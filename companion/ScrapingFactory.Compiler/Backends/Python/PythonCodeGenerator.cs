@@ -7,5 +7,9 @@ namespace ScrapingFactory.Compiler.Backends.Python;
 // Uses template-based generation (templates in language-modules/python/templates/).
 public sealed class PythonCodeGenerator
 {
-    // TODO: implement Generate(ScrapingConfig config) → string
+    public string Generate(ScrapingConfig config)
+    {
+        // TODO: implement full template rendering (Phase 3)
+        throw new NotImplementedException("PythonCodeGenerator is not yet implemented.");
+    }
 }
