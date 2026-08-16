@@ -34,10 +34,13 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
             Encoding.UTF8,
             "application/json");
 
-        // PythonCodeGenerator throws NotImplementedException in the stub — expect 500 for now,
-        // but the endpoint itself must accept the request (not 400).
         var response = await _client.PostAsync("/generate", content);
-        Assert.NotEqual(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/plain", response.Content.Headers.ContentType?.MediaType);
+
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("https://example.com", body);
+        Assert.Contains("import requests", body);
     }
 
     [Fact]
