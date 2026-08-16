@@ -11,6 +11,12 @@ global.chrome = {
     query: jest.fn(),
     sendMessage: jest.fn(),
   },
+  storage: {
+    session: {
+      set:    jest.fn().mockResolvedValue(undefined),
+      remove: jest.fn().mockResolvedValue(undefined),
+    },
+  },
 };
 
 require('./service-worker');
@@ -56,6 +62,16 @@ test('ELEMENT_SELECTED is forwarded to runtime (popup)', () => {
     selector: 'li.card > h2',
   });
   expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
+});
+
+test('ELEMENT_SELECTED stores selector in session storage', async () => {
+  capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.card > h2' }, {});
+
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  expect(chrome.storage.session.set).toHaveBeenCalledWith({
+    pendingSelector: 'li.card > h2',
+  });
 });
 
 test('ELEMENT_SELECTED swallows error when popup is closed', async () => {
