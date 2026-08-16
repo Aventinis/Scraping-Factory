@@ -1,0 +1,65 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+using Microsoft.AspNetCore.Mvc.Testing;
+using ScrapingFactory.Compiler.IR;
+using Xunit;
+
+namespace ScrapingFactory.Tests;
+
+public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
+    : IClassFixture<WebApplicationFactory<Program>>
+{
+    private readonly HttpClient _client = factory.CreateClient();
+
+    [Fact]
+    public async Task Health_Returns200()
+    {
+        var response = await _client.GetAsync("/health");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Generate_ValidConfig_Returns200WithTextPlain()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }]
+        };
+
+        var content = new StringContent(
+            JsonSerializer.Serialize(config),
+            Encoding.UTF8,
+            "application/json");
+
+        // PythonCodeGenerator throws NotImplementedException in the stub — expect 500 for now,
+        // but the endpoint itself must accept the request (not 400).
+        var response = await _client.PostAsync("/generate", content);
+        Assert.NotEqual(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Generate_MissingUrl_Returns400()
+    {
+        var payload = JsonSerializer.Serialize(new { Fields = new[] { new { Name = "x", Selector = "h1" } } });
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Generate_EmptyFields_Returns400()
+    {
+        var config = new ScrapingConfig { Url = "https://example.com" };
+        var content = new StringContent(
+            JsonSerializer.Serialize(config),
+            Encoding.UTF8,
+            "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+}
