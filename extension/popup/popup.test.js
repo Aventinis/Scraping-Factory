@@ -1,11 +1,18 @@
-// Mock chrome and fetch before requiring the module so that the
-// DOMContentLoaded init (wireEvents + checkCompanion) runs safely.
+// Mock chrome and fetch before requiring the module so that the async init()
+// (wireEvents + storage read + checkCompanion) runs safely without real APIs.
 global.chrome = {
   runtime: {
     onMessage: { addListener: jest.fn() },
     sendMessage: jest.fn(),
   },
   tabs: { query: jest.fn() },
+  storage: {
+    session: {
+      get:    jest.fn().mockResolvedValue({}),
+      set:    jest.fn().mockResolvedValue(undefined),
+      remove: jest.fn().mockResolvedValue(undefined),
+    },
+  },
 };
 global.fetch = jest.fn().mockResolvedValue({ ok: false });
 
