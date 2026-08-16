@@ -5,6 +5,7 @@
   "description": "Visueller Scraper-Builder — generiert eigenständige Python-Skripte.",
   "permissions": [
     "activeTab",
+    "tabs",
     "scripting",
     "storage"
   ],
