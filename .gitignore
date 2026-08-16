@@ -19,5 +19,8 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Node
+extension/node_modules/
+
 # Generated scripts (user output — not source)
 output/
