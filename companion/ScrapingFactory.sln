@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScrapingFactory.Companion", "ScrapingFactory.Companion\ScrapingFactory.Companion.csproj", "{8C356B0D-8310-4829-9947-3CB5660C0DFC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScrapingFactory.Compiler", "ScrapingFactory.Compiler\ScrapingFactory.Compiler.csproj", "{E4375876-88B7-40D0-B282-3B54FA004AAF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8C356B0D-8310-4829-9947-3CB5660C0DFC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8C356B0D-8310-4829-9947-3CB5660C0DFC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8C356B0D-8310-4829-9947-3CB5660C0DFC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8C356B0D-8310-4829-9947-3CB5660C0DFC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E4375876-88B7-40D0-B282-3B54FA004AAF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E4375876-88B7-40D0-B282-3B54FA004AAF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E4375876-88B7-40D0-B282-3B54FA004AAF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E4375876-88B7-40D0-B282-3B54FA004AAF}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

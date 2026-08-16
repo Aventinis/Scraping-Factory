@@ -1,0 +1,23 @@
+# .NET
+companion/**/bin/
+companion/**/obj/
+companion/**/*.user
+companion/**/*.suo
+*.nupkg
+.vs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Generated scripts (user output — not source)
+output/
