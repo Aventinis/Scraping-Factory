@@ -3,10 +3,174 @@
 <head>
   <meta charset="UTF-8" />
   <title>Scraping Factory</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      font-size: 14px;
+      width: 380px;
+      background: #fff;
+      color: #1a1a1a;
+    }
+    .screen { padding: 16px; }
+    .hidden { display: none !important; }
+
+    /* Spinner */
+    .spinner {
+      width: 24px; height: 24px;
+      border: 3px solid #e5e7eb;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #screen-checking, #screen-generating {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 120px; text-align: center; color: #6b7280;
+    }
+
+    /* Error screen */
+    #screen-error { text-align: center; padding: 24px 16px; }
+    .error-icon  { font-size: 32px; margin-bottom: 8px; }
+    .error-hint  { color: #6b7280; font-size: 13px; margin: 6px 0 16px; }
+
+    /* URL row */
+    .url-row     { margin-bottom: 14px; }
+    .row-label   { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #9ca3af; margin-bottom: 2px; }
+    .url-value   { font-size: 12px; color: #374151; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Fields */
+    #fields-list { margin-bottom: 12px; min-height: 4px; }
+    .field-row {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 8px; background: #f9fafb; border-radius: 6px; margin-bottom: 4px;
+    }
+    .field-name     { font-weight: 500; min-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .field-selector { flex: 1; font-size: 11px; font-family: monospace; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Selecting screen */
+    #screen-selecting { text-align: center; padding: 28px 16px; }
+    .selecting-hint   { color: #6b7280; margin-bottom: 16px; }
+
+    /* Done screen */
+    #screen-done    { text-align: center; padding: 24px 16px; }
+    .success-icon   { font-size: 32px; color: #22c55e; margin-bottom: 8px; }
+    .done-actions   { display: flex; gap: 8px; margin-top: 16px; justify-content: center; }
+
+    /* Buttons */
+    button {
+      border: none; border-radius: 6px; cursor: pointer;
+      font-size: 13px; padding: 7px 12px; font-family: inherit; transition: background .1s;
+    }
+    .btn-primary             { background: #3b82f6; color: #fff; }
+    .btn-primary:hover       { background: #2563eb; }
+    .btn-primary:disabled    { background: #93c5fd; cursor: default; }
+    .btn-secondary           { background: #f3f4f6; color: #374151; }
+    .btn-secondary:hover     { background: #e5e7eb; }
+    .btn-danger              { background: transparent; color: #ef4444; font-size: 12px; padding: 3px 6px; }
+    .btn-danger:hover        { background: #fee2e2; }
+
+    .actions { display: flex; gap: 8px; }
+    .actions .btn-primary  { flex: 1; }
+    .actions .btn-secondary { flex: 1; }
+
+    /* Modal */
+    .modal {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.45);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 10;
+    }
+    .modal-inner {
+      background: #fff; border-radius: 10px; padding: 18px;
+      width: 320px; box-shadow: 0 8px 24px rgba(0,0,0,.18);
+    }
+    .modal-inner label { display: block; font-size: 12px; color: #6b7280; margin-bottom: 6px; }
+    .modal-inner input {
+      width: 100%; border: 1px solid #d1d5db; border-radius: 6px;
+      padding: 7px 10px; font-size: 14px; margin-bottom: 12px; font-family: inherit; outline: none;
+    }
+    .modal-inner input:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.2); }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 10px; left: 10px; right: 10px;
+      background: #ef4444; color: #fff; padding: 8px 12px;
+      border-radius: 6px; font-size: 13px; z-index: 20;
+    }
+  </style>
 </head>
 <body>
-  <h1>Scraping Factory</h1>
-  <p>Noch nicht implementiert.</p>
+
+  <!-- CHECKING_COMPANION -->
+  <section id="screen-checking" class="screen">
+    <div class="spinner"></div>
+    <p>Verbinde mit Companion…</p>
+  </section>
+
+  <!-- COMPANION_ERROR -->
+  <section id="screen-error" class="screen hidden">
+    <p class="error-icon">⚠</p>
+    <p>Companion App nicht erreichbar</p>
+    <p class="error-hint">Starte ScrapingFactory.Companion und versuche es erneut.</p>
+    <button id="btn-retry" class="btn-primary">Erneut versuchen</button>
+  </section>
+
+  <!-- IDLE -->
+  <section id="screen-idle" class="screen hidden">
+    <div class="url-row">
+      <div class="row-label">URL</div>
+      <div id="url-display" class="url-value"></div>
+    </div>
+    <div class="row-label" style="margin-bottom: 6px;">Felder</div>
+    <div id="fields-list"></div>
+    <div class="actions">
+      <button id="btn-add-field" class="btn-secondary">+ Feld hinzufügen</button>
+      <button id="btn-generate" class="btn-primary" disabled>Skript generieren ▶</button>
+    </div>
+  </section>
+
+  <!-- SELECTING -->
+  <section id="screen-selecting" class="screen hidden">
+    <p class="selecting-hint">Klicke ein Element auf der Seite an…</p>
+    <button id="btn-cancel-selection" class="btn-secondary">Abbrechen</button>
+  </section>
+
+  <!-- GENERATING -->
+  <section id="screen-generating" class="screen hidden">
+    <div class="spinner"></div>
+    <p>Generiere Skript…</p>
+  </section>
+
+  <!-- DONE -->
+  <section id="screen-done" class="screen hidden">
+    <p class="success-icon">✓</p>
+    <p>Skript erfolgreich generiert!</p>
+    <div class="done-actions">
+      <button id="btn-new-scraper" class="btn-secondary">Neu</button>
+      <button id="btn-download" class="btn-primary">scraper.py herunterladen</button>
+    </div>
+  </section>
+
+  <!-- Modal: field-name input -->
+  <div id="modal-field-name" class="modal hidden">
+    <div class="modal-inner">
+      <label for="input-field-name">Feldname (z. B. "Produkttitel")</label>
+      <input id="input-field-name" type="text" placeholder="Feldname" autocomplete="off" />
+      <div class="modal-actions">
+        <button id="btn-field-cancel" class="btn-secondary">Abbrechen</button>
+        <button id="btn-field-confirm" class="btn-primary">Hinzufügen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error toast -->
+  <div id="error-toast" class="toast hidden"></div>
+
   <script src="popup.js"></script>
 </body>
 </html>
