@@ -17,6 +17,15 @@ let _state = {
   pendingSelector: null, // set while field-name modal is open
 };
 
+// ── Logging ───────────────────────────────────────────────────────────────────
+
+function log(event, data) {
+  const ts = new Date().toISOString().slice(11, 23);
+  data !== undefined
+    ? console.log(`[SF:Popup ${ts}]`, event, data)
+    : console.log(`[SF:Popup ${ts}]`, event);
+}
+
 // ── Pure functions (exported for testing) ────────────────────────────────────
 
 function buildScrapingConfig(url, fields) {
@@ -47,8 +56,19 @@ function escapeHtml(str) {
 // ── State ────────────────────────────────────────────────────────────────────
 
 function setState(newState, patch = {}) {
+  const prev = _state.current;
   _state = { ..._state, current: newState, ...patch };
+  log('STATE', `${prev} → ${newState}`, Object.keys(patch).length ? patch : undefined);
+  persistState();
   if (typeof document !== 'undefined') render();
+}
+
+// Persists the parts of state that must survive popup close/reopen.
+function persistState() {
+  if (typeof chrome === 'undefined' || !chrome.storage?.session) return;
+  chrome.storage.session
+    .set({ fields: _state.fields, url: _state.url })
+    .catch(err => log('STORAGE_ERR', err.message));
 }
 
 // ── DOM helpers ───────────────────────────────────────────────────────────────
@@ -107,14 +127,20 @@ function renderFields() {
 // ── Async actions ─────────────────────────────────────────────────────────────
 
 async function checkCompanion() {
+  log('HEALTH_CHECK start', COMPANION_URL);
   try {
     const res = await fetch(`${COMPANION_URL}/health`);
-    if (!res.ok) throw new Error('not ok');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    log('HEALTH_CHECK OK');
+
     const tabs = await new Promise(resolve =>
       chrome.tabs.query({ active: true, currentWindow: true }, resolve)
     );
-    setState(STATES.IDLE, { url: tabs[0]?.url ?? '' });
-  } catch {
+    const url = tabs[0]?.url ?? '';
+    log('TAB_URL', url);
+    setState(STATES.IDLE, { url });
+  } catch (err) {
+    log('HEALTH_CHECK FAIL', err.message);
     setState(STATES.COMPANION_ERROR);
   }
 }
@@ -122,6 +148,7 @@ async function checkCompanion() {
 async function generate() {
   setState(STATES.GENERATING);
   const config = buildScrapingConfig(_state.url, _state.fields);
+  log('GENERATE request', config);
   try {
     const res = await fetch(`${COMPANION_URL}/generate`, {
       method: 'POST',
@@ -130,14 +157,17 @@ async function generate() {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const scriptText = await res.text();
+    log('GENERATE OK', `${scriptText.length} chars`);
     setState(STATES.DONE, { scriptText });
   } catch (err) {
+    log('GENERATE FAIL', err.message);
     setState(STATES.IDLE);
     showToast(`Fehler: ${err.message}`);
   }
 }
 
 function triggerDownload() {
+  log('DOWNLOAD scraper.py');
   const blob = new Blob([_state.scriptText], { type: 'text/plain' });
   const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -162,29 +192,30 @@ function showToast(message) {
 function confirmField() {
   const name = document.getElementById('input-field-name')?.value.trim();
   if (!name) return;
-  _state = {
-    ..._state,
+  log('FIELD_ADD', { name, selector: _state.pendingSelector });
+  setState(STATES.IDLE, {
     fields:          addField(_state.fields, name, _state.pendingSelector),
     pendingSelector: null,
-    current:         STATES.IDLE,
-  };
-  render();
+  });
 }
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
 
 function wireEvents() {
   document.getElementById('btn-retry')?.addEventListener('click', () => {
+    log('BTN retry');
     setState(STATES.CHECKING_COMPANION);
     checkCompanion();
   });
 
   document.getElementById('btn-add-field')?.addEventListener('click', () => {
+    log('BTN add-field → START_SELECTION');
     chrome.runtime.sendMessage({ type: 'START_SELECTION' });
     setState(STATES.SELECTING, { pendingSelector: null });
   });
 
   document.getElementById('btn-cancel-selection')?.addEventListener('click', () => {
+    log('BTN cancel-selection → STOP_SELECTION');
     chrome.runtime.sendMessage({ type: 'STOP_SELECTION' });
     setState(STATES.IDLE);
   });
@@ -196,8 +227,7 @@ function wireEvents() {
   });
 
   document.getElementById('btn-field-cancel')?.addEventListener('click', () => {
-    // Selection already stopped in content script when the element was clicked;
-    // no need to send STOP_SELECTION here.
+    log('BTN field-cancel');
     setState(STATES.IDLE, { pendingSelector: null });
   });
 
@@ -206,19 +236,29 @@ function wireEvents() {
     const btn = e.target.closest('.btn-remove-field');
     if (!btn) return;
     const index = parseInt(btn.dataset.index, 10);
-    _state = { ..._state, fields: removeField(_state.fields, index) };
-    render();
+    log('FIELD_REMOVE', { index, name: _state.fields[index]?.name });
+    setState(_state.current, { fields: removeField(_state.fields, index) });
   });
 
-  document.getElementById('btn-generate')?.addEventListener('click', generate);
+  document.getElementById('btn-generate')?.addEventListener('click', () => {
+    log('BTN generate');
+    generate();
+  });
   document.getElementById('btn-download')?.addEventListener('click', triggerDownload);
 
   document.getElementById('btn-new-scraper')?.addEventListener('click', () => {
-    setState(STATES.IDLE, { fields: [], scriptText: '' });
+    log('BTN new-scraper → reset state');
+    chrome.storage.session.set({ fields: [], url: '' });
+    setState(STATES.CHECKING_COMPANION, { fields: [], scriptText: '', url: '' });
+    checkCompanion();
   });
 
   chrome.runtime.onMessage.addListener((message) => {
+    log('MSG_IN', message);
     if (message.type === 'ELEMENT_SELECTED' && _state.current === STATES.SELECTING) {
+      log('ELEMENT_SELECTED received (real-time)', message.selector);
+      // Clear the storage entry the service worker wrote — we have it now.
+      chrome.storage.session.remove('pendingSelector');
       setState(STATES.SELECTING, { pendingSelector: message.selector });
     }
   });
@@ -226,12 +266,35 @@ function wireEvents() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
+async function init() {
+  wireEvents();
+
+  log('INIT reading session storage');
+  const stored = await chrome.storage.session.get(['fields', 'url', 'pendingSelector']);
+  log('INIT restored', stored);
+
+  // Always restore persisted fields and URL.
+  if (Array.isArray(stored.fields)) _state = { ..._state, fields: stored.fields };
+  if (stored.url)                   _state = { ..._state, url: stored.url };
+
+  if (stored.pendingSelector) {
+    // The user clicked an element while the popup was closed.
+    // Show the field-name modal immediately without re-checking the companion.
+    log('INIT pending selector found → show modal', stored.pendingSelector);
+    await chrome.storage.session.remove('pendingSelector');
+    setState(STATES.SELECTING, { pendingSelector: stored.pendingSelector });
+    return;
+  }
+
+  setState(STATES.CHECKING_COMPANION);
+  await checkCompanion();
+}
+
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => { wireEvents(); checkCompanion(); });
+    document.addEventListener('DOMContentLoaded', init);
   } else {
-    wireEvents();
-    checkCompanion();
+    init();
   }
 }
 
