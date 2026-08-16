@@ -1,9 +1,19 @@
 namespace ScrapingFactory.Compiler.IR;
 
-// Intermediate Representation (IR) — language-agnostic scraping configuration.
-// Every language backend consumes this type to generate its target code.
-// Schema must be finalized and versioned before implementing any language backend.
 public sealed class ScrapingConfig
 {
-    // TODO: define IR schema (URL, fields/selectors, output format, …)
+    public string Version { get; init; } = "1";
+    public required string Url { get; init; }
+    public List<ScrapingField> Fields { get; init; } = [];
+    public OutputFormat OutputFormat { get; init; } = OutputFormat.Csv;
 }
+
+public sealed class ScrapingField
+{
+    public required string Name { get; init; }
+    public required string Selector { get; init; }
+    // null = Textinhalt; "href", "src" usw. für Attribut-Extraktion
+    public string? Attribute { get; init; }
+}
+
+public enum OutputFormat { Csv }
