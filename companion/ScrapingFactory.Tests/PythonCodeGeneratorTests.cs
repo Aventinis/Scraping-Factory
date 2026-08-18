@@ -56,6 +56,19 @@ public class PythonCodeGeneratorTests
     }
 
     [Fact]
+    public void Generate_ParsesResponseContentNotText()
+    {
+        // requests.Response.text guesses the encoding from the Content-Type
+        // header and falls back to ISO-8859-1 when no charset is given,
+        // mangling UTF-8 pages that only declare their charset via
+        // <meta charset>. response.content (bytes) lets BeautifulSoup detect
+        // that meta tag itself, so the generated script must use it.
+        var script = _generator.Generate(TwoFieldConfig());
+        Assert.Contains("BeautifulSoup(response.content,", script);
+        Assert.DoesNotContain("BeautifulSoup(response.text,", script);
+    }
+
+    [Fact]
     public void Generate_AttributeFieldAppearsInAttributesDict()
     {
         var script = _generator.Generate(TwoFieldConfig());
