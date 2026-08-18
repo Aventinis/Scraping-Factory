@@ -109,16 +109,16 @@ function render() {
   }
 }
 
-function renderFields() {
+function renderFields(fields = _state.fields) {
   const listEl = document.getElementById('fields-list');
   if (!listEl) return;
   listEl.innerHTML = '';
-  _state.fields.forEach((field, i) => {
+  fields.forEach((field, i) => {
     const row = document.createElement('div');
     row.className = 'field-row';
     row.innerHTML =
-      `<span class="field-name">${escapeHtml(field.name)}</span>` +
-      `<span class="field-selector">${escapeHtml(field.selector)}</span>` +
+      `<span class="field-name" title="${escapeHtml(field.name)}">${escapeHtml(field.name)}</span>` +
+      `<span class="field-selector" title="${escapeHtml(field.selector)}">${escapeHtml(field.selector)}</span>` +
       `<button class="btn-danger btn-remove-field" data-index="${i}">Entfernen</button>`;
     listEl.appendChild(row);
   });
@@ -299,5 +299,5 @@ if (typeof document !== 'undefined') {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { buildScrapingConfig, addField, removeField, escapeHtml, STATES };
+  module.exports = { buildScrapingConfig, addField, removeField, escapeHtml, renderFields, STATES };
 }
