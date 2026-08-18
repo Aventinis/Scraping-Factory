@@ -65,4 +65,24 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         var response = await _client.PostAsync("/generate", content);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    // Reproduces the exact wire format sent by the browser extension
+    // (camelCase property names, outputFormat as a string) — this is
+    // what regressed to always return 400 without a JsonStringEnumConverter.
+    [Fact]
+    public async Task Generate_ExtensionStylePayload_Returns200()
+    {
+        const string payload = """
+            {
+              "version": "1",
+              "url": "https://example.com",
+              "fields": [ { "name": "Titel", "selector": "h1", "attribute": null } ],
+              "outputFormat": "Csv"
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
 }
