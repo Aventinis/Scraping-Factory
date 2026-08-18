@@ -16,7 +16,7 @@ global.chrome = {
 };
 global.fetch = jest.fn().mockResolvedValue({ ok: false });
 
-const { buildScrapingConfig, addField, removeField, escapeHtml, STATES } = require('./popup');
+const { buildScrapingConfig, addField, removeField, escapeHtml, renderFields, STATES } = require('./popup');
 
 // ── buildScrapingConfig ───────────────────────────────────────────────────────
 
@@ -120,6 +120,30 @@ describe('escapeHtml', () => {
 
   test('coerces non-string to string first', () => {
     expect(escapeHtml(42)).toBe('42');
+  });
+});
+
+// ── renderFields ─────────────────────────────────────────────────────────────
+
+describe('renderFields', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="fields-list"></div>';
+  });
+
+  test('sets full selector as title attribute so it is visible despite CSS truncation', () => {
+    const longSelector = '#vorspeisen > ul.menu-list > li.item > span.name';
+    renderFields([{ name: 'Titel', selector: longSelector, attribute: null }]);
+
+    const selectorEl = document.querySelector('.field-selector');
+    expect(selectorEl.title).toBe(longSelector);
+    expect(selectorEl.textContent).toBe(longSelector);
+  });
+
+  test('sets full name as title attribute too', () => {
+    renderFields([{ name: 'Ein sehr langer Feldname', selector: 'h1', attribute: null }]);
+
+    const nameEl = document.querySelector('.field-name');
+    expect(nameEl.title).toBe('Ein sehr langer Feldname');
   });
 });
 
