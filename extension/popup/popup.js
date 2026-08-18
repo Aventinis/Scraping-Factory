@@ -278,7 +278,8 @@ async function init() {
   if (stored.url)                   _state = { ..._state, url: stored.url };
 
   if (stored.pendingSelector) {
-    // The user clicked an element while the popup was closed.
+    // The user clicked an element while the side panel was closed (e.g. it
+    // hadn't finished loading yet, or was closed manually).
     // Show the field-name modal immediately without re-checking the companion.
     log('INIT pending selector found → show modal', stored.pendingSelector);
     await chrome.storage.session.remove('pendingSelector');
