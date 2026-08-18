@@ -54,7 +54,7 @@ test('no tab message sent when no active tab exists', () => {
   expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
 });
 
-test('ELEMENT_SELECTED is forwarded to runtime (popup)', () => {
+test('ELEMENT_SELECTED is forwarded to runtime (side panel)', () => {
   capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.card > h2' }, {});
 
   expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
@@ -74,8 +74,8 @@ test('ELEMENT_SELECTED stores selector in session storage', async () => {
   });
 });
 
-test('ELEMENT_SELECTED swallows error when popup is closed', async () => {
-  chrome.runtime.sendMessage.mockRejectedValue(new Error('No popup'));
+test('ELEMENT_SELECTED swallows error when side panel is closed', async () => {
+  chrome.runtime.sendMessage.mockRejectedValue(new Error('No side panel'));
 
   await expect(
     new Promise((resolve) => {
