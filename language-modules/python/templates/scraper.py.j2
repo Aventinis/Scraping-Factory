@@ -25,7 +25,11 @@ ATTRIBUTES = {
 def scrape(url):
     response = requests.get(url, timeout=10)
     response.raise_for_status()
-    soup = BeautifulSoup(response.text, "html.parser")
+    # Use response.content (bytes) instead of response.text: requests guesses
+    # the encoding from the Content-Type header, defaulting to ISO-8859-1 when
+    # no charset is given — which mangles UTF-8 pages that only declare their
+    # charset via <meta charset>. BeautifulSoup detects that meta tag itself.
+    soup = BeautifulSoup(response.content, "html.parser")
 
     columns = {name: soup.select(sel) for name, sel in SELECTORS.items()}
     n = max((len(v) for v in columns.values()), default=0)
