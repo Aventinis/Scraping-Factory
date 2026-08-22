@@ -1,11 +1,24 @@
+using System.Reflection;
+using Scriban;
 using ScrapingFactory.Compiler.IR;
 
 namespace ScrapingFactory.Compiler.Backends.Python;
 
-// Language backend: generates a standalone Python script from a ScrapingConfig IR.
-// v1 target: requests + BeautifulSoup (static pages only, no JS rendering).
-// Uses template-based generation (templates in language-modules/python/templates/).
 public sealed class PythonCodeGenerator
 {
-    // TODO: implement Generate(ScrapingConfig config) → string
+    public string Generate(ScrapingConfig config)
+    {
+        var assembly = Assembly.GetExecutingAssembly();
+        using var stream = assembly.GetManifestResourceStream("scraper.py.j2")
+            ?? throw new InvalidOperationException("Embedded template 'scraper.py.j2' not found in assembly.");
+        using var reader = new StreamReader(stream);
+        var templateText = reader.ReadToEnd();
+
+        var template = Template.Parse(templateText);
+        if (template.HasErrors)
+            throw new InvalidOperationException(
+                $"Template parse errors: {string.Join(", ", template.Messages)}");
+
+        return template.Render(new { config });
+    }
 }

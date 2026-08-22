@@ -5,8 +5,10 @@
   "description": "Visueller Scraper-Builder — generiert eigenständige Python-Skripte.",
   "permissions": [
     "activeTab",
+    "tabs",
     "scripting",
-    "storage"
+    "storage",
+    "sidePanel"
   ],
   "background": {
     "service_worker": "background/service-worker.js"
@@ -19,7 +21,10 @@
     }
   ],
   "action": {
-    "default_popup": "popup/popup.html",
     "default_title": "Scraping Factory"
-  }
+  },
+  "side_panel": {
+    "default_path": "popup/popup.html"
+  },
+  "minimum_chrome_version": "114"
 }

@@ -6,4 +6,12 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Scriban" Version="7.2.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\language-modules\python\templates\scraper.py.j2" LogicalName="scraper.py.j2" />
+  </ItemGroup>
+
 </Project>
