@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zur Goldenen Gabel — Speisekarte</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Georgia, 'Times New Roman', serif;
+      background: #faf8f3;
+      color: #2c2416;
+      padding: 40px 20px;
+    }
+
+    /* ── Header ── */
+    .restaurant-header {
+      text-align: center;
+      margin-bottom: 48px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid #c8a96e;
+    }
+    .restaurant-name {
+      font-size: 2.4rem;
+      letter-spacing: .08em;
+      color: #7a4f1a;
+      margin-bottom: 6px;
+    }
+    .restaurant-tagline {
+      font-style: italic;
+      color: #8c7355;
+      font-size: 1rem;
+    }
+
+    /* ── Layout ── */
+    .menu {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    /* ── Category section ── */
+    .menu-category {
+      margin-bottom: 44px;
+    }
+    .category-title {
+      font-size: 1.3rem;
+      text-transform: uppercase;
+      letter-spacing: .15em;
+      color: #7a4f1a;
+      border-bottom: 1px solid #c8a96e;
+      padding-bottom: 8px;
+      margin-bottom: 20px;
+    }
+
+    /* ── Item list ── */
+    .menu-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .menu-item {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      grid-template-rows: auto auto;
+      column-gap: 16px;
+      row-gap: 4px;
+      padding: 14px 0;
+      border-bottom: 1px dotted #d4c5a5;
+    }
+    .menu-item:last-child { border-bottom: none; }
+
+    .item-name {
+      font-size: 1.05rem;
+      font-weight: bold;
+      color: #2c2416;
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .item-price {
+      font-size: 1.05rem;
+      font-weight: bold;
+      color: #7a4f1a;
+      grid-column: 2;
+      grid-row: 1;
+      white-space: nowrap;
+    }
+    .item-description {
+      font-size: 0.88rem;
+      color: #6b5a40;
+      font-style: italic;
+      grid-column: 1;
+      grid-row: 2;
+      line-height: 1.5;
+    }
+    .item-badge {
+      font-size: 0.72rem;
+      background: #7a4f1a;
+      color: #fff;
+      border-radius: 3px;
+      padding: 1px 6px;
+      margin-left: 8px;
+      vertical-align: middle;
+      font-style: normal;
+      letter-spacing: .04em;
+    }
+    .item-badge.vegan  { background: #4a7c3f; }
+    .item-badge.scharf { background: #b94040; }
+
+    /* ── Footer ── */
+    .menu-footer {
+      max-width: 860px;
+      margin: 40px auto 0;
+      padding-top: 20px;
+      border-top: 2px solid #c8a96e;
+      text-align: center;
+      font-size: 0.82rem;
+      color: #8c7355;
+      line-height: 1.8;
+    }
+
+    /* ── Plugin-Hinweis ── */
+    .plugin-hint {
+      max-width: 860px;
+      margin: 0 auto 36px;
+      background: #eef4fb;
+      border: 1px solid #9bb8d4;
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-family: system-ui, sans-serif;
+      font-size: 0.85rem;
+      color: #1e4068;
+      line-height: 1.6;
+    }
+    .plugin-hint strong { display: block; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+
+  <header class="restaurant-header">
+    <h1 class="restaurant-name">Zur Goldenen Gabel</h1>
+    <p class="restaurant-tagline">Traditionelle Küche seit 1987 — Inh. Familie Breitner</p>
+  </header>
+
+  <div class="plugin-hint">
+    <strong>Scraping Factory — Test-Seite</strong>
+    Gute Selektoren zum Ausprobieren:
+    <code>li.menu-item &gt; h3.item-name</code> (alle Gerichtnamen) ·
+    <code>li.menu-item &gt; span.item-price</code> (alle Preise) ·
+    <code>li.menu-item &gt; p.item-description</code> (alle Beschreibungen)
+  </div>
+
+  <main class="menu">
+
+    <!-- ── Vorspeisen ─────────────────────────────────────────── -->
+    <section class="menu-category" id="vorspeisen">
+      <h2 class="category-title">Vorspeisen</h2>
+      <ul class="menu-list">
+
+        <li class="menu-item">
+          <h3 class="item-name">Hausgemachte Leberknödelsuppe</h3>
+          <span class="item-price">6,90 €</span>
+          <p class="item-description">Kräftige Rinderbouillon mit zwei hausgemachten Leberknödeln und Schnittlauch</p>
+        </li>
+
+        <li class="menu-item">
+          <h3 class="item-name">Burrata mit Tomaten<span class="item-badge vegan">vegan möglich</span></h3>
+          <span class="item-price">9,50 €</span>
+          <p class="item-description">Cremige Burrata auf Heirloom-Tomaten, Basilikumöl, Fleur de Sel</p>
+        </li>
+
+        <li class="menu-item">
+          <h3 class="item-name">Gebeizter Lachs</h3>
+          <span class="item-price">11,80 €</span>
+          <p class="item-description">48 Stunden in Dill und Zitronenschale gebeizt, mit Crème fraîche und Pumpernickel</p>
+        </li>
+
+        <li class="menu-item">
+          <h3 class="item-name">Flammkuchen Elsässer Art</h3>
+          <span class="item-price">8,40 €</span>
+          <p class="item-description">Crème fraîche, Zwiebeln, Speck — knusperdünn gebacken</p>
+        </li>
+
+      </ul>
+    </section>
+
+    <!-- ── Suppen ─────────────────────────────────────────────── -->
+    <section class="menu-category" id="suppen">
+      <h2 class="category-title">Suppen</h2>
+      <ul class="menu-list">
+
+        <li class="menu-item">
+          <h3 class="item-name">Kürbiscremesuppe<span class="item-badge vegan">vegan</span></h3>
+          <span class="item-price">7,20 €</span>
+          <p class="item-description">Hokkaido-Kürbis, geröstete Kürbiskerne, Ingwer-Kokos-Schaum</p>
+        </li>
+
+        <li class="menu-item">
+          <h3 class="item-name">Bouillabaisse</h3>
+          <span class="item-price">13,50 €</span>
+          <p class="item-description">Provenzalische Fischsuppe mit Rouille und geröstetem Baguette</p>
+        </li>
+
+      </ul>
+    </section>
+
+    <!-- ── Hauptgerichte ──────────────────────────────────────── -->
+    <section class="menu-category" id="hauptgerichte">
+      <h2 class="category-title">Hauptgerichte</h2>
+      <ul class="menu-list">
+
+        <li class="menu-item">
+          <h3 class="item-name">Wiener Schnitzel vom Kalb</h3>
+          <span class="item-price">26,90 €</span>
+          <p class="item-description">Klassisch paniert, mit Petersilienkartoffeln, Preiselbeeren und Zitronenscheibe</p>
+        </li>
+
+        <li class="menu-item">
+          <h3 class="item-name">Zwiebelrostbraten</h3>
+          <span class="item-price">28,50 €</span>
+          <p class="item-description">200 g Roastbeef auf Röstzwiebeln, mit Spätzle und grünem Salat</p>
+        </li>
+
+        <li class="menu-item">
+          <h3 class="item-name">Sauerbraten mit Rotkohl<span class="item-badge">Hausrezept</span></h3>
+          <span class="item-price">22,80 €</span>
+          <p class="item-description">Drei Tage marinierter Rinderbraten, Rosinen-Soße, Kartoffelklöße, Rotkohl</p>
+        </li>
+
+        <li class="menu-item">
+          <h3 class="item-name">Gebratener Saibling<span class="item-badge scharf">aus der Region</span></h3>
+          <span class="item-price">24,00 €</span>
+          <p class="item-description">Ganzer Saibling aus der Mangfall, mit Mandelbutter, Zitrone und Blattspinat</p>
+        </li>
+
+        <li class="menu-item">
+          <h3 class="item-name">Gemüse-Risotto<span class="item-badge vegan">vegetarisch</span></h3>
+          <span class="item-price">18,50 €</span>
+          <p class="item-description">Arborio-Reis, Parmesan, Saison-Gemüse, Trüffelöl</p>
+        </li>
+
+      </ul>
+    </section>
+
+    <!-- ── Beilagen ───────────────────────────────────────────── -->
+    <section class="menu-category" id="beilagen">
+      <h2 class="category-title">Beilagen</h2>
+      <ul class="menu-list">
+
+        <li class="menu-item">
+          <h3 class="item-name">Hausgemachte Spätzle</h3>
+          <span class="item-price">4,50 €</span>
+          <p class="item-description">Mit Butter geschwenkt</p>
+        </li>
+
+        <li class="menu-item">
+          <h3 class="item-name">Kartoffelgratin</h3>
+          <span class="item-price">4,90 €</span>
+          <p class="item-description">Mit Sahne und Gruyère überbacken</p>
+        </li>
+
+        <li class="menu-item">
+          <h3 class="item-name">Gemischter Salat</h3>
+          <span class="item-price">5,50 €</span>
+          <p class="item-description">Saison-Blätter, Radieschen, Gurke, Hausdressing</p>
+        </li>
+
+      </ul>
+    </section>
+
+    <!-- ── Desserts ───────────────────────────────────────────── -->
+    <section class="menu-category" id="desserts">
+      <h2 class="category-title">Desserts</h2>
+      <ul class="menu-list">
+
+        <li class="menu-item">
+          <h3 class="item-name">Kaiserschmarrn</h3>
+          <span class="item-price">9,80 €</span>
+          <p class="item-description">Flaumig gerissen, mit Zwetschgenröster und Puderzucker</p>
+        </li>
+
+        <li class="menu-item">
+          <h3 class="item-name">Crème brûlée</h3>
+          <span class="item-price">7,90 €</span>
+          <p class="item-description">Klassische Vanillecreme mit karamellisierter Zuckerkruste</p>
+        </li>
+
+        <li class="menu-item">
+          <h3 class="item-name">Schokoladenfondue für zwei<span class="item-badge">für 2 Personen</span></h3>
+          <span class="item-price">16,00 €</span>
+          <p class="item-description">Zartbitter-Kuvertüre mit Erdbeeren, Banane, Marshmallows und Waffeln</p>
+        </li>
+
+        <li class="menu-item">
+          <h3 class="item-name">Sorbetto misto<span class="item-badge vegan">vegan</span></h3>
+          <span class="item-price">6,50 €</span>
+          <p class="item-description">Drei Kugeln: Mango, Himbeere, Zitrone</p>
+        </li>
+
+      </ul>
+    </section>
+
+    <!-- ── Getränke ───────────────────────────────────────────── -->
+    <section class="menu-category" id="getraenke">
+      <h2 class="category-title">Getränke</h2>
+      <ul class="menu-list">
+
+        <li class="menu-item">
+          <h3 class="item-name">Mineralwasser still / sprudelnd</h3>
+          <span class="item-price">3,20 €</span>
+          <p class="item-description">0,33 l</p>
+        </li>
+
+        <li class="menu-item">
+          <h3 class="item-name">Hausgemachte Limonade</h3>
+          <span class="item-price">4,50 €</span>
+          <p class="item-description">Täglich wechselnd — heute: Holunderblüte & Minze (0,4 l)</p>
+        </li>
+
+        <li class="menu-item">
+          <h3 class="item-name">Weißbier vom Fass</h3>
+          <span class="item-price">4,80 €</span>
+          <p class="item-description">0,5 l — Erdinger Weißbräu</p>
+        </li>
+
+        <li class="menu-item">
+          <h3 class="item-name">Grauburgunder (Glas)</h3>
+          <span class="item-price">6,90 €</span>
+          <p class="item-description">0,2 l — Weingut Huber, Baden 2022, trocken</p>
+        </li>
+
+        <li class="menu-item">
+          <h3 class="item-name">Espresso</h3>
+          <span class="item-price">2,80 €</span>
+          <p class="item-description">Doppelt geröstet, aus der Siebträgermaschine</p>
+        </li>
+
+      </ul>
+    </section>
+
+  </main>
+
+  <footer class="menu-footer">
+    <p>Alle Preise inkl. MwSt. · Allergene auf Anfrage · Küche täglich 11:30 – 22:00 Uhr</p>
+    <p>Zur Goldenen Gabel · Hauptstraße 14 · 83022 Rosenheim · Tel. 08031 / 44 22 10</p>
+  </footer>
+
+</body>
+</html>
