@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
-using ScrapingFactory.Compiler.Backends.Python;
+using ScrapingFactory.Compiler.Backends;
 using ScrapingFactory.Compiler.IR;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,18 +13,22 @@ builder.Services.AddCors(options =>
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
+builder.Services.AddSingleton<LanguageModuleRegistry>();
+
 var app = builder.Build();
 
 app.UseCors();
 
 app.MapGet("/health", () => Results.Ok());
 
-app.MapPost("/generate", async ([FromBody] ScrapingConfig? config) =>
+app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModuleRegistry registry) =>
 {
     if (config is null || string.IsNullOrWhiteSpace(config.Url) || config.Fields.Count == 0)
         return Results.BadRequest(new { error = "Invalid ScrapingConfig: Url and at least one Field are required." });
 
-    var generator = new PythonCodeGenerator();
+    // v1 only ships a Python backend, so the language id is fixed here;
+    // a later phase will let ScrapingConfig pick the target language.
+    var generator = registry.ResolveCodeGenerator("python");
     var script = generator.Generate(config);
 
     // Actually run the generated script against the live page before handing
@@ -32,7 +36,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config) =>
     // works (network fetch, parsing, CSV export, no runtime errors) and
     // returns real data, rather than approximating that with a static
     // selector check that could disagree with what BeautifulSoup does.
-    var verifier = new PythonScriptVerifier();
+    var verifier = registry.ResolveScriptVerifier("python");
     var verification = await verifier.VerifyAsync(script);
     if (!verification.Success)
     {
