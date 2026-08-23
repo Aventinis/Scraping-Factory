@@ -160,6 +160,61 @@ test('STOP_SELECTION failure does not notify the side panel', async () => {
   expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
 });
 
+describe('GET_LOGS', () => {
+  test('returns true to keep the message channel open for the async response', () => {
+    chrome.tabs.query.mockImplementation((_, cb) => cb([]));
+    const result = capturedListener({ type: 'GET_LOGS' }, {}, jest.fn());
+    expect(result).toBe(true);
+  });
+
+  test('combines the background buffer with the content script response', async () => {
+    chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+    const contentLogs = [{ ts: 'x', event: 'CONTENT_EVENT', data: null }];
+    chrome.tabs.sendMessage.mockImplementation((tabId, msg) => {
+      expect(msg).toEqual({ type: 'GET_LOGS' });
+      return Promise.resolve(contentLogs);
+    });
+    const sendResponse = jest.fn();
+
+    capturedListener({ type: 'GET_LOGS' }, {}, sendResponse);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({
+      content: contentLogs,
+      contentError: null,
+    }));
+    const response = sendResponse.mock.calls[0][0];
+    expect(Array.isArray(response.background)).toBe(true);
+  });
+
+  test('reports contentError when there is no active tab', async () => {
+    chrome.tabs.query.mockImplementation((_, cb) => cb([]));
+    const sendResponse = jest.fn();
+
+    capturedListener({ type: 'GET_LOGS' }, {}, sendResponse);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({
+      content: null,
+      contentError: 'no active tab',
+    }));
+  });
+
+  test('reports contentError when the content script is unreachable', async () => {
+    chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+    chrome.tabs.sendMessage.mockRejectedValue(new Error('Could not establish connection.'));
+    const sendResponse = jest.fn();
+
+    capturedListener({ type: 'GET_LOGS' }, {}, sendResponse);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({
+      content: null,
+      contentError: 'Could not establish connection.',
+    }));
+  });
+});
+
 test('unknown message type is ignored', () => {
   capturedListener({ type: 'UNKNOWN' }, {});
 
