@@ -16,7 +16,10 @@ global.chrome = {
 };
 global.fetch = jest.fn().mockResolvedValue({ ok: false });
 
-const { buildScrapingConfig, addField, removeField, escapeHtml, renderFields, STATES } = require('./popup');
+const {
+  buildScrapingConfig, addField, removeField, escapeHtml, renderFields, STATES,
+  formatTreeLabel, renderDomTree, highlightHover, highlightSelected,
+} = require('./popup');
 
 // ── buildScrapingConfig ───────────────────────────────────────────────────────
 
@@ -152,4 +155,242 @@ describe('renderFields', () => {
 test('STATES contains expected keys', () => {
   const expected = ['CHECKING_COMPANION', 'COMPANION_ERROR', 'IDLE', 'SELECTING', 'GENERATING', 'DONE'];
   expected.forEach(key => expect(STATES).toHaveProperty(key));
+});
+
+// ── formatTreeLabel ───────────────────────────────────────────────────────────
+
+describe('formatTreeLabel', () => {
+  test('tag only when no id or classes', () => {
+    expect(formatTreeLabel({ tag: 'p', id: null, classes: [] })).toBe('p');
+  });
+
+  test('appends #id', () => {
+    expect(formatTreeLabel({ tag: 'section', id: 'main', classes: [] })).toBe('section#main');
+  });
+
+  test('appends .class.class for multiple classes', () => {
+    expect(formatTreeLabel({ tag: 'li', id: null, classes: ['card', 'active'] })).toBe('li.card.active');
+  });
+
+  test('combines id and classes', () => {
+    expect(formatTreeLabel({ tag: 'div', id: 'wrap', classes: ['a'] })).toBe('div#wrap.a');
+  });
+});
+
+// ── DOM tree rendering & highlighting ────────────────────────────────────────
+
+describe('renderDomTree / highlightHover / highlightSelected', () => {
+  const sampleTree = {
+    tag: 'body', id: null, classes: [], path: [],
+    children: [
+      {
+        tag: 'section', id: 'main', classes: [], path: [0],
+        children: [
+          { tag: 'p', id: null, classes: ['a'], path: [0, 0], children: [] },
+        ],
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    document.body.innerHTML = '<ul id="dom-tree-root"></ul>';
+    renderDomTree(sampleTree);
+  });
+
+  test('renders one <li> per tree node with the node label', () => {
+    const nodes = document.querySelectorAll('.dom-tree-node');
+    expect(nodes).toHaveLength(3);
+    expect(document.querySelector('[data-path="[0]"]').textContent).toContain('section#main');
+  });
+
+  test('nested nodes start collapsed', () => {
+    const childUl = document.querySelector('[data-path="[0]"] > .dom-tree-children');
+    expect(childUl.classList.contains('hidden')).toBe(true);
+  });
+
+  test('highlightHover marks the matching row and expands its ancestors', () => {
+    highlightHover([0, 0]);
+    const row = document.querySelector('[data-path="[0,0]"] > .dom-tree-row');
+    expect(row.classList.contains('hover')).toBe(true);
+
+    const ancestorUl = document.querySelector('[data-path="[0]"] > .dom-tree-children');
+    expect(ancestorUl.classList.contains('hidden')).toBe(false);
+  });
+
+  test('highlightHover clears the previous hover highlight', () => {
+    highlightHover([0]);
+    highlightHover([0, 0]);
+    const previousRow = document.querySelector('[data-path="[0]"] > .dom-tree-row');
+    expect(previousRow.classList.contains('hover')).toBe(false);
+  });
+
+  test('highlightSelected marks the row as selected', () => {
+    highlightSelected([0, 0]);
+    const row = document.querySelector('[data-path="[0,0]"] > .dom-tree-row');
+    expect(row.classList.contains('selected')).toBe(true);
+  });
+
+  test('highlightSelected replaces a previous selection', () => {
+    highlightSelected([0]);
+    highlightSelected([0, 0]);
+    const previousRow = document.querySelector('[data-path="[0]"] > .dom-tree-row');
+    expect(previousRow.classList.contains('selected')).toBe(false);
+  });
+});
+
+// ── SELECTION_UNAVAILABLE ────────────────────────────────────────────────────
+// Regression coverage: chrome.tabs.sendMessage(START_SELECTION) rejects when
+// the active tab has no content script (chrome://, Web Store, PDF viewer, a
+// page open since before the extension reloaded, …). The side panel must
+// fall back to IDLE with an explanation instead of being stuck on
+// "Klicke ein Element an…" forever.
+
+describe('SELECTION_UNAVAILABLE handling', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden"></section>
+      <section id="screen-selecting" class="hidden">
+        <button id="btn-add-field"></button>
+      </section>
+      <div id="error-toast" class="hidden"></div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn() },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({}),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: false });
+
+    require('./popup');
+    await flushMicrotasks();
+
+    document.getElementById('btn-add-field').click(); // → STATES.SELECTING
+  });
+
+  test('falls back to IDLE and shows a toast', () => {
+    capturedListener({ type: 'SELECTION_UNAVAILABLE', reason: 'no content script' });
+
+    expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
+
+    const toast = document.getElementById('error-toast');
+    expect(toast.classList.contains('hidden')).toBe(false);
+    expect(toast.textContent).toContain('nicht möglich');
+  });
+});
+
+// ── DOM tree loading timeout ─────────────────────────────────────────────────
+// Regression coverage: a lost/never-arriving DOM_TREE response used to leave
+// the "Lade DOM-Baum…" spinner stuck forever. A timeout must now surface an
+// error instead.
+
+describe('DOM tree loading timeout', () => {
+  let capturedListener;
+
+  // init() awaits chrome.storage.session.get() and then fetch() (mocked,
+  // resolved) before settling on COMPANION_ERROR — flush those microtasks
+  // with real timers before switching to fake ones for the timeout itself.
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle"></section>
+      <section id="screen-selecting" class="hidden">
+        <button id="btn-add-field"></button>
+        <input type="checkbox" id="toggle-dom-view" />
+        <div id="dom-tree-wrapper" class="hidden">
+          <p id="dom-tree-loading"></p>
+          <p id="dom-tree-error" class="hidden"></p>
+          <p id="dom-tree-truncated" class="hidden"></p>
+          <ul id="dom-tree-root"></ul>
+        </div>
+      </section>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn() },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({}),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: false });
+
+    require('./popup');
+    await flushMicrotasks();
+
+    document.getElementById('btn-add-field').click(); // → STATES.SELECTING
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('shows an error if no DOM_TREE response arrives within the timeout', () => {
+    const toggle = document.getElementById('toggle-dom-view');
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+
+    expect(document.getElementById('dom-tree-error').classList.contains('hidden')).toBe(true);
+
+    jest.advanceTimersByTime(5000);
+
+    expect(document.getElementById('dom-tree-error').classList.contains('hidden')).toBe(false);
+  });
+
+  test('a DOM_TREE response before the timeout clears loading without an error', () => {
+    const toggle = document.getElementById('toggle-dom-view');
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+
+    capturedListener({
+      type: 'DOM_TREE',
+      tree: { tag: 'body', id: null, classes: [], path: [], children: [] },
+      truncated: false,
+    });
+    jest.advanceTimersByTime(5000);
+
+    expect(document.getElementById('dom-tree-error').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('dom-tree-loading').classList.contains('hidden')).toBe(true);
+  });
+
+  test('a DOM_TREE error response surfaces immediately without waiting for the timeout', () => {
+    const toggle = document.getElementById('toggle-dom-view');
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+
+    capturedListener({ type: 'DOM_TREE', tree: null, truncated: false, error: 'boom' });
+
+    expect(document.getElementById('dom-tree-error').classList.contains('hidden')).toBe(false);
+  });
 });
