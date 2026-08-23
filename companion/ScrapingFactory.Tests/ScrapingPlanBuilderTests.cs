@@ -61,4 +61,33 @@ public class ScrapingPlanBuilderTests
         var step = Assert.Single(plan.Steps);
         Assert.IsType<NavigateStep>(step);
     }
+
+    [Fact]
+    public void Build_DefaultsToStaticEngine()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal(ScrapingEngine.Static, plan.Engine);
+    }
+
+    [Fact]
+    public void Build_PreservesBrowserEngine()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+            Engine = ScrapingEngine.Browser,
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal(ScrapingEngine.Browser, plan.Engine);
+    }
 }
