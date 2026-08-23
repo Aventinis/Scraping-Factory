@@ -5,13 +5,14 @@ using ScrapingFactory.Compiler.IR;
 namespace ScrapingFactory.Compiler.Backends.Python;
 
 // Generates a Playwright-based script for the Browser engine (dynamically
-// rendered pages). Navigate/WaitFor steps become inline actions rendered
-// from their own small fragment templates, one per step, in order — that's
-// the per-step-type template composition the static generator's monolithic
-// template doesn't need. Extract steps still end up aggregated into
-// SELECTORS/ATTRIBUTES dicts like the static generator, since extraction
-// itself has no per-step control flow (unlike Navigate/WaitFor, which each
-// correspond to one specific action at one specific point in the flow).
+// rendered pages, and simple login flows). Navigate/WaitFor/Fill/Click
+// steps become inline actions rendered from their own small fragment
+// templates, one per step, in order — that's the per-step-type template
+// composition the static generator's monolithic template doesn't need.
+// Extract steps still end up aggregated into SELECTORS/ATTRIBUTES dicts
+// like the static generator, since extraction itself has no per-step
+// control flow (unlike the other step types, which each correspond to one
+// specific action at one specific point in the flow).
 public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
 {
     public string LanguageId => "python";
@@ -22,6 +23,8 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         var assembly = Assembly.GetExecutingAssembly();
         var navigateTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_navigate_step.py.j2");
         var waitTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_wait_step.py.j2");
+        var fillTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_fill_step.py.j2");
+        var clickTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_click_step.py.j2");
         var shellTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_scraper.py.j2");
 
         var navigate = plan.Steps.OfType<NavigateStep>().Single();
@@ -34,13 +37,16 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
             {
                 NavigateStep s => navigateTemplate.Render(new { step = new { url = s.Url } }),
                 WaitForStep s => waitTemplate.Render(new { step = new { selector = s.Selector, timeout_ms = s.TimeoutMs } }),
+                FillStep s => fillTemplate.Render(new { step = new { selector = s.Selector, env_var = s.EnvironmentVariableName } }),
+                ClickStep s => clickTemplate.Render(new { step = new { selector = s.Selector } }),
                 _ => null,
             })
             .Where(line => line is not null)
             .Select(line => line!.TrimEnd());
 
         var actions = string.Join("\n", actionLines);
+        var needsOsImport = plan.Steps.OfType<FillStep>().Any();
 
-        return shellTemplate.Render(new { url = navigate.Url, fields, actions });
+        return shellTemplate.Render(new { url = navigate.Url, fields, actions, needs_os_import = needsOsImport });
     }
 }

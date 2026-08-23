@@ -30,6 +30,19 @@ public class PythonPlaywrightCodeGeneratorTests
         ],
     };
 
+    private static ScrapingPlan LoginPlan() => new()
+    {
+        Engine = ScrapingEngine.Browser,
+        Steps =
+        [
+            new NavigateStep { Url = "https://example.com/login" },
+            new FillStep { Selector = "#username", EnvironmentVariableName = "SF_USERNAME" },
+            new FillStep { Selector = "#password", EnvironmentVariableName = "SF_PASSWORD" },
+            new ClickStep { Selector = "#submit" },
+            new ExtractStep { Name = "Titel", Selector = "h1" },
+        ],
+    };
+
     [Fact]
     public void Generate_ContainsTargetUrl()
     {
@@ -77,5 +90,34 @@ public class PythonPlaywrightCodeGeneratorTests
     {
         var script = _generator.Generate(PlanWithoutWait());
         Assert.Contains("csv.DictWriter", script);
+    }
+
+    [Fact]
+    public void Generate_WithoutFillStep_DoesNotImportOs()
+    {
+        var script = _generator.Generate(PlanWithoutWait());
+        Assert.DoesNotContain("import os", script);
+    }
+
+    [Fact]
+    public void Generate_WithFillStep_ImportsOs()
+    {
+        var script = _generator.Generate(LoginPlan());
+        Assert.Contains("import os", script);
+    }
+
+    [Fact]
+    public void Generate_WithFillStep_ReadsValueFromEnvironmentVariable()
+    {
+        var script = _generator.Generate(LoginPlan());
+        Assert.Contains("page.fill(\"#username\", os.environ[\"SF_USERNAME\"])", script);
+        Assert.Contains("page.fill(\"#password\", os.environ[\"SF_PASSWORD\"])", script);
+    }
+
+    [Fact]
+    public void Generate_WithClickStep_ContainsPageClick()
+    {
+        var script = _generator.Generate(LoginPlan());
+        Assert.Contains("page.click(\"#submit\")", script);
     }
 }
