@@ -13,6 +13,6 @@ public static class ScrapingPlanBuilder
         steps.AddRange(config.Fields.Select(field =>
             (ScrapingStep)new ExtractStep { Name = field.Name, Selector = field.Selector, Attribute = field.Attribute }));
 
-        return new ScrapingPlan { Steps = steps, OutputFormat = config.OutputFormat };
+        return new ScrapingPlan { Steps = steps, OutputFormat = config.OutputFormat, Engine = config.Engine };
     }
 }

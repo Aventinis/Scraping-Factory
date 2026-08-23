@@ -105,6 +105,56 @@ public class ScrapingPlanValidatorTests
     }
 
     [Fact]
+    public void Validate_ValidWaitForStep_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new WaitForStep { Selector = ".loaded", TimeoutMs = 3000 },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public void Validate_WaitForStepWithEmptySelector_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new WaitForStep { Selector = " " },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("WaitForStep", result.Error);
+    }
+
+    [Fact]
+    public void Validate_WaitForStepWithNonPositiveTimeout_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new WaitForStep { Selector = ".loaded", TimeoutMs = 0 },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Timeout", result.Error);
+    }
+
+    [Fact]
     public void Validate_DuplicateFieldNames_Fails()
     {
         var plan = new ScrapingPlan
