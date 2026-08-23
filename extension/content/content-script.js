@@ -1,11 +1,15 @@
 // Exported for testing (Jest/jsdom). In the extension build the chrome API
 // calls are guarded by the message listener below.
 
-function log(event, data) {
-  const ts = new Date().toISOString().slice(11, 23);
-  data !== undefined
-    ? console.log(`[SF:Content ${ts}]`, event, data)
-    : console.log(`[SF:Content ${ts}]`, event);
+const { createLogger, getLogBuffer } =
+  typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+const log = createLogger('SF:Content');
+
+// Surfaces otherwise-silent script errors in the bug report (see GET_LOGS
+// below) instead of only showing up in the page's own devtools console.
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (e) => log('UNCAUGHT_ERROR', e.message));
+  window.addEventListener('unhandledrejection', (e) => log('UNHANDLED_REJECTION', String(e.reason)));
 }
 
 function buildSelector(element) {
@@ -210,11 +214,14 @@ function disableDomView() {
 // ── Message listener ──────────────────────────────────────────────────────────
 
 if (typeof chrome !== 'undefined' && chrome.runtime) {
-  chrome.runtime.onMessage.addListener((message) => {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     log('MSG_IN', message.type);
     if (message.type === 'START_SELECTION') startSelection();
     if (message.type === 'STOP_SELECTION')  stopSelection();
     if (message.type === 'ENABLE_DOM_VIEW') enableDomView();
     if (message.type === 'DISABLE_DOM_VIEW') disableDomView();
+    if (message.type === 'GET_LOGS') {
+      sendResponse(getLogBuffer());
+    }
   });
 }
