@@ -8,4 +8,5 @@ public sealed class ScrapingPlan
 {
     public List<ScrapingStep> Steps { get; init; } = [];
     public OutputFormat OutputFormat { get; init; } = OutputFormat.Csv;
+    public ScrapingEngine Engine { get; init; } = ScrapingEngine.Static;
 }

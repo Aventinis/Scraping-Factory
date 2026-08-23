@@ -6,6 +6,11 @@ public sealed class ScrapingConfig
     public required string Url { get; init; }
     public List<ScrapingField> Fields { get; init; } = [];
     public OutputFormat OutputFormat { get; init; } = OutputFormat.Csv;
+
+    // Additive, wire-compatible: existing extension payloads omit this and
+    // get Static, today's only behavior. No extension UI to set it yet —
+    // reachable only by sending "engine": "Browser" directly.
+    public ScrapingEngine Engine { get; init; } = ScrapingEngine.Static;
 }
 
 public sealed class ScrapingField

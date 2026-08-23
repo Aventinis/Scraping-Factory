@@ -13,9 +13,12 @@ namespace ScrapingFactory.Compiler.Backends.Python;
 // and BeautifulSoup-vs-CSS-selector quirks a simulated check would miss.
 public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSpan? timeout = null) : IScriptVerifier
 {
-    // Matches the generated script's own `requests.get(url, timeout=10)`
-    // plus headroom for interpreter startup and CSV parsing.
-    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(20);
+    // One shared timeout for every script this verifier runs, regardless of
+    // which engine generated it: comfortably covers the Static engine's own
+    // `requests.get(url, timeout=10)` plus interpreter/CSV overhead, and the
+    // slower Browser engine (Chromium launch + page load + optional
+    // WaitForStep). Avoids needing a per-engine verifier just for timing.
+    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(45);
     private static readonly string[] DefaultCandidates = ["python3", "python"];
 
     private readonly TimeSpan _timeout = timeout ?? DefaultTimeout;
