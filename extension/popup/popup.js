@@ -289,18 +289,14 @@ async function checkCompanion() {
   }
 }
 
-// The companion verifies the config against the live page before handing out
-// a script (same static-HTML rendering stage the script itself uses) and
-// responds 422 with per-field detail when a selector matched nothing, or
-// when the page couldn't be reached at all. Turn that into one readable
-// message — the full `data` (incl. every field's matchCount) is logged
-// separately so it ends up in the bug report if the user reports it.
+// The companion actually generates and runs the script against the live
+// page before handing it out (same rendering stage, and now the exact
+// artifact the user would download) and responds 422 with a message when
+// that run fails or errors — is the page unreachable, does the script raise
+// an exception, or does it run cleanly but write no data (all selectors
+// found nothing). `data` is logged separately so it ends up in the bug
+// report if the user reports it.
 function buildVerificationErrorMessage(data) {
-  const failed = (data?.fields || []).filter(f => !f.success);
-  if (failed.length > 0) {
-    const list = failed.map(f => `„${f.name}“ (${f.selector})`).join(', ');
-    return `Kein Element gefunden für: ${list}`;
-  }
   return data?.error || 'Verifikation der Konfiguration fehlgeschlagen.';
 }
 
