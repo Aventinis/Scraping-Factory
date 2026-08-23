@@ -19,7 +19,7 @@ global.fetch = jest.fn().mockResolvedValue({ ok: false });
 const {
   buildScrapingConfig, addField, removeField, escapeHtml, renderFields, STATES,
   formatTreeLabel, renderDomTree, highlightHover, highlightSelected,
-  formatLogSection, buildGithubIssueUrl, setLastError,
+  formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,
 } = require('./popup');
 
 // ── buildScrapingConfig ───────────────────────────────────────────────────────
@@ -442,6 +442,100 @@ describe('buildGithubIssueUrl', () => {
     const body = decodeURIComponent(url.split('body=')[1]);
     expect(body).toContain('gekürzt');
     expect(body.length).toBeLessThan(longReport.length);
+  });
+});
+
+// ── buildVerificationErrorMessage ────────────────────────────────────────────
+// The companion generates and actually runs the script against the live
+// page before returning it; /generate responds 422 with an `error` message
+// describing why that run failed (page unreachable, script raised an
+// exception, or it ran cleanly but produced no data at all).
+
+describe('buildVerificationErrorMessage', () => {
+  test('uses the error message from the response', () => {
+    const msg = buildVerificationErrorMessage({
+      error: 'Skript lief fehlerfrei, hat aber keine Daten zurückgegeben (output.csv enthält nur die Kopfzeile).',
+    });
+    expect(msg).toBe('Skript lief fehlerfrei, hat aber keine Daten zurückgegeben (output.csv enthält nur die Kopfzeile).');
+  });
+
+  test('passes through a script-crash error message', () => {
+    const msg = buildVerificationErrorMessage({ error: 'Skript (python3) wurde mit Fehler beendet (Exit-Code 1): Traceback...' });
+    expect(msg).toBe('Skript (python3) wurde mit Fehler beendet (Exit-Code 1): Traceback...');
+  });
+
+  test('handles a missing/empty response gracefully', () => {
+    expect(buildVerificationErrorMessage(null)).toBe('Verifikation der Konfiguration fehlgeschlagen.');
+    expect(buildVerificationErrorMessage(undefined)).toBe('Verifikation der Konfiguration fehlgeschlagen.');
+    expect(buildVerificationErrorMessage({})).toBe('Verifikation der Konfiguration fehlgeschlagen.');
+  });
+});
+
+describe('generate() surfaces companion verification failures', () => {
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div id="fields-list"></div>
+        <button id="btn-generate"></button>
+      </section>
+      <section id="screen-generating" class="hidden"></section>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: jest.fn() },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({
+            fields: [{ name: 'Preis', selector: '.price', attribute: null }],
+            url: 'https://example.com',
+          }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+
+    global.fetch = jest.fn((url) => {
+      if (String(url).endsWith('/health')) return Promise.resolve({ ok: true });
+      if (String(url).endsWith('/generate')) {
+        return Promise.resolve({
+          ok: false,
+          status: 422,
+          json: () => Promise.resolve({
+            error: 'Skript lief fehlerfrei, hat aber keine Daten zurückgegeben (output.csv enthält nur die Kopfzeile).',
+          }),
+        });
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${url}`));
+    });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE, fields restored from storage
+  });
+
+  test('shows a toast with the verification error and offers to report it', async () => {
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const toast = document.getElementById('error-toast');
+    expect(toast.classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('error-toast-message').textContent).toContain('keine Daten zurückgegeben');
+    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
   });
 });
 

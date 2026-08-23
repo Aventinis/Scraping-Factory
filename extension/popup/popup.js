@@ -289,6 +289,17 @@ async function checkCompanion() {
   }
 }
 
+// The companion actually generates and runs the script against the live
+// page before handing it out (same rendering stage, and now the exact
+// artifact the user would download) and responds 422 with a message when
+// that run fails or errors — is the page unreachable, does the script raise
+// an exception, or does it run cleanly but write no data (all selectors
+// found nothing). `data` is logged separately so it ends up in the bug
+// report if the user reports it.
+function buildVerificationErrorMessage(data) {
+  return data?.error || 'Verifikation der Konfiguration fehlgeschlagen.';
+}
+
 async function generate() {
   setState(STATES.GENERATING);
   const config = buildScrapingConfig(_state.url, _state.fields);
@@ -299,6 +310,11 @@ async function generate() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config),
     });
+    if (res.status === 422) {
+      const data = await res.json().catch(() => null);
+      log('GENERATE VERIFICATION FAIL', data);
+      throw new Error(buildVerificationErrorMessage(data));
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const scriptText = await res.text();
     log('GENERATE OK', `${scriptText.length} chars`);
@@ -598,6 +614,6 @@ if (typeof module !== 'undefined') {
   module.exports = {
     buildScrapingConfig, addField, removeField, escapeHtml, renderFields, STATES,
     formatTreeLabel, renderDomTree, highlightHover, highlightSelected,
-    formatLogSection, buildGithubIssueUrl, setLastError,
+    formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,
   };
 }
