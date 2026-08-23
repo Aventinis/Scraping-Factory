@@ -70,6 +70,7 @@
     .dom-tree-loading, .dom-tree-truncated {
       font-size: 12px; color: #9ca3af; margin: 2px 0 4px;
     }
+    .dom-tree-error { font-size: 12px; color: #ef4444; margin: 2px 0 4px; }
     .dom-tree, .dom-tree-children { list-style: none; margin: 0; padding: 0; }
     .dom-tree-children.hidden { display: none; }
     .dom-tree-row {
@@ -171,6 +172,7 @@
     </label>
     <div id="dom-tree-wrapper" class="dom-tree-wrapper hidden">
       <p id="dom-tree-loading" class="dom-tree-loading">Lade DOM-Baum…</p>
+      <p id="dom-tree-error" class="dom-tree-error hidden">Baum konnte nicht geladen werden.</p>
       <p id="dom-tree-truncated" class="dom-tree-truncated hidden">Baum gekürzt (zu viele Elemente).</p>
       <ul id="dom-tree-root" class="dom-tree"></ul>
     </div>
