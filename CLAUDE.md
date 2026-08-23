@@ -34,12 +34,13 @@ language-modules/
 ### Companion App (`companion/ScrapingFactory.Companion`)
 - .NET 9 Konsolenanwendung
 - Startet einen lokalen HTTP-Server für die Extension
-- Startet bei Bedarf eine automatisierte Browser-Session (Playwright für .NET geplant) zur Verifikation der Konfiguration
+- `/generate` generiert das Skript, führt es dann per Sprachmodul-Verifier (`Backends/Python/PythonScriptVerifier`) probeweise in einem temporären Verzeichnis aus und liefert es erst bei Erfolg (Exit-Code 0, mindestens eine Datenzeile) aus — bei Fehlschlag `422` mit Fehlermeldung statt Skript
+- **Laufzeit-Voraussetzung:** `python3` (oder `python`) inkl. `requests` + `beautifulsoup4` muss auf dem Rechner, auf dem die Companion App läuft, im PATH verfügbar sein — nicht mehr nur beim Endnutzer, der das heruntergeladene Skript später ausführt
 - Baut die IR und übergibt sie an `ScrapingFactory.Compiler`
 
 ### Compiler (`companion/ScrapingFactory.Compiler`)
 - Enthält die IR-Typen (`ScrapingFactory.Compiler.IR.ScrapingConfig`)
-- Enthält die Sprachmodule (`Backends/Python/PythonCodeGenerator`)
+- Enthält die Sprachmodule (`Backends/Python/PythonCodeGenerator`, `Backends/Python/PythonScriptVerifier`)
 - **Wichtig:** IR-Schema muss vor Implementierung des Python-Backends fixiert werden
 
 ### Python-Templates (`language-modules/python/templates/`)
@@ -72,4 +73,4 @@ dotnet build companion/ScrapingFactory.sln
 
 ## Konsistenzregel
 
-Die Companion App nutzt zur Verifikation dieselbe Rendering-Stufe wie das generierte Skript. In v1 bedeutet das: die Companion App prüft ebenfalls nur statisches HTML (kein Playwright-Rendering zur Verifikation), damit Live-Vorschau und generiertes Skript identische Ergebnisse liefern.
+Die Companion App verifiziert nicht mehr nur auf derselben Rendering-Stufe wie das generierte Skript — sie führt vor der Auslieferung das exakt generierte Skript einmal probeweise aus (`Backends/Python/PythonScriptVerifier`: Skript in ein temporäres Verzeichnis schreiben, per `python3`/`python`-Subprozess ausführen, Exit-Code und `output.csv` prüfen). Das schließt jede Diskrepanz zwischen Verifikation und generiertem Skript aus (Encoding, Selektor-Kompatibilität, Netzwerkfehler, Laufzeitfehler) und war der Grund, weshalb ein separater Playwright- oder AngleSharp-basierter Verifikationspfad verworfen wurde: er hätte immer nur eine Annäherung an das reale Skriptverhalten sein können.
