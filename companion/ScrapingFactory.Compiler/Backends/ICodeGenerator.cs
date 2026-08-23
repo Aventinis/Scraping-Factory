@@ -6,5 +6,5 @@ public interface ICodeGenerator
 {
     string LanguageId { get; }
 
-    string Generate(ScrapingConfig config);
+    string Generate(ScrapingPlan plan);
 }
