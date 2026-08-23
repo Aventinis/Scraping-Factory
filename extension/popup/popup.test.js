@@ -19,7 +19,7 @@ global.fetch = jest.fn().mockResolvedValue({ ok: false });
 const {
   buildScrapingConfig, addField, removeField, escapeHtml, renderFields, STATES,
   formatTreeLabel, renderDomTree, highlightHover, highlightSelected,
-  formatLogSection, buildGithubIssueUrl, setLastError,
+  formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,
 } = require('./popup');
 
 // ── buildScrapingConfig ───────────────────────────────────────────────────────
@@ -442,6 +442,115 @@ describe('buildGithubIssueUrl', () => {
     const body = decodeURIComponent(url.split('body=')[1]);
     expect(body).toContain('gekürzt');
     expect(body.length).toBeLessThan(longReport.length);
+  });
+});
+
+// ── buildVerificationErrorMessage ────────────────────────────────────────────
+// The companion verifies field selectors against the live page before
+// returning a script; /generate responds 422 with per-field detail when a
+// selector matched nothing, or a plain `error` when the page itself
+// couldn't be reached at all.
+
+describe('buildVerificationErrorMessage', () => {
+  test('lists the failed field with its selector when exactly one failed', () => {
+    const msg = buildVerificationErrorMessage({
+      error: 'Mindestens ein Selektor hat kein Element auf der Seite gefunden.',
+      fields: [
+        { name: 'Titel', selector: 'h1', success: true },
+        { name: 'Preis', selector: '.price', success: false },
+      ],
+    });
+    expect(msg).toBe('Kein Element gefunden für: „Preis“ (.price)');
+  });
+
+  test('lists every failed field when several fail', () => {
+    const msg = buildVerificationErrorMessage({
+      fields: [
+        { name: 'A', selector: '.a', success: false },
+        { name: 'B', selector: '.b', success: false },
+      ],
+    });
+    expect(msg).toBe('Kein Element gefunden für: „A“ (.a), „B“ (.b)');
+  });
+
+  test('falls back to the generic error when no field failed individually (e.g. page unreachable)', () => {
+    const msg = buildVerificationErrorMessage({ error: 'Seite nicht erreichbar: timeout', fields: [] });
+    expect(msg).toBe('Seite nicht erreichbar: timeout');
+  });
+
+  test('handles a missing/empty response gracefully', () => {
+    expect(buildVerificationErrorMessage(null)).toBe('Verifikation der Konfiguration fehlgeschlagen.');
+    expect(buildVerificationErrorMessage(undefined)).toBe('Verifikation der Konfiguration fehlgeschlagen.');
+    expect(buildVerificationErrorMessage({})).toBe('Verifikation der Konfiguration fehlgeschlagen.');
+  });
+});
+
+describe('generate() surfaces companion verification failures', () => {
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div id="fields-list"></div>
+        <button id="btn-generate"></button>
+      </section>
+      <section id="screen-generating" class="hidden"></section>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: jest.fn() },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({
+            fields: [{ name: 'Preis', selector: '.price', attribute: null }],
+            url: 'https://example.com',
+          }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+
+    global.fetch = jest.fn((url) => {
+      if (String(url).endsWith('/health')) return Promise.resolve({ ok: true });
+      if (String(url).endsWith('/generate')) {
+        return Promise.resolve({
+          ok: false,
+          status: 422,
+          json: () => Promise.resolve({
+            error: 'Mindestens ein Selektor hat kein Element auf der Seite gefunden.',
+            fields: [{ name: 'Preis', selector: '.price', matchCount: 0, success: false }],
+          }),
+        });
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${url}`));
+    });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE, fields restored from storage
+  });
+
+  test('shows a toast naming the failed field and offers to report it', async () => {
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const toast = document.getElementById('error-toast');
+    expect(toast.classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('error-toast-message').textContent).toContain('.price');
+    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
   });
 });
 
