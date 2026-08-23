@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
+using ScrapingFactory.Compiler.Backends;
 
 namespace ScrapingFactory.Compiler.Backends.Python;
 
@@ -10,7 +11,7 @@ namespace ScrapingFactory.Compiler.Backends.Python;
 // produced at least one data row. This subsumes any static selector check —
 // running the real script also catches network failures, encoding issues,
 // and BeautifulSoup-vs-CSS-selector quirks a simulated check would miss.
-public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSpan? timeout = null)
+public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSpan? timeout = null) : IScriptVerifier
 {
     // Matches the generated script's own `requests.get(url, timeout=10)`
     // plus headroom for interpreter startup and CSV parsing.
@@ -19,6 +20,8 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
 
     private readonly TimeSpan _timeout = timeout ?? DefaultTimeout;
     private readonly string[] _candidates = pythonExecutable is not null ? [pythonExecutable] : DefaultCandidates;
+
+    public string LanguageId => "python";
 
     public async Task<ScriptVerificationResult> VerifyAsync(string script, CancellationToken ct = default)
     {

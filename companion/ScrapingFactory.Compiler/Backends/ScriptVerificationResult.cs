@@ -1,4 +1,4 @@
-namespace ScrapingFactory.Compiler.Backends.Python;
+namespace ScrapingFactory.Compiler.Backends;
 
 public sealed class ScriptVerificationResult
 {
