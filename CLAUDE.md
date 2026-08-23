@@ -4,6 +4,10 @@
 
 Browser-Plugin, das Nutzern ohne Programmierkenntnisse ermöglicht, Webscraper visuell zu konfigurieren. Ergebnis ist ein eigenständiges, lesbares **Python-Skript** (v1). Die Architektur ist auf spätere Zielsprachen ausgelegt.
 
+Das Projekt befindet sich nicht mehr in der Prototyping-Phase, sondern im aktiven Ausbau des MVP. Grundsatzentscheidungen aus der Prototyping-Phase (IR-Schema, Extension↔Companion-Kommunikation) gelten als getroffen und werden im laufenden Betrieb weiterentwickelt statt neu diskutiert — siehe „Architekturentscheidungen" unten.
+
+**Grundsatz:** Scraping Factory soll ein freies (kostenloses, ohne Abhängigkeit von kostenpflichtigen Drittanbieter-Diensten) Plugin bleiben. Das schließt insbesondere kommerzielle Stealth-Browser-/Anti-Bot-SDKs mit Session- oder Lizenzmodell aus (siehe „Geplant für spätere Releases").
+
 Vollständiges Architekturkonzept: `architekturkonzept.md` (im Repo-Root, nicht eingecheckt / separat).
 
 ## Verzeichnisstruktur
@@ -17,7 +21,7 @@ extension/                  Browser Extension (Manifest V3)
 companion/                  .NET 9 Solution
   ScrapingFactory.Companion/ Einstiegspunkt — lokaler HTTP-Server
   ScrapingFactory.Compiler/  IR-Typen + Sprachmodule
-    IR/ScrapingConfig.cs     Intermediate Representation (JSON-Schema, noch offen)
+    IR/ScrapingConfig.cs     Intermediate Representation
     Backends/Python/         Python-Codegenerator
 
 language-modules/
@@ -29,7 +33,7 @@ language-modules/
 ### Browser Extension
 - Manifest V3, kein Node.js-Zugriff im Service Worker
 - Enthält **keine** Scraping- oder Codegenerierungslogik
-- Kommuniziert mit der Companion App via lokalen HTTP-Server (Implementierung steht noch aus; Native Messaging wäre Alternative)
+- Kommuniziert mit der Companion App via lokalen HTTP-Server (`http://localhost:5000`)
 
 ### Companion App (`companion/ScrapingFactory.Companion`)
 - .NET 9 Konsolenanwendung
@@ -41,7 +45,6 @@ language-modules/
 ### Compiler (`companion/ScrapingFactory.Compiler`)
 - Enthält die IR-Typen (`ScrapingFactory.Compiler.IR.ScrapingConfig`)
 - Enthält die Sprachmodule (`Backends/Python/PythonCodeGenerator`, `Backends/Python/PythonScriptVerifier`)
-- **Wichtig:** IR-Schema muss vor Implementierung des Python-Backends fixiert werden
 
 ### Python-Templates (`language-modules/python/templates/`)
 - Jinja2-Templates, aus denen der `PythonCodeGenerator` das fertige Skript rendert
@@ -57,11 +60,16 @@ dotnet build companion/ScrapingFactory.sln
 # Erweiterungsverwaltung → "Entpackte Erweiterung laden" → extension/
 ```
 
-## Offene Designentscheidungen (vor Implementierung fixieren)
+## Architekturentscheidungen
 
-1. **IR-Schema** — Felder, Selektor-Format, Ausgabeformat (CSV/JSON), Feldtypen
-2. **Extension ↔ Companion Kommunikation** — lokaler HTTP-Server (aktuell geplant) vs. Native Messaging API
-3. **Selektor-Kompatibilität** — CSS-Selektoren die sich nicht 1:1 auf BeautifulSoup übertragen (`:contains()`, Shadow DOM, dynamische Klassen)
+Aus der Prototyping-Phase getroffen und aktiv in Verwendung (nicht mehr offen — Änderungen daran sind normale Weiterentwicklung, keine Grundsatzentscheidung mehr):
+
+1. **IR-Schema** — `ScrapingFactory.Compiler.IR.ScrapingConfig` (Felder, Selektor als CSS-String, optionales Attribut, `OutputFormat`); Wire-Format camelCase/String-Enum, siehe `CompanionEndpointTests`
+2. **Extension ↔ Companion Kommunikation** — lokaler HTTP-Server (`http://localhost:5000`), kein Native Messaging
+
+Weiterhin bestehende, bekannte Einschränkung (kein offener Entscheidungsbedarf, sondern eine Eigenschaft des gewählten Ansatzes):
+
+3. **Selektor-Kompatibilität** — CSS-Selektoren, die sich nicht 1:1 auf BeautifulSoup/soupsieve übertragen (`:contains()`, Shadow DOM, dynamische Klassen). Wird bei der Skript-Verifikation in `/generate` sichtbar (Selektor liefert keine Daten → `422`), nicht separat validiert.
 
 ## v1-Scope (MVP)
 
@@ -70,6 +78,13 @@ dotnet build companion/ScrapingFactory.sln
 - Keine Pagination
 - Nur Python als Zielsprache
 - Backend des generierten Skripts: `requests` + `BeautifulSoup`
+
+## Geplant für spätere Releases (Post-MVP)
+
+- **JS-Rendering-Unterstützung** — Skripte sollen auch dynamisch gerenderte Seiten scrapen können. Muss mit einer freien/kostenlosen Lösung umgesetzt werden (z. B. reines Playwright + Standard-Chromium/-Firefox), **keine kommerziellen Stealth-Browser-/Anti-Bot-Dienste mit Lizenz- oder Session-Modell** (z. B. CloakBrowser — geprüft und verworfen: Free-/Pro-Tarife sind session-limitiert und das Binary-Lizenzmodell untersagt Redistribution an Dritte ohne separaten OEM/SaaS-Vertrag, was mit einem frei verteilten Plugin nicht vereinbar ist). Bei Umsetzung ändert sich die Konsistenzregel nicht: die Companion App verifiziert weiterhin durch tatsächliche Ausführung des generierten Skripts.
+- **Login-/Session-Handling**
+- **Pagination**
+- **Weitere Zielsprachen** neben Python (Architektur ist bereits darauf ausgelegt, siehe Projektübersicht)
 
 ## Konsistenzregel
 
