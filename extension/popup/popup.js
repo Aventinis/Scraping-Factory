@@ -289,6 +289,21 @@ async function checkCompanion() {
   }
 }
 
+// The companion verifies the config against the live page before handing out
+// a script (same static-HTML rendering stage the script itself uses) and
+// responds 422 with per-field detail when a selector matched nothing, or
+// when the page couldn't be reached at all. Turn that into one readable
+// message — the full `data` (incl. every field's matchCount) is logged
+// separately so it ends up in the bug report if the user reports it.
+function buildVerificationErrorMessage(data) {
+  const failed = (data?.fields || []).filter(f => !f.success);
+  if (failed.length > 0) {
+    const list = failed.map(f => `„${f.name}“ (${f.selector})`).join(', ');
+    return `Kein Element gefunden für: ${list}`;
+  }
+  return data?.error || 'Verifikation der Konfiguration fehlgeschlagen.';
+}
+
 async function generate() {
   setState(STATES.GENERATING);
   const config = buildScrapingConfig(_state.url, _state.fields);
@@ -299,6 +314,11 @@ async function generate() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config),
     });
+    if (res.status === 422) {
+      const data = await res.json().catch(() => null);
+      log('GENERATE VERIFICATION FAIL', data);
+      throw new Error(buildVerificationErrorMessage(data));
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const scriptText = await res.text();
     log('GENERATE OK', `${scriptText.length} chars`);
@@ -598,6 +618,6 @@ if (typeof module !== 'undefined') {
   module.exports = {
     buildScrapingConfig, addField, removeField, escapeHtml, renderFields, STATES,
     formatTreeLabel, renderDomTree, highlightHover, highlightSelected,
-    formatLogSection, buildGithubIssueUrl, setLastError,
+    formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,
   };
 }
