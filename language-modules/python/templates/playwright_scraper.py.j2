@@ -5,6 +5,9 @@
 # Run:    python scraper.py
 
 import csv
+{{~ if needs_os_import ~}}
+import os
+{{~ end ~}}
 from playwright.sync_api import sync_playwright
 
 URL = "{{ url }}"
