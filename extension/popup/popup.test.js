@@ -446,36 +446,22 @@ describe('buildGithubIssueUrl', () => {
 });
 
 // ── buildVerificationErrorMessage ────────────────────────────────────────────
-// The companion verifies field selectors against the live page before
-// returning a script; /generate responds 422 with per-field detail when a
-// selector matched nothing, or a plain `error` when the page itself
-// couldn't be reached at all.
+// The companion generates and actually runs the script against the live
+// page before returning it; /generate responds 422 with an `error` message
+// describing why that run failed (page unreachable, script raised an
+// exception, or it ran cleanly but produced no data at all).
 
 describe('buildVerificationErrorMessage', () => {
-  test('lists the failed field with its selector when exactly one failed', () => {
+  test('uses the error message from the response', () => {
     const msg = buildVerificationErrorMessage({
-      error: 'Mindestens ein Selektor hat kein Element auf der Seite gefunden.',
-      fields: [
-        { name: 'Titel', selector: 'h1', success: true },
-        { name: 'Preis', selector: '.price', success: false },
-      ],
+      error: 'Skript lief fehlerfrei, hat aber keine Daten zurückgegeben (output.csv enthält nur die Kopfzeile).',
     });
-    expect(msg).toBe('Kein Element gefunden für: „Preis“ (.price)');
+    expect(msg).toBe('Skript lief fehlerfrei, hat aber keine Daten zurückgegeben (output.csv enthält nur die Kopfzeile).');
   });
 
-  test('lists every failed field when several fail', () => {
-    const msg = buildVerificationErrorMessage({
-      fields: [
-        { name: 'A', selector: '.a', success: false },
-        { name: 'B', selector: '.b', success: false },
-      ],
-    });
-    expect(msg).toBe('Kein Element gefunden für: „A“ (.a), „B“ (.b)');
-  });
-
-  test('falls back to the generic error when no field failed individually (e.g. page unreachable)', () => {
-    const msg = buildVerificationErrorMessage({ error: 'Seite nicht erreichbar: timeout', fields: [] });
-    expect(msg).toBe('Seite nicht erreichbar: timeout');
+  test('passes through a script-crash error message', () => {
+    const msg = buildVerificationErrorMessage({ error: 'Skript (python3) wurde mit Fehler beendet (Exit-Code 1): Traceback...' });
+    expect(msg).toBe('Skript (python3) wurde mit Fehler beendet (Exit-Code 1): Traceback...');
   });
 
   test('handles a missing/empty response gracefully', () => {
@@ -531,8 +517,7 @@ describe('generate() surfaces companion verification failures', () => {
           ok: false,
           status: 422,
           json: () => Promise.resolve({
-            error: 'Mindestens ein Selektor hat kein Element auf der Seite gefunden.',
-            fields: [{ name: 'Preis', selector: '.price', matchCount: 0, success: false }],
+            error: 'Skript lief fehlerfrei, hat aber keine Daten zurückgegeben (output.csv enthält nur die Kopfzeile).',
           }),
         });
       }
@@ -543,13 +528,13 @@ describe('generate() surfaces companion verification failures', () => {
     await flushMicrotasks(); // → STATES.IDLE, fields restored from storage
   });
 
-  test('shows a toast naming the failed field and offers to report it', async () => {
+  test('shows a toast with the verification error and offers to report it', async () => {
     document.getElementById('btn-generate').click();
     await flushMicrotasks();
 
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('error-toast-message').textContent).toContain('.price');
+    expect(document.getElementById('error-toast-message').textContent).toContain('keine Daten zurückgegeben');
     expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
   });
 });
