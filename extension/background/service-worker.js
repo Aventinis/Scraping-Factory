@@ -19,15 +19,36 @@ chrome.sidePanel
 chrome.runtime.onMessage.addListener((message, sender) => {
   log('MSG_IN', { type: message.type, fromTab: sender.tab?.id ?? 'sidepanel' });
 
-  if (message.type === 'START_SELECTION' || message.type === 'STOP_SELECTION') {
+  const FORWARD_TO_TAB = ['START_SELECTION', 'STOP_SELECTION', 'ENABLE_DOM_VIEW', 'DISABLE_DOM_VIEW'];
+  if (FORWARD_TO_TAB.includes(message.type)) {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs.length === 0) {
         log('FWD_SKIP — no active tab');
         return;
       }
       log('FWD → tab', { tabId: tabs[0].id, type: message.type });
-      chrome.tabs.sendMessage(tabs[0].id, message);
+      chrome.tabs.sendMessage(tabs[0].id, message)
+        .then(() => log('FWD → tab OK', message.type))
+        .catch((err) => {
+          // No content script on this tab — e.g. chrome://, the Chrome Web
+          // Store, a PDF viewer, or a page that was already open before the
+          // extension was installed/reloaded. Without this .catch(), the
+          // rejected promise surfaces as an uncaught error in the service
+          // worker's error console.
+          log('FWD → tab MISS', { type: message.type, error: err.message });
+          if (message.type === 'START_SELECTION') {
+            chrome.runtime.sendMessage({ type: 'SELECTION_UNAVAILABLE', reason: err.message }).catch(() => {});
+          }
+        });
     });
+  }
+
+  if (message.type === 'HOVER_ELEMENT' || message.type === 'DOM_TREE') {
+    // Transient, side-panel-only messages — no session storage fallback,
+    // since missing one while the panel is closed is harmless.
+    chrome.runtime.sendMessage(message)
+      .then(() => log('FWD → sidepanel OK', message.type))
+      .catch(() => log('FWD → sidepanel MISS', message.type));
   }
 
   if (message.type === 'ELEMENT_SELECTED') {
