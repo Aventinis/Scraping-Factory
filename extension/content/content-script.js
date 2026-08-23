@@ -32,7 +32,46 @@ function buildSelector(element) {
   return segments.join(' > ');
 }
 
-if (typeof module !== 'undefined') module.exports = { buildSelector };
+// Identifies an element by its position within the DOM tree, relative to
+// document.body (same boundary buildSelector stops at). Used to correlate
+// page-side hover/click events with nodes in the side panel's tree view.
+function elementPath(element) {
+  const path = [];
+  let current = element;
+  while (current && current !== document.body) {
+    const parent = current.parentElement;
+    if (!parent) break;
+    path.unshift(Array.prototype.indexOf.call(parent.children, current));
+    current = parent;
+  }
+  return path;
+}
+
+// Serializes the DOM (rooted at document.body) into a plain-object tree the
+// side panel can render. Capped at MAX_TREE_NODES so a huge page can't hang
+// the side panel or blow up the message payload.
+const MAX_TREE_NODES = 1500;
+
+function serializeDomTree() {
+  let count = 0;
+  let truncated = false;
+
+  function walk(element, path) {
+    count++;
+    const classes = Array.from(element.classList).filter(c => c.trim() !== '');
+    const children = [];
+    for (let i = 0; i < element.children.length; i++) {
+      if (count >= MAX_TREE_NODES) { truncated = true; break; }
+      children.push(walk(element.children[i], [...path, i]));
+    }
+    return { tag: element.tagName.toLowerCase(), id: element.id || null, classes, path, children };
+  }
+
+  const tree = walk(document.body, []);
+  return { tree, truncated };
+}
+
+if (typeof module !== 'undefined') module.exports = { buildSelector, elementPath, serializeDomTree };
 
 // ── Overlay ──────────────────────────────────────────────────────────────────
 
@@ -73,9 +112,17 @@ function moveOverlayTo(element) {
 
 // ── Selection mode ────────────────────────────────────────────────────────────
 
+// Set by ENABLE_DOM_VIEW / DISABLE_DOM_VIEW; gates the (relatively chatty)
+// HOVER_ELEMENT forwarding so it only runs while the side panel's optional
+// DOM tree view is actually visible.
+let domViewEnabled = false;
+
 function onMouseOver(e) {
   if (e.target === overlay) return;
   moveOverlayTo(e.target);
+  if (domViewEnabled) {
+    chrome.runtime.sendMessage({ type: 'HOVER_ELEMENT', path: elementPath(e.target) });
+  }
 }
 
 function onClick(e) {
@@ -83,10 +130,11 @@ function onClick(e) {
   e.stopPropagation();
 
   const selector = buildSelector(e.target);
+  const path = elementPath(e.target);
   log('CLICK → selector', selector);
   stopSelection();
   log('MSG_OUT ELEMENT_SELECTED', selector);
-  chrome.runtime.sendMessage({ type: 'ELEMENT_SELECTED', selector });
+  chrome.runtime.sendMessage({ type: 'ELEMENT_SELECTED', selector, path });
 }
 
 function startSelection() {
@@ -103,6 +151,17 @@ function stopSelection() {
   removeOverlay();
 }
 
+function enableDomView() {
+  domViewEnabled = true;
+  log('DOM_VIEW enable → sending tree');
+  chrome.runtime.sendMessage({ type: 'DOM_TREE', ...serializeDomTree() });
+}
+
+function disableDomView() {
+  log('DOM_VIEW disable');
+  domViewEnabled = false;
+}
+
 // ── Message listener ──────────────────────────────────────────────────────────
 
 if (typeof chrome !== 'undefined' && chrome.runtime) {
@@ -110,5 +169,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     log('MSG_IN', message.type);
     if (message.type === 'START_SELECTION') startSelection();
     if (message.type === 'STOP_SELECTION')  stopSelection();
+    if (message.type === 'ENABLE_DOM_VIEW') enableDomView();
+    if (message.type === 'DISABLE_DOM_VIEW') disableDomView();
   });
 }
