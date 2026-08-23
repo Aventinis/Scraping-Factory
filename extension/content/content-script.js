@@ -50,7 +50,7 @@ function elementPath(element) {
 // Serializes the DOM (rooted at document.body) into a plain-object tree the
 // side panel can render. Capped at MAX_TREE_NODES so a huge page can't hang
 // the side panel or blow up the message payload.
-const MAX_TREE_NODES = 1500;
+const MAX_TREE_NODES = 500;
 
 function serializeDomTree() {
   let count = 0;
@@ -112,16 +112,38 @@ function moveOverlayTo(element) {
 
 // ── Selection mode ────────────────────────────────────────────────────────────
 
-// Set by ENABLE_DOM_VIEW / DISABLE_DOM_VIEW; gates the (relatively chatty)
-// HOVER_ELEMENT forwarding so it only runs while the side panel's optional
-// DOM tree view is actually visible.
+// Set by ENABLE_DOM_VIEW / DISABLE_DOM_VIEW; gates the HOVER_ELEMENT
+// forwarding so it only runs while the side panel's optional DOM tree view
+// is actually visible.
 let domViewEnabled = false;
+
+// mouseover fires once per element-boundary crossing, which on a dense real
+// page can be dozens of times a second — sending one runtime message per
+// crossing flooded the extension's message channel badly enough to delay
+// unrelated messages (including plain selection). Coalesce to at most one
+// HOVER_ELEMENT send per ~16ms (one frame), always reflecting the latest target.
+const HOVER_THROTTLE_MS = 16;
+let hoverTimeoutId = null;
+let pendingHoverTarget = null;
+
+function flushHover() {
+  hoverTimeoutId = null;
+  if (!domViewEnabled || !pendingHoverTarget) return;
+  try {
+    chrome.runtime.sendMessage({ type: 'HOVER_ELEMENT', path: elementPath(pendingHoverTarget) });
+  } catch (err) {
+    log('HOVER_ELEMENT send failed', err.message);
+  }
+}
 
 function onMouseOver(e) {
   if (e.target === overlay) return;
   moveOverlayTo(e.target);
-  if (domViewEnabled) {
-    chrome.runtime.sendMessage({ type: 'HOVER_ELEMENT', path: elementPath(e.target) });
+
+  if (!domViewEnabled) return;
+  pendingHoverTarget = e.target;
+  if (hoverTimeoutId === null) {
+    hoverTimeoutId = setTimeout(flushHover, HOVER_THROTTLE_MS);
   }
 }
 
@@ -130,9 +152,18 @@ function onClick(e) {
   e.stopPropagation();
 
   const selector = buildSelector(e.target);
-  const path = elementPath(e.target);
   log('CLICK → selector', selector);
   stopSelection();
+
+  // Path is a nice-to-have for the optional tree-view highlight — never let
+  // a failure here block the actual field selection.
+  let path;
+  try {
+    path = elementPath(e.target);
+  } catch (err) {
+    log('elementPath failed', err.message);
+  }
+
   log('MSG_OUT ELEMENT_SELECTED', selector);
   chrome.runtime.sendMessage({ type: 'ELEMENT_SELECTED', selector, path });
 }
@@ -149,17 +180,31 @@ function stopSelection() {
   document.removeEventListener('mouseover', onMouseOver);
   document.removeEventListener('click', onClick, true);
   removeOverlay();
+  if (hoverTimeoutId !== null) {
+    clearTimeout(hoverTimeoutId);
+    hoverTimeoutId = null;
+  }
+  pendingHoverTarget = null;
 }
 
 function enableDomView() {
   domViewEnabled = true;
   log('DOM_VIEW enable → sending tree');
-  chrome.runtime.sendMessage({ type: 'DOM_TREE', ...serializeDomTree() });
+  try {
+    chrome.runtime.sendMessage({ type: 'DOM_TREE', ...serializeDomTree() });
+  } catch (err) {
+    log('DOM_TREE send failed', err.message);
+    chrome.runtime.sendMessage({ type: 'DOM_TREE', tree: null, truncated: false, error: err.message });
+  }
 }
 
 function disableDomView() {
   log('DOM_VIEW disable');
   domViewEnabled = false;
+  if (hoverTimeoutId !== null) {
+    clearTimeout(hoverTimeoutId);
+    hoverTimeoutId = null;
+  }
 }
 
 // ── Message listener ──────────────────────────────────────────────────────────

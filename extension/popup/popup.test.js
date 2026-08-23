@@ -237,3 +237,101 @@ describe('renderDomTree / highlightHover / highlightSelected', () => {
     expect(previousRow.classList.contains('selected')).toBe(false);
   });
 });
+
+// ── DOM tree loading timeout ─────────────────────────────────────────────────
+// Regression coverage: a lost/never-arriving DOM_TREE response used to leave
+// the "Lade DOM-Baum…" spinner stuck forever. A timeout must now surface an
+// error instead.
+
+describe('DOM tree loading timeout', () => {
+  let capturedListener;
+
+  // init() awaits chrome.storage.session.get() and then fetch() (mocked,
+  // resolved) before settling on COMPANION_ERROR — flush those microtasks
+  // with real timers before switching to fake ones for the timeout itself.
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle"></section>
+      <section id="screen-selecting" class="hidden">
+        <button id="btn-add-field"></button>
+        <input type="checkbox" id="toggle-dom-view" />
+        <div id="dom-tree-wrapper" class="hidden">
+          <p id="dom-tree-loading"></p>
+          <p id="dom-tree-error" class="hidden"></p>
+          <p id="dom-tree-truncated" class="hidden"></p>
+          <ul id="dom-tree-root"></ul>
+        </div>
+      </section>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn() },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({}),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: false });
+
+    require('./popup');
+    await flushMicrotasks();
+
+    document.getElementById('btn-add-field').click(); // → STATES.SELECTING
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('shows an error if no DOM_TREE response arrives within the timeout', () => {
+    const toggle = document.getElementById('toggle-dom-view');
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+
+    expect(document.getElementById('dom-tree-error').classList.contains('hidden')).toBe(true);
+
+    jest.advanceTimersByTime(5000);
+
+    expect(document.getElementById('dom-tree-error').classList.contains('hidden')).toBe(false);
+  });
+
+  test('a DOM_TREE response before the timeout clears loading without an error', () => {
+    const toggle = document.getElementById('toggle-dom-view');
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+
+    capturedListener({
+      type: 'DOM_TREE',
+      tree: { tag: 'body', id: null, classes: [], path: [], children: [] },
+      truncated: false,
+    });
+    jest.advanceTimersByTime(5000);
+
+    expect(document.getElementById('dom-tree-error').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('dom-tree-loading').classList.contains('hidden')).toBe(true);
+  });
+
+  test('a DOM_TREE error response surfaces immediately without waiting for the timeout', () => {
+    const toggle = document.getElementById('toggle-dom-view');
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+
+    capturedListener({ type: 'DOM_TREE', tree: null, truncated: false, error: 'boom' });
+
+    expect(document.getElementById('dom-tree-error').classList.contains('hidden')).toBe(false);
+  });
+});

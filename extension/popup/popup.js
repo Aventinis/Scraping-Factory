@@ -16,9 +16,26 @@ let _state = {
   scriptText:        '',
   pendingSelector:   null,  // set while field-name modal is open
   domViewEnabled:    false, // user preference, kept across selection rounds
-  domTree:           null,  // serialized tree from the content script, or null while loading
+  domTree:           null,  // serialized tree from the content script, or null while loading/errored
   domTreeTruncated:  false,
+  domTreeError:      null,  // set if no DOM_TREE response arrives within DOM_TREE_TIMEOUT_MS
 };
+
+const DOM_TREE_TIMEOUT_MS = 5000;
+let domTreeTimeoutId = null;
+
+// Sends ENABLE_DOM_VIEW and arms a timeout so a lost/slow response shows an
+// error instead of spinning forever (see feature/dom-tree-view regression:
+// an unthrottled content script could stall the message channel entirely).
+function requestDomTree() {
+  clearTimeout(domTreeTimeoutId);
+  patchState({ domTree: null, domTreeTruncated: false, domTreeError: null });
+  chrome.runtime.sendMessage({ type: 'ENABLE_DOM_VIEW' });
+  domTreeTimeoutId = setTimeout(() => {
+    log('DOM_TREE timeout — no response');
+    patchState({ domTreeError: 'Baum konnte nicht geladen werden.' });
+  }, DOM_TREE_TIMEOUT_MS);
+}
 
 // ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -126,7 +143,10 @@ function render() {
     if (wrapper) wrapper.classList.toggle('hidden', !_state.domViewEnabled);
 
     const loading = document.getElementById('dom-tree-loading');
-    if (loading) loading.classList.toggle('hidden', _state.domTree !== null);
+    if (loading) loading.classList.toggle('hidden', _state.domTree !== null || !!_state.domTreeError);
+
+    const error = document.getElementById('dom-tree-error');
+    if (error) error.classList.toggle('hidden', !_state.domTreeError);
 
     const truncated = document.getElementById('dom-tree-truncated');
     if (truncated) truncated.classList.toggle('hidden', !_state.domTreeTruncated);
@@ -331,16 +351,17 @@ function wireEvents() {
   document.getElementById('btn-add-field')?.addEventListener('click', () => {
     log('BTN add-field → START_SELECTION');
     chrome.runtime.sendMessage({ type: 'START_SELECTION' });
-    setState(STATES.SELECTING, { pendingSelector: null, domTree: null, domTreeTruncated: false });
+    setState(STATES.SELECTING, { pendingSelector: null, domTree: null, domTreeTruncated: false, domTreeError: null });
     if (_state.domViewEnabled) {
       log('DOM view was enabled → re-requesting tree');
-      chrome.runtime.sendMessage({ type: 'ENABLE_DOM_VIEW' });
+      requestDomTree();
     }
   });
 
   document.getElementById('btn-cancel-selection')?.addEventListener('click', () => {
     log('BTN cancel-selection → STOP_SELECTION');
     chrome.runtime.sendMessage({ type: 'STOP_SELECTION' });
+    clearTimeout(domTreeTimeoutId);
     setState(STATES.IDLE);
   });
 
@@ -348,10 +369,11 @@ function wireEvents() {
     const enabled = e.target.checked;
     log('BTN toggle-dom-view', enabled);
     if (enabled) {
-      chrome.runtime.sendMessage({ type: 'ENABLE_DOM_VIEW' });
-      patchState({ domViewEnabled: true, domTree: null, domTreeTruncated: false });
+      patchState({ domViewEnabled: true });
+      requestDomTree();
     } else {
       chrome.runtime.sendMessage({ type: 'DISABLE_DOM_VIEW' });
+      clearTimeout(domTreeTimeoutId);
       patchState({ domViewEnabled: false });
     }
   });
@@ -400,8 +422,13 @@ function wireEvents() {
     }
     if (message.type === 'DOM_TREE') {
       log('DOM_TREE received', { nodes: message.tree, truncated: message.truncated });
-      patchState({ domTree: message.tree, domTreeTruncated: !!message.truncated });
-      renderDomTree(message.tree);
+      clearTimeout(domTreeTimeoutId);
+      if (message.tree) {
+        patchState({ domTree: message.tree, domTreeTruncated: !!message.truncated, domTreeError: null });
+        renderDomTree(message.tree);
+      } else {
+        patchState({ domTreeError: message.error || 'Baum konnte nicht geladen werden.' });
+      }
     }
     if (message.type === 'HOVER_ELEMENT') {
       highlightHover(message.path);
