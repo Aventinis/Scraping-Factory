@@ -19,7 +19,8 @@ chrome.sidePanel
 chrome.runtime.onMessage.addListener((message, sender) => {
   log('MSG_IN', { type: message.type, fromTab: sender.tab?.id ?? 'sidepanel' });
 
-  if (message.type === 'START_SELECTION' || message.type === 'STOP_SELECTION') {
+  const FORWARD_TO_TAB = ['START_SELECTION', 'STOP_SELECTION', 'ENABLE_DOM_VIEW', 'DISABLE_DOM_VIEW'];
+  if (FORWARD_TO_TAB.includes(message.type)) {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs.length === 0) {
         log('FWD_SKIP — no active tab');
@@ -28,6 +29,14 @@ chrome.runtime.onMessage.addListener((message, sender) => {
       log('FWD → tab', { tabId: tabs[0].id, type: message.type });
       chrome.tabs.sendMessage(tabs[0].id, message);
     });
+  }
+
+  if (message.type === 'HOVER_ELEMENT' || message.type === 'DOM_TREE') {
+    // Transient, side-panel-only messages — no session storage fallback,
+    // since missing one while the panel is closed is harmless.
+    chrome.runtime.sendMessage(message)
+      .then(() => log('FWD → sidepanel OK', message.type))
+      .catch(() => log('FWD → sidepanel MISS', message.type));
   }
 
   if (message.type === 'ELEMENT_SELECTED') {

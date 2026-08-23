@@ -85,6 +85,49 @@ test('ELEMENT_SELECTED swallows error when side panel is closed', async () => {
   ).resolves.toBeUndefined();
 });
 
+test('ENABLE_DOM_VIEW is forwarded to active tab content script', () => {
+  chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+
+  capturedListener({ type: 'ENABLE_DOM_VIEW' }, {});
+
+  expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(7, { type: 'ENABLE_DOM_VIEW' });
+});
+
+test('DISABLE_DOM_VIEW is forwarded to active tab content script', () => {
+  chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+
+  capturedListener({ type: 'DISABLE_DOM_VIEW' }, {});
+
+  expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(7, { type: 'DISABLE_DOM_VIEW' });
+});
+
+test('DOM_TREE is forwarded to runtime (side panel) without touching tabs or storage', () => {
+  const tree = { tag: 'body', id: null, classes: [], path: [], children: [] };
+  capturedListener({ type: 'DOM_TREE', tree, truncated: false }, {});
+
+  expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'DOM_TREE', tree, truncated: false });
+  expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
+  expect(chrome.storage.session.set).not.toHaveBeenCalled();
+});
+
+test('DOM_TREE forward swallows error when side panel is closed', async () => {
+  chrome.runtime.sendMessage.mockRejectedValue(new Error('No side panel'));
+
+  await expect(
+    new Promise((resolve) => {
+      capturedListener({ type: 'DOM_TREE', tree: {}, truncated: false }, {});
+      setTimeout(resolve, 0);
+    }),
+  ).resolves.toBeUndefined();
+});
+
+test('HOVER_ELEMENT is forwarded to runtime (side panel)', () => {
+  capturedListener({ type: 'HOVER_ELEMENT', path: [0, 1] }, {});
+
+  expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'HOVER_ELEMENT', path: [0, 1] });
+  expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
+});
+
 test('unknown message type is ignored', () => {
   capturedListener({ type: 'UNKNOWN' }, {});
 
