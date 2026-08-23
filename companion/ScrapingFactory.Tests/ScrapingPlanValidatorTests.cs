@@ -109,6 +109,7 @@ public class ScrapingPlanValidatorTests
     {
         var plan = new ScrapingPlan
         {
+            Engine = ScrapingEngine.Browser,
             Steps =
             [
                 new NavigateStep { Url = "https://example.com" },
@@ -125,6 +126,7 @@ public class ScrapingPlanValidatorTests
     {
         var plan = new ScrapingPlan
         {
+            Engine = ScrapingEngine.Browser,
             Steps =
             [
                 new NavigateStep { Url = "https://example.com" },
@@ -142,6 +144,7 @@ public class ScrapingPlanValidatorTests
     {
         var plan = new ScrapingPlan
         {
+            Engine = ScrapingEngine.Browser,
             Steps =
             [
                 new NavigateStep { Url = "https://example.com" },
@@ -152,6 +155,100 @@ public class ScrapingPlanValidatorTests
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
         Assert.Contains("Timeout", result.Error);
+    }
+
+    [Fact]
+    public void Validate_BrowserOnlyStepWithStaticEngine_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Static,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new WaitForStep { Selector = ".loaded" },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Engine", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ValidFillAndClickSteps_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com/login" },
+                new FillStep { Selector = "#user", EnvironmentVariableName = "SF_USERNAME" },
+                new ClickStep { Selector = "#submit" },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public void Validate_FillStepWithEmptySelector_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new FillStep { Selector = " ", EnvironmentVariableName = "SF_USERNAME" },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("FillStep", result.Error);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("1BAD")]
+    [InlineData("BAD NAME")]
+    [InlineData("BAD-NAME")]
+    public void Validate_FillStepWithInvalidEnvironmentVariableName_Fails(string envVarName)
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new FillStep { Selector = "#user", EnvironmentVariableName = envVarName },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Umgebungsvariablen-Name", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ClickStepWithEmptySelector_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ClickStep { Selector = " " },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("ClickStep", result.Error);
     }
 
     [Fact]

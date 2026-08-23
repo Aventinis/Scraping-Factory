@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace ScrapingFactory.Compiler.IR;
 
 // Fast, in-process structural checks on a ScrapingPlan, run before codegen
@@ -26,12 +28,33 @@ public static class ScrapingPlanValidator
             return Invalid($"Ungültige URL '{navigate.Url}': muss eine absolute http(s)-URL sein.");
         }
 
+        // WaitFor/Fill/Click all need a real browser to mean anything — the
+        // Static engine's codegen simply doesn't look at them, so silently
+        // generating a script that just drops them would be confusing.
+        var browserOnlySteps = plan.Steps.Where(step => step is WaitForStep or FillStep or ClickStep).ToList();
+        if (plan.Engine != ScrapingEngine.Browser && browserOnlySteps.Count > 0)
+            return Invalid("WaitForStep/FillStep/ClickStep erfordern Engine 'Browser'.");
+
         foreach (var waitStep in plan.Steps.OfType<WaitForStep>())
         {
             if (string.IsNullOrWhiteSpace(waitStep.Selector))
                 return Invalid("Selector eines WaitForStep darf nicht leer sein.");
             if (waitStep.TimeoutMs <= 0)
                 return Invalid("Timeout eines WaitForStep muss positiv sein.");
+        }
+
+        foreach (var fillStep in plan.Steps.OfType<FillStep>())
+        {
+            if (string.IsNullOrWhiteSpace(fillStep.Selector))
+                return Invalid("Selector eines FillStep darf nicht leer sein.");
+            if (!EnvironmentVariableNamePattern.IsMatch(fillStep.EnvironmentVariableName))
+                return Invalid($"Ungültiger Umgebungsvariablen-Name '{fillStep.EnvironmentVariableName}' in FillStep.");
+        }
+
+        foreach (var clickStep in plan.Steps.OfType<ClickStep>())
+        {
+            if (string.IsNullOrWhiteSpace(clickStep.Selector))
+                return Invalid("Selector eines ClickStep darf nicht leer sein.");
         }
 
         var extractSteps = plan.Steps.OfType<ExtractStep>().ToList();
@@ -56,6 +79,8 @@ public static class ScrapingPlanValidator
 
         return new PlanValidationResult { Success = true };
     }
+
+    private static readonly Regex EnvironmentVariableNamePattern = new("^[A-Za-z_][A-Za-z0-9_]*$");
 
     private static PlanValidationResult Invalid(string error) => new() { Success = false, Error = error };
 }
