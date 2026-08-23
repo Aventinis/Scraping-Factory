@@ -25,7 +25,7 @@ companion/                  .NET 9 Solution
     Backends/Python/         Python-Codegenerator
 
 language-modules/
-  python/templates/          Jinja2-Templates für generierte Python-Skripte
+  python/templates/          Scriban-Templates für generierte Python-Skripte
 ```
 
 ## Komponenten
@@ -47,7 +47,7 @@ language-modules/
 - Enthält die Sprachmodule (`Backends/Python/PythonCodeGenerator`, `Backends/Python/PythonScriptVerifier`)
 
 ### Python-Templates (`language-modules/python/templates/`)
-- Jinja2-Templates, aus denen der `PythonCodeGenerator` das fertige Skript rendert
+- Scriban-Templates (Dateiendung `.j2` aus historischen Gründen, Syntax ist Scriban statt Jinja2), aus denen der `PythonCodeGenerator` das fertige Skript rendert
 - Generierter Code soll idiomatisch, kommentiert und für Endnutzer lesbar sein
 
 ## Build
