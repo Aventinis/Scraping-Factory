@@ -16,7 +16,10 @@ global.chrome = {
 };
 global.fetch = jest.fn().mockResolvedValue({ ok: false });
 
-const { buildScrapingConfig, addField, removeField, escapeHtml, renderFields, STATES } = require('./popup');
+const {
+  buildScrapingConfig, addField, removeField, escapeHtml, renderFields, STATES,
+  formatTreeLabel, renderDomTree, highlightHover, highlightSelected,
+} = require('./popup');
 
 // ── buildScrapingConfig ───────────────────────────────────────────────────────
 
@@ -152,4 +155,85 @@ describe('renderFields', () => {
 test('STATES contains expected keys', () => {
   const expected = ['CHECKING_COMPANION', 'COMPANION_ERROR', 'IDLE', 'SELECTING', 'GENERATING', 'DONE'];
   expected.forEach(key => expect(STATES).toHaveProperty(key));
+});
+
+// ── formatTreeLabel ───────────────────────────────────────────────────────────
+
+describe('formatTreeLabel', () => {
+  test('tag only when no id or classes', () => {
+    expect(formatTreeLabel({ tag: 'p', id: null, classes: [] })).toBe('p');
+  });
+
+  test('appends #id', () => {
+    expect(formatTreeLabel({ tag: 'section', id: 'main', classes: [] })).toBe('section#main');
+  });
+
+  test('appends .class.class for multiple classes', () => {
+    expect(formatTreeLabel({ tag: 'li', id: null, classes: ['card', 'active'] })).toBe('li.card.active');
+  });
+
+  test('combines id and classes', () => {
+    expect(formatTreeLabel({ tag: 'div', id: 'wrap', classes: ['a'] })).toBe('div#wrap.a');
+  });
+});
+
+// ── DOM tree rendering & highlighting ────────────────────────────────────────
+
+describe('renderDomTree / highlightHover / highlightSelected', () => {
+  const sampleTree = {
+    tag: 'body', id: null, classes: [], path: [],
+    children: [
+      {
+        tag: 'section', id: 'main', classes: [], path: [0],
+        children: [
+          { tag: 'p', id: null, classes: ['a'], path: [0, 0], children: [] },
+        ],
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    document.body.innerHTML = '<ul id="dom-tree-root"></ul>';
+    renderDomTree(sampleTree);
+  });
+
+  test('renders one <li> per tree node with the node label', () => {
+    const nodes = document.querySelectorAll('.dom-tree-node');
+    expect(nodes).toHaveLength(3);
+    expect(document.querySelector('[data-path="[0]"]').textContent).toContain('section#main');
+  });
+
+  test('nested nodes start collapsed', () => {
+    const childUl = document.querySelector('[data-path="[0]"] > .dom-tree-children');
+    expect(childUl.classList.contains('hidden')).toBe(true);
+  });
+
+  test('highlightHover marks the matching row and expands its ancestors', () => {
+    highlightHover([0, 0]);
+    const row = document.querySelector('[data-path="[0,0]"] > .dom-tree-row');
+    expect(row.classList.contains('hover')).toBe(true);
+
+    const ancestorUl = document.querySelector('[data-path="[0]"] > .dom-tree-children');
+    expect(ancestorUl.classList.contains('hidden')).toBe(false);
+  });
+
+  test('highlightHover clears the previous hover highlight', () => {
+    highlightHover([0]);
+    highlightHover([0, 0]);
+    const previousRow = document.querySelector('[data-path="[0]"] > .dom-tree-row');
+    expect(previousRow.classList.contains('hover')).toBe(false);
+  });
+
+  test('highlightSelected marks the row as selected', () => {
+    highlightSelected([0, 0]);
+    const row = document.querySelector('[data-path="[0,0]"] > .dom-tree-row');
+    expect(row.classList.contains('selected')).toBe(true);
+  });
+
+  test('highlightSelected replaces a previous selection', () => {
+    highlightSelected([0]);
+    highlightSelected([0, 0]);
+    const previousRow = document.querySelector('[data-path="[0]"] > .dom-tree-row');
+    expect(previousRow.classList.contains('selected')).toBe(false);
+  });
 });
