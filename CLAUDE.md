@@ -39,15 +39,17 @@ language-modules/
 - .NET 9 Konsolenanwendung
 - Startet einen lokalen HTTP-Server für die Extension
 - `/generate` generiert das Skript, führt es dann per Sprachmodul-Verifier (`Backends/Python/PythonScriptVerifier`) probeweise in einem temporären Verzeichnis aus und liefert es erst bei Erfolg (Exit-Code 0, mindestens eine Datenzeile) aus — bei Fehlschlag `422` mit Fehlermeldung statt Skript
-- **Laufzeit-Voraussetzung:** `python3` (oder `python`) inkl. `requests` + `beautifulsoup4` muss auf dem Rechner, auf dem die Companion App läuft, im PATH verfügbar sein — nicht mehr nur beim Endnutzer, der das heruntergeladene Skript später ausführt
+- **Laufzeit-Voraussetzung:** `python3` (oder `python`) inkl. `requests` + `beautifulsoup4` muss auf dem Rechner, auf dem die Companion App läuft, im PATH verfügbar sein — nicht mehr nur beim Endnutzer, der das heruntergeladene Skript später ausführt. Für den Browser-Engine (`Engine: "Browser"`) zusätzlich `playwright` (`pip install playwright`) inkl. installiertem Chromium (`playwright install chromium`)
 - Baut die IR und übergibt sie an `ScrapingFactory.Compiler`
 
 ### Compiler (`companion/ScrapingFactory.Compiler`)
 - Enthält die IR-Typen: das Wire-Format `ScrapingFactory.Compiler.IR.ScrapingConfig` (Fields-Liste, wie von der Extension gesendet) wird von `ScrapingPlanBuilder` in die kanonische `ScrapingPlan` (Schrittfolge aus `NavigateStep`/`ExtractStep`) übersetzt — Codegenerator und Verifier sehen nur noch `ScrapingPlan`
-- Enthält die Sprachmodule (`Backends/Python/PythonCodeGenerator`, `Backends/Python/PythonScriptVerifier`), die `ICodeGenerator`/`IScriptVerifier` implementieren; die `LanguageModuleRegistry` löst sie per `LanguageId` auf, ohne dass Aufrufer die konkreten Typen kennen müssen
+- Enthält die Sprachmodule: `Backends/Python/PythonCodeGenerator` (Engine `Static`, requests+BeautifulSoup) und `Backends/Python/PythonPlaywrightCodeGenerator` (Engine `Browser`, Playwright), beide implementieren `ICodeGenerator`; `Backends/Python/PythonScriptVerifier` implementiert `IScriptVerifier` und führt beide Skriptarten gleichermaßen aus. Die `LanguageModuleRegistry` löst Codegeneratoren per `(LanguageId, Engine)`-Tupel auf, Verifier per `LanguageId` — Aufrufer kennen die konkreten Typen nicht
 
 ### Python-Templates (`language-modules/python/templates/`)
-- Scriban-Templates (Dateiendung `.j2` aus historischen Gründen, Syntax ist Scriban statt Jinja2), aus denen der `PythonCodeGenerator` das fertige Skript rendert
+- Scriban-Templates (Dateiendung `.j2` aus historischen Gründen, Syntax ist Scriban statt Jinja2)
+- `scraper.py.j2`: ein Monolith für den Static-Engine (`PythonCodeGenerator`) — deklarativer Dict-Ansatz (SELECTORS/ATTRIBUTES), braucht keine Schritt-für-Schritt-Komposition
+- `playwright_scraper.py.j2` + `playwright_navigate_step.py.j2` + `playwright_wait_step.py.j2`: für den Browser-Engine (`PythonPlaywrightCodeGenerator`) — Navigate-/WaitFor-Steps werden als eigene Fragmente pro Step-Typ gerendert und der Reihe nach in die Shell eingesetzt, weil sie (anders als Extract) je einer konkreten Aktion an einer festen Stelle im Ablauf entsprechen
 - Generierter Code soll idiomatisch, kommentiert und für Endnutzer lesbar sein
 
 ## Build
@@ -73,16 +75,16 @@ Weiterhin bestehende, bekannte Einschränkung (kein offener Entscheidungsbedarf,
 
 ## v1-Scope (MVP)
 
-- Nur statisch gerenderte Seiten (kein JS-Rendering im generierten Skript)
-- Kein Login-/Session-Handling
+- Standard-Engine ist weiterhin statisches Rendering (`requests` + `BeautifulSoup`, kein JS). Ein optionaler Browser-Engine (Playwright + Chromium, `Engine: "Browser"`) für dynamisch gerenderte Seiten existiert bereits serverseitig (IR, Codegen, Verifikation), hat aber noch **keine Extension-UI** — nur direkt über die Companion-API ansteuerbar
+- Kein Login-/Session-Handling (auch nicht über den Browser-Engine — es gibt noch keine `Click`/`Fill`-Steps)
 - Keine Pagination
 - Nur Python als Zielsprache
-- Backend des generierten Skripts: `requests` + `BeautifulSoup`
+- Backend des generierten Skripts: `requests` + `BeautifulSoup` (Static) bzw. Playwright (Browser)
 
 ## Geplant für spätere Releases (Post-MVP)
 
-- **JS-Rendering-Unterstützung** — Skripte sollen auch dynamisch gerenderte Seiten scrapen können. Muss mit einer freien/kostenlosen Lösung umgesetzt werden (z. B. reines Playwright + Standard-Chromium/-Firefox), **keine kommerziellen Stealth-Browser-/Anti-Bot-Dienste mit Lizenz- oder Session-Modell** (z. B. CloakBrowser — geprüft und verworfen: Free-/Pro-Tarife sind session-limitiert und das Binary-Lizenzmodell untersagt Redistribution an Dritte ohne separaten OEM/SaaS-Vertrag, was mit einem frei verteilten Plugin nicht vereinbar ist). Bei Umsetzung ändert sich die Konsistenzregel nicht: die Companion App verifiziert weiterhin durch tatsächliche Ausführung des generierten Skripts.
-- **Login-/Session-Handling**
+- **JS-Rendering-Unterstützung** — serverseitig umgesetzt: `Engine: "Browser"` generiert ein Playwright-Skript (reines Playwright + Standard-Chromium, **keine kommerziellen Stealth-Browser-/Anti-Bot-Dienste mit Lizenz- oder Session-Modell** — z. B. CloakBrowser wurde geprüft und verworfen, siehe Git-Historie), verifiziert durch tatsächliche Ausführung wie beim Static-Engine (Konsistenzregel unverändert). Offen: Extension-UI zum Auswählen des Engines und zum Setzen von `WaitForStep`
+- **Login-/Session-Handling** — `WaitForStep` existiert bereits (IR + Browser-Engine-Codegen), `ClickStep`/`FillStep` für Formulare/Login fehlen noch
 - **Pagination**
 - **Weitere Zielsprachen** neben Python (Architektur ist bereits darauf ausgelegt, siehe Projektübersicht)
 
