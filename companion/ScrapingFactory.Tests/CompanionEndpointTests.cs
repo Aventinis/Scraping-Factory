@@ -108,6 +108,46 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    // Caught by the fast ScrapingPlanValidator pre-check — never spawns a
+    // Python subprocess or touches the network, unlike the 422 cases above.
+    [Fact]
+    public async Task Generate_InvalidUrlScheme_Returns400()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "ftp://example.com",
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+        };
+        var content = new StringContent(JsonSerializer.Serialize(config), Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("Ungültige URL", doc.RootElement.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task Generate_DuplicateFieldNames_Returns400()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Fields =
+            [
+                new ScrapingField { Name = "Titel", Selector = "h1" },
+                new ScrapingField { Name = "Titel", Selector = "h2" },
+            ],
+        };
+        var content = new StringContent(JsonSerializer.Serialize(config), Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("Doppelte Feldnamen", doc.RootElement.GetProperty("error").GetString());
+    }
+
     // Reproduces the exact wire format sent by the browser extension
     // (camelCase property names, outputFormat as a string) — this is
     // what regressed to always return 400 without a JsonStringEnumConverter.
