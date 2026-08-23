@@ -30,6 +30,14 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     // canonical Steps-based ScrapingPlan that backends actually consume.
     var plan = ScrapingPlanBuilder.Build(config);
 
+    // Fast structural checks (malformed URL, duplicate/empty field names)
+    // before paying for codegen and a real subprocess/network round trip.
+    // Deliberately doesn't validate CSS selector syntax — that's still only
+    // proven by actually running the script below.
+    var planValidation = ScrapingPlanValidator.Validate(plan);
+    if (!planValidation.Success)
+        return Results.BadRequest(new { error = planValidation.Error });
+
     // v1 only ships a Python backend, so the language id is fixed here;
     // a later phase will let ScrapingConfig pick the target language.
     var generator = registry.ResolveCodeGenerator("python");
