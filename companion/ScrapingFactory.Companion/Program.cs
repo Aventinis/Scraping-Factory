@@ -38,9 +38,11 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     if (!planValidation.Success)
         return Results.BadRequest(new { error = planValidation.Error });
 
-    // v1 only ships a Python backend, so the language id is fixed here;
-    // a later phase will let ScrapingConfig pick the target language.
-    var generator = registry.ResolveCodeGenerator("python");
+    // v1 only ships Python backends, so the language id is fixed here;
+    // a later phase will let ScrapingConfig pick the target language. The
+    // engine (Static requests+BeautifulSoup vs. Browser Playwright) comes
+    // straight from the request.
+    var generator = registry.ResolveCodeGenerator("python", plan.Engine);
     var script = generator.Generate(plan);
 
     // Actually run the generated script against the live page before handing

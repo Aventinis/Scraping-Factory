@@ -49,6 +49,28 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.Contains("import requests", body);
     }
 
+    // Proves the Browser engine is wired end-to-end through the real HTTP
+    // endpoint: engine selection, Playwright codegen, and real verification
+    // via an actual Chromium subprocess (not just unit-level codegen tests).
+    [Fact]
+    public async Task Generate_BrowserEngine_Returns200WithPlaywrightScript()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var config = new ScrapingConfig
+        {
+            Url = server.BaseUrl,
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+            Engine = ScrapingEngine.Browser,
+        };
+
+        var content = new StringContent(JsonSerializer.Serialize(config), Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("from playwright.sync_api import sync_playwright", body);
+    }
+
     [Fact]
     public async Task Generate_SelectorMatchesNothing_Returns422WithError()
     {

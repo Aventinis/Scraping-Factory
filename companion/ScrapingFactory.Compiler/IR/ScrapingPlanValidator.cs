@@ -26,6 +26,14 @@ public static class ScrapingPlanValidator
             return Invalid($"Ungültige URL '{navigate.Url}': muss eine absolute http(s)-URL sein.");
         }
 
+        foreach (var waitStep in plan.Steps.OfType<WaitForStep>())
+        {
+            if (string.IsNullOrWhiteSpace(waitStep.Selector))
+                return Invalid("Selector eines WaitForStep darf nicht leer sein.");
+            if (waitStep.TimeoutMs <= 0)
+                return Invalid("Timeout eines WaitForStep muss positiv sein.");
+        }
+
         var extractSteps = plan.Steps.OfType<ExtractStep>().ToList();
         if (extractSteps.Count == 0)
             return Invalid("Plan muss mindestens einen ExtractStep enthalten.");
