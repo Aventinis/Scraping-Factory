@@ -27,7 +27,19 @@ chrome.runtime.onMessage.addListener((message, sender) => {
         return;
       }
       log('FWD → tab', { tabId: tabs[0].id, type: message.type });
-      chrome.tabs.sendMessage(tabs[0].id, message);
+      chrome.tabs.sendMessage(tabs[0].id, message)
+        .then(() => log('FWD → tab OK', message.type))
+        .catch((err) => {
+          // No content script on this tab — e.g. chrome://, the Chrome Web
+          // Store, a PDF viewer, or a page that was already open before the
+          // extension was installed/reloaded. Without this .catch(), the
+          // rejected promise surfaces as an uncaught error in the service
+          // worker's error console.
+          log('FWD → tab MISS', { type: message.type, error: err.message });
+          if (message.type === 'START_SELECTION') {
+            chrome.runtime.sendMessage({ type: 'SELECTION_UNAVAILABLE', reason: err.message }).catch(() => {});
+          }
+        });
     });
   }
 
