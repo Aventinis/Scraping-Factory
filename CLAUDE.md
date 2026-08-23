@@ -49,7 +49,7 @@ language-modules/
 ### Python-Templates (`language-modules/python/templates/`)
 - Scriban-Templates (Dateiendung `.j2` aus historischen Gründen, Syntax ist Scriban statt Jinja2)
 - `scraper.py.j2`: ein Monolith für den Static-Engine (`PythonCodeGenerator`) — deklarativer Dict-Ansatz (SELECTORS/ATTRIBUTES), braucht keine Schritt-für-Schritt-Komposition
-- `playwright_scraper.py.j2` + `playwright_navigate_step.py.j2` + `playwright_wait_step.py.j2`: für den Browser-Engine (`PythonPlaywrightCodeGenerator`) — Navigate-/WaitFor-Steps werden als eigene Fragmente pro Step-Typ gerendert und der Reihe nach in die Shell eingesetzt, weil sie (anders als Extract) je einer konkreten Aktion an einer festen Stelle im Ablauf entsprechen
+- `playwright_scraper.py.j2` + `playwright_navigate_step.py.j2` + `playwright_wait_step.py.j2` + `playwright_fill_step.py.j2` + `playwright_click_step.py.j2`: für den Browser-Engine (`PythonPlaywrightCodeGenerator`) — Navigate-/WaitFor-/Fill-/Click-Steps werden als eigene Fragmente pro Step-Typ gerendert und der Reihe nach in die Shell eingesetzt, weil sie (anders als Extract) je einer konkreten Aktion an einer festen Stelle im Ablauf entsprechen. `FillStep`-Werte werden nie als Literal ins Skript geschrieben, sondern immer per `os.environ[...]` zur Laufzeit gelesen (`import os` wird nur eingefügt, wenn tatsächlich ein `FillStep` vorkommt)
 - Generierter Code soll idiomatisch, kommentiert und für Endnutzer lesbar sein
 
 ## Build
@@ -75,8 +75,9 @@ Weiterhin bestehende, bekannte Einschränkung (kein offener Entscheidungsbedarf,
 
 ## v1-Scope (MVP)
 
-- Standard-Engine ist weiterhin statisches Rendering (`requests` + `BeautifulSoup`, kein JS). Ein optionaler Browser-Engine (Playwright + Chromium, `Engine: "Browser"`) für dynamisch gerenderte Seiten existiert bereits serverseitig (IR, Codegen, Verifikation), hat aber noch **keine Extension-UI** — nur direkt über die Companion-API ansteuerbar
-- Kein Login-/Session-Handling (auch nicht über den Browser-Engine — es gibt noch keine `Click`/`Fill`-Steps)
+- Standard-Engine ist weiterhin statisches Rendering (`requests` + `BeautifulSoup`, kein JS). Ein optionaler Browser-Engine (Playwright + Chromium, `Engine: "Browser"`) für dynamisch gerenderte Seiten und einfache Login-Flows (`FillStep`/`ClickStep`/`WaitForStep`) existiert bereits serverseitig (IR, Codegen, Verifikation), hat aber noch **keine Extension-UI** — nur direkt über die Companion-API ansteuerbar
+- Login innerhalb eines einzelnen Skriptlaufs ist möglich (Formular ausfüllen → absenden → warten → extrahieren, Zugangsdaten nur über Umgebungsvariablen, nie im Skript). Kein persistentes Session-Handling über mehrere Skriptläufe hinweg (kein Cookie-/Storage-State-Speichern und -Wiederverwenden)
+- **Keine Captcha-Lösung/-Umgehung** — bewusste Grenze, kein offener Punkt: Captchas sind eine gezielte Anti-Automatisierungs-Maßnahme der Zielseite; ein generisches Umgehungsfeature wäre Evasion-Tooling unabhängig von der Absicht im Einzelfall und bräuchte typischerweise kostenpflichtige Drittanbieter-Lösedienste (Verstoß gegen den Grundsatz oben). Blockiert eine Captcha den Ablauf, schlägt das Skript einfach ehrlich fehl (z. B. `WaitForStep` nach dem Login-Klick findet das erwartete Element nicht → Timeout), es gibt keine Sonderbehandlung
 - Keine Pagination
 - Nur Python als Zielsprache
 - Backend des generierten Skripts: `requests` + `BeautifulSoup` (Static) bzw. Playwright (Browser)
@@ -84,7 +85,7 @@ Weiterhin bestehende, bekannte Einschränkung (kein offener Entscheidungsbedarf,
 ## Geplant für spätere Releases (Post-MVP)
 
 - **JS-Rendering-Unterstützung** — serverseitig umgesetzt: `Engine: "Browser"` generiert ein Playwright-Skript (reines Playwright + Standard-Chromium, **keine kommerziellen Stealth-Browser-/Anti-Bot-Dienste mit Lizenz- oder Session-Modell** — z. B. CloakBrowser wurde geprüft und verworfen, siehe Git-Historie), verifiziert durch tatsächliche Ausführung wie beim Static-Engine (Konsistenzregel unverändert). Offen: Extension-UI zum Auswählen des Engines und zum Setzen von `WaitForStep`
-- **Login-/Session-Handling** — `WaitForStep` existiert bereits (IR + Browser-Engine-Codegen), `ClickStep`/`FillStep` für Formulare/Login fehlen noch
+- **Login-/Session-Handling** — Login innerhalb eines Laufs umgesetzt (`FillStep`/`ClickStep`, siehe v1-Scope). Offen: persistentes Session-/Cookie-Handling über mehrere Skriptläufe hinweg, Extension-UI zum Konfigurieren eines Login-Flows. Captcha-Lösung ist kein Ziel (siehe v1-Scope)
 - **Pagination**
 - **Weitere Zielsprachen** neben Python (Architektur ist bereits darauf ausgelegt, siehe Projektübersicht)
 
