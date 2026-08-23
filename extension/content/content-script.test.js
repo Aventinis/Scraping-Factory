@@ -178,4 +178,16 @@ describe('hover message throttling (message-listener wiring)', () => {
 
     expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
   });
+
+  test('GET_LOGS responds with this context\'s log buffer', () => {
+    capturedListener({ type: 'START_SELECTION' }); // generates at least one log entry
+    const sendResponse = jest.fn();
+
+    capturedListener({ type: 'GET_LOGS' }, {}, sendResponse);
+
+    expect(sendResponse).toHaveBeenCalledTimes(1);
+    const logs = sendResponse.mock.calls[0][0];
+    expect(Array.isArray(logs)).toBe(true);
+    expect(logs.some(e => e.event === 'MSG_IN')).toBe(true);
+  });
 });

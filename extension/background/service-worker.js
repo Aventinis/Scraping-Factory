@@ -2,12 +2,17 @@
 // The side panel cannot send messages directly to a content script — it
 // must go through the service worker, which has access to chrome.tabs.
 
-function log(event, data) {
-  const ts = new Date().toISOString().slice(11, 23);
-  data !== undefined
-    ? console.log(`[SF:SW ${ts}]`, event, data)
-    : console.log(`[SF:SW ${ts}]`, event);
+if (typeof require === 'undefined' && typeof importScripts === 'function') {
+  importScripts('../shared/logger.js');
 }
+const { createLogger, getLogBuffer } =
+  typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+const log = createLogger('SF:SW');
+
+// Surfaces otherwise-silent script errors in the bug report (see GET_LOGS
+// below) instead of only showing up in chrome://extensions' error console.
+self.addEventListener('error', (e) => log('UNCAUGHT_ERROR', e.message));
+self.addEventListener('unhandledrejection', (e) => log('UNHANDLED_REJECTION', String(e.reason)));
 
 // Open the side panel on action-icon click instead of a classic popup, so
 // the UI stays open while the user clicks elements on the page to select
@@ -16,8 +21,22 @@ chrome.sidePanel
   ?.setPanelBehavior({ openPanelOnActionClick: true })
   ?.catch(err => log('SIDE_PANEL_BEHAVIOR ERR', err.message));
 
-chrome.runtime.onMessage.addListener((message, sender) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   log('MSG_IN', { type: message.type, fromTab: sender.tab?.id ?? 'sidepanel' });
+
+  if (message.type === 'GET_LOGS') {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const background = getLogBuffer();
+      if (tabs.length === 0) {
+        sendResponse({ background, content: null, contentError: 'no active tab' });
+        return;
+      }
+      chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_LOGS' })
+        .then((content) => sendResponse({ background, content, contentError: null }))
+        .catch((err) => sendResponse({ background, content: null, contentError: err.message }));
+    });
+    return true; // keep the message channel open for the async sendResponse above
+  }
 
   const FORWARD_TO_TAB = ['START_SELECTION', 'STOP_SELECTION', 'ENABLE_DOM_VIEW', 'DISABLE_DOM_VIEW'];
   if (FORWARD_TO_TAB.includes(message.type)) {

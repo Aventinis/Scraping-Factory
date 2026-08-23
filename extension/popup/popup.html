@@ -130,6 +130,18 @@
       position: fixed; bottom: 10px; left: 10px; right: 10px;
       background: #ef4444; color: #fff; padding: 8px 12px;
       border-radius: 6px; font-size: 13px; z-index: 20;
+      display: flex; align-items: center; gap: 8px; justify-content: space-between;
+    }
+    .toast-report-btn {
+      background: rgba(255,255,255,.2); color: #fff; font-size: 12px;
+      padding: 4px 8px; flex: none; white-space: nowrap;
+    }
+    .toast-report-btn:hover { background: rgba(255,255,255,.32); }
+
+    /* "Fehler melden" affordances */
+    .report-bug-link {
+      background: none; border: none; color: #ef4444; font-size: 12px;
+      text-decoration: underline; cursor: pointer; padding: 0; margin-top: 4px;
     }
   </style>
 </head>
@@ -146,7 +158,10 @@
     <p class="error-icon">⚠</p>
     <p>Companion App nicht erreichbar</p>
     <p class="error-hint">Starte ScrapingFactory.Companion und versuche es erneut.</p>
-    <button id="btn-retry" class="btn-primary">Erneut versuchen</button>
+    <div class="actions">
+      <button id="btn-retry" class="btn-primary">Erneut versuchen</button>
+      <button id="btn-report-bug-error" class="btn-secondary">Fehler melden</button>
+    </div>
   </section>
 
   <!-- IDLE -->
@@ -172,7 +187,10 @@
     </label>
     <div id="dom-tree-wrapper" class="dom-tree-wrapper hidden">
       <p id="dom-tree-loading" class="dom-tree-loading">Lade DOM-Baum…</p>
-      <p id="dom-tree-error" class="dom-tree-error hidden">Baum konnte nicht geladen werden.</p>
+      <p id="dom-tree-error" class="dom-tree-error hidden">
+        Baum konnte nicht geladen werden.
+        <button id="btn-report-bug-domtree" class="report-bug-link">Fehler melden</button>
+      </p>
       <p id="dom-tree-truncated" class="dom-tree-truncated hidden">Baum gekürzt (zu viele Elemente).</p>
       <ul id="dom-tree-root" class="dom-tree"></ul>
     </div>
@@ -208,8 +226,12 @@
   </div>
 
   <!-- Error toast -->
-  <div id="error-toast" class="toast hidden"></div>
+  <div id="error-toast" class="toast hidden">
+    <span id="error-toast-message"></span>
+    <button id="btn-report-bug-toast" class="toast-report-btn hidden">Fehler melden</button>
+  </div>
 
+  <script src="../shared/logger.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
