@@ -33,17 +33,20 @@ function requestDomTree() {
   chrome.runtime.sendMessage({ type: 'ENABLE_DOM_VIEW' });
   domTreeTimeoutId = setTimeout(() => {
     log('DOM_TREE timeout — no response');
+    setLastError('DOM-Baum-Anfrage lief in ein Timeout', 'DOM-Baum-Ansicht');
     patchState({ domTreeError: 'Baum konnte nicht geladen werden.' });
   }, DOM_TREE_TIMEOUT_MS);
 }
 
 // ── Logging ───────────────────────────────────────────────────────────────────
 
-function log(event, data) {
-  const ts = new Date().toISOString().slice(11, 23);
-  data !== undefined
-    ? console.log(`[SF:Popup ${ts}]`, event, data)
-    : console.log(`[SF:Popup ${ts}]`, event);
+const { createLogger, getLogBuffer } =
+  typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+const log = createLogger('SF:Popup');
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (e) => log('UNCAUGHT_ERROR', e.message));
+  window.addEventListener('unhandledrejection', (e) => log('UNHANDLED_REJECTION', String(e.reason)));
 }
 
 // ── Pure functions (exported for testing) ────────────────────────────────────
@@ -281,6 +284,7 @@ async function checkCompanion() {
     setState(STATES.IDLE, { url });
   } catch (err) {
     log('HEALTH_CHECK FAIL', err.message);
+    setLastError(err.message, 'Companion-Verbindung');
     setState(STATES.COMPANION_ERROR);
   }
 }
@@ -302,7 +306,7 @@ async function generate() {
   } catch (err) {
     log('GENERATE FAIL', err.message);
     setState(STATES.IDLE);
-    showToast(`Fehler: ${err.message}`);
+    showToast(`Fehler: ${err.message}`, 'Skript-Generierung');
   }
 }
 
@@ -319,12 +323,119 @@ function triggerDownload() {
   URL.revokeObjectURL(objectUrl);
 }
 
-function showToast(message) {
+// `context` is a short human label (e.g. "Skript-Generierung"); passing it
+// marks the error as reportable — the toast then also offers "Fehler
+// melden" and the message/context are attached to the next bug report.
+function showToast(message, context) {
   const toast = document.getElementById('error-toast');
   if (!toast) return;
-  toast.textContent = message;
+
+  const msgEl = document.getElementById('error-toast-message');
+  if (msgEl) msgEl.textContent = message; else toast.textContent = message;
+
+  const reportBtn = document.getElementById('btn-report-bug-toast');
+  if (reportBtn) reportBtn.classList.toggle('hidden', !context);
+  if (context) setLastError(message, context);
+
   toast.classList.remove('hidden');
-  setTimeout(() => toast.classList.add('hidden'), 4000);
+  setTimeout(() => toast.classList.add('hidden'), context ? 8000 : 4000);
+}
+
+// ── Bug reporting ─────────────────────────────────────────────────────────────
+// Combines this side panel's own log buffer with the service worker's and
+// (best-effort, via the service worker) the active tab's content script's,
+// so a user hitting an error can attach real diagnostic context to a GitHub
+// issue in one click instead of having to copy devtools console output by hand.
+
+const GITHUB_REPO_URL = 'https://github.com/Aventinis/Scraping-Factory';
+const BUG_REPORT_LOG_EXCERPT_LIMIT = 5000; // chars embedded directly in the GitHub issue body
+
+let lastReportedError = null; // { message, context, ts } — feeds the next bug report
+
+function setLastError(message, context) {
+  lastReportedError = { message, context, ts: new Date().toISOString() };
+}
+
+async function collectLogs() {
+  const popup = getLogBuffer();
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'GET_LOGS' });
+    return { popup, background: response?.background ?? [], content: response?.content ?? null, contentError: response?.contentError ?? null };
+  } catch (err) {
+    log('GET_LOGS failed', err.message);
+    return { popup, background: [], content: null, contentError: err.message };
+  }
+}
+
+function formatLogSection(title, entries) {
+  if (!entries || entries.length === 0) return `## ${title}\n(keine Einträge)\n`;
+  const lines = entries.map(e => `${e.ts} ${e.event}${e.data !== null ? ' ' + JSON.stringify(e.data) : ''}`);
+  return `## ${title}\n${lines.join('\n')}\n`;
+}
+
+async function buildBugReport() {
+  const { popup, background, content, contentError } = await collectLogs();
+  const manifest = typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest() : {};
+
+  const header = [
+    '# Scraping Factory — Bug Report',
+    `Zeitpunkt: ${new Date().toISOString()}`,
+    `Extension-Version: ${manifest.version || '?'}`,
+    `Seite: ${_state.url || '—'}`,
+    lastReportedError ? `Letzter Fehler: ${lastReportedError.message} (${lastReportedError.context})` : null,
+  ].filter(Boolean).join('\n');
+
+  const sections = [
+    formatLogSection('Side Panel', popup),
+    formatLogSection('Service Worker', background),
+    contentError ? `## Content Script\n(nicht verfügbar: ${contentError})\n` : formatLogSection('Content Script', content),
+  ].join('\n');
+
+  return `${header}\n\n${sections}`;
+}
+
+function downloadBugReport(text) {
+  log('DOWNLOAD bug-report.log');
+  const blob = new Blob([text], { type: 'text/plain' });
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = `bug-report-${Date.now()}.log`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(objectUrl);
+}
+
+// Prefills a new GitHub issue. Short reports are embedded in full so the
+// issue is ready to submit as-is; longer ones are trailed off with a note
+// pointing at the downloaded bug-report.log (URLs have practical length
+// limits, so we don't risk silently truncating mid-word into a broken link).
+function buildGithubIssueUrl(reportText) {
+  const title = lastReportedError ? `Fehler: ${lastReportedError.message}` : 'Fehlerbericht';
+  const truncated = reportText.length > BUG_REPORT_LOG_EXCERPT_LIMIT;
+  const excerpt = truncated ? reportText.slice(-BUG_REPORT_LOG_EXCERPT_LIMIT) : reportText;
+
+  const body = [
+    'Bitte kurz beschreiben, was du getan hast, als der Fehler auftrat.',
+    '',
+    '<details><summary>Log</summary>',
+    '',
+    '```',
+    excerpt,
+    '```',
+    '</details>',
+    truncated ? '\n_(Log gekürzt — bitte die heruntergeladene bug-report.log-Datei zusätzlich an dieses Issue anhängen.)_' : '',
+  ].filter(Boolean).join('\n');
+
+  return `${GITHUB_REPO_URL}/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+}
+
+async function reportBug() {
+  log('BTN report-bug');
+  const reportText = await buildBugReport();
+  downloadBugReport(reportText);
+  chrome.tabs.create({ url: buildGithubIssueUrl(reportText) });
 }
 
 // ── Field-name modal ──────────────────────────────────────────────────────────
@@ -342,6 +453,10 @@ function confirmField() {
 // ── Event wiring ──────────────────────────────────────────────────────────────
 
 function wireEvents() {
+  document.getElementById('btn-report-bug-error')?.addEventListener('click', reportBug);
+  document.getElementById('btn-report-bug-toast')?.addEventListener('click', reportBug);
+  document.getElementById('btn-report-bug-domtree')?.addEventListener('click', reportBug);
+
   document.getElementById('btn-retry')?.addEventListener('click', () => {
     log('BTN retry');
     setState(STATES.CHECKING_COMPANION);
@@ -415,6 +530,7 @@ function wireEvents() {
     log('MSG_IN', message);
     if (message.type === 'SELECTION_UNAVAILABLE' && _state.current === STATES.SELECTING) {
       log('SELECTION_UNAVAILABLE', message.reason);
+      setLastError(message.reason, 'Element-Auswahl');
       setState(STATES.IDLE);
       showToast('Element-Auswahl auf dieser Seite nicht möglich.');
     }
@@ -432,7 +548,9 @@ function wireEvents() {
         patchState({ domTree: message.tree, domTreeTruncated: !!message.truncated, domTreeError: null });
         renderDomTree(message.tree);
       } else {
-        patchState({ domTreeError: message.error || 'Baum konnte nicht geladen werden.' });
+        const reason = message.error || 'Baum konnte nicht geladen werden.';
+        setLastError(reason, 'DOM-Baum-Ansicht');
+        patchState({ domTreeError: reason });
       }
     }
     if (message.type === 'HOVER_ELEMENT') {
@@ -480,5 +598,6 @@ if (typeof module !== 'undefined') {
   module.exports = {
     buildScrapingConfig, addField, removeField, escapeHtml, renderFields, STATES,
     formatTreeLabel, renderDomTree, highlightHover, highlightSelected,
+    formatLogSection, buildGithubIssueUrl, setLastError,
   };
 }
