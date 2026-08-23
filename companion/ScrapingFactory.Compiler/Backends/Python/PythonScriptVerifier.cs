@@ -1,0 +1,144 @@
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Text;
+
+namespace ScrapingFactory.Compiler.Backends.Python;
+
+// Proves a generated script actually works before it's handed to the user:
+// writes it to a throwaway directory, runs it for real (network fetch,
+// parsing, CSV export — everything), and checks it exited cleanly and
+// produced at least one data row. This subsumes any static selector check —
+// running the real script also catches network failures, encoding issues,
+// and BeautifulSoup-vs-CSS-selector quirks a simulated check would miss.
+public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSpan? timeout = null)
+{
+    // Matches the generated script's own `requests.get(url, timeout=10)`
+    // plus headroom for interpreter startup and CSV parsing.
+    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(20);
+    private static readonly string[] DefaultCandidates = ["python3", "python"];
+
+    private readonly TimeSpan _timeout = timeout ?? DefaultTimeout;
+    private readonly string[] _candidates = pythonExecutable is not null ? [pythonExecutable] : DefaultCandidates;
+
+    public async Task<ScriptVerificationResult> VerifyAsync(string script, CancellationToken ct = default)
+    {
+        var workDir = Directory.CreateTempSubdirectory("scrapingfactory-verify-").FullName;
+        try
+        {
+            var scriptPath = Path.Combine(workDir, "scraper.py");
+            await File.WriteAllTextAsync(scriptPath, script, ct);
+
+            var (process, executableUsed) = StartProcess(scriptPath, workDir);
+            if (process is null)
+            {
+                return new ScriptVerificationResult
+                {
+                    Success = false,
+                    Error = $"Kein Python-Interpreter gefunden (versucht: {string.Join(", ", _candidates)}). " +
+                            "Ist Python installiert und im PATH der Companion App verfügbar?",
+                };
+            }
+
+            using (process)
+            {
+                var stderrBuilder = new StringBuilder();
+                process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderrBuilder.AppendLine(e.Data); };
+                process.BeginErrorReadLine();
+                var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
+
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeoutCts.CancelAfter(_timeout);
+                try
+                {
+                    await process.WaitForExitAsync(timeoutCts.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    TryKill(process);
+                    return new ScriptVerificationResult
+                    {
+                        Success = false,
+                        Error = $"Skript-Ausführung hat das Zeitlimit von {_timeout.TotalSeconds:0}s überschritten.",
+                    };
+                }
+                await stdoutTask;
+
+                if (process.ExitCode != 0)
+                {
+                    return new ScriptVerificationResult
+                    {
+                        Success = false,
+                        Error = $"Skript ({executableUsed}) wurde mit Fehler beendet (Exit-Code {process.ExitCode}): " +
+                                Truncate(stderrBuilder.ToString()),
+                    };
+                }
+            }
+
+            var csvPath = Path.Combine(workDir, "output.csv");
+            if (!File.Exists(csvPath))
+            {
+                return new ScriptVerificationResult { Success = false, Error = "Skript hat keine output.csv erzeugt." };
+            }
+
+            var lines = await File.ReadAllLinesAsync(csvPath, ct);
+            var rowCount = Math.Max(0, lines.Length - 1); // minus header row
+
+            return rowCount > 0
+                ? new ScriptVerificationResult { Success = true, RowCount = rowCount }
+                : new ScriptVerificationResult
+                {
+                    Success = false,
+                    Error = "Skript lief fehlerfrei, hat aber keine Daten zurückgegeben " +
+                            "(output.csv enthält nur die Kopfzeile) — mindestens ein Selektor findet vermutlich nichts.",
+                };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return new ScriptVerificationResult { Success = false, Error = $"Verifikation fehlgeschlagen: {ex.Message}" };
+        }
+        finally
+        {
+            try { Directory.Delete(workDir, recursive: true); } catch { /* best-effort cleanup */ }
+        }
+    }
+
+    private (Process? Process, string? Executable) StartProcess(string scriptPath, string workDir)
+    {
+        foreach (var candidate in _candidates)
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = candidate,
+                WorkingDirectory = workDir,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            psi.ArgumentList.Add(scriptPath);
+
+            try
+            {
+                var process = new Process { StartInfo = psi };
+                process.Start();
+                return (process, candidate);
+            }
+            catch (Win32Exception)
+            {
+                // Executable not found on PATH — try the next candidate.
+            }
+        }
+        return (null, null);
+    }
+
+    private static void TryKill(Process process)
+    {
+        try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { /* best-effort */ }
+    }
+
+    private static string Truncate(string text, int max = 2000)
+    {
+        var trimmed = text.Trim();
+        return trimmed.Length <= max ? trimmed : trimmed[..max] + "… (gekürzt)";
+    }
+}
