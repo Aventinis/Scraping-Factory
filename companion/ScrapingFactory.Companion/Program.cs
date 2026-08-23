@@ -26,10 +26,14 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     if (config is null || string.IsNullOrWhiteSpace(config.Url) || config.Fields.Count == 0)
         return Results.BadRequest(new { error = "Invalid ScrapingConfig: Url and at least one Field are required." });
 
+    // Wire format (Fields) is unchanged; internally it's compiled into the
+    // canonical Steps-based ScrapingPlan that backends actually consume.
+    var plan = ScrapingPlanBuilder.Build(config);
+
     // v1 only ships a Python backend, so the language id is fixed here;
     // a later phase will let ScrapingConfig pick the target language.
     var generator = registry.ResolveCodeGenerator("python");
-    var script = generator.Generate(config);
+    var script = generator.Generate(plan);
 
     // Actually run the generated script against the live page before handing
     // it out — this proves the exact artifact the user is about to download

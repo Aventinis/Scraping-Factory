@@ -12,12 +12,13 @@ namespace ScrapingFactory.Tests;
 // has at runtime).
 public class PythonScriptVerifierTests
 {
-    private static string GenerateScript(string url, params (string Name, string Selector)[] fields) =>
-        new PythonCodeGenerator().Generate(new ScrapingConfig
-        {
-            Url = url,
-            Fields = fields.Select(f => new ScrapingField { Name = f.Name, Selector = f.Selector }).ToList(),
-        });
+    private static string GenerateScript(string url, params (string Name, string Selector)[] fields)
+    {
+        var steps = new List<ScrapingStep> { new NavigateStep { Url = url } };
+        steps.AddRange(fields.Select(f => (ScrapingStep)new ExtractStep { Name = f.Name, Selector = f.Selector }));
+
+        return new PythonCodeGenerator().Generate(new ScrapingPlan { Steps = steps });
+    }
 
     [Fact]
     public async Task ScriptThatFindsData_Succeeds()

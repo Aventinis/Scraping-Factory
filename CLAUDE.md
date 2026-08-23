@@ -43,8 +43,8 @@ language-modules/
 - Baut die IR und übergibt sie an `ScrapingFactory.Compiler`
 
 ### Compiler (`companion/ScrapingFactory.Compiler`)
-- Enthält die IR-Typen (`ScrapingFactory.Compiler.IR.ScrapingConfig`)
-- Enthält die Sprachmodule (`Backends/Python/PythonCodeGenerator`, `Backends/Python/PythonScriptVerifier`)
+- Enthält die IR-Typen: das Wire-Format `ScrapingFactory.Compiler.IR.ScrapingConfig` (Fields-Liste, wie von der Extension gesendet) wird von `ScrapingPlanBuilder` in die kanonische `ScrapingPlan` (Schrittfolge aus `NavigateStep`/`ExtractStep`) übersetzt — Codegenerator und Verifier sehen nur noch `ScrapingPlan`
+- Enthält die Sprachmodule (`Backends/Python/PythonCodeGenerator`, `Backends/Python/PythonScriptVerifier`), die `ICodeGenerator`/`IScriptVerifier` implementieren; die `LanguageModuleRegistry` löst sie per `LanguageId` auf, ohne dass Aufrufer die konkreten Typen kennen müssen
 
 ### Python-Templates (`language-modules/python/templates/`)
 - Scriban-Templates (Dateiendung `.j2` aus historischen Gründen, Syntax ist Scriban statt Jinja2), aus denen der `PythonCodeGenerator` das fertige Skript rendert
@@ -64,7 +64,7 @@ dotnet build companion/ScrapingFactory.sln
 
 Aus der Prototyping-Phase getroffen und aktiv in Verwendung (nicht mehr offen — Änderungen daran sind normale Weiterentwicklung, keine Grundsatzentscheidung mehr):
 
-1. **IR-Schema** — `ScrapingFactory.Compiler.IR.ScrapingConfig` (Felder, Selektor als CSS-String, optionales Attribut, `OutputFormat`); Wire-Format camelCase/String-Enum, siehe `CompanionEndpointTests`
+1. **IR-Schema** — Wire-Format bleibt `ScrapingFactory.Compiler.IR.ScrapingConfig` (Felder, Selektor als CSS-String, optionales Attribut, `OutputFormat`; camelCase/String-Enum, siehe `CompanionEndpointTests`). Intern übersetzt `ScrapingPlanBuilder` das in die kanonische `ScrapingPlan` (Schrittfolge `NavigateStep`/`ExtractStep`), die Codegenerator und Verifier konsumieren — Grundlage für künftige Schritt-Typen (Login, Warten, Klicks) ohne Bruch des Wire-Formats
 2. **Extension ↔ Companion Kommunikation** — lokaler HTTP-Server (`http://localhost:5000`), kein Native Messaging
 
 Weiterhin bestehende, bekannte Einschränkung (kein offener Entscheidungsbedarf, sondern eine Eigenschaft des gewählten Ansatzes):
