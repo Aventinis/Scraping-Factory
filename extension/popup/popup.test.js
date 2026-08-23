@@ -238,6 +238,65 @@ describe('renderDomTree / highlightHover / highlightSelected', () => {
   });
 });
 
+// ── SELECTION_UNAVAILABLE ────────────────────────────────────────────────────
+// Regression coverage: chrome.tabs.sendMessage(START_SELECTION) rejects when
+// the active tab has no content script (chrome://, Web Store, PDF viewer, a
+// page open since before the extension reloaded, …). The side panel must
+// fall back to IDLE with an explanation instead of being stuck on
+// "Klicke ein Element an…" forever.
+
+describe('SELECTION_UNAVAILABLE handling', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden"></section>
+      <section id="screen-selecting" class="hidden">
+        <button id="btn-add-field"></button>
+      </section>
+      <div id="error-toast" class="hidden"></div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn() },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({}),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: false });
+
+    require('./popup');
+    await flushMicrotasks();
+
+    document.getElementById('btn-add-field').click(); // → STATES.SELECTING
+  });
+
+  test('falls back to IDLE and shows a toast', () => {
+    capturedListener({ type: 'SELECTION_UNAVAILABLE', reason: 'no content script' });
+
+    expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
+
+    const toast = document.getElementById('error-toast');
+    expect(toast.classList.contains('hidden')).toBe(false);
+    expect(toast.textContent).toContain('nicht möglich');
+  });
+});
+
 // ── DOM tree loading timeout ─────────────────────────────────────────────────
 // Regression coverage: a lost/never-arriving DOM_TREE response used to leave
 // the "Lade DOM-Baum…" spinner stuck forever. A timeout must now surface an

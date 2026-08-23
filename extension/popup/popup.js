@@ -413,6 +413,11 @@ function wireEvents() {
 
   chrome.runtime.onMessage.addListener((message) => {
     log('MSG_IN', message);
+    if (message.type === 'SELECTION_UNAVAILABLE' && _state.current === STATES.SELECTING) {
+      log('SELECTION_UNAVAILABLE', message.reason);
+      setState(STATES.IDLE);
+      showToast('Element-Auswahl auf dieser Seite nicht möglich.');
+    }
     if (message.type === 'ELEMENT_SELECTED' && _state.current === STATES.SELECTING) {
       log('ELEMENT_SELECTED received (real-time)', message.selector);
       // Clear the storage entry the service worker wrote — we have it now.
