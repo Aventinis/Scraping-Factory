@@ -25,7 +25,7 @@ companion/                  .NET 9 Solution
     Backends/Python/         Python-Codegenerator
 
 language-modules/
-  python/templates/          Jinja2-Templates für generierte Python-Skripte
+  python/templates/          Scriban-Templates für generierte Python-Skripte
 ```
 
 ## Komponenten
@@ -39,15 +39,17 @@ language-modules/
 - .NET 9 Konsolenanwendung
 - Startet einen lokalen HTTP-Server für die Extension
 - `/generate` generiert das Skript, führt es dann per Sprachmodul-Verifier (`Backends/Python/PythonScriptVerifier`) probeweise in einem temporären Verzeichnis aus und liefert es erst bei Erfolg (Exit-Code 0, mindestens eine Datenzeile) aus — bei Fehlschlag `422` mit Fehlermeldung statt Skript
-- **Laufzeit-Voraussetzung:** `python3` (oder `python`) inkl. `requests` + `beautifulsoup4` muss auf dem Rechner, auf dem die Companion App läuft, im PATH verfügbar sein — nicht mehr nur beim Endnutzer, der das heruntergeladene Skript später ausführt
+- **Laufzeit-Voraussetzung:** `python3` (oder `python`) inkl. `requests` + `beautifulsoup4` muss auf dem Rechner, auf dem die Companion App läuft, im PATH verfügbar sein — nicht mehr nur beim Endnutzer, der das heruntergeladene Skript später ausführt. Für den Browser-Engine (`Engine: "Browser"`) zusätzlich `playwright` (`pip install playwright`) inkl. installiertem Chromium (`playwright install chromium`)
 - Baut die IR und übergibt sie an `ScrapingFactory.Compiler`
 
 ### Compiler (`companion/ScrapingFactory.Compiler`)
-- Enthält die IR-Typen (`ScrapingFactory.Compiler.IR.ScrapingConfig`)
-- Enthält die Sprachmodule (`Backends/Python/PythonCodeGenerator`, `Backends/Python/PythonScriptVerifier`)
+- Enthält die IR-Typen: das Wire-Format `ScrapingFactory.Compiler.IR.ScrapingConfig` (Fields-Liste, wie von der Extension gesendet) wird von `ScrapingPlanBuilder` in die kanonische `ScrapingPlan` (Schrittfolge aus `NavigateStep`/`ExtractStep`) übersetzt — Codegenerator und Verifier sehen nur noch `ScrapingPlan`
+- Enthält die Sprachmodule: `Backends/Python/PythonCodeGenerator` (Engine `Static`, requests+BeautifulSoup) und `Backends/Python/PythonPlaywrightCodeGenerator` (Engine `Browser`, Playwright), beide implementieren `ICodeGenerator`; `Backends/Python/PythonScriptVerifier` implementiert `IScriptVerifier` und führt beide Skriptarten gleichermaßen aus. Die `LanguageModuleRegistry` löst Codegeneratoren per `(LanguageId, Engine)`-Tupel auf, Verifier per `LanguageId` — Aufrufer kennen die konkreten Typen nicht
 
 ### Python-Templates (`language-modules/python/templates/`)
-- Jinja2-Templates, aus denen der `PythonCodeGenerator` das fertige Skript rendert
+- Scriban-Templates (Dateiendung `.j2` aus historischen Gründen, Syntax ist Scriban statt Jinja2)
+- `scraper.py.j2`: ein Monolith für den Static-Engine (`PythonCodeGenerator`) — deklarativer Dict-Ansatz (SELECTORS/ATTRIBUTES), braucht keine Schritt-für-Schritt-Komposition
+- `playwright_scraper.py.j2` + `playwright_navigate_step.py.j2` + `playwright_wait_step.py.j2` + `playwright_fill_step.py.j2` + `playwright_click_step.py.j2`: für den Browser-Engine (`PythonPlaywrightCodeGenerator`) — Navigate-/WaitFor-/Fill-/Click-Steps werden als eigene Fragmente pro Step-Typ gerendert und der Reihe nach in die Shell eingesetzt, weil sie (anders als Extract) je einer konkreten Aktion an einer festen Stelle im Ablauf entsprechen. `FillStep`-Werte werden nie als Literal ins Skript geschrieben, sondern immer per `os.environ[...]` zur Laufzeit gelesen (`import os` wird nur eingefügt, wenn tatsächlich ein `FillStep` vorkommt)
 - Generierter Code soll idiomatisch, kommentiert und für Endnutzer lesbar sein
 
 ## Build
@@ -64,7 +66,7 @@ dotnet build companion/ScrapingFactory.sln
 
 Aus der Prototyping-Phase getroffen und aktiv in Verwendung (nicht mehr offen — Änderungen daran sind normale Weiterentwicklung, keine Grundsatzentscheidung mehr):
 
-1. **IR-Schema** — `ScrapingFactory.Compiler.IR.ScrapingConfig` (Felder, Selektor als CSS-String, optionales Attribut, `OutputFormat`); Wire-Format camelCase/String-Enum, siehe `CompanionEndpointTests`
+1. **IR-Schema** — Wire-Format bleibt `ScrapingFactory.Compiler.IR.ScrapingConfig` (Felder, Selektor als CSS-String, optionales Attribut, `OutputFormat`; camelCase/String-Enum, siehe `CompanionEndpointTests`). Intern übersetzt `ScrapingPlanBuilder` das in die kanonische `ScrapingPlan` (Schrittfolge `NavigateStep`/`ExtractStep`), die Codegenerator und Verifier konsumieren — Grundlage für künftige Schritt-Typen (Login, Warten, Klicks) ohne Bruch des Wire-Formats
 2. **Extension ↔ Companion Kommunikation** — lokaler HTTP-Server (`http://localhost:5000`), kein Native Messaging
 
 Weiterhin bestehende, bekannte Einschränkung (kein offener Entscheidungsbedarf, sondern eine Eigenschaft des gewählten Ansatzes):
@@ -73,19 +75,22 @@ Weiterhin bestehende, bekannte Einschränkung (kein offener Entscheidungsbedarf,
 
 ## v1-Scope (MVP)
 
-- Nur statisch gerenderte Seiten (kein JS-Rendering im generierten Skript)
-- Kein Login-/Session-Handling
+- Standard-Engine ist weiterhin statisches Rendering (`requests` + `BeautifulSoup`, kein JS). Ein optionaler Browser-Engine (Playwright + Chromium, `Engine: "Browser"`) für dynamisch gerenderte Seiten und einfache Login-Flows (`FillStep`/`ClickStep`/`WaitForStep`) existiert bereits serverseitig (IR, Codegen, Verifikation), hat aber noch **keine Extension-UI** — nur direkt über die Companion-API ansteuerbar
+- Login innerhalb eines einzelnen Skriptlaufs ist möglich (Formular ausfüllen → absenden → warten → extrahieren, Zugangsdaten nur über Umgebungsvariablen, nie im Skript). Kein persistentes Session-Handling über mehrere Skriptläufe hinweg (kein Cookie-/Storage-State-Speichern und -Wiederverwenden)
+- **Keine Captcha-Lösung/-Umgehung** — bewusste Grenze, kein offener Punkt: Captchas sind eine gezielte Anti-Automatisierungs-Maßnahme der Zielseite; ein generisches Umgehungsfeature wäre Evasion-Tooling unabhängig von der Absicht im Einzelfall und bräuchte typischerweise kostenpflichtige Drittanbieter-Lösedienste (Verstoß gegen den Grundsatz oben). Blockiert eine Captcha den Ablauf, schlägt das Skript einfach ehrlich fehl (z. B. `WaitForStep` nach dem Login-Klick findet das erwartete Element nicht → Timeout), es gibt keine Sonderbehandlung
 - Keine Pagination
 - Nur Python als Zielsprache
-- Backend des generierten Skripts: `requests` + `BeautifulSoup`
+- Backend des generierten Skripts: `requests` + `BeautifulSoup` (Static) bzw. Playwright (Browser)
 
 ## Geplant für spätere Releases (Post-MVP)
 
-- **JS-Rendering-Unterstützung** — Skripte sollen auch dynamisch gerenderte Seiten scrapen können. Muss mit einer freien/kostenlosen Lösung umgesetzt werden (z. B. reines Playwright + Standard-Chromium/-Firefox), **keine kommerziellen Stealth-Browser-/Anti-Bot-Dienste mit Lizenz- oder Session-Modell** (z. B. CloakBrowser — geprüft und verworfen: Free-/Pro-Tarife sind session-limitiert und das Binary-Lizenzmodell untersagt Redistribution an Dritte ohne separaten OEM/SaaS-Vertrag, was mit einem frei verteilten Plugin nicht vereinbar ist). Bei Umsetzung ändert sich die Konsistenzregel nicht: die Companion App verifiziert weiterhin durch tatsächliche Ausführung des generierten Skripts.
-- **Login-/Session-Handling**
+- **JS-Rendering-Unterstützung** — serverseitig umgesetzt: `Engine: "Browser"` generiert ein Playwright-Skript (reines Playwright + Standard-Chromium, **keine kommerziellen Stealth-Browser-/Anti-Bot-Dienste mit Lizenz- oder Session-Modell** — z. B. CloakBrowser wurde geprüft und verworfen, siehe Git-Historie), verifiziert durch tatsächliche Ausführung wie beim Static-Engine (Konsistenzregel unverändert). Offen: Extension-UI zum Auswählen des Engines und zum Setzen von `WaitForStep`
+- **Login-/Session-Handling** — Login innerhalb eines Laufs umgesetzt (`FillStep`/`ClickStep`, siehe v1-Scope). Offen: persistentes Session-/Cookie-Handling über mehrere Skriptläufe hinweg, Extension-UI zum Konfigurieren eines Login-Flows. Captcha-Lösung ist kein Ziel (siehe v1-Scope)
 - **Pagination**
 - **Weitere Zielsprachen** neben Python (Architektur ist bereits darauf ausgelegt, siehe Projektübersicht)
 
 ## Konsistenzregel
 
 Die Companion App verifiziert nicht mehr nur auf derselben Rendering-Stufe wie das generierte Skript — sie führt vor der Auslieferung das exakt generierte Skript einmal probeweise aus (`Backends/Python/PythonScriptVerifier`: Skript in ein temporäres Verzeichnis schreiben, per `python3`/`python`-Subprozess ausführen, Exit-Code und `output.csv` prüfen). Das schließt jede Diskrepanz zwischen Verifikation und generiertem Skript aus (Encoding, Selektor-Kompatibilität, Netzwerkfehler, Laufzeitfehler) und war der Grund, weshalb ein separater Playwright- oder AngleSharp-basierter Verifikationspfad verworfen wurde: er hätte immer nur eine Annäherung an das reale Skriptverhalten sein können.
+
+Vor dieser echten Ausführung läuft in `/generate` zusätzlich `IR/ScrapingPlanValidator` als schnelle, rein strukturelle Vorprüfung der `ScrapingPlan` (kaputte URL, doppelte/leere Feldnamen) — das ersetzt die echte Verifikation nicht, sondern spart nur den Subprozess-Start bei Konfigurationen, die unabhängig vom Skriptverhalten immer falsch sind. CSS-Selektor-Syntax/-Kompatibilität wird bewusst weiterhin nicht separat geprüft (siehe Punkt 3 oben), sondern bleibt allein Sache der echten Skript-Ausführung.
