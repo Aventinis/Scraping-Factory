@@ -8,27 +8,27 @@ public class PythonCodeGeneratorTests
 {
     private readonly PythonCodeGenerator _generator = new();
 
-    private static ScrapingConfig TwoFieldConfig() => new()
+    private static ScrapingPlan TwoFieldPlan() => new()
     {
-        Url = "https://books.toscrape.com",
-        Fields =
+        Steps =
         [
-            new ScrapingField { Name = "Titel", Selector = "h3 > a" },
-            new ScrapingField { Name = "Link",  Selector = "h3 > a", Attribute = "href" }
+            new NavigateStep { Url = "https://books.toscrape.com" },
+            new ExtractStep { Name = "Titel", Selector = "h3 > a" },
+            new ExtractStep { Name = "Link", Selector = "h3 > a", Attribute = "href" }
         ]
     };
 
     [Fact]
     public void Generate_ContainsTargetUrl()
     {
-        var script = _generator.Generate(TwoFieldConfig());
+        var script = _generator.Generate(TwoFieldPlan());
         Assert.Contains("https://books.toscrape.com", script);
     }
 
     [Fact]
     public void Generate_ContainsAllFieldNames()
     {
-        var script = _generator.Generate(TwoFieldConfig());
+        var script = _generator.Generate(TwoFieldPlan());
         Assert.Contains("Titel", script);
         Assert.Contains("Link", script);
     }
@@ -36,14 +36,14 @@ public class PythonCodeGeneratorTests
     [Fact]
     public void Generate_ContainsAllSelectors()
     {
-        var script = _generator.Generate(TwoFieldConfig());
+        var script = _generator.Generate(TwoFieldPlan());
         Assert.Contains("h3 > a", script);
     }
 
     [Fact]
     public void Generate_ContainsPythonImports()
     {
-        var script = _generator.Generate(TwoFieldConfig());
+        var script = _generator.Generate(TwoFieldPlan());
         Assert.Contains("import requests", script);
         Assert.Contains("from bs4 import BeautifulSoup", script);
     }
@@ -51,7 +51,7 @@ public class PythonCodeGeneratorTests
     [Fact]
     public void Generate_ContainsCsvDictWriter()
     {
-        var script = _generator.Generate(TwoFieldConfig());
+        var script = _generator.Generate(TwoFieldPlan());
         Assert.Contains("csv.DictWriter", script);
     }
 
@@ -63,7 +63,7 @@ public class PythonCodeGeneratorTests
         // mangling UTF-8 pages that only declare their charset via
         // <meta charset>. response.content (bytes) lets BeautifulSoup detect
         // that meta tag itself, so the generated script must use it.
-        var script = _generator.Generate(TwoFieldConfig());
+        var script = _generator.Generate(TwoFieldPlan());
         Assert.Contains("BeautifulSoup(response.content,", script);
         Assert.DoesNotContain("BeautifulSoup(response.text,", script);
     }
@@ -71,14 +71,14 @@ public class PythonCodeGeneratorTests
     [Fact]
     public void Generate_AttributeFieldAppearsInAttributesDict()
     {
-        var script = _generator.Generate(TwoFieldConfig());
+        var script = _generator.Generate(TwoFieldPlan());
         Assert.Contains("\"Link\": \"href\"", script);
     }
 
     [Fact]
     public void Generate_FieldWithoutAttributeNotInAttributesDict()
     {
-        var script = _generator.Generate(TwoFieldConfig());
+        var script = _generator.Generate(TwoFieldPlan());
         // "Titel" has no attribute — must not appear in ATTRIBUTES block
         var attributesSection = script[(script.IndexOf("ATTRIBUTES") + "ATTRIBUTES".Length)..];
         Assert.DoesNotContain("\"Titel\"", attributesSection.Split("def scrape")[0]);

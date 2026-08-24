@@ -49,6 +49,28 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.Contains("import requests", body);
     }
 
+    // Proves the Browser engine is wired end-to-end through the real HTTP
+    // endpoint: engine selection, Playwright codegen, and real verification
+    // via an actual Chromium subprocess (not just unit-level codegen tests).
+    [Fact]
+    public async Task Generate_BrowserEngine_Returns200WithPlaywrightScript()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var config = new ScrapingConfig
+        {
+            Url = server.BaseUrl,
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+            Engine = ScrapingEngine.Browser,
+        };
+
+        var content = new StringContent(JsonSerializer.Serialize(config), Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("from playwright.sync_api import sync_playwright", body);
+    }
+
     [Fact]
     public async Task Generate_SelectorMatchesNothing_Returns422WithError()
     {
@@ -106,6 +128,46 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         var response = await _client.PostAsync("/generate", content);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    // Caught by the fast ScrapingPlanValidator pre-check — never spawns a
+    // Python subprocess or touches the network, unlike the 422 cases above.
+    [Fact]
+    public async Task Generate_InvalidUrlScheme_Returns400()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "ftp://example.com",
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+        };
+        var content = new StringContent(JsonSerializer.Serialize(config), Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("Ungültige URL", doc.RootElement.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task Generate_DuplicateFieldNames_Returns400()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Fields =
+            [
+                new ScrapingField { Name = "Titel", Selector = "h1" },
+                new ScrapingField { Name = "Titel", Selector = "h2" },
+            ],
+        };
+        var content = new StringContent(JsonSerializer.Serialize(config), Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("Doppelte Feldnamen", doc.RootElement.GetProperty("error").GetString());
     }
 
     // Reproduces the exact wire format sent by the browser extension
