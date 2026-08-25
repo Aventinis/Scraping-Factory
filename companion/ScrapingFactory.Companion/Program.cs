@@ -11,7 +11,13 @@ builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy => policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
 builder.Services.ConfigureHttpJsonOptions(options =>
-    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    // Required for Container-Mode: List<ContainerNode> mixes GroupNode and
+    // DataFieldNode, which System.Text.Json can't (de)serialize through the
+    // abstract base type on its own — see ContainerNodeJsonConverter.
+    options.SerializerOptions.Converters.Add(new ContainerNodeJsonConverter());
+});
 
 builder.Services.AddSingleton<LanguageModuleRegistry>();
 
@@ -23,11 +29,25 @@ app.MapGet("/health", () => Results.Ok());
 
 app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModuleRegistry registry) =>
 {
-    if (config is null || string.IsNullOrWhiteSpace(config.Url) || config.Fields.Count == 0)
-        return Results.BadRequest(new { error = "Invalid ScrapingConfig: Url and at least one Field are required." });
+    var hasFields = config?.Fields.Count > 0;
+    var hasGroups = config?.Groups?.Count > 0;
+    if (config is null || string.IsNullOrWhiteSpace(config.Url) || (!hasFields && !hasGroups))
+    {
+        return Results.BadRequest(new
+        {
+            error = "Invalid ScrapingConfig: Url and at least one Field or Group are required.",
+        });
+    }
 
-    // Wire format (Fields) is unchanged; internally it's compiled into the
-    // canonical Steps-based ScrapingPlan that backends actually consume.
+    // Flat-Mode (Fields → Csv) and Container-Mode (Groups → Xml) are
+    // strictly separate — mixing them in one request would leave it
+    // ambiguous which extraction phase (and OutputFormat) the caller wants.
+    if (hasFields && hasGroups)
+        return Results.BadRequest(new { error = "Fields und Groups schließen sich aus." });
+
+    // Wire format (Fields/Groups) is unchanged; internally it's compiled
+    // into the canonical Steps-based ScrapingPlan that backends actually
+    // consume.
     var plan = ScrapingPlanBuilder.Build(config);
 
     // Fast structural checks (malformed URL, duplicate/empty field names)
@@ -51,7 +71,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     // returns real data, rather than approximating that with a static
     // selector check that could disagree with what BeautifulSoup does.
     var verifier = registry.ResolveScriptVerifier("python");
-    var verification = await verifier.VerifyAsync(script);
+    var verification = await verifier.VerifyAsync(script, plan.OutputFormat);
     if (!verification.Success)
     {
         return Results.UnprocessableEntity(new
