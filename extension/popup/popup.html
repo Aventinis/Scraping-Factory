@@ -53,6 +53,29 @@
     .field-name     { font-weight: 500; min-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .field-selector { flex: 1; font-size: 11px; font-family: monospace; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+    /* Mode toggle */
+    .mode-toggle { display: flex; gap: 4px; margin-bottom: 14px; background: #f3f4f6; border-radius: 8px; padding: 3px; }
+    .mode-btn {
+      flex: 1; background: transparent; color: #6b7280; font-size: 12px; padding: 6px 8px; border-radius: 6px;
+    }
+    .mode-btn.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 2px rgba(0,0,0,.08); font-weight: 500; }
+
+    /* Container tree editor */
+    #group-tree-root { list-style: none; margin: 0 0 10px; padding: 0; }
+    .group-tree-children { list-style: none; margin: 0; padding: 0; }
+    .group-tree-children.hidden { display: none; }
+    .group-tree-row {
+      display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+      padding: 4px 2px; font-size: 12px; color: #374151;
+    }
+    .group-tree-toggle { width: 12px; flex: none; color: #9ca3af; cursor: pointer; user-select: none; }
+    .group-tree-label  { flex: 1; min-width: 60px; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .btn-tiny { font-size: 11px; padding: 3px 6px; }
+
+    /* Radio row (container-type picker) — specificity beats .modal-inner label's block display */
+    .radio-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; font-size: 13px; color: #374151; }
+    .modal-inner .radio-row label { display: flex; align-items: center; gap: 6px; font-size: inherit; margin-bottom: 0; }
+
     /* Selecting screen */
     #screen-selecting { text-align: center; padding: 28px 16px; }
     .selecting-hint   { color: #6b7280; margin-bottom: 16px; }
@@ -123,6 +146,11 @@
       padding: 7px 10px; font-size: 14px; margin-bottom: 12px; font-family: inherit; outline: none;
     }
     .modal-inner input:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.2); }
+    .modal-inner select {
+      width: 100%; border: 1px solid #d1d5db; border-radius: 6px;
+      padding: 7px 10px; font-size: 14px; margin-bottom: 12px; font-family: inherit; outline: none;
+      background: #fff;
+    }
     .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
     /* Toast */
@@ -170,10 +198,29 @@
       <div class="row-label">URL</div>
       <div id="url-display" class="url-value"></div>
     </div>
-    <div class="row-label" style="margin-bottom: 6px;">Felder</div>
-    <div id="fields-list"></div>
-    <div class="actions">
-      <button id="btn-add-field" class="btn-secondary">+ Feld hinzufügen</button>
+
+    <div class="mode-toggle">
+      <button id="btn-mode-flat" class="mode-btn active" type="button">Felder (flach)</button>
+      <button id="btn-mode-container" class="mode-btn" type="button">Container (verschachtelt)</button>
+    </div>
+
+    <div id="flat-mode-section">
+      <div class="row-label" style="margin-bottom: 6px;">Felder</div>
+      <div id="fields-list"></div>
+      <div class="actions">
+        <button id="btn-add-field" class="btn-secondary">+ Feld hinzufügen</button>
+      </div>
+    </div>
+
+    <div id="container-mode-section" class="hidden">
+      <div class="row-label" style="margin-bottom: 6px;">Container</div>
+      <ul id="group-tree-root" class="group-tree"></ul>
+      <div class="actions">
+        <button id="btn-add-root-container" class="btn-secondary">+ Container hinzufügen</button>
+      </div>
+    </div>
+
+    <div class="actions" style="margin-top: 10px;">
       <button id="btn-generate" class="btn-primary" disabled>Skript generieren ▶</button>
     </div>
   </section>
@@ -221,6 +268,45 @@
       <div class="modal-actions">
         <button id="btn-field-cancel" class="btn-secondary">Abbrechen</button>
         <button id="btn-field-confirm" class="btn-primary">Hinzufügen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: new container (name + type), shown before element selection starts -->
+  <div id="modal-container-new" class="modal hidden">
+    <div class="modal-inner">
+      <label for="input-container-name">Name des Containers (z. B. "Vorspeisen")</label>
+      <input id="input-container-name" type="text" placeholder="Name" autocomplete="off" />
+      <label>Typ</label>
+      <div class="radio-row">
+        <label><input type="radio" name="container-type" id="radio-container-single" checked /> Einzelnes Element</label>
+        <label><input type="radio" name="container-type" id="radio-container-repeating" /> Wiederholend</label>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-container-cancel" class="btn-secondary">Abbrechen</button>
+        <button id="btn-container-confirm" class="btn-primary">Weiter — Element wählen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: extended field input (Container-Mode) — name, type, optional attribute -->
+  <div id="modal-field-extended" class="modal hidden">
+    <div class="modal-inner">
+      <label for="input-field-extended-name">Feldname (z. B. "Preis")</label>
+      <input id="input-field-extended-name" type="text" placeholder="Feldname" autocomplete="off" />
+      <label for="select-field-mode">Feldtyp</label>
+      <select id="select-field-mode">
+        <option value="text">Text</option>
+        <option value="attribute">Attribut</option>
+        <option value="exists">Vorhanden?</option>
+      </select>
+      <div id="field-attribute-row" class="hidden">
+        <label for="input-field-attribute">Attribut-Name (z. B. "href")</label>
+        <input id="input-field-attribute" type="text" placeholder="Attribut" autocomplete="off" />
+      </div>
+      <div class="modal-actions">
+        <button id="btn-field-extended-cancel" class="btn-secondary">Abbrechen</button>
+        <button id="btn-field-extended-confirm" class="btn-primary">Hinzufügen</button>
       </div>
     </div>
   </div>
