@@ -10,11 +10,17 @@ const STATES = {
 };
 
 let _state = {
-  current:           STATES.CHECKING_COMPANION,
-  url:               '',
-  fields:            [],   // [{name, selector, attribute}]
-  scriptText:        '',
-  pendingSelector:   null,  // set while field-name modal is open
+  current:             STATES.CHECKING_COMPANION,
+  url:                 '',
+  mode:                'flat', // 'flat' (Fields → Csv) | 'container' (Groups → Xml) — mutually exclusive
+  fields:              [],   // [{name, selector, attribute}]
+  groups:              [],   // container-mode tree: {kind:'group', name, selector, repeating, children} | {kind:'field', name, selector, mode, attribute}
+  scriptText:          '',
+  pendingSelector:     null,  // set while field-name modal (flat) or extended field modal (container) is open
+  selectionKind:       null,  // 'field' | 'container' | null — which kind the current SELECTING round is for (container-mode only)
+  pendingParentPath:   null,  // number[] | null — where the next inserted group-tree node goes; null = root level
+  pendingNewContainer: null,  // {name, repeating} captured by modal-container-new before element-selection starts
+  containerModalOpen:  false, // modal-container-new visibility
   domViewEnabled:    false, // user preference, kept across selection rounds
   domTree:           null,  // serialized tree from the content script, or null while loading/errored
   domTreeTruncated:  false,
@@ -51,7 +57,10 @@ if (typeof window !== 'undefined') {
 
 // ── Pure functions (exported for testing) ────────────────────────────────────
 
-function buildScrapingConfig(url, fields) {
+function buildScrapingConfig(url, mode, fields, groups) {
+  if (mode === 'container') {
+    return { version: '1', url, groups: serializeGroupTree(groups) };
+  }
   return {
     version: '1',
     url,
@@ -66,6 +75,68 @@ function addField(fields, name, selector) {
 
 function removeField(fields, index) {
   return fields.filter((_, i) => i !== index);
+}
+
+// ── Container-Mode tree (GroupNode/DataFieldNode) ───────────────────────────
+// Mirrors the backend IR (ContainerNode.cs): a group node scopes its
+// children to matches of its own selector, a field node is the extraction
+// leaf. `path` addresses a node the same way the DOM-tree-view already does
+// (an array of child indices) — see buildTreeNodeEl's `node.path`.
+
+function buildGroupNode(name, selector, repeating) {
+  return { kind: 'group', name, selector, repeating, children: [] };
+}
+
+function buildFieldNode(name, selector, mode, attribute) {
+  return { kind: 'field', name, selector, mode, attribute: mode === 'attribute' ? attribute : null };
+}
+
+function resolveGroupNode(groups, path) {
+  if (!path || path.length === 0) return null;
+  let node = groups[path[0]];
+  for (let i = 1; i < path.length; i++) node = node.children[path[i]];
+  return node;
+}
+
+// Appends `node` as the last child at `parentPath` (or at root level when
+// `parentPath` is null) — immutable, like addField above.
+function insertContainerNode(groups, parentPath, node) {
+  const path = parentPath || [];
+  if (path.length === 0) return [...groups, node];
+  const [head, ...rest] = path;
+  return groups.map((n, i) => (i === head ? { ...n, children: insertContainerNode(n.children, rest, node) } : n));
+}
+
+// Removes the node (and its subtree) at `path` — always non-empty, unlike
+// insertContainerNode's parentPath.
+function removeGroupTreeNode(groups, path) {
+  if (path.length === 1) return groups.filter((_, i) => i !== path[0]);
+  const [head, ...rest] = path;
+  return groups.map((n, i) => (i === head ? { ...n, children: removeGroupTreeNode(n.children, rest) } : n));
+}
+
+function formatGroupNodeLabel(node) {
+  if (node.kind === 'group') {
+    return `${node.name} (${node.repeating ? 'wiederholend' : 'einzeln'})`;
+  }
+  const modeLabel = { text: 'Text', attribute: `Attribut: ${node.attribute}`, exists: 'Vorhanden?' }[node.mode];
+  return `${node.name} — ${modeLabel}`;
+}
+
+const FIELD_MODE_WIRE_NAMES = { text: 'Text', attribute: 'Attribute', exists: 'Exists' };
+
+// Strips the popup's internal `kind` tag and shapes each node exactly like
+// the wire format the Companion expects (ContainerNode.cs / ContainerNodeJsonConverter):
+// `children` present only for groups, `attribute` present only when mode is Attribute.
+function serializeGroupTree(groups) {
+  return groups.map(node => node.kind === 'group'
+    ? { name: node.name, selector: node.selector, repeating: node.repeating, children: serializeGroupTree(node.children) }
+    : {
+        name: node.name,
+        selector: node.selector,
+        mode: FIELD_MODE_WIRE_NAMES[node.mode],
+        ...(node.mode === 'attribute' ? { attribute: node.attribute } : {}),
+      });
 }
 
 function escapeHtml(str) {
@@ -97,7 +168,15 @@ function patchState(patch) {
 function persistState() {
   if (typeof chrome === 'undefined' || !chrome.storage?.session) return;
   chrome.storage.session
-    .set({ fields: _state.fields, url: _state.url })
+    .set({
+      fields: _state.fields,
+      url: _state.url,
+      mode: _state.mode,
+      groups: _state.groups,
+      selectionKind: _state.selectionKind,
+      pendingParentPath: _state.pendingParentPath,
+      pendingNewContainer: _state.pendingNewContainer,
+    })
     .catch(err => log('STORAGE_ERR', err.message));
 }
 
@@ -111,6 +190,8 @@ function render() {
     hide(`screen-${s}`)
   );
   hide('modal-field-name');
+  hide('modal-field-extended');
+  hide('modal-container-new');
 
   const screenKey = {
     [STATES.CHECKING_COMPANION]: 'checking',
@@ -126,16 +207,46 @@ function render() {
   if (_state.current === STATES.IDLE) {
     const urlEl = document.getElementById('url-display');
     if (urlEl) urlEl.textContent = _state.url || '—';
-    renderFields();
+
+    document.getElementById('btn-mode-flat')?.classList.toggle('active', _state.mode === 'flat');
+    document.getElementById('btn-mode-container')?.classList.toggle('active', _state.mode === 'container');
+    document.getElementById('flat-mode-section')?.classList.toggle('hidden', _state.mode !== 'flat');
+    document.getElementById('container-mode-section')?.classList.toggle('hidden', _state.mode !== 'container');
+
+    if (_state.mode === 'container') {
+      renderGroupTree(_state.groups);
+    } else {
+      renderFields();
+    }
+
     const genBtn = document.getElementById('btn-generate');
-    if (genBtn) genBtn.disabled = _state.fields.length === 0;
+    if (genBtn) genBtn.disabled = _state.mode === 'container' ? _state.groups.length === 0 : _state.fields.length === 0;
+
+    if (_state.containerModalOpen) {
+      show('modal-container-new');
+      const nameInput = document.getElementById('input-container-name');
+      if (nameInput) { nameInput.value = ''; nameInput.focus(); }
+      const singleRadio = document.getElementById('radio-container-single');
+      if (singleRadio) singleRadio.checked = true;
+    }
   }
 
   // Show modal when an element has been captured during selection
   if (_state.current === STATES.SELECTING && _state.pendingSelector !== null) {
-    show('modal-field-name');
-    const input = document.getElementById('input-field-name');
-    if (input) { input.value = ''; input.focus(); }
+    if (_state.mode === 'container') {
+      show('modal-field-extended');
+      const nameInput = document.getElementById('input-field-extended-name');
+      if (nameInput) { nameInput.value = ''; nameInput.focus(); }
+      const modeSelect = document.getElementById('select-field-mode');
+      if (modeSelect) modeSelect.value = 'text';
+      document.getElementById('field-attribute-row')?.classList.add('hidden');
+      const attrInput = document.getElementById('input-field-attribute');
+      if (attrInput) attrInput.value = '';
+    } else {
+      show('modal-field-name');
+      const input = document.getElementById('input-field-name');
+      if (input) { input.value = ''; input.focus(); }
+    }
   }
 
   if (_state.current === STATES.SELECTING) {
@@ -169,6 +280,76 @@ function renderFields(fields = _state.fields) {
       `<button class="btn-danger btn-remove-field" data-index="${i}">Entfernen</button>`;
     listEl.appendChild(row);
   });
+}
+
+// ── Container tree editor ────────────────────────────────────────────────────
+// Same visual pattern as the DOM-tree-view below (indentation, toggle arrow,
+// click-to-collapse — see buildTreeNodeEl) but editable: rows carry
+// add-container/add-field/remove buttons, and nodes start expanded since
+// this tree is user-authored and typically small, unlike a full page DOM.
+
+function buildGroupTreeNodeEl(node, path, depth) {
+  const li = document.createElement('li');
+  li.className = 'group-tree-node';
+  li.dataset.path = JSON.stringify(path);
+
+  const row = document.createElement('div');
+  row.className = 'group-tree-row';
+  row.style.paddingLeft = `${depth * 12}px`;
+
+  const hasChildren = node.kind === 'group' && node.children.length > 0;
+  const toggle = document.createElement('span');
+  toggle.className = 'group-tree-toggle';
+  toggle.textContent = hasChildren ? '▾' : '';
+  row.appendChild(toggle);
+
+  const label = document.createElement('span');
+  label.className = 'group-tree-label';
+  label.textContent = formatGroupNodeLabel(node);
+  label.title = node.selector;
+  row.appendChild(label);
+
+  if (node.kind === 'group') {
+    const addContainerBtn = document.createElement('button');
+    addContainerBtn.className = 'btn-secondary btn-tiny btn-add-subcontainer';
+    addContainerBtn.textContent = '+ Container';
+    row.appendChild(addContainerBtn);
+
+    const addFieldBtn = document.createElement('button');
+    addFieldBtn.className = 'btn-secondary btn-tiny btn-add-subfield';
+    addFieldBtn.textContent = '+ Datenfeld';
+    row.appendChild(addFieldBtn);
+  }
+
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'btn-danger btn-remove-group-node';
+  removeBtn.textContent = 'Entfernen';
+  row.appendChild(removeBtn);
+
+  li.appendChild(row);
+
+  if (node.kind === 'group') {
+    const childUl = document.createElement('ul');
+    childUl.className = 'group-tree-children';
+    node.children.forEach((child, i) => childUl.appendChild(buildGroupTreeNodeEl(child, [...path, i], depth + 1)));
+    li.appendChild(childUl);
+
+    if (hasChildren) {
+      toggle.addEventListener('click', () => {
+        const collapsed = childUl.classList.toggle('hidden');
+        toggle.textContent = collapsed ? '▸' : '▾';
+      });
+    }
+  }
+
+  return li;
+}
+
+function renderGroupTree(groups) {
+  const root = document.getElementById('group-tree-root');
+  if (!root) return;
+  root.innerHTML = '';
+  groups.forEach((node, i) => root.appendChild(buildGroupTreeNodeEl(node, [i], 0)));
 }
 
 // ── DOM tree view ────────────────────────────────────────────────────────────
@@ -302,7 +483,7 @@ function buildVerificationErrorMessage(data) {
 
 async function generate() {
   setState(STATES.GENERATING);
-  const config = buildScrapingConfig(_state.url, _state.fields);
+  const config = buildScrapingConfig(_state.url, _state.mode, _state.fields, _state.groups);
   log('GENERATE request', config);
   try {
     const res = await fetch(`${COMPANION_URL}/generate`, {
@@ -466,6 +647,85 @@ function confirmField() {
   });
 }
 
+// ── Container-Mode: mode switch, container/field add flows ─────────────────
+
+function switchMode(mode) {
+  if (mode === _state.mode) return;
+  log('MODE_SWITCH', mode);
+  // Strictly separate — switching modes clears the other mode's config
+  // rather than keeping both around.
+  setState(_state.current, mode === 'flat' ? { mode, groups: [] } : { mode, fields: [] });
+}
+
+function openContainerModal(parentPath) {
+  log('CONTAINER_MODAL open', { parentPath });
+  patchState({ containerModalOpen: true, pendingParentPath: parentPath });
+}
+
+// Container-add order is deliberately "name/type first, then click an
+// element" (unlike field-add below) — see planning-container-scraping.md.
+function confirmContainerModal() {
+  const name = document.getElementById('input-container-name')?.value.trim();
+  if (!name) return;
+  const repeating = document.getElementById('radio-container-repeating')?.checked ?? false;
+  const parentPath = _state.pendingParentPath;
+  const scopeSelector = parentPath ? resolveGroupNode(_state.groups, parentPath)?.selector : null;
+
+  log('CONTAINER_ADD start', { name, repeating, parentPath, scopeSelector });
+  chrome.runtime.sendMessage({ type: 'START_SELECTION', scopeSelector });
+  setState(STATES.SELECTING, {
+    containerModalOpen:  false,
+    selectionKind:       'container',
+    pendingNewContainer: { name, repeating },
+    pendingSelector:     null,
+    domTree: null, domTreeTruncated: false, domTreeError: null,
+  });
+  if (_state.domViewEnabled) requestDomTree();
+}
+
+function cancelContainerModal() {
+  log('CONTAINER_MODAL cancel');
+  setState(_state.current, { containerModalOpen: false, pendingParentPath: null });
+}
+
+// Field-add within a container keeps the flat mode's order — click first,
+// name/type after — since the field type doesn't affect what gets clicked.
+function startFieldSelection(parentPath) {
+  const scopeSelector = resolveGroupNode(_state.groups, parentPath)?.selector ?? null;
+  log('FIELD_ADD(container) start', { parentPath, scopeSelector });
+  chrome.runtime.sendMessage({ type: 'START_SELECTION', scopeSelector });
+  setState(STATES.SELECTING, {
+    selectionKind:       'field',
+    pendingParentPath:   parentPath,
+    pendingNewContainer: null,
+    pendingSelector:     null,
+    domTree: null, domTreeTruncated: false, domTreeError: null,
+  });
+  if (_state.domViewEnabled) requestDomTree();
+}
+
+function confirmExtendedField() {
+  const name = document.getElementById('input-field-extended-name')?.value.trim();
+  if (!name) return;
+  const mode = document.getElementById('select-field-mode')?.value ?? 'text';
+  const attribute = document.getElementById('input-field-attribute')?.value.trim();
+  if (mode === 'attribute' && !attribute) return;
+
+  const node = buildFieldNode(name, _state.pendingSelector, mode, attribute);
+  log('FIELD_ADD(container) confirm', node);
+  setState(STATES.IDLE, {
+    groups:            insertContainerNode(_state.groups, _state.pendingParentPath, node),
+    pendingSelector:   null,
+    pendingParentPath: null,
+    selectionKind:     null,
+  });
+}
+
+function cancelExtendedField() {
+  log('FIELD_ADD(container) cancel');
+  setState(STATES.IDLE, { pendingSelector: null, pendingParentPath: null, selectionKind: null });
+}
+
 // ── Event wiring ──────────────────────────────────────────────────────────────
 
 function wireEvents() {
@@ -489,11 +749,45 @@ function wireEvents() {
     }
   });
 
+  document.getElementById('btn-mode-flat')?.addEventListener('click', () => switchMode('flat'));
+  document.getElementById('btn-mode-container')?.addEventListener('click', () => switchMode('container'));
+
+  document.getElementById('btn-add-root-container')?.addEventListener('click', () => openContainerModal(null));
+
+  // Event delegation for the container tree's per-row add/remove buttons
+  document.getElementById('group-tree-root')?.addEventListener('click', (e) => {
+    const li = e.target.closest('.group-tree-node');
+    if (!li) return;
+    const path = JSON.parse(li.dataset.path);
+
+    if (e.target.closest('.btn-add-subcontainer')) { openContainerModal(path); return; }
+    if (e.target.closest('.btn-add-subfield')) { startFieldSelection(path); return; }
+    if (e.target.closest('.btn-remove-group-node')) {
+      log('GROUP_NODE_REMOVE', { path });
+      setState(_state.current, { groups: removeGroupTreeNode(_state.groups, path) });
+    }
+  });
+
+  document.getElementById('btn-container-confirm')?.addEventListener('click', confirmContainerModal);
+  document.getElementById('input-container-name')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') confirmContainerModal();
+  });
+  document.getElementById('btn-container-cancel')?.addEventListener('click', cancelContainerModal);
+
+  document.getElementById('btn-field-extended-confirm')?.addEventListener('click', confirmExtendedField);
+  document.getElementById('input-field-extended-name')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') confirmExtendedField();
+  });
+  document.getElementById('btn-field-extended-cancel')?.addEventListener('click', cancelExtendedField);
+  document.getElementById('select-field-mode')?.addEventListener('change', (e) => {
+    document.getElementById('field-attribute-row')?.classList.toggle('hidden', e.target.value !== 'attribute');
+  });
+
   document.getElementById('btn-cancel-selection')?.addEventListener('click', () => {
     log('BTN cancel-selection → STOP_SELECTION');
     chrome.runtime.sendMessage({ type: 'STOP_SELECTION' });
     clearTimeout(domTreeTimeoutId);
-    setState(STATES.IDLE);
+    setState(STATES.IDLE, { selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null });
   });
 
   document.getElementById('toggle-dom-view')?.addEventListener('change', (e) => {
@@ -537,8 +831,8 @@ function wireEvents() {
 
   document.getElementById('btn-new-scraper')?.addEventListener('click', () => {
     log('BTN new-scraper → reset state');
-    chrome.storage.session.set({ fields: [], url: '' });
-    setState(STATES.CHECKING_COMPANION, { fields: [], scriptText: '', url: '' });
+    chrome.storage.session.set({ fields: [], url: '', groups: [] });
+    setState(STATES.CHECKING_COMPANION, { fields: [], groups: [], scriptText: '', url: '' });
     checkCompanion();
   });
 
@@ -547,14 +841,24 @@ function wireEvents() {
     if (message.type === 'SELECTION_UNAVAILABLE' && _state.current === STATES.SELECTING) {
       log('SELECTION_UNAVAILABLE', message.reason);
       setLastError(message.reason, 'Element-Auswahl');
-      setState(STATES.IDLE);
+      setState(STATES.IDLE, { selectionKind: null, pendingParentPath: null, pendingNewContainer: null });
       showToast('Element-Auswahl auf dieser Seite nicht möglich.');
     }
     if (message.type === 'ELEMENT_SELECTED' && _state.current === STATES.SELECTING) {
       log('ELEMENT_SELECTED received (real-time)', message.selector);
       // Clear the storage entry the service worker wrote — we have it now.
       chrome.storage.session.remove('pendingSelector');
-      setState(STATES.SELECTING, { pendingSelector: message.selector });
+      if (_state.mode === 'container' && _state.selectionKind === 'container') {
+        // Name/type were already collected by modal-container-new — insert
+        // the new group node straight away, no further modal needed.
+        const node = buildGroupNode(_state.pendingNewContainer.name, message.selector, _state.pendingNewContainer.repeating);
+        setState(STATES.IDLE, {
+          groups: insertContainerNode(_state.groups, _state.pendingParentPath, node),
+          selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null,
+        });
+      } else {
+        setState(STATES.SELECTING, { pendingSelector: message.selector });
+      }
       if (message.path) highlightSelected(message.path);
     }
     if (message.type === 'DOM_TREE') {
@@ -581,19 +885,42 @@ async function init() {
   wireEvents();
 
   log('INIT reading session storage');
-  const stored = await chrome.storage.session.get(['fields', 'url', 'pendingSelector']);
+  const stored = await chrome.storage.session.get([
+    'fields', 'url', 'pendingSelector', 'mode', 'groups',
+    'selectionKind', 'pendingParentPath', 'pendingNewContainer',
+  ]);
   log('INIT restored', stored);
 
-  // Always restore persisted fields and URL.
+  // Always restore persisted fields/groups and URL.
   if (Array.isArray(stored.fields)) _state = { ..._state, fields: stored.fields };
+  if (Array.isArray(stored.groups)) _state = { ..._state, groups: stored.groups };
   if (stored.url)                   _state = { ..._state, url: stored.url };
+  if (stored.mode)                  _state = { ..._state, mode: stored.mode };
+  if (stored.selectionKind)         _state = { ..._state, selectionKind: stored.selectionKind };
+  if (stored.pendingParentPath !== undefined) _state = { ..._state, pendingParentPath: stored.pendingParentPath };
+  if (stored.pendingNewContainer)   _state = { ..._state, pendingNewContainer: stored.pendingNewContainer };
 
   if (stored.pendingSelector) {
     // The user clicked an element while the side panel was closed (e.g. it
     // hadn't finished loading yet, or was closed manually).
-    // Show the field-name modal immediately without re-checking the companion.
-    log('INIT pending selector found → show modal', stored.pendingSelector);
     await chrome.storage.session.remove('pendingSelector');
+
+    if (stored.mode === 'container' && stored.selectionKind === 'container' && stored.pendingNewContainer) {
+      // Same as the live ELEMENT_SELECTED path: name/type were already
+      // collected before selection started, so insert straight away.
+      log('INIT pending container selector found → inserting node', stored.pendingSelector);
+      const node = buildGroupNode(stored.pendingNewContainer.name, stored.pendingSelector, stored.pendingNewContainer.repeating);
+      const groups = insertContainerNode(_state.groups, stored.pendingParentPath, node);
+      await chrome.storage.session.set({ groups });
+      setState(STATES.IDLE, {
+        groups, selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null,
+      });
+      return;
+    }
+
+    // Flat field or container field — show the (extended, in container
+    // mode) field-name modal without re-checking the companion.
+    log('INIT pending selector found → show modal', stored.pendingSelector);
     setState(STATES.SELECTING, { pendingSelector: stored.pendingSelector });
     return;
   }
@@ -615,5 +942,7 @@ if (typeof module !== 'undefined') {
     buildScrapingConfig, addField, removeField, escapeHtml, renderFields, STATES,
     formatTreeLabel, renderDomTree, highlightHover, highlightSelected,
     formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,
+    buildGroupNode, buildFieldNode, resolveGroupNode, insertContainerNode, removeGroupTreeNode,
+    formatGroupNodeLabel, serializeGroupTree, renderGroupTree,
   };
 }
