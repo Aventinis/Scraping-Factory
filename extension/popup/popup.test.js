@@ -21,8 +21,18 @@ const {
   formatTreeLabel, renderDomTree, highlightHover, highlightSelected,
   formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,
   buildGroupNode, buildFieldNode, resolveGroupNode, insertContainerNode, removeGroupTreeNode,
-  formatGroupNodeLabel, serializeGroupTree, renderGroupTree,
+  formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport,
 } = require('./popup');
+
+// jsdom's Blob doesn't implement .text() — read via FileReader instead.
+function readBlobText(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsText(blob);
+  });
+}
 
 // ── buildScrapingConfig ───────────────────────────────────────────────────────
 
@@ -70,6 +80,35 @@ describe('buildScrapingConfig (container mode)', () => {
     });
     expect(result.outputFormat).toBeUndefined();
     expect(result.fields).toBeUndefined();
+  });
+});
+
+// ── buildConfigExport ────────────────────────────────────────────────────────
+// Lets a user attach their current Fields/Groups to a bug report — wraps the
+// exact wire-format config (buildScrapingConfig) with export metadata.
+
+describe('buildConfigExport', () => {
+  test('wraps the flat-mode config with exportedAt and the extension version', () => {
+    const fields = [{ name: 'Titel', selector: 'h1', attribute: null }];
+    const result = buildConfigExport('https://example.com', 'flat', fields, [], { version: '1.2.3' });
+
+    expect(result.extensionVersion).toBe('1.2.3');
+    expect(() => new Date(result.exportedAt).toISOString()).not.toThrow();
+    expect(result.config).toEqual(buildScrapingConfig('https://example.com', 'flat', fields, []));
+  });
+
+  test('wraps the container-mode config (groups) the same way', () => {
+    const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
+    const result = buildConfigExport('https://example.com', 'container', [], groups, { version: '1.2.3' });
+
+    expect(result.config).toEqual(buildScrapingConfig('https://example.com', 'container', [], groups));
+    expect(result.config.groups).toBeDefined();
+    expect(result.config.fields).toBeUndefined();
+  });
+
+  test('falls back to "?" when no manifest/version is available', () => {
+    const result = buildConfigExport('https://example.com', 'flat', [], []);
+    expect(result.extensionVersion).toBe('?');
   });
 });
 
@@ -882,6 +921,125 @@ describe('Container-Mode integration', () => {
     document.getElementById('btn-field-extended-confirm').click();
     const rows = document.querySelectorAll('#group-tree-root .group-tree-row');
     expect(rows[1].textContent).toContain('Link — Attribut: href');
+  });
+});
+
+// ── Konfiguration exportieren (btn-export-config) ────────────────────────────
+
+describe('downloadConfigExport (btn-export-config)', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div class="mode-toggle">
+          <button id="btn-mode-flat" class="mode-btn active"></button>
+          <button id="btn-mode-container" class="mode-btn"></button>
+        </div>
+        <div id="flat-mode-section">
+          <div id="fields-list"></div>
+          <button id="btn-add-field"></button>
+        </div>
+        <div id="container-mode-section" class="hidden">
+          <ul id="group-tree-root"></ul>
+          <button id="btn-add-root-container"></button>
+        </div>
+        <button id="btn-generate" disabled></button>
+        <button id="btn-export-config" disabled></button>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <input type="checkbox" id="toggle-dom-view" />
+        <div id="dom-tree-wrapper" class="hidden">
+          <p id="dom-tree-loading"></p>
+          <p id="dom-tree-error" class="hidden"></p>
+          <p id="dom-tree-truncated" class="hidden"></p>
+          <ul id="dom-tree-root"></ul>
+        </div>
+      </section>
+      <div id="modal-container-new" class="hidden">
+        <input id="input-container-name" />
+        <input type="radio" name="container-type" id="radio-container-single" checked />
+        <input type="radio" name="container-type" id="radio-container-repeating" />
+        <button id="btn-container-confirm"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+        getManifest: jest.fn().mockReturnValue({ version: '9.9.9-test' }),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com/speisekarte' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({
+            fields: [{ name: 'Titel', selector: 'h1', attribute: null }],
+            url: 'https://example.com/speisekarte',
+          }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+    global.URL.createObjectURL = jest.fn(() => 'blob:mock');
+    global.URL.revokeObjectURL = jest.fn();
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE, fields restored from storage
+  });
+
+  test('is disabled with no fields, enabled once a field exists (flat mode)', () => {
+    expect(document.getElementById('btn-export-config').disabled).toBe(false); // seeded with one field above
+  });
+
+  test('downloads a JSON file containing the exact /generate config plus export metadata', async () => {
+    document.getElementById('btn-export-config').click();
+
+    expect(global.URL.createObjectURL).toHaveBeenCalledTimes(1);
+    const blobArg = global.URL.createObjectURL.mock.calls[0][0];
+    expect(blobArg.type).toBe('application/json');
+
+    const text = await readBlobText(blobArg);
+    const parsed = JSON.parse(text);
+
+    expect(parsed.extensionVersion).toBe('9.9.9-test');
+    expect(parsed.config).toEqual({
+      version: '1',
+      url: 'https://example.com/speisekarte',
+      fields: [{ name: 'Titel', selector: 'h1', attribute: null }],
+      outputFormat: 'Csv',
+    });
+  });
+
+  test('exports groups instead of fields once a container has been added', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('radio-container-repeating').checked = true;
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+
+    expect(document.getElementById('btn-export-config').disabled).toBe(false);
+
+    document.getElementById('btn-export-config').click();
+    const blobArg = global.URL.createObjectURL.mock.calls[0][0];
+    const parsed = JSON.parse(await readBlobText(blobArg));
+
+    expect(parsed.config).toEqual({
+      version: '1',
+      url: 'https://example.com/speisekarte',
+      groups: [{ name: 'Vorspeisen', selector: 'section.menu-category', repeating: true, children: [] }],
+    });
   });
 });
 

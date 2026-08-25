@@ -69,6 +69,20 @@ function buildScrapingConfig(url, mode, fields, groups) {
   };
 }
 
+// Wraps the exact wire-format config (buildScrapingConfig) with export
+// metadata, so a user hitting a selector problem can hand over one file
+// that both shows the current Fields/Groups and, unwrapped, is the literal
+// request body /generate would receive — no need to describe the setup by
+// hand. `manifest` is injected so this stays a pure, testable function
+// instead of reaching into chrome.runtime itself.
+function buildConfigExport(url, mode, fields, groups, manifest = {}) {
+  return {
+    exportedAt: new Date().toISOString(),
+    extensionVersion: manifest.version || '?',
+    config: buildScrapingConfig(url, mode, fields, groups),
+  };
+}
+
 function addField(fields, name, selector) {
   return [...fields, { name, selector, attribute: null }];
 }
@@ -219,8 +233,11 @@ function render() {
       renderFields();
     }
 
+    const hasConfig = _state.mode === 'container' ? _state.groups.length > 0 : _state.fields.length > 0;
     const genBtn = document.getElementById('btn-generate');
-    if (genBtn) genBtn.disabled = _state.mode === 'container' ? _state.groups.length === 0 : _state.fields.length === 0;
+    if (genBtn) genBtn.disabled = !hasConfig;
+    const exportBtn = document.getElementById('btn-export-config');
+    if (exportBtn) exportBtn.disabled = !hasConfig;
 
     if (_state.containerModalOpen) {
       show('modal-container-new');
@@ -514,6 +531,25 @@ function triggerDownload() {
   const a = document.createElement('a');
   a.href = objectUrl;
   a.download = 'scraper.py';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(objectUrl);
+}
+
+// Lets a user hand over the current Fields/Groups configuration when
+// reporting a selector problem, without having to describe their setup by
+// hand — e.g. attached to a "Fehler melden" GitHub issue or shared directly.
+function downloadConfigExport() {
+  const manifest = typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest() : {};
+  const exportObj = buildConfigExport(_state.url, _state.mode, _state.fields, _state.groups, manifest);
+  log('DOWNLOAD scraping-config.json', exportObj);
+
+  const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = `scraping-config-${Date.now()}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -828,6 +864,7 @@ function wireEvents() {
     generate();
   });
   document.getElementById('btn-download')?.addEventListener('click', triggerDownload);
+  document.getElementById('btn-export-config')?.addEventListener('click', downloadConfigExport);
 
   document.getElementById('btn-new-scraper')?.addEventListener('click', () => {
     log('BTN new-scraper → reset state');
@@ -943,6 +980,6 @@ if (typeof module !== 'undefined') {
     formatTreeLabel, renderDomTree, highlightHover, highlightSelected,
     formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,
     buildGroupNode, buildFieldNode, resolveGroupNode, insertContainerNode, removeGroupTreeNode,
-    formatGroupNodeLabel, serializeGroupTree, renderGroupTree,
+    formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport,
   };
 }
