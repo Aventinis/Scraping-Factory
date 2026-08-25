@@ -28,9 +28,6 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         var shellTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_scraper.py.j2");
 
         var navigate = plan.Steps.OfType<NavigateStep>().Single();
-        var fields = plan.Steps.OfType<ExtractStep>()
-            .Select(step => new { name = step.Name, selector = step.Selector, attribute = step.Attribute })
-            .ToList();
 
         var actionLines = plan.Steps
             .Select(step => step switch
@@ -46,6 +43,30 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
 
         var actions = string.Join("\n", actionLines);
         var needsOsImport = plan.Steps.OfType<FillStep>().Any();
+
+        // Container-Mode: login/wait steps (if any) still run first — only
+        // the extraction phase after them differs (group tree → XML instead
+        // of flat fields → CSV). See ExtractGroupStep and
+        // PythonCodeGenerator's equivalent branch.
+        var groupStep = plan.Steps.OfType<ExtractGroupStep>().SingleOrDefault();
+        if (groupStep is not null)
+        {
+            var groupsLiteral = PythonGroupTreeLiteral.Render(groupStep.Roots, indent: 0);
+            var rootNames = groupStep.Roots.Select(root => root.Name).ToList();
+            var groupedShellTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_scraper_grouped.py.j2");
+            return groupedShellTemplate.Render(new
+            {
+                url = navigate.Url,
+                groups_literal = groupsLiteral,
+                root_names = rootNames,
+                actions,
+                needs_os_import = needsOsImport,
+            });
+        }
+
+        var fields = plan.Steps.OfType<ExtractStep>()
+            .Select(step => new { name = step.Name, selector = step.Selector, attribute = step.Attribute })
+            .ToList();
 
         return shellTemplate.Render(new { url = navigate.Url, fields, actions, needs_os_import = needsOsImport });
     }

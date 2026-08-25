@@ -12,7 +12,9 @@
 
   <ItemGroup>
     <EmbeddedResource Include="..\..\language-modules\python\templates\scraper.py.j2" LogicalName="scraper.py.j2" />
+    <EmbeddedResource Include="..\..\language-modules\python\templates\scraper_grouped.py.j2" LogicalName="scraper_grouped.py.j2" />
     <EmbeddedResource Include="..\..\language-modules\python\templates\playwright_scraper.py.j2" LogicalName="playwright_scraper.py.j2" />
+    <EmbeddedResource Include="..\..\language-modules\python\templates\playwright_scraper_grouped.py.j2" LogicalName="playwright_scraper_grouped.py.j2" />
     <EmbeddedResource Include="..\..\language-modules\python\templates\playwright_navigate_step.py.j2" LogicalName="playwright_navigate_step.py.j2" />
     <EmbeddedResource Include="..\..\language-modules\python\templates\playwright_wait_step.py.j2" LogicalName="playwright_wait_step.py.j2" />
     <EmbeddedResource Include="..\..\language-modules\python\templates\playwright_fill_step.py.j2" LogicalName="playwright_fill_step.py.j2" />

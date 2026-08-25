@@ -43,3 +43,13 @@ public sealed class ClickStep : ScrapingStep
 {
     public required string Selector { get; init; }
 }
+
+// Container-Mode: replaces the flat list of ExtractSteps entirely when the
+// wire-format config carries Groups instead of Fields. Engine-independent —
+// unlike WaitFor/Fill/Click it works identically with Static and Browser
+// codegen, only the DOM-access calls in the generated extract_group()
+// differ. See ContainerNode.
+public sealed class ExtractGroupStep : ScrapingStep
+{
+    public required List<GroupNode> Roots { get; init; }
+}

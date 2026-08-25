@@ -1,7 +1,9 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
+using System.Xml.Linq;
 using ScrapingFactory.Compiler.Backends;
+using ScrapingFactory.Compiler.IR;
 
 namespace ScrapingFactory.Compiler.Backends.Python;
 
@@ -26,7 +28,8 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
 
     public string LanguageId => "python";
 
-    public async Task<ScriptVerificationResult> VerifyAsync(string script, CancellationToken ct = default)
+    public async Task<ScriptVerificationResult> VerifyAsync(
+        string script, OutputFormat outputFormat = OutputFormat.Csv, CancellationToken ct = default)
     {
         var workDir = Directory.CreateTempSubdirectory("scrapingfactory-verify-").FullName;
         try
@@ -80,6 +83,9 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                 }
             }
 
+            if (outputFormat == OutputFormat.Xml)
+                return VerifyXmlOutput(workDir);
+
             var csvPath = Path.Combine(workDir, "output.csv");
             if (!File.Exists(csvPath))
             {
@@ -106,6 +112,30 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
         {
             try { Directory.Delete(workDir, recursive: true); } catch { /* best-effort cleanup */ }
         }
+    }
+
+    // XML analog of the CSV "at least one data row" check above: output.xml
+    // must exist, parse as valid XML, and its root must have at least one
+    // descendant element. Parse failures (e.g. an invalid XML tag name from
+    // a Container-Mode Name the user typed) bubble up to VerifyAsync's outer
+    // catch, same as any other unexpected exception during verification.
+    private static ScriptVerificationResult VerifyXmlOutput(string workDir)
+    {
+        var xmlPath = Path.Combine(workDir, "output.xml");
+        if (!File.Exists(xmlPath))
+            return new ScriptVerificationResult { Success = false, Error = "Skript hat keine output.xml erzeugt." };
+
+        var document = XDocument.Load(xmlPath);
+        var elementCount = document.Root?.Descendants().Count() ?? 0;
+
+        return elementCount > 0
+            ? new ScriptVerificationResult { Success = true, RowCount = elementCount }
+            : new ScriptVerificationResult
+            {
+                Success = false,
+                Error = "Skript lief fehlerfrei, hat aber keine Daten zurückgegeben " +
+                        "(output.xml enthält keine Elemente) — mindestens ein Selektor findet vermutlich nichts.",
+            };
     }
 
     private (Process? Process, string? Executable) StartProcess(string scriptPath, string workDir)
