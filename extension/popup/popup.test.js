@@ -21,7 +21,7 @@ const {
   formatTreeLabel, renderDomTree, highlightHover, highlightSelected,
   formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,
   buildGroupNode, buildFieldNode, resolveGroupNode, insertContainerNode, removeGroupTreeNode,
-  formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport,
+  formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport, hasRepeatingAncestor,
 } = require('./popup');
 
 // jsdom's Blob doesn't implement .text() — read via FileReader instead.
@@ -232,6 +232,52 @@ describe('resolveGroupNode / insertContainerNode / removeGroupTreeNode', () => {
   test('removeGroupTreeNode removes a nested node', () => {
     const result = removeGroupTreeNode(tree(), [0, 0]);
     expect(result[0].children).toEqual([]);
+  });
+});
+
+// ── hasRepeatingAncestor ─────────────────────────────────────────────────────
+// Determines whether a new node's selector will be re-evaluated once per
+// repeating instance — see content-script.js's avoidId (an id-based
+// selector would then only ever match one of the N instances).
+
+describe('hasRepeatingAncestor', () => {
+  const treeWithRepeatingRoot = () => [
+    {
+      kind: 'group', name: 'Kategorie', selector: 'section.menu-category', repeating: true,
+      children: [
+        {
+          kind: 'group', name: 'Speise', selector: 'li.menu-item', repeating: false,
+          children: [],
+        },
+      ],
+    },
+  ];
+
+  const treeWithNonRepeatingRoot = () => [
+    {
+      kind: 'group', name: 'Header', selector: 'header', repeating: false,
+      children: [
+        { kind: 'field', name: 'Titel', selector: 'h1', mode: 'text', attribute: null },
+      ],
+    },
+  ];
+
+  test('false for a null/empty path', () => {
+    expect(hasRepeatingAncestor(treeWithRepeatingRoot(), null)).toBe(false);
+    expect(hasRepeatingAncestor(treeWithRepeatingRoot(), [])).toBe(false);
+  });
+
+  test('true when the immediate parent is repeating', () => {
+    expect(hasRepeatingAncestor(treeWithRepeatingRoot(), [0])).toBe(true);
+  });
+
+  test('true when a non-repeating parent has a repeating ancestor further up', () => {
+    // path [0, 0] = the non-repeating "Speise" group, nested inside repeating "Kategorie"
+    expect(hasRepeatingAncestor(treeWithRepeatingRoot(), [0, 0])).toBe(true);
+  });
+
+  test('false when neither the parent nor any ancestor repeats', () => {
+    expect(hasRepeatingAncestor(treeWithNonRepeatingRoot(), [0])).toBe(false);
   });
 });
 
@@ -854,7 +900,9 @@ describe('Container-Mode integration', () => {
     document.getElementById('radio-container-repeating').checked = true;
     document.getElementById('btn-container-confirm').click();
 
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'START_SELECTION', scopeSelector: null });
+    // avoidId: true — a "Wiederholend" container's own selector must be
+    // able to match more than once, which an id-based selector never can.
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'START_SELECTION', scopeSelector: null, avoidId: true });
     expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(false);
 
     capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
@@ -878,8 +926,10 @@ describe('Container-Mode integration', () => {
     chrome.runtime.sendMessage.mockClear();
 
     document.querySelector('.btn-add-subfield').click();
+    // avoidId: false — "Vorspeisen" here was added as "Einzeln" (default),
+    // so its own selector only needs to match once.
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
-      type: 'START_SELECTION', scopeSelector: 'section.menu-category',
+      type: 'START_SELECTION', scopeSelector: 'section.menu-category', avoidId: false,
     });
 
     capturedListener({ type: 'ELEMENT_SELECTED', selector: 'h2.category-title' });
@@ -921,6 +971,30 @@ describe('Container-Mode integration', () => {
     document.getElementById('btn-field-extended-confirm').click();
     const rows = document.querySelectorAll('#group-tree-root .group-tree-row');
     expect(rows[1].textContent).toContain('Link — Attribut: href');
+  });
+
+  // Regression: an id-bearing element used to always short-circuit to an id
+  // selector, which can only ever match once — silently starving every
+  // repetition but the first. avoidId must propagate down from a repeating
+  // ancestor even to a nested container that is itself "Einzeln".
+  test('nested container add inherits avoidId:true from a repeating ancestor, even if itself "Einzeln"', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Kategorien';
+    document.getElementById('radio-container-repeating').checked = true;
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+    chrome.runtime.sendMessage.mockClear();
+
+    document.querySelector('.btn-add-subcontainer').click();
+    document.getElementById('input-container-name').value = 'Badge';
+    // "Einzelnes Element" is the modal's default — left unchanged here.
+    document.getElementById('btn-container-confirm').click();
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+      type: 'START_SELECTION', scopeSelector: 'section.menu-category', avoidId: true,
+    });
   });
 });
 
