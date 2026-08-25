@@ -86,6 +86,45 @@ describe('buildSelector with a scopeRoot', () => {
   });
 });
 
+// ── avoidId (repeating containers/fields) ────────────────────────────────────
+// A page-unique id can only ever match one element — self-defeating for a
+// "Wiederholend" container's own selector, or anything nested inside one
+// (see popup.js's hasRepeatingAncestor). avoidId tells buildSelector to keep
+// walking past an id-bearing element instead of shortcutting to `#id`.
+
+describe('buildSelector with avoidId', () => {
+  test('skips an id on the clicked element itself, falling back to its class', () => {
+    document.body.innerHTML = '';
+    const section = el('section', { id: 'vorspeisen', classes: 'menu-category' });
+    document.body.appendChild(section);
+
+    expect(buildSelector(section)).toBe('#vorspeisen'); // unchanged default behavior
+    expect(buildSelector(section, undefined, true)).toBe('section.menu-category');
+  });
+
+  test('skips an id on an ancestor and keeps walking up to the next segment', () => {
+    document.body.innerHTML = '';
+    const main = el('main', { classes: 'menu' });
+    const section = el('section', { id: 'vorspeisen', classes: 'menu-category' });
+    const h2 = el('h2', { classes: 'category-title' });
+    section.appendChild(h2);
+    main.appendChild(section);
+    document.body.appendChild(main);
+
+    expect(buildSelector(h2, undefined, true)).toBe('main.menu > section.menu-category > h2.category-title');
+  });
+
+  test('without avoidId, an id ancestor still stops the walk there (default unchanged)', () => {
+    document.body.innerHTML = '';
+    const section = el('section', { id: 'vorspeisen', classes: 'menu-category' });
+    const h2 = el('h2', { classes: 'category-title' });
+    section.appendChild(h2);
+    document.body.appendChild(section);
+
+    expect(buildSelector(h2)).toBe('#vorspeisen > h2.category-title');
+  });
+});
+
 // ── elementPath ────────────────────────────────────────────────────────────────
 
 describe('elementPath', () => {
@@ -295,6 +334,35 @@ describe('scoped selection (START_SELECTION with scopeSelector)', () => {
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
       type: 'ELEMENT_SELECTED',
       selector: '#outside',
+    }));
+  });
+
+  // Regression: picking a "Wiederholend" container by clicking an element
+  // that (or whose ancestor) has an id used to always produce an id
+  // selector, matching only that one element instead of all repetitions.
+  test('avoidId: true skips an id-bearing element, producing a class-based selector instead', () => {
+    document.getElementById('outside').id = 'vorspeisen';
+    document.getElementById('vorspeisen').className = 'menu-category';
+
+    capturedListener({ type: 'START_SELECTION', avoidId: true });
+    document.getElementById('vorspeisen').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ELEMENT_SELECTED',
+      selector: 'div.menu-category',
+    }));
+  });
+
+  test('without avoidId, the same id-bearing element still short-circuits to #id (default unchanged)', () => {
+    document.getElementById('outside').id = 'vorspeisen';
+    document.getElementById('vorspeisen').className = 'menu-category';
+
+    capturedListener({ type: 'START_SELECTION' });
+    document.getElementById('vorspeisen').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ELEMENT_SELECTED',
+      selector: '#vorspeisen',
     }));
   });
 });
