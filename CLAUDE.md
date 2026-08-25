@@ -34,6 +34,9 @@ language-modules/
 - Manifest V3, kein Node.js-Zugriff im Service Worker
 - Enthält **keine** Scraping- oder Codegenerierungslogik
 - Kommuniziert mit der Companion App via lokalen HTTP-Server (`http://localhost:5000`)
+- Popup/Side Panel (`extension/popup/popup.js`) unterstützt beide Modi strikt getrennt: „Felder (flach)" (bestehend) und „Container (verschachtelt)" — Moduswechsel leert jeweils die andere Konfiguration. Der Container-Baum wird nach dem visuellen Muster der DOM-Tree-View editierbar gerendert (`renderGroupTree`/`buildGroupTreeNodeEl`, analog zu `renderDomTree`/`buildTreeNodeEl`); Container-Anlegen fragt Name/Typ **vor** der Klick-Auswahl ab (`modal-container-new`), Datenfeld-Anlegen wie im Flat-Modus **nach** der Klick-Auswahl (`modal-field-extended`, mit Feldtyp-Dropdown Text/Attribut/Vorhanden?)
+- Content Script (`extension/content/content-script.js`): `buildSelector`/`startSelection` akzeptieren einen optionalen Scope-Root (`scopeSelector` auf der `START_SELECTION`-Nachricht) — beim Anlegen eines verschachtelten Containers/Datenfelds wird die Klick-Auswahl auf Nachfahren der ersten Instanz der Elterngruppe beschränkt, und der erzeugte Selektor ist relativ zu dieser Instanz gültig statt zu `document.body`
+- „Konfiguration exportieren" (`btn-export-config`, `buildConfigExport`/`downloadConfigExport` in `popup.js`) lädt die aktuelle Fields-/Groups-Konfiguration als JSON herunter — `config` darin ist wortgleich der Request-Body, den `/generate` bekäme (wiederverwendet `buildScrapingConfig`), plus `exportedAt`/`extensionVersion`. Gedacht zum Beilegen bei Selektor-/Bug-Reports, unabhängig vom bestehenden „Fehler melden"-Log-Export
 
 ### Companion App (`companion/ScrapingFactory.Companion`)
 - .NET 9 Konsolenanwendung
@@ -80,7 +83,7 @@ Weiterhin bestehende, bekannte Einschränkung (kein offener Entscheidungsbedarf,
 - Standard-Engine ist weiterhin statisches Rendering (`requests` + `BeautifulSoup`, kein JS). Ein optionaler Browser-Engine (Playwright + Chromium, `Engine: "Browser"`) für dynamisch gerenderte Seiten und einfache Login-Flows (`FillStep`/`ClickStep`/`WaitForStep`) existiert bereits serverseitig (IR, Codegen, Verifikation), hat aber noch **keine Extension-UI** — nur direkt über die Companion-API ansteuerbar
 - Login innerhalb eines einzelnen Skriptlaufs ist möglich (Formular ausfüllen → absenden → warten → extrahieren, Zugangsdaten nur über Umgebungsvariablen, nie im Skript). Kein persistentes Session-Handling über mehrere Skriptläufe hinweg (kein Cookie-/Storage-State-Speichern und -Wiederverwenden)
 - **Keine Captcha-Lösung/-Umgehung** — bewusste Grenze, kein offener Punkt: Captchas sind eine gezielte Anti-Automatisierungs-Maßnahme der Zielseite; ein generisches Umgehungsfeature wäre Evasion-Tooling unabhängig von der Absicht im Einzelfall und bräuchte typischerweise kostenpflichtige Drittanbieter-Lösedienste (Verstoß gegen den Grundsatz oben). Blockiert eine Captcha den Ablauf, schlägt das Skript einfach ehrlich fehl (z. B. `WaitForStep` nach dem Login-Klick findet das erwartete Element nicht → Timeout), es gibt keine Sonderbehandlung
-- **Container-basiertes Scraping** (Gruppen/Container, Issue #21): serverseitig umgesetzt (IR, Codegen für beide Engines, XML-Verifikation über echte Skriptausführung), hat aber ebenfalls noch **keine Extension-UI** — nur direkt über die Companion-API ansteuerbar (`groups` statt `fields` im Request)
+- **Container-basiertes Scraping** (Gruppen/Container, Issue #21): vollständig umgesetzt inkl. Extension-UI (Moduswahl, Baum-Editor, Scoping der Klick-Auswahl auf eine Container-Instanz)
 - Keine Pagination
 - Nur Python als Zielsprache
 - Backend des generierten Skripts: `requests` + `BeautifulSoup` (Static) bzw. Playwright (Browser); Ausgabe als CSV (Flat-Mode) oder XML (Container-Mode)
@@ -89,7 +92,6 @@ Weiterhin bestehende, bekannte Einschränkung (kein offener Entscheidungsbedarf,
 
 - **JS-Rendering-Unterstützung** — serverseitig umgesetzt: `Engine: "Browser"` generiert ein Playwright-Skript (reines Playwright + Standard-Chromium, **keine kommerziellen Stealth-Browser-/Anti-Bot-Dienste mit Lizenz- oder Session-Modell** — z. B. CloakBrowser wurde geprüft und verworfen, siehe Git-Historie), verifiziert durch tatsächliche Ausführung wie beim Static-Engine (Konsistenzregel unverändert). Offen: Extension-UI zum Auswählen des Engines und zum Setzen von `WaitForStep`
 - **Login-/Session-Handling** — Login innerhalb eines Laufs umgesetzt (`FillStep`/`ClickStep`, siehe v1-Scope). Offen: persistentes Session-/Cookie-Handling über mehrere Skriptläufe hinweg, Extension-UI zum Konfigurieren eines Login-Flows. Captcha-Lösung ist kein Ziel (siehe v1-Scope)
-- **Container-basiertes Scraping** — `GroupNode`/`DataFieldNode`-Baum, `ExtractGroupStep`, Codegen für beide Engines und XML-Verifikation sind umgesetzt (siehe v1-Scope, Issue #21). Offen: Extension-UI (Moduswahl Flat/Container, Baum-Editor nach Vorbild der DOM-Tree-View, Scoping der Klick-Auswahl auf eine Container-Instanz)
 - **Pagination**
 - **Weitere Zielsprachen** neben Python (Architektur ist bereits darauf ausgelegt, siehe Projektübersicht)
 
