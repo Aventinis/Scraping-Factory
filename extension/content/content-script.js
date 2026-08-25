@@ -12,12 +12,25 @@ if (typeof window !== 'undefined') {
   window.addEventListener('unhandledrejection', (e) => log('UNHANDLED_REJECTION', String(e.reason)));
 }
 
-function buildSelector(element) {
+// scopeRoot (optional): stops the upward walk there instead of document.body,
+// so the selector is valid relative to a container instance rather than the
+// whole page — used when adding a nested container/field in Container-Mode
+// (see startSelection's scopeSelector).
+//
+// avoidId (optional): skips the ID short-circuit below. An id is unique
+// page-wide, so a selector built from one can only ever match a single
+// element — fine for a one-off flat field or an "Einzelnes Element"
+// container, but self-defeating for anything that has to match N times: a
+// "Wiederholend" container's own selector, or any container/field nested
+// inside one (its selector gets re-evaluated once per repeating instance —
+// see popup.js's hasRepeatingAncestor).
+function buildSelector(element, scopeRoot, avoidId) {
+  const boundary = scopeRoot || document.body;
   const segments = [];
 
   let current = element;
-  while (current && current !== document.body) {
-    if (current.id) {
+  while (current && current !== boundary) {
+    if (current.id && !avoidId) {
       segments.unshift(`#${current.id}`);
       break;
     }
@@ -130,6 +143,19 @@ const HOVER_THROTTLE_MS = 16;
 let hoverTimeoutId = null;
 let pendingHoverTarget = null;
 
+// Set while a Container-Mode selection is scoped to a container instance
+// (see startSelection's scopeSelector) — null means the whole page is fair
+// game, same as today's flat-mode selection.
+let scopeRootEl = null;
+
+// Set for the duration of a selection round that must produce a selector
+// capable of matching more than once — see buildSelector's avoidId.
+let avoidIdInSelector = false;
+
+function isInScope(element) {
+  return !scopeRootEl || scopeRootEl.contains(element);
+}
+
 function flushHover() {
   hoverTimeoutId = null;
   if (!domViewEnabled || !pendingHoverTarget) return;
@@ -142,6 +168,14 @@ function flushHover() {
 
 function onMouseOver(e) {
   if (e.target === overlay) return;
+
+  if (!isInScope(e.target)) {
+    // Out of scope — hide the highlight instead of pointing at an element
+    // that couldn't be selected anyway.
+    if (overlay) overlay.style.opacity = '0';
+    return;
+  }
+  if (overlay) overlay.style.opacity = '1';
   moveOverlayTo(e.target);
 
   if (!domViewEnabled) return;
@@ -155,7 +189,14 @@ function onClick(e) {
   e.preventDefault();
   e.stopPropagation();
 
-  const selector = buildSelector(e.target);
+  if (!isInScope(e.target)) {
+    // Stay in selection mode — the user just clicked outside the container
+    // instance they're supposed to be picking a descendant of.
+    log('CLICK outside scope, ignored');
+    return;
+  }
+
+  const selector = buildSelector(e.target, scopeRootEl, avoidIdInSelector);
   log('CLICK → selector', selector);
   stopSelection();
 
@@ -172,8 +213,29 @@ function onClick(e) {
   chrome.runtime.sendMessage({ type: 'ELEMENT_SELECTED', selector, path });
 }
 
-function startSelection() {
-  log('SELECTION start');
+// scopeSelector (optional): Container-Mode passes the immediate parent
+// group's selector when adding a nested container/field, so only
+// descendants of that group's first matching instance can be picked (the
+// same "first instance is the template" assumption point-and-click already
+// relies on for a repeating group). No match on the current page → the
+// selection can't proceed, same SELECTION_UNAVAILABLE path as a missing
+// content script.
+function startSelection(scopeSelector, avoidId) {
+  log('SELECTION start', { scopeSelector, avoidId });
+  avoidIdInSelector = !!avoidId;
+  if (scopeSelector) {
+    scopeRootEl = document.querySelector(scopeSelector);
+    if (!scopeRootEl) {
+      log('SELECTION scope not found', scopeSelector);
+      chrome.runtime.sendMessage({
+        type: 'SELECTION_UNAVAILABLE',
+        reason: `Container-Selektor '${scopeSelector}' findet kein Element auf dieser Seite.`,
+      });
+      return;
+    }
+  } else {
+    scopeRootEl = null;
+  }
   createOverlay();
   document.addEventListener('mouseover', onMouseOver);
   document.addEventListener('click', onClick, true);
@@ -184,6 +246,8 @@ function stopSelection() {
   document.removeEventListener('mouseover', onMouseOver);
   document.removeEventListener('click', onClick, true);
   removeOverlay();
+  scopeRootEl = null;
+  avoidIdInSelector = false;
   if (hoverTimeoutId !== null) {
     clearTimeout(hoverTimeoutId);
     hoverTimeoutId = null;
@@ -216,7 +280,7 @@ function disableDomView() {
 if (typeof chrome !== 'undefined' && chrome.runtime) {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     log('MSG_IN', message.type);
-    if (message.type === 'START_SELECTION') startSelection();
+    if (message.type === 'START_SELECTION') startSelection(message.scopeSelector, message.avoidId);
     if (message.type === 'STOP_SELECTION')  stopSelection();
     if (message.type === 'ENABLE_DOM_VIEW') enableDomView();
     if (message.type === 'DISABLE_DOM_VIEW') disableDomView();

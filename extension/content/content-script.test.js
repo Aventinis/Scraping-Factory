@@ -58,6 +58,73 @@ test('element without classes or id returns tagName only', () => {
   expect(buildSelector(p)).toBe('p');
 });
 
+// ── scopeRoot (Container-Mode) ───────────────────────────────────────────────
+
+describe('buildSelector with a scopeRoot', () => {
+  test('stops the upward walk at scopeRoot instead of document.body', () => {
+    document.body.innerHTML = '';
+    const section = el('section', { classes: 'menu-category' });
+    const li = el('li', { classes: 'menu-item' });
+    const h3 = el('h3', { classes: 'item-name' });
+    li.appendChild(h3);
+    section.appendChild(li);
+    document.body.appendChild(section);
+
+    expect(buildSelector(h3, li)).toBe('h3.item-name');
+    expect(buildSelector(h3, section)).toBe('li.menu-item > h3.item-name');
+    expect(buildSelector(h3)).toBe('section.menu-category > li.menu-item > h3.item-name');
+  });
+
+  test('an id inside the scope still short-circuits the walk', () => {
+    document.body.innerHTML = '';
+    const section = el('section', { classes: 'menu-category' });
+    const span = el('span', { id: 'price' });
+    section.appendChild(span);
+    document.body.appendChild(section);
+
+    expect(buildSelector(span, section)).toBe('#price');
+  });
+});
+
+// ── avoidId (repeating containers/fields) ────────────────────────────────────
+// A page-unique id can only ever match one element — self-defeating for a
+// "Wiederholend" container's own selector, or anything nested inside one
+// (see popup.js's hasRepeatingAncestor). avoidId tells buildSelector to keep
+// walking past an id-bearing element instead of shortcutting to `#id`.
+
+describe('buildSelector with avoidId', () => {
+  test('skips an id on the clicked element itself, falling back to its class', () => {
+    document.body.innerHTML = '';
+    const section = el('section', { id: 'vorspeisen', classes: 'menu-category' });
+    document.body.appendChild(section);
+
+    expect(buildSelector(section)).toBe('#vorspeisen'); // unchanged default behavior
+    expect(buildSelector(section, undefined, true)).toBe('section.menu-category');
+  });
+
+  test('skips an id on an ancestor and keeps walking up to the next segment', () => {
+    document.body.innerHTML = '';
+    const main = el('main', { classes: 'menu' });
+    const section = el('section', { id: 'vorspeisen', classes: 'menu-category' });
+    const h2 = el('h2', { classes: 'category-title' });
+    section.appendChild(h2);
+    main.appendChild(section);
+    document.body.appendChild(main);
+
+    expect(buildSelector(h2, undefined, true)).toBe('main.menu > section.menu-category > h2.category-title');
+  });
+
+  test('without avoidId, an id ancestor still stops the walk there (default unchanged)', () => {
+    document.body.innerHTML = '';
+    const section = el('section', { id: 'vorspeisen', classes: 'menu-category' });
+    const h2 = el('h2', { classes: 'category-title' });
+    section.appendChild(h2);
+    document.body.appendChild(section);
+
+    expect(buildSelector(h2)).toBe('#vorspeisen > h2.category-title');
+  });
+});
+
 // ── elementPath ────────────────────────────────────────────────────────────────
 
 describe('elementPath', () => {
@@ -189,5 +256,113 @@ describe('hover message throttling (message-listener wiring)', () => {
     const logs = sendResponse.mock.calls[0][0];
     expect(Array.isArray(logs)).toBe(true);
     expect(logs.some(e => e.event === 'MSG_IN')).toBe(true);
+  });
+});
+
+// ── Scoped selection (Container-Mode) ────────────────────────────────────────
+// START_SELECTION carries an optional scopeSelector when adding a nested
+// container/field — only descendants of the first element matching that
+// selector should be pickable (see content-script.js startSelection/onClick).
+
+describe('scoped selection (START_SELECTION with scopeSelector)', () => {
+  let capturedListener;
+
+  beforeEach(() => {
+    jest.resetModules();
+    document.body.innerHTML = `
+      <section class="menu-category">
+        <li class="menu-item"><h3 class="item-name">Suppe</h3></li>
+      </section>
+      <div id="outside">Outside</div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+    };
+
+    require('./content-script');
+  });
+
+  afterEach(() => {
+    capturedListener({ type: 'STOP_SELECTION' });
+    delete global.chrome;
+  });
+
+  test('a click inside the scope sends ELEMENT_SELECTED with a selector relative to the scope root', () => {
+    const section = document.querySelector('section.menu-category');
+    capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
+
+    document.querySelector('h3.item-name').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ELEMENT_SELECTED',
+      selector: 'li.menu-item > h3.item-name',
+    }));
+    expect(section).toBeTruthy(); // sanity: the scope root itself was found, not just any element
+  });
+
+  test('a click outside the scope is ignored — no ELEMENT_SELECTED, selection stays active', () => {
+    capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
+
+    document.getElementById('outside').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'ELEMENT_SELECTED' }));
+
+    // Selection is still active: a subsequent in-scope click now succeeds.
+    document.querySelector('h3.item-name').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'ELEMENT_SELECTED' }));
+  });
+
+  test('a scopeSelector matching nothing on the page sends SELECTION_UNAVAILABLE and does not arm selection', () => {
+    capturedListener({ type: 'START_SELECTION', scopeSelector: '.does-not-exist' });
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'SELECTION_UNAVAILABLE' }));
+
+    chrome.runtime.sendMessage.mockClear();
+    document.querySelector('h3.item-name').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+  });
+
+  test('no scopeSelector behaves like today — any element on the page is pickable', () => {
+    capturedListener({ type: 'START_SELECTION' });
+
+    document.getElementById('outside').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ELEMENT_SELECTED',
+      selector: '#outside',
+    }));
+  });
+
+  // Regression: picking a "Wiederholend" container by clicking an element
+  // that (or whose ancestor) has an id used to always produce an id
+  // selector, matching only that one element instead of all repetitions.
+  test('avoidId: true skips an id-bearing element, producing a class-based selector instead', () => {
+    document.getElementById('outside').id = 'vorspeisen';
+    document.getElementById('vorspeisen').className = 'menu-category';
+
+    capturedListener({ type: 'START_SELECTION', avoidId: true });
+    document.getElementById('vorspeisen').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ELEMENT_SELECTED',
+      selector: 'div.menu-category',
+    }));
+  });
+
+  test('without avoidId, the same id-bearing element still short-circuits to #id (default unchanged)', () => {
+    document.getElementById('outside').id = 'vorspeisen';
+    document.getElementById('vorspeisen').className = 'menu-category';
+
+    capturedListener({ type: 'START_SELECTION' });
+    document.getElementById('vorspeisen').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ELEMENT_SELECTED',
+      selector: '#vorspeisen',
+    }));
   });
 });

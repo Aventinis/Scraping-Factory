@@ -268,4 +268,123 @@ public class ScrapingPlanValidatorTests
         Assert.Contains("Doppelte Feldnamen", result.Error);
         Assert.Contains("Titel", result.Error);
     }
+
+    // ── Container-Mode (ExtractGroupStep) ────────────────────────────────
+
+    private static ScrapingPlan GroupPlan(List<GroupNode> roots, ScrapingEngine engine = ScrapingEngine.Static) => new()
+    {
+        Engine = engine,
+        Steps = [new NavigateStep { Url = "https://example.com" }, new ExtractGroupStep { Roots = roots }],
+    };
+
+    [Fact]
+    public void Validate_ValidNestedGroupTree_Succeeds()
+    {
+        var roots = new List<GroupNode>
+        {
+            new()
+            {
+                Name = "Kategorie",
+                Selector = "section.menu-category",
+                Repeating = true,
+                Children =
+                [
+                    new DataFieldNode { Name = "Titel", Selector = "h2" },
+                    new GroupNode
+                    {
+                        Name = "Gericht",
+                        Selector = "li.menu-item",
+                        Repeating = true,
+                        Children =
+                        [
+                            new DataFieldNode { Name = "Name", Selector = "h3" },
+                            new DataFieldNode { Name = "Link", Selector = "a", Mode = ExtractMode.Attribute, Attribute = "href" },
+                            new DataFieldNode { Name = "Vegan", Selector = ".vegan", Mode = ExtractMode.Exists },
+                        ],
+                    },
+                ],
+            },
+        };
+
+        var result = ScrapingPlanValidator.Validate(GroupPlan(roots));
+
+        Assert.True(result.Success);
+        Assert.Null(result.Error);
+    }
+
+    // Container-Mode works identically regardless of engine — unlike
+    // WaitFor/Fill/Click it's not in browserOnlySteps.
+    [Fact]
+    public void Validate_GroupPlanWithStaticEngine_Succeeds()
+    {
+        var roots = new List<GroupNode>
+        {
+            new() { Name = "Kategorie", Selector = "section", Repeating = true, Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }] },
+        };
+
+        var result = ScrapingPlanValidator.Validate(GroupPlan(roots, ScrapingEngine.Static));
+
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public void Validate_EmptyRoots_Fails()
+    {
+        var result = ScrapingPlanValidator.Validate(GroupPlan([]));
+        Assert.False(result.Success);
+        Assert.Contains("ExtractGroupStep", result.Error);
+    }
+
+    [Fact]
+    public void Validate_GroupWithEmptyName_Fails()
+    {
+        var roots = new List<GroupNode> { new() { Name = " ", Selector = "section", Repeating = true, Children = [] } };
+        var result = ScrapingPlanValidator.Validate(GroupPlan(roots));
+        Assert.False(result.Success);
+        Assert.Contains("Name", result.Error);
+    }
+
+    [Fact]
+    public void Validate_GroupWithEmptySelector_Fails()
+    {
+        var roots = new List<GroupNode> { new() { Name = "Kategorie", Selector = " ", Repeating = true, Children = [] } };
+        var result = ScrapingPlanValidator.Validate(GroupPlan(roots));
+        Assert.False(result.Success);
+        Assert.Contains("Selector", result.Error);
+        Assert.Contains("Kategorie", result.Error);
+    }
+
+    [Fact]
+    public void Validate_NestedDataFieldWithEmptySelector_Fails()
+    {
+        var roots = new List<GroupNode>
+        {
+            new()
+            {
+                Name = "Kategorie", Selector = "section", Repeating = true,
+                Children = [new DataFieldNode { Name = "Titel", Selector = " " }],
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(GroupPlan(roots));
+        Assert.False(result.Success);
+        Assert.Contains("Selector", result.Error);
+        Assert.Contains("Titel", result.Error);
+    }
+
+    [Fact]
+    public void Validate_DataFieldAttributeModeWithoutAttribute_Fails()
+    {
+        var roots = new List<GroupNode>
+        {
+            new()
+            {
+                Name = "Kategorie", Selector = "section", Repeating = true,
+                Children = [new DataFieldNode { Name = "Link", Selector = "a", Mode = ExtractMode.Attribute }],
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(GroupPlan(roots));
+        Assert.False(result.Success);
+        Assert.Contains("Attribut", result.Error);
+        Assert.Contains("Link", result.Error);
+    }
 }
