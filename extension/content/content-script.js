@@ -16,13 +16,21 @@ if (typeof window !== 'undefined') {
 // so the selector is valid relative to a container instance rather than the
 // whole page — used when adding a nested container/field in Container-Mode
 // (see startSelection's scopeSelector).
-function buildSelector(element, scopeRoot) {
+//
+// avoidId (optional): skips the ID short-circuit below. An id is unique
+// page-wide, so a selector built from one can only ever match a single
+// element — fine for a one-off flat field or an "Einzelnes Element"
+// container, but self-defeating for anything that has to match N times: a
+// "Wiederholend" container's own selector, or any container/field nested
+// inside one (its selector gets re-evaluated once per repeating instance —
+// see popup.js's hasRepeatingAncestor).
+function buildSelector(element, scopeRoot, avoidId) {
   const boundary = scopeRoot || document.body;
   const segments = [];
 
   let current = element;
   while (current && current !== boundary) {
-    if (current.id) {
+    if (current.id && !avoidId) {
       segments.unshift(`#${current.id}`);
       break;
     }
@@ -140,6 +148,10 @@ let pendingHoverTarget = null;
 // game, same as today's flat-mode selection.
 let scopeRootEl = null;
 
+// Set for the duration of a selection round that must produce a selector
+// capable of matching more than once — see buildSelector's avoidId.
+let avoidIdInSelector = false;
+
 function isInScope(element) {
   return !scopeRootEl || scopeRootEl.contains(element);
 }
@@ -184,7 +196,7 @@ function onClick(e) {
     return;
   }
 
-  const selector = buildSelector(e.target, scopeRootEl);
+  const selector = buildSelector(e.target, scopeRootEl, avoidIdInSelector);
   log('CLICK → selector', selector);
   stopSelection();
 
@@ -208,8 +220,9 @@ function onClick(e) {
 // relies on for a repeating group). No match on the current page → the
 // selection can't proceed, same SELECTION_UNAVAILABLE path as a missing
 // content script.
-function startSelection(scopeSelector) {
-  log('SELECTION start', scopeSelector);
+function startSelection(scopeSelector, avoidId) {
+  log('SELECTION start', { scopeSelector, avoidId });
+  avoidIdInSelector = !!avoidId;
   if (scopeSelector) {
     scopeRootEl = document.querySelector(scopeSelector);
     if (!scopeRootEl) {
@@ -234,6 +247,7 @@ function stopSelection() {
   document.removeEventListener('click', onClick, true);
   removeOverlay();
   scopeRootEl = null;
+  avoidIdInSelector = false;
   if (hoverTimeoutId !== null) {
     clearTimeout(hoverTimeoutId);
     hoverTimeoutId = null;
@@ -266,7 +280,7 @@ function disableDomView() {
 if (typeof chrome !== 'undefined' && chrome.runtime) {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     log('MSG_IN', message.type);
-    if (message.type === 'START_SELECTION') startSelection(message.scopeSelector);
+    if (message.type === 'START_SELECTION') startSelection(message.scopeSelector, message.avoidId);
     if (message.type === 'STOP_SELECTION')  stopSelection();
     if (message.type === 'ENABLE_DOM_VIEW') enableDomView();
     if (message.type === 'DISABLE_DOM_VIEW') disableDomView();

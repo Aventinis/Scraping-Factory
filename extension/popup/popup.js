@@ -112,6 +112,24 @@ function resolveGroupNode(groups, path) {
   return node;
 }
 
+// True if the node at `path` (or any of its ancestors) is a repeating
+// group — i.e. a selector added under this path will be re-evaluated once
+// per matched instance, not just once. Used to tell content-script to skip
+// its usual id-selector shortcut (see buildSelector's avoidId): an id is
+// page-unique, so a selector built from one can only ever match a single
+// instance, silently starving every other repetition of that field/nested
+// container.
+function hasRepeatingAncestor(groups, path) {
+  if (!path) return false;
+  let nodes = groups;
+  for (const index of path) {
+    const node = nodes[index];
+    if (node.kind === 'group' && node.repeating) return true;
+    nodes = node.children;
+  }
+  return false;
+}
+
 // Appends `node` as the last child at `parentPath` (or at root level when
 // `parentPath` is null) — immutable, like addField above.
 function insertContainerNode(groups, parentPath, node) {
@@ -706,9 +724,12 @@ function confirmContainerModal() {
   const repeating = document.getElementById('radio-container-repeating')?.checked ?? false;
   const parentPath = _state.pendingParentPath;
   const scopeSelector = parentPath ? resolveGroupNode(_state.groups, parentPath)?.selector : null;
+  // This container's own selector must itself be able to match N times when
+  // repeating, on top of the usual "nested inside a repeating ancestor" case.
+  const avoidId = repeating || hasRepeatingAncestor(_state.groups, parentPath);
 
-  log('CONTAINER_ADD start', { name, repeating, parentPath, scopeSelector });
-  chrome.runtime.sendMessage({ type: 'START_SELECTION', scopeSelector });
+  log('CONTAINER_ADD start', { name, repeating, parentPath, scopeSelector, avoidId });
+  chrome.runtime.sendMessage({ type: 'START_SELECTION', scopeSelector, avoidId });
   setState(STATES.SELECTING, {
     containerModalOpen:  false,
     selectionKind:       'container',
@@ -728,8 +749,9 @@ function cancelContainerModal() {
 // name/type after — since the field type doesn't affect what gets clicked.
 function startFieldSelection(parentPath) {
   const scopeSelector = resolveGroupNode(_state.groups, parentPath)?.selector ?? null;
-  log('FIELD_ADD(container) start', { parentPath, scopeSelector });
-  chrome.runtime.sendMessage({ type: 'START_SELECTION', scopeSelector });
+  const avoidId = hasRepeatingAncestor(_state.groups, parentPath);
+  log('FIELD_ADD(container) start', { parentPath, scopeSelector, avoidId });
+  chrome.runtime.sendMessage({ type: 'START_SELECTION', scopeSelector, avoidId });
   setState(STATES.SELECTING, {
     selectionKind:       'field',
     pendingParentPath:   parentPath,
@@ -980,6 +1002,6 @@ if (typeof module !== 'undefined') {
     formatTreeLabel, renderDomTree, highlightHover, highlightSelected,
     formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,
     buildGroupNode, buildFieldNode, resolveGroupNode, insertContainerNode, removeGroupTreeNode,
-    formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport,
+    formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport, hasRepeatingAncestor,
   };
 }
