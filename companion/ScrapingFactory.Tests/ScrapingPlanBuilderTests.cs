@@ -90,4 +90,41 @@ public class ScrapingPlanBuilderTests
 
         Assert.Equal(ScrapingEngine.Browser, plan.Engine);
     }
+
+    private static List<GroupNode> SampleGroups() =>
+    [
+        new GroupNode
+        {
+            Name = "Kategorie",
+            Selector = "section.menu-category",
+            Repeating = true,
+            Children =
+            [
+                new DataFieldNode { Name = "Titel", Selector = "h2" },
+            ],
+        },
+    ];
+
+    [Fact]
+    public void Build_Groups_ProducesNavigateStepFollowedByOneExtractGroupStep()
+    {
+        var config = new ScrapingConfig { Url = "https://example.com", Groups = SampleGroups() };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal(2, plan.Steps.Count);
+        Assert.IsType<NavigateStep>(plan.Steps[0]);
+        var groupStep = Assert.IsType<ExtractGroupStep>(plan.Steps[1]);
+        Assert.Same(config.Groups, groupStep.Roots);
+    }
+
+    [Fact]
+    public void Build_Groups_ForcesXmlOutputFormatRegardlessOfConfig()
+    {
+        var config = new ScrapingConfig { Url = "https://example.com", Groups = SampleGroups(), OutputFormat = OutputFormat.Csv };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal(OutputFormat.Xml, plan.OutputFormat);
+    }
 }
