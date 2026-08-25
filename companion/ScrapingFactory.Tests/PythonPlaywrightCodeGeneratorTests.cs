@@ -120,4 +120,97 @@ public class PythonPlaywrightCodeGeneratorTests
         var script = _generator.Generate(LoginPlan());
         Assert.Contains("page.click(\"#submit\")", script);
     }
+
+    // ── Container-Mode ────────────────────────────────────────────────────
+
+    private static ScrapingPlan GroupPlan() => new()
+    {
+        Engine = ScrapingEngine.Browser,
+        Steps =
+        [
+            new NavigateStep { Url = "https://example.com/speisekarte" },
+            new ExtractGroupStep
+            {
+                Roots =
+                [
+                    new GroupNode
+                    {
+                        Name = "Kategorie",
+                        Selector = "section.menu-category",
+                        Repeating = true,
+                        Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }],
+                    },
+                ],
+            },
+        ],
+    };
+
+    // Container-Mode is orthogonal to a preceding login flow — Navigate/
+    // Fill/Click still run first, only the extraction phase after them
+    // changes (group tree → XML instead of flat fields → CSV).
+    private static ScrapingPlan GroupPlanWithLogin() => new()
+    {
+        Engine = ScrapingEngine.Browser,
+        Steps =
+        [
+            new NavigateStep { Url = "https://example.com/login" },
+            new FillStep { Selector = "#user", EnvironmentVariableName = "SF_USERNAME" },
+            new ClickStep { Selector = "#submit" },
+            new ExtractGroupStep
+            {
+                Roots =
+                [
+                    new GroupNode
+                    {
+                        Name = "Kategorie",
+                        Selector = "section.menu-category",
+                        Repeating = true,
+                        Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }],
+                    },
+                ],
+            },
+        ],
+    };
+
+    [Fact]
+    public void Generate_GroupPlan_ContainsGroupsLiteralAndXmlWrite()
+    {
+        var script = _generator.Generate(GroupPlan());
+        Assert.Contains("GROUPS = [", script);
+        Assert.Contains("\"name\": 'Kategorie'", script);
+        Assert.Contains("import xml.etree.ElementTree as ET", script);
+        Assert.Contains("output.xml", script);
+    }
+
+    [Fact]
+    public void Generate_GroupPlan_UsesQuerySelectorNotBeautifulSoupSelect()
+    {
+        var script = _generator.Generate(GroupPlan());
+        Assert.Contains("scope.query_selector_all(node[\"selector\"])", script);
+        Assert.Contains("scope.query_selector(node[\"selector\"])", script);
+    }
+
+    [Fact]
+    public void Generate_GroupPlan_DoesNotContainFlatFieldsScaffolding()
+    {
+        var script = _generator.Generate(GroupPlan());
+        Assert.DoesNotContain("SELECTORS = {", script);
+        Assert.DoesNotContain("csv.DictWriter", script);
+    }
+
+    [Fact]
+    public void Generate_GroupPlanWithLogin_RendersFillAndClickBeforeExtraction()
+    {
+        var script = _generator.Generate(GroupPlanWithLogin());
+        Assert.Contains("page.fill(\"#user\", os.environ[\"SF_USERNAME\"])", script);
+        Assert.Contains("page.click(\"#submit\")", script);
+
+        // Textual order inside scrape() is execution order: the rendered
+        // actions (fill/click) sit before the "for node in GROUPS" loop that
+        // actually drives extraction — GROUPS itself is just a top-level
+        // data literal declared earlier and isn't what "runs" first.
+        var clickIndex = script.IndexOf("page.click", StringComparison.Ordinal);
+        var extractionLoopIndex = script.IndexOf("for node in GROUPS:", StringComparison.Ordinal);
+        Assert.True(clickIndex < extractionLoopIndex);
+    }
 }

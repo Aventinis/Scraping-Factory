@@ -57,6 +57,19 @@ public static class ScrapingPlanValidator
                 return Invalid("Selector eines ClickStep darf nicht leer sein.");
         }
 
+        // Container-Mode replaces the flat ExtractStep list wholesale — see
+        // ScrapingPlanBuilder. Engine-independent, so deliberately not part
+        // of browserOnlySteps above.
+        var extractGroupStep = plan.Steps.OfType<ExtractGroupStep>().SingleOrDefault();
+        if (extractGroupStep is not null)
+        {
+            if (extractGroupStep.Roots.Count == 0)
+                return Invalid("ExtractGroupStep muss mindestens eine Gruppe enthalten.");
+
+            var groupError = ValidateContainerNodes(extractGroupStep.Roots);
+            return groupError is null ? new PlanValidationResult { Success = true } : Invalid(groupError);
+        }
+
         var extractSteps = plan.Steps.OfType<ExtractStep>().ToList();
         if (extractSteps.Count == 0)
             return Invalid("Plan muss mindestens einen ExtractStep enthalten.");
@@ -83,4 +96,37 @@ public static class ScrapingPlanValidator
     private static readonly Regex EnvironmentVariableNamePattern = new("^[A-Za-z_][A-Za-z0-9_]*$");
 
     private static PlanValidationResult Invalid(string error) => new() { Success = false, Error = error };
+
+    // Deliberately doesn't check whether Name is a valid XML tag name, or
+    // whether a non-repeating GroupNode's selector could ever match more
+    // than once — same laissez-faire as CSS selector syntax elsewhere in
+    // this validator (see class doc comment): a bad tag name surfaces as a
+    // real Python exception via PythonScriptVerifier, not here.
+    private static string? ValidateContainerNodes(IEnumerable<ContainerNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            if (string.IsNullOrWhiteSpace(node.Name))
+                return "Name eines Container-Knotens darf nicht leer sein.";
+
+            switch (node)
+            {
+                case GroupNode group:
+                    if (string.IsNullOrWhiteSpace(group.Selector))
+                        return $"Selector der Gruppe '{group.Name}' darf nicht leer sein.";
+                    var childError = ValidateContainerNodes(group.Children);
+                    if (childError is not null)
+                        return childError;
+                    break;
+
+                case DataFieldNode field:
+                    if (string.IsNullOrWhiteSpace(field.Selector))
+                        return $"Selector des Datenfelds '{field.Name}' darf nicht leer sein.";
+                    if (field.Mode == ExtractMode.Attribute && string.IsNullOrWhiteSpace(field.Attribute))
+                        return $"Datenfeld '{field.Name}' mit Modus 'Attribute' braucht ein Attribut.";
+                    break;
+            }
+        }
+        return null;
+    }
 }
