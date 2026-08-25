@@ -190,4 +190,69 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         var response = await _client.PostAsync("/generate", content);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
+
+    // Container-Mode wire payload: "groups" instead of "fields", nested
+    // "children" — no "outputFormat" needed, the server forces Xml itself
+    // (see ScrapingPlanBuilder).
+    [Fact]
+    public async Task Generate_GroupsPayload_Returns200WithXmlScript()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+            <section class="menu-category"><h2>Vorspeisen</h2>
+              <li class="menu-item"><h3>Suppe</h3></li>
+            </section>
+            </body></html>
+            """);
+        var payload = $$"""
+            {
+              "version": "1",
+              "url": "{{server.BaseUrl}}",
+              "groups": [
+                {
+                  "name": "Kategorie",
+                  "selector": "section.menu-category",
+                  "repeating": true,
+                  "children": [
+                    { "name": "Titel", "selector": "h2" },
+                    {
+                      "name": "Gericht",
+                      "selector": "li.menu-item",
+                      "repeating": true,
+                      "children": [ { "name": "Name", "selector": "h3" } ]
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Contains("import xml.etree.ElementTree as ET", body);
+        Assert.Contains("output.xml", body);
+    }
+
+    [Fact]
+    public async Task Generate_FieldsAndGroupsBothSet_Returns400()
+    {
+        var payload = """
+            {
+              "url": "https://example.com",
+              "fields": [ { "name": "Titel", "selector": "h1" } ],
+              "groups": [
+                { "name": "Kategorie", "selector": "section", "repeating": true, "children": [] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
+    }
 }

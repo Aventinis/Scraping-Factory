@@ -5,6 +5,13 @@ public sealed class ScrapingConfig
     public string Version { get; init; } = "1";
     public required string Url { get; init; }
     public List<ScrapingField> Fields { get; init; } = [];
+
+    // Container-Mode: mutually exclusive with Fields (enforced in the
+    // /generate endpoint, before ScrapingPlanBuilder ever sees the config).
+    // When set, OutputFormat is forced to Xml server-side — see
+    // ScrapingPlanBuilder.
+    public List<GroupNode>? Groups { get; init; }
+
     public OutputFormat OutputFormat { get; init; } = OutputFormat.Csv;
 
     // Additive, wire-compatible: existing extension payloads omit this and
@@ -21,4 +28,4 @@ public sealed class ScrapingField
     public string? Attribute { get; init; }
 }
 
-public enum OutputFormat { Csv }
+public enum OutputFormat { Csv, Xml }
