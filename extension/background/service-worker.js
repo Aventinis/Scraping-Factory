@@ -38,7 +38,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep the message channel open for the async sendResponse above
   }
 
-  const FORWARD_TO_TAB = ['START_SELECTION', 'STOP_SELECTION', 'ENABLE_DOM_VIEW', 'DISABLE_DOM_VIEW'];
+  const FORWARD_TO_TAB = ['START_SELECTION', 'STOP_SELECTION', 'ENABLE_DOM_VIEW', 'DISABLE_DOM_VIEW', 'PREVIEW_START', 'PREVIEW_STOP'];
   if (FORWARD_TO_TAB.includes(message.type)) {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs.length === 0) {
@@ -58,11 +58,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           if (message.type === 'START_SELECTION') {
             chrome.runtime.sendMessage({ type: 'SELECTION_UNAVAILABLE', reason: err.message }).catch(() => {});
           }
+          if (message.type === 'PREVIEW_START') {
+            chrome.runtime.sendMessage({ type: 'PREVIEW_UNAVAILABLE', reason: err.message }).catch(() => {});
+          }
         });
     });
   }
 
-  if (message.type === 'HOVER_ELEMENT' || message.type === 'DOM_TREE') {
+  if (message.type === 'HOVER_ELEMENT' || message.type === 'DOM_TREE' || message.type === 'PREVIEW_RESULT') {
     // Transient, side-panel-only messages — no session storage fallback,
     // since missing one while the panel is closed is harmless.
     chrome.runtime.sendMessage(message)
