@@ -25,6 +25,8 @@ let _state = {
   domTree:           null,  // serialized tree from the content script, or null while loading/errored
   domTreeTruncated:  false,
   domTreeError:      null,  // set if no DOM_TREE response arrives within DOM_TREE_TIMEOUT_MS
+  previewActive:     false, // Vorschau toggle — not persisted, always off on popup reopen (like domViewEnabled)
+  previewSummary:    null,  // {total, empty, truncated} from the content script's last PREVIEW_RESULT, or null
 };
 
 const DOM_TREE_TIMEOUT_MS = 5000;
@@ -257,6 +259,27 @@ function render() {
     const exportBtn = document.getElementById('btn-export-config');
     if (exportBtn) exportBtn.disabled = !hasConfig;
 
+    const previewBtn = document.getElementById('btn-preview');
+    if (previewBtn) {
+      previewBtn.disabled = !hasConfig;
+      previewBtn.classList.toggle('active', _state.previewActive);
+      previewBtn.textContent = _state.previewActive ? 'Vorschau beenden' : 'Vorschau anzeigen';
+    }
+    const previewSummaryEl = document.getElementById('preview-summary');
+    if (previewSummaryEl) {
+      if (_state.previewActive && _state.previewSummary) {
+        const { total, empty, truncated } = _state.previewSummary;
+        const parts = [`${total} Element(e) markiert`];
+        if (empty.length > 0) parts.push(`ohne Treffer: ${empty.join(', ')}`);
+        if (truncated) parts.push('Anzeige gekürzt (zu viele Treffer)');
+        previewSummaryEl.textContent = parts.join(' — ');
+        previewSummaryEl.classList.toggle('warn', empty.length > 0);
+        previewSummaryEl.classList.remove('hidden');
+      } else {
+        previewSummaryEl.classList.add('hidden');
+      }
+    }
+
     if (_state.containerModalOpen) {
       show('modal-container-new');
       const nameInput = document.getElementById('input-container-name');
@@ -483,6 +506,41 @@ function highlightSelected(path) {
   }
 }
 
+// ── Preview mode ──────────────────────────────────────────────────────────────
+// Sends the current Fields/Groups to the content script so it can match them
+// against the live DOM and highlight the results directly on the page — see
+// content-script.js's computePreviewMatches/startPreview for the matching
+// semantics (mirrors the backend codegen exactly).
+
+function startPreview() {
+  const hasConfig = _state.mode === 'container' ? _state.groups.length > 0 : _state.fields.length > 0;
+  if (!hasConfig) return;
+
+  const payload = _state.mode === 'container'
+    ? { groups: serializeGroupTree(_state.groups) }
+    : { fields: _state.fields.map(f => ({ name: f.name, selector: f.selector })) };
+  log('PREVIEW_START', { mode: _state.mode, ...payload });
+  chrome.runtime.sendMessage({ type: 'PREVIEW_START', mode: _state.mode, ...payload });
+  patchState({ previewActive: true, previewSummary: null });
+}
+
+function stopPreview() {
+  log('PREVIEW_STOP');
+  chrome.runtime.sendMessage({ type: 'PREVIEW_STOP' });
+  patchState({ previewActive: false, previewSummary: null });
+}
+
+function togglePreview() {
+  if (_state.previewActive) stopPreview(); else startPreview();
+}
+
+// Called wherever the Fields/Groups configuration changes or a new selection
+// starts — an active preview would otherwise keep showing highlights for a
+// configuration that no longer matches the current state.
+function stopPreviewIfActive() {
+  if (_state.previewActive) stopPreview();
+}
+
 // ── Async actions ─────────────────────────────────────────────────────────────
 
 async function checkCompanion() {
@@ -517,6 +575,7 @@ function buildVerificationErrorMessage(data) {
 }
 
 async function generate() {
+  stopPreviewIfActive();
   setState(STATES.GENERATING);
   const config = buildScrapingConfig(_state.url, _state.mode, _state.fields, _state.groups);
   log('GENERATE request', config);
@@ -706,6 +765,7 @@ function confirmField() {
 function switchMode(mode) {
   if (mode === _state.mode) return;
   log('MODE_SWITCH', mode);
+  stopPreviewIfActive();
   // Strictly separate — switching modes clears the other mode's config
   // rather than keeping both around.
   setState(_state.current, mode === 'flat' ? { mode, groups: [] } : { mode, fields: [] });
@@ -729,6 +789,7 @@ function confirmContainerModal() {
   const avoidId = repeating || hasRepeatingAncestor(_state.groups, parentPath);
 
   log('CONTAINER_ADD start', { name, repeating, parentPath, scopeSelector, avoidId });
+  stopPreviewIfActive();
   chrome.runtime.sendMessage({ type: 'START_SELECTION', scopeSelector, avoidId });
   setState(STATES.SELECTING, {
     containerModalOpen:  false,
@@ -751,6 +812,7 @@ function startFieldSelection(parentPath) {
   const scopeSelector = resolveGroupNode(_state.groups, parentPath)?.selector ?? null;
   const avoidId = hasRepeatingAncestor(_state.groups, parentPath);
   log('FIELD_ADD(container) start', { parentPath, scopeSelector, avoidId });
+  stopPreviewIfActive();
   chrome.runtime.sendMessage({ type: 'START_SELECTION', scopeSelector, avoidId });
   setState(STATES.SELECTING, {
     selectionKind:       'field',
@@ -797,8 +859,14 @@ function wireEvents() {
     checkCompanion();
   });
 
+  document.getElementById('btn-preview')?.addEventListener('click', () => {
+    log('BTN preview');
+    togglePreview();
+  });
+
   document.getElementById('btn-add-field')?.addEventListener('click', () => {
     log('BTN add-field → START_SELECTION');
+    stopPreviewIfActive();
     chrome.runtime.sendMessage({ type: 'START_SELECTION' });
     setState(STATES.SELECTING, { pendingSelector: null, domTree: null, domTreeTruncated: false, domTreeError: null });
     if (_state.domViewEnabled) {
@@ -822,6 +890,7 @@ function wireEvents() {
     if (e.target.closest('.btn-add-subfield')) { startFieldSelection(path); return; }
     if (e.target.closest('.btn-remove-group-node')) {
       log('GROUP_NODE_REMOVE', { path });
+      stopPreviewIfActive();
       setState(_state.current, { groups: removeGroupTreeNode(_state.groups, path) });
     }
   });
@@ -878,6 +947,7 @@ function wireEvents() {
     if (!btn) return;
     const index = parseInt(btn.dataset.index, 10);
     log('FIELD_REMOVE', { index, name: _state.fields[index]?.name });
+    stopPreviewIfActive();
     setState(_state.current, { fields: removeField(_state.fields, index) });
   });
 
@@ -890,6 +960,7 @@ function wireEvents() {
 
   document.getElementById('btn-new-scraper')?.addEventListener('click', () => {
     log('BTN new-scraper → reset state');
+    stopPreviewIfActive();
     chrome.storage.session.set({ fields: [], url: '', groups: [] });
     setState(STATES.CHECKING_COMPANION, { fields: [], groups: [], scriptText: '', url: '' });
     checkCompanion();
@@ -934,6 +1005,16 @@ function wireEvents() {
     }
     if (message.type === 'HOVER_ELEMENT') {
       highlightHover(message.path);
+    }
+    if (message.type === 'PREVIEW_RESULT' && _state.previewActive) {
+      log('PREVIEW_RESULT received', message);
+      patchState({ previewSummary: { total: message.total, empty: message.empty, truncated: message.truncated } });
+    }
+    if (message.type === 'PREVIEW_UNAVAILABLE') {
+      log('PREVIEW_UNAVAILABLE', message.reason);
+      setLastError(message.reason, 'Vorschau');
+      patchState({ previewActive: false, previewSummary: null });
+      showToast('Vorschau auf dieser Seite nicht möglich.');
     }
   });
 }
