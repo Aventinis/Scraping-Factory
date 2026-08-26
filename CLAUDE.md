@@ -4,7 +4,7 @@
 
 Browser-Plugin, das Nutzern ohne Programmierkenntnisse ermöglicht, Webscraper visuell zu konfigurieren. Ergebnis ist ein eigenständiges, lesbares **Python-Skript** (v1). Die Architektur ist auf spätere Zielsprachen ausgelegt.
 
-Das Projekt befindet sich nicht mehr in der Prototyping-Phase, sondern im aktiven Ausbau des MVP. Grundsatzentscheidungen aus der Prototyping-Phase (IR-Schema, Extension↔Companion-Kommunikation) gelten als getroffen und werden im laufenden Betrieb weiterentwickelt statt neu diskutiert — siehe „Architekturentscheidungen" unten.
+Das MVP (v1.0.0) ist erreicht und liegt hinter uns — aktueller Stand ist v1.4.1, in Arbeit befindet sich v1.5.0. Das Projekt befindet sich damit nicht mehr im MVP-Ausbau, sondern in normaler Feature-Weiterentwicklung darüber hinaus, auch über den ursprünglich für v1 geplanten Funktionsumfang hinaus. Grundsatzentscheidungen aus der Prototyping-Phase (IR-Schema, Extension↔Companion-Kommunikation) gelten als getroffen und werden im laufenden Betrieb weiterentwickelt statt neu diskutiert — siehe „Architekturentscheidungen" unten.
 
 **Grundsatz:** Scraping Factory soll ein freies (kostenloses, ohne Abhängigkeit von kostenpflichtigen Drittanbieter-Diensten) Plugin bleiben. Das schließt insbesondere kommerzielle Stealth-Browser-/Anti-Bot-SDKs mit Session- oder Lizenzmodell aus (siehe „Geplant für spätere Releases").
 
@@ -78,7 +78,9 @@ Weiterhin bestehende, bekannte Einschränkung (kein offener Entscheidungsbedarf,
 
 3. **Selektor-Kompatibilität** — CSS-Selektoren, die sich nicht 1:1 auf BeautifulSoup/soupsieve übertragen (`:contains()`, Shadow DOM, dynamische Klassen). Wird bei der Skript-Verifikation in `/generate` sichtbar (Selektor liefert keine Daten → `422`), nicht separat validiert.
 
-## v1-Scope (MVP)
+## Funktionsumfang (Stand v1.4.1)
+
+Ursprünglich als "v1-Scope (MVP)" geführt — das MVP ist seit v1.0.0 erreicht, dieser Abschnitt fasst seitdem laufend den aktuellen Gesamtumfang zusammen (zuletzt u. a. um Container-basiertes Scraping erweitert). Einzelne Punkte wandern von „Geplant für spätere Releases" hierher, sobald sie umgesetzt sind.
 
 - Standard-Engine ist weiterhin statisches Rendering (`requests` + `BeautifulSoup`, kein JS). Ein optionaler Browser-Engine (Playwright + Chromium, `Engine: "Browser"`) für dynamisch gerenderte Seiten und einfache Login-Flows (`FillStep`/`ClickStep`/`WaitForStep`) existiert bereits serverseitig (IR, Codegen, Verifikation), hat aber noch **keine Extension-UI** — nur direkt über die Companion-API ansteuerbar
 - Login innerhalb eines einzelnen Skriptlaufs ist möglich (Formular ausfüllen → absenden → warten → extrahieren, Zugangsdaten nur über Umgebungsvariablen, nie im Skript). Kein persistentes Session-Handling über mehrere Skriptläufe hinweg (kein Cookie-/Storage-State-Speichern und -Wiederverwenden)
@@ -88,10 +90,10 @@ Weiterhin bestehende, bekannte Einschränkung (kein offener Entscheidungsbedarf,
 - Nur Python als Zielsprache
 - Backend des generierten Skripts: `requests` + `BeautifulSoup` (Static) bzw. Playwright (Browser); Ausgabe als CSV (Flat-Mode) oder XML (Container-Mode)
 
-## Geplant für spätere Releases (Post-MVP)
+## Geplant für spätere Releases
 
 - **JS-Rendering-Unterstützung** — serverseitig umgesetzt: `Engine: "Browser"` generiert ein Playwright-Skript (reines Playwright + Standard-Chromium, **keine kommerziellen Stealth-Browser-/Anti-Bot-Dienste mit Lizenz- oder Session-Modell** — z. B. CloakBrowser wurde geprüft und verworfen, siehe Git-Historie), verifiziert durch tatsächliche Ausführung wie beim Static-Engine (Konsistenzregel unverändert). Offen: Extension-UI zum Auswählen des Engines und zum Setzen von `WaitForStep`
-- **Login-/Session-Handling** — Login innerhalb eines Laufs umgesetzt (`FillStep`/`ClickStep`, siehe v1-Scope). Offen: persistentes Session-/Cookie-Handling über mehrere Skriptläufe hinweg, Extension-UI zum Konfigurieren eines Login-Flows. Captcha-Lösung ist kein Ziel (siehe v1-Scope)
+- **Login-/Session-Handling** — Login innerhalb eines Laufs umgesetzt (`FillStep`/`ClickStep`, siehe „Funktionsumfang"). Offen: persistentes Session-/Cookie-Handling über mehrere Skriptläufe hinweg, Extension-UI zum Konfigurieren eines Login-Flows. Captcha-Lösung ist kein Ziel (siehe „Funktionsumfang")
 - **Pagination**
 - **Weitere Zielsprachen** neben Python (Architektur ist bereits darauf ausgelegt, siehe Projektübersicht)
 
