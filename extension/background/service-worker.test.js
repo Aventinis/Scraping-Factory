@@ -215,6 +215,53 @@ describe('GET_LOGS', () => {
   });
 });
 
+test('PREVIEW_START is forwarded to active tab content script', () => {
+  chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+
+  capturedListener({ type: 'PREVIEW_START', mode: 'flat', fields: [] }, {});
+
+  expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(7, { type: 'PREVIEW_START', mode: 'flat', fields: [] });
+});
+
+test('PREVIEW_STOP is forwarded to active tab content script', () => {
+  chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+
+  capturedListener({ type: 'PREVIEW_STOP' }, {});
+
+  expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(7, { type: 'PREVIEW_STOP' });
+});
+
+test('PREVIEW_START failure notifies the side panel via PREVIEW_UNAVAILABLE', async () => {
+  chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+  chrome.tabs.sendMessage.mockRejectedValue(new Error('Could not establish connection. Receiving end does not exist.'));
+
+  capturedListener({ type: 'PREVIEW_START', mode: 'flat', fields: [] }, {});
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+    type: 'PREVIEW_UNAVAILABLE',
+    reason: 'Could not establish connection. Receiving end does not exist.',
+  });
+});
+
+test('PREVIEW_STOP failure does not notify the side panel', async () => {
+  chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+  chrome.tabs.sendMessage.mockRejectedValue(new Error('Could not establish connection. Receiving end does not exist.'));
+
+  capturedListener({ type: 'PREVIEW_STOP' }, {});
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+});
+
+test('PREVIEW_RESULT is forwarded to runtime (side panel) without touching tabs or storage', () => {
+  capturedListener({ type: 'PREVIEW_RESULT', total: 3, empty: [], truncated: false }, {});
+
+  expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'PREVIEW_RESULT', total: 3, empty: [], truncated: false });
+  expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
+  expect(chrome.storage.session.set).not.toHaveBeenCalled();
+});
+
 test('unknown message type is ignored', () => {
   capturedListener({ type: 'UNKNOWN' }, {});
 

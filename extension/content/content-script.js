@@ -88,7 +88,88 @@ function serializeDomTree() {
   return { tree, truncated };
 }
 
-if (typeof module !== 'undefined') module.exports = { buildSelector, elementPath, serializeDomTree };
+// ── Preview-mode matching ────────────────────────────────────────────────────
+// Mirrors the backend codegen exactly so the preview never shows something
+// the real generated script wouldn't extract:
+// - Flat mode (scraper.py.j2): `soup.select(selector)` per field — every
+//   match, index-aligned into rows. Equivalent here: querySelectorAll.
+// - Container mode (scraper_grouped.py.j2's extract_group): a group node
+//   resolves its selector once (select_one) or repeatedly (select, when
+//   `repeating`) against the current scope and recurses into each match; a
+//   field leaf is always a single match (select_one). The wire format from
+//   serializeGroupTree (popup.js) already distinguishes group vs. field by
+//   whether `children` is present, exactly like extract_group's `"children"
+//   in node` check — so the same tree can be walked here unmodified.
+//
+// Each querySelector(All) call is wrapped individually: an invalid/
+// incompatible selector is treated as zero matches instead of aborting the
+// whole preview (same selector-compatibility limitation documented for the
+// real backend — see CLAUDE.md point 3).
+
+function safeQueryAll(scope, selector) {
+  try {
+    return Array.from(scope.querySelectorAll(selector));
+  } catch (err) {
+    log('PREVIEW invalid selector', selector, err.message);
+    return [];
+  }
+}
+
+function safeQueryOne(scope, selector) {
+  try {
+    return scope.querySelector(selector);
+  } catch (err) {
+    log('PREVIEW invalid selector', selector, err.message);
+    return null;
+  }
+}
+
+function matchFlatFields(fields) {
+  const matches = [];
+  const empty = [];
+  fields.forEach(({ name, selector }) => {
+    const found = safeQueryAll(document, selector);
+    if (found.length === 0) empty.push(name);
+    found.forEach(element => matches.push({ element, name }));
+  });
+  return { matches, empty };
+}
+
+function matchGroupTree(scope, nodes, matches, empty) {
+  nodes.forEach(node => {
+    if (node.children) {
+      const instances = node.repeating
+        ? safeQueryAll(scope, node.selector)
+        : [safeQueryOne(scope, node.selector)].filter(Boolean);
+      if (instances.length === 0) empty.push(node.name);
+      instances.forEach(instance => {
+        matches.push({ element: instance, name: node.name });
+        matchGroupTree(instance, node.children, matches, empty);
+      });
+    } else {
+      const found = safeQueryOne(scope, node.selector);
+      if (found) matches.push({ element: found, name: node.name });
+      else empty.push(node.name);
+    }
+  });
+}
+
+function computePreviewMatches(mode, fields, groups) {
+  if (mode === 'container') {
+    const matches = [];
+    const empty = [];
+    matchGroupTree(document, groups || [], matches, empty);
+    return { matches, empty };
+  }
+  return matchFlatFields(fields || []);
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = {
+    buildSelector, elementPath, serializeDomTree,
+    matchFlatFields, matchGroupTree, computePreviewMatches,
+  };
+}
 
 // ── Overlay ──────────────────────────────────────────────────────────────────
 
@@ -125,6 +206,75 @@ function moveOverlayTo(element) {
     width:  `${r.width}px`,
     height: `${r.height}px`,
   });
+}
+
+// ── Preview overlay ──────────────────────────────────────────────────────────
+// Draws one highlight box + name label per match from computePreviewMatches.
+// Uses position:absolute (document-relative, via getBoundingClientRect() +
+// window.scrollX/Y) instead of the hover overlay's position:fixed, so boxes
+// stay aligned with their elements while the page scrolls without needing a
+// scroll listener. No MutationObserver/ResizeObserver — boxes are a
+// point-in-time snapshot, same simplicity level as the hover overlay.
+
+const PREVIEW_MAX_BOXES = 300; // caps drawn boxes on pathological pages; the real match count is still reported
+
+let previewBoxes = [];
+
+function createPreviewBox(element, name) {
+  const rect = element.getBoundingClientRect();
+  const box = document.createElement('div');
+  box.className = 'sf-preview-box';
+  Object.assign(box.style, {
+    position:      'absolute',
+    top:           `${rect.top + window.scrollY}px`,
+    left:          `${rect.left + window.scrollX}px`,
+    width:         `${rect.width}px`,
+    height:        `${rect.height}px`,
+    border:        '2px solid #3b82f6',
+    background:    'rgba(59,130,246,0.15)',
+    boxSizing:     'border-box',
+    pointerEvents: 'none',
+    zIndex:        '2147483646',
+  });
+
+  const label = document.createElement('div');
+  label.textContent = name;
+  Object.assign(label.style, {
+    position:      'absolute',
+    top:           '-18px',
+    left:          '0',
+    background:    '#3b82f6',
+    color:         '#fff',
+    font:          '11px sans-serif',
+    padding:       '1px 4px',
+    borderRadius:  '3px',
+    whiteSpace:    'nowrap',
+    pointerEvents: 'none',
+  });
+  box.appendChild(label);
+
+  document.body.appendChild(box);
+  previewBoxes.push(box);
+}
+
+function clearPreviewBoxes() {
+  previewBoxes.forEach(box => box.remove());
+  previewBoxes = [];
+}
+
+function startPreview(mode, fields, groups) {
+  clearPreviewBoxes();
+  const { matches, empty } = computePreviewMatches(mode, fields, groups);
+  matches.slice(0, PREVIEW_MAX_BOXES).forEach(({ element, name }) => createPreviewBox(element, name));
+  const truncated = matches.length > PREVIEW_MAX_BOXES;
+
+  log('PREVIEW result', { total: matches.length, empty, truncated });
+  chrome.runtime.sendMessage({ type: 'PREVIEW_RESULT', total: matches.length, empty, truncated });
+}
+
+function stopPreview() {
+  log('PREVIEW stop');
+  clearPreviewBoxes();
 }
 
 // ── Selection mode ────────────────────────────────────────────────────────────
@@ -284,6 +434,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     if (message.type === 'STOP_SELECTION')  stopSelection();
     if (message.type === 'ENABLE_DOM_VIEW') enableDomView();
     if (message.type === 'DISABLE_DOM_VIEW') disableDomView();
+    if (message.type === 'PREVIEW_START') startPreview(message.mode, message.fields, message.groups);
+    if (message.type === 'PREVIEW_STOP') stopPreview();
     if (message.type === 'GET_LOGS') {
       sendResponse(getLogBuffer());
     }

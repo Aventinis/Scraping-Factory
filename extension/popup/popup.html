@@ -60,6 +60,15 @@
     }
     .mode-btn.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 2px rgba(0,0,0,.08); font-weight: 500; }
 
+    /* Preview toggle */
+    .btn-toggle           { background: #f3f4f6; color: #374151; width: 100%; }
+    .btn-toggle:hover     { background: #e5e7eb; }
+    .btn-toggle:disabled  { color: #9ca3af; cursor: default; }
+    .btn-toggle.active         { background: #3b82f6; color: #fff; }
+    .btn-toggle.active:hover   { background: #2563eb; }
+    .preview-summary { font-size: 11px; color: #6b7280; margin-top: 6px; text-align: center; }
+    .preview-summary.warn { color: #d97706; }
+
     /* Container tree editor */
     #group-tree-root { list-style: none; margin: 0 0 10px; padding: 0; }
     .group-tree-children { list-style: none; margin: 0; padding: 0; }
@@ -219,6 +228,11 @@
         <button id="btn-add-root-container" class="btn-secondary">+ Container hinzufügen</button>
       </div>
     </div>
+
+    <div class="actions" style="margin-top: 10px;">
+      <button id="btn-preview" class="btn-toggle" disabled title="Zeigt direkt auf der Seite, welche Elemente die aktuelle Konfiguration treffen würde">Vorschau anzeigen</button>
+    </div>
+    <p id="preview-summary" class="preview-summary hidden"></p>
 
     <div class="actions" style="margin-top: 10px;">
       <button id="btn-export-config" class="btn-secondary" disabled title="Aktuelle Felder/Container als JSON exportieren — z. B. für einen Bug-Report">Konfiguration exportieren</button>

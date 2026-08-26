@@ -1,4 +1,7 @@
-const { buildSelector, elementPath, serializeDomTree } = require('./content-script');
+const {
+  buildSelector, elementPath, serializeDomTree,
+  matchFlatFields, matchGroupTree, computePreviewMatches,
+} = require('./content-script');
 
 function el(tag, { id, classes } = {}) {
   const e = document.createElement(tag);
@@ -364,5 +367,195 @@ describe('scoped selection (START_SELECTION with scopeSelector)', () => {
       type: 'ELEMENT_SELECTED',
       selector: '#vorspeisen',
     }));
+  });
+});
+
+// ── Preview-mode matching ────────────────────────────────────────────────────
+// Pure functions — no chrome mock needed, same style as buildSelector above.
+
+describe('matchFlatFields', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <h2 class="title">Erstes</h2>
+      <h2 class="title">Zweites</h2>
+      <span class="price">1,99</span>
+    `;
+  });
+
+  test('collects every match per field, index order preserved', () => {
+    const { matches, empty } = matchFlatFields([
+      { name: 'Titel', selector: '.title' },
+      { name: 'Preis', selector: '.price' },
+    ]);
+    expect(matches.map(m => m.name)).toEqual(['Titel', 'Titel', 'Preis']);
+    expect(matches[0].element.textContent).toBe('Erstes');
+    expect(matches[1].element.textContent).toBe('Zweites');
+    expect(empty).toEqual([]);
+  });
+
+  test('a field with zero matches is reported in `empty`, others unaffected', () => {
+    const { matches, empty } = matchFlatFields([
+      { name: 'Titel', selector: '.title' },
+      { name: 'Fehlt', selector: '.does-not-exist' },
+    ]);
+    expect(matches.map(m => m.name)).toEqual(['Titel', 'Titel']);
+    expect(empty).toEqual(['Fehlt']);
+  });
+
+  test('an invalid selector is treated as zero matches instead of throwing', () => {
+    const { matches, empty } = matchFlatFields([{ name: 'Kaputt', selector: ':::not-css' }]);
+    expect(matches).toEqual([]);
+    expect(empty).toEqual(['Kaputt']);
+  });
+});
+
+describe('matchGroupTree', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <ul class="menu">
+        <li class="item"><h3 class="name">Suppe</h3><span class="price">3,50</span></li>
+        <li class="item"><h3 class="name">Salat</h3></li>
+      </ul>
+      <div class="footer" id="footer-single"><span class="text">Impressum</span></div>
+    `;
+  });
+
+  test('a repeating group recurses into every match, a field leaf is a single match per instance', () => {
+    const groups = [{
+      name: 'Gericht', selector: '.item', repeating: true,
+      children: [
+        { name: 'Name', selector: '.name' },
+        { name: 'Preis', selector: '.price' },
+      ],
+    }];
+    const matches = [];
+    const empty = [];
+    matchGroupTree(document, groups, matches, empty);
+
+    expect(matches.filter(m => m.name === 'Gericht')).toHaveLength(2);
+    expect(matches.filter(m => m.name === 'Name').map(m => m.element.textContent)).toEqual(['Suppe', 'Salat']);
+    // Second "Gericht" instance has no .price — the group itself still matched, only the field leaf is empty.
+    expect(matches.filter(m => m.name === 'Preis')).toHaveLength(1);
+    expect(empty).toEqual(['Preis']);
+  });
+
+  test('a non-repeating group resolves at most one instance (select_one semantics)', () => {
+    const groups = [{
+      name: 'Fußzeile', selector: '.footer', repeating: false,
+      children: [{ name: 'Text', selector: '.text' }],
+    }];
+    const matches = [];
+    const empty = [];
+    matchGroupTree(document, groups, matches, empty);
+
+    expect(matches.filter(m => m.name === 'Fußzeile')).toHaveLength(1);
+    expect(empty).toEqual([]);
+  });
+
+  test('a non-repeating group with zero matches is omitted, not an error', () => {
+    const groups = [{
+      name: 'Fehlt', selector: '.does-not-exist', repeating: false,
+      children: [{ name: 'Text', selector: '.name' }],
+    }];
+    const matches = [];
+    const empty = [];
+    matchGroupTree(document, groups, matches, empty);
+
+    expect(matches).toEqual([]);
+    expect(empty).toEqual(['Fehlt']);
+  });
+
+  test('nested groups scope their children to each instance', () => {
+    document.body.innerHTML = `
+      <section class="cat"><li class="item"><h3 class="name">A</h3></li></section>
+      <section class="cat"><li class="item"><h3 class="name">B</h3></li><li class="item"><h3 class="name">C</h3></li></section>
+    `;
+    const groups = [{
+      name: 'Kategorie', selector: '.cat', repeating: true,
+      children: [{
+        name: 'Gericht', selector: '.item', repeating: true,
+        children: [{ name: 'Name', selector: '.name' }],
+      }],
+    }];
+    const matches = [];
+    const empty = [];
+    matchGroupTree(document, groups, matches, empty);
+
+    expect(matches.filter(m => m.name === 'Name').map(m => m.element.textContent)).toEqual(['A', 'B', 'C']);
+  });
+});
+
+describe('computePreviewMatches', () => {
+  test('dispatches to matchFlatFields for flat mode', () => {
+    document.body.innerHTML = '<p class="x">Hi</p>';
+    const { matches } = computePreviewMatches('flat', [{ name: 'X', selector: '.x' }], []);
+    expect(matches).toHaveLength(1);
+  });
+
+  test('dispatches to matchGroupTree for container mode', () => {
+    document.body.innerHTML = '<div class="g"><span class="f">Hi</span></div>';
+    const groups = [{ name: 'G', selector: '.g', repeating: false, children: [{ name: 'F', selector: '.f' }] }];
+    const { matches } = computePreviewMatches('container', [], groups);
+    expect(matches.map(m => m.name)).toEqual(['G', 'F']);
+  });
+});
+
+describe('PREVIEW_START / PREVIEW_STOP (message-listener wiring)', () => {
+  let capturedListener;
+
+  beforeEach(() => {
+    jest.resetModules();
+    document.body.innerHTML = `
+      <h2 class="title">Erstes</h2>
+      <h2 class="title">Zweites</h2>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+    };
+
+    require('./content-script');
+  });
+
+  afterEach(() => {
+    delete global.chrome;
+  });
+
+  test('PREVIEW_START draws one highlight box per match and reports PREVIEW_RESULT', () => {
+    capturedListener({ type: 'PREVIEW_START', mode: 'flat', fields: [{ name: 'Titel', selector: '.title' }] });
+
+    expect(document.querySelectorAll('.sf-preview-box')).toHaveLength(2);
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+      type: 'PREVIEW_RESULT', total: 2, empty: [], truncated: false,
+    });
+  });
+
+  test('a field with zero matches is listed in the PREVIEW_RESULT empty array', () => {
+    capturedListener({
+      type: 'PREVIEW_START', mode: 'flat',
+      fields: [{ name: 'Titel', selector: '.title' }, { name: 'Fehlt', selector: '.nope' }],
+    });
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+      type: 'PREVIEW_RESULT', total: 2, empty: ['Fehlt'], truncated: false,
+    });
+  });
+
+  test('a second PREVIEW_START replaces the previous boxes instead of accumulating them', () => {
+    capturedListener({ type: 'PREVIEW_START', mode: 'flat', fields: [{ name: 'Titel', selector: '.title' }] });
+    capturedListener({ type: 'PREVIEW_START', mode: 'flat', fields: [{ name: 'Titel', selector: '.title' }] });
+
+    expect(document.querySelectorAll('.sf-preview-box')).toHaveLength(2);
+  });
+
+  test('PREVIEW_STOP removes all highlight boxes', () => {
+    capturedListener({ type: 'PREVIEW_START', mode: 'flat', fields: [{ name: 'Titel', selector: '.title' }] });
+    expect(document.querySelectorAll('.sf-preview-box')).toHaveLength(2);
+
+    capturedListener({ type: 'PREVIEW_STOP' });
+    expect(document.querySelectorAll('.sf-preview-box')).toHaveLength(0);
   });
 });
