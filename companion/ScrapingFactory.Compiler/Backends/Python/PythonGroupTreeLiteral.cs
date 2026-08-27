@@ -40,7 +40,7 @@ internal static class PythonGroupTreeLiteral
     private static string RenderGroup(GroupNode group, int indent)
     {
         var children = Render(group.Children, indent);
-        return $$"""{"name": {{PyStr(group.Name)}}, "selector": {{PyStr(group.Selector)}}, "repeating": {{(group.Repeating ? "True" : "False")}}, "children": {{children}}}""";
+        return $$"""{"name": {{PythonLiteral.Str(group.Name)}}, "selector": {{PythonLiteral.Str(group.Selector)}}, "repeating": {{(group.Repeating ? "True" : "False")}}, "children": {{children}}}""";
     }
 
     private static string RenderField(DataFieldNode field)
@@ -52,22 +52,7 @@ internal static class PythonGroupTreeLiteral
             ExtractMode.Exists => "exists",
             _ => throw new InvalidOperationException($"Unbekannter ExtractMode: {field.Mode}"),
         };
-        var attributePart = field.Mode == ExtractMode.Attribute ? $""", "attribute": {PyStr(field.Attribute!)}""" : "";
-        return $$"""{"name": {{PyStr(field.Name)}}, "selector": {{PyStr(field.Selector)}}, "mode": {{PyStr(mode)}}{{attributePart}}}""";
-    }
-
-    // Python single-quoted string literal, escaped for the characters a
-    // user-entered name/selector/attribute could plausibly contain
-    // (backslash, single quote, newline/CR/tab) so a value can't break out
-    // of the literal or corrupt the generated script.
-    private static string PyStr(string value)
-    {
-        var escaped = value
-            .Replace("\\", "\\\\")
-            .Replace("'", "\\'")
-            .Replace("\n", "\\n")
-            .Replace("\r", "\\r")
-            .Replace("\t", "\\t");
-        return $"'{escaped}'";
+        var attributePart = field.Mode == ExtractMode.Attribute ? $""", "attribute": {PythonLiteral.Str(field.Attribute!)}""" : "";
+        return $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "selector": {{PythonLiteral.Str(field.Selector)}}, "mode": {{PythonLiteral.Str(mode)}}{{attributePart}}}""";
     }
 }

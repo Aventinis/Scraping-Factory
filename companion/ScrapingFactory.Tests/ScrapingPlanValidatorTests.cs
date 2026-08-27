@@ -472,6 +472,22 @@ public class ScrapingPlanValidatorTests
     }
 
     [Fact]
+    public void Validate_ApiConfigWithFieldNameCollidingWithParameterName_Fails()
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "category", Path = "categorySlug" }],
+            Parameters = [new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["a"] } }],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("kollidieren", result.Error);
+        Assert.Contains("category", result.Error);
+    }
+
+    [Fact]
     public void Validate_ApiConfigWithNoParameters_Fails()
     {
         var api = ValidApiConfig();
@@ -644,6 +660,24 @@ public class ScrapingPlanValidatorTests
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
         Assert.Contains("Umgebungsvariablen-Name", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithDuplicateHeaderNames_Fails()
+    {
+        var api = ValidApiConfig();
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = api.UrlTemplate, ItemsPath = api.ItemsPath, Fields = api.Fields, Parameters = api.Parameters,
+            Headers =
+            [
+                new ApiHeader { Name = "Authorization", Value = "Bearer a" },
+                new ApiHeader { Name = "Authorization", EnvironmentVariableName = "SF_TOKEN" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Doppelte Header-Namen", result.Error);
     }
 
     [Fact]
