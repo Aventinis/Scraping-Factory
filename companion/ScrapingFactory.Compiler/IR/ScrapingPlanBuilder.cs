@@ -21,6 +21,16 @@ public static class ScrapingPlanBuilder
             return new ScrapingPlan { Steps = steps, OutputFormat = OutputFormat.Xml, Engine = config.Engine };
         }
 
+        // API-Mode: Api replaces Fields/Groups wholesale, and forces Csv +
+        // Engine.Api regardless of what the wire payload set — same
+        // "the extension doesn't need to set this itself" pattern as
+        // Container-Mode forcing Xml above.
+        if (config.Api is { } api)
+        {
+            steps.Add(new ApiCallStep { Config = api });
+            return new ScrapingPlan { Steps = steps, OutputFormat = OutputFormat.Csv, Engine = ScrapingEngine.Api };
+        }
+
         steps.AddRange(config.Fields.Select(field =>
             (ScrapingStep)new ExtractStep { Name = field.Name, Selector = field.Selector, Attribute = field.Attribute }));
 
