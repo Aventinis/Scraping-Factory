@@ -70,6 +70,15 @@ public static class ScrapingPlanValidator
             return groupError is null ? new PlanValidationResult { Success = true } : Invalid(groupError);
         }
 
+        // API-Mode replaces the flat ExtractStep list wholesale, just like
+        // Container-Mode above — see ScrapingPlanBuilder.
+        var apiCallStep = plan.Steps.OfType<ApiCallStep>().SingleOrDefault();
+        if (apiCallStep is not null)
+        {
+            var apiError = ValidateApiConfig(apiCallStep.Config);
+            return apiError is null ? new PlanValidationResult { Success = true } : Invalid(apiError);
+        }
+
         var extractSteps = plan.Steps.OfType<ExtractStep>().ToList();
         if (extractSteps.Count == 0)
             return Invalid("Plan muss mindestens einen ExtractStep enthalten.");
@@ -82,11 +91,7 @@ public static class ScrapingPlanValidator
                 return Invalid($"Selector für Feld '{step.Name}' darf nicht leer sein.");
         }
 
-        var duplicateNames = extractSteps
-            .GroupBy(step => step.Name)
-            .Where(group => group.Count() > 1)
-            .Select(group => group.Key)
-            .ToList();
+        var duplicateNames = FindDuplicates(extractSteps, step => step.Name);
         if (duplicateNames.Count > 0)
             return Invalid($"Doppelte Feldnamen: {string.Join(", ", duplicateNames)}.");
 
@@ -96,6 +101,9 @@ public static class ScrapingPlanValidator
     private static readonly Regex EnvironmentVariableNamePattern = new("^[A-Za-z_][A-Za-z0-9_]*$");
 
     private static PlanValidationResult Invalid(string error) => new() { Success = false, Error = error };
+
+    private static List<string> FindDuplicates<T>(IEnumerable<T> items, Func<T, string> keySelector) =>
+        items.GroupBy(keySelector).Where(group => group.Count() > 1).Select(group => group.Key).ToList();
 
     // Deliberately doesn't check whether Name is a valid XML tag name, or
     // whether a non-repeating GroupNode's selector could ever match more
@@ -126,6 +134,116 @@ public static class ScrapingPlanValidator
                         return $"Datenfeld '{field.Name}' mit Modus 'Attribute' braucht ein Attribut.";
                     break;
             }
+        }
+        return null;
+    }
+
+    private static readonly Regex UrlTemplatePlaceholderPattern = new(@"\{([^{}]+)\}");
+
+    // Deliberately doesn't validate JSON-path syntax (ItemsPath/Fields[].Path/
+    // DiscoverySource.ValuePath) — same laissez-faire as CSS selectors and
+    // XML tag names elsewhere in this validator: a bad path surfaces as a
+    // real runtime miss via PythonScriptVerifier once Phase 2 adds codegen,
+    // not here.
+    private static string? ValidateApiConfig(ApiConfig api)
+    {
+        if (api.Method != "GET")
+            return $"Nicht unterstützte HTTP-Methode '{api.Method}': Api-Mode unterstützt bisher nur GET.";
+
+        if (string.IsNullOrWhiteSpace(api.ItemsPath))
+            return "ItemsPath darf nicht leer sein.";
+
+        if (api.Fields.Count == 0)
+            return "Api-Konfiguration muss mindestens ein Feld enthalten.";
+
+        foreach (var field in api.Fields)
+        {
+            if (string.IsNullOrWhiteSpace(field.Name))
+                return "Feldname darf nicht leer sein.";
+            if (string.IsNullOrWhiteSpace(field.Path))
+                return $"Pfad für Feld '{field.Name}' darf nicht leer sein.";
+        }
+
+        var duplicateFieldNames = FindDuplicates(api.Fields, field => field.Name);
+        if (duplicateFieldNames.Count > 0)
+            return $"Doppelte Feldnamen: {string.Join(", ", duplicateFieldNames)}.";
+
+        if (api.Parameters.Count == 0)
+            return "Api-Konfiguration muss mindestens einen Parameter enthalten.";
+
+        foreach (var parameter in api.Parameters)
+        {
+            if (string.IsNullOrWhiteSpace(parameter.Name))
+                return "Parametername darf nicht leer sein.";
+        }
+
+        var duplicateParameterNames = FindDuplicates(api.Parameters, parameter => parameter.Name);
+        if (duplicateParameterNames.Count > 0)
+            return $"Doppelte Parameternamen: {string.Join(", ", duplicateParameterNames)}.";
+
+        var placeholders = UrlTemplatePlaceholderPattern.Matches(api.UrlTemplate)
+            .Select(match => match.Groups[1].Value)
+            .ToHashSet();
+        var parameterNames = api.Parameters.Select(parameter => parameter.Name).ToHashSet();
+
+        var missingParameters = placeholders.Except(parameterNames).ToList();
+        if (missingParameters.Count > 0)
+            return $"UrlTemplate referenziert unbekannte Parameter: {string.Join(", ", missingParameters)}.";
+
+        var unusedParameters = parameterNames.Except(placeholders).ToList();
+        if (unusedParameters.Count > 0)
+            return $"Parameter ohne Platzhalter im UrlTemplate: {string.Join(", ", unusedParameters)}.";
+
+        foreach (var parameter in api.Parameters)
+        {
+            var sourceError = parameter.Source switch
+            {
+                StaticListSource { Values.Count: 0 } =>
+                    $"Parameter '{parameter.Name}' mit Werteliste braucht mindestens einen Wert.",
+                DiscoverySource discovery => ValidateDiscoverySource(parameter.Name, discovery),
+                RangeSource { From: var from, To: var to } when string.IsNullOrWhiteSpace(from) || string.IsNullOrWhiteSpace(to) =>
+                    $"Bereich für Parameter '{parameter.Name}' braucht Start und Ende.",
+                _ => null,
+            };
+            if (sourceError is not null)
+                return sourceError;
+        }
+
+        return api.Headers is { } headers ? ValidateApiHeaders(headers) : null;
+    }
+
+    // DiscoverySource.UrlTemplate is deliberately not cross-checked against
+    // api.Parameters the way the main UrlTemplate is: Phase 1 explicitly
+    // rules out dependencies between parameters (see issue #53's scope
+    // boundaries), so a discovery endpoint's own template is expected to be
+    // fully static.
+    private static string? ValidateDiscoverySource(string parameterName, DiscoverySource discovery)
+    {
+        if (discovery.Method != "GET")
+            return $"Discovery-Endpunkt für Parameter '{parameterName}': Api-Mode unterstützt bisher nur GET.";
+        if (string.IsNullOrWhiteSpace(discovery.UrlTemplate))
+            return $"Discovery-Endpunkt für Parameter '{parameterName}' braucht ein UrlTemplate.";
+        if (string.IsNullOrWhiteSpace(discovery.ItemsPath))
+            return $"Discovery-Endpunkt für Parameter '{parameterName}' braucht ein ItemsPath.";
+        if (string.IsNullOrWhiteSpace(discovery.ValuePath))
+            return $"Discovery-Endpunkt für Parameter '{parameterName}' braucht ein ValuePath.";
+        return null;
+    }
+
+    private static string? ValidateApiHeaders(List<ApiHeader> headers)
+    {
+        foreach (var header in headers)
+        {
+            if (string.IsNullOrWhiteSpace(header.Name))
+                return "Name eines Api-Headers darf nicht leer sein.";
+
+            var hasValue = !string.IsNullOrWhiteSpace(header.Value);
+            var hasEnvironmentVariable = !string.IsNullOrWhiteSpace(header.EnvironmentVariableName);
+            if (hasValue == hasEnvironmentVariable)
+                return $"Header '{header.Name}' braucht genau eines von Value/EnvironmentVariableName.";
+
+            if (hasEnvironmentVariable && !EnvironmentVariableNamePattern.IsMatch(header.EnvironmentVariableName!))
+                return $"Ungültiger Umgebungsvariablen-Name '{header.EnvironmentVariableName}' in Header '{header.Name}'.";
         }
         return null;
     }

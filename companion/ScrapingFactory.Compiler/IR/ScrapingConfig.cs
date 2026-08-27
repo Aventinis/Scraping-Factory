@@ -12,6 +12,12 @@ public sealed class ScrapingConfig
     // ScrapingPlanBuilder.
     public List<GroupNode>? Groups { get; init; }
 
+    // API-Mode (Issue #53): mutually exclusive with both Fields and Groups
+    // (enforced in the /generate endpoint). When set, OutputFormat is forced
+    // to Csv and Engine to ScrapingEngine.Api server-side — see
+    // ScrapingPlanBuilder.
+    public ApiConfig? Api { get; init; }
+
     public OutputFormat OutputFormat { get; init; } = OutputFormat.Csv;
 
     // Additive, wire-compatible: existing extension payloads omit this and

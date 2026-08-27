@@ -53,3 +53,14 @@ public sealed class ExtractGroupStep : ScrapingStep
 {
     public required List<GroupNode> Roots { get; init; }
 }
+
+// API-Mode (Issue #53): replaces the flat list of ExtractSteps entirely when
+// the wire-format config carries Api instead of Fields/Groups — a single
+// step because, unlike NavigateStep + ExtractStep, fetching and parsing a
+// JSON API response isn't naturally split into a page-navigation phase and
+// a separate extraction phase. Always paired with ScrapingEngine.Api and
+// OutputFormat.Csv, forced in ScrapingPlanBuilder.
+public sealed class ApiCallStep : ScrapingStep
+{
+    public required ApiConfig Config { get; init; }
+}
