@@ -181,6 +181,15 @@ public static class ScrapingPlanValidator
         if (duplicateParameterNames.Count > 0)
             return $"Doppelte Parameternamen: {string.Join(", ", duplicateParameterNames)}.";
 
+        // Parameter values become extra CSV columns alongside the extracted
+        // fields (see PythonApiCodeGenerator) — a name shared between the
+        // two would silently collapse two distinct columns into one.
+        var collidingNames = api.Fields.Select(field => field.Name)
+            .Intersect(api.Parameters.Select(parameter => parameter.Name))
+            .ToList();
+        if (collidingNames.Count > 0)
+            return $"Feldname(n) kollidieren mit Parameternamen: {string.Join(", ", collidingNames)}.";
+
         var placeholders = UrlTemplatePlaceholderPattern.Matches(api.UrlTemplate)
             .Select(match => match.Groups[1].Value)
             .ToHashSet();
@@ -245,6 +254,14 @@ public static class ScrapingPlanValidator
             if (hasEnvironmentVariable && !EnvironmentVariableNamePattern.IsMatch(header.EnvironmentVariableName!))
                 return $"Ungültiger Umgebungsvariablen-Name '{header.EnvironmentVariableName}' in Header '{header.Name}'.";
         }
+
+        // _build_headers() in scraper_api.py.j2 builds a dict keyed by name —
+        // a duplicate would silently overwrite an earlier header instead of
+        // surfacing as an error.
+        var duplicateHeaderNames = FindDuplicates(headers, header => header.Name);
+        if (duplicateHeaderNames.Count > 0)
+            return $"Doppelte Header-Namen: {string.Join(", ", duplicateHeaderNames)}.";
+
         return null;
     }
 }
