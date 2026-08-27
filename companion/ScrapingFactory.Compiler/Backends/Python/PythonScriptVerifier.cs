@@ -95,13 +95,18 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
             var lines = await File.ReadAllLinesAsync(csvPath, ct);
             var rowCount = Math.Max(0, lines.Length - 1); // minus header row
 
+            // Also covers API-Mode's 0-combinations edge case (a
+            // DiscoverySource resolving to no values at runtime, despite
+            // ScrapingPlanValidator requiring at least one parameter with a
+            // non-empty static list/range at config time) — treated
+            // identically to any other 0-row result, not a special case.
             return rowCount > 0
                 ? new ScriptVerificationResult { Success = true, RowCount = rowCount }
                 : new ScriptVerificationResult
                 {
                     Success = false,
                     Error = "Skript lief fehlerfrei, hat aber keine Daten zurückgegeben " +
-                            "(output.csv enthält nur die Kopfzeile) — mindestens ein Selektor findet vermutlich nichts.",
+                            "(output.csv enthält nur die Kopfzeile) — mindestens ein Selektor bzw. eine Anfrage findet vermutlich nichts.",
                 };
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
