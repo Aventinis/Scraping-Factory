@@ -127,4 +127,42 @@ public class ScrapingPlanBuilderTests
 
         Assert.Equal(OutputFormat.Xml, plan.OutputFormat);
     }
+
+    private static ApiConfig SampleApiConfig() => new()
+    {
+        UrlTemplate = "https://example.com/api/items?category={category}",
+        ItemsPath = "data.items",
+        Fields = [new ApiField { Name = "Titel", Path = "title" }],
+        Parameters = [new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["a", "b"] } }],
+    };
+
+    [Fact]
+    public void Build_Api_ProducesNavigateStepFollowedByOneApiCallStep()
+    {
+        var config = new ScrapingConfig { Url = "https://example.com", Api = SampleApiConfig() };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal(2, plan.Steps.Count);
+        Assert.IsType<NavigateStep>(plan.Steps[0]);
+        var apiStep = Assert.IsType<ApiCallStep>(plan.Steps[1]);
+        Assert.Same(config.Api, apiStep.Config);
+    }
+
+    [Fact]
+    public void Build_Api_ForcesCsvOutputFormatAndApiEngineRegardlessOfConfig()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Api = SampleApiConfig(),
+            OutputFormat = OutputFormat.Xml,
+            Engine = ScrapingEngine.Browser,
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal(OutputFormat.Csv, plan.OutputFormat);
+        Assert.Equal(ScrapingEngine.Api, plan.Engine);
+    }
 }

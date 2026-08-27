@@ -255,4 +255,81 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
     }
+
+    // API-Mode (Issue #53, Phase 1) is a third alternative to Fields/Groups,
+    // exclusive with both — no codegen exists yet (see PythonApiCodeGenerator,
+    // planned for Phase 2), so these tests only exercise the exclusivity
+    // check and never reach ScrapingPlanBuilder/codegen for a successful case.
+    private const string SampleApiPayload = """
+        {
+          "urlTemplate": "https://example.com/api/items?category={category}",
+          "itemsPath": "data.items",
+          "fields": [ { "name": "Titel", "path": "title" } ],
+          "parameters": [
+            { "name": "category", "source": { "kind": "staticList", "values": ["a"] } }
+          ]
+        }
+        """;
+
+    [Fact]
+    public async Task Generate_FieldsAndApiBothSet_Returns400()
+    {
+        var payload = $$"""
+            {
+              "url": "https://example.com",
+              "fields": [ { "name": "Titel", "selector": "h1" } ],
+              "api": {{SampleApiPayload}}
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task Generate_GroupsAndApiBothSet_Returns400()
+    {
+        var payload = $$"""
+            {
+              "url": "https://example.com",
+              "groups": [
+                { "name": "Kategorie", "selector": "section", "repeating": true, "children": [] }
+              ],
+              "api": {{SampleApiPayload}}
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task Generate_OnlyApiSet_PassesExclusivityAndStructuralValidation()
+    {
+        var payload = $$"""
+            {
+              "url": "https://example.com",
+              "api": {{SampleApiPayload}}
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        // No PythonApiCodeGenerator is registered yet (Phase 2), so codegen
+        // resolution itself fails — but cleanly, as a 422 with a JSON error
+        // body like any other rejected config, not an unhandled 500. Proves
+        // the exclusivity check and ScrapingPlanValidator both passed.
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("python", doc.RootElement.GetProperty("error").GetString());
+    }
 }

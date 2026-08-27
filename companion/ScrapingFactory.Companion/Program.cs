@@ -31,19 +31,25 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
 {
     var hasFields = config?.Fields.Count > 0;
     var hasGroups = config?.Groups?.Count > 0;
-    if (config is null || string.IsNullOrWhiteSpace(config.Url) || (!hasFields && !hasGroups))
+    var hasApi = config?.Api is not null;
+    if (config is null || string.IsNullOrWhiteSpace(config.Url) || (!hasFields && !hasGroups && !hasApi))
     {
         return Results.BadRequest(new
         {
-            error = "Invalid ScrapingConfig: Url and at least one Field or Group are required.",
+            error = "Invalid ScrapingConfig: Url and at least one Field, Group or Api are required.",
         });
     }
 
-    // Flat-Mode (Fields → Csv) and Container-Mode (Groups → Xml) are
-    // strictly separate — mixing them in one request would leave it
-    // ambiguous which extraction phase (and OutputFormat) the caller wants.
+    // Flat-Mode (Fields → Csv), Container-Mode (Groups → Xml) and API-Mode
+    // (Api → Csv) are strictly separate — mixing any two in one request
+    // would leave it ambiguous which extraction phase (and OutputFormat)
+    // the caller wants.
     if (hasFields && hasGroups)
         return Results.BadRequest(new { error = "Fields und Groups schließen sich aus." });
+    if (hasFields && hasApi)
+        return Results.BadRequest(new { error = "Fields und Api schließen sich aus." });
+    if (hasGroups && hasApi)
+        return Results.BadRequest(new { error = "Groups und Api schließen sich aus." });
 
     // Wire format (Fields/Groups) is unchanged; internally it's compiled
     // into the canonical Steps-based ScrapingPlan that backends actually
@@ -60,9 +66,20 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
 
     // v1 only ships Python backends, so the language id is fixed here;
     // a later phase will let ScrapingConfig pick the target language. The
-    // engine (Static requests+BeautifulSoup vs. Browser Playwright) comes
-    // straight from the request.
-    var generator = registry.ResolveCodeGenerator("python", plan.Engine);
+    // engine (Static requests+BeautifulSoup vs. Browser Playwright vs. Api)
+    // comes straight from the request. Resolution can fail for a plan whose
+    // engine has no registered generator yet (e.g. Api-Mode before Phase 2's
+    // PythonApiCodeGenerator lands) — reported the same way as any other
+    // config-level rejection instead of an unhandled 500.
+    ICodeGenerator generator;
+    try
+    {
+        generator = registry.ResolveCodeGenerator("python", plan.Engine);
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.UnprocessableEntity(new { error = ex.Message });
+    }
     var script = generator.Generate(plan);
 
     // Actually run the generated script against the live page before handing
