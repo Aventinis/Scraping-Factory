@@ -256,10 +256,11 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
     }
 
-    // API-Mode (Issue #53, Phase 1) is a third alternative to Fields/Groups,
-    // exclusive with both — no codegen exists yet (see PythonApiCodeGenerator,
-    // planned for Phase 2), so these tests only exercise the exclusivity
-    // check and never reach ScrapingPlanBuilder/codegen for a successful case.
+    // API-Mode (Issue #53): a third alternative to Fields/Groups, exclusive
+    // with both. The exclusivity-only tests below never reach codegen (they
+    // 400 first), so a fake, unreachable URL is fine there — see
+    // Generate_ApiPayload_Returns200WithVerifiedScript below for the actual
+    // end-to-end case that reaches PythonApiCodeGenerator + PythonScriptVerifier.
     private const string SampleApiPayload = """
         {
           "urlTemplate": "https://example.com/api/items?category={category}",
@@ -311,25 +312,41 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
     }
 
+    // End-to-end through the real HTTP endpoint: engine selection resolves
+    // PythonApiCodeGenerator, and the generated script is actually run
+    // against a fake JSON API (real subprocess + real HTTP request, like
+    // Generate_ValidConfig_Returns200WithTextPlain does for Flat-Mode).
     [Fact]
-    public async Task Generate_OnlyApiSet_PassesExclusivityAndStructuralValidation()
+    public async Task Generate_ApiPayload_Returns200WithVerifiedScript()
     {
+        using var server = new LocalTestServer(request =>
+        {
+            var category = request.QueryString["category"];
+            var json = $$"""{ "data": { "items": [ { "title": "Item-{{category}}" } ] } }""";
+            return new LocalTestServerResponse(json, "application/json");
+        });
+
         var payload = $$"""
             {
               "url": "https://example.com",
-              "api": {{SampleApiPayload}}
+              "api": {
+                "urlTemplate": "{{server.BaseUrl}}?category={category}",
+                "itemsPath": "data.items",
+                "fields": [ { "name": "Titel", "path": "title" } ],
+                "parameters": [
+                  { "name": "category", "source": { "kind": "staticList", "values": ["a", "b"] } }
+                ]
+              }
             }
             """;
         var content = new StringContent(payload, Encoding.UTF8, "application/json");
 
         var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
 
-        // No PythonApiCodeGenerator is registered yet (Phase 2), so codegen
-        // resolution itself fails — but cleanly, as a 422 with a JSON error
-        // body like any other rejected config, not an unhandled 500. Proves
-        // the exclusivity check and ScrapingPlanValidator both passed.
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("python", doc.RootElement.GetProperty("error").GetString());
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Contains("import requests", body);
+        Assert.DoesNotContain("BeautifulSoup", body);
+        Assert.Contains("itertools.product", body);
     }
 }
