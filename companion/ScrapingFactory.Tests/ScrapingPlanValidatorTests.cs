@@ -387,4 +387,279 @@ public class ScrapingPlanValidatorTests
         Assert.Contains("Attribut", result.Error);
         Assert.Contains("Link", result.Error);
     }
+
+    // ── API-Mode (ApiCallStep) ────────────────────────────────────────────
+
+    private static ApiConfig ValidApiConfig() => new()
+    {
+        UrlTemplate = "https://example.com/api/items?category={category}",
+        ItemsPath = "data.items",
+        Fields = [new ApiField { Name = "Titel", Path = "title" }],
+        Parameters = [new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["a"] } }],
+    };
+
+    private static ScrapingPlan ApiPlan(ApiConfig api) => new()
+    {
+        Engine = ScrapingEngine.Api,
+        Steps = [new NavigateStep { Url = "https://example.com" }, new ApiCallStep { Config = api }],
+    };
+
+    [Fact]
+    public void Validate_ValidApiConfig_Succeeds()
+    {
+        var result = ScrapingPlanValidator.Validate(ApiPlan(ValidApiConfig()));
+        Assert.True(result.Success);
+        Assert.Null(result.Error);
+    }
+
+    [Theory]
+    [InlineData("POST")]
+    [InlineData("get")]
+    [InlineData("")]
+    public void Validate_ApiConfigWithNonGetMethod_Fails(string method)
+    {
+        var api = ValidApiConfig();
+        var invalid = new ApiConfig
+        {
+            Method = method, UrlTemplate = api.UrlTemplate, ItemsPath = api.ItemsPath,
+            Fields = api.Fields, Parameters = api.Parameters,
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("GET", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithEmptyItemsPath_Fails()
+    {
+        var api = ValidApiConfig();
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = api.UrlTemplate, ItemsPath = " ", Fields = api.Fields, Parameters = api.Parameters,
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("ItemsPath", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithNoFields_Fails()
+    {
+        var api = ValidApiConfig();
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = api.UrlTemplate, ItemsPath = api.ItemsPath, Fields = [], Parameters = api.Parameters,
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Feld", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithDuplicateFieldNames_Fails()
+    {
+        var api = ValidApiConfig();
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items",
+            ItemsPath = api.ItemsPath,
+            Fields = [new ApiField { Name = "Titel", Path = "title" }, new ApiField { Name = "Titel", Path = "name" }],
+            Parameters = api.Parameters,
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Doppelte Feldnamen", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithNoParameters_Fails()
+    {
+        var api = ValidApiConfig();
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items", ItemsPath = api.ItemsPath, Fields = api.Fields, Parameters = [],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Parameter", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithPlaceholderMissingParameter_Fails()
+    {
+        var api = ValidApiConfig();
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}&week={week}",
+            ItemsPath = api.ItemsPath, Fields = api.Fields, Parameters = api.Parameters,
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("week", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithUnusedParameter_Fails()
+    {
+        var api = ValidApiConfig();
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items",
+            ItemsPath = api.ItemsPath, Fields = api.Fields, Parameters = api.Parameters,
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("category", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithDuplicateParameterNames_Fails()
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["a"] } },
+                new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["b"] } },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Doppelte Parameternamen", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithEmptyStaticListSource_Fails()
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters = [new ApiParameter { Name = "category", Source = new StaticListSource { Values = [] } }],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Werteliste", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithDiscoverySourceMissingItemsPath_Fails()
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter
+                {
+                    Name = "category",
+                    Source = new DiscoverySource { UrlTemplate = "https://example.com/api/categories", ItemsPath = " ", ValuePath = "id" },
+                },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("ItemsPath", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithRangeSourceMissingTo_Fails()
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?week={week}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters = [new ApiParameter { Name = "week", Source = new RangeSource { Type = RangeType.IsoWeek, From = "2026-W01", To = " " } }],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Bereich", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithValidDiscoverySource_Succeeds()
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter
+                {
+                    Name = "category",
+                    Source = new DiscoverySource { UrlTemplate = "https://example.com/api/categories", ItemsPath = "data", ValuePath = "id" },
+                },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithHeaderMissingValueAndEnvironmentVariable_Fails()
+    {
+        var api = ValidApiConfig();
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = api.UrlTemplate, ItemsPath = api.ItemsPath, Fields = api.Fields, Parameters = api.Parameters,
+            Headers = [new ApiHeader { Name = "Authorization" }],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Authorization", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithHeaderSettingBothValueAndEnvironmentVariable_Fails()
+    {
+        var api = ValidApiConfig();
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = api.UrlTemplate, ItemsPath = api.ItemsPath, Fields = api.Fields, Parameters = api.Parameters,
+            Headers = [new ApiHeader { Name = "Authorization", Value = "Bearer x", EnvironmentVariableName = "SF_TOKEN" }],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Authorization", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithHeaderInvalidEnvironmentVariableName_Fails()
+    {
+        var api = ValidApiConfig();
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = api.UrlTemplate, ItemsPath = api.ItemsPath, Fields = api.Fields, Parameters = api.Parameters,
+            Headers = [new ApiHeader { Name = "Authorization", EnvironmentVariableName = "BAD-NAME" }],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Umgebungsvariablen-Name", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithValidHeaders_Succeeds()
+    {
+        var api = ValidApiConfig();
+        var valid = new ApiConfig
+        {
+            UrlTemplate = api.UrlTemplate, ItemsPath = api.ItemsPath, Fields = api.Fields, Parameters = api.Parameters,
+            Headers =
+            [
+                new ApiHeader { Name = "Accept", Value = "application/json" },
+                new ApiHeader { Name = "Authorization", EnvironmentVariableName = "SF_TOKEN" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success);
+    }
 }
