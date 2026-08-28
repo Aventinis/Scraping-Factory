@@ -38,7 +38,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep the message channel open for the async sendResponse above
   }
 
-  const FORWARD_TO_TAB = ['START_SELECTION', 'STOP_SELECTION', 'ENABLE_DOM_VIEW', 'DISABLE_DOM_VIEW', 'PREVIEW_START', 'PREVIEW_STOP'];
+  const FORWARD_TO_TAB = ['START_SELECTION', 'STOP_SELECTION', 'ENABLE_DOM_VIEW', 'DISABLE_DOM_VIEW', 'PREVIEW_START', 'PREVIEW_STOP', 'API_CAPTURE_START', 'API_CAPTURE_STOP'];
   if (FORWARD_TO_TAB.includes(message.type)) {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs.length === 0) {
@@ -61,11 +61,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           if (message.type === 'PREVIEW_START') {
             chrome.runtime.sendMessage({ type: 'PREVIEW_UNAVAILABLE', reason: err.message }).catch(() => {});
           }
+          if (message.type === 'API_CAPTURE_START') {
+            chrome.runtime.sendMessage({ type: 'API_CAPTURE_UNAVAILABLE', reason: err.message }).catch(() => {});
+          }
         });
     });
   }
 
-  if (message.type === 'HOVER_ELEMENT' || message.type === 'DOM_TREE' || message.type === 'PREVIEW_RESULT') {
+  if (message.type === 'HOVER_ELEMENT' || message.type === 'DOM_TREE' || message.type === 'PREVIEW_RESULT' || message.type === 'API_CAPTURE_ENTRY' || message.type === 'API_CANDIDATES') {
     // Transient, side-panel-only messages — no session storage fallback,
     // since missing one while the panel is closed is harmless.
     chrome.runtime.sendMessage(message)

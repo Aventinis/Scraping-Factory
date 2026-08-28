@@ -39,6 +39,14 @@ test('START_SELECTION is forwarded to active tab content script', () => {
   expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(7, { type: 'START_SELECTION' });
 });
 
+test('START_SELECTION forwards extra fields verbatim (e.g. Phase 4\'s apiSearch flag)', () => {
+  chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+
+  capturedListener({ type: 'START_SELECTION', apiSearch: true }, {});
+
+  expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(7, { type: 'START_SELECTION', apiSearch: true });
+});
+
 test('STOP_SELECTION is forwarded to active tab content script', () => {
   chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
 
@@ -258,6 +266,65 @@ test('PREVIEW_RESULT is forwarded to runtime (side panel) without touching tabs 
   capturedListener({ type: 'PREVIEW_RESULT', total: 3, empty: [], truncated: false }, {});
 
   expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'PREVIEW_RESULT', total: 3, empty: [], truncated: false });
+  expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
+  expect(chrome.storage.session.set).not.toHaveBeenCalled();
+});
+
+test('API_CAPTURE_START is forwarded to active tab content script', () => {
+  chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+
+  capturedListener({ type: 'API_CAPTURE_START' }, {});
+
+  expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(7, { type: 'API_CAPTURE_START' });
+});
+
+test('API_CAPTURE_STOP is forwarded to active tab content script', () => {
+  chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+
+  capturedListener({ type: 'API_CAPTURE_STOP' }, {});
+
+  expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(7, { type: 'API_CAPTURE_STOP' });
+});
+
+test('API_CAPTURE_START failure notifies the side panel via API_CAPTURE_UNAVAILABLE', async () => {
+  chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+  chrome.tabs.sendMessage.mockRejectedValue(new Error('Could not establish connection. Receiving end does not exist.'));
+
+  capturedListener({ type: 'API_CAPTURE_START' }, {});
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+    type: 'API_CAPTURE_UNAVAILABLE',
+    reason: 'Could not establish connection. Receiving end does not exist.',
+  });
+});
+
+test('API_CAPTURE_STOP failure does not notify the side panel', async () => {
+  chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+  chrome.tabs.sendMessage.mockRejectedValue(new Error('Could not establish connection. Receiving end does not exist.'));
+
+  capturedListener({ type: 'API_CAPTURE_STOP' }, {});
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+});
+
+test('API_CAPTURE_ENTRY is forwarded to runtime (side panel) without touching tabs or storage', () => {
+  const entry = { id: 1, url: 'https://example.com/api/items', method: 'GET', status: 200, contentType: 'application/json', body: '{}', bodyTruncated: false };
+
+  capturedListener({ type: 'API_CAPTURE_ENTRY', entry }, {});
+
+  expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'API_CAPTURE_ENTRY', entry });
+  expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
+  expect(chrome.storage.session.set).not.toHaveBeenCalled();
+});
+
+test('API_CANDIDATES (Issue #53 Phase 4) is forwarded to runtime (side panel) without touching tabs or storage', () => {
+  const candidates = [{ entryId: 1, url: 'https://example.com/api', method: 'GET', path: 'items[0].name', value: 'Suppe', siblings: [] }];
+
+  capturedListener({ type: 'API_CANDIDATES', target: 'Suppe', candidates }, {});
+
+  expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'API_CANDIDATES', target: 'Suppe', candidates });
   expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
   expect(chrome.storage.session.set).not.toHaveBeenCalled();
 });
