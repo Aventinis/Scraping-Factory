@@ -425,6 +425,23 @@ function disableDomView() {
   }
 }
 
+// ── API-Mode capture bridge ──────────────────────────────────────────────────
+// api-capture.js runs in the MAIN world (real fetch/XHR access, no
+// chrome.runtime) — this isolated-world script is the relay between it and
+// the rest of the extension: START/STOP commands go out via postMessage,
+// captured entries come back the same way and get forwarded to the side
+// panel via chrome.runtime.sendMessage, same as HOVER_ELEMENT/DOM_TREE/
+// PREVIEW_RESULT above.
+if (typeof window !== 'undefined') {
+  window.addEventListener('message', (event) => {
+    if (event.source !== window) return;
+    const data = event.data;
+    if (!data || data.source !== 'sf-api-capture' || data.type !== 'API_CAPTURE_ENTRY') return;
+    log('API_CAPTURE_ENTRY received', { url: data.entry?.url });
+    chrome.runtime.sendMessage({ type: 'API_CAPTURE_ENTRY', entry: data.entry });
+  });
+}
+
 // ── Message listener ──────────────────────────────────────────────────────────
 
 if (typeof chrome !== 'undefined' && chrome.runtime) {
@@ -436,6 +453,10 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     if (message.type === 'DISABLE_DOM_VIEW') disableDomView();
     if (message.type === 'PREVIEW_START') startPreview(message.mode, message.fields, message.groups);
     if (message.type === 'PREVIEW_STOP') stopPreview();
+    if (message.type === 'API_CAPTURE_START' || message.type === 'API_CAPTURE_STOP') {
+      log('API_CAPTURE forward to MAIN world', message.type);
+      window.postMessage({ source: 'sf-api-capture-control', type: message.type }, '*');
+    }
     if (message.type === 'GET_LOGS') {
       sendResponse(getLogBuffer());
     }

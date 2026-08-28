@@ -234,6 +234,14 @@
     </div>
     <p id="preview-summary" class="preview-summary hidden"></p>
 
+    <!-- API-Mode network recording (Issue #53, Phase 3) — standalone for now,
+         not yet gated by a third API mode (see btn-mode-flat/-container above),
+         which lands in a later phase. -->
+    <div class="actions" style="margin-top: 10px;">
+      <button id="btn-api-capture" class="btn-toggle" type="button" title="Zeichnet fetch/XHR-Netzwerkanfragen dieser Seite auf — Vorstufe für den kommenden API-Modus">Netzwerk-Aufzeichnung starten</button>
+    </div>
+    <p id="api-capture-summary" class="preview-summary hidden"></p>
+
     <div class="actions" style="margin-top: 10px;">
       <button id="btn-export-config" class="btn-secondary" disabled title="Aktuelle Felder/Container als JSON exportieren — z. B. für einen Bug-Report">Konfiguration exportieren</button>
       <button id="btn-generate" class="btn-primary" disabled>Skript generieren ▶</button>
