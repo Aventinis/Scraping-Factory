@@ -22,6 +22,7 @@ const {
   formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,
   buildGroupNode, buildFieldNode, resolveGroupNode, insertContainerNode, removeGroupTreeNode,
   formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport, hasRepeatingAncestor,
+  renderApiCandidates,
 } = require('./popup');
 
 // jsdom's Blob doesn't implement .text() — read via FileReader instead.
@@ -404,6 +405,44 @@ describe('renderFields', () => {
 
     const nameEl = document.querySelector('.field-name');
     expect(nameEl.title).toBe('Ein sehr langer Feldname');
+  });
+});
+
+describe('renderApiCandidates (Issue #53 Phase 4)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <p id="api-candidates-target"></p>
+      <ul id="api-candidates-list"></ul>
+    `;
+  });
+
+  test('shows the searched-for target and an empty-state message when there are no candidates', () => {
+    renderApiCandidates({ target: 'Suppe', candidates: [] });
+
+    expect(document.getElementById('api-candidates-target').textContent).toBe('Gesucht: "Suppe"');
+    expect(document.querySelector('.api-candidates-empty')).not.toBeNull();
+  });
+
+  test('renders one row per candidate with url/path/value', () => {
+    renderApiCandidates({
+      target: 'Suppe',
+      candidates: [{ url: 'https://example.com/api', method: 'GET', path: 'items[0].name', value: 'Suppe', siblings: [] }],
+    });
+
+    const row = document.querySelector('.api-candidate');
+    expect(row.querySelector('.api-candidate-url').textContent).toContain('https://example.com/api');
+    expect(row.querySelector('.api-candidate-path').textContent).toBe('items[0].name');
+    expect(row.querySelector('.api-candidate-value').textContent).toContain('Suppe');
+  });
+
+  test('renders a one-click chip per sibling suggestion', () => {
+    renderApiCandidates({
+      target: 'Suppe',
+      candidates: [{ url: 'https://example.com/api', method: 'GET', path: 'items[0].name', value: 'Suppe', siblings: [{ name: 'price', path: 'items[0].price', value: 3.5 }] }],
+    });
+
+    const chip = document.querySelector('.api-sibling-chip');
+    expect(chip.textContent).toBe('+ price');
   });
 });
 
@@ -1436,11 +1475,23 @@ describe('Network recording toggle (btn-api-capture)', () => {
     expect(summary.classList.contains('hidden')).toBe(true);
   });
 
-  test('stopping resets the recorded-count summary', () => {
+  test('stopping keeps the recorded-count summary visible (Phase 4 searches it after stopping)', () => {
     document.getElementById('btn-api-capture').click();
     capturedListener({ type: 'API_CAPTURE_ENTRY', entry: { id: 1, url: 'https://example.com/api/a' } });
 
     document.getElementById('btn-api-capture').click();
+
+    const summary = document.getElementById('api-capture-summary');
+    expect(summary.classList.contains('hidden')).toBe(false);
+    expect(summary.textContent).toBe('1 Anfrage(n) aufgezeichnet');
+  });
+
+  test('starting a new recording resets the count back to 0', () => {
+    document.getElementById('btn-api-capture').click();
+    capturedListener({ type: 'API_CAPTURE_ENTRY', entry: { id: 1, url: 'https://example.com/api/a' } });
+    document.getElementById('btn-api-capture').click(); // stop
+
+    document.getElementById('btn-api-capture').click(); // start again
 
     expect(document.getElementById('api-capture-summary').classList.contains('hidden')).toBe(true);
   });
@@ -1453,5 +1504,129 @@ describe('Network recording toggle (btn-api-capture)', () => {
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
     expect(toast.textContent).toContain('nicht möglich');
+  });
+});
+
+describe('API-mode candidate search (btn-api-search, Issue #53 Phase 4)', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <button id="btn-add-field"></button>
+        <button id="btn-api-capture"></button>
+        <p id="api-capture-summary" class="hidden"></p>
+        <button id="btn-api-search" disabled></button>
+        <div id="api-candidates-panel" class="hidden">
+          <p id="api-candidates-target"></p>
+          <ul id="api-candidates-list"></ul>
+        </div>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <button id="btn-cancel-selection"></button>
+      </section>
+      <div id="modal-field-name" class="hidden">
+        <input id="input-field-name" />
+        <button id="btn-field-confirm"></button>
+        <button id="btn-field-cancel"></button>
+      </div>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({ url: 'https://example.com' }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+  });
+
+  function recordOneEntry() {
+    document.getElementById('btn-api-capture').click(); // start
+    capturedListener({ type: 'API_CAPTURE_ENTRY', entry: { id: 1, url: 'https://example.com/api' } });
+    document.getElementById('btn-api-capture').click(); // stop — count must survive this, see the recording-toggle tests above
+    chrome.runtime.sendMessage.mockClear();
+  }
+
+  test('stays disabled until something has been recorded', () => {
+    expect(document.getElementById('btn-api-search').disabled).toBe(true);
+  });
+
+  test('is enabled once at least one request has been recorded, even after stopping', () => {
+    recordOneEntry();
+    expect(document.getElementById('btn-api-search').disabled).toBe(false);
+  });
+
+  test('clicking sends START_SELECTION with apiSearch:true and switches to the selecting screen', () => {
+    recordOneEntry();
+
+    document.getElementById('btn-api-search').click();
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'START_SELECTION', apiSearch: true });
+    expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(true);
+  });
+
+  test('an ELEMENT_SELECTED arriving during an api-search round does not open the flat field-name modal', () => {
+    recordOneEntry();
+    document.getElementById('btn-api-search').click();
+
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price', path: [] });
+
+    expect(document.getElementById('modal-field-name').classList.contains('hidden')).toBe(true);
+  });
+
+  test('API_CANDIDATES ends the selection round, returns to idle and renders the results', () => {
+    recordOneEntry();
+    document.getElementById('btn-api-search').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price', path: [] });
+
+    const candidates = [{ url: 'https://example.com/api', method: 'GET', path: 'price', value: '3.50', siblings: [] }];
+    capturedListener({ type: 'API_CANDIDATES', target: '3.50', candidates });
+
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(true);
+    expect(chrome.storage.session.remove).toHaveBeenCalledWith('pendingSelector');
+
+    const panel = document.getElementById('api-candidates-panel');
+    expect(panel.classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('api-candidates-target').textContent).toBe('Gesucht: "3.50"');
+    expect(document.querySelectorAll('.api-candidate')).toHaveLength(1);
+  });
+
+  test('cancelling an api-search round clears apiSearchSelecting (a later plain click can open the field modal again)', () => {
+    recordOneEntry();
+    document.getElementById('btn-api-search').click();
+
+    document.getElementById('btn-cancel-selection').click();
+    // A later, unrelated selection round (a normal "+ Feld hinzufügen"
+    // click, which also lands in STATES.SELECTING) reaching ELEMENT_SELECTED
+    // must behave normally now, not be swallowed by a leftover
+    // apiSearchSelecting flag.
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price', path: [] });
+
+    expect(document.getElementById('modal-field-name').classList.contains('hidden')).toBe(false);
   });
 });
