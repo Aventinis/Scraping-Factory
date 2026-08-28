@@ -166,8 +166,92 @@ function buildDiscoverySource(urlTemplate, itemsPath, valuePath) {
   return { kind: 'discovery', urlTemplate, itemsPath, valuePath };
 }
 
-function buildRangeSource(type, from, to) {
-  return { kind: 'range', type, from, to };
+// `format` is omitted from the wire object entirely when unset (Number has
+// no format concept, and an empty/undetected one shouldn't override the
+// backend's own default) — mirrors PythonApiConfigLiteral's RenderFormatSuffix
+// on the companion side, which does the same for the same reason: the
+// runtime's own hardcoded default (RangeFormat.Resolve) stays the single
+// source of truth for "what ISO-Standard actually means" when nothing was
+// explicitly chosen.
+function buildRangeSource(type, from, to, format) {
+  return { kind: 'range', type, from, to, ...(format ? { format } : {}) };
+}
+
+// ── Range format presets (bug/api-range-format follow-up) ──────────────────
+// A target site can encode a year-week or date however it likes in its own
+// URL — the reported bug: penny.de uses "2026-35" where the ISO-8601
+// default "{yyyy}-W{ww}" expects "2026-W35", crashing the generated script.
+// These presets cover the common shapes without the user ever typing the
+// "{yyyy}"-style token syntax by hand; "custom" (any format not in this
+// list) is the escape hatch for anything else. Order matters: the first
+// entry per type is also the "nothing else matched" fallback in
+// detectRangeFormat, so it must be the ISO-8601/RangeFormat.Resolve default.
+const RANGE_FORMAT_PRESETS = {
+  IsoWeek: [
+    { format: '{yyyy}-W{ww}', label: 'ISO-Standard (2026-W35)' },
+    { format: '{yyyy}-{ww}', label: 'Jahr-Woche ohne Trennzeichen (2026-35)' },
+  ],
+  Date: [
+    { format: '{yyyy}-{mm}-{dd}', label: 'ISO-Standard (2026-08-28)' },
+    { format: '{dd}.{mm}.{yyyy}', label: 'Deutsches Format (28.08.2026)' },
+    { format: '{yyyy}{mm}{dd}', label: 'Ohne Trennzeichen (20260828)' },
+  ],
+};
+
+const RANGE_FORMAT_TOKEN_PATTERNS = { yyyy: '\\d{4}', ww: '\\d{1,2}', mm: '\\d{1,2}', dd: '\\d{1,2}' };
+
+// Mirrors, character for character, RangeFormat.CompilePattern on the
+// companion side (companion/ScrapingFactory.Compiler/Backends/Python/RangeFormat.cs)
+// and _compile_range_format in scraper_api.py.j2 — a value this matches is
+// guaranteed to parse there too. Kept as its own small copy rather than
+// shared code across the extension/companion boundary, same as every other
+// piece of duplicated-but-consistent logic in this app (e.g. the JSON-path
+// DSL, per CLAUDE.md).
+function compileRangeFormatPattern(format) {
+  let pattern = format.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  for (const [token, valuePattern] of Object.entries(RANGE_FORMAT_TOKEN_PATTERNS)) {
+    pattern = pattern.replaceAll(`\\{${token}\\}`, valuePattern);
+  }
+  return new RegExp(`^${pattern}$`);
+}
+
+// Auto-suggests a format the moment "Bereich" is picked (or its Type is
+// changed): matches `rawValue` — the literal example captured from the
+// recording (see part.value below) — against each type's presets in order,
+// falling back to the ISO-Standard preset (always first, see
+// RANGE_FORMAT_PRESETS's doc comment) when nothing matches or there's no
+// raw value yet. For the reported bug's exact case ("2026-35"), this picks
+// "Jahr-Woche ohne Trennzeichen" with zero typing. Returns null for Number,
+// which has no format concept.
+function detectRangeFormat(type, rawValue) {
+  const presets = RANGE_FORMAT_PRESETS[type];
+  if (!presets) return null;
+  if (rawValue) {
+    const matched = presets.find(preset => compileRangeFormatPattern(preset.format).test(rawValue));
+    if (matched) return matched.format;
+  }
+  return presets[0].format;
+}
+
+// The captured literal a variable URL part started out as (e.g. "2026-35")
+// — parseUrlTemplateParts stores it in seg.value/p.value, the "variabel"
+// toggle preserves it via object spread, and variableUrlParts carries it
+// through as part.value; this just looks it up by partId for
+// detectRangeFormat's benefit.
+function findUrlPartValue(urlParts, partId) {
+  return variableUrlParts(urlParts).find(p => p.id === partId)?.value;
+}
+
+// "Beispiel: …" text next to Von/Bis: echoes `fromValue` back verbatim once
+// it actually matches `format` (proving the round-trip works), or shows the
+// bare token template as a hint otherwise (not-yet-matching From) — or, for
+// an empty format (the "Eigenes Format…" preset before anything's been
+// typed into its revealed input), a placeholder prompting for one instead
+// of silently falling back to a different preset's template.
+function rangeFormatExample(format, fromValue) {
+  if (!format) return '(Format eingeben)';
+  if (fromValue && compileRangeFormatPattern(format).test(fromValue)) return fromValue;
+  return format;
 }
 
 // capturedHeaders: [{name, value}] from the confirmed candidate's recorded
@@ -724,12 +808,37 @@ function renderApiConfigParameters(draft, discoveryCandidates) {
           <input type="text" class="api-config-range-from" data-part-id="${safePartId}" placeholder="Von" value="${escapeHtml(source.from || '')}" />
           <input type="text" class="api-config-range-to" data-part-id="${safePartId}" placeholder="Bis (z. B. \"today\")" value="${escapeHtml(source.to || '')}" />
         </div>
+        ${renderRangeFormatFields(source, safePartId)}
       `;
     }
     card.appendChild(fieldsEl);
 
     container.appendChild(card);
   });
+}
+
+// The preset dropdown + revealed custom-format input + live "Beispiel: …"
+// text below Von/Bis, for IsoWeek/Date only (Number has no format concept).
+// `source.format` is always already set by the time this renders — either
+// auto-detected (setApiConfigSourceKind/the Type-change handler both call
+// detectRangeFormat) or explicitly chosen by the user — so "custom" here
+// just means "not one of this Type's presets", not "unset".
+function renderRangeFormatFields(source, safePartId) {
+  if (source.type === 'Number') return '';
+
+  const presets = RANGE_FORMAT_PRESETS[source.type];
+  const isCustom = !presets.some(preset => preset.format === source.format);
+  const options = presets
+    .map(preset => `<option value="${escapeHtml(preset.format)}" ${preset.format === source.format ? 'selected' : ''}>${escapeHtml(preset.label)}</option>`)
+    .join('') + `<option value="custom" ${isCustom ? 'selected' : ''}>Eigenes Format…</option>`;
+
+  return `
+    <div class="api-config-range-format-row">
+      <select class="api-config-range-format-preset" data-part-id="${safePartId}">${options}</select>
+      ${isCustom ? `<input type="text" class="api-config-range-format-custom" data-part-id="${safePartId}" placeholder="{yyyy}-{ww}" value="${escapeHtml(source.format || '')}" />` : ''}
+      <p class="api-config-range-format-example">Beispiel: ${escapeHtml(rangeFormatExample(source.format, source.from))}</p>
+    </div>
+  `;
 }
 
 function renderDiscoverySourceFields(part, source, discoveryCandidates) {
@@ -1154,9 +1263,16 @@ const API_CONFIG_SOURCE_DEFAULTS = {
   discovery: { kind: 'discovery' }, // incomplete until confirmDiscoveryCandidate fills in urlTemplate/itemsPath/valuePath
 };
 
+// Range sources get their format auto-detected from the part's own
+// captured example value the moment "Bereich" is picked — see
+// detectRangeFormat's doc comment.
 function setApiConfigSourceKind(partId, kind) {
   const draft = _state.apiConfigDraft;
-  patchApiConfigDraft({ parameterSources: { ...draft.parameterSources, [partId]: API_CONFIG_SOURCE_DEFAULTS[kind] } });
+  const defaults = API_CONFIG_SOURCE_DEFAULTS[kind];
+  const source = kind === 'range'
+    ? { ...defaults, format: detectRangeFormat(defaults.type, findUrlPartValue(draft.urlParts, partId)) }
+    : defaults;
+  patchApiConfigDraft({ parameterSources: { ...draft.parameterSources, [partId]: source } });
 }
 
 function patchApiConfigSource(partId, patch) {
@@ -1184,7 +1300,7 @@ function confirmApiConfig() {
     parameterSources[part.name] = source.kind === 'staticList'
       ? buildStaticListSource(source.valuesText)
       : source.kind === 'range'
-        ? buildRangeSource(source.type, source.from, source.to)
+        ? buildRangeSource(source.type, source.from, source.to, source.format)
         : source;
   });
 
@@ -1592,11 +1708,24 @@ function wireEvents() {
     const staticList = e.target.closest('.api-config-static-list');
     if (staticList) { patchApiConfigSource(staticList.dataset.partId, { valuesText: staticList.value }); return; }
     const rangeType = e.target.closest('.api-config-range-type');
-    if (rangeType) { patchApiConfigSource(rangeType.dataset.partId, { type: rangeType.value }); return; }
+    if (rangeType) {
+      const partId = rangeType.dataset.partId;
+      // Re-detect on every Type change, not just the initial "Bereich" pick
+      // — switching e.g. IsoWeek → Date should re-match the same captured
+      // raw value against Date's own presets instead of keeping a format
+      // string that no longer means anything for the new Type.
+      const rawValue = findUrlPartValue(_state.apiConfigDraft.urlParts, partId);
+      patchApiConfigSource(partId, { type: rangeType.value, format: detectRangeFormat(rangeType.value, rawValue) });
+      return;
+    }
     const rangeFrom = e.target.closest('.api-config-range-from');
     if (rangeFrom) { patchApiConfigSource(rangeFrom.dataset.partId, { from: rangeFrom.value.trim() }); return; }
     const rangeTo = e.target.closest('.api-config-range-to');
-    if (rangeTo) patchApiConfigSource(rangeTo.dataset.partId, { to: rangeTo.value.trim() });
+    if (rangeTo) { patchApiConfigSource(rangeTo.dataset.partId, { to: rangeTo.value.trim() }); return; }
+    const formatPreset = e.target.closest('.api-config-range-format-preset');
+    if (formatPreset) { patchApiConfigSource(formatPreset.dataset.partId, { format: formatPreset.value === 'custom' ? '' : formatPreset.value }); return; }
+    const formatCustom = e.target.closest('.api-config-range-format-custom');
+    if (formatCustom) patchApiConfigSource(formatCustom.dataset.partId, { format: formatCustom.value.trim() });
   });
 
   document.getElementById('api-config-parameters')?.addEventListener('click', (e) => {
@@ -1910,5 +2039,6 @@ if (typeof module !== 'undefined') {
     parseUrlTemplateParts, buildUrlTemplate, parseValueListInput,
     buildStaticListSource, buildDiscoverySource, buildRangeSource, buildApiHeaders, buildApiConfig,
     variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
+    detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
   };
 }
