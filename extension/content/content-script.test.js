@@ -1,7 +1,7 @@
 const {
   buildSelector, elementPath, serializeDomTree,
   matchFlatFields, matchGroupTree, computePreviewMatches,
-  findValueInJson, siblingFields, findApiCandidates,
+  findValueInJson, siblingFields, findApiCandidates, deriveItemsAndValuePath,
 } = require('./content-script');
 
 function el(tag, { id, classes } = {}) {
@@ -650,6 +650,32 @@ describe('findApiCandidates', () => {
     expect(candidates[0].siblings).toEqual([{ name: 'price', path: 'data.items[0].price', value: 3.5 }]);
   });
 
+  test('attaches the derived itemsPath/valuePath (Issue #53 Phase 5) so the popup does not need to re-derive them', () => {
+    const entries = [entry({ body: JSON.stringify({ data: { items: [{ name: 'Suppe', price: 3.5 }] } }) })];
+    const [candidate] = findApiCandidates(entries, 'Suppe');
+    expect(candidate.itemsPath).toBe('data.items');
+    expect(candidate.valuePath).toBe('name');
+  });
+
+  test('itemsPath/valuePath are null when the match is not inside any array', () => {
+    const entries = [entry({ body: JSON.stringify({ meta: { name: 'Suppe' } }) })];
+    const [candidate] = findApiCandidates(entries, 'Suppe');
+    expect(candidate.itemsPath).toBeNull();
+    expect(candidate.valuePath).toBeNull();
+  });
+
+  test('carries the source entry\'s requestHeaders through', () => {
+    const entries = [entry({ body: JSON.stringify({ name: 'Suppe' }), requestHeaders: [{ name: 'Authorization', value: 'Bearer x' }] })];
+    const [candidate] = findApiCandidates(entries, 'Suppe');
+    expect(candidate.requestHeaders).toEqual([{ name: 'Authorization', value: 'Bearer x' }]);
+  });
+
+  test('defaults requestHeaders to an empty array when the entry has none', () => {
+    const entries = [entry({ body: JSON.stringify({ name: 'Suppe' }) })];
+    const [candidate] = findApiCandidates(entries, 'Suppe');
+    expect(candidate.requestHeaders).toEqual([]);
+  });
+
   test('skips entries with a non-JSON, skipped, or empty body instead of throwing', () => {
     const entries = [
       entry({ id: 1, body: 'not json' }),
@@ -693,6 +719,28 @@ describe('findApiCandidates', () => {
   test('returns nothing for an empty target', () => {
     const entries = [entry({ body: JSON.stringify({ name: '' }) })];
     expect(findApiCandidates(entries, '   ')).toEqual([]);
+  });
+});
+
+describe('deriveItemsAndValuePath (Issue #53 Phase 5)', () => {
+  test('splits at the last array index into itemsPath (the array) and valuePath (relative to one record)', () => {
+    expect(deriveItemsAndValuePath('data.items[2].price')).toEqual({ itemsPath: 'data.items', valuePath: 'price' });
+  });
+
+  test('supports a nested valuePath', () => {
+    expect(deriveItemsAndValuePath('items[0].meta.price')).toEqual({ itemsPath: 'items', valuePath: 'meta.price' });
+  });
+
+  test('uses the *last* array index when a match sits inside nested arrays', () => {
+    expect(deriveItemsAndValuePath('categories[0].items[3].name')).toEqual({ itemsPath: 'categories[0].items', valuePath: 'name' });
+  });
+
+  test('returns null when the path never enters an array (no repeating-records structure)', () => {
+    expect(deriveItemsAndValuePath('meta.name')).toBeNull();
+  });
+
+  test('returns an empty valuePath when the match is itself the bare array element (no record object)', () => {
+    expect(deriveItemsAndValuePath('tags[0]')).toEqual({ itemsPath: 'tags', valuePath: '' });
   });
 });
 
