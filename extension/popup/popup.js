@@ -28,7 +28,9 @@ let _state = {
   previewActive:     false, // Vorschau toggle — not persisted, always off on popup reopen (like domViewEnabled)
   previewSummary:    null,  // {total, empty, truncated} from the content script's last PREVIEW_RESULT, or null
   apiCaptureActive:  false, // Netzwerk-Aufzeichnung toggle (Issue #53 Phase 3) — not persisted, always off on popup reopen
-  apiCaptureCount:   0,     // number of API_CAPTURE_ENTRY messages received since the current/last recording started
+  apiCaptureCount:   0,     // number of API_CAPTURE_ENTRY messages since the current recording started — kept after stop, only reset on the next start (Phase 4 searches what was recorded, after stopping)
+  apiSearchSelecting: false, // Issue #53 Phase 4 — true while a "find in recording" selection round is in progress; persisted (see persistState) so a popup closed mid-click doesn't come back thinking it's a normal flat-field pick
+  apiCandidates:     null,  // {target, candidates} from the last API_CANDIDATES search, or null
 };
 
 const DOM_TREE_TIMEOUT_MS = 5000;
@@ -212,6 +214,7 @@ function persistState() {
       selectionKind: _state.selectionKind,
       pendingParentPath: _state.pendingParentPath,
       pendingNewContainer: _state.pendingNewContainer,
+      apiSearchSelecting: _state.apiSearchSelecting,
     })
     .catch(err => log('STORAGE_ERR', err.message));
 }
@@ -289,11 +292,27 @@ function render() {
     }
     const apiCaptureSummaryEl = document.getElementById('api-capture-summary');
     if (apiCaptureSummaryEl) {
-      if (_state.apiCaptureActive) {
+      // Shown whenever there's something recorded, not just while active —
+      // Phase 4's search below runs *after* the user stops recording, so
+      // this is the user's only confirmation that there's something to search.
+      if (_state.apiCaptureCount > 0) {
         apiCaptureSummaryEl.textContent = `${_state.apiCaptureCount} Anfrage(n) aufgezeichnet`;
         apiCaptureSummaryEl.classList.remove('hidden');
       } else {
         apiCaptureSummaryEl.classList.add('hidden');
+      }
+    }
+
+    const apiSearchBtn = document.getElementById('btn-api-search');
+    if (apiSearchBtn) apiSearchBtn.disabled = _state.apiCaptureCount === 0;
+
+    const apiCandidatesPanel = document.getElementById('api-candidates-panel');
+    if (apiCandidatesPanel) {
+      if (_state.apiCandidates) {
+        renderApiCandidates(_state.apiCandidates);
+        apiCandidatesPanel.classList.remove('hidden');
+      } else {
+        apiCandidatesPanel.classList.add('hidden');
       }
     }
 
@@ -354,6 +373,57 @@ function renderFields(fields = _state.fields) {
       `<span class="field-selector" title="${escapeHtml(field.selector)}">${escapeHtml(field.selector)}</span>` +
       `<button class="btn-danger btn-remove-field" data-index="${i}">Entfernen</button>`;
     listEl.appendChild(row);
+  });
+}
+
+// ── API-mode candidate search results (Issue #53 Phase 4) ──────────────────
+// Renders content-script.js's findApiCandidates output: one row per
+// candidate (request + JSON path + matched value), with the same object's
+// sibling scalar keys offered as click-to-toggle suggestions for additional
+// fields — purely a visual "picked" toggle for now, since there's no
+// ApiConfig to feed them into yet (that's Phase 5+).
+
+function renderApiCandidates({ target, candidates }) {
+  const targetEl = document.getElementById('api-candidates-target');
+  if (targetEl) targetEl.textContent = `Gesucht: "${target}"`;
+
+  const listEl = document.getElementById('api-candidates-list');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+
+  if (candidates.length === 0) {
+    const li = document.createElement('li');
+    li.className = 'api-candidates-empty';
+    li.textContent = 'Keine Treffer in der Aufzeichnung.';
+    listEl.appendChild(li);
+    return;
+  }
+
+  candidates.forEach((candidate, i) => {
+    const li = document.createElement('li');
+    li.className = 'api-candidate';
+    li.innerHTML =
+      `<div class="api-candidate-url" title="${escapeHtml(candidate.url)}">${escapeHtml(candidate.method)} ${escapeHtml(candidate.url)}</div>` +
+      `<div class="api-candidate-path">${escapeHtml(candidate.path)}</div>` +
+      `<div class="api-candidate-value">Treffer: ${escapeHtml(String(candidate.value))}</div>`;
+
+    if (candidate.siblings.length > 0) {
+      const siblingsEl = document.createElement('div');
+      siblingsEl.className = 'api-candidate-siblings';
+      candidate.siblings.forEach((sibling) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'api-sibling-chip';
+        chip.textContent = `+ ${sibling.name}`;
+        chip.title = String(sibling.value);
+        chip.dataset.candidateIndex = String(i);
+        chip.dataset.siblingName = sibling.name;
+        siblingsEl.appendChild(chip);
+      });
+      li.appendChild(siblingsEl);
+    }
+
+    listEl.appendChild(li);
   });
 }
 
@@ -574,11 +644,33 @@ function startApiCapture() {
 function stopApiCapture() {
   log('API_CAPTURE_STOP');
   chrome.runtime.sendMessage({ type: 'API_CAPTURE_STOP' });
-  patchState({ apiCaptureActive: false, apiCaptureCount: 0 });
+  // Keep apiCaptureCount — Phase 4's search below runs on what was recorded
+  // *after* stopping, so the user still needs to see it stayed non-zero.
+  patchState({ apiCaptureActive: false });
 }
 
 function toggleApiCapture() {
   if (_state.apiCaptureActive) stopApiCapture(); else startApiCapture();
+}
+
+// ── API-Mode candidate search (Issue #53 Phase 4) ───────────────────────────
+// Reuses the existing click-selection mechanism (START_SELECTION/
+// ELEMENT_SELECTED) with an extra apiSearch flag — content-script.js still
+// sends ELEMENT_SELECTED as always (see the guard in the message listener
+// below), but additionally correlates the clicked element's text against
+// the entries buffered during the (now stopped) recording and reports
+// candidates via a separate API_CANDIDATES message.
+
+function startApiFieldSearch() {
+  if (_state.apiCaptureCount === 0) return;
+  log('API_SEARCH start → START_SELECTION(apiSearch)');
+  stopPreviewIfActive();
+  chrome.runtime.sendMessage({ type: 'START_SELECTION', apiSearch: true });
+  setState(STATES.SELECTING, {
+    apiSearchSelecting: true, pendingSelector: null, apiCandidates: null,
+    domTree: null, domTreeTruncated: false, domTreeError: null,
+  });
+  if (_state.domViewEnabled) requestDomTree();
 }
 
 // ── Async actions ─────────────────────────────────────────────────────────────
@@ -909,6 +1001,20 @@ function wireEvents() {
     toggleApiCapture();
   });
 
+  document.getElementById('btn-api-search')?.addEventListener('click', () => {
+    log('BTN api-search');
+    startApiFieldSearch();
+  });
+
+  // Event delegation for the sibling-field suggestion chips — purely a
+  // visual "picked" toggle for now, see renderApiCandidates.
+  document.getElementById('api-candidates-list')?.addEventListener('click', (e) => {
+    const chip = e.target.closest('.api-sibling-chip');
+    if (!chip) return;
+    chip.classList.toggle('picked');
+    log('API_CANDIDATE sibling toggled', chip.dataset.siblingName);
+  });
+
   document.getElementById('btn-add-field')?.addEventListener('click', () => {
     log('BTN add-field → START_SELECTION');
     stopPreviewIfActive();
@@ -959,7 +1065,10 @@ function wireEvents() {
     log('BTN cancel-selection → STOP_SELECTION');
     chrome.runtime.sendMessage({ type: 'STOP_SELECTION' });
     clearTimeout(domTreeTimeoutId);
-    setState(STATES.IDLE, { selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null });
+    setState(STATES.IDLE, {
+      selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null,
+      apiSearchSelecting: false,
+    });
   });
 
   document.getElementById('toggle-dom-view')?.addEventListener('change', (e) => {
@@ -1016,11 +1125,18 @@ function wireEvents() {
     if (message.type === 'SELECTION_UNAVAILABLE' && _state.current === STATES.SELECTING) {
       log('SELECTION_UNAVAILABLE', message.reason);
       setLastError(message.reason, 'Element-Auswahl');
-      setState(STATES.IDLE, { selectionKind: null, pendingParentPath: null, pendingNewContainer: null });
+      setState(STATES.IDLE, { selectionKind: null, pendingParentPath: null, pendingNewContainer: null, apiSearchSelecting: false });
       showToast('Element-Auswahl auf dieser Seite nicht möglich.');
     }
     if (message.type === 'ELEMENT_SELECTED' && _state.current === STATES.SELECTING) {
       log('ELEMENT_SELECTED received (real-time)', message.selector);
+      if (_state.apiSearchSelecting) {
+        // API-mode search: content-script.js always sends this too (same
+        // click), but the actual result arrives as a separate API_CANDIDATES
+        // message right after — handled below, nothing to do with the plain
+        // selector here.
+        return;
+      }
       // Clear the storage entry the service worker wrote — we have it now.
       chrome.storage.session.remove('pendingSelector');
       if (_state.mode === 'container' && _state.selectionKind === 'container') {
@@ -1071,6 +1187,14 @@ function wireEvents() {
       patchState({ apiCaptureActive: false, apiCaptureCount: 0 });
       showToast('Netzwerk-Aufzeichnung auf dieser Seite nicht möglich.');
     }
+    if (message.type === 'API_CANDIDATES' && _state.apiSearchSelecting) {
+      log('API_CANDIDATES received', { target: message.target, count: message.candidates?.length });
+      chrome.storage.session.remove('pendingSelector');
+      setState(STATES.IDLE, {
+        apiSearchSelecting: false,
+        apiCandidates: { target: message.target, candidates: message.candidates || [] },
+      });
+    }
   });
 }
 
@@ -1082,7 +1206,7 @@ async function init() {
   log('INIT reading session storage');
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'mode', 'groups',
-    'selectionKind', 'pendingParentPath', 'pendingNewContainer',
+    'selectionKind', 'pendingParentPath', 'pendingNewContainer', 'apiSearchSelecting',
   ]);
   log('INIT restored', stored);
 
@@ -1099,6 +1223,17 @@ async function init() {
     // The user clicked an element while the side panel was closed (e.g. it
     // hadn't finished loading yet, or was closed manually).
     await chrome.storage.session.remove('pendingSelector');
+
+    if (stored.apiSearchSelecting) {
+      // Unlike the other pending-selector cases below, there's nothing to
+      // recover here: the actual search result (API_CANDIDATES) is a
+      // transient message content-script.js never persists anywhere, so a
+      // leftover selector alone can't be turned into a candidate list —
+      // discard it rather than misinterpret it as a flat-field pick.
+      log('INIT pending API-search selector found, but candidates were never persisted — discarding');
+      setState(STATES.IDLE, {});
+      return;
+    }
 
     if (stored.mode === 'container' && stored.selectionKind === 'container' && stored.pendingNewContainer) {
       // Same as the live ELEMENT_SELECTED path: name/type were already
@@ -1139,5 +1274,6 @@ if (typeof module !== 'undefined') {
     formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,
     buildGroupNode, buildFieldNode, resolveGroupNode, insertContainerNode, removeGroupTreeNode,
     formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport, hasRepeatingAncestor,
+    renderApiCandidates,
   };
 }
