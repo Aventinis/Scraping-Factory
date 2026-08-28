@@ -85,6 +85,30 @@
     .api-sibling-chip:hover { background: #e5e7eb; }
     .api-sibling-chip.picked { background: #3b82f6; color: #fff; }
     .api-candidates-empty { font-size: 11px; color: #9ca3af; text-align: center; padding: 4px 0; }
+    .api-candidate-use { display: flex; gap: 4px; margin-top: 6px; }
+    .api-candidate-field-name { flex: 1; font-size: 11px; padding: 3px 6px; border: 1px solid #e5e7eb; border-radius: 4px; }
+    .api-candidate-unusable { font-size: 10px; color: #9ca3af; margin-top: 6px; }
+
+    /* API-mode config screen (Phase 5) */
+    #screen-api-config { padding: 16px; max-height: 480px; overflow-y: auto; }
+    .api-config-fields, .api-config-parts, .api-config-headers { list-style: none; margin-bottom: 4px; }
+    .api-config-field-row, .api-config-part-row, .api-config-header-row {
+      display: flex; align-items: center; gap: 6px; padding: 5px 6px; background: #f9fafb; border-radius: 6px; margin-bottom: 4px; font-size: 11px;
+    }
+    .api-config-field-row .field-name { min-width: 70px; font-weight: 500; }
+    .api-config-field-row .field-selector { flex: 1; font-family: monospace; color: #6b7280; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .api-config-part-value { flex: 1; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .api-config-part-name { width: 90px; font-size: 11px; padding: 3px 6px; border: 1px solid #e5e7eb; border-radius: 4px; }
+    .api-config-param-card { padding: 8px; background: #f9fafb; border-radius: 6px; margin-bottom: 6px; }
+    .api-config-param-card .row-label { margin-bottom: 4px; }
+    .api-config-source-kind { display: flex; gap: 10px; font-size: 11px; margin-bottom: 6px; }
+    .api-config-source-fields textarea { width: 100%; font-size: 11px; padding: 4px 6px; border: 1px solid #e5e7eb; border-radius: 4px; font-family: monospace; }
+    .api-config-source-fields input[type="text"] { font-size: 11px; padding: 3px 6px; border: 1px solid #e5e7eb; border-radius: 4px; }
+    .api-config-range-row { display: flex; gap: 6px; margin-top: 4px; }
+    .api-config-range-row input, .api-config-range-row select { flex: 1; }
+    .api-config-header-row .api-config-header-name { flex: 1; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .api-config-header-mode { display: flex; gap: 6px; }
+    .api-config-env-name { width: 90px; font-size: 11px; padding: 3px 6px; border: 1px solid #e5e7eb; border-radius: 4px; }
 
     /* Container tree editor */
     #group-tree-root { list-style: none; margin: 0 0 10px; padding: 0; }
@@ -269,6 +293,16 @@
       <ul id="api-candidates-list" class="api-candidates-list"></ul>
     </div>
 
+    <!-- ApiConfig summary (Issue #53 Phase 5) — shown once "Übernehmen" was
+         clicked on the config screen. Not wired into /generate yet
+         (Phase 6); "Verwerfen" just clears it so a bad config isn't stuck. -->
+    <div id="api-config-panel" class="api-candidates-panel hidden">
+      <p id="api-config-summary" class="api-candidates-target"></p>
+      <div class="actions">
+        <button id="btn-api-config-discard" class="btn-secondary btn-tiny" type="button">Verwerfen</button>
+      </div>
+    </div>
+
     <div class="actions" style="margin-top: 10px;">
       <button id="btn-export-config" class="btn-secondary" disabled title="Aktuelle Felder/Container als JSON exportieren — z. B. für einen Bug-Report">Konfiguration exportieren</button>
       <button id="btn-generate" class="btn-primary" disabled>Skript generieren ▶</button>
@@ -292,6 +326,31 @@
       <ul id="dom-tree-root" class="dom-tree"></ul>
     </div>
     <button id="btn-cancel-selection" class="btn-secondary">Abbrechen</button>
+  </section>
+
+  <!-- API_CONFIG (Issue #53 Phase 5) — configuring a confirmed candidate
+       into an ApiConfig. Standalone screen, not yet reachable via the mode
+       toggle above (Phase 6 still owns the actual third mode). -->
+  <section id="screen-api-config" class="screen hidden">
+    <div class="row-label">Felder</div>
+    <ul id="api-config-fields" class="api-config-fields"></ul>
+
+    <div class="row-label" style="margin-top: 10px;">URL — Pfad</div>
+    <ul id="api-config-segments" class="api-config-parts"></ul>
+
+    <div class="row-label" style="margin-top: 10px;">URL — Query-Parameter</div>
+    <ul id="api-config-query-params" class="api-config-parts"></ul>
+
+    <div class="row-label" style="margin-top: 10px;">Werte-Quellen</div>
+    <div id="api-config-parameters"></div>
+
+    <div class="row-label" style="margin-top: 10px;">Header</div>
+    <ul id="api-config-headers" class="api-config-headers"></ul>
+
+    <div class="actions" style="margin-top: 12px;">
+      <button id="btn-api-config-cancel" class="btn-secondary" type="button">Abbrechen</button>
+      <button id="btn-api-config-confirm" class="btn-primary" type="button" disabled>Übernehmen</button>
+    </div>
   </section>
 
   <!-- GENERATING -->

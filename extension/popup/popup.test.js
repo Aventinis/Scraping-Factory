@@ -23,6 +23,9 @@ const {
   buildGroupNode, buildFieldNode, resolveGroupNode, insertContainerNode, removeGroupTreeNode,
   formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport, hasRepeatingAncestor,
   renderApiCandidates,
+  parseUrlTemplateParts, buildUrlTemplate, parseValueListInput,
+  buildStaticListSource, buildDiscoverySource, buildRangeSource, buildApiHeaders, buildApiConfig,
+  variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
 } = require('./popup');
 
 // jsdom's Blob doesn't implement .text() — read via FileReader instead.
@@ -446,10 +449,366 @@ describe('renderApiCandidates (Issue #53 Phase 4)', () => {
   });
 });
 
+describe('parseUrlTemplateParts / buildUrlTemplate (Issue #53 Phase 5)', () => {
+  test('splits origin, path segments and query params', () => {
+    const parts = parseUrlTemplateParts('https://example.com/api/items/42?category=Elektronik&page=1');
+
+    expect(parts.origin).toBe('https://example.com');
+    expect(parts.pathSegments).toEqual([
+      { value: 'api', variable: false, name: '' },
+      { value: 'items', variable: false, name: '' },
+      { value: '42', variable: false, name: '' },
+    ]);
+    expect(parts.queryParams).toEqual([
+      { key: 'category', value: 'Elektronik', variable: false, name: 'category' },
+      { key: 'page', value: '1', variable: false, name: 'page' },
+    ]);
+  });
+
+  test('ignores a leading/trailing slash (no empty segments)', () => {
+    expect(parseUrlTemplateParts('https://example.com/api/').pathSegments).toEqual([{ value: 'api', variable: false, name: '' }]);
+  });
+
+  test('a URL with no query string has no query params', () => {
+    expect(parseUrlTemplateParts('https://example.com/api').queryParams).toEqual([]);
+  });
+
+  test('buildUrlTemplate round-trips an all-literal decomposition back to the original URL', () => {
+    const parts = parseUrlTemplateParts('https://example.com/api/items?category=Elektronik');
+    expect(buildUrlTemplate(parts)).toBe('https://example.com/api/items?category=Elektronik');
+  });
+
+  test('buildUrlTemplate replaces a variable path segment/query param with {name}', () => {
+    const parts = {
+      origin: 'https://example.com',
+      pathSegments: [{ value: 'api', variable: false, name: '' }, { value: '42', variable: true, name: 'id' }],
+      queryParams: [{ key: 'category', value: 'Elektronik', variable: true, name: 'category' }],
+    };
+    expect(buildUrlTemplate(parts)).toBe('https://example.com/api/{id}?category={category}');
+  });
+
+  test('buildUrlTemplate re-encodes a literal query value (URLSearchParams decodes it on the way in)', () => {
+    const parts = parseUrlTemplateParts('https://example.com/api?q=a%20b%26c');
+    expect(buildUrlTemplate(parts)).toBe('https://example.com/api?q=a%20b%26c');
+  });
+});
+
+describe('parseValueListInput / buildStaticListSource / buildDiscoverySource / buildRangeSource', () => {
+  test('splits on commas and newlines, trims, drops empties', () => {
+    expect(parseValueListInput('a, b,\nc , ,')).toEqual(['a', 'b', 'c']);
+  });
+
+  test('treats missing input as no values', () => {
+    expect(parseValueListInput(undefined)).toEqual([]);
+  });
+
+  test('buildStaticListSource wraps parsed values with the staticList discriminator', () => {
+    expect(buildStaticListSource('Elektronik, Bücher')).toEqual({ kind: 'staticList', values: ['Elektronik', 'Bücher'] });
+  });
+
+  test('buildDiscoverySource carries the discriminator and all three fields', () => {
+    expect(buildDiscoverySource('https://example.com/api/categories', 'data', 'slug')).toEqual({
+      kind: 'discovery', urlTemplate: 'https://example.com/api/categories', itemsPath: 'data', valuePath: 'slug',
+    });
+  });
+
+  test('buildRangeSource carries the discriminator, type and bounds', () => {
+    expect(buildRangeSource('IsoWeek', '2026-W01', 'today')).toEqual({ kind: 'range', type: 'IsoWeek', from: '2026-W01', to: 'today' });
+  });
+});
+
+describe('buildApiHeaders', () => {
+  const captured = [
+    { name: 'Authorization', value: 'Bearer secret' },
+    { name: 'Accept', value: 'application/json' },
+    { name: 'X-Trace-Id', value: 'abc123' },
+  ];
+
+  test('excludes headers not marked for inclusion', () => {
+    const decisions = { Authorization: { include: true, mode: 'literal' } };
+    expect(buildApiHeaders(captured, decisions)).toEqual([{ name: 'Authorization', value: 'Bearer secret' }]);
+  });
+
+  test('an env-mode header never carries its captured literal value', () => {
+    const decisions = { Authorization: { include: true, mode: 'env', envName: 'API_TOKEN' } };
+    expect(buildApiHeaders(captured, decisions)).toEqual([{ name: 'Authorization', environmentVariableName: 'API_TOKEN' }]);
+  });
+
+  test('a header with no decision at all is excluded (opt-in, not opt-out)', () => {
+    expect(buildApiHeaders(captured, {})).toEqual([]);
+  });
+
+  test('preserves the captured header order among the included ones', () => {
+    const decisions = {
+      'X-Trace-Id': { include: true, mode: 'literal' },
+      Accept: { include: true, mode: 'literal' },
+    };
+    expect(buildApiHeaders(captured, decisions).map(h => h.name)).toEqual(['Accept', 'X-Trace-Id']);
+  });
+});
+
+describe('buildApiConfig', () => {
+  test('assembles urlTemplate, itemsPath, fields, parameters and (when present) headers', () => {
+    const config = buildApiConfig({
+      urlParts: {
+        origin: 'https://example.com',
+        pathSegments: [{ value: 'api', variable: false, name: '' }, { value: 'items', variable: false, name: '' }],
+        queryParams: [{ key: 'category', value: 'Elektronik', variable: true, name: 'category' }],
+      },
+      itemsPath: 'data.items',
+      fields: [{ name: 'Titel', path: 'name' }, { name: 'Preis', path: 'price' }],
+      parameterSources: { category: { kind: 'staticList', values: ['Elektronik', 'Bücher'] } },
+      capturedHeaders: [{ name: 'Authorization', value: 'Bearer secret' }],
+      headerDecisions: { Authorization: { include: true, mode: 'env', envName: 'API_TOKEN' } },
+    });
+
+    expect(config).toEqual({
+      urlTemplate: 'https://example.com/api/items?category={category}',
+      itemsPath: 'data.items',
+      fields: [{ name: 'Titel', path: 'name' }, { name: 'Preis', path: 'price' }],
+      parameters: [{ name: 'category', source: { kind: 'staticList', values: ['Elektronik', 'Bücher'] } }],
+      headers: [{ name: 'Authorization', environmentVariableName: 'API_TOKEN' }],
+    });
+  });
+
+  test('omits the headers key entirely when nothing was adopted (matches the optional wire field)', () => {
+    const config = buildApiConfig({
+      urlParts: { origin: 'https://example.com', pathSegments: [{ value: 'api', variable: false, name: '' }], queryParams: [] },
+      itemsPath: 'data',
+      fields: [{ name: 'Titel', path: 'name' }],
+      parameterSources: {},
+      capturedHeaders: [],
+      headerDecisions: {},
+    });
+
+    expect(config).not.toHaveProperty('headers');
+  });
+
+  test('collects a variable path segment and a variable query param together, in encounter order', () => {
+    const config = buildApiConfig({
+      urlParts: {
+        origin: 'https://example.com',
+        pathSegments: [{ value: 'api', variable: false, name: '' }, { value: '42', variable: true, name: 'id' }],
+        queryParams: [{ key: 'week', value: '2026-W01', variable: true, name: 'week' }],
+      },
+      itemsPath: 'data',
+      fields: [{ name: 'Titel', path: 'name' }],
+      parameterSources: {
+        id: { kind: 'staticList', values: ['42'] },
+        week: { kind: 'range', type: 'IsoWeek', from: '2026-W01', to: 'today' },
+      },
+      capturedHeaders: [],
+      headerDecisions: {},
+    });
+
+    expect(config.parameters.map(p => p.name)).toEqual(['id', 'week']);
+  });
+});
+
+describe('variableUrlParts / apiConfigDraftHasAllSourcesChosen', () => {
+  const urlParts = {
+    origin: 'https://example.com',
+    pathSegments: [{ value: 'api', variable: false, name: '' }, { value: '42', variable: true, name: 'id' }],
+    queryParams: [{ key: 'category', value: 'Elektronik', variable: true, name: 'category' }, { key: 'page', value: '1', variable: false, name: 'page' }],
+  };
+
+  test('collects only variable parts, tagged with a stable partId', () => {
+    expect(variableUrlParts(urlParts).map(p => p.id)).toEqual(['path:1', 'query:category']);
+  });
+
+  test('apiConfigDraftHasAllSourcesChosen is false with no variable parts (Api-Mode needs at least one)', () => {
+    const draft = { urlParts: { origin: 'x', pathSegments: [], queryParams: [] }, parameterSources: {} };
+    expect(apiConfigDraftHasAllSourcesChosen(draft)).toBe(false);
+  });
+
+  test('requires a chosen source kind for every variable part', () => {
+    const draft = { urlParts, parameterSources: { 'path:1': { kind: 'staticList' } } };
+    expect(apiConfigDraftHasAllSourcesChosen(draft)).toBe(false); // query:category has none yet
+
+    draft.parameterSources['query:category'] = { kind: 'range' };
+    expect(apiConfigDraftHasAllSourcesChosen(draft)).toBe(true);
+  });
+
+  test('a variable part with an empty name blocks confirmation even with a source chosen', () => {
+    const namelessUrlParts = { ...urlParts, pathSegments: [{ value: '42', variable: true, name: '' }], queryParams: [] };
+    const draft = { urlParts: namelessUrlParts, parameterSources: { 'path:0': { kind: 'staticList' } } };
+    expect(apiConfigDraftHasAllSourcesChosen(draft)).toBe(false);
+  });
+});
+
+describe('renderApiConfigScreen (Issue #53 Phase 5)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <ul id="api-config-fields"></ul>
+      <ul id="api-config-segments"></ul>
+      <ul id="api-config-query-params"></ul>
+      <div id="api-config-parameters"></div>
+      <ul id="api-config-headers"></ul>
+      <button id="btn-api-config-confirm" disabled></button>
+    `;
+  });
+
+  const baseDraft = () => ({
+    sourceUrl: 'https://example.com/api/items/42?category=Elektronik',
+    itemsPath: 'data.items',
+    urlParts: {
+      origin: 'https://example.com',
+      pathSegments: [
+        { value: 'api', variable: false, name: '' },
+        { value: 'items', variable: false, name: '' },
+        { value: '42', variable: false, name: '' },
+      ],
+      queryParams: [{ key: 'category', value: 'Elektronik', variable: false, name: 'category' }],
+    },
+    fields: [{ name: 'Titel', path: 'name' }],
+    capturedHeaders: [{ name: 'Authorization', value: 'Bearer secret' }],
+    parameterSources: {},
+    headerDecisions: {},
+  });
+
+  test('renders confirmed fields read-only', () => {
+    renderApiConfigScreen(baseDraft(), null);
+    const row = document.querySelector('#api-config-fields .api-config-field-row');
+    expect(row.textContent).toContain('Titel');
+    expect(row.textContent).toContain('name');
+  });
+
+  test('renders each path segment/query param as a literal row when not variable', () => {
+    renderApiConfigScreen(baseDraft(), null);
+    const segRows = document.querySelectorAll('#api-config-segments .api-config-part-row');
+    expect(segRows).toHaveLength(3);
+    expect(segRows[2].querySelector('.api-config-part-value').textContent).toBe('/42');
+    expect(segRows[2].querySelector('.api-config-part-name')).toBeNull();
+  });
+
+  test('shows a name input once a part is marked variable', () => {
+    const draft = baseDraft();
+    draft.urlParts.pathSegments[2].variable = true;
+    renderApiConfigScreen(draft, null);
+    const nameInput = document.querySelector('#api-config-segments .api-config-part-name');
+    expect(nameInput).not.toBeNull();
+    expect(nameInput.dataset.partId).toBe('path:2');
+  });
+
+  // Regression: a query param's key comes straight from the recorded URL —
+  // like candidate.url/value elsewhere in this file, that's untrusted input
+  // from whatever site was being recorded. partId ("query:<key>") is built
+  // from it and interpolated into several innerHTML attribute strings
+  // (data-part-id, radio `name`) — a key containing a quote must not be
+  // able to break out of the attribute and inject markup.
+  test('a query param key with HTML-special characters cannot break out of its innerHTML attribute', () => {
+    const draft = baseDraft();
+    draft.urlParts.queryParams = [{ key: '"><img src=x onerror=alert(1)>', value: 'v', variable: true, name: 'p' }];
+    renderApiConfigScreen(draft, null);
+
+    expect(document.querySelector('#api-config-query-params img')).toBeNull();
+    const toggle = document.querySelector('#api-config-query-params .api-config-part-toggle');
+    expect(toggle.dataset.partId).toContain('img src=x onerror=alert(1)');
+
+    const card = document.querySelector('#api-config-parameters .api-config-param-card');
+    expect(document.querySelector('#api-config-parameters img')).toBeNull();
+    expect(card.querySelector('.api-config-source-kind-radio').dataset.partId).toBe(toggle.dataset.partId);
+  });
+
+  test('renders one parameter card per variable part', () => {
+    const draft = baseDraft();
+    draft.urlParts.pathSegments[2].variable = true;
+    draft.urlParts.pathSegments[2].name = 'id';
+    draft.urlParts.queryParams[0].variable = true;
+    renderApiConfigScreen(draft, null);
+    const cards = document.querySelectorAll('#api-config-parameters .api-config-param-card');
+    expect(cards).toHaveLength(2);
+    expect(cards[0].dataset.partId).toBe('path:2');
+    expect(cards[1].dataset.partId).toBe('query:category');
+  });
+
+  test('renders the static-list textarea when that kind is selected', () => {
+    const draft = baseDraft();
+    draft.urlParts.pathSegments[2].variable = true;
+    draft.parameterSources['path:2'] = { kind: 'staticList', valuesText: 'a, b' };
+    renderApiConfigScreen(draft, null);
+    expect(document.querySelector('.api-config-static-list').value).toBe('a, b');
+  });
+
+  test('renders range type/from/to when that kind is selected', () => {
+    const draft = baseDraft();
+    draft.urlParts.pathSegments[2].variable = true;
+    draft.parameterSources['path:2'] = { kind: 'range', type: 'IsoWeek', from: '2026-W01', to: 'today' };
+    renderApiConfigScreen(draft, null);
+    expect(document.querySelector('.api-config-range-from').value).toBe('2026-W01');
+    expect(document.querySelector('.api-config-range-to').value).toBe('today');
+  });
+
+  test('renders a discovery search button, and a summary once a source URL is already set', () => {
+    const draft = baseDraft();
+    draft.urlParts.pathSegments[2].variable = true;
+    draft.parameterSources['path:2'] = { kind: 'discovery', urlTemplate: 'https://example.com/api/categories', itemsPath: 'data', valuePath: 'slug' };
+    renderApiConfigScreen(draft, null);
+    expect(document.querySelector('.api-config-discovery-search').textContent).toBe('Erneut suchen');
+    expect(document.querySelector('.api-candidates-target').textContent).toContain('data');
+  });
+
+  test('renders discovery search results scoped to the matching part only', () => {
+    const draft = baseDraft();
+    draft.urlParts.pathSegments[2].variable = true;
+    draft.parameterSources['path:2'] = { kind: 'discovery' };
+    const discoveryCandidates = {
+      parameter: 'path:2', target: 'Elektronik',
+      candidates: [{ url: 'https://example.com/api/categories', method: 'GET', path: 'data[0].name', value: 'Elektronik', itemsPath: 'data', valuePath: 'name' }],
+    };
+    renderApiConfigScreen(draft, discoveryCandidates);
+    expect(document.querySelectorAll('#api-config-parameters .api-candidate')).toHaveLength(1);
+    expect(document.querySelector('.api-config-discovery-confirm').dataset.partId).toBe('path:2');
+  });
+
+  test('does not render discovery results under an unrelated part', () => {
+    const draft = baseDraft();
+    draft.urlParts.pathSegments[2].variable = true;
+    draft.parameterSources['path:2'] = { kind: 'discovery' };
+    const discoveryCandidates = { parameter: 'query:other', target: 'x', candidates: [{ url: 'https://x', method: 'GET', path: 'a[0]', value: 'x', itemsPath: 'a', valuePath: '' }] };
+    renderApiConfigScreen(draft, discoveryCandidates);
+    expect(document.querySelectorAll('#api-config-parameters .api-candidate')).toHaveLength(0);
+  });
+
+  test('renders header rows with an include checkbox, mode controls only once included', () => {
+    renderApiConfigScreen(baseDraft(), null);
+    const row = document.querySelector('#api-config-headers .api-config-header-row');
+    expect(row.querySelector('.api-config-header-include')).not.toBeNull();
+    expect(row.querySelector('.api-config-header-mode-radio')).toBeNull();
+  });
+
+  test('shows mode radios and an env-name input once a header is included via env mode', () => {
+    const draft = baseDraft();
+    draft.headerDecisions.Authorization = { include: true, mode: 'env', envName: 'API_TOKEN' };
+    renderApiConfigScreen(draft, null);
+    expect(document.querySelectorAll('.api-config-header-mode-radio')).toHaveLength(2);
+    expect(document.querySelector('.api-config-env-name').value).toBe('API_TOKEN');
+  });
+
+  test('shows a placeholder message when no request headers were captured', () => {
+    const draft = baseDraft();
+    draft.capturedHeaders = [];
+    renderApiConfigScreen(draft, null);
+    expect(document.querySelector('#api-config-headers .api-candidates-empty')).not.toBeNull();
+  });
+
+  test('enables "Übernehmen" only once every variable part has a name and a source kind', () => {
+    const draft = baseDraft();
+    renderApiConfigScreen(draft, null); // no variable parts at all
+    expect(document.getElementById('btn-api-config-confirm').disabled).toBe(true);
+
+    draft.urlParts.pathSegments[2].variable = true;
+    draft.urlParts.pathSegments[2].name = 'id';
+    draft.parameterSources['path:2'] = { kind: 'staticList', valuesText: '42' };
+    renderApiConfigScreen(draft, null);
+    expect(document.getElementById('btn-api-config-confirm').disabled).toBe(false);
+  });
+});
+
 // ── STATES export ─────────────────────────────────────────────────────────────
 
 test('STATES contains expected keys', () => {
-  const expected = ['CHECKING_COMPANION', 'COMPANION_ERROR', 'IDLE', 'SELECTING', 'GENERATING', 'DONE'];
+  const expected = ['CHECKING_COMPANION', 'COMPANION_ERROR', 'IDLE', 'SELECTING', 'API_CONFIG', 'GENERATING', 'DONE'];
   expected.forEach(key => expect(STATES).toHaveProperty(key));
 });
 
@@ -1628,5 +1987,295 @@ describe('API-mode candidate search (btn-api-search, Issue #53 Phase 4)', () => 
     capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price', path: [] });
 
     expect(document.getElementById('modal-field-name').classList.contains('hidden')).toBe(false);
+  });
+});
+
+describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <button id="btn-add-field"></button>
+        <button id="btn-api-capture"></button>
+        <p id="api-capture-summary" class="hidden"></p>
+        <button id="btn-api-search" disabled></button>
+        <div id="api-candidates-panel" class="hidden">
+          <p id="api-candidates-target"></p>
+          <ul id="api-candidates-list"></ul>
+        </div>
+        <div id="api-config-panel" class="hidden">
+          <p id="api-config-summary"></p>
+          <button id="btn-api-config-discard"></button>
+        </div>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <button id="btn-cancel-selection"></button>
+      </section>
+      <section id="screen-api-config" class="hidden">
+        <ul id="api-config-fields"></ul>
+        <ul id="api-config-segments"></ul>
+        <ul id="api-config-query-params"></ul>
+        <div id="api-config-parameters"></div>
+        <ul id="api-config-headers"></ul>
+        <button id="btn-api-config-cancel"></button>
+        <button id="btn-api-config-confirm" disabled></button>
+      </section>
+      <div id="modal-field-name" class="hidden">
+        <input id="input-field-name" />
+        <button id="btn-field-confirm"></button>
+        <button id="btn-field-cancel"></button>
+      </div>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({ url: 'https://example.com' }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+  });
+
+  const PRIMARY_CANDIDATE = {
+    entryId: 1,
+    url: 'https://example.com/api/items/42?category=Elektronik',
+    method: 'GET',
+    path: 'data.items[0].name',
+    value: 'Titel-Test',
+    siblings: [],
+    itemsPath: 'data.items',
+    valuePath: 'name',
+    requestHeaders: [{ name: 'Authorization', value: 'Bearer secret' }],
+  };
+
+  // Drives the popup from a fresh IDLE screen up to a rendered API_CONFIG
+  // screen with one confirmed field — the common setup every test below
+  // builds on.
+  function confirmPrimaryCandidate() {
+    document.getElementById('btn-api-capture').click();
+    capturedListener({ type: 'API_CAPTURE_ENTRY', entry: { id: 1, url: 'https://example.com/api' } });
+    document.getElementById('btn-api-capture').click();
+
+    document.getElementById('btn-api-search').click();
+    capturedListener({ type: 'API_CANDIDATES', target: 'Titel-Test', candidates: [PRIMARY_CANDIDATE] });
+
+    const nameInput = document.querySelector('.api-candidate-field-name');
+    nameInput.value = 'Titel';
+    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('.api-candidate-confirm').click();
+  }
+
+  test('confirming a candidate lands on the API_CONFIG screen with the field and decomposed URL', () => {
+    confirmPrimaryCandidate();
+
+    expect(document.getElementById('screen-api-config').classList.contains('hidden')).toBe(false);
+    const fieldRow = document.querySelector('#api-config-fields .api-config-field-row');
+    expect(fieldRow.textContent).toContain('Titel');
+    expect(fieldRow.textContent).toContain('name');
+
+    const segRows = document.querySelectorAll('#api-config-segments .api-config-part-row');
+    expect(Array.from(segRows).map(r => r.querySelector('.api-config-part-value').textContent)).toEqual(['/api', '/items', '/42']);
+    const queryRows = document.querySelectorAll('#api-config-query-params .api-config-part-row');
+    expect(queryRows[0].querySelector('.api-config-part-value').textContent).toBe('category=Elektronik');
+  });
+
+  test('toggling a path segment variable reveals a name input and, once named, a parameter card', () => {
+    confirmPrimaryCandidate();
+
+    const toggle = document.querySelector('#api-config-segments .api-config-part-row:nth-child(3) .api-config-part-toggle');
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const nameInput = document.querySelector('#api-config-segments .api-config-part-name');
+    expect(nameInput.dataset.partId).toBe('path:2');
+    // The card appears as soon as the part is variable — before a name is
+    // typed it just shows a placeholder title.
+    expect(document.querySelector('#api-config-parameters .api-config-param-card').textContent).toContain('(noch unbenannt)');
+
+    nameInput.value = 'id';
+    nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const card = document.querySelector('#api-config-parameters .api-config-param-card');
+    expect(card.dataset.partId).toBe('path:2');
+    expect(card.textContent).toContain('id');
+  });
+
+  test('choosing Werteliste renders a textarea, and typing values keeps "Übernehmen" gated until present', () => {
+    confirmPrimaryCandidate();
+    const toggle = document.querySelectorAll('#api-config-segments .api-config-part-toggle')[2];
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    const nameInput = document.querySelector('#api-config-segments .api-config-part-name');
+    nameInput.value = 'id';
+    nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const kindRadio = document.querySelector('.api-config-source-kind-radio[value="staticList"]');
+    kindRadio.checked = true;
+    kindRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const textarea = document.querySelector('.api-config-static-list');
+    expect(textarea).not.toBeNull();
+    textarea.value = '42, 43';
+    textarea.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(document.getElementById('btn-api-config-confirm').disabled).toBe(false);
+  });
+
+  test('the discovery round-trip: search, receive scoped candidates, confirm one as the source', () => {
+    confirmPrimaryCandidate();
+
+    // Query param "category" already carries its own key as a default name
+    // (see parseUrlTemplateParts) — toggling it variable is enough on its
+    // own, no name input needed.
+    const queryToggle = document.querySelector('#api-config-query-params .api-config-part-toggle');
+    queryToggle.checked = true;
+    queryToggle.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const discoveryRadio = document.querySelector('.api-config-source-kind-radio[value="discovery"]');
+    discoveryRadio.checked = true;
+    discoveryRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    chrome.runtime.sendMessage.mockClear();
+    document.querySelector('.api-config-discovery-search').click();
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'START_SELECTION', apiSearch: true });
+    expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(false);
+
+    const discoveryCandidate = {
+      entryId: 2, url: 'https://example.com/api/categories', method: 'GET',
+      path: 'data[0].name', value: 'Elektronik', siblings: [],
+      itemsPath: 'data', valuePath: 'name', requestHeaders: [],
+    };
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.cat', path: [] }); // sent alongside, must not open the field modal
+    capturedListener({ type: 'API_CANDIDATES', target: 'Elektronik', candidates: [discoveryCandidate] });
+
+    expect(document.getElementById('modal-field-name').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('screen-api-config').classList.contains('hidden')).toBe(false);
+
+    const confirmDiscoveryBtn = document.querySelector('.api-config-discovery-confirm');
+    expect(confirmDiscoveryBtn.dataset.partId).toBe('query:category');
+    confirmDiscoveryBtn.click();
+
+    expect(document.getElementById('btn-api-config-confirm').disabled).toBe(false);
+    expect(document.querySelector('.api-candidates-target').textContent).toContain('https://example.com/api/categories');
+  });
+
+  test('a cancelled discovery search returns to API_CONFIG, not IDLE', () => {
+    confirmPrimaryCandidate();
+    const queryToggle = document.querySelector('#api-config-query-params .api-config-part-toggle');
+    queryToggle.checked = true;
+    queryToggle.dispatchEvent(new Event('change', { bubbles: true }));
+    const discoveryRadio = document.querySelector('.api-config-source-kind-radio[value="discovery"]');
+    discoveryRadio.checked = true;
+    discoveryRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    document.querySelector('.api-config-discovery-search').click();
+    document.getElementById('btn-cancel-selection').click();
+
+    expect(document.getElementById('screen-api-config').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(true);
+  });
+
+  test('header adoption: including a header via an environment variable', () => {
+    confirmPrimaryCandidate();
+
+    const include = document.querySelector('.api-config-header-include');
+    include.checked = true;
+    include.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const envRadio = document.querySelector('.api-config-header-mode-radio[value="env"]');
+    envRadio.checked = true;
+    envRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const envInput = document.querySelector('.api-config-env-name');
+    envInput.value = 'API_TOKEN';
+    envInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(document.querySelector('.api-config-env-name').value).toBe('API_TOKEN');
+  });
+
+  test('"Abbrechen" discards the draft and returns to IDLE', () => {
+    confirmPrimaryCandidate();
+    document.getElementById('btn-api-config-cancel').click();
+
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('api-config-panel').classList.contains('hidden')).toBe(true);
+  });
+
+  test('"Übernehmen" assembles the final ApiConfig, persists it, and shows the summary on IDLE', () => {
+    confirmPrimaryCandidate();
+
+    const toggle = document.querySelectorAll('#api-config-segments .api-config-part-toggle')[2];
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    const nameInput = document.querySelector('#api-config-segments .api-config-part-name');
+    nameInput.value = 'id';
+    nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+    const kindRadio = document.querySelector('.api-config-source-kind-radio[value="staticList"]');
+    kindRadio.checked = true;
+    kindRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    const textarea = document.querySelector('.api-config-static-list');
+    textarea.value = '42';
+    textarea.dispatchEvent(new Event('change', { bubbles: true }));
+
+    chrome.storage.session.set.mockClear();
+    document.getElementById('btn-api-config-confirm').click();
+
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('api-config-panel').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('api-config-summary').textContent).toContain('1 Feld(er)');
+    expect(document.getElementById('api-config-summary').textContent).toContain('1 Parameter');
+
+    const persistedConfig = chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig;
+    expect(persistedConfig).toEqual({
+      urlTemplate: 'https://example.com/api/items/{id}?category=Elektronik',
+      itemsPath: 'data.items',
+      fields: [{ name: 'Titel', path: 'name' }],
+      parameters: [{ name: 'id', source: { kind: 'staticList', values: ['42'] } }],
+      // No header was ever included (default headerDecisions is empty) — the
+      // key is omitted entirely, matching the optional wire field.
+    });
+    expect(persistedConfig).not.toHaveProperty('headers');
+  });
+
+  test('"Verwerfen" on the summary panel clears the confirmed apiConfig', () => {
+    confirmPrimaryCandidate();
+    const toggle = document.querySelectorAll('#api-config-segments .api-config-part-toggle')[2];
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    const nameInput = document.querySelector('#api-config-segments .api-config-part-name');
+    nameInput.value = 'id';
+    nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+    const kindRadio = document.querySelector('.api-config-source-kind-radio[value="staticList"]');
+    kindRadio.checked = true;
+    kindRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('.api-config-static-list').value = '42';
+    document.querySelector('.api-config-static-list').dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('btn-api-config-confirm').click();
+
+    document.getElementById('btn-api-config-discard').click();
+
+    expect(document.getElementById('api-config-panel').classList.contains('hidden')).toBe(true);
   });
 });
