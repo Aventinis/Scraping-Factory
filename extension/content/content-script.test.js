@@ -559,3 +559,78 @@ describe('PREVIEW_START / PREVIEW_STOP (message-listener wiring)', () => {
     expect(document.querySelectorAll('.sf-preview-box')).toHaveLength(0);
   });
 });
+
+// ── API-Mode capture bridge (message-listener wiring) ────────────────────────
+// api-capture.js (MAIN world) talks to this isolated-world script via
+// window.postMessage in both directions — see content-script.js's bridge.
+//
+// Note: window.addEventListener('message', ...) is registered unconditionally
+// at module load (same as the existing 'error'/'unhandledrejection'
+// listeners above), so re-requiring the module in earlier tests in this file
+// leaves old listeners attached to the shared jsdom `window`. A dispatched
+// 'message' event can therefore reach more than one accumulated listener —
+// harmless since every one performs the same forward, but it means these
+// tests assert with toHaveBeenCalledWith (content, regardless of count),
+// not toHaveBeenCalledTimes.
+describe('API_CAPTURE bridge (message-listener wiring)', () => {
+  let capturedListener;
+
+  beforeEach(() => {
+    jest.resetModules();
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+    };
+
+    require('./content-script');
+  });
+
+  afterEach(() => {
+    delete global.chrome;
+  });
+
+  test('API_CAPTURE_START is forwarded to the MAIN world via postMessage', () => {
+    jest.spyOn(window, 'postMessage');
+
+    capturedListener({ type: 'API_CAPTURE_START' });
+
+    expect(window.postMessage).toHaveBeenCalledWith(
+      { source: 'sf-api-capture-control', type: 'API_CAPTURE_START' }, '*',
+    );
+  });
+
+  test('API_CAPTURE_STOP is forwarded to the MAIN world via postMessage', () => {
+    jest.spyOn(window, 'postMessage');
+
+    capturedListener({ type: 'API_CAPTURE_STOP' });
+
+    expect(window.postMessage).toHaveBeenCalledWith(
+      { source: 'sf-api-capture-control', type: 'API_CAPTURE_STOP' }, '*',
+    );
+  });
+
+  // Dispatched directly (not via window.postMessage, whose jsdom delivery is
+  // an async macrotask) so the bridge's synchronous handling is testable
+  // without a real event-loop wait; `source: window` matches what a genuine
+  // same-window postMessage from the MAIN world would set.
+  test('a captured entry from the MAIN world is forwarded to the side panel as API_CAPTURE_ENTRY', () => {
+    const entry = { id: 1, url: 'https://example.com/api/items', method: 'GET', status: 200, contentType: 'application/json', body: '{}', bodyTruncated: false };
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { source: 'sf-api-capture', type: 'API_CAPTURE_ENTRY', entry }, source: window,
+    }));
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'API_CAPTURE_ENTRY', entry });
+  });
+
+  test('a message without the expected source tag is ignored', () => {
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: 'API_CAPTURE_ENTRY', entry: {} }, source: window, // missing source: 'sf-api-capture'
+    }));
+
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+  });
+});
