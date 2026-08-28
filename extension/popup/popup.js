@@ -5,6 +5,7 @@ const STATES = {
   COMPANION_ERROR:    'COMPANION_ERROR',
   IDLE:               'IDLE',
   SELECTING:          'SELECTING',
+  API_CONFIG:         'API_CONFIG', // Issue #53 Phase 5 — configuring a confirmed candidate into an ApiConfig
   GENERATING:         'GENERATING',
   DONE:               'DONE',
 };
@@ -29,8 +30,17 @@ let _state = {
   previewSummary:    null,  // {total, empty, truncated} from the content script's last PREVIEW_RESULT, or null
   apiCaptureActive:  false, // Netzwerk-Aufzeichnung toggle (Issue #53 Phase 3) — not persisted, always off on popup reopen
   apiCaptureCount:   0,     // number of API_CAPTURE_ENTRY messages since the current recording started — kept after stop, only reset on the next start (Phase 4 searches what was recorded, after stopping)
-  apiSearchSelecting: false, // Issue #53 Phase 4 — true while a "find in recording" selection round is in progress; persisted (see persistState) so a popup closed mid-click doesn't come back thinking it's a normal flat-field pick
-  apiCandidates:     null,  // {target, candidates} from the last API_CANDIDATES search, or null
+  // Issue #53 Phase 4/5 — null while no "find in recording" selection round is
+  // in progress; 'field' while searching for the primary field (from IDLE);
+  // {parameter: name} while searching a Discovery source's example value for
+  // one of apiConfigDraft's variable parts (from API_CONFIG). Persisted (see
+  // persistState) so a popup closed mid-click doesn't come back thinking a
+  // leftover selector is a normal flat-field pick.
+  apiSearchTarget:   null,
+  apiCandidates:      null, // {target, candidates} from the last primary-field search, or null
+  apiDiscoveryCandidates: null, // {target, candidates} from the last in-progress Discovery search, or null
+  apiConfigDraft:     null, // set once a candidate is confirmed as the primary field — the in-progress ApiConfig being built, see buildApiConfig/confirmApiFieldCandidate
+  apiConfig:          null, // the "Übernehmen"-confirmed ApiConfig wire object — Phase 6 will read this; persisted like fields/groups
 };
 
 const DOM_TREE_TIMEOUT_MS = 5000;
@@ -95,6 +105,99 @@ function addField(fields, name, selector) {
 
 function removeField(fields, index) {
   return fields.filter((_, i) => i !== index);
+}
+
+// ── API-Mode config assembly (Issue #53 Phase 5) ────────────────────────────
+// Turns a confirmed Phase-4 candidate request into a parameterized ApiConfig
+// (companion/ScrapingFactory.Compiler/IR/ApiConfig.cs) — URL decomposed into
+// literal/variable path segments and query params, each variable part given
+// a value source, captured request headers optionally adopted. Not wired
+// into buildScrapingConfig/`/generate` yet — that's Phase 6, which also adds
+// the third top-level mode; this only has to produce the right shape.
+
+// One entry per non-empty path segment / query param, `variable`/`name`
+// default to "not parameterized yet" so the URL-editor screen can render
+// the decomposed request before the user has toggled anything.
+function parseUrlTemplateParts(urlString) {
+  const url = new URL(urlString);
+  const pathSegments = url.pathname.split('/').filter(s => s !== '').map(value => ({ value, variable: false, name: '' }));
+  const queryParams = Array.from(url.searchParams.entries()).map(([key, value]) => ({ key, value, variable: false, name: key }));
+  return { origin: url.origin, pathSegments, queryParams };
+}
+
+// Inverse of parseUrlTemplateParts, given the (possibly since-edited)
+// segments/params — a "variable" part becomes a "{name}" placeholder,
+// otherwise its literal value is kept. Path segment values come straight
+// from url.pathname (already percent-encoded, so used as-is); query values
+// come from url.searchParams (percent-*decoded* by the URL API), so those
+// need re-encoding when rebuilt.
+function buildUrlTemplate({ origin, pathSegments, queryParams }) {
+  const path = pathSegments.map(seg => (seg.variable ? `{${seg.name}}` : seg.value)).join('/');
+  const query = queryParams
+    .map(p => `${encodeURIComponent(p.key)}=${p.variable ? `{${p.name}}` : encodeURIComponent(p.value)}`)
+    .join('&');
+  return `${origin}/${path}${query ? `?${query}` : ''}`;
+}
+
+// Werteliste source: comma- or newline-separated free text → trimmed,
+// non-empty values.
+function parseValueListInput(text) {
+  return String(text ?? '').split(/[,\n]/).map(s => s.trim()).filter(s => s.length > 0);
+}
+
+function buildStaticListSource(valuesText) {
+  return { kind: 'staticList', values: parseValueListInput(valuesText) };
+}
+
+// urlTemplate here is deliberately the confirmed candidate's raw URL, not
+// built from segments/params like the main request — DiscoverySource is
+// expected to be fully static (see ScrapingPlanValidator.ValidateDiscoverySource:
+// no cross-checking against the main request's parameters, by design, since
+// Phase 1 rules out dependencies between parameters).
+function buildDiscoverySource(urlTemplate, itemsPath, valuePath) {
+  return { kind: 'discovery', urlTemplate, itemsPath, valuePath };
+}
+
+function buildRangeSource(type, from, to) {
+  return { kind: 'range', type, from, to };
+}
+
+// capturedHeaders: [{name, value}] from the confirmed candidate's recorded
+// request (api-capture.js's requestHeaders). decisions: {[headerName]:
+// {include, mode: 'literal'|'env', envName}} — the header-adoption table's
+// per-row choice. Mirrors FillStep's env-var pattern: a header adopted via
+// an environment variable is never embedded literally.
+function buildApiHeaders(capturedHeaders, decisions) {
+  return capturedHeaders
+    .filter(h => decisions[h.name]?.include)
+    .map((h) => {
+      const decision = decisions[h.name];
+      return decision.mode === 'env'
+        ? { name: h.name, environmentVariableName: decision.envName }
+        : { name: h.name, value: h.value };
+    });
+}
+
+// Top-level assembly: the ApiConfig wire object exactly as
+// companion/ScrapingFactory.Compiler/IR/ApiConfig.cs expects it (method
+// omitted — GET is the only supported value and also the backend default).
+// `itemsPath` is the confirmed candidate's own ItemsPath (derived once via
+// content-script.js's deriveItemsAndValuePath when the candidate was
+// confirmed, not re-derived here) — this function only assembles, it
+// doesn't re-derive anything from a JSON body.
+function buildApiConfig({ urlParts, itemsPath, fields, parameterSources, capturedHeaders, headerDecisions }) {
+  const urlTemplate = buildUrlTemplate(urlParts);
+  const variableParts = [...urlParts.pathSegments, ...urlParts.queryParams].filter(p => p.variable);
+  const parameters = variableParts.map(p => ({ name: p.name, source: parameterSources[p.name] }));
+  const headers = buildApiHeaders(capturedHeaders, headerDecisions);
+
+  return {
+    urlTemplate,
+    itemsPath,
+    fields,
+    parameters,
+    ...(headers.length > 0 ? { headers } : {}),
+  };
 }
 
 // ── Container-Mode tree (GroupNode/DataFieldNode) ───────────────────────────
@@ -214,7 +317,9 @@ function persistState() {
       selectionKind: _state.selectionKind,
       pendingParentPath: _state.pendingParentPath,
       pendingNewContainer: _state.pendingNewContainer,
-      apiSearchSelecting: _state.apiSearchSelecting,
+      apiSearchTarget: _state.apiSearchTarget,
+      apiConfigDraft: _state.apiConfigDraft,
+      apiConfig: _state.apiConfig,
     })
     .catch(err => log('STORAGE_ERR', err.message));
 }
@@ -225,7 +330,7 @@ function show(id) { document.getElementById(id)?.classList.remove('hidden'); }
 function hide(id) { document.getElementById(id)?.classList.add('hidden'); }
 
 function render() {
-  ['checking', 'error', 'idle', 'selecting', 'generating', 'done'].forEach(s =>
+  ['checking', 'error', 'idle', 'selecting', 'api-config', 'generating', 'done'].forEach(s =>
     hide(`screen-${s}`)
   );
   hide('modal-field-name');
@@ -237,6 +342,7 @@ function render() {
     [STATES.COMPANION_ERROR]:    'error',
     [STATES.IDLE]:               'idle',
     [STATES.SELECTING]:          'selecting',
+    [STATES.API_CONFIG]:         'api-config',
     [STATES.GENERATING]:         'generating',
     [STATES.DONE]:               'done',
   }[_state.current];
@@ -316,6 +422,20 @@ function render() {
       }
     }
 
+    const apiConfigPanel = document.getElementById('api-config-panel');
+    if (apiConfigPanel) {
+      if (_state.apiConfig) {
+        const summaryEl = document.getElementById('api-config-summary');
+        if (summaryEl) {
+          const { fields, parameters, headers } = _state.apiConfig;
+          summaryEl.textContent = `API-Konfiguration bereit: ${fields.length} Feld(er), ${parameters.length} Parameter${headers ? `, ${headers.length} Header` : ''} — Verdrahtung ins Popup folgt in Phase 6.`;
+        }
+        apiConfigPanel.classList.remove('hidden');
+      } else {
+        apiConfigPanel.classList.add('hidden');
+      }
+    }
+
     if (_state.containerModalOpen) {
       show('modal-container-new');
       const nameInput = document.getElementById('input-container-name');
@@ -323,6 +443,10 @@ function render() {
       const singleRadio = document.getElementById('radio-container-single');
       if (singleRadio) singleRadio.checked = true;
     }
+  }
+
+  if (_state.current === STATES.API_CONFIG && _state.apiConfigDraft) {
+    renderApiConfigScreen(_state.apiConfigDraft, _state.apiDiscoveryCandidates);
   }
 
   // Show modal when an element has been captured during selection
@@ -423,6 +547,245 @@ function renderApiCandidates({ target, candidates }) {
       li.appendChild(siblingsEl);
     }
 
+    // "Verwenden" (Issue #53 Phase 5): only offered when the match sits
+    // inside an actual repeating record (candidate.itemsPath truthy,
+    // valuePath non-empty — see deriveItemsAndValuePath's doc comment for
+    // why an empty-but-non-null valuePath also isn't usable) — Api-Mode's
+    // whole model is "records extracted from a repeating array".
+    if (candidate.itemsPath && candidate.valuePath) {
+      const useRow = document.createElement('div');
+      useRow.className = 'api-candidate-use';
+      useRow.innerHTML =
+        `<input type="text" class="api-candidate-field-name" placeholder="Feldname" data-candidate-index="${i}" />` +
+        `<button type="button" class="btn-secondary btn-tiny api-candidate-confirm" data-candidate-index="${i}" disabled>Verwenden</button>`;
+      li.appendChild(useRow);
+    } else {
+      const note = document.createElement('div');
+      note.className = 'api-candidate-unusable';
+      note.textContent = 'Kein Datensatz-Array gefunden — als Quelle nicht verwendbar.';
+      li.appendChild(note);
+    }
+
+    listEl.appendChild(li);
+  });
+}
+
+// ── API-Mode config screen (Issue #53 Phase 5) ──────────────────────────────
+// Renders the in-progress apiConfigDraft: confirmed fields (read-only),
+// URL path segments/query params with a fest/variabel toggle per part, one
+// source-configuration card per variable part, and the header-adoption
+// table. Structural choices (variable toggle, source kind, header
+// include/mode) are reactive — patched into apiConfigDraft and immediately
+// re-rendered — but committed via the `change` event, not `input`, so
+// typing in a text field doesn't trigger a re-render (and thus lose focus)
+// on every keystroke; only leaving the field (or picking a different
+// control) does. A rerender triggered by one control can still visually
+// reset another field's *not yet committed* typing elsewhere on the same
+// screen — an accepted rough edge given how many independent inputs this
+// screen has, not a bug in the reactive fields themselves.
+//
+// partId identifies a variable-part-in-progress independently of its
+// (user-editable, only committed on blur) name — "path:<index>" or
+// "query:<key>" — so apiConfigDraft.parameterSources can be keyed by
+// something stable while the display name is still being typed.
+
+function renderApiConfigScreen(draft, discoveryCandidates) {
+  renderApiConfigFieldsList(draft.fields);
+  renderApiConfigUrlParts(draft.urlParts);
+  renderApiConfigParameters(draft, discoveryCandidates);
+  renderApiConfigHeaders(draft.capturedHeaders, draft.headerDecisions);
+
+  const confirmBtn = document.getElementById('btn-api-config-confirm');
+  if (confirmBtn) confirmBtn.disabled = !apiConfigDraftHasAllSourcesChosen(draft);
+}
+
+function renderApiConfigFieldsList(fields) {
+  const listEl = document.getElementById('api-config-fields');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  fields.forEach((f) => {
+    const li = document.createElement('li');
+    li.className = 'api-config-field-row';
+    li.innerHTML =
+      `<span class="field-name">${escapeHtml(f.name)}</span>` +
+      `<span class="field-selector" title="${escapeHtml(f.path)}">${escapeHtml(f.path)}</span>`;
+    listEl.appendChild(li);
+  });
+}
+
+// `id` ("path:<index>" or "query:<key>") embeds the query param's own key
+// for the query-param case — which, like every other piece of a recorded
+// URL, came from the page being recorded and so must be treated as
+// untrusted the same way candidate.url/value already are elsewhere in this
+// file (escapeHtml, not raw interpolation into an innerHTML string).
+function urlPartRowHtml(id, valueLabel, variable, name) {
+  const safeId = escapeHtml(id);
+  return (
+    `<span class="api-config-part-value" title="${escapeHtml(valueLabel)}">${escapeHtml(valueLabel)}</span>` +
+    `<label><input type="checkbox" class="api-config-part-toggle" data-part-id="${safeId}" ${variable ? 'checked' : ''} /> variabel</label>` +
+    (variable ? `<input type="text" class="api-config-part-name" data-part-id="${safeId}" placeholder="Name" value="${escapeHtml(name || '')}" />` : '')
+  );
+}
+
+function renderApiConfigUrlParts(urlParts) {
+  const segEl = document.getElementById('api-config-segments');
+  if (segEl) {
+    segEl.innerHTML = '';
+    urlParts.pathSegments.forEach((seg, i) => {
+      const li = document.createElement('li');
+      li.className = 'api-config-part-row';
+      li.innerHTML = urlPartRowHtml(`path:${i}`, `/${seg.value}`, seg.variable, seg.name);
+      segEl.appendChild(li);
+    });
+  }
+
+  const queryEl = document.getElementById('api-config-query-params');
+  if (queryEl) {
+    queryEl.innerHTML = '';
+    urlParts.queryParams.forEach((p) => {
+      const li = document.createElement('li');
+      li.className = 'api-config-part-row';
+      li.innerHTML = urlPartRowHtml(`query:${p.key}`, `${p.key}=${p.value}`, p.variable, p.name);
+      queryEl.appendChild(li);
+    });
+  }
+}
+
+// Every {variable: true} part, tagged with its partId — the single source
+// of truth for "which parameter cards exist" (independent of whether a
+// name has been typed for it yet).
+function variableUrlParts(urlParts) {
+  return [
+    ...urlParts.pathSegments.map((seg, i) => ({ ...seg, id: `path:${i}` })),
+    ...urlParts.queryParams.map(p => ({ ...p, id: `query:${p.key}` })),
+  ].filter(p => p.variable);
+}
+
+function apiConfigDraftHasAllSourcesChosen(draft) {
+  const parts = variableUrlParts(draft.urlParts);
+  if (parts.length === 0) return false; // Api-Mode's whole premise is enumerating over at least one variable part
+  return parts.every(p => !!p.name?.trim() && !!draft.parameterSources[p.id]?.kind);
+}
+
+function renderApiConfigParameters(draft, discoveryCandidates) {
+  const container = document.getElementById('api-config-parameters');
+  if (!container) return;
+  container.innerHTML = '';
+
+  variableUrlParts(draft.urlParts).forEach((part) => {
+    const source = draft.parameterSources[part.id];
+    const safePartId = escapeHtml(part.id); // see urlPartRowHtml's doc comment — part.id can embed an untrusted query key
+    const card = document.createElement('div');
+    card.className = 'api-config-param-card';
+    card.dataset.partId = part.id; // DOM property assignment, not HTML parsing — safe regardless
+
+    const title = document.createElement('div');
+    title.className = 'row-label';
+    title.textContent = part.name ? part.name : '(noch unbenannt)';
+    card.appendChild(title);
+
+    const kindRow = document.createElement('div');
+    kindRow.className = 'api-config-source-kind';
+    kindRow.innerHTML = ['staticList', 'discovery', 'range'].map(kind => `
+      <label>
+        <input type="radio" name="source-kind-${safePartId}" class="api-config-source-kind-radio"
+          data-part-id="${safePartId}" value="${kind}" ${source?.kind === kind ? 'checked' : ''} />
+        ${{ staticList: 'Werteliste', discovery: 'Discovery-Endpunkt', range: 'Bereich' }[kind]}
+      </label>
+    `).join('');
+    card.appendChild(kindRow);
+
+    const fieldsEl = document.createElement('div');
+    fieldsEl.className = 'api-config-source-fields';
+    if (source?.kind === 'staticList') {
+      fieldsEl.innerHTML = `<textarea class="api-config-static-list" data-part-id="${safePartId}" rows="2" placeholder="Werte, kommagetrennt oder pro Zeile">${escapeHtml(source.valuesText || '')}</textarea>`;
+    } else if (source?.kind === 'discovery') {
+      fieldsEl.appendChild(renderDiscoverySourceFields(part, source, discoveryCandidates));
+    } else if (source?.kind === 'range') {
+      fieldsEl.innerHTML = `
+        <div class="api-config-range-row">
+          <select class="api-config-range-type" data-part-id="${safePartId}">
+            ${['IsoWeek', 'Number', 'Date'].map(t => `<option value="${t}" ${source.type === t ? 'selected' : ''}>${t}</option>`).join('')}
+          </select>
+          <input type="text" class="api-config-range-from" data-part-id="${safePartId}" placeholder="Von" value="${escapeHtml(source.from || '')}" />
+          <input type="text" class="api-config-range-to" data-part-id="${safePartId}" placeholder="Bis (z. B. \"today\")" value="${escapeHtml(source.to || '')}" />
+        </div>
+      `;
+    }
+    card.appendChild(fieldsEl);
+
+    container.appendChild(card);
+  });
+}
+
+function renderDiscoverySourceFields(part, source, discoveryCandidates) {
+  const wrap = document.createElement('div');
+
+  if (source.urlTemplate) {
+    const summary = document.createElement('p');
+    summary.className = 'api-candidates-target';
+    summary.textContent = `Quelle: ${source.urlTemplate} (${source.itemsPath} → ${source.valuePath})`;
+    wrap.appendChild(summary);
+  }
+
+  const searchBtn = document.createElement('button');
+  searchBtn.type = 'button';
+  searchBtn.className = 'btn-secondary btn-tiny api-config-discovery-search';
+  searchBtn.dataset.partId = part.id;
+  searchBtn.textContent = source.urlTemplate ? 'Erneut suchen' : 'Wert auf Seite suchen';
+  wrap.appendChild(searchBtn);
+
+  if (discoveryCandidates && discoveryCandidates.parameter === part.id) {
+    const list = document.createElement('ul');
+    list.className = 'api-candidates-list';
+    if (discoveryCandidates.candidates.length === 0) {
+      list.innerHTML = '<li class="api-candidates-empty">Keine Treffer in der Aufzeichnung.</li>';
+    } else {
+      discoveryCandidates.candidates.forEach((candidate, i) => {
+        const li = document.createElement('li');
+        li.className = 'api-candidate';
+        const usable = candidate.itemsPath && candidate.valuePath;
+        li.innerHTML =
+          `<div class="api-candidate-url" title="${escapeHtml(candidate.url)}">${escapeHtml(candidate.method)} ${escapeHtml(candidate.url)}</div>` +
+          `<div class="api-candidate-path">${escapeHtml(candidate.path)}</div>` +
+          (usable
+            ? `<button type="button" class="btn-secondary btn-tiny api-config-discovery-confirm" data-part-id="${escapeHtml(part.id)}" data-candidate-index="${i}">Verwenden</button>`
+            : `<div class="api-candidate-unusable">Kein Datensatz-Array gefunden — als Quelle nicht verwendbar.</div>`);
+        list.appendChild(li);
+      });
+    }
+    wrap.appendChild(list);
+  }
+
+  return wrap;
+}
+
+function renderApiConfigHeaders(capturedHeaders, headerDecisions) {
+  const listEl = document.getElementById('api-config-headers');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+
+  if (capturedHeaders.length === 0) {
+    listEl.innerHTML = '<li class="api-candidates-empty">Keine Request-Header aufgezeichnet.</li>';
+    return;
+  }
+
+  capturedHeaders.forEach((header) => {
+    const decision = headerDecisions[header.name] || { include: false, mode: 'literal', envName: '' };
+    const li = document.createElement('li');
+    li.className = 'api-config-header-row';
+    li.innerHTML =
+      `<label><input type="checkbox" class="api-config-header-include" data-header-name="${escapeHtml(header.name)}" ${decision.include ? 'checked' : ''} /></label>` +
+      `<span class="api-config-header-name" title="${escapeHtml(header.name)}: ${escapeHtml(header.value)}">${escapeHtml(header.name)}</span>` +
+      (decision.include
+        ? `<span class="api-config-header-mode">
+             <label><input type="radio" name="header-mode-${escapeHtml(header.name)}" class="api-config-header-mode-radio" data-header-name="${escapeHtml(header.name)}" value="literal" ${decision.mode === 'literal' ? 'checked' : ''} /> Wert</label>
+             <label><input type="radio" name="header-mode-${escapeHtml(header.name)}" class="api-config-header-mode-radio" data-header-name="${escapeHtml(header.name)}" value="env" ${decision.mode === 'env' ? 'checked' : ''} /> Umgebungsvariable</label>
+           </span>` +
+          (decision.mode === 'env'
+            ? `<input type="text" class="api-config-env-name" data-header-name="${escapeHtml(header.name)}" placeholder="ENV_NAME" value="${escapeHtml(decision.envName || '')}" />`
+            : '')
+        : '');
     listEl.appendChild(li);
   });
 }
@@ -667,10 +1030,161 @@ function startApiFieldSearch() {
   stopPreviewIfActive();
   chrome.runtime.sendMessage({ type: 'START_SELECTION', apiSearch: true });
   setState(STATES.SELECTING, {
-    apiSearchSelecting: true, pendingSelector: null, apiCandidates: null,
+    apiSearchTarget: 'field', pendingSelector: null, apiCandidates: null,
     domTree: null, domTreeTruncated: false, domTreeError: null,
   });
   if (_state.domViewEnabled) requestDomTree();
+}
+
+// ── API-Mode parameter configuration (Issue #53 Phase 5) ────────────────────
+// Turns a confirmed primary-field candidate into an in-progress ApiConfig
+// draft and enters STATES.API_CONFIG — see buildApiConfig (the pure wire-
+// format assembly) for what this eventually becomes once the user finishes
+// configuring URL segments/params/headers there.
+
+// `siblingNames` are JSON keys the user picked as one-click extra fields —
+// each already IS a valid field name/path (a sibling's own key, always a
+// direct property of the same record, see content-script.js's
+// siblingFields) so no separate naming step is needed for those, unlike the
+// primary field which needs a user-chosen name.
+function confirmApiFieldCandidate(candidate, fieldName, siblingNames) {
+  const fields = [
+    { name: fieldName, path: candidate.valuePath },
+    ...siblingNames.map(name => ({ name, path: name })),
+  ];
+
+  log('API_FIELD_CONFIRM', { url: candidate.url, itemsPath: candidate.itemsPath, fields });
+  stopPreviewIfActive();
+  setState(STATES.API_CONFIG, {
+    apiCandidates: null,
+    apiConfigDraft: {
+      sourceUrl: candidate.url,
+      itemsPath: candidate.itemsPath,
+      urlParts: parseUrlTemplateParts(candidate.url),
+      fields,
+      capturedHeaders: candidate.requestHeaders || [],
+      parameterSources: {},
+      headerDecisions: {},
+    },
+  });
+}
+
+function cancelApiConfig() {
+  log('API_CONFIG cancel');
+  setState(STATES.IDLE, { apiConfigDraft: null, apiDiscoveryCandidates: null });
+}
+
+// Starts a *second* search round, reusing the exact same click-selection
+// mechanism as startApiFieldSearch (content-script.js doesn't need to know
+// which purpose this one serves) — its result becomes a DiscoverySource for
+// one specific variable part of the config being drafted, instead of the
+// primary field. `partId` (not the user-editable display name — see the
+// API-Mode config screen's own doc comment) identifies which one.
+function startDiscoverySearch(partId) {
+  log('API_DISCOVERY_SEARCH start', partId);
+  chrome.runtime.sendMessage({ type: 'START_SELECTION', apiSearch: true });
+  setState(STATES.SELECTING, {
+    apiSearchTarget: { parameter: partId }, pendingSelector: null, apiDiscoveryCandidates: null,
+    domTree: null, domTreeTruncated: false, domTreeError: null,
+  });
+  if (_state.domViewEnabled) requestDomTree();
+}
+
+function confirmDiscoveryCandidate(partId, candidate) {
+  const source = buildDiscoverySource(candidate.url, candidate.itemsPath, candidate.valuePath);
+  log('API_DISCOVERY_CONFIRM', { partId, source });
+  setState(STATES.API_CONFIG, {
+    apiDiscoveryCandidates: null,
+    apiConfigDraft: {
+      ..._state.apiConfigDraft,
+      parameterSources: { ..._state.apiConfigDraft.parameterSources, [partId]: source },
+    },
+  });
+}
+
+// Persists every apiConfigDraft edit through setState (not patchState) so it
+// survives a popup close/reopen mid-configuration, same as fields/groups.
+function patchApiConfigDraft(patch) {
+  setState(_state.current, { apiConfigDraft: { ..._state.apiConfigDraft, ...patch } });
+}
+
+function toggleApiConfigPartVariable(partId) {
+  const draft = _state.apiConfigDraft;
+  const [scope, key] = partId.split(':');
+  const urlParts = scope === 'path'
+    ? { ...draft.urlParts, pathSegments: draft.urlParts.pathSegments.map((seg, i) => (String(i) === key ? { ...seg, variable: !seg.variable } : seg)) }
+    : { ...draft.urlParts, queryParams: draft.urlParts.queryParams.map(p => (p.key === key ? { ...p, variable: !p.variable } : p)) };
+
+  // Toggling either way drops any source config for this part — avoids an
+  // orphaned/stale parameterSources entry for a part that just became
+  // "fest" again, or a half-configured one lingering under a name that no
+  // longer means anything after a second toggle.
+  const parameterSources = { ...draft.parameterSources };
+  delete parameterSources[partId];
+
+  patchApiConfigDraft({ urlParts, parameterSources });
+}
+
+function setApiConfigPartName(partId, name) {
+  const draft = _state.apiConfigDraft;
+  const [scope, key] = partId.split(':');
+  const urlParts = scope === 'path'
+    ? { ...draft.urlParts, pathSegments: draft.urlParts.pathSegments.map((seg, i) => (String(i) === key ? { ...seg, name } : seg)) }
+    : { ...draft.urlParts, queryParams: draft.urlParts.queryParams.map(p => (p.key === key ? { ...p, name } : p)) };
+  patchApiConfigDraft({ urlParts });
+}
+
+const API_CONFIG_SOURCE_DEFAULTS = {
+  staticList: { kind: 'staticList', valuesText: '' },
+  range: { kind: 'range', type: 'IsoWeek', from: '', to: '' },
+  discovery: { kind: 'discovery' }, // incomplete until confirmDiscoveryCandidate fills in urlTemplate/itemsPath/valuePath
+};
+
+function setApiConfigSourceKind(partId, kind) {
+  const draft = _state.apiConfigDraft;
+  patchApiConfigDraft({ parameterSources: { ...draft.parameterSources, [partId]: API_CONFIG_SOURCE_DEFAULTS[kind] } });
+}
+
+function patchApiConfigSource(partId, patch) {
+  const draft = _state.apiConfigDraft;
+  patchApiConfigDraft({ parameterSources: { ...draft.parameterSources, [partId]: { ...draft.parameterSources[partId], ...patch } } });
+}
+
+function setApiConfigHeaderDecision(headerName, patch) {
+  const draft = _state.apiConfigDraft;
+  const current = draft.headerDecisions[headerName] || { include: false, mode: 'literal', envName: '' };
+  patchApiConfigDraft({ headerDecisions: { ...draft.headerDecisions, [headerName]: { ...current, ...patch } } });
+}
+
+// Final assembly (Issue #53 Phase 5's "Übernehmen"): staticList/range
+// sources are only ever kept as raw UI state (valuesText / type+from+to) in
+// apiConfigDraft, never as a built wire object — built here, once, from
+// whatever's currently in state. discovery sources are already complete
+// wire objects (built earlier by confirmDiscoveryCandidate) and passed
+// through as-is.
+function confirmApiConfig() {
+  const draft = _state.apiConfigDraft;
+  const parameterSources = {};
+  variableUrlParts(draft.urlParts).forEach((part) => {
+    const source = draft.parameterSources[part.id];
+    parameterSources[part.name] = source.kind === 'staticList'
+      ? buildStaticListSource(source.valuesText)
+      : source.kind === 'range'
+        ? buildRangeSource(source.type, source.from, source.to)
+        : source;
+  });
+
+  const apiConfig = buildApiConfig({
+    urlParts: draft.urlParts,
+    itemsPath: draft.itemsPath,
+    fields: draft.fields,
+    parameterSources,
+    capturedHeaders: draft.capturedHeaders,
+    headerDecisions: draft.headerDecisions,
+  });
+
+  log('API_CONFIG confirm', apiConfig);
+  setState(STATES.IDLE, { apiConfig, apiConfigDraft: null, apiDiscoveryCandidates: null });
 }
 
 // ── Async actions ─────────────────────────────────────────────────────────────
@@ -1006,13 +1520,98 @@ function wireEvents() {
     startApiFieldSearch();
   });
 
-  // Event delegation for the sibling-field suggestion chips — purely a
-  // visual "picked" toggle for now, see renderApiCandidates.
+  // Event delegation for the sibling-field suggestion chips — toggles which
+  // ones get included as extra fields once "Verwenden" is confirmed below.
   document.getElementById('api-candidates-list')?.addEventListener('click', (e) => {
     const chip = e.target.closest('.api-sibling-chip');
-    if (!chip) return;
-    chip.classList.toggle('picked');
-    log('API_CANDIDATE sibling toggled', chip.dataset.siblingName);
+    if (chip) {
+      chip.classList.toggle('picked');
+      log('API_CANDIDATE sibling toggled', chip.dataset.siblingName);
+      return;
+    }
+
+    const confirmBtn = e.target.closest('.api-candidate-confirm');
+    if (confirmBtn) {
+      const index = parseInt(confirmBtn.dataset.candidateIndex, 10);
+      const candidate = _state.apiCandidates?.candidates?.[index];
+      if (!candidate) return;
+      const li = confirmBtn.closest('.api-candidate');
+      const fieldName = li.querySelector('.api-candidate-field-name')?.value.trim();
+      if (!fieldName) return;
+      const siblingNames = Array.from(li.querySelectorAll('.api-sibling-chip.picked')).map(c => c.dataset.siblingName);
+      confirmApiFieldCandidate(candidate, fieldName, siblingNames);
+    }
+  });
+
+  // Enables "Verwenden" once a field name has been typed for that row.
+  document.getElementById('api-candidates-list')?.addEventListener('input', (e) => {
+    const input = e.target.closest('.api-candidate-field-name');
+    if (!input) return;
+    const li = input.closest('.api-candidate');
+    const confirmBtn = li?.querySelector('.api-candidate-confirm');
+    if (confirmBtn) confirmBtn.disabled = input.value.trim() === '';
+  });
+
+  // ── API-Mode config screen (Issue #53 Phase 5) ─────────────────────────────
+  // Delegated `change` listeners (not `input`) so typing in a text field
+  // doesn't trigger a re-render — and thus lose focus — on every keystroke;
+  // see renderApiConfigScreen's doc comment for the trade-off this implies.
+
+  const handleUrlPartControlChange = (e) => {
+    const toggle = e.target.closest('.api-config-part-toggle');
+    if (toggle) { toggleApiConfigPartVariable(toggle.dataset.partId); return; }
+    const nameInput = e.target.closest('.api-config-part-name');
+    if (nameInput) setApiConfigPartName(nameInput.dataset.partId, nameInput.value.trim());
+  };
+  document.getElementById('api-config-segments')?.addEventListener('change', handleUrlPartControlChange);
+  document.getElementById('api-config-query-params')?.addEventListener('change', handleUrlPartControlChange);
+
+  document.getElementById('api-config-parameters')?.addEventListener('change', (e) => {
+    const kindRadio = e.target.closest('.api-config-source-kind-radio');
+    if (kindRadio) { setApiConfigSourceKind(kindRadio.dataset.partId, kindRadio.value); return; }
+    const staticList = e.target.closest('.api-config-static-list');
+    if (staticList) { patchApiConfigSource(staticList.dataset.partId, { valuesText: staticList.value }); return; }
+    const rangeType = e.target.closest('.api-config-range-type');
+    if (rangeType) { patchApiConfigSource(rangeType.dataset.partId, { type: rangeType.value }); return; }
+    const rangeFrom = e.target.closest('.api-config-range-from');
+    if (rangeFrom) { patchApiConfigSource(rangeFrom.dataset.partId, { from: rangeFrom.value.trim() }); return; }
+    const rangeTo = e.target.closest('.api-config-range-to');
+    if (rangeTo) patchApiConfigSource(rangeTo.dataset.partId, { to: rangeTo.value.trim() });
+  });
+
+  document.getElementById('api-config-parameters')?.addEventListener('click', (e) => {
+    const searchBtn = e.target.closest('.api-config-discovery-search');
+    if (searchBtn) { startDiscoverySearch(searchBtn.dataset.partId); return; }
+    const confirmBtn = e.target.closest('.api-config-discovery-confirm');
+    if (confirmBtn) {
+      const index = parseInt(confirmBtn.dataset.candidateIndex, 10);
+      const candidate = _state.apiDiscoveryCandidates?.candidates?.[index];
+      if (candidate) confirmDiscoveryCandidate(confirmBtn.dataset.partId, candidate);
+    }
+  });
+
+  document.getElementById('api-config-headers')?.addEventListener('change', (e) => {
+    const include = e.target.closest('.api-config-header-include');
+    if (include) { setApiConfigHeaderDecision(include.dataset.headerName, { include: include.checked }); return; }
+    const modeRadio = e.target.closest('.api-config-header-mode-radio');
+    if (modeRadio) { setApiConfigHeaderDecision(modeRadio.dataset.headerName, { mode: modeRadio.value }); return; }
+    const envName = e.target.closest('.api-config-env-name');
+    if (envName) setApiConfigHeaderDecision(envName.dataset.headerName, { envName: envName.value.trim() });
+  });
+
+  document.getElementById('btn-api-config-cancel')?.addEventListener('click', () => {
+    log('BTN api-config-cancel');
+    cancelApiConfig();
+  });
+
+  document.getElementById('btn-api-config-confirm')?.addEventListener('click', () => {
+    log('BTN api-config-confirm');
+    confirmApiConfig();
+  });
+
+  document.getElementById('btn-api-config-discard')?.addEventListener('click', () => {
+    log('BTN api-config-discard');
+    setState(STATES.IDLE, { apiConfig: null });
   });
 
   document.getElementById('btn-add-field')?.addEventListener('click', () => {
@@ -1065,9 +1664,13 @@ function wireEvents() {
     log('BTN cancel-selection → STOP_SELECTION');
     chrome.runtime.sendMessage({ type: 'STOP_SELECTION' });
     clearTimeout(domTreeTimeoutId);
-    setState(STATES.IDLE, {
+    // A Discovery search (see startDiscoverySearch) is started *from*
+    // STATES.API_CONFIG — cancelling it must return there, not to IDLE,
+    // or the in-progress apiConfigDraft would appear to have vanished.
+    const returnTo = _state.apiConfigDraft ? STATES.API_CONFIG : STATES.IDLE;
+    setState(returnTo, {
       selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null,
-      apiSearchSelecting: false,
+      apiSearchTarget: null,
     });
   });
 
@@ -1125,12 +1728,13 @@ function wireEvents() {
     if (message.type === 'SELECTION_UNAVAILABLE' && _state.current === STATES.SELECTING) {
       log('SELECTION_UNAVAILABLE', message.reason);
       setLastError(message.reason, 'Element-Auswahl');
-      setState(STATES.IDLE, { selectionKind: null, pendingParentPath: null, pendingNewContainer: null, apiSearchSelecting: false });
+      const returnTo = _state.apiConfigDraft ? STATES.API_CONFIG : STATES.IDLE;
+      setState(returnTo, { selectionKind: null, pendingParentPath: null, pendingNewContainer: null, apiSearchTarget: null });
       showToast('Element-Auswahl auf dieser Seite nicht möglich.');
     }
     if (message.type === 'ELEMENT_SELECTED' && _state.current === STATES.SELECTING) {
       log('ELEMENT_SELECTED received (real-time)', message.selector);
-      if (_state.apiSearchSelecting) {
+      if (_state.apiSearchTarget) {
         // API-mode search: content-script.js always sends this too (same
         // click), but the actual result arrives as a separate API_CANDIDATES
         // message right after — handled below, nothing to do with the plain
@@ -1187,13 +1791,17 @@ function wireEvents() {
       patchState({ apiCaptureActive: false, apiCaptureCount: 0 });
       showToast('Netzwerk-Aufzeichnung auf dieser Seite nicht möglich.');
     }
-    if (message.type === 'API_CANDIDATES' && _state.apiSearchSelecting) {
-      log('API_CANDIDATES received', { target: message.target, count: message.candidates?.length });
+    if (message.type === 'API_CANDIDATES' && _state.apiSearchTarget) {
+      log('API_CANDIDATES received', { target: message.target, count: message.candidates?.length, for: _state.apiSearchTarget });
       chrome.storage.session.remove('pendingSelector');
-      setState(STATES.IDLE, {
-        apiSearchSelecting: false,
-        apiCandidates: { target: message.target, candidates: message.candidates || [] },
-      });
+      const result = { target: message.target, candidates: message.candidates || [] };
+      if (_state.apiSearchTarget === 'field') {
+        setState(STATES.IDLE, { apiSearchTarget: null, apiCandidates: result });
+      } else {
+        // {parameter: partId} — the search was started from STATES.API_CONFIG
+        // (see startDiscoverySearch), so it returns there, not to IDLE.
+        setState(STATES.API_CONFIG, { apiSearchTarget: null, apiDiscoveryCandidates: { ...result, parameter: _state.apiSearchTarget.parameter } });
+      }
     }
   });
 }
@@ -1206,7 +1814,8 @@ async function init() {
   log('INIT reading session storage');
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'mode', 'groups',
-    'selectionKind', 'pendingParentPath', 'pendingNewContainer', 'apiSearchSelecting',
+    'selectionKind', 'pendingParentPath', 'pendingNewContainer',
+    'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
   ]);
   log('INIT restored', stored);
 
@@ -1218,20 +1827,22 @@ async function init() {
   if (stored.selectionKind)         _state = { ..._state, selectionKind: stored.selectionKind };
   if (stored.pendingParentPath !== undefined) _state = { ..._state, pendingParentPath: stored.pendingParentPath };
   if (stored.pendingNewContainer)   _state = { ..._state, pendingNewContainer: stored.pendingNewContainer };
+  if (stored.apiConfigDraft)        _state = { ..._state, apiConfigDraft: stored.apiConfigDraft };
+  if (stored.apiConfig)             _state = { ..._state, apiConfig: stored.apiConfig };
 
   if (stored.pendingSelector) {
     // The user clicked an element while the side panel was closed (e.g. it
     // hadn't finished loading yet, or was closed manually).
     await chrome.storage.session.remove('pendingSelector');
 
-    if (stored.apiSearchSelecting) {
+    if (stored.apiSearchTarget) {
       // Unlike the other pending-selector cases below, there's nothing to
       // recover here: the actual search result (API_CANDIDATES) is a
       // transient message content-script.js never persists anywhere, so a
       // leftover selector alone can't be turned into a candidate list —
       // discard it rather than misinterpret it as a flat-field pick.
       log('INIT pending API-search selector found, but candidates were never persisted — discarding');
-      setState(STATES.IDLE, {});
+      setState(_state.apiConfigDraft ? STATES.API_CONFIG : STATES.IDLE, {});
       return;
     }
 
@@ -1275,5 +1886,8 @@ if (typeof module !== 'undefined') {
     buildGroupNode, buildFieldNode, resolveGroupNode, insertContainerNode, removeGroupTreeNode,
     formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport, hasRepeatingAncestor,
     renderApiCandidates,
+    parseUrlTemplateParts, buildUrlTemplate, parseValueListInput,
+    buildStaticListSource, buildDiscoverySource, buildRangeSource, buildApiHeaders, buildApiConfig,
+    variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
   };
 }
