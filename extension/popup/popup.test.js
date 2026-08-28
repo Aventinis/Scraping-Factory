@@ -1,3 +1,13 @@
+// Fixes the popup's language-detection default to German — none of the
+// mocks below set up chrome.storage.local (the i18n module's stored-
+// preference source), so every test in this file falls through to
+// detectDefaultLanguage(navigator.language). Forcing it to German here
+// means every pre-existing assertion below (written against the original
+// hardcoded German copy) keeps working unchanged now that the same text
+// comes from extension/i18n/de.json instead. Language-switching itself is
+// covered separately (see "Language selector").
+Object.defineProperty(window.navigator, 'language', { value: 'de-DE', configurable: true });
+
 // Mock chrome and fetch before requiring the module so that the async init()
 // (wireEvents + storage read + checkCompanion) runs safely without real APIs.
 global.chrome = {
@@ -596,8 +606,8 @@ describe('rangeFormatExample', () => {
     expect(rangeFormatExample('{yyyy}-{mm}-{dd}', '')).toBe('{yyyy}-{mm}-{dd}');
   });
 
-  test('prompts for input when the format itself is empty ("Eigenes Format…" before typing)', () => {
-    expect(rangeFormatExample('', '2026-35')).toBe('(Format eingeben)');
+  test('returns null when the format itself is empty ("Eigenes Format…" before typing) — the caller shows a translated prompt', () => {
+    expect(rangeFormatExample('', '2026-35')).toBeNull();
   });
 });
 
@@ -1174,11 +1184,15 @@ describe('formatLogSection', () => {
   });
 
   test('shows a placeholder for an empty or missing list', () => {
-    expect(formatLogSection('Empty', [])).toBe('## Empty\n(keine Einträge)\n');
-    expect(formatLogSection('Missing', null)).toBe('## Missing\n(keine Einträge)\n');
+    expect(formatLogSection('Empty', [])).toBe('## Empty\n(no entries)\n');
+    expect(formatLogSection('Missing', null)).toBe('## Missing\n(no entries)\n');
   });
 });
 
+// buildGithubIssueUrl's fixed strings (title/body copy) are always English,
+// independent of the popup's selected UI language — see CLAUDE.md's
+// Language policy: bug reports are a maintainer-facing GitHub artifact, not
+// conversational UI a multilingual end user reads.
 describe('buildGithubIssueUrl', () => {
   test("points at the repo's new-issue page", () => {
     const url = buildGithubIssueUrl('some report text');
@@ -1186,23 +1200,23 @@ describe('buildGithubIssueUrl', () => {
   });
 
   test('uses the last reported error as the title when set', () => {
-    setLastError('HTTP 500', 'Skript-Generierung');
+    setLastError('HTTP 500', 'Script generation');
     const url = buildGithubIssueUrl('report');
-    expect(url).toContain(`title=${encodeURIComponent('Fehler: HTTP 500')}`);
+    expect(url).toContain(`title=${encodeURIComponent('Error: HTTP 500')}`);
   });
 
   test('embeds the full report body when short', () => {
     const url = buildGithubIssueUrl('a short report');
     const body = decodeURIComponent(url.split('body=')[1]);
     expect(body).toContain('a short report');
-    expect(body).not.toContain('gekürzt');
+    expect(body).not.toContain('truncated');
   });
 
   test('truncates and adds a note when the report is very long', () => {
     const longReport = 'x'.repeat(10000);
     const url = buildGithubIssueUrl(longReport);
     const body = decodeURIComponent(url.split('body=')[1]);
-    expect(body).toContain('gekürzt');
+    expect(body).toContain('truncated');
     expect(body.length).toBeLessThan(longReport.length);
   });
 });
@@ -1829,6 +1843,281 @@ describe('Preview toggle (btn-preview)', () => {
     document.querySelector('.btn-remove-field').click();
 
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'PREVIEW_STOP' });
+  });
+});
+
+describe('robots.txt check (btn-check-robots)', () => {
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <button id="btn-check-robots"></button>
+        <p id="robots-txt-result" class="hidden"></p>
+      </section>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: () => {} },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com/produkte' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({}),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+  });
+
+  test('starts out hidden with the default label', () => {
+    const result = document.getElementById('robots-txt-result');
+    expect(result.classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('btn-check-robots').textContent).toBe('robots.txt prüfen');
+  });
+
+  test('clicking sends CHECK_ROBOTS_TXT and shows a disallowed result in red', async () => {
+    chrome.runtime.sendMessage.mockResolvedValue({
+      ok: true, robotsUrl: 'https://example.com/robots.txt', path: '/produkte',
+      notFound: false, allowed: false, matchedRule: { type: 'disallow', pattern: '/produkte' },
+    });
+
+    document.getElementById('btn-check-robots').click();
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'CHECK_ROBOTS_TXT' });
+    expect(document.getElementById('btn-check-robots').textContent).toBe('Prüfe robots.txt…');
+    expect(document.getElementById('btn-check-robots').disabled).toBe(true);
+
+    await flushMicrotasks();
+
+    const result = document.getElementById('robots-txt-result');
+    expect(result.classList.contains('hidden')).toBe(false);
+    expect(result.classList.contains('robots-txt-disallowed')).toBe(true);
+    expect(result.textContent).toContain('Verboten');
+    expect(result.textContent).toContain('/produkte');
+    expect(document.getElementById('btn-check-robots').disabled).toBe(false);
+  });
+
+  test('an allowed result is shown in green', async () => {
+    chrome.runtime.sendMessage.mockResolvedValue({
+      ok: true, robotsUrl: 'https://example.com/robots.txt', path: '/produkte',
+      notFound: false, allowed: true, matchedRule: null,
+    });
+
+    document.getElementById('btn-check-robots').click();
+    await flushMicrotasks();
+
+    const result = document.getElementById('robots-txt-result');
+    expect(result.classList.contains('robots-txt-allowed')).toBe(true);
+    expect(result.textContent).toContain('Erlaubt');
+  });
+
+  test('no robots.txt found (404) is shown as allowed', async () => {
+    chrome.runtime.sendMessage.mockResolvedValue({
+      ok: true, robotsUrl: 'https://example.com/robots.txt', path: '/produkte',
+      notFound: true, allowed: true, matchedRule: null,
+    });
+
+    document.getElementById('btn-check-robots').click();
+    await flushMicrotasks();
+
+    const result = document.getElementById('robots-txt-result');
+    expect(result.classList.contains('robots-txt-allowed')).toBe(true);
+    expect(result.textContent).toContain('Keine robots.txt gefunden');
+  });
+
+  test('a failed check is shown in gray with the error message', async () => {
+    chrome.runtime.sendMessage.mockResolvedValue({ ok: false, error: 'Keine aktive Seite gefunden.' });
+
+    document.getElementById('btn-check-robots').click();
+    await flushMicrotasks();
+
+    const result = document.getElementById('robots-txt-result');
+    expect(result.classList.contains('robots-txt-unknown')).toBe(true);
+    expect(result.textContent).toContain('Keine aktive Seite gefunden.');
+  });
+
+  test('a rejected sendMessage is handled the same way as an {ok:false} result', async () => {
+    chrome.runtime.sendMessage.mockRejectedValue(new Error('No content script'));
+
+    document.getElementById('btn-check-robots').click();
+    await flushMicrotasks();
+
+    const result = document.getElementById('robots-txt-result');
+    expect(result.classList.contains('robots-txt-unknown')).toBe(true);
+    expect(result.textContent).toContain('No content script');
+    expect(document.getElementById('btn-check-robots').disabled).toBe(false);
+  });
+});
+
+describe('Language selector (lang-select)', () => {
+  // initI18n() adds a few extra microtask hops in front of the rest of
+  // init()'s async chain (storage read + checkCompanion's fetch) compared
+  // to describes elsewhere in this file — a few more iterations than the
+  // usual 5 keeps this reliably past STATES.IDLE without depending on
+  // exact tick counts.
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  function baseHtml() {
+    return `
+      <div id="lang-switcher">
+        <select id="lang-select">
+          <option value="de">Deutsch</option>
+          <option value="en">English</option>
+          <option value="es">Español</option>
+        </select>
+      </div>
+      <section id="screen-idle" class="hidden">
+        <div class="row-label" data-i18n="idle.urlLabel"></div>
+        <div id="url-display"></div>
+        <div class="mode-toggle">
+          <button id="btn-mode-flat" class="mode-btn active" data-i18n="idle.modeFlat"></button>
+          <button id="btn-mode-container" class="mode-btn" data-i18n="idle.modeContainer"></button>
+        </div>
+        <div id="flat-mode-section">
+          <div id="fields-list"></div>
+          <button id="btn-add-field" data-i18n="idle.addFieldBtn"></button>
+        </div>
+        <div id="container-mode-section" class="hidden">
+          <ul id="group-tree-root"></ul>
+          <button id="btn-add-root-container"></button>
+        </div>
+        <button id="btn-preview" disabled></button>
+        <p id="preview-summary" class="hidden"></p>
+        <button id="btn-generate" disabled></button>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <input type="checkbox" id="toggle-dom-view" />
+        <div id="dom-tree-wrapper" class="hidden">
+          <p id="dom-tree-loading"></p>
+          <p id="dom-tree-error" class="hidden"></p>
+          <p id="dom-tree-truncated" class="hidden"></p>
+          <ul id="dom-tree-root"></ul>
+        </div>
+      </section>
+      <div id="modal-field-name" class="hidden">
+        <input id="input-field-name" />
+        <button id="btn-field-confirm"></button>
+        <button id="btn-field-cancel"></button>
+      </div>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+  }
+
+  function baseChromeMock(storageLocalGet) {
+    return {
+      runtime: {
+        onMessage: { addListener: () => {} },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({ fields: [{ name: 'Titel', selector: 'h1', attribute: null }] }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+        local: {
+          get: jest.fn().mockResolvedValue(storageLocalGet || {}),
+          set: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+  }
+
+  afterEach(() => {
+    Object.defineProperty(window.navigator, 'language', { value: 'de-DE', configurable: true });
+  });
+
+  test('applies the detected browser language on init, with no stored preference', async () => {
+    jest.resetModules();
+    document.body.innerHTML = baseHtml();
+    global.chrome = baseChromeMock();
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+    require('./popup');
+    await flushMicrotasks();
+
+    expect(document.getElementById('lang-select').value).toBe('de');
+    expect(document.getElementById('btn-mode-flat').textContent).toBe('Felder (flach)');
+    expect(document.documentElement.lang).toBe('de');
+  });
+
+  test('an unsupported browser language falls back to English', async () => {
+    Object.defineProperty(window.navigator, 'language', { value: 'fr-FR', configurable: true });
+    jest.resetModules();
+    document.body.innerHTML = baseHtml();
+    global.chrome = baseChromeMock();
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+    require('./popup');
+    await flushMicrotasks();
+
+    expect(document.getElementById('lang-select').value).toBe('en');
+    expect(document.getElementById('btn-mode-flat').textContent).toBe('Fields (flat)');
+  });
+
+  test('a stored preference overrides the detected browser language', async () => {
+    jest.resetModules();
+    document.body.innerHTML = baseHtml();
+    global.chrome = baseChromeMock({ language: 'es' });
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+    require('./popup');
+    await flushMicrotasks();
+
+    expect(document.getElementById('lang-select').value).toBe('es');
+    expect(document.getElementById('btn-mode-flat').textContent).toBe('Campos (plano)');
+  });
+
+  test('switching language re-translates static text and persists the choice', async () => {
+    jest.resetModules();
+    document.body.innerHTML = baseHtml();
+    global.chrome = baseChromeMock();
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+    require('./popup');
+    await flushMicrotasks();
+
+    document.getElementById('lang-select').value = 'en';
+    document.getElementById('lang-select').dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+
+    expect(document.getElementById('btn-mode-flat').textContent).toBe('Fields (flat)');
+    expect(chrome.storage.local.set).toHaveBeenCalledWith({ language: 'en' });
+  });
+
+  test('switching language also re-renders dynamic content (e.g. a field row\'s remove button)', async () => {
+    jest.resetModules();
+    document.body.innerHTML = baseHtml();
+    global.chrome = baseChromeMock();
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+    require('./popup');
+    await flushMicrotasks(); // seeded field ('Titel') is restored from session storage
+
+    expect(document.querySelector('.btn-remove-field').textContent).toBe('Entfernen');
+
+    document.getElementById('lang-select').value = 'en';
+    document.getElementById('lang-select').dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+
+    expect(document.querySelector('.btn-remove-field').textContent).toBe('Remove');
   });
 });
 

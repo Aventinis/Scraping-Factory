@@ -1,8 +1,8 @@
-## Gemeinsamer Ablauf (nach Branch-Erstellung)
+## Shared process (after branch creation)
 
-1. Entwickle das Feature. Committe zusammenhängende Änderungen in möglichst kleinen, thematisch klaren Schritten (Conventional Commits, z. B. `feat: ...`, `fix: ...`)
-2. Erstelle Tests für das neue Feature
-3. Teste das Feature
-4. Nur wenn alle Tests erfolgreich sind: 'git push'
-5. Erstelle einen Pull Request gegen `dev` via `gh pr create` mit aussagekräftigem Titel und Beschreibung
-6. Merge NIEMALS selbst und fordere den Merge nicht an – die Freigabe erfolgt ausschließlich durch den Nutzer
+1. Develop the feature. Commit related changes in small, thematically clear steps (Conventional Commits, e.g. `feat: ...`, `fix: ...`)
+2. Write tests for the new feature
+3. Test the feature
+4. Only if all tests pass: `git push`
+5. Open a pull request against `dev` via `gh pr create` with a meaningful title and description
+6. NEVER merge it yourself and do not request the merge — approval is the user's decision alone

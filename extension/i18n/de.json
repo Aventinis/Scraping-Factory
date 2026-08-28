@@ -1,0 +1,155 @@
+{
+  "common": {
+    "cancel": "Abbrechen",
+    "add": "Hinzufügen",
+    "remove": "Entfernen",
+    "use": "Verwenden",
+    "apply": "Übernehmen",
+    "discard": "Verwerfen",
+    "reportBug": "Fehler melden",
+    "retry": "Erneut versuchen",
+    "fields": "Felder",
+    "containers": "Container",
+    "namePlaceholder": "Name",
+    "fieldNamePlaceholder": "Feldname",
+    "attributePlaceholder": "Attribut",
+    "noMatches": "Keine Treffer in der Aufzeichnung.",
+    "noRecordArray": "Kein Datensatz-Array gefunden — als Quelle nicht verwendbar."
+  },
+  "language": {
+    "label": "Sprache"
+  },
+  "checking": {
+    "message": "Verbinde mit Companion…"
+  },
+  "error": {
+    "title": "Companion App nicht erreichbar",
+    "hint": "Starte ScrapingFactory.Companion und versuche es erneut."
+  },
+  "idle": {
+    "urlLabel": "URL",
+    "robotsCheckTitle": "Prüft in der robots.txt der Seite, ob diese URL für Crawler erlaubt ist",
+    "robotsCheckBtn": "robots.txt prüfen",
+    "robotsCheckBtnChecking": "Prüfe robots.txt…",
+    "modeFlat": "Felder (flach)",
+    "modeContainer": "Container (verschachtelt)",
+    "modeApi": "API",
+    "addFieldBtn": "+ Feld hinzufügen",
+    "addContainerBtn": "+ Container hinzufügen",
+    "apiCaptureTitle": "Zeichnet fetch/XHR-Netzwerkanfragen dieser Seite auf",
+    "apiCaptureStartBtn": "Netzwerk-Aufzeichnung starten",
+    "apiCaptureStopBtn": "Netzwerk-Aufzeichnung beenden",
+    "apiCaptureSummary": "{count} Anfrage(n) aufgezeichnet",
+    "apiSearchTitle": "Klicke danach einen Datenpunkt auf der Seite an — er wird in der Aufzeichnung gesucht",
+    "apiSearchBtn": "Datenpunkt in Aufzeichnung suchen",
+    "apiConfigSummary": "API-Konfiguration bereit: {fields} Feld(er), {parameters} Parameter{headers}.",
+    "apiConfigSummaryHeaders": ", {count} Header",
+    "previewShowBtn": "Vorschau anzeigen",
+    "previewHideBtn": "Vorschau beenden",
+    "previewTitle": "Zeigt direkt auf der Seite, welche Elemente die aktuelle Konfiguration treffen würde",
+    "previewSummaryMatched": "{count} Element(e) markiert",
+    "previewSummaryEmpty": "ohne Treffer: {names}",
+    "previewSummaryTruncated": "Anzeige gekürzt (zu viele Treffer)",
+    "exportConfigTitle": "Aktuelle Felder/Container als JSON exportieren — z. B. für einen Bug-Report",
+    "exportConfigBtn": "Konfiguration exportieren",
+    "generateBtn": "Skript generieren ▶"
+  },
+  "robots": {
+    "checkFailed": "robots.txt konnte nicht geprüft werden ({error}).",
+    "notFound": "Keine robots.txt gefunden — Zugriff ist erlaubt.",
+    "allowed": "Erlaubt für {path}",
+    "allowedWithRule": "Erlaubt für {path} (Allow: {pattern})",
+    "disallowed": "Verboten für {path} (Disallow: {pattern})"
+  },
+  "selecting": {
+    "hint": "Klicke ein Element auf der Seite an…",
+    "domTreeToggle": "DOM-Baum anzeigen",
+    "domTreeLoading": "Lade DOM-Baum…",
+    "domTreeError": "Baum konnte nicht geladen werden.",
+    "domTreeTruncated": "Baum gekürzt (zu viele Elemente).",
+    "cancelBtn": "Abbrechen"
+  },
+  "apiCandidates": {
+    "searchedFor": "Gesucht: \"{target}\"",
+    "matchLabel": "Treffer: {value}",
+    "siblingChip": "+ {name}",
+    "useFieldNamePlaceholder": "Feldname"
+  },
+  "apiConfig": {
+    "urlPathLabel": "URL — Pfad",
+    "urlQueryLabel": "URL — Query-Parameter",
+    "valueSourcesLabel": "Werte-Quellen",
+    "headersLabel": "Header",
+    "variableLabel": "variabel",
+    "unnamedPart": "(noch unbenannt)",
+    "sourceKindStaticList": "Werteliste",
+    "sourceKindDiscovery": "Discovery-Endpunkt",
+    "sourceKindRange": "Bereich",
+    "valueListPlaceholder": "Werte, kommagetrennt oder pro Zeile",
+    "rangeFromPlaceholder": "Von",
+    "rangeToPlaceholder": "Bis (z. B. \"today\")",
+    "customFormatOption": "Eigenes Format…",
+    "formatExample": "Beispiel: {example}",
+    "formatEnterPrompt": "(Format eingeben)",
+    "presetIsoWeekStandard": "ISO-Standard (2026-W35)",
+    "presetIsoWeekNoSeparator": "Jahr-Woche ohne Trennzeichen (2026-35)",
+    "presetDateStandard": "ISO-Standard (2026-08-28)",
+    "presetDateGerman": "Deutsches Format (28.08.2026)",
+    "presetDateNoSeparator": "Ohne Trennzeichen (20260828)",
+    "discoverySearchBtn": "Wert auf Seite suchen",
+    "discoverySearchAgainBtn": "Erneut suchen",
+    "discoverySource": "Quelle: {urlTemplate} ({itemsPath} → {valuePath})",
+    "noHeadersRecorded": "Keine Request-Header aufgezeichnet.",
+    "headerModeValue": "Wert",
+    "headerModeEnv": "Umgebungsvariable",
+    "envNamePlaceholder": "ENV_NAME"
+  },
+  "group": {
+    "repeating": "wiederholend",
+    "single": "einzeln",
+    "textMode": "Text",
+    "attributeMode": "Attribut: {attribute}",
+    "existsMode": "Vorhanden?",
+    "addSubcontainerBtn": "+ Container",
+    "addSubfieldBtn": "+ Datenfeld"
+  },
+  "generating": {
+    "message": "Generiere Skript…"
+  },
+  "done": {
+    "title": "Skript erfolgreich generiert!",
+    "newBtn": "Neu",
+    "downloadBtn": "scraper.py herunterladen"
+  },
+  "modals": {
+    "fieldName": {
+      "label": "Feldname (z. B. \"Produkttitel\")",
+      "placeholder": "Feldname"
+    },
+    "containerNew": {
+      "label": "Name des Containers (z. B. \"Vorspeisen\")",
+      "namePlaceholder": "Name",
+      "typeLabel": "Typ",
+      "single": "Einzelnes Element",
+      "repeating": "Wiederholend",
+      "next": "Weiter — Element wählen"
+    },
+    "fieldExtended": {
+      "label": "Feldname (z. B. \"Preis\")",
+      "placeholder": "Feldname",
+      "typeLabel": "Feldtyp",
+      "textOption": "Text",
+      "attributeOption": "Attribut",
+      "existsOption": "Vorhanden?",
+      "attributeLabel": "Attribut-Name (z. B. \"href\")",
+      "attributePlaceholder": "Attribut"
+    }
+  },
+  "toast": {
+    "verificationFailed": "Verifikation der Konfiguration fehlgeschlagen.",
+    "generationError": "Fehler: {message}",
+    "selectionUnavailable": "Element-Auswahl auf dieser Seite nicht möglich.",
+    "previewUnavailable": "Vorschau auf dieser Seite nicht möglich.",
+    "captureUnavailable": "Netzwerk-Aufzeichnung auf dieser Seite nicht möglich."
+  }
+}

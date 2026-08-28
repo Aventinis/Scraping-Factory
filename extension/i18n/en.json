@@ -1,0 +1,155 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "add": "Add",
+    "remove": "Remove",
+    "use": "Use",
+    "apply": "Apply",
+    "discard": "Discard",
+    "reportBug": "Report bug",
+    "retry": "Try again",
+    "fields": "Fields",
+    "containers": "Containers",
+    "namePlaceholder": "Name",
+    "fieldNamePlaceholder": "Field name",
+    "attributePlaceholder": "Attribute",
+    "noMatches": "No matches in the recording.",
+    "noRecordArray": "No record array found — can't be used as a source."
+  },
+  "language": {
+    "label": "Language"
+  },
+  "checking": {
+    "message": "Connecting to companion…"
+  },
+  "error": {
+    "title": "Companion app unreachable",
+    "hint": "Start ScrapingFactory.Companion and try again."
+  },
+  "idle": {
+    "urlLabel": "URL",
+    "robotsCheckTitle": "Checks the page's robots.txt to see whether this URL is allowed for crawlers",
+    "robotsCheckBtn": "Check robots.txt",
+    "robotsCheckBtnChecking": "Checking robots.txt…",
+    "modeFlat": "Fields (flat)",
+    "modeContainer": "Containers (nested)",
+    "modeApi": "API",
+    "addFieldBtn": "+ Add field",
+    "addContainerBtn": "+ Add container",
+    "apiCaptureTitle": "Records this page's fetch/XHR network requests",
+    "apiCaptureStartBtn": "Start network recording",
+    "apiCaptureStopBtn": "Stop network recording",
+    "apiCaptureSummary": "{count} request(s) recorded",
+    "apiSearchTitle": "Then click a data point on the page — it will be searched for in the recording",
+    "apiSearchBtn": "Find data point in recording",
+    "apiConfigSummary": "API configuration ready: {fields} field(s), {parameters} parameter(s){headers}.",
+    "apiConfigSummaryHeaders": ", {count} header(s)",
+    "previewShowBtn": "Show preview",
+    "previewHideBtn": "Stop preview",
+    "previewTitle": "Shows directly on the page which elements the current configuration would match",
+    "previewSummaryMatched": "{count} element(s) highlighted",
+    "previewSummaryEmpty": "no matches: {names}",
+    "previewSummaryTruncated": "display truncated (too many matches)",
+    "exportConfigTitle": "Export the current fields/containers as JSON — e.g. for a bug report",
+    "exportConfigBtn": "Export configuration",
+    "generateBtn": "Generate script ▶"
+  },
+  "robots": {
+    "checkFailed": "robots.txt could not be checked ({error}).",
+    "notFound": "No robots.txt found — access is allowed.",
+    "allowed": "Allowed for {path}",
+    "allowedWithRule": "Allowed for {path} (Allow: {pattern})",
+    "disallowed": "Disallowed for {path} (Disallow: {pattern})"
+  },
+  "selecting": {
+    "hint": "Click an element on the page…",
+    "domTreeToggle": "Show DOM tree",
+    "domTreeLoading": "Loading DOM tree…",
+    "domTreeError": "The tree could not be loaded.",
+    "domTreeTruncated": "Tree truncated (too many elements).",
+    "cancelBtn": "Cancel"
+  },
+  "apiCandidates": {
+    "searchedFor": "Searched for: \"{target}\"",
+    "matchLabel": "Match: {value}",
+    "siblingChip": "+ {name}",
+    "useFieldNamePlaceholder": "Field name"
+  },
+  "apiConfig": {
+    "urlPathLabel": "URL — Path",
+    "urlQueryLabel": "URL — Query parameters",
+    "valueSourcesLabel": "Value sources",
+    "headersLabel": "Headers",
+    "variableLabel": "variable",
+    "unnamedPart": "(not yet named)",
+    "sourceKindStaticList": "Value list",
+    "sourceKindDiscovery": "Discovery endpoint",
+    "sourceKindRange": "Range",
+    "valueListPlaceholder": "Values, comma-separated or one per line",
+    "rangeFromPlaceholder": "From",
+    "rangeToPlaceholder": "To (e.g. \"today\")",
+    "customFormatOption": "Custom format…",
+    "formatExample": "Example: {example}",
+    "formatEnterPrompt": "(enter a format)",
+    "presetIsoWeekStandard": "ISO standard (2026-W35)",
+    "presetIsoWeekNoSeparator": "Year-week without separator (2026-35)",
+    "presetDateStandard": "ISO standard (2026-08-28)",
+    "presetDateGerman": "German format (28.08.2026)",
+    "presetDateNoSeparator": "No separator (20260828)",
+    "discoverySearchBtn": "Search for value on page",
+    "discoverySearchAgainBtn": "Search again",
+    "discoverySource": "Source: {urlTemplate} ({itemsPath} → {valuePath})",
+    "noHeadersRecorded": "No request headers recorded.",
+    "headerModeValue": "Value",
+    "headerModeEnv": "Environment variable",
+    "envNamePlaceholder": "ENV_NAME"
+  },
+  "group": {
+    "repeating": "repeating",
+    "single": "single",
+    "textMode": "Text",
+    "attributeMode": "Attribute: {attribute}",
+    "existsMode": "Exists?",
+    "addSubcontainerBtn": "+ Container",
+    "addSubfieldBtn": "+ Data field"
+  },
+  "generating": {
+    "message": "Generating script…"
+  },
+  "done": {
+    "title": "Script generated successfully!",
+    "newBtn": "New",
+    "downloadBtn": "Download scraper.py"
+  },
+  "modals": {
+    "fieldName": {
+      "label": "Field name (e.g. \"Product title\")",
+      "placeholder": "Field name"
+    },
+    "containerNew": {
+      "label": "Container name (e.g. \"Starters\")",
+      "namePlaceholder": "Name",
+      "typeLabel": "Type",
+      "single": "Single element",
+      "repeating": "Repeating",
+      "next": "Next — select element"
+    },
+    "fieldExtended": {
+      "label": "Field name (e.g. \"Price\")",
+      "placeholder": "Field name",
+      "typeLabel": "Field type",
+      "textOption": "Text",
+      "attributeOption": "Attribute",
+      "existsOption": "Exists?",
+      "attributeLabel": "Attribute name (e.g. \"href\")",
+      "attributePlaceholder": "Attribute"
+    }
+  },
+  "toast": {
+    "verificationFailed": "Configuration verification failed.",
+    "generationError": "Error: {message}",
+    "selectionUnavailable": "Element selection isn't possible on this page.",
+    "previewUnavailable": "Preview isn't possible on this page.",
+    "captureUnavailable": "Network recording isn't possible on this page."
+  }
+}

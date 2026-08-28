@@ -38,6 +38,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep the message channel open for the async sendResponse above
   }
 
+  if (message.type === 'CHECK_ROBOTS_TXT') {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs.length === 0) {
+        sendResponse({ ok: false, error: 'Keine aktive Seite gefunden.' });
+        return;
+      }
+      chrome.tabs.sendMessage(tabs[0].id, { type: 'CHECK_ROBOTS_TXT' })
+        .then((result) => sendResponse(result))
+        .catch((err) => sendResponse({ ok: false, error: err.message }));
+    });
+    return true; // keep the message channel open for the async sendResponse above
+  }
+
   const FORWARD_TO_TAB = ['START_SELECTION', 'STOP_SELECTION', 'ENABLE_DOM_VIEW', 'DISABLE_DOM_VIEW', 'PREVIEW_START', 'PREVIEW_STOP', 'API_CAPTURE_START', 'API_CAPTURE_STOP'];
   if (FORWARD_TO_TAB.includes(message.type)) {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {

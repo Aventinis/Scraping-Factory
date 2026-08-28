@@ -43,6 +43,11 @@
     .url-row     { margin-bottom: 14px; }
     .row-label   { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #9ca3af; margin-bottom: 2px; }
     .url-value   { font-size: 12px; color: #374151; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #btn-check-robots  { margin-top: 6px; }
+    .robots-txt-result     { font-size: 11px; margin-top: 6px; }
+    .robots-txt-allowed    { color: #16a34a; }
+    .robots-txt-disallowed { color: #ef4444; }
+    .robots-txt-unknown    { color: #9ca3af; }
 
     /* Fields */
     #fields-list { margin-bottom: 12px; min-height: 4px; }
@@ -224,53 +229,73 @@
       background: none; border: none; color: #ef4444; font-size: 12px;
       text-decoration: underline; cursor: pointer; padding: 0; margin-top: 4px;
     }
+
+    /* Language selector — always visible, independent of the current screen */
+    #lang-switcher { display: flex; justify-content: flex-end; padding: 6px 10px 0; }
+    #lang-select {
+      font-size: 11px; padding: 2px 4px; border: 1px solid #e5e7eb; border-radius: 4px;
+      background: #fff; color: #374151; font-family: inherit;
+    }
   </style>
 </head>
 <body>
 
+  <!-- Language selector: rendered outside every .screen section so switching
+       language is always possible, regardless of app state (checking,
+       error, idle, …). See popup.js's applyStaticTranslations/setLanguage. -->
+  <div id="lang-switcher">
+    <select id="lang-select" aria-label="Language / Sprache / Idioma" title="Language / Sprache / Idioma">
+      <option value="de">Deutsch</option>
+      <option value="en">English</option>
+      <option value="es">Español</option>
+    </select>
+  </div>
+
   <!-- CHECKING_COMPANION -->
   <section id="screen-checking" class="screen">
     <div class="spinner"></div>
-    <p>Verbinde mit Companion…</p>
+    <p data-i18n="checking.message"></p>
   </section>
 
   <!-- COMPANION_ERROR -->
   <section id="screen-error" class="screen hidden">
     <p class="error-icon">⚠</p>
-    <p>Companion App nicht erreichbar</p>
-    <p class="error-hint">Starte ScrapingFactory.Companion und versuche es erneut.</p>
+    <p data-i18n="error.title"></p>
+    <p class="error-hint" data-i18n="error.hint"></p>
     <div class="actions">
-      <button id="btn-retry" class="btn-primary">Erneut versuchen</button>
-      <button id="btn-report-bug-error" class="btn-secondary">Fehler melden</button>
+      <button id="btn-retry" class="btn-primary" data-i18n="common.retry"></button>
+      <button id="btn-report-bug-error" class="btn-secondary" data-i18n="common.reportBug"></button>
     </div>
   </section>
 
   <!-- IDLE -->
   <section id="screen-idle" class="screen hidden">
     <div class="url-row">
-      <div class="row-label">URL</div>
+      <div class="row-label" data-i18n="idle.urlLabel"></div>
       <div id="url-display" class="url-value"></div>
+      <button id="btn-check-robots" class="btn-secondary btn-tiny" type="button" data-i18n="idle.robotsCheckBtn" data-i18n-title="idle.robotsCheckTitle"></button>
+      <p id="robots-txt-result" class="robots-txt-result hidden"></p>
     </div>
 
     <div class="mode-toggle">
-      <button id="btn-mode-flat" class="mode-btn active" type="button">Felder (flach)</button>
-      <button id="btn-mode-container" class="mode-btn" type="button">Container (verschachtelt)</button>
-      <button id="btn-mode-api" class="mode-btn" type="button">API</button>
+      <button id="btn-mode-flat" class="mode-btn active" type="button" data-i18n="idle.modeFlat"></button>
+      <button id="btn-mode-container" class="mode-btn" type="button" data-i18n="idle.modeContainer"></button>
+      <button id="btn-mode-api" class="mode-btn" type="button" data-i18n="idle.modeApi"></button>
     </div>
 
     <div id="flat-mode-section">
-      <div class="row-label" style="margin-bottom: 6px;">Felder</div>
+      <div class="row-label" style="margin-bottom: 6px;" data-i18n="common.fields"></div>
       <div id="fields-list"></div>
       <div class="actions">
-        <button id="btn-add-field" class="btn-secondary">+ Feld hinzufügen</button>
+        <button id="btn-add-field" class="btn-secondary" data-i18n="idle.addFieldBtn"></button>
       </div>
     </div>
 
     <div id="container-mode-section" class="hidden">
-      <div class="row-label" style="margin-bottom: 6px;">Container</div>
+      <div class="row-label" style="margin-bottom: 6px;" data-i18n="common.containers"></div>
       <ul id="group-tree-root" class="group-tree"></ul>
       <div class="actions">
-        <button id="btn-add-root-container" class="btn-secondary">+ Container hinzufügen</button>
+        <button id="btn-add-root-container" class="btn-secondary" data-i18n="idle.addContainerBtn"></button>
       </div>
     </div>
 
@@ -279,12 +304,12 @@
          here now, gated behind the mode toggle above like flat/container. -->
     <div id="api-mode-section" class="hidden">
       <div class="actions">
-        <button id="btn-api-capture" class="btn-toggle" type="button" title="Zeichnet fetch/XHR-Netzwerkanfragen dieser Seite auf">Netzwerk-Aufzeichnung starten</button>
+        <button id="btn-api-capture" class="btn-toggle" type="button" data-i18n="idle.apiCaptureStartBtn" data-i18n-title="idle.apiCaptureTitle"></button>
       </div>
       <p id="api-capture-summary" class="preview-summary hidden"></p>
 
       <div class="actions" style="margin-top: 6px;">
-        <button id="btn-api-search" class="btn-secondary" type="button" disabled title="Klicke danach einen Datenpunkt auf der Seite an — er wird in der Aufzeichnung gesucht">Datenpunkt in Aufzeichnung suchen</button>
+        <button id="btn-api-search" class="btn-secondary" type="button" disabled data-i18n="idle.apiSearchBtn" data-i18n-title="idle.apiSearchTitle"></button>
       </div>
       <div id="api-candidates-panel" class="api-candidates-panel hidden">
         <p id="api-candidates-target" class="api-candidates-target"></p>
@@ -296,7 +321,7 @@
       <div id="api-config-panel" class="api-candidates-panel hidden">
         <p id="api-config-summary" class="api-candidates-target"></p>
         <div class="actions">
-          <button id="btn-api-config-discard" class="btn-secondary btn-tiny" type="button">Verwerfen</button>
+          <button id="btn-api-config-discard" class="btn-secondary btn-tiny" type="button" data-i18n="common.discard"></button>
         </div>
       </div>
     </div>
@@ -305,85 +330,85 @@
          which extracts from a JSON body instead, so it's hidden there. -->
     <div id="preview-section">
       <div class="actions" style="margin-top: 10px;">
-        <button id="btn-preview" class="btn-toggle" disabled title="Zeigt direkt auf der Seite, welche Elemente die aktuelle Konfiguration treffen würde">Vorschau anzeigen</button>
+        <button id="btn-preview" class="btn-toggle" disabled data-i18n="idle.previewShowBtn" data-i18n-title="idle.previewTitle"></button>
       </div>
       <p id="preview-summary" class="preview-summary hidden"></p>
     </div>
 
     <div class="actions" style="margin-top: 10px;">
-      <button id="btn-export-config" class="btn-secondary" disabled title="Aktuelle Felder/Container als JSON exportieren — z. B. für einen Bug-Report">Konfiguration exportieren</button>
-      <button id="btn-generate" class="btn-primary" disabled>Skript generieren ▶</button>
+      <button id="btn-export-config" class="btn-secondary" disabled data-i18n="idle.exportConfigBtn" data-i18n-title="idle.exportConfigTitle"></button>
+      <button id="btn-generate" class="btn-primary" disabled data-i18n="idle.generateBtn"></button>
     </div>
   </section>
 
   <!-- SELECTING -->
   <section id="screen-selecting" class="screen hidden">
-    <p class="selecting-hint">Klicke ein Element auf der Seite an…</p>
+    <p class="selecting-hint" data-i18n="selecting.hint"></p>
     <label class="dom-view-toggle">
       <input type="checkbox" id="toggle-dom-view" />
-      DOM-Baum anzeigen
+      <span data-i18n="selecting.domTreeToggle"></span>
     </label>
     <div id="dom-tree-wrapper" class="dom-tree-wrapper hidden">
-      <p id="dom-tree-loading" class="dom-tree-loading">Lade DOM-Baum…</p>
+      <p id="dom-tree-loading" class="dom-tree-loading" data-i18n="selecting.domTreeLoading"></p>
       <p id="dom-tree-error" class="dom-tree-error hidden">
-        Baum konnte nicht geladen werden.
-        <button id="btn-report-bug-domtree" class="report-bug-link">Fehler melden</button>
+        <span data-i18n="selecting.domTreeError"></span>
+        <button id="btn-report-bug-domtree" class="report-bug-link" data-i18n="common.reportBug"></button>
       </p>
-      <p id="dom-tree-truncated" class="dom-tree-truncated hidden">Baum gekürzt (zu viele Elemente).</p>
+      <p id="dom-tree-truncated" class="dom-tree-truncated hidden" data-i18n="selecting.domTreeTruncated"></p>
       <ul id="dom-tree-root" class="dom-tree"></ul>
     </div>
-    <button id="btn-cancel-selection" class="btn-secondary">Abbrechen</button>
+    <button id="btn-cancel-selection" class="btn-secondary" data-i18n="selecting.cancelBtn"></button>
   </section>
 
   <!-- API_CONFIG (Issue #53 Phase 5) — configuring a confirmed candidate
        into an ApiConfig. Reached from the api-mode-section's "Verwenden"
        flow (see screen-idle above), which only shows once mode === 'api'. -->
   <section id="screen-api-config" class="screen hidden">
-    <div class="row-label">Felder</div>
+    <div class="row-label" data-i18n="common.fields"></div>
     <ul id="api-config-fields" class="api-config-fields"></ul>
 
-    <div class="row-label" style="margin-top: 10px;">URL — Pfad</div>
+    <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.urlPathLabel"></div>
     <ul id="api-config-segments" class="api-config-parts"></ul>
 
-    <div class="row-label" style="margin-top: 10px;">URL — Query-Parameter</div>
+    <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.urlQueryLabel"></div>
     <ul id="api-config-query-params" class="api-config-parts"></ul>
 
-    <div class="row-label" style="margin-top: 10px;">Werte-Quellen</div>
+    <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.valueSourcesLabel"></div>
     <div id="api-config-parameters"></div>
 
-    <div class="row-label" style="margin-top: 10px;">Header</div>
+    <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.headersLabel"></div>
     <ul id="api-config-headers" class="api-config-headers"></ul>
 
     <div class="actions" style="margin-top: 12px;">
-      <button id="btn-api-config-cancel" class="btn-secondary" type="button">Abbrechen</button>
-      <button id="btn-api-config-confirm" class="btn-primary" type="button" disabled>Übernehmen</button>
+      <button id="btn-api-config-cancel" class="btn-secondary" type="button" data-i18n="common.cancel"></button>
+      <button id="btn-api-config-confirm" class="btn-primary" type="button" disabled data-i18n="common.apply"></button>
     </div>
   </section>
 
   <!-- GENERATING -->
   <section id="screen-generating" class="screen hidden">
     <div class="spinner"></div>
-    <p>Generiere Skript…</p>
+    <p data-i18n="generating.message"></p>
   </section>
 
   <!-- DONE -->
   <section id="screen-done" class="screen hidden">
     <p class="success-icon">✓</p>
-    <p>Skript erfolgreich generiert!</p>
+    <p data-i18n="done.title"></p>
     <div class="done-actions">
-      <button id="btn-new-scraper" class="btn-secondary">Neu</button>
-      <button id="btn-download" class="btn-primary">scraper.py herunterladen</button>
+      <button id="btn-new-scraper" class="btn-secondary" data-i18n="done.newBtn"></button>
+      <button id="btn-download" class="btn-primary" data-i18n="done.downloadBtn"></button>
     </div>
   </section>
 
   <!-- Modal: field-name input -->
   <div id="modal-field-name" class="modal hidden">
     <div class="modal-inner">
-      <label for="input-field-name">Feldname (z. B. "Produkttitel")</label>
-      <input id="input-field-name" type="text" placeholder="Feldname" autocomplete="off" />
+      <label for="input-field-name" data-i18n="modals.fieldName.label"></label>
+      <input id="input-field-name" type="text" data-i18n-placeholder="modals.fieldName.placeholder" autocomplete="off" />
       <div class="modal-actions">
-        <button id="btn-field-cancel" class="btn-secondary">Abbrechen</button>
-        <button id="btn-field-confirm" class="btn-primary">Hinzufügen</button>
+        <button id="btn-field-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-field-confirm" class="btn-primary" data-i18n="common.add"></button>
       </div>
     </div>
   </div>
@@ -391,16 +416,16 @@
   <!-- Modal: new container (name + type), shown before element selection starts -->
   <div id="modal-container-new" class="modal hidden">
     <div class="modal-inner">
-      <label for="input-container-name">Name des Containers (z. B. "Vorspeisen")</label>
-      <input id="input-container-name" type="text" placeholder="Name" autocomplete="off" />
-      <label>Typ</label>
+      <label for="input-container-name" data-i18n="modals.containerNew.label"></label>
+      <input id="input-container-name" type="text" data-i18n-placeholder="modals.containerNew.namePlaceholder" autocomplete="off" />
+      <label data-i18n="modals.containerNew.typeLabel"></label>
       <div class="radio-row">
-        <label><input type="radio" name="container-type" id="radio-container-single" checked /> Einzelnes Element</label>
-        <label><input type="radio" name="container-type" id="radio-container-repeating" /> Wiederholend</label>
+        <label><input type="radio" name="container-type" id="radio-container-single" checked /> <span data-i18n="modals.containerNew.single"></span></label>
+        <label><input type="radio" name="container-type" id="radio-container-repeating" /> <span data-i18n="modals.containerNew.repeating"></span></label>
       </div>
       <div class="modal-actions">
-        <button id="btn-container-cancel" class="btn-secondary">Abbrechen</button>
-        <button id="btn-container-confirm" class="btn-primary">Weiter — Element wählen</button>
+        <button id="btn-container-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-container-confirm" class="btn-primary" data-i18n="modals.containerNew.next"></button>
       </div>
     </div>
   </div>
@@ -408,21 +433,21 @@
   <!-- Modal: extended field input (Container-Mode) — name, type, optional attribute -->
   <div id="modal-field-extended" class="modal hidden">
     <div class="modal-inner">
-      <label for="input-field-extended-name">Feldname (z. B. "Preis")</label>
-      <input id="input-field-extended-name" type="text" placeholder="Feldname" autocomplete="off" />
-      <label for="select-field-mode">Feldtyp</label>
+      <label for="input-field-extended-name" data-i18n="modals.fieldExtended.label"></label>
+      <input id="input-field-extended-name" type="text" data-i18n-placeholder="modals.fieldExtended.placeholder" autocomplete="off" />
+      <label for="select-field-mode" data-i18n="modals.fieldExtended.typeLabel"></label>
       <select id="select-field-mode">
-        <option value="text">Text</option>
-        <option value="attribute">Attribut</option>
-        <option value="exists">Vorhanden?</option>
+        <option value="text" data-i18n="modals.fieldExtended.textOption"></option>
+        <option value="attribute" data-i18n="modals.fieldExtended.attributeOption"></option>
+        <option value="exists" data-i18n="modals.fieldExtended.existsOption"></option>
       </select>
       <div id="field-attribute-row" class="hidden">
-        <label for="input-field-attribute">Attribut-Name (z. B. "href")</label>
-        <input id="input-field-attribute" type="text" placeholder="Attribut" autocomplete="off" />
+        <label for="input-field-attribute" data-i18n="modals.fieldExtended.attributeLabel"></label>
+        <input id="input-field-attribute" type="text" data-i18n-placeholder="modals.fieldExtended.attributePlaceholder" autocomplete="off" />
       </div>
       <div class="modal-actions">
-        <button id="btn-field-extended-cancel" class="btn-secondary">Abbrechen</button>
-        <button id="btn-field-extended-confirm" class="btn-primary">Hinzufügen</button>
+        <button id="btn-field-extended-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-field-extended-confirm" class="btn-primary" data-i18n="common.add"></button>
       </div>
     </div>
   </div>
@@ -430,10 +455,11 @@
   <!-- Error toast -->
   <div id="error-toast" class="toast hidden">
     <span id="error-toast-message"></span>
-    <button id="btn-report-bug-toast" class="toast-report-btn hidden">Fehler melden</button>
+    <button id="btn-report-bug-toast" class="toast-report-btn hidden" data-i18n="common.reportBug"></button>
   </div>
 
   <script src="../shared/logger.js"></script>
+  <script src="../i18n/i18n.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
