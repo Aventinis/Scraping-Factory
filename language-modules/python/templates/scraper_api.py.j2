@@ -197,6 +197,22 @@ def scrape():
         url = URL_TEMPLATE.format(**encoded_combo)
 
         response = requests.get(url, headers=headers, timeout=10)
+        # A 404 is treated as "this combination doesn't exist" and skipped
+        # rather than aborting the whole run — Api-Mode tries the full
+        # cartesian product of every parameter's values without knowing
+        # which combinations are actually valid on the target site (no way
+        # to express e.g. "this category has no offers for that week"), so
+        # hitting at least one missing combination is expected, not
+        # exceptional. Every other error status still aborts immediately —
+        # unlike a 404, those more likely mean something is actually wrong
+        # (bad auth, server error), and silently skipping them could hide a
+        # real problem behind an incomplete but "successful"-looking result.
+        # If every combination fails (or nothing was ever valid), the
+        # existing "at least one output row" check in PythonScriptVerifier
+        # still catches that — this doesn't need to track failures itself.
+        if response.status_code == 404:
+            print(f"Übersprungen (404 Not Found): {url}")
+            continue
         response.raise_for_status()
         for record in _resolve_items(response.json(), ITEMS_PATH):
             rows.append(_extract_row(record, combo))

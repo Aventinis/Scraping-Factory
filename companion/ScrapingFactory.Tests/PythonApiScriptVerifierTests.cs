@@ -273,6 +273,59 @@ public class PythonApiScriptVerifierTests
         Assert.Equal(0, result.RowCount);
     }
 
+    // Reproduces the reported bug: Api-Mode tries the full cartesian product
+    // of every parameter's values without knowing which combinations
+    // actually exist on the target site — a 404 for one of them (e.g. a
+    // category with no offers for a given week) used to abort the whole
+    // script instead of just skipping that one combination.
+    [Fact]
+    public async Task SomeCombinationsReturning404_AreSkippedNotFailed_Succeeds()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var category = request.QueryString["category"];
+            return category == "missing"
+                ? new LocalTestServerResponse("not found", "text/plain", HttpStatusCode.NotFound)
+                : new LocalTestServerResponse($$"""{ "items": [ { "title": "Item-{{category}}" } ] }""", "application/json");
+        });
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = $"{server.BaseUrl}?category={{category}}",
+            ItemsPath = "items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters = [new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["a", "missing", "b"] } }],
+        };
+
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateScript(api));
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(2, result.RowCount); // "missing" skipped, "a" and "b" succeeded
+    }
+
+    // The skip-on-404 behavior above must not silently turn a genuinely
+    // broken configuration into a "successful" empty result — the existing
+    // "at least one output row" check still applies when nothing succeeds.
+    [Fact]
+    public async Task AllCombinationsReturning404_StillFailsWithZeroDataRows()
+    {
+        using var server = new LocalTestServer(_ =>
+            new LocalTestServerResponse("not found", "text/plain", HttpStatusCode.NotFound));
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = $"{server.BaseUrl}?category={{category}}",
+            ItemsPath = "items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters = [new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["a", "b"] } }],
+        };
+
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateScript(api));
+
+        Assert.False(result.Success);
+        Assert.Equal(0, result.RowCount);
+    }
+
     [Fact]
     public async Task PageReturning500_FailsWithScriptErrorOutput()
     {
