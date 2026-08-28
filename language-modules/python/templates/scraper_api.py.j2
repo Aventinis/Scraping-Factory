@@ -66,17 +66,52 @@ def _resolve_field(record, path):
     return values[0] if values else None
 
 
-def _parse_iso_week(value):
+_DEFAULT_ISO_WEEK_FORMAT = "{yyyy}-W{ww}"
+_DEFAULT_DATE_FORMAT = "{yyyy}-{mm}-{dd}"
+
+# "{token}" mini-template, mirrored token-for-token by the companion's
+# RangeFormat (used to validate From/To ahead of a real script run) — the
+# site's own URL convention decides which tokens/separators are needed
+# (e.g. ISO-8601 "2026-W35" vs. a site using "2026-35"), so this is
+# configurable per RangeSource instead of hardcoded to one format.
+_RANGE_FORMAT_TOKEN_PATTERNS = {"yyyy": r"\d{4}", "ww": r"\d{1,2}", "mm": r"\d{1,2}", "dd": r"\d{1,2}"}
+
+
+def _compile_range_format(fmt):
+    pattern = re.escape(fmt)
+    for token, value_pattern in _RANGE_FORMAT_TOKEN_PATTERNS.items():
+        pattern = pattern.replace(re.escape("{" + token + "}"), f"(?P<{token}>{value_pattern})")
+    return re.compile(f"^{pattern}$")
+
+
+def _parse_range_value(value, fmt):
+    match = _compile_range_format(fmt).match(value)
+    if not match:
+        raise ValueError(f"Wert '{value}' passt nicht zum Format '{fmt}'.")
+    return {token: int(v) for token, v in match.groupdict().items()}
+
+
+def _render_range_value(tokens, fmt):
+    rendered = fmt
+    for token, value in tokens.items():
+        width = 4 if token == "yyyy" else 2
+        rendered = rendered.replace("{" + token + "}", f"{value:0{width}d}")
+    return rendered
+
+
+# IsoWeek resolves "today" for *both* From and To (they share this parse
+# step) — unlike Date below, where only To gets that treatment.
+def _parse_iso_week(value, fmt):
     if value == "today":
         year, week, _ = datetime.date.today().isocalendar()
         return year, week
-    year_str, week_str = value.split("-W")
-    return int(year_str), int(week_str)
+    tokens = _parse_range_value(value, fmt)
+    return tokens["yyyy"], tokens["ww"]
 
 
-def _iso_week_range(from_value, to_value):
-    start_year, start_week = _parse_iso_week(from_value)
-    end_year, end_week = _parse_iso_week(to_value)
+def _iso_week_range(from_value, to_value, fmt):
+    start_year, start_week = _parse_iso_week(from_value, fmt)
+    end_year, end_week = _parse_iso_week(to_value, fmt)
     start_ordinal = datetime.date.fromisocalendar(start_year, start_week, 1).toordinal()
     end_ordinal = datetime.date.fromisocalendar(end_year, end_week, 1).toordinal()
 
@@ -84,19 +119,24 @@ def _iso_week_range(from_value, to_value):
     ordinal = start_ordinal
     while ordinal <= end_ordinal:
         iso_year, iso_week, _ = datetime.date.fromordinal(ordinal).isocalendar()
-        weeks.append(f"{iso_year}-W{iso_week:02d}")
+        weeks.append(_render_range_value({"yyyy": iso_year, "ww": iso_week}, fmt))
         ordinal += 7
     return weeks
 
 
-def _date_range(from_value, to_value):
-    start = datetime.date.fromisoformat(from_value)
-    end = datetime.date.today() if to_value == "today" else datetime.date.fromisoformat(to_value)
+def _date_range(from_value, to_value, fmt):
+    start_tokens = _parse_range_value(from_value, fmt)
+    start = datetime.date(start_tokens["yyyy"], start_tokens["mm"], start_tokens["dd"])
+    if to_value == "today":
+        end = datetime.date.today()
+    else:
+        end_tokens = _parse_range_value(to_value, fmt)
+        end = datetime.date(end_tokens["yyyy"], end_tokens["mm"], end_tokens["dd"])
 
     dates = []
     current = start
     while current <= end:
-        dates.append(current.isoformat())
+        dates.append(_render_range_value({"yyyy": current.year, "mm": current.month, "dd": current.day}, fmt))
         current += datetime.timedelta(days=1)
     return dates
 
@@ -121,9 +161,9 @@ def _resolve_parameter_values(source, headers):
     if kind == "range":
         range_type = source["type"]
         if range_type == "IsoWeek":
-            return _iso_week_range(source["from"], source["to"])
+            return _iso_week_range(source["from"], source["to"], source.get("format", _DEFAULT_ISO_WEEK_FORMAT))
         if range_type == "Date":
-            return _date_range(source["from"], source["to"])
+            return _date_range(source["from"], source["to"], source.get("format", _DEFAULT_DATE_FORMAT))
         return _number_range(source["from"], source["to"])
     if kind == "discovery":
         response = requests.get(source["urlTemplate"], headers=headers, timeout=10)

@@ -61,6 +61,18 @@ public class ApiParameterSourceJsonTests
         Assert.Equal(RangeType.IsoWeek, range.Type);
         Assert.Equal("2026-W01", range.From);
         Assert.Equal("today", range.To);
+        Assert.Null(range.Format);
+    }
+
+    [Fact]
+    public void Deserialize_RangeSourceWithFormat_ProducesRangeSourceWithFormat()
+    {
+        const string json = """{ "kind": "range", "type": "IsoWeek", "from": "2026-35", "to": "2026-50", "format": "{yyyy}-{ww}" }""";
+
+        var source = JsonSerializer.Deserialize<ApiParameterSource>(json, Options);
+
+        var range = Assert.IsType<RangeSource>(source);
+        Assert.Equal("{yyyy}-{ww}", range.Format);
     }
 
     [Fact]
@@ -71,6 +83,7 @@ public class ApiParameterSourceJsonTests
             new StaticListSource { Values = ["Elektronik", "Bücher"] },
             new DiscoverySource { UrlTemplate = "https://example.com/api/categories", ItemsPath = "data", ValuePath = "slug" },
             new RangeSource { Type = RangeType.Number, From = "1", To = "10" },
+            new RangeSource { Type = RangeType.IsoWeek, From = "2026-35", To = "2026-50", Format = "{yyyy}-{ww}" },
         ];
 
         foreach (var source in sources)

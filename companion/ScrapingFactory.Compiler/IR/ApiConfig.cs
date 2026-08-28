@@ -95,6 +95,18 @@ public sealed class RangeSource : ApiParameterSource
     public required RangeType Type { get; init; }
     public required string From { get; init; }
     public required string To { get; init; }
+
+    // Only meaningful for IsoWeek/Date (Number is plain integers, no
+    // template). Null falls back to RangeFormat's hardcoded default per
+    // Type — kept optional rather than required so existing persisted
+    // configs and direct API callers from before this field existed keep
+    // working unchanged. Same "{token}" mini-syntax as UrlTemplate's
+    // "{name}" placeholders, used for both parsing From/To *and* rendering
+    // each expanded value, so the two can never drift apart the way a
+    // hardcoded parser and a target site's own URL convention just did
+    // (bug: a site using "2026-35" instead of ISO-8601 "2026-W35" crashed
+    // the generated script) — see RangeFormat.
+    public string? Format { get; init; }
 }
 
 public enum RangeType { IsoWeek, Number, Date }
