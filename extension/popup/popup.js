@@ -40,7 +40,9 @@ let _state = {
   apiCandidates:      null, // {target, candidates} from the last primary-field search, or null
   apiDiscoveryCandidates: null, // {target, candidates} from the last in-progress Discovery search, or null
   apiConfigDraft:     null, // set once a candidate is confirmed as the primary field — the in-progress ApiConfig being built, see buildApiConfig/confirmApiFieldCandidate
-  apiConfig:          null, // the "Übernehmen"-confirmed ApiConfig wire object — Phase 6 will read this; persisted like fields/groups
+  apiConfig:          null, // the "Apply"-confirmed ApiConfig wire object — Phase 6 will read this; persisted like fields/groups
+  robotsTxtChecking: false, // not persisted, always off on popup reopen (like previewActive/apiCaptureActive)
+  robotsTxtResult:   null,  // {ok, robotsUrl, path, notFound, allowed, matchedRule} | {ok:false, error} from the content script's CHECK_ROBOTS_TXT response, or null before the first check
 };
 
 const DOM_TREE_TIMEOUT_MS = 5000;
@@ -55,8 +57,8 @@ function requestDomTree() {
   chrome.runtime.sendMessage({ type: 'ENABLE_DOM_VIEW' });
   domTreeTimeoutId = setTimeout(() => {
     log('DOM_TREE timeout — no response');
-    setLastError('DOM-Baum-Anfrage lief in ein Timeout', 'DOM-Baum-Ansicht');
-    patchState({ domTreeError: 'Baum konnte nicht geladen werden.' });
+    setLastError('DOM tree request timed out', 'DOM tree view');
+    patchState({ domTreeError: 'Tree could not be loaded.' });
   }, DOM_TREE_TIMEOUT_MS);
 }
 
@@ -65,6 +67,9 @@ function requestDomTree() {
 const { createLogger, getLogBuffer } =
   typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
 const log = createLogger('SF:Popup');
+
+const { SUPPORTED_LANGUAGES, initI18n, setLanguage, getLanguage, t } =
+  typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
 
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (e) => log('UNCAUGHT_ERROR', e.message));
@@ -188,13 +193,13 @@ function buildRangeSource(type, from, to, format) {
 // detectRangeFormat, so it must be the ISO-8601/RangeFormat.Resolve default.
 const RANGE_FORMAT_PRESETS = {
   IsoWeek: [
-    { format: '{yyyy}-W{ww}', label: 'ISO-Standard (2026-W35)' },
-    { format: '{yyyy}-{ww}', label: 'Jahr-Woche ohne Trennzeichen (2026-35)' },
+    { format: '{yyyy}-W{ww}', labelKey: 'apiConfig.presetIsoWeekStandard' },
+    { format: '{yyyy}-{ww}', labelKey: 'apiConfig.presetIsoWeekNoSeparator' },
   ],
   Date: [
-    { format: '{yyyy}-{mm}-{dd}', label: 'ISO-Standard (2026-08-28)' },
-    { format: '{dd}.{mm}.{yyyy}', label: 'Deutsches Format (28.08.2026)' },
-    { format: '{yyyy}{mm}{dd}', label: 'Ohne Trennzeichen (20260828)' },
+    { format: '{yyyy}-{mm}-{dd}', labelKey: 'apiConfig.presetDateStandard' },
+    { format: '{dd}.{mm}.{yyyy}', labelKey: 'apiConfig.presetDateGerman' },
+    { format: '{yyyy}{mm}{dd}', labelKey: 'apiConfig.presetDateNoSeparator' },
   ],
 };
 
@@ -215,7 +220,7 @@ function compileRangeFormatPattern(format) {
   return new RegExp(`^${pattern}$`);
 }
 
-// Auto-suggests a format the moment "Bereich" is picked (or its Type is
+// Auto-suggests a format the moment "Range" is picked (or its Type is
 // changed): matches `rawValue` — the literal example captured from the
 // recording (see part.value below) — against each type's presets in order,
 // falling back to the ISO-Standard preset (always first, see
@@ -242,14 +247,17 @@ function findUrlPartValue(urlParts, partId) {
   return variableUrlParts(urlParts).find(p => p.id === partId)?.value;
 }
 
-// "Beispiel: …" text next to Von/Bis: echoes `fromValue` back verbatim once
+// "Example: …" text next to From/To: echoes `fromValue` back verbatim once
 // it actually matches `format` (proving the round-trip works), or shows the
-// bare token template as a hint otherwise (not-yet-matching From) — or, for
-// an empty format (the "Eigenes Format…" preset before anything's been
-// typed into its revealed input), a placeholder prompting for one instead
-// of silently falling back to a different preset's template.
+// bare token template as a hint otherwise (not-yet-matching From) — or,
+// null for an empty format (the "Custom format…" preset before anything's
+// been typed into its revealed input), leaving it to the caller to show a
+// translated "enter a format" prompt instead of silently falling back to a
+// different preset's template. Kept translation-free (unlike the render
+// functions that call it) so it stays a pure, load-order-independent
+// function to unit-test directly.
 function rangeFormatExample(format, fromValue) {
-  if (!format) return '(Format eingeben)';
+  if (!format) return null;
   if (fromValue && compileRangeFormatPattern(format).test(fromValue)) return fromValue;
   return format;
 }
@@ -350,9 +358,13 @@ function removeGroupTreeNode(groups, path) {
 
 function formatGroupNodeLabel(node) {
   if (node.kind === 'group') {
-    return `${node.name} (${node.repeating ? 'wiederholend' : 'einzeln'})`;
+    return `${node.name} (${t(node.repeating ? 'group.repeating' : 'group.single')})`;
   }
-  const modeLabel = { text: 'Text', attribute: `Attribut: ${node.attribute}`, exists: 'Vorhanden?' }[node.mode];
+  const modeLabel = {
+    text: t('group.textMode'),
+    attribute: t('group.attributeMode', { attribute: node.attribute }),
+    exists: t('group.existsMode'),
+  }[node.mode];
   return `${node.name} — ${modeLabel}`;
 }
 
@@ -421,6 +433,20 @@ function persistState() {
 function show(id) { document.getElementById(id)?.classList.remove('hidden'); }
 function hide(id) { document.getElementById(id)?.classList.add('hidden'); }
 
+// Fills every static, always-present element (popup.html's data-i18n*
+// attributes) with the current language's text. Only needs to run once at
+// init and again after an explicit language switch — render() rebuilds
+// dynamic subtrees (group tree, API candidates, …) itself and those call
+// t() directly, so they don't rely on this sweep at all.
+function applyStaticTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-title]').forEach((el) => { el.title = t(el.dataset.i18nTitle); });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+  const langSelect = document.getElementById('lang-select');
+  if (langSelect) langSelect.value = getLanguage();
+  if (typeof document !== 'undefined' && document.documentElement) document.documentElement.lang = getLanguage();
+}
+
 function render() {
   ['checking', 'error', 'idle', 'selecting', 'api-config', 'generating', 'done'].forEach(s =>
     hide(`screen-${s}`)
@@ -444,6 +470,33 @@ function render() {
   if (_state.current === STATES.IDLE) {
     const urlEl = document.getElementById('url-display');
     if (urlEl) urlEl.textContent = _state.url || '—';
+
+    const robotsBtn = document.getElementById('btn-check-robots');
+    if (robotsBtn) {
+      robotsBtn.disabled = _state.robotsTxtChecking;
+      robotsBtn.textContent = t(_state.robotsTxtChecking ? 'idle.robotsCheckBtnChecking' : 'idle.robotsCheckBtn');
+    }
+    const robotsResultEl = document.getElementById('robots-txt-result');
+    if (robotsResultEl) {
+      const r = _state.robotsTxtResult;
+      if (!r) {
+        robotsResultEl.className = 'robots-txt-result hidden';
+      } else if (!r.ok) {
+        robotsResultEl.textContent = t('robots.checkFailed', { error: r.error });
+        robotsResultEl.className = 'robots-txt-result robots-txt-unknown';
+      } else if (r.notFound) {
+        robotsResultEl.textContent = t('robots.notFound');
+        robotsResultEl.className = 'robots-txt-result robots-txt-allowed';
+      } else if (r.allowed) {
+        robotsResultEl.textContent = r.matchedRule
+          ? t('robots.allowedWithRule', { path: r.path, pattern: r.matchedRule.pattern })
+          : t('robots.allowed', { path: r.path });
+        robotsResultEl.className = 'robots-txt-result robots-txt-allowed';
+      } else {
+        robotsResultEl.textContent = t('robots.disallowed', { path: r.path, pattern: r.matchedRule.pattern });
+        robotsResultEl.className = 'robots-txt-result robots-txt-disallowed';
+      }
+    }
 
     document.getElementById('btn-mode-flat')?.classList.toggle('active', _state.mode === 'flat');
     document.getElementById('btn-mode-container')?.classList.toggle('active', _state.mode === 'container');
@@ -472,15 +525,15 @@ function render() {
     if (previewBtn) {
       previewBtn.disabled = !hasConfig;
       previewBtn.classList.toggle('active', _state.previewActive);
-      previewBtn.textContent = _state.previewActive ? 'Vorschau beenden' : 'Vorschau anzeigen';
+      previewBtn.textContent = t(_state.previewActive ? 'idle.previewHideBtn' : 'idle.previewShowBtn');
     }
     const previewSummaryEl = document.getElementById('preview-summary');
     if (previewSummaryEl) {
       if (_state.previewActive && _state.previewSummary) {
         const { total, empty, truncated } = _state.previewSummary;
-        const parts = [`${total} Element(e) markiert`];
-        if (empty.length > 0) parts.push(`ohne Treffer: ${empty.join(', ')}`);
-        if (truncated) parts.push('Anzeige gekürzt (zu viele Treffer)');
+        const parts = [t('idle.previewSummaryMatched', { count: total })];
+        if (empty.length > 0) parts.push(t('idle.previewSummaryEmpty', { names: empty.join(', ') }));
+        if (truncated) parts.push(t('idle.previewSummaryTruncated'));
         previewSummaryEl.textContent = parts.join(' — ');
         previewSummaryEl.classList.toggle('warn', empty.length > 0);
         previewSummaryEl.classList.remove('hidden');
@@ -492,7 +545,7 @@ function render() {
     const apiCaptureBtn = document.getElementById('btn-api-capture');
     if (apiCaptureBtn) {
       apiCaptureBtn.classList.toggle('active', _state.apiCaptureActive);
-      apiCaptureBtn.textContent = _state.apiCaptureActive ? 'Netzwerk-Aufzeichnung beenden' : 'Netzwerk-Aufzeichnung starten';
+      apiCaptureBtn.textContent = t(_state.apiCaptureActive ? 'idle.apiCaptureStopBtn' : 'idle.apiCaptureStartBtn');
     }
     const apiCaptureSummaryEl = document.getElementById('api-capture-summary');
     if (apiCaptureSummaryEl) {
@@ -500,7 +553,7 @@ function render() {
       // Phase 4's search below runs *after* the user stops recording, so
       // this is the user's only confirmation that there's something to search.
       if (_state.apiCaptureCount > 0) {
-        apiCaptureSummaryEl.textContent = `${_state.apiCaptureCount} Anfrage(n) aufgezeichnet`;
+        apiCaptureSummaryEl.textContent = t('idle.apiCaptureSummary', { count: _state.apiCaptureCount });
         apiCaptureSummaryEl.classList.remove('hidden');
       } else {
         apiCaptureSummaryEl.classList.add('hidden');
@@ -526,7 +579,11 @@ function render() {
         const summaryEl = document.getElementById('api-config-summary');
         if (summaryEl) {
           const { fields, parameters, headers } = _state.apiConfig;
-          summaryEl.textContent = `API-Konfiguration bereit: ${fields.length} Feld(er), ${parameters.length} Parameter${headers ? `, ${headers.length} Header` : ''}.`;
+          summaryEl.textContent = t('idle.apiConfigSummary', {
+            fields: fields.length,
+            parameters: parameters.length,
+            headers: headers ? t('idle.apiConfigSummaryHeaders', { count: headers.length }) : '',
+          });
         }
         apiConfigPanel.classList.remove('hidden');
       } else {
@@ -593,7 +650,7 @@ function renderFields(fields = _state.fields) {
     row.innerHTML =
       `<span class="field-name" title="${escapeHtml(field.name)}">${escapeHtml(field.name)}</span>` +
       `<span class="field-selector" title="${escapeHtml(field.selector)}">${escapeHtml(field.selector)}</span>` +
-      `<button class="btn-danger btn-remove-field" data-index="${i}">Entfernen</button>`;
+      `<button class="btn-danger btn-remove-field" data-index="${i}">${escapeHtml(t('common.remove'))}</button>`;
     listEl.appendChild(row);
   });
 }
@@ -607,7 +664,7 @@ function renderFields(fields = _state.fields) {
 
 function renderApiCandidates({ target, candidates }) {
   const targetEl = document.getElementById('api-candidates-target');
-  if (targetEl) targetEl.textContent = `Gesucht: "${target}"`;
+  if (targetEl) targetEl.textContent = t('apiCandidates.searchedFor', { target });
 
   const listEl = document.getElementById('api-candidates-list');
   if (!listEl) return;
@@ -616,7 +673,7 @@ function renderApiCandidates({ target, candidates }) {
   if (candidates.length === 0) {
     const li = document.createElement('li');
     li.className = 'api-candidates-empty';
-    li.textContent = 'Keine Treffer in der Aufzeichnung.';
+    li.textContent = t('common.noMatches');
     listEl.appendChild(li);
     return;
   }
@@ -627,7 +684,7 @@ function renderApiCandidates({ target, candidates }) {
     li.innerHTML =
       `<div class="api-candidate-url" title="${escapeHtml(candidate.url)}">${escapeHtml(candidate.method)} ${escapeHtml(candidate.url)}</div>` +
       `<div class="api-candidate-path">${escapeHtml(candidate.path)}</div>` +
-      `<div class="api-candidate-value">Treffer: ${escapeHtml(String(candidate.value))}</div>`;
+      `<div class="api-candidate-value">${escapeHtml(t('apiCandidates.matchLabel', { value: String(candidate.value) }))}</div>`;
 
     if (candidate.siblings.length > 0) {
       const siblingsEl = document.createElement('div');
@@ -636,7 +693,7 @@ function renderApiCandidates({ target, candidates }) {
         const chip = document.createElement('button');
         chip.type = 'button';
         chip.className = 'api-sibling-chip';
-        chip.textContent = `+ ${sibling.name}`;
+        chip.textContent = t('apiCandidates.siblingChip', { name: sibling.name });
         chip.title = String(sibling.value);
         chip.dataset.candidateIndex = String(i);
         chip.dataset.siblingName = sibling.name;
@@ -645,7 +702,7 @@ function renderApiCandidates({ target, candidates }) {
       li.appendChild(siblingsEl);
     }
 
-    // "Verwenden" (Issue #53 Phase 5): only offered when the match sits
+    // "Use" (Issue #53 Phase 5): only offered when the match sits
     // inside an actual repeating record (candidate.itemsPath truthy,
     // valuePath non-empty — see deriveItemsAndValuePath's doc comment for
     // why an empty-but-non-null valuePath also isn't usable) — Api-Mode's
@@ -654,13 +711,13 @@ function renderApiCandidates({ target, candidates }) {
       const useRow = document.createElement('div');
       useRow.className = 'api-candidate-use';
       useRow.innerHTML =
-        `<input type="text" class="api-candidate-field-name" placeholder="Feldname" data-candidate-index="${i}" />` +
-        `<button type="button" class="btn-secondary btn-tiny api-candidate-confirm" data-candidate-index="${i}" disabled>Verwenden</button>`;
+        `<input type="text" class="api-candidate-field-name" placeholder="${escapeHtml(t('apiCandidates.useFieldNamePlaceholder'))}" data-candidate-index="${i}" />` +
+        `<button type="button" class="btn-secondary btn-tiny api-candidate-confirm" data-candidate-index="${i}" disabled>${escapeHtml(t('common.use'))}</button>`;
       li.appendChild(useRow);
     } else {
       const note = document.createElement('div');
       note.className = 'api-candidate-unusable';
-      note.textContent = 'Kein Datensatz-Array gefunden — als Quelle nicht verwendbar.';
+      note.textContent = t('common.noRecordArray');
       li.appendChild(note);
     }
 
@@ -720,8 +777,8 @@ function urlPartRowHtml(id, valueLabel, variable, name) {
   const safeId = escapeHtml(id);
   return (
     `<span class="api-config-part-value" title="${escapeHtml(valueLabel)}">${escapeHtml(valueLabel)}</span>` +
-    `<label><input type="checkbox" class="api-config-part-toggle" data-part-id="${safeId}" ${variable ? 'checked' : ''} /> variabel</label>` +
-    (variable ? `<input type="text" class="api-config-part-name" data-part-id="${safeId}" placeholder="Name" value="${escapeHtml(name || '')}" />` : '')
+    `<label><input type="checkbox" class="api-config-part-toggle" data-part-id="${safeId}" ${variable ? 'checked' : ''} /> ${escapeHtml(t('apiConfig.variableLabel'))}</label>` +
+    (variable ? `<input type="text" class="api-config-part-name" data-part-id="${safeId}" placeholder="${escapeHtml(t('common.namePlaceholder'))}" value="${escapeHtml(name || '')}" />` : '')
   );
 }
 
@@ -779,16 +836,21 @@ function renderApiConfigParameters(draft, discoveryCandidates) {
 
     const title = document.createElement('div');
     title.className = 'row-label';
-    title.textContent = part.name ? part.name : '(noch unbenannt)';
+    title.textContent = part.name ? part.name : t('apiConfig.unnamedPart');
     card.appendChild(title);
 
     const kindRow = document.createElement('div');
     kindRow.className = 'api-config-source-kind';
+    const sourceKindLabels = {
+      staticList: t('apiConfig.sourceKindStaticList'),
+      discovery: t('apiConfig.sourceKindDiscovery'),
+      range: t('apiConfig.sourceKindRange'),
+    };
     kindRow.innerHTML = ['staticList', 'discovery', 'range'].map(kind => `
       <label>
         <input type="radio" name="source-kind-${safePartId}" class="api-config-source-kind-radio"
           data-part-id="${safePartId}" value="${kind}" ${source?.kind === kind ? 'checked' : ''} />
-        ${{ staticList: 'Werteliste', discovery: 'Discovery-Endpunkt', range: 'Bereich' }[kind]}
+        ${escapeHtml(sourceKindLabels[kind])}
       </label>
     `).join('');
     card.appendChild(kindRow);
@@ -796,17 +858,17 @@ function renderApiConfigParameters(draft, discoveryCandidates) {
     const fieldsEl = document.createElement('div');
     fieldsEl.className = 'api-config-source-fields';
     if (source?.kind === 'staticList') {
-      fieldsEl.innerHTML = `<textarea class="api-config-static-list" data-part-id="${safePartId}" rows="2" placeholder="Werte, kommagetrennt oder pro Zeile">${escapeHtml(source.valuesText || '')}</textarea>`;
+      fieldsEl.innerHTML = `<textarea class="api-config-static-list" data-part-id="${safePartId}" rows="2" placeholder="${escapeHtml(t('apiConfig.valueListPlaceholder'))}">${escapeHtml(source.valuesText || '')}</textarea>`;
     } else if (source?.kind === 'discovery') {
       fieldsEl.appendChild(renderDiscoverySourceFields(part, source, discoveryCandidates));
     } else if (source?.kind === 'range') {
       fieldsEl.innerHTML = `
         <div class="api-config-range-row">
           <select class="api-config-range-type" data-part-id="${safePartId}">
-            ${['IsoWeek', 'Number', 'Date'].map(t => `<option value="${t}" ${source.type === t ? 'selected' : ''}>${t}</option>`).join('')}
+            ${['IsoWeek', 'Number', 'Date'].map(rangeType => `<option value="${rangeType}" ${source.type === rangeType ? 'selected' : ''}>${rangeType}</option>`).join('')}
           </select>
-          <input type="text" class="api-config-range-from" data-part-id="${safePartId}" placeholder="Von" value="${escapeHtml(source.from || '')}" />
-          <input type="text" class="api-config-range-to" data-part-id="${safePartId}" placeholder="Bis (z. B. \"today\")" value="${escapeHtml(source.to || '')}" />
+          <input type="text" class="api-config-range-from" data-part-id="${safePartId}" placeholder="${escapeHtml(t('apiConfig.rangeFromPlaceholder'))}" value="${escapeHtml(source.from || '')}" />
+          <input type="text" class="api-config-range-to" data-part-id="${safePartId}" placeholder="${escapeHtml(t('apiConfig.rangeToPlaceholder'))}" value="${escapeHtml(source.to || '')}" />
         </div>
         ${renderRangeFormatFields(source, safePartId)}
       `;
@@ -817,8 +879,8 @@ function renderApiConfigParameters(draft, discoveryCandidates) {
   });
 }
 
-// The preset dropdown + revealed custom-format input + live "Beispiel: …"
-// text below Von/Bis, for IsoWeek/Date only (Number has no format concept).
+// The preset dropdown + revealed custom-format input + live "Example: …"
+// text below From/To, for IsoWeek/Date only (Number has no format concept).
 // `source.format` is always already set by the time this renders — either
 // auto-detected (setApiConfigSourceKind/the Type-change handler both call
 // detectRangeFormat) or explicitly chosen by the user — so "custom" here
@@ -829,14 +891,15 @@ function renderRangeFormatFields(source, safePartId) {
   const presets = RANGE_FORMAT_PRESETS[source.type];
   const isCustom = !presets.some(preset => preset.format === source.format);
   const options = presets
-    .map(preset => `<option value="${escapeHtml(preset.format)}" ${preset.format === source.format ? 'selected' : ''}>${escapeHtml(preset.label)}</option>`)
-    .join('') + `<option value="custom" ${isCustom ? 'selected' : ''}>Eigenes Format…</option>`;
+    .map(preset => `<option value="${escapeHtml(preset.format)}" ${preset.format === source.format ? 'selected' : ''}>${escapeHtml(t(preset.labelKey))}</option>`)
+    .join('') + `<option value="custom" ${isCustom ? 'selected' : ''}>${escapeHtml(t('apiConfig.customFormatOption'))}</option>`;
+  const example = rangeFormatExample(source.format, source.from) ?? t('apiConfig.formatEnterPrompt');
 
   return `
     <div class="api-config-range-format-row">
       <select class="api-config-range-format-preset" data-part-id="${safePartId}">${options}</select>
       ${isCustom ? `<input type="text" class="api-config-range-format-custom" data-part-id="${safePartId}" placeholder="{yyyy}-{ww}" value="${escapeHtml(source.format || '')}" />` : ''}
-      <p class="api-config-range-format-example">Beispiel: ${escapeHtml(rangeFormatExample(source.format, source.from))}</p>
+      <p class="api-config-range-format-example">${escapeHtml(t('apiConfig.formatExample', { example }))}</p>
     </div>
   `;
 }
@@ -847,7 +910,7 @@ function renderDiscoverySourceFields(part, source, discoveryCandidates) {
   if (source.urlTemplate) {
     const summary = document.createElement('p');
     summary.className = 'api-candidates-target';
-    summary.textContent = `Quelle: ${source.urlTemplate} (${source.itemsPath} → ${source.valuePath})`;
+    summary.textContent = t('apiConfig.discoverySource', { urlTemplate: source.urlTemplate, itemsPath: source.itemsPath, valuePath: source.valuePath });
     wrap.appendChild(summary);
   }
 
@@ -855,14 +918,14 @@ function renderDiscoverySourceFields(part, source, discoveryCandidates) {
   searchBtn.type = 'button';
   searchBtn.className = 'btn-secondary btn-tiny api-config-discovery-search';
   searchBtn.dataset.partId = part.id;
-  searchBtn.textContent = source.urlTemplate ? 'Erneut suchen' : 'Wert auf Seite suchen';
+  searchBtn.textContent = t(source.urlTemplate ? 'apiConfig.discoverySearchAgainBtn' : 'apiConfig.discoverySearchBtn');
   wrap.appendChild(searchBtn);
 
   if (discoveryCandidates && discoveryCandidates.parameter === part.id) {
     const list = document.createElement('ul');
     list.className = 'api-candidates-list';
     if (discoveryCandidates.candidates.length === 0) {
-      list.innerHTML = '<li class="api-candidates-empty">Keine Treffer in der Aufzeichnung.</li>';
+      list.innerHTML = `<li class="api-candidates-empty">${escapeHtml(t('common.noMatches'))}</li>`;
     } else {
       discoveryCandidates.candidates.forEach((candidate, i) => {
         const li = document.createElement('li');
@@ -872,8 +935,8 @@ function renderDiscoverySourceFields(part, source, discoveryCandidates) {
           `<div class="api-candidate-url" title="${escapeHtml(candidate.url)}">${escapeHtml(candidate.method)} ${escapeHtml(candidate.url)}</div>` +
           `<div class="api-candidate-path">${escapeHtml(candidate.path)}</div>` +
           (usable
-            ? `<button type="button" class="btn-secondary btn-tiny api-config-discovery-confirm" data-part-id="${escapeHtml(part.id)}" data-candidate-index="${i}">Verwenden</button>`
-            : `<div class="api-candidate-unusable">Kein Datensatz-Array gefunden — als Quelle nicht verwendbar.</div>`);
+            ? `<button type="button" class="btn-secondary btn-tiny api-config-discovery-confirm" data-part-id="${escapeHtml(part.id)}" data-candidate-index="${i}">${escapeHtml(t('common.use'))}</button>`
+            : `<div class="api-candidate-unusable">${escapeHtml(t('common.noRecordArray'))}</div>`);
         list.appendChild(li);
       });
     }
@@ -889,7 +952,7 @@ function renderApiConfigHeaders(capturedHeaders, headerDecisions) {
   listEl.innerHTML = '';
 
   if (capturedHeaders.length === 0) {
-    listEl.innerHTML = '<li class="api-candidates-empty">Keine Request-Header aufgezeichnet.</li>';
+    listEl.innerHTML = `<li class="api-candidates-empty">${escapeHtml(t('apiConfig.noHeadersRecorded'))}</li>`;
     return;
   }
 
@@ -902,11 +965,11 @@ function renderApiConfigHeaders(capturedHeaders, headerDecisions) {
       `<span class="api-config-header-name" title="${escapeHtml(header.name)}: ${escapeHtml(header.value)}">${escapeHtml(header.name)}</span>` +
       (decision.include
         ? `<span class="api-config-header-mode">
-             <label><input type="radio" name="header-mode-${escapeHtml(header.name)}" class="api-config-header-mode-radio" data-header-name="${escapeHtml(header.name)}" value="literal" ${decision.mode === 'literal' ? 'checked' : ''} /> Wert</label>
-             <label><input type="radio" name="header-mode-${escapeHtml(header.name)}" class="api-config-header-mode-radio" data-header-name="${escapeHtml(header.name)}" value="env" ${decision.mode === 'env' ? 'checked' : ''} /> Umgebungsvariable</label>
+             <label><input type="radio" name="header-mode-${escapeHtml(header.name)}" class="api-config-header-mode-radio" data-header-name="${escapeHtml(header.name)}" value="literal" ${decision.mode === 'literal' ? 'checked' : ''} /> ${escapeHtml(t('apiConfig.headerModeValue'))}</label>
+             <label><input type="radio" name="header-mode-${escapeHtml(header.name)}" class="api-config-header-mode-radio" data-header-name="${escapeHtml(header.name)}" value="env" ${decision.mode === 'env' ? 'checked' : ''} /> ${escapeHtml(t('apiConfig.headerModeEnv'))}</label>
            </span>` +
           (decision.mode === 'env'
-            ? `<input type="text" class="api-config-env-name" data-header-name="${escapeHtml(header.name)}" placeholder="ENV_NAME" value="${escapeHtml(decision.envName || '')}" />`
+            ? `<input type="text" class="api-config-env-name" data-header-name="${escapeHtml(header.name)}" placeholder="${escapeHtml(t('apiConfig.envNamePlaceholder'))}" value="${escapeHtml(decision.envName || '')}" />`
             : '')
         : '');
     listEl.appendChild(li);
@@ -943,18 +1006,18 @@ function buildGroupTreeNodeEl(node, path, depth) {
   if (node.kind === 'group') {
     const addContainerBtn = document.createElement('button');
     addContainerBtn.className = 'btn-secondary btn-tiny btn-add-subcontainer';
-    addContainerBtn.textContent = '+ Container';
+    addContainerBtn.textContent = t('group.addSubcontainerBtn');
     row.appendChild(addContainerBtn);
 
     const addFieldBtn = document.createElement('button');
     addFieldBtn.className = 'btn-secondary btn-tiny btn-add-subfield';
-    addFieldBtn.textContent = '+ Datenfeld';
+    addFieldBtn.textContent = t('group.addSubfieldBtn');
     row.appendChild(addFieldBtn);
   }
 
   const removeBtn = document.createElement('button');
   removeBtn.className = 'btn-danger btn-remove-group-node';
-  removeBtn.textContent = 'Entfernen';
+  removeBtn.textContent = t('common.remove');
   row.appendChild(removeBtn);
 
   li.appendChild(row);
@@ -1264,7 +1327,7 @@ const API_CONFIG_SOURCE_DEFAULTS = {
 };
 
 // Range sources get their format auto-detected from the part's own
-// captured example value the moment "Bereich" is picked — see
+// captured example value the moment "Range" is picked — see
 // detectRangeFormat's doc comment.
 function setApiConfigSourceKind(partId, kind) {
   const draft = _state.apiConfigDraft;
@@ -1286,7 +1349,7 @@ function setApiConfigHeaderDecision(headerName, patch) {
   patchApiConfigDraft({ headerDecisions: { ...draft.headerDecisions, [headerName]: { ...current, ...patch } } });
 }
 
-// Final assembly (Issue #53 Phase 5's "Übernehmen"): staticList/range
+// Final assembly (Issue #53 Phase 5's "Apply"): staticList/range
 // sources are only ever kept as raw UI state (valuesText / type+from+to) in
 // apiConfigDraft, never as a built wire object — built here, once, from
 // whatever's currently in state. discovery sources are already complete
@@ -1334,8 +1397,25 @@ async function checkCompanion() {
     setState(STATES.IDLE, { url });
   } catch (err) {
     log('HEALTH_CHECK FAIL', err.message);
-    setLastError(err.message, 'Companion-Verbindung');
+    setLastError(err.message, 'Companion connection');
     setState(STATES.COMPANION_ERROR);
+  }
+}
+
+// robots.txt is fetched by the content script (same-origin relative to the
+// inspected page, see checkRobotsTxt in content-script.js) — the side panel
+// only relays the request/response through the service worker, same
+// request/response shape as GET_LOGS above.
+async function checkRobotsTxt() {
+  log('ROBOTS_TXT_CHECK start');
+  patchState({ robotsTxtChecking: true, robotsTxtResult: null });
+  try {
+    const result = await chrome.runtime.sendMessage({ type: 'CHECK_ROBOTS_TXT' });
+    log('ROBOTS_TXT_CHECK result', result);
+    patchState({ robotsTxtChecking: false, robotsTxtResult: result });
+  } catch (err) {
+    log('ROBOTS_TXT_CHECK failed', err.message);
+    patchState({ robotsTxtChecking: false, robotsTxtResult: { ok: false, error: err.message } });
   }
 }
 
@@ -1347,7 +1427,7 @@ async function checkCompanion() {
 // found nothing). `data` is logged separately so it ends up in the bug
 // report if the user reports it.
 function buildVerificationErrorMessage(data) {
-  return data?.error || 'Verifikation der Konfiguration fehlgeschlagen.';
+  return data?.error || t('toast.verificationFailed');
 }
 
 async function generate() {
@@ -1373,7 +1453,7 @@ async function generate() {
   } catch (err) {
     log('GENERATE FAIL', err.message);
     setState(STATES.IDLE);
-    showToast(`Fehler: ${err.message}`, 'Skript-Generierung');
+    showToast(t('toast.generationError', { message: err.message }), 'Script generation');
   }
 }
 
@@ -1392,7 +1472,7 @@ function triggerDownload() {
 
 // Lets a user hand over the current Fields/Groups configuration when
 // reporting a selector problem, without having to describe their setup by
-// hand — e.g. attached to a "Fehler melden" GitHub issue or shared directly.
+// hand — e.g. attached to a "Report bug" GitHub issue or shared directly.
 function downloadConfigExport() {
   const manifest = typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest() : {};
   const exportObj = buildConfigExport(_state.url, _state.mode, _state.fields, _state.groups, manifest, _state.apiConfig);
@@ -1409,9 +1489,9 @@ function downloadConfigExport() {
   URL.revokeObjectURL(objectUrl);
 }
 
-// `context` is a short human label (e.g. "Skript-Generierung"); passing it
-// marks the error as reportable — the toast then also offers "Fehler
-// melden" and the message/context are attached to the next bug report.
+// `context` is a short human label (e.g. "Script generation"); passing it
+// marks the error as reportable — the toast then also offers "Report
+// bug" and the message/context are attached to the next bug report.
 function showToast(message, context) {
   const toast = document.getElementById('error-toast');
   if (!toast) return;
@@ -1453,8 +1533,12 @@ async function collectLogs() {
   }
 }
 
+// This log/bug-report format is always English, independent of the popup's
+// selected UI language — it's a diagnostic artifact for maintainers on the
+// public, English-language GitHub repo, not conversational UI a
+// multilingual end user reads day-to-day (see CLAUDE.md's Language policy).
 function formatLogSection(title, entries) {
-  if (!entries || entries.length === 0) return `## ${title}\n(keine Einträge)\n`;
+  if (!entries || entries.length === 0) return `## ${title}\n(no entries)\n`;
   const lines = entries.map(e => `${e.ts} ${e.event}${e.data !== null ? ' ' + JSON.stringify(e.data) : ''}`);
   return `## ${title}\n${lines.join('\n')}\n`;
 }
@@ -1465,16 +1549,16 @@ async function buildBugReport() {
 
   const header = [
     '# Scraping Factory — Bug Report',
-    `Zeitpunkt: ${new Date().toISOString()}`,
-    `Extension-Version: ${manifest.version || '?'}`,
-    `Seite: ${_state.url || '—'}`,
-    lastReportedError ? `Letzter Fehler: ${lastReportedError.message} (${lastReportedError.context})` : null,
+    `Timestamp: ${new Date().toISOString()}`,
+    `Extension version: ${manifest.version || '?'}`,
+    `Page: ${_state.url || '—'}`,
+    lastReportedError ? `Last error: ${lastReportedError.message} (${lastReportedError.context})` : null,
   ].filter(Boolean).join('\n');
 
   const sections = [
     formatLogSection('Side Panel', popup),
     formatLogSection('Service Worker', background),
-    contentError ? `## Content Script\n(nicht verfügbar: ${contentError})\n` : formatLogSection('Content Script', content),
+    contentError ? `## Content Script\n(unavailable: ${contentError})\n` : formatLogSection('Content Script', content),
   ].join('\n');
 
   return `${header}\n\n${sections}`;
@@ -1498,12 +1582,12 @@ function downloadBugReport(text) {
 // pointing at the downloaded bug-report.log (URLs have practical length
 // limits, so we don't risk silently truncating mid-word into a broken link).
 function buildGithubIssueUrl(reportText) {
-  const title = lastReportedError ? `Fehler: ${lastReportedError.message}` : 'Fehlerbericht';
+  const title = lastReportedError ? `Error: ${lastReportedError.message}` : 'Bug report';
   const truncated = reportText.length > BUG_REPORT_LOG_EXCERPT_LIMIT;
   const excerpt = truncated ? reportText.slice(-BUG_REPORT_LOG_EXCERPT_LIMIT) : reportText;
 
   const body = [
-    'Bitte kurz beschreiben, was du getan hast, als der Fehler auftrat.',
+    'Please briefly describe what you were doing when the error occurred.',
     '',
     '<details><summary>Log</summary>',
     '',
@@ -1511,7 +1595,7 @@ function buildGithubIssueUrl(reportText) {
     excerpt,
     '```',
     '</details>',
-    truncated ? '\n_(Log gekürzt — bitte die heruntergeladene bug-report.log-Datei zusätzlich an dieses Issue anhängen.)_' : '',
+    truncated ? '\n_(Log truncated — please also attach the downloaded bug-report.log file to this issue.)_' : '',
   ].filter(Boolean).join('\n');
 
   return `${GITHUB_REPO_URL}/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
@@ -1631,6 +1715,13 @@ function cancelExtendedField() {
 // ── Event wiring ──────────────────────────────────────────────────────────────
 
 function wireEvents() {
+  document.getElementById('lang-select')?.addEventListener('change', async (e) => {
+    log('LANG_SELECT change', e.target.value);
+    await setLanguage(e.target.value);
+    applyStaticTranslations();
+    render(); // re-render currently-visible dynamic content (group tree, API candidates, …) in the new language
+  });
+
   document.getElementById('btn-report-bug-error')?.addEventListener('click', reportBug);
   document.getElementById('btn-report-bug-toast')?.addEventListener('click', reportBug);
   document.getElementById('btn-report-bug-domtree')?.addEventListener('click', reportBug);
@@ -1646,6 +1737,11 @@ function wireEvents() {
     togglePreview();
   });
 
+  document.getElementById('btn-check-robots')?.addEventListener('click', () => {
+    log('BTN check-robots');
+    checkRobotsTxt();
+  });
+
   document.getElementById('btn-api-capture')?.addEventListener('click', () => {
     log('BTN api-capture');
     toggleApiCapture();
@@ -1657,7 +1753,7 @@ function wireEvents() {
   });
 
   // Event delegation for the sibling-field suggestion chips — toggles which
-  // ones get included as extra fields once "Verwenden" is confirmed below.
+  // ones get included as extra fields once "Use" is confirmed below.
   document.getElementById('api-candidates-list')?.addEventListener('click', (e) => {
     const chip = e.target.closest('.api-sibling-chip');
     if (chip) {
@@ -1679,7 +1775,7 @@ function wireEvents() {
     }
   });
 
-  // Enables "Verwenden" once a field name has been typed for that row.
+  // Enables "Use" once a field name has been typed for that row.
   document.getElementById('api-candidates-list')?.addEventListener('input', (e) => {
     const input = e.target.closest('.api-candidate-field-name');
     if (!input) return;
@@ -1710,7 +1806,7 @@ function wireEvents() {
     const rangeType = e.target.closest('.api-config-range-type');
     if (rangeType) {
       const partId = rangeType.dataset.partId;
-      // Re-detect on every Type change, not just the initial "Bereich" pick
+      // Re-detect on every Type change, not just the initial "Range" pick
       // — switching e.g. IsoWeek → Date should re-match the same captured
       // raw value against Date's own presets instead of keeping a format
       // string that no longer means anything for the new Type.
@@ -1848,7 +1944,7 @@ function wireEvents() {
     setState(STATES.IDLE, { pendingSelector: null });
   });
 
-  // Event delegation for "Entfernen" buttons in the field list
+  // Event delegation for "Remove" buttons in the field list
   document.getElementById('fields-list')?.addEventListener('click', (e) => {
     const btn = e.target.closest('.btn-remove-field');
     if (!btn) return;
@@ -1877,10 +1973,10 @@ function wireEvents() {
     log('MSG_IN', message);
     if (message.type === 'SELECTION_UNAVAILABLE' && _state.current === STATES.SELECTING) {
       log('SELECTION_UNAVAILABLE', message.reason);
-      setLastError(message.reason, 'Element-Auswahl');
+      setLastError(message.reason, 'Element selection');
       const returnTo = _state.apiConfigDraft ? STATES.API_CONFIG : STATES.IDLE;
       setState(returnTo, { selectionKind: null, pendingParentPath: null, pendingNewContainer: null, apiSearchTarget: null });
-      showToast('Element-Auswahl auf dieser Seite nicht möglich.');
+      showToast(t('toast.selectionUnavailable'));
     }
     if (message.type === 'ELEMENT_SELECTED' && _state.current === STATES.SELECTING) {
       log('ELEMENT_SELECTED received (real-time)', message.selector);
@@ -1913,8 +2009,8 @@ function wireEvents() {
         patchState({ domTree: message.tree, domTreeTruncated: !!message.truncated, domTreeError: null });
         renderDomTree(message.tree);
       } else {
-        const reason = message.error || 'Baum konnte nicht geladen werden.';
-        setLastError(reason, 'DOM-Baum-Ansicht');
+        const reason = message.error || 'Tree could not be loaded.';
+        setLastError(reason, 'DOM tree view');
         patchState({ domTreeError: reason });
       }
     }
@@ -1927,9 +2023,9 @@ function wireEvents() {
     }
     if (message.type === 'PREVIEW_UNAVAILABLE') {
       log('PREVIEW_UNAVAILABLE', message.reason);
-      setLastError(message.reason, 'Vorschau');
+      setLastError(message.reason, 'Preview');
       patchState({ previewActive: false, previewSummary: null });
-      showToast('Vorschau auf dieser Seite nicht möglich.');
+      showToast(t('toast.previewUnavailable'));
     }
     if (message.type === 'API_CAPTURE_ENTRY' && _state.apiCaptureActive) {
       log('API_CAPTURE_ENTRY received', message.entry?.url);
@@ -1937,9 +2033,9 @@ function wireEvents() {
     }
     if (message.type === 'API_CAPTURE_UNAVAILABLE') {
       log('API_CAPTURE_UNAVAILABLE', message.reason);
-      setLastError(message.reason, 'Netzwerk-Aufzeichnung');
+      setLastError(message.reason, 'Network recording');
       patchState({ apiCaptureActive: false, apiCaptureCount: 0 });
-      showToast('Netzwerk-Aufzeichnung auf dieser Seite nicht möglich.');
+      showToast(t('toast.captureUnavailable'));
     }
     if (message.type === 'API_CANDIDATES' && _state.apiSearchTarget) {
       log('API_CANDIDATES received', { target: message.target, count: message.candidates?.length, for: _state.apiSearchTarget });
@@ -1959,6 +2055,10 @@ function wireEvents() {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 async function init() {
+  const language = await initI18n(typeof navigator !== 'undefined' ? navigator.language : '');
+  log('INIT language', language);
+  applyStaticTranslations();
+
   wireEvents();
 
   log('INIT reading session storage');
@@ -2040,5 +2140,6 @@ if (typeof module !== 'undefined') {
     buildStaticListSource, buildDiscoverySource, buildRangeSource, buildApiHeaders, buildApiConfig,
     variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
     detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
+    applyStaticTranslations,
   };
 }
