@@ -1832,6 +1832,125 @@ describe('Preview toggle (btn-preview)', () => {
   });
 });
 
+describe('robots.txt check (btn-check-robots)', () => {
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <button id="btn-check-robots"></button>
+        <p id="robots-txt-result" class="hidden"></p>
+      </section>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: () => {} },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com/produkte' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({}),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+  });
+
+  test('starts out hidden with the default label', () => {
+    const result = document.getElementById('robots-txt-result');
+    expect(result.classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('btn-check-robots').textContent).toBe('robots.txt prüfen');
+  });
+
+  test('clicking sends CHECK_ROBOTS_TXT and shows a disallowed result in red', async () => {
+    chrome.runtime.sendMessage.mockResolvedValue({
+      ok: true, robotsUrl: 'https://example.com/robots.txt', path: '/produkte',
+      notFound: false, allowed: false, matchedRule: { type: 'disallow', pattern: '/produkte' },
+    });
+
+    document.getElementById('btn-check-robots').click();
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'CHECK_ROBOTS_TXT' });
+    expect(document.getElementById('btn-check-robots').textContent).toBe('Prüfe robots.txt…');
+    expect(document.getElementById('btn-check-robots').disabled).toBe(true);
+
+    await flushMicrotasks();
+
+    const result = document.getElementById('robots-txt-result');
+    expect(result.classList.contains('hidden')).toBe(false);
+    expect(result.classList.contains('robots-txt-disallowed')).toBe(true);
+    expect(result.textContent).toContain('Verboten');
+    expect(result.textContent).toContain('/produkte');
+    expect(document.getElementById('btn-check-robots').disabled).toBe(false);
+  });
+
+  test('an allowed result is shown in green', async () => {
+    chrome.runtime.sendMessage.mockResolvedValue({
+      ok: true, robotsUrl: 'https://example.com/robots.txt', path: '/produkte',
+      notFound: false, allowed: true, matchedRule: null,
+    });
+
+    document.getElementById('btn-check-robots').click();
+    await flushMicrotasks();
+
+    const result = document.getElementById('robots-txt-result');
+    expect(result.classList.contains('robots-txt-allowed')).toBe(true);
+    expect(result.textContent).toContain('Erlaubt');
+  });
+
+  test('no robots.txt found (404) is shown as allowed', async () => {
+    chrome.runtime.sendMessage.mockResolvedValue({
+      ok: true, robotsUrl: 'https://example.com/robots.txt', path: '/produkte',
+      notFound: true, allowed: true, matchedRule: null,
+    });
+
+    document.getElementById('btn-check-robots').click();
+    await flushMicrotasks();
+
+    const result = document.getElementById('robots-txt-result');
+    expect(result.classList.contains('robots-txt-allowed')).toBe(true);
+    expect(result.textContent).toContain('Keine robots.txt gefunden');
+  });
+
+  test('a failed check is shown in gray with the error message', async () => {
+    chrome.runtime.sendMessage.mockResolvedValue({ ok: false, error: 'Keine aktive Seite gefunden.' });
+
+    document.getElementById('btn-check-robots').click();
+    await flushMicrotasks();
+
+    const result = document.getElementById('robots-txt-result');
+    expect(result.classList.contains('robots-txt-unknown')).toBe(true);
+    expect(result.textContent).toContain('Keine aktive Seite gefunden.');
+  });
+
+  test('a rejected sendMessage is handled the same way as an {ok:false} result', async () => {
+    chrome.runtime.sendMessage.mockRejectedValue(new Error('No content script'));
+
+    document.getElementById('btn-check-robots').click();
+    await flushMicrotasks();
+
+    const result = document.getElementById('robots-txt-result');
+    expect(result.classList.contains('robots-txt-unknown')).toBe(true);
+    expect(result.textContent).toContain('No content script');
+    expect(document.getElementById('btn-check-robots').disabled).toBe(false);
+  });
+});
+
 // API-Mode network recording (Issue #53 Phase 3) — a standalone toggle, not
 // gated by Fields/Groups config the way btn-preview is (no third API mode
 // in the popup yet, see btn-mode-flat/-container).
