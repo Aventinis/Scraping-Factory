@@ -265,6 +265,14 @@ function findApiCandidates(entries, targetText) {
     if (matches.length === 0) return;
     const isJsonContentType = !!(entry.contentType && entry.contentType.includes('json'));
     matches.forEach(({ path, value }) => {
+      // itemsPath/valuePath (Issue #53 Phase 5): derived once here so the
+      // popup — which only ever sees this message's plain data, never
+      // content-script.js's own functions — doesn't need its own copy of
+      // deriveItemsAndValuePath to know whether/how a candidate can become
+      // an API-mode source. null when the match isn't inside a repeating
+      // array at all; valuePath is "" (not null) for the bare-array-element
+      // case — see deriveItemsAndValuePath's own doc comment.
+      const derived = deriveItemsAndValuePath(path);
       ranked.push({
         entryId: entry.id,
         url: entry.url,
@@ -272,6 +280,9 @@ function findApiCandidates(entries, targetText) {
         path,
         value,
         siblings: siblingFields(parsed, path),
+        itemsPath: derived ? derived.itemsPath : null,
+        valuePath: derived ? derived.valuePath : null,
+        requestHeaders: entry.requestHeaders || [],
         isJsonContentType,
         matchCountInBody: matches.length,
       });
@@ -287,11 +298,43 @@ function findApiCandidates(entries, targetText) {
   return ranked.slice(0, MAX_API_CANDIDATES).map(({ isJsonContentType, matchCountInBody, ...candidate }) => candidate);
 }
 
+// Splits a match path into the "repeating records" part and the "one
+// field within a record" part — e.g. "data.items[2].price" becomes
+// itemsPath "data.items" (the array itself) and valuePath "price" (the
+// matched field, relative to one record). Backend shape: ApiConfig.ItemsPath
+// is exactly this itemsPath for whichever candidate the user confirms as
+// the API-mode source, and a DiscoverySource built from a *different*
+// confirmed candidate uses the same split for its own ItemsPath/ValuePath
+// (see companion/.../IR/ApiConfig.cs) — Phase 5 reuses this one function
+// for both.
+//
+// Returns null when the path never enters an array at all (a bare
+// top-level scalar match) — there is no repeating-records structure to
+// derive an ItemsPath from, so such a candidate can't become an API-mode
+// source. Also null-ish in effect when the match *is* the array element
+// itself (e.g. "tags[0]", a plain array of scalars, no record object to
+// pull other fields out of) — valuePath comes back as "", which the
+// backend's validator rejects as a field path (Fields[].Path must be
+// non-empty), so callers should treat an empty valuePath the same as null.
+function deriveItemsAndValuePath(matchPath) {
+  const tokens = pathTokens(matchPath);
+  let lastBracketIndex = -1;
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    if (tokens[i].startsWith('[')) { lastBracketIndex = i; break; }
+  }
+  if (lastBracketIndex === -1) return null;
+
+  return {
+    itemsPath: tokensToPath(tokens.slice(0, lastBracketIndex)),
+    valuePath: tokensToPath(tokens.slice(lastBracketIndex + 1)),
+  };
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     buildSelector, elementPath, serializeDomTree,
     matchFlatFields, matchGroupTree, computePreviewMatches,
-    findValueInJson, siblingFields, findApiCandidates,
+    findValueInJson, siblingFields, findApiCandidates, deriveItemsAndValuePath,
   };
 }
 
