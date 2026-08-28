@@ -56,6 +56,57 @@ describe('shouldSkipBody', () => {
   });
 });
 
+describe('resolveUrl (Issue #53 Phase 5)', () => {
+  test('leaves an already-absolute URL unchanged', () => {
+    expect(capture.resolveUrl('https://example.com/api/items')).toBe('https://example.com/api/items');
+  });
+
+  test('resolves a relative URL against the page location (jsdom default: http://localhost/)', () => {
+    expect(capture.resolveUrl('/api/items')).toBe('http://localhost/api/items');
+  });
+
+  test('falls back to the raw string for a genuinely unparseable value instead of throwing', () => {
+    expect(capture.resolveUrl('http://')).toBe('http://');
+  });
+});
+
+describe('normalizeHeaders (Issue #53 Phase 5)', () => {
+  test('normalizes a plain {name: value} object', () => {
+    expect(capture.normalizeHeaders({ 'Content-Type': 'application/json', 'X-Api-Key': 'abc' })).toEqual([
+      { name: 'Content-Type', value: 'application/json' },
+      { name: 'X-Api-Key', value: 'abc' },
+    ]);
+  });
+
+  test('normalizes a Headers-like instance via .entries()', () => {
+    const headersLike = { entries: () => [['accept', 'application/json']][Symbol.iterator]() };
+    expect(capture.normalizeHeaders(headersLike)).toEqual([{ name: 'accept', value: 'application/json' }]);
+  });
+
+  test('normalizes an array of [name, value] pairs (not mistaken for a Headers-like object)', () => {
+    expect(capture.normalizeHeaders([['x-a', '1'], ['x-b', '2']])).toEqual([
+      { name: 'x-a', value: '1' },
+      { name: 'x-b', value: '2' },
+    ]);
+  });
+
+  test('returns an empty array for null/undefined', () => {
+    expect(capture.normalizeHeaders(null)).toEqual([]);
+    expect(capture.normalizeHeaders(undefined)).toEqual([]);
+  });
+
+  test('caps the number of headers at MAX_REQUEST_HEADERS', () => {
+    const many = Object.fromEntries(Array.from({ length: capture.MAX_REQUEST_HEADERS + 10 }, (_, i) => [`h${i}`, 'v']));
+    expect(capture.normalizeHeaders(many)).toHaveLength(capture.MAX_REQUEST_HEADERS);
+  });
+
+  test('truncates an over-long header value at MAX_HEADER_VALUE_CHARS', () => {
+    const longValue = 'x'.repeat(capture.MAX_HEADER_VALUE_CHARS + 10);
+    const [header] = capture.normalizeHeaders({ 'x-long': longValue });
+    expect(header.value).toHaveLength(capture.MAX_HEADER_VALUE_CHARS);
+  });
+});
+
 describe('buildEntry', () => {
   test('builds an entry with an incrementing id and uppercased method', () => {
     const first = capture.buildEntry('https://example.com/a', 'get', 200, 'application/json', '{}');
@@ -63,6 +114,14 @@ describe('buildEntry', () => {
 
     expect(first.method).toBe('GET');
     expect(second.id).toBe(first.id + 1);
+  });
+
+  test('carries the given requestHeaders through, defaulting to an empty array', () => {
+    const withHeaders = capture.buildEntry('https://example.com/a', 'GET', 200, 'application/json', '{}', false, [{ name: 'x-a', value: '1' }]);
+    expect(withHeaders.requestHeaders).toEqual([{ name: 'x-a', value: '1' }]);
+
+    const withoutHeaders = capture.buildEntry('https://example.com/a', 'GET', 200, 'application/json', '{}');
+    expect(withoutHeaders.requestHeaders).toEqual([]);
   });
 
   test('defaults method to GET when none is given', () => {
