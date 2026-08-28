@@ -330,11 +330,111 @@ function deriveItemsAndValuePath(matchPath) {
   };
 }
 
+// ── robots.txt check ─────────────────────────────────────────────────────────
+// Groups consecutive "User-agent:" lines followed by their Allow/Disallow
+// lines into records, per the general robots.txt grouping rule: a new
+// User-agent line right after another one joins the same group (several
+// names sharing one rule set), but one that follows a rule line starts a
+// fresh group.
+function parseRobotsTxt(text) {
+  const groups = [];
+  let current = null;
+  let sawRuleInCurrent = false;
+
+  for (const rawLine of text.split(/\r\n|\r|\n/)) {
+    const line = rawLine.replace(/#.*$/, '').trim();
+    if (!line) continue;
+    const sepIndex = line.indexOf(':');
+    if (sepIndex === -1) continue;
+    const field = line.slice(0, sepIndex).trim().toLowerCase();
+    const value = line.slice(sepIndex + 1).trim();
+
+    if (field === 'user-agent') {
+      if (!current || sawRuleInCurrent) {
+        current = { agents: [], rules: [] };
+        groups.push(current);
+        sawRuleInCurrent = false;
+      }
+      current.agents.push(value.toLowerCase());
+    } else if ((field === 'allow' || field === 'disallow') && current) {
+      sawRuleInCurrent = true;
+      // An empty "Disallow:" traditionally means "nothing is disallowed" —
+      // equivalent to no rule at all, so it's simply not recorded.
+      if (value !== '') current.rules.push({ type: field, pattern: value });
+    }
+  }
+
+  return groups;
+}
+
+// Translates a robots.txt path pattern into a RegExp, supporting the
+// de-facto "*" (any sequence) and trailing "$" (end-of-string) extensions
+// most crawlers — including the ones this project cares about — honor,
+// even though they're not in the original robots.txt draft.
+function robotsPatternToRegex(pattern) {
+  const hasEndAnchor = pattern.endsWith('$');
+  const body = hasEndAnchor ? pattern.slice(0, -1) : pattern;
+  const escaped = body
+    .split('*')
+    .map(part => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+    .join('.*');
+  return new RegExp(`^${escaped}${hasEndAnchor ? '$' : ''}`);
+}
+
+// Decides whether `path` is allowed, per the standard "longest matching
+// pattern wins, ties go to Allow" rule. Always checked against the
+// catch-all "User-agent: *" group — the scripts this tool generates
+// (`requests`' default UA, a plain Playwright/Chromium UA) don't carry a
+// dedicated product token most robots.txt files would recognize by name,
+// so the generic group is the only one that's meaningfully applicable.
+function evaluateRobotsTxt(text, path) {
+  const groups = parseRobotsTxt(text);
+  const group = groups.find(g => g.agents.includes('*'));
+  if (!group) return { allowed: true, matchedRule: null };
+
+  let best = null;
+  for (const rule of group.rules) {
+    if (!robotsPatternToRegex(rule.pattern).test(path)) continue;
+    const isLonger = !best || rule.pattern.length > best.pattern.length;
+    const isTieBrokenByAllow = best && rule.pattern.length === best.pattern.length
+      && rule.type === 'allow' && best.type === 'disallow';
+    if (isLonger || isTieBrokenByAllow) best = rule;
+  }
+  return { allowed: !best || best.type === 'allow', matchedRule: best };
+}
+
+// Fetched from here rather than the side panel so it's a same-origin
+// request relative to the inspected page (like the page's own JS could
+// make) — no extra host_permissions needed for a cross-origin fetch from
+// an extension page.
+async function checkRobotsTxt() {
+  const robotsUrl = `${location.origin}/robots.txt`;
+  const path = location.pathname + location.search;
+  log('ROBOTS_TXT_CHECK start', robotsUrl);
+  try {
+    const res = await fetch(robotsUrl, { cache: 'no-store' });
+    if (res.status === 404) {
+      // No robots.txt at all is the standard "everything is allowed" case.
+      return { ok: true, robotsUrl, path, notFound: true, allowed: true, matchedRule: null };
+    }
+    if (!res.ok) {
+      return { ok: false, robotsUrl, path, error: `HTTP ${res.status}` };
+    }
+    const text = await res.text();
+    const { allowed, matchedRule } = evaluateRobotsTxt(text, path);
+    return { ok: true, robotsUrl, path, notFound: false, allowed, matchedRule };
+  } catch (err) {
+    log('ROBOTS_TXT_CHECK fail', err.message);
+    return { ok: false, robotsUrl, path, error: err.message };
+  }
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     buildSelector, elementPath, serializeDomTree,
     matchFlatFields, matchGroupTree, computePreviewMatches,
     findValueInJson, siblingFields, findApiCandidates, deriveItemsAndValuePath,
+    parseRobotsTxt, evaluateRobotsTxt, checkRobotsTxt,
   };
 }
 
@@ -659,6 +759,10 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     }
     if (message.type === 'GET_LOGS') {
       sendResponse(getLogBuffer());
+    }
+    if (message.type === 'CHECK_ROBOTS_TXT') {
+      checkRobotsTxt().then(sendResponse);
+      return true; // keep the message channel open for the async sendResponse above
     }
   });
 }

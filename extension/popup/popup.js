@@ -41,6 +41,8 @@ let _state = {
   apiDiscoveryCandidates: null, // {target, candidates} from the last in-progress Discovery search, or null
   apiConfigDraft:     null, // set once a candidate is confirmed as the primary field — the in-progress ApiConfig being built, see buildApiConfig/confirmApiFieldCandidate
   apiConfig:          null, // the "Übernehmen"-confirmed ApiConfig wire object — Phase 6 will read this; persisted like fields/groups
+  robotsTxtChecking: false, // not persisted, always off on popup reopen (like previewActive/apiCaptureActive)
+  robotsTxtResult:   null,  // {ok, robotsUrl, path, notFound, allowed, matchedRule} | {ok:false, error} from the content script's CHECK_ROBOTS_TXT response, or null before the first check
 };
 
 const DOM_TREE_TIMEOUT_MS = 5000;
@@ -444,6 +446,31 @@ function render() {
   if (_state.current === STATES.IDLE) {
     const urlEl = document.getElementById('url-display');
     if (urlEl) urlEl.textContent = _state.url || '—';
+
+    const robotsBtn = document.getElementById('btn-check-robots');
+    if (robotsBtn) {
+      robotsBtn.disabled = _state.robotsTxtChecking;
+      robotsBtn.textContent = _state.robotsTxtChecking ? 'Prüfe robots.txt…' : 'robots.txt prüfen';
+    }
+    const robotsResultEl = document.getElementById('robots-txt-result');
+    if (robotsResultEl) {
+      const r = _state.robotsTxtResult;
+      if (!r) {
+        robotsResultEl.className = 'robots-txt-result hidden';
+      } else if (!r.ok) {
+        robotsResultEl.textContent = `robots.txt konnte nicht geprüft werden (${r.error}).`;
+        robotsResultEl.className = 'robots-txt-result robots-txt-unknown';
+      } else if (r.notFound) {
+        robotsResultEl.textContent = 'Keine robots.txt gefunden — Zugriff ist erlaubt.';
+        robotsResultEl.className = 'robots-txt-result robots-txt-allowed';
+      } else if (r.allowed) {
+        robotsResultEl.textContent = `Erlaubt für ${r.path}${r.matchedRule ? ` (Allow: ${r.matchedRule.pattern})` : ''}`;
+        robotsResultEl.className = 'robots-txt-result robots-txt-allowed';
+      } else {
+        robotsResultEl.textContent = `Verboten für ${r.path} (Disallow: ${r.matchedRule.pattern})`;
+        robotsResultEl.className = 'robots-txt-result robots-txt-disallowed';
+      }
+    }
 
     document.getElementById('btn-mode-flat')?.classList.toggle('active', _state.mode === 'flat');
     document.getElementById('btn-mode-container')?.classList.toggle('active', _state.mode === 'container');
@@ -1339,6 +1366,23 @@ async function checkCompanion() {
   }
 }
 
+// robots.txt is fetched by the content script (same-origin relative to the
+// inspected page, see checkRobotsTxt in content-script.js) — the side panel
+// only relays the request/response through the service worker, same
+// request/response shape as GET_LOGS above.
+async function checkRobotsTxt() {
+  log('ROBOTS_TXT_CHECK start');
+  patchState({ robotsTxtChecking: true, robotsTxtResult: null });
+  try {
+    const result = await chrome.runtime.sendMessage({ type: 'CHECK_ROBOTS_TXT' });
+    log('ROBOTS_TXT_CHECK result', result);
+    patchState({ robotsTxtChecking: false, robotsTxtResult: result });
+  } catch (err) {
+    log('ROBOTS_TXT_CHECK failed', err.message);
+    patchState({ robotsTxtChecking: false, robotsTxtResult: { ok: false, error: err.message } });
+  }
+}
+
 // The companion actually generates and runs the script against the live
 // page before handing it out (same rendering stage, and now the exact
 // artifact the user would download) and responds 422 with a message when
@@ -1644,6 +1688,11 @@ function wireEvents() {
   document.getElementById('btn-preview')?.addEventListener('click', () => {
     log('BTN preview');
     togglePreview();
+  });
+
+  document.getElementById('btn-check-robots')?.addEventListener('click', () => {
+    log('BTN check-robots');
+    checkRobotsTxt();
   });
 
   document.getElementById('btn-api-capture')?.addEventListener('click', () => {
