@@ -599,6 +599,74 @@ public class ScrapingPlanValidatorTests
         Assert.Contains("Bereich", result.Error);
     }
 
+    // Reproduces the reported bug exactly: a site (penny.de) uses "2026-35"
+    // in its own URL instead of ISO-8601 "2026-W35" — this used to only
+    // fail deep inside the generated script (raw Python traceback). Without
+    // an explicit Format, the default "{yyyy}-W{ww}" applies and correctly
+    // rejects it here instead, with a message pointing at the mismatch.
+    [Fact]
+    public void Validate_ApiConfigWithIsoWeekRangeNotMatchingDefaultFormat_Fails()
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?week={week}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters = [new ApiParameter { Name = "week", Source = new RangeSource { Type = RangeType.IsoWeek, From = "2026-35", To = "2026-50" } }],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("2026-35", result.Error);
+        Assert.Contains("Format", result.Error);
+    }
+
+    // The same From/To values succeed once a matching Format is set — this
+    // is the actual fix, not just a friendlier rejection.
+    [Fact]
+    public void Validate_ApiConfigWithIsoWeekRangeMatchingCustomFormat_Succeeds()
+    {
+        var valid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?week={week}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters = [new ApiParameter { Name = "week", Source = new RangeSource { Type = RangeType.IsoWeek, From = "2026-35", To = "2026-50", Format = "{yyyy}-{ww}" } }],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithRangeSourceInvalidFormat_Fails()
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?week={week}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            // {dd} isn't a valid token for IsoWeek, and {ww} is missing.
+            Parameters = [new ApiParameter { Name = "week", Source = new RangeSource { Type = RangeType.IsoWeek, From = "2026-35", To = "2026-50", Format = "{yyyy}-{dd}" } }],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Format", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithNumberRangeNonIntegerValue_Fails()
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?page={page}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters = [new ApiParameter { Name = "page", Source = new RangeSource { Type = RangeType.Number, From = "eins", To = "10" } }],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("eins", result.Error);
+    }
+
     [Fact]
     public void Validate_ApiConfigWithValidDiscoverySource_Succeeds()
     {

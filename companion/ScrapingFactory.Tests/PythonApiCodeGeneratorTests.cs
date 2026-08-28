@@ -115,6 +115,27 @@ public class PythonApiCodeGeneratorTests
         Assert.Contains("'IsoWeek'", script);
         Assert.Contains("'2026-W01'", script);
         Assert.Contains("'today'", script);
+        // Not "format" alone — that also appears in the template's own
+        // dispatch code (`source.get("format", ...)`) regardless of this
+        // RangeSource. The dict-literal key specifically ends in a colon.
+        Assert.DoesNotContain("\"format\":", script);
+    }
+
+    [Fact]
+    public void Generate_RangeSourceParameterWithFormat_ContainsFormatLiteral()
+    {
+        var api = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?week={week}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters = [new ApiParameter { Name = "week", Source = new RangeSource { Type = RangeType.IsoWeek, From = "2026-35", To = "2026-50", Format = "{yyyy}-{ww}" } }],
+        };
+
+        var script = _generator.Generate(PlanWith(api));
+
+        Assert.Contains("\"format\":", script);
+        Assert.Contains("'{yyyy}-{ww}'", script);
     }
 
     [Fact]

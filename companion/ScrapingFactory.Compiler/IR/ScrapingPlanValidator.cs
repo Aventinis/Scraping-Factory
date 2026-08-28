@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using ScrapingFactory.Compiler.Backends.Python;
 
 namespace ScrapingFactory.Compiler.IR;
 
@@ -210,8 +211,7 @@ public static class ScrapingPlanValidator
                 StaticListSource { Values.Count: 0 } =>
                     $"Parameter '{parameter.Name}' mit Werteliste braucht mindestens einen Wert.",
                 DiscoverySource discovery => ValidateDiscoverySource(parameter.Name, discovery),
-                RangeSource { From: var from, To: var to } when string.IsNullOrWhiteSpace(from) || string.IsNullOrWhiteSpace(to) =>
-                    $"Bereich für Parameter '{parameter.Name}' braucht Start und Ende.",
+                RangeSource range => ValidateRangeSource(parameter.Name, range),
                 _ => null,
             };
             if (sourceError is not null)
@@ -236,6 +236,43 @@ public static class ScrapingPlanValidator
             return $"Discovery-Endpunkt für Parameter '{parameterName}' braucht ein ItemsPath.";
         if (string.IsNullOrWhiteSpace(discovery.ValuePath))
             return $"Discovery-Endpunkt für Parameter '{parameterName}' braucht ein ValuePath.";
+        return null;
+    }
+
+    // Unlike the CSS-selector/JSON-path laissez-faire elsewhere in this
+    // validator, a Range's From/To/Format are plain user-typed strings with
+    // a fully deterministic syntax (no library-compatibility ambiguity to
+    // punt on) — so, same as EnvironmentVariableNamePattern above, checking
+    // them here is cheap and catches a real bug class: a From/To value that
+    // doesn't match its (possibly default) Format used to only fail deep
+    // inside the generated script (raw Python traceback, e.g. a site using
+    // "2026-35" instead of ISO-8601 "2026-W35" for a week number).
+    private static string? ValidateRangeSource(string parameterName, RangeSource range)
+    {
+        if (string.IsNullOrWhiteSpace(range.From) || string.IsNullOrWhiteSpace(range.To))
+            return $"Bereich für Parameter '{parameterName}' braucht Start und Ende.";
+
+        if (range.Type == RangeType.Number)
+        {
+            if (!int.TryParse(range.From, out _))
+                return $"Start-Wert '{range.From}' für Parameter '{parameterName}' ist keine ganze Zahl.";
+            if (!int.TryParse(range.To, out _))
+                return $"Ende-Wert '{range.To}' für Parameter '{parameterName}' ist keine ganze Zahl.";
+            return null;
+        }
+
+        var formatError = RangeFormat.ValidateFormat(range.Type, range.Format);
+        if (formatError is not null)
+            return $"Format für Parameter '{parameterName}': {formatError}";
+
+        var format = RangeFormat.Resolve(range.Type, range.Format);
+        // See RangeFormat.IsValid's doc comment for why allowToday differs
+        // between From and To here.
+        if (!RangeFormat.IsValid(range.From, format, allowToday: range.Type == RangeType.IsoWeek))
+            return $"Start-Wert '{range.From}' für Parameter '{parameterName}' passt nicht zum Format '{format}'.";
+        if (!RangeFormat.IsValid(range.To, format, allowToday: true))
+            return $"Ende-Wert '{range.To}' für Parameter '{parameterName}' passt nicht zum Format '{format}'.";
+
         return null;
     }
 
