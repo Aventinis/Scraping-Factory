@@ -87,6 +87,23 @@ describe('buildScrapingConfig (container mode)', () => {
   });
 });
 
+describe('buildScrapingConfig (api mode, Issue #53 Phase 6)', () => {
+  test('sends the confirmed apiConfig as-is instead of fields/groups, no outputFormat', () => {
+    const apiConfig = {
+      urlTemplate: 'https://example.com/api/items?category={category}',
+      itemsPath: 'data.items',
+      fields: [{ name: 'Titel', path: 'name' }],
+      parameters: [{ name: 'category', source: { kind: 'staticList', values: ['Elektronik'] } }],
+    };
+    const result = buildScrapingConfig('https://example.com', 'api', [], [], apiConfig);
+
+    expect(result).toEqual({ version: '1', url: 'https://example.com', api: apiConfig });
+    expect(result.fields).toBeUndefined();
+    expect(result.groups).toBeUndefined();
+    expect(result.outputFormat).toBeUndefined();
+  });
+});
+
 // ── buildConfigExport ────────────────────────────────────────────────────────
 // Lets a user attach their current Fields/Groups to a bug report — wraps the
 // exact wire-format config (buildScrapingConfig) with export metadata.
@@ -113,6 +130,14 @@ describe('buildConfigExport', () => {
   test('falls back to "?" when no manifest/version is available', () => {
     const result = buildConfigExport('https://example.com', 'flat', [], []);
     expect(result.extensionVersion).toBe('?');
+  });
+
+  test('wraps the api-mode config (api) the same way (Issue #53 Phase 6)', () => {
+    const apiConfig = { urlTemplate: 'https://example.com/api/{id}', itemsPath: 'data', fields: [], parameters: [] };
+    const result = buildConfigExport('https://example.com', 'api', [], [], { version: '1.2.3' }, apiConfig);
+
+    expect(result.config).toEqual(buildScrapingConfig('https://example.com', 'api', [], [], apiConfig));
+    expect(result.config.api).toEqual(apiConfig);
   });
 });
 
@@ -2277,5 +2302,140 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
     document.getElementById('btn-api-config-discard').click();
 
     expect(document.getElementById('api-config-panel').classList.contains('hidden')).toBe(true);
+  });
+});
+
+// ── API-Mode: third popup mode, /generate wiring (Issue #53 Phase 6) ────────
+// switchMode's three-way clearing and the section-gating in render() — see
+// the "Container-Mode integration" suite above for the same pattern applied
+// to flat/container.
+
+describe('API-Mode third mode integration (Issue #53 Phase 6)', () => {
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  const seededApiConfig = {
+    urlTemplate: 'https://example.com/api/items?category={category}',
+    itemsPath: 'data.items',
+    fields: [{ name: 'Titel', path: 'name' }],
+    parameters: [{ name: 'category', source: { kind: 'staticList', values: ['Elektronik'] } }],
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div class="mode-toggle">
+          <button id="btn-mode-flat" class="mode-btn active"></button>
+          <button id="btn-mode-container" class="mode-btn"></button>
+          <button id="btn-mode-api" class="mode-btn"></button>
+        </div>
+        <div id="flat-mode-section">
+          <div id="fields-list"></div>
+          <button id="btn-add-field"></button>
+        </div>
+        <div id="container-mode-section" class="hidden">
+          <ul id="group-tree-root"></ul>
+          <button id="btn-add-root-container"></button>
+        </div>
+        <div id="api-mode-section" class="hidden">
+          <button id="btn-api-capture"></button>
+          <p id="api-capture-summary" class="hidden"></p>
+          <button id="btn-api-search" disabled></button>
+          <div id="api-candidates-panel" class="hidden">
+            <p id="api-candidates-target"></p>
+            <ul id="api-candidates-list"></ul>
+          </div>
+          <div id="api-config-panel" class="hidden">
+            <p id="api-config-summary"></p>
+            <button id="btn-api-config-discard"></button>
+          </div>
+        </div>
+        <div id="preview-section">
+          <button id="btn-preview" disabled></button>
+          <p id="preview-summary" class="hidden"></p>
+        </div>
+        <button id="btn-generate" disabled></button>
+        <button id="btn-export-config" disabled></button>
+      </section>
+      <section id="screen-generating" class="hidden"></section>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: jest.fn() },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({
+            fields: [{ name: 'Titel', selector: 'h1', attribute: null }],
+            groups: [],
+            apiConfig: seededApiConfig,
+            mode: 'flat',
+            url: 'https://example.com',
+          }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn((url) => {
+      if (String(url).endsWith('/generate')) return Promise.resolve({ ok: true, text: () => Promise.resolve('# script') });
+      return Promise.resolve({ ok: true });
+    });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE, fields/apiConfig restored from storage
+  });
+
+  test('switching to API mode shows only api-mode-section and hides the (meaningless there) preview toggle', () => {
+    document.getElementById('btn-mode-api').click();
+
+    expect(document.getElementById('api-mode-section').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('flat-mode-section').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('container-mode-section').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('preview-section').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('btn-mode-api').classList.contains('active')).toBe(true);
+  });
+
+  test('switching to API mode clears fields/groups; switching away clears the confirmed apiConfig', () => {
+    expect(document.getElementById('fields-list').children.length).toBe(1);
+
+    document.getElementById('btn-mode-api').click();
+    // Fields cleared like the flat↔container switch already does.
+    expect(document.getElementById('fields-list').children.length).toBe(0);
+    // apiConfig itself is untouched by switching *into* api mode.
+    expect(document.getElementById('api-config-panel').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('btn-generate').disabled).toBe(false);
+
+    document.getElementById('btn-mode-flat').click();
+    // Fields stayed empty (flat mode only clears groups/apiConfig, not fields).
+    expect(document.getElementById('btn-generate').disabled).toBe(true);
+
+    document.getElementById('btn-mode-api').click();
+    // apiConfig was cleared by the switch away from api mode above.
+    expect(document.getElementById('api-config-panel').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('btn-generate').disabled).toBe(true);
+  });
+
+  test('POSTs {version, url, api} — no fields/groups/outputFormat — once in API mode', async () => {
+    document.getElementById('btn-mode-api').click();
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const generateCall = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/generate'));
+    expect(generateCall).toBeDefined();
+    const body = JSON.parse(generateCall[1].body);
+
+    expect(body).toEqual({ version: '1', url: 'https://example.com', api: seededApiConfig });
   });
 });
