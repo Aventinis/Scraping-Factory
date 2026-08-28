@@ -73,9 +73,17 @@ if (typeof window !== 'undefined') {
 
 // ── Pure functions (exported for testing) ────────────────────────────────────
 
-function buildScrapingConfig(url, mode, fields, groups) {
+// `apiConfig` is only read when mode === 'api' — the confirmed ApiConfig
+// wire object built by buildApiConfig (Issue #53 Phase 5), passed straight
+// through as the request body's `api` field. Method/OutputFormat/Engine are
+// forced server-side (see companion's ScrapingPlanBuilder), so nothing
+// extra is added here the way outputFormat is for flat mode.
+function buildScrapingConfig(url, mode, fields, groups, apiConfig = null) {
   if (mode === 'container') {
     return { version: '1', url, groups: serializeGroupTree(groups) };
+  }
+  if (mode === 'api') {
+    return { version: '1', url, api: apiConfig };
   }
   return {
     version: '1',
@@ -87,15 +95,15 @@ function buildScrapingConfig(url, mode, fields, groups) {
 
 // Wraps the exact wire-format config (buildScrapingConfig) with export
 // metadata, so a user hitting a selector problem can hand over one file
-// that both shows the current Fields/Groups and, unwrapped, is the literal
-// request body /generate would receive — no need to describe the setup by
-// hand. `manifest` is injected so this stays a pure, testable function
-// instead of reaching into chrome.runtime itself.
-function buildConfigExport(url, mode, fields, groups, manifest = {}) {
+// that both shows the current Fields/Groups/Api config and, unwrapped, is
+// the literal request body /generate would receive — no need to describe
+// the setup by hand. `manifest` is injected so this stays a pure, testable
+// function instead of reaching into chrome.runtime itself.
+function buildConfigExport(url, mode, fields, groups, manifest = {}, apiConfig = null) {
   return {
     exportedAt: new Date().toISOString(),
     extensionVersion: manifest.version || '?',
-    config: buildScrapingConfig(url, mode, fields, groups),
+    config: buildScrapingConfig(url, mode, fields, groups, apiConfig),
   };
 }
 
@@ -355,8 +363,12 @@ function render() {
 
     document.getElementById('btn-mode-flat')?.classList.toggle('active', _state.mode === 'flat');
     document.getElementById('btn-mode-container')?.classList.toggle('active', _state.mode === 'container');
+    document.getElementById('btn-mode-api')?.classList.toggle('active', _state.mode === 'api');
     document.getElementById('flat-mode-section')?.classList.toggle('hidden', _state.mode !== 'flat');
     document.getElementById('container-mode-section')?.classList.toggle('hidden', _state.mode !== 'container');
+    document.getElementById('api-mode-section')?.classList.toggle('hidden', _state.mode !== 'api');
+    // Vorschau highlights matched DOM elements — meaningless for API-Mode.
+    document.getElementById('preview-section')?.classList.toggle('hidden', _state.mode === 'api');
 
     if (_state.mode === 'container') {
       renderGroupTree(_state.groups);
@@ -364,7 +376,9 @@ function render() {
       renderFields();
     }
 
-    const hasConfig = _state.mode === 'container' ? _state.groups.length > 0 : _state.fields.length > 0;
+    const hasConfig = _state.mode === 'container' ? _state.groups.length > 0
+      : _state.mode === 'api' ? !!_state.apiConfig
+      : _state.fields.length > 0;
     const genBtn = document.getElementById('btn-generate');
     if (genBtn) genBtn.disabled = !hasConfig;
     const exportBtn = document.getElementById('btn-export-config');
@@ -428,7 +442,7 @@ function render() {
         const summaryEl = document.getElementById('api-config-summary');
         if (summaryEl) {
           const { fields, parameters, headers } = _state.apiConfig;
-          summaryEl.textContent = `API-Konfiguration bereit: ${fields.length} Feld(er), ${parameters.length} Parameter${headers ? `, ${headers.length} Header` : ''} — Verdrahtung ins Popup folgt in Phase 6.`;
+          summaryEl.textContent = `API-Konfiguration bereit: ${fields.length} Feld(er), ${parameters.length} Parameter${headers ? `, ${headers.length} Header` : ''}.`;
         }
         apiConfigPanel.classList.remove('hidden');
       } else {
@@ -1223,7 +1237,7 @@ function buildVerificationErrorMessage(data) {
 async function generate() {
   stopPreviewIfActive();
   setState(STATES.GENERATING);
-  const config = buildScrapingConfig(_state.url, _state.mode, _state.fields, _state.groups);
+  const config = buildScrapingConfig(_state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig);
   log('GENERATE request', config);
   try {
     const res = await fetch(`${COMPANION_URL}/generate`, {
@@ -1265,7 +1279,7 @@ function triggerDownload() {
 // hand — e.g. attached to a "Fehler melden" GitHub issue or shared directly.
 function downloadConfigExport() {
   const manifest = typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest() : {};
-  const exportObj = buildConfigExport(_state.url, _state.mode, _state.fields, _state.groups, manifest);
+  const exportObj = buildConfigExport(_state.url, _state.mode, _state.fields, _state.groups, manifest, _state.apiConfig);
   log('DOWNLOAD scraping-config.json', exportObj);
 
   const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
@@ -1408,13 +1422,19 @@ function confirmField() {
 
 // ── Container-Mode: mode switch, container/field add flows ─────────────────
 
+// Strictly separate — switching modes clears the *other* modes' configs
+// rather than keeping all three around.
+const MODE_SWITCH_CLEARS = {
+  flat:      { groups: [], apiConfig: null },
+  container: { fields: [], apiConfig: null },
+  api:       { fields: [], groups: [] },
+};
+
 function switchMode(mode) {
   if (mode === _state.mode) return;
   log('MODE_SWITCH', mode);
   stopPreviewIfActive();
-  // Strictly separate — switching modes clears the other mode's config
-  // rather than keeping both around.
-  setState(_state.current, mode === 'flat' ? { mode, groups: [] } : { mode, fields: [] });
+  setState(_state.current, { mode, ...MODE_SWITCH_CLEARS[mode] });
 }
 
 function openContainerModal(parentPath) {
@@ -1627,6 +1647,7 @@ function wireEvents() {
 
   document.getElementById('btn-mode-flat')?.addEventListener('click', () => switchMode('flat'));
   document.getElementById('btn-mode-container')?.addEventListener('click', () => switchMode('container'));
+  document.getElementById('btn-mode-api')?.addEventListener('click', () => switchMode('api'));
 
   document.getElementById('btn-add-root-container')?.addEventListener('click', () => openContainerModal(null));
 
@@ -1718,8 +1739,8 @@ function wireEvents() {
   document.getElementById('btn-new-scraper')?.addEventListener('click', () => {
     log('BTN new-scraper → reset state');
     stopPreviewIfActive();
-    chrome.storage.session.set({ fields: [], url: '', groups: [] });
-    setState(STATES.CHECKING_COMPANION, { fields: [], groups: [], scriptText: '', url: '' });
+    chrome.storage.session.set({ fields: [], url: '', groups: [], apiConfig: null });
+    setState(STATES.CHECKING_COMPANION, { fields: [], groups: [], apiConfig: null, scriptText: '', url: '' });
     checkCompanion();
   });
 

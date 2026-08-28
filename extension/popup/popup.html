@@ -252,6 +252,7 @@
     <div class="mode-toggle">
       <button id="btn-mode-flat" class="mode-btn active" type="button">Felder (flach)</button>
       <button id="btn-mode-container" class="mode-btn" type="button">Container (verschachtelt)</button>
+      <button id="btn-mode-api" class="mode-btn" type="button">API</button>
     </div>
 
     <div id="flat-mode-section">
@@ -270,37 +271,40 @@
       </div>
     </div>
 
-    <div class="actions" style="margin-top: 10px;">
-      <button id="btn-preview" class="btn-toggle" disabled title="Zeigt direkt auf der Seite, welche Elemente die aktuelle Konfiguration treffen würde">Vorschau anzeigen</button>
-    </div>
-    <p id="preview-summary" class="preview-summary hidden"></p>
-
-    <!-- API-Mode network recording (Issue #53, Phase 3) — standalone for now,
-         not yet gated by a third API mode (see btn-mode-flat/-container above),
-         which lands in a later phase. -->
-    <div class="actions" style="margin-top: 10px;">
-      <button id="btn-api-capture" class="btn-toggle" type="button" title="Zeichnet fetch/XHR-Netzwerkanfragen dieser Seite auf — Vorstufe für den kommenden API-Modus">Netzwerk-Aufzeichnung starten</button>
-    </div>
-    <p id="api-capture-summary" class="preview-summary hidden"></p>
-
-    <!-- API-Mode candidate search (Issue #53, Phase 4) — likewise standalone
-         until Phase 6 gives API-Mode its own third mode in the toggle above. -->
-    <div class="actions" style="margin-top: 6px;">
-      <button id="btn-api-search" class="btn-secondary" type="button" disabled title="Klicke danach einen Datenpunkt auf der Seite an — er wird in der Aufzeichnung gesucht">Datenpunkt in Aufzeichnung suchen</button>
-    </div>
-    <div id="api-candidates-panel" class="api-candidates-panel hidden">
-      <p id="api-candidates-target" class="api-candidates-target"></p>
-      <ul id="api-candidates-list" class="api-candidates-list"></ul>
-    </div>
-
-    <!-- ApiConfig summary (Issue #53 Phase 5) — shown once "Übernehmen" was
-         clicked on the config screen. Not wired into /generate yet
-         (Phase 6); "Verwerfen" just clears it so a bad config isn't stuck. -->
-    <div id="api-config-panel" class="api-candidates-panel hidden">
-      <p id="api-config-summary" class="api-candidates-target"></p>
+    <!-- API-Mode (Issue #53, Phase 6): recording (Phase 3), candidate search
+         (Phase 4) and the confirmed-ApiConfig summary (Phase 5) all live
+         here now, gated behind the mode toggle above like flat/container. -->
+    <div id="api-mode-section" class="hidden">
       <div class="actions">
-        <button id="btn-api-config-discard" class="btn-secondary btn-tiny" type="button">Verwerfen</button>
+        <button id="btn-api-capture" class="btn-toggle" type="button" title="Zeichnet fetch/XHR-Netzwerkanfragen dieser Seite auf">Netzwerk-Aufzeichnung starten</button>
       </div>
+      <p id="api-capture-summary" class="preview-summary hidden"></p>
+
+      <div class="actions" style="margin-top: 6px;">
+        <button id="btn-api-search" class="btn-secondary" type="button" disabled title="Klicke danach einen Datenpunkt auf der Seite an — er wird in der Aufzeichnung gesucht">Datenpunkt in Aufzeichnung suchen</button>
+      </div>
+      <div id="api-candidates-panel" class="api-candidates-panel hidden">
+        <p id="api-candidates-target" class="api-candidates-target"></p>
+        <ul id="api-candidates-list" class="api-candidates-list"></ul>
+      </div>
+
+      <!-- Shown once "Übernehmen" was clicked on the API_CONFIG screen;
+           "Verwerfen" just clears it so a bad config isn't stuck. -->
+      <div id="api-config-panel" class="api-candidates-panel hidden">
+        <p id="api-config-summary" class="api-candidates-target"></p>
+        <div class="actions">
+          <button id="btn-api-config-discard" class="btn-secondary btn-tiny" type="button">Verwerfen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Vorschau highlights matched DOM elements — meaningless for API-Mode,
+         which extracts from a JSON body instead, so it's hidden there. -->
+    <div id="preview-section">
+      <div class="actions" style="margin-top: 10px;">
+        <button id="btn-preview" class="btn-toggle" disabled title="Zeigt direkt auf der Seite, welche Elemente die aktuelle Konfiguration treffen würde">Vorschau anzeigen</button>
+      </div>
+      <p id="preview-summary" class="preview-summary hidden"></p>
     </div>
 
     <div class="actions" style="margin-top: 10px;">
@@ -329,8 +333,8 @@
   </section>
 
   <!-- API_CONFIG (Issue #53 Phase 5) — configuring a confirmed candidate
-       into an ApiConfig. Standalone screen, not yet reachable via the mode
-       toggle above (Phase 6 still owns the actual third mode). -->
+       into an ApiConfig. Reached from the api-mode-section's "Verwenden"
+       flow (see screen-idle above), which only shows once mode === 'api'. -->
   <section id="screen-api-config" class="screen hidden">
     <div class="row-label">Felder</div>
     <ul id="api-config-fields" class="api-config-fields"></ul>
