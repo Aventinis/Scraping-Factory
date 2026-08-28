@@ -35,9 +35,16 @@ internal static class PythonApiConfigLiteral
     {
         StaticListSource s => $$"""{"kind": "staticList", "values": [{{string.Join(", ", s.Values.Select(PythonLiteral.Str))}}]}""",
         DiscoverySource d => $$"""{"kind": "discovery", "urlTemplate": {{PythonLiteral.Str(d.UrlTemplate)}}, "itemsPath": {{PythonLiteral.Str(d.ItemsPath)}}, "valuePath": {{PythonLiteral.Str(d.ValuePath)}}}""",
-        RangeSource r => $$"""{"kind": "range", "type": {{PythonLiteral.Str(r.Type.ToString())}}, "from": {{PythonLiteral.Str(r.From)}}, "to": {{PythonLiteral.Str(r.To)}}}""",
+        // "format" is omitted when unset (rather than sending the resolved
+        // default) so the runtime's own RangeFormat.Resolve-equivalent
+        // (_resolve_parameter_values's `source.get("format")` fallback in
+        // scraper_api.py.j2) stays the single source of truth for defaults.
+        RangeSource r => $$"""{"kind": "range", "type": {{PythonLiteral.Str(r.Type.ToString())}}, "from": {{PythonLiteral.Str(r.From)}}, "to": {{PythonLiteral.Str(r.To)}}{{RenderFormatSuffix(r.Format)}}}""",
         _ => throw new InvalidOperationException($"Unbekannter ApiParameterSource-Typ: {source.GetType()}"),
     };
+
+    private static string RenderFormatSuffix(string? format) =>
+        format is null ? "" : $$""", "format": {{PythonLiteral.Str(format)}}""";
 
     private static string RenderList<T>(List<T> items, Func<T, string> renderItem) =>
         "[" + string.Join(", ", items.Select(renderItem)) + "]";
