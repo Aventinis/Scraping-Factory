@@ -329,6 +329,51 @@ test('API_CANDIDATES (Issue #53 Phase 4) is forwarded to runtime (side panel) wi
   expect(chrome.storage.session.set).not.toHaveBeenCalled();
 });
 
+describe('CHECK_ROBOTS_TXT', () => {
+  test('returns true to keep the message channel open for the async response', () => {
+    chrome.tabs.query.mockImplementation((_, cb) => cb([]));
+    const result = capturedListener({ type: 'CHECK_ROBOTS_TXT' }, {}, jest.fn());
+    expect(result).toBe(true);
+  });
+
+  test('forwards to the active tab and relays its result', async () => {
+    chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+    const checkResult = { ok: true, robotsUrl: 'https://example.com/robots.txt', path: '/', allowed: true, matchedRule: null };
+    chrome.tabs.sendMessage.mockImplementation((tabId, msg) => {
+      expect(tabId).toBe(7);
+      expect(msg).toEqual({ type: 'CHECK_ROBOTS_TXT' });
+      return Promise.resolve(checkResult);
+    });
+    const sendResponse = jest.fn();
+
+    capturedListener({ type: 'CHECK_ROBOTS_TXT' }, {}, sendResponse);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(sendResponse).toHaveBeenCalledWith(checkResult);
+  });
+
+  test('reports an error when there is no active tab', async () => {
+    chrome.tabs.query.mockImplementation((_, cb) => cb([]));
+    const sendResponse = jest.fn();
+
+    capturedListener({ type: 'CHECK_ROBOTS_TXT' }, {}, sendResponse);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(sendResponse).toHaveBeenCalledWith({ ok: false, error: 'Keine aktive Seite gefunden.' });
+  });
+
+  test('reports an error when the content script is unreachable', async () => {
+    chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+    chrome.tabs.sendMessage.mockRejectedValue(new Error('Could not establish connection.'));
+    const sendResponse = jest.fn();
+
+    capturedListener({ type: 'CHECK_ROBOTS_TXT' }, {}, sendResponse);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(sendResponse).toHaveBeenCalledWith({ ok: false, error: 'Could not establish connection.' });
+  });
+});
+
 test('unknown message type is ignored', () => {
   capturedListener({ type: 'UNKNOWN' }, {});
 
