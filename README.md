@@ -1,59 +1,61 @@
 # Scraping-Factory
 
-Eine Lösung, um Webscraping-Skripte einfach im Browser erstellen zu können — ganz ohne Programmierkenntnisse.
+A tool for building web scraping scripts right in your browser — no programming knowledge required.
 
-Der Nutzer wählt Elemente auf einer Webseite per Klick aus, die Scraping-Factory generiert daraus ein eigenständiges, lesbares **Python-Skript** (`requests` + `BeautifulSoup`).
+The user selects elements on a web page by clicking, and Scraping Factory generates a standalone, readable **Python script** (`requests` + `BeautifulSoup`, or Playwright for dynamic pages) from that selection.
 
-## Aufbau
+## Architecture
 
-Das Projekt besteht aus zwei Teilen, die über einen lokalen HTTP-Server kommunizieren:
+The project consists of two parts that communicate over a local HTTP server:
 
-- **Browser Extension** (Manifest V3) — läuft im Chrome Side Panel, ermöglicht das Auswählen von Elementen auf der Seite per Hover/Klick
-- **Companion App** (.NET 9) — lokaler Server, baut aus der Auswahl die Zwischenrepräsentation (IR) und generiert daraus das Python-Skript
+- **Browser extension** (Manifest V3) — runs in the Chrome side panel, lets you select elements on the page via hover/click
+- **Companion app** (.NET 9) — a local server that builds an intermediate representation (IR) from the selection and generates the Python script from it
 
-## Features (v1 / MVP)
+## Features (as of v1.5.0)
 
-- Elemente per Hover-Highlighting auf der Zielseite auswählen, CSS-Selektor wird automatisch extrahiert
-- Feldverwaltung im Side Panel (hinzufügen, benennen, Selektor per Tooltip einsehen)
-- Generierung eines eigenständigen, kommentierten Python-Scraping-Skripts (`requests` + `BeautifulSoup`) und direkter Download
-- Zustand von Auswahl und UI bleibt über Session Storage erhalten, auch wenn das Side Panel geschlossen wird
-- Strukturiertes Logging in Content Script, Service Worker und Side Panel zur Fehlerdiagnose
+- Select elements via hover highlighting on the target page; the CSS selector is extracted automatically
+- Field management in the side panel (add, name, inspect the selector via tooltip)
+- Three configuration modes: flat fields, nested containers (repeating groups), and an API mode that finds the matching JSON API request for a clicked data point instead of scraping HTML
+- Optional browser engine (Playwright + Chromium) for dynamically rendered pages and simple login flows, currently reachable only via the companion API (no extension UI yet)
+- Generation of a standalone, commented Python scraping script and direct download — the companion app actually runs the generated script once as a trial before handing it out, so what you download is guaranteed to work against the page as configured
+- Selection and UI state persist via session storage, even if the side panel is closed
+- Structured logging in the content script, service worker, and side panel for troubleshooting
 
-**Scope-Grenzen in v1:** nur statisch gerenderte Seiten (kein JS-Rendering im generierten Skript), kein Login-/Session-Handling, keine Pagination, nur Python als Zielsprache.
+**Current scope limits:** no pagination, no persistent session/cookie handling across multiple runs, no CAPTCHA solving (a deliberate boundary, not a gap), and Python as the only target language. See `CLAUDE.md` for the full, up-to-date feature scope and known limitations.
 
-## Verzeichnisstruktur
+## Directory Structure
 
 ```
-extension/                  Browser Extension (Manifest V3)
-  background/               Service Worker — nur Nachrichtenweiterleitung
-  content/                  Content Script — DOM-Highlighting, Selektor-Extraktion
-  popup/                    Side-Panel-UI
+extension/                  Browser extension (Manifest V3)
+  background/               Service worker — message relay only
+  content/                  Content script — DOM highlighting, selector extraction
+  popup/                    Side panel UI
 
-companion/                  .NET 9 Solution
-  ScrapingFactory.Companion/ Einstiegspunkt — lokaler HTTP-Server
-  ScrapingFactory.Compiler/  IR-Typen + Sprachmodule
-    IR/ScrapingConfig.cs     Intermediate Representation
-    Backends/Python/         Python-Codegenerator
-  ScrapingFactory.Tests/     Tests für Companion, Compiler und Codegenerator
+companion/                  .NET 9 solution
+  ScrapingFactory.Companion/ Entry point — local HTTP server
+  ScrapingFactory.Compiler/  IR types + language modules
+    IR/ScrapingConfig.cs     Intermediate representation
+    Backends/Python/         Python code generator
+  ScrapingFactory.Tests/     Tests for the companion, compiler, and code generator
 
 language-modules/
-  python/templates/          Jinja2/Scriban-Templates für generierte Python-Skripte
+  python/templates/          Scriban templates for generated Python scripts
 ```
 
 ## Build & Test
 
 ```bash
-# .NET Solution bauen
+# Build the .NET solution
 dotnet build companion/ScrapingFactory.sln
 
-# .NET Tests ausführen
+# Run the .NET tests
 dotnet test companion/ScrapingFactory.sln
 
-# Extension-Tests ausführen
+# Run the extension tests
 cd extension && npm test
 
-# Extension laden (Chrome/Edge)
-# Erweiterungsverwaltung → "Entpackte Erweiterung laden" → extension/
+# Load the extension (Chrome/Edge)
+# Extension management → "Load unpacked" → extension/
 ```
 
-Ausführliche Entwicklerdokumentation (Architektur, offene Designentscheidungen): siehe `CLAUDE.md`.
+For full developer documentation (architecture, open design decisions), see `CLAUDE.md`.
