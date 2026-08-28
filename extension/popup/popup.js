@@ -27,6 +27,8 @@ let _state = {
   domTreeError:      null,  // set if no DOM_TREE response arrives within DOM_TREE_TIMEOUT_MS
   previewActive:     false, // Vorschau toggle — not persisted, always off on popup reopen (like domViewEnabled)
   previewSummary:    null,  // {total, empty, truncated} from the content script's last PREVIEW_RESULT, or null
+  apiCaptureActive:  false, // Netzwerk-Aufzeichnung toggle (Issue #53 Phase 3) — not persisted, always off on popup reopen
+  apiCaptureCount:   0,     // number of API_CAPTURE_ENTRY messages received since the current/last recording started
 };
 
 const DOM_TREE_TIMEOUT_MS = 5000;
@@ -277,6 +279,21 @@ function render() {
         previewSummaryEl.classList.remove('hidden');
       } else {
         previewSummaryEl.classList.add('hidden');
+      }
+    }
+
+    const apiCaptureBtn = document.getElementById('btn-api-capture');
+    if (apiCaptureBtn) {
+      apiCaptureBtn.classList.toggle('active', _state.apiCaptureActive);
+      apiCaptureBtn.textContent = _state.apiCaptureActive ? 'Netzwerk-Aufzeichnung beenden' : 'Netzwerk-Aufzeichnung starten';
+    }
+    const apiCaptureSummaryEl = document.getElementById('api-capture-summary');
+    if (apiCaptureSummaryEl) {
+      if (_state.apiCaptureActive) {
+        apiCaptureSummaryEl.textContent = `${_state.apiCaptureCount} Anfrage(n) aufgezeichnet`;
+        apiCaptureSummaryEl.classList.remove('hidden');
+      } else {
+        apiCaptureSummaryEl.classList.add('hidden');
       }
     }
 
@@ -539,6 +556,29 @@ function togglePreview() {
 // configuration that no longer matches the current state.
 function stopPreviewIfActive() {
   if (_state.previewActive) stopPreview();
+}
+
+// ── API-Mode network recording (Issue #53 Phase 3) ───────────────────────────
+// Unlike preview, this doesn't depend on Fields/Groups — it's a standalone
+// recording of the page's own fetch/XHR traffic, meant to feed the future
+// API-Mode's request-discovery flow (Phase 4+). See content-script.js's
+// API_CAPTURE bridge and api-capture.js (MAIN world) for where the actual
+// interception happens.
+
+function startApiCapture() {
+  log('API_CAPTURE_START');
+  chrome.runtime.sendMessage({ type: 'API_CAPTURE_START' });
+  patchState({ apiCaptureActive: true, apiCaptureCount: 0 });
+}
+
+function stopApiCapture() {
+  log('API_CAPTURE_STOP');
+  chrome.runtime.sendMessage({ type: 'API_CAPTURE_STOP' });
+  patchState({ apiCaptureActive: false, apiCaptureCount: 0 });
+}
+
+function toggleApiCapture() {
+  if (_state.apiCaptureActive) stopApiCapture(); else startApiCapture();
 }
 
 // ── Async actions ─────────────────────────────────────────────────────────────
@@ -864,6 +904,11 @@ function wireEvents() {
     togglePreview();
   });
 
+  document.getElementById('btn-api-capture')?.addEventListener('click', () => {
+    log('BTN api-capture');
+    toggleApiCapture();
+  });
+
   document.getElementById('btn-add-field')?.addEventListener('click', () => {
     log('BTN add-field → START_SELECTION');
     stopPreviewIfActive();
@@ -1015,6 +1060,16 @@ function wireEvents() {
       setLastError(message.reason, 'Vorschau');
       patchState({ previewActive: false, previewSummary: null });
       showToast('Vorschau auf dieser Seite nicht möglich.');
+    }
+    if (message.type === 'API_CAPTURE_ENTRY' && _state.apiCaptureActive) {
+      log('API_CAPTURE_ENTRY received', message.entry?.url);
+      patchState({ apiCaptureCount: _state.apiCaptureCount + 1 });
+    }
+    if (message.type === 'API_CAPTURE_UNAVAILABLE') {
+      log('API_CAPTURE_UNAVAILABLE', message.reason);
+      setLastError(message.reason, 'Netzwerk-Aufzeichnung');
+      patchState({ apiCaptureActive: false, apiCaptureCount: 0 });
+      showToast('Netzwerk-Aufzeichnung auf dieser Seite nicht möglich.');
     }
   });
 }

@@ -1325,3 +1325,133 @@ describe('Preview toggle (btn-preview)', () => {
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'PREVIEW_STOP' });
   });
 });
+
+// API-Mode network recording (Issue #53 Phase 3) — a standalone toggle, not
+// gated by Fields/Groups config the way btn-preview is (no third API mode
+// in the popup yet, see btn-mode-flat/-container).
+describe('Network recording toggle (btn-api-capture)', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div class="mode-toggle">
+          <button id="btn-mode-flat" class="mode-btn active"></button>
+          <button id="btn-mode-container" class="mode-btn"></button>
+        </div>
+        <div id="flat-mode-section">
+          <div id="fields-list"></div>
+          <button id="btn-add-field"></button>
+        </div>
+        <div id="container-mode-section" class="hidden">
+          <ul id="group-tree-root"></ul>
+          <button id="btn-add-root-container"></button>
+        </div>
+        <button id="btn-preview" disabled></button>
+        <p id="preview-summary" class="hidden"></p>
+        <button id="btn-api-capture"></button>
+        <p id="api-capture-summary" class="hidden"></p>
+        <button id="btn-generate" disabled></button>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <input type="checkbox" id="toggle-dom-view" />
+        <div id="dom-tree-wrapper" class="hidden">
+          <p id="dom-tree-loading"></p>
+          <p id="dom-tree-error" class="hidden"></p>
+          <p id="dom-tree-truncated" class="hidden"></p>
+          <ul id="dom-tree-root"></ul>
+        </div>
+      </section>
+      <div id="modal-field-name" class="hidden">
+        <input id="input-field-name" />
+        <button id="btn-field-confirm"></button>
+        <button id="btn-field-cancel"></button>
+      </div>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({ url: 'https://example.com' }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+  });
+
+  test('clicking sends API_CAPTURE_START and turns the button active', () => {
+    document.getElementById('btn-api-capture').click();
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'API_CAPTURE_START' });
+    expect(document.getElementById('btn-api-capture').classList.contains('active')).toBe(true);
+    expect(document.getElementById('btn-api-capture').textContent).toContain('beenden');
+  });
+
+  test('clicking again sends API_CAPTURE_STOP and turns the button back off', () => {
+    document.getElementById('btn-api-capture').click();
+    chrome.runtime.sendMessage.mockClear();
+
+    document.getElementById('btn-api-capture').click();
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'API_CAPTURE_STOP' });
+    expect(document.getElementById('btn-api-capture').classList.contains('active')).toBe(false);
+  });
+
+  test('API_CAPTURE_ENTRY messages increment the recorded-count summary while active', () => {
+    document.getElementById('btn-api-capture').click();
+
+    capturedListener({ type: 'API_CAPTURE_ENTRY', entry: { id: 1, url: 'https://example.com/api/a' } });
+    capturedListener({ type: 'API_CAPTURE_ENTRY', entry: { id: 2, url: 'https://example.com/api/b' } });
+
+    const summary = document.getElementById('api-capture-summary');
+    expect(summary.classList.contains('hidden')).toBe(false);
+    expect(summary.textContent).toContain('2 Anfrage(n) aufgezeichnet');
+  });
+
+  test('API_CAPTURE_ENTRY messages are ignored while recording is not active', () => {
+    capturedListener({ type: 'API_CAPTURE_ENTRY', entry: { id: 1, url: 'https://example.com/api/a' } });
+
+    const summary = document.getElementById('api-capture-summary');
+    expect(summary.classList.contains('hidden')).toBe(true);
+  });
+
+  test('stopping resets the recorded-count summary', () => {
+    document.getElementById('btn-api-capture').click();
+    capturedListener({ type: 'API_CAPTURE_ENTRY', entry: { id: 1, url: 'https://example.com/api/a' } });
+
+    document.getElementById('btn-api-capture').click();
+
+    expect(document.getElementById('api-capture-summary').classList.contains('hidden')).toBe(true);
+  });
+
+  test('API_CAPTURE_UNAVAILABLE turns recording off and shows a toast', () => {
+    document.getElementById('btn-api-capture').click();
+    capturedListener({ type: 'API_CAPTURE_UNAVAILABLE', reason: 'no content script' });
+
+    expect(document.getElementById('btn-api-capture').classList.contains('active')).toBe(false);
+    const toast = document.getElementById('error-toast');
+    expect(toast.classList.contains('hidden')).toBe(false);
+    expect(toast.textContent).toContain('nicht möglich');
+  });
+});

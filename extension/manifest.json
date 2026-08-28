@@ -18,6 +18,12 @@
       "matches": ["<all_urls>"],
       "js": ["shared/logger.js", "content/content-script.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/api-capture.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
     }
   ],
   "action": {
