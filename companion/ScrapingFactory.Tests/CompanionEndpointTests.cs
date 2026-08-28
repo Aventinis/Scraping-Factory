@@ -255,4 +255,98 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
     }
+
+    // API-Mode (Issue #53): a third alternative to Fields/Groups, exclusive
+    // with both. The exclusivity-only tests below never reach codegen (they
+    // 400 first), so a fake, unreachable URL is fine there — see
+    // Generate_ApiPayload_Returns200WithVerifiedScript below for the actual
+    // end-to-end case that reaches PythonApiCodeGenerator + PythonScriptVerifier.
+    private const string SampleApiPayload = """
+        {
+          "urlTemplate": "https://example.com/api/items?category={category}",
+          "itemsPath": "data.items",
+          "fields": [ { "name": "Titel", "path": "title" } ],
+          "parameters": [
+            { "name": "category", "source": { "kind": "staticList", "values": ["a"] } }
+          ]
+        }
+        """;
+
+    [Fact]
+    public async Task Generate_FieldsAndApiBothSet_Returns400()
+    {
+        var payload = $$"""
+            {
+              "url": "https://example.com",
+              "fields": [ { "name": "Titel", "selector": "h1" } ],
+              "api": {{SampleApiPayload}}
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task Generate_GroupsAndApiBothSet_Returns400()
+    {
+        var payload = $$"""
+            {
+              "url": "https://example.com",
+              "groups": [
+                { "name": "Kategorie", "selector": "section", "repeating": true, "children": [] }
+              ],
+              "api": {{SampleApiPayload}}
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
+    }
+
+    // End-to-end through the real HTTP endpoint: engine selection resolves
+    // PythonApiCodeGenerator, and the generated script is actually run
+    // against a fake JSON API (real subprocess + real HTTP request, like
+    // Generate_ValidConfig_Returns200WithTextPlain does for Flat-Mode).
+    [Fact]
+    public async Task Generate_ApiPayload_Returns200WithVerifiedScript()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var category = request.QueryString["category"];
+            var json = $$"""{ "data": { "items": [ { "title": "Item-{{category}}" } ] } }""";
+            return new LocalTestServerResponse(json, "application/json");
+        });
+
+        var payload = $$"""
+            {
+              "url": "https://example.com",
+              "api": {
+                "urlTemplate": "{{server.BaseUrl}}?category={category}",
+                "itemsPath": "data.items",
+                "fields": [ { "name": "Titel", "path": "title" } ],
+                "parameters": [
+                  { "name": "category", "source": { "kind": "staticList", "values": ["a", "b"] } }
+                ]
+              }
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Contains("import requests", body);
+        Assert.DoesNotContain("BeautifulSoup", body);
+        Assert.Contains("itertools.product", body);
+    }
 }

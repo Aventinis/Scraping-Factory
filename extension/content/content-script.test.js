@@ -1,6 +1,7 @@
 const {
   buildSelector, elementPath, serializeDomTree,
   matchFlatFields, matchGroupTree, computePreviewMatches,
+  findValueInJson, siblingFields, findApiCandidates, deriveItemsAndValuePath,
 } = require('./content-script');
 
 function el(tag, { id, classes } = {}) {
@@ -370,6 +371,75 @@ describe('scoped selection (START_SELECTION with scopeSelector)', () => {
   });
 });
 
+// ── API-mode search selection (START_SELECTION with apiSearch) ─────────────
+// capturedApiEntries (fed by the API_CAPTURE bridge below) is module-level
+// state, so these tests populate it the same way the bridge tests do:
+// dispatching a synthetic postMessage 'message' event rather than a real
+// (async) postMessage round-trip.
+
+describe('API-mode search selection (START_SELECTION with apiSearch)', () => {
+  let capturedListener;
+
+  beforeEach(() => {
+    jest.resetModules();
+    document.body.innerHTML = '<p class="price">3.50</p>';
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+    };
+
+    require('./content-script');
+  });
+
+  afterEach(() => {
+    capturedListener({ type: 'STOP_SELECTION' });
+    delete global.chrome;
+  });
+
+  function feedEntry(entry) {
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { source: 'sf-api-capture', type: 'API_CAPTURE_ENTRY', entry }, source: window,
+    }));
+  }
+
+  test('a click while apiSearch is active sends both ELEMENT_SELECTED and API_CANDIDATES', () => {
+    feedEntry({ id: 1, url: 'https://example.com/api', method: 'GET', status: 200, contentType: 'application/json', body: JSON.stringify({ price: '3.50' }), bodyTruncated: false, bodySkipped: false });
+
+    capturedListener({ type: 'START_SELECTION', apiSearch: true });
+    document.querySelector('.price').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'ELEMENT_SELECTED' }));
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+      type: 'API_CANDIDATES',
+      target: '3.50',
+      candidates: [expect.objectContaining({ path: 'price', value: '3.50' })],
+    });
+  });
+
+  test('a click without apiSearch never sends API_CANDIDATES, even with entries buffered', () => {
+    feedEntry({ id: 1, url: 'https://example.com/api', contentType: 'application/json', body: JSON.stringify({ price: '3.50' }), bodySkipped: false });
+
+    capturedListener({ type: 'START_SELECTION' }); // no apiSearch flag
+    document.querySelector('.price').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'API_CANDIDATES' }));
+  });
+
+  test('API_CAPTURE_START clears the locally buffered entries a later apiSearch click would search', () => {
+    feedEntry({ id: 1, url: 'https://example.com/api', contentType: 'application/json', body: JSON.stringify({ price: '3.50' }), bodySkipped: false });
+
+    capturedListener({ type: 'API_CAPTURE_START' });
+
+    capturedListener({ type: 'START_SELECTION', apiSearch: true });
+    document.querySelector('.price').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'API_CANDIDATES', target: '3.50', candidates: [] });
+  });
+});
+
 // ── Preview-mode matching ────────────────────────────────────────────────────
 // Pure functions — no chrome mock needed, same style as buildSelector above.
 
@@ -500,6 +570,180 @@ describe('computePreviewMatches', () => {
   });
 });
 
+// ── API-Mode candidate correlation (Issue #53 Phase 4) ──────────────────────
+
+describe('findValueInJson', () => {
+  test('finds a scalar string match nested inside objects and arrays, with a dot/[n] path', () => {
+    const data = { data: { items: [{ name: 'Suppe', price: 3.5 }, { name: 'Salat', price: 4 }] } };
+    const matches = findValueInJson(data, 'Salat', []);
+    expect(matches).toEqual([{ path: 'data.items[1].name', value: 'Salat' }]);
+  });
+
+  test('matches numbers/booleans via their string representation', () => {
+    const data = { items: [{ price: 3.5 }, { inStock: true }] };
+    expect(findValueInJson(data, '3.5', [])).toEqual([{ path: 'items[0].price', value: 3.5 }]);
+    expect(findValueInJson(data, 'true', [])).toEqual([{ path: 'items[1].inStock', value: true }]);
+  });
+
+  test('trims whitespace on both the target and the search (a clicked element\'s textContent often has stray whitespace)', () => {
+    const data = { name: 'Suppe' };
+    expect(findValueInJson(data, '  Suppe  ', [])).toEqual([{ path: 'name', value: 'Suppe' }]);
+  });
+
+  test('returns every occurrence when the value appears more than once', () => {
+    const data = { a: { x: 'Suppe' }, b: [{ x: 'Suppe' }] };
+    const matches = findValueInJson(data, 'Suppe', []);
+    expect(matches.map(m => m.path).sort()).toEqual(['a.x', 'b[0].x']);
+  });
+
+  test('never matches an object/array itself, only scalar leaves', () => {
+    const data = { items: [{ name: 'x' }] };
+    expect(findValueInJson(data, '[object Object]', [])).toEqual([]);
+  });
+
+  test('returns nothing for an empty/whitespace-only target', () => {
+    expect(findValueInJson({ a: 'x' }, '   ', [])).toEqual([]);
+  });
+});
+
+describe('siblingFields', () => {
+  const data = { items: [{ name: 'Suppe', price: 3.5, tags: ['vegan'], meta: null }] };
+
+  test('returns the other scalar keys of the object containing the match', () => {
+    const siblings = siblingFields(data, 'items[0].name');
+    expect(siblings).toEqual(expect.arrayContaining([
+      { name: 'price', path: 'items[0].price', value: 3.5 },
+    ]));
+    expect(siblings.find(s => s.name === 'name')).toBeUndefined(); // excludes the matched key itself
+  });
+
+  test('excludes object/array-valued siblings (only flat fields are supported)', () => {
+    const siblings = siblingFields(data, 'items[0].name');
+    expect(siblings.find(s => s.name === 'tags')).toBeUndefined();
+    expect(siblings.find(s => s.name === 'meta')).toBeUndefined(); // null is typeof 'object' too
+  });
+
+  test('a match that is itself a bare array element has no named siblings', () => {
+    expect(siblingFields({ tags: ['vegan', 'scharf'] }, 'tags[0]')).toEqual([]);
+  });
+
+  test('a top-level match (no path) has no siblings', () => {
+    expect(siblingFields({ a: 'x' }, '')).toEqual([]);
+  });
+
+  test('a match on a top-level key gets bare-path siblings (no leading dot)', () => {
+    expect(siblingFields({ name: 'Suppe', price: 3.5 }, 'name')).toEqual([{ name: 'price', path: 'price', value: 3.5 }]);
+  });
+});
+
+describe('findApiCandidates', () => {
+  function entry(overrides) {
+    return { id: 1, url: 'https://example.com/api', method: 'GET', status: 200, contentType: 'application/json', body: '{}', bodyTruncated: false, bodySkipped: false, ...overrides };
+  }
+
+  test('finds a candidate in a recorded JSON body, including sibling suggestions', () => {
+    const entries = [entry({ body: JSON.stringify({ data: { items: [{ name: 'Suppe', price: 3.5 }] } }) })];
+    const candidates = findApiCandidates(entries, 'Suppe');
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({ entryId: 1, url: 'https://example.com/api', method: 'GET', path: 'data.items[0].name', value: 'Suppe' });
+    expect(candidates[0].siblings).toEqual([{ name: 'price', path: 'data.items[0].price', value: 3.5 }]);
+  });
+
+  test('attaches the derived itemsPath/valuePath (Issue #53 Phase 5) so the popup does not need to re-derive them', () => {
+    const entries = [entry({ body: JSON.stringify({ data: { items: [{ name: 'Suppe', price: 3.5 }] } }) })];
+    const [candidate] = findApiCandidates(entries, 'Suppe');
+    expect(candidate.itemsPath).toBe('data.items');
+    expect(candidate.valuePath).toBe('name');
+  });
+
+  test('itemsPath/valuePath are null when the match is not inside any array', () => {
+    const entries = [entry({ body: JSON.stringify({ meta: { name: 'Suppe' } }) })];
+    const [candidate] = findApiCandidates(entries, 'Suppe');
+    expect(candidate.itemsPath).toBeNull();
+    expect(candidate.valuePath).toBeNull();
+  });
+
+  test('carries the source entry\'s requestHeaders through', () => {
+    const entries = [entry({ body: JSON.stringify({ name: 'Suppe' }), requestHeaders: [{ name: 'Authorization', value: 'Bearer x' }] })];
+    const [candidate] = findApiCandidates(entries, 'Suppe');
+    expect(candidate.requestHeaders).toEqual([{ name: 'Authorization', value: 'Bearer x' }]);
+  });
+
+  test('defaults requestHeaders to an empty array when the entry has none', () => {
+    const entries = [entry({ body: JSON.stringify({ name: 'Suppe' }) })];
+    const [candidate] = findApiCandidates(entries, 'Suppe');
+    expect(candidate.requestHeaders).toEqual([]);
+  });
+
+  test('skips entries with a non-JSON, skipped, or empty body instead of throwing', () => {
+    const entries = [
+      entry({ id: 1, body: 'not json' }),
+      entry({ id: 2, bodySkipped: true, body: '' }),
+      entry({ id: 3, body: '' }),
+      entry({ id: 4, body: JSON.stringify({ name: 'Suppe' }) }),
+    ];
+    const candidates = findApiCandidates(entries, 'Suppe');
+    expect(candidates.map(c => c.entryId)).toEqual([4]);
+  });
+
+  test('returns nothing when no entry contains the target text', () => {
+    const entries = [entry({ body: JSON.stringify({ name: 'Salat' }) })];
+    expect(findApiCandidates(entries, 'Suppe')).toEqual([]);
+  });
+
+  test('ranks a declared application/json body above a same-value match in a non-JSON-declared body', () => {
+    const entries = [
+      entry({ id: 1, contentType: 'text/plain', body: JSON.stringify({ name: 'Suppe' }) }),
+      entry({ id: 2, contentType: 'application/json', body: JSON.stringify({ name: 'Suppe' }) }),
+    ];
+    const candidates = findApiCandidates(entries, 'Suppe');
+    expect(candidates[0].entryId).toBe(2);
+  });
+
+  test('ranks a body where the value is unique above one where it recurs many times', () => {
+    const entries = [
+      entry({ id: 1, body: JSON.stringify({ items: [{ x: 'Suppe' }, { x: 'Suppe' }, { x: 'Suppe' }] }) }),
+      entry({ id: 2, body: JSON.stringify({ name: 'Suppe' }) }),
+    ];
+    const candidates = findApiCandidates(entries, 'Suppe');
+    expect(candidates[0].entryId).toBe(2);
+  });
+
+  test('caps the number of returned candidates at MAX_API_CANDIDATES (20)', () => {
+    const items = Array.from({ length: 25 }, (_, i) => ({ name: 'Suppe', id: i }));
+    const entries = [entry({ body: JSON.stringify({ items }) })];
+    expect(findApiCandidates(entries, 'Suppe')).toHaveLength(20);
+  });
+
+  test('returns nothing for an empty target', () => {
+    const entries = [entry({ body: JSON.stringify({ name: '' }) })];
+    expect(findApiCandidates(entries, '   ')).toEqual([]);
+  });
+});
+
+describe('deriveItemsAndValuePath (Issue #53 Phase 5)', () => {
+  test('splits at the last array index into itemsPath (the array) and valuePath (relative to one record)', () => {
+    expect(deriveItemsAndValuePath('data.items[2].price')).toEqual({ itemsPath: 'data.items', valuePath: 'price' });
+  });
+
+  test('supports a nested valuePath', () => {
+    expect(deriveItemsAndValuePath('items[0].meta.price')).toEqual({ itemsPath: 'items', valuePath: 'meta.price' });
+  });
+
+  test('uses the *last* array index when a match sits inside nested arrays', () => {
+    expect(deriveItemsAndValuePath('categories[0].items[3].name')).toEqual({ itemsPath: 'categories[0].items', valuePath: 'name' });
+  });
+
+  test('returns null when the path never enters an array (no repeating-records structure)', () => {
+    expect(deriveItemsAndValuePath('meta.name')).toBeNull();
+  });
+
+  test('returns an empty valuePath when the match is itself the bare array element (no record object)', () => {
+    expect(deriveItemsAndValuePath('tags[0]')).toEqual({ itemsPath: 'tags', valuePath: '' });
+  });
+});
+
 describe('PREVIEW_START / PREVIEW_STOP (message-listener wiring)', () => {
   let capturedListener;
 
@@ -557,5 +801,80 @@ describe('PREVIEW_START / PREVIEW_STOP (message-listener wiring)', () => {
 
     capturedListener({ type: 'PREVIEW_STOP' });
     expect(document.querySelectorAll('.sf-preview-box')).toHaveLength(0);
+  });
+});
+
+// ── API-Mode capture bridge (message-listener wiring) ────────────────────────
+// api-capture.js (MAIN world) talks to this isolated-world script via
+// window.postMessage in both directions — see content-script.js's bridge.
+//
+// Note: window.addEventListener('message', ...) is registered unconditionally
+// at module load (same as the existing 'error'/'unhandledrejection'
+// listeners above), so re-requiring the module in earlier tests in this file
+// leaves old listeners attached to the shared jsdom `window`. A dispatched
+// 'message' event can therefore reach more than one accumulated listener —
+// harmless since every one performs the same forward, but it means these
+// tests assert with toHaveBeenCalledWith (content, regardless of count),
+// not toHaveBeenCalledTimes.
+describe('API_CAPTURE bridge (message-listener wiring)', () => {
+  let capturedListener;
+
+  beforeEach(() => {
+    jest.resetModules();
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+    };
+
+    require('./content-script');
+  });
+
+  afterEach(() => {
+    delete global.chrome;
+  });
+
+  test('API_CAPTURE_START is forwarded to the MAIN world via postMessage', () => {
+    jest.spyOn(window, 'postMessage');
+
+    capturedListener({ type: 'API_CAPTURE_START' });
+
+    expect(window.postMessage).toHaveBeenCalledWith(
+      { source: 'sf-api-capture-control', type: 'API_CAPTURE_START' }, '*',
+    );
+  });
+
+  test('API_CAPTURE_STOP is forwarded to the MAIN world via postMessage', () => {
+    jest.spyOn(window, 'postMessage');
+
+    capturedListener({ type: 'API_CAPTURE_STOP' });
+
+    expect(window.postMessage).toHaveBeenCalledWith(
+      { source: 'sf-api-capture-control', type: 'API_CAPTURE_STOP' }, '*',
+    );
+  });
+
+  // Dispatched directly (not via window.postMessage, whose jsdom delivery is
+  // an async macrotask) so the bridge's synchronous handling is testable
+  // without a real event-loop wait; `source: window` matches what a genuine
+  // same-window postMessage from the MAIN world would set.
+  test('a captured entry from the MAIN world is forwarded to the side panel as API_CAPTURE_ENTRY', () => {
+    const entry = { id: 1, url: 'https://example.com/api/items', method: 'GET', status: 200, contentType: 'application/json', body: '{}', bodyTruncated: false };
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { source: 'sf-api-capture', type: 'API_CAPTURE_ENTRY', entry }, source: window,
+    }));
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'API_CAPTURE_ENTRY', entry });
+  });
+
+  test('a message without the expected source tag is ignored', () => {
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: 'API_CAPTURE_ENTRY', entry: {} }, source: window, // missing source: 'sf-api-capture'
+    }));
+
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
   });
 });
