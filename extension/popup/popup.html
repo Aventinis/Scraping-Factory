@@ -69,6 +69,23 @@
     .preview-summary { font-size: 11px; color: #6b7280; margin-top: 6px; text-align: center; }
     .preview-summary.warn { color: #d97706; }
 
+    /* API-mode candidate search (Phase 4) */
+    .api-candidates-panel { margin-top: 8px; padding: 8px; background: #f9fafb; border-radius: 6px; }
+    .api-candidates-target { font-size: 11px; color: #6b7280; margin-bottom: 6px; word-break: break-word; }
+    .api-candidates-list { list-style: none; }
+    .api-candidate { padding: 6px; background: #fff; border-radius: 6px; margin-bottom: 4px; font-size: 11px; }
+    .api-candidate:last-child { margin-bottom: 0; }
+    .api-candidate-url { font-family: monospace; color: #374151; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .api-candidate-path { font-family: monospace; color: #3b82f6; margin-top: 2px; }
+    .api-candidate-value { color: #6b7280; margin-top: 2px; word-break: break-word; }
+    .api-candidate-siblings { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .api-sibling-chip {
+      font-size: 10px; padding: 2px 6px; background: #f3f4f6; color: #374151; border-radius: 999px;
+    }
+    .api-sibling-chip:hover { background: #e5e7eb; }
+    .api-sibling-chip.picked { background: #3b82f6; color: #fff; }
+    .api-candidates-empty { font-size: 11px; color: #9ca3af; text-align: center; padding: 4px 0; }
+
     /* Container tree editor */
     #group-tree-root { list-style: none; margin: 0 0 10px; padding: 0; }
     .group-tree-children { list-style: none; margin: 0; padding: 0; }
@@ -241,6 +258,16 @@
       <button id="btn-api-capture" class="btn-toggle" type="button" title="Zeichnet fetch/XHR-Netzwerkanfragen dieser Seite auf — Vorstufe für den kommenden API-Modus">Netzwerk-Aufzeichnung starten</button>
     </div>
     <p id="api-capture-summary" class="preview-summary hidden"></p>
+
+    <!-- API-Mode candidate search (Issue #53, Phase 4) — likewise standalone
+         until Phase 6 gives API-Mode its own third mode in the toggle above. -->
+    <div class="actions" style="margin-top: 6px;">
+      <button id="btn-api-search" class="btn-secondary" type="button" disabled title="Klicke danach einen Datenpunkt auf der Seite an — er wird in der Aufzeichnung gesucht">Datenpunkt in Aufzeichnung suchen</button>
+    </div>
+    <div id="api-candidates-panel" class="api-candidates-panel hidden">
+      <p id="api-candidates-target" class="api-candidates-target"></p>
+      <ul id="api-candidates-list" class="api-candidates-list"></ul>
+    </div>
 
     <div class="actions" style="margin-top: 10px;">
       <button id="btn-export-config" class="btn-secondary" disabled title="Aktuelle Felder/Container als JSON exportieren — z. B. für einen Bug-Report">Konfiguration exportieren</button>

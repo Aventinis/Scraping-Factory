@@ -164,10 +164,134 @@ function computePreviewMatches(mode, fields, groups) {
   return matchFlatFields(fields || []);
 }
 
+// ── API-Mode candidate correlation (Issue #53 Phase 4) ──────────────────────
+// Given the text of a clicked element, searches the JSON bodies buffered by
+// Phase 3's recording (see the API-Mode capture bridge below) for a scalar
+// value matching that text, and reports each hit as a JSON path — using the
+// same minimal dot/"[n]" path notation the companion backend's ApiConfig
+// already expects (see scraper_api.py.j2's _resolve_json_path), so a path
+// found here stays directly usable once later phases build an ApiConfig
+// from it. Deliberately emits concrete "[n]" indices, never "[*]" — that
+// token means "every element" in the backend's DSL and only makes sense for
+// a path someone authors by hand, not a single found match.
+
+const JSON_PATH_TOKEN_RE = /[^.[\]]+|\[\d+\]/g;
+
+function pathTokens(path) {
+  return path.match(JSON_PATH_TOKEN_RE) || [];
+}
+
+function tokensToPath(tokens) {
+  return tokens.reduce((acc, token) => (token.startsWith('[') ? acc + token : (acc ? `${acc}.${token}` : token)), '');
+}
+
+// Walks `tokens` against `data` the same way the Python runtime resolves a
+// path at scrape time — used here to re-locate a match's parent container
+// for siblingFields below.
+function resolveTokens(data, tokens) {
+  let value = data;
+  for (const token of tokens) {
+    if (value === null || value === undefined) return undefined;
+    if (token.startsWith('[')) {
+      value = Array.isArray(value) ? value[parseInt(token.slice(1, -1), 10)] : undefined;
+    } else {
+      value = (typeof value === 'object' && !Array.isArray(value)) ? value[token] : undefined;
+    }
+  }
+  return value;
+}
+
+// Recursive walk, accumulator-style like matchGroupTree above. Only scalar
+// leaves (string/number/boolean) are candidate matches — an object/array
+// itself never equals a clicked element's text.
+function walkJson(data, path, target, matches) {
+  if (Array.isArray(data)) {
+    data.forEach((item, i) => walkJson(item, `${path}[${i}]`, target, matches));
+  } else if (data && typeof data === 'object') {
+    Object.keys(data).forEach((key) => walkJson(data[key], path ? `${path}.${key}` : key, target, matches));
+  } else if (data !== null && data !== undefined && String(data).trim() === target) {
+    matches.push({ path, value: data });
+  }
+}
+
+function findValueInJson(data, targetText, matches) {
+  const target = String(targetText ?? '').trim();
+  if (target) walkJson(data, '', target, matches);
+  return matches;
+}
+
+// Sibling scalar keys of the object that directly contains the match at
+// `matchPath` — e.g. for a match at "items[2].price", the siblings are the
+// other flat fields of items[2] ("name", "id", …), offered as one-click
+// suggestions for additional fields of the same record. A match that's
+// itself a bare array element (path ends in "[n]", e.g. "tags[0]") has no
+// named siblings — a scalar array has no keys.
+function siblingFields(data, matchPath) {
+  const tokens = pathTokens(matchPath);
+  if (tokens.length === 0) return [];
+  const matchedKey = tokens[tokens.length - 1];
+  if (matchedKey.startsWith('[')) return [];
+
+  const parent = resolveTokens(data, tokens.slice(0, -1));
+  if (!parent || typeof parent !== 'object' || Array.isArray(parent)) return [];
+
+  const parentPath = tokensToPath(tokens.slice(0, -1));
+  return Object.keys(parent)
+    .filter((key) => key !== matchedKey && parent[key] !== null && typeof parent[key] !== 'object')
+    .map((key) => ({ name: key, path: parentPath ? `${parentPath}.${key}` : key, value: parent[key] }));
+}
+
+const MAX_API_CANDIDATES = 20; // caps the UI list on a heavily-recorded session, same spirit as PREVIEW_MAX_BOXES
+
+// Searches every buffered entry's (parsed) response body for `targetText`,
+// ranking hits by plausibility — a declared JSON content-type first, then a
+// body where the value occurs fewer times (more likely to be the *specific*
+// value the user meant, not a generic recurring one like a currency symbol
+// or status string), then a shorter path as a final tiebreaker.
+function findApiCandidates(entries, targetText) {
+  const target = String(targetText ?? '').trim();
+  if (!target) return [];
+
+  const ranked = [];
+  entries.forEach((entry) => {
+    if (!entry.body || entry.bodySkipped) return;
+    let parsed;
+    try {
+      parsed = JSON.parse(entry.body);
+    } catch {
+      return; // not JSON, or a truncated body cut off mid-structure — can't search it
+    }
+    const matches = findValueInJson(parsed, target, []);
+    if (matches.length === 0) return;
+    const isJsonContentType = !!(entry.contentType && entry.contentType.includes('json'));
+    matches.forEach(({ path, value }) => {
+      ranked.push({
+        entryId: entry.id,
+        url: entry.url,
+        method: entry.method,
+        path,
+        value,
+        siblings: siblingFields(parsed, path),
+        isJsonContentType,
+        matchCountInBody: matches.length,
+      });
+    });
+  });
+
+  ranked.sort((a, b) => {
+    if (a.isJsonContentType !== b.isJsonContentType) return a.isJsonContentType ? -1 : 1;
+    if (a.matchCountInBody !== b.matchCountInBody) return a.matchCountInBody - b.matchCountInBody;
+    return a.path.length - b.path.length;
+  });
+
+  return ranked.slice(0, MAX_API_CANDIDATES).map(({ isJsonContentType, matchCountInBody, ...candidate }) => candidate);
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     buildSelector, elementPath, serializeDomTree,
     matchFlatFields, matchGroupTree, computePreviewMatches,
+    findValueInJson, siblingFields, findApiCandidates,
   };
 }
 
@@ -302,6 +426,12 @@ let scopeRootEl = null;
 // capable of matching more than once — see buildSelector's avoidId.
 let avoidIdInSelector = false;
 
+// Set for the duration of a Phase-4 "find in recording" selection round —
+// see startSelection's apiSearch param. Orthogonal to scopeRootEl/
+// avoidIdInSelector: API-mode search doesn't restrict which elements are
+// clickable, it changes what a click produces (see onClick below).
+let apiSearchActive = false;
+
 function isInScope(element) {
   return !scopeRootEl || scopeRootEl.contains(element);
 }
@@ -347,6 +477,8 @@ function onClick(e) {
   }
 
   const selector = buildSelector(e.target, scopeRootEl, avoidIdInSelector);
+  const wasApiSearch = apiSearchActive; // read before stopSelection() clears it
+  const clickedText = (e.target.textContent || '').trim();
   log('CLICK → selector', selector);
   stopSelection();
 
@@ -361,6 +493,16 @@ function onClick(e) {
 
   log('MSG_OUT ELEMENT_SELECTED', selector);
   chrome.runtime.sendMessage({ type: 'ELEMENT_SELECTED', selector, path });
+
+  // API-mode search: additionally correlate the clicked element's text
+  // against Phase 3's recorded responses (see capturedApiEntries below) and
+  // report candidate JSON matches — on top of, not instead of, the CSS
+  // selector above.
+  if (wasApiSearch) {
+    const candidates = findApiCandidates(capturedApiEntries, clickedText);
+    log('MSG_OUT API_CANDIDATES', { target: clickedText, count: candidates.length });
+    chrome.runtime.sendMessage({ type: 'API_CANDIDATES', target: clickedText, candidates });
+  }
 }
 
 // scopeSelector (optional): Container-Mode passes the immediate parent
@@ -370,9 +512,10 @@ function onClick(e) {
 // relies on for a repeating group). No match on the current page → the
 // selection can't proceed, same SELECTION_UNAVAILABLE path as a missing
 // content script.
-function startSelection(scopeSelector, avoidId) {
-  log('SELECTION start', { scopeSelector, avoidId });
+function startSelection(scopeSelector, avoidId, apiSearch) {
+  log('SELECTION start', { scopeSelector, avoidId, apiSearch });
   avoidIdInSelector = !!avoidId;
+  apiSearchActive = !!apiSearch;
   if (scopeSelector) {
     scopeRootEl = document.querySelector(scopeSelector);
     if (!scopeRootEl) {
@@ -398,6 +541,7 @@ function stopSelection() {
   removeOverlay();
   scopeRootEl = null;
   avoidIdInSelector = false;
+  apiSearchActive = false;
   if (hoverTimeoutId !== null) {
     clearTimeout(hoverTimeoutId);
     hoverTimeoutId = null;
@@ -432,12 +576,24 @@ function disableDomView() {
 // captured entries come back the same way and get forwarded to the side
 // panel via chrome.runtime.sendMessage, same as HOVER_ELEMENT/DOM_TREE/
 // PREVIEW_RESULT above.
+//
+// Also keeps its own capped copy of every entry that passes through
+// (capturedApiEntries) — Phase 4's onClick/findApiCandidates search this
+// copy directly rather than reaching back into the MAIN world for it, since
+// the click-driven correlation step runs here in the isolated world anyway.
+// Cleared on API_CAPTURE_START (see the message listener below), mirroring
+// api-capture.js's own buffer reset — deliberately *not* cleared on STOP,
+// since Phase 4's search runs after recording has stopped.
+const MAX_LOCAL_API_ENTRIES = 200; // mirrors api-capture.js's MAX_CAPTURED_ENTRIES; independent cap, same value
+let capturedApiEntries = [];
+
 if (typeof window !== 'undefined') {
   window.addEventListener('message', (event) => {
     if (event.source !== window) return;
     const data = event.data;
     if (!data || data.source !== 'sf-api-capture' || data.type !== 'API_CAPTURE_ENTRY') return;
     log('API_CAPTURE_ENTRY received', { url: data.entry?.url });
+    if (capturedApiEntries.length < MAX_LOCAL_API_ENTRIES) capturedApiEntries.push(data.entry);
     chrome.runtime.sendMessage({ type: 'API_CAPTURE_ENTRY', entry: data.entry });
   });
 }
@@ -447,7 +603,7 @@ if (typeof window !== 'undefined') {
 if (typeof chrome !== 'undefined' && chrome.runtime) {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     log('MSG_IN', message.type);
-    if (message.type === 'START_SELECTION') startSelection(message.scopeSelector, message.avoidId);
+    if (message.type === 'START_SELECTION') startSelection(message.scopeSelector, message.avoidId, message.apiSearch);
     if (message.type === 'STOP_SELECTION')  stopSelection();
     if (message.type === 'ENABLE_DOM_VIEW') enableDomView();
     if (message.type === 'DISABLE_DOM_VIEW') disableDomView();
@@ -455,6 +611,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     if (message.type === 'PREVIEW_STOP') stopPreview();
     if (message.type === 'API_CAPTURE_START' || message.type === 'API_CAPTURE_STOP') {
       log('API_CAPTURE forward to MAIN world', message.type);
+      if (message.type === 'API_CAPTURE_START') capturedApiEntries = [];
       window.postMessage({ source: 'sf-api-capture-control', type: message.type }, '*');
     }
     if (message.type === 'GET_LOGS') {
