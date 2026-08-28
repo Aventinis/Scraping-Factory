@@ -1,0 +1,155 @@
+{
+  "common": {
+    "cancel": "Cancelar",
+    "add": "Añadir",
+    "remove": "Eliminar",
+    "use": "Usar",
+    "apply": "Aplicar",
+    "discard": "Descartar",
+    "reportBug": "Informar de un error",
+    "retry": "Reintentar",
+    "fields": "Campos",
+    "containers": "Contenedores",
+    "namePlaceholder": "Nombre",
+    "fieldNamePlaceholder": "Nombre del campo",
+    "attributePlaceholder": "Atributo",
+    "noMatches": "Sin coincidencias en la grabación.",
+    "noRecordArray": "No se encontró ningún array de registros — no se puede usar como fuente."
+  },
+  "language": {
+    "label": "Idioma"
+  },
+  "checking": {
+    "message": "Conectando con Companion…"
+  },
+  "error": {
+    "title": "No se puede conectar con la app Companion",
+    "hint": "Inicia ScrapingFactory.Companion y vuelve a intentarlo."
+  },
+  "idle": {
+    "urlLabel": "URL",
+    "robotsCheckTitle": "Comprueba en el robots.txt del sitio si esta URL está permitida para rastreadores",
+    "robotsCheckBtn": "Comprobar robots.txt",
+    "robotsCheckBtnChecking": "Comprobando robots.txt…",
+    "modeFlat": "Campos (plano)",
+    "modeContainer": "Contenedores (anidado)",
+    "modeApi": "API",
+    "addFieldBtn": "+ Añadir campo",
+    "addContainerBtn": "+ Añadir contenedor",
+    "apiCaptureTitle": "Registra las solicitudes de red fetch/XHR de esta página",
+    "apiCaptureStartBtn": "Iniciar grabación de red",
+    "apiCaptureStopBtn": "Detener grabación de red",
+    "apiCaptureSummary": "{count} solicitud(es) grabada(s)",
+    "apiSearchTitle": "Luego haz clic en un dato de la página — se buscará en la grabación",
+    "apiSearchBtn": "Buscar dato en la grabación",
+    "apiConfigSummary": "Configuración de API lista: {fields} campo(s), {parameters} parámetro(s){headers}.",
+    "apiConfigSummaryHeaders": ", {count} cabecera(s)",
+    "previewShowBtn": "Mostrar vista previa",
+    "previewHideBtn": "Detener vista previa",
+    "previewTitle": "Muestra directamente en la página qué elementos coincidirían con la configuración actual",
+    "previewSummaryMatched": "{count} elemento(s) resaltado(s)",
+    "previewSummaryEmpty": "sin coincidencias: {names}",
+    "previewSummaryTruncated": "vista recortada (demasiadas coincidencias)",
+    "exportConfigTitle": "Exportar los campos/contenedores actuales como JSON — p. ej. para un informe de error",
+    "exportConfigBtn": "Exportar configuración",
+    "generateBtn": "Generar script ▶"
+  },
+  "robots": {
+    "checkFailed": "No se pudo comprobar el robots.txt ({error}).",
+    "notFound": "No se encontró robots.txt — el acceso está permitido.",
+    "allowed": "Permitido para {path}",
+    "allowedWithRule": "Permitido para {path} (Allow: {pattern})",
+    "disallowed": "No permitido para {path} (Disallow: {pattern})"
+  },
+  "selecting": {
+    "hint": "Haz clic en un elemento de la página…",
+    "domTreeToggle": "Mostrar árbol DOM",
+    "domTreeLoading": "Cargando árbol DOM…",
+    "domTreeError": "No se pudo cargar el árbol.",
+    "domTreeTruncated": "Árbol recortado (demasiados elementos).",
+    "cancelBtn": "Cancelar"
+  },
+  "apiCandidates": {
+    "searchedFor": "Buscado: \"{target}\"",
+    "matchLabel": "Coincidencia: {value}",
+    "siblingChip": "+ {name}",
+    "useFieldNamePlaceholder": "Nombre del campo"
+  },
+  "apiConfig": {
+    "urlPathLabel": "URL — Ruta",
+    "urlQueryLabel": "URL — Parámetros de consulta",
+    "valueSourcesLabel": "Fuentes de valores",
+    "headersLabel": "Cabeceras",
+    "variableLabel": "variable",
+    "unnamedPart": "(aún sin nombre)",
+    "sourceKindStaticList": "Lista de valores",
+    "sourceKindDiscovery": "Endpoint de descubrimiento",
+    "sourceKindRange": "Rango",
+    "valueListPlaceholder": "Valores, separados por comas o uno por línea",
+    "rangeFromPlaceholder": "Desde",
+    "rangeToPlaceholder": "Hasta (p. ej. \"today\")",
+    "customFormatOption": "Formato personalizado…",
+    "formatExample": "Ejemplo: {example}",
+    "formatEnterPrompt": "(introduce un formato)",
+    "presetIsoWeekStandard": "Estándar ISO (2026-W35)",
+    "presetIsoWeekNoSeparator": "Año-semana sin separador (2026-35)",
+    "presetDateStandard": "Estándar ISO (2026-08-28)",
+    "presetDateGerman": "Formato alemán (28.08.2026)",
+    "presetDateNoSeparator": "Sin separador (20260828)",
+    "discoverySearchBtn": "Buscar valor en la página",
+    "discoverySearchAgainBtn": "Buscar de nuevo",
+    "discoverySource": "Fuente: {urlTemplate} ({itemsPath} → {valuePath})",
+    "noHeadersRecorded": "No se registraron cabeceras de solicitud.",
+    "headerModeValue": "Valor",
+    "headerModeEnv": "Variable de entorno",
+    "envNamePlaceholder": "ENV_NAME"
+  },
+  "group": {
+    "repeating": "repetitivo",
+    "single": "único",
+    "textMode": "Texto",
+    "attributeMode": "Atributo: {attribute}",
+    "existsMode": "¿Existe?",
+    "addSubcontainerBtn": "+ Contenedor",
+    "addSubfieldBtn": "+ Campo de datos"
+  },
+  "generating": {
+    "message": "Generando script…"
+  },
+  "done": {
+    "title": "¡Script generado correctamente!",
+    "newBtn": "Nuevo",
+    "downloadBtn": "Descargar scraper.py"
+  },
+  "modals": {
+    "fieldName": {
+      "label": "Nombre del campo (p. ej. \"Título del producto\")",
+      "placeholder": "Nombre del campo"
+    },
+    "containerNew": {
+      "label": "Nombre del contenedor (p. ej. \"Entrantes\")",
+      "namePlaceholder": "Nombre",
+      "typeLabel": "Tipo",
+      "single": "Elemento único",
+      "repeating": "Repetitivo",
+      "next": "Siguiente — seleccionar elemento"
+    },
+    "fieldExtended": {
+      "label": "Nombre del campo (p. ej. \"Precio\")",
+      "placeholder": "Nombre del campo",
+      "typeLabel": "Tipo de campo",
+      "textOption": "Texto",
+      "attributeOption": "Atributo",
+      "existsOption": "¿Existe?",
+      "attributeLabel": "Nombre del atributo (p. ej. \"href\")",
+      "attributePlaceholder": "Atributo"
+    }
+  },
+  "toast": {
+    "verificationFailed": "Error al verificar la configuración.",
+    "generationError": "Error: {message}",
+    "selectionUnavailable": "No es posible seleccionar elementos en esta página.",
+    "previewUnavailable": "No es posible la vista previa en esta página.",
+    "captureUnavailable": "No es posible grabar red en esta página."
+  }
+}
