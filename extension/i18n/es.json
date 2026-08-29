@@ -123,7 +123,7 @@
   "done": {
     "title": "¡Script generado correctamente!",
     "newBtn": "Nuevo",
-    "downloadBtn": "Descargar scraper.py"
+    "downloadBtn": "Descargar {filename}"
   },
   "modals": {
     "fieldName": {

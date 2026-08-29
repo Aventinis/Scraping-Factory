@@ -1825,6 +1825,25 @@ describe('output settings (script/output filename)', () => {
     expect(anchor.download).toBe('scraper.py');
     appendSpy.mockRestore();
   });
+
+  test('the done-screen download button label shows the configured (sanitized) script name', async () => {
+    document.getElementById('input-script-filename').value = 'mein scraper!';
+    document.getElementById('input-script-filename').dispatchEvent(new Event('input'));
+
+    global.fetch.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('# script') });
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    expect(document.getElementById('btn-download').textContent).toBe('mein_scraper.py herunterladen');
+  });
+
+  test('the done-screen download button label falls back to "scraper.py" when no script name was typed', async () => {
+    global.fetch.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('# script') });
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    expect(document.getElementById('btn-download').textContent).toBe('scraper.py herunterladen');
+  });
 });
 
 describe('reportBug end-to-end via the COMPANION_ERROR screen button', () => {
