@@ -3,7 +3,7 @@
 # Engine: Browser (Playwright — renders JavaScript before extracting)
 # Mode:   Container (verschachtelte Gruppen → XML)
 # Gruppen: {{ for name in root_names }}{{ name }}{{ if !for.last }}, {{ end }}{{ end }}
-# Run:    python scraper.py
+# Run:    python {{ script_filename }}.py
 
 {{~ if needs_os_import ~}}
 import os
@@ -75,9 +75,9 @@ def main():
     root = scrape(URL)
     tree = ET.ElementTree(root)
     ET.indent(tree)
-    tree.write("output.xml", encoding="utf-8", xml_declaration=True)
+    tree.write("{{ output_filename }}.xml", encoding="utf-8", xml_declaration=True)
     count = len(root.findall(".//*"))
-    print(f"Done — {count} elements written to output.xml")
+    print(f"Done — {count} elements written to {{ output_filename }}.xml")
 
 
 if __name__ == "__main__":

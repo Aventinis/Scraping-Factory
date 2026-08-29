@@ -24,7 +24,11 @@ public sealed class PythonCodeGenerator : ICodeGenerator
             var groupsLiteral = PythonGroupTreeLiteral.Render(groupStep.Roots, indent: 0);
             var rootNames = groupStep.Roots.Select(root => root.Name).ToList();
             var groupedTemplate = EmbeddedScribanTemplate.Load(assembly, "scraper_grouped.py.j2");
-            return groupedTemplate.Render(new { url = navigate.Url, groups_literal = groupsLiteral, root_names = rootNames });
+            return groupedTemplate.Render(new
+            {
+                url = navigate.Url, groups_literal = groupsLiteral, root_names = rootNames,
+                script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
+            });
         }
 
         // The template only knows a flat url + fields shape — derive that
@@ -36,6 +40,13 @@ public sealed class PythonCodeGenerator : ICodeGenerator
             .ToList();
 
         var template = EmbeddedScribanTemplate.Load(assembly, "scraper.py.j2");
-        return template.Render(new { config = new { url = navigate.Url, fields } });
+        return template.Render(new
+        {
+            config = new
+            {
+                url = navigate.Url, fields,
+                script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
+            },
+        });
     }
 }

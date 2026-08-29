@@ -24,6 +24,21 @@ public sealed class ScrapingConfig
     // get Static, today's only behavior. No extension UI to set it yet —
     // reachable only by sending "engine": "Browser" directly.
     public ScrapingEngine Engine { get; init; } = ScrapingEngine.Static;
+
+    // Base filename (no extension) for the downloaded .py script. Purely
+    // cosmetic today — used only in the generated script's "# Run: python
+    // X.py" header comment, since the extension names the actual download
+    // itself and never asks the companion for it. Sanitized server-side too
+    // (see FileNameSanitizer) in case a caller talks to /generate directly.
+    // Null/blank falls back to "scraper".
+    public string? ScriptFileName { get; init; }
+
+    // Base filename (no extension) for the data file the generated script
+    // writes (output.csv/output.xml today) — the extension itself is still
+    // chosen by OutputFormat/Container-Mode, only the base name is
+    // configurable. Sanitized server-side (see FileNameSanitizer). Null/blank
+    // falls back to "output".
+    public string? OutputFileName { get; init; }
 }
 
 public sealed class ScrapingField

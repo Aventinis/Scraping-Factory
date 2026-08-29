@@ -52,6 +52,10 @@
     "previewSummaryTruncated": "display truncated (too many matches)",
     "exportConfigTitle": "Export the current fields/containers as JSON — e.g. for a bug report",
     "exportConfigBtn": "Export configuration",
+    "scriptFilenameLabel": "Script name",
+    "scriptFilenamePlaceholder": "scraper",
+    "outputFilenameLabel": "Output file name",
+    "outputFilenamePlaceholder": "output",
     "generateBtn": "Generate script ▶"
   },
   "robots": {
@@ -119,7 +123,7 @@
   "done": {
     "title": "Script generated successfully!",
     "newBtn": "New",
-    "downloadBtn": "Download scraper.py"
+    "downloadBtn": "Download {filename}"
   },
   "modals": {
     "fieldName": {

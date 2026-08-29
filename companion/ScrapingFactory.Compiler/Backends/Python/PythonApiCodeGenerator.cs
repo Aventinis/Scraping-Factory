@@ -38,6 +38,8 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
             fields_literal = PythonApiConfigLiteral.RenderFields(api.Fields),
             parameters_literal = PythonApiConfigLiteral.RenderParameters(api.Parameters),
             headers_literal = PythonApiConfigLiteral.RenderHeaders(api.Headers),
+            script_filename = plan.ScriptFileName,
+            output_filename = plan.OutputFileBaseName,
         });
     }
 }

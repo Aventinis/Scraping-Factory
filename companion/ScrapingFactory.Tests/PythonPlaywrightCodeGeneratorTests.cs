@@ -93,6 +93,31 @@ public class PythonPlaywrightCodeGeneratorTests
     }
 
     [Fact]
+    public void Generate_DefaultsToScraperAndOutputFileNames()
+    {
+        var script = _generator.Generate(PlanWithoutWait());
+        Assert.Contains("python scraper.py", script);
+        Assert.Contains("open(\"output.csv\"", script);
+    }
+
+    [Fact]
+    public void Generate_UsesConfiguredFileNames()
+    {
+        var plan = PlanWithoutWait();
+        plan = new ScrapingPlan
+        {
+            Steps = plan.Steps, OutputFormat = plan.OutputFormat, Engine = plan.Engine,
+            ScriptFileName = "browser_scraper", OutputFileBaseName = "browser_output",
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("python browser_scraper.py", script);
+        Assert.Contains("open(\"browser_output.csv\"", script);
+        Assert.DoesNotContain("\"output.csv\"", script);
+    }
+
+    [Fact]
     public void Generate_WithoutFillStep_DoesNotImportOs()
     {
         var script = _generator.Generate(PlanWithoutWait());
@@ -180,6 +205,23 @@ public class PythonPlaywrightCodeGeneratorTests
         Assert.Contains("\"name\": 'Kategorie'", script);
         Assert.Contains("import xml.etree.ElementTree as ET", script);
         Assert.Contains("output.xml", script);
+    }
+
+    [Fact]
+    public void Generate_GroupPlan_UsesConfiguredFileNames()
+    {
+        var plan = GroupPlan();
+        plan = new ScrapingPlan
+        {
+            Steps = plan.Steps, OutputFormat = plan.OutputFormat, Engine = plan.Engine,
+            ScriptFileName = "menu_scraper", OutputFileBaseName = "menu",
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("python menu_scraper.py", script);
+        Assert.Contains("menu.xml", script);
+        Assert.DoesNotContain("output.xml", script);
     }
 
     [Fact]
