@@ -52,6 +52,10 @@
     "previewSummaryTruncated": "Anzeige gekürzt (zu viele Treffer)",
     "exportConfigTitle": "Aktuelle Felder/Container als JSON exportieren — z. B. für einen Bug-Report",
     "exportConfigBtn": "Konfiguration exportieren",
+    "scriptFilenameLabel": "Skriptname",
+    "scriptFilenamePlaceholder": "scraper",
+    "outputFilenameLabel": "Name der Ausgabedatei",
+    "outputFilenamePlaceholder": "output",
     "generateBtn": "Skript generieren ▶"
   },
   "robots": {
