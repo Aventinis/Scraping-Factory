@@ -49,6 +49,33 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.Contains("import requests", body);
     }
 
+    // Proves ScriptFileName/OutputFileName are wired end-to-end: sanitized,
+    // baked into the generated script's comment/open() calls, and verified
+    // against the *same* sanitized output filename (not the "output.csv"
+    // default) — a mismatch here would make every custom-named request fail
+    // verification even though the script itself is fine.
+    [Fact]
+    public async Task Generate_CustomFileNames_Returns200WithSanitizedNamesInScript()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var config = new ScrapingConfig
+        {
+            Url = server.BaseUrl,
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+            ScriptFileName = "mein scraper!",
+            OutputFileName = "../../etc/ergebnisse",
+        };
+
+        var content = new StringContent(JsonSerializer.Serialize(config), Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("python mein_scraper.py", body);
+        Assert.Contains("etc_ergebnisse.csv", body);
+        Assert.DoesNotContain("output.csv", body);
+    }
+
     // Proves the Browser engine is wired end-to-end through the real HTTP
     // endpoint: engine selection, Playwright codegen, and real verification
     // via an actual Chromium subprocess (not just unit-level codegen tests).

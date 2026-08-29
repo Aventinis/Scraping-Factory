@@ -61,6 +61,8 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
                 root_names = rootNames,
                 actions,
                 needs_os_import = needsOsImport,
+                script_filename = plan.ScriptFileName,
+                output_filename = plan.OutputFileBaseName,
             });
         }
 
@@ -68,6 +70,10 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
             .Select(step => new { name = step.Name, selector = step.Selector, attribute = step.Attribute })
             .ToList();
 
-        return shellTemplate.Render(new { url = navigate.Url, fields, actions, needs_os_import = needsOsImport });
+        return shellTemplate.Render(new
+        {
+            url = navigate.Url, fields, actions, needs_os_import = needsOsImport,
+            script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
+        });
     }
 }

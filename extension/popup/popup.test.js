@@ -36,7 +36,7 @@ const {
   parseUrlTemplateParts, buildUrlTemplate, parseValueListInput,
   buildStaticListSource, buildDiscoverySource, buildRangeSource, buildApiHeaders, buildApiConfig,
   variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
-  detectRangeFormat, findUrlPartValue, rangeFormatExample,
+  detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase,
 } = require('./popup');
 
 // jsdom's Blob doesn't implement .text() — read via FileReader instead.
@@ -65,6 +65,8 @@ describe('buildScrapingConfig (flat mode)', () => {
         { name: 'Preis', selector: '.price', attribute: null },
       ],
       outputFormat: 'Csv',
+      scriptFileName: null,
+      outputFileName: null,
     });
   });
 
@@ -81,6 +83,18 @@ describe('buildScrapingConfig (flat mode)', () => {
     ]);
     expect(result.fields[0].attribute).toBe('href');
   });
+
+  test('passes through scriptFileName/outputFileName as-is (companion sanitizes/defaults)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [], [], null, 'my scraper!', 'result data');
+    expect(result.scriptFileName).toBe('my scraper!');
+    expect(result.outputFileName).toBe('result data');
+  });
+
+  test('defaults scriptFileName/outputFileName to null when not given', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', []);
+    expect(result.scriptFileName).toBeNull();
+    expect(result.outputFileName).toBeNull();
+  });
 });
 
 describe('buildScrapingConfig (container mode)', () => {
@@ -92,6 +106,8 @@ describe('buildScrapingConfig (container mode)', () => {
       version: '1',
       url: 'https://example.com',
       groups: [{ name: 'Kategorie', selector: 'section.menu-category', repeating: true, children: [] }],
+      scriptFileName: null,
+      outputFileName: null,
     });
     expect(result.outputFormat).toBeUndefined();
     expect(result.fields).toBeUndefined();
@@ -108,10 +124,41 @@ describe('buildScrapingConfig (api mode, Issue #53 Phase 6)', () => {
     };
     const result = buildScrapingConfig('https://example.com', 'api', [], [], apiConfig);
 
-    expect(result).toEqual({ version: '1', url: 'https://example.com', api: apiConfig });
+    expect(result).toEqual({
+      version: '1', url: 'https://example.com', api: apiConfig,
+      scriptFileName: null, outputFileName: null,
+    });
     expect(result.fields).toBeUndefined();
     expect(result.groups).toBeUndefined();
     expect(result.outputFormat).toBeUndefined();
+  });
+});
+
+// ── sanitizeFileNameBase ─────────────────────────────────────────────────────
+// Mirrors the companion's FileNameSanitizer (see popup.js) so the actual
+// downloaded filename always matches what the generated script's own
+// "# Run: python X.py" comment says, for the same raw input.
+
+describe('sanitizeFileNameBase', () => {
+  test('falls back for empty/whitespace-only input', () => {
+    expect(sanitizeFileNameBase('', 'scraper')).toBe('scraper');
+    expect(sanitizeFileNameBase('   ', 'scraper')).toBe('scraper');
+    expect(sanitizeFileNameBase(null, 'scraper')).toBe('scraper');
+    expect(sanitizeFileNameBase(undefined, 'scraper')).toBe('scraper');
+  });
+
+  test('replaces path separators, spaces and other unsafe characters', () => {
+    expect(sanitizeFileNameBase('../../etc/passwd', 'output')).toBe('etc_passwd');
+    expect(sanitizeFileNameBase('my scraper!', 'scraper')).toBe('my_scraper');
+    expect(sanitizeFileNameBase('a"b\'c', 'output')).toBe('a_b_c');
+  });
+
+  test('keeps letters, digits, underscore and hyphen as-is', () => {
+    expect(sanitizeFileNameBase('my-scraper_v2', 'scraper')).toBe('my-scraper_v2');
+  });
+
+  test('falls back when every character is invalid', () => {
+    expect(sanitizeFileNameBase('///', 'output')).toBe('output');
   });
 });
 
@@ -149,6 +196,12 @@ describe('buildConfigExport', () => {
 
     expect(result.config).toEqual(buildScrapingConfig('https://example.com', 'api', [], [], apiConfig));
     expect(result.config.api).toEqual(apiConfig);
+  });
+
+  test('carries scriptFileName/outputFileName through into the wrapped config', () => {
+    const result = buildConfigExport('https://example.com', 'flat', [], [], { version: '1.2.3' }, null, 'myscraper', 'result');
+    expect(result.config.scriptFileName).toBe('myscraper');
+    expect(result.config.outputFileName).toBe('result');
   });
 });
 
@@ -1611,6 +1664,8 @@ describe('downloadConfigExport (btn-export-config)', () => {
       url: 'https://example.com/speisekarte',
       fields: [{ name: 'Titel', selector: 'h1', attribute: null }],
       outputFormat: 'Csv',
+      scriptFileName: null,
+      outputFileName: null,
     });
   });
 
@@ -1633,7 +1688,161 @@ describe('downloadConfigExport (btn-export-config)', () => {
       version: '1',
       url: 'https://example.com/speisekarte',
       groups: [{ name: 'Vorspeisen', selector: 'section.menu-category', repeating: true, children: [] }],
+      scriptFileName: null,
+      outputFileName: null,
     });
+  });
+});
+
+describe('output settings (script/output filename)', () => {
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div class="mode-toggle">
+          <button id="btn-mode-flat" class="mode-btn active"></button>
+          <button id="btn-mode-container" class="mode-btn"></button>
+          <button id="btn-mode-api" class="mode-btn"></button>
+        </div>
+        <div id="flat-mode-section">
+          <div id="fields-list"></div>
+          <button id="btn-add-field"></button>
+        </div>
+        <div id="container-mode-section" class="hidden">
+          <ul id="group-tree-root"></ul>
+          <button id="btn-add-root-container"></button>
+        </div>
+        <div id="api-mode-section" class="hidden"></div>
+        <input type="text" id="input-script-filename" />
+        <input type="text" id="input-output-filename" />
+        <span id="output-filename-ext"></span>
+        <button id="btn-generate" disabled></button>
+        <button id="btn-export-config" disabled></button>
+      </section>
+      <section id="screen-generating" class="hidden"></section>
+      <section id="screen-done" class="hidden">
+        <button id="btn-download"></button>
+      </section>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: jest.fn() },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({
+            fields: [{ name: 'Titel', selector: 'h1', attribute: null }],
+            url: 'https://example.com',
+          }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValueOnce({ ok: true }); // health check
+    global.URL.createObjectURL = jest.fn(() => 'blob:mock');
+    global.URL.revokeObjectURL = jest.fn();
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE, fields restored from storage
+  });
+
+  test('typing into the script/output filename inputs persists them to session storage', () => {
+    const scriptInput = document.getElementById('input-script-filename');
+    scriptInput.value = 'mein-scraper';
+    scriptInput.dispatchEvent(new Event('input'));
+
+    const outputInput = document.getElementById('input-output-filename');
+    outputInput.value = 'ergebnisse';
+    outputInput.dispatchEvent(new Event('input'));
+
+    expect(global.chrome.storage.session.set).toHaveBeenCalledWith(
+      expect.objectContaining({ scriptFileName: 'mein-scraper', outputFileName: 'ergebnisse' }),
+    );
+  });
+
+  test('the output extension hint switches between .csv and .xml depending on mode', () => {
+    const ext = document.getElementById('output-filename-ext');
+    expect(ext.textContent).toBe('.csv');
+
+    document.getElementById('btn-mode-container').click();
+    expect(ext.textContent).toBe('.xml');
+
+    document.getElementById('btn-mode-flat').click();
+    expect(ext.textContent).toBe('.csv');
+  });
+
+  test('generate() sends the configured script/output filenames to /generate', async () => {
+    document.getElementById('input-script-filename').value = 'mein-scraper';
+    document.getElementById('input-script-filename').dispatchEvent(new Event('input'));
+    document.getElementById('input-output-filename').value = 'ergebnisse';
+    document.getElementById('input-output-filename').dispatchEvent(new Event('input'));
+
+    global.fetch.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('# script') });
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const generateCall = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/generate'));
+    const body = JSON.parse(generateCall[1].body);
+    expect(body.scriptFileName).toBe('mein-scraper');
+    expect(body.outputFileName).toBe('ergebnisse');
+  });
+
+  test('the downloaded file uses the sanitized script filename', async () => {
+    document.getElementById('input-script-filename').value = 'my scraper!';
+    document.getElementById('input-script-filename').dispatchEvent(new Event('input'));
+
+    global.fetch.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('# script') });
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const appendSpy = jest.spyOn(document.body, 'appendChild');
+    document.getElementById('btn-download').click();
+
+    const anchor = appendSpy.mock.calls[0][0];
+    expect(anchor.download).toBe('my_scraper.py');
+    appendSpy.mockRestore();
+  });
+
+  test('the downloaded file falls back to "scraper.py" when no script name was typed', async () => {
+    global.fetch.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('# script') });
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const appendSpy = jest.spyOn(document.body, 'appendChild');
+    document.getElementById('btn-download').click();
+
+    const anchor = appendSpy.mock.calls[0][0];
+    expect(anchor.download).toBe('scraper.py');
+    appendSpy.mockRestore();
+  });
+
+  test('the done-screen download button label shows the configured (sanitized) script name', async () => {
+    document.getElementById('input-script-filename').value = 'mein scraper!';
+    document.getElementById('input-script-filename').dispatchEvent(new Event('input'));
+
+    global.fetch.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('# script') });
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    expect(document.getElementById('btn-download').textContent).toBe('mein_scraper.py herunterladen');
+  });
+
+  test('the done-screen download button label falls back to "scraper.py" when no script name was typed', async () => {
+    global.fetch.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('# script') });
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    expect(document.getElementById('btn-download').textContent).toBe('scraper.py herunterladen');
   });
 });
 
@@ -2808,7 +3017,10 @@ describe('API-Mode third mode integration (Issue #53 Phase 6)', () => {
     expect(generateCall).toBeDefined();
     const body = JSON.parse(generateCall[1].body);
 
-    expect(body).toEqual({ version: '1', url: 'https://example.com', api: seededApiConfig });
+    expect(body).toEqual({
+      version: '1', url: 'https://example.com', api: seededApiConfig,
+      scriptFileName: null, outputFileName: null,
+    });
   });
 });
 
