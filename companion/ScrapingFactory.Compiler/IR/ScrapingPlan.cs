@@ -9,4 +9,11 @@ public sealed class ScrapingPlan
     public List<ScrapingStep> Steps { get; init; } = [];
     public OutputFormat OutputFormat { get; init; } = OutputFormat.Csv;
     public ScrapingEngine Engine { get; init; } = ScrapingEngine.Static;
+
+    // Already sanitized by FileNameSanitizer in ScrapingPlanBuilder — code
+    // generators and PythonScriptVerifier can use these verbatim, no further
+    // escaping/validation needed (see ScrapingConfig.ScriptFileName/
+    // OutputFileName for what these mean).
+    public string ScriptFileName { get; init; } = "scraper";
+    public string OutputFileBaseName { get; init; } = "output";
 }

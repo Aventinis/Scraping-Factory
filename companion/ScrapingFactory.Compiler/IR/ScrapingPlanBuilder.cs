@@ -11,6 +11,11 @@ public static class ScrapingPlanBuilder
     {
         var steps = new List<ScrapingStep> { new NavigateStep { Url = config.Url } };
 
+        // Sanitized once here, regardless of mode — see FileNameSanitizer for
+        // why this happens server-side instead of trusting the wire payload.
+        var scriptFileName = FileNameSanitizer.SanitizeBaseName(config.ScriptFileName, "scraper");
+        var outputFileBaseName = FileNameSanitizer.SanitizeBaseName(config.OutputFileName, "output");
+
         // Container-Mode: Groups replaces Fields wholesale, and forces Xml
         // regardless of what the wire payload set OutputFormat to — the
         // extension doesn't need to know this any more than it needs to set
@@ -18,7 +23,11 @@ public static class ScrapingPlanBuilder
         if (config.Groups is { Count: > 0 } groups)
         {
             steps.Add(new ExtractGroupStep { Roots = groups });
-            return new ScrapingPlan { Steps = steps, OutputFormat = OutputFormat.Xml, Engine = config.Engine };
+            return new ScrapingPlan
+            {
+                Steps = steps, OutputFormat = OutputFormat.Xml, Engine = config.Engine,
+                ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
+            };
         }
 
         // API-Mode: Api replaces Fields/Groups wholesale, and forces Csv +
@@ -28,12 +37,20 @@ public static class ScrapingPlanBuilder
         if (config.Api is { } api)
         {
             steps.Add(new ApiCallStep { Config = api });
-            return new ScrapingPlan { Steps = steps, OutputFormat = OutputFormat.Csv, Engine = ScrapingEngine.Api };
+            return new ScrapingPlan
+            {
+                Steps = steps, OutputFormat = OutputFormat.Csv, Engine = ScrapingEngine.Api,
+                ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
+            };
         }
 
         steps.AddRange(config.Fields.Select(field =>
             (ScrapingStep)new ExtractStep { Name = field.Name, Selector = field.Selector, Attribute = field.Attribute }));
 
-        return new ScrapingPlan { Steps = steps, OutputFormat = config.OutputFormat, Engine = config.Engine };
+        return new ScrapingPlan
+        {
+            Steps = steps, OutputFormat = config.OutputFormat, Engine = config.Engine,
+            ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
+        };
     }
 }

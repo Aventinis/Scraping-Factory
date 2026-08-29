@@ -91,6 +91,38 @@ public class ScrapingPlanBuilderTests
         Assert.Equal(ScrapingEngine.Browser, plan.Engine);
     }
 
+    [Fact]
+    public void Build_DefaultsFileNamesWhenNotGiven()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal("scraper", plan.ScriptFileName);
+        Assert.Equal("output", plan.OutputFileBaseName);
+    }
+
+    [Fact]
+    public void Build_SanitizesFileNames()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+            ScriptFileName = "../../etc/passwd",
+            OutputFileName = "my results!",
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal("etc_passwd", plan.ScriptFileName);
+        Assert.Equal("my_results", plan.OutputFileBaseName);
+    }
+
     private static List<GroupNode> SampleGroups() =>
     [
         new GroupNode
@@ -126,6 +158,21 @@ public class ScrapingPlanBuilderTests
         var plan = ScrapingPlanBuilder.Build(config);
 
         Assert.Equal(OutputFormat.Xml, plan.OutputFormat);
+    }
+
+    [Fact]
+    public void Build_Groups_AlsoSanitizesFileNames()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com", Groups = SampleGroups(),
+            ScriptFileName = "my scraper", OutputFileName = "my export",
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal("my_scraper", plan.ScriptFileName);
+        Assert.Equal("my_export", plan.OutputFileBaseName);
     }
 
     private static ApiConfig SampleApiConfig() => new()
@@ -164,5 +211,20 @@ public class ScrapingPlanBuilderTests
 
         Assert.Equal(OutputFormat.Csv, plan.OutputFormat);
         Assert.Equal(ScrapingEngine.Api, plan.Engine);
+    }
+
+    [Fact]
+    public void Build_Api_AlsoSanitizesFileNames()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com", Api = SampleApiConfig(),
+            ScriptFileName = "", OutputFileName = "***",
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal("scraper", plan.ScriptFileName);
+        Assert.Equal("output", plan.OutputFileBaseName);
     }
 }
