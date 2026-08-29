@@ -636,6 +636,14 @@ function render() {
     renderApiConfigScreen(_state.apiConfigDraft, _state.apiDiscoveryCandidates);
   }
 
+  if (_state.current === STATES.DONE) {
+    const downloadBtn = document.getElementById('btn-download');
+    if (downloadBtn) {
+      const filename = `${sanitizeFileNameBase(_state.scriptFileName, 'scraper')}.py`;
+      downloadBtn.textContent = t('done.downloadBtn', { filename });
+    }
+  }
+
   // Show modal when an element has been captured during selection
   if (_state.current === STATES.SELECTING && _state.pendingSelector !== null) {
     if (_state.mode === 'container') {
