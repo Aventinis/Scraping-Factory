@@ -83,4 +83,31 @@ public class PythonCodeGeneratorTests
         var attributesSection = script[(script.IndexOf("ATTRIBUTES") + "ATTRIBUTES".Length)..];
         Assert.DoesNotContain("\"Titel\"", attributesSection.Split("def scrape")[0]);
     }
+
+    [Fact]
+    public void Generate_DefaultsToScraperAndOutputFileNames()
+    {
+        var script = _generator.Generate(TwoFieldPlan());
+        Assert.Contains("python scraper.py", script);
+        Assert.Contains("open(\"output.csv\"", script);
+        Assert.Contains("written to output.csv", script);
+    }
+
+    [Fact]
+    public void Generate_UsesConfiguredFileNames()
+    {
+        var plan = TwoFieldPlan();
+        plan = new ScrapingPlan
+        {
+            Steps = plan.Steps, OutputFormat = plan.OutputFormat, Engine = plan.Engine,
+            ScriptFileName = "mein_scraper", OutputFileBaseName = "ergebnisse",
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("python mein_scraper.py", script);
+        Assert.Contains("open(\"ergebnisse.csv\"", script);
+        Assert.Contains("written to ergebnisse.csv", script);
+        Assert.DoesNotContain("output.csv", script);
+    }
 }

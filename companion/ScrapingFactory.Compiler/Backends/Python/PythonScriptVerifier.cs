@@ -29,7 +29,8 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
     public string LanguageId => "python";
 
     public async Task<ScriptVerificationResult> VerifyAsync(
-        string script, OutputFormat outputFormat = OutputFormat.Csv, CancellationToken ct = default)
+        string script, OutputFormat outputFormat = OutputFormat.Csv, string outputFileBaseName = "output",
+        CancellationToken ct = default)
     {
         var workDir = Directory.CreateTempSubdirectory("scrapingfactory-verify-").FullName;
         try
@@ -84,12 +85,13 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
             }
 
             if (outputFormat == OutputFormat.Xml)
-                return VerifyXmlOutput(workDir);
+                return VerifyXmlOutput(workDir, outputFileBaseName);
 
-            var csvPath = Path.Combine(workDir, "output.csv");
+            var csvFileName = $"{outputFileBaseName}.csv";
+            var csvPath = Path.Combine(workDir, csvFileName);
             if (!File.Exists(csvPath))
             {
-                return new ScriptVerificationResult { Success = false, Error = "Skript hat keine output.csv erzeugt." };
+                return new ScriptVerificationResult { Success = false, Error = $"Skript hat keine {csvFileName} erzeugt." };
             }
 
             var lines = await File.ReadAllLinesAsync(csvPath, ct);
@@ -106,7 +108,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                 {
                     Success = false,
                     Error = "Skript lief fehlerfrei, hat aber keine Daten zurückgegeben " +
-                            "(output.csv enthält nur die Kopfzeile) — mindestens ein Selektor bzw. eine Anfrage findet vermutlich nichts.",
+                            $"({csvFileName} enthält nur die Kopfzeile) — mindestens ein Selektor bzw. eine Anfrage findet vermutlich nichts.",
                 };
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -124,11 +126,12 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
     // descendant element. Parse failures (e.g. an invalid XML tag name from
     // a Container-Mode Name the user typed) bubble up to VerifyAsync's outer
     // catch, same as any other unexpected exception during verification.
-    private static ScriptVerificationResult VerifyXmlOutput(string workDir)
+    private static ScriptVerificationResult VerifyXmlOutput(string workDir, string outputFileBaseName)
     {
-        var xmlPath = Path.Combine(workDir, "output.xml");
+        var xmlFileName = $"{outputFileBaseName}.xml";
+        var xmlPath = Path.Combine(workDir, xmlFileName);
         if (!File.Exists(xmlPath))
-            return new ScriptVerificationResult { Success = false, Error = "Skript hat keine output.xml erzeugt." };
+            return new ScriptVerificationResult { Success = false, Error = $"Skript hat keine {xmlFileName} erzeugt." };
 
         var document = XDocument.Load(xmlPath);
         var elementCount = document.Root?.Descendants().Count() ?? 0;
@@ -139,7 +142,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
             {
                 Success = false,
                 Error = "Skript lief fehlerfrei, hat aber keine Daten zurückgegeben " +
-                        "(output.xml enthält keine Elemente) — mindestens ein Selektor findet vermutlich nichts.",
+                        $"({xmlFileName} enthält keine Elemente) — mindestens ein Selektor findet vermutlich nichts.",
             };
     }
 

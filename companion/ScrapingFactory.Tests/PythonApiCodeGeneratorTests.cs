@@ -69,6 +69,33 @@ public class PythonApiCodeGeneratorTests
     }
 
     [Fact]
+    public void Generate_DefaultsToScraperAndOutputFileNames()
+    {
+        var script = _generator.Generate(PlanWith(SampleApi()));
+        Assert.Contains("python scraper.py", script);
+        Assert.Contains("open(\"output.csv\"", script);
+    }
+
+    [Fact]
+    public void Generate_UsesConfiguredFileNames()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = [new NavigateStep { Url = "https://example.com" }, new ApiCallStep { Config = SampleApi() }],
+            OutputFormat = OutputFormat.Csv,
+            Engine = ScrapingEngine.Api,
+            ScriptFileName = "api_scraper",
+            OutputFileBaseName = "api_results",
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("python api_scraper.py", script);
+        Assert.Contains("open(\"api_results.csv\"", script);
+        Assert.DoesNotContain("output.csv", script);
+    }
+
+    [Fact]
     public void Generate_DiscoverySourceParameter_ContainsDiscoveryFields()
     {
         var api = new ApiConfig

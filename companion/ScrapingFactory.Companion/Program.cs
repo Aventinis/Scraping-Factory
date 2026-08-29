@@ -88,7 +88,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     // returns real data, rather than approximating that with a static
     // selector check that could disagree with what BeautifulSoup does.
     var verifier = registry.ResolveScriptVerifier("python");
-    var verification = await verifier.VerifyAsync(script, plan.OutputFormat);
+    var verification = await verifier.VerifyAsync(script, plan.OutputFormat, plan.OutputFileBaseName);
     if (!verification.Success)
     {
         return Results.UnprocessableEntity(new

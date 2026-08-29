@@ -2,7 +2,7 @@
 # Target: {{ url }}
 # Engine: Browser (Playwright — renders JavaScript before extracting)
 # Fields: {{ for field in fields }}{{ field.name }}{{ if !for.last }}, {{ end }}{{ end }}
-# Run:    python scraper.py
+# Run:    python {{ script_filename }}.py
 
 import csv
 {{~ if needs_os_import ~}}
@@ -51,11 +51,11 @@ def scrape(url):
 
 def main():
     data = scrape(URL)
-    with open("output.csv", "w", newline="", encoding="utf-8") as f:
+    with open("{{ output_filename }}.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=list(SELECTORS.keys()))
         writer.writeheader()
         writer.writerows(data)
-    print(f"Done — {len(data)} rows written to output.csv")
+    print(f"Done — {len(data)} rows written to {{ output_filename }}.csv")
 
 
 if __name__ == "__main__":
