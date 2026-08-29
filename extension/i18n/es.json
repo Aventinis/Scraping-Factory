@@ -52,6 +52,10 @@
     "previewSummaryTruncated": "vista recortada (demasiadas coincidencias)",
     "exportConfigTitle": "Exportar los campos/contenedores actuales como JSON — p. ej. para un informe de error",
     "exportConfigBtn": "Exportar configuración",
+    "scriptFilenameLabel": "Nombre del script",
+    "scriptFilenamePlaceholder": "scraper",
+    "outputFilenameLabel": "Nombre del archivo de salida",
+    "outputFilenamePlaceholder": "output",
     "generateBtn": "Generar script ▶"
   },
   "robots": {

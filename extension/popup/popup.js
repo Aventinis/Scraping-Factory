@@ -16,6 +16,8 @@ let _state = {
   mode:                'flat', // 'flat' (Fields → Csv) | 'container' (Groups → Xml) — mutually exclusive
   fields:              [],   // [{name, selector, attribute}]
   groups:              [],   // container-mode tree: {kind:'group', name, selector, repeating, children} | {kind:'field', name, selector, mode, attribute}
+  scriptFileName:      '', // base name (no extension) for the downloaded .py — empty = use the "scraper" placeholder/default
+  outputFileName:      '', // base name (no extension) for the script's own output.csv/output.xml — empty = use the "output" placeholder/default
   scriptText:          '',
   pendingSelector:     null,  // set while field-name modal (flat) or extended field modal (container) is open
   selectionKind:       null,  // 'field' | 'container' | null — which kind the current SELECTING round is for (container-mode only)
@@ -78,23 +80,41 @@ if (typeof window !== 'undefined') {
 
 // ── Pure functions (exported for testing) ────────────────────────────────────
 
+// Mirrors the companion's FileNameSanitizer (ScrapingFactory.Compiler/IR/
+// FileNameSanitizer.cs) character-for-character: strips everything but
+// letters/digits/underscore/hyphen and falls back to `fallback` for
+// empty/fully-invalid input. Kept in sync by hand (same pattern as
+// RangeFormat's client-side mirror) so the name shown here — used for the
+// actual download — always matches what the companion baked into the
+// generated script's "# Run: python X.py" comment for the same raw input.
+function sanitizeFileNameBase(input, fallback) {
+  if (!input || !input.trim()) return fallback;
+  const sanitized = input.trim().replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^[-_]+|[-_]+$/g, '');
+  return sanitized || fallback;
+}
+
 // `apiConfig` is only read when mode === 'api' — the confirmed ApiConfig
 // wire object built by buildApiConfig (Issue #53 Phase 5), passed straight
 // through as the request body's `api` field. Method/OutputFormat/Engine are
 // forced server-side (see companion's ScrapingPlanBuilder), so nothing
 // extra is added here the way outputFormat is for flat mode.
-function buildScrapingConfig(url, mode, fields, groups, apiConfig = null) {
+// `scriptFileName`/`outputFileName` are sent as-is (possibly blank) — the
+// companion sanitizes and defaults them itself (see FileNameSanitizer),
+// same "server is the source of truth" pattern as OutputFormat/Engine.
+function buildScrapingConfig(url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null) {
   if (mode === 'container') {
-    return { version: '1', url, groups: serializeGroupTree(groups) };
+    return { version: '1', url, groups: serializeGroupTree(groups), scriptFileName: scriptFileName || null, outputFileName: outputFileName || null };
   }
   if (mode === 'api') {
-    return { version: '1', url, api: apiConfig };
+    return { version: '1', url, api: apiConfig, scriptFileName: scriptFileName || null, outputFileName: outputFileName || null };
   }
   return {
     version: '1',
     url,
     fields: fields.map(f => ({ name: f.name, selector: f.selector, attribute: f.attribute ?? null })),
     outputFormat: 'Csv',
+    scriptFileName: scriptFileName || null,
+    outputFileName: outputFileName || null,
   };
 }
 
@@ -104,11 +124,11 @@ function buildScrapingConfig(url, mode, fields, groups, apiConfig = null) {
 // the literal request body /generate would receive — no need to describe
 // the setup by hand. `manifest` is injected so this stays a pure, testable
 // function instead of reaching into chrome.runtime itself.
-function buildConfigExport(url, mode, fields, groups, manifest = {}, apiConfig = null) {
+function buildConfigExport(url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null) {
   return {
     exportedAt: new Date().toISOString(),
     extensionVersion: manifest.version || '?',
-    config: buildScrapingConfig(url, mode, fields, groups, apiConfig),
+    config: buildScrapingConfig(url, mode, fields, groups, apiConfig, scriptFileName, outputFileName),
   };
 }
 
@@ -418,6 +438,8 @@ function persistState() {
       url: _state.url,
       mode: _state.mode,
       groups: _state.groups,
+      scriptFileName: _state.scriptFileName,
+      outputFileName: _state.outputFileName,
       selectionKind: _state.selectionKind,
       pendingParentPath: _state.pendingParentPath,
       pendingNewContainer: _state.pendingNewContainer,
@@ -590,6 +612,16 @@ function render() {
         apiConfigPanel.classList.add('hidden');
       }
     }
+
+    // Only overwrite an input's value while it isn't the one the user is
+    // currently typing in — otherwise every keystroke's setState()/render()
+    // round-trip would reset the cursor to the end of the field.
+    const scriptNameInput = document.getElementById('input-script-filename');
+    if (scriptNameInput && document.activeElement !== scriptNameInput) scriptNameInput.value = _state.scriptFileName;
+    const outputNameInput = document.getElementById('input-output-filename');
+    if (outputNameInput && document.activeElement !== outputNameInput) outputNameInput.value = _state.outputFileName;
+    const outputExtEl = document.getElementById('output-filename-ext');
+    if (outputExtEl) outputExtEl.textContent = _state.mode === 'container' ? '.xml' : '.csv';
 
     if (_state.containerModalOpen) {
       show('modal-container-new');
@@ -1433,7 +1465,10 @@ function buildVerificationErrorMessage(data) {
 async function generate() {
   stopPreviewIfActive();
   setState(STATES.GENERATING);
-  const config = buildScrapingConfig(_state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig);
+  const config = buildScrapingConfig(
+    _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
+    _state.scriptFileName, _state.outputFileName,
+  );
   log('GENERATE request', config);
   try {
     const res = await fetch(`${COMPANION_URL}/generate`, {
@@ -1458,12 +1493,13 @@ async function generate() {
 }
 
 function triggerDownload() {
-  log('DOWNLOAD scraper.py');
+  const fileName = `${sanitizeFileNameBase(_state.scriptFileName, 'scraper')}.py`;
+  log('DOWNLOAD', fileName);
   const blob = new Blob([_state.scriptText], { type: 'text/plain' });
   const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = objectUrl;
-  a.download = 'scraper.py';
+  a.download = fileName;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -1475,7 +1511,10 @@ function triggerDownload() {
 // hand — e.g. attached to a "Report bug" GitHub issue or shared directly.
 function downloadConfigExport() {
   const manifest = typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest() : {};
-  const exportObj = buildConfigExport(_state.url, _state.mode, _state.fields, _state.groups, manifest, _state.apiConfig);
+  const exportObj = buildConfigExport(
+    _state.url, _state.mode, _state.fields, _state.groups, manifest, _state.apiConfig,
+    _state.scriptFileName, _state.outputFileName,
+  );
   log('DOWNLOAD scraping-config.json', exportObj);
 
   const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
@@ -1745,6 +1784,13 @@ function wireEvents() {
   document.getElementById('btn-api-capture')?.addEventListener('click', () => {
     log('BTN api-capture');
     toggleApiCapture();
+  });
+
+  document.getElementById('input-script-filename')?.addEventListener('input', (e) => {
+    setState(_state.current, { scriptFileName: e.target.value });
+  });
+  document.getElementById('input-output-filename')?.addEventListener('input', (e) => {
+    setState(_state.current, { outputFileName: e.target.value });
   });
 
   document.getElementById('btn-api-search')?.addEventListener('click', () => {
@@ -2066,6 +2112,7 @@ async function init() {
     'fields', 'url', 'pendingSelector', 'mode', 'groups',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
+    'scriptFileName', 'outputFileName',
   ]);
   log('INIT restored', stored);
 
@@ -2074,6 +2121,8 @@ async function init() {
   if (Array.isArray(stored.groups)) _state = { ..._state, groups: stored.groups };
   if (stored.url)                   _state = { ..._state, url: stored.url };
   if (stored.mode)                  _state = { ..._state, mode: stored.mode };
+  if (stored.scriptFileName)        _state = { ..._state, scriptFileName: stored.scriptFileName };
+  if (stored.outputFileName)        _state = { ..._state, outputFileName: stored.outputFileName };
   if (stored.selectionKind)         _state = { ..._state, selectionKind: stored.selectionKind };
   if (stored.pendingParentPath !== undefined) _state = { ..._state, pendingParentPath: stored.pendingParentPath };
   if (stored.pendingNewContainer)   _state = { ..._state, pendingNewContainer: stored.pendingNewContainer };
@@ -2140,6 +2189,6 @@ if (typeof module !== 'undefined') {
     buildStaticListSource, buildDiscoverySource, buildRangeSource, buildApiHeaders, buildApiConfig,
     variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
     detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
-    applyStaticTranslations,
+    applyStaticTranslations, sanitizeFileNameBase,
   };
 }
