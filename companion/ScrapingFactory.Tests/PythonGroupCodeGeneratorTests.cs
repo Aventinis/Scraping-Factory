@@ -92,6 +92,23 @@ public class PythonGroupCodeGeneratorTests
     }
 
     [Fact]
+    public void Generate_UsesConfiguredFileNames()
+    {
+        var plan = NestedGroupPlan();
+        plan = new ScrapingPlan
+        {
+            Steps = plan.Steps, OutputFormat = plan.OutputFormat, Engine = plan.Engine,
+            ScriptFileName = "speisekarte_scraper", OutputFileBaseName = "speisekarte",
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("python speisekarte_scraper.py", script);
+        Assert.Contains("speisekarte.xml", script);
+        Assert.DoesNotContain("output.xml", script);
+    }
+
+    [Fact]
     public void Generate_ContainsRecursiveExtractGroupFunction()
     {
         var script = _generator.Generate(NestedGroupPlan());

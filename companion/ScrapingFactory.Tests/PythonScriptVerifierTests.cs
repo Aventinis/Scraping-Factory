@@ -73,6 +73,46 @@ public class PythonScriptVerifierTests
     }
 
     [Fact]
+    public async Task CustomOutputFileBaseName_IsFoundAndVerified()
+    {
+        using var server = new LocalTestServer(
+            "<html><body><ul><li class='item'>A</li><li class='item'>B</li></ul></body></html>");
+        var steps = new List<ScrapingStep>
+        {
+            new NavigateStep { Url = server.BaseUrl },
+            new ExtractStep { Name = "Item", Selector = ".item" },
+        };
+        var script = new PythonCodeGenerator().Generate(
+            new ScrapingPlan { Steps = steps, OutputFileBaseName = "ergebnisse" });
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Csv, "ergebnisse");
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(2, result.RowCount);
+    }
+
+    [Fact]
+    public async Task OutputFileBaseNameMismatch_FailsWithNotFoundError()
+    {
+        using var server = new LocalTestServer(
+            "<html><body><ul><li class='item'>A</li></ul></body></html>");
+        var steps = new List<ScrapingStep>
+        {
+            new NavigateStep { Url = server.BaseUrl },
+            new ExtractStep { Name = "Item", Selector = ".item" },
+        };
+        // Script writes "ergebnisse.csv", but we ask the verifier to look for
+        // the default "output.csv" — must fail, not silently pass.
+        var script = new PythonCodeGenerator().Generate(
+            new ScrapingPlan { Steps = steps, OutputFileBaseName = "ergebnisse" });
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.False(result.Success);
+        Assert.Contains("keine output.csv erzeugt", result.Error);
+    }
+
+    [Fact]
     public async Task MissingPythonExecutable_FailsGracefully()
     {
         var verifier = new PythonScriptVerifier("definitely-not-a-real-python-executable-xyz");
