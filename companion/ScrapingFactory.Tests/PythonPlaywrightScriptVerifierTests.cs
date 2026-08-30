@@ -504,4 +504,125 @@ public class PythonPlaywrightScriptVerifierTests
         // 2 <Kategorie> + 2 <Titel> + 2 <Kurs> = 6
         Assert.Equal(6, result.RowCount);
     }
+
+    // ── FramePath for Action Steps (Issue #42, Phase 4) ─────────────────────
+    // Mirrors LoginFlow_FillsCredentialsFromEnvironmentAndClicksSubmit above,
+    // but the whole login form (inputs, button, and the resulting .welcome
+    // element) lives inside an iframe — a common real-world pattern (SSO
+    // widgets embedded via iframe). Exercises FillStep, ClickStep and
+    // WaitForStep's FramePath together, plus ExtractStep's (from Phase 2)
+    // for the final read.
+    [Fact]
+    public async Task LoginFlow_WithFormEmbeddedViaIframe_FillsClicksAndWaitsInsideTheFrame()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var html = request.Url!.AbsolutePath switch
+            {
+                "/login" => """
+                    <html><body>
+                    <input id="username" type="text" />
+                    <input id="password" type="password" />
+                    <button id="submit" onclick="
+                      if (document.getElementById('username').value === 'alice' &amp;&amp;
+                          document.getElementById('password').value === 's3cret') {
+                        var el = document.createElement('div');
+                        el.className = 'welcome';
+                        el.textContent = 'Welcome, alice';
+                        document.body.appendChild(el);
+                      }
+                    ">Login</button>
+                    </body></html>
+                    """,
+                _ => "<html><body><iframe id='sso' src='/login'></iframe></body></html>",
+            };
+            return new LocalTestServerResponse(html, "text/html; charset=utf-8");
+        });
+
+        const string usernameVar = "SCRAPINGFACTORY_TEST_USERNAME_FRAMED";
+        const string passwordVar = "SCRAPINGFACTORY_TEST_PASSWORD_FRAMED";
+        Environment.SetEnvironmentVariable(usernameVar, "alice");
+        Environment.SetEnvironmentVariable(passwordVar, "s3cret");
+        try
+        {
+            var plan = new ScrapingPlan
+            {
+                Engine = ScrapingEngine.Browser,
+                Steps =
+                [
+                    new NavigateStep { Url = server.BaseUrl },
+                    new FillStep { Selector = "#username", EnvironmentVariableName = usernameVar, FramePath = ["#sso"] },
+                    new FillStep { Selector = "#password", EnvironmentVariableName = passwordVar, FramePath = ["#sso"] },
+                    new ClickStep { Selector = "#submit", FramePath = ["#sso"] },
+                    new WaitForStep { Selector = ".welcome", TimeoutMs = 5000, FramePath = ["#sso"] },
+                    new ExtractStep { Name = "Welcome", Selector = ".welcome", FramePath = ["#sso"] },
+                ],
+            };
+            var script = Generator.Generate(plan);
+            Assert.DoesNotContain("alice", script);
+            Assert.DoesNotContain("s3cret", script);
+
+            var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+            Assert.True(result.Success, result.Error);
+            Assert.Equal(1, result.RowCount);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(usernameVar, null);
+            Environment.SetEnvironmentVariable(passwordVar, null);
+        }
+    }
+
+    // ScrollStep's FramePath, button variant — reuses Phase 1's
+    // self-removing load-more-button pattern, but the button and list now
+    // live inside an iframe.
+    [Fact]
+    public async Task ScrollStep_LoadMoreButtonInsideIframe_ClicksUntilButtonDisappears()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var html = request.Url!.AbsolutePath switch
+            {
+                "/widget" => """
+                    <html><body>
+                    <div id="list"><div class="item">1</div></div>
+                    <button id="load-more" onclick="
+                      var list = document.getElementById('list');
+                      var count = list.children.length;
+                      var next = Math.min(count + 3, 9);
+                      for (var i = count + 1; i <= next; i++) {
+                        var el = document.createElement('div');
+                        el.className = 'item';
+                        el.textContent = String(i);
+                        list.appendChild(el);
+                      }
+                      if (next >= 9) { this.remove(); }
+                    ">Mehr laden</button>
+                    </body></html>
+                    """,
+                _ => "<html><body><iframe id='widget' src='/widget'></iframe></body></html>",
+            };
+            return new LocalTestServerResponse(html, "text/html; charset=utf-8");
+        });
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = server.BaseUrl },
+                new ScrollStep
+                {
+                    LoadMoreButtonSelector = "#load-more", MaxIterations = 6, WaitAfterMs = 200, FramePath = ["#widget"],
+                },
+                new ExtractStep { Name = "Item", Selector = ".item", FramePath = ["#widget"] },
+            ],
+        };
+        var script = Generator.Generate(plan);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(9, result.RowCount);
+    }
 }
