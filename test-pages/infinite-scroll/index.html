@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stadtblog Bergheim</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: #f4f5f7;
+      color: #232526;
+      padding: 40px 20px 80px;
+    }
+
+    /* ── Header ── */
+    .site-header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .site-name {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #1c3f5f;
+      letter-spacing: -.02em;
+    }
+    .site-tagline {
+      color: #6b7280;
+      font-size: 0.95rem;
+      margin-top: 4px;
+    }
+
+    .page {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
+    section + section {
+      margin-top: 56px;
+    }
+
+    .section-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #1c3f5f;
+      border-bottom: 2px solid #d7dce2;
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+    .section-hint {
+      color: #6b7280;
+      font-size: 0.82rem;
+      margin: -12px 0 20px;
+    }
+
+    /* ── Feed (scroll-triggered) ──
+       A fixed-height, independently scrollable container (its own scrollbar,
+       not the page's) — the pattern ScrollStep's ContainerSelector targets,
+       as opposed to a page where the whole window scrolls. */
+    #feed {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      /* Deliberately short: the very first batch must already overflow, so
+         there's something to scroll to from round one — same as any real
+         infinite-scroll list, which only exists because content already
+         exceeds the viewport. */
+      max-height: 160px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .post {
+      background: #fff;
+      border: 1px solid #e4e7eb;
+      border-radius: 8px;
+      padding: 16px 18px;
+    }
+    .post-title {
+      font-weight: 700;
+      color: #1c3f5f;
+    }
+    .post-meta {
+      color: #9aa3ad;
+      font-size: 0.78rem;
+      margin-top: 2px;
+    }
+    #feed-status {
+      text-align: center;
+      color: #9aa3ad;
+      font-size: 0.82rem;
+      padding: 16px 0;
+    }
+
+    /* ── Classifieds (load-more button) ── */
+    #classifieds {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .ad {
+      background: #fff;
+      border: 1px solid #e4e7eb;
+      border-radius: 8px;
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+    }
+    .ad-title {
+      font-weight: 600;
+    }
+    .ad-price {
+      color: #1c7a4a;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    #load-more-classifieds {
+      display: block;
+      margin: 20px auto 0;
+      padding: 10px 28px;
+      background: #1c3f5f;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.92rem;
+      cursor: pointer;
+    }
+    #load-more-classifieds:hover {
+      background: #163350;
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-name">Stadtblog Bergheim</div>
+    <div class="site-tagline">Neuigkeiten &amp; Kleinanzeigen aus der Region</div>
+  </header>
+
+  <div class="page">
+    <!--
+      Section 1: pure scroll-triggered infinite loading (no button) — the
+      #feed box has its own scrollbar (independent of the page) and grows as
+      you scroll it, up to a known, finite total of 47 posts. Intended for a
+      ScrollStep with ContainerSelector="#feed" and no LoadMoreButtonSelector.
+    -->
+    <section>
+      <div class="section-title">Neueste Beiträge</div>
+      <div class="section-hint">Lädt beim Scrollen innerhalb des Kastens automatisch weiter (insgesamt 47 Beiträge).</div>
+      <div id="feed"></div>
+      <div id="feed-status"></div>
+    </section>
+
+    <!--
+      Section 2: explicit "load more" button — the #classifieds container
+      grows only on click, up to a known, finite total of 18 ads, and the
+      button removes itself once everything is loaded. Intended for a
+      ScrollStep with LoadMoreButtonSelector="#load-more-classifieds".
+    -->
+    <section>
+      <div class="section-title">Kleinanzeigen</div>
+      <div class="section-hint">"Mehr laden" klicken, um weitere Anzeigen zu sehen (insgesamt 18 Anzeigen).</div>
+      <div id="classifieds"></div>
+      <button id="load-more-classifieds" type="button">Mehr laden</button>
+    </section>
+  </div>
+
+  <script>
+    // ── Feed: scroll-triggered, batches of 5, total 47 ──
+    (function () {
+      var TOTAL = 47;
+      var BATCH = 5;
+      var loaded = 0;
+      var feed = document.getElementById('feed');
+      var status = document.getElementById('feed-status');
+
+      function loadNextBatch() {
+        if (loaded >= TOTAL) return;
+        var next = Math.min(loaded + BATCH, TOTAL);
+        for (var i = loaded + 1; i <= next; i++) {
+          var post = document.createElement('article');
+          post.className = 'post';
+          post.innerHTML =
+            '<div class="post-title">Beitrag #' + i + ': Neues aus Bergheim</div>' +
+            '<div class="post-meta">Veröffentlicht vor ' + i + ' Tagen</div>';
+          feed.appendChild(post);
+        }
+        loaded = next;
+        status.textContent = loaded >= TOTAL
+          ? 'Alle ' + TOTAL + ' Beiträge geladen.'
+          : loaded + ' von ' + TOTAL + ' Beiträgen geladen …';
+      }
+
+      loadNextBatch(); // initial batch, same as a real feed's first page
+
+      feed.addEventListener('scroll', loadNextBatch);
+    })();
+
+    // ── Classifieds: button-triggered, batches of 6, total 18 ──
+    (function () {
+      var TOTAL = 18;
+      var BATCH = 6;
+      var loaded = 0;
+      var list = document.getElementById('classifieds');
+      var button = document.getElementById('load-more-classifieds');
+
+      function loadNextBatch() {
+        var next = Math.min(loaded + BATCH, TOTAL);
+        for (var i = loaded + 1; i <= next; i++) {
+          var ad = document.createElement('div');
+          ad.className = 'ad';
+          ad.innerHTML =
+            '<span class="ad-title">Anzeige #' + i + '</span>' +
+            '<span class="ad-price">' + (10 + i * 3) + ' €</span>';
+          list.appendChild(ad);
+        }
+        loaded = next;
+        if (loaded >= TOTAL) {
+          button.remove();
+        }
+      }
+
+      loadNextBatch(); // initial batch
+      button.addEventListener('click', loadNextBatch);
+    })();
+  </script>
+</body>
+</html>

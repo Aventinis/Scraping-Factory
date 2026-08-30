@@ -98,6 +98,72 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.Contains("from playwright.sync_api import sync_playwright", body);
     }
 
+    // Proves BrowserActions is wired end-to-end through the real HTTP
+    // endpoint: wire-format "kind"-discriminated JSON → ScrapingPlanBuilder
+    // → ScrollStep → PythonPlaywrightCodeGenerator → real verification via
+    // an actual Chromium subprocess scrolling a page that lazy-loads content.
+    [Fact]
+    public async Task Generate_BrowserActionsWithScroll_Returns200WithAllItemsExtracted()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+            <div id="list"><div class="item">1</div><div class="item">2</div></div>
+            <div style="height: 2000px;"></div>
+            <script>
+              var total = 6;
+              var loaded = 2;
+              window.addEventListener('scroll', function () {
+                if (loaded >= total) return;
+                var list = document.getElementById('list');
+                var el = document.createElement('div');
+                el.className = 'item';
+                el.textContent = String(++loaded);
+                list.appendChild(el);
+              });
+            </script>
+            </body></html>
+            """);
+        var payload = $$"""
+            {
+              "url": "{{server.BaseUrl}}",
+              "engine": "Browser",
+              "fields": [ { "name": "Item", "selector": ".item" } ],
+              "browserActions": [
+                { "kind": "scroll", "maxIterations": 10, "waitAfterMs": 300 }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Contains("_scroll_prev_height", body);
+    }
+
+    // Caught by ScrapingPlanValidator's fast structural pre-check (same class
+    // of failure as Generate_InvalidUrlScheme_Returns400) — never spawns a
+    // Python subprocess.
+    [Fact]
+    public async Task Generate_BrowserActionsWithStaticEngine_Returns400()
+    {
+        var payload = """
+            {
+              "url": "https://example.com",
+              "fields": [ { "name": "Titel", "selector": "h1" } ],
+              "browserActions": [ { "kind": "scroll" } ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("Engine", doc.RootElement.GetProperty("error").GetString());
+    }
+
     [Fact]
     public async Task Generate_SelectorMatchesNothing_Returns422WithError()
     {

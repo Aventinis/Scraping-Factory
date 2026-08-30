@@ -44,6 +44,24 @@ public sealed class ClickStep : ScrapingStep
     public required string Selector { get; init; }
 }
 
+// Browser-engine only: repeatedly scrolls (the whole page, or a specific
+// container) and/or clicks a "load more" button, to surface content that
+// only appears after infinite-scroll/lazy-loading has fired — for content
+// already present in the initial DOM, WaitForStep is enough. Always capped
+// by MaxIterations; the earlier stop signal depends on whether
+// LoadMoreButtonSelector is set: with a button, its own disappearance is the
+// signal (more reliable than page height — newly loaded content can still
+// fit within the viewport without ever growing scrollHeight); without one,
+// the page/container no longer growing across two consecutive rounds is the
+// only signal available. See playwright_scroll_step.py.j2.
+public sealed class ScrollStep : ScrapingStep
+{
+    public string? ContainerSelector { get; init; }
+    public string? LoadMoreButtonSelector { get; init; }
+    public int MaxIterations { get; init; } = 10;
+    public int WaitAfterMs { get; init; } = 1000;
+}
+
 // Container-Mode: replaces the flat list of ExtractSteps entirely when the
 // wire-format config carries Groups instead of Fields. Engine-independent —
 // unlike WaitFor/Fill/Click it works identically with Static and Browser

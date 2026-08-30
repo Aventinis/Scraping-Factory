@@ -87,8 +87,16 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     // works (network fetch, parsing, CSV export, no runtime errors) and
     // returns real data, rather than approximating that with a static
     // selector check that could disagree with what BeautifulSoup does.
+    // A ScrollStep's own configured cost (MaxIterations × WaitAfterMs) can
+    // exceed the verifier's baseline timeout on its own — added on top
+    // rather than baked into the baseline, so scripts without a ScrollStep
+    // keep the tight default instead of everyone paying for the slowest
+    // possible configuration.
+    var extraTimeout = TimeSpan.FromMilliseconds(
+        plan.Steps.OfType<ScrollStep>().Sum(step => (long)step.MaxIterations * step.WaitAfterMs));
+
     var verifier = registry.ResolveScriptVerifier("python");
-    var verification = await verifier.VerifyAsync(script, plan.OutputFormat, plan.OutputFileBaseName);
+    var verification = await verifier.VerifyAsync(script, plan.OutputFormat, plan.OutputFileBaseName, extraTimeout);
     if (!verification.Success)
     {
         return Results.UnprocessableEntity(new
