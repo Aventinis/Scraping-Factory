@@ -56,7 +56,11 @@
     "scriptFilenamePlaceholder": "scraper",
     "outputFilenameLabel": "Name der Ausgabedatei",
     "outputFilenamePlaceholder": "output",
-    "generateBtn": "Skript generieren ▶"
+    "generateBtn": "Skript generieren ▶",
+    "engineLabel": "Engine",
+    "engineStatic": "Statisch",
+    "engineBrowser": "Browser",
+    "engineBrowserTitle": "Rendert JavaScript vor der Extraktion — für dynamisch geladene Seiten oder Login-Flows. Langsamer als die statische Engine."
   },
   "robots": {
     "checkFailed": "robots.txt konnte nicht geprüft werden ({error}).",
@@ -155,5 +159,21 @@
     "selectionUnavailable": "Element-Auswahl auf dieser Seite nicht möglich.",
     "previewUnavailable": "Vorschau auf dieser Seite nicht möglich.",
     "captureUnavailable": "Netzwerk-Aufzeichnung auf dieser Seite nicht möglich."
+  },
+  "browserActions": {
+    "title": "Browser-Aktionen",
+    "hint": "Werden der Reihe nach vor der Extraktion ausgeführt, z. B. für einen Login-Flow.",
+    "addWaitBtn": "+ Warten",
+    "addFillBtn": "+ Ausfüllen",
+    "addClickBtn": "+ Klicken",
+    "kindWaitFor": "Warten",
+    "kindFill": "Ausfüllen",
+    "kindClick": "Klicken",
+    "noSelector": "Kein Element ausgewählt",
+    "pickSelectorBtn": "Element auswählen",
+    "timeoutLabel": "Timeout (ms)",
+    "envVarLabel": "Umgebungsvariable",
+    "envNamePlaceholder": "ENV_NAME",
+    "envVarHint": "Der Wert wird zur Laufzeit aus dieser Umgebungsvariable gelesen, nie im Skript gespeichert."
   }
 }

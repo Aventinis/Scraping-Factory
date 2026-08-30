@@ -56,7 +56,11 @@
     "scriptFilenamePlaceholder": "scraper",
     "outputFilenameLabel": "Nombre del archivo de salida",
     "outputFilenamePlaceholder": "output",
-    "generateBtn": "Generar script ▶"
+    "generateBtn": "Generar script ▶",
+    "engineLabel": "Motor",
+    "engineStatic": "Estático",
+    "engineBrowser": "Navegador",
+    "engineBrowserTitle": "Renderiza JavaScript antes de la extracción — para páginas cargadas dinámicamente o flujos de inicio de sesión. Más lento que el motor estático."
   },
   "robots": {
     "checkFailed": "No se pudo comprobar el robots.txt ({error}).",
@@ -155,5 +159,21 @@
     "selectionUnavailable": "No es posible seleccionar elementos en esta página.",
     "previewUnavailable": "No es posible la vista previa en esta página.",
     "captureUnavailable": "No es posible grabar red en esta página."
+  },
+  "browserActions": {
+    "title": "Acciones del navegador",
+    "hint": "Se ejecutan en orden antes de la extracción, p. ej. para un flujo de inicio de sesión.",
+    "addWaitBtn": "+ Esperar",
+    "addFillBtn": "+ Rellenar",
+    "addClickBtn": "+ Clic",
+    "kindWaitFor": "Esperar",
+    "kindFill": "Rellenar",
+    "kindClick": "Clic",
+    "noSelector": "Ningún elemento seleccionado",
+    "pickSelectorBtn": "Seleccionar elemento",
+    "timeoutLabel": "Tiempo de espera (ms)",
+    "envVarLabel": "Variable de entorno",
+    "envNamePlaceholder": "ENV_NAME",
+    "envVarHint": "El valor se lee de esta variable de entorno en tiempo de ejecución, nunca se guarda en el script."
   }
 }

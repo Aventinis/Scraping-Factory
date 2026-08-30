@@ -16,13 +16,19 @@ let _state = {
   mode:                'flat', // 'flat' (Fields → Csv) | 'container' (Groups → Xml) — mutually exclusive
   fields:              [],   // [{name, selector, attribute}]
   groups:              [],   // container-mode tree: {kind:'group', name, selector, repeating, children} | {kind:'field', name, selector, mode, attribute}
+  // Issue #41/#42, Phase 5: mode-independent (applies regardless of Fields/
+  // Groups/Api, see A) in PLAN-issues-41-42.md's Phase 5 research) — never
+  // touched by switchMode/MODE_SWITCH_CLEARS, unlike fields/groups/apiConfig.
+  engine:              'Static', // 'Static' | 'Browser' — only sent to /generate when 'Browser' (see buildScrapingConfig)
+  browserActions:      [],  // [{kind:'waitFor'|'fill'|'click', selector, timeoutMs?, environmentVariableName?}], executed in order before extraction — Browser-engine only
   scriptFileName:      '', // base name (no extension) for the downloaded .py — empty = use the "scraper" placeholder/default
   outputFileName:      '', // base name (no extension) for the script's own output.csv/output.xml — empty = use the "output" placeholder/default
   scriptText:          '',
   pendingSelector:     null,  // set while field-name modal (flat) or extended field modal (container) is open
-  selectionKind:       null,  // 'field' | 'container' | null — which kind the current SELECTING round is for (container-mode only)
+  selectionKind:       null,  // 'field' | 'container' | 'browserAction' | null — which kind the current SELECTING round is for
   pendingParentPath:   null,  // number[] | null — where the next inserted group-tree node goes; null = root level
   pendingNewContainer: null,  // {name, repeating} captured by modal-container-new before element-selection starts
+  pendingBrowserActionIndex: null, // number | null — which browserActions entry the current SELECTING round's result is written into (selectionKind === 'browserAction')
   containerModalOpen:  false, // modal-container-new visibility
   domViewEnabled:    false, // user preference, kept across selection rounds
   domTree:           null,  // serialized tree from the content script, or null while loading/errored
@@ -95,18 +101,38 @@ function sanitizeFileNameBase(input, fallback) {
 
 // `apiConfig` is only read when mode === 'api' — the confirmed ApiConfig
 // wire object built by buildApiConfig (Issue #53 Phase 5), passed straight
-// through as the request body's `api` field. Method/OutputFormat/Engine are
-// forced server-side (see companion's ScrapingPlanBuilder), so nothing
-// extra is added here the way outputFormat is for flat mode.
+// through as the request body's `api` field. Method/OutputFormat are forced
+// server-side (see companion's ScrapingPlanBuilder), so nothing extra is
+// added here the way outputFormat is for flat mode.
 // `scriptFileName`/`outputFileName` are sent as-is (possibly blank) — the
 // companion sanitizes and defaults them itself (see FileNameSanitizer),
-// same "server is the source of truth" pattern as OutputFormat/Engine.
-function buildScrapingConfig(url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null) {
+// same "server is the source of truth" pattern as OutputFormat.
+// `engine`/`browserActions` (Issue #41/#42, Phase 5) are mode-independent —
+// only included at all when `engine === 'Browser'` (the server already
+// defaults to Static when the key is absent, so the 'Static' case round-trips
+// to byte-for-byte the same request body as before this existed), and
+// `browserActions` only on top of that when non-empty.
+function buildScrapingConfig(
+  url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
+  engine = 'Static', browserActions = [],
+) {
+  const engineFields = engine === 'Browser'
+    ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
+    : {};
+
   if (mode === 'container') {
-    return { version: '1', url, groups: serializeGroupTree(groups), scriptFileName: scriptFileName || null, outputFileName: outputFileName || null };
+    return {
+      version: '1', url, groups: serializeGroupTree(groups),
+      scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
+      ...engineFields,
+    };
   }
   if (mode === 'api') {
-    return { version: '1', url, api: apiConfig, scriptFileName: scriptFileName || null, outputFileName: outputFileName || null };
+    return {
+      version: '1', url, api: apiConfig,
+      scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
+      ...engineFields,
+    };
   }
   return {
     version: '1',
@@ -115,6 +141,7 @@ function buildScrapingConfig(url, mode, fields, groups, apiConfig = null, script
     outputFormat: 'Csv',
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
+    ...engineFields,
   };
 }
 
@@ -124,16 +151,50 @@ function buildScrapingConfig(url, mode, fields, groups, apiConfig = null, script
 // the literal request body /generate would receive — no need to describe
 // the setup by hand. `manifest` is injected so this stays a pure, testable
 // function instead of reaching into chrome.runtime itself.
-function buildConfigExport(url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null) {
+function buildConfigExport(
+  url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
+  engine = 'Static', browserActions = [],
+) {
   return {
     exportedAt: new Date().toISOString(),
     extensionVersion: manifest.version || '?',
-    config: buildScrapingConfig(url, mode, fields, groups, apiConfig, scriptFileName, outputFileName),
+    config: buildScrapingConfig(url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions),
   };
 }
 
 function addField(fields, name, selector) {
   return [...fields, { name, selector, attribute: null }];
+}
+
+// Issue #41/#42, Phase 5: browser actions (WaitFor/Fill/Click, executed in
+// order before extraction) — same pure add/remove/update shape as
+// addField/removeField above, so setState() callers stay trivial.
+function addBrowserAction(actions, kind) {
+  const defaults = {
+    waitFor: { kind: 'waitFor', selector: '', timeoutMs: 5000 },
+    fill:    { kind: 'fill', selector: '', environmentVariableName: '' },
+    click:   { kind: 'click', selector: '' },
+  };
+  return [...actions, defaults[kind]];
+}
+
+function removeBrowserAction(actions, index) {
+  return actions.filter((_, i) => i !== index);
+}
+
+function updateBrowserAction(actions, index, patch) {
+  return actions.map((a, i) => (i === index ? { ...a, ...patch } : a));
+}
+
+// Picks exactly the wire-relevant fields per kind (companion's BrowserAction
+// variants, IR/BrowserAction.cs) — actions themselves are free to carry
+// extra UI-only bookkeeping later without it leaking into the request body.
+function serializeBrowserActions(actions) {
+  return actions.map((a) => {
+    if (a.kind === 'waitFor') return { kind: 'waitFor', selector: a.selector, timeoutMs: a.timeoutMs };
+    if (a.kind === 'fill') return { kind: 'fill', selector: a.selector, environmentVariableName: a.environmentVariableName };
+    return { kind: 'click', selector: a.selector };
+  });
 }
 
 function removeField(fields, index) {
@@ -438,11 +499,14 @@ function persistState() {
       url: _state.url,
       mode: _state.mode,
       groups: _state.groups,
+      engine: _state.engine,
+      browserActions: _state.browserActions,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
       selectionKind: _state.selectionKind,
       pendingParentPath: _state.pendingParentPath,
       pendingNewContainer: _state.pendingNewContainer,
+      pendingBrowserActionIndex: _state.pendingBrowserActionIndex,
       apiSearchTarget: _state.apiSearchTarget,
       apiConfigDraft: _state.apiConfigDraft,
       apiConfig: _state.apiConfig,
@@ -528,6 +592,14 @@ function render() {
     document.getElementById('api-mode-section')?.classList.toggle('hidden', _state.mode !== 'api');
     // Vorschau highlights matched DOM elements — meaningless for API-Mode.
     document.getElementById('preview-section')?.classList.toggle('hidden', _state.mode === 'api');
+
+    // Engine + browser actions (Issue #41/#42, Phase 5) — mode-independent,
+    // so this sits alongside the mode toggle above rather than inside any
+    // of the three mode-specific blocks.
+    document.getElementById('btn-engine-static')?.classList.toggle('active', _state.engine === 'Static');
+    document.getElementById('btn-engine-browser')?.classList.toggle('active', _state.engine === 'Browser');
+    document.getElementById('browser-actions-section')?.classList.toggle('hidden', _state.engine !== 'Browser');
+    if (_state.engine === 'Browser') renderBrowserActions();
 
     if (_state.mode === 'container') {
       renderGroupTree(_state.groups);
@@ -692,6 +764,67 @@ function renderFields(fields = _state.fields) {
       `<span class="field-selector" title="${escapeHtml(field.selector)}">${escapeHtml(field.selector)}</span>` +
       `<button class="btn-danger btn-remove-field" data-index="${i}">${escapeHtml(t('common.remove'))}</button>`;
     listEl.appendChild(row);
+  });
+}
+
+// Issue #41/#42, Phase 5. One card per action, kind fixed at creation time
+// (via btn-add-action-wait/-fill/-click) — unlike the API-config parameter
+// cards, there's no "change the kind afterward" control, since an action is
+// created from scratch by the user rather than pre-existing (see
+// renderApiConfigParameters for that different case).
+function renderBrowserActions(actions = _state.browserActions) {
+  const container = document.getElementById('browser-actions-list');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const kindLabels = {
+    waitFor: t('browserActions.kindWaitFor'),
+    fill: t('browserActions.kindFill'),
+    click: t('browserActions.kindClick'),
+  };
+
+  actions.forEach((action, i) => {
+    const card = document.createElement('div');
+    card.className = 'browser-action-card';
+    card.dataset.index = i;
+
+    const header = document.createElement('div');
+    header.className = 'browser-action-header';
+    header.innerHTML =
+      `<span class="row-label">${escapeHtml(kindLabels[action.kind] || action.kind)}</span>` +
+      `<button type="button" class="btn-danger btn-remove-action" data-index="${i}">${escapeHtml(t('common.remove'))}</button>`;
+    card.appendChild(header);
+
+    const selectorRow = document.createElement('div');
+    selectorRow.className = 'browser-action-selector-row';
+    const selectorText = action.selector || t('browserActions.noSelector');
+    selectorRow.innerHTML =
+      `<span class="field-selector" title="${escapeHtml(selectorText)}">${escapeHtml(selectorText)}</span>` +
+      `<button type="button" class="btn-secondary btn-tiny btn-pick-action-selector" data-index="${i}">${escapeHtml(t('browserActions.pickSelectorBtn'))}</button>`;
+    card.appendChild(selectorRow);
+
+    if (action.kind === 'waitFor') {
+      const row = document.createElement('div');
+      row.className = 'browser-action-field-row';
+      row.innerHTML =
+        `<label>${escapeHtml(t('browserActions.timeoutLabel'))}</label>` +
+        `<input type="number" min="1" class="browser-action-timeout" data-index="${i}" value="${action.timeoutMs}" />`;
+      card.appendChild(row);
+    } else if (action.kind === 'fill') {
+      const row = document.createElement('div');
+      row.className = 'browser-action-field-row';
+      row.innerHTML =
+        `<label>${escapeHtml(t('browserActions.envVarLabel'))}</label>` +
+        `<input type="text" class="browser-action-env-name" data-index="${i}" placeholder="${escapeHtml(t('browserActions.envNamePlaceholder'))}" value="${escapeHtml(action.environmentVariableName || '')}" />`;
+      card.appendChild(row);
+
+      const hint = document.createElement('p');
+      hint.className = 'browser-action-hint';
+      hint.textContent = t('browserActions.envVarHint');
+      card.appendChild(hint);
+    }
+
+    container.appendChild(card);
   });
 }
 
@@ -1475,7 +1608,7 @@ async function generate() {
   setState(STATES.GENERATING);
   const config = buildScrapingConfig(
     _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
-    _state.scriptFileName, _state.outputFileName,
+    _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions,
   );
   log('GENERATE request', config);
   try {
@@ -1521,7 +1654,7 @@ function downloadConfigExport() {
   const manifest = typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest() : {};
   const exportObj = buildConfigExport(
     _state.url, _state.mode, _state.fields, _state.groups, manifest, _state.apiConfig,
-    _state.scriptFileName, _state.outputFileName,
+    _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions,
   );
   log('DOWNLOAD scraping-config.json', exportObj);
 
@@ -1970,7 +2103,7 @@ function wireEvents() {
     const returnTo = _state.apiConfigDraft ? STATES.API_CONFIG : STATES.IDLE;
     setState(returnTo, {
       selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null,
-      apiSearchTarget: null,
+      pendingBrowserActionIndex: null, apiSearchTarget: null,
     });
   });
 
@@ -2023,13 +2156,86 @@ function wireEvents() {
     checkCompanion();
   });
 
+  // ── Engine + browser actions (Issue #41/#42, Phase 5) ────────────────────
+  // Mode-independent, unlike fields/groups/apiConfig — no interaction with
+  // switchMode/MODE_SWITCH_CLEARS.
+
+  document.getElementById('btn-engine-static')?.addEventListener('click', () => {
+    log('BTN engine-static');
+    setState(_state.current, { engine: 'Static' });
+  });
+  document.getElementById('btn-engine-browser')?.addEventListener('click', () => {
+    log('BTN engine-browser');
+    setState(_state.current, { engine: 'Browser' });
+  });
+
+  document.getElementById('btn-add-action-wait')?.addEventListener('click', () => {
+    log('BTN add-action-wait');
+    setState(_state.current, { browserActions: addBrowserAction(_state.browserActions, 'waitFor') });
+  });
+  document.getElementById('btn-add-action-fill')?.addEventListener('click', () => {
+    log('BTN add-action-fill');
+    setState(_state.current, { browserActions: addBrowserAction(_state.browserActions, 'fill') });
+  });
+  document.getElementById('btn-add-action-click')?.addEventListener('click', () => {
+    log('BTN add-action-click');
+    setState(_state.current, { browserActions: addBrowserAction(_state.browserActions, 'click') });
+  });
+
+  document.getElementById('browser-actions-list')?.addEventListener('click', (e) => {
+    const removeBtn = e.target.closest('.btn-remove-action');
+    if (removeBtn) {
+      const index = parseInt(removeBtn.dataset.index, 10);
+      log('BROWSER_ACTION_REMOVE', { index });
+      setState(_state.current, { browserActions: removeBrowserAction(_state.browserActions, index) });
+      return;
+    }
+    const pickBtn = e.target.closest('.btn-pick-action-selector');
+    if (pickBtn) {
+      const index = parseInt(pickBtn.dataset.index, 10);
+      log('BTN pick-action-selector → START_SELECTION', index);
+      stopPreviewIfActive();
+      chrome.runtime.sendMessage({ type: 'START_SELECTION' });
+      setState(STATES.SELECTING, {
+        pendingSelector: null, selectionKind: 'browserAction', pendingBrowserActionIndex: index,
+        domTree: null, domTreeTruncated: false, domTreeError: null,
+      });
+    }
+  });
+
+  // change (not input) — same reasoning as the API-config screen's text
+  // inputs: a re-render on every keystroke would reset the cursor position.
+  document.getElementById('browser-actions-list')?.addEventListener('change', (e) => {
+    const timeoutInput = e.target.closest('.browser-action-timeout');
+    if (timeoutInput) {
+      const index = parseInt(timeoutInput.dataset.index, 10);
+      const timeoutMs = parseInt(timeoutInput.value, 10);
+      setState(_state.current, {
+        browserActions: updateBrowserAction(_state.browserActions, index, {
+          timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 5000,
+        }),
+      });
+      return;
+    }
+    const envInput = e.target.closest('.browser-action-env-name');
+    if (envInput) {
+      const index = parseInt(envInput.dataset.index, 10);
+      setState(_state.current, {
+        browserActions: updateBrowserAction(_state.browserActions, index, { environmentVariableName: envInput.value.trim() }),
+      });
+    }
+  });
+
   chrome.runtime.onMessage.addListener((message) => {
     log('MSG_IN', message);
     if (message.type === 'SELECTION_UNAVAILABLE' && _state.current === STATES.SELECTING) {
       log('SELECTION_UNAVAILABLE', message.reason);
       setLastError(message.reason, 'Element selection');
       const returnTo = _state.apiConfigDraft ? STATES.API_CONFIG : STATES.IDLE;
-      setState(returnTo, { selectionKind: null, pendingParentPath: null, pendingNewContainer: null, apiSearchTarget: null });
+      setState(returnTo, {
+        selectionKind: null, pendingParentPath: null, pendingNewContainer: null,
+        pendingBrowserActionIndex: null, apiSearchTarget: null,
+      });
       showToast(t('toast.selectionUnavailable'));
     }
     if (message.type === 'ELEMENT_SELECTED' && _state.current === STATES.SELECTING) {
@@ -2050,6 +2256,14 @@ function wireEvents() {
         setState(STATES.IDLE, {
           groups: insertContainerNode(_state.groups, _state.pendingParentPath, node),
           selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null,
+        });
+      } else if (_state.selectionKind === 'browserAction' && _state.pendingBrowserActionIndex !== null) {
+        // The action card already exists (kind chosen when it was added via
+        // btn-add-action-*) — write the selector straight into it, no
+        // naming modal needed, same shape as the container branch above.
+        setState(STATES.IDLE, {
+          browserActions: updateBrowserAction(_state.browserActions, _state.pendingBrowserActionIndex, { selector: message.selector }),
+          selectionKind: null, pendingBrowserActionIndex: null, pendingSelector: null,
         });
       } else {
         setState(STATES.SELECTING, { pendingSelector: message.selector });
@@ -2118,6 +2332,7 @@ async function init() {
   log('INIT reading session storage');
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'mode', 'groups',
+    'engine', 'browserActions', 'pendingBrowserActionIndex',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
     'scriptFileName', 'outputFileName',
@@ -2129,11 +2344,14 @@ async function init() {
   if (Array.isArray(stored.groups)) _state = { ..._state, groups: stored.groups };
   if (stored.url)                   _state = { ..._state, url: stored.url };
   if (stored.mode)                  _state = { ..._state, mode: stored.mode };
+  if (stored.engine)                _state = { ..._state, engine: stored.engine };
+  if (Array.isArray(stored.browserActions)) _state = { ..._state, browserActions: stored.browserActions };
   if (stored.scriptFileName)        _state = { ..._state, scriptFileName: stored.scriptFileName };
   if (stored.outputFileName)        _state = { ..._state, outputFileName: stored.outputFileName };
   if (stored.selectionKind)         _state = { ..._state, selectionKind: stored.selectionKind };
   if (stored.pendingParentPath !== undefined) _state = { ..._state, pendingParentPath: stored.pendingParentPath };
   if (stored.pendingNewContainer)   _state = { ..._state, pendingNewContainer: stored.pendingNewContainer };
+  if (stored.pendingBrowserActionIndex !== undefined) _state = { ..._state, pendingBrowserActionIndex: stored.pendingBrowserActionIndex };
   if (stored.apiConfigDraft)        _state = { ..._state, apiConfigDraft: stored.apiConfigDraft };
   if (stored.apiConfig)             _state = { ..._state, apiConfig: stored.apiConfig };
 
@@ -2162,6 +2380,19 @@ async function init() {
       await chrome.storage.session.set({ groups });
       setState(STATES.IDLE, {
         groups, selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null,
+      });
+      return;
+    }
+
+    if (stored.selectionKind === 'browserAction' && stored.pendingBrowserActionIndex !== null && stored.pendingBrowserActionIndex !== undefined) {
+      // Same as the live ELEMENT_SELECTED path: the action card already
+      // exists (kind chosen when it was added) — write the selector
+      // straight into it, no naming modal needed.
+      log('INIT pending browser-action selector found → updating action', stored.pendingSelector);
+      const browserActions = updateBrowserAction(_state.browserActions, stored.pendingBrowserActionIndex, { selector: stored.pendingSelector });
+      await chrome.storage.session.set({ browserActions });
+      setState(STATES.IDLE, {
+        browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingSelector: null,
       });
       return;
     }
@@ -2198,5 +2429,6 @@ if (typeof module !== 'undefined') {
     variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
     detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
     applyStaticTranslations, sanitizeFileNameBase,
+    addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
   };
 }
