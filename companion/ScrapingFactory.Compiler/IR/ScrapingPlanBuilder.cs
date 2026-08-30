@@ -66,15 +66,19 @@ public static class ScrapingPlanBuilder
 
     private static ScrapingStep ToStep(BrowserAction action) => action switch
     {
-        WaitForAction a => new WaitForStep { Selector = a.Selector, TimeoutMs = a.TimeoutMs },
-        FillAction a => new FillStep { Selector = a.Selector, EnvironmentVariableName = a.EnvironmentVariableName },
-        ClickAction a => new ClickStep { Selector = a.Selector },
+        WaitForAction a => new WaitForStep { Selector = a.Selector, TimeoutMs = a.TimeoutMs, FramePath = a.FramePath },
+        FillAction a => new FillStep
+        {
+            Selector = a.Selector, EnvironmentVariableName = a.EnvironmentVariableName, FramePath = a.FramePath,
+        },
+        ClickAction a => new ClickStep { Selector = a.Selector, FramePath = a.FramePath },
         ScrollAction a => new ScrollStep
         {
             ContainerSelector = a.ContainerSelector,
             LoadMoreButtonSelector = a.LoadMoreButtonSelector,
             MaxIterations = a.MaxIterations,
             WaitAfterMs = a.WaitAfterMs,
+            FramePath = a.FramePath,
         },
         _ => throw new InvalidOperationException($"Unbekannter BrowserAction-Typ: {action.GetType().Name}"),
     };

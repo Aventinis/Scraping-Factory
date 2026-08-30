@@ -36,6 +36,13 @@ FRAME_PATHS = {
 }
 
 
+def _resolve_frame_locator(page, frame_path):
+    scope = page
+    for frame_selector in frame_path:
+        scope = scope.frame_locator(frame_selector)
+    return scope
+
+
 # ElementHandle (from query_selector_all) and Locator (from a FrameLocator
 # chain) expose the same .text_content()/.get_attribute() methods, so the
 # extraction loop below doesn't need to know or care which one it got — only
@@ -43,10 +50,17 @@ FRAME_PATHS = {
 def _resolve_elements(page, selector, frame_path):
     if not frame_path:
         return page.query_selector_all(selector)
-    scope = page
-    for frame_selector in frame_path:
-        scope = scope.frame_locator(frame_selector)
-    return scope.locator(selector).all()
+    return _resolve_frame_locator(page, frame_path).locator(selector).all()
+
+
+# Used by the WaitFor/Fill/Click/Scroll action fragments rendered into the
+# scrape() body below (one per playwright_*_step.py.j2 template) — a plain
+# page.locator(selector) when frame_path is unset, the same frame-scoped
+# Locator _resolve_elements builds otherwise. Page has .locator() too, so
+# _resolve_frame_locator(page, []) returning page unchanged already makes
+# this uniform without a separate branch here.
+def _resolve_locator(page, selector, frame_path):
+    return _resolve_frame_locator(page, frame_path or []).locator(selector)
 
 
 def scrape(url):
