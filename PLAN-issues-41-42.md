@@ -135,7 +135,7 @@ Shadow DOM likely needs no codegen change (Playwright pierces it automatically f
 
 ---
 
-## Phase 3 — `FramePath` for Container-Mode (Issue #42, extended scope)
+## Phase 3 — `FramePath` for Container-Mode (Issue #42, extended scope) — ✅ DONE
 
 **Branch:** `feature/iframe-container-mode`
 **Depends on:** Phase 2 merged (needs `FramePath`'s IR shape and the `Locator`-based resolver helper to already exist and be proven working for the flat case before reusing the pattern recursively).
@@ -148,15 +148,15 @@ The content-script side (`resolveFramePath`/`findIframeSelectorForWindow`/the `e
 
 ### Tasks
 
-- [ ] **IR**: add `FramePath` (`List<string>?`, default `null`) to `DataFieldNode` and `GroupNode` (`IR/ContainerNode.cs`).
-- [ ] **Codegen**: `playwright_scraper_grouped.py.j2`'s `extract_group()` currently takes a single `scope` (either `page` or a previously-matched `ElementHandle`) and calls `scope.query_selector_all(node["selector"])`/`scope.query_selector(node["selector"])` uniformly. Extend it to resolve a per-node scope via the same `FramePath`-aware resolver introduced in Phase 2 when `node.get("frame_path")` is set, instead of using the inherited `scope` — needs a per-node decision, not just a whole-tree one, since only some nodes in a tree might be framed. Reuse `PythonGroupTreeLiteral` to bake `frame_path` into each node's dict literal alongside `selector`/`name`/etc.
-- [ ] **`ScrapingPlanValidator`**: extend `ValidateContainerNodes` with the same Browser-only-when-`FramePath`-is-set guard as `ExtractStep`.
-- [ ] **Tests**: `PythonGroupCodeGeneratorTests`/`PythonPlaywrightScriptVerifierTests` cases for a group tree with a framed node (and a mix of framed + non-framed siblings, since that's the actual point of doing this per-node instead of per-tree). Manually verify against an extended/reused iframe test page.
+- [x] **IR**: `FramePath` (`List<string>?`, default `null`) added to `DataFieldNode` and `GroupNode` (`IR/ContainerNode.cs`) — same "absolute path from the top document, not inherited from an ancestor's FramePath" semantic as `ExtractStep.FramePath`, documented explicitly on both since container-mode is the first place that semantic actually gets tested (a flat `ExtractStep` has no ancestor to be ambiguous about).
+- [x] **Codegen**: `playwright_scraper_grouped.py.j2`'s `extract_group()` now takes `page` as an explicit third parameter (threaded through every recursive call) alongside `scope`/`node`, since `frame_path` resolution always starts fresh from `page` regardless of nesting depth — `scope` alone was never enough once a node's own `frame_path` needed resolving independently of its ancestors. Two small resolver functions, `_resolve_group_matches`/`_resolve_field_match`, are the only things that branch on `node.get("frame_path")`; everything downstream (the recursive walk, XML element building) is unchanged. **Design note, worth knowing if this code is touched again:** `Locator` (what a `FrameLocator` chain returns) has no `query_selector`/`query_selector_all` of its own — a resolved *group* match is converted to an `ElementHandle` via `.element_handle()` immediately after resolution, specifically so every recursive call into a framed group's children can keep using `scope.query_selector(...)` completely unchanged, exactly as if the group had never been framed at all. `PythonGroupTreeLiteral` bakes `frame_path` into each node's dict literal the same "omit the key entirely when null" way `attribute` already does, via a new shared `PythonLiteral.StrList` helper.
+- [x] **`ScrapingPlanValidator`**: `ValidateContainerNodes` now takes the plan's `Engine` and checks `FramePath` on both `GroupNode` and `DataFieldNode` via a new shared `ValidateFramePath` helper (also now used by `ExtractStep`'s check from Phase 2, replacing what used to be three copies of the same three checks).
+- [x] **Tests**: `PythonPlaywrightCodeGeneratorTests.cs` (resolver helpers present, `frame_path` in/omitted from the tree literal correctly per-node), `ScrapingPlanValidatorTests.cs` (Browser-only guard + field validation on both node types), `PythonPlaywrightScriptVerifierTests.cs` (two real end-to-end Chromium tests: a framed *group* whose children extract normally from within it; a mix of one plain sibling field and one field framed into a completely separate shared iframe). **All passed on the first run** — same "spikes/prior-phase design notes paid off" pattern as Phase 2. Also manually verified against the real (already-existing) `test-pages/iframe-shadow-dom/index.html` via two live `/generate` calls against a running companion (not `LocalTestServer`): a non-repeating group scoped into `#price-widget` correctly extracted `124,50 €`; a mixed-siblings group (one plain top-level field, one field framed two levels deep into `#price-widget` → `#reviews-widget`) correctly extracted both `129,00 €` and `4,7 / 5 (312 Bewertungen)` in the same `<Produkt>` element.
 
 ### Definition of done
 
-- Container-mode extraction works correctly when one or more nodes in the tree have a `FramePath` set, including mixed framed/non-framed siblings in the same tree.
-- All new + existing tests green.
+- [x] Container-mode extraction works correctly when one or more nodes in the tree have a `FramePath` set, including mixed framed/non-framed siblings in the same tree.
+- [x] All new + existing tests green (223 backend; extension suite untouched by this phase, still 380).
 
 ---
 
@@ -173,7 +173,7 @@ Extends `FramePath` support to `WaitForStep`/`FillStep`/`ClickStep`/`ScrollStep`
 
 - [ ] **IR**: add `FramePath` (`List<string>?`, default `null`) to `WaitForStep`, `FillStep`, `ClickStep`, `ScrollStep` (`IR/ScrapingStep.cs`), and to the matching wire-format `BrowserAction` variants (`IR/BrowserAction.cs`).
 - [ ] **Codegen**: unlike Phase 2/3's "get a list of elements" resolver, these steps need an "does exactly one element exist right now" resolution — `Locator.count()` (a synchronous, non-waiting check) rather than `query_selector`'s "returns `None` immediately if absent" semantics, since actions on a `FrameLocator`-scoped `Locator` (e.g. `.click()`) auto-wait/retry by default unlike `ElementHandle.click()`. Design this resolution helper carefully and **verify it manually against a real page before trusting it** — Phase 1's two bugs (button-presence vs. height, wrong-scope height check) both came from an untested assumption about a Playwright API's exact behavior; don't repeat that here with `Locator.count()`/auto-waiting semantics.
-- [ ] **`ScrapingPlanValidator`**: extend field validation for each of the four step types with the same Browser-only-when-`FramePath`-is-set guard.
+- [ ] **`ScrapingPlanValidator`**: extend field validation for each of the four step types with the same Browser-only-when-`FramePath`-is-set guard — reuse `ValidateFramePath` (added in Phase 3, already shared by `ExtractStep`/`GroupNode`/`DataFieldNode`) rather than writing a fourth copy of the same three checks.
 - [ ] **Tests**: `PythonPlaywrightScriptVerifierTests` cases for each of the four step types with `FramePath` set (e.g. a login form embedded via iframe, mirroring the existing `LoginFlow_FillsCredentialsFromEnvironmentAndClicksSubmit` test but with the form inside an iframe). Manually verify against a real page, not just `LocalTestServer`.
 
 ### Definition of done
@@ -241,7 +241,7 @@ Add the missing engine selection and browser-action configuration UI to the exte
 
 1. ~~Phase 1 (independent)~~ ✅ done
 2. ~~Phase 2 — flat `ExtractStep` FramePath (independent, but benefits from Phase 1's wire-format pattern existing first)~~ ✅ done
-3. Phase 3 — container-mode `FramePath` (needs Phase 2 merged)
+3. ~~Phase 3 — container-mode `FramePath` (needs Phase 2 merged)~~ ✅ done
 4. Phase 4 — action-step `FramePath` (needs Phase 2 merged; independent of Phase 3, either order/parallel is fine)
 5. Phase 5 — browser-engine UI baseline (needs Phase 1 merged for `BrowserActions` to exist; otherwise independent of 2/3/4)
 6. Phase 6 — ScrollStep UI (needs 1 + 5 merged)
