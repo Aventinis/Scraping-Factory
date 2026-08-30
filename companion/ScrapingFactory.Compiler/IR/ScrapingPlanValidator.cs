@@ -29,12 +29,13 @@ public static class ScrapingPlanValidator
             return Invalid($"Ungültige URL '{navigate.Url}': muss eine absolute http(s)-URL sein.");
         }
 
-        // WaitFor/Fill/Click all need a real browser to mean anything — the
-        // Static engine's codegen simply doesn't look at them, so silently
-        // generating a script that just drops them would be confusing.
-        var browserOnlySteps = plan.Steps.Where(step => step is WaitForStep or FillStep or ClickStep).ToList();
+        // WaitFor/Fill/Click/Scroll all need a real browser to mean anything —
+        // the Static engine's codegen simply doesn't look at them, so
+        // silently generating a script that just drops them would be
+        // confusing.
+        var browserOnlySteps = plan.Steps.Where(step => step is WaitForStep or FillStep or ClickStep or ScrollStep).ToList();
         if (plan.Engine != ScrapingEngine.Browser && browserOnlySteps.Count > 0)
-            return Invalid("WaitForStep/FillStep/ClickStep erfordern Engine 'Browser'.");
+            return Invalid("WaitForStep/FillStep/ClickStep/ScrollStep erfordern Engine 'Browser'.");
 
         foreach (var waitStep in plan.Steps.OfType<WaitForStep>())
         {
@@ -56,6 +57,18 @@ public static class ScrapingPlanValidator
         {
             if (string.IsNullOrWhiteSpace(clickStep.Selector))
                 return Invalid("Selector eines ClickStep darf nicht leer sein.");
+        }
+
+        foreach (var scrollStep in plan.Steps.OfType<ScrollStep>())
+        {
+            if (scrollStep.ContainerSelector is not null && string.IsNullOrWhiteSpace(scrollStep.ContainerSelector))
+                return Invalid("ContainerSelector eines ScrollStep darf, wenn gesetzt, nicht leer sein.");
+            if (scrollStep.LoadMoreButtonSelector is not null && string.IsNullOrWhiteSpace(scrollStep.LoadMoreButtonSelector))
+                return Invalid("LoadMoreButtonSelector eines ScrollStep darf, wenn gesetzt, nicht leer sein.");
+            if (scrollStep.MaxIterations <= 0)
+                return Invalid("MaxIterations eines ScrollStep muss positiv sein.");
+            if (scrollStep.WaitAfterMs < 0)
+                return Invalid("WaitAfterMs eines ScrollStep darf nicht negativ sein.");
         }
 
         // Container-Mode replaces the flat ExtractStep list wholesale — see
