@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechShop24 — Produktseite</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: #f4f5f7;
+      color: #232526;
+      padding: 32px 20px;
+    }
+
+    .page {
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    .site-name {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #1c3f5f;
+      margin-bottom: 24px;
+    }
+
+    .product-card {
+      background: #fff;
+      border: 1px solid #e4e7eb;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+    .product-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .product-sku {
+      color: #9aa3ad;
+      font-size: 0.8rem;
+      margin-bottom: 16px;
+    }
+
+    .widget-box {
+      border: 1px dashed #c7cdd4;
+      border-radius: 6px;
+      padding: 12px;
+      margin-top: 16px;
+    }
+    .widget-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+    iframe {
+      width: 100%;
+      border: none;
+    }
+
+    /* Content rendered when this document itself is loaded as an iframe
+       (?level=1 / ?level=2, see the script at the bottom) — same stylesheet,
+       reused for every level so all three documents look consistent. */
+    .marker-box {
+      background: #eef2f6;
+      border-radius: 6px;
+      padding: 14px 16px;
+    }
+    .marker-label {
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+    .marker-value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #1c3f5f;
+    }
+
+    .shadow-host {
+      margin-top: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="site-name">TechShop24</div>
+
+    <div class="product-card">
+      <div class="product-title">Funkkopfhörer Pro X</div>
+      <div class="product-sku">Art.-Nr. 88213-A</div>
+
+      <!--
+        Top-level marker: directly on this document, no iframe/shadow-DOM
+        involved. A sanity baseline for "does plain flat-mode extraction
+        still work on this page."
+      -->
+      <div class="marker-box">
+        <div class="marker-label">Preis (Top-Level)</div>
+        <div class="marker-value price-top-level">129,00 €</div>
+      </div>
+
+      <!--
+        Level 1: a single iframe, simulating a commonly-embedded
+        price-comparison widget. Its content is this same index.html,
+        loaded with ?level=1 (a real HTTP request/response, real separate
+        document — deliberately not an about:srcdoc iframe, which Chrome
+        extension content scripts do NOT get injected into, verified
+        directly rather than assumed; see PLAN-issues-41-42.md's Spike A
+        write-up for the methodology).
+      -->
+      <div class="widget-box">
+        <div class="widget-label">Preisvergleichs-Widget (iframe)</div>
+        <iframe id="price-widget" src="index.html?level=1" height="90" title="Preisvergleich"></iframe>
+      </div>
+
+      <!--
+        Shadow DOM: a "shipping badge" web-component-style widget, attached
+        via an open shadow root — no iframe involved. Playwright's own
+        selector engine pierces open shadow roots automatically for a plain
+        CSS selector, so this needs no FramePath at all (see Spike B).
+      -->
+      <div class="widget-box shadow-host">
+        <div class="widget-label">Versand-Badge (Shadow DOM)</div>
+        <div id="shipping-badge-host"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const level = new URLSearchParams(location.search).get('level');
+
+    if (!level) {
+      // Top-level document: attach the shadow-DOM shipping badge.
+      const host = document.getElementById('shipping-badge-host');
+      const shadow = host.attachShadow({ mode: 'open' });
+      shadow.innerHTML = `
+        <div class="marker-box">
+          <div class="marker-label">Versandkosten</div>
+          <div class="marker-value price-shadow">0,00 € (Prime)</div>
+        </div>
+      `;
+    } else if (level === '1') {
+      // Loaded as the level-1 iframe: replace the whole page with its own
+      // marker, plus a nested iframe (level 2) simulating e.g. a reviews
+      // widget embedded *inside* the price-comparison widget.
+      document.body.innerHTML = `
+        <div class="marker-box">
+          <div class="marker-label">Preis (im Iframe)</div>
+          <div class="marker-value price-in-iframe">124,50 €</div>
+        </div>
+        <div class="widget-box">
+          <div class="widget-label">Bewertungs-Widget (verschachteltes Iframe)</div>
+          <iframe id="reviews-widget" src="index.html?level=2" height="70" title="Bewertungen"></iframe>
+        </div>
+      `;
+    } else if (level === '2') {
+      // Loaded as the level-2, doubly-nested iframe.
+      document.body.innerHTML = `
+        <div class="marker-box">
+          <div class="marker-label">Bewertung (im verschachtelten Iframe)</div>
+          <div class="marker-value price-in-nested-iframe">4,7 / 5 (312 Bewertungen)</div>
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>

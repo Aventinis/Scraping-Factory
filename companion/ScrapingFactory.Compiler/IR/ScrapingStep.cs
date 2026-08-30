@@ -16,6 +16,16 @@ public sealed class ExtractStep : ScrapingStep
 
     // null = Textinhalt; "href", "src" usw. für Attribut-Extraktion
     public string? Attribute { get; init; }
+
+    // Browser-engine only (Issue #42): an ordered list of CSS selectors
+    // identifying each iframe from the top document down to the frame
+    // containing Selector, e.g. ["iframe#outer", "iframe.inner"] — null (the
+    // default) means Selector is evaluated against the top-level document,
+    // today's only behavior. Shadow DOM needs no such field: Playwright's own
+    // selector engine pierces open shadow roots automatically for a plain
+    // CSS selector passed to query_selector/query_selector_all/locator, so
+    // Selector alone is already enough there.
+    public List<string>? FramePath { get; init; }
 }
 
 // Browser-engine only: waits for a selector to appear before continuing,
