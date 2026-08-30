@@ -34,6 +34,11 @@ public sealed class WaitForStep : ScrapingStep
 {
     public required string Selector { get; init; }
     public int TimeoutMs { get; init; } = 5000;
+
+    // See ExtractStep.FramePath (Issue #42, Phase 4) — same "absolute path
+    // from the top document, resolved fresh regardless of any other step's
+    // own FramePath" semantic.
+    public List<string>? FramePath { get; init; }
 }
 
 // Browser-engine only: fills a form field, e.g. a login form's username or
@@ -44,6 +49,10 @@ public sealed class FillStep : ScrapingStep
 {
     public required string Selector { get; init; }
     public required string EnvironmentVariableName { get; init; }
+
+    // See ExtractStep.FramePath (Issue #42, Phase 4) — e.g. a login form
+    // embedded via an SSO iframe widget.
+    public List<string>? FramePath { get; init; }
 }
 
 // Browser-engine only: clicks an element, e.g. a login form's submit
@@ -52,6 +61,10 @@ public sealed class FillStep : ScrapingStep
 public sealed class ClickStep : ScrapingStep
 {
     public required string Selector { get; init; }
+
+    // See ExtractStep.FramePath (Issue #42, Phase 4) — e.g. a cookie-consent
+    // button that lives inside an iframe.
+    public List<string>? FramePath { get; init; }
 }
 
 // Browser-engine only: repeatedly scrolls (the whole page, or a specific
@@ -70,6 +83,11 @@ public sealed class ScrollStep : ScrapingStep
     public string? LoadMoreButtonSelector { get; init; }
     public int MaxIterations { get; init; } = 10;
     public int WaitAfterMs { get; init; } = 1000;
+
+    // See ExtractStep.FramePath (Issue #42, Phase 4) — applies to both
+    // ContainerSelector and LoadMoreButtonSelector, since a single ScrollStep
+    // already targets one specific area of one specific page/frame.
+    public List<string>? FramePath { get; init; }
 }
 
 // Container-Mode: replaces the flat list of ExtractSteps entirely when the

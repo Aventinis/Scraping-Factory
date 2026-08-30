@@ -34,9 +34,15 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
             .Select(step => step switch
             {
                 NavigateStep s => navigateTemplate.Render(new { step = new { url = s.Url } }),
-                WaitForStep s => waitTemplate.Render(new { step = new { selector = s.Selector, timeout_ms = s.TimeoutMs } }),
-                FillStep s => fillTemplate.Render(new { step = new { selector = s.Selector, env_var = s.EnvironmentVariableName } }),
-                ClickStep s => clickTemplate.Render(new { step = new { selector = s.Selector } }),
+                WaitForStep s => waitTemplate.Render(new
+                {
+                    step = new { selector = s.Selector, timeout_ms = s.TimeoutMs, frame_path = s.FramePath },
+                }),
+                FillStep s => fillTemplate.Render(new
+                {
+                    step = new { selector = s.Selector, env_var = s.EnvironmentVariableName, frame_path = s.FramePath },
+                }),
+                ClickStep s => clickTemplate.Render(new { step = new { selector = s.Selector, frame_path = s.FramePath } }),
                 ScrollStep s => scrollTemplate.Render(new
                 {
                     step = new
@@ -45,6 +51,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
                         load_more_button_selector = s.LoadMoreButtonSelector,
                         max_iterations = s.MaxIterations,
                         wait_after_ms = s.WaitAfterMs,
+                        frame_path = s.FramePath,
                     },
                 }),
                 _ => null,

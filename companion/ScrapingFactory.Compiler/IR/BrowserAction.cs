@@ -26,17 +26,20 @@ public sealed class WaitForAction : BrowserAction
 {
     public required string Selector { get; init; }
     public int TimeoutMs { get; init; } = 5000;
+    public List<string>? FramePath { get; init; }
 }
 
 public sealed class FillAction : BrowserAction
 {
     public required string Selector { get; init; }
     public required string EnvironmentVariableName { get; init; }
+    public List<string>? FramePath { get; init; }
 }
 
 public sealed class ClickAction : BrowserAction
 {
     public required string Selector { get; init; }
+    public List<string>? FramePath { get; init; }
 }
 
 public sealed class ScrollAction : BrowserAction
@@ -45,4 +48,5 @@ public sealed class ScrollAction : BrowserAction
     public string? LoadMoreButtonSelector { get; init; }
     public int MaxIterations { get; init; } = 10;
     public int WaitAfterMs { get; init; } = 1000;
+    public List<string>? FramePath { get; init; }
 }

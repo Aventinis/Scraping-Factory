@@ -360,6 +360,100 @@ public class ScrapingPlanValidatorTests
         Assert.Contains("WaitAfterMs", result.Error);
     }
 
+    // ── FramePath for Action Steps (Issue #42, Phase 4) ─────────────────────
+
+    [Fact]
+    public void Validate_ValidFramedActionSteps_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new FillStep { Selector = "#user", EnvironmentVariableName = "SF_USER", FramePath = ["iframe#sso"] },
+                new ClickStep { Selector = "#submit", FramePath = ["iframe#sso"] },
+                new WaitForStep { Selector = ".welcome", FramePath = ["iframe#sso"] },
+                new ScrollStep { LoadMoreButtonSelector = "#more", FramePath = ["iframe#sso"] },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_FramedWaitForStepWithEmptyFramePath_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new WaitForStep { Selector = ".welcome", FramePath = [] },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("FramePath", result.Error);
+    }
+
+    [Fact]
+    public void Validate_FramedFillStepWithBlankFramePathSegment_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new FillStep { Selector = "#user", EnvironmentVariableName = "SF_USER", FramePath = [" "] },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("FramePath", result.Error);
+    }
+
+    [Fact]
+    public void Validate_FramedClickStepWithEmptyFramePath_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ClickStep { Selector = "#submit", FramePath = [] },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("FramePath", result.Error);
+    }
+
+    [Fact]
+    public void Validate_FramedScrollStepWithEmptyFramePath_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ScrollStep { LoadMoreButtonSelector = "#more", FramePath = [] },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("FramePath", result.Error);
+    }
+
     [Fact]
     public void Validate_DuplicateFieldNames_Fails()
     {

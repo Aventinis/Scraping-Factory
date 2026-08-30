@@ -43,6 +43,9 @@ public static class ScrapingPlanValidator
                 return Invalid("Selector eines WaitForStep darf nicht leer sein.");
             if (waitStep.TimeoutMs <= 0)
                 return Invalid("Timeout eines WaitForStep muss positiv sein.");
+            var waitFrameError = ValidateFramePath(waitStep.FramePath, "WaitForStep", plan.Engine);
+            if (waitFrameError is not null)
+                return Invalid(waitFrameError);
         }
 
         foreach (var fillStep in plan.Steps.OfType<FillStep>())
@@ -51,12 +54,18 @@ public static class ScrapingPlanValidator
                 return Invalid("Selector eines FillStep darf nicht leer sein.");
             if (!EnvironmentVariableNamePattern.IsMatch(fillStep.EnvironmentVariableName))
                 return Invalid($"Ungültiger Umgebungsvariablen-Name '{fillStep.EnvironmentVariableName}' in FillStep.");
+            var fillFrameError = ValidateFramePath(fillStep.FramePath, "FillStep", plan.Engine);
+            if (fillFrameError is not null)
+                return Invalid(fillFrameError);
         }
 
         foreach (var clickStep in plan.Steps.OfType<ClickStep>())
         {
             if (string.IsNullOrWhiteSpace(clickStep.Selector))
                 return Invalid("Selector eines ClickStep darf nicht leer sein.");
+            var clickFrameError = ValidateFramePath(clickStep.FramePath, "ClickStep", plan.Engine);
+            if (clickFrameError is not null)
+                return Invalid(clickFrameError);
         }
 
         foreach (var scrollStep in plan.Steps.OfType<ScrollStep>())
@@ -69,6 +78,9 @@ public static class ScrapingPlanValidator
                 return Invalid("MaxIterations eines ScrollStep muss positiv sein.");
             if (scrollStep.WaitAfterMs < 0)
                 return Invalid("WaitAfterMs eines ScrollStep darf nicht negativ sein.");
+            var scrollFrameError = ValidateFramePath(scrollStep.FramePath, "ScrollStep", plan.Engine);
+            if (scrollFrameError is not null)
+                return Invalid(scrollFrameError);
         }
 
         // Container-Mode replaces the flat ExtractStep list wholesale — see
