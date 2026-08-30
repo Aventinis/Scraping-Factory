@@ -184,7 +184,7 @@ Extends `FramePath` support to `WaitForStep`/`FillStep`/`ClickStep`/`ScrollStep`
 
 ---
 
-## Phase 5 — Extension UI: Browser-engine baseline
+## Phase 5 — Extension UI: Browser-engine baseline — ✅ DONE
 
 **Branch:** `feature/browser-engine-ui`
 **Depends on:** nothing structurally (this closes a pre-existing gap independent of #41/#42), but do it after Phase 1 so `BrowserActions` (which this UI needs to populate) already exists on the wire format.
@@ -195,13 +195,25 @@ Add the missing engine selection and browser-action configuration UI to the exte
 
 ### Tasks
 
-- [ ] Add an engine selector (Static/Browser) to `extension/popup/popup.html`/`popup.js`, wired into `buildScrapingConfig`.
-- [ ] Add UI for configuring an ordered list of browser actions (`WaitForStep`/`FillStep`/`ClickStep`) when `Engine = Browser` is selected — reuse the existing credential/env-var UI pattern already used for API-mode headers (`FillStep`'s env-var value source) as precedent.
-- [ ] Wire this UI's output into the `BrowserActions` field of the request body sent to `/generate`.
+- [x] Engine selector (Static/Browser) added to `extension/popup/popup.html`/`popup.js` as a mode-independent `.mode-toggle`-styled control living outside the Fields/Groups/Api mode sections (new `_state.engine`, never touched by `switchMode`/`MODE_SWITCH_CLEARS` — see A) in the Phase 5 research notes this plan doc's history captured), wired into `buildScrapingConfig`.
+- [x] UI for an ordered list of browser actions (`WaitForStep`/`FillStep`/`ClickStep` — `ScrollStep` is explicitly Phase 6) shown only when `Engine = Browser`, via three "+ Warten/Ausfüllen/Klicken" buttons (kind fixed at creation, unlike the API-config parameter cards' "change the kind afterward" pattern — simpler since actions are created from scratch, not pre-existing). Each card's selector is set via the existing click-based `START_SELECTION`/`ELEMENT_SELECTED` flow (a new `selectionKind: 'browserAction'` + `pendingBrowserActionIndex`, writing straight into the action with no naming modal — same shape as container-mode's node-insertion branch). `FillStep`'s environment-variable-name input reuses the API-config-headers env-var text-input pattern (not the literal/env toggle itself, since a `FillStep`'s value is always an env var).
+- [x] Wired into the `/generate` request body: `buildScrapingConfig`/`buildConfigExport` both gained trailing `engine`/`browserActions` parameters, defaulting to `'Static'`/`[]` so **every existing call site and every existing test keeps producing byte-for-byte the same output as before this phase** — `engine` is only included in the wire payload at all when `'Browser'`, and `browserActions` only on top of that when non-empty (switching back to Static hides the section but doesn't clear configured actions, so nothing meaningless for Static ever reaches the wire — verified by a dedicated test).
+- [x] All i18n strings (new `idle.engine*` keys, new `browserActions.*` section) added to `de.json`/`en.json`/`es.json` — no hardcoded UI text (confirmed during research that i18n, not hardcoded German, is the current authoritative pattern for all new UI, contrary to CLAUDE.md's now-stale "stays in German" wording).
+
+### Manual, real-extension verification
+
+Same methodology as Phase 2's Spike A (load the actual unpacked extension into real headless Chromium via Playwright, drive the real side-panel page). Configured a complete login flow **entirely through the real UI** — engine toggle, two Fill actions (with env-var names), one Click, one WaitFor, each selector picked by actually clicking the target element on a real test page, plus a flat extraction field for the resulting `.welcome` element — then clicked the real "Skript generieren" button and captured the real `/generate` response (200 OK, meaning the companion's own internal verification already passed). Ran the generated script independently afterward: correctly filled credentials from environment variables, clicked submit, waited, and extracted `"Welcome, alice"`.
+
+Two things went wrong along the way — **both were artifacts of the Playwright driver script, not application bugs, and no application code changed as a result**:
+1. Using pre-fetched Playwright element handles (`query_selector_all(...)[i]`) for a "pick element" button click failed intermittently when an *unrelated* preceding action (typing an env-var name, then blurring it via the next click) triggered a re-render that replaced the DOM node the stale handle pointed to mid-click. Fixed by using `page.locator(...).nth(i).click()` (re-resolved at click time) instead — confirmed this is specifically an element-handle-staleness issue, not a real one: a real mouse click is position-based, not JS-reference-based, and lands on the re-rendered button (same shape, same position) without issue.
+2. The companion read the *popup's own* `chrome-extension://` URL instead of the test page's URL on the first attempt, because the popup tab (not the test page tab) was still `chrome.tabs`-"active" at the moment `checkCompanion()` ran. Fixed in the driver script by calling `bring_to_front()` on the test-page tab before letting the popup finish initializing — a real user never hits this, since their actual browser tab is naturally the active one while the side panel is open alongside it.
+
+Both are documented here specifically so a future session writing more Playwright-driven popup tests doesn't have to rediscover them.
 
 ### Definition of done
 
-- A user can, purely through the extension UI, configure a login flow (fill + click + wait) against a real page and download a working script — no direct companion API call needed.
+- [x] A user can, purely through the extension UI, configure a login flow (fill + click + wait) against a real page and download a working script — no direct companion API call needed.
+- [x] All new + existing tests green (401 extension tests; backend untouched by this phase, still 236).
 
 ---
 
@@ -244,7 +256,7 @@ Add the missing engine selection and browser-action configuration UI to the exte
 2. ~~Phase 2 — flat `ExtractStep` FramePath (independent, but benefits from Phase 1's wire-format pattern existing first)~~ ✅ done
 3. ~~Phase 3 — container-mode `FramePath` (needs Phase 2 merged)~~ ✅ done
 4. ~~Phase 4 — action-step `FramePath` (needs Phase 2 merged; independent of Phase 3, either order/parallel is fine)~~ ✅ done
-5. Phase 5 — browser-engine UI baseline (needs Phase 1 merged for `BrowserActions` to exist; otherwise independent of 2/3/4)
+5. ~~Phase 5 — browser-engine UI baseline (needs Phase 1 merged for `BrowserActions` to exist; otherwise independent of 2/3/4)~~ ✅ done
 6. Phase 6 — ScrollStep UI (needs 1 + 5 merged)
 7. Phase 7 — Iframe UI (needs 2 + 5 merged at minimum; more useful with 3/4 also merged)
 
