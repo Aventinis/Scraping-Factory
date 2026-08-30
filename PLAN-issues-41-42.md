@@ -240,7 +240,7 @@ Add the missing engine selection and browser-action configuration UI to the exte
 ## Suggested execution order
 
 1. ~~Phase 1 (independent)~~ ✅ done
-2. Phase 2 — flat `ExtractStep` FramePath (independent, but benefits from Phase 1's wire-format pattern existing first)
+2. ~~Phase 2 — flat `ExtractStep` FramePath (independent, but benefits from Phase 1's wire-format pattern existing first)~~ ✅ done
 3. Phase 3 — container-mode `FramePath` (needs Phase 2 merged)
 4. Phase 4 — action-step `FramePath` (needs Phase 2 merged; independent of Phase 3, either order/parallel is fine)
 5. Phase 5 — browser-engine UI baseline (needs Phase 1 merged for `BrowserActions` to exist; otherwise independent of 2/3/4)
