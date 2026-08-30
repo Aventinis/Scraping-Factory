@@ -20,7 +20,12 @@ let _state = {
   // Groups/Api, see A) in PLAN-issues-41-42.md's Phase 5 research) — never
   // touched by switchMode/MODE_SWITCH_CLEARS, unlike fields/groups/apiConfig.
   engine:              'Static', // 'Static' | 'Browser' — only sent to /generate when 'Browser' (see buildScrapingConfig)
-  browserActions:      [],  // [{kind:'waitFor'|'fill'|'click', selector, timeoutMs?, environmentVariableName?}], executed in order before extraction — Browser-engine only
+  // [{kind:'waitFor'|'fill'|'click', selector, timeoutMs?, environmentVariableName?} |
+  //  {kind:'scroll', containerSelector, loadMoreButtonSelector, maxIterations, waitAfterMs}],
+  // executed in order before extraction — Browser-engine only. Issue #41
+  // Phase 6 added 'scroll' — see also pendingBrowserActionField below, since
+  // it's the only kind with more than one pickable selector per card.
+  browserActions:      [],
   scriptFileName:      '', // base name (no extension) for the downloaded .py — empty = use the "scraper" placeholder/default
   outputFileName:      '', // base name (no extension) for the script's own output.csv/output.xml — empty = use the "output" placeholder/default
   scriptText:          '',
@@ -29,6 +34,10 @@ let _state = {
   pendingParentPath:   null,  // number[] | null — where the next inserted group-tree node goes; null = root level
   pendingNewContainer: null,  // {name, repeating} captured by modal-container-new before element-selection starts
   pendingBrowserActionIndex: null, // number | null — which browserActions entry the current SELECTING round's result is written into (selectionKind === 'browserAction')
+  // 'selector' | 'containerSelector' | 'loadMoreButtonSelector' — which
+  // property of that entry gets the picked value; only a ScrollStep action
+  // has more than one pickable field, everything else always uses 'selector'.
+  pendingBrowserActionField: 'selector',
   containerModalOpen:  false, // modal-container-new visibility
   domViewEnabled:    false, // user preference, kept across selection rounds
   domTree:           null,  // serialized tree from the content script, or null while loading/errored
@@ -166,14 +175,17 @@ function addField(fields, name, selector) {
   return [...fields, { name, selector, attribute: null }];
 }
 
-// Issue #41/#42, Phase 5: browser actions (WaitFor/Fill/Click, executed in
-// order before extraction) — same pure add/remove/update shape as
-// addField/removeField above, so setState() callers stay trivial.
+// Issue #41/#42, Phase 5/6: browser actions (WaitFor/Fill/Click/Scroll,
+// executed in order before extraction) — same pure add/remove/update shape
+// as addField/removeField above, so setState() callers stay trivial.
+// MaxIterations/WaitAfterMs default to the same values ScrollStep itself
+// defaults to server-side (IR/ScrapingStep.cs), kept in sync by hand.
 function addBrowserAction(actions, kind) {
   const defaults = {
     waitFor: { kind: 'waitFor', selector: '', timeoutMs: 5000 },
     fill:    { kind: 'fill', selector: '', environmentVariableName: '' },
     click:   { kind: 'click', selector: '' },
+    scroll:  { kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000 },
   };
   return [...actions, defaults[kind]];
 }
@@ -189,10 +201,22 @@ function updateBrowserAction(actions, index, patch) {
 // Picks exactly the wire-relevant fields per kind (companion's BrowserAction
 // variants, IR/BrowserAction.cs) — actions themselves are free to carry
 // extra UI-only bookkeeping later without it leaking into the request body.
+// ScrollStep's ContainerSelector/LoadMoreButtonSelector are nullable on the
+// server, and "set but blank" is rejected (ScrapingPlanValidator) — an
+// unpicked '' here must serialize to null, never ''.
 function serializeBrowserActions(actions) {
   return actions.map((a) => {
     if (a.kind === 'waitFor') return { kind: 'waitFor', selector: a.selector, timeoutMs: a.timeoutMs };
     if (a.kind === 'fill') return { kind: 'fill', selector: a.selector, environmentVariableName: a.environmentVariableName };
+    if (a.kind === 'scroll') {
+      return {
+        kind: 'scroll',
+        containerSelector: a.containerSelector || null,
+        loadMoreButtonSelector: a.loadMoreButtonSelector || null,
+        maxIterations: a.maxIterations,
+        waitAfterMs: a.waitAfterMs,
+      };
+    }
     return { kind: 'click', selector: a.selector };
   });
 }
@@ -507,6 +531,7 @@ function persistState() {
       pendingParentPath: _state.pendingParentPath,
       pendingNewContainer: _state.pendingNewContainer,
       pendingBrowserActionIndex: _state.pendingBrowserActionIndex,
+      pendingBrowserActionField: _state.pendingBrowserActionField,
       apiSearchTarget: _state.apiSearchTarget,
       apiConfigDraft: _state.apiConfigDraft,
       apiConfig: _state.apiConfig,
@@ -767,10 +792,10 @@ function renderFields(fields = _state.fields) {
   });
 }
 
-// Issue #41/#42, Phase 5. One card per action, kind fixed at creation time
-// (via btn-add-action-wait/-fill/-click) — unlike the API-config parameter
-// cards, there's no "change the kind afterward" control, since an action is
-// created from scratch by the user rather than pre-existing (see
+// Issue #41/#42, Phase 5/6. One card per action, kind fixed at creation time
+// (via btn-add-action-wait/-fill/-click/-scroll) — unlike the API-config
+// parameter cards, there's no "change the kind afterward" control, since an
+// action is created from scratch by the user rather than pre-existing (see
 // renderApiConfigParameters for that different case).
 function renderBrowserActions(actions = _state.browserActions) {
   const container = document.getElementById('browser-actions-list');
@@ -781,7 +806,24 @@ function renderBrowserActions(actions = _state.browserActions) {
     waitFor: t('browserActions.kindWaitFor'),
     fill: t('browserActions.kindFill'),
     click: t('browserActions.kindClick'),
+    scroll: t('browserActions.kindScroll'),
   };
+
+  // A single "pick element" row bound to a specific property of `action`
+  // (data-field) — every kind but 'scroll' has exactly one such row
+  // (property 'selector'); 'scroll' has two (containerSelector/
+  // loadMoreButtonSelector), both optional, see buildSelectorRow's callers.
+  function buildSelectorRow(index, field, value, label) {
+    const row = document.createElement('div');
+    row.className = 'browser-action-selector-row';
+    const selectorText = value || t('browserActions.noSelector');
+    const labelHtml = label ? `<label>${escapeHtml(label)}</label>` : '';
+    row.innerHTML =
+      labelHtml +
+      `<span class="field-selector" title="${escapeHtml(selectorText)}">${escapeHtml(selectorText)}</span>` +
+      `<button type="button" class="btn-secondary btn-tiny btn-pick-action-selector" data-index="${index}" data-field="${field}">${escapeHtml(t('browserActions.pickSelectorBtn'))}</button>`;
+    return row;
+  }
 
   actions.forEach((action, i) => {
     const card = document.createElement('div');
@@ -795,13 +837,24 @@ function renderBrowserActions(actions = _state.browserActions) {
       `<button type="button" class="btn-danger btn-remove-action" data-index="${i}">${escapeHtml(t('common.remove'))}</button>`;
     card.appendChild(header);
 
-    const selectorRow = document.createElement('div');
-    selectorRow.className = 'browser-action-selector-row';
-    const selectorText = action.selector || t('browserActions.noSelector');
-    selectorRow.innerHTML =
-      `<span class="field-selector" title="${escapeHtml(selectorText)}">${escapeHtml(selectorText)}</span>` +
-      `<button type="button" class="btn-secondary btn-tiny btn-pick-action-selector" data-index="${i}">${escapeHtml(t('browserActions.pickSelectorBtn'))}</button>`;
-    card.appendChild(selectorRow);
+    if (action.kind === 'scroll') {
+      card.appendChild(buildSelectorRow(i, 'containerSelector', action.containerSelector, t('browserActions.containerSelectorLabel')));
+      card.appendChild(buildSelectorRow(i, 'loadMoreButtonSelector', action.loadMoreButtonSelector, t('browserActions.loadMoreButtonSelectorLabel')));
+
+      const row = document.createElement('div');
+      row.className = 'browser-action-field-row';
+      row.innerHTML =
+        `<label>${escapeHtml(t('browserActions.maxIterationsLabel'))}</label>` +
+        `<input type="number" min="1" class="browser-action-max-iterations" data-index="${i}" value="${action.maxIterations}" />` +
+        `<label>${escapeHtml(t('browserActions.waitAfterMsLabel'))}</label>` +
+        `<input type="number" min="0" class="browser-action-wait-after-ms" data-index="${i}" value="${action.waitAfterMs}" />`;
+      card.appendChild(row);
+
+      container.appendChild(card);
+      return;
+    }
+
+    card.appendChild(buildSelectorRow(i, 'selector', action.selector, null));
 
     if (action.kind === 'waitFor') {
       const row = document.createElement('div');
@@ -2103,7 +2156,7 @@ function wireEvents() {
     const returnTo = _state.apiConfigDraft ? STATES.API_CONFIG : STATES.IDLE;
     setState(returnTo, {
       selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null,
-      pendingBrowserActionIndex: null, apiSearchTarget: null,
+      pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', apiSearchTarget: null,
     });
   });
 
@@ -2181,6 +2234,10 @@ function wireEvents() {
     log('BTN add-action-click');
     setState(_state.current, { browserActions: addBrowserAction(_state.browserActions, 'click') });
   });
+  document.getElementById('btn-add-action-scroll')?.addEventListener('click', () => {
+    log('BTN add-action-scroll');
+    setState(_state.current, { browserActions: addBrowserAction(_state.browserActions, 'scroll') });
+  });
 
   document.getElementById('browser-actions-list')?.addEventListener('click', (e) => {
     const removeBtn = e.target.closest('.btn-remove-action');
@@ -2193,11 +2250,12 @@ function wireEvents() {
     const pickBtn = e.target.closest('.btn-pick-action-selector');
     if (pickBtn) {
       const index = parseInt(pickBtn.dataset.index, 10);
-      log('BTN pick-action-selector → START_SELECTION', index);
+      const field = pickBtn.dataset.field; // 'selector' | 'containerSelector' | 'loadMoreButtonSelector' — see buildSelectorRow
+      log('BTN pick-action-selector → START_SELECTION', { index, field });
       stopPreviewIfActive();
       chrome.runtime.sendMessage({ type: 'START_SELECTION' });
       setState(STATES.SELECTING, {
-        pendingSelector: null, selectionKind: 'browserAction', pendingBrowserActionIndex: index,
+        pendingSelector: null, selectionKind: 'browserAction', pendingBrowserActionIndex: index, pendingBrowserActionField: field,
         domTree: null, domTreeTruncated: false, domTreeError: null,
       });
     }
@@ -2223,6 +2281,28 @@ function wireEvents() {
       setState(_state.current, {
         browserActions: updateBrowserAction(_state.browserActions, index, { environmentVariableName: envInput.value.trim() }),
       });
+      return;
+    }
+    const maxIterationsInput = e.target.closest('.browser-action-max-iterations');
+    if (maxIterationsInput) {
+      const index = parseInt(maxIterationsInput.dataset.index, 10);
+      const maxIterations = parseInt(maxIterationsInput.value, 10);
+      setState(_state.current, {
+        browserActions: updateBrowserAction(_state.browserActions, index, {
+          maxIterations: Number.isFinite(maxIterations) && maxIterations > 0 ? maxIterations : 10,
+        }),
+      });
+      return;
+    }
+    const waitAfterMsInput = e.target.closest('.browser-action-wait-after-ms');
+    if (waitAfterMsInput) {
+      const index = parseInt(waitAfterMsInput.dataset.index, 10);
+      const waitAfterMs = parseInt(waitAfterMsInput.value, 10);
+      setState(_state.current, {
+        browserActions: updateBrowserAction(_state.browserActions, index, {
+          waitAfterMs: Number.isFinite(waitAfterMs) && waitAfterMs >= 0 ? waitAfterMs : 1000,
+        }),
+      });
     }
   });
 
@@ -2234,7 +2314,7 @@ function wireEvents() {
       const returnTo = _state.apiConfigDraft ? STATES.API_CONFIG : STATES.IDLE;
       setState(returnTo, {
         selectionKind: null, pendingParentPath: null, pendingNewContainer: null,
-        pendingBrowserActionIndex: null, apiSearchTarget: null,
+        pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', apiSearchTarget: null,
       });
       showToast(t('toast.selectionUnavailable'));
     }
@@ -2259,11 +2339,15 @@ function wireEvents() {
         });
       } else if (_state.selectionKind === 'browserAction' && _state.pendingBrowserActionIndex !== null) {
         // The action card already exists (kind chosen when it was added via
-        // btn-add-action-*) — write the selector straight into it, no
+        // btn-add-action-*) — write the selector straight into the field
+        // the pick button was for (pendingBrowserActionField — always
+        // 'selector' except for a ScrollStep's two optional selectors), no
         // naming modal needed, same shape as the container branch above.
         setState(STATES.IDLE, {
-          browserActions: updateBrowserAction(_state.browserActions, _state.pendingBrowserActionIndex, { selector: message.selector }),
-          selectionKind: null, pendingBrowserActionIndex: null, pendingSelector: null,
+          browserActions: updateBrowserAction(_state.browserActions, _state.pendingBrowserActionIndex, {
+            [_state.pendingBrowserActionField]: message.selector,
+          }),
+          selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null,
         });
       } else {
         setState(STATES.SELECTING, { pendingSelector: message.selector });
@@ -2332,7 +2416,7 @@ async function init() {
   log('INIT reading session storage');
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'mode', 'groups',
-    'engine', 'browserActions', 'pendingBrowserActionIndex',
+    'engine', 'browserActions', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
     'scriptFileName', 'outputFileName',
@@ -2352,6 +2436,7 @@ async function init() {
   if (stored.pendingParentPath !== undefined) _state = { ..._state, pendingParentPath: stored.pendingParentPath };
   if (stored.pendingNewContainer)   _state = { ..._state, pendingNewContainer: stored.pendingNewContainer };
   if (stored.pendingBrowserActionIndex !== undefined) _state = { ..._state, pendingBrowserActionIndex: stored.pendingBrowserActionIndex };
+  if (stored.pendingBrowserActionField)   _state = { ..._state, pendingBrowserActionField: stored.pendingBrowserActionField };
   if (stored.apiConfigDraft)        _state = { ..._state, apiConfigDraft: stored.apiConfigDraft };
   if (stored.apiConfig)             _state = { ..._state, apiConfig: stored.apiConfig };
 
@@ -2388,11 +2473,12 @@ async function init() {
       // Same as the live ELEMENT_SELECTED path: the action card already
       // exists (kind chosen when it was added) — write the selector
       // straight into it, no naming modal needed.
-      log('INIT pending browser-action selector found → updating action', stored.pendingSelector);
-      const browserActions = updateBrowserAction(_state.browserActions, stored.pendingBrowserActionIndex, { selector: stored.pendingSelector });
+      const field = stored.pendingBrowserActionField || 'selector';
+      log('INIT pending browser-action selector found → updating action', { field, selector: stored.pendingSelector });
+      const browserActions = updateBrowserAction(_state.browserActions, stored.pendingBrowserActionIndex, { [field]: stored.pendingSelector });
       await chrome.storage.session.set({ browserActions });
       setState(STATES.IDLE, {
-        browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingSelector: null,
+        browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null,
       });
       return;
     }

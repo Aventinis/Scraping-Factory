@@ -166,14 +166,20 @@
     "addWaitBtn": "+ Esperar",
     "addFillBtn": "+ Rellenar",
     "addClickBtn": "+ Clic",
+    "addScrollBtn": "+ Desplazar",
     "kindWaitFor": "Esperar",
     "kindFill": "Rellenar",
     "kindClick": "Clic",
+    "kindScroll": "Desplazar",
     "noSelector": "Ningún elemento seleccionado",
     "pickSelectorBtn": "Seleccionar elemento",
     "timeoutLabel": "Tiempo de espera (ms)",
     "envVarLabel": "Variable de entorno",
     "envNamePlaceholder": "ENV_NAME",
-    "envVarHint": "El valor se lee de esta variable de entorno en tiempo de ejecución, nunca se guarda en el script."
+    "envVarHint": "El valor se lee de esta variable de entorno en tiempo de ejecución, nunca se guarda en el script.",
+    "containerSelectorLabel": "Contenedor (opcional)",
+    "loadMoreButtonSelectorLabel": "Botón \"Cargar más\" (opcional)",
+    "maxIterationsLabel": "Rondas máx.",
+    "waitAfterMsLabel": "Tiempo de espera (ms)"
   }
 }

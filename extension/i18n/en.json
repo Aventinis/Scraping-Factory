@@ -166,14 +166,20 @@
     "addWaitBtn": "+ Wait",
     "addFillBtn": "+ Fill",
     "addClickBtn": "+ Click",
+    "addScrollBtn": "+ Scroll",
     "kindWaitFor": "Wait",
     "kindFill": "Fill",
     "kindClick": "Click",
+    "kindScroll": "Scroll",
     "noSelector": "No element selected",
     "pickSelectorBtn": "Select element",
     "timeoutLabel": "Timeout (ms)",
     "envVarLabel": "Environment variable",
     "envNamePlaceholder": "ENV_NAME",
-    "envVarHint": "The value is read from this environment variable at runtime, never stored in the script."
+    "envVarHint": "The value is read from this environment variable at runtime, never stored in the script.",
+    "containerSelectorLabel": "Container (optional)",
+    "loadMoreButtonSelectorLabel": "\"Load more\" button (optional)",
+    "maxIterationsLabel": "Max. rounds",
+    "waitAfterMsLabel": "Wait time (ms)"
   }
 }
