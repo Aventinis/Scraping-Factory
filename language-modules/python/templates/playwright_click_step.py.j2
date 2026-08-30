@@ -1,1 +1,1 @@
-        page.click("{{ step.selector }}")
+        _resolve_locator(page, "{{ step.selector }}", {{ if step.frame_path }}[{{ for sel in step.frame_path }}"{{ sel }}"{{ if !for.last }}, {{ end }}{{ end }}]{{ else }}None{{ end }}).click()
