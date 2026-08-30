@@ -429,12 +429,109 @@ async function checkRobotsTxt() {
   }
 }
 
+// ── Cross-frame path resolution (Issue #42) ─────────────────────────────────
+// With all_frames:true (see manifest.json), this script runs once per frame
+// on the page, including every iframe (same-origin or not — cross-origin
+// injection was verified to work via a real loaded extension, see
+// PLAN-issues-41-42.md's Spike A). A click inside a nested frame needs a
+// "frame path" — an ordered list of CSS selectors identifying each iframe
+// from the top document down to the frame that was clicked in — so the
+// companion can later reach the same element via
+// page.frame_locator(sel1).frame_locator(sel2)....
+//
+// window.frameElement (which would give a frame its own containing <iframe>
+// element directly) only works for same-origin frames — cross-origin access
+// to it is blocked by the standard same-origin policy, same as any other
+// cross-origin DOM read, regardless of the content script's elevated
+// injection privileges. So this instead asks the parent frame (which always
+// has full access to its own DOM, including the <iframe> element embedding
+// this frame, since window.parent.postMessage/whichever <iframe> element's
+// .contentWindow matches this frame's window is not restricted by
+// same-origin) via postMessage, recursively up to the top document.
+
+const FRAME_PATH_SOURCE = 'sf-frame-path';
+const FRAME_PATH_TIMEOUT_MS = 2000;
+let framePathRequestId = 0;
+const pendingFramePathRequests = new Map();
+
+// Finds the <iframe> element in this frame's own document whose
+// contentWindow is `childWindow`, and returns a selector for it (reusing
+// buildSelector — an <iframe> is just another element in `document`) — or
+// null if no matching iframe is found (e.g. a request racing the frame's
+// removal from the DOM).
+function findIframeSelectorForWindow(childWindow) {
+  const iframes = document.getElementsByTagName('iframe');
+  for (const iframe of iframes) {
+    if (iframe.contentWindow === childWindow) return buildSelector(iframe, null, false);
+  }
+  return null;
+}
+
+// Resolves to the ordered list of iframe selectors from the top document
+// down to (but not including) the current frame — [] if this frame *is* the
+// top document (today's only case, unchanged default behavior), or null if
+// this frame is nested but a parent's reply never arrived in time
+// (practically only possible if a parent's own content script somehow isn't
+// running — Spike A showed the request/reply round trip itself is otherwise
+// effectively instant, even across cross-origin frames).
+function resolveFramePath() {
+  if (window === window.top) return Promise.resolve([]);
+
+  const requestId = ++framePathRequestId;
+  return new Promise((resolve) => {
+    const timeoutId = setTimeout(() => {
+      pendingFramePathRequests.delete(requestId);
+      log('FRAME_PATH request timed out', requestId);
+      resolve(null);
+    }, FRAME_PATH_TIMEOUT_MS);
+    pendingFramePathRequests.set(requestId, { resolve, timeoutId });
+    window.parent.postMessage({ source: FRAME_PATH_SOURCE, type: 'REQUEST', requestId }, '*');
+  });
+}
+
+// Registered in every frame — a frame only ever acts as the "parent" side
+// (REQUEST handling) when it actually has a nested child asking it, and only
+// ever acts as the "child" side (REQUEST sending / REPLY handling) when it
+// itself is nested — both roles can apply to the same frame at once for a
+// frame nested more than one level deep, so this listener always runs
+// regardless of this frame's own position in the tree.
+function handleFramePathMessage(event) {
+  const data = event.data;
+  if (!data || data.source !== FRAME_PATH_SOURCE) return;
+
+  if (data.type === 'REQUEST') {
+    const mySelectorForChild = findIframeSelectorForWindow(event.source);
+    if (mySelectorForChild === null) {
+      event.source.postMessage({ source: FRAME_PATH_SOURCE, type: 'REPLY', requestId: data.requestId, path: null }, '*');
+      return;
+    }
+    resolveFramePath().then((ownPath) => {
+      const path = ownPath === null ? null : [...ownPath, mySelectorForChild];
+      event.source.postMessage({ source: FRAME_PATH_SOURCE, type: 'REPLY', requestId: data.requestId, path }, '*');
+    });
+    return;
+  }
+
+  if (data.type === 'REPLY') {
+    const pending = pendingFramePathRequests.get(data.requestId);
+    if (!pending) return; // already timed out, or addressed to a different request
+    clearTimeout(pending.timeoutId);
+    pendingFramePathRequests.delete(data.requestId);
+    pending.resolve(data.path);
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('message', handleFramePathMessage);
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     buildSelector, elementPath, serializeDomTree,
     matchFlatFields, matchGroupTree, computePreviewMatches,
     findValueInJson, siblingFields, findApiCandidates, deriveItemsAndValuePath,
     parseRobotsTxt, evaluateRobotsTxt, checkRobotsTxt,
+    findIframeSelectorForWindow, resolveFramePath,
   };
 }
 
@@ -589,20 +686,34 @@ function flushHover() {
   }
 }
 
+// A click/mouseover on an element inside a shadow root gets its `target`
+// retargeted to the shadow *host* by the browser for any listener outside
+// that shadow tree (standard event-retargeting, applies to open and closed
+// roots alike, not something specific to this extension) — so e.target alone
+// would build a selector for the host, not the actual element the user
+// hovered/clicked. composedPath()[0] is the true, un-retargeted originating
+// element, including inside shadow trees; found via manual testing against
+// a real shadow-DOM element, not assumed (see PLAN-issues-41-42.md).
+function eventTargetElement(e) {
+  const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+  return path.length > 0 ? path[0] : e.target;
+}
+
 function onMouseOver(e) {
   if (e.target === overlay) return;
+  const target = eventTargetElement(e);
 
-  if (!isInScope(e.target)) {
+  if (!isInScope(target)) {
     // Out of scope — hide the highlight instead of pointing at an element
     // that couldn't be selected anyway.
     if (overlay) overlay.style.opacity = '0';
     return;
   }
   if (overlay) overlay.style.opacity = '1';
-  moveOverlayTo(e.target);
+  moveOverlayTo(target);
 
   if (!domViewEnabled) return;
-  pendingHoverTarget = e.target;
+  pendingHoverTarget = target;
   if (hoverTimeoutId === null) {
     hoverTimeoutId = setTimeout(flushHover, HOVER_THROTTLE_MS);
   }
@@ -611,17 +722,18 @@ function onMouseOver(e) {
 function onClick(e) {
   e.preventDefault();
   e.stopPropagation();
+  const target = eventTargetElement(e);
 
-  if (!isInScope(e.target)) {
+  if (!isInScope(target)) {
     // Stay in selection mode — the user just clicked outside the container
     // instance they're supposed to be picking a descendant of.
     log('CLICK outside scope, ignored');
     return;
   }
 
-  const selector = buildSelector(e.target, scopeRootEl, avoidIdInSelector);
+  const selector = buildSelector(target, scopeRootEl, avoidIdInSelector);
   const wasApiSearch = apiSearchActive; // read before stopSelection() clears it
-  const clickedText = (e.target.textContent || '').trim();
+  const clickedText = (target.textContent || '').trim();
   log('CLICK → selector', selector);
   stopSelection();
 
@@ -629,23 +741,31 @@ function onClick(e) {
   // a failure here block the actual field selection.
   let path;
   try {
-    path = elementPath(e.target);
+    path = elementPath(target);
   } catch (err) {
     log('elementPath failed', err.message);
   }
 
-  log('MSG_OUT ELEMENT_SELECTED', selector);
-  chrome.runtime.sendMessage({ type: 'ELEMENT_SELECTED', selector, path });
+  // null (not []) when this click happened in the top-level document — same
+  // "null = today's default, unchanged behavior" convention the companion's
+  // ExtractStep.FramePath uses.
+  resolveFramePath().then((framePath) => {
+    log('MSG_OUT ELEMENT_SELECTED', selector, framePath);
+    chrome.runtime.sendMessage({
+      type: 'ELEMENT_SELECTED', selector, path,
+      framePath: framePath && framePath.length > 0 ? framePath : null,
+    });
 
-  // API-mode search: additionally correlate the clicked element's text
-  // against Phase 3's recorded responses (see capturedApiEntries below) and
-  // report candidate JSON matches — on top of, not instead of, the CSS
-  // selector above.
-  if (wasApiSearch) {
-    const candidates = findApiCandidates(capturedApiEntries, clickedText);
-    log('MSG_OUT API_CANDIDATES', { target: clickedText, count: candidates.length });
-    chrome.runtime.sendMessage({ type: 'API_CANDIDATES', target: clickedText, candidates });
-  }
+    // API-mode search: additionally correlate the clicked element's text
+    // against Phase 3's recorded responses (see capturedApiEntries below)
+    // and report candidate JSON matches — on top of, not instead of, the CSS
+    // selector above.
+    if (wasApiSearch) {
+      const candidates = findApiCandidates(capturedApiEntries, clickedText);
+      log('MSG_OUT API_CANDIDATES', { target: clickedText, count: candidates.length });
+      chrome.runtime.sendMessage({ type: 'API_CANDIDATES', target: clickedText, candidates });
+    }
+  });
 }
 
 // scopeSelector (optional): Container-Mode passes the immediate parent
@@ -743,24 +863,41 @@ if (typeof window !== 'undefined') {
 
 // ── Message listener ──────────────────────────────────────────────────────────
 
+// With all_frames:true, every one of these messages arrives once per frame
+// on the page (chrome.tabs.sendMessage without a frameId broadcasts to all
+// of them). START_SELECTION/STOP_SELECTION genuinely need to run in every
+// frame — the frame the user actually hovers/clicks in is whichever one
+// reacts, and that can't be predicted in advance. Everything else here
+// operates on "the whole page" as a single concept (one DOM tree view, one
+// preview run, one log export, one robots.txt check) and must only ever run
+// once — without this guard, every frame would independently respond,
+// causing duplicate/garbled results (e.g. multiple frames racing to
+// sendResponse() for the same GET_LOGS request, only one of which wins
+// unpredictably).
+function isTopFrame() {
+  return window === window.top;
+}
+
 if (typeof chrome !== 'undefined' && chrome.runtime) {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     log('MSG_IN', message.type);
     if (message.type === 'START_SELECTION') startSelection(message.scopeSelector, message.avoidId, message.apiSearch);
     if (message.type === 'STOP_SELECTION')  stopSelection();
-    if (message.type === 'ENABLE_DOM_VIEW') enableDomView();
-    if (message.type === 'DISABLE_DOM_VIEW') disableDomView();
-    if (message.type === 'PREVIEW_START') startPreview(message.mode, message.fields, message.groups);
-    if (message.type === 'PREVIEW_STOP') stopPreview();
+    if (message.type === 'ENABLE_DOM_VIEW' && isTopFrame()) enableDomView();
+    if (message.type === 'DISABLE_DOM_VIEW' && isTopFrame()) disableDomView();
+    if (message.type === 'PREVIEW_START' && isTopFrame()) startPreview(message.mode, message.fields, message.groups);
+    if (message.type === 'PREVIEW_STOP' && isTopFrame()) stopPreview();
     if (message.type === 'API_CAPTURE_START' || message.type === 'API_CAPTURE_STOP') {
       log('API_CAPTURE forward to MAIN world', message.type);
       if (message.type === 'API_CAPTURE_START') capturedApiEntries = [];
       window.postMessage({ source: 'sf-api-capture-control', type: message.type }, '*');
     }
     if (message.type === 'GET_LOGS') {
+      if (!isTopFrame()) return;
       sendResponse(getLogBuffer());
     }
     if (message.type === 'CHECK_ROBOTS_TXT') {
+      if (!isTopFrame()) return;
       checkRobotsTxt().then(sendResponse);
       return true; // keep the message channel open for the async sendResponse above
     }
