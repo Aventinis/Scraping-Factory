@@ -203,6 +203,48 @@ public class PythonPlaywrightCodeGeneratorTests
         Assert.Contains("page.wait_for_timeout(500)", script);
     }
 
+    // ── FramePath (Issue #42) ───────────────────────────────────────────────
+
+    private static ScrapingPlan PlanWithFramedField() => new()
+    {
+        Engine = ScrapingEngine.Browser,
+        Steps =
+        [
+            new NavigateStep { Url = "https://example.com" },
+            new ExtractStep { Name = "Titel", Selector = "h3 > a" },
+            new ExtractStep { Name = "Preis", Selector = ".price", FramePath = ["iframe#outer", "iframe.inner"] },
+        ],
+    };
+
+    [Fact]
+    public void Generate_WithoutFramePath_FramePathsDictIsEmpty()
+    {
+        // _resolve_elements/frame_locator is always emitted (general-case
+        // Python, decided by data at runtime — see FRAME_PATHS.get(name)
+        // returning None for a field with no FramePath) rather than
+        // conditionally rendered, so this checks the dict content instead of
+        // absence of the helper itself.
+        var script = _generator.Generate(PlanWithoutWait());
+        Assert.Contains("FRAME_PATHS = {\n}", script.Replace("\r\n", "\n"));
+        Assert.Contains("_resolve_elements(page, sel, FRAME_PATHS.get(name))", script);
+    }
+
+    [Fact]
+    public void Generate_WithFramePath_OnlyFramedFieldAppearsInFramePathsDict()
+    {
+        var script = _generator.Generate(PlanWithFramedField());
+        Assert.Contains("\"Preis\": [\"iframe#outer\", \"iframe.inner\"]", script);
+        Assert.DoesNotContain("\"Titel\": [", script);
+    }
+
+    [Fact]
+    public void Generate_WithFramePath_ResolverChainsFrameLocatorCalls()
+    {
+        var script = _generator.Generate(PlanWithFramedField());
+        Assert.Contains("scope = scope.frame_locator(frame_selector)", script);
+        Assert.Contains("scope.locator(selector).all()", script);
+    }
+
     // ── Container-Mode ────────────────────────────────────────────────────
 
     private static ScrapingPlan GroupPlan() => new()

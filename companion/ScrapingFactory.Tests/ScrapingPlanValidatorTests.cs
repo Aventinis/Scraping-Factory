@@ -378,6 +378,92 @@ public class ScrapingPlanValidatorTests
         Assert.Contains("Titel", result.Error);
     }
 
+    // ── FramePath (Issue #42) ───────────────────────────────────────────────
+
+    [Fact]
+    public void Validate_ValidFramePath_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ExtractStep { Name = "Preis", Selector = ".price", FramePath = ["iframe#outer", "iframe.inner"] },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_FramePathWithStaticEngine_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Static,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ExtractStep { Name = "Preis", Selector = ".price", FramePath = ["iframe#outer"] },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Engine", result.Error);
+        Assert.Contains("Preis", result.Error);
+    }
+
+    [Fact]
+    public void Validate_EmptyFramePath_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ExtractStep { Name = "Preis", Selector = ".price", FramePath = [] },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("FramePath", result.Error);
+    }
+
+    [Fact]
+    public void Validate_FramePathWithBlankSegment_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ExtractStep { Name = "Preis", Selector = ".price", FramePath = ["iframe#outer", " "] },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("FramePath", result.Error);
+    }
+
+    [Fact]
+    public void Validate_NullFramePath_SucceedsWithStaticEngine()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Static,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
     // ── Container-Mode (ExtractGroupStep) ────────────────────────────────
 
     private static ScrapingPlan GroupPlan(List<GroupNode> roots, ScrapingEngine engine = ScrapingEngine.Static) => new()
