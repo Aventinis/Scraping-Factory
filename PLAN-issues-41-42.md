@@ -35,7 +35,7 @@ This plan is meant to survive across separate Claude Code sessions/conversations
 
 ## Decisions already locked in (do not re-litigate)
 
-1. **UI is phased separately from backend.** Phases 1 and 2 are backend/IR/codegen only, reachable via the companion HTTP API (like `curl`/manual `/generate` calls), not via the extension UI. Phases 3-5 add extension UI on top, once the backend exists.
+1. **UI is phased separately from backend.** Phases 1-4 are backend/IR/codegen only, reachable via the companion HTTP API (like `curl`/manual `/generate` calls), not via the extension UI. Phases 5-7 add extension UI on top, once the backend exists.
 2. **`ScrollStep` abort criterion:** combine a hard cap (`MaxIterations`) with an earlier stop signal — see "Design notes from Phase 1" below for what that signal actually needs to be (this evolved during implementation, learn from it before touching this code again).
 3. **Test pages are required, not optional**, and live under `test-pages/<name>/index.html`, one per issue, checked into the repo permanently (not throwaway).
 
@@ -96,12 +96,14 @@ Shadow DOM likely needs no codegen change (Playwright pierces it automatically f
 
 **Before writing any code here, read "Design notes from Phase 1" above** — the same class of "which document/element am I actually checking" bug is very likely to recur for frame-scoped actions/extraction.
 
-### Spike (do first, before committing to the full design below)
+### Spike (done — answers recorded below)
 
-- [ ] **Spike A — cross-origin iframes**: confirm whether a Manifest V3 content script with `matches: ["<all_urls>"]` and `all_frames: true` actually gets injected into cross-origin iframes (not just same-origin). Test manually with a throwaway page embedding a cross-origin iframe. Record the answer in this file before proceeding — if cross-origin iframes are *not* inspectable, the plan needs a documented, honest failure mode (clear error) instead of silent partial support.
-- [ ] **Spike B — Locator API migration scope**: `FrameLocator` (Playwright's iframe API) has no `query_selector_all`, only `Locator`-based methods (`.all()`, `.count()`, etc.), while today's extraction code uses `query_selector`/`query_selector_all` throughout. Decide: (a) migrate extraction to the `Locator` API universally (cleaner, bigger diff, touches both `playwright_scraper.py.j2` and `playwright_scraper_grouped.py.j2`), or (b) keep `query_selector` for the no-frame case and add a parallel `Locator`-based path only when `FramePath` is set (smaller diff, two code paths to maintain). Record the decision + reasoning in this file before proceeding.
+- [x] **Spike A — cross-origin iframes**: confirmed empirically, not just from docs. Built a throwaway extension (`matches: ["<all_urls>"]`, `all_frames: true`, a content script that stamps `document.documentElement.setAttribute('data-sf-injected', location.href)`), loaded it into a real headless Chromium via Playwright's `launch_persistent_context` (`--load-extension`/`--disable-extensions-except`), and pointed it at a top page on `http://127.0.0.1:9001` embedding an iframe served from `http://127.0.0.1:9002` (different port = different origin = genuinely cross-origin). The content script ran and mutated the DOM in **both** the top frame and the cross-origin iframe. **Conclusion: cross-origin iframes are fully inspectable** — content-script injection is governed purely by the frame's own URL matching `matches`, not by any relationship to the top frame's origin. No special `host_permissions` needed beyond what's already declared (`<all_urls>` already covers it). No fallback/error-messaging design is needed for this — it just works.
+- [x] **Spike B — Locator API migration scope**: confirmed via runtime introspection (`hasattr` on the actual installed Playwright Python classes) rather than assumption. `FrameLocator` has `.locator()` and `.frame_locator()` (for chaining into nested iframes) but genuinely no `query_selector`/`query_selector_all` — any frame-scoped access must use the `Locator` API, no way around that. The important discovery: `ElementHandle` (what `query_selector_all` returns today) and `Locator` (what `FrameLocator.locator(...).all()` returns) **share the same method names** for extraction — both have `.text_content()` and `.get_attribute(name)`. That means the extraction/attribute-reading code itself doesn't need to know or care which flavor of object it got; only the *selector-resolution* step (how to get from a CSS selector string to a list of element-like objects) needs to branch on whether `FramePath` is set. **Decision: option (b)** — keep `query_selector`/`query_selector_all` completely unchanged for the no-`FramePath` case (the vast majority of usage, and all of Phase 1's already-shipped, well-tested functionality), and add a small parallel resolver used only when `FramePath` is set, e.g. a template-level helper that chains `page.frame_locator(sel)...` and calls `.locator(selector).all()`, returning objects the existing downstream code (attribute/text extraction, CSV writing) can consume exactly like it already does for `ElementHandle`. Reasoning: option (a) (migrate everything to `Locator`) would touch every currently-shipped code path (flat, container, and Phase 1's `ScrollStep`/action steps) for a feature that's opt-in — unjustified blast radius and regression risk for functionality the diff doesn't need to touch.
 
-**OPEN DECISION** (resolve with user before starting IR/codegen work): should `FramePath` be added only to `ExtractStep` (flat mode), or also to container-mode nodes (`DataFieldNode`/`GroupNode`) and the browser-action steps from Phase 1 (`WaitForStep`/`FillStep`/`ClickStep`/`ScrollStep`, e.g. for clicking a cookie-consent button that lives inside an iframe)? This changes effort meaningfully — confirm scope, don't assume "everything" by default.
+### Scope decision (resolved with the user, 2026-08-30)
+
+`FramePath` in **this** phase is scoped to flat-mode `ExtractStep` only — the core case Issue #42 is actually about (extracting data that lives inside an iframe). Container-mode nodes (`DataFieldNode`/`GroupNode`) and the Phase 1 browser-action steps (`WaitForStep`/`FillStep`/`ClickStep`/`ScrollStep`) were deliberately *not* folded into this phase to keep it reviewable — but the user asked that they not be pushed to "the end" either. They're their own phases, **Phase 3** and **Phase 4** below, positioned immediately after this one (before the UI phases) since they're backend work that naturally belongs together with this phase rather than after the UI phases. Do Phase 3/4 back-to-back with Phase 2 if that's still the active train of thought when Phase 2 lands — no need to context-switch to UI work in between if backend momentum is there.
 
 ### Tasks
 
@@ -118,30 +120,76 @@ Shadow DOM likely needs no codegen change (Playwright pierces it automatically f
 
 - [ ] **Background service worker** (`extension/background/service-worker.js`): the popup→content-script relay currently targets the active tab without a `frameId`. Extend the relay to target the specific frame the selection came from (`chrome.tabs.sendMessage(tabId, message, { frameId })`), using `sender.frameId` from the originating message.
 
-- [ ] **IR**: add `FramePath` (`List<string>?`, default `null` = top-level document, unchanged behavior) to `ExtractStep` and to whichever other step/node types were confirmed in scope by the OPEN DECISION above.
+- [ ] **IR**: add `FramePath` (`List<string>?`, default `null` = top-level document, unchanged behavior) to `ExtractStep` only (see scope decision above).
 
-- [ ] **Codegen**: per the Spike B decision, emit a `page.frame_locator(sel1).frame_locator(sel2)...` chain (using Playwright's `Locator` API) for any extraction/action whose `FramePath` is set, in `playwright_scraper.py.j2` / `playwright_scraper_grouped.py.j2`'s `extract_group()` / the relevant `playwright_*_step.py.j2` fragments.
+- [ ] **Codegen**: per the Spike B decision, `playwright_scraper.py.j2`'s flat extraction gets a small resolver (chains `page.frame_locator(sel)...` via the `Locator` API when a field's `FramePath` is set, falls back to today's `query_selector_all` otherwise) — extraction/attribute-reading code itself stays unchanged, since `ElementHandle`/`Locator` share method names (see Spike B). Container-mode (`playwright_scraper_grouped.py.j2`) and the Phase 1 action-step fragments are explicitly untouched here — that's Phase 3/4.
 
-- [ ] **`ScrapingPlanValidator`**: reject a plan where `FramePath` is set on any step but `Engine != Browser`, with a clear message (mirror the existing Browser-only-step guard) — the static engine has no iframe/shadow-DOM support and should fail fast with a clear reason rather than a silent `422` from a selector that "just returns no data."
+- [ ] **`ScrapingPlanValidator`**: reject a plan where `FramePath` is set on an `ExtractStep` but `Engine != Browser`, with a clear message (mirror the existing Browser-only-step guard) — the static engine has no iframe/shadow-DOM support and should fail fast with a clear reason rather than a silent `422` from a selector that "just returns no data."
 
 - [ ] **Tests**: extend `PythonPlaywrightScriptVerifierTests.cs` with `LocalTestServer`-based cases for (a) shadow-DOM extraction with a plain selector (proving no codegen change was needed there), (b) single-iframe extraction via `FramePath`, (c) nested-iframe extraction via a two-element `FramePath`. Extend `ScrapingPlanValidatorTests.cs` for the Browser-only guard on `FramePath`. **Also manually verify against the real test page**, not just `LocalTestServer` — Phase 1 showed the synthetic server-based tests alone are not sufficient to catch scope/timing bugs.
 
 ### Definition of done
 
-- Spike A and B answers recorded in this file.
-- Manually confirmed against `test-pages/iframe-shadow-dom/index.html` that: shadow-DOM content is extracted without any `FramePath`; single- and nested-iframe content is extracted correctly using `FramePath` produced by the updated content script.
+- [x] Spike A and B answers recorded in this file.
+- [ ] Manually confirmed against `test-pages/iframe-shadow-dom/index.html` that: shadow-DOM content is extracted without any `FramePath`; single- and nested-iframe content is extracted correctly using `FramePath` produced by the updated content script.
+- [ ] All new + existing tests green.
+
+---
+
+## Phase 3 — `FramePath` for Container-Mode (Issue #42, extended scope)
+
+**Branch:** `feature/iframe-container-mode`
+**Depends on:** Phase 2 merged (needs `FramePath`'s IR shape and the `Locator`-based resolver helper to already exist and be proven working for the flat case before reusing the pattern recursively).
+
+### Scope
+
+Extends `FramePath` support to `DataFieldNode`/`GroupNode` so container-mode (nested group) extraction can also pull data out of an iframe — e.g. a menu/listing structure that itself lives inside an iframe, or where one nested group happens to be sourced from a different iframe than its siblings.
+
+### Tasks
+
+- [ ] **IR**: add `FramePath` (`List<string>?`, default `null`) to `DataFieldNode` and `GroupNode` (`IR/ContainerNode.cs`).
+- [ ] **Codegen**: `playwright_scraper_grouped.py.j2`'s `extract_group()` currently takes a single `scope` (either `page` or a previously-matched `ElementHandle`) and calls `scope.query_selector_all(node["selector"])`/`scope.query_selector(node["selector"])` uniformly. Extend it to resolve a per-node scope via the same `FramePath`-aware resolver introduced in Phase 2 when `node.get("frame_path")` is set, instead of using the inherited `scope` — needs a per-node decision, not just a whole-tree one, since only some nodes in a tree might be framed. Reuse `PythonGroupTreeLiteral` to bake `frame_path` into each node's dict literal alongside `selector`/`name`/etc.
+- [ ] **`ScrapingPlanValidator`**: extend `ValidateContainerNodes` with the same Browser-only-when-`FramePath`-is-set guard as `ExtractStep`.
+- [ ] **Tests**: `PythonGroupCodeGeneratorTests`/`PythonPlaywrightScriptVerifierTests` cases for a group tree with a framed node (and a mix of framed + non-framed siblings, since that's the actual point of doing this per-node instead of per-tree). Manually verify against an extended/reused iframe test page.
+
+### Definition of done
+
+- Container-mode extraction works correctly when one or more nodes in the tree have a `FramePath` set, including mixed framed/non-framed siblings in the same tree.
 - All new + existing tests green.
 
 ---
 
-## Phase 3 — Extension UI: Browser-engine baseline
+## Phase 4 — `FramePath` for Browser-Action Steps (Issue #42, extended scope)
+
+**Branch:** `feature/iframe-action-steps`
+**Depends on:** Phase 2 merged (same resolver-reuse rationale as Phase 3; independent of Phase 3 itself, could be done in either order or in parallel).
+
+### Scope
+
+Extends `FramePath` support to `WaitForStep`/`FillStep`/`ClickStep`/`ScrollStep` (Phase 1) — e.g. clicking a cookie-consent button that lives inside an iframe before extraction can proceed, or filling a login form embedded via iframe (a common real-world pattern, e.g. some SSO widgets).
+
+### Tasks
+
+- [ ] **IR**: add `FramePath` (`List<string>?`, default `null`) to `WaitForStep`, `FillStep`, `ClickStep`, `ScrollStep` (`IR/ScrapingStep.cs`), and to the matching wire-format `BrowserAction` variants (`IR/BrowserAction.cs`).
+- [ ] **Codegen**: unlike Phase 2/3's "get a list of elements" resolver, these steps need an "does exactly one element exist right now" resolution — `Locator.count()` (a synchronous, non-waiting check) rather than `query_selector`'s "returns `None` immediately if absent" semantics, since actions on a `FrameLocator`-scoped `Locator` (e.g. `.click()`) auto-wait/retry by default unlike `ElementHandle.click()`. Design this resolution helper carefully and **verify it manually against a real page before trusting it** — Phase 1's two bugs (button-presence vs. height, wrong-scope height check) both came from an untested assumption about a Playwright API's exact behavior; don't repeat that here with `Locator.count()`/auto-waiting semantics.
+- [ ] **`ScrapingPlanValidator`**: extend field validation for each of the four step types with the same Browser-only-when-`FramePath`-is-set guard.
+- [ ] **Tests**: `PythonPlaywrightScriptVerifierTests` cases for each of the four step types with `FramePath` set (e.g. a login form embedded via iframe, mirroring the existing `LoginFlow_FillsCredentialsFromEnvironmentAndClicksSubmit` test but with the form inside an iframe). Manually verify against a real page, not just `LocalTestServer`.
+
+### Definition of done
+
+- All four Phase 1 action steps can target a selector inside an iframe via `FramePath`, wired end-to-end from `BrowserActions` through to the generated script.
+- All new + existing tests green.
+
+---
+
+## Phase 5 — Extension UI: Browser-engine baseline
 
 **Branch:** `feature/browser-engine-ui`
 **Depends on:** nothing structurally (this closes a pre-existing gap independent of #41/#42), but do it after Phase 1 so `BrowserActions` (which this UI needs to populate) already exists on the wire format.
 
 ### Scope
 
-Add the missing engine selection and browser-action configuration UI to the extension — today `popup.js` never sends an `engine` field and there's no UI for `FillStep`/`ClickStep`/`WaitForStep` at all. This phase does **not** add Scroll- or iframe-specific UI yet (see Phases 4-5).
+Add the missing engine selection and browser-action configuration UI to the extension — today `popup.js` never sends an `engine` field and there's no UI for `FillStep`/`ClickStep`/`WaitForStep` at all. This phase does **not** add Scroll- or iframe-specific UI yet (see Phases 6-7).
 
 ### Tasks
 
@@ -155,14 +203,14 @@ Add the missing engine selection and browser-action configuration UI to the exte
 
 ---
 
-## Phase 4 — Extension UI: `ScrollStep` configuration
+## Phase 6 — Extension UI: `ScrollStep` configuration
 
 **Branch:** `feature/scroll-step-ui`
-**Depends on:** Phase 1 (backend) + Phase 3 (browser-action UI baseline)
+**Depends on:** Phase 1 (backend) + Phase 5 (browser-action UI baseline)
 
 ### Tasks
 
-- [ ] Add a "Scroll / Load more" action type to the browser-action list UI from Phase 3, with fields for container selector (optional, click-to-select like other selectors), load-more button selector (optional, click-to-select), max iterations, wait time.
+- [ ] Add a "Scroll / Load more" action type to the browser-action list UI from Phase 5, with fields for container selector (optional, click-to-select like other selectors), load-more button selector (optional, click-to-select), max iterations, wait time.
 - [ ] Manually verify end-to-end against `test-pages/infinite-scroll/index.html`.
 
 ### Definition of done
@@ -171,15 +219,15 @@ Add the missing engine selection and browser-action configuration UI to the exte
 
 ---
 
-## Phase 5 — Extension UI: Iframe/Shadow-DOM support
+## Phase 7 — Extension UI: Iframe/Shadow-DOM support
 
 **Branch:** `feature/iframe-ui`
-**Depends on:** Phase 2 (backend) + Phase 3 (browser-action UI baseline)
+**Depends on:** Phase 2 (backend, minimum) + Phase 5 (browser-action UI baseline). Phases 3/4 aren't a hard dependency but make this phase materially more useful (framed container/action-step configuration) — check whether they've landed and adjust scope accordingly.
 
 ### Tasks
 
 - [ ] Visual feedback during click-based selection when the hovered/clicked element is inside an iframe (analogous to the existing DOM tree highlighting) — at minimum, indicate the frame path being recorded.
-- [ ] Surface a clear error/warning in the UI for the cross-origin-iframe failure mode identified in Phase 2's Spike A, if applicable.
+- [ ] (Cross-origin iframes need no special-casing per Phase 2's Spike A — they're fully inspectable, so no fallback/error UI is needed for that case specifically.)
 - [ ] Manually verify end-to-end against `test-pages/iframe-shadow-dom/index.html`.
 
 ### Definition of done
@@ -191,9 +239,11 @@ Add the missing engine selection and browser-action configuration UI to the exte
 ## Suggested execution order
 
 1. ~~Phase 1 (independent)~~ ✅ done
-2. Phase 2 (independent, but benefits from Phase 1's wire-format pattern existing first)
-3. Phase 3 (independent, but needs Phase 1 merged for `BrowserActions` to exist)
-4. Phase 4 (needs 1 + 3 merged)
-5. Phase 5 (needs 2 + 3 merged)
+2. Phase 2 — flat `ExtractStep` FramePath (independent, but benefits from Phase 1's wire-format pattern existing first)
+3. Phase 3 — container-mode `FramePath` (needs Phase 2 merged)
+4. Phase 4 — action-step `FramePath` (needs Phase 2 merged; independent of Phase 3, either order/parallel is fine)
+5. Phase 5 — browser-engine UI baseline (needs Phase 1 merged for `BrowserActions` to exist; otherwise independent of 2/3/4)
+6. Phase 6 — ScrollStep UI (needs 1 + 5 merged)
+7. Phase 7 — Iframe UI (needs 2 + 5 merged at minimum; more useful with 3/4 also merged)
 
-Phases 2 and 3 can be worked in parallel by different sessions/branches if desired, since neither depends on the other.
+Phase 5 can be worked in parallel with Phases 2/3/4 by a different session/branch if desired, since it doesn't depend on any of them.
