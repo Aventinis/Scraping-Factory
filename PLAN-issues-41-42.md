@@ -217,19 +217,20 @@ Both are documented here specifically so a future session writing more Playwrigh
 
 ---
 
-## Phase 6 — Extension UI: `ScrollStep` configuration
+## Phase 6 — Extension UI: `ScrollStep` configuration — ✅ DONE
 
 **Branch:** `feature/scroll-step-ui`
 **Depends on:** Phase 1 (backend) + Phase 5 (browser-action UI baseline)
 
 ### Tasks
 
-- [ ] Add a "Scroll / Load more" action type to the browser-action list UI from Phase 5, with fields for container selector (optional, click-to-select like other selectors), load-more button selector (optional, click-to-select), max iterations, wait time.
-- [ ] Manually verify end-to-end against `test-pages/infinite-scroll/index.html`.
+- [x] "Scroll" action type added to the Phase 5 browser-action list UI (a fourth `+ Scrollen` button alongside Warten/Ausfüllen/Klicken), with container selector (optional, click-to-select), load-more-button selector (optional, click-to-select), max iterations and wait-time number inputs. Unlike Fill/Click/WaitFor (exactly one pickable selector per card), a Scroll card has *two* independently-pickable selectors — generalized the existing click-based pick mechanism with a new `pendingBrowserActionField` (`'selector' | 'containerSelector' | 'loadMoreButtonSelector'`, carried alongside the existing `pendingBrowserActionIndex`) instead of hardcoding which property `ELEMENT_SELECTED` writes into. `serializeBrowserActions` coerces an unpicked selector to `null`, never `''` — `ScrapingPlanValidator` rejects a "set but blank" `ContainerSelector`/`LoadMoreButtonSelector`, so sending `''` would silently 400 a perfectly valid single-selector Scroll configuration.
+- [x] Manually verified end-to-end against the real `test-pages/infinite-scroll/index.html`, through the real extension UI (not just `LocalTestServer`/direct `/generate` calls): configured two Scroll actions in one script (one `ContainerSelector="#feed"`, one `LoadMoreButtonSelector="#load-more-classifieds"`) plus two extraction fields, generated (200 OK), and ran the script independently — extracted the full, correct counts for both (47/47 posts, 18/18 ads), confirming both ScrollStep variants work through the complete UI → wire format → codegen → real-script pipeline.
 
 ### Definition of done
 
-- A user can configure infinite-scroll/load-more scraping entirely through the extension UI and download a working script.
+- [x] A user can configure infinite-scroll/load-more scraping entirely through the extension UI and download a working script.
+- [x] All new + existing tests green (407 extension tests; backend untouched by this phase, still 236).
 
 ---
 
@@ -257,7 +258,7 @@ Both are documented here specifically so a future session writing more Playwrigh
 3. ~~Phase 3 — container-mode `FramePath` (needs Phase 2 merged)~~ ✅ done
 4. ~~Phase 4 — action-step `FramePath` (needs Phase 2 merged; independent of Phase 3, either order/parallel is fine)~~ ✅ done
 5. ~~Phase 5 — browser-engine UI baseline (needs Phase 1 merged for `BrowserActions` to exist; otherwise independent of 2/3/4)~~ ✅ done
-6. Phase 6 — ScrollStep UI (needs 1 + 5 merged)
+6. ~~Phase 6 — ScrollStep UI (needs 1 + 5 merged)~~ ✅ done
 7. Phase 7 — Iframe UI (needs 2 + 5 merged at minimum; more useful with 3/4 also merged)
 
 Phase 5 can be worked in parallel with Phases 2/3/4 by a different session/branch if desired, since it doesn't depend on any of them.

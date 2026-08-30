@@ -166,14 +166,20 @@
     "addWaitBtn": "+ Warten",
     "addFillBtn": "+ Ausfüllen",
     "addClickBtn": "+ Klicken",
+    "addScrollBtn": "+ Scrollen",
     "kindWaitFor": "Warten",
     "kindFill": "Ausfüllen",
     "kindClick": "Klicken",
+    "kindScroll": "Scrollen",
     "noSelector": "Kein Element ausgewählt",
     "pickSelectorBtn": "Element auswählen",
     "timeoutLabel": "Timeout (ms)",
     "envVarLabel": "Umgebungsvariable",
     "envNamePlaceholder": "ENV_NAME",
-    "envVarHint": "Der Wert wird zur Laufzeit aus dieser Umgebungsvariable gelesen, nie im Skript gespeichert."
+    "envVarHint": "Der Wert wird zur Laufzeit aus dieser Umgebungsvariable gelesen, nie im Skript gespeichert.",
+    "containerSelectorLabel": "Container (optional)",
+    "loadMoreButtonSelectorLabel": "„Mehr laden“-Button (optional)",
+    "maxIterationsLabel": "Max. Durchläufe",
+    "waitAfterMsLabel": "Wartezeit (ms)"
   }
 }

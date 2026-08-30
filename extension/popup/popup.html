@@ -71,10 +71,11 @@
     .browser-action-card { padding: 8px; background: #f9fafb; border-radius: 6px; margin-bottom: 6px; }
     .browser-action-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
     .browser-action-selector-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-    .browser-action-selector-row .field-selector { background: #fff; border: 1px solid #e5e7eb; border-radius: 4px; padding: 3px 6px; }
+    .browser-action-selector-row label { flex: none; width: 60px; font-size: 11px; color: #6b7280; }
+    .browser-action-selector-row .field-selector { flex: 1; background: #fff; border: 1px solid #e5e7eb; border-radius: 4px; padding: 3px 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .browser-action-field-row { display: flex; align-items: center; gap: 6px; }
     .browser-action-field-row label { flex: none; font-size: 11px; color: #6b7280; }
-    .browser-action-field-row input { flex: 1; font-size: 11px; padding: 3px 6px; border: 1px solid #e5e7eb; border-radius: 4px; }
+    .browser-action-field-row input { flex: 1; min-width: 0; font-size: 11px; padding: 3px 6px; border: 1px solid #e5e7eb; border-radius: 4px; }
     .browser-action-hint { font-size: 10px; color: #9ca3af; margin: 4px 0 0; }
 
     /* Preview toggle */
@@ -326,6 +327,7 @@
           <button id="btn-add-action-wait" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.addWaitBtn"></button>
           <button id="btn-add-action-fill" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.addFillBtn"></button>
           <button id="btn-add-action-click" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.addClickBtn"></button>
+          <button id="btn-add-action-scroll" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.addScrollBtn"></button>
         </div>
       </div>
     </div>

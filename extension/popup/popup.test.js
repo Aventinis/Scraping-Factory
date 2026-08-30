@@ -325,6 +325,12 @@ describe('addBrowserAction', () => {
     expect(addBrowserAction([], 'click')).toEqual([{ kind: 'click', selector: '' }]);
   });
 
+  test('appends a scroll action with defaults (Issue #41, Phase 6)', () => {
+    expect(addBrowserAction([], 'scroll')).toEqual([
+      { kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000 },
+    ]);
+  });
+
   test('does not mutate original array', () => {
     const actions = [{ kind: 'click', selector: '#a' }];
     addBrowserAction(actions, 'waitFor');
@@ -381,6 +387,22 @@ describe('serializeBrowserActions', () => {
   test('drops UI-only extra fields not part of the wire shape', () => {
     const actions = [{ kind: 'click', selector: '#submit', someUiOnlyFlag: true }];
     expect(serializeBrowserActions(actions)).toEqual([{ kind: 'click', selector: '#submit' }]);
+  });
+
+  test('serializes a scroll action with both selectors set (Issue #41, Phase 6)', () => {
+    const actions = [{ kind: 'scroll', containerSelector: '#list', loadMoreButtonSelector: '#more', maxIterations: 5, waitAfterMs: 500 }];
+    expect(serializeBrowserActions(actions)).toEqual([
+      { kind: 'scroll', containerSelector: '#list', loadMoreButtonSelector: '#more', maxIterations: 5, waitAfterMs: 500 },
+    ]);
+  });
+
+  test('serializes an unpicked scroll selector as null, never empty string', () => {
+    // ScrapingPlanValidator rejects a "set but blank" ContainerSelector/
+    // LoadMoreButtonSelector — '' must never reach the wire.
+    const actions = [{ kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000 }];
+    const result = serializeBrowserActions(actions);
+    expect(result[0].containerSelector).toBeNull();
+    expect(result[0].loadMoreButtonSelector).toBeNull();
   });
 });
 
@@ -1734,6 +1756,7 @@ describe('Engine + browser actions integration', () => {
             <button id="btn-add-action-wait"></button>
             <button id="btn-add-action-fill"></button>
             <button id="btn-add-action-click"></button>
+            <button id="btn-add-action-scroll"></button>
           </div>
         </div>
         <button id="btn-generate" disabled></button>
@@ -1787,13 +1810,59 @@ describe('Engine + browser actions integration', () => {
     document.getElementById('btn-add-action-wait').click();
     document.getElementById('btn-add-action-fill').click();
     document.getElementById('btn-add-action-click').click();
+    document.getElementById('btn-add-action-scroll').click();
 
     const cards = document.querySelectorAll('.browser-action-card');
-    expect(cards).toHaveLength(3);
+    expect(cards).toHaveLength(4);
     expect(cards[0].querySelector('.browser-action-timeout')).not.toBeNull();
     expect(cards[1].querySelector('.browser-action-env-name')).not.toBeNull();
     expect(cards[2].querySelector('.browser-action-timeout')).toBeNull();
     expect(cards[2].querySelector('.browser-action-env-name')).toBeNull();
+    expect(cards[3].querySelectorAll('.btn-pick-action-selector')).toHaveLength(2);
+    expect(cards[3].querySelector('.browser-action-max-iterations')).not.toBeNull();
+    expect(cards[3].querySelector('.browser-action-wait-after-ms')).not.toBeNull();
+  });
+
+  test('a scroll card\'s two pick buttons target containerSelector/loadMoreButtonSelector independently', async () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-scroll').click();
+
+    // Re-query after every pick — each ELEMENT_SELECTED round re-renders
+    // #browser-actions-list from scratch, so a NodeList captured before a
+    // prior round is a snapshot of now-detached nodes (the exact "stale
+    // element handle" pitfall documented in the Phase 5 manual verification
+    // notes, here as a real jsdom analogue).
+    let pickButtons = document.querySelectorAll('.btn-pick-action-selector');
+    expect(pickButtons[0].dataset.field).toBe('containerSelector');
+    expect(pickButtons[1].dataset.field).toBe('loadMoreButtonSelector');
+
+    pickButtons[1].click(); // pick the load-more button first, on purpose
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#load-more' });
+    await flushMicrotasks();
+
+    pickButtons = document.querySelectorAll('.btn-pick-action-selector');
+    pickButtons[0].click(); // then the container — must not overwrite the first pick
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#list' });
+    await flushMicrotasks();
+
+    const selectorTexts = [...document.querySelectorAll('.browser-action-selector-row .field-selector')].map(el => el.textContent);
+    expect(selectorTexts).toEqual(['#list', '#load-more']);
+  });
+
+  test('editing a scroll action\'s maxIterations/waitAfterMs persists them into state', () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-scroll').click();
+
+    const maxIterationsInput = document.querySelector('.browser-action-max-iterations');
+    maxIterationsInput.value = '20';
+    maxIterationsInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const waitAfterMsInput = document.querySelector('.browser-action-wait-after-ms');
+    waitAfterMsInput.value = '2500';
+    waitAfterMsInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(document.querySelector('.browser-action-max-iterations').value).toBe('20');
+    expect(document.querySelector('.browser-action-wait-after-ms').value).toBe('2500');
   });
 
   test('removing an action drops only that card', () => {
@@ -1883,6 +1952,30 @@ describe('Engine + browser actions integration', () => {
       { kind: 'fill', selector: '#password', environmentVariableName: 'SF_PASSWORD' },
       { kind: 'click', selector: '#submit' },
       { kind: 'waitFor', selector: '.welcome', timeoutMs: 5000 },
+    ]);
+  });
+
+  test('a scroll action with only the load-more button picked is sent with containerSelector: null', async () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-scroll').click();
+
+    const pickButtons = document.querySelectorAll('.btn-pick-action-selector');
+    pickButtons[1].click(); // loadMoreButtonSelector only — containerSelector stays unset
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#load-more' });
+    await flushMicrotasks();
+
+    const maxIterationsInput = document.querySelector('.browser-action-max-iterations');
+    maxIterationsInput.value = '6';
+    maxIterationsInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    document.getElementById('btn-generate').disabled = false;
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const [, options] = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/generate'));
+    const body = JSON.parse(options.body);
+    expect(body.browserActions).toEqual([
+      { kind: 'scroll', containerSelector: null, loadMoreButtonSelector: '#load-more', maxIterations: 6, waitAfterMs: 1000 },
     ]);
   });
 });
