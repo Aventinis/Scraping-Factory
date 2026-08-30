@@ -251,6 +251,115 @@ public class ScrapingPlanValidatorTests
         Assert.Contains("ClickStep", result.Error);
     }
 
+    // ── ScrollStep ───────────────────────────────────────────────────────
+
+    [Fact]
+    public void Validate_ValidScrollStep_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ScrollStep { ContainerSelector = "#list", LoadMoreButtonSelector = ".more", MaxIterations = 5, WaitAfterMs = 500 },
+                new ExtractStep { Name = "Titel", Selector = ".item" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ScrollStepWithStaticEngine_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Static,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ScrollStep(),
+                new ExtractStep { Name = "Titel", Selector = ".item" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Engine", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ScrollStepWithBlankContainerSelector_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ScrollStep { ContainerSelector = " " },
+                new ExtractStep { Name = "Titel", Selector = ".item" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("ContainerSelector", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ScrollStepWithBlankLoadMoreButtonSelector_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ScrollStep { LoadMoreButtonSelector = " " },
+                new ExtractStep { Name = "Titel", Selector = ".item" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("LoadMoreButtonSelector", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ScrollStepWithNonPositiveMaxIterations_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ScrollStep { MaxIterations = 0 },
+                new ExtractStep { Name = "Titel", Selector = ".item" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("MaxIterations", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ScrollStepWithNegativeWaitAfterMs_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ScrollStep { WaitAfterMs = -1 },
+                new ExtractStep { Name = "Titel", Selector = ".item" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("WaitAfterMs", result.Error);
+    }
+
     [Fact]
     public void Validate_DuplicateFieldNames_Fails()
     {

@@ -129,4 +129,152 @@ public class PythonPlaywrightScriptVerifierTests
             Environment.SetEnvironmentVariable(passwordVar, null);
         }
     }
+
+    // Proves ScrollStep's actual point: content that only appears after
+    // repeated scrolling (infinite scroll), not just a single WaitForStep's
+    // worth of async-loaded content. The page loads 5 more .item elements
+    // per scroll event, up to 20 total — a plain single-pass extraction
+    // would only ever see the initial 5.
+    [Fact]
+    public async Task ScrollStep_InfiniteScroll_ExtractsAllItemsAcrossMultipleRounds()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+            <div id="list">
+              <div class="item">1</div>
+              <div class="item">2</div>
+              <div class="item">3</div>
+              <div class="item">4</div>
+              <div class="item">5</div>
+            </div>
+            <div style="height: 2000px;"></div>
+            <script>
+              var total = 20;
+              var loaded = 5;
+              window.addEventListener('scroll', function () {
+                if (loaded >= total) return;
+                var list = document.getElementById('list');
+                var next = Math.min(loaded + 5, total);
+                for (var i = loaded + 1; i <= next; i++) {
+                  var el = document.createElement('div');
+                  el.className = 'item';
+                  el.textContent = String(i);
+                  list.appendChild(el);
+                }
+                loaded = next;
+              });
+            </script>
+            </body></html>
+            """);
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = server.BaseUrl },
+                new ScrollStep { MaxIterations = 10, WaitAfterMs = 300 },
+                new ExtractStep { Name = "Item", Selector = ".item" },
+            ],
+        };
+        var script = Generator.Generate(plan);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(20, result.RowCount);
+    }
+
+    // Covers ContainerSelector specifically: a fixed-height, independently
+    // scrollable box (its own scrollbar, not the page's). Regression test
+    // for a real bug found via manual testing — the stop-condition check
+    // originally always measured document.body.scrollHeight, which never
+    // changes when a bounded sub-container grows internally, so scrolling
+    // stopped after the very first round.
+    [Fact]
+    public async Task ScrollStep_ContainerSelector_ExtractsAllItemsFromScrollableBox()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+            <div id="box" style="max-height: 40px; overflow-y: auto;">
+              <div class="item">1</div>
+              <div class="item">2</div>
+              <div class="item">3</div>
+            </div>
+            <script>
+              var total = 15;
+              var loaded = 3;
+              var box = document.getElementById('box');
+              box.addEventListener('scroll', function () {
+                if (loaded >= total) return;
+                var next = Math.min(loaded + 3, total);
+                for (var i = loaded + 1; i <= next; i++) {
+                  var el = document.createElement('div');
+                  el.className = 'item';
+                  el.textContent = String(i);
+                  box.appendChild(el);
+                }
+                loaded = next;
+              });
+            </script>
+            </body></html>
+            """);
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = server.BaseUrl },
+                new ScrollStep { ContainerSelector = "#box", MaxIterations = 10, WaitAfterMs = 300 },
+                new ExtractStep { Name = "Item", Selector = ".item" },
+            ],
+        };
+        var script = Generator.Generate(plan);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(15, result.RowCount);
+    }
+
+    // Covers the "load more" button variant of ScrollStep: the button
+    // appends more items per click and removes itself once everything is
+    // loaded — proving the generated script tolerates the button
+    // disappearing (page.query_selector returning None) instead of erroring.
+    [Fact]
+    public async Task ScrollStep_LoadMoreButton_ClicksUntilButtonDisappears()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+            <div id="list"><div class="item">1</div></div>
+            <button id="load-more" onclick="
+              var list = document.getElementById('list');
+              var count = list.children.length;
+              var next = Math.min(count + 3, 10);
+              for (var i = count + 1; i <= next; i++) {
+                var el = document.createElement('div');
+                el.className = 'item';
+                el.textContent = String(i);
+                list.appendChild(el);
+              }
+              if (next >= 10) { this.remove(); }
+            ">Mehr laden</button>
+            </body></html>
+            """);
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = server.BaseUrl },
+                new ScrollStep { LoadMoreButtonSelector = "#load-more", MaxIterations = 6, WaitAfterMs = 200 },
+                new ExtractStep { Name = "Item", Selector = ".item" },
+            ],
+        };
+        var script = Generator.Generate(plan);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(10, result.RowCount);
+    }
 }

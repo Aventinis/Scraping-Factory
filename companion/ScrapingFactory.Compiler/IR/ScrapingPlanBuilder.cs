@@ -11,6 +11,13 @@ public static class ScrapingPlanBuilder
     {
         var steps = new List<ScrapingStep> { new NavigateStep { Url = config.Url } };
 
+        // Browser actions run before extraction regardless of mode (Fields/
+        // Groups/Api) — same "runs first, extraction phase after differs"
+        // shape as a login flow already had via WaitFor/Fill/Click before
+        // BrowserActions gave them a wire path.
+        if (config.BrowserActions is { Count: > 0 } actions)
+            steps.AddRange(actions.Select(ToStep));
+
         // Sanitized once here, regardless of mode — see FileNameSanitizer for
         // why this happens server-side instead of trusting the wire payload.
         var scriptFileName = FileNameSanitizer.SanitizeBaseName(config.ScriptFileName, "scraper");
@@ -53,4 +60,19 @@ public static class ScrapingPlanBuilder
             ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
         };
     }
+
+    private static ScrapingStep ToStep(BrowserAction action) => action switch
+    {
+        WaitForAction a => new WaitForStep { Selector = a.Selector, TimeoutMs = a.TimeoutMs },
+        FillAction a => new FillStep { Selector = a.Selector, EnvironmentVariableName = a.EnvironmentVariableName },
+        ClickAction a => new ClickStep { Selector = a.Selector },
+        ScrollAction a => new ScrollStep
+        {
+            ContainerSelector = a.ContainerSelector,
+            LoadMoreButtonSelector = a.LoadMoreButtonSelector,
+            MaxIterations = a.MaxIterations,
+            WaitAfterMs = a.WaitAfterMs,
+        },
+        _ => throw new InvalidOperationException($"Unbekannter BrowserAction-Typ: {action.GetType().Name}"),
+    };
 }

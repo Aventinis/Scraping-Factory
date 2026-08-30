@@ -30,8 +30,9 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
 
     public async Task<ScriptVerificationResult> VerifyAsync(
         string script, OutputFormat outputFormat = OutputFormat.Csv, string outputFileBaseName = "output",
-        CancellationToken ct = default)
+        TimeSpan extraTimeout = default, CancellationToken ct = default)
     {
+        var effectiveTimeout = _timeout + extraTimeout;
         var workDir = Directory.CreateTempSubdirectory("scrapingfactory-verify-").FullName;
         try
         {
@@ -57,7 +58,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                 var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
 
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                timeoutCts.CancelAfter(_timeout);
+                timeoutCts.CancelAfter(effectiveTimeout);
                 try
                 {
                     await process.WaitForExitAsync(timeoutCts.Token);
@@ -68,7 +69,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                     return new ScriptVerificationResult
                     {
                         Success = false,
-                        Error = $"Skript-Ausführung hat das Zeitlimit von {_timeout.TotalSeconds:0}s überschritten.",
+                        Error = $"Skript-Ausführung hat das Zeitlimit von {effectiveTimeout.TotalSeconds:0}s überschritten.",
                     };
                 }
                 await stdoutTask;
