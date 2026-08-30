@@ -80,7 +80,7 @@ public static class ScrapingPlanValidator
             if (extractGroupStep.Roots.Count == 0)
                 return Invalid("ExtractGroupStep muss mindestens eine Gruppe enthalten.");
 
-            var groupError = ValidateContainerNodes(extractGroupStep.Roots);
+            var groupError = ValidateContainerNodes(extractGroupStep.Roots, plan.Engine);
             return groupError is null ? new PlanValidationResult { Success = true } : Invalid(groupError);
         }
 
@@ -107,15 +107,9 @@ public static class ScrapingPlanValidator
             // FramePath is Browser-engine-only, unlike ExtractStep itself
             // (used by both engines) — so this can't join browserOnlySteps
             // above, which gates on step *type*, not a per-step property.
-            if (step.FramePath is not null)
-            {
-                if (plan.Engine != ScrapingEngine.Browser)
-                    return Invalid($"FramePath für Feld '{step.Name}' erfordert Engine 'Browser'.");
-                if (step.FramePath.Count == 0)
-                    return Invalid($"FramePath für Feld '{step.Name}' darf, wenn gesetzt, nicht leer sein.");
-                if (step.FramePath.Any(string.IsNullOrWhiteSpace))
-                    return Invalid($"FramePath für Feld '{step.Name}' darf keine leeren Segmente enthalten.");
-            }
+            var frameError = ValidateFramePath(step.FramePath, $"Feld '{step.Name}'", plan.Engine);
+            if (frameError is not null)
+                return Invalid(frameError);
         }
 
         var duplicateNames = FindDuplicates(extractSteps, step => step.Name);
@@ -137,7 +131,7 @@ public static class ScrapingPlanValidator
     // than once — same laissez-faire as CSS selector syntax elsewhere in
     // this validator (see class doc comment): a bad tag name surfaces as a
     // real Python exception via PythonScriptVerifier, not here.
-    private static string? ValidateContainerNodes(IEnumerable<ContainerNode> nodes)
+    private static string? ValidateContainerNodes(IEnumerable<ContainerNode> nodes, ScrapingEngine engine)
     {
         foreach (var node in nodes)
         {
@@ -149,7 +143,10 @@ public static class ScrapingPlanValidator
                 case GroupNode group:
                     if (string.IsNullOrWhiteSpace(group.Selector))
                         return $"Selector der Gruppe '{group.Name}' darf nicht leer sein.";
-                    var childError = ValidateContainerNodes(group.Children);
+                    var groupFrameError = ValidateFramePath(group.FramePath, $"Gruppe '{group.Name}'", engine);
+                    if (groupFrameError is not null)
+                        return groupFrameError;
+                    var childError = ValidateContainerNodes(group.Children, engine);
                     if (childError is not null)
                         return childError;
                     break;
@@ -159,9 +156,28 @@ public static class ScrapingPlanValidator
                         return $"Selector des Datenfelds '{field.Name}' darf nicht leer sein.";
                     if (field.Mode == ExtractMode.Attribute && string.IsNullOrWhiteSpace(field.Attribute))
                         return $"Datenfeld '{field.Name}' mit Modus 'Attribute' braucht ein Attribut.";
+                    var fieldFrameError = ValidateFramePath(field.FramePath, $"Datenfeld '{field.Name}'", engine);
+                    if (fieldFrameError is not null)
+                        return fieldFrameError;
                     break;
             }
         }
+        return null;
+    }
+
+    // Shared by ExtractStep.FramePath and GroupNode/DataFieldNode.FramePath
+    // (Issue #42) — same three checks regardless of which node type carries
+    // the FramePath.
+    private static string? ValidateFramePath(List<string>? framePath, string context, ScrapingEngine engine)
+    {
+        if (framePath is null)
+            return null;
+        if (engine != ScrapingEngine.Browser)
+            return $"FramePath für {context} erfordert Engine 'Browser'.";
+        if (framePath.Count == 0)
+            return $"FramePath für {context} darf, wenn gesetzt, nicht leer sein.";
+        if (framePath.Any(string.IsNullOrWhiteSpace))
+            return $"FramePath für {context} darf keine leeren Segmente enthalten.";
         return null;
     }
 
