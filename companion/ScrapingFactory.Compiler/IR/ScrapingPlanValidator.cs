@@ -103,6 +103,19 @@ public static class ScrapingPlanValidator
                 return Invalid("Feldname darf nicht leer sein.");
             if (string.IsNullOrWhiteSpace(step.Selector))
                 return Invalid($"Selector für Feld '{step.Name}' darf nicht leer sein.");
+
+            // FramePath is Browser-engine-only, unlike ExtractStep itself
+            // (used by both engines) — so this can't join browserOnlySteps
+            // above, which gates on step *type*, not a per-step property.
+            if (step.FramePath is not null)
+            {
+                if (plan.Engine != ScrapingEngine.Browser)
+                    return Invalid($"FramePath für Feld '{step.Name}' erfordert Engine 'Browser'.");
+                if (step.FramePath.Count == 0)
+                    return Invalid($"FramePath für Feld '{step.Name}' darf, wenn gesetzt, nicht leer sein.");
+                if (step.FramePath.Any(string.IsNullOrWhiteSpace))
+                    return Invalid($"FramePath für Feld '{step.Name}' darf keine leeren Segmente enthalten.");
+            }
         }
 
         var duplicateNames = FindDuplicates(extractSteps, step => step.Name);
