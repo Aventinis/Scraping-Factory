@@ -277,4 +277,135 @@ public class PythonPlaywrightScriptVerifierTests
         Assert.True(result.Success, result.Error);
         Assert.Equal(10, result.RowCount);
     }
+
+    // ── FramePath / Shadow DOM (Issue #42) ──────────────────────────────────
+
+    // Regression/verification test for Spike B's finding: Playwright's own
+    // selector engine pierces open shadow roots automatically for a plain
+    // CSS selector passed to query_selector_all — no FramePath, no codegen
+    // change, this should just work already.
+    [Fact]
+    public async Task ShadowDom_ExtractsDataWithoutFramePath()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+            <div id="host"></div>
+            <script>
+              var host = document.getElementById('host');
+              var shadow = host.attachShadow({ mode: 'open' });
+              var el = document.createElement('div');
+              el.className = 'price';
+              el.textContent = '17';
+              shadow.appendChild(el);
+            </script>
+            </body></html>
+            """);
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = server.BaseUrl },
+                new ExtractStep { Name = "Preis", Selector = ".price" },
+            ],
+        };
+        var script = Generator.Generate(plan);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(1, result.RowCount);
+    }
+
+    [Fact]
+    public async Task FramePath_SingleIframe_ExtractsDataFromInsideIframe()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var html = request.Url!.AbsolutePath switch
+            {
+                "/inner" => "<html><body><div class='price'>42</div></body></html>",
+                _ => "<html><body><iframe id='outer' src='/inner'></iframe></body></html>",
+            };
+            return new LocalTestServerResponse(html, "text/html; charset=utf-8");
+        });
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = server.BaseUrl },
+                new ExtractStep { Name = "Preis", Selector = ".price", FramePath = ["#outer"] },
+            ],
+        };
+        var script = Generator.Generate(plan);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(1, result.RowCount);
+    }
+
+    [Fact]
+    public async Task FramePath_NestedIframe_ExtractsDataFromDoublyNestedIframe()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var html = request.Url!.AbsolutePath switch
+            {
+                "/inner" => "<html><body><div class='price'>99</div></body></html>",
+                "/mid" => "<html><body><iframe id='inner-frame' src='/inner'></iframe></body></html>",
+                _ => "<html><body><iframe id='outer' src='/mid'></iframe></body></html>",
+            };
+            return new LocalTestServerResponse(html, "text/html; charset=utf-8");
+        });
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = server.BaseUrl },
+                new ExtractStep { Name = "Preis", Selector = ".price", FramePath = ["#outer", "#inner-frame"] },
+            ],
+        };
+        var script = Generator.Generate(plan);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(1, result.RowCount);
+    }
+
+    // Extracting a mix of framed and non-framed fields in the same request —
+    // proves FRAME_PATHS.get(name) correctly falls back to the plain
+    // query_selector_all path per-field, not plan-wide.
+    [Fact]
+    public async Task FramePath_MixedFramedAndUnframedFields_ExtractsBoth()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var html = request.Url!.AbsolutePath switch
+            {
+                "/inner" => "<html><body><div class='price'>7</div></body></html>",
+                _ => "<html><body><h1 class='title'>Top-Level Titel</h1><iframe id='outer' src='/inner'></iframe></body></html>",
+            };
+            return new LocalTestServerResponse(html, "text/html; charset=utf-8");
+        });
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = server.BaseUrl },
+                new ExtractStep { Name = "Titel", Selector = ".title" },
+                new ExtractStep { Name = "Preis", Selector = ".price", FramePath = ["#outer"] },
+            ],
+        };
+        var script = Generator.Generate(plan);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(1, result.RowCount);
+    }
 }
