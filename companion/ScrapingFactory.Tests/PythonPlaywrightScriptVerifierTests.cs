@@ -408,4 +408,100 @@ public class PythonPlaywrightScriptVerifierTests
         Assert.True(result.Success, result.Error);
         Assert.Equal(1, result.RowCount);
     }
+
+    // ── Container-Mode FramePath (Issue #42, Phase 3) ───────────────────────
+
+    private static string GenerateGroupedScript(string url, GroupNode root)
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps = [new NavigateStep { Url = url }, new ExtractGroupStep { Roots = [root] }],
+        };
+        return Generator.Generate(plan);
+    }
+
+    // The group's own selector matches inside an iframe — its children (not
+    // individually framed) are extracted relative to each matched instance,
+    // exactly as if the group had never been framed at all, since a matched
+    // instance is converted to an ElementHandle right after resolution (see
+    // playwright_scraper_grouped.py.j2's _resolve_group_matches).
+    [Fact]
+    public async Task FramedGroup_ExtractsChildrenFromWithinTheIframe()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var html = request.Url!.AbsolutePath switch
+            {
+                "/inner" => """
+                    <html><body>
+                    <section class="cat"><h2>Suppe</h2></section>
+                    <section class="cat"><h2>Salat</h2></section>
+                    </body></html>
+                    """,
+                _ => "<html><body><iframe id='widget' src='/inner'></iframe></body></html>",
+            };
+            return new LocalTestServerResponse(html, "text/html; charset=utf-8");
+        });
+        var root = new GroupNode
+        {
+            Name = "Kategorie",
+            Selector = ".cat",
+            Repeating = true,
+            FramePath = ["#widget"],
+            Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }],
+        };
+        var script = GenerateGroupedScript(server.BaseUrl, root);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Xml);
+
+        Assert.True(result.Success, result.Error);
+        // 2 <Kategorie> + 2 <Titel> = 4
+        Assert.Equal(4, result.RowCount);
+    }
+
+    // A group repeats on the top-level page (unframed, existing behavior),
+    // but one of its child fields is sourced from a single, separate iframe
+    // widget shared across every instance (e.g. a currency rate shown once,
+    // applied to every row) — proves per-node FramePath, not per-tree: the
+    // plain sibling field still resolves against each matched instance,
+    // while the framed sibling always resolves the same absolute path
+    // regardless of which instance is currently being processed.
+    [Fact]
+    public async Task MixedFramedAndUnframedSiblingFields_ExtractsBoth()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var html = request.Url!.AbsolutePath switch
+            {
+                "/rate" => "<html><body><div class='value'>1,08 USD</div></body></html>",
+                _ => """
+                    <html><body>
+                    <section class="cat"><h2>Suppe</h2></section>
+                    <section class="cat"><h2>Salat</h2></section>
+                    <iframe id="rate" src="/rate"></iframe>
+                    </body></html>
+                    """,
+            };
+            return new LocalTestServerResponse(html, "text/html; charset=utf-8");
+        });
+        var root = new GroupNode
+        {
+            Name = "Kategorie",
+            Selector = ".cat",
+            Repeating = true,
+            Children =
+            [
+                new DataFieldNode { Name = "Titel", Selector = "h2" },
+                new DataFieldNode { Name = "Kurs", Selector = ".value", FramePath = ["#rate"] },
+            ],
+        };
+        var script = GenerateGroupedScript(server.BaseUrl, root);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Xml);
+
+        Assert.True(result.Success, result.Error);
+        // 2 <Kategorie> + 2 <Titel> + 2 <Kurs> = 6
+        Assert.Equal(6, result.RowCount);
+    }
 }

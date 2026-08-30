@@ -583,6 +583,104 @@ public class ScrapingPlanValidatorTests
         Assert.Contains("Link", result.Error);
     }
 
+    // ── Container-Mode FramePath (Issue #42, Phase 3) ───────────────────────
+
+    [Fact]
+    public void Validate_ValidFramedDataFieldNode_Succeeds()
+    {
+        var roots = new List<GroupNode>
+        {
+            new()
+            {
+                Name = "Kategorie", Selector = "section", Repeating = true,
+                Children = [new DataFieldNode { Name = "Preis", Selector = ".price", FramePath = ["iframe#widget"] }],
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(GroupPlan(roots, ScrapingEngine.Browser));
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ValidFramedGroupNode_Succeeds()
+    {
+        var roots = new List<GroupNode>
+        {
+            new()
+            {
+                Name = "Kategorie", Selector = "section", Repeating = true, FramePath = ["iframe#widget"],
+                Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }],
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(GroupPlan(roots, ScrapingEngine.Browser));
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_FramedDataFieldNodeWithStaticEngine_Fails()
+    {
+        var roots = new List<GroupNode>
+        {
+            new()
+            {
+                Name = "Kategorie", Selector = "section", Repeating = true,
+                Children = [new DataFieldNode { Name = "Preis", Selector = ".price", FramePath = ["iframe#widget"] }],
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(GroupPlan(roots, ScrapingEngine.Static));
+        Assert.False(result.Success);
+        Assert.Contains("Engine", result.Error);
+        Assert.Contains("Preis", result.Error);
+    }
+
+    [Fact]
+    public void Validate_FramedGroupNodeWithStaticEngine_Fails()
+    {
+        var roots = new List<GroupNode>
+        {
+            new()
+            {
+                Name = "Kategorie", Selector = "section", Repeating = true, FramePath = ["iframe#widget"],
+                Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }],
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(GroupPlan(roots, ScrapingEngine.Static));
+        Assert.False(result.Success);
+        Assert.Contains("Engine", result.Error);
+        Assert.Contains("Kategorie", result.Error);
+    }
+
+    [Fact]
+    public void Validate_EmptyFramePathOnDataFieldNode_Fails()
+    {
+        var roots = new List<GroupNode>
+        {
+            new()
+            {
+                Name = "Kategorie", Selector = "section", Repeating = true,
+                Children = [new DataFieldNode { Name = "Preis", Selector = ".price", FramePath = [] }],
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(GroupPlan(roots, ScrapingEngine.Browser));
+        Assert.False(result.Success);
+        Assert.Contains("FramePath", result.Error);
+    }
+
+    [Fact]
+    public void Validate_FramePathWithBlankSegmentOnGroupNode_Fails()
+    {
+        var roots = new List<GroupNode>
+        {
+            new()
+            {
+                Name = "Kategorie", Selector = "section", Repeating = true, FramePath = ["iframe#widget", " "],
+                Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }],
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(GroupPlan(roots, ScrapingEngine.Browser));
+        Assert.False(result.Success);
+        Assert.Contains("FramePath", result.Error);
+    }
+
     // ── API-Mode (ApiCallStep) ────────────────────────────────────────────
 
     private static ApiConfig ValidApiConfig() => new()
