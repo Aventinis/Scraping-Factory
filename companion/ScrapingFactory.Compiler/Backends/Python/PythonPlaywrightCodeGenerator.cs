@@ -78,7 +78,10 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         }
 
         var fields = plan.Steps.OfType<ExtractStep>()
-            .Select(step => new { name = step.Name, selector = step.Selector, attribute = step.Attribute })
+            .Select(step => new
+            {
+                name = step.Name, selector = step.Selector, attribute = step.Attribute, frame_path = step.FramePath,
+            })
             .ToList();
 
         return shellTemplate.Render(new

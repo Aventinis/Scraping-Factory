@@ -52,7 +52,10 @@ public static class ScrapingPlanBuilder
         }
 
         steps.AddRange(config.Fields.Select(field =>
-            (ScrapingStep)new ExtractStep { Name = field.Name, Selector = field.Selector, Attribute = field.Attribute }));
+            (ScrapingStep)new ExtractStep
+            {
+                Name = field.Name, Selector = field.Selector, Attribute = field.Attribute, FramePath = field.FramePath,
+            }));
 
         return new ScrapingPlan
         {

@@ -55,6 +55,9 @@ public sealed class ScrapingField
     public required string Selector { get; init; }
     // null = Textinhalt; "href", "src" usw. für Attribut-Extraktion
     public string? Attribute { get; init; }
+
+    // See ExtractStep.FramePath — same meaning, just the wire-format mirror.
+    public List<string>? FramePath { get; init; }
 }
 
 public enum OutputFormat { Csv, Xml }
