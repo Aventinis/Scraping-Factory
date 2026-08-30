@@ -37,6 +37,7 @@ const {
   buildStaticListSource, buildDiscoverySource, buildRangeSource, buildApiHeaders, buildApiConfig,
   variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
   detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase,
+  addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
 } = require('./popup');
 
 // jsdom's Blob doesn't implement .text() — read via FileReader instead.
@@ -94,6 +95,57 @@ describe('buildScrapingConfig (flat mode)', () => {
     const result = buildScrapingConfig('https://example.com', 'flat', []);
     expect(result.scriptFileName).toBeNull();
     expect(result.outputFileName).toBeNull();
+  });
+});
+
+// Issue #41/#42, Phase 5: engine/browserActions are mode-independent, so
+// these are tested once rather than per mode (flat mode used as the
+// representative case) — buildScrapingConfig's own doc comment explains why
+// the omit/include behavior is important for existing-call backward-compat.
+describe('buildScrapingConfig (engine / browserActions, Issue #41/#42 Phase 5)', () => {
+  test('omits engine entirely when Static (the default) — byte-for-byte the same as before this existed', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.engine).toBeUndefined();
+    expect(result.browserActions).toBeUndefined();
+  });
+
+  test('includes engine when Browser, even with no browserActions', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Browser',
+    );
+    expect(result.engine).toBe('Browser');
+    expect(result.browserActions).toBeUndefined();
+  });
+
+  test('includes serialized browserActions alongside engine when Browser and non-empty', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Browser',
+      [{ kind: 'click', selector: '#submit' }],
+    );
+    expect(result.engine).toBe('Browser');
+    expect(result.browserActions).toEqual([{ kind: 'click', selector: '#submit' }]);
+  });
+
+  test('omits browserActions (and engine) when Static, even if actions were configured', () => {
+    // Matches the popup's own UI behavior: switching back to Static hides
+    // the browser-actions section without clearing it, so a user flipping
+    // the toggle back and forth doesn't lose their work — but nothing
+    // meaningless for the Static engine should ever reach the wire.
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static',
+      [{ kind: 'click', selector: '#submit' }],
+    );
+    expect(result.engine).toBeUndefined();
+    expect(result.browserActions).toBeUndefined();
+  });
+
+  test('works the same way for container and api modes', () => {
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig('https://example.com', 'container', [], groups, null, null, null, 'Browser');
+    expect(containerResult.engine).toBe('Browser');
+
+    const apiResult = buildScrapingConfig('https://example.com', 'api', [], [], { fields: [] }, null, null, 'Browser');
+    expect(apiResult.engine).toBe('Browser');
   });
 });
 
@@ -255,6 +307,80 @@ describe('removeField', () => {
   test('does not mutate original array', () => {
     removeField(base, 0);
     expect(base).toHaveLength(3);
+  });
+});
+
+// ── Browser actions (Issue #41/#42, Phase 5) ─────────────────────────────────
+
+describe('addBrowserAction', () => {
+  test('appends a waitFor action with defaults', () => {
+    expect(addBrowserAction([], 'waitFor')).toEqual([{ kind: 'waitFor', selector: '', timeoutMs: 5000 }]);
+  });
+
+  test('appends a fill action with defaults', () => {
+    expect(addBrowserAction([], 'fill')).toEqual([{ kind: 'fill', selector: '', environmentVariableName: '' }]);
+  });
+
+  test('appends a click action with defaults', () => {
+    expect(addBrowserAction([], 'click')).toEqual([{ kind: 'click', selector: '' }]);
+  });
+
+  test('does not mutate original array', () => {
+    const actions = [{ kind: 'click', selector: '#a' }];
+    addBrowserAction(actions, 'waitFor');
+    expect(actions).toHaveLength(1);
+  });
+});
+
+describe('removeBrowserAction', () => {
+  const base = [
+    { kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER' },
+    { kind: 'click', selector: '#submit' },
+  ];
+
+  test('removes the action at the given index', () => {
+    const result = removeBrowserAction(base, 0);
+    expect(result).toEqual([{ kind: 'click', selector: '#submit' }]);
+  });
+
+  test('does not mutate original array', () => {
+    removeBrowserAction(base, 0);
+    expect(base).toHaveLength(2);
+  });
+});
+
+describe('updateBrowserAction', () => {
+  test('patches only the action at the given index', () => {
+    const actions = [{ kind: 'click', selector: '' }, { kind: 'waitFor', selector: '', timeoutMs: 5000 }];
+    const result = updateBrowserAction(actions, 0, { selector: '#submit' });
+    expect(result[0]).toEqual({ kind: 'click', selector: '#submit' });
+    expect(result[1]).toEqual(actions[1]);
+  });
+
+  test('does not mutate original array', () => {
+    const actions = [{ kind: 'click', selector: '' }];
+    updateBrowserAction(actions, 0, { selector: '#submit' });
+    expect(actions[0].selector).toBe('');
+  });
+});
+
+describe('serializeBrowserActions', () => {
+  test('picks only the wire-relevant fields per kind', () => {
+    const actions = [
+      { kind: 'waitFor', selector: '.welcome', timeoutMs: 3000 },
+      { kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER' },
+      { kind: 'click', selector: '#submit' },
+    ];
+    expect(serializeBrowserActions(actions)).toEqual([
+      { kind: 'waitFor', selector: '.welcome', timeoutMs: 3000 },
+      { kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER' },
+      { kind: 'click', selector: '#submit' },
+    ]);
+  });
+
+  test('drops UI-only extra fields not part of the wire shape', () => {
+    const actions = [{ kind: 'click', selector: '#submit', someUiOnlyFlag: true }];
+    expect(serializeBrowserActions(actions)).toEqual([{ kind: 'click', selector: '#submit' }]);
   });
 });
 
@@ -1568,6 +1694,196 @@ describe('Container-Mode integration', () => {
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
       type: 'START_SELECTION', scopeSelector: 'section.menu-category', avoidId: true,
     });
+  });
+});
+
+// ── Engine + browser actions integration (Issue #41/#42, Phase 5) ───────────
+// Mode-independent (see buildScrapingConfig's doc comment) — mirrors the
+// Container-Mode integration block's DOM-mocking pattern above, but the
+// engine toggle/browser-actions list is never gated behind a mode switch.
+
+describe('Engine + browser actions integration', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div class="mode-toggle">
+          <button id="btn-mode-flat" class="mode-btn active"></button>
+          <button id="btn-mode-container" class="mode-btn"></button>
+        </div>
+        <div id="flat-mode-section">
+          <div id="fields-list"></div>
+          <button id="btn-add-field"></button>
+        </div>
+        <div id="container-mode-section" class="hidden">
+          <ul id="group-tree-root"></ul>
+        </div>
+        <div>
+          <button id="btn-engine-static" class="mode-btn active"></button>
+          <button id="btn-engine-browser" class="mode-btn"></button>
+          <div id="browser-actions-section" class="hidden">
+            <div id="browser-actions-list"></div>
+            <button id="btn-add-action-wait"></button>
+            <button id="btn-add-action-fill"></button>
+            <button id="btn-add-action-click"></button>
+          </div>
+        </div>
+        <button id="btn-generate" disabled></button>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <input type="checkbox" id="toggle-dom-view" />
+        <div id="dom-tree-wrapper" class="hidden">
+          <p id="dom-tree-loading"></p>
+          <p id="dom-tree-error" class="hidden"></p>
+          <p id="dom-tree-truncated" class="hidden"></p>
+          <ul id="dom-tree-root"></ul>
+        </div>
+        <button id="btn-cancel-selection"></button>
+      </section>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({}),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+  });
+
+  test('Browser engine reveals the browser-actions section; Static hides it again', () => {
+    expect(document.getElementById('browser-actions-section').classList.contains('hidden')).toBe(true);
+
+    document.getElementById('btn-engine-browser').click();
+    expect(document.getElementById('browser-actions-section').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('btn-engine-browser').classList.contains('active')).toBe(true);
+    expect(document.getElementById('btn-engine-static').classList.contains('active')).toBe(false);
+
+    document.getElementById('btn-engine-static').click();
+    expect(document.getElementById('browser-actions-section').classList.contains('hidden')).toBe(true);
+  });
+
+  test('adding each action kind renders the right card, in order', () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-wait').click();
+    document.getElementById('btn-add-action-fill').click();
+    document.getElementById('btn-add-action-click').click();
+
+    const cards = document.querySelectorAll('.browser-action-card');
+    expect(cards).toHaveLength(3);
+    expect(cards[0].querySelector('.browser-action-timeout')).not.toBeNull();
+    expect(cards[1].querySelector('.browser-action-env-name')).not.toBeNull();
+    expect(cards[2].querySelector('.browser-action-timeout')).toBeNull();
+    expect(cards[2].querySelector('.browser-action-env-name')).toBeNull();
+  });
+
+  test('removing an action drops only that card', () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-wait').click();
+    document.getElementById('btn-add-action-click').click();
+
+    document.querySelectorAll('.btn-remove-action')[0].click();
+
+    const cards = document.querySelectorAll('.browser-action-card');
+    expect(cards).toHaveLength(1);
+    expect(cards[0].querySelector('.browser-action-timeout')).toBeNull(); // the click action remains
+  });
+
+  test('editing a Fill action\'s environment variable name persists it into state', () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-fill').click();
+
+    const envInput = document.querySelector('.browser-action-env-name');
+    envInput.value = 'SF_USERNAME';
+    envInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    // Re-render (triggered by the change handler's setState) must not lose it.
+    expect(document.querySelector('.browser-action-env-name').value).toBe('SF_USERNAME');
+  });
+
+  test('picking an element for an action selector: START_SELECTION, then the result is written straight into that action — no modal', async () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-click').click();
+
+    document.querySelector('.btn-pick-action-selector').click();
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'START_SELECTION' });
+    expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(false);
+
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#submit' });
+    await flushMicrotasks();
+
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
+    const selectorText = document.querySelector('.browser-action-selector-row .field-selector');
+    expect(selectorText.textContent).toBe('#submit');
+  });
+
+  test('a full login flow (fill, fill, click, wait) is sent to /generate with engine and browserActions', async () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-fill').click();
+    document.getElementById('btn-add-action-fill').click();
+    document.getElementById('btn-add-action-click').click();
+    document.getElementById('btn-add-action-wait').click();
+
+    const pickButtons = () => document.querySelectorAll('.btn-pick-action-selector');
+    const envInputs = () => document.querySelectorAll('.browser-action-env-name');
+
+    pickButtons()[0].click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#username' });
+    await flushMicrotasks();
+    envInputs()[0].value = 'SF_USERNAME';
+    envInputs()[0].dispatchEvent(new Event('change', { bubbles: true }));
+
+    pickButtons()[1].click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#password' });
+    await flushMicrotasks();
+    envInputs()[1].value = 'SF_PASSWORD';
+    envInputs()[1].dispatchEvent(new Event('change', { bubbles: true }));
+
+    pickButtons()[2].click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#submit' });
+    await flushMicrotasks();
+
+    pickButtons()[3].click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.welcome' });
+    await flushMicrotasks();
+
+    // hasConfig (gating btn-generate) only looks at fields/groups/apiConfig,
+    // none of which this test cares about — only the request body's
+    // engine/browserActions shape — so the disabled gate is bypassed
+    // directly rather than adding an unrelated flat field just to satisfy it.
+    document.getElementById('btn-generate').disabled = false;
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const [, options] = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/generate'));
+    const body = JSON.parse(options.body);
+    expect(body.engine).toBe('Browser');
+    expect(body.browserActions).toEqual([
+      { kind: 'fill', selector: '#username', environmentVariableName: 'SF_USERNAME' },
+      { kind: 'fill', selector: '#password', environmentVariableName: 'SF_PASSWORD' },
+      { kind: 'click', selector: '#submit' },
+      { kind: 'waitFor', selector: '.welcome', timeoutMs: 5000 },
+    ]);
   });
 });
 

@@ -65,6 +65,18 @@
     }
     .mode-btn.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 2px rgba(0,0,0,.08); font-weight: 500; }
 
+    /* Engine toggle + browser actions (Issue #41/#42, Phase 5) */
+    .engine-section { margin-bottom: 14px; }
+    .browser-actions-hint { font-size: 11px; color: #6b7280; margin-bottom: 8px; }
+    .browser-action-card { padding: 8px; background: #f9fafb; border-radius: 6px; margin-bottom: 6px; }
+    .browser-action-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .browser-action-selector-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .browser-action-selector-row .field-selector { background: #fff; border: 1px solid #e5e7eb; border-radius: 4px; padding: 3px 6px; }
+    .browser-action-field-row { display: flex; align-items: center; gap: 6px; }
+    .browser-action-field-row label { flex: none; font-size: 11px; color: #6b7280; }
+    .browser-action-field-row input { flex: 1; font-size: 11px; padding: 3px 6px; border: 1px solid #e5e7eb; border-radius: 4px; }
+    .browser-action-hint { font-size: 10px; color: #9ca3af; margin: 4px 0 0; }
+
     /* Preview toggle */
     .btn-toggle           { background: #f3f4f6; color: #374151; width: 100%; }
     .btn-toggle:hover     { background: #e5e7eb; }
@@ -292,6 +304,30 @@
       <button id="btn-mode-flat" class="mode-btn active" type="button" data-i18n="idle.modeFlat"></button>
       <button id="btn-mode-container" class="mode-btn" type="button" data-i18n="idle.modeContainer"></button>
       <button id="btn-mode-api" class="mode-btn" type="button" data-i18n="idle.modeApi"></button>
+    </div>
+
+    <!-- Engine + browser actions (Issue #41/#42, Phase 5): applies across
+         all three modes above, so it lives outside the mode-specific
+         sections — same "global setting" treatment as output-settings
+         below. Browser-actions run before extraction regardless of mode
+         (see companion ScrapingPlanBuilder). -->
+    <div class="engine-section">
+      <div class="row-label" data-i18n="idle.engineLabel"></div>
+      <div class="mode-toggle" style="margin-bottom: 8px;">
+        <button id="btn-engine-static" class="mode-btn active" type="button" data-i18n="idle.engineStatic"></button>
+        <button id="btn-engine-browser" class="mode-btn" type="button" data-i18n="idle.engineBrowser" data-i18n-title="idle.engineBrowserTitle"></button>
+      </div>
+
+      <div id="browser-actions-section" class="hidden">
+        <div class="row-label" data-i18n="browserActions.title"></div>
+        <p class="browser-actions-hint" data-i18n="browserActions.hint"></p>
+        <div id="browser-actions-list"></div>
+        <div class="actions">
+          <button id="btn-add-action-wait" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.addWaitBtn"></button>
+          <button id="btn-add-action-fill" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.addFillBtn"></button>
+          <button id="btn-add-action-click" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.addClickBtn"></button>
+        </div>
+      </div>
     </div>
 
     <div id="flat-mode-section">
