@@ -75,7 +75,7 @@ public class PythonPlaywrightCodeGeneratorTests
     public void Generate_WithWaitForStep_ContainsWaitForSelectorWithTimeout()
     {
         var script = _generator.Generate(PlanWithWait());
-        Assert.Contains("page.wait_for_selector(\".loaded\", timeout=7000)", script);
+        Assert.Contains("_resolve_locator(page, \".loaded\", None).wait_for(timeout=7000)", script);
     }
 
     [Fact]
@@ -135,15 +135,15 @@ public class PythonPlaywrightCodeGeneratorTests
     public void Generate_WithFillStep_ReadsValueFromEnvironmentVariable()
     {
         var script = _generator.Generate(LoginPlan());
-        Assert.Contains("page.fill(\"#username\", os.environ[\"SF_USERNAME\"])", script);
-        Assert.Contains("page.fill(\"#password\", os.environ[\"SF_PASSWORD\"])", script);
+        Assert.Contains("_resolve_locator(page, \"#username\", None).fill(os.environ[\"SF_USERNAME\"])", script);
+        Assert.Contains("_resolve_locator(page, \"#password\", None).fill(os.environ[\"SF_PASSWORD\"])", script);
     }
 
     [Fact]
     public void Generate_WithClickStep_ContainsPageClick()
     {
         var script = _generator.Generate(LoginPlan());
-        Assert.Contains("page.click(\"#submit\")", script);
+        Assert.Contains("_resolve_locator(page, \"#submit\", None).click()", script);
     }
 
     // ── ScrollStep ───────────────────────────────────────────────────────
@@ -242,7 +242,7 @@ public class PythonPlaywrightCodeGeneratorTests
     {
         var script = _generator.Generate(PlanWithFramedField());
         Assert.Contains("scope = scope.frame_locator(frame_selector)", script);
-        Assert.Contains("scope.locator(selector).all()", script);
+        Assert.Contains("_resolve_frame_locator(page, frame_path).locator(selector).all()", script);
     }
 
     // ── Container-Mode ────────────────────────────────────────────────────
@@ -343,14 +343,14 @@ public class PythonPlaywrightCodeGeneratorTests
     public void Generate_GroupPlanWithLogin_RendersFillAndClickBeforeExtraction()
     {
         var script = _generator.Generate(GroupPlanWithLogin());
-        Assert.Contains("page.fill(\"#user\", os.environ[\"SF_USERNAME\"])", script);
-        Assert.Contains("page.click(\"#submit\")", script);
+        Assert.Contains("_resolve_locator(page, \"#user\", None).fill(os.environ[\"SF_USERNAME\"])", script);
+        Assert.Contains("_resolve_locator(page, \"#submit\", None).click()", script);
 
         // Textual order inside scrape() is execution order: the rendered
         // actions (fill/click) sit before the "for node in GROUPS" loop that
         // actually drives extraction — GROUPS itself is just a top-level
         // data literal declared earlier and isn't what "runs" first.
-        var clickIndex = script.IndexOf("page.click", StringComparison.Ordinal);
+        var clickIndex = script.IndexOf(".click()", StringComparison.Ordinal);
         var extractionLoopIndex = script.IndexOf("for node in GROUPS:", StringComparison.Ordinal);
         Assert.True(clickIndex < extractionLoopIndex);
     }
@@ -436,5 +436,65 @@ public class PythonPlaywrightCodeGeneratorTests
     {
         var script = _generator.Generate(GroupPlanWithFramedGroup());
         Assert.Contains("\"repeating\": True, \"frame_path\": ['iframe#widget'], \"children\":", script);
+    }
+
+    // ── FramePath for Action Steps (Issue #42, Phase 4) ─────────────────────
+
+    private static ScrapingPlan FramedActionStepsPlan() => new()
+    {
+        Engine = ScrapingEngine.Browser,
+        Steps =
+        [
+            new NavigateStep { Url = "https://example.com/login" },
+            new FillStep { Selector = "#user", EnvironmentVariableName = "SF_USERNAME", FramePath = ["iframe#sso"] },
+            new ClickStep { Selector = "#submit", FramePath = ["iframe#sso"] },
+            new WaitForStep { Selector = ".welcome", TimeoutMs = 3000, FramePath = ["iframe#sso"] },
+            new ScrollStep { LoadMoreButtonSelector = "#more", FramePath = ["iframe#sso"] },
+            new ExtractStep { Name = "Titel", Selector = "h1" },
+        ],
+    };
+
+    [Fact]
+    public void Generate_FramedFillStep_ChainsResolveLocatorWithFramePath()
+    {
+        var script = _generator.Generate(FramedActionStepsPlan());
+        Assert.Contains("_resolve_locator(page, \"#user\", [\"iframe#sso\"]).fill(os.environ[\"SF_USERNAME\"])", script);
+    }
+
+    [Fact]
+    public void Generate_FramedClickStep_ChainsResolveLocatorWithFramePath()
+    {
+        var script = _generator.Generate(FramedActionStepsPlan());
+        Assert.Contains("_resolve_locator(page, \"#submit\", [\"iframe#sso\"]).click()", script);
+    }
+
+    [Fact]
+    public void Generate_FramedWaitForStep_ChainsResolveLocatorWithFramePath()
+    {
+        var script = _generator.Generate(FramedActionStepsPlan());
+        Assert.Contains("_resolve_locator(page, \".welcome\", [\"iframe#sso\"]).wait_for(timeout=3000)", script);
+    }
+
+    [Fact]
+    public void Generate_FramedScrollStep_SetsScrollFramePathVariable()
+    {
+        var script = _generator.Generate(FramedActionStepsPlan());
+        Assert.Contains("_scroll_frame_path = [\"iframe#sso\"]", script);
+        Assert.Contains("_resolve_locator(page, _scroll_load_more_selector, _scroll_frame_path)", script);
+    }
+
+    [Fact]
+    public void Generate_UnframedActionSteps_PassNoneAsFramePath()
+    {
+        var script = _generator.Generate(LoginPlan());
+        Assert.Contains("_resolve_locator(page, \"#username\", None)", script);
+        Assert.Contains("_resolve_locator(page, \"#submit\", None)", script);
+    }
+
+    [Fact]
+    public void Generate_UnframedScrollStep_SetsScrollFramePathToNone()
+    {
+        var script = _generator.Generate(ScrollOnlyPlan());
+        Assert.Contains("_scroll_frame_path = None", script);
     }
 }
