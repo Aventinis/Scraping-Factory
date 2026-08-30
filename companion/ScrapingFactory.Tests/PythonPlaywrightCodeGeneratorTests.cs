@@ -146,6 +146,63 @@ public class PythonPlaywrightCodeGeneratorTests
         Assert.Contains("page.click(\"#submit\")", script);
     }
 
+    // ── ScrollStep ───────────────────────────────────────────────────────
+
+    private static ScrapingPlan ScrollOnlyPlan() => new()
+    {
+        Engine = ScrapingEngine.Browser,
+        Steps =
+        [
+            new NavigateStep { Url = "https://example.com" },
+            new ScrollStep { MaxIterations = 5, WaitAfterMs = 250 },
+            new ExtractStep { Name = "Titel", Selector = ".item" },
+        ],
+    };
+
+    private static ScrapingPlan ScrollWithContainerAndButtonPlan() => new()
+    {
+        Engine = ScrapingEngine.Browser,
+        Steps =
+        [
+            new NavigateStep { Url = "https://example.com" },
+            new ScrollStep
+            {
+                ContainerSelector = "#list", LoadMoreButtonSelector = ".load-more",
+                MaxIterations = 3, WaitAfterMs = 500,
+            },
+            new ExtractStep { Name = "Titel", Selector = ".item" },
+        ],
+    };
+
+    [Fact]
+    public void Generate_WithoutScrollStep_DoesNotContainScrollLoop()
+    {
+        var script = _generator.Generate(PlanWithoutWait());
+        Assert.DoesNotContain("_scroll_prev_height", script);
+    }
+
+    [Fact]
+    public void Generate_ScrollOnly_ScrollsWholePageAndHasNoButtonClick()
+    {
+        var script = _generator.Generate(ScrollOnlyPlan());
+        Assert.Contains("for _ in range(5):", script);
+        Assert.Contains("window.scrollTo(0, document.body.scrollHeight)", script);
+        Assert.Contains("page.wait_for_timeout(250)", script);
+        Assert.Contains("_scroll_container_selector = None", script);
+        Assert.Contains("_scroll_load_more_selector = None", script);
+    }
+
+    [Fact]
+    public void Generate_ScrollWithContainerAndButton_ScrollsContainerAndClicksButton()
+    {
+        var script = _generator.Generate(ScrollWithContainerAndButtonPlan());
+        Assert.Contains("_scroll_container_selector = \"#list\"", script);
+        Assert.Contains("_scroll_load_more_selector = \".load-more\"", script);
+        Assert.Contains("el.scrollTop = el.scrollHeight", script);
+        Assert.Contains("for _ in range(3):", script);
+        Assert.Contains("page.wait_for_timeout(500)", script);
+    }
+
     // ── Container-Mode ────────────────────────────────────────────────────
 
     private static ScrapingPlan GroupPlan() => new()

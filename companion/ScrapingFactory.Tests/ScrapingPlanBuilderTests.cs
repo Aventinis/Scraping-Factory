@@ -175,6 +175,83 @@ public class ScrapingPlanBuilderTests
         Assert.Equal("my_export", plan.OutputFileBaseName);
     }
 
+    // ── BrowserActions (Issue #41) ──────────────────────────────────────
+
+    [Fact]
+    public void Build_BrowserActions_TranslatesToStepsInOrderBeforeExtraction()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Engine = ScrapingEngine.Browser,
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+            BrowserActions =
+            [
+                new WaitForAction { Selector = ".loaded", TimeoutMs = 3000 },
+                new FillAction { Selector = "#user", EnvironmentVariableName = "SF_USERNAME" },
+                new ClickAction { Selector = "#submit" },
+                new ScrollAction { ContainerSelector = "#list", LoadMoreButtonSelector = ".more", MaxIterations = 4, WaitAfterMs = 750 },
+            ],
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal(6, plan.Steps.Count);
+        Assert.IsType<NavigateStep>(plan.Steps[0]);
+
+        var wait = Assert.IsType<WaitForStep>(plan.Steps[1]);
+        Assert.Equal(".loaded", wait.Selector);
+        Assert.Equal(3000, wait.TimeoutMs);
+
+        var fill = Assert.IsType<FillStep>(plan.Steps[2]);
+        Assert.Equal("#user", fill.Selector);
+        Assert.Equal("SF_USERNAME", fill.EnvironmentVariableName);
+
+        var click = Assert.IsType<ClickStep>(plan.Steps[3]);
+        Assert.Equal("#submit", click.Selector);
+
+        var scroll = Assert.IsType<ScrollStep>(plan.Steps[4]);
+        Assert.Equal("#list", scroll.ContainerSelector);
+        Assert.Equal(".more", scroll.LoadMoreButtonSelector);
+        Assert.Equal(4, scroll.MaxIterations);
+        Assert.Equal(750, scroll.WaitAfterMs);
+
+        Assert.IsType<ExtractStep>(plan.Steps[5]);
+    }
+
+    [Fact]
+    public void Build_NoBrowserActions_ProducesNoActionSteps()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal(2, plan.Steps.Count);
+    }
+
+    [Fact]
+    public void Build_BrowserActions_AlsoRunBeforeGroupExtraction()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Engine = ScrapingEngine.Browser,
+            Groups = SampleGroups(),
+            BrowserActions = [new ClickAction { Selector = "#cookie-consent" }],
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal(3, plan.Steps.Count);
+        Assert.IsType<NavigateStep>(plan.Steps[0]);
+        Assert.IsType<ClickStep>(plan.Steps[1]);
+        Assert.IsType<ExtractGroupStep>(plan.Steps[2]);
+    }
+
     private static ApiConfig SampleApiConfig() => new()
     {
         UrlTemplate = "https://example.com/api/items?category={category}",
