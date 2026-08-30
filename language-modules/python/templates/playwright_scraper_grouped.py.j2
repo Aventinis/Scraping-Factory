@@ -16,23 +16,61 @@ URL = "{{ url }}"
 GROUPS = {{ groups_literal }}
 
 
+# A node's own "frame_path" (Issue #42, Phase 3) is always resolved fresh
+# from `page` — an absolute top-to-target chain, independent of how deeply
+# nested the node is in the tree or whether any ancestor also has a
+# frame_path. Locator (what a FrameLocator chain returns) has no
+# query_selector/query_selector_all of its own, only ElementHandle does — so
+# a resolved group match is converted via .element_handle() right away,
+# letting every recursive call below keep using query_selector/
+# query_selector_all exactly as before this existed, regardless of whether
+# *this* node was framed.
+def _resolve_frame_locator(page, frame_path):
+    scope = page
+    for frame_selector in frame_path:
+        scope = scope.frame_locator(frame_selector)
+    return scope
+
+
+def _resolve_group_matches(page, scope, node):
+    frame_path = node.get("frame_path")
+    if not frame_path:
+        if node["repeating"]:
+            return scope.query_selector_all(node["selector"])
+        found = scope.query_selector(node["selector"])
+        return [found] if found else []
+
+    locator = _resolve_frame_locator(page, frame_path).locator(node["selector"])
+    if node["repeating"]:
+        return [item.element_handle() for item in locator.all()]
+    return [locator.first.element_handle()] if locator.count() > 0 else []
+
+
+def _resolve_field_match(page, scope, node):
+    frame_path = node.get("frame_path")
+    if not frame_path:
+        return scope.query_selector(node["selector"])
+
+    locator = _resolve_frame_locator(page, frame_path).locator(node["selector"])
+    return locator.first if locator.count() > 0 else None
+
+
 # Same tree walk as the Static engine's scraper_grouped.py.j2 — only the two
 # DOM-access calls differ (query_selector_all/query_selector here vs.
 # select/select_one there), the recursive group/data-field logic is
-# identical.
-def extract_group(scope, node):
+# identical. `page` is threaded through explicitly (rather than relying on
+# closure capture) purely so frame_path resolution — always relative to the
+# top-level page, never to `scope` — has something to resolve from
+# regardless of how deep the current recursion already is.
+def extract_group(page, scope, node):
     if "children" in node:
-        if node["repeating"]:
-            matches = scope.query_selector_all(node["selector"])
-        else:
-            found = scope.query_selector(node["selector"])
-            matches = [found] if found else []
+        matches = _resolve_group_matches(page, scope, node)
 
         elements = []
         for match in matches:
             el = ET.Element(node["name"])
             for child in node["children"]:
-                result = extract_group(match, child)
+                result = extract_group(page, match, child)
                 if isinstance(result, list):
                     el.extend(result)
                 else:
@@ -41,16 +79,15 @@ def extract_group(scope, node):
         return elements
 
     el = ET.Element(node["name"])
+    found = _resolve_field_match(page, scope, node)
     if node["mode"] == "exists":
-        el.text = "true" if scope.query_selector(node["selector"]) else "false"
+        el.text = "true" if found else "false"
+    elif found is None:
+        el.text = ""
+    elif node["mode"] == "attribute":
+        el.text = found.get_attribute(node["attribute"]) or ""
     else:
-        found = scope.query_selector(node["selector"])
-        if found is None:
-            el.text = ""
-        elif node["mode"] == "attribute":
-            el.text = found.get_attribute(node["attribute"]) or ""
-        else:
-            el.text = (found.text_content() or "").strip()
+        el.text = (found.text_content() or "").strip()
     return el
 
 
@@ -64,7 +101,7 @@ def scrape(url):
         # exactly one root element — wrap them all in a single <Ergebnis>.
         root = ET.Element("Ergebnis")
         for node in GROUPS:
-            for el in extract_group(page, node):
+            for el in extract_group(page, page, node):
                 root.append(el)
 
         browser.close()
