@@ -32,6 +32,15 @@ def _resolve_frame_locator(page, frame_path):
     return scope
 
 
+# Used by the WaitFor/Fill/Click/Scroll action fragments rendered into the
+# scrape() body below (one per playwright_*_step.py.j2 template) — same
+# helper as playwright_scraper.py.j2's, duplicated rather than shared since
+# the two shell templates don't share any Python source, only the same
+# Scriban fragment templates rendered into both.
+def _resolve_locator(page, selector, frame_path):
+    return _resolve_frame_locator(page, frame_path or []).locator(selector)
+
+
 def _resolve_group_matches(page, scope, node):
     frame_path = node.get("frame_path")
     if not frame_path:

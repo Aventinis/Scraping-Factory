@@ -160,7 +160,7 @@ The content-script side (`resolveFramePath`/`findIframeSelectorForWindow`/the `e
 
 ---
 
-## Phase 4 — `FramePath` for Browser-Action Steps (Issue #42, extended scope)
+## Phase 4 — `FramePath` for Browser-Action Steps (Issue #42, extended scope) — ✅ DONE
 
 **Branch:** `feature/iframe-action-steps`
 **Depends on:** Phase 2 merged (same resolver-reuse rationale as Phase 3; independent of Phase 3 itself, could be done in either order or in parallel).
@@ -171,15 +171,16 @@ Extends `FramePath` support to `WaitForStep`/`FillStep`/`ClickStep`/`ScrollStep`
 
 ### Tasks
 
-- [ ] **IR**: add `FramePath` (`List<string>?`, default `null`) to `WaitForStep`, `FillStep`, `ClickStep`, `ScrollStep` (`IR/ScrapingStep.cs`), and to the matching wire-format `BrowserAction` variants (`IR/BrowserAction.cs`).
-- [ ] **Codegen**: unlike Phase 2/3's "get a list of elements" resolver, these steps need an "does exactly one element exist right now" resolution — `Locator.count()` (a synchronous, non-waiting check) rather than `query_selector`'s "returns `None` immediately if absent" semantics, since actions on a `FrameLocator`-scoped `Locator` (e.g. `.click()`) auto-wait/retry by default unlike `ElementHandle.click()`. Design this resolution helper carefully and **verify it manually against a real page before trusting it** — Phase 1's two bugs (button-presence vs. height, wrong-scope height check) both came from an untested assumption about a Playwright API's exact behavior; don't repeat that here with `Locator.count()`/auto-waiting semantics.
-- [ ] **`ScrapingPlanValidator`**: extend field validation for each of the four step types with the same Browser-only-when-`FramePath`-is-set guard — reuse `ValidateFramePath` (added in Phase 3, already shared by `ExtractStep`/`GroupNode`/`DataFieldNode`) rather than writing a fourth copy of the same three checks.
-- [ ] **Tests**: `PythonPlaywrightScriptVerifierTests` cases for each of the four step types with `FramePath` set (e.g. a login form embedded via iframe, mirroring the existing `LoginFlow_FillsCredentialsFromEnvironmentAndClicksSubmit` test but with the form inside an iframe). Manually verify against a real page, not just `LocalTestServer`.
+- [x] **IR**: `FramePath` (`List<string>?`, default `null`) added to `WaitForStep`, `FillStep`, `ClickStep`, `ScrollStep` (`IR/ScrapingStep.cs`), and to the matching wire-format `BrowserAction` variants (`IR/BrowserAction.cs`). `ScrollStep.FramePath` applies to both `ContainerSelector` and `LoadMoreButtonSelector` — one step, one frame.
+- [x] **Codegen** — turned out simpler than the task description anticipated: `Locator.wait_for(timeout=...)`/`.fill(...)`/`.click()` all default to the same "visible" state `page.wait_for_selector`/`page.fill`/`page.click` already use (checked via `inspect.signature` on the real installed Playwright classes, not assumed), so a *single* shared helper works for all three — `_resolve_locator(page, selector, frame_path)` returns `page.locator(selector)` when `frame_path` is falsy (reusing the `_resolve_frame_locator` helper from Phase 2/3, which already returns `page` unchanged for an empty path) and a frame-scoped `Locator` otherwise; each fragment template became a single line, e.g. `_resolve_locator(page, "{{ step.selector }}", ...).click()`. `ScrollStep` was the one case matching the task's original prediction: its button-existence check now uses `Locator.count() == 0` instead of `query_selector(...) is None` for the framed branch (the *unframed* branch was deliberately left untouched, byte-for-byte, to not risk regressing Phase 1's already-shipped, hard-won stop-condition logic — see "Design notes from Phase 1" earlier in this file).
+- [x] **`ScrapingPlanValidator`**: all four step types now call the shared `ValidateFramePath` (from Phase 3) instead of a new copy. Note: for these four step types (unlike `ExtractStep`/container nodes), the "`FramePath` requires Engine Browser" branch inside `ValidateFramePath` is actually unreachable in practice — the existing `browserOnlySteps` guard earlier in `Validate()` already rejects a Static-engine plan containing *any* `WaitForStep`/`FillStep`/`ClickStep`/`ScrollStep`, framed or not, before the per-step loop is ever reached. Reusing the helper anyway is still correct and avoids a fourth near-identical copy of the same checks — the unreachable branch is cheap insurance, not dead weight.
+- [x] **Tests**: `PythonPlaywrightCodeGeneratorTests.cs` (all four fragment types render `_resolve_locator(...)` correctly with/without `frame_path`), `ScrapingPlanValidatorTests.cs` (guard + field validation on all four types), `PythonPlaywrightScriptVerifierTests.cs` (two real end-to-end Chromium tests: the full login flow — fill, fill, click, wait, extract — with the entire form embedded in an iframe, directly mirroring the existing unframed login test; and `ScrollStep`'s load-more-button variant with the button inside an iframe). **All passed on the first run** — same "the upfront spikes/introspection paid off" pattern as Phase 2/3.
+- [x] **Manual verification against a real page** (not `LocalTestServer`): unlike Phase 2/3, this one specifically exercised the **wire format** (`POST /generate` with a JSON `browserActions` array containing `"framePath"` per action) rather than constructing a `ScrapingPlan` directly in C#, since that's the one path the `LocalTestServer`-based tests don't cover (they bypass `ScrapingPlanBuilder` entirely). Built a throwaway local login-in-iframe page, ran it against a real companion instance with real environment variables — the generated script correctly filled the credentials, clicked submit, waited for `.welcome`, and extracted `"Welcome, alice"`, all inside the iframe, end-to-end through the real wire format.
 
 ### Definition of done
 
-- All four Phase 1 action steps can target a selector inside an iframe via `FramePath`, wired end-to-end from `BrowserActions` through to the generated script.
-- All new + existing tests green.
+- [x] All four Phase 1 action steps can target a selector inside an iframe via `FramePath`, wired end-to-end from `BrowserActions` through to the generated script.
+- [x] All new + existing tests green (236 backend; extension suite untouched by this phase).
 
 ---
 
@@ -242,7 +243,7 @@ Add the missing engine selection and browser-action configuration UI to the exte
 1. ~~Phase 1 (independent)~~ ✅ done
 2. ~~Phase 2 — flat `ExtractStep` FramePath (independent, but benefits from Phase 1's wire-format pattern existing first)~~ ✅ done
 3. ~~Phase 3 — container-mode `FramePath` (needs Phase 2 merged)~~ ✅ done
-4. Phase 4 — action-step `FramePath` (needs Phase 2 merged; independent of Phase 3, either order/parallel is fine)
+4. ~~Phase 4 — action-step `FramePath` (needs Phase 2 merged; independent of Phase 3, either order/parallel is fine)~~ ✅ done
 5. Phase 5 — browser-engine UI baseline (needs Phase 1 merged for `BrowserActions` to exist; otherwise independent of 2/3/4)
 6. Phase 6 — ScrollStep UI (needs 1 + 5 merged)
 7. Phase 7 — Iframe UI (needs 2 + 5 merged at minimum; more useful with 3/4 also merged)
