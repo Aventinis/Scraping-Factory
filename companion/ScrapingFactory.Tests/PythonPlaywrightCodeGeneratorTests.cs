@@ -354,4 +354,87 @@ public class PythonPlaywrightCodeGeneratorTests
         var extractionLoopIndex = script.IndexOf("for node in GROUPS:", StringComparison.Ordinal);
         Assert.True(clickIndex < extractionLoopIndex);
     }
+
+    // ── Container-Mode FramePath (Issue #42, Phase 3) ───────────────────────
+
+    private static ScrapingPlan GroupPlanWithFramedField() => new()
+    {
+        Engine = ScrapingEngine.Browser,
+        Steps =
+        [
+            new NavigateStep { Url = "https://example.com/speisekarte" },
+            new ExtractGroupStep
+            {
+                Roots =
+                [
+                    new GroupNode
+                    {
+                        Name = "Kategorie",
+                        Selector = "section.menu-category",
+                        Repeating = true,
+                        Children =
+                        [
+                            new DataFieldNode { Name = "Titel", Selector = "h2" },
+                            new DataFieldNode { Name = "Preis", Selector = ".price", FramePath = ["iframe#widget"] },
+                        ],
+                    },
+                ],
+            },
+        ],
+    };
+
+    private static ScrapingPlan GroupPlanWithFramedGroup() => new()
+    {
+        Engine = ScrapingEngine.Browser,
+        Steps =
+        [
+            new NavigateStep { Url = "https://example.com/speisekarte" },
+            new ExtractGroupStep
+            {
+                Roots =
+                [
+                    new GroupNode
+                    {
+                        Name = "Kategorie",
+                        Selector = "section.menu-category",
+                        Repeating = true,
+                        FramePath = ["iframe#widget"],
+                        Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }],
+                    },
+                ],
+            },
+        ],
+    };
+
+    [Fact]
+    public void Generate_GroupPlan_ContainsFrameResolverHelpers()
+    {
+        var script = _generator.Generate(GroupPlan());
+        Assert.Contains("def _resolve_group_matches(page, scope, node):", script);
+        Assert.Contains("def _resolve_field_match(page, scope, node):", script);
+        Assert.Contains("def extract_group(page, scope, node):", script);
+    }
+
+    [Fact]
+    public void Generate_GroupPlanWithoutFramePath_TreeLiteralHasNoFramePathKey()
+    {
+        // "frame_path" (no colon) also appears in the resolver helpers' own
+        // doc comments — checking for the dict-key form specifically.
+        var script = _generator.Generate(GroupPlan());
+        Assert.DoesNotContain("\"frame_path\":", script);
+    }
+
+    [Fact]
+    public void Generate_GroupPlanWithFramedField_TreeLiteralContainsFramePath()
+    {
+        var script = _generator.Generate(GroupPlanWithFramedField());
+        Assert.Contains("\"name\": 'Preis', \"selector\": '.price', \"mode\": 'text', \"frame_path\": ['iframe#widget']", script);
+    }
+
+    [Fact]
+    public void Generate_GroupPlanWithFramedGroup_TreeLiteralContainsFramePathBeforeChildren()
+    {
+        var script = _generator.Generate(GroupPlanWithFramedGroup());
+        Assert.Contains("\"repeating\": True, \"frame_path\": ['iframe#widget'], \"children\":", script);
+    }
 }
