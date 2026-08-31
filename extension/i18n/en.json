@@ -160,6 +160,10 @@
     "previewUnavailable": "Preview isn't possible on this page.",
     "captureUnavailable": "Network recording isn't possible on this page."
   },
+  "frame": {
+    "badge": "iframe",
+    "badgeTitle": "Inside embedded frame: {path}"
+  },
   "browserActions": {
     "title": "Browser actions",
     "hint": "Run in order before extraction, e.g. for a login flow.",
