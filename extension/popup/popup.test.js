@@ -1623,6 +1623,82 @@ describe('generate() surfaces companion verification failures', () => {
   });
 });
 
+// A 400 is ScrapingPlanValidator/the /generate endpoint itself rejecting a
+// structurally invalid config (bad URL, mutually exclusive Fields/Groups/
+// Api, a FramePath without Engine=Browser, ...) — a deterministic,
+// pre-execution rejection of the current configuration, never a companion
+// or generated-script malfunction. Unlike the 422 case above, this must
+// NOT invite a bug report — that would just fill GitHub issues with
+// non-bugs (see the "Static engine + a framed field/action" case that
+// prompted this).
+describe('generate() surfaces a 400 config rejection without inviting a bug report', () => {
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div id="fields-list"></div>
+        <button id="btn-generate"></button>
+      </section>
+      <section id="screen-generating" class="hidden"></section>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: jest.fn() },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({
+            fields: [{ name: 'Preis', selector: '.price', attribute: null, framePath: ['#widget'] }],
+            url: 'https://example.com',
+          }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+
+    global.fetch = jest.fn((url) => {
+      if (String(url).endsWith('/health')) return Promise.resolve({ ok: true });
+      if (String(url).endsWith('/generate')) {
+        return Promise.resolve({
+          ok: false,
+          status: 400,
+          json: () => Promise.resolve({
+            error: 'FramePath ist nur mit Engine "Browser" zulässig.',
+          }),
+        });
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${url}`));
+    });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE, fields restored from storage
+  });
+
+  test('shows a toast with the rejection reason but keeps the "Report bug" button hidden', async () => {
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const toast = document.getElementById('error-toast');
+    expect(toast.classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('error-toast-message').textContent).toContain('FramePath ist nur mit Engine');
+    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(true);
+  });
+});
+
 // ── Container-Mode integration ───────────────────────────────────────────────
 // Full flows through the real state machine (mode switch, modal → click-select
 // → tree update), mirroring the existing SELECTION_UNAVAILABLE/generate()
