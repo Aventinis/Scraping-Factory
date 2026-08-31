@@ -531,26 +531,74 @@ if (typeof module !== 'undefined') {
     matchFlatFields, matchGroupTree, computePreviewMatches,
     findValueInJson, siblingFields, findApiCandidates, deriveItemsAndValuePath,
     parseRobotsTxt, evaluateRobotsTxt, checkRobotsTxt,
-    findIframeSelectorForWindow, resolveFramePath,
+    findIframeSelectorForWindow, resolveFramePath, frameDepth,
   };
 }
 
 // ── Overlay ──────────────────────────────────────────────────────────────────
 
+// How many <iframe> boundaries separate this frame from the top document —
+// 0 for the top document itself (today's only case before Issue #42). Walks
+// window.parent references without reading any property off them, so this
+// stays cross-origin-safe (see the cross-frame path resolution section
+// above for the same concern) — no postMessage round trip needed, unlike
+// resolveFramePath's actual selector chain, so this is cheap enough to call
+// synchronously from createOverlay() on every selection round.
+function frameDepth() {
+  let depth = 0;
+  let w = window;
+  while (w !== window.top) {
+    depth++;
+    w = w.parent;
+  }
+  return depth;
+}
+
 let overlay = null;
 
+// Highlights an element inside a nested frame with a distinct (amber, badged
+// with the nesting depth) style from a top-level one (blue, Issue #41's
+// original color) — the depth is available synchronously (see frameDepth
+// above), while the actual resolved frame path (the chain of iframe
+// selectors) is only known once resolveFramePath's async postMessage round
+// trip completes in onClick below, so it can't be shown live during hover.
+// The depth badge is icon+number only, deliberately not routed through the
+// popup's i18n system — this renders into the inspected page itself, not
+// the extension's own UI, and a resolved frame path is shown as proper
+// translated text in the side panel once a click actually confirms one.
 function createOverlay() {
   if (overlay) return;
+  const depth = frameDepth();
   overlay = document.createElement('div');
   Object.assign(overlay.style, {
     position:      'fixed',
     pointerEvents: 'none',
     zIndex:        '2147483647',
-    border:        '2px solid #3b82f6',
-    background:    'rgba(59,130,246,0.1)',
+    border:        `2px solid ${depth > 0 ? '#f59e0b' : '#3b82f6'}`,
+    background:    depth > 0 ? 'rgba(245,158,11,0.12)' : 'rgba(59,130,246,0.1)',
     boxSizing:     'border-box',
     transition:    'all 0.05s ease',
   });
+
+  if (depth > 0) {
+    const badge = document.createElement('div');
+    badge.className = 'sf-frame-depth-badge';
+    badge.textContent = `\u{1F5BC} ${depth}`;
+    Object.assign(badge.style, {
+      position:      'absolute',
+      top:           '-18px',
+      left:          '0',
+      background:    '#f59e0b',
+      color:         '#fff',
+      font:          '11px sans-serif',
+      padding:       '1px 4px',
+      borderRadius:  '3px',
+      whiteSpace:    'nowrap',
+      pointerEvents: 'none',
+    });
+    overlay.appendChild(badge);
+  }
+
   document.body.appendChild(overlay);
 }
 
