@@ -234,20 +234,30 @@ Both are documented here specifically so a future session writing more Playwrigh
 
 ---
 
-## Phase 7 — Extension UI: Iframe/Shadow-DOM support
+## Phase 7 — Extension UI: Iframe/Shadow-DOM support — ✅ DONE
 
 **Branch:** `feature/iframe-ui`
 **Depends on:** Phase 2 (backend, minimum) + Phase 5 (browser-action UI baseline). Phases 3/4 aren't a hard dependency but make this phase materially more useful (framed container/action-step configuration) — check whether they've landed and adjust scope accordingly.
 
+### Scope note (discovered while implementing, not assumed upfront)
+
+The task list below was written assuming the wire-format plumbing already existed and only the *visual feedback* was missing. That assumption was wrong: `content-script.js`'s `ELEMENT_SELECTED` message has carried a resolved `framePath` since Phase 2, but `popup.js` never read `message.framePath` anywhere — flat fields, container-mode nodes, and browser actions had no `framePath` property at all, and none of `buildScrapingConfig`/`serializeGroupTree`/`serializeBrowserActions` ever emitted one. So Issue #42 was **not actually usable end-to-end through the extension** before this phase, regardless of how the "click inside an iframe" selection itself behaved — this phase had to add that plumbing first, then the visual feedback on top of it.
+
 ### Tasks
 
-- [ ] Visual feedback during click-based selection when the hovered/clicked element is inside an iframe (analogous to the existing DOM tree highlighting) — at minimum, indicate the frame path being recorded.
-- [ ] (Cross-origin iframes need no special-casing per Phase 2's Spike A — they're fully inspectable, so no fallback/error UI is needed for that case specifically.)
-- [ ] Manually verify end-to-end against `test-pages/iframe-shadow-dom/index.html`.
+- [x] **Visual feedback during selection** (two layers, since the two pieces of information become available at very different times):
+  - **Live, during hover** — `content-script.js`'s `createOverlay()` now colors the hover highlight amber (vs. the original blue) and adds a `🖼 {depth}` badge whenever the current frame isn't the top document (`frameDepth()`, a synchronous `window.parent` walk — no postMessage round trip needed, unlike the actual selector-chain resolution). Icon+number only, deliberately not routed through the popup's i18n system, since this renders into the *inspected page*, not the extension's own UI.
+  - **After a click, in the side panel** — once `resolveFramePath()`'s async postMessage round trip actually resolves a `framePath`, it's threaded through the popup's state (`pendingFramePath`, mirroring `pendingSelector`) and stored onto the resulting field/group-node/browser-action. A small translated `.frame-badge` pill (new `frame.badge`/`frame.badgeTitle` i18n keys, `frameBadgeHtml()`) is shown next to the item in `renderFields`/`renderGroupTree`/`renderBrowserActions` whenever it carries a non-null `framePath`, with the full resolved chain (`" > "`-joined) in the tooltip.
+  - Plumbing added to make the above possible: `addField`/`buildGroupNode`/`buildFieldNode` gained an optional `framePath` parameter; `serializeGroupTree`/`serializeBrowserActions`/`buildScrapingConfig`'s flat-fields mapping all include `framePath` in the wire payload only when set (never `null`), matching the existing "omit when meaningless" convention `engine`/`attribute` already use. `background/service-worker.js`'s `ELEMENT_SELECTED` handler now also persists `pendingFramePath` into session storage alongside `pendingSelector`, for the same "popup was closed at click time" recovery path.
+  - A `ScrollStep` action has two independently-pickable selectors but the backend models exactly one `FramePath` for the whole step (see Phase 4) — the popup reflects this literally: picking either selector overwrites the action's single `framePath` with whatever the most recent pick resolved to, rather than trying to merge/reconcile two picks that could disagree. Not further validated in the UI (e.g. no warning if the two selectors were picked from different frames) — a known, accepted limitation matching the backend's own.
+- [x] Cross-origin iframes needed no special-casing, confirmed again here — per Phase 2's Spike A they're fully inspectable, so no fallback/error UI exists for that case specifically.
+- [x] **Tests**: `content-script.test.js` (`frameDepth()` returns 0 for the top-level document — the `depth > 0` branch is jsdom-untestable for the same `window.top`-non-configurable reason Phase 2 already hit, verified manually instead, see below). `popup.test.js`: `addField`/`buildGroupNode`/`buildFieldNode` carrying a `framePath`; `serializeGroupTree`/`serializeBrowserActions`/`buildScrapingConfig` including/omitting `framePath` correctly; `frameBadgeHtml` unit tests; `renderFields`/`renderGroupTree` badge presence/absence; a full container-mode and a full browser-action integration test each confirming the badge appears (with the right selector chain in its title) after a simulated framed `ELEMENT_SELECTED`, and does not appear for a top-level one. `service-worker.test.js`: `pendingFramePath` stored alongside `pendingSelector`.
+- [x] **Manual, real-extension verification** against `test-pages/iframe-shadow-dom/index.html` (same methodology as Phases 2/5/6: `launch_persistent_context` loading the real unpacked extension into real Chromium — headless needed `headless=False` + `args=["--headless=new", ...]` together, since `headless=True` alone adds the old `--headless` flag which silently disables extension loading; the display-less environment this session ran in otherwise had no `Xvfb`/`xvfb-run` available, so this exact incantation was required rather than a headed browser). Configured a complete flat-mode config **entirely through the real UI**: Browser engine enabled, then four fields picked by actually clicking on the real page — top-level baseline (no badge), a field inside the first-level iframe (badge, tooltip `#price-widget`), a field inside the *doubly-nested* iframe reached via `page.frame_locator(...).frame_locator(...)` (badge, tooltip `#price-widget > #reviews-widget`), and the open-shadow-DOM badge value (no `framePath` badge, exactly as expected since shadow DOM needs none). Verified the live hover overlay too: hovering the top-level marker showed the original blue box with no depth badge; hovering the level-1 iframe's marker showed the amber box with a `🖼 1` badge, read directly out of that frame's own DOM. Generation returned 200 OK; ran the downloaded script independently and confirmed `output.csv` contained all four correct values in one row: `129,00 €` / `124,50 €` / `4,7 / 5 (312 Bewertungen)` / `0,00 € (Prime)` — a genuine end-to-end proof (extension click → wire format → `FRAME_PATHS` in the generated script → real Playwright execution → correct extraction), not just the UI half tested in isolation.
 
 ### Definition of done
 
-- A user can select data inside an iframe (including nested iframes) purely through the extension UI and download a working script.
+- [x] A user can select data inside an iframe (including nested iframes) purely through the extension UI and download a working script.
+- [x] All new + existing tests green (422 extension tests; backend untouched by this phase).
 
 ---
 
@@ -259,6 +269,6 @@ Both are documented here specifically so a future session writing more Playwrigh
 4. ~~Phase 4 — action-step `FramePath` (needs Phase 2 merged; independent of Phase 3, either order/parallel is fine)~~ ✅ done
 5. ~~Phase 5 — browser-engine UI baseline (needs Phase 1 merged for `BrowserActions` to exist; otherwise independent of 2/3/4)~~ ✅ done
 6. ~~Phase 6 — ScrollStep UI (needs 1 + 5 merged)~~ ✅ done
-7. Phase 7 — Iframe UI (needs 2 + 5 merged at minimum; more useful with 3/4 also merged)
+7. ~~Phase 7 — Iframe UI (needs 2 + 5 merged at minimum; more useful with 3/4 also merged)~~ ✅ done
 
 Phase 5 can be worked in parallel with Phases 2/3/4 by a different session/branch if desired, since it doesn't depend on any of them.
