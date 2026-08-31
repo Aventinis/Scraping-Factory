@@ -1708,6 +1708,21 @@ async function generate() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config),
     });
+    if (res.status === 400) {
+      // A structural config rejection (bad URL, mutually exclusive Fields/
+      // Groups/Api, a FramePath without Engine=Browser, ...) — always a
+      // deterministic, pre-execution validation failure caused by the
+      // current configuration, never a companion/script malfunction. Unlike
+      // the 422/network-error cases below, no "Report bug" prompt is
+      // offered — showToast's context arg is intentionally omitted, since
+      // inviting a bug report here would just fill GitHub issues with
+      // non-bugs (an invalid config, not a defect).
+      const data = await res.json().catch(() => null);
+      log('GENERATE CONFIG INVALID', data);
+      setState(STATES.IDLE);
+      showToast(t('toast.configInvalid', { message: data?.error || t('toast.verificationFailed') }));
+      return;
+    }
     if (res.status === 422) {
       const data = await res.json().catch(() => null);
       log('GENERATE VERIFICATION FAIL', data);
