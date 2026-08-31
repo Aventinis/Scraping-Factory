@@ -80,6 +80,22 @@ test('ELEMENT_SELECTED stores selector in session storage', async () => {
 
   expect(chrome.storage.session.set).toHaveBeenCalledWith({
     pendingSelector: 'li.card > h2',
+    pendingFramePath: null,
+  });
+});
+
+// Issue #42, Phase 7: a click inside an iframe carries a resolved framePath
+// alongside the selector — this must survive the same session-storage
+// fallback path a plain top-level selector already does (see above), so a
+// popup that was closed at click time can still recover it on reopen.
+test('ELEMENT_SELECTED with a framePath stores it alongside the selector', async () => {
+  capturedListener({ type: 'ELEMENT_SELECTED', selector: 'h2', framePath: ['#price-widget'] }, {});
+
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  expect(chrome.storage.session.set).toHaveBeenCalledWith({
+    pendingSelector: 'h2',
+    pendingFramePath: ['#price-widget'],
   });
 });
 

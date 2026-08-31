@@ -38,6 +38,7 @@ const {
   variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
   detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase,
   addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
+  frameBadgeHtml,
 } = require('./popup');
 
 // jsdom's Blob doesn't implement .text() — read via FileReader instead.
@@ -95,6 +96,16 @@ describe('buildScrapingConfig (flat mode)', () => {
     const result = buildScrapingConfig('https://example.com', 'flat', []);
     expect(result.scriptFileName).toBeNull();
     expect(result.outputFileName).toBeNull();
+  });
+
+  // Issue #42, Phase 7
+  test('includes framePath on a field when set, omits it when not', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [
+      { name: 'Preis', selector: '.price', framePath: ['#price-widget'] },
+      { name: 'Titel', selector: 'h1' },
+    ]);
+    expect(result.fields[0].framePath).toEqual(['#price-widget']);
+    expect(result.fields[1]).not.toHaveProperty('framePath');
   });
 });
 
@@ -262,7 +273,13 @@ describe('buildConfigExport', () => {
 describe('addField', () => {
   test('appends field with null attribute', () => {
     const result = addField([], 'Titel', 'h1');
-    expect(result).toEqual([{ name: 'Titel', selector: 'h1', attribute: null }]);
+    expect(result).toEqual([{ name: 'Titel', selector: 'h1', attribute: null, framePath: null }]);
+  });
+
+  // Issue #42, Phase 7
+  test('appends field with framePath when given', () => {
+    const result = addField([], 'Preis', 'h2', ['#price-widget']);
+    expect(result).toEqual([{ name: 'Preis', selector: 'h2', attribute: null, framePath: ['#price-widget'] }]);
   });
 
   test('does not mutate original array', () => {
@@ -404,6 +421,21 @@ describe('serializeBrowserActions', () => {
     expect(result[0].containerSelector).toBeNull();
     expect(result[0].loadMoreButtonSelector).toBeNull();
   });
+
+  // Issue #42, Phase 7
+  test('includes framePath on every kind when set, omits it entirely when null', () => {
+    const framed = [
+      { kind: 'waitFor', selector: '.welcome', timeoutMs: 3000, framePath: ['#login-widget'] },
+      { kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER', framePath: null },
+      { kind: 'click', selector: '#submit', framePath: ['#login-widget'] },
+      { kind: 'scroll', containerSelector: '#list', loadMoreButtonSelector: null, maxIterations: 5, waitAfterMs: 500, framePath: ['#feed-widget'] },
+    ];
+    const result = serializeBrowserActions(framed);
+    expect(result[0].framePath).toEqual(['#login-widget']);
+    expect(result[1]).not.toHaveProperty('framePath');
+    expect(result[2].framePath).toEqual(['#login-widget']);
+    expect(result[3].framePath).toEqual(['#feed-widget']);
+  });
 });
 
 // ── Container-Mode tree helpers ──────────────────────────────────────────────
@@ -411,17 +443,24 @@ describe('serializeBrowserActions', () => {
 describe('buildGroupNode / buildFieldNode', () => {
   test('buildGroupNode starts with empty children', () => {
     expect(buildGroupNode('Kategorie', 'section', true)).toEqual({
-      kind: 'group', name: 'Kategorie', selector: 'section', repeating: true, children: [],
+      kind: 'group', name: 'Kategorie', selector: 'section', repeating: true, children: [], framePath: null,
     });
   });
 
   test('buildFieldNode nulls attribute unless mode is attribute', () => {
     expect(buildFieldNode('Titel', 'h2', 'text', 'href')).toEqual({
-      kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null,
+      kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null, framePath: null,
     });
     expect(buildFieldNode('Link', 'a', 'attribute', 'href')).toEqual({
-      kind: 'field', name: 'Link', selector: 'a', mode: 'attribute', attribute: 'href',
+      kind: 'field', name: 'Link', selector: 'a', mode: 'attribute', attribute: 'href', framePath: null,
     });
+  });
+
+  // Issue #42, Phase 7
+  test('buildGroupNode / buildFieldNode carry a framePath when given', () => {
+    expect(buildGroupNode('Kategorie', 'section', true, ['#price-widget']).framePath).toEqual(['#price-widget']);
+    expect(buildFieldNode('Titel', 'h2', 'text', null, ['#price-widget', '#reviews-widget']).framePath)
+      .toEqual(['#price-widget', '#reviews-widget']);
   });
 });
 
@@ -551,6 +590,24 @@ describe('serializeGroupTree', () => {
     const groups = [{ kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null }];
     expect(serializeGroupTree(groups)[0]).not.toHaveProperty('attribute');
   });
+
+  // Issue #42, Phase 7
+  test('includes framePath on both group and field nodes when set, omits it when null', () => {
+    const groups = [
+      {
+        kind: 'group', name: 'Preisvergleich', selector: '#price-widget', repeating: false,
+        framePath: ['#price-widget'],
+        children: [
+          { kind: 'field', name: 'Preis', selector: '.price', mode: 'text', attribute: null, framePath: ['#price-widget'] },
+          { kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null, framePath: null },
+        ],
+      },
+    ];
+    const [group] = serializeGroupTree(groups);
+    expect(group.framePath).toEqual(['#price-widget']);
+    expect(group.children[0].framePath).toEqual(['#price-widget']);
+    expect(group.children[1]).not.toHaveProperty('framePath');
+  });
 });
 
 describe('formatGroupNodeLabel', () => {
@@ -604,9 +661,46 @@ describe('renderGroupTree', () => {
     const childUl = document.querySelector('[data-path="[0]"] > .group-tree-children');
     expect(childUl.classList.contains('hidden')).toBe(false);
   });
+
+  // Issue #42, Phase 7
+  test('shows an iframe badge only for a node with a framePath', () => {
+    renderGroupTree([
+      {
+        kind: 'group', name: 'Preisvergleich', selector: '#price-widget', repeating: false,
+        framePath: ['#price-widget'],
+        children: [
+          { kind: 'field', name: 'Preis', selector: '.price', mode: 'text', attribute: null, framePath: ['#price-widget'] },
+          { kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null, framePath: null },
+        ],
+      },
+    ]);
+
+    const groupRow = document.querySelector('[data-path="[0]"] > .group-tree-row');
+    expect(groupRow.querySelector('.frame-badge').title).toContain('#price-widget');
+
+    const framedFieldRow = document.querySelector('[data-path="[0,0]"] > .group-tree-row');
+    expect(framedFieldRow.querySelector('.frame-badge')).not.toBeNull();
+
+    const plainFieldRow = document.querySelector('[data-path="[0,1]"] > .group-tree-row');
+    expect(plainFieldRow.querySelector('.frame-badge')).toBeNull();
+  });
 });
 
 // ── escapeHtml ────────────────────────────────────────────────────────────────
+
+// Issue #42, Phase 7
+describe('frameBadgeHtml', () => {
+  test('returns empty string for null/empty framePath', () => {
+    expect(frameBadgeHtml(null)).toBe('');
+    expect(frameBadgeHtml([])).toBe('');
+  });
+
+  test('renders a badge with the joined path in the title', () => {
+    const html = frameBadgeHtml(['#price-widget', '#reviews-widget']);
+    expect(html).toContain('frame-badge');
+    expect(html).toContain('#price-widget &gt; #reviews-widget');
+  });
+});
 
 describe('escapeHtml', () => {
   test('escapes <, >, &, and "', () => {
@@ -645,6 +739,19 @@ describe('renderFields', () => {
 
     const nameEl = document.querySelector('.field-name');
     expect(nameEl.title).toBe('Ein sehr langer Feldname');
+  });
+
+  // Issue #42, Phase 7
+  test('shows an iframe badge only for a field with a framePath', () => {
+    renderFields([
+      { name: 'Preis', selector: '.price', attribute: null, framePath: ['#price-widget'] },
+      { name: 'Titel', selector: 'h1', attribute: null, framePath: null },
+    ]);
+
+    const rows = document.querySelectorAll('.field-row');
+    expect(rows[0].querySelector('.frame-badge')).not.toBeNull();
+    expect(rows[0].querySelector('.frame-badge').title).toContain('#price-widget');
+    expect(rows[1].querySelector('.frame-badge')).toBeNull();
   });
 });
 
@@ -1717,6 +1824,37 @@ describe('Container-Mode integration', () => {
       type: 'START_SELECTION', scopeSelector: 'section.menu-category', avoidId: true,
     });
   });
+
+  // Issue #42, Phase 7: a framed container/field shows the iframe badge in
+  // the tree and carries framePath through to the wire format.
+  test('a root container picked inside an iframe shows the iframe badge and serializes with framePath', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Preisvergleich';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#price-box', framePath: ['#price-widget'] });
+    await flushMicrotasks();
+
+    const badge = document.querySelector('#group-tree-root .frame-badge');
+    expect(badge).not.toBeNull();
+    expect(badge.title).toContain('#price-widget');
+
+    expect(serializeGroupTree([{
+      kind: 'group', name: 'Preisvergleich', selector: '#price-box', repeating: false,
+      children: [], framePath: ['#price-widget'],
+    }])[0].framePath).toEqual(['#price-widget']);
+  });
+
+  test('a root container picked at the top level shows no iframe badge', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+
+    expect(document.querySelector('#group-tree-root .frame-badge')).toBeNull();
+  });
 });
 
 // ── Engine + browser actions integration (Issue #41/#42, Phase 5) ───────────
@@ -1904,6 +2042,36 @@ describe('Engine + browser actions integration', () => {
     expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
     const selectorText = document.querySelector('.browser-action-selector-row .field-selector');
     expect(selectorText.textContent).toBe('#submit');
+  });
+
+  // Issue #42, Phase 7: a click landing inside an iframe reports a framePath
+  // alongside the selector — it's written straight into the action (like the
+  // selector itself) and surfaced as a badge on the action card.
+  test('a framed action selector shows the iframe badge and carries framePath onto the action', async () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-click').click();
+
+    document.querySelector('.btn-pick-action-selector').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#submit', framePath: ['#login-widget'] });
+    await flushMicrotasks();
+
+    const badge = document.querySelector('.browser-action-card .frame-badge');
+    expect(badge).not.toBeNull();
+    expect(badge.title).toContain('#login-widget');
+
+    expect(serializeBrowserActions([{ kind: 'click', selector: '#submit', framePath: ['#login-widget'] }]))
+      .toEqual([{ kind: 'click', selector: '#submit', framePath: ['#login-widget'] }]);
+  });
+
+  test('a top-level (unframed) action selector shows no iframe badge', async () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-click').click();
+
+    document.querySelector('.btn-pick-action-selector').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#submit' });
+    await flushMicrotasks();
+
+    expect(document.querySelector('.browser-action-card .frame-badge')).toBeNull();
   });
 
   test('a full login flow (fill, fill, click, wait) is sent to /generate with engine and browserActions', async () => {
