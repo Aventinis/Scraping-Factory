@@ -58,6 +58,15 @@
     .field-name     { font-weight: 500; min-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .field-selector { flex: 1; font-size: 11px; font-family: monospace; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+    /* Frame-path indicator (Issue #42, Phase 7) — flags a field/node/action
+       whose selector was picked inside an iframe (see FramePath on the wire
+       format); the amber tone matches content-script.js's own in-page
+       overlay/badge color for the same concept. */
+    .frame-badge {
+      flex: none; font-size: 10px; padding: 1px 6px; border-radius: 999px;
+      background: #fef3c7; color: #b45309; white-space: nowrap;
+    }
+
     /* Mode toggle */
     .mode-toggle { display: flex; gap: 4px; margin-bottom: 14px; background: #f3f4f6; border-radius: 8px; padding: 3px; }
     .mode-btn {

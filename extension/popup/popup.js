@@ -30,6 +30,11 @@ let _state = {
   outputFileName:      '', // base name (no extension) for the script's own output.csv/output.xml — empty = use the "output" placeholder/default
   scriptText:          '',
   pendingSelector:     null,  // set while field-name modal (flat) or extended field modal (container) is open
+  // Issue #42, Phase 7: the framePath ELEMENT_SELECTED reported alongside
+  // pendingSelector above — null for a top-level pick, carried through the
+  // same modal round trip and written onto the resulting field/node once
+  // confirmed (see confirmField/confirmExtendedField).
+  pendingFramePath:    null,
   selectionKind:       null,  // 'field' | 'container' | 'browserAction' | null — which kind the current SELECTING round is for
   pendingParentPath:   null,  // number[] | null — where the next inserted group-tree node goes; null = root level
   pendingNewContainer: null,  // {name, repeating} captured by modal-container-new before element-selection starts
@@ -146,7 +151,10 @@ function buildScrapingConfig(
   return {
     version: '1',
     url,
-    fields: fields.map(f => ({ name: f.name, selector: f.selector, attribute: f.attribute ?? null })),
+    fields: fields.map(f => ({
+      name: f.name, selector: f.selector, attribute: f.attribute ?? null,
+      ...(f.framePath ? { framePath: f.framePath } : {}),
+    })),
     outputFormat: 'Csv',
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
@@ -171,8 +179,8 @@ function buildConfigExport(
   };
 }
 
-function addField(fields, name, selector) {
-  return [...fields, { name, selector, attribute: null }];
+function addField(fields, name, selector, framePath = null) {
+  return [...fields, { name, selector, attribute: null, framePath: framePath || null }];
 }
 
 // Issue #41/#42, Phase 5/6: browser actions (WaitFor/Fill/Click/Scroll,
@@ -206,8 +214,9 @@ function updateBrowserAction(actions, index, patch) {
 // unpicked '' here must serialize to null, never ''.
 function serializeBrowserActions(actions) {
   return actions.map((a) => {
-    if (a.kind === 'waitFor') return { kind: 'waitFor', selector: a.selector, timeoutMs: a.timeoutMs };
-    if (a.kind === 'fill') return { kind: 'fill', selector: a.selector, environmentVariableName: a.environmentVariableName };
+    const framePath = a.framePath ? { framePath: a.framePath } : {};
+    if (a.kind === 'waitFor') return { kind: 'waitFor', selector: a.selector, timeoutMs: a.timeoutMs, ...framePath };
+    if (a.kind === 'fill') return { kind: 'fill', selector: a.selector, environmentVariableName: a.environmentVariableName, ...framePath };
     if (a.kind === 'scroll') {
       return {
         kind: 'scroll',
@@ -215,9 +224,10 @@ function serializeBrowserActions(actions) {
         loadMoreButtonSelector: a.loadMoreButtonSelector || null,
         maxIterations: a.maxIterations,
         waitAfterMs: a.waitAfterMs,
+        ...framePath,
       };
     }
-    return { kind: 'click', selector: a.selector };
+    return { kind: 'click', selector: a.selector, ...framePath };
   });
 }
 
@@ -411,12 +421,12 @@ function buildApiConfig({ urlParts, itemsPath, fields, parameterSources, capture
 // leaf. `path` addresses a node the same way the DOM-tree-view already does
 // (an array of child indices) — see buildTreeNodeEl's `node.path`.
 
-function buildGroupNode(name, selector, repeating) {
-  return { kind: 'group', name, selector, repeating, children: [] };
+function buildGroupNode(name, selector, repeating, framePath = null) {
+  return { kind: 'group', name, selector, repeating, children: [], framePath: framePath || null };
 }
 
-function buildFieldNode(name, selector, mode, attribute) {
-  return { kind: 'field', name, selector, mode, attribute: mode === 'attribute' ? attribute : null };
+function buildFieldNode(name, selector, mode, attribute, framePath = null) {
+  return { kind: 'field', name, selector, mode, attribute: mode === 'attribute' ? attribute : null, framePath: framePath || null };
 }
 
 function resolveGroupNode(groups, path) {
@@ -480,13 +490,31 @@ const FIELD_MODE_WIRE_NAMES = { text: 'Text', attribute: 'Attribute', exists: 'E
 // `children` present only for groups, `attribute` present only when mode is Attribute.
 function serializeGroupTree(groups) {
   return groups.map(node => node.kind === 'group'
-    ? { name: node.name, selector: node.selector, repeating: node.repeating, children: serializeGroupTree(node.children) }
+    ? {
+        name: node.name, selector: node.selector, repeating: node.repeating,
+        children: serializeGroupTree(node.children),
+        ...(node.framePath ? { framePath: node.framePath } : {}),
+      }
     : {
         name: node.name,
         selector: node.selector,
         mode: FIELD_MODE_WIRE_NAMES[node.mode],
         ...(node.mode === 'attribute' ? { attribute: node.attribute } : {}),
+        ...(node.framePath ? { framePath: node.framePath } : {}),
       });
+}
+
+// Issue #42, Phase 7: a small pill shown next to a field's/node's/action's
+// selector once ELEMENT_SELECTED resolved a non-null framePath for it — the
+// side panel's own, translated indicator of what content-script.js's
+// synchronous, icon-only overlay badge could only hint at live during
+// selection (see createOverlay's frameDepth-based styling). `path.join(' > ')`
+// matches the top-to-target reading order the backend itself documents on
+// FramePath (IR/BrowserAction.cs, ContainerNode.cs).
+function frameBadgeHtml(framePath) {
+  if (!framePath || framePath.length === 0) return '';
+  const title = escapeHtml(t('frame.badgeTitle', { path: framePath.join(' > ') }));
+  return `<span class="frame-badge" title="${title}">${escapeHtml(t('frame.badge'))}</span>`;
 }
 
 function escapeHtml(str) {
@@ -787,6 +815,7 @@ function renderFields(fields = _state.fields) {
     row.innerHTML =
       `<span class="field-name" title="${escapeHtml(field.name)}">${escapeHtml(field.name)}</span>` +
       `<span class="field-selector" title="${escapeHtml(field.selector)}">${escapeHtml(field.selector)}</span>` +
+      frameBadgeHtml(field.framePath) +
       `<button class="btn-danger btn-remove-field" data-index="${i}">${escapeHtml(t('common.remove'))}</button>`;
     listEl.appendChild(row);
   });
@@ -834,6 +863,7 @@ function renderBrowserActions(actions = _state.browserActions) {
     header.className = 'browser-action-header';
     header.innerHTML =
       `<span class="row-label">${escapeHtml(kindLabels[action.kind] || action.kind)}</span>` +
+      frameBadgeHtml(action.framePath) +
       `<button type="button" class="btn-danger btn-remove-action" data-index="${i}">${escapeHtml(t('common.remove'))}</button>`;
     card.appendChild(header);
 
@@ -1228,6 +1258,14 @@ function buildGroupTreeNodeEl(node, path, depth) {
   label.textContent = formatGroupNodeLabel(node);
   label.title = node.selector;
   row.appendChild(label);
+
+  if (node.framePath) {
+    const badge = document.createElement('span');
+    badge.className = 'frame-badge';
+    badge.title = t('frame.badgeTitle', { path: node.framePath.join(' > ') });
+    badge.textContent = t('frame.badge');
+    row.appendChild(badge);
+  }
 
   if (node.kind === 'group') {
     const addContainerBtn = document.createElement('button');
@@ -1846,10 +1884,11 @@ async function reportBug() {
 function confirmField() {
   const name = document.getElementById('input-field-name')?.value.trim();
   if (!name) return;
-  log('FIELD_ADD', { name, selector: _state.pendingSelector });
+  log('FIELD_ADD', { name, selector: _state.pendingSelector, framePath: _state.pendingFramePath });
   setState(STATES.IDLE, {
-    fields:          addField(_state.fields, name, _state.pendingSelector),
-    pendingSelector: null,
+    fields:           addField(_state.fields, name, _state.pendingSelector, _state.pendingFramePath),
+    pendingSelector:  null,
+    pendingFramePath: null,
   });
 }
 
@@ -1930,11 +1969,12 @@ function confirmExtendedField() {
   const attribute = document.getElementById('input-field-attribute')?.value.trim();
   if (mode === 'attribute' && !attribute) return;
 
-  const node = buildFieldNode(name, _state.pendingSelector, mode, attribute);
+  const node = buildFieldNode(name, _state.pendingSelector, mode, attribute, _state.pendingFramePath);
   log('FIELD_ADD(container) confirm', node);
   setState(STATES.IDLE, {
     groups:            insertContainerNode(_state.groups, _state.pendingParentPath, node),
     pendingSelector:   null,
+    pendingFramePath:  null,
     pendingParentPath: null,
     selectionKind:     null,
   });
@@ -1942,7 +1982,7 @@ function confirmExtendedField() {
 
 function cancelExtendedField() {
   log('FIELD_ADD(container) cancel');
-  setState(STATES.IDLE, { pendingSelector: null, pendingParentPath: null, selectionKind: null });
+  setState(STATES.IDLE, { pendingSelector: null, pendingFramePath: null, pendingParentPath: null, selectionKind: null });
 }
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
@@ -2329,13 +2369,14 @@ function wireEvents() {
       }
       // Clear the storage entry the service worker wrote — we have it now.
       chrome.storage.session.remove('pendingSelector');
+      const framePath = message.framePath || null;
       if (_state.mode === 'container' && _state.selectionKind === 'container') {
         // Name/type were already collected by modal-container-new — insert
         // the new group node straight away, no further modal needed.
-        const node = buildGroupNode(_state.pendingNewContainer.name, message.selector, _state.pendingNewContainer.repeating);
+        const node = buildGroupNode(_state.pendingNewContainer.name, message.selector, _state.pendingNewContainer.repeating, framePath);
         setState(STATES.IDLE, {
           groups: insertContainerNode(_state.groups, _state.pendingParentPath, node),
-          selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null,
+          selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null,
         });
       } else if (_state.selectionKind === 'browserAction' && _state.pendingBrowserActionIndex !== null) {
         // The action card already exists (kind chosen when it was added via
@@ -2343,14 +2384,20 @@ function wireEvents() {
         // the pick button was for (pendingBrowserActionField — always
         // 'selector' except for a ScrollStep's two optional selectors), no
         // naming modal needed, same shape as the container branch above.
+        // framePath is written unconditionally (even to null) rather than
+        // merged: the backend models exactly one FramePath per ScrollStep,
+        // shared by both ContainerSelector and LoadMoreButtonSelector (see
+        // IR/BrowserAction.cs), so re-picking either selector re-records
+        // which frame the *step* now targets.
         setState(STATES.IDLE, {
           browserActions: updateBrowserAction(_state.browserActions, _state.pendingBrowserActionIndex, {
             [_state.pendingBrowserActionField]: message.selector,
+            framePath,
           }),
-          selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null,
+          selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null,
         });
       } else {
-        setState(STATES.SELECTING, { pendingSelector: message.selector });
+        setState(STATES.SELECTING, { pendingSelector: message.selector, pendingFramePath: framePath });
       }
       if (message.path) highlightSelected(message.path);
     }
@@ -2415,7 +2462,7 @@ async function init() {
 
   log('INIT reading session storage');
   const stored = await chrome.storage.session.get([
-    'fields', 'url', 'pendingSelector', 'mode', 'groups',
+    'fields', 'url', 'pendingSelector', 'pendingFramePath', 'mode', 'groups',
     'engine', 'browserActions', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
@@ -2460,11 +2507,11 @@ async function init() {
       // Same as the live ELEMENT_SELECTED path: name/type were already
       // collected before selection started, so insert straight away.
       log('INIT pending container selector found → inserting node', stored.pendingSelector);
-      const node = buildGroupNode(stored.pendingNewContainer.name, stored.pendingSelector, stored.pendingNewContainer.repeating);
+      const node = buildGroupNode(stored.pendingNewContainer.name, stored.pendingSelector, stored.pendingNewContainer.repeating, stored.pendingFramePath);
       const groups = insertContainerNode(_state.groups, stored.pendingParentPath, node);
       await chrome.storage.session.set({ groups });
       setState(STATES.IDLE, {
-        groups, selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null,
+        groups, selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null,
       });
       return;
     }
@@ -2475,10 +2522,12 @@ async function init() {
       // straight into it, no naming modal needed.
       const field = stored.pendingBrowserActionField || 'selector';
       log('INIT pending browser-action selector found → updating action', { field, selector: stored.pendingSelector });
-      const browserActions = updateBrowserAction(_state.browserActions, stored.pendingBrowserActionIndex, { [field]: stored.pendingSelector });
+      const browserActions = updateBrowserAction(_state.browserActions, stored.pendingBrowserActionIndex, {
+        [field]: stored.pendingSelector, framePath: stored.pendingFramePath || null,
+      });
       await chrome.storage.session.set({ browserActions });
       setState(STATES.IDLE, {
-        browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null,
+        browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null,
       });
       return;
     }
@@ -2486,7 +2535,7 @@ async function init() {
     // Flat field or container field — show the (extended, in container
     // mode) field-name modal without re-checking the companion.
     log('INIT pending selector found → show modal', stored.pendingSelector);
-    setState(STATES.SELECTING, { pendingSelector: stored.pendingSelector });
+    setState(STATES.SELECTING, { pendingSelector: stored.pendingSelector, pendingFramePath: stored.pendingFramePath || null });
     return;
   }
 
@@ -2516,5 +2565,6 @@ if (typeof module !== 'undefined') {
     detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
     applyStaticTranslations, sanitizeFileNameBase,
     addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
+    frameBadgeHtml,
   };
 }

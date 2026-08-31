@@ -160,6 +160,10 @@
     "previewUnavailable": "No es posible la vista previa en esta página.",
     "captureUnavailable": "No es posible grabar red en esta página."
   },
+  "frame": {
+    "badge": "iframe",
+    "badgeTitle": "Dentro de un frame incrustado: {path}"
+  },
   "browserActions": {
     "title": "Acciones del navegador",
     "hint": "Se ejecutan en orden antes de la extracción, p. ej. para un flujo de inicio de sesión.",
