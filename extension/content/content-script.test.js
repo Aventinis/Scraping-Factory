@@ -2,7 +2,7 @@ const {
   buildSelector, elementPath, serializeDomTree,
   matchFlatFields, matchGroupTree, computePreviewMatches,
   findValueInJson, siblingFields, findApiCandidates, deriveItemsAndValuePath,
-  findIframeSelectorForWindow, resolveFramePath,
+  findIframeSelectorForWindow, resolveFramePath, frameDepth,
 } = require('./content-script');
 
 function el(tag, { id, classes } = {}) {
@@ -813,6 +813,20 @@ describe('findIframeSelectorForWindow', () => {
 describe('resolveFramePath', () => {
   test('resolves to [] for the top-level document (jsdom is always window === window.top)', async () => {
     await expect(resolveFramePath()).resolves.toEqual([]);
+  });
+});
+
+// Issue #42, Phase 7: frameDepth() drives createOverlay's iframe-visual-
+// feedback branch (amber highlight + depth badge, see the "Overlay" section).
+// Only the top-frame (depth 0) case is exercisable in jsdom — jsdom's
+// window.top is non-configurable (see PLAN-issues-41-42.md's Phase 2 design
+// notes: the same limitation already blocks unit-testing resolveFramePath's
+// actual cross-frame round trip), so the depth > 0 branch is verified
+// manually against a real nested iframe instead (see PLAN-issues-41-42.md's
+// Phase 7 section).
+describe('frameDepth', () => {
+  test('is 0 for the top-level document', () => {
+    expect(frameDepth()).toBe(0);
   });
 });
 
