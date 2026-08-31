@@ -155,6 +155,7 @@
   },
   "toast": {
     "verificationFailed": "Verifikation der Konfiguration fehlgeschlagen.",
+    "configInvalid": "Konfiguration ungültig: {message}",
     "generationError": "Fehler: {message}",
     "selectionUnavailable": "Element-Auswahl auf dieser Seite nicht möglich.",
     "previewUnavailable": "Vorschau auf dieser Seite nicht möglich.",
