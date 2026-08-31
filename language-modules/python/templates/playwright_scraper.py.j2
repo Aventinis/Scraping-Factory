@@ -24,6 +24,44 @@ ATTRIBUTES = {
 {{- end }}{{- end }}
 }
 
+# A field's own selector is evaluated against the top-level page unless it
+# has a FRAME_PATH entry — an ordered list of CSS selectors identifying each
+# iframe from the top document down to the frame the field actually lives
+# in. Shadow DOM needs no equivalent: Playwright's own selector engine
+# pierces open shadow roots automatically for a plain CSS selector.
+FRAME_PATHS = {
+{{- for field in fields }}{{- if field.frame_path }}
+    "{{ field.name }}": [{{ for sel in field.frame_path }}"{{ sel }}"{{ if !for.last }}, {{ end }}{{ end }}],
+{{- end }}{{- end }}
+}
+
+
+def _resolve_frame_locator(page, frame_path):
+    scope = page
+    for frame_selector in frame_path:
+        scope = scope.frame_locator(frame_selector)
+    return scope
+
+
+# ElementHandle (from query_selector_all) and Locator (from a FrameLocator
+# chain) expose the same .text_content()/.get_attribute() methods, so the
+# extraction loop below doesn't need to know or care which one it got — only
+# resolving "selector string" -> "list of element-like objects" differs.
+def _resolve_elements(page, selector, frame_path):
+    if not frame_path:
+        return page.query_selector_all(selector)
+    return _resolve_frame_locator(page, frame_path).locator(selector).all()
+
+
+# Used by the WaitFor/Fill/Click/Scroll action fragments rendered into the
+# scrape() body below (one per playwright_*_step.py.j2 template) — a plain
+# page.locator(selector) when frame_path is unset, the same frame-scoped
+# Locator _resolve_elements builds otherwise. Page has .locator() too, so
+# _resolve_frame_locator(page, []) returning page unchanged already makes
+# this uniform without a separate branch here.
+def _resolve_locator(page, selector, frame_path):
+    return _resolve_frame_locator(page, frame_path or []).locator(selector)
+
 
 def scrape(url):
     with sync_playwright() as p:
@@ -31,7 +69,7 @@ def scrape(url):
         page = browser.new_page()
 {{ actions }}
 
-        columns = {name: page.query_selector_all(sel) for name, sel in SELECTORS.items()}
+        columns = {name: _resolve_elements(page, sel, FRAME_PATHS.get(name)) for name, sel in SELECTORS.items()}
         n = max((len(v) for v in columns.values()), default=0)
 
         rows = []

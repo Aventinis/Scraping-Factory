@@ -16,6 +16,16 @@ public sealed class ExtractStep : ScrapingStep
 
     // null = Textinhalt; "href", "src" usw. für Attribut-Extraktion
     public string? Attribute { get; init; }
+
+    // Browser-engine only (Issue #42): an ordered list of CSS selectors
+    // identifying each iframe from the top document down to the frame
+    // containing Selector, e.g. ["iframe#outer", "iframe.inner"] — null (the
+    // default) means Selector is evaluated against the top-level document,
+    // today's only behavior. Shadow DOM needs no such field: Playwright's own
+    // selector engine pierces open shadow roots automatically for a plain
+    // CSS selector passed to query_selector/query_selector_all/locator, so
+    // Selector alone is already enough there.
+    public List<string>? FramePath { get; init; }
 }
 
 // Browser-engine only: waits for a selector to appear before continuing,
@@ -24,6 +34,11 @@ public sealed class WaitForStep : ScrapingStep
 {
     public required string Selector { get; init; }
     public int TimeoutMs { get; init; } = 5000;
+
+    // See ExtractStep.FramePath (Issue #42, Phase 4) — same "absolute path
+    // from the top document, resolved fresh regardless of any other step's
+    // own FramePath" semantic.
+    public List<string>? FramePath { get; init; }
 }
 
 // Browser-engine only: fills a form field, e.g. a login form's username or
@@ -34,6 +49,10 @@ public sealed class FillStep : ScrapingStep
 {
     public required string Selector { get; init; }
     public required string EnvironmentVariableName { get; init; }
+
+    // See ExtractStep.FramePath (Issue #42, Phase 4) — e.g. a login form
+    // embedded via an SSO iframe widget.
+    public List<string>? FramePath { get; init; }
 }
 
 // Browser-engine only: clicks an element, e.g. a login form's submit
@@ -42,6 +61,33 @@ public sealed class FillStep : ScrapingStep
 public sealed class ClickStep : ScrapingStep
 {
     public required string Selector { get; init; }
+
+    // See ExtractStep.FramePath (Issue #42, Phase 4) — e.g. a cookie-consent
+    // button that lives inside an iframe.
+    public List<string>? FramePath { get; init; }
+}
+
+// Browser-engine only: repeatedly scrolls (the whole page, or a specific
+// container) and/or clicks a "load more" button, to surface content that
+// only appears after infinite-scroll/lazy-loading has fired — for content
+// already present in the initial DOM, WaitForStep is enough. Always capped
+// by MaxIterations; the earlier stop signal depends on whether
+// LoadMoreButtonSelector is set: with a button, its own disappearance is the
+// signal (more reliable than page height — newly loaded content can still
+// fit within the viewport without ever growing scrollHeight); without one,
+// the page/container no longer growing across two consecutive rounds is the
+// only signal available. See playwright_scroll_step.py.j2.
+public sealed class ScrollStep : ScrapingStep
+{
+    public string? ContainerSelector { get; init; }
+    public string? LoadMoreButtonSelector { get; init; }
+    public int MaxIterations { get; init; } = 10;
+    public int WaitAfterMs { get; init; } = 1000;
+
+    // See ExtractStep.FramePath (Issue #42, Phase 4) — applies to both
+    // ContainerSelector and LoadMoreButtonSelector, since a single ScrollStep
+    // already targets one specific area of one specific page/frame.
+    public List<string>? FramePath { get; init; }
 }
 
 // Container-Mode: replaces the flat list of ExtractSteps entirely when the

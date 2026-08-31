@@ -17,4 +17,9 @@ internal static class PythonLiteral
             .Replace("\t", "\\t");
         return $"'{escaped}'";
     }
+
+    // A Python list-of-strings literal, e.g. ['#outer', '#inner'] — used for
+    // FramePath (Issue #42, Phase 3: GroupNode/DataFieldNode.FramePath).
+    public static string StrList(IEnumerable<string> values) =>
+        "[" + string.Join(", ", values.Select(Str)) + "]";
 }

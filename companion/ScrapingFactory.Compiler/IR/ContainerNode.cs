@@ -23,6 +23,15 @@ public sealed class GroupNode : ContainerNode
     public required bool Repeating { get; init; }
 
     public required List<ContainerNode> Children { get; init; }
+
+    // Browser-engine only (Issue #42, Phase 3): see ExtractStep.FramePath —
+    // same meaning, resolved as an *absolute* path from the top document
+    // regardless of this node's own nesting depth in the tree, independent
+    // of any ancestor's FramePath (there's no path composition/inheritance
+    // — every node's FramePath, when set, is a complete top-to-target
+    // chain). null (the default) means Selector is evaluated against the
+    // inherited scope exactly as before this field existed.
+    public List<string>? FramePath { get; init; }
 }
 
 public sealed class DataFieldNode : ContainerNode
@@ -32,6 +41,10 @@ public sealed class DataFieldNode : ContainerNode
 
     // Only meaningful (and required) when Mode == Attribute.
     public string? Attribute { get; init; }
+
+    // See GroupNode.FramePath — same meaning and same "absolute, not
+    // inherited" semantics.
+    public List<string>? FramePath { get; init; }
 }
 
 public enum ExtractMode { Text, Attribute, Exists }
