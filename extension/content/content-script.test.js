@@ -2,6 +2,7 @@ const {
   buildSelector, elementPath, serializeDomTree,
   matchFlatFields, matchGroupTree, computePreviewMatches,
   findValueInJson, siblingFields, findApiCandidates, deriveItemsAndValuePath,
+  findIframeSelectorForWindow, resolveFramePath, frameDepth,
 } = require('./content-script');
 
 function el(tag, { id, classes } = {}) {
@@ -295,45 +296,57 @@ describe('scoped selection (START_SELECTION with scopeSelector)', () => {
     delete global.chrome;
   });
 
-  test('a click inside the scope sends ELEMENT_SELECTED with a selector relative to the scope root', () => {
+  // ELEMENT_SELECTED now goes out after an async resolveFramePath() call
+  // (Issue #42 — see content-script.js) even though it resolves
+  // synchronously-in-effect here (jsdom has no real nested window, so
+  // window === window.top and resolveFramePath() is Promise.resolve([]));
+  // `await null` flushes that one microtask before asserting.
+
+  test('a click inside the scope sends ELEMENT_SELECTED with a selector relative to the scope root', async () => {
     const section = document.querySelector('section.menu-category');
     capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
 
     document.querySelector('h3.item-name').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
 
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
       type: 'ELEMENT_SELECTED',
       selector: 'li.menu-item > h3.item-name',
+      framePath: null,
     }));
     expect(section).toBeTruthy(); // sanity: the scope root itself was found, not just any element
   });
 
-  test('a click outside the scope is ignored — no ELEMENT_SELECTED, selection stays active', () => {
+  test('a click outside the scope is ignored — no ELEMENT_SELECTED, selection stays active', async () => {
     capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
 
     document.getElementById('outside').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
 
     expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'ELEMENT_SELECTED' }));
 
     // Selection is still active: a subsequent in-scope click now succeeds.
     document.querySelector('h3.item-name').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'ELEMENT_SELECTED' }));
   });
 
-  test('a scopeSelector matching nothing on the page sends SELECTION_UNAVAILABLE and does not arm selection', () => {
+  test('a scopeSelector matching nothing on the page sends SELECTION_UNAVAILABLE and does not arm selection', async () => {
     capturedListener({ type: 'START_SELECTION', scopeSelector: '.does-not-exist' });
 
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'SELECTION_UNAVAILABLE' }));
 
     chrome.runtime.sendMessage.mockClear();
     document.querySelector('h3.item-name').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
     expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
   });
 
-  test('no scopeSelector behaves like today — any element on the page is pickable', () => {
+  test('no scopeSelector behaves like today — any element on the page is pickable', async () => {
     capturedListener({ type: 'START_SELECTION' });
 
     document.getElementById('outside').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
 
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
       type: 'ELEMENT_SELECTED',
@@ -344,12 +357,13 @@ describe('scoped selection (START_SELECTION with scopeSelector)', () => {
   // Regression: picking a "Wiederholend" container by clicking an element
   // that (or whose ancestor) has an id used to always produce an id
   // selector, matching only that one element instead of all repetitions.
-  test('avoidId: true skips an id-bearing element, producing a class-based selector instead', () => {
+  test('avoidId: true skips an id-bearing element, producing a class-based selector instead', async () => {
     document.getElementById('outside').id = 'vorspeisen';
     document.getElementById('vorspeisen').className = 'menu-category';
 
     capturedListener({ type: 'START_SELECTION', avoidId: true });
     document.getElementById('vorspeisen').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
 
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
       type: 'ELEMENT_SELECTED',
@@ -357,12 +371,13 @@ describe('scoped selection (START_SELECTION with scopeSelector)', () => {
     }));
   });
 
-  test('without avoidId, the same id-bearing element still short-circuits to #id (default unchanged)', () => {
+  test('without avoidId, the same id-bearing element still short-circuits to #id (default unchanged)', async () => {
     document.getElementById('outside').id = 'vorspeisen';
     document.getElementById('vorspeisen').className = 'menu-category';
 
     capturedListener({ type: 'START_SELECTION' });
     document.getElementById('vorspeisen').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
 
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
       type: 'ELEMENT_SELECTED',
@@ -405,11 +420,12 @@ describe('API-mode search selection (START_SELECTION with apiSearch)', () => {
     }));
   }
 
-  test('a click while apiSearch is active sends both ELEMENT_SELECTED and API_CANDIDATES', () => {
+  test('a click while apiSearch is active sends both ELEMENT_SELECTED and API_CANDIDATES', async () => {
     feedEntry({ id: 1, url: 'https://example.com/api', method: 'GET', status: 200, contentType: 'application/json', body: JSON.stringify({ price: '3.50' }), bodyTruncated: false, bodySkipped: false });
 
     capturedListener({ type: 'START_SELECTION', apiSearch: true });
     document.querySelector('.price').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
 
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'ELEMENT_SELECTED' }));
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
@@ -419,22 +435,24 @@ describe('API-mode search selection (START_SELECTION with apiSearch)', () => {
     });
   });
 
-  test('a click without apiSearch never sends API_CANDIDATES, even with entries buffered', () => {
+  test('a click without apiSearch never sends API_CANDIDATES, even with entries buffered', async () => {
     feedEntry({ id: 1, url: 'https://example.com/api', contentType: 'application/json', body: JSON.stringify({ price: '3.50' }), bodySkipped: false });
 
     capturedListener({ type: 'START_SELECTION' }); // no apiSearch flag
     document.querySelector('.price').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
 
     expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'API_CANDIDATES' }));
   });
 
-  test('API_CAPTURE_START clears the locally buffered entries a later apiSearch click would search', () => {
+  test('API_CAPTURE_START clears the locally buffered entries a later apiSearch click would search', async () => {
     feedEntry({ id: 1, url: 'https://example.com/api', contentType: 'application/json', body: JSON.stringify({ price: '3.50' }), bodySkipped: false });
 
     capturedListener({ type: 'API_CAPTURE_START' });
 
     capturedListener({ type: 'START_SELECTION', apiSearch: true });
     document.querySelector('.price').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
 
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'API_CANDIDATES', target: '3.50', candidates: [] });
   });
@@ -741,6 +759,74 @@ describe('deriveItemsAndValuePath (Issue #53 Phase 5)', () => {
 
   test('returns an empty valuePath when the match is itself the bare array element (no record object)', () => {
     expect(deriveItemsAndValuePath('tags[0]')).toEqual({ itemsPath: 'tags', valuePath: '' });
+  });
+});
+
+// ── Cross-frame path resolution (Issue #42) ─────────────────────────────────
+// jsdom has no real nested browsing context: window.top/window.parent always
+// equal window itself, and window.top can't even be reassigned for a test
+// (it's a non-configurable accessor — verified directly, not assumed). So
+// only the parts that don't depend on *actually* being a different window
+// are unit-tested here:
+// - findIframeSelectorForWindow: real jsdom <iframe> elements do get a
+//   working contentWindow, so the "which <iframe> embeds this window"
+//   correlation is fully testable.
+// - resolveFramePath's top-frame base case ([] when window === window.top),
+//   which is jsdom's only reachable case anyway.
+// The actual cross-frame postMessage round trip (nested frames, nested
+// FramePath, and the non-top-frame message-listener guards) was instead
+// verified against a real loaded extension in real Chromium — see
+// PLAN-issues-41-42.md.
+
+describe('findIframeSelectorForWindow', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  test('finds the iframe whose contentWindow matches, and returns its selector', () => {
+    const iframe = document.createElement('iframe');
+    iframe.id = 'outer';
+    document.body.appendChild(iframe);
+
+    expect(iframe.contentWindow).toBeTruthy(); // sanity: jsdom really does give iframes a contentWindow
+    expect(findIframeSelectorForWindow(iframe.contentWindow)).toBe('#outer');
+  });
+
+  test('picks the right one among several iframes', () => {
+    const first = document.createElement('iframe');
+    first.className = 'first-frame';
+    const second = document.createElement('iframe');
+    second.className = 'second-frame';
+    document.body.append(first, second);
+
+    expect(findIframeSelectorForWindow(second.contentWindow)).toBe('iframe.second-frame');
+  });
+
+  test('returns null when no iframe matches the given window', () => {
+    const iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+
+    expect(findIframeSelectorForWindow({})).toBeNull();
+  });
+});
+
+describe('resolveFramePath', () => {
+  test('resolves to [] for the top-level document (jsdom is always window === window.top)', async () => {
+    await expect(resolveFramePath()).resolves.toEqual([]);
+  });
+});
+
+// Issue #42, Phase 7: frameDepth() drives createOverlay's iframe-visual-
+// feedback branch (amber highlight + depth badge, see the "Overlay" section).
+// Only the top-frame (depth 0) case is exercisable in jsdom — jsdom's
+// window.top is non-configurable (see PLAN-issues-41-42.md's Phase 2 design
+// notes: the same limitation already blocks unit-testing resolveFramePath's
+// actual cross-frame round trip), so the depth > 0 branch is verified
+// manually against a real nested iframe instead (see PLAN-issues-41-42.md's
+// Phase 7 section).
+describe('frameDepth', () => {
+  test('is 0 for the top-level document', () => {
+    expect(frameDepth()).toBe(0);
   });
 });
 

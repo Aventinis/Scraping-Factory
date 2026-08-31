@@ -37,6 +37,8 @@ const {
   buildStaticListSource, buildDiscoverySource, buildRangeSource, buildApiHeaders, buildApiConfig,
   variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
   detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase,
+  addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
+  frameBadgeHtml,
 } = require('./popup');
 
 // jsdom's Blob doesn't implement .text() — read via FileReader instead.
@@ -94,6 +96,67 @@ describe('buildScrapingConfig (flat mode)', () => {
     const result = buildScrapingConfig('https://example.com', 'flat', []);
     expect(result.scriptFileName).toBeNull();
     expect(result.outputFileName).toBeNull();
+  });
+
+  // Issue #42, Phase 7
+  test('includes framePath on a field when set, omits it when not', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [
+      { name: 'Preis', selector: '.price', framePath: ['#price-widget'] },
+      { name: 'Titel', selector: 'h1' },
+    ]);
+    expect(result.fields[0].framePath).toEqual(['#price-widget']);
+    expect(result.fields[1]).not.toHaveProperty('framePath');
+  });
+});
+
+// Issue #41/#42, Phase 5: engine/browserActions are mode-independent, so
+// these are tested once rather than per mode (flat mode used as the
+// representative case) — buildScrapingConfig's own doc comment explains why
+// the omit/include behavior is important for existing-call backward-compat.
+describe('buildScrapingConfig (engine / browserActions, Issue #41/#42 Phase 5)', () => {
+  test('omits engine entirely when Static (the default) — byte-for-byte the same as before this existed', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.engine).toBeUndefined();
+    expect(result.browserActions).toBeUndefined();
+  });
+
+  test('includes engine when Browser, even with no browserActions', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Browser',
+    );
+    expect(result.engine).toBe('Browser');
+    expect(result.browserActions).toBeUndefined();
+  });
+
+  test('includes serialized browserActions alongside engine when Browser and non-empty', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Browser',
+      [{ kind: 'click', selector: '#submit' }],
+    );
+    expect(result.engine).toBe('Browser');
+    expect(result.browserActions).toEqual([{ kind: 'click', selector: '#submit' }]);
+  });
+
+  test('omits browserActions (and engine) when Static, even if actions were configured', () => {
+    // Matches the popup's own UI behavior: switching back to Static hides
+    // the browser-actions section without clearing it, so a user flipping
+    // the toggle back and forth doesn't lose their work — but nothing
+    // meaningless for the Static engine should ever reach the wire.
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static',
+      [{ kind: 'click', selector: '#submit' }],
+    );
+    expect(result.engine).toBeUndefined();
+    expect(result.browserActions).toBeUndefined();
+  });
+
+  test('works the same way for container and api modes', () => {
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig('https://example.com', 'container', [], groups, null, null, null, 'Browser');
+    expect(containerResult.engine).toBe('Browser');
+
+    const apiResult = buildScrapingConfig('https://example.com', 'api', [], [], { fields: [] }, null, null, 'Browser');
+    expect(apiResult.engine).toBe('Browser');
   });
 });
 
@@ -210,7 +273,13 @@ describe('buildConfigExport', () => {
 describe('addField', () => {
   test('appends field with null attribute', () => {
     const result = addField([], 'Titel', 'h1');
-    expect(result).toEqual([{ name: 'Titel', selector: 'h1', attribute: null }]);
+    expect(result).toEqual([{ name: 'Titel', selector: 'h1', attribute: null, framePath: null }]);
+  });
+
+  // Issue #42, Phase 7
+  test('appends field with framePath when given', () => {
+    const result = addField([], 'Preis', 'h2', ['#price-widget']);
+    expect(result).toEqual([{ name: 'Preis', selector: 'h2', attribute: null, framePath: ['#price-widget'] }]);
   });
 
   test('does not mutate original array', () => {
@@ -258,22 +327,140 @@ describe('removeField', () => {
   });
 });
 
+// ── Browser actions (Issue #41/#42, Phase 5) ─────────────────────────────────
+
+describe('addBrowserAction', () => {
+  test('appends a waitFor action with defaults', () => {
+    expect(addBrowserAction([], 'waitFor')).toEqual([{ kind: 'waitFor', selector: '', timeoutMs: 5000 }]);
+  });
+
+  test('appends a fill action with defaults', () => {
+    expect(addBrowserAction([], 'fill')).toEqual([{ kind: 'fill', selector: '', environmentVariableName: '' }]);
+  });
+
+  test('appends a click action with defaults', () => {
+    expect(addBrowserAction([], 'click')).toEqual([{ kind: 'click', selector: '' }]);
+  });
+
+  test('appends a scroll action with defaults (Issue #41, Phase 6)', () => {
+    expect(addBrowserAction([], 'scroll')).toEqual([
+      { kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000 },
+    ]);
+  });
+
+  test('does not mutate original array', () => {
+    const actions = [{ kind: 'click', selector: '#a' }];
+    addBrowserAction(actions, 'waitFor');
+    expect(actions).toHaveLength(1);
+  });
+});
+
+describe('removeBrowserAction', () => {
+  const base = [
+    { kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER' },
+    { kind: 'click', selector: '#submit' },
+  ];
+
+  test('removes the action at the given index', () => {
+    const result = removeBrowserAction(base, 0);
+    expect(result).toEqual([{ kind: 'click', selector: '#submit' }]);
+  });
+
+  test('does not mutate original array', () => {
+    removeBrowserAction(base, 0);
+    expect(base).toHaveLength(2);
+  });
+});
+
+describe('updateBrowserAction', () => {
+  test('patches only the action at the given index', () => {
+    const actions = [{ kind: 'click', selector: '' }, { kind: 'waitFor', selector: '', timeoutMs: 5000 }];
+    const result = updateBrowserAction(actions, 0, { selector: '#submit' });
+    expect(result[0]).toEqual({ kind: 'click', selector: '#submit' });
+    expect(result[1]).toEqual(actions[1]);
+  });
+
+  test('does not mutate original array', () => {
+    const actions = [{ kind: 'click', selector: '' }];
+    updateBrowserAction(actions, 0, { selector: '#submit' });
+    expect(actions[0].selector).toBe('');
+  });
+});
+
+describe('serializeBrowserActions', () => {
+  test('picks only the wire-relevant fields per kind', () => {
+    const actions = [
+      { kind: 'waitFor', selector: '.welcome', timeoutMs: 3000 },
+      { kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER' },
+      { kind: 'click', selector: '#submit' },
+    ];
+    expect(serializeBrowserActions(actions)).toEqual([
+      { kind: 'waitFor', selector: '.welcome', timeoutMs: 3000 },
+      { kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER' },
+      { kind: 'click', selector: '#submit' },
+    ]);
+  });
+
+  test('drops UI-only extra fields not part of the wire shape', () => {
+    const actions = [{ kind: 'click', selector: '#submit', someUiOnlyFlag: true }];
+    expect(serializeBrowserActions(actions)).toEqual([{ kind: 'click', selector: '#submit' }]);
+  });
+
+  test('serializes a scroll action with both selectors set (Issue #41, Phase 6)', () => {
+    const actions = [{ kind: 'scroll', containerSelector: '#list', loadMoreButtonSelector: '#more', maxIterations: 5, waitAfterMs: 500 }];
+    expect(serializeBrowserActions(actions)).toEqual([
+      { kind: 'scroll', containerSelector: '#list', loadMoreButtonSelector: '#more', maxIterations: 5, waitAfterMs: 500 },
+    ]);
+  });
+
+  test('serializes an unpicked scroll selector as null, never empty string', () => {
+    // ScrapingPlanValidator rejects a "set but blank" ContainerSelector/
+    // LoadMoreButtonSelector — '' must never reach the wire.
+    const actions = [{ kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000 }];
+    const result = serializeBrowserActions(actions);
+    expect(result[0].containerSelector).toBeNull();
+    expect(result[0].loadMoreButtonSelector).toBeNull();
+  });
+
+  // Issue #42, Phase 7
+  test('includes framePath on every kind when set, omits it entirely when null', () => {
+    const framed = [
+      { kind: 'waitFor', selector: '.welcome', timeoutMs: 3000, framePath: ['#login-widget'] },
+      { kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER', framePath: null },
+      { kind: 'click', selector: '#submit', framePath: ['#login-widget'] },
+      { kind: 'scroll', containerSelector: '#list', loadMoreButtonSelector: null, maxIterations: 5, waitAfterMs: 500, framePath: ['#feed-widget'] },
+    ];
+    const result = serializeBrowserActions(framed);
+    expect(result[0].framePath).toEqual(['#login-widget']);
+    expect(result[1]).not.toHaveProperty('framePath');
+    expect(result[2].framePath).toEqual(['#login-widget']);
+    expect(result[3].framePath).toEqual(['#feed-widget']);
+  });
+});
+
 // ── Container-Mode tree helpers ──────────────────────────────────────────────
 
 describe('buildGroupNode / buildFieldNode', () => {
   test('buildGroupNode starts with empty children', () => {
     expect(buildGroupNode('Kategorie', 'section', true)).toEqual({
-      kind: 'group', name: 'Kategorie', selector: 'section', repeating: true, children: [],
+      kind: 'group', name: 'Kategorie', selector: 'section', repeating: true, children: [], framePath: null,
     });
   });
 
   test('buildFieldNode nulls attribute unless mode is attribute', () => {
     expect(buildFieldNode('Titel', 'h2', 'text', 'href')).toEqual({
-      kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null,
+      kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null, framePath: null,
     });
     expect(buildFieldNode('Link', 'a', 'attribute', 'href')).toEqual({
-      kind: 'field', name: 'Link', selector: 'a', mode: 'attribute', attribute: 'href',
+      kind: 'field', name: 'Link', selector: 'a', mode: 'attribute', attribute: 'href', framePath: null,
     });
+  });
+
+  // Issue #42, Phase 7
+  test('buildGroupNode / buildFieldNode carry a framePath when given', () => {
+    expect(buildGroupNode('Kategorie', 'section', true, ['#price-widget']).framePath).toEqual(['#price-widget']);
+    expect(buildFieldNode('Titel', 'h2', 'text', null, ['#price-widget', '#reviews-widget']).framePath)
+      .toEqual(['#price-widget', '#reviews-widget']);
   });
 });
 
@@ -403,6 +590,24 @@ describe('serializeGroupTree', () => {
     const groups = [{ kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null }];
     expect(serializeGroupTree(groups)[0]).not.toHaveProperty('attribute');
   });
+
+  // Issue #42, Phase 7
+  test('includes framePath on both group and field nodes when set, omits it when null', () => {
+    const groups = [
+      {
+        kind: 'group', name: 'Preisvergleich', selector: '#price-widget', repeating: false,
+        framePath: ['#price-widget'],
+        children: [
+          { kind: 'field', name: 'Preis', selector: '.price', mode: 'text', attribute: null, framePath: ['#price-widget'] },
+          { kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null, framePath: null },
+        ],
+      },
+    ];
+    const [group] = serializeGroupTree(groups);
+    expect(group.framePath).toEqual(['#price-widget']);
+    expect(group.children[0].framePath).toEqual(['#price-widget']);
+    expect(group.children[1]).not.toHaveProperty('framePath');
+  });
 });
 
 describe('formatGroupNodeLabel', () => {
@@ -456,9 +661,46 @@ describe('renderGroupTree', () => {
     const childUl = document.querySelector('[data-path="[0]"] > .group-tree-children');
     expect(childUl.classList.contains('hidden')).toBe(false);
   });
+
+  // Issue #42, Phase 7
+  test('shows an iframe badge only for a node with a framePath', () => {
+    renderGroupTree([
+      {
+        kind: 'group', name: 'Preisvergleich', selector: '#price-widget', repeating: false,
+        framePath: ['#price-widget'],
+        children: [
+          { kind: 'field', name: 'Preis', selector: '.price', mode: 'text', attribute: null, framePath: ['#price-widget'] },
+          { kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null, framePath: null },
+        ],
+      },
+    ]);
+
+    const groupRow = document.querySelector('[data-path="[0]"] > .group-tree-row');
+    expect(groupRow.querySelector('.frame-badge').title).toContain('#price-widget');
+
+    const framedFieldRow = document.querySelector('[data-path="[0,0]"] > .group-tree-row');
+    expect(framedFieldRow.querySelector('.frame-badge')).not.toBeNull();
+
+    const plainFieldRow = document.querySelector('[data-path="[0,1]"] > .group-tree-row');
+    expect(plainFieldRow.querySelector('.frame-badge')).toBeNull();
+  });
 });
 
 // ── escapeHtml ────────────────────────────────────────────────────────────────
+
+// Issue #42, Phase 7
+describe('frameBadgeHtml', () => {
+  test('returns empty string for null/empty framePath', () => {
+    expect(frameBadgeHtml(null)).toBe('');
+    expect(frameBadgeHtml([])).toBe('');
+  });
+
+  test('renders a badge with the joined path in the title', () => {
+    const html = frameBadgeHtml(['#price-widget', '#reviews-widget']);
+    expect(html).toContain('frame-badge');
+    expect(html).toContain('#price-widget &gt; #reviews-widget');
+  });
+});
 
 describe('escapeHtml', () => {
   test('escapes <, >, &, and "', () => {
@@ -497,6 +739,19 @@ describe('renderFields', () => {
 
     const nameEl = document.querySelector('.field-name');
     expect(nameEl.title).toBe('Ein sehr langer Feldname');
+  });
+
+  // Issue #42, Phase 7
+  test('shows an iframe badge only for a field with a framePath', () => {
+    renderFields([
+      { name: 'Preis', selector: '.price', attribute: null, framePath: ['#price-widget'] },
+      { name: 'Titel', selector: 'h1', attribute: null, framePath: null },
+    ]);
+
+    const rows = document.querySelectorAll('.field-row');
+    expect(rows[0].querySelector('.frame-badge')).not.toBeNull();
+    expect(rows[0].querySelector('.frame-badge').title).toContain('#price-widget');
+    expect(rows[1].querySelector('.frame-badge')).toBeNull();
   });
 });
 
@@ -1368,6 +1623,82 @@ describe('generate() surfaces companion verification failures', () => {
   });
 });
 
+// A 400 is ScrapingPlanValidator/the /generate endpoint itself rejecting a
+// structurally invalid config (bad URL, mutually exclusive Fields/Groups/
+// Api, a FramePath without Engine=Browser, ...) — a deterministic,
+// pre-execution rejection of the current configuration, never a companion
+// or generated-script malfunction. Unlike the 422 case above, this must
+// NOT invite a bug report — that would just fill GitHub issues with
+// non-bugs (see the "Static engine + a framed field/action" case that
+// prompted this).
+describe('generate() surfaces a 400 config rejection without inviting a bug report', () => {
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div id="fields-list"></div>
+        <button id="btn-generate"></button>
+      </section>
+      <section id="screen-generating" class="hidden"></section>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: jest.fn() },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({
+            fields: [{ name: 'Preis', selector: '.price', attribute: null, framePath: ['#widget'] }],
+            url: 'https://example.com',
+          }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+
+    global.fetch = jest.fn((url) => {
+      if (String(url).endsWith('/health')) return Promise.resolve({ ok: true });
+      if (String(url).endsWith('/generate')) {
+        return Promise.resolve({
+          ok: false,
+          status: 400,
+          json: () => Promise.resolve({
+            error: 'FramePath ist nur mit Engine "Browser" zulässig.',
+          }),
+        });
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${url}`));
+    });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE, fields restored from storage
+  });
+
+  test('shows a toast with the rejection reason but keeps the "Report bug" button hidden', async () => {
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const toast = document.getElementById('error-toast');
+    expect(toast.classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('error-toast-message').textContent).toContain('FramePath ist nur mit Engine');
+    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(true);
+  });
+});
+
 // ── Container-Mode integration ───────────────────────────────────────────────
 // Full flows through the real state machine (mode switch, modal → click-select
 // → tree update), mirroring the existing SELECTION_UNAVAILABLE/generate()
@@ -1568,6 +1899,328 @@ describe('Container-Mode integration', () => {
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
       type: 'START_SELECTION', scopeSelector: 'section.menu-category', avoidId: true,
     });
+  });
+
+  // Issue #42, Phase 7: a framed container/field shows the iframe badge in
+  // the tree and carries framePath through to the wire format.
+  test('a root container picked inside an iframe shows the iframe badge and serializes with framePath', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Preisvergleich';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#price-box', framePath: ['#price-widget'] });
+    await flushMicrotasks();
+
+    const badge = document.querySelector('#group-tree-root .frame-badge');
+    expect(badge).not.toBeNull();
+    expect(badge.title).toContain('#price-widget');
+
+    expect(serializeGroupTree([{
+      kind: 'group', name: 'Preisvergleich', selector: '#price-box', repeating: false,
+      children: [], framePath: ['#price-widget'],
+    }])[0].framePath).toEqual(['#price-widget']);
+  });
+
+  test('a root container picked at the top level shows no iframe badge', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+
+    expect(document.querySelector('#group-tree-root .frame-badge')).toBeNull();
+  });
+});
+
+// ── Engine + browser actions integration (Issue #41/#42, Phase 5) ───────────
+// Mode-independent (see buildScrapingConfig's doc comment) — mirrors the
+// Container-Mode integration block's DOM-mocking pattern above, but the
+// engine toggle/browser-actions list is never gated behind a mode switch.
+
+describe('Engine + browser actions integration', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div class="mode-toggle">
+          <button id="btn-mode-flat" class="mode-btn active"></button>
+          <button id="btn-mode-container" class="mode-btn"></button>
+        </div>
+        <div id="flat-mode-section">
+          <div id="fields-list"></div>
+          <button id="btn-add-field"></button>
+        </div>
+        <div id="container-mode-section" class="hidden">
+          <ul id="group-tree-root"></ul>
+        </div>
+        <div>
+          <button id="btn-engine-static" class="mode-btn active"></button>
+          <button id="btn-engine-browser" class="mode-btn"></button>
+          <div id="browser-actions-section" class="hidden">
+            <div id="browser-actions-list"></div>
+            <button id="btn-add-action-wait"></button>
+            <button id="btn-add-action-fill"></button>
+            <button id="btn-add-action-click"></button>
+            <button id="btn-add-action-scroll"></button>
+          </div>
+        </div>
+        <button id="btn-generate" disabled></button>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <input type="checkbox" id="toggle-dom-view" />
+        <div id="dom-tree-wrapper" class="hidden">
+          <p id="dom-tree-loading"></p>
+          <p id="dom-tree-error" class="hidden"></p>
+          <p id="dom-tree-truncated" class="hidden"></p>
+          <ul id="dom-tree-root"></ul>
+        </div>
+        <button id="btn-cancel-selection"></button>
+      </section>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({}),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+  });
+
+  test('Browser engine reveals the browser-actions section; Static hides it again', () => {
+    expect(document.getElementById('browser-actions-section').classList.contains('hidden')).toBe(true);
+
+    document.getElementById('btn-engine-browser').click();
+    expect(document.getElementById('browser-actions-section').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('btn-engine-browser').classList.contains('active')).toBe(true);
+    expect(document.getElementById('btn-engine-static').classList.contains('active')).toBe(false);
+
+    document.getElementById('btn-engine-static').click();
+    expect(document.getElementById('browser-actions-section').classList.contains('hidden')).toBe(true);
+  });
+
+  test('adding each action kind renders the right card, in order', () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-wait').click();
+    document.getElementById('btn-add-action-fill').click();
+    document.getElementById('btn-add-action-click').click();
+    document.getElementById('btn-add-action-scroll').click();
+
+    const cards = document.querySelectorAll('.browser-action-card');
+    expect(cards).toHaveLength(4);
+    expect(cards[0].querySelector('.browser-action-timeout')).not.toBeNull();
+    expect(cards[1].querySelector('.browser-action-env-name')).not.toBeNull();
+    expect(cards[2].querySelector('.browser-action-timeout')).toBeNull();
+    expect(cards[2].querySelector('.browser-action-env-name')).toBeNull();
+    expect(cards[3].querySelectorAll('.btn-pick-action-selector')).toHaveLength(2);
+    expect(cards[3].querySelector('.browser-action-max-iterations')).not.toBeNull();
+    expect(cards[3].querySelector('.browser-action-wait-after-ms')).not.toBeNull();
+  });
+
+  test('a scroll card\'s two pick buttons target containerSelector/loadMoreButtonSelector independently', async () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-scroll').click();
+
+    // Re-query after every pick — each ELEMENT_SELECTED round re-renders
+    // #browser-actions-list from scratch, so a NodeList captured before a
+    // prior round is a snapshot of now-detached nodes (the exact "stale
+    // element handle" pitfall documented in the Phase 5 manual verification
+    // notes, here as a real jsdom analogue).
+    let pickButtons = document.querySelectorAll('.btn-pick-action-selector');
+    expect(pickButtons[0].dataset.field).toBe('containerSelector');
+    expect(pickButtons[1].dataset.field).toBe('loadMoreButtonSelector');
+
+    pickButtons[1].click(); // pick the load-more button first, on purpose
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#load-more' });
+    await flushMicrotasks();
+
+    pickButtons = document.querySelectorAll('.btn-pick-action-selector');
+    pickButtons[0].click(); // then the container — must not overwrite the first pick
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#list' });
+    await flushMicrotasks();
+
+    const selectorTexts = [...document.querySelectorAll('.browser-action-selector-row .field-selector')].map(el => el.textContent);
+    expect(selectorTexts).toEqual(['#list', '#load-more']);
+  });
+
+  test('editing a scroll action\'s maxIterations/waitAfterMs persists them into state', () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-scroll').click();
+
+    const maxIterationsInput = document.querySelector('.browser-action-max-iterations');
+    maxIterationsInput.value = '20';
+    maxIterationsInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const waitAfterMsInput = document.querySelector('.browser-action-wait-after-ms');
+    waitAfterMsInput.value = '2500';
+    waitAfterMsInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(document.querySelector('.browser-action-max-iterations').value).toBe('20');
+    expect(document.querySelector('.browser-action-wait-after-ms').value).toBe('2500');
+  });
+
+  test('removing an action drops only that card', () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-wait').click();
+    document.getElementById('btn-add-action-click').click();
+
+    document.querySelectorAll('.btn-remove-action')[0].click();
+
+    const cards = document.querySelectorAll('.browser-action-card');
+    expect(cards).toHaveLength(1);
+    expect(cards[0].querySelector('.browser-action-timeout')).toBeNull(); // the click action remains
+  });
+
+  test('editing a Fill action\'s environment variable name persists it into state', () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-fill').click();
+
+    const envInput = document.querySelector('.browser-action-env-name');
+    envInput.value = 'SF_USERNAME';
+    envInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    // Re-render (triggered by the change handler's setState) must not lose it.
+    expect(document.querySelector('.browser-action-env-name').value).toBe('SF_USERNAME');
+  });
+
+  test('picking an element for an action selector: START_SELECTION, then the result is written straight into that action — no modal', async () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-click').click();
+
+    document.querySelector('.btn-pick-action-selector').click();
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'START_SELECTION' });
+    expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(false);
+
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#submit' });
+    await flushMicrotasks();
+
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
+    const selectorText = document.querySelector('.browser-action-selector-row .field-selector');
+    expect(selectorText.textContent).toBe('#submit');
+  });
+
+  // Issue #42, Phase 7: a click landing inside an iframe reports a framePath
+  // alongside the selector — it's written straight into the action (like the
+  // selector itself) and surfaced as a badge on the action card.
+  test('a framed action selector shows the iframe badge and carries framePath onto the action', async () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-click').click();
+
+    document.querySelector('.btn-pick-action-selector').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#submit', framePath: ['#login-widget'] });
+    await flushMicrotasks();
+
+    const badge = document.querySelector('.browser-action-card .frame-badge');
+    expect(badge).not.toBeNull();
+    expect(badge.title).toContain('#login-widget');
+
+    expect(serializeBrowserActions([{ kind: 'click', selector: '#submit', framePath: ['#login-widget'] }]))
+      .toEqual([{ kind: 'click', selector: '#submit', framePath: ['#login-widget'] }]);
+  });
+
+  test('a top-level (unframed) action selector shows no iframe badge', async () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-click').click();
+
+    document.querySelector('.btn-pick-action-selector').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#submit' });
+    await flushMicrotasks();
+
+    expect(document.querySelector('.browser-action-card .frame-badge')).toBeNull();
+  });
+
+  test('a full login flow (fill, fill, click, wait) is sent to /generate with engine and browserActions', async () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-fill').click();
+    document.getElementById('btn-add-action-fill').click();
+    document.getElementById('btn-add-action-click').click();
+    document.getElementById('btn-add-action-wait').click();
+
+    const pickButtons = () => document.querySelectorAll('.btn-pick-action-selector');
+    const envInputs = () => document.querySelectorAll('.browser-action-env-name');
+
+    pickButtons()[0].click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#username' });
+    await flushMicrotasks();
+    envInputs()[0].value = 'SF_USERNAME';
+    envInputs()[0].dispatchEvent(new Event('change', { bubbles: true }));
+
+    pickButtons()[1].click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#password' });
+    await flushMicrotasks();
+    envInputs()[1].value = 'SF_PASSWORD';
+    envInputs()[1].dispatchEvent(new Event('change', { bubbles: true }));
+
+    pickButtons()[2].click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#submit' });
+    await flushMicrotasks();
+
+    pickButtons()[3].click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.welcome' });
+    await flushMicrotasks();
+
+    // hasConfig (gating btn-generate) only looks at fields/groups/apiConfig,
+    // none of which this test cares about — only the request body's
+    // engine/browserActions shape — so the disabled gate is bypassed
+    // directly rather than adding an unrelated flat field just to satisfy it.
+    document.getElementById('btn-generate').disabled = false;
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const [, options] = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/generate'));
+    const body = JSON.parse(options.body);
+    expect(body.engine).toBe('Browser');
+    expect(body.browserActions).toEqual([
+      { kind: 'fill', selector: '#username', environmentVariableName: 'SF_USERNAME' },
+      { kind: 'fill', selector: '#password', environmentVariableName: 'SF_PASSWORD' },
+      { kind: 'click', selector: '#submit' },
+      { kind: 'waitFor', selector: '.welcome', timeoutMs: 5000 },
+    ]);
+  });
+
+  test('a scroll action with only the load-more button picked is sent with containerSelector: null', async () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-scroll').click();
+
+    const pickButtons = document.querySelectorAll('.btn-pick-action-selector');
+    pickButtons[1].click(); // loadMoreButtonSelector only — containerSelector stays unset
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#load-more' });
+    await flushMicrotasks();
+
+    const maxIterationsInput = document.querySelector('.browser-action-max-iterations');
+    maxIterationsInput.value = '6';
+    maxIterationsInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    document.getElementById('btn-generate').disabled = false;
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const [, options] = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/generate'));
+    const body = JSON.parse(options.body);
+    expect(body.browserActions).toEqual([
+      { kind: 'scroll', containerSelector: null, loadMoreButtonSelector: '#load-more', maxIterations: 6, waitAfterMs: 1000 },
+    ]);
   });
 });
 

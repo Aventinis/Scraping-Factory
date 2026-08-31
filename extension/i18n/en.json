@@ -56,7 +56,11 @@
     "scriptFilenamePlaceholder": "scraper",
     "outputFilenameLabel": "Output file name",
     "outputFilenamePlaceholder": "output",
-    "generateBtn": "Generate script ▶"
+    "generateBtn": "Generate script ▶",
+    "engineLabel": "Engine",
+    "engineStatic": "Static",
+    "engineBrowser": "Browser",
+    "engineBrowserTitle": "Renders JavaScript before extraction — for dynamically loaded pages or login flows. Slower than the static engine."
   },
   "robots": {
     "checkFailed": "robots.txt could not be checked ({error}).",
@@ -151,9 +155,36 @@
   },
   "toast": {
     "verificationFailed": "Configuration verification failed.",
+    "configInvalid": "Invalid configuration: {message}",
     "generationError": "Error: {message}",
     "selectionUnavailable": "Element selection isn't possible on this page.",
     "previewUnavailable": "Preview isn't possible on this page.",
     "captureUnavailable": "Network recording isn't possible on this page."
+  },
+  "frame": {
+    "badge": "iframe",
+    "badgeTitle": "Inside embedded frame: {path}"
+  },
+  "browserActions": {
+    "title": "Browser actions",
+    "hint": "Run in order before extraction, e.g. for a login flow.",
+    "addWaitBtn": "+ Wait",
+    "addFillBtn": "+ Fill",
+    "addClickBtn": "+ Click",
+    "addScrollBtn": "+ Scroll",
+    "kindWaitFor": "Wait",
+    "kindFill": "Fill",
+    "kindClick": "Click",
+    "kindScroll": "Scroll",
+    "noSelector": "No element selected",
+    "pickSelectorBtn": "Select element",
+    "timeoutLabel": "Timeout (ms)",
+    "envVarLabel": "Environment variable",
+    "envNamePlaceholder": "ENV_NAME",
+    "envVarHint": "The value is read from this environment variable at runtime, never stored in the script.",
+    "containerSelectorLabel": "Container (optional)",
+    "loadMoreButtonSelectorLabel": "\"Load more\" button (optional)",
+    "maxIterationsLabel": "Max. rounds",
+    "waitAfterMsLabel": "Wait time (ms)"
   }
 }

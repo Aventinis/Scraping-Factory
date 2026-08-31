@@ -36,11 +36,14 @@ internal static class PythonGroupTreeLiteral
 
     // Presence of the "children" key (even if empty) is what extract_group()
     // uses at runtime to tell a group from a leaf field — see the grouped
-    // templates.
+    // templates. "frame_path" (Issue #42, Phase 3) is omitted entirely when
+    // null, same "absent key = no FramePath" convention as "attribute"
+    // below — extract_group() reads it via node.get("frame_path").
     private static string RenderGroup(GroupNode group, int indent)
     {
         var children = Render(group.Children, indent);
-        return $$"""{"name": {{PythonLiteral.Str(group.Name)}}, "selector": {{PythonLiteral.Str(group.Selector)}}, "repeating": {{(group.Repeating ? "True" : "False")}}, "children": {{children}}}""";
+        var framePathPart = FramePathPart(group.FramePath);
+        return $$"""{"name": {{PythonLiteral.Str(group.Name)}}, "selector": {{PythonLiteral.Str(group.Selector)}}, "repeating": {{(group.Repeating ? "True" : "False")}}{{framePathPart}}, "children": {{children}}}""";
     }
 
     private static string RenderField(DataFieldNode field)
@@ -53,6 +56,10 @@ internal static class PythonGroupTreeLiteral
             _ => throw new InvalidOperationException($"Unbekannter ExtractMode: {field.Mode}"),
         };
         var attributePart = field.Mode == ExtractMode.Attribute ? $""", "attribute": {PythonLiteral.Str(field.Attribute!)}""" : "";
-        return $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "selector": {{PythonLiteral.Str(field.Selector)}}, "mode": {{PythonLiteral.Str(mode)}}{{attributePart}}}""";
+        var framePathPart = FramePathPart(field.FramePath);
+        return $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "selector": {{PythonLiteral.Str(field.Selector)}}, "mode": {{PythonLiteral.Str(mode)}}{{attributePart}}{{framePathPart}}}""";
     }
+
+    private static string FramePathPart(List<string>? framePath) =>
+        framePath is { Count: > 0 } ? $""", "frame_path": {PythonLiteral.StrList(framePath)}""" : "";
 }

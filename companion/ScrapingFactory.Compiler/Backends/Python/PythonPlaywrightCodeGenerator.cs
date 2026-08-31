@@ -25,6 +25,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         var waitTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_wait_step.py.j2");
         var fillTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_fill_step.py.j2");
         var clickTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_click_step.py.j2");
+        var scrollTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_scroll_step.py.j2");
         var shellTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_scraper.py.j2");
 
         var navigate = plan.Steps.OfType<NavigateStep>().Single();
@@ -33,9 +34,26 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
             .Select(step => step switch
             {
                 NavigateStep s => navigateTemplate.Render(new { step = new { url = s.Url } }),
-                WaitForStep s => waitTemplate.Render(new { step = new { selector = s.Selector, timeout_ms = s.TimeoutMs } }),
-                FillStep s => fillTemplate.Render(new { step = new { selector = s.Selector, env_var = s.EnvironmentVariableName } }),
-                ClickStep s => clickTemplate.Render(new { step = new { selector = s.Selector } }),
+                WaitForStep s => waitTemplate.Render(new
+                {
+                    step = new { selector = s.Selector, timeout_ms = s.TimeoutMs, frame_path = s.FramePath },
+                }),
+                FillStep s => fillTemplate.Render(new
+                {
+                    step = new { selector = s.Selector, env_var = s.EnvironmentVariableName, frame_path = s.FramePath },
+                }),
+                ClickStep s => clickTemplate.Render(new { step = new { selector = s.Selector, frame_path = s.FramePath } }),
+                ScrollStep s => scrollTemplate.Render(new
+                {
+                    step = new
+                    {
+                        container_selector = s.ContainerSelector,
+                        load_more_button_selector = s.LoadMoreButtonSelector,
+                        max_iterations = s.MaxIterations,
+                        wait_after_ms = s.WaitAfterMs,
+                        frame_path = s.FramePath,
+                    },
+                }),
                 _ => null,
             })
             .Where(line => line is not null)
@@ -67,7 +85,10 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         }
 
         var fields = plan.Steps.OfType<ExtractStep>()
-            .Select(step => new { name = step.Name, selector = step.Selector, attribute = step.Attribute })
+            .Select(step => new
+            {
+                name = step.Name, selector = step.Selector, attribute = step.Attribute, frame_path = step.FramePath,
+            })
             .ToList();
 
         return shellTemplate.Render(new

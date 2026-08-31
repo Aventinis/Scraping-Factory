@@ -25,6 +25,14 @@ public sealed class ScrapingConfig
     // reachable only by sending "engine": "Browser" directly.
     public ScrapingEngine Engine { get; init; } = ScrapingEngine.Static;
 
+    // Browser-engine-only action steps (WaitFor/Fill/Click/Scroll, see
+    // BrowserAction), executed in order after navigation and before
+    // extraction (Fields/Groups/Api alike — see ScrapingPlanBuilder).
+    // Rejected server-side unless Engine is Browser (see
+    // ScrapingPlanValidator). Null/empty = no actions, today's only
+    // behavior for existing payloads.
+    public List<BrowserAction>? BrowserActions { get; init; }
+
     // Base filename (no extension) for the downloaded .py script. Purely
     // cosmetic today — used only in the generated script's "# Run: python
     // X.py" header comment, since the extension names the actual download
@@ -47,6 +55,9 @@ public sealed class ScrapingField
     public required string Selector { get; init; }
     // null = Textinhalt; "href", "src" usw. für Attribut-Extraktion
     public string? Attribute { get; init; }
+
+    // See ExtractStep.FramePath — same meaning, just the wire-format mirror.
+    public List<string>? FramePath { get; init; }
 }
 
 public enum OutputFormat { Csv, Xml }

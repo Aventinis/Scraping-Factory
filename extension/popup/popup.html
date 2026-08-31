@@ -58,12 +58,34 @@
     .field-name     { font-weight: 500; min-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .field-selector { flex: 1; font-size: 11px; font-family: monospace; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+    /* Frame-path indicator (Issue #42, Phase 7) — flags a field/node/action
+       whose selector was picked inside an iframe (see FramePath on the wire
+       format); the amber tone matches content-script.js's own in-page
+       overlay/badge color for the same concept. */
+    .frame-badge {
+      flex: none; font-size: 10px; padding: 1px 6px; border-radius: 999px;
+      background: #fef3c7; color: #b45309; white-space: nowrap;
+    }
+
     /* Mode toggle */
     .mode-toggle { display: flex; gap: 4px; margin-bottom: 14px; background: #f3f4f6; border-radius: 8px; padding: 3px; }
     .mode-btn {
       flex: 1; background: transparent; color: #6b7280; font-size: 12px; padding: 6px 8px; border-radius: 6px;
     }
     .mode-btn.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 2px rgba(0,0,0,.08); font-weight: 500; }
+
+    /* Engine toggle + browser actions (Issue #41/#42, Phase 5) */
+    .engine-section { margin-bottom: 14px; }
+    .browser-actions-hint { font-size: 11px; color: #6b7280; margin-bottom: 8px; }
+    .browser-action-card { padding: 8px; background: #f9fafb; border-radius: 6px; margin-bottom: 6px; }
+    .browser-action-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .browser-action-selector-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .browser-action-selector-row label { flex: none; width: 60px; font-size: 11px; color: #6b7280; }
+    .browser-action-selector-row .field-selector { flex: 1; background: #fff; border: 1px solid #e5e7eb; border-radius: 4px; padding: 3px 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .browser-action-field-row { display: flex; align-items: center; gap: 6px; }
+    .browser-action-field-row label { flex: none; font-size: 11px; color: #6b7280; }
+    .browser-action-field-row input { flex: 1; min-width: 0; font-size: 11px; padding: 3px 6px; border: 1px solid #e5e7eb; border-radius: 4px; }
+    .browser-action-hint { font-size: 10px; color: #9ca3af; margin: 4px 0 0; }
 
     /* Preview toggle */
     .btn-toggle           { background: #f3f4f6; color: #374151; width: 100%; }
@@ -292,6 +314,31 @@
       <button id="btn-mode-flat" class="mode-btn active" type="button" data-i18n="idle.modeFlat"></button>
       <button id="btn-mode-container" class="mode-btn" type="button" data-i18n="idle.modeContainer"></button>
       <button id="btn-mode-api" class="mode-btn" type="button" data-i18n="idle.modeApi"></button>
+    </div>
+
+    <!-- Engine + browser actions (Issue #41/#42, Phase 5): applies across
+         all three modes above, so it lives outside the mode-specific
+         sections — same "global setting" treatment as output-settings
+         below. Browser-actions run before extraction regardless of mode
+         (see companion ScrapingPlanBuilder). -->
+    <div class="engine-section">
+      <div class="row-label" data-i18n="idle.engineLabel"></div>
+      <div class="mode-toggle" style="margin-bottom: 8px;">
+        <button id="btn-engine-static" class="mode-btn active" type="button" data-i18n="idle.engineStatic"></button>
+        <button id="btn-engine-browser" class="mode-btn" type="button" data-i18n="idle.engineBrowser" data-i18n-title="idle.engineBrowserTitle"></button>
+      </div>
+
+      <div id="browser-actions-section" class="hidden">
+        <div class="row-label" data-i18n="browserActions.title"></div>
+        <p class="browser-actions-hint" data-i18n="browserActions.hint"></p>
+        <div id="browser-actions-list"></div>
+        <div class="actions">
+          <button id="btn-add-action-wait" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.addWaitBtn"></button>
+          <button id="btn-add-action-fill" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.addFillBtn"></button>
+          <button id="btn-add-action-click" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.addClickBtn"></button>
+          <button id="btn-add-action-scroll" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.addScrollBtn"></button>
+        </div>
+      </div>
     </div>
 
     <div id="flat-mode-section">

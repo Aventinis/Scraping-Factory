@@ -1,0 +1,48 @@
+        _scroll_frame_path = {{ if step.frame_path }}[{{ for sel in step.frame_path }}"{{ sel }}"{{ if !for.last }}, {{ end }}{{ end }}]{{ else }}None{{ end }}
+        _scroll_container_selector = {{ if step.container_selector }}"{{ step.container_selector }}"{{ else }}None{{ end }}
+        _scroll_load_more_selector = {{ if step.load_more_button_selector }}"{{ step.load_more_button_selector }}"{{ else }}None{{ end }}
+        _scroll_prev_height = None
+        for _ in range({{ step.max_iterations }}):
+            if _scroll_container_selector:
+                if _scroll_frame_path:
+                    _resolve_locator(page, _scroll_container_selector, _scroll_frame_path).evaluate("el => el.scrollTop = el.scrollHeight")
+                else:
+                    page.eval_on_selector(_scroll_container_selector, "el => el.scrollTop = el.scrollHeight")
+            else:
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+
+            # A configured "load more" button is a more reliable stop signal
+            # than page height: newly loaded content can still fit within
+            # the viewport (scrollHeight never grows past it) even though
+            # more content really did load, which would make a height-only
+            # check give up too early.
+            if _scroll_load_more_selector:
+                if _scroll_frame_path:
+                    _scroll_button_locator = _resolve_locator(page, _scroll_load_more_selector, _scroll_frame_path)
+                    if _scroll_button_locator.count() == 0:
+                        break
+                    _scroll_button_locator.click()
+                else:
+                    _scroll_button = page.query_selector(_scroll_load_more_selector)
+                    if not _scroll_button:
+                        break
+                    _scroll_button.click()
+                page.wait_for_timeout({{ step.wait_after_ms }})
+                continue
+
+            page.wait_for_timeout({{ step.wait_after_ms }})
+            # Growth is measured on whatever was actually scrolled — a
+            # container's own scrollHeight when ContainerSelector is set,
+            # since a bounded, independently-scrollable container growing
+            # internally doesn't change the surrounding page's body height
+            # at all.
+            if _scroll_container_selector:
+                if _scroll_frame_path:
+                    _scroll_height = _resolve_locator(page, _scroll_container_selector, _scroll_frame_path).evaluate("el => el.scrollHeight")
+                else:
+                    _scroll_height = page.eval_on_selector(_scroll_container_selector, "el => el.scrollHeight")
+            else:
+                _scroll_height = page.evaluate("document.body.scrollHeight")
+            if _scroll_height == _scroll_prev_height:
+                break
+            _scroll_prev_height = _scroll_height
