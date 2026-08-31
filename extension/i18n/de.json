@@ -160,6 +160,10 @@
     "previewUnavailable": "Vorschau auf dieser Seite nicht möglich.",
     "captureUnavailable": "Netzwerk-Aufzeichnung auf dieser Seite nicht möglich."
   },
+  "frame": {
+    "badge": "iframe",
+    "badgeTitle": "In eingebettetem Frame: {path}"
+  },
   "browserActions": {
     "title": "Browser-Aktionen",
     "hint": "Werden der Reihe nach vor der Extraktion ausgeführt, z. B. für einen Login-Flow.",
