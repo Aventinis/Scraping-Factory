@@ -38,6 +38,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep the message channel open for the async sendResponse above
   }
 
+  if (message.type === 'GET_API_CAPTURE_ENTRIES') {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs.length === 0) {
+        sendResponse([]);
+        return;
+      }
+      chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_API_CAPTURE_ENTRIES' })
+        .then((entries) => sendResponse(entries || []))
+        .catch(() => sendResponse([])); // no content script on this tab — same as GET_LOGS' content half, but nothing else here needs a background half
+    });
+    return true; // keep the message channel open for the async sendResponse above
+  }
+
   if (message.type === 'CHECK_ROBOTS_TXT') {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs.length === 0) {

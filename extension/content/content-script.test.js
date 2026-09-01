@@ -456,6 +456,33 @@ describe('API-mode search selection (START_SELECTION with apiSearch)', () => {
 
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'API_CANDIDATES', target: '3.50', candidates: [] });
   });
+
+  // Recorded-endpoints panel / pool-derived value-list autofill follow-up:
+  // GET_API_CAPTURE_ENTRIES exposes the same locally buffered pool
+  // findApiCandidates already searches at click time, but on demand — same
+  // request/response shape as GET_LOGS above (isTopFrame-gated, synchronous
+  // sendResponse).
+  test('GET_API_CAPTURE_ENTRIES responds with the locally buffered pool', () => {
+    feedEntry({ id: 1, url: 'https://example.com/api', method: 'GET', status: 200, contentType: 'application/json', body: '{}', bodySkipped: false });
+    feedEntry({ id: 2, url: 'https://example.com/api2', method: 'GET', status: 200, contentType: 'application/json', body: '{}', bodySkipped: false });
+    const sendResponse = jest.fn();
+
+    capturedListener({ type: 'GET_API_CAPTURE_ENTRIES' }, {}, sendResponse);
+
+    expect(sendResponse).toHaveBeenCalledTimes(1);
+    const entries = sendResponse.mock.calls[0][0];
+    expect(entries.map(e => e.id)).toEqual([1, 2]);
+  });
+
+  test('GET_API_CAPTURE_ENTRIES reflects a subsequent API_CAPTURE_START reset', () => {
+    feedEntry({ id: 1, url: 'https://example.com/api', bodySkipped: false });
+    capturedListener({ type: 'API_CAPTURE_START' });
+    const sendResponse = jest.fn();
+
+    capturedListener({ type: 'GET_API_CAPTURE_ENTRIES' }, {}, sendResponse);
+
+    expect(sendResponse).toHaveBeenCalledWith([]);
+  });
 });
 
 // ── Preview-mode matching ────────────────────────────────────────────────────
