@@ -52,6 +52,14 @@ let _state = {
   previewSummary:    null,  // {total, empty, truncated} from the content script's last PREVIEW_RESULT, or null
   apiCaptureActive:  false, // Netzwerk-Aufzeichnung toggle (Issue #53 Phase 3) — not persisted, always off on popup reopen
   apiCaptureCount:   0,     // number of API_CAPTURE_ENTRY messages since the current recording started — kept after stop, only reset on the next start (Phase 4 searches what was recorded, after stopping)
+  // API-mode follow-up: inline "view recorded endpoints" panel — not
+  // persisted, always closed on popup reopen (like previewActive above).
+  // apiEntries is re-fetched fresh (via GET_API_CAPTURE_ENTRIES) each time
+  // the panel is opened, not accumulated from the live API_CAPTURE_ENTRY
+  // stream — that stream is dropped entirely while the popup is closed, so
+  // a pull-based fetch is the only way to reliably see the whole pool.
+  apiEntriesPanelOpen: false,
+  apiEntries:          null,
   // Issue #53 Phase 4/5 — null while no "find in recording" selection round is
   // in progress; 'field' while searching for the primary field (from IDLE);
   // {parameter: name} while searching a Discovery source's example value for
@@ -271,6 +279,82 @@ function buildUrlTemplate({ origin, pathSegments, queryParams }) {
 // non-empty values.
 function parseValueListInput(text) {
   return String(text ?? '').split(/[,\n]/).map(s => s.trim()).filter(s => s.length > 0);
+}
+
+// API-mode follow-up: auto-fill a StaticListSource's value list from the
+// recorded request pool. `urlParts` is the confirmed candidate's own
+// decomposed URL (see parseUrlTemplateParts) with the user's current
+// variable/name toggles; `targetPartId` ("path:<index>" or "query:<key>")
+// is the one part being derived — every *other* fixed part must match
+// exactly for an entry to count as "the same endpoint, different value",
+// and every other *variable* part is left free (it's parameterized
+// separately, so siblings may legitimately disagree on it too). Each
+// candidate entry's URL is parsed with the same parseUrlTemplateParts used
+// to build urlParts in the first place, so a matched value comes back in
+// exactly the representation buildUrlTemplate expects to substitute back in
+// (percent-encoded-as-is for a path segment, percent-decoded for a query
+// param) — no extra normalization needed. Returns distinct values in
+// first-seen order.
+function findUrlTemplateMatches(urlParts, targetPartId, entries) {
+  const [targetScope, targetKey] = targetPartId.split(':');
+  const seen = new Set();
+  const values = [];
+
+  (entries || []).forEach((entry) => {
+    let candidate;
+    try {
+      candidate = parseUrlTemplateParts(entry.url);
+    } catch {
+      return; // not a resolvable absolute URL — can't compare
+    }
+    if (candidate.origin !== urlParts.origin) return;
+    if (candidate.pathSegments.length !== urlParts.pathSegments.length) return;
+
+    for (let i = 0; i < urlParts.pathSegments.length; i++) {
+      const partId = `path:${i}`;
+      if (partId === targetPartId) continue;
+      const seg = urlParts.pathSegments[i];
+      if (seg.variable) continue; // parameterized independently — free to differ
+      if (candidate.pathSegments[i].value !== seg.value) return;
+    }
+
+    const urlKeys = urlParts.queryParams.map(p => p.key).slice().sort().join(',');
+    const candidateKeys = candidate.queryParams.map(p => p.key).slice().sort().join(',');
+    if (urlKeys !== candidateKeys) return; // different query-key shape → not the same endpoint
+
+    for (const p of urlParts.queryParams) {
+      const partId = `query:${p.key}`;
+      if (partId === targetPartId) continue;
+      if (p.variable) continue;
+      const match = candidate.queryParams.find(q => q.key === p.key);
+      if (!match || match.value !== p.value) return;
+    }
+
+    const extracted = targetScope === 'path'
+      ? candidate.pathSegments[parseInt(targetKey, 10)]?.value
+      : candidate.queryParams.find(q => q.key === targetKey)?.value;
+
+    if (extracted && !seen.has(extracted)) {
+      seen.add(extracted);
+      values.push(extracted);
+    }
+  });
+
+  return values;
+}
+
+// Appends newly-derived values onto an existing value-list text without
+// touching anything already there — including a value the user has since
+// deleted, which a full re-derivation must not silently resurrect (see the
+// "merge, don't replace" decision this mirrors). Dedupes against
+// parseValueListInput's own reading of the existing text, the same split
+// the textarea itself is interpreted with everywhere else.
+function mergeValueListValues(existingText, newValues) {
+  const existing = new Set(parseValueListInput(existingText));
+  const added = newValues.filter(v => !existing.has(v));
+  if (added.length === 0) return { text: existingText || '', addedCount: 0 };
+  const prefix = existingText && existingText.trim() ? `${existingText.replace(/\s+$/, '')}\n` : '';
+  return { text: prefix + added.join('\n'), addedCount: added.length };
 }
 
 function buildStaticListSource(valuesText) {
@@ -710,6 +794,23 @@ function render() {
     const apiSearchBtn = document.getElementById('btn-api-search');
     if (apiSearchBtn) apiSearchBtn.disabled = _state.apiCaptureCount === 0;
 
+    const apiEntriesToggleBtn = document.getElementById('btn-api-entries-toggle');
+    if (apiEntriesToggleBtn) {
+      apiEntriesToggleBtn.disabled = _state.apiCaptureCount === 0;
+      apiEntriesToggleBtn.textContent = _state.apiEntriesPanelOpen
+        ? t('idle.apiEntriesHideBtn')
+        : t('idle.apiEntriesShowBtn', { count: _state.apiCaptureCount });
+    }
+    const apiEntriesPanel = document.getElementById('api-entries-panel');
+    if (apiEntriesPanel) {
+      if (_state.apiEntriesPanelOpen) {
+        renderApiEntriesList(_state.apiEntries);
+        apiEntriesPanel.classList.remove('hidden');
+      } else {
+        apiEntriesPanel.classList.add('hidden');
+      }
+    }
+
     const apiCandidatesPanel = document.getElementById('api-candidates-panel');
     if (apiCandidatesPanel) {
       if (_state.apiCandidates) {
@@ -981,6 +1082,36 @@ function renderApiCandidates({ target, candidates }) {
   });
 }
 
+// API-mode follow-up: the raw recorded pool, for whoever wants to see it
+// directly instead of only going through a value-correlation search — e.g.
+// to sanity-check that a variable part's other values were actually
+// recorded before relying on the pool-derived autofill below. Reuses the
+// same .api-candidate/.api-candidate-url/.api-candidate-path row styling
+// renderApiCandidates already uses, just without the value/siblings/use
+// parts that only apply to a JSON-body match.
+function renderApiEntriesList(entries) {
+  const listEl = document.getElementById('api-entries-list');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+
+  if (!entries || entries.length === 0) {
+    const li = document.createElement('li');
+    li.className = 'api-candidates-empty';
+    li.textContent = t('idle.apiEntriesEmpty');
+    listEl.appendChild(li);
+    return;
+  }
+
+  entries.forEach((entry) => {
+    const li = document.createElement('li');
+    li.className = 'api-candidate';
+    li.innerHTML =
+      `<div class="api-candidate-url" title="${escapeHtml(entry.url)}">${escapeHtml(entry.method)} ${escapeHtml(String(entry.status))} ${escapeHtml(entry.url)}</div>` +
+      (entry.contentType ? `<div class="api-candidate-path">${escapeHtml(entry.contentType)}</div>` : '');
+    listEl.appendChild(li);
+  });
+}
+
 // ── API-Mode config screen (Issue #53 Phase 5) ──────────────────────────────
 // Renders the in-progress apiConfigDraft: confirmed fields (read-only),
 // URL path segments/query params with a fest/variabel toggle per part, one
@@ -1114,7 +1245,9 @@ function renderApiConfigParameters(draft, discoveryCandidates) {
     const fieldsEl = document.createElement('div');
     fieldsEl.className = 'api-config-source-fields';
     if (source?.kind === 'staticList') {
-      fieldsEl.innerHTML = `<textarea class="api-config-static-list" data-part-id="${safePartId}" rows="2" placeholder="${escapeHtml(t('apiConfig.valueListPlaceholder'))}">${escapeHtml(source.valuesText || '')}</textarea>`;
+      fieldsEl.innerHTML =
+        `<textarea class="api-config-static-list" data-part-id="${safePartId}" rows="2" placeholder="${escapeHtml(t('apiConfig.valueListPlaceholder'))}">${escapeHtml(source.valuesText || '')}</textarea>` +
+        `<button type="button" class="btn-secondary btn-tiny api-config-autofill-pool" data-part-id="${safePartId}" title="${escapeHtml(t('apiConfig.autoFillFromPoolTitle'))}">${escapeHtml(t('apiConfig.autoFillFromPoolBtn'))}</button>`;
     } else if (source?.kind === 'discovery') {
       fieldsEl.appendChild(renderDiscoverySourceFields(part, source, discoveryCandidates));
     } else if (source?.kind === 'range') {
@@ -1683,6 +1816,69 @@ async function checkRobotsTxt() {
   }
 }
 
+// Low-level GET_API_CAPTURE_ENTRIES round trip, shared by the "view
+// recorded endpoints" panel below and the value-list autofill further down
+// — same request/response shape as GET_LOGS/CHECK_ROBOTS_TXT, just no
+// dedicated loading/result state of its own since both callers keep their
+// own.
+async function fetchApiCaptureEntries() {
+  try {
+    return await chrome.runtime.sendMessage({ type: 'GET_API_CAPTURE_ENTRIES' }) || [];
+  } catch (err) {
+    log('GET_API_CAPTURE_ENTRIES failed', err.message);
+    return [];
+  }
+}
+
+// API-mode follow-up: toggles the inline "view recorded endpoints" panel —
+// fetches a fresh snapshot of the pool on every open (not just once) so a
+// user who recorded more requests, closed the panel, and reopens it sees
+// them without needing to stop/restart recording.
+async function toggleApiEntriesPanel() {
+  if (_state.apiEntriesPanelOpen) {
+    log('API_ENTRIES_PANEL close');
+    patchState({ apiEntriesPanelOpen: false });
+    return;
+  }
+  log('API_ENTRIES_PANEL open');
+  const entries = await fetchApiCaptureEntries();
+  patchState({ apiEntriesPanelOpen: true, apiEntries: entries });
+}
+
+// API-mode follow-up: derives sibling values for one variable URL part from
+// the recorded pool and merges them into that part's StaticListSource value
+// list — see findUrlTemplateMatches/mergeValueListValues above for the
+// actual matching/merging logic. Runs once automatically the moment
+// "Werteliste" is picked as the source kind, and again on demand via the
+// per-card "Aus Aufzeichnung übernehmen" button (e.g. after scrolling the
+// inspected page further to trigger more recorded requests).
+async function fillStaticListFromPool(partId) {
+  log('API_AUTOFILL start', partId);
+  const entries = await fetchApiCaptureEntries();
+
+  // The round trip is async — re-read state instead of trusting a
+  // closed-over draft, and bail if the screen/parameter moved on while it
+  // was in flight (config screen left, part removed, or its source kind
+  // switched away from staticList in the meantime).
+  const draft = _state.apiConfigDraft;
+  const source = draft?.parameterSources?.[partId];
+  if (!draft || source?.kind !== 'staticList') return;
+
+  const matches = findUrlTemplateMatches(draft.urlParts, partId, entries);
+  const { text, addedCount } = mergeValueListValues(source.valuesText || '', matches);
+  log('API_AUTOFILL result', { partId, found: matches.length, added: addedCount });
+
+  // A successful fill is already visible in the textarea itself — no need
+  // to also announce it via the (otherwise error-only, red) toast. Only the
+  // no-op case gets one, since nothing else on screen would otherwise
+  // confirm that the button/auto-run actually did something.
+  if (addedCount > 0) {
+    patchApiConfigSource(partId, { valuesText: text });
+  } else {
+    showToast(t('apiConfig.autoFillNoMatches'));
+  }
+}
+
 // The companion actually generates and runs the script against the live
 // page before handing it out (same rendering stage, and now the exact
 // artifact the user would download) and responds 422 with a message when
@@ -2047,6 +2243,11 @@ function wireEvents() {
     startApiFieldSearch();
   });
 
+  document.getElementById('btn-api-entries-toggle')?.addEventListener('click', () => {
+    log('BTN api-entries-toggle');
+    toggleApiEntriesPanel();
+  });
+
   // Event delegation for the sibling-field suggestion chips — toggles which
   // ones get included as extra fields once "Use" is confirmed below.
   document.getElementById('api-candidates-list')?.addEventListener('click', (e) => {
@@ -2095,7 +2296,16 @@ function wireEvents() {
 
   document.getElementById('api-config-parameters')?.addEventListener('change', (e) => {
     const kindRadio = e.target.closest('.api-config-source-kind-radio');
-    if (kindRadio) { setApiConfigSourceKind(kindRadio.dataset.partId, kindRadio.value); return; }
+    if (kindRadio) {
+      setApiConfigSourceKind(kindRadio.dataset.partId, kindRadio.value);
+      // Best-effort, automatic first pass — picking "Werteliste" is exactly
+      // the moment a user would otherwise go hunting through DevTools for
+      // sibling requests, so try the pool first and let them refine/refresh
+      // via the button rendered alongside the textarea (see
+      // fillStaticListFromPool's own doc comment).
+      if (kindRadio.value === 'staticList') fillStaticListFromPool(kindRadio.dataset.partId);
+      return;
+    }
     const staticList = e.target.closest('.api-config-static-list');
     if (staticList) { patchApiConfigSource(staticList.dataset.partId, { valuesText: staticList.value }); return; }
     const rangeType = e.target.closest('.api-config-range-type');
@@ -2127,7 +2337,10 @@ function wireEvents() {
       const index = parseInt(confirmBtn.dataset.candidateIndex, 10);
       const candidate = _state.apiDiscoveryCandidates?.candidates?.[index];
       if (candidate) confirmDiscoveryCandidate(confirmBtn.dataset.partId, candidate);
+      return;
     }
+    const autofillBtn = e.target.closest('.api-config-autofill-pool');
+    if (autofillBtn) fillStaticListFromPool(autofillBtn.dataset.partId);
   });
 
   document.getElementById('api-config-headers')?.addEventListener('change', (e) => {
@@ -2573,9 +2786,10 @@ if (typeof module !== 'undefined') {
     formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,
     buildGroupNode, buildFieldNode, resolveGroupNode, insertContainerNode, removeGroupTreeNode,
     formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport, hasRepeatingAncestor,
-    renderApiCandidates,
+    renderApiCandidates, renderApiEntriesList,
     parseUrlTemplateParts, buildUrlTemplate, parseValueListInput,
     buildStaticListSource, buildDiscoverySource, buildRangeSource, buildApiHeaders, buildApiConfig,
+    findUrlTemplateMatches, mergeValueListValues,
     variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
     detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
     applyStaticTranslations, sanitizeFileNameBase,
