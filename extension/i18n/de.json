@@ -85,6 +85,8 @@
     "searchedFor": "Gesucht: \"{target}\"",
     "matchLabel": "Treffer: {value}",
     "siblingChip": "+ {name}",
+    "selectAllChips": "Alle auswählen",
+    "deselectAllChips": "Alle abwählen",
     "useFieldNamePlaceholder": "Feldname"
   },
   "apiConfig": {
