@@ -1046,6 +1046,22 @@ function renderApiCandidates({ target, candidates }) {
     if (candidate.siblings.length > 0) {
       const siblingsEl = document.createElement('div');
       siblingsEl.className = 'api-candidate-siblings';
+
+      // Picking one-by-one is fine for a handful of siblings, but a record
+      // with many keys is exactly the "I want most of these" case a user
+      // asked to no longer have to click through individually — one button
+      // to pick all of them, toggling back to none on a second click
+      // (mirrors this file's other state-reflecting toggle buttons, e.g.
+      // preview show/hide). Picked state itself stays DOM-only (see the
+      // click handler in wireEvents), so this button's own label is updated
+      // directly on click rather than through a render() pass.
+      const selectAllBtn = document.createElement('button');
+      selectAllBtn.type = 'button';
+      selectAllBtn.className = 'api-sibling-select-all';
+      selectAllBtn.textContent = t('apiCandidates.selectAllChips');
+      selectAllBtn.dataset.candidateIndex = String(i);
+      siblingsEl.appendChild(selectAllBtn);
+
       candidate.siblings.forEach((sibling) => {
         const chip = document.createElement('button');
         chip.type = 'button';
@@ -1141,15 +1157,23 @@ function renderApiConfigScreen(draft, discoveryCandidates) {
   if (confirmBtn) confirmBtn.disabled = !apiConfigDraftHasAllSourcesChosen(draft);
 }
 
+// Field names were previously only ever chosen once — typed for the primary
+// field at "Use" time (confirmApiFieldCandidate), or fixed to the JSON key
+// for a sibling field added via a suggestion chip — and never editable
+// again afterwards. This screen is the only place left before "Übernehmen"
+// where every field (primary and siblings alike) can still be renamed, so
+// the name here is a committed (`change`, not `input` — see this file's
+// doc comment above) text input instead of a read-only span, matching the
+// URL-part-name inputs elsewhere on this same screen.
 function renderApiConfigFieldsList(fields) {
   const listEl = document.getElementById('api-config-fields');
   if (!listEl) return;
   listEl.innerHTML = '';
-  fields.forEach((f) => {
+  fields.forEach((f, i) => {
     const li = document.createElement('li');
     li.className = 'api-config-field-row';
     li.innerHTML =
-      `<span class="field-name">${escapeHtml(f.name)}</span>` +
+      `<input type="text" class="api-config-field-name" data-field-index="${i}" value="${escapeHtml(f.name)}" />` +
       `<span class="field-selector" title="${escapeHtml(f.path)}">${escapeHtml(f.path)}</span>`;
     listEl.appendChild(li);
   });
@@ -1203,7 +1227,13 @@ function variableUrlParts(urlParts) {
   ].filter(p => p.variable);
 }
 
+// Gates "Übernehmen" — also the single place guarding against a blank field
+// name reaching buildApiConfig: before field names became editable on this
+// screen (see renderApiConfigFieldsList), a blank one could never occur in
+// the first place (the primary field's name is required at "Use" time, a
+// sibling's is always a non-empty JSON key), so nothing enforced it here.
 function apiConfigDraftHasAllSourcesChosen(draft) {
+  if ((draft.fields || []).some(f => !f.name?.trim())) return false;
   const parts = variableUrlParts(draft.urlParts);
   if (parts.length === 0) return false; // Api-Mode's whole premise is enumerating over at least one variable part
   return parts.every(p => !!p.name?.trim() && !!draft.parameterSources[p.id]?.kind);
@@ -1715,6 +1745,16 @@ function setApiConfigPartName(partId, name) {
     ? { ...draft.urlParts, pathSegments: draft.urlParts.pathSegments.map((seg, i) => (String(i) === key ? { ...seg, name } : seg)) }
     : { ...draft.urlParts, queryParams: draft.urlParts.queryParams.map(p => (p.key === key ? { ...p, name } : p)) };
   patchApiConfigDraft({ urlParts });
+}
+
+// Renames one field in the draft — `index` addresses it positionally
+// (fields.length/order is fixed on this screen; only the URL parts/sources/
+// headers below change), same identity scheme confirmApiFieldCandidate's
+// own fields array already implies.
+function setApiConfigFieldName(index, name) {
+  const draft = _state.apiConfigDraft;
+  const fields = draft.fields.map((f, i) => (i === index ? { ...f, name } : f));
+  patchApiConfigDraft({ fields });
 }
 
 const API_CONFIG_SOURCE_DEFAULTS = {
@@ -2258,6 +2298,16 @@ function wireEvents() {
       return;
     }
 
+    const selectAllBtn = e.target.closest('.api-sibling-select-all');
+    if (selectAllBtn) {
+      const chips = selectAllBtn.closest('.api-candidate-siblings').querySelectorAll('.api-sibling-chip');
+      const allPicked = Array.from(chips).every(c => c.classList.contains('picked'));
+      chips.forEach(c => c.classList.toggle('picked', !allPicked));
+      selectAllBtn.textContent = t(allPicked ? 'apiCandidates.selectAllChips' : 'apiCandidates.deselectAllChips');
+      log('API_CANDIDATE siblings select-all', { toggledTo: !allPicked });
+      return;
+    }
+
     const confirmBtn = e.target.closest('.api-candidate-confirm');
     if (confirmBtn) {
       const index = parseInt(confirmBtn.dataset.candidateIndex, 10);
@@ -2293,6 +2343,11 @@ function wireEvents() {
   };
   document.getElementById('api-config-segments')?.addEventListener('change', handleUrlPartControlChange);
   document.getElementById('api-config-query-params')?.addEventListener('change', handleUrlPartControlChange);
+
+  document.getElementById('api-config-fields')?.addEventListener('change', (e) => {
+    const nameInput = e.target.closest('.api-config-field-name');
+    if (nameInput) setApiConfigFieldName(parseInt(nameInput.dataset.fieldIndex, 10), nameInput.value.trim());
+  });
 
   document.getElementById('api-config-parameters')?.addEventListener('change', (e) => {
     const kindRadio = e.target.closest('.api-config-source-kind-radio');
