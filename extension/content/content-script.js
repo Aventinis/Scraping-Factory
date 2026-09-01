@@ -944,6 +944,17 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
       if (!isTopFrame()) return;
       sendResponse(getLogBuffer());
     }
+    // Pull-based, same shape as GET_LOGS — lets the side panel inspect the
+    // full recorded pool (not just entries that happened to arrive while it
+    // was open, see the API_CAPTURE_ENTRY forward above, which is dropped
+    // silently if no listener is around) and also lets it re-derive sibling
+    // URL values (Issue #53 follow-up: auto-filling a StaticListSource's
+    // value list) from whatever has accumulated by the time it's asked, not
+    // just at click time like findApiCandidates above.
+    if (message.type === 'GET_API_CAPTURE_ENTRIES') {
+      if (!isTopFrame()) return;
+      sendResponse(capturedApiEntries);
+    }
     if (message.type === 'CHECK_ROBOTS_TXT') {
       if (!isTopFrame()) return;
       checkRobotsTxt().then(sendResponse);

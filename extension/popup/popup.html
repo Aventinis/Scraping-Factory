@@ -130,6 +130,7 @@
     .api-config-param-card .row-label { margin-bottom: 4px; }
     .api-config-source-kind { display: flex; gap: 10px; font-size: 11px; margin-bottom: 6px; }
     .api-config-source-fields textarea { width: 100%; font-size: 11px; padding: 4px 6px; border: 1px solid #e5e7eb; border-radius: 4px; font-family: monospace; }
+    .api-config-source-fields .api-config-autofill-pool { margin-top: 4px; }
     .api-config-source-fields input[type="text"] { font-size: 11px; padding: 3px 6px; border: 1px solid #e5e7eb; border-radius: 4px; }
     .api-config-range-row { display: flex; gap: 6px; margin-top: 4px; }
     .api-config-range-row input, .api-config-range-row select { flex: 1; }
@@ -365,6 +366,16 @@
         <button id="btn-api-capture" class="btn-toggle" type="button" data-i18n="idle.apiCaptureStartBtn" data-i18n-title="idle.apiCaptureTitle"></button>
       </div>
       <p id="api-capture-summary" class="preview-summary hidden"></p>
+
+      <!-- Recorded-endpoints viewer: lets whoever wants the detail inspect
+           the raw pool directly, independent of the click-based value
+           search below. -->
+      <div class="actions" style="margin-top: 6px;">
+        <button id="btn-api-entries-toggle" class="btn-secondary btn-tiny" type="button" disabled data-i18n-title="idle.apiEntriesTitle"></button>
+      </div>
+      <div id="api-entries-panel" class="api-candidates-panel hidden">
+        <ul id="api-entries-list" class="api-candidates-list"></ul>
+      </div>
 
       <div class="actions" style="margin-top: 6px;">
         <button id="btn-api-search" class="btn-secondary" type="button" disabled data-i18n="idle.apiSearchBtn" data-i18n-title="idle.apiSearchTitle"></button>

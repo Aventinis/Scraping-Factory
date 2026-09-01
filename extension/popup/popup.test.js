@@ -32,9 +32,10 @@ const {
   formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,
   buildGroupNode, buildFieldNode, resolveGroupNode, insertContainerNode, removeGroupTreeNode,
   formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport, hasRepeatingAncestor,
-  renderApiCandidates,
+  renderApiCandidates, renderApiEntriesList,
   parseUrlTemplateParts, buildUrlTemplate, parseValueListInput,
   buildStaticListSource, buildDiscoverySource, buildRangeSource, buildApiHeaders, buildApiConfig,
+  findUrlTemplateMatches, mergeValueListValues,
   variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
   detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase,
   addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
@@ -793,6 +794,43 @@ describe('renderApiCandidates (Issue #53 Phase 4)', () => {
   });
 });
 
+describe('renderApiEntriesList (recorded-endpoints viewer)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `<ul id="api-entries-list"></ul>`;
+  });
+
+  test('shows an empty-state message when nothing was recorded', () => {
+    renderApiEntriesList([]);
+    expect(document.querySelector('.api-candidates-empty')).not.toBeNull();
+  });
+
+  test('treats a missing/null entries list the same as empty', () => {
+    renderApiEntriesList(null);
+    expect(document.querySelector('.api-candidates-empty')).not.toBeNull();
+  });
+
+  test('renders one row per entry with method, status and URL, plus content type when present', () => {
+    renderApiEntriesList([
+      { url: 'https://example.com/api/items', method: 'GET', status: 200, contentType: 'application/json' },
+      { url: 'https://example.com/img.png', method: 'GET', status: 200, contentType: 'image/png', bodySkipped: true },
+    ]);
+
+    const rows = document.querySelectorAll('.api-candidate');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].querySelector('.api-candidate-url').textContent).toBe('GET 200 https://example.com/api/items');
+    expect(rows[0].querySelector('.api-candidate-path').textContent).toBe('application/json');
+    // The status is always known (read off the response before the
+    // body-skip decision, see api-capture.js) — bodySkipped only affects
+    // whether a body was captured, not whether the row shows a status.
+    expect(rows[1].querySelector('.api-candidate-url').textContent).toBe('GET 200 https://example.com/img.png');
+  });
+
+  test('omits the content-type line entirely when none was recorded', () => {
+    renderApiEntriesList([{ url: 'https://example.com/api', method: 'GET', status: 200, contentType: null }]);
+    expect(document.querySelector('.api-candidate-path')).toBeNull();
+  });
+});
+
 describe('parseUrlTemplateParts / buildUrlTemplate (Issue #53 Phase 5)', () => {
   test('splits origin, path segments and query params', () => {
     const parts = parseUrlTemplateParts('https://example.com/api/items/42?category=Elektronik&page=1');
@@ -869,6 +907,120 @@ describe('parseValueListInput / buildStaticListSource / buildDiscoverySource / b
   test('buildRangeSource omits format entirely when unset', () => {
     const source = buildRangeSource('Number', '1', '10', null);
     expect(source).not.toHaveProperty('format');
+  });
+});
+
+// ── findUrlTemplateMatches / mergeValueListValues (API-mode: auto-fill a ──
+// StaticListSource's value list from the recorded request pool) ───────────
+describe('findUrlTemplateMatches', () => {
+  // /api/category/obst/products → segments [api, category, obst, products]
+  // — the literal "category" segment sits at index 1, the actual value
+  // ("obst") at index 2, so path:2 is the part under test throughout.
+  test('extracts a variable path segment\'s value from sibling requests with the same URL shape', () => {
+    const urlParts = parseUrlTemplateParts('https://shop.example.com/api/category/obst/products');
+    urlParts.pathSegments[2].variable = true; // "obst"
+
+    const entries = [
+      { url: 'https://shop.example.com/api/category/obst/products' }, // the confirmed candidate itself
+      { url: 'https://shop.example.com/api/category/gemuese/products' },
+      { url: 'https://shop.example.com/api/category/tiefkuehl/products' },
+    ];
+
+    expect(findUrlTemplateMatches(urlParts, 'path:2', entries)).toEqual(['obst', 'gemuese', 'tiefkuehl']);
+  });
+
+  test('rejects an entry whose fixed segments differ, even if the segment count matches', () => {
+    const urlParts = parseUrlTemplateParts('https://shop.example.com/api/category/obst/products');
+    urlParts.pathSegments[2].variable = true;
+
+    const entries = [
+      { url: 'https://shop.example.com/api/brand/obst/products' }, // "brand" instead of "category" — different endpoint shape
+      { url: 'https://shop.example.com/api/category/gemuese/reviews' }, // different fixed trailing segment
+    ];
+
+    expect(findUrlTemplateMatches(urlParts, 'path:2', entries)).toEqual([]);
+  });
+
+  test('rejects an entry from a different origin or with a different segment count', () => {
+    const urlParts = parseUrlTemplateParts('https://shop.example.com/api/category/obst/products');
+    urlParts.pathSegments[2].variable = true;
+
+    const entries = [
+      { url: 'https://other.example.com/api/category/gemuese/products' },
+      { url: 'https://shop.example.com/api/category/gemuese/products/extra' },
+    ];
+
+    expect(findUrlTemplateMatches(urlParts, 'path:2', entries)).toEqual([]);
+  });
+
+  test('extracts a variable query param\'s value, requiring the same query-key set', () => {
+    const urlParts = parseUrlTemplateParts('https://shop.example.com/api/products?category=obst&page=1');
+    urlParts.queryParams[0].variable = true; // "category"
+
+    const entries = [
+      { url: 'https://shop.example.com/api/products?category=gemuese&page=1' },
+      { url: 'https://shop.example.com/api/products?category=tiefkuehl&page=2' }, // "page" (fixed here) differs → not a sibling
+      { url: 'https://shop.example.com/api/products?category=fleisch' }, // missing "page" entirely → different shape
+    ];
+
+    expect(findUrlTemplateMatches(urlParts, 'query:category', entries)).toEqual(['gemuese']);
+  });
+
+  test('leaves other variable parts free to differ without affecting the match', () => {
+    // /api/category/obst/week/2026-01 → [api, category, obst, week, 2026-01]
+    const urlParts = parseUrlTemplateParts('https://shop.example.com/api/category/obst/week/2026-01');
+    urlParts.pathSegments[2].variable = true; // category value
+    urlParts.pathSegments[4].variable = true; // week value — parameterized independently
+
+    const entries = [
+      { url: 'https://shop.example.com/api/category/gemuese/week/2026-07' },
+    ];
+
+    expect(findUrlTemplateMatches(urlParts, 'path:2', entries)).toEqual(['gemuese']);
+  });
+
+  test('deduplicates repeated values and ignores unparseable URLs', () => {
+    const urlParts = parseUrlTemplateParts('https://shop.example.com/api/category/obst/products');
+    urlParts.pathSegments[2].variable = true;
+
+    const entries = [
+      { url: 'https://shop.example.com/api/category/gemuese/products' },
+      { url: 'https://shop.example.com/api/category/gemuese/products' }, // duplicate
+      { url: 'not a url' },
+    ];
+
+    expect(findUrlTemplateMatches(urlParts, 'path:2', entries)).toEqual(['gemuese']);
+  });
+
+  test('an empty/missing entries pool yields no matches', () => {
+    const urlParts = parseUrlTemplateParts('https://shop.example.com/api/category/obst/products');
+    urlParts.pathSegments[2].variable = true;
+    expect(findUrlTemplateMatches(urlParts, 'path:2', [])).toEqual([]);
+    expect(findUrlTemplateMatches(urlParts, 'path:2', undefined)).toEqual([]);
+  });
+});
+
+describe('mergeValueListValues', () => {
+  test('appends new values not already present, comma/newline-split like parseValueListInput', () => {
+    const { text, addedCount } = mergeValueListValues('obst, gemuese', ['gemuese', 'tiefkuehl']);
+    expect(text).toBe('obst, gemuese\ntiefkuehl');
+    expect(addedCount).toBe(1);
+  });
+
+  test('reports zero added and returns the text unchanged when every value is already present', () => {
+    const { text, addedCount } = mergeValueListValues('obst, gemuese', ['obst', 'gemuese']);
+    expect(text).toBe('obst, gemuese');
+    expect(addedCount).toBe(0);
+  });
+
+  test('starting from empty text just becomes the new values, one per line', () => {
+    const { text, addedCount } = mergeValueListValues('', ['obst', 'gemuese']);
+    expect(text).toBe('obst\ngemuese');
+    expect(addedCount).toBe(2);
+  });
+
+  test('treats missing existing text the same as empty', () => {
+    expect(mergeValueListValues(undefined, ['obst'])).toEqual({ text: 'obst', addedCount: 1 });
   });
 });
 
@@ -3536,6 +3688,215 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
     document.getElementById('btn-api-config-discard').click();
 
     expect(document.getElementById('api-config-panel').classList.contains('hidden')).toBe(true);
+  });
+});
+
+// ── API-mode follow-up: recorded-endpoints panel + pool-derived value-list ──
+// autofill. Both features read the recorded pool via a new pull-based
+// GET_API_CAPTURE_ENTRIES round trip (mirrors GET_LOGS/CHECK_ROBOTS_TXT) —
+// content-script.js itself is out of scope here (covered in its own test
+// file), so chrome.runtime.sendMessage is mocked directly to stand in for
+// that round trip.
+
+describe('recorded-endpoints panel and pool-derived value-list autofill', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <button id="btn-add-field"></button>
+        <button id="btn-api-capture"></button>
+        <p id="api-capture-summary" class="hidden"></p>
+        <button id="btn-api-entries-toggle" disabled></button>
+        <div id="api-entries-panel" class="hidden">
+          <ul id="api-entries-list"></ul>
+        </div>
+        <button id="btn-api-search" disabled></button>
+        <div id="api-candidates-panel" class="hidden">
+          <p id="api-candidates-target"></p>
+          <ul id="api-candidates-list"></ul>
+        </div>
+        <div id="api-config-panel" class="hidden">
+          <p id="api-config-summary"></p>
+          <button id="btn-api-config-discard"></button>
+        </div>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <button id="btn-cancel-selection"></button>
+      </section>
+      <section id="screen-api-config" class="hidden">
+        <ul id="api-config-fields"></ul>
+        <ul id="api-config-segments"></ul>
+        <ul id="api-config-query-params"></ul>
+        <div id="api-config-parameters"></div>
+        <ul id="api-config-headers"></ul>
+        <button id="btn-api-config-cancel"></button>
+        <button id="btn-api-config-confirm" disabled></button>
+      </section>
+      <div id="modal-field-name" class="hidden">
+        <input id="input-field-name" />
+        <button id="btn-field-confirm"></button>
+        <button id="btn-field-cancel"></button>
+      </div>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn().mockResolvedValue(undefined),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({ url: 'https://example.com' }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+  });
+
+  const PRIMARY_CANDIDATE = {
+    entryId: 1,
+    url: 'https://example.com/api/category/obst/products',
+    method: 'GET',
+    path: 'data.items[0].name',
+    value: 'Titel-Test',
+    siblings: [],
+    itemsPath: 'data.items',
+    valuePath: 'name',
+    requestHeaders: [],
+  };
+
+  function recordOneEntry() {
+    document.getElementById('btn-api-capture').click();
+    capturedListener({ type: 'API_CAPTURE_ENTRY', entry: { id: 1, url: 'https://example.com/api' } });
+    document.getElementById('btn-api-capture').click();
+  }
+
+  function confirmPrimaryCandidate() {
+    recordOneEntry();
+    document.getElementById('btn-api-search').click();
+    capturedListener({ type: 'API_CANDIDATES', target: 'Titel-Test', candidates: [PRIMARY_CANDIDATE] });
+
+    const nameInput = document.querySelector('.api-candidate-field-name');
+    nameInput.value = 'Titel';
+    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('.api-candidate-confirm').click();
+  }
+
+  test('the toggle button stays disabled until something has been recorded', () => {
+    expect(document.getElementById('btn-api-entries-toggle').disabled).toBe(true);
+    recordOneEntry();
+    expect(document.getElementById('btn-api-entries-toggle').disabled).toBe(false);
+  });
+
+  test('opening the panel fetches the pool and renders it; closing does not re-fetch', async () => {
+    recordOneEntry();
+    chrome.runtime.sendMessage.mockResolvedValueOnce([
+      { url: 'https://example.com/api/a', method: 'GET', status: 200, contentType: 'application/json' },
+      { url: 'https://example.com/api/b', method: 'GET', status: 404, contentType: null },
+    ]);
+
+    document.getElementById('btn-api-entries-toggle').click();
+    await flushMicrotasks();
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'GET_API_CAPTURE_ENTRIES' });
+    expect(document.getElementById('api-entries-panel').classList.contains('hidden')).toBe(false);
+    expect(document.querySelectorAll('#api-entries-list .api-candidate')).toHaveLength(2);
+
+    chrome.runtime.sendMessage.mockClear();
+    document.getElementById('btn-api-entries-toggle').click();
+
+    expect(document.getElementById('api-entries-panel').classList.contains('hidden')).toBe(true);
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+  });
+
+  test('picking "Werteliste" auto-fills the value list from sibling requests in the pool', async () => {
+    confirmPrimaryCandidate();
+
+    // /api/category/obst/products → [api, category, obst, products]; "obst"
+    // (index 2) is the part being turned into a parameter.
+    const toggle = document.querySelectorAll('#api-config-segments .api-config-part-toggle')[2];
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    const nameInput = document.querySelector('#api-config-segments .api-config-part-name');
+    nameInput.value = 'category';
+    nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    chrome.runtime.sendMessage.mockResolvedValueOnce([
+      { url: 'https://example.com/api/category/obst/products' },
+      { url: 'https://example.com/api/category/gemuese/products' },
+      { url: 'https://example.com/api/category/tiefkuehl/products' },
+    ]);
+
+    const kindRadio = document.querySelector('.api-config-source-kind-radio[value="staticList"]');
+    kindRadio.checked = true;
+    kindRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    await flushMicrotasks();
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'GET_API_CAPTURE_ENTRIES' });
+    expect(document.querySelector('.api-config-static-list').value).toBe('obst\ngemuese\ntiefkuehl');
+  });
+
+  test('the "Aus Aufzeichnung übernehmen" button merges new pool matches without clobbering manual edits', async () => {
+    confirmPrimaryCandidate();
+    const toggle = document.querySelectorAll('#api-config-segments .api-config-part-toggle')[2];
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('#api-config-segments .api-config-part-name').dispatchEvent(new Event('change', { bubbles: true }));
+
+    // Pick Werteliste with an empty pool (no auto-fill happens), then type a
+    // manual value the pool doesn't know about.
+    chrome.runtime.sendMessage.mockResolvedValueOnce([]);
+    const kindRadio = document.querySelector('.api-config-source-kind-radio[value="staticList"]');
+    kindRadio.checked = true;
+    kindRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    await flushMicrotasks();
+
+    const textarea = document.querySelector('.api-config-static-list');
+    textarea.value = 'handgetippt';
+    textarea.dispatchEvent(new Event('change', { bubbles: true }));
+
+    // The pool has since gained a sibling request — clicking the refresh
+    // button now should append it, not replace the manual entry.
+    chrome.runtime.sendMessage.mockResolvedValueOnce([
+      { url: 'https://example.com/api/category/gemuese/products' },
+    ]);
+    document.querySelector('.api-config-autofill-pool').click();
+    await flushMicrotasks();
+
+    expect(document.querySelector('.api-config-static-list').value).toBe('handgetippt\ngemuese');
+  });
+
+  test('no new matches leaves the value list untouched', async () => {
+    confirmPrimaryCandidate();
+    const toggle = document.querySelectorAll('#api-config-segments .api-config-part-toggle')[2];
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('#api-config-segments .api-config-part-name').dispatchEvent(new Event('change', { bubbles: true }));
+
+    chrome.runtime.sendMessage.mockResolvedValueOnce([]);
+    const kindRadio = document.querySelector('.api-config-source-kind-radio[value="staticList"]');
+    kindRadio.checked = true;
+    kindRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    await flushMicrotasks();
+
+    expect(document.querySelector('.api-config-static-list').value).toBe('');
   });
 });
 

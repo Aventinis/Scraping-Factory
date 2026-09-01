@@ -390,6 +390,51 @@ describe('CHECK_ROBOTS_TXT', () => {
   });
 });
 
+describe('GET_API_CAPTURE_ENTRIES', () => {
+  test('returns true to keep the message channel open for the async response', () => {
+    chrome.tabs.query.mockImplementation((_, cb) => cb([]));
+    const result = capturedListener({ type: 'GET_API_CAPTURE_ENTRIES' }, {}, jest.fn());
+    expect(result).toBe(true);
+  });
+
+  test('forwards to the active tab and relays its result', async () => {
+    chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+    const entries = [{ id: 1, url: 'https://example.com/api', method: 'GET', status: 200 }];
+    chrome.tabs.sendMessage.mockImplementation((tabId, msg) => {
+      expect(tabId).toBe(7);
+      expect(msg).toEqual({ type: 'GET_API_CAPTURE_ENTRIES' });
+      return Promise.resolve(entries);
+    });
+    const sendResponse = jest.fn();
+
+    capturedListener({ type: 'GET_API_CAPTURE_ENTRIES' }, {}, sendResponse);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(sendResponse).toHaveBeenCalledWith(entries);
+  });
+
+  test('responds with an empty array when there is no active tab', async () => {
+    chrome.tabs.query.mockImplementation((_, cb) => cb([]));
+    const sendResponse = jest.fn();
+
+    capturedListener({ type: 'GET_API_CAPTURE_ENTRIES' }, {}, sendResponse);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(sendResponse).toHaveBeenCalledWith([]);
+  });
+
+  test('responds with an empty array when the content script is unreachable', async () => {
+    chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+    chrome.tabs.sendMessage.mockRejectedValue(new Error('Could not establish connection.'));
+    const sendResponse = jest.fn();
+
+    capturedListener({ type: 'GET_API_CAPTURE_ENTRIES' }, {}, sendResponse);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(sendResponse).toHaveBeenCalledWith([]);
+  });
+});
+
 test('unknown message type is ignored', () => {
   capturedListener({ type: 'UNKNOWN' }, {});
 
