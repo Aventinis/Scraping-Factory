@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kontoportal Nordlicht</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: #f4f5f7;
+      color: #232526;
+      padding: 40px 20px 80px;
+    }
+
+    .site-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .site-name {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #1c3f5f;
+      letter-spacing: -.02em;
+    }
+    .site-tagline {
+      color: #6b7280;
+      font-size: 0.92rem;
+      margin-top: 4px;
+    }
+
+    .page {
+      max-width: 460px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid #e4e7eb;
+      border-radius: 8px;
+      padding: 28px 26px;
+    }
+
+    /* ── Test fixture hint ──
+       Deliberately shown on-page (this is a local test fixture, not a real
+       login) so whoever is testing Issue #43's verification-values feature
+       doesn't have to go digging in this file for the expected credentials. */
+    .fixture-hint {
+      background: #eef2f6;
+      border: 1px dashed #c7cdd4;
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-size: 0.82rem;
+      color: #44505d;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+    .fixture-hint code {
+      background: #dfe6ec;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-family: 'SF Mono', Consolas, monospace;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+    .field label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #44505d;
+      margin-bottom: 6px;
+    }
+    .field input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d7dce2;
+      border-radius: 6px;
+      font-size: 0.95rem;
+    }
+    .field input:focus {
+      outline: 2px solid #1c3f5f;
+      outline-offset: 1px;
+    }
+
+    #login-error {
+      color: #b3261e;
+      font-size: 0.85rem;
+      margin-bottom: 14px;
+    }
+    #login-error.hidden {
+      display: none;
+    }
+
+    #login-submit {
+      display: block;
+      width: 100%;
+      padding: 11px;
+      background: #1c3f5f;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #login-submit:hover {
+      background: #163350;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    /* ── Dashboard (post-login) ── */
+    .welcome-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #1c3f5f;
+      margin-bottom: 4px;
+    }
+    .welcome-sub {
+      color: #6b7280;
+      font-size: 0.85rem;
+      margin-bottom: 20px;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 10px 0;
+      border-bottom: 1px solid #eef0f2;
+    }
+    .stat-row:last-of-type {
+      border-bottom: none;
+    }
+    .stat-label {
+      color: #6b7280;
+      font-size: 0.85rem;
+    }
+    .stat-value {
+      font-weight: 700;
+      color: #1c3f5f;
+    }
+
+    .transactions {
+      margin-top: 20px;
+    }
+    .transactions-title {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #44505d;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      margin-bottom: 10px;
+    }
+    .transaction {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      font-size: 0.88rem;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .transaction:last-child {
+      border-bottom: none;
+    }
+    .transaction-amount.negative {
+      color: #b3261e;
+    }
+    .transaction-amount.positive {
+      color: #1c7a4a;
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-name">Kontoportal Nordlicht</div>
+    <div class="site-tagline">Online-Banking-Demo für Login-Flow-Tests</div>
+  </header>
+
+  <div class="page">
+    <div class="card">
+      <!--
+        Login form: intended browserActions sequence in the popup —
+          1. Fill  #username
+          2. Fill  #password
+          3. Click #login-submit
+          4. WaitFor .dashboard (appears only after a correct login)
+        Engine must be "Browser" (Playwright) — the popup's static engine
+        can't run this page's JS at all. See Issue #43 / CLAUDE.md's
+        "Feature Scope" for the verificationValues mechanism this page
+        exercises: type the credentials below into each Fill action's new
+        "Testwert" field so the trial run in the companion app can actually
+        log in before handing you the generated script.
+      -->
+      <div id="login-view">
+        <div class="fixture-hint">
+          Test-Zugangsdaten für diese Demo-Seite:<br />
+          Benutzername: <code>nordlicht</code> · Passwort: <code>Fjord2026!</code>
+        </div>
+
+        <p id="login-error" class="hidden">Benutzername oder Passwort ist falsch.</p>
+
+        <div class="field">
+          <label for="username">Benutzername</label>
+          <input id="username" type="text" autocomplete="username" />
+        </div>
+        <div class="field">
+          <label for="password">Passwort</label>
+          <input id="password" type="password" autocomplete="current-password" />
+        </div>
+        <button id="login-submit" type="button">Anmelden</button>
+      </div>
+
+      <!--
+        Dashboard: hidden until a correct login, then this is what a
+        WaitForStep targets (.dashboard) and — once past the login — a
+        realistic follow-up flat-mode data field selection can extract from
+        (e.g. .stat-value, .transaction-amount).
+      -->
+      <div id="dashboard-view" class="dashboard hidden">
+        <div class="welcome-title">Willkommen zurück, <span id="welcome-name"></span></div>
+        <div class="welcome-sub">Letzte Anmeldung: 01.09.2026, 08:14 Uhr</div>
+
+        <div class="stat-row">
+          <span class="stat-label">Kontostand</span>
+          <span class="stat-value">2.348,17 €</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Verfügbarer Kreditrahmen</span>
+          <span class="stat-value">1.500,00 €</span>
+        </div>
+
+        <div class="transactions">
+          <div class="transactions-title">Letzte Buchungen</div>
+          <div class="transaction">
+            <span class="transaction-desc">Supermarkt Nord</span>
+            <span class="transaction-amount negative">-42,17 €</span>
+          </div>
+          <div class="transaction">
+            <span class="transaction-desc">Gehaltseingang</span>
+            <span class="transaction-amount positive">+2.100,00 €</span>
+          </div>
+          <div class="transaction">
+            <span class="transaction-desc">Stromabschlag</span>
+            <span class="transaction-amount negative">-89,50 €</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var VALID_USERNAME = 'nordlicht';
+      var VALID_PASSWORD = 'Fjord2026!';
+
+      var loginView = document.getElementById('login-view');
+      var dashboardView = document.getElementById('dashboard-view');
+      var errorEl = document.getElementById('login-error');
+
+      document.getElementById('login-submit').addEventListener('click', function () {
+        var username = document.getElementById('username').value;
+        var password = document.getElementById('password').value;
+
+        if (username === VALID_USERNAME && password === VALID_PASSWORD) {
+          errorEl.classList.add('hidden');
+          document.getElementById('welcome-name').textContent = username;
+          loginView.classList.add('hidden');
+          dashboardView.classList.remove('hidden');
+        } else {
+          errorEl.classList.remove('hidden');
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
