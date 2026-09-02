@@ -30,7 +30,8 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
 
     public async Task<ScriptVerificationResult> VerifyAsync(
         string script, OutputFormat outputFormat = OutputFormat.Csv, string outputFileBaseName = "output",
-        TimeSpan extraTimeout = default, CancellationToken ct = default)
+        TimeSpan extraTimeout = default, IReadOnlyDictionary<string, string>? extraEnvironmentVariables = null,
+        CancellationToken ct = default)
     {
         var effectiveTimeout = _timeout + extraTimeout;
         var workDir = Directory.CreateTempSubdirectory("scrapingfactory-verify-").FullName;
@@ -39,7 +40,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
             var scriptPath = Path.Combine(workDir, "scraper.py");
             await File.WriteAllTextAsync(scriptPath, script, ct);
 
-            var (process, executableUsed) = StartProcess(scriptPath, workDir);
+            var (process, executableUsed) = StartProcess(scriptPath, workDir, extraEnvironmentVariables);
             if (process is null)
             {
                 return new ScriptVerificationResult
@@ -147,7 +148,8 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
             };
     }
 
-    private (Process? Process, string? Executable) StartProcess(string scriptPath, string workDir)
+    private (Process? Process, string? Executable) StartProcess(
+        string scriptPath, string workDir, IReadOnlyDictionary<string, string>? extraEnv)
     {
         foreach (var candidate in _candidates)
         {
@@ -161,6 +163,11 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                 CreateNoWindow = true,
             };
             psi.ArgumentList.Add(scriptPath);
+            if (extraEnv is not null)
+            {
+                foreach (var (key, value) in extraEnv)
+                    psi.Environment[key] = value;
+            }
 
             try
             {
