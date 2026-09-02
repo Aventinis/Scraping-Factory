@@ -39,6 +39,7 @@ const {
   variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
   detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase,
   addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
+  buildVerificationValues,
   frameBadgeHtml,
 } = require('./popup');
 
@@ -439,6 +440,35 @@ describe('serializeBrowserActions', () => {
   });
 });
 
+// Issue #43 — one-time Fill test values for the /generate verification trial
+// run only, never persisted/logged/written into the generated script.
+describe('buildVerificationValues', () => {
+  test('collects a value for each fill action with a matching env-var-keyed test value', () => {
+    const actions = [
+      { kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER' },
+      { kind: 'fill', selector: '#pass', environmentVariableName: 'SF_PASS' },
+    ];
+    const result = buildVerificationValues(actions, { SF_USER: 'alice', SF_PASS: 's3cret' });
+    expect(result).toEqual({ SF_USER: 'alice', SF_PASS: 's3cret' });
+  });
+
+  test('ignores non-fill actions', () => {
+    const actions = [{ kind: 'click', selector: '#submit' }, { kind: 'waitFor', selector: '.welcome', timeoutMs: 5000 }];
+    expect(buildVerificationValues(actions, { SF_USER: 'alice' })).toEqual({});
+  });
+
+  test('ignores a fill action with a blank env-var name', () => {
+    const actions = [{ kind: 'fill', selector: '#user', environmentVariableName: '' }];
+    expect(buildVerificationValues(actions, { '': 'alice' })).toEqual({});
+  });
+
+  test('ignores a blank/missing test value for an otherwise-matching env-var name', () => {
+    const actions = [{ kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER' }];
+    expect(buildVerificationValues(actions, { SF_USER: '' })).toEqual({});
+    expect(buildVerificationValues(actions, {})).toEqual({});
+  });
+});
+
 // ── Container-Mode tree helpers ──────────────────────────────────────────────
 
 describe('buildGroupNode / buildFieldNode', () => {
@@ -753,6 +783,34 @@ describe('renderFields', () => {
     expect(rows[0].querySelector('.frame-badge')).not.toBeNull();
     expect(rows[0].querySelector('.frame-badge').title).toContain('#price-widget');
     expect(rows[1].querySelector('.frame-badge')).toBeNull();
+  });
+});
+
+// Issue #43 — the test-value input only appears once a fill action's
+// env-var name is actually set (that's the join key sent to /generate).
+describe('renderBrowserActions — Fill test-value row', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="browser-actions-list"></div>';
+  });
+
+  test('renders a test-value input for a fill action with a non-blank env-var name', () => {
+    renderBrowserActions([{ kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER' }], { SF_USER: 'alice' });
+
+    const input = document.querySelector('.browser-action-test-value');
+    expect(input).not.toBeNull();
+    expect(input.dataset.envName).toBe('SF_USER');
+    expect(input.value).toBe('alice');
+    expect(input.type).toBe('password');
+  });
+
+  test('does not render a test-value input for a fill action with a blank env-var name', () => {
+    renderBrowserActions([{ kind: 'fill', selector: '#user', environmentVariableName: '' }], {});
+    expect(document.querySelector('.browser-action-test-value')).toBeNull();
+  });
+
+  test('does not render a test-value input for non-fill actions', () => {
+    renderBrowserActions([{ kind: 'click', selector: '#submit' }], {});
+    expect(document.querySelector('.browser-action-test-value')).toBeNull();
   });
 });
 
@@ -2317,6 +2375,39 @@ describe('Engine + browser actions integration', () => {
     expect(document.querySelector('.browser-action-env-name').value).toBe('SF_USERNAME');
   });
 
+  // Issue #43
+  test('setting a Fill action\'s env-var name reveals its test-value input', () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-fill').click();
+
+    expect(document.querySelector('.browser-action-test-value')).toBeNull();
+
+    const envInput = document.querySelector('.browser-action-env-name');
+    envInput.value = 'SF_USERNAME';
+    envInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(document.querySelector('.browser-action-test-value')).not.toBeNull();
+  });
+
+  // Issue #43: fillTestValues must never survive a popup close/reopen — the
+  // change handler uses patchState (which never calls persistState), unlike
+  // every other browser-action field here, which uses setState.
+  test('typing a Fill test value updates the input but is never written to session storage', () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-fill').click();
+    const envInput = document.querySelector('.browser-action-env-name');
+    envInput.value = 'SF_USERNAME';
+    envInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    chrome.storage.session.set.mockClear();
+    const testValueInput = document.querySelector('.browser-action-test-value');
+    testValueInput.value = 'alice';
+    testValueInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(document.querySelector('.browser-action-test-value').value).toBe('alice');
+    expect(chrome.storage.session.set).not.toHaveBeenCalled();
+  });
+
   test('picking an element for an action selector: START_SELECTION, then the result is written straight into that action — no modal', async () => {
     document.getElementById('btn-engine-browser').click();
     document.getElementById('btn-add-action-click').click();
@@ -2411,6 +2502,38 @@ describe('Engine + browser actions integration', () => {
       { kind: 'click', selector: '#submit' },
       { kind: 'waitFor', selector: '.welcome', timeoutMs: 5000 },
     ]);
+    // Issue #43: no test values were typed in this test, so nothing is sent —
+    // matches the gap the feature closes without ever forcing an empty key.
+    expect(body.verificationValues).toBeUndefined();
+  });
+
+  // Issue #43
+  test('typed Fill test values are sent to /generate as verificationValues, keyed by env-var name', async () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-fill').click();
+    document.getElementById('btn-add-action-fill').click();
+
+    const envInputs = () => document.querySelectorAll('.browser-action-env-name');
+    envInputs()[0].value = 'SF_USERNAME';
+    envInputs()[0].dispatchEvent(new Event('change', { bubbles: true }));
+    envInputs()[1].value = 'SF_PASSWORD';
+    envInputs()[1].dispatchEvent(new Event('change', { bubbles: true }));
+
+    const testValueInputs = () => document.querySelectorAll('.browser-action-test-value');
+    testValueInputs()[0].value = 'alice';
+    testValueInputs()[0].dispatchEvent(new Event('change', { bubbles: true }));
+    testValueInputs()[1].value = 's3cret';
+    testValueInputs()[1].dispatchEvent(new Event('change', { bubbles: true }));
+
+    document.getElementById('btn-generate').disabled = false;
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const [, options] = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/generate'));
+    const body = JSON.parse(options.body);
+    expect(body.verificationValues).toEqual({ SF_USERNAME: 'alice', SF_PASSWORD: 's3cret' });
+    // The logged request body must stay clean — never carries the test values.
+    expect(body.engine).toBe('Browser');
   });
 
   test('a scroll action with only the load-more button picked is sent with containerSelector: null', async () => {
