@@ -2099,12 +2099,32 @@ function downloadBugReport(text) {
   URL.revokeObjectURL(objectUrl);
 }
 
+// GitHub (and browsers) reject a new-issue URL past a certain length outright
+// ("the URI you submitted is too long") instead of silently truncating it —
+// so unlike BUG_REPORT_LOG_EXCERPT_LIMIT (a raw-character budget for the log
+// excerpt), this is checked against the *actual* encoded URL, since percent-
+// encoding (quotes/braces/newlines in JSON log data, in particular) can
+// inflate length well past what the raw excerpt accounts for.
+const GITHUB_ISSUE_URL_LIMIT = 8000;
+
+function buildIssueTitle() {
+  return lastReportedError ? `Error: ${lastReportedError.message}` : 'Bug report';
+}
+
+function buildIssueUrl(title, body) {
+  return `${GITHUB_REPO_URL}/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+}
+
 // Prefills a new GitHub issue. Short reports are embedded in full so the
 // issue is ready to submit as-is; longer ones are trailed off with a note
-// pointing at the downloaded bug-report.log (URLs have practical length
-// limits, so we don't risk silently truncating mid-word into a broken link).
+// pointing at the downloaded bug-report.log. If the resulting URL would
+// still exceed GitHub's practical length limit (e.g. the error message
+// itself is a huge traceback), we degrade further rather than hand back a
+// broken link — down to an entirely unfilled issue as the last resort. An
+// issue is always opened either way; the full log is already on disk via
+// downloadBugReport() for the user to attach manually.
 function buildGithubIssueUrl(reportText) {
-  const title = lastReportedError ? `Error: ${lastReportedError.message}` : 'Bug report';
+  const title = buildIssueTitle();
   const truncated = reportText.length > BUG_REPORT_LOG_EXCERPT_LIMIT;
   const excerpt = truncated ? reportText.slice(-BUG_REPORT_LOG_EXCERPT_LIMIT) : reportText;
 
@@ -2120,7 +2140,20 @@ function buildGithubIssueUrl(reportText) {
     truncated ? '\n_(Log truncated — please also attach the downloaded bug-report.log file to this issue.)_' : '',
   ].filter(Boolean).join('\n');
 
-  return `${GITHUB_REPO_URL}/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+  const prefilledUrl = buildIssueUrl(title, body);
+  if (prefilledUrl.length <= GITHUB_ISSUE_URL_LIMIT) return prefilledUrl;
+
+  const fallbackBody = [
+    'Please briefly describe what you were doing when the error occurred.',
+    '',
+    '_(The automatically collected log was too long to prefill here — please attach the downloaded bug-report.log file to this issue instead.)_',
+  ].join('\n');
+  const fallbackUrl = buildIssueUrl(title, fallbackBody);
+  if (fallbackUrl.length <= GITHUB_ISSUE_URL_LIMIT) return fallbackUrl;
+
+  // Even the title alone (e.g. a huge error message used as-is) pushes past
+  // the limit — open a fully blank issue.
+  return `${GITHUB_REPO_URL}/issues/new`;
 }
 
 async function reportBug() {
