@@ -26,6 +26,12 @@ let _state = {
   // Phase 6 added 'scroll' — see also pendingBrowserActionField below, since
   // it's the only kind with more than one pickable selector per card.
   browserActions:      [],
+  // Issue #43: one-time Fill test values for the /generate verification
+  // trial run only — keyed by FillAction.environmentVariableName. Deliberately
+  // absent from persistState()'s chrome.storage.session write and from
+  // init()'s restore list below — must not survive a popup close/reopen or be
+  // logged/exported. See buildVerificationValues.
+  fillTestValues:      {},
   scriptFileName:      '', // base name (no extension) for the downloaded .py — empty = use the "scraper" placeholder/default
   outputFileName:      '', // base name (no extension) for the script's own output.csv/output.xml — empty = use the "output" placeholder/default
   scriptText:          '',
@@ -237,6 +243,22 @@ function serializeBrowserActions(actions) {
     }
     return { kind: 'click', selector: a.selector, ...framePath };
   });
+}
+
+// Issue #43: bundles fillTestValues into the wire dict /generate expects,
+// keyed by FillAction.environmentVariableName — the same join key the wire
+// FillAction itself carries. Never touches buildScrapingConfig or
+// persistState. Returns {} when there's nothing to send (e.g. no test values
+// typed, or no fill actions at all).
+function buildVerificationValues(browserActions, fillTestValues) {
+  const result = {};
+  for (const action of browserActions) {
+    if (action.kind !== 'fill') continue;
+    const name = action.environmentVariableName?.trim();
+    const value = name ? fillTestValues[name] : null;
+    if (name && value) result[name] = value;
+  }
+  return result;
 }
 
 function removeField(fields, index) {
@@ -927,7 +949,7 @@ function renderFields(fields = _state.fields) {
 // parameter cards, there's no "change the kind afterward" control, since an
 // action is created from scratch by the user rather than pre-existing (see
 // renderApiConfigParameters for that different case).
-function renderBrowserActions(actions = _state.browserActions) {
+function renderBrowserActions(actions = _state.browserActions, testValues = _state.fillTestValues) {
   const container = document.getElementById('browser-actions-list');
   if (!container) return;
   container.innerHTML = '';
@@ -1006,6 +1028,26 @@ function renderBrowserActions(actions = _state.browserActions) {
       hint.className = 'browser-action-hint';
       hint.textContent = t('browserActions.envVarHint');
       card.appendChild(hint);
+
+      // Issue #43: one-time test value for the /generate verification trial
+      // run only — keyed by env-var name (not action index) so the change
+      // handler doesn't need to look the action up by position. Only shown
+      // once the env var name is actually set, since that's the join key.
+      const envName = (action.environmentVariableName || '').trim();
+      if (envName) {
+        const testValueRow = document.createElement('div');
+        testValueRow.className = 'browser-action-field-row';
+        testValueRow.innerHTML =
+          `<label>${escapeHtml(t('browserActions.testValueLabel'))}</label>` +
+          `<input type="password" class="browser-action-test-value" data-env-name="${escapeHtml(envName)}" ` +
+          `placeholder="${escapeHtml(t('browserActions.testValuePlaceholder'))}" value="${escapeHtml(testValues[envName] || '')}" />`;
+        card.appendChild(testValueRow);
+
+        const testValueHint = document.createElement('p');
+        testValueHint.className = 'browser-action-hint';
+        testValueHint.textContent = t('browserActions.testValueHint');
+        card.appendChild(testValueHint);
+      }
     }
 
     container.appendChild(card);
@@ -1937,12 +1979,21 @@ async function generate() {
     _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions,
   );
+  // Issue #43: one-time login/test values, sent only in this request body —
+  // deliberately kept out of `config` (and therefore out of the log line
+  // below, buildConfigExport, and the "Report bug" log export) since none of
+  // those are meant to ever see them. See fillTestValues/buildVerificationValues.
+  const verificationValues = _state.engine === 'Browser'
+    ? buildVerificationValues(_state.browserActions, _state.fillTestValues)
+    : {};
   log('GENERATE request', config);
   try {
     const res = await fetch(`${COMPANION_URL}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(config),
+      body: JSON.stringify(
+        Object.keys(verificationValues).length > 0 ? { ...config, verificationValues } : config,
+      ),
     });
     if (res.status === 400) {
       // A structural config rejection (bad URL, mutually exclusive Fields/
@@ -2639,6 +2690,14 @@ function wireEvents() {
       });
       return;
     }
+    const testValueInput = e.target.closest('.browser-action-test-value');
+    if (testValueInput) {
+      // patchState (not setState): fillTestValues must never reach
+      // persistState()/chrome.storage.session — see its _state comment.
+      const envName = testValueInput.dataset.envName;
+      patchState({ fillTestValues: { ..._state.fillTestValues, [envName]: testValueInput.value } });
+      return;
+    }
     const maxIterationsInput = e.target.closest('.browser-action-max-iterations');
     if (maxIterationsInput) {
       const index = parseInt(maxIterationsInput.dataset.index, 10);
@@ -2882,6 +2941,7 @@ if (typeof module !== 'undefined') {
     detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
     applyStaticTranslations, sanitizeFileNameBase,
     addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
+    buildVerificationValues,
     frameBadgeHtml,
   };
 }
