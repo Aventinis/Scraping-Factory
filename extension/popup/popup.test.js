@@ -1717,6 +1717,30 @@ describe('buildGithubIssueUrl', () => {
     expect(body).toContain('truncated');
     expect(body.length).toBeLessThan(longReport.length);
   });
+
+  test('never exceeds GitHub\'s practical URL length limit, even for excerpt-hostile content', () => {
+    // Lots of characters that balloon under percent-encoding (quotes/braces/
+    // newlines, as real JSON log data would contain) — the raw-character
+    // excerpt limit alone doesn't bound the *encoded* URL length.
+    const hostileReport = '{"a":"\n"}'.repeat(2000);
+    const url = buildGithubIssueUrl(hostileReport);
+    expect(url.length).toBeLessThanOrEqual(8000);
+    expect(url.startsWith('https://github.com/Aventinis/Scraping-Factory/issues/new')).toBe(true);
+  });
+
+  test('drops the log excerpt and points at the manual attachment when still too long', () => {
+    const hostileReport = '{"a":"\n"}'.repeat(2000);
+    const url = buildGithubIssueUrl(hostileReport);
+    const body = decodeURIComponent(url.split('body=')[1]);
+    expect(body).toContain('too long to prefill');
+    expect(body).not.toContain('<details>');
+  });
+
+  test('falls back to a fully blank issue when even the title alone is too long', () => {
+    setLastError('E'.repeat(9000), 'Script generation');
+    const url = buildGithubIssueUrl('short report');
+    expect(url).toBe('https://github.com/Aventinis/Scraping-Factory/issues/new');
+  });
 });
 
 // ── buildVerificationErrorMessage ────────────────────────────────────────────
