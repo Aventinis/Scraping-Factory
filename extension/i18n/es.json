@@ -85,6 +85,8 @@
     "searchedFor": "Buscado: \"{target}\"",
     "matchLabel": "Coincidencia: {value}",
     "siblingChip": "+ {name}",
+    "selectAllChips": "Seleccionar todo",
+    "deselectAllChips": "Deseleccionar todo",
     "useFieldNamePlaceholder": "Nombre del campo"
   },
   "apiConfig": {
