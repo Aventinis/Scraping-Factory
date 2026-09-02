@@ -792,6 +792,28 @@ describe('renderApiCandidates (Issue #53 Phase 4)', () => {
     const chip = document.querySelector('.api-sibling-chip');
     expect(chip.textContent).toBe('+ price');
   });
+
+  test('renders a "select all" button alongside the sibling chips, initially labeled to select', () => {
+    renderApiCandidates({
+      target: 'Suppe',
+      candidates: [{
+        url: 'https://example.com/api', method: 'GET', path: 'items[0].name', value: 'Suppe',
+        siblings: [{ name: 'price', path: 'items[0].price', value: 3.5 }, { name: 'unit', path: 'items[0].unit', value: 'kg' }],
+      }],
+    });
+
+    const selectAllBtn = document.querySelector('.api-sibling-select-all');
+    expect(selectAllBtn).not.toBeNull();
+    expect(selectAllBtn.textContent).toBe('Alle auswählen');
+  });
+
+  test('no select-all button when a candidate has no siblings', () => {
+    renderApiCandidates({
+      target: 'Suppe',
+      candidates: [{ url: 'https://example.com/api', method: 'GET', path: 'items[0].name', value: 'Suppe', siblings: [] }],
+    });
+    expect(document.querySelector('.api-sibling-select-all')).toBeNull();
+  });
 });
 
 describe('renderApiEntriesList (recorded-endpoints viewer)', () => {
@@ -1212,6 +1234,22 @@ describe('variableUrlParts / apiConfigDraftHasAllSourcesChosen', () => {
     const draft = { urlParts: namelessUrlParts, parameterSources: { 'path:0': { kind: 'staticList' } } };
     expect(apiConfigDraftHasAllSourcesChosen(draft)).toBe(false);
   });
+
+  // Field names became editable on the API_CONFIG screen (see
+  // renderApiConfigFieldsList) — a blank one couldn't occur before that, so
+  // this is the first place a client-side guard against it is needed.
+  test('a blank field name blocks confirmation even when every source is otherwise chosen', () => {
+    const fullyConfiguredDraft = {
+      urlParts, fields: [{ name: '', path: 'name' }],
+      parameterSources: { 'path:1': { kind: 'staticList' }, 'query:category': { kind: 'range' } },
+    };
+    expect(apiConfigDraftHasAllSourcesChosen(fullyConfiguredDraft)).toBe(false);
+  });
+
+  test('a missing fields array (older/partial draft shapes) is treated as no fields, not a crash', () => {
+    const draft = { urlParts, parameterSources: { 'path:1': { kind: 'staticList' }, 'query:category': { kind: 'range' } } };
+    expect(apiConfigDraftHasAllSourcesChosen(draft)).toBe(true);
+  });
 });
 
 describe('renderApiConfigScreen (Issue #53 Phase 5)', () => {
@@ -1244,10 +1282,10 @@ describe('renderApiConfigScreen (Issue #53 Phase 5)', () => {
     headerDecisions: {},
   });
 
-  test('renders confirmed fields read-only', () => {
+  test('renders confirmed fields with an editable name and a read-only path', () => {
     renderApiConfigScreen(baseDraft(), null);
     const row = document.querySelector('#api-config-fields .api-config-field-row');
-    expect(row.textContent).toContain('Titel');
+    expect(row.querySelector('.api-config-field-name').value).toBe('Titel');
     expect(row.textContent).toContain('name');
   });
 
@@ -3503,13 +3541,94 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
 
     expect(document.getElementById('screen-api-config').classList.contains('hidden')).toBe(false);
     const fieldRow = document.querySelector('#api-config-fields .api-config-field-row');
-    expect(fieldRow.textContent).toContain('Titel');
+    expect(fieldRow.querySelector('.api-config-field-name').value).toBe('Titel');
     expect(fieldRow.textContent).toContain('name');
 
     const segRows = document.querySelectorAll('#api-config-segments .api-config-part-row');
     expect(Array.from(segRows).map(r => r.querySelector('.api-config-part-value').textContent)).toEqual(['/api', '/items', '/42']);
     const queryRows = document.querySelectorAll('#api-config-query-params .api-config-part-row');
     expect(queryRows[0].querySelector('.api-config-part-value').textContent).toBe('category=Elektronik');
+  });
+
+  test('renaming a field on the API_CONFIG screen carries the new name through to the confirmed apiConfig', () => {
+    confirmPrimaryCandidate();
+
+    const nameInput = document.querySelector('#api-config-fields .api-config-field-name');
+    nameInput.value = 'Produktname';
+    nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(document.querySelector('#api-config-fields .api-config-field-name').value).toBe('Produktname');
+
+    const toggle = document.querySelector('#api-config-segments .api-config-part-row:nth-child(3) .api-config-part-toggle');
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('#api-config-segments .api-config-part-name').value = 'id';
+    document.querySelector('#api-config-segments .api-config-part-name').dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('.api-config-source-kind-radio[value="staticList"]').checked = true;
+    document.querySelector('.api-config-source-kind-radio[value="staticList"]').dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('.api-config-static-list').value = '42';
+    document.querySelector('.api-config-static-list').dispatchEvent(new Event('change', { bubbles: true }));
+
+    document.getElementById('btn-api-config-confirm').click();
+
+    expect(chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig.fields).toEqual([{ name: 'Produktname', path: 'name' }]);
+  });
+
+  test('a blanked-out field name disables "Übernehmen" until it is filled in again', () => {
+    confirmPrimaryCandidate();
+    const toggle = document.querySelector('#api-config-segments .api-config-part-row:nth-child(3) .api-config-part-toggle');
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('#api-config-segments .api-config-part-name').value = 'id';
+    document.querySelector('#api-config-segments .api-config-part-name').dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('.api-config-source-kind-radio[value="staticList"]').checked = true;
+    document.querySelector('.api-config-source-kind-radio[value="staticList"]').dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('.api-config-static-list').value = '42';
+    document.querySelector('.api-config-static-list').dispatchEvent(new Event('change', { bubbles: true }));
+    expect(document.getElementById('btn-api-config-confirm').disabled).toBe(false);
+
+    const nameInput = document.querySelector('#api-config-fields .api-config-field-name');
+    nameInput.value = '   ';
+    nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(document.getElementById('btn-api-config-confirm').disabled).toBe(true);
+  });
+
+  test('"Alle auswählen" picks every sibling in one click, toggling back to none on a second click', () => {
+    document.getElementById('btn-api-capture').click();
+    capturedListener({ type: 'API_CAPTURE_ENTRY', entry: { id: 1, url: 'https://example.com/api' } });
+    document.getElementById('btn-api-capture').click();
+    document.getElementById('btn-api-search').click();
+
+    const candidateWithSiblings = {
+      ...PRIMARY_CANDIDATE,
+      siblings: [
+        { name: 'price', path: 'items[0].price', value: 3.5 },
+        { name: 'unit', path: 'items[0].unit', value: 'kg' },
+      ],
+    };
+    capturedListener({ type: 'API_CANDIDATES', target: 'Titel-Test', candidates: [candidateWithSiblings] });
+
+    const chips = document.querySelectorAll('.api-sibling-chip');
+    expect(Array.from(chips).some(c => c.classList.contains('picked'))).toBe(false);
+
+    document.querySelector('.api-sibling-select-all').click();
+    expect(Array.from(chips).every(c => c.classList.contains('picked'))).toBe(true);
+    expect(document.querySelector('.api-sibling-select-all').textContent).toBe('Alle abwählen');
+
+    document.querySelector('.api-sibling-select-all').click();
+    expect(Array.from(chips).some(c => c.classList.contains('picked'))).toBe(false);
+    expect(document.querySelector('.api-sibling-select-all').textContent).toBe('Alle auswählen');
+
+    // Confirming with all siblings picked carries both into the field list.
+    document.querySelector('.api-sibling-select-all').click();
+    const nameInput = document.querySelector('.api-candidate-field-name');
+    nameInput.value = 'Titel';
+    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('.api-candidate-confirm').click();
+
+    const fieldNames = Array.from(document.querySelectorAll('#api-config-fields .api-config-field-name')).map(i => i.value);
+    expect(fieldNames).toEqual(['Titel', 'price', 'unit']);
   });
 
   test('toggling a path segment variable reveals a name input and, once named, a parameter card', () => {
