@@ -142,6 +142,144 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.Contains("_scroll_prev_height", body);
     }
 
+    // Issue #43: proves verificationValues is wired end-to-end through the
+    // real HTTP endpoint — the one-time login test values reach the
+    // verification subprocess (via FillVerificationValues.Filter →
+    // PythonScriptVerifier's extraEnvironmentVariables), letting a login
+    // flow verify successfully without the credentials ever needing to be
+    // set in the companion process's own OS environment. Also proves the
+    // literal test password never ends up in the returned script text.
+    [Fact]
+    public async Task Generate_LoginFlowWithVerificationValues_Returns200()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+            <input id="username" type="text" />
+            <input id="password" type="password" />
+            <button id="submit" onclick="
+              if (document.getElementById('username').value === 'alice' &amp;&amp;
+                  document.getElementById('password').value === 's3cret') {
+                var el = document.createElement('div');
+                el.className = 'welcome';
+                el.textContent = 'Welcome, alice';
+                document.body.appendChild(el);
+              }
+            ">Login</button>
+            </body></html>
+            """);
+        var payload = $$"""
+            {
+              "url": "{{server.BaseUrl}}",
+              "engine": "Browser",
+              "fields": [ { "name": "Welcome", "selector": ".welcome" } ],
+              "browserActions": [
+                { "kind": "fill", "selector": "#username", "environmentVariableName": "SF_TEST_USER" },
+                { "kind": "fill", "selector": "#password", "environmentVariableName": "SF_TEST_PASS" },
+                { "kind": "click", "selector": "#submit" },
+                { "kind": "waitFor", "selector": ".welcome", "timeoutMs": 5000 }
+              ],
+              "verificationValues": { "SF_TEST_USER": "alice", "SF_TEST_PASS": "s3cret" }
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.DoesNotContain("s3cret", body);
+    }
+
+    // Documents/locks in the exact gap Issue #43 closes: without
+    // verificationValues, the trial subprocess never sees the credentials
+    // (the companion process's own OS environment doesn't have them either),
+    // so the WaitFor for the post-login element times out and verification
+    // fails with 422 instead of succeeding.
+    [Fact]
+    public async Task Generate_LoginFlowWithoutVerificationValues_Returns422()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+            <input id="username" type="text" />
+            <input id="password" type="password" />
+            <button id="submit" onclick="
+              if (document.getElementById('username').value === 'alice' &amp;&amp;
+                  document.getElementById('password').value === 's3cret') {
+                var el = document.createElement('div');
+                el.className = 'welcome';
+                el.textContent = 'Welcome, alice';
+                document.body.appendChild(el);
+              }
+            ">Login</button>
+            </body></html>
+            """);
+        var payload = $$"""
+            {
+              "url": "{{server.BaseUrl}}",
+              "engine": "Browser",
+              "fields": [ { "name": "Welcome", "selector": ".welcome" } ],
+              "browserActions": [
+                { "kind": "fill", "selector": "#username", "environmentVariableName": "SF_TEST_USER_2" },
+                { "kind": "fill", "selector": "#password", "environmentVariableName": "SF_TEST_PASS_2" },
+                { "kind": "click", "selector": "#submit" },
+                { "kind": "waitFor", "selector": ".welcome", "timeoutMs": 2000 }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    // Proves FillVerificationValues.Filter actually filters — a stray key
+    // that doesn't match any FillAction's env var name is ignored rather
+    // than e.g. rejected outright, while the correct keys still verify.
+    [Fact]
+    public async Task Generate_LoginFlowWithUnrelatedVerificationValueKey_IsIgnored()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+            <input id="username" type="text" />
+            <input id="password" type="password" />
+            <button id="submit" onclick="
+              if (document.getElementById('username').value === 'alice' &amp;&amp;
+                  document.getElementById('password').value === 's3cret') {
+                var el = document.createElement('div');
+                el.className = 'welcome';
+                el.textContent = 'Welcome, alice';
+                document.body.appendChild(el);
+              }
+            ">Login</button>
+            </body></html>
+            """);
+        var payload = $$"""
+            {
+              "url": "{{server.BaseUrl}}",
+              "engine": "Browser",
+              "fields": [ { "name": "Welcome", "selector": ".welcome" } ],
+              "browserActions": [
+                { "kind": "fill", "selector": "#username", "environmentVariableName": "SF_TEST_USER_3" },
+                { "kind": "fill", "selector": "#password", "environmentVariableName": "SF_TEST_PASS_3" },
+                { "kind": "click", "selector": "#submit" },
+                { "kind": "waitFor", "selector": ".welcome", "timeoutMs": 5000 }
+              ],
+              "verificationValues": {
+                "SF_TEST_USER_3": "alice",
+                "SF_TEST_PASS_3": "s3cret",
+                "SF_UNRELATED": "whatever"
+              }
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+    }
+
     // Caught by ScrapingPlanValidator's fast structural pre-check (same class
     // of failure as Generate_InvalidUrlScheme_Returns400) — never spawns a
     // Python subprocess.
