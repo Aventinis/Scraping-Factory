@@ -18,7 +18,11 @@ public interface IScriptVerifier
     // that baseline (e.g. a ScrollStep's MaxIterations × WaitAfterMs), the
     // caller (knowing the plan) asks for the extra headroom the verifier
     // (only ever seeing the rendered script) has no way to infer on its own.
+    // extraEnvironmentVariables are set on the verification subprocess only
+    // (e.g. one-time login test values, see IR/FillVerificationValues.cs) —
+    // never persisted, never part of the script itself.
     Task<ScriptVerificationResult> VerifyAsync(
         string script, OutputFormat outputFormat = OutputFormat.Csv, string outputFileBaseName = "output",
-        TimeSpan extraTimeout = default, CancellationToken ct = default);
+        TimeSpan extraTimeout = default, IReadOnlyDictionary<string, string>? extraEnvironmentVariables = null,
+        CancellationToken ct = default);
 }
