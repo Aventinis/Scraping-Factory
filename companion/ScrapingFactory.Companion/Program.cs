@@ -95,8 +95,16 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     var extraTimeout = TimeSpan.FromMilliseconds(
         plan.Steps.OfType<ScrollStep>().Sum(step => (long)step.MaxIterations * step.WaitAfterMs));
 
+    // One-time login/test values (Issue #43) for FillAction steps, matched
+    // against BrowserActions.FillAction.EnvironmentVariableName and applied
+    // only to this trial subprocess — never persisted, never reaches the
+    // generator/generated script (see IR/FillVerificationValues.cs).
+    var verificationEnv = FillVerificationValues.Filter(config.BrowserActions, config.VerificationValues);
+
     var verifier = registry.ResolveScriptVerifier("python");
-    var verification = await verifier.VerifyAsync(script, plan.OutputFormat, plan.OutputFileBaseName, extraTimeout);
+    var verification = await verifier.VerifyAsync(
+        script, plan.OutputFormat, plan.OutputFileBaseName, extraTimeout,
+        verificationEnv.Count > 0 ? verificationEnv : null);
     if (!verification.Success)
     {
         return Results.UnprocessableEntity(new

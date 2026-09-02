@@ -33,6 +33,13 @@ public sealed class ScrapingConfig
     // behavior for existing payloads.
     public List<BrowserAction>? BrowserActions { get; init; }
 
+    // One-time, verification-only values for FillAction.EnvironmentVariableName
+    // (login credentials etc.), keyed by env var name. Used only for the
+    // /generate trial-run subprocess (PythonScriptVerifier) — never reaches
+    // ScrapingPlan/the code generator/the generated script; FillAction stays
+    // env-var-only by design (see IR/FillVerificationValues.cs).
+    public Dictionary<string, string>? VerificationValues { get; init; }
+
     // Base filename (no extension) for the downloaded .py script. Purely
     // cosmetic today — used only in the generated script's "# Run: python
     // X.py" header comment, since the extension names the actual download

@@ -130,6 +130,62 @@ public class PythonPlaywrightScriptVerifierTests
         }
     }
 
+    // Issue #43: the same login flow as above, but via VerifyAsync's
+    // extraEnvironmentVariables parameter instead of a companion-process-wide
+    // Environment.SetEnvironmentVariable — proving the /generate trial run no
+    // longer needs the OS environment to already carry the credentials, which
+    // would be unreasonable to ask of the extension's target audience.
+    [Fact]
+    public async Task LoginFlow_FillsCredentialsFromExtraEnvironmentVariablesParameter()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+            <input id="username" type="text" />
+            <input id="password" type="password" />
+            <button id="submit" onclick="
+              if (document.getElementById('username').value === 'alice' &amp;&amp;
+                  document.getElementById('password').value === 's3cret') {
+                var el = document.createElement('div');
+                el.className = 'welcome';
+                el.textContent = 'Welcome, alice';
+                document.body.appendChild(el);
+              }
+            ">Login</button>
+            </body></html>
+            """);
+
+        const string usernameVar = "SCRAPINGFACTORY_TEST_USERNAME_2";
+        const string passwordVar = "SCRAPINGFACTORY_TEST_PASSWORD_2";
+        Assert.Null(Environment.GetEnvironmentVariable(usernameVar));
+        Assert.Null(Environment.GetEnvironmentVariable(passwordVar));
+
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = server.BaseUrl },
+                new FillStep { Selector = "#username", EnvironmentVariableName = usernameVar },
+                new FillStep { Selector = "#password", EnvironmentVariableName = passwordVar },
+                new ClickStep { Selector = "#submit" },
+                new WaitForStep { Selector = ".welcome", TimeoutMs = 5000 },
+                new ExtractStep { Name = "Welcome", Selector = ".welcome" },
+            ],
+        };
+        var script = Generator.Generate(plan);
+        Assert.DoesNotContain("alice", script);
+        Assert.DoesNotContain("s3cret", script);
+
+        var extraEnv = new Dictionary<string, string> { [usernameVar] = "alice", [passwordVar] = "s3cret" };
+        var result = await new PythonScriptVerifier().VerifyAsync(
+            script, extraEnvironmentVariables: extraEnv);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(1, result.RowCount);
+        Assert.Null(Environment.GetEnvironmentVariable(usernameVar));
+        Assert.Null(Environment.GetEnvironmentVariable(passwordVar));
+    }
+
     // Proves ScrollStep's actual point: content that only appears after
     // repeated scrolling (infinite scroll), not just a single WaitForStep's
     // worth of async-loaded content. The page loads 5 more .item elements
