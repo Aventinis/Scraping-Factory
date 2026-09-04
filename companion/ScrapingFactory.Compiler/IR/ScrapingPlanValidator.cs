@@ -177,6 +177,50 @@ public static class ScrapingPlanValidator
         return null;
     }
 
+    // Mirrors ValidateContainerNodes for API-Mode's JSON-path tree (Issue
+    // #54): same non-empty-name rule and recursive walk. Path itself stays
+    // deliberately unvalidated (see ValidateApiConfig's doc comment) except
+    // ApiField.Path, which — unlike ApiGroup.Path — must be non-empty: an
+    // empty ApiGroup.Path is a legitimate "operate directly on the parent
+    // scope" marker (see ApiGroup's doc comment), but an empty ApiField.Path
+    // would silently extract nothing.
+    private static string? ValidateApiNodes(IEnumerable<ApiNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            if (string.IsNullOrWhiteSpace(node.Name))
+                return "Name eines Api-Knotens darf nicht leer sein.";
+
+            switch (node)
+            {
+                case ApiGroup group:
+                    if (group.Children.Count == 0)
+                        return $"Gruppe '{group.Name}' braucht mindestens ein Kind-Element.";
+                    var childError = ValidateApiNodes(group.Children);
+                    if (childError is not null)
+                        return childError;
+                    break;
+
+                case ApiField field:
+                    if (string.IsNullOrWhiteSpace(field.Path))
+                        return $"Pfad des Felds '{field.Name}' darf nicht leer sein.";
+                    break;
+            }
+        }
+        return null;
+    }
+
+    // A tree of only nested, empty-of-fields groups would extract nothing —
+    // mirrors the flat shape's "Fields.Count == 0 → error" check above, just
+    // walked recursively since a field could be reachable at any depth.
+    private static bool ApiNodesContainField(IEnumerable<ApiNode> nodes) =>
+        nodes.Any(node => node switch
+        {
+            ApiField => true,
+            ApiGroup group => ApiNodesContainField(group.Children),
+            _ => false,
+        });
+
     // Shared by ExtractStep.FramePath and GroupNode/DataFieldNode.FramePath
     // (Issue #42) — same three checks regardless of which node type carries
     // the FramePath.
@@ -196,32 +240,71 @@ public static class ScrapingPlanValidator
     private static readonly Regex UrlTemplatePlaceholderPattern = new(@"\{([^{}]+)\}");
 
     // Deliberately doesn't validate JSON-path syntax (ItemsPath/Fields[].Path/
-    // DiscoverySource.ValuePath) — same laissez-faire as CSS selectors and
-    // XML tag names elsewhere in this validator: a bad path surfaces as a
-    // real runtime miss via PythonScriptVerifier once Phase 2 adds codegen,
-    // not here.
+    // ApiGroup.Path/DiscoverySource.ValuePath) — same laissez-faire as CSS
+    // selectors and XML tag names elsewhere in this validator: a bad path
+    // surfaces as a real runtime miss via PythonScriptVerifier, not here.
     private static string? ValidateApiConfig(ApiConfig api)
     {
         if (api.Method != "GET")
             return $"Nicht unterstützte HTTP-Methode '{api.Method}': Api-Mode unterstützt bisher nur GET.";
 
-        if (string.IsNullOrWhiteSpace(api.ItemsPath))
-            return "ItemsPath darf nicht leer sein.";
+        // Two mutually exclusive response shapes (Issue #54): the original
+        // flat ItemsPath+Fields (exactly one repetition level), or the
+        // recursive Groups tree (arbitrarily deep). Exactly one of the two
+        // must be set.
+        var hasFlat = api.ItemsPath is not null || api.Fields is not null;
+        var hasGroups = api.Groups is { Count: > 0 };
 
-        if (api.Fields.Count == 0)
-            return "Api-Konfiguration muss mindestens ein Feld enthalten.";
+        if (hasFlat && hasGroups)
+            return "ItemsPath/Fields und Groups schließen sich gegenseitig aus.";
+        if (!hasFlat && !hasGroups)
+            return "Api-Konfiguration braucht entweder ItemsPath und Fields, oder Groups.";
 
-        foreach (var field in api.Fields)
+        if (hasFlat)
         {
-            if (string.IsNullOrWhiteSpace(field.Name))
-                return "Feldname darf nicht leer sein.";
-            if (string.IsNullOrWhiteSpace(field.Path))
-                return $"Pfad für Feld '{field.Name}' darf nicht leer sein.";
-        }
+            if (api.ItemsPath is null || api.Fields is null)
+                return "ItemsPath und Fields müssen beide gesetzt sein, wenn eines von beiden gesetzt ist.";
 
-        var duplicateFieldNames = FindDuplicates(api.Fields, field => field.Name);
-        if (duplicateFieldNames.Count > 0)
-            return $"Doppelte Feldnamen: {string.Join(", ", duplicateFieldNames)}.";
+            if (string.IsNullOrWhiteSpace(api.ItemsPath))
+                return "ItemsPath darf nicht leer sein.";
+
+            if (api.Fields.Count == 0)
+                return "Api-Konfiguration muss mindestens ein Feld enthalten.";
+
+            foreach (var field in api.Fields)
+            {
+                if (string.IsNullOrWhiteSpace(field.Name))
+                    return "Feldname darf nicht leer sein.";
+                if (string.IsNullOrWhiteSpace(field.Path))
+                    return $"Pfad für Feld '{field.Name}' darf nicht leer sein.";
+            }
+
+            var duplicateFieldNames = FindDuplicates(api.Fields, field => field.Name);
+            if (duplicateFieldNames.Count > 0)
+                return $"Doppelte Feldnamen: {string.Join(", ", duplicateFieldNames)}.";
+
+            // Parameter values become extra CSV columns alongside the
+            // extracted fields (see PythonApiCodeGenerator) — a name shared
+            // between the two would silently collapse two distinct columns
+            // into one. Only meaningful for the flat/Csv shape — the tree
+            // shape outputs Xml, where duplicate sibling names are exactly
+            // as fine as they already are in Container-Mode, so this check
+            // is deliberately not ported to ValidateApiNodes below.
+            var collidingNames = api.Fields.Select(field => field.Name)
+                .Intersect(api.Parameters.Select(parameter => parameter.Name))
+                .ToList();
+            if (collidingNames.Count > 0)
+                return $"Feldname(n) kollidieren mit Parameternamen: {string.Join(", ", collidingNames)}.";
+        }
+        else
+        {
+            var treeError = ValidateApiNodes(api.Groups!);
+            if (treeError is not null)
+                return treeError;
+
+            if (!ApiNodesContainField(api.Groups!))
+                return "Api-Konfiguration (Groups) muss mindestens ein Feld enthalten.";
+        }
 
         if (api.Parameters.Count == 0)
             return "Api-Konfiguration muss mindestens einen Parameter enthalten.";
@@ -235,15 +318,6 @@ public static class ScrapingPlanValidator
         var duplicateParameterNames = FindDuplicates(api.Parameters, parameter => parameter.Name);
         if (duplicateParameterNames.Count > 0)
             return $"Doppelte Parameternamen: {string.Join(", ", duplicateParameterNames)}.";
-
-        // Parameter values become extra CSV columns alongside the extracted
-        // fields (see PythonApiCodeGenerator) — a name shared between the
-        // two would silently collapse two distinct columns into one.
-        var collidingNames = api.Fields.Select(field => field.Name)
-            .Intersect(api.Parameters.Select(parameter => parameter.Name))
-            .ToList();
-        if (collidingNames.Count > 0)
-            return $"Feldname(n) kollidieren mit Parameternamen: {string.Join(", ", collidingNames)}.";
 
         var placeholders = UrlTemplatePlaceholderPattern.Matches(api.UrlTemplate)
             .Select(match => match.Groups[1].Value)

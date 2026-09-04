@@ -37,16 +37,22 @@ public static class ScrapingPlanBuilder
             };
         }
 
-        // API-Mode: Api replaces Fields/Groups wholesale, and forces Csv +
+        // API-Mode: Api replaces Fields/Groups wholesale, and forces
         // Engine.Api regardless of what the wire payload set — same
         // "the extension doesn't need to set this itself" pattern as
-        // Container-Mode forcing Xml above.
+        // Container-Mode forcing Xml above. OutputFormat itself depends on
+        // which of Api's two response shapes is set (Issue #54): the flat
+        // ItemsPath/Fields shape still forces Csv exactly as before, but
+        // the tree shape (Groups) forces Xml instead — tree data doesn't
+        // fit CSV's column model, the same reason Container-Mode's own
+        // tree forces Xml above.
         if (config.Api is { } api)
         {
+            var apiOutputFormat = api.Groups is { Count: > 0 } ? OutputFormat.Xml : OutputFormat.Csv;
             steps.Add(new ApiCallStep { Config = api });
             return new ScrapingPlan
             {
-                Steps = steps, OutputFormat = OutputFormat.Csv, Engine = ScrapingEngine.Api,
+                Steps = steps, OutputFormat = apiOutputFormat, Engine = ScrapingEngine.Api,
                 ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
             };
         }
