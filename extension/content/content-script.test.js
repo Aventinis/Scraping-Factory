@@ -761,6 +761,27 @@ describe('findApiCandidates', () => {
     expect(candidate.valuePath).toBe('name');
   });
 
+  // Issue #54, Phase A5: popup.js runs in a different execution context and
+  // has no access to content-script.js's own functions (deriveApiTreeSkeleton
+  // included) — so, like itemsPath/valuePath above, the full tree skeleton is
+  // pre-derived here and attached to the candidate message.
+  test('attaches the derived treeSkeleton (Issue #54 Phase A5) so the popup does not need its own deriveApiTreeSkeleton', () => {
+    const entries = [entry({ body: JSON.stringify({ categories: [{ subcategories: [{ products: [{ title: 'Suppe' }] }] }] }) })];
+    const [candidate] = findApiCandidates(entries, 'Suppe');
+    expect(candidate.treeSkeleton).toEqual([
+      { kind: 'group', path: 'categories' },
+      { kind: 'group', path: 'subcategories' },
+      { kind: 'group', path: 'products' },
+      { kind: 'field', path: 'title' },
+    ]);
+  });
+
+  test('treeSkeleton is null when the match is not inside any array, same as itemsPath/valuePath', () => {
+    const entries = [entry({ body: JSON.stringify({ meta: { name: 'Suppe' } }) })];
+    const [candidate] = findApiCandidates(entries, 'Suppe');
+    expect(candidate.treeSkeleton).toBeNull();
+  });
+
   test('itemsPath/valuePath are null when the match is not inside any array', () => {
     const entries = [entry({ body: JSON.stringify({ meta: { name: 'Suppe' } }) })];
     const [candidate] = findApiCandidates(entries, 'Suppe');

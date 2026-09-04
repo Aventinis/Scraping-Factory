@@ -122,12 +122,10 @@
 
     /* API-mode config screen (Phase 5) */
     #screen-api-config { padding: 16px; max-height: 480px; overflow-y: auto; }
-    .api-config-fields, .api-config-parts, .api-config-headers { list-style: none; margin-bottom: 4px; }
-    .api-config-field-row, .api-config-part-row, .api-config-header-row {
+    .api-config-parts, .api-config-headers { list-style: none; margin-bottom: 4px; }
+    .api-config-part-row, .api-config-header-row {
       display: flex; align-items: center; gap: 6px; padding: 5px 6px; background: #f9fafb; border-radius: 6px; margin-bottom: 4px; font-size: 11px;
     }
-    .api-config-field-name { min-width: 70px; font-weight: 500; font-size: 11px; padding: 3px 6px; border: 1px solid #e5e7eb; border-radius: 4px; }
-    .api-config-field-row .field-selector { flex: 1; font-family: monospace; color: #6b7280; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .api-config-part-value { flex: 1; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .api-config-part-name { width: 90px; font-size: 11px; padding: 3px 6px; border: 1px solid #e5e7eb; border-radius: 4px; }
     .api-config-param-card { padding: 8px; background: #f9fafb; border-radius: 6px; margin-bottom: 6px; }
@@ -167,7 +165,8 @@
       padding: 4px 2px; font-size: 12px; color: #374151;
     }
     .api-tree-toggle { width: 12px; flex: none; color: #9ca3af; cursor: pointer; user-select: none; }
-    .api-tree-label  { flex: 1; min-width: 60px; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .api-tree-name { min-width: 70px; font-weight: 500; font-size: 11px; padding: 3px 6px; border: 1px solid #e5e7eb; border-radius: 4px; }
+    .api-tree-path { flex: 1; min-width: 60px; font-family: monospace; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     /* Radio row (container-type picker) — specificity beats .modal-inner label's block display */
     .radio-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; font-size: 13px; color: #374151; }
@@ -462,14 +461,23 @@
        into an ApiConfig. Reached from the api-mode-section's "Verwenden"
        flow (see screen-idle above), which only shows once mode === 'api'. -->
   <section id="screen-api-config" class="screen hidden">
+    <!-- Nested JSON tree editor (Issue #54) — subsumes the old flat field
+         list entirely (Phase A5): a single top-level match renders as a
+         one-node-deep tree, visually almost identical to the old list but
+         wrapped in the same tree-editor chrome every deeper level reuses. -->
     <div class="row-label" data-i18n="common.fields"></div>
-    <ul id="api-config-fields" class="api-config-fields"></ul>
-
-    <!-- Nested JSON tree editor (Issue #54, Phase A4) — rendering/pure
-         draft helpers only for now; Phase A5 wires this into the confirm/
-         edit flow, at which point it subsumes api-config-fields above
-         (a single top-level match renders as a one-node-deep tree). -->
     <ul id="api-tree-root" class="api-tree"></ul>
+    <div class="actions">
+      <button id="btn-api-tree-add-root" class="btn-secondary btn-tiny" type="button" data-i18n="apiTree.addRootGroupBtn"></button>
+    </div>
+    <!-- Results of an "add root group"/"add sub-field" search started from
+         this screen (see btn-api-tree-add-root and the tree's own per-row
+         add buttons) — same markup/behavior as the primary search's
+         api-candidates-panel on screen-idle, see renderApiCandidates. -->
+    <div id="api-tree-search-panel" class="api-candidates-panel hidden">
+      <p id="api-tree-search-target" class="api-candidates-target"></p>
+      <ul id="api-tree-search-list" class="api-candidates-list"></ul>
+    </div>
 
     <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.urlPathLabel"></div>
     <ul id="api-config-segments" class="api-config-parts"></ul>
@@ -552,6 +560,24 @@
       <div class="modal-actions">
         <button id="btn-field-extended-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
         <button id="btn-field-extended-confirm" class="btn-primary" data-i18n="common.add"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: new API-tree sub-group (Issue #54, Phase A5) — name and JSON
+       path both typed directly, no click-based search: unlike a field/root
+       search there's no single clicked value to derive an empty group from
+       without also implying a leaf field nobody asked for (see
+       confirmApiGroupModal's own doc comment). -->
+  <div id="modal-api-group-new" class="modal hidden">
+    <div class="modal-inner">
+      <label for="input-api-group-name" data-i18n="modals.apiGroupNew.nameLabel"></label>
+      <input id="input-api-group-name" type="text" data-i18n-placeholder="modals.apiGroupNew.namePlaceholder" autocomplete="off" />
+      <label for="input-api-group-path" data-i18n="modals.apiGroupNew.pathLabel"></label>
+      <input id="input-api-group-path" type="text" data-i18n-placeholder="modals.apiGroupNew.pathPlaceholder" autocomplete="off" />
+      <div class="modal-actions">
+        <button id="btn-api-group-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-api-group-confirm" class="btn-primary" data-i18n="modals.apiGroupNew.confirm"></button>
       </div>
     </div>
   </div>
