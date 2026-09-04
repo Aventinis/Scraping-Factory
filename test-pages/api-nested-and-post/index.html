@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Katalog-Demo (API-Modus Testfixture)</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: #f4f5f7;
+      color: #232526;
+      padding: 40px 20px 80px;
+    }
+
+    .site-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .site-name {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #1c3f5f;
+      letter-spacing: -.02em;
+    }
+    .site-tagline {
+      color: #6b7280;
+      font-size: 0.92rem;
+      margin-top: 4px;
+    }
+
+    .page {
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    /* ── Test fixture hint ──
+       Deliberately shown on-page (this is a local test fixture, not a real
+       shop) so whoever is testing Issues #54/#55 (nested API responses,
+       POST/GraphQL request bodies) doesn't have to go digging in server.py
+       for the endpoint shapes. */
+    .fixture-hint {
+      background: #eef2f6;
+      border: 1px dashed #c7cdd4;
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-size: 0.82rem;
+      color: #44505d;
+      margin-bottom: 28px;
+      line-height: 1.6;
+    }
+    .fixture-hint code {
+      background: #dfe6ec;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-family: 'SF Mono', Consolas, monospace;
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid #e4e7eb;
+      border-radius: 8px;
+      padding: 22px 24px;
+      margin-bottom: 20px;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #1c3f5f;
+    }
+    .card-endpoint {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 400;
+      color: #6b7280;
+      font-family: 'SF Mono', Consolas, monospace;
+      margin-top: 2px;
+    }
+
+    button {
+      padding: 8px 14px;
+      background: #1c3f5f;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    button:hover {
+      background: #163350;
+    }
+
+    .status {
+      font-size: 0.8rem;
+      color: #6b7280;
+      margin-bottom: 10px;
+    }
+    .status.error {
+      color: #b3261e;
+    }
+
+    /* ── Catalog tree rendering ──
+       Every leaf value (category/subcategory name, product title, price,
+       tag) is rendered as plain, clickable page text — that's what
+       API-mode's click-based candidate search needs to correlate a click
+       against the recorded network traffic. */
+    .catalog-tree, .catalog-tree ul {
+      list-style: none;
+      padding-left: 18px;
+    }
+    .catalog-tree {
+      padding-left: 0;
+    }
+    .catalog-tree li {
+      padding: 3px 0;
+    }
+    .category-name, .subcategory-name {
+      font-weight: 700;
+      color: #1c3f5f;
+    }
+    .product-row {
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+      flex-wrap: wrap;
+    }
+    .product-title {
+      font-weight: 600;
+    }
+    .product-price {
+      color: #1c7a4a;
+      font-weight: 600;
+    }
+    .product-sku {
+      color: #9aa3ad;
+      font-size: 0.78rem;
+      font-family: 'SF Mono', Consolas, monospace;
+    }
+    .tag {
+      display: inline-block;
+      background: #eef2f6;
+      border-radius: 10px;
+      padding: 1px 8px;
+      font-size: 0.74rem;
+      color: #44505d;
+      margin-right: 4px;
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-name">Katalog-Demo</div>
+    <div class="site-tagline">Testfixture für API-Modus (verschachtelte Antworten, POST, GraphQL)</div>
+  </header>
+
+  <div class="page">
+    <div class="fixture-hint">
+      Diese Seite ruft beim Laden drei Endpunkte desselben lokalen Servers auf
+      (same-origin, kein CORS nötig): <code>GET /api/catalog</code>,
+      <code>POST /api/search</code> und <code>POST /graphql</code>. Alle drei
+      liefern denselben dreistufig verschachtelten Katalog
+      (Kategorie → Unterkategorie → Produkt, plus Tags als Array).
+      Jeder Button unten löst die jeweilige Anfrage erneut aus — nützlich, um
+      eine Aufnahme im Erweiterungs-Popup gezielt neu zu triggern.
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Katalog
+          <span class="card-endpoint">GET /api/catalog</span>
+        </div>
+        <button id="btn-reload-catalog" type="button">Katalog neu laden</button>
+      </div>
+      <div class="status" id="status-catalog">Lädt…</div>
+      <div id="result-catalog"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Suche
+          <span class="card-endpoint">POST /api/search { category: "electronics" }</span>
+        </div>
+        <button id="btn-reload-search" type="button">Suche (POST)</button>
+      </div>
+      <div class="status" id="status-search">Lädt…</div>
+      <div id="result-search"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">GraphQL
+          <span class="card-endpoint">POST /graphql { query, variables: { category: "books" } }</span>
+        </div>
+        <button id="btn-reload-graphql" type="button">GraphQL-Query</button>
+      </div>
+      <div class="status" id="status-graphql">Lädt…</div>
+      <div id="result-graphql"></div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      // Renders one filtered category list (identical shape for all three
+      // endpoints) as a nested <ul>/<li> tree, so every leaf is visible,
+      // clickable page text.
+      function renderCategories(categories) {
+        var rootUl = document.createElement('ul');
+        rootUl.className = 'catalog-tree';
+
+        categories.forEach(function (category) {
+          var categoryLi = document.createElement('li');
+
+          var categoryName = document.createElement('span');
+          categoryName.className = 'category-name';
+          categoryName.textContent = category.name;
+          categoryLi.appendChild(categoryName);
+
+          var subcategoryUl = document.createElement('ul');
+          category.subcategories.forEach(function (subcategory) {
+            var subcategoryLi = document.createElement('li');
+
+            var subcategoryName = document.createElement('span');
+            subcategoryName.className = 'subcategory-name';
+            subcategoryName.textContent = subcategory.name;
+            subcategoryLi.appendChild(subcategoryName);
+
+            var productUl = document.createElement('ul');
+            subcategory.products.forEach(function (product) {
+              var productLi = document.createElement('li');
+
+              var row = document.createElement('div');
+              row.className = 'product-row';
+
+              var title = document.createElement('span');
+              title.className = 'product-title';
+              title.textContent = product.title;
+              row.appendChild(title);
+
+              var price = document.createElement('span');
+              price.className = 'product-price';
+              price.textContent = product.price.toFixed(2) + ' €';
+              row.appendChild(price);
+
+              var sku = document.createElement('span');
+              sku.className = 'product-sku';
+              sku.textContent = product.sku;
+              row.appendChild(sku);
+
+              (product.tags || []).forEach(function (tag) {
+                var tagEl = document.createElement('span');
+                tagEl.className = 'tag';
+                tagEl.textContent = tag;
+                row.appendChild(tagEl);
+              });
+
+              productLi.appendChild(row);
+              productUl.appendChild(productLi);
+            });
+
+            subcategoryLi.appendChild(productUl);
+            subcategoryUl.appendChild(subcategoryLi);
+          });
+
+          categoryLi.appendChild(subcategoryUl);
+          rootUl.appendChild(categoryLi);
+        });
+
+        return rootUl;
+      }
+
+      function setStatus(statusEl, text, isError) {
+        statusEl.textContent = text;
+        statusEl.classList.toggle('error', !!isError);
+      }
+
+      function loadCatalog() {
+        var statusEl = document.getElementById('status-catalog');
+        var resultEl = document.getElementById('result-catalog');
+        setStatus(statusEl, 'Lädt…', false);
+        resultEl.innerHTML = '';
+
+        fetch('/api/catalog')
+          .then(function (response) {
+            if (!response.ok) throw new Error('Status ' + response.status);
+            return response.json();
+          })
+          .then(function (data) {
+            setStatus(statusEl, 'Geladen: ' + data.categories.length + ' Kategorien (' + data.meta.generatedAt + ')', false);
+            resultEl.appendChild(renderCategories(data.categories));
+          })
+          .catch(function (err) {
+            setStatus(statusEl, 'Fehler: ' + err.message, true);
+          });
+      }
+
+      function loadSearch() {
+        var statusEl = document.getElementById('status-search');
+        var resultEl = document.getElementById('result-search');
+        setStatus(statusEl, 'Lädt…', false);
+        resultEl.innerHTML = '';
+
+        fetch('/api/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category: 'electronics' })
+        })
+          .then(function (response) {
+            if (!response.ok) throw new Error('Status ' + response.status);
+            return response.json();
+          })
+          .then(function (data) {
+            setStatus(statusEl, 'Geladen: ' + data.categories.length + ' Kategorie(n)', false);
+            resultEl.appendChild(renderCategories(data.categories));
+          })
+          .catch(function (err) {
+            setStatus(statusEl, 'Fehler: ' + err.message, true);
+          });
+      }
+
+      function loadGraphql() {
+        var statusEl = document.getElementById('status-graphql');
+        var resultEl = document.getElementById('result-graphql');
+        setStatus(statusEl, 'Lädt…', false);
+        resultEl.innerHTML = '';
+
+        fetch('/graphql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: 'query CategoryProducts($category: String) { categoryProducts(category: $category) { id name subcategories { id name products { sku title price tags } } } }',
+            variables: { category: 'books' }
+          })
+        })
+          .then(function (response) {
+            if (!response.ok) throw new Error('Status ' + response.status);
+            return response.json();
+          })
+          .then(function (data) {
+            var categories = data.data.categoryProducts;
+            setStatus(statusEl, 'Geladen: ' + categories.length + ' Kategorie(n)', false);
+            resultEl.appendChild(renderCategories(categories));
+          })
+          .catch(function (err) {
+            setStatus(statusEl, 'Fehler: ' + err.message, true);
+          });
+      }
+
+      document.getElementById('btn-reload-catalog').addEventListener('click', loadCatalog);
+      document.getElementById('btn-reload-search').addEventListener('click', loadSearch);
+      document.getElementById('btn-reload-graphql').addEventListener('click', loadGraphql);
+
+      loadCatalog();
+      loadSearch();
+      loadGraphql();
+    })();
+  </script>
+</body>
+</html>
