@@ -298,13 +298,18 @@ function findApiCandidates(entries, targetText, scopePath = null) {
     matches.forEach(({ path, value }) => {
       if (!pathStartsWithScope(path, scopeTokens)) return;
 
-      // itemsPath/valuePath (Issue #53 Phase 5): derived once here so the
-      // popup — which only ever sees this message's plain data, never
-      // content-script.js's own functions — doesn't need its own copy of
-      // deriveItemsAndValuePath to know whether/how a candidate can become
-      // an API-mode source. null when the match isn't inside a repeating
-      // array at all; valuePath is "" (not null) for the bare-array-element
-      // case — see deriveItemsAndValuePath's own doc comment.
+      // itemsPath/valuePath (Issue #53 Phase 5) and treeSkeleton (Issue #54
+      // Phase A5) are derived once here so the popup — which only ever sees
+      // this message's plain data, never content-script.js's own functions
+      // (a different execution context entirely; see popup.js's own
+      // buildApiSubtreeFromCandidate) — doesn't need its own copy of
+      // deriveItemsAndValuePath/deriveApiTreeSkeleton to know whether/how a
+      // candidate can become an API-mode source. itemsPath/valuePath are
+      // null when the match isn't inside a repeating array at all;
+      // valuePath is "" (not null) for the bare-array-element case — see
+      // deriveItemsAndValuePath's own doc comment. treeSkeleton is likewise
+      // null in that same case (deriveApiTreeSkeleton shares the exact same
+      // null condition).
       const derived = deriveItemsAndValuePath(path);
       ranked.push({
         entryId: entry.id,
@@ -315,6 +320,7 @@ function findApiCandidates(entries, targetText, scopePath = null) {
         siblings: siblingFields(parsed, path),
         itemsPath: derived ? derived.itemsPath : null,
         valuePath: derived ? derived.valuePath : null,
+        treeSkeleton: deriveApiTreeSkeleton(path),
         requestHeaders: entry.requestHeaders || [],
         isJsonContentType,
         matchCountInBody: matches.length,
