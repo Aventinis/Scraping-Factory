@@ -130,6 +130,10 @@
     "addSubcontainerBtn": "+ Contenedor",
     "addSubfieldBtn": "+ Campo de datos"
   },
+  "apiTree": {
+    "addSubgroupBtn": "+ Grupo",
+    "addSubfieldBtn": "+ Campo de datos"
+  },
   "generating": {
     "message": "Generando script…"
   },
