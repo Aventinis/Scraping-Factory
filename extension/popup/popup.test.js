@@ -33,7 +33,8 @@ const {
   buildGroupNode, buildFieldNode, resolveGroupNode, insertContainerNode, removeGroupTreeNode,
   formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport, hasRepeatingAncestor,
   buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
-  serializeApiTree, formatApiTreeNodeLabel, renderApiTree,
+  serializeApiTree, renderApiTree, updateApiTreeNode, apiTreeNodesHaveNonBlankNames,
+  lastPathSegmentName, buildApiSubtreeFromCandidate, resolveApiGroupScopePath, countApiConfigFields,
   renderApiCandidates, renderApiEntriesList,
   parseUrlTemplateParts, buildUrlTemplate, parseValueListInput,
   buildStaticListSource, buildDiscoverySource, buildRangeSource, buildApiHeaders, buildApiConfig,
@@ -823,14 +824,163 @@ describe('serializeApiTree', () => {
   });
 });
 
-describe('formatApiTreeNodeLabel', () => {
-  test('shows the name and path together', () => {
-    expect(formatApiTreeNodeLabel(buildApiGroupDraft('Kategorie', 'categories'))).toBe('Kategorie (categories)');
-    expect(formatApiTreeNodeLabel(buildApiFieldDraft('Titel', 'title'))).toBe('Titel (title)');
+describe('updateApiTreeNode / apiTreeNodesHaveNonBlankNames (Phase A5)', () => {
+  const tree = () => [
+    {
+      kind: 'group', name: 'Kategorie', path: 'categories',
+      children: [{ kind: 'field', name: 'Name', path: 'name' }],
+    },
+  ];
+
+  test('updateApiTreeNode renames a root node', () => {
+    const result = updateApiTreeNode(tree(), [0], node => ({ ...node, name: 'Kat.' }));
+    expect(result[0].name).toBe('Kat.');
+    expect(result[0].children).toEqual(tree()[0].children);
   });
 
-  test('omits the parens entirely for an empty path (array-of-arrays group)', () => {
-    expect(formatApiTreeNodeLabel(buildApiGroupDraft('Zeile', ''))).toBe('Zeile');
+  test('updateApiTreeNode renames a nested node without touching siblings', () => {
+    const result = updateApiTreeNode(tree(), [0, 0], node => ({ ...node, name: 'Titel' }));
+    expect(result[0].children[0].name).toBe('Titel');
+    expect(result[0].name).toBe('Kategorie');
+  });
+
+  test('updateApiTreeNode does not mutate the original tree', () => {
+    const original = tree();
+    updateApiTreeNode(original, [0], node => ({ ...node, name: 'X' }));
+    expect(original[0].name).toBe('Kategorie');
+  });
+
+  test('apiTreeNodesHaveNonBlankNames is true when every node (recursively) has a name', () => {
+    expect(apiTreeNodesHaveNonBlankNames(tree())).toBe(true);
+  });
+
+  test('apiTreeNodesHaveNonBlankNames is false when a leaf name is blank', () => {
+    const blank = updateApiTreeNode(tree(), [0, 0], node => ({ ...node, name: '  ' }));
+    expect(apiTreeNodesHaveNonBlankNames(blank)).toBe(false);
+  });
+
+  test('apiTreeNodesHaveNonBlankNames is false when a group name is blank, even if its children are fine', () => {
+    const blank = updateApiTreeNode(tree(), [0], node => ({ ...node, name: '' }));
+    expect(apiTreeNodesHaveNonBlankNames(blank)).toBe(false);
+  });
+});
+
+describe('lastPathSegmentName (Phase A5)', () => {
+  test('returns the last plain key of a dot-path', () => {
+    expect(lastPathSegmentName('data.categories')).toBe('categories');
+    expect(lastPathSegmentName('subcategories')).toBe('subcategories');
+  });
+
+  test('returns null for an empty path (the array-of-arrays case)', () => {
+    expect(lastPathSegmentName('')).toBeNull();
+  });
+});
+
+describe('resolveApiGroupScopePath (Phase A5)', () => {
+  const tree = () => [
+    {
+      kind: 'group', name: 'Kategorie', path: 'categories',
+      children: [{
+        kind: 'group', name: 'Subkategorie', path: 'subcategories',
+        children: [{ kind: 'field', name: 'Name', path: 'name' }],
+      }],
+    },
+  ];
+
+  test('a root group scope is its own path plus a first-instance index', () => {
+    expect(resolveApiGroupScopePath(tree(), [0])).toBe('categories[0]');
+  });
+
+  test('a nested group scope chains each ancestor\'s first-instance index', () => {
+    expect(resolveApiGroupScopePath(tree(), [0, 0])).toBe('categories[0].subcategories[0]');
+  });
+
+  test('an empty-path group (array-of-arrays) appends its index directly, no dot', () => {
+    const arrayOfArrays = [{ kind: 'group', name: 'Zeile', path: 'rows', children: [{ kind: 'group', name: 'Eintrag', path: '', children: [] }] }];
+    expect(resolveApiGroupScopePath(arrayOfArrays, [0, 0])).toBe('rows[0][0]');
+  });
+});
+
+describe('buildApiSubtreeFromCandidate (Phase A5)', () => {
+  // Mirrors Phase 0's catalog fixture: categories[*] → subcategories[*] →
+  // products[*], three independent repeating levels.
+  const deepCandidate = { path: 'categories[0].subcategories[1].products[2].title', treeSkeleton: [
+    { kind: 'group', path: 'categories' }, { kind: 'group', path: 'subcategories' },
+    { kind: 'group', path: 'products' }, { kind: 'field', path: 'title' },
+  ] };
+
+  test('a single-level match (skipSegments 0) becomes one auto-named group wrapping the named field', () => {
+    const oneLevel = { path: 'data.items[0].name', treeSkeleton: [{ kind: 'group', path: 'data.items' }, { kind: 'field', path: 'name' }] };
+    expect(buildApiSubtreeFromCandidate(oneLevel, 'Titel', [])).toEqual([
+      { kind: 'group', name: 'items', path: 'data.items', children: [{ kind: 'field', name: 'Titel', path: 'name' }] },
+    ]);
+  });
+
+  test('a multi-level match (skipSegments 0) nests every intermediate group, auto-named from its own path', () => {
+    const [root] = buildApiSubtreeFromCandidate(deepCandidate, 'Titel', []);
+    expect(root).toEqual({
+      kind: 'group', name: 'categories', path: 'categories',
+      children: [{
+        kind: 'group', name: 'subcategories', path: 'subcategories',
+        children: [{
+          kind: 'group', name: 'products', path: 'products',
+          children: [{ kind: 'field', name: 'Titel', path: 'title' }],
+        }],
+      }],
+    });
+  });
+
+  test('sibling names become extra field leaves at the innermost scope, keyed by their own name', () => {
+    const oneLevel = { path: 'data.items[0].name', treeSkeleton: [{ kind: 'group', path: 'data.items' }, { kind: 'field', path: 'name' }] };
+    const [root] = buildApiSubtreeFromCandidate(oneLevel, 'Titel', ['price', 'unit']);
+    expect(root.children).toEqual([
+      { kind: 'field', name: 'Titel', path: 'name' },
+      { kind: 'field', name: 'price', path: 'price' },
+      { kind: 'field', name: 'unit', path: 'unit' },
+    ]);
+  });
+
+  // skipSegments (Phase A5's "add sub-field"/"add root group" reuse): the
+  // target group's own tree depth's worth of leading skeleton segments are
+  // already represented by existing ancestors — see resolveApiGroupScopePath.
+  test('skipSegments strips already-represented ancestor levels — a sibling field at the innermost scope needs no new group at all', () => {
+    expect(buildApiSubtreeFromCandidate(deepCandidate, 'Titel', [], 3)).toEqual([{ kind: 'field', name: 'Titel', path: 'title' }]);
+  });
+
+  test('skipSegments partway through still nests the remaining levels', () => {
+    const [node] = buildApiSubtreeFromCandidate(deepCandidate, 'Titel', [], 1);
+    expect(node).toEqual({
+      kind: 'group', name: 'subcategories', path: 'subcategories',
+      children: [{ kind: 'group', name: 'products', path: 'products', children: [{ kind: 'field', name: 'Titel', path: 'title' }] }],
+    });
+  });
+
+  test('an empty-path group segment (array-of-arrays) falls back to the generic default name', () => {
+    const arrayOfArrays = { path: 'rows[0][0].title', treeSkeleton: [
+      { kind: 'group', path: 'rows' }, { kind: 'group', path: '' }, { kind: 'field', path: 'title' },
+    ] };
+    const [root] = buildApiSubtreeFromCandidate(arrayOfArrays, 'Titel', []);
+    expect(root.children[0].name).toBe('Gruppe'); // apiTree.defaultGroupName (German, this test file's fixed language)
+    expect(root.children[0].path).toBe('');
+  });
+});
+
+describe('countApiConfigFields (Phase A5)', () => {
+  test('counts a flat ApiConfig.Fields array directly', () => {
+    expect(countApiConfigFields({ fields: [{ name: 'a', path: 'a' }, { name: 'b', path: 'b' }] })).toBe(2);
+  });
+
+  test('counts every leaf ApiField anywhere in a tree-shaped ApiConfig.Groups, at any depth', () => {
+    const apiConfig = {
+      groups: [{
+        name: 'Kategorie', path: 'categories',
+        children: [
+          { name: 'Name', path: 'name' },
+          { name: 'Subkategorie', path: 'subcategories', children: [{ name: 'Titel', path: 'title' }, { name: 'Preis', path: 'price' }] },
+        ],
+      }],
+    };
+    expect(countApiConfigFields(apiConfig)).toBe(3);
   });
 });
 
@@ -851,13 +1001,15 @@ describe('renderApiTree', () => {
     expect(nodes).toHaveLength(2);
 
     const groupRow = document.querySelector('[data-path="[0]"] > .api-tree-row');
-    expect(groupRow.textContent).toContain('Kategorie (categories)');
+    expect(groupRow.querySelector('.api-tree-name').value).toBe('Kategorie');
+    expect(groupRow.querySelector('.api-tree-path').textContent).toBe('categories');
     expect(groupRow.querySelector('.btn-add-api-subgroup')).not.toBeNull();
     expect(groupRow.querySelector('.btn-add-api-subfield')).not.toBeNull();
     expect(groupRow.querySelector('.btn-remove-api-node')).not.toBeNull();
 
     const fieldRow = document.querySelector('[data-path="[0,0]"] > .api-tree-row');
-    expect(fieldRow.textContent).toContain('Titel (name)');
+    expect(fieldRow.querySelector('.api-tree-name').value).toBe('Titel');
+    expect(fieldRow.querySelector('.api-tree-path').textContent).toBe('name');
     expect(fieldRow.querySelector('.btn-add-api-subgroup')).toBeNull(); // fields can't have children
     expect(fieldRow.querySelector('.btn-remove-api-node')).not.toBeNull();
   });
@@ -882,7 +1034,8 @@ describe('renderApiTree', () => {
 
     expect(document.querySelectorAll('.api-tree-node')).toHaveLength(4);
     const leafRow = document.querySelector('[data-path="[0,0,0,0]"] > .api-tree-row');
-    expect(leafRow.textContent).toContain('Titel (title)');
+    expect(leafRow.querySelector('.api-tree-name').value).toBe('Titel');
+    expect(leafRow.querySelector('.api-tree-path').textContent).toBe('title');
     // Each level is indented 12px further than its parent (depth * 12px).
     const rootRow = document.querySelector('[data-path="[0]"] > .api-tree-row');
     expect(rootRow.style.paddingLeft).toBe('0px');
@@ -1497,7 +1650,7 @@ describe('variableUrlParts / apiConfigDraftHasAllSourcesChosen', () => {
 describe('renderApiConfigScreen (Issue #53 Phase 5)', () => {
   beforeEach(() => {
     document.body.innerHTML = `
-      <ul id="api-config-fields"></ul>
+      <ul id="api-tree-root"></ul>
       <ul id="api-config-segments"></ul>
       <ul id="api-config-query-params"></ul>
       <div id="api-config-parameters"></div>
@@ -1508,7 +1661,6 @@ describe('renderApiConfigScreen (Issue #53 Phase 5)', () => {
 
   const baseDraft = () => ({
     sourceUrl: 'https://example.com/api/items/42?category=Elektronik',
-    itemsPath: 'data.items',
     urlParts: {
       origin: 'https://example.com',
       pathSegments: [
@@ -1518,17 +1670,17 @@ describe('renderApiConfigScreen (Issue #53 Phase 5)', () => {
       ],
       queryParams: [{ key: 'category', value: 'Elektronik', variable: false, name: 'category' }],
     },
-    fields: [{ name: 'Titel', path: 'name' }],
+    groups: [{ kind: 'group', name: 'items', path: 'data.items', children: [{ kind: 'field', name: 'Titel', path: 'name' }] }],
     capturedHeaders: [{ name: 'Authorization', value: 'Bearer secret' }],
     parameterSources: {},
     headerDecisions: {},
   });
 
-  test('renders confirmed fields with an editable name and a read-only path', () => {
+  test('renders the confirmed tree with editable names and read-only paths', () => {
     renderApiConfigScreen(baseDraft(), null);
-    const row = document.querySelector('#api-config-fields .api-config-field-row');
-    expect(row.querySelector('.api-config-field-name').value).toBe('Titel');
-    expect(row.textContent).toContain('name');
+    const fieldRow = document.querySelector('[data-path="[0,0]"] > .api-tree-row');
+    expect(fieldRow.querySelector('.api-tree-name').value).toBe('Titel');
+    expect(fieldRow.querySelector('.api-tree-path').textContent).toBe('name');
   });
 
   test('renders each path segment/query param as a literal row when not variable', () => {
@@ -3799,7 +3951,7 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
         <button id="btn-cancel-selection"></button>
       </section>
       <section id="screen-api-config" class="hidden">
-        <ul id="api-config-fields"></ul>
+        <ul id="api-tree-root"></ul>
         <ul id="api-config-segments"></ul>
         <ul id="api-config-query-params"></ul>
         <div id="api-config-parameters"></div>
@@ -3847,6 +3999,7 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
     siblings: [],
     itemsPath: 'data.items',
     valuePath: 'name',
+    treeSkeleton: [{ kind: 'group', path: 'data.items' }, { kind: 'field', path: 'name' }],
     requestHeaders: [{ name: 'Authorization', value: 'Bearer secret' }],
   };
 
@@ -3871,9 +4024,14 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
     confirmPrimaryCandidate();
 
     expect(document.getElementById('screen-api-config').classList.contains('hidden')).toBe(false);
-    const fieldRow = document.querySelector('#api-config-fields .api-config-field-row');
-    expect(fieldRow.querySelector('.api-config-field-name').value).toBe('Titel');
-    expect(fieldRow.textContent).toContain('name');
+    // A single top-level match (PRIMARY_CANDIDATE.path has one array level)
+    // renders as a one-node-deep tree — the auto-named "items" group (from
+    // its own path's last segment) wrapping the user-named "Titel" field.
+    const groupRow = document.querySelector('[data-path="[0]"] > .api-tree-row');
+    expect(groupRow.querySelector('.api-tree-name').value).toBe('items');
+    const fieldRow = document.querySelector('[data-path="[0,0]"] > .api-tree-row');
+    expect(fieldRow.querySelector('.api-tree-name').value).toBe('Titel');
+    expect(fieldRow.querySelector('.api-tree-path').textContent).toBe('name');
 
     const segRows = document.querySelectorAll('#api-config-segments .api-config-part-row');
     expect(Array.from(segRows).map(r => r.querySelector('.api-config-part-value').textContent)).toEqual(['/api', '/items', '/42']);
@@ -3884,11 +4042,11 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
   test('renaming a field on the API_CONFIG screen carries the new name through to the confirmed apiConfig', () => {
     confirmPrimaryCandidate();
 
-    const nameInput = document.querySelector('#api-config-fields .api-config-field-name');
+    const nameInput = document.querySelector('[data-path="[0,0]"] .api-tree-name');
     nameInput.value = 'Produktname';
     nameInput.dispatchEvent(new Event('change', { bubbles: true }));
 
-    expect(document.querySelector('#api-config-fields .api-config-field-name').value).toBe('Produktname');
+    expect(document.querySelector('[data-path="[0,0]"] .api-tree-name').value).toBe('Produktname');
 
     const toggle = document.querySelector('#api-config-segments .api-config-part-row:nth-child(3) .api-config-part-toggle');
     toggle.checked = true;
@@ -3902,7 +4060,9 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
 
     document.getElementById('btn-api-config-confirm').click();
 
-    expect(chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig.fields).toEqual([{ name: 'Produktname', path: 'name' }]);
+    expect(chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig.groups).toEqual([
+      { name: 'items', path: 'data.items', children: [{ name: 'Produktname', path: 'name' }] },
+    ]);
   });
 
   test('a blanked-out field name disables "Übernehmen" until it is filled in again', () => {
@@ -3918,7 +4078,7 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
     document.querySelector('.api-config-static-list').dispatchEvent(new Event('change', { bubbles: true }));
     expect(document.getElementById('btn-api-config-confirm').disabled).toBe(false);
 
-    const nameInput = document.querySelector('#api-config-fields .api-config-field-name');
+    const nameInput = document.querySelector('[data-path="[0,0]"] .api-tree-name');
     nameInput.value = '   ';
     nameInput.dispatchEvent(new Event('change', { bubbles: true }));
 
@@ -3958,7 +4118,9 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
     nameInput.dispatchEvent(new Event('input', { bubbles: true }));
     document.querySelector('.api-candidate-confirm').click();
 
-    const fieldNames = Array.from(document.querySelectorAll('#api-config-fields .api-config-field-name')).map(i => i.value);
+    // The auto-named "items" group's own name input is also an .api-tree-name
+    // — [data-path^="[0,"] scopes this to its direct children only.
+    const fieldNames = Array.from(document.querySelectorAll('[data-path^="[0,"] .api-tree-name')).map(i => i.value);
     expect(fieldNames).toEqual(['Titel', 'price', 'unit']);
   });
 
@@ -4111,8 +4273,7 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
     const persistedConfig = chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig;
     expect(persistedConfig).toEqual({
       urlTemplate: 'https://example.com/api/items/{id}?category=Elektronik',
-      itemsPath: 'data.items',
-      fields: [{ name: 'Titel', path: 'name' }],
+      groups: [{ name: 'items', path: 'data.items', children: [{ name: 'Titel', path: 'name' }] }],
       parameters: [{ name: 'id', source: { kind: 'staticList', values: ['42'] } }],
       // No header was ever included (default headerDecisions is empty) — the
       // key is omitted entirely, matching the optional wire field.
@@ -4138,6 +4299,291 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
     document.getElementById('btn-api-config-discard').click();
 
     expect(document.getElementById('api-config-panel').classList.contains('hidden')).toBe(true);
+  });
+});
+
+// ── API-tree wiring end-to-end (Issue #54, Phase A5) ────────────────────────
+// The full vertical slice from Phase A1–A4 finally exists together: recording
+// a 3-level nested response (mirroring Phase 0's catalog fixture) → clicking
+// a deep value → confirming the primary field → adding a sibling field at
+// the innermost group's own scope via a second, scoped search → adding an
+// entirely separate independent root group via a third, unscoped search →
+// confirming the whole draft and asserting the exact Groups JSON that would
+// be sent to /generate.
+describe('API-tree wiring end-to-end (Issue #54, Phase A5)', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <button id="btn-add-field"></button>
+        <button id="btn-api-capture"></button>
+        <p id="api-capture-summary" class="hidden"></p>
+        <button id="btn-api-search" disabled></button>
+        <div id="api-candidates-panel" class="hidden">
+          <p id="api-candidates-target"></p>
+          <ul id="api-candidates-list"></ul>
+        </div>
+        <div id="api-config-panel" class="hidden">
+          <p id="api-config-summary"></p>
+          <button id="btn-api-config-discard"></button>
+        </div>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <button id="btn-cancel-selection"></button>
+      </section>
+      <section id="screen-api-config" class="hidden">
+        <ul id="api-tree-root"></ul>
+        <button id="btn-api-tree-add-root"></button>
+        <div id="api-tree-search-panel" class="hidden">
+          <p id="api-tree-search-target"></p>
+          <ul id="api-tree-search-list"></ul>
+        </div>
+        <ul id="api-config-segments"></ul>
+        <ul id="api-config-query-params"></ul>
+        <div id="api-config-parameters"></div>
+        <ul id="api-config-headers"></ul>
+        <button id="btn-api-config-cancel"></button>
+        <button id="btn-api-config-confirm" disabled></button>
+      </section>
+      <div id="modal-field-name" class="hidden">
+        <input id="input-field-name" />
+        <button id="btn-field-confirm"></button>
+        <button id="btn-field-cancel"></button>
+      </div>
+      <div id="modal-api-group-new" class="hidden">
+        <input id="input-api-group-name" />
+        <input id="input-api-group-path" />
+        <button id="btn-api-group-confirm"></button>
+        <button id="btn-api-group-cancel"></button>
+      </div>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({ url: 'https://example.com' }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+  });
+
+  // Mirrors Phase 0's catalog fixture (test-pages/api-nested-and-post):
+  // categories[*] → subcategories[*] → products[*], three independent
+  // repeating levels, plus a wholly unrelated top-level "labels" array.
+  const PRIMARY_CANDIDATE = {
+    entryId: 1,
+    url: 'https://example.com/api/catalog?category=electronics',
+    method: 'GET',
+    path: 'categories[0].subcategories[0].products[0].title',
+    value: 'Smartphone X',
+    siblings: [],
+    itemsPath: 'categories[0].subcategories[0].products',
+    valuePath: 'title',
+    treeSkeleton: [
+      { kind: 'group', path: 'categories' }, { kind: 'group', path: 'subcategories' },
+      { kind: 'group', path: 'products' }, { kind: 'field', path: 'title' },
+    ],
+    requestHeaders: [],
+  };
+
+  test('full flow: primary field → sibling at innermost scope → second root group → confirmed Groups JSON', () => {
+    // 1. Record, search, click the deep value, confirm the primary field.
+    document.getElementById('btn-api-capture').click();
+    capturedListener({ type: 'API_CAPTURE_ENTRY', entry: { id: 1, url: 'https://example.com/api/catalog' } });
+    document.getElementById('btn-api-capture').click();
+
+    document.getElementById('btn-api-search').click();
+    capturedListener({ type: 'API_CANDIDATES', target: 'Smartphone X', candidates: [PRIMARY_CANDIDATE] });
+
+    const primaryNameInput = document.querySelector('.api-candidate-field-name');
+    primaryNameInput.value = 'Titel';
+    primaryNameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('.api-candidate-confirm').click();
+
+    expect(document.getElementById('screen-api-config').classList.contains('hidden')).toBe(false);
+    // categories → subcategories → products → Titel, each auto-named from
+    // its own path segment except the user-typed leaf field.
+    expect(document.querySelector('[data-path="[0]"] .api-tree-name').value).toBe('categories');
+    expect(document.querySelector('[data-path="[0,0]"] .api-tree-name').value).toBe('subcategories');
+    expect(document.querySelector('[data-path="[0,0,0]"] .api-tree-name').value).toBe('products');
+    expect(document.querySelector('[data-path="[0,0,0,0]"] .api-tree-name').value).toBe('Titel');
+
+    // 2. Add a sibling field ("Preis") at the innermost "products" group's
+    // own scope, via a second, scoped search.
+    document.querySelector('[data-path="[0,0,0]"] .btn-add-api-subfield').click();
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+      type: 'START_SELECTION', apiSearch: true, apiScopePath: 'categories[0].subcategories[0].products[0]',
+    });
+    expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(false);
+
+    const siblingCandidate = {
+      entryId: 1, url: 'https://example.com/api/catalog?category=electronics', method: 'GET',
+      path: 'categories[0].subcategories[0].products[0].price', value: '499',
+      siblings: [], itemsPath: 'categories[0].subcategories[0].products', valuePath: 'price',
+      treeSkeleton: [
+        { kind: 'group', path: 'categories' }, { kind: 'group', path: 'subcategories' },
+        { kind: 'group', path: 'products' }, { kind: 'field', path: 'price' },
+      ],
+      requestHeaders: [],
+    };
+    capturedListener({ type: 'API_CANDIDATES', target: '499', candidates: [siblingCandidate] });
+
+    expect(document.getElementById('screen-api-config').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('api-tree-search-panel').classList.contains('hidden')).toBe(false);
+
+    const siblingNameInput = document.querySelector('#api-tree-search-list .api-candidate-field-name');
+    siblingNameInput.value = 'Preis';
+    siblingNameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('#api-tree-search-list .api-candidate-confirm').click();
+
+    // Inserted directly under "products" — no new group, since the scoped
+    // click landed at exactly the already-represented scope.
+    expect(document.getElementById('api-tree-search-panel').classList.contains('hidden')).toBe(true);
+    expect(document.querySelector('[data-path="[0,0,0,1]"] .api-tree-name').value).toBe('Preis');
+    expect(document.querySelector('[data-path="[0,0,0,1]"] .api-tree-path').textContent).toBe('price');
+
+    // 3. Add an entirely separate, independent root group ("labels") via a
+    // third, unscoped search.
+    document.getElementById('btn-api-tree-add-root').click();
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'START_SELECTION', apiSearch: true, apiScopePath: null });
+
+    const secondRootCandidate = {
+      entryId: 1, url: 'https://example.com/api/catalog?category=electronics', method: 'GET',
+      path: 'labels[0].name', value: 'sale', siblings: [],
+      itemsPath: 'labels', valuePath: 'name',
+      treeSkeleton: [{ kind: 'group', path: 'labels' }, { kind: 'field', path: 'name' }],
+      requestHeaders: [],
+    };
+    capturedListener({ type: 'API_CANDIDATES', target: 'sale', candidates: [secondRootCandidate] });
+
+    const rootNameInput = document.querySelector('#api-tree-search-list .api-candidate-field-name');
+    rootNameInput.value = 'Label';
+    rootNameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('#api-tree-search-list .api-candidate-confirm').click();
+
+    expect(document.querySelector('[data-path="[1]"] .api-tree-name').value).toBe('labels');
+    expect(document.querySelector('[data-path="[1,0]"] .api-tree-name').value).toBe('Label');
+
+    // 4. Configure the one required variable URL part, then confirm.
+    const toggle = document.querySelectorAll('#api-config-query-params .api-config-part-toggle')[0];
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('#api-config-query-params .api-config-part-name').value = 'category';
+    document.querySelector('#api-config-query-params .api-config-part-name').dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('.api-config-source-kind-radio[value="staticList"]').checked = true;
+    document.querySelector('.api-config-source-kind-radio[value="staticList"]').dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('.api-config-static-list').value = 'electronics';
+    document.querySelector('.api-config-static-list').dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(document.getElementById('btn-api-config-confirm').disabled).toBe(false);
+    document.getElementById('btn-api-config-confirm').click();
+
+    // Exactly A1's wire shape (IR/ApiConfig.cs's ApiGroup/ApiField, via
+    // serializeApiTree/buildApiConfig) — this is verbatim what /generate
+    // would receive as ScrapingConfig.Api once mode is switched to 'api'
+    // (buildScrapingConfig passes _state.apiConfig through unchanged, see
+    // the "API-Mode third mode integration" suite for that wiring proof).
+    const persistedConfig = chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig;
+    expect(persistedConfig).toEqual({
+      urlTemplate: 'https://example.com/api/catalog?category={category}',
+      groups: [
+        {
+          name: 'categories', path: 'categories',
+          children: [{
+            name: 'subcategories', path: 'subcategories',
+            children: [{
+              name: 'products', path: 'products',
+              children: [{ name: 'Titel', path: 'title' }, { name: 'Preis', path: 'price' }],
+            }],
+          }],
+        },
+        { name: 'labels', path: 'labels', children: [{ name: 'Label', path: 'name' }] },
+      ],
+      parameters: [{ name: 'category', source: { kind: 'staticList', values: ['electronics'] } }],
+    });
+  });
+
+  // modal-api-group-new (Phase A5): unlike a field/root search, a manually
+  // added sub-group needs no click at all — name and JSON path are both
+  // typed directly (see confirmApiGroupModal's own doc comment).
+  function confirmPrimaryCandidateOnly() {
+    document.getElementById('btn-api-capture').click();
+    capturedListener({ type: 'API_CAPTURE_ENTRY', entry: { id: 1, url: 'https://example.com/api/catalog' } });
+    document.getElementById('btn-api-capture').click();
+    document.getElementById('btn-api-search').click();
+    capturedListener({ type: 'API_CANDIDATES', target: 'Smartphone X', candidates: [PRIMARY_CANDIDATE] });
+    const nameInput = document.querySelector('.api-candidate-field-name');
+    nameInput.value = 'Titel';
+    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('.api-candidate-confirm').click();
+  }
+
+  test('"+ Gruppe" opens a name+path modal and inserts an empty group with no click-based search at all', () => {
+    confirmPrimaryCandidateOnly();
+    chrome.runtime.sendMessage.mockClear();
+
+    document.querySelector('[data-path="[0,0,0]"] .btn-add-api-subgroup').click();
+
+    expect(document.getElementById('modal-api-group-new').classList.contains('hidden')).toBe(false);
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+
+    document.getElementById('input-api-group-name').value = 'Varianten';
+    document.getElementById('input-api-group-path').value = 'variants';
+    document.getElementById('btn-api-group-confirm').click();
+
+    expect(document.getElementById('modal-api-group-new').classList.contains('hidden')).toBe(true);
+    // Inserted as the 5th child (index 4) of "products", after Titel.
+    const newGroupPath = '[0,0,0,1]';
+    expect(document.querySelector(`[data-path="${newGroupPath}"] .api-tree-name`).value).toBe('Varianten');
+    expect(document.querySelector(`[data-path="${newGroupPath}"] .api-tree-path`).textContent).toBe('variants');
+    expect(document.querySelector(`[data-path="${newGroupPath}"] .btn-add-api-subfield`)).not.toBeNull(); // it's a group, not a field
+  });
+
+  test('"+ Gruppe" does nothing until both name and path are filled in', () => {
+    confirmPrimaryCandidateOnly();
+    document.querySelector('[data-path="[0,0,0]"] .btn-add-api-subgroup').click();
+
+    document.getElementById('input-api-group-name').value = 'Varianten';
+    // path left blank
+    document.getElementById('btn-api-group-confirm').click();
+
+    expect(document.getElementById('modal-api-group-new').classList.contains('hidden')).toBe(false);
+    expect(document.querySelectorAll('[data-path="[0,0,0]"] .api-tree-children > .api-tree-node')).toHaveLength(1); // still just Titel
+  });
+
+  test('cancelling the group modal discards the typed name/path', () => {
+    confirmPrimaryCandidateOnly();
+    document.querySelector('[data-path="[0,0,0]"] .btn-add-api-subgroup').click();
+    document.getElementById('input-api-group-name').value = 'Varianten';
+    document.getElementById('input-api-group-path').value = 'variants';
+
+    document.getElementById('btn-api-group-cancel').click();
+
+    expect(document.getElementById('modal-api-group-new').classList.contains('hidden')).toBe(true);
+    expect(document.querySelectorAll('[data-path="[0,0,0]"] .api-tree-children > .api-tree-node')).toHaveLength(1);
   });
 });
 
@@ -4181,7 +4627,7 @@ describe('recorded-endpoints panel and pool-derived value-list autofill', () => 
         <button id="btn-cancel-selection"></button>
       </section>
       <section id="screen-api-config" class="hidden">
-        <ul id="api-config-fields"></ul>
+        <ul id="api-tree-root"></ul>
         <ul id="api-config-segments"></ul>
         <ul id="api-config-query-params"></ul>
         <div id="api-config-parameters"></div>
@@ -4229,6 +4675,7 @@ describe('recorded-endpoints panel and pool-derived value-list autofill', () => 
     siblings: [],
     itemsPath: 'data.items',
     valuePath: 'name',
+    treeSkeleton: [{ kind: 'group', path: 'data.items' }, { kind: 'field', path: 'name' }],
     requestHeaders: [],
   };
 
@@ -4524,7 +4971,7 @@ describe('API-Mode range format presets (bug/api-range-format follow-up)', () =>
         <button id="btn-cancel-selection"></button>
       </section>
       <section id="screen-api-config" class="hidden">
-        <ul id="api-config-fields"></ul>
+        <ul id="api-tree-root"></ul>
         <ul id="api-config-segments"></ul>
         <ul id="api-config-query-params"></ul>
         <div id="api-config-parameters"></div>
@@ -4575,6 +5022,7 @@ describe('API-Mode range format presets (bug/api-range-format follow-up)', () =>
     siblings: [],
     itemsPath: 'offerTiles',
     valuePath: 'title',
+    treeSkeleton: [{ kind: 'group', path: 'offerTiles' }, { kind: 'field', path: 'title' }],
     requestHeaders: [],
   };
 
