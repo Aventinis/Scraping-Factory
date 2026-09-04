@@ -32,6 +32,8 @@ const {
   formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,
   buildGroupNode, buildFieldNode, resolveGroupNode, insertContainerNode, removeGroupTreeNode,
   formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport, hasRepeatingAncestor,
+  buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
+  serializeApiTree, formatApiTreeNodeLabel, renderApiTree,
   renderApiCandidates, renderApiEntriesList,
   parseUrlTemplateParts, buildUrlTemplate, parseValueListInput,
   buildStaticListSource, buildDiscoverySource, buildRangeSource, buildApiHeaders, buildApiConfig,
@@ -714,6 +716,188 @@ describe('renderGroupTree', () => {
 
     const plainFieldRow = document.querySelector('[data-path="[0,1]"] > .group-tree-row');
     expect(plainFieldRow.querySelector('.frame-badge')).toBeNull();
+  });
+});
+
+// ── API-Mode tree (ApiGroup/ApiField, Issue #54 Phase A4) ───────────────────
+// Near-verbatim mirror of the Container-Mode tree tests above — same tree
+// machinery, different field names (path instead of selector, no
+// mode/attribute/repeating/framePath).
+
+describe('resolveApiTreeNode / insertApiTreeNode / removeApiTreeNode', () => {
+  const tree = () => [
+    {
+      kind: 'group', name: 'Kategorie', path: 'categories',
+      children: [
+        { kind: 'field', name: 'Name', path: 'name' },
+      ],
+    },
+  ];
+
+  test('resolveApiTreeNode returns null for a null/empty path', () => {
+    expect(resolveApiTreeNode(tree(), null)).toBeNull();
+    expect(resolveApiTreeNode(tree(), [])).toBeNull();
+  });
+
+  test('resolveApiTreeNode walks nested paths', () => {
+    expect(resolveApiTreeNode(tree(), [0]).name).toBe('Kategorie');
+    expect(resolveApiTreeNode(tree(), [0, 0]).name).toBe('Name');
+  });
+
+  test('insertApiTreeNode appends at root when parentPath is null', () => {
+    const node = buildApiGroupDraft('Produkte', 'products');
+    const result = insertApiTreeNode(tree(), null, node);
+    expect(result).toHaveLength(2);
+    expect(result[1]).toEqual(node);
+  });
+
+  test('insertApiTreeNode appends into a nested group', () => {
+    const node = buildApiFieldDraft('Preis', 'price');
+    const result = insertApiTreeNode(tree(), [0], node);
+    expect(result[0].children).toHaveLength(2);
+    expect(result[0].children[1]).toEqual(node);
+  });
+
+  test('insertApiTreeNode does not mutate the original tree', () => {
+    const original = tree();
+    insertApiTreeNode(original, [0], buildApiFieldDraft('X', 'x'));
+    expect(original[0].children).toHaveLength(1);
+  });
+
+  test('removeApiTreeNode removes a root node', () => {
+    expect(removeApiTreeNode(tree(), [0])).toEqual([]);
+  });
+
+  test('removeApiTreeNode removes a nested node', () => {
+    const result = removeApiTreeNode(tree(), [0, 0]);
+    expect(result[0].children).toEqual([]);
+  });
+});
+
+describe('serializeApiTree', () => {
+  test('strips internal `kind` and shapes group/field nodes for the wire, round-tripping a 3-level tree', () => {
+    const groups = [
+      {
+        kind: 'group', name: 'Kategorie', path: 'categories',
+        children: [
+          { kind: 'field', name: 'Name', path: 'name' },
+          {
+            kind: 'group', name: 'Subkategorie', path: 'subcategories',
+            children: [
+              { kind: 'field', name: 'Name', path: 'name' },
+              {
+                kind: 'group', name: 'Produkt', path: 'products',
+                children: [{ kind: 'field', name: 'Titel', path: 'title' }],
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    expect(serializeApiTree(groups)).toEqual([
+      {
+        name: 'Kategorie', path: 'categories',
+        children: [
+          { name: 'Name', path: 'name' },
+          {
+            name: 'Subkategorie', path: 'subcategories',
+            children: [
+              { name: 'Name', path: 'name' },
+              { name: 'Produkt', path: 'products', children: [{ name: 'Titel', path: 'title' }] },
+            ],
+          },
+        ],
+      },
+    ]);
+  });
+
+  test('a group with an empty path (array-of-arrays, see ApiGroup.Path) round-trips unchanged', () => {
+    const groups = [{ kind: 'group', name: 'Zeile', path: '', children: [{ kind: 'field', name: 'Titel', path: 'title' }] }];
+    expect(serializeApiTree(groups)[0].path).toBe('');
+  });
+
+  test('a field node never has a `children` key', () => {
+    const groups = [{ kind: 'field', name: 'Titel', path: 'title' }];
+    expect(serializeApiTree(groups)[0]).not.toHaveProperty('children');
+  });
+});
+
+describe('formatApiTreeNodeLabel', () => {
+  test('shows the name and path together', () => {
+    expect(formatApiTreeNodeLabel(buildApiGroupDraft('Kategorie', 'categories'))).toBe('Kategorie (categories)');
+    expect(formatApiTreeNodeLabel(buildApiFieldDraft('Titel', 'title'))).toBe('Titel (title)');
+  });
+
+  test('omits the parens entirely for an empty path (array-of-arrays group)', () => {
+    expect(formatApiTreeNodeLabel(buildApiGroupDraft('Zeile', ''))).toBe('Zeile');
+  });
+});
+
+describe('renderApiTree', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '<ul id="api-tree-root"></ul>';
+  });
+
+  test('renders nested groups and fields with add/remove buttons', () => {
+    renderApiTree([
+      {
+        kind: 'group', name: 'Kategorie', path: 'categories',
+        children: [{ kind: 'field', name: 'Titel', path: 'name' }],
+      },
+    ]);
+
+    const nodes = document.querySelectorAll('.api-tree-node');
+    expect(nodes).toHaveLength(2);
+
+    const groupRow = document.querySelector('[data-path="[0]"] > .api-tree-row');
+    expect(groupRow.textContent).toContain('Kategorie (categories)');
+    expect(groupRow.querySelector('.btn-add-api-subgroup')).not.toBeNull();
+    expect(groupRow.querySelector('.btn-add-api-subfield')).not.toBeNull();
+    expect(groupRow.querySelector('.btn-remove-api-node')).not.toBeNull();
+
+    const fieldRow = document.querySelector('[data-path="[0,0]"] > .api-tree-row');
+    expect(fieldRow.textContent).toContain('Titel (name)');
+    expect(fieldRow.querySelector('.btn-add-api-subgroup')).toBeNull(); // fields can't have children
+    expect(fieldRow.querySelector('.btn-remove-api-node')).not.toBeNull();
+  });
+
+  test('a 3-level tree renders with correct nesting/indentation', () => {
+    renderApiTree([
+      {
+        kind: 'group', name: 'Kategorie', path: 'categories',
+        children: [
+          {
+            kind: 'group', name: 'Subkategorie', path: 'subcategories',
+            children: [
+              {
+                kind: 'group', name: 'Produkt', path: 'products',
+                children: [{ kind: 'field', name: 'Titel', path: 'title' }],
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    expect(document.querySelectorAll('.api-tree-node')).toHaveLength(4);
+    const leafRow = document.querySelector('[data-path="[0,0,0,0]"] > .api-tree-row');
+    expect(leafRow.textContent).toContain('Titel (title)');
+    // Each level is indented 12px further than its parent (depth * 12px).
+    const rootRow = document.querySelector('[data-path="[0]"] > .api-tree-row');
+    expect(rootRow.style.paddingLeft).toBe('0px');
+    expect(leafRow.style.paddingLeft).toBe('36px');
+  });
+
+  test('groups start expanded, unlike the DOM tree view', () => {
+    renderApiTree([
+      {
+        kind: 'group', name: 'Kategorie', path: 'categories',
+        children: [{ kind: 'field', name: 'Titel', path: 'name' }],
+      },
+    ]);
+    const childUl = document.querySelector('[data-path="[0]"] > .api-tree-children');
+    expect(childUl.classList.contains('hidden')).toBe(false);
   });
 });
 

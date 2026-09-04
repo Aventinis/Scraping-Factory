@@ -521,6 +521,133 @@ function buildApiConfig({ urlParts, itemsPath, fields, parameterSources, capture
   };
 }
 
+// ── API-Mode tree (ApiGroup/ApiField, Issue #54 Phase A4) ───────────────────
+// The JSON-path counterpart to the Container-Mode tree below: near-verbatim
+// renames of the same helpers (`path` instead of `selector`, no
+// mode/attribute/repeating/framePath concept at all — ApiGroup's own
+// repeating-ness is inferred at runtime from JSON structure, never chosen
+// here, see companion/.../IR/ApiConfig.cs's ApiGroup doc comment) — the tree
+// machinery itself is generic over "a node has a name, is a
+// group-with-children or a leaf" and needed no new *shape* thinking.
+// Pure helpers only in this phase; event wiring into the API_CONFIG screen
+// is Phase A5.
+
+function buildApiGroupDraft(name, path) {
+  return { kind: 'group', name, path, children: [] };
+}
+
+function buildApiFieldDraft(name, path) {
+  return { kind: 'field', name, path };
+}
+
+function resolveApiTreeNode(groups, path) {
+  if (!path || path.length === 0) return null;
+  let node = groups[path[0]];
+  for (let i = 1; i < path.length; i++) node = node.children[path[i]];
+  return node;
+}
+
+// Appends `node` as the last child at `parentPath` (or at root level when
+// `parentPath` is null) — immutable, like insertContainerNode below.
+function insertApiTreeNode(groups, parentPath, node) {
+  const path = parentPath || [];
+  if (path.length === 0) return [...groups, node];
+  const [head, ...rest] = path;
+  return groups.map((n, i) => (i === head ? { ...n, children: insertApiTreeNode(n.children, rest, node) } : n));
+}
+
+// Removes the node (and its subtree) at `path` — always non-empty, unlike
+// insertApiTreeNode's parentPath.
+function removeApiTreeNode(groups, path) {
+  if (path.length === 1) return groups.filter((_, i) => i !== path[0]);
+  const [head, ...rest] = path;
+  return groups.map((n, i) => (i === head ? { ...n, children: removeApiTreeNode(n.children, rest) } : n));
+}
+
+// Strips the popup's internal `kind` tag and shapes each node exactly like
+// the wire format the companion expects (IR/ApiConfig.cs's
+// ApiGroup/ApiField, discriminated structurally by ApiNodeJsonConverter via
+// presence of `children` — see PythonApiConfigLiteral.RenderGroups on the
+// codegen side for the same discriminator).
+function serializeApiTree(groups) {
+  return groups.map(node => node.kind === 'group'
+    ? { name: node.name, path: node.path, children: serializeApiTree(node.children) }
+    : { name: node.name, path: node.path });
+}
+
+function formatApiTreeNodeLabel(node) {
+  return node.path ? `${node.name} (${node.path})` : node.name;
+}
+
+// Same visual pattern as the Container-Mode tree editor below (indentation,
+// toggle arrow, add/remove buttons, nodes start expanded) — see
+// buildGroupTreeNodeEl. Row content differs: node.path is shown instead of
+// node.selector, and there's no repeating/attribute/mode label to add (see
+// formatApiTreeNodeLabel above) or frame badge (JSON has no iframes).
+function buildApiTreeNodeEl(node, path, depth) {
+  const li = document.createElement('li');
+  li.className = 'api-tree-node';
+  li.dataset.path = JSON.stringify(path);
+
+  const row = document.createElement('div');
+  row.className = 'api-tree-row';
+  row.style.paddingLeft = `${depth * 12}px`;
+
+  const hasChildren = node.kind === 'group' && node.children.length > 0;
+  const toggle = document.createElement('span');
+  toggle.className = 'api-tree-toggle';
+  toggle.textContent = hasChildren ? '▾' : '';
+  row.appendChild(toggle);
+
+  const label = document.createElement('span');
+  label.className = 'api-tree-label';
+  label.textContent = formatApiTreeNodeLabel(node);
+  label.title = node.path;
+  row.appendChild(label);
+
+  if (node.kind === 'group') {
+    const addSubgroupBtn = document.createElement('button');
+    addSubgroupBtn.className = 'btn-secondary btn-tiny btn-add-api-subgroup';
+    addSubgroupBtn.textContent = t('apiTree.addSubgroupBtn');
+    row.appendChild(addSubgroupBtn);
+
+    const addFieldBtn = document.createElement('button');
+    addFieldBtn.className = 'btn-secondary btn-tiny btn-add-api-subfield';
+    addFieldBtn.textContent = t('apiTree.addSubfieldBtn');
+    row.appendChild(addFieldBtn);
+  }
+
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'btn-danger btn-remove-api-node';
+  removeBtn.textContent = t('common.remove');
+  row.appendChild(removeBtn);
+
+  li.appendChild(row);
+
+  if (node.kind === 'group') {
+    const childUl = document.createElement('ul');
+    childUl.className = 'api-tree-children';
+    node.children.forEach((child, i) => childUl.appendChild(buildApiTreeNodeEl(child, [...path, i], depth + 1)));
+    li.appendChild(childUl);
+
+    if (hasChildren) {
+      toggle.addEventListener('click', () => {
+        const collapsed = childUl.classList.toggle('hidden');
+        toggle.textContent = collapsed ? '▸' : '▾';
+      });
+    }
+  }
+
+  return li;
+}
+
+function renderApiTree(groups) {
+  const root = document.getElementById('api-tree-root');
+  if (!root) return;
+  root.innerHTML = '';
+  groups.forEach((node, i) => root.appendChild(buildApiTreeNodeEl(node, [i], 0)));
+}
+
 // ── Container-Mode tree (GroupNode/DataFieldNode) ───────────────────────────
 // Mirrors the backend IR (ContainerNode.cs): a group node scopes its
 // children to matches of its own selector, a field node is the extraction
@@ -2933,6 +3060,8 @@ if (typeof module !== 'undefined') {
     formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,
     buildGroupNode, buildFieldNode, resolveGroupNode, insertContainerNode, removeGroupTreeNode,
     formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport, hasRepeatingAncestor,
+    buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
+    serializeApiTree, formatApiTreeNodeLabel, renderApiTree,
     renderApiCandidates, renderApiEntriesList,
     parseUrlTemplateParts, buildUrlTemplate, parseValueListInput,
     buildStaticListSource, buildDiscoverySource, buildRangeSource, buildApiHeaders, buildApiConfig,
