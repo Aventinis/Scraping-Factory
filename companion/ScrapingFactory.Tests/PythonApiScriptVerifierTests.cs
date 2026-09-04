@@ -345,4 +345,185 @@ public class PythonApiScriptVerifierTests
         Assert.False(result.Success);
         Assert.NotNull(result.Error);
     }
+
+    // ── Groups (Issue #54's tree shape, OutputFormat.Xml) ────────────────
+    // Same "prove the real artifact works" philosophy as the flat/CSV tests
+    // above, but against a shape mirroring Phase 0's nested catalog fixture
+    // (test-pages/api-nested-and-post/server.py): categories[*] →
+    // subcategories[*] → products[*], three independent repeating levels.
+
+    [Fact]
+    public async Task GroupedScript_ThreeLevelNesting_SucceedsAndWritesXml()
+    {
+        using var server = new LocalTestServer(_ => new LocalTestServerResponse(
+            """
+            {
+              "categories": [
+                {
+                  "name": "Elektronik",
+                  "subcategories": [
+                    {
+                      "name": "Telefone",
+                      "products": [
+                        { "title": "Smartphone X" },
+                        { "title": "Smartphone Y" }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "Bücher",
+                  "subcategories": [
+                    { "name": "Romane", "products": [ { "title": "Buch A" } ] }
+                  ]
+                }
+              ]
+            }
+            """, "application/json"));
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = server.BaseUrl,
+            Groups =
+            [
+                new ApiGroup
+                {
+                    Name = "Kategorie",
+                    Path = "categories",
+                    Children =
+                    [
+                        new ApiField { Name = "Name", Path = "name" },
+                        new ApiGroup
+                        {
+                            Name = "Subkategorie",
+                            Path = "subcategories",
+                            Children =
+                            [
+                                new ApiField { Name = "Name", Path = "name" },
+                                new ApiGroup
+                                {
+                                    Name = "Produkt",
+                                    Path = "products",
+                                    Children = [new ApiField { Name = "Titel", Path = "title" }],
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateScript(api), OutputFormat.Xml);
+
+        Assert.True(result.Success, result.Error);
+        // 2 <Kategorie> + 2 <Name> (category) + 2 <Subkategorie> + 2 <Name>
+        // (subcategory) + 3 <Produkt> + 3 <Titel> = 14
+        Assert.Equal(14, result.RowCount);
+    }
+
+    [Fact]
+    public async Task GroupedScript_EmptyPathArrayOfArrays_SucceedsAndFlattensOneLevel()
+    {
+        // A raw array-of-arrays with no object key between the two repeating
+        // levels — ApiGroup.Path == "" means "operate directly on the
+        // parent scope itself" (see ApiGroup's doc comment).
+        using var server = new LocalTestServer(_ => new LocalTestServerResponse(
+            """{ "rows": [ [ { "title": "A" }, { "title": "B" } ], [ { "title": "C" } ] ] }""", "application/json"));
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = server.BaseUrl,
+            Groups =
+            [
+                new ApiGroup
+                {
+                    Name = "Zeile",
+                    Path = "rows",
+                    Children =
+                    [
+                        new ApiGroup
+                        {
+                            Name = "Eintrag",
+                            Path = "",
+                            Children = [new ApiField { Name = "Titel", Path = "title" }],
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateScript(api), OutputFormat.Xml);
+
+        Assert.True(result.Success, result.Error);
+        // 2 <Zeile> + 3 <Eintrag> + 3 <Titel> = 8
+        Assert.Equal(8, result.RowCount);
+    }
+
+    [Fact]
+    public async Task GroupedScript_ParameterizedRequest_CombinesResultsAcrossCombinations()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var category = request.QueryString["category"];
+            var json = $$"""{ "products": [ { "title": "Item-{{category}}" } ] }""";
+            return new LocalTestServerResponse(json, "application/json");
+        });
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = $"{server.BaseUrl}?category={{category}}",
+            Groups = [new ApiGroup { Name = "Produkt", Path = "products", Children = [new ApiField { Name = "Titel", Path = "title" }] }],
+            Parameters = [new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["a", "b"] } }],
+        };
+
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateScript(api), OutputFormat.Xml);
+
+        Assert.True(result.Success, result.Error);
+        // 2 <Produkt> + 2 <Titel> = 4, combined across both category requests
+        Assert.Equal(4, result.RowCount);
+    }
+
+    [Fact]
+    public async Task GroupedScript_PathMatchingNothing_FailsWithZeroElements()
+    {
+        using var server = new LocalTestServer(_ =>
+            new LocalTestServerResponse("""{ "categories": [] }""", "application/json"));
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = server.BaseUrl,
+            Groups = [new ApiGroup { Name = "Kategorie", Path = "categories", Children = [new ApiField { Name = "Name", Path = "name" }] }],
+        };
+
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateScript(api), OutputFormat.Xml);
+
+        Assert.False(result.Success);
+        Assert.Contains("keine Daten", result.Error);
+        Assert.Equal(0, result.RowCount);
+    }
+
+    [Fact]
+    public async Task GroupedScript_SomeCombinationsReturning404_AreSkippedNotFailed_Succeeds()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var category = request.QueryString["category"];
+            return category == "missing"
+                ? new LocalTestServerResponse("not found", "text/plain", HttpStatusCode.NotFound)
+                : new LocalTestServerResponse($$"""{ "products": [ { "title": "Item-{{category}}" } ] }""", "application/json");
+        });
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = $"{server.BaseUrl}?category={{category}}",
+            Groups = [new ApiGroup { Name = "Produkt", Path = "products", Children = [new ApiField { Name = "Titel", Path = "title" }] }],
+            Parameters = [new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["a", "missing"] } }],
+        };
+
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateScript(api), OutputFormat.Xml);
+
+        Assert.True(result.Success, result.Error);
+        // 1 <Produkt> + 1 <Titel> = 2, "missing" skipped
+        Assert.Equal(2, result.RowCount);
+    }
 }
