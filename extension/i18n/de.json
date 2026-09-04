@@ -130,6 +130,12 @@
     "addSubcontainerBtn": "+ Container",
     "addSubfieldBtn": "+ Datenfeld"
   },
+  "apiTree": {
+    "addSubgroupBtn": "+ Gruppe",
+    "addSubfieldBtn": "+ Datenfeld",
+    "addRootGroupBtn": "+ Neue Gruppe (oberste Ebene)",
+    "defaultGroupName": "Gruppe"
+  },
   "generating": {
     "message": "Generiere Skript…"
   },
@@ -160,6 +166,13 @@
       "existsOption": "Vorhanden?",
       "attributeLabel": "Attribut-Name (z. B. \"href\")",
       "attributePlaceholder": "Attribut"
+    },
+    "apiGroupNew": {
+      "nameLabel": "Name der Gruppe (z. B. \"Subkategorie\")",
+      "namePlaceholder": "Name",
+      "pathLabel": "JSON-Pfad (relativ zur übergeordneten Ebene, z. B. \"subcategories\")",
+      "pathPlaceholder": "JSON-Pfad",
+      "confirm": "Hinzufügen"
     }
   },
   "toast": {

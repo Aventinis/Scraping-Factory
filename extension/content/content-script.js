@@ -220,6 +220,24 @@ function findValueInJson(data, targetText, matches) {
   return matches;
 }
 
+// Every scalar (flat) key of the object located at `scopeTokens` — e.g. for
+// scopeTokens ['items', '[2]'], every flat field of items[2] ("name",
+// "price", …). Ancestor-chain-aware: scopeTokens can point at *any* level of
+// the tree, not just "the parent of one specific match" — used directly by
+// Phase A5's "add a sibling field at an already-confirmed group's own
+// scope" flow, where there's no single matched value to derive a scope from
+// in the first place. siblingFields below is the "one matched value's
+// parent" special case of this.
+function siblingFieldsAt(data, scopeTokens) {
+  const parent = resolveTokens(data, scopeTokens);
+  if (!parent || typeof parent !== 'object' || Array.isArray(parent)) return [];
+
+  const parentPath = tokensToPath(scopeTokens);
+  return Object.keys(parent)
+    .filter((key) => parent[key] !== null && typeof parent[key] !== 'object')
+    .map((key) => ({ name: key, path: parentPath ? `${parentPath}.${key}` : key, value: parent[key] }));
+}
+
 // Sibling scalar keys of the object that directly contains the match at
 // `matchPath` — e.g. for a match at "items[2].price", the siblings are the
 // other flat fields of items[2] ("name", "id", …), offered as one-click
@@ -232,25 +250,38 @@ function siblingFields(data, matchPath) {
   const matchedKey = tokens[tokens.length - 1];
   if (matchedKey.startsWith('[')) return [];
 
-  const parent = resolveTokens(data, tokens.slice(0, -1));
-  if (!parent || typeof parent !== 'object' || Array.isArray(parent)) return [];
-
-  const parentPath = tokensToPath(tokens.slice(0, -1));
-  return Object.keys(parent)
-    .filter((key) => key !== matchedKey && parent[key] !== null && typeof parent[key] !== 'object')
-    .map((key) => ({ name: key, path: parentPath ? `${parentPath}.${key}` : key, value: parent[key] }));
+  return siblingFieldsAt(data, tokens.slice(0, -1)).filter((sibling) => sibling.name !== matchedKey);
 }
 
 const MAX_API_CANDIDATES = 20; // caps the UI list on a heavily-recorded session, same spirit as PREVIEW_MAX_BOXES
+
+// True when `path`'s own tokens start with every one of `scopeTokens`, in
+// order — the JSON-side analogue of Container-Mode's DOM scoping (an
+// element must be a descendant of scopeRootEl to be selectable). An empty
+// scopeTokens list (the default, unscoped search) matches everything.
+function pathStartsWithScope(path, scopeTokens) {
+  if (scopeTokens.length === 0) return true;
+  const tokens = pathTokens(path);
+  return tokens.length >= scopeTokens.length && scopeTokens.every((token, i) => tokens[i] === token);
+}
 
 // Searches every buffered entry's (parsed) response body for `targetText`,
 // ranking hits by plausibility — a declared JSON content-type first, then a
 // body where the value occurs fewer times (more likely to be the *specific*
 // value the user meant, not a generic recurring one like a currency symbol
 // or status string), then a shorter path as a final tiebreaker.
-function findApiCandidates(entries, targetText) {
+//
+// scopePath (optional, Phase A5): when set, only matches whose own path
+// starts with scopePath are kept — used when adding a nested group/field to
+// an already-confirmed ApiGroup, so the search stays confined to that
+// group's own (first-instance) scope, the same "first instance is the
+// template" assumption Container-Mode's own scopeSelector already relies on.
+// null/undefined (today's only caller) reproduces the previous whole-pool
+// search unchanged.
+function findApiCandidates(entries, targetText, scopePath = null) {
   const target = String(targetText ?? '').trim();
   if (!target) return [];
+  const scopeTokens = scopePath ? pathTokens(scopePath) : [];
 
   const ranked = [];
   entries.forEach((entry) => {
@@ -265,13 +296,20 @@ function findApiCandidates(entries, targetText) {
     if (matches.length === 0) return;
     const isJsonContentType = !!(entry.contentType && entry.contentType.includes('json'));
     matches.forEach(({ path, value }) => {
-      // itemsPath/valuePath (Issue #53 Phase 5): derived once here so the
-      // popup — which only ever sees this message's plain data, never
-      // content-script.js's own functions — doesn't need its own copy of
-      // deriveItemsAndValuePath to know whether/how a candidate can become
-      // an API-mode source. null when the match isn't inside a repeating
-      // array at all; valuePath is "" (not null) for the bare-array-element
-      // case — see deriveItemsAndValuePath's own doc comment.
+      if (!pathStartsWithScope(path, scopeTokens)) return;
+
+      // itemsPath/valuePath (Issue #53 Phase 5) and treeSkeleton (Issue #54
+      // Phase A5) are derived once here so the popup — which only ever sees
+      // this message's plain data, never content-script.js's own functions
+      // (a different execution context entirely; see popup.js's own
+      // buildApiSubtreeFromCandidate) — doesn't need its own copy of
+      // deriveItemsAndValuePath/deriveApiTreeSkeleton to know whether/how a
+      // candidate can become an API-mode source. itemsPath/valuePath are
+      // null when the match isn't inside a repeating array at all;
+      // valuePath is "" (not null) for the bare-array-element case — see
+      // deriveItemsAndValuePath's own doc comment. treeSkeleton is likewise
+      // null in that same case (deriveApiTreeSkeleton shares the exact same
+      // null condition).
       const derived = deriveItemsAndValuePath(path);
       ranked.push({
         entryId: entry.id,
@@ -282,6 +320,7 @@ function findApiCandidates(entries, targetText) {
         siblings: siblingFields(parsed, path),
         itemsPath: derived ? derived.itemsPath : null,
         valuePath: derived ? derived.valuePath : null,
+        treeSkeleton: deriveApiTreeSkeleton(path),
         requestHeaders: entry.requestHeaders || [],
         isJsonContentType,
         matchCountInBody: matches.length,
@@ -296,6 +335,16 @@ function findApiCandidates(entries, targetText) {
   });
 
   return ranked.slice(0, MAX_API_CANDIDATES).map(({ isJsonContentType, matchCountInBody, ...candidate }) => candidate);
+}
+
+// Indices (into `tokens`) of every "[n]" array-index token, in order —
+// the shared boundary-finding step both deriveItemsAndValuePath (which
+// only ever needs the *last* one) and deriveApiTreeSkeleton (which needs
+// *every* one) are built on top of.
+function bracketTokenIndices(tokens) {
+  const indices = [];
+  tokens.forEach((token, i) => { if (token.startsWith('[')) indices.push(i); });
+  return indices;
 }
 
 // Splits a match path into the "repeating records" part and the "one
@@ -316,18 +365,59 @@ function findApiCandidates(entries, targetText) {
 // pull other fields out of) — valuePath comes back as "", which the
 // backend's validator rejects as a field path (Fields[].Path must be
 // non-empty), so callers should treat an empty valuePath the same as null.
+//
+// Deliberately only ever splits at the *last* array boundary, even when a
+// match sits inside more than one repeating level — DiscoverySource.
+// ItemsPath/ValuePath (the only remaining caller for such a path, since
+// Phase A5 gives the main field-selection flow deriveApiTreeSkeleton
+// instead) is still genuinely single-level by design (Issue #54 didn't
+// touch DiscoverySource), so every earlier array stays frozen to the
+// concrete index the match happened to be found at, exactly like before —
+// see deriveApiTreeSkeleton below for the fully-generalized alternative.
 function deriveItemsAndValuePath(matchPath) {
   const tokens = pathTokens(matchPath);
-  let lastBracketIndex = -1;
-  for (let i = tokens.length - 1; i >= 0; i--) {
-    if (tokens[i].startsWith('[')) { lastBracketIndex = i; break; }
-  }
-  if (lastBracketIndex === -1) return null;
+  const bracketIndices = bracketTokenIndices(tokens);
+  if (bracketIndices.length === 0) return null;
 
+  const lastBracketIndex = bracketIndices[bracketIndices.length - 1];
   return {
     itemsPath: tokensToPath(tokens.slice(0, lastBracketIndex)),
     valuePath: tokensToPath(tokens.slice(lastBracketIndex + 1)),
   };
+}
+
+// Generalizes deriveItemsAndValuePath: walks *every* "[n]" boundary in
+// matchPath (not just the last), producing one segment per repetition level
+// plus a final leaf segment. E.g. "data.categories[2].subcategories[0].
+// products[5].title" becomes:
+//   [ { kind: 'group', path: 'data.categories' },
+//     { kind: 'group', path: 'subcategories' },
+//     { kind: 'group', path: 'products' },
+//     { kind: 'field', path: 'title' } ]
+// Each path is relative to the *previous* segment's matched instance,
+// mirroring ApiGroup.Path's own "relative to parent scope" convention —
+// which is also why, unlike deriveItemsAndValuePath's itemsPath, no segment
+// here ever keeps a concrete "[n]" index: a group's whole point is to
+// iterate *every* instance its path resolves to, not just the one instance
+// the click happened to land on. Two directly-nested repeating levels with
+// no object key between them (a raw array-of-arrays) produce a group with
+// path "" (see ApiGroup.Path's own doc comment for the same convention).
+//
+// Returns null when matchPath never enters an array at all — same case
+// deriveItemsAndValuePath returns null for.
+function deriveApiTreeSkeleton(matchPath) {
+  const tokens = pathTokens(matchPath);
+  const bracketIndices = bracketTokenIndices(tokens);
+  if (bracketIndices.length === 0) return null;
+
+  const segments = [];
+  let start = 0;
+  for (const bracketIndex of bracketIndices) {
+    segments.push({ kind: 'group', path: tokensToPath(tokens.slice(start, bracketIndex)) });
+    start = bracketIndex + 1;
+  }
+  segments.push({ kind: 'field', path: tokensToPath(tokens.slice(start)) });
+  return segments;
 }
 
 // ── robots.txt check ─────────────────────────────────────────────────────────
@@ -529,7 +619,8 @@ if (typeof module !== 'undefined') {
   module.exports = {
     buildSelector, elementPath, serializeDomTree,
     matchFlatFields, matchGroupTree, computePreviewMatches,
-    findValueInJson, siblingFields, findApiCandidates, deriveItemsAndValuePath,
+    findValueInJson, siblingFields, siblingFieldsAt, findApiCandidates,
+    deriveItemsAndValuePath, deriveApiTreeSkeleton,
     parseRobotsTxt, evaluateRobotsTxt, checkRobotsTxt,
     findIframeSelectorForWindow, resolveFramePath, frameDepth,
   };
@@ -720,6 +811,14 @@ let avoidIdInSelector = false;
 // clickable, it changes what a click produces (see onClick below).
 let apiSearchActive = false;
 
+// Set alongside apiSearchActive when adding a nested group/field to an
+// already-confirmed ApiGroup (Phase A5) — see startSelection's apiScopePath
+// param. Passed through to findApiCandidates' own scopePath so the search
+// stays confined to that group's scope. null (the default) reproduces
+// today's whole-pool search — unrelated to scopeRootEl/isInScope above,
+// which scope *DOM* clickability, not the JSON search a click produces.
+let apiScopePathActive = null;
+
 function isInScope(element) {
   return !scopeRootEl || scopeRootEl.contains(element);
 }
@@ -781,6 +880,7 @@ function onClick(e) {
 
   const selector = buildSelector(target, scopeRootEl, avoidIdInSelector);
   const wasApiSearch = apiSearchActive; // read before stopSelection() clears it
+  const apiScopePathForSearch = apiScopePathActive; // read before stopSelection() clears it
   const clickedText = (target.textContent || '').trim();
   log('CLICK → selector', selector);
   stopSelection();
@@ -809,7 +909,7 @@ function onClick(e) {
     // and report candidate JSON matches — on top of, not instead of, the CSS
     // selector above.
     if (wasApiSearch) {
-      const candidates = findApiCandidates(capturedApiEntries, clickedText);
+      const candidates = findApiCandidates(capturedApiEntries, clickedText, apiScopePathForSearch);
       log('MSG_OUT API_CANDIDATES', { target: clickedText, count: candidates.length });
       chrome.runtime.sendMessage({ type: 'API_CANDIDATES', target: clickedText, candidates });
     }
@@ -823,10 +923,15 @@ function onClick(e) {
 // relies on for a repeating group). No match on the current page → the
 // selection can't proceed, same SELECTION_UNAVAILABLE path as a missing
 // content script.
-function startSelection(scopeSelector, avoidId, apiSearch) {
-  log('SELECTION start', { scopeSelector, avoidId, apiSearch });
+// apiScopePath (optional, Phase A5): the JSON-side analogue of
+// scopeSelector — passed through to findApiCandidates so a click during
+// this round only searches within that scope. Only meaningful alongside
+// apiSearch; ignored otherwise.
+function startSelection(scopeSelector, avoidId, apiSearch, apiScopePath) {
+  log('SELECTION start', { scopeSelector, avoidId, apiSearch, apiScopePath });
   avoidIdInSelector = !!avoidId;
   apiSearchActive = !!apiSearch;
+  apiScopePathActive = apiSearch ? (apiScopePath || null) : null;
   if (scopeSelector) {
     scopeRootEl = document.querySelector(scopeSelector);
     if (!scopeRootEl) {
@@ -853,6 +958,7 @@ function stopSelection() {
   scopeRootEl = null;
   avoidIdInSelector = false;
   apiSearchActive = false;
+  apiScopePathActive = null;
   if (hoverTimeoutId !== null) {
     clearTimeout(hoverTimeoutId);
     hoverTimeoutId = null;
@@ -929,7 +1035,7 @@ function isTopFrame() {
 if (typeof chrome !== 'undefined' && chrome.runtime) {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     log('MSG_IN', message.type);
-    if (message.type === 'START_SELECTION') startSelection(message.scopeSelector, message.avoidId, message.apiSearch);
+    if (message.type === 'START_SELECTION') startSelection(message.scopeSelector, message.avoidId, message.apiSearch, message.apiScopePath);
     if (message.type === 'STOP_SELECTION')  stopSelection();
     if (message.type === 'ENABLE_DOM_VIEW' && isTopFrame()) enableDomView();
     if (message.type === 'DISABLE_DOM_VIEW' && isTopFrame()) disableDomView();
