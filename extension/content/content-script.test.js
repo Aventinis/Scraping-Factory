@@ -1,7 +1,8 @@
 const {
   buildSelector, elementPath, serializeDomTree,
   matchFlatFields, matchGroupTree, computePreviewMatches,
-  findValueInJson, siblingFields, findApiCandidates, deriveItemsAndValuePath,
+  findValueInJson, siblingFields, siblingFieldsAt, findApiCandidates,
+  deriveItemsAndValuePath, deriveApiTreeSkeleton,
   findIframeSelectorForWindow, resolveFramePath, frameDepth,
 } = require('./content-script');
 
@@ -445,6 +446,30 @@ describe('API-mode search selection (START_SELECTION with apiSearch)', () => {
     expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'API_CANDIDATES' }));
   });
 
+  test('a click while apiScopePath is set only reports candidates inside that scope (Phase A3, Phase A5 use case)', async () => {
+    feedEntry({ id: 1, url: 'https://example.com/api', contentType: 'application/json', body: JSON.stringify({ a: { price: '3.50' }, b: { price: '3.50' } }), bodySkipped: false });
+
+    capturedListener({ type: 'START_SELECTION', apiSearch: true, apiScopePath: 'a' });
+    document.querySelector('.price').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+      type: 'API_CANDIDATES',
+      target: '3.50',
+      candidates: [expect.objectContaining({ path: 'a.price' })],
+    });
+  });
+
+  test('apiScopePath is ignored (no filtering) unless apiSearch is also set', async () => {
+    feedEntry({ id: 1, url: 'https://example.com/api', contentType: 'application/json', body: JSON.stringify({ price: '3.50' }), bodySkipped: false });
+
+    capturedListener({ type: 'START_SELECTION', apiScopePath: 'a' }); // no apiSearch flag
+    document.querySelector('.price').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
+
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'API_CANDIDATES' }));
+  });
+
   test('API_CAPTURE_START clears the locally buffered entries a later apiSearch click would search', async () => {
     feedEntry({ id: 1, url: 'https://example.com/api', contentType: 'application/json', body: JSON.stringify({ price: '3.50' }), bodySkipped: false });
 
@@ -681,6 +706,40 @@ describe('siblingFields', () => {
   });
 });
 
+describe('siblingFieldsAt (Phase A3, ancestor-chain-aware)', () => {
+  // Mirrors Phase 0's catalog fixture shape: categories[*] → subcategories[*]
+  // → products[*], three independent repeating levels.
+  const data = {
+    categories: [
+      { name: 'Elektronik', subcategories: [{ name: 'Telefone', products: [{ sku: 'P-100', title: 'Smartphone X' }] }] },
+    ],
+  };
+
+  test('returns every scalar key of the object at a non-root scope, unlike siblingFields it does not exclude any key', () => {
+    const siblings = siblingFieldsAt(data, ['categories', '[0]', 'subcategories', '[0]', 'products', '[0]']);
+    expect(siblings).toEqual(expect.arrayContaining([
+      { name: 'sku', path: 'categories[0].subcategories[0].products[0].sku', value: 'P-100' },
+      { name: 'title', path: 'categories[0].subcategories[0].products[0].title', value: 'Smartphone X' },
+    ]));
+  });
+
+  test('an intermediate group scope (not just a leaf record) also works', () => {
+    const siblings = siblingFieldsAt(data, ['categories', '[0]']);
+    expect(siblings).toEqual([{ name: 'name', path: 'categories[0].name', value: 'Elektronik' }]);
+  });
+
+  test('the root scope (empty tokens) returns bare-path siblings, no leading dot', () => {
+    expect(siblingFieldsAt({ a: 'x', b: 1 }, [])).toEqual(expect.arrayContaining([
+      { name: 'a', path: 'a', value: 'x' },
+      { name: 'b', path: 'b', value: 1 },
+    ]));
+  });
+
+  test('a scope that does not resolve to an object returns no siblings', () => {
+    expect(siblingFieldsAt(data, ['categories', '[0]', 'subcategories', '[0]', 'products'])).toEqual([]);
+  });
+});
+
 describe('findApiCandidates', () => {
   function entry(overrides) {
     return { id: 1, url: 'https://example.com/api', method: 'GET', status: 200, contentType: 'application/json', body: '{}', bodyTruncated: false, bodySkipped: false, ...overrides };
@@ -765,6 +824,38 @@ describe('findApiCandidates', () => {
     const entries = [entry({ body: JSON.stringify({ name: '' }) })];
     expect(findApiCandidates(entries, '   ')).toEqual([]);
   });
+
+  // Phase A3: scopePath is the JSON-side analogue of Container-Mode's
+  // scopeSelector, used (Phase A5) when adding a nested group/field to an
+  // already-confirmed ApiGroup — the search must stay confined to that
+  // group's own scope so a same-named field under a *different* instance
+  // isn't offered as a false match.
+  describe('scopePath (Phase A3)', () => {
+    const catalog = {
+      categories: [
+        { name: 'Elektronik', subcategories: [{ name: 'Telefone', products: [{ title: 'Smartphone X' }] }] },
+        { name: 'Bücher', subcategories: [{ name: 'Romane', products: [{ title: 'Smartphone X' }] }] },
+      ],
+    };
+
+    test('excludes a match outside the given scope, keeping one inside it', () => {
+      const entries = [entry({ body: JSON.stringify(catalog) })];
+      const candidates = findApiCandidates(entries, 'Smartphone X', 'categories[0]');
+      expect(candidates).toHaveLength(1);
+      expect(candidates[0].path).toBe('categories[0].subcategories[0].products[0].title');
+    });
+
+    test('a scope matching no category excludes every candidate', () => {
+      const entries = [entry({ body: JSON.stringify(catalog) })];
+      expect(findApiCandidates(entries, 'Smartphone X', 'categories[5]')).toEqual([]);
+    });
+
+    test('null/undefined scopePath reproduces the unscoped whole-pool search', () => {
+      const entries = [entry({ body: JSON.stringify(catalog) })];
+      expect(findApiCandidates(entries, 'Smartphone X', null)).toHaveLength(2);
+      expect(findApiCandidates(entries, 'Smartphone X')).toHaveLength(2);
+    });
+  });
 });
 
 describe('deriveItemsAndValuePath (Issue #53 Phase 5)', () => {
@@ -786,6 +877,51 @@ describe('deriveItemsAndValuePath (Issue #53 Phase 5)', () => {
 
   test('returns an empty valuePath when the match is itself the bare array element (no record object)', () => {
     expect(deriveItemsAndValuePath('tags[0]')).toEqual({ itemsPath: 'tags', valuePath: '' });
+  });
+});
+
+describe('deriveApiTreeSkeleton (Phase A3, Issue #54)', () => {
+  test('a 3-level match (Phase 0\'s catalog shape) produces a 4-segment skeleton', () => {
+    const skeleton = deriveApiTreeSkeleton('data.categories[2].subcategories[0].products[5].title');
+    expect(skeleton).toEqual([
+      { kind: 'group', path: 'data.categories' },
+      { kind: 'group', path: 'subcategories' },
+      { kind: 'group', path: 'products' },
+      { kind: 'field', path: 'title' },
+    ]);
+  });
+
+  test('a 1-level match still produces the old 2-segment form', () => {
+    expect(deriveApiTreeSkeleton('data.items[2].price')).toEqual([
+      { kind: 'group', path: 'data.items' },
+      { kind: 'field', path: 'price' },
+    ]);
+  });
+
+  test('a nested field path (no array after the last group) stays on one field segment', () => {
+    expect(deriveApiTreeSkeleton('items[0].meta.price')).toEqual([
+      { kind: 'group', path: 'items' },
+      { kind: 'field', path: 'meta.price' },
+    ]);
+  });
+
+  test('two directly-nested repeating levels with no key between them produce a group with an empty path', () => {
+    expect(deriveApiTreeSkeleton('rows[0][0].title')).toEqual([
+      { kind: 'group', path: 'rows' },
+      { kind: 'group', path: '' },
+      { kind: 'field', path: 'title' },
+    ]);
+  });
+
+  test('a bare array element (no record object) yields an empty final field path', () => {
+    expect(deriveApiTreeSkeleton('tags[0]')).toEqual([
+      { kind: 'group', path: 'tags' },
+      { kind: 'field', path: '' },
+    ]);
+  });
+
+  test('returns null when the path never enters an array at all, same as deriveItemsAndValuePath', () => {
+    expect(deriveApiTreeSkeleton('meta.name')).toBeNull();
   });
 });
 
