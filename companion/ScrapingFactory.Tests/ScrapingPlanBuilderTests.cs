@@ -304,4 +304,44 @@ public class ScrapingPlanBuilderTests
         Assert.Equal("scraper", plan.ScriptFileName);
         Assert.Equal("output", plan.OutputFileBaseName);
     }
+
+    // ── API-Mode: Groups (tree shape, Issue #54) ────────────────────────
+
+    private static ApiConfig SampleApiGroupsConfig() => new()
+    {
+        UrlTemplate = "https://example.com/api/catalog?category={category}",
+        Groups =
+        [
+            new ApiGroup
+            {
+                Name = "Kategorie", Path = "categories",
+                Children = [new ApiField { Name = "Titel", Path = "name" }],
+            },
+        ],
+        Parameters = [new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["a", "b"] } }],
+    };
+
+    [Fact]
+    public void Build_ApiWithGroups_ForcesXmlOutputFormatInsteadOfCsv()
+    {
+        var config = new ScrapingConfig { Url = "https://example.com", Api = SampleApiGroupsConfig(), OutputFormat = OutputFormat.Csv };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal(OutputFormat.Xml, plan.OutputFormat);
+        Assert.Equal(ScrapingEngine.Api, plan.Engine);
+    }
+
+    [Fact]
+    public void Build_ApiWithFlatShape_StillForcesCsvOutputFormat()
+    {
+        // SampleApiConfig() (flat ItemsPath/Fields, no Groups) must keep
+        // forcing Csv exactly as before Issue #54 — only the Groups shape
+        // changes the forced OutputFormat.
+        var config = new ScrapingConfig { Url = "https://example.com", Api = SampleApiConfig(), OutputFormat = OutputFormat.Xml };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal(OutputFormat.Csv, plan.OutputFormat);
+    }
 }

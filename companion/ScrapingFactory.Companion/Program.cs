@@ -17,6 +17,10 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     // DataFieldNode, which System.Text.Json can't (de)serialize through the
     // abstract base type on its own — see ContainerNodeJsonConverter.
     options.SerializerOptions.Converters.Add(new ContainerNodeJsonConverter());
+    // Same reason, one level down: API-Mode's nested tree shape (Issue #54,
+    // ApiGroup.Children: List<ApiNode>) needs the same treatment — see
+    // ApiNodeJsonConverter.
+    options.SerializerOptions.Converters.Add(new ApiNodeJsonConverter());
 });
 
 builder.Services.AddSingleton<LanguageModuleRegistry>();

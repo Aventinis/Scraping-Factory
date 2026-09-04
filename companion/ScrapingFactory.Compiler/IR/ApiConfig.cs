@@ -25,12 +25,26 @@ public sealed class ApiConfig
 
     public List<ApiParameter> Parameters { get; init; } = [];
 
-    // JSON path to the array of records within the response body — minimal
-    // dot/[*]/[n] notation (full JSON-path DSL comes with Phase 2's codegen
-    // and its runtime counterpart).
-    public required string ItemsPath { get; init; }
+    // Flat shape (Issue #53, Phase 1): JSON path to the array of records
+    // within the response body — minimal dot/[*]/[n] notation — plus one
+    // flat ApiField per extracted value, relative to one record. Exactly
+    // one repetition level. Mutually exclusive with Groups below; both
+    // null, or both set (enforced in ScrapingPlanValidator). Nullable
+    // (rather than the original `required`) since Issue #54's tree shape
+    // is now an alternative, not a replacement — see Groups.
+    public string? ItemsPath { get; init; }
+    public List<ApiField>? Fields { get; init; }
 
-    public List<ApiField> Fields { get; init; } = [];
+    // Tree shape (Issue #54): an arbitrarily deep alternative to
+    // ItemsPath/Fields for responses that nest more than one repetition
+    // level (arrays of arrays, or objects with their own nested arrays).
+    // Mutually exclusive with ItemsPath/Fields. A single root ApiGroup with
+    // Path == the old ItemsPath and one ApiField child per old Fields entry
+    // is exactly equivalent to the flat shape. Forces OutputFormat.Xml
+    // instead of Csv when set (see ScrapingPlanBuilder) — the same way
+    // ScrapingConfig.Groups forces Xml for Container-Mode, since tree data
+    // (unlike a flat record list) doesn't fit CSV's column model.
+    public List<ApiGroup>? Groups { get; init; }
 }
 
 // Exactly one of Value/EnvironmentVariableName is set — same "one of two
@@ -111,11 +125,44 @@ public sealed class RangeSource : ApiParameterSource
 
 public enum RangeType { IsoWeek, Number, Date }
 
-public sealed class ApiField
+// API-Mode's JSON-path tree (Issue #54), parallel to ContainerNode's
+// CSS-selector tree: an ApiGroup scopes its children to whatever its own
+// Path resolves to (one instance if that's an object/scalar, N instances if
+// it's a JSON array), ApiField is the leaf that actually extracts a value
+// from within that scope. See ApiConfig.Groups/ApiCallStep.
+public abstract class ApiNode
 {
     public required string Name { get; init; }
+}
 
-    // Minimal JSON-path notation relative to one ItemsPath record, e.g.
-    // "title" or "meta.price".
+public sealed class ApiGroup : ApiNode
+{
+    // Relative to the parent scope: the whole parsed response body for a
+    // root group, or one already-matched instance of the parent group's own
+    // resolved value for a nested one — same "relative to parent scope"
+    // convention GroupNode.Selector uses for CSS. May be "" to mean
+    // "operate directly on the parent scope itself", needed to express two
+    // directly-nested repeating levels with no object key between them (a
+    // raw array-of-arrays).
+    public required string Path { get; init; }
+
+    public required List<ApiNode> Children { get; init; }
+
+    // Deliberately no Repeating flag, unlike GroupNode.Repeating: whether a
+    // CSS selector matches once or N times is a transient runtime fact
+    // (GroupNode.Repeating is chosen explicitly by the user, never inferred
+    // from match count, since a page's DOM could change from run to run).
+    // Whether resolving a JSON path yields an array or an object/scalar has
+    // no such ambiguity — it's a structural property of the API's schema,
+    // stable across requests — so repeating-ness is simply inferred at
+    // runtime from whatever Path resolves to.
+}
+
+public sealed class ApiField : ApiNode
+{
+    // Minimal JSON-path notation relative to the parent scope — one
+    // ItemsPath record in the flat shape (Issue #53), or one ApiGroup
+    // instance in the tree shape (Issue #54) — e.g. "title" or
+    // "meta.price".
     public required string Path { get; init; }
 }
