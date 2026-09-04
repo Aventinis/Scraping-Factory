@@ -230,4 +230,23 @@ public class PythonApiCodeGeneratorTests
         var script = _generator.Generate(PlanWith(SampleApi()));
         Assert.DoesNotContain("import os", script);
     }
+
+    // Groups (Issue #54's tree shape) passes ScrapingPlanValidator's
+    // structural checks already, but this generator has no grouped-template
+    // counterpart yet (that lands in a later phase, mirroring how
+    // scraper_grouped.py.j2 followed one phase after Container-Mode's own
+    // flat groundwork) — a clear, typed rejection instead of an
+    // ItemsPath/Fields-are-null NullReferenceException.
+    [Fact]
+    public void Generate_ApiConfigWithGroups_ThrowsNotSupported()
+    {
+        var api = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/catalog",
+            Groups = [new ApiGroup { Name = "Kategorie", Path = "categories", Children = [new ApiField { Name = "Titel", Path = "name" }] }],
+            Parameters = [],
+        };
+
+        Assert.Throws<NotSupportedException>(() => _generator.Generate(PlanWith(api)));
+    }
 }
