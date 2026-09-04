@@ -1,3 +1,4 @@
+using System.Text;
 using ScrapingFactory.Compiler.IR;
 
 namespace ScrapingFactory.Compiler.Backends.Python;
@@ -15,6 +16,46 @@ internal static class PythonApiConfigLiteral
     public static string RenderFields(List<ApiField> fields) =>
         RenderList(fields, field =>
             $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "path": {{PythonLiteral.Str(field.Path)}}}""");
+
+    // Serializes ApiConfig.Groups (Issue #54's tree shape) the same way
+    // PythonGroupTreeLiteral serializes Container-Mode's GroupNode tree:
+    // a nested list-of-dicts literal that scraper_api_grouped.py.j2's
+    // _extract_api_group() walks at runtime, using presence of the
+    // "children" key as the group-vs-field discriminator (mirroring
+    // ApiNodeJsonConverter's own structural discriminator on the wire).
+    public static string RenderGroups(IReadOnlyList<ApiGroup> groups, int indent = 0) =>
+        RenderNodes(groups, indent);
+
+    private static string RenderNodes(IReadOnlyList<ApiNode> nodes, int indent)
+    {
+        if (nodes.Count == 0)
+            return "[]";
+
+        var pad = new string(' ', indent);
+        var childPad = new string(' ', indent + 4);
+        var sb = new StringBuilder();
+        sb.Append("[\n");
+        foreach (var node in nodes)
+            sb.Append(childPad).Append(RenderNode(node, indent + 4)).Append(",\n");
+        sb.Append(pad).Append(']');
+        return sb.ToString();
+    }
+
+    private static string RenderNode(ApiNode node, int indent) => node switch
+    {
+        ApiGroup group => RenderGroup(group, indent),
+        ApiField field => RenderField(field),
+        _ => throw new InvalidOperationException($"Unbekannter Api-Knoten-Typ: {node.GetType()}"),
+    };
+
+    private static string RenderGroup(ApiGroup group, int indent)
+    {
+        var children = RenderNodes(group.Children, indent);
+        return $$"""{"name": {{PythonLiteral.Str(group.Name)}}, "path": {{PythonLiteral.Str(group.Path)}}, "children": {{children}}}""";
+    }
+
+    private static string RenderField(ApiField field) =>
+        $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "path": {{PythonLiteral.Str(field.Path)}}}""";
 
     public static string RenderParameters(List<ApiParameter> parameters) =>
         RenderList(parameters, parameter =>
