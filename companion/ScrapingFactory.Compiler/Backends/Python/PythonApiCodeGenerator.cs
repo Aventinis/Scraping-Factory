@@ -21,25 +21,53 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
         var api = apiStep.Config;
         var assembly = Assembly.GetExecutingAssembly();
 
-        var fields = api.Fields.Select(field => new { name = field.Name, path = field.Path }).ToList();
-        // Matches RenderHeader's/ValidateApiHeaders's "meaningful" check: an
-        // empty-string EnvironmentVariableName never reaches os.environ[...]
-        // at runtime, so it shouldn't trigger the import either.
-        var needsOsImport = api.Headers?.Any(header => !string.IsNullOrWhiteSpace(header.EnvironmentVariableName)) ?? false;
+        // Issue #54's tree shape gets its own template, exactly the
+        // precedent Container-Mode already set (scraper.py.j2 vs.
+        // scraper_grouped.py.j2) — Scriban can't recurse over a tree of
+        // unknown depth the way the flat template's Fields loop can iterate
+        // a flat list, so the tree *structure* is pre-rendered into a Python
+        // literal in C# (PythonApiConfigLiteral.RenderGroups) and a generic
+        // runtime walk (_extract_api_group) consumes it.
+        if (api.Groups is { Count: > 0 })
+        {
+            var rootNames = api.Groups.Select(root => root.Name).ToList();
+            var groupedTemplate = EmbeddedScribanTemplate.Load(assembly, "scraper_api_grouped.py.j2");
+            return groupedTemplate.Render(new
+            {
+                url_template = api.UrlTemplate,
+                root_names = rootNames,
+                needs_os_import = NeedsOsImport(api.Headers),
+                url_template_literal = PythonLiteral.Str(api.UrlTemplate),
+                groups_literal = PythonApiConfigLiteral.RenderGroups(api.Groups),
+                parameters_literal = PythonApiConfigLiteral.RenderParameters(api.Parameters),
+                headers_literal = PythonApiConfigLiteral.RenderHeaders(api.Headers),
+                script_filename = plan.ScriptFileName,
+                output_filename = plan.OutputFileBaseName,
+            });
+        }
+
+        var fields = api.Fields!.Select(field => new { name = field.Name, path = field.Path }).ToList();
 
         var template = EmbeddedScribanTemplate.Load(assembly, "scraper_api.py.j2");
         return template.Render(new
         {
             url_template = api.UrlTemplate,
             fields,
-            needs_os_import = needsOsImport,
+            needs_os_import = NeedsOsImport(api.Headers),
             url_template_literal = PythonLiteral.Str(api.UrlTemplate),
-            items_path_literal = PythonLiteral.Str(api.ItemsPath),
-            fields_literal = PythonApiConfigLiteral.RenderFields(api.Fields),
+            items_path_literal = PythonLiteral.Str(api.ItemsPath!),
+            fields_literal = PythonApiConfigLiteral.RenderFields(api.Fields!),
             parameters_literal = PythonApiConfigLiteral.RenderParameters(api.Parameters),
             headers_literal = PythonApiConfigLiteral.RenderHeaders(api.Headers),
             script_filename = plan.ScriptFileName,
             output_filename = plan.OutputFileBaseName,
         });
     }
+
+    // Matches RenderHeader's/ValidateApiHeaders's "meaningful" check: an
+    // empty-string EnvironmentVariableName never reaches os.environ[...] at
+    // runtime, so it shouldn't trigger the import either. Shared by both
+    // templates above — the header-handling side is identical either way.
+    private static bool NeedsOsImport(List<ApiHeader>? headers) =>
+        headers?.Any(header => !string.IsNullOrWhiteSpace(header.EnvironmentVariableName)) ?? false;
 }

@@ -230,4 +230,119 @@ public class PythonApiCodeGeneratorTests
         var script = _generator.Generate(PlanWith(SampleApi()));
         Assert.DoesNotContain("import os", script);
     }
+
+    // ── Groups (Issue #54's tree shape) ──────────────────────────────────
+    // Picks scraper_api_grouped.py.j2 instead of scraper_api.py.j2 — same
+    // "a second template, not an if-branch inside the flat one" precedent
+    // Container-Mode already set for scraper.py.j2/scraper_grouped.py.j2.
+
+    private static ApiConfig SampleGroupedApi() => new()
+    {
+        UrlTemplate = "https://example.com/api/catalog?category={category}",
+        Groups =
+        [
+            new ApiGroup
+            {
+                Name = "Kategorie",
+                Path = "categories",
+                Children =
+                [
+                    new ApiField { Name = "Name", Path = "name" },
+                    new ApiGroup
+                    {
+                        Name = "Produkt",
+                        Path = "products",
+                        Children = [new ApiField { Name = "Titel", Path = "title" }],
+                    },
+                ],
+            },
+        ],
+        Parameters = [new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["electronics"] } }],
+    };
+
+    [Fact]
+    public void Generate_ApiConfigWithGroups_ContainsGroupsLiteralAndTreeWalker()
+    {
+        var script = _generator.Generate(PlanWith(SampleGroupedApi()));
+
+        Assert.Contains("GROUPS = [", script);
+        Assert.Contains("'Kategorie'", script);
+        Assert.Contains("'categories'", script);
+        Assert.Contains("'Produkt'", script);
+        Assert.Contains("'products'", script);
+        Assert.Contains("def _extract_api_group(", script);
+        Assert.Contains("\"children\" in node", script);
+    }
+
+    [Fact]
+    public void Generate_ApiConfigWithGroups_WritesXmlNotCsv()
+    {
+        var script = _generator.Generate(PlanWith(SampleGroupedApi()));
+
+        Assert.Contains("import xml.etree.ElementTree as ET", script);
+        Assert.Contains("tree.write(\"output.xml\"", script);
+        Assert.DoesNotContain("import csv", script);
+        Assert.DoesNotContain("ITEMS_PATH", script);
+        Assert.DoesNotContain("FIELDS = ", script);
+    }
+
+    [Fact]
+    public void Generate_ApiConfigWithGroups_DoesNotImportBeautifulSoup()
+    {
+        var script = _generator.Generate(PlanWith(SampleGroupedApi()));
+
+        Assert.DoesNotContain("BeautifulSoup", script);
+        Assert.DoesNotContain("bs4", script);
+    }
+
+    [Fact]
+    public void Generate_ApiConfigWithGroups_UsesConfiguredFileNames()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = [new NavigateStep { Url = "https://example.com" }, new ApiCallStep { Config = SampleGroupedApi() }],
+            OutputFormat = OutputFormat.Xml,
+            Engine = ScrapingEngine.Api,
+            ScriptFileName = "api_scraper",
+            OutputFileBaseName = "api_results",
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("python api_scraper.py", script);
+        Assert.Contains("tree.write(\"api_results.xml\"", script);
+        Assert.DoesNotContain("output.xml", script);
+    }
+
+    [Fact]
+    public void Generate_ApiConfigWithGroups_StaticListParameter_ContainsValuesInParametersLiteral()
+    {
+        var script = _generator.Generate(PlanWith(SampleGroupedApi()));
+
+        Assert.Contains("\"kind\": \"staticList\"", script);
+        Assert.Contains("'electronics'", script);
+    }
+
+    [Fact]
+    public void Generate_ApiConfigWithGroups_HeaderWithEnvironmentVariable_ImportsOs()
+    {
+        var api = SampleGroupedApi();
+        var withHeader = new ApiConfig
+        {
+            UrlTemplate = api.UrlTemplate, Groups = api.Groups, Parameters = api.Parameters,
+            Headers = [new ApiHeader { Name = "Authorization", EnvironmentVariableName = "SF_TOKEN" }],
+        };
+
+        var script = _generator.Generate(PlanWith(withHeader));
+
+        Assert.Contains("import os", script);
+        Assert.Contains("'SF_TOKEN'", script);
+    }
+
+    [Fact]
+    public void Generate_ApiConfigWithGroups_NoHeaders_DoesNotImportOs()
+    {
+        var script = _generator.Generate(PlanWith(SampleGroupedApi()));
+        Assert.DoesNotContain("import os", script);
+    }
 }

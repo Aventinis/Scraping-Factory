@@ -1151,4 +1151,162 @@ public class ScrapingPlanValidatorTests
         var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
         Assert.True(result.Success);
     }
+
+    // ── API-Mode: Groups (tree shape, Issue #54) ────────────────────────
+
+    private static ApiConfig ValidApiGroupsConfig() => new()
+    {
+        UrlTemplate = "https://example.com/api/catalog?category={category}",
+        Groups =
+        [
+            new ApiGroup
+            {
+                Name = "Kategorie",
+                Path = "categories",
+                Children =
+                [
+                    new ApiField { Name = "KategorieName", Path = "name" },
+                    new ApiGroup
+                    {
+                        Name = "Produkt",
+                        Path = "products",
+                        Children = [new ApiField { Name = "Titel", Path = "title" }],
+                    },
+                ],
+            },
+        ],
+        Parameters = [new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["a"] } }],
+    };
+
+    [Fact]
+    public void Validate_ValidApiGroupsConfig_Succeeds()
+    {
+        var result = ScrapingPlanValidator.Validate(ApiPlan(ValidApiGroupsConfig()));
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithBothFlatAndGroups_Fails()
+    {
+        var flat = ValidApiConfig();
+        var tree = ValidApiGroupsConfig();
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = flat.UrlTemplate, ItemsPath = flat.ItemsPath, Fields = flat.Fields,
+            Groups = tree.Groups, Parameters = flat.Parameters,
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("schließen sich", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithNeitherFlatNorGroups_Fails()
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items",
+            Parameters = [new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["a"] } }],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("ItemsPath", result.Error);
+        Assert.Contains("Groups", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithItemsPathButNoFields_Fails()
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items",
+            ItemsPath = "data.items",
+            Parameters = [new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["a"] } }],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("ItemsPath und Fields", result.Error);
+    }
+
+    // ApiConfig isn't a record, so these build a fresh instance per test
+    // instead of using `with` — UrlTemplate/Parameters copied verbatim from
+    // ValidApiGroupsConfig(), only Groups varies per test.
+    private static ApiConfig WithGroups(List<ApiGroup> groups) => new()
+    {
+        UrlTemplate = ValidApiGroupsConfig().UrlTemplate,
+        Groups = groups,
+        Parameters = ValidApiGroupsConfig().Parameters,
+    };
+
+    [Fact]
+    public void Validate_ApiGroupsConfigWithEmptyGroupName_Fails()
+    {
+        var invalid = WithGroups([new ApiGroup { Name = " ", Path = "categories", Children = [new ApiField { Name = "Titel", Path = "title" }] }]);
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Name eines Api-Knotens", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiGroupsConfigWithEmptyGroupChildren_Fails()
+    {
+        var invalid = WithGroups([new ApiGroup { Name = "Kategorie", Path = "categories", Children = [] }]);
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Kind-Element", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiGroupsConfigWithEmptyFieldPath_Fails()
+    {
+        var invalid = WithGroups([new ApiGroup { Name = "Kategorie", Path = "categories", Children = [new ApiField { Name = "Titel", Path = " " }] }]);
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Pfad des Felds 'Titel'", result.Error);
+    }
+
+    // Unlike ApiField.Path, an empty ApiGroup.Path is legitimate (see
+    // ApiGroup's doc comment, "array-of-arrays") — must not be rejected the
+    // way an empty ApiField.Path is above.
+    [Fact]
+    public void Validate_ApiGroupsConfigWithEmptyGroupPath_SucceedsWhenFieldStillReachable()
+    {
+        var valid = WithGroups([new ApiGroup { Name = "Zeile", Path = "", Children = [new ApiField { Name = "Wert", Path = "value" }] }]);
+        var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success, result.Error);
+    }
+
+    // Deeply nested groups-of-groups still succeed as long as a field is
+    // reachable at the bottom — proves ApiNodesContainField's recursion
+    // isn't accidentally shallow (e.g. only checking direct children).
+    [Fact]
+    public void Validate_ApiGroupsConfigWithFieldOnlyAtDeepestLevel_Succeeds()
+    {
+        var valid = WithGroups(
+        [
+            new ApiGroup
+            {
+                Name = "Aussen", Path = "outer",
+                Children = [new ApiGroup { Name = "Innen", Path = "inner", Children = [new ApiGroup { Name = "GanzInnen", Path = "innermost", Children = [new ApiField { Name = "Wert", Path = "value" }] }] }],
+            },
+        ]);
+        var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success, result.Error);
+    }
+
+    // ApiNodesContainField's own "no field anywhere" branch is structurally
+    // unreachable for any tree that already satisfies ValidateApiNodes'
+    // "every group needs ≥1 child" rule: since JSON (and therefore any
+    // ApiGroup tree built from it) is finite and acyclic, the deepest node
+    // in a tree where every group has children can only be an ApiField —
+    // ApiGroup is the only other ApiNode variant, and it would itself
+    // require further children, contradicting "deepest". The check is kept
+    // anyway for the same reason flat mode keeps its own explicit
+    // "Fields.Count == 0" check rather than relying on this argument: it
+    // states the actual business rule ("a config must extract something")
+    // directly, instead of leaving it as an emergent property of an
+    // unrelated structural rule that could change under a future refactor.
+    // No dedicated [Fact] for this branch specifically, for that reason —
+    // there is no way to construct a finite, otherwise-valid tree that
+    // would exercise it.
 }

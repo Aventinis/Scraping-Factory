@@ -130,6 +130,12 @@
     "addSubcontainerBtn": "+ Contenedor",
     "addSubfieldBtn": "+ Campo de datos"
   },
+  "apiTree": {
+    "addSubgroupBtn": "+ Grupo",
+    "addSubfieldBtn": "+ Campo de datos",
+    "addRootGroupBtn": "+ Nuevo grupo (nivel superior)",
+    "defaultGroupName": "Grupo"
+  },
   "generating": {
     "message": "Generando script…"
   },
@@ -160,6 +166,13 @@
       "existsOption": "¿Existe?",
       "attributeLabel": "Nombre del atributo (p. ej. \"href\")",
       "attributePlaceholder": "Atributo"
+    },
+    "apiGroupNew": {
+      "nameLabel": "Nombre del grupo (p. ej. \"Subcategoría\")",
+      "namePlaceholder": "Nombre",
+      "pathLabel": "Ruta JSON (relativa al ámbito superior, p. ej. \"subcategories\")",
+      "pathPlaceholder": "Ruta JSON",
+      "confirm": "Añadir"
     }
   },
   "toast": {
