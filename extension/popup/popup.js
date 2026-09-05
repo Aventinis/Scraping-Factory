@@ -1,4 +1,8 @@
-const COMPANION_URL = 'http://localhost:5000';
+// Resolved fresh in checkCompanion() (default or the user's persisted
+// override, see shared/companion-config.js) and reused by generate() below —
+// module-level rather than re-resolved per fetch since it only ever changes
+// via a full CHECKING_COMPANION -> checkCompanion() round trip anyway.
+let companionUrl = null;
 
 const STATES = {
   CHECKING_COMPANION: 'CHECKING_COMPANION',
@@ -127,6 +131,9 @@ const log = createLogger('SF:Popup');
 
 const { SUPPORTED_LANGUAGES, initI18n, setLanguage, getLanguage, t } =
   typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
+
+const { DEFAULT_COMPANION_URL, getCompanionUrl, setCompanionUrlOverride, resetCompanionUrlOverride, normalizeUrl } =
+  typeof require !== 'undefined' ? require('../shared/companion-config') : self.SFCompanionConfig;
 
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (e) => log('UNCAUGHT_ERROR', e.message));
@@ -1099,6 +1106,13 @@ function render() {
   }[_state.current];
 
   if (screenKey) show(`screen-${screenKey}`);
+
+  if (_state.current === STATES.COMPANION_ERROR) {
+    const currentUrlEl = document.getElementById('error-current-url');
+    if (currentUrlEl) currentUrlEl.textContent = t('error.currentUrl', { url: companionUrl || DEFAULT_COMPANION_URL });
+    const urlInput = document.getElementById('input-companion-url');
+    if (urlInput && !urlInput.value) urlInput.value = companionUrl && companionUrl !== DEFAULT_COMPANION_URL ? companionUrl : '';
+  }
 
   if (_state.current === STATES.IDLE) {
     const urlEl = document.getElementById('url-display');
@@ -2599,9 +2613,10 @@ function confirmApiConfig() {
 // ── Async actions ─────────────────────────────────────────────────────────────
 
 async function checkCompanion() {
-  log('HEALTH_CHECK start', COMPANION_URL);
+  companionUrl = await getCompanionUrl();
+  log('HEALTH_CHECK start', companionUrl);
   try {
-    const res = await fetch(`${COMPANION_URL}/health`);
+    const res = await fetch(`${companionUrl}/health`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     log('HEALTH_CHECK OK');
 
@@ -2616,6 +2631,37 @@ async function checkCompanion() {
     setLastError(err.message, 'Companion connection');
     setState(STATES.COMPANION_ERROR);
   }
+}
+
+// Manual override entry point for the COMPANION_ERROR screen — lets the user
+// point at a companion instance running on another host/port (e.g. a custom
+// Companion:Port in its own appsettings.json) when the default address isn't
+// reachable. Persisted via setCompanionUrlOverride so it's remembered for
+// the next session (see shared/companion-config.js), then re-runs the same
+// health check a plain retry would.
+async function useCustomCompanionUrl(rawUrl) {
+  const normalized = normalizeUrl(rawUrl);
+  let parsed = null;
+  try {
+    parsed = new URL(normalized);
+  } catch {
+    // parsed stays null — reported as invalid below, same as an empty input.
+  }
+  if (!parsed || !['http:', 'https:'].includes(parsed.protocol)) {
+    showToast(t('toast.invalidCompanionUrl'));
+    return;
+  }
+  log('COMPANION_URL_OVERRIDE set', normalized);
+  await setCompanionUrlOverride(normalized);
+  setState(STATES.CHECKING_COMPANION);
+  await checkCompanion();
+}
+
+async function resetCustomCompanionUrl() {
+  log('COMPANION_URL_OVERRIDE reset');
+  await resetCompanionUrlOverride();
+  setState(STATES.CHECKING_COMPANION);
+  await checkCompanion();
 }
 
 // robots.txt is fetched by the content script (same-origin relative to the
@@ -2725,7 +2771,7 @@ async function generate() {
     : {};
   log('GENERATE request', config);
   try {
-    const res = await fetch(`${COMPANION_URL}/generate`, {
+    const res = await fetch(`${companionUrl}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(
@@ -3081,6 +3127,17 @@ function wireEvents() {
     log('BTN retry');
     setState(STATES.CHECKING_COMPANION);
     checkCompanion();
+  });
+
+  document.getElementById('btn-use-companion-url')?.addEventListener('click', () => {
+    log('BTN use-companion-url');
+    const input = document.getElementById('input-companion-url');
+    useCustomCompanionUrl(input?.value || '');
+  });
+
+  document.getElementById('btn-reset-companion-url')?.addEventListener('click', () => {
+    log('BTN reset-companion-url');
+    resetCustomCompanionUrl();
   });
 
   document.getElementById('btn-preview')?.addEventListener('click', () => {
