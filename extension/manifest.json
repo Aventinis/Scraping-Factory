@@ -30,6 +30,10 @@
   "action": {
     "default_title": "Scraping Factory"
   },
+  "sidebar_action": {
+    "default_panel": "popup/popup.html",
+    "default_title": "Scraping Factory"
+  },
   "side_panel": {
     "default_path": "popup/popup.html"
   },
