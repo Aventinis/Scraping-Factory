@@ -1246,6 +1246,32 @@ describe('renderApiEntriesList (recorded-endpoints viewer)', () => {
     renderApiEntriesList([{ url: 'https://example.com/api', method: 'GET', status: 200, contentType: null }]);
     expect(document.querySelector('.api-candidate-path')).toBeNull();
   });
+
+  test('shows a captured POST body', () => {
+    renderApiEntriesList([
+      { url: 'https://example.com/api/search', method: 'POST', status: 200, contentType: 'application/json', requestBody: '{"category":"electronics"}' },
+    ]);
+    const bodyEl = document.querySelector('.api-candidate-body');
+    expect(bodyEl).not.toBeNull();
+    expect(bodyEl.textContent).toBe('{"category":"electronics"}');
+    expect(bodyEl.classList.contains('api-candidate-body-skipped')).toBe(false);
+  });
+
+  test('shows a "[not captured]" note for a skipped request body', () => {
+    renderApiEntriesList([
+      { url: 'https://example.com/api/search', method: 'POST', status: 200, contentType: 'multipart/form-data', requestBodySkipped: true },
+    ]);
+    const bodyEl = document.querySelector('.api-candidate-body');
+    expect(bodyEl).not.toBeNull();
+    expect(bodyEl.classList.contains('api-candidate-body-skipped')).toBe(true);
+  });
+
+  test('omits the body line entirely for a GET entry with no request body', () => {
+    renderApiEntriesList([
+      { url: 'https://example.com/api', method: 'GET', status: 200, contentType: 'application/json', requestBody: '', requestBodySkipped: false },
+    ]);
+    expect(document.querySelector('.api-candidate-body')).toBeNull();
+  });
 });
 
 describe('parseUrlTemplateParts / buildUrlTemplate (Issue #53 Phase 5)', () => {

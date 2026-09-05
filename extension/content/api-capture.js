@@ -15,6 +15,11 @@
 // Known limitations (not solved here):
 // - Requests that don't go through fetch/XHR (navigator.sendBeacon,
 //   WebSocket) aren't captured.
+// - Request bodies (Issue #55 prep): only string bodies (a JSON.stringify'd
+//   object, plain text) are captured as `requestBody`. A FormData/Blob/
+//   ArrayBuffer/URLSearchParams body is flagged via `requestBodySkipped`
+//   instead of being read — form-encoded/multipart request bodies are out
+//   of scope for now.
 // - The control/entry channel is window.postMessage(..., '*'), which the
 //   hosting page's own scripts can also observe or forge (both worlds share
 //   the same `window`). Accepted for now — there is no unforgeable channel
@@ -101,8 +106,9 @@ function normalizeHeaders(headersLike) {
 
 // Pure construction of one capture entry — kept separate from the
 // fetch/XHR interception glue below so it's testable without mocking those.
-function buildEntry(url, method, status, contentType, bodyText, bodySkipped, requestHeaders) {
+function buildEntry(url, method, status, contentType, bodyText, bodySkipped, requestHeaders, requestBodyText, requestBodySkipped) {
   const { body, truncated } = bodySkipped ? { body: '', truncated: false } : truncateBody(bodyText);
+  const { body: requestBody, truncated: requestBodyTruncated } = requestBodySkipped ? { body: '', truncated: false } : truncateBody(requestBodyText);
   return {
     id: _nextId++,
     url,
@@ -113,18 +119,47 @@ function buildEntry(url, method, status, contentType, bodyText, bodySkipped, req
     bodyTruncated: truncated,
     bodySkipped: !!bodySkipped,
     requestHeaders: requestHeaders || [],
+    requestBody,
+    requestBodyTruncated,
+    requestBodySkipped: !!requestBodySkipped,
   };
 }
 
-function recordEntry(url, method, status, contentType, bodyText, bodySkipped, requestHeaders) {
+function recordEntry(url, method, status, contentType, bodyText, bodySkipped, requestHeaders, requestBodyText, requestBodySkipped) {
   if (!_recording) return;
   if (_entries.length >= MAX_CAPTURED_ENTRIES) return; // silently drop — buffer already at cap
 
-  const entry = buildEntry(url, method, status, contentType, bodyText, bodySkipped, requestHeaders);
+  const entry = buildEntry(url, method, status, contentType, bodyText, bodySkipped, requestHeaders, requestBodyText, requestBodySkipped);
   _entries.push(entry);
   if (typeof window !== 'undefined') {
     window.postMessage({ source: 'sf-api-capture', type: 'API_CAPTURE_ENTRY', entry }, '*');
   }
+}
+
+// Classifies a raw request-body value (fetch's init.body, or XHR's
+// send(body) argument) synchronously: a string is captured as-is, anything
+// else (FormData/Blob/ArrayBuffer/URLSearchParams/URL-encoded params object)
+// is flagged as not-capturable rather than read — see the known-limitations
+// note at the top of this file.
+function classifyRequestBody(body) {
+  if (body == null) return { text: '', skipped: false };
+  return typeof body === 'string' ? { text: body, skipped: false } : { text: '', skipped: true };
+}
+
+// fetch-specific: init.body (2nd arg) takes precedence over a Request's own
+// body, mirroring fetch's own override semantics already used above for
+// headers/method. Only reached for the Request-object fallback when
+// init.body is absent — a Request's body is only readable asynchronously,
+// via .clone().text() (mirrors how the response body is already read
+// elsewhere in this file), so this always returns a Promise.
+function readFetchRequestBody(initBody, request) {
+  if (initBody != null) return Promise.resolve(classifyRequestBody(initBody));
+  if (request && typeof request.clone === 'function') {
+    return request.clone().text()
+      .then((text) => ({ text, skipped: false }))
+      .catch(() => ({ text: '', skipped: true }));
+  }
+  return Promise.resolve({ text: '', skipped: false });
 }
 
 // Persists the on/off flag in sessionStorage (shared by the MAIN world, the
@@ -172,6 +207,8 @@ if (typeof module !== 'undefined') {
     shouldSkipBody,
     normalizeHeaders,
     resolveUrl,
+    classifyRequestBody,
+    readFetchRequestBody,
     recordEntry,
     startRecording,
     stopRecording,
@@ -211,17 +248,20 @@ if (typeof window !== 'undefined' && typeof module === 'undefined') {
       // — matches fetch's own override semantics when both are given.
       const headersLike = (args[1] && args[1].headers) || (request && request.headers) || null;
       const requestHeaders = normalizeHeaders(headersLike);
+      const requestBodyPromise = readFetchRequestBody(args[1] && args[1].body, request);
 
       return originalFetch.apply(this, args).then((response) => {
         if (_recording) {
           const contentType = response.headers.get('content-type');
-          if (shouldSkipBody(contentType, response.headers.get('content-length'))) {
-            recordEntry(url, method, response.status, contentType, '', true, requestHeaders);
-          } else {
-            response.clone().text()
-              .then((bodyText) => recordEntry(url, method, response.status, contentType, bodyText, false, requestHeaders))
-              .catch(() => {}); // unreadable body (e.g. opaque cross-origin response) — just skip capturing it
-          }
+          requestBodyPromise.then(({ text: requestBodyText, skipped: requestBodySkipped }) => {
+            if (shouldSkipBody(contentType, response.headers.get('content-length'))) {
+              recordEntry(url, method, response.status, contentType, '', true, requestHeaders, requestBodyText, requestBodySkipped);
+            } else {
+              response.clone().text()
+                .then((bodyText) => recordEntry(url, method, response.status, contentType, bodyText, false, requestHeaders, requestBodyText, requestBodySkipped))
+                .catch(() => {}); // unreadable body (e.g. opaque cross-origin response) — just skip capturing it
+            }
+          });
         }
         return response;
       });
@@ -248,6 +288,7 @@ if (typeof window !== 'undefined' && typeof module === 'undefined') {
     XMLHttpRequest.prototype.send = function (...args) {
       if (_recording) {
         const requestHeaders = normalizeHeaders(this._sfRequestHeaders);
+        const { text: requestBodyText, skipped: requestBodySkipped } = classifyRequestBody(args[0]);
         this.addEventListener('load', () => {
           if (!_recording) return;
           const contentType = this.getResponseHeader('content-type');
@@ -256,7 +297,7 @@ if (typeof window !== 'undefined' && typeof module === 'undefined') {
           // avoid touching) — this at least skips copying it into our own
           // capture entry.
           if (shouldSkipBody(contentType, this.getResponseHeader('content-length'))) {
-            recordEntry(this._sfUrl, this._sfMethod, this.status, contentType, '', true, requestHeaders);
+            recordEntry(this._sfUrl, this._sfMethod, this.status, contentType, '', true, requestHeaders, requestBodyText, requestBodySkipped);
             return;
           }
           let bodyText = '';
@@ -265,7 +306,7 @@ if (typeof window !== 'undefined' && typeof module === 'undefined') {
           } catch {
             // Not a text-ish response — capture the entry without a body.
           }
-          recordEntry(this._sfUrl, this._sfMethod, this.status, contentType, bodyText, false, requestHeaders);
+          recordEntry(this._sfUrl, this._sfMethod, this.status, contentType, bodyText, false, requestHeaders, requestBodyText, requestBodySkipped);
         });
       }
       return originalSend.apply(this, args);
