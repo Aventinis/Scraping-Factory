@@ -8,7 +8,7 @@ The user selects elements on a web page by clicking, and Scraping Factory genera
 
 The project consists of two parts that communicate over a local HTTP server:
 
-- **Browser extension** (Manifest V3) — runs in the Chrome side panel, lets you select elements on the page via hover/click
+- **Browser extension** (Manifest V3) — runs in the browser's side panel (Chrome/Edge) or sidebar (Opera), lets you select elements on the page via hover/click
 - **Companion app** (.NET 9) — a local server that builds an intermediate representation (IR) from the selection and generates the Python script from it
 
 ## Features (as of v1.5.0)
@@ -54,8 +54,10 @@ dotnet test companion/ScrapingFactory.sln
 # Run the extension tests
 cd extension && npm test
 
-# Load the extension (Chrome/Edge)
+# Load the extension (Chrome/Edge/Opera)
 # Extension management → "Load unpacked" → extension/
 ```
+
+**Known issue (Chrome/Chromium on Linux):** under tiling Wayland compositors (observed on Hyprland), native `<select>` dropdowns in the side panel can render mispositioned, off-screen. This looks like an upstream Chromium/Ozone-Wayland popup-positioning quirk rather than a bug in Scraping Factory — it wasn't reproducible in Opera on the same setup (possibly different Ozone/XWayland defaults, not confirmed). If you hit this, Opera is a working alternative that needs no extra setup.
 
 For full developer documentation (architecture, open design decisions), see `CLAUDE.md`.
