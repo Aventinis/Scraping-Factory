@@ -49,6 +49,7 @@ test('shared/logger.js + i18n/i18n.js + popup/popup.js load together without a r
   // this test, not full runtime behavior (that's what popup.test.js covers).
   expect(() => runClassicScripts([
     'shared/logger.js',
+    'shared/companion-config.js',
     'i18n/i18n.js',
     'popup/popup.js',
   ])).not.toThrow();
