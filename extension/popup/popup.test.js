@@ -44,6 +44,8 @@ const {
   addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
   buildVerificationValues,
   frameBadgeHtml,
+  jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
+  bodyTreeLeavesAreBound, serializeBodyTree, allParameterParts, renderBodyTree,
 } = require('./popup');
 
 // jsdom's Blob doesn't implement .text() — read via FileReader instead.
@@ -1624,6 +1626,224 @@ describe('buildApiConfig', () => {
 
     expect(config.parameters.map(p => p.name)).toEqual(['id', 'week']);
   });
+
+  // ── Request body/method (Issue #55, Phase B4) ─────────────────────────
+
+  test('omits method and body when neither is given (matches the optional wire fields)', () => {
+    const config = buildApiConfig({
+      urlParts: { origin: 'https://example.com', pathSegments: [{ value: 'api', variable: false, name: '' }], queryParams: [] },
+      itemsPath: 'data',
+      fields: [{ name: 'Titel', path: 'name' }],
+      parameterSources: {},
+      capturedHeaders: [],
+      headerDecisions: {},
+    });
+
+    expect(config).not.toHaveProperty('method');
+    expect(config).not.toHaveProperty('body');
+  });
+
+  test('omits method for a plain GET (matches the companion default) but includes it for POST', () => {
+    const base = {
+      urlParts: { origin: 'https://example.com', pathSegments: [{ value: 'api', variable: false, name: '' }], queryParams: [] },
+      itemsPath: 'data', fields: [{ name: 'Titel', path: 'name' }], parameterSources: {}, capturedHeaders: [], headerDecisions: {},
+    };
+    expect(buildApiConfig({ ...base, method: 'GET' })).not.toHaveProperty('method');
+    expect(buildApiConfig({ ...base, method: 'POST' })).toHaveProperty('method', 'POST');
+  });
+
+  test('serializes bodyTree via serializeBodyTree, resolving a variable leaf\'s parameterId to its declared name', () => {
+    const config = buildApiConfig({
+      urlParts: { origin: 'https://example.com', pathSegments: [{ value: 'api', variable: false, name: '' }], queryParams: [] },
+      itemsPath: 'data', fields: [{ name: 'Titel', path: 'name' }],
+      parameterSources: { category: { kind: 'staticList', values: ['a'] } },
+      capturedHeaders: [], headerDecisions: {},
+      method: 'POST',
+      bodyTree: {
+        kind: 'object',
+        properties: {
+          fixed: { kind: 'literal', literalKind: 'String', value: 'x' },
+          category: { kind: 'variable', literalKind: 'String', value: 'a', parameterId: 'body:0', coerceTo: null },
+        },
+      },
+      bodyParameterNames: ['category'],
+      parameterIdToName: { 'body:0': 'category' },
+    });
+
+    expect(config.body).toEqual({
+      properties: {
+        fixed: { kind: 'String', value: 'x' },
+        category: { parameterName: 'category' },
+      },
+    });
+    expect(config.parameters).toContainEqual({ name: 'category', source: { kind: 'staticList', values: ['a'] } });
+  });
+});
+
+// ── API-Mode request-body tree pure helpers (Issue #55, Phase B4) ──────────
+
+describe('jsonValueToBodyDraft', () => {
+  test('converts a nested object/array/scalar JSON value into an all-literal draft tree', () => {
+    const draft = jsonValueToBodyDraft({
+      query: 'query { items }',
+      variables: { category: 'electronics', maxPrice: 500, active: true, note: null },
+      tags: ['a', 'b'],
+    });
+
+    expect(draft).toEqual({
+      kind: 'object',
+      properties: {
+        query: { kind: 'literal', literalKind: 'String', value: 'query { items }' },
+        variables: {
+          kind: 'object',
+          properties: {
+            category: { kind: 'literal', literalKind: 'String', value: 'electronics' },
+            maxPrice: { kind: 'literal', literalKind: 'Number', value: 500 },
+            active: { kind: 'literal', literalKind: 'Boolean', value: true },
+            note: { kind: 'literal', literalKind: 'Null', value: null },
+          },
+        },
+        tags: {
+          kind: 'array',
+          items: [
+            { kind: 'literal', literalKind: 'String', value: 'a' },
+            { kind: 'literal', literalKind: 'String', value: 'b' },
+          ],
+        },
+      },
+    });
+  });
+
+  test('a bare top-level array round-trips as an array draft', () => {
+    expect(jsonValueToBodyDraft([1, 2])).toEqual({
+      kind: 'array',
+      items: [
+        { kind: 'literal', literalKind: 'Number', value: 1 },
+        { kind: 'literal', literalKind: 'Number', value: 2 },
+      ],
+    });
+  });
+});
+
+describe('resolveBodyTreeNode / updateBodyTreeNode', () => {
+  const tree = {
+    kind: 'object',
+    properties: {
+      query: { kind: 'literal', literalKind: 'String', value: 'q' },
+      variables: {
+        kind: 'object',
+        properties: { category: { kind: 'literal', literalKind: 'String', value: 'electronics' } },
+      },
+      tags: { kind: 'array', items: [{ kind: 'literal', literalKind: 'String', value: 'a' }] },
+    },
+  };
+
+  test('resolves a nested object-key path', () => {
+    expect(resolveBodyTreeNode(tree, ['variables', 'category'])).toEqual({ kind: 'literal', literalKind: 'String', value: 'electronics' });
+  });
+
+  test('resolves a path through an array index', () => {
+    expect(resolveBodyTreeNode(tree, ['tags', 0])).toEqual({ kind: 'literal', literalKind: 'String', value: 'a' });
+  });
+
+  test('updates only the targeted node, leaving the rest of the tree untouched (immutable)', () => {
+    const updated = updateBodyTreeNode(tree, ['variables', 'category'], node => ({ ...node, value: 'books' }));
+
+    expect(resolveBodyTreeNode(updated, ['variables', 'category']).value).toBe('books');
+    expect(resolveBodyTreeNode(tree, ['variables', 'category']).value).toBe('electronics'); // original untouched
+    expect(resolveBodyTreeNode(updated, ['query'])).toBe(tree.properties.query); // untouched branch, same reference
+  });
+
+  test('updates through an array index', () => {
+    const updated = updateBodyTreeNode(tree, ['tags', 0], node => ({ ...node, value: 'b' }));
+    expect(resolveBodyTreeNode(updated, ['tags', 0]).value).toBe('b');
+  });
+});
+
+describe('bodyTreeReferencesParameterId / bodyTreeLeavesAreBound', () => {
+  test('finds a variable leaf referencing the given parameter id at any depth', () => {
+    const tree = {
+      kind: 'object',
+      properties: {
+        variables: {
+          kind: 'object',
+          properties: { category: { kind: 'variable', parameterId: 'body:0' } },
+        },
+      },
+    };
+    expect(bodyTreeReferencesParameterId(tree, 'body:0')).toBe(true);
+    expect(bodyTreeReferencesParameterId(tree, 'body:1')).toBe(false);
+  });
+
+  test('finds a variable leaf inside an array too', () => {
+    const tree = { kind: 'array', items: [{ kind: 'variable', parameterId: 'path:0' }] };
+    expect(bodyTreeReferencesParameterId(tree, 'path:0')).toBe(true);
+  });
+
+  test('bodyTreeLeavesAreBound is true when every variable leaf has a parameterId', () => {
+    const bound = { kind: 'object', properties: { a: { kind: 'variable', parameterId: 'body:0' }, b: { kind: 'literal', literalKind: 'String', value: 'x' } } };
+    expect(bodyTreeLeavesAreBound(bound)).toBe(true);
+  });
+
+  test('bodyTreeLeavesAreBound is false when a variable leaf has no parameterId yet', () => {
+    const unbound = { kind: 'object', properties: { a: { kind: 'variable', parameterId: null } } };
+    expect(bodyTreeLeavesAreBound(unbound)).toBe(false);
+  });
+});
+
+describe('serializeBodyTree', () => {
+  test('serializes object/array/literal/variable nodes into the exact ApiBodyNode wire shape', () => {
+    const tree = {
+      kind: 'object',
+      properties: {
+        query: { kind: 'literal', literalKind: 'String', value: 'query { items }' },
+        variables: {
+          kind: 'object',
+          properties: { category: { kind: 'variable', parameterId: 'body:0', coerceTo: null } },
+        },
+        tags: { kind: 'array', items: [{ kind: 'literal', literalKind: 'Number', value: 1 }] },
+      },
+    };
+
+    expect(serializeBodyTree(tree, { 'body:0': 'category' })).toEqual({
+      properties: {
+        query: { kind: 'String', value: 'query { items }' },
+        variables: { properties: { category: { parameterName: 'category' } } },
+        tags: { items: [{ kind: 'Number', value: 1 }] },
+      },
+    });
+  });
+
+  test('omits "value" entirely for a Null literal', () => {
+    expect(serializeBodyTree({ kind: 'literal', literalKind: 'Null', value: null }, {})).toEqual({ kind: 'Null' });
+  });
+
+  test('includes coerceTo only when set', () => {
+    expect(serializeBodyTree({ kind: 'variable', parameterId: 'body:0', coerceTo: 'Number' }, { 'body:0': 'page' }))
+      .toEqual({ parameterName: 'page', coerceTo: 'Number' });
+    expect(serializeBodyTree({ kind: 'variable', parameterId: 'body:0', coerceTo: null }, { 'body:0': 'page' }))
+      .toEqual({ parameterName: 'page' });
+  });
+});
+
+describe('allParameterParts', () => {
+  test('combines variable URL parts and body-only parameters', () => {
+    const draft = {
+      urlParts: {
+        origin: 'https://example.com',
+        pathSegments: [{ value: '42', variable: true, name: 'id' }],
+        queryParams: [],
+      },
+      bodyParameters: [{ id: 'body:0', name: 'category' }],
+    };
+
+    expect(allParameterParts(draft).map(p => p.id)).toEqual(['path:0', 'body:0']);
+  });
+
+  test('an undefined bodyParameters list (no body at all) is treated as empty', () => {
+    const draft = { urlParts: { origin: 'https://example.com', pathSegments: [], queryParams: [] } };
+    expect(allParameterParts(draft)).toEqual([]);
+  });
 });
 
 describe('variableUrlParts / apiConfigDraftHasAllSourcesChosen', () => {
@@ -1669,6 +1889,37 @@ describe('variableUrlParts / apiConfigDraftHasAllSourcesChosen', () => {
 
   test('a missing fields array (older/partial draft shapes) is treated as no fields, not a crash', () => {
     const draft = { urlParts, parameterSources: { 'path:1': { kind: 'staticList' }, 'query:category': { kind: 'range' } } };
+    expect(apiConfigDraftHasAllSourcesChosen(draft)).toBe(true);
+  });
+
+  // ── Body-only parameters / variable leaves (Issue #55, Phase B4) ───────
+
+  test('a body-only parameter with a chosen source satisfies "at least one parameter" even with no URL variables at all', () => {
+    const noVariableUrlParts = { origin: 'https://example.com', pathSegments: [{ value: 'graphql', variable: false, name: '' }], queryParams: [] };
+    const draft = {
+      urlParts: noVariableUrlParts,
+      bodyParameters: [{ id: 'body:0', name: 'category' }],
+      parameterSources: { 'body:0': { kind: 'staticList' } },
+      bodyTree: { kind: 'variable', parameterId: 'body:0' },
+    };
+    expect(apiConfigDraftHasAllSourcesChosen(draft)).toBe(true);
+  });
+
+  test('a variable body leaf not yet bound to any parameter blocks confirmation', () => {
+    const draft = {
+      urlParts, // has variable parts, both fully configured
+      parameterSources: { 'path:1': { kind: 'staticList' }, 'query:category': { kind: 'range' } },
+      bodyTree: { kind: 'object', properties: { x: { kind: 'variable', parameterId: null } } },
+    };
+    expect(apiConfigDraftHasAllSourcesChosen(draft)).toBe(false);
+  });
+
+  test('a fully-literal bodyTree (no variable leaves at all) never blocks confirmation on its own', () => {
+    const draft = {
+      urlParts,
+      parameterSources: { 'path:1': { kind: 'staticList' }, 'query:category': { kind: 'range' } },
+      bodyTree: { kind: 'object', properties: { x: { kind: 'literal', literalKind: 'String', value: 'fixed' } } },
+    };
     expect(apiConfigDraftHasAllSourcesChosen(draft)).toBe(true);
   });
 });
@@ -1838,6 +2089,60 @@ describe('renderApiConfigScreen (Issue #53 Phase 5)', () => {
     draft.parameterSources['path:2'] = { kind: 'staticList', valuesText: '42' };
     renderApiConfigScreen(draft, null);
     expect(document.getElementById('btn-api-config-confirm').disabled).toBe(false);
+  });
+});
+
+describe('renderBodyTree (Issue #55, Phase B4)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `<ul id="body-tree-root"></ul>`;
+  });
+
+  const draft = () => ({
+    urlParts: { origin: 'https://example.com', pathSegments: [], queryParams: [] },
+    bodyParameters: [{ id: 'body:0', name: 'category' }],
+    bodyTree: {
+      kind: 'object',
+      properties: {
+        query: { kind: 'literal', literalKind: 'String', value: 'fixed query' },
+        variables: {
+          kind: 'object',
+          properties: { category: { kind: 'variable', literalKind: 'String', value: 'electronics', parameterId: 'body:0', coerceTo: null } },
+        },
+      },
+    },
+  });
+
+  test('renders nothing when there is no body tree at all', () => {
+    renderBodyTree({ urlParts: { origin: 'x', pathSegments: [], queryParams: [] }, bodyTree: null });
+    expect(document.querySelectorAll('.body-tree-node')).toHaveLength(0);
+  });
+
+  test('a literal leaf shows its value preview and a "to variable" button, no picker', () => {
+    renderBodyTree(draft());
+    const nodes = document.querySelectorAll('.body-tree-node');
+    const queryNode = Array.from(nodes).find(li => li.querySelector('.body-tree-label').textContent.startsWith('query:'));
+    expect(queryNode.querySelector('.body-tree-label').textContent).toBe('query: "fixed query"');
+    expect(queryNode.querySelector('.btn-body-to-variable')).not.toBeNull();
+    expect(queryNode.querySelector('.body-tree-parameter-picker')).toBeNull();
+  });
+
+  test('a variable leaf shows the bound parameter selected in the picker, a coerceTo select, and a "to fixed" button', () => {
+    renderBodyTree(draft());
+    const nodes = document.querySelectorAll('.body-tree-node');
+    const categoryNode = Array.from(nodes).find(li => li.querySelector('.body-tree-label').textContent === 'category');
+    const picker = categoryNode.querySelector('.body-tree-parameter-picker');
+    expect(picker.value).toBe('body:0');
+    expect(categoryNode.querySelector('.body-tree-coerce-to').value).toBe('String');
+    expect(categoryNode.querySelector('.btn-body-to-fixed')).not.toBeNull();
+    expect(categoryNode.querySelector('.btn-body-to-variable')).toBeNull();
+  });
+
+  test('an object node has no leaf controls of its own and recurses into its children', () => {
+    renderBodyTree(draft());
+    const nodes = document.querySelectorAll('.body-tree-node');
+    const variablesNode = Array.from(nodes).find(li => li.querySelector('.body-tree-label').textContent === 'variables');
+    expect(variablesNode.querySelector(':scope > .body-tree-row .btn-body-to-variable')).toBeNull();
+    expect(variablesNode.querySelectorAll('.body-tree-children > .body-tree-node')).toHaveLength(1);
   });
 });
 
@@ -5155,5 +5460,251 @@ describe('API-Mode range format presets (bug/api-range-format follow-up)', () =>
       name: 'KW',
       source: { kind: 'range', type: 'IsoWeek', from: '2026-35', to: '2026-50', format: '{yyyy}-{ww}' },
     });
+  });
+});
+
+// ── API-Mode request-body tree end-to-end (Issue #55, Phase B4) ────────────
+// A confirmed POST candidate's own captured request body isn't attached to
+// the candidate object itself (only entryId is) — loadInitialBodyTreeForCandidate
+// looks it up in the recorded pool via the same GET_API_CAPTURE_ENTRIES round
+// trip the "recorded endpoints" panel/value-list autofill already use, so
+// chrome.runtime.sendMessage is mocked to answer that request type directly
+// (mirrors the "recorded-endpoints panel" describe block above).
+
+describe('API-Mode request-body tree end-to-end (Issue #55, Phase B4)', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  const GRAPHQL_ENTRY = {
+    id: 1,
+    url: 'https://example.com/graphql',
+    method: 'POST',
+    status: 200,
+    contentType: 'application/json',
+    requestBody: JSON.stringify({
+      query: 'query($category: String) { categoryProducts(category: $category) { items { title } } }',
+      variables: { category: 'electronics' },
+    }),
+    requestBodySkipped: false,
+  };
+
+  const GRAPHQL_CANDIDATE = {
+    entryId: 1,
+    url: 'https://example.com/graphql',
+    method: 'POST',
+    path: 'data.categoryProducts.items[0].title',
+    value: 'Smartphone X',
+    siblings: [],
+    itemsPath: 'data.categoryProducts.items',
+    valuePath: 'title',
+    treeSkeleton: [{ kind: 'group', path: 'data.categoryProducts.items' }, { kind: 'field', path: 'title' }],
+    requestHeaders: [],
+  };
+
+  // Overridable per test (see confirmGraphQlCandidate's `entry` param) —
+  // GET_API_CAPTURE_ENTRIES always answers with whatever this currently
+  // holds, so a test exercising a skipped/GET entry doesn't need its own
+  // separate mock setup.
+  let poolEntries;
+
+  beforeEach(async () => {
+    jest.resetModules();
+    poolEntries = [GRAPHQL_ENTRY];
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <button id="btn-add-field"></button>
+        <button id="btn-api-capture"></button>
+        <p id="api-capture-summary" class="hidden"></p>
+        <button id="btn-api-search" disabled></button>
+        <div id="api-candidates-panel" class="hidden">
+          <p id="api-candidates-target"></p>
+          <ul id="api-candidates-list"></ul>
+        </div>
+        <div id="api-config-panel" class="hidden">
+          <p id="api-config-summary"></p>
+          <button id="btn-api-config-discard"></button>
+        </div>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <button id="btn-cancel-selection"></button>
+      </section>
+      <section id="screen-api-config" class="hidden">
+        <ul id="api-tree-root"></ul>
+        <ul id="api-config-segments"></ul>
+        <ul id="api-config-query-params"></ul>
+        <div id="api-config-parameters"></div>
+        <div id="api-config-body-section" class="hidden">
+          <ul id="body-tree-root"></ul>
+        </div>
+        <ul id="api-config-headers"></ul>
+        <button id="btn-api-config-cancel"></button>
+        <button id="btn-api-config-confirm" disabled></button>
+      </section>
+      <div id="modal-field-name" class="hidden">
+        <input id="input-field-name" />
+        <button id="btn-field-confirm"></button>
+        <button id="btn-field-cancel"></button>
+      </div>
+      <div id="modal-api-body-parameter-new" class="hidden">
+        <input id="input-api-body-parameter-name" />
+        <button id="btn-api-body-parameter-confirm"></button>
+        <button id="btn-api-body-parameter-cancel"></button>
+      </div>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn((message) => {
+          if (message?.type === 'GET_API_CAPTURE_ENTRIES') return Promise.resolve(poolEntries);
+          return Promise.resolve(undefined);
+        }),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({ url: 'https://example.com' }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+  });
+
+  async function confirmGraphQlCandidate(candidate = GRAPHQL_CANDIDATE, entry = GRAPHQL_ENTRY) {
+    poolEntries = [entry]; // what GET_API_CAPTURE_ENTRIES resolves with, see beforeEach
+    document.getElementById('btn-api-capture').click();
+    capturedListener({ type: 'API_CAPTURE_ENTRY', entry });
+    document.getElementById('btn-api-capture').click();
+
+    document.getElementById('btn-api-search').click();
+    capturedListener({ type: 'API_CANDIDATES', target: 'Smartphone X', candidates: [candidate] });
+
+    const nameInput = document.querySelector('.api-candidate-field-name');
+    nameInput.value = 'Titel';
+    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('.api-candidate-confirm').click();
+
+    await flushMicrotasks(); // loadInitialBodyTreeForCandidate's GET_API_CAPTURE_ENTRIES round trip
+  }
+
+  function findBodyNodeByLabelPrefix(prefix) {
+    return Array.from(document.querySelectorAll('#body-tree-root .body-tree-node'))
+      .find(li => li.querySelector('.body-tree-label')?.textContent.startsWith(prefix));
+  }
+
+  test('a confirmed POST candidate auto-populates the body tree from its captured request body', async () => {
+    await confirmGraphQlCandidate();
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'GET_API_CAPTURE_ENTRIES' });
+    expect(document.getElementById('api-config-body-section').classList.contains('hidden')).toBe(false);
+
+    const labels = Array.from(document.querySelectorAll('#body-tree-root .body-tree-label')).map(l => l.textContent);
+    expect(labels).toEqual(expect.arrayContaining([expect.stringContaining('query:'), 'variables', expect.stringContaining('category:')]));
+  });
+
+  test('a GET candidate never fetches the pool for a body and the body section stays hidden', async () => {
+    const getCandidate = { ...GRAPHQL_CANDIDATE, method: 'GET' };
+    const getEntry = { ...GRAPHQL_ENTRY, method: 'GET' };
+    await confirmGraphQlCandidate(getCandidate, getEntry);
+
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith({ type: 'GET_API_CAPTURE_ENTRIES' });
+    expect(document.getElementById('api-config-body-section').classList.contains('hidden')).toBe(true);
+  });
+
+  test('a POST candidate whose captured body was skipped (e.g. FormData) leaves the body section hidden', async () => {
+    const skippedEntry = { ...GRAPHQL_ENTRY, requestBody: '', requestBodySkipped: true };
+    await confirmGraphQlCandidate(GRAPHQL_CANDIDATE, skippedEntry);
+
+    expect(document.getElementById('api-config-body-section').classList.contains('hidden')).toBe(true);
+  });
+
+  test('marking variables.category as variable, creating a new parameter, and confirming sends the exact Body/Method wire shape', async () => {
+    await confirmGraphQlCandidate();
+
+    // "query" is left untouched — only "variables.category" is marked
+    // variable. Re-queried via document (not the pre-toggle row reference)
+    // since toggling re-renders the whole body tree from scratch.
+    findBodyNodeByLabelPrefix('category').querySelector('.btn-body-to-variable').click();
+
+    const picker = document.querySelector('.body-tree-parameter-picker');
+    picker.value = '__new__';
+    picker.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(document.getElementById('modal-api-body-parameter-new').classList.contains('hidden')).toBe(false);
+    document.getElementById('input-api-body-parameter-name').value = 'category';
+    document.getElementById('btn-api-body-parameter-confirm').click();
+
+    // The new body-only parameter gets its own source card — same markup/
+    // behavior as a URL variable part's (see allParameterParts).
+    const kindRadio = document.querySelector('.api-config-source-kind-radio[value="staticList"]');
+    kindRadio.checked = true;
+    kindRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    const textarea = document.querySelector('.api-config-static-list');
+    textarea.value = 'electronics, books';
+    textarea.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(document.getElementById('btn-api-config-confirm').disabled).toBe(false);
+    document.getElementById('btn-api-config-confirm').click();
+
+    const persistedConfig = chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig;
+    expect(persistedConfig.method).toBe('POST');
+    expect(persistedConfig.parameters).toContainEqual({
+      name: 'category',
+      source: { kind: 'staticList', values: ['electronics', 'books'] },
+    });
+    expect(persistedConfig.body).toEqual({
+      properties: {
+        query: {
+          kind: 'String',
+          value: 'query($category: String) { categoryProducts(category: $category) { items { title } } }',
+        },
+        variables: { properties: { category: { parameterName: 'category' } } },
+      },
+    });
+  });
+
+  test('reverting the only reference to a body-only parameter back to fixed drops the now-orphaned parameter card', async () => {
+    await confirmGraphQlCandidate();
+    findBodyNodeByLabelPrefix('category').querySelector('.btn-body-to-variable').click();
+    const picker = document.querySelector('.body-tree-parameter-picker');
+    picker.value = '__new__';
+    picker.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('input-api-body-parameter-name').value = 'category';
+    document.getElementById('btn-api-body-parameter-confirm').click();
+    expect(document.querySelectorAll('#api-config-parameters .api-config-param-card')).toHaveLength(1);
+
+    findBodyNodeByLabelPrefix('category').querySelector('.btn-body-to-fixed').click();
+
+    expect(document.querySelectorAll('#api-config-parameters .api-config-param-card')).toHaveLength(0);
+    // Back to a plain literal leaf, value preserved.
+    const revertedRow = findBodyNodeByLabelPrefix('category');
+    expect(revertedRow.querySelector('.body-tree-label').textContent).toBe('category: "electronics"');
+  });
+
+  test('cancelling the new-parameter modal leaves the leaf unbound', async () => {
+    await confirmGraphQlCandidate();
+    findBodyNodeByLabelPrefix('category').querySelector('.btn-body-to-variable').click();
+    const picker = document.querySelector('.body-tree-parameter-picker');
+    picker.value = '__new__';
+    picker.dispatchEvent(new Event('change', { bubbles: true }));
+
+    document.getElementById('btn-api-body-parameter-cancel').click();
+
+    expect(document.getElementById('modal-api-body-parameter-new').classList.contains('hidden')).toBe(true);
+    expect(document.querySelectorAll('#api-config-parameters .api-config-param-card')).toHaveLength(0);
+    expect(document.getElementById('btn-api-config-confirm').disabled).toBe(true); // still no parameter bound anywhere
   });
 });
