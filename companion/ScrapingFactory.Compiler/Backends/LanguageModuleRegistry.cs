@@ -19,15 +19,24 @@ public sealed class LanguageModuleRegistry
     private readonly Dictionary<(string LanguageId, ScrapingEngine Engine), ICodeGenerator> _codeGenerators;
     private readonly Dictionary<string, IScriptVerifier> _scriptVerifiers;
 
-    public LanguageModuleRegistry() : this(Assembly.GetExecutingAssembly())
+    // ctorOverrides lets a caller (Program.cs, driven by appsettings.json's
+    // "Companion" section) reach into an otherwise-opaque, reflectively
+    // discovered backend's own optional constructor parameters by name —
+    // e.g. PythonScriptVerifier's (pythonExecutable, timeout) — without this
+    // registry needing any compile-time knowledge of which backends exist or
+    // which parameters they expose. A key with no matching parameter on a
+    // given type is simply ignored; a parameter with no matching key keeps
+    // its normal C# default.
+    public LanguageModuleRegistry(IReadOnlyDictionary<string, object?>? ctorOverrides = null)
+        : this(Assembly.GetExecutingAssembly(), ctorOverrides)
     {
     }
 
-    public LanguageModuleRegistry(Assembly assembly)
+    public LanguageModuleRegistry(Assembly assembly, IReadOnlyDictionary<string, object?>? ctorOverrides = null)
     {
         _codeGenerators = Discover<ICodeGenerator, (string, ScrapingEngine)>(
-            assembly, g => (g.LanguageId, g.Engine));
-        _scriptVerifiers = Discover<IScriptVerifier, string>(assembly, v => v.LanguageId);
+            assembly, g => (g.LanguageId, g.Engine), ctorOverrides);
+        _scriptVerifiers = Discover<IScriptVerifier, string>(assembly, v => v.LanguageId, ctorOverrides);
     }
 
     public ICodeGenerator ResolveCodeGenerator(string languageId, ScrapingEngine engine) =>
@@ -41,7 +50,8 @@ public sealed class LanguageModuleRegistry
             ? verifier
             : throw new InvalidOperationException($"Kein Skript-Verifier für Sprache '{languageId}' registriert.");
 
-    private static Dictionary<TKey, T> Discover<T, TKey>(Assembly assembly, Func<T, TKey> keySelector)
+    private static Dictionary<TKey, T> Discover<T, TKey>(
+        Assembly assembly, Func<T, TKey> keySelector, IReadOnlyDictionary<string, object?>? ctorOverrides)
         where T : class
         where TKey : notnull
     {
@@ -61,7 +71,12 @@ public sealed class LanguageModuleRegistry
             if (ctor is null)
                 continue;
 
-            var args = ctor.GetParameters().Select(p => p.DefaultValue).ToArray();
+            var args = ctor.GetParameters()
+                .Select(p => ctorOverrides is not null && p.Name is not null &&
+                             ctorOverrides.TryGetValue(p.Name, out var overrideValue)
+                    ? overrideValue
+                    : p.DefaultValue)
+                .ToArray();
             instances.Add((T)ctor.Invoke(args));
         }
 
