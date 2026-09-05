@@ -11,9 +11,9 @@ namespace ScrapingFactory.Compiler.IR;
 // ScrapingPlanBuilder.
 public sealed class ApiConfig
 {
-    // Only GET is supported for now (enforced in ScrapingPlanValidator) —
-    // POST/GraphQL request bodies are deliberately out of scope for this
-    // phase, see follow-up issue #55.
+    // GET or POST (enforced in ScrapingPlanValidator) — POST/GraphQL request
+    // bodies (Issue #55). DiscoverySource's own Method stays GET-only,
+    // unchanged: a discovery endpoint's own request is not in scope here.
     public string Method { get; init; } = "GET";
 
     // e.g. "https://example.com/api/items?category={category}&week={week}"
@@ -45,6 +45,15 @@ public sealed class ApiConfig
     // ScrapingConfig.Groups forces Xml for Container-Mode, since tree data
     // (unlike a flat record list) doesn't fit CSV's column model.
     public List<ApiGroup>? Groups { get; init; }
+
+    // Request-body tree (Issue #55). Requires Method == "POST" (a bodyless
+    // POST is still valid; a GET with a Body is rejected, enforced in
+    // ScrapingPlanValidator). Fully orthogonal to the flat-vs-tree response
+    // shape above — a GraphQL body is just an ordinary ApiBodyObject whose
+    // "query"/"variables" keys are handled by the same generic
+    // fixed/variable-value machinery as any other POST body, see
+    // ApiBodyNode.
+    public ApiBodyNode? Body { get; init; }
 }
 
 // Exactly one of Value/EnvironmentVariableName is set — same "one of two
