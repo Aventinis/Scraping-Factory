@@ -11,7 +11,8 @@
     "sidePanel"
   ],
   "background": {
-    "service_worker": "background/service-worker.js"
+    "service_worker": "background/service-worker.js",
+    "scripts": ["background/service-worker.js"]
   },
   "content_scripts": [
     {
@@ -30,8 +31,18 @@
   "action": {
     "default_title": "Scraping Factory"
   },
+  "sidebar_action": {
+    "default_panel": "popup/popup.html",
+    "default_title": "Scraping Factory"
+  },
   "side_panel": {
     "default_path": "popup/popup.html"
   },
-  "minimum_chrome_version": "114"
+  "minimum_chrome_version": "114",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "scraping-factory@aventinis.github.io",
+      "strict_min_version": "128.0"
+    }
+  }
 }
