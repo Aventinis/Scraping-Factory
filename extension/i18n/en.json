@@ -120,7 +120,14 @@
     "noHeadersRecorded": "No request headers recorded.",
     "headerModeValue": "Value",
     "headerModeEnv": "Environment variable",
-    "envNamePlaceholder": "ENV_NAME"
+    "envNamePlaceholder": "ENV_NAME",
+    "bodyLabel": "Request body",
+    "bodyRootLabel": "Body",
+    "bodyToVariableBtn": "→ Variable",
+    "bodyToFixedBtn": "→ Fixed",
+    "bodyPickParameterPlaceholder": "-- choose a parameter --",
+    "bodyNewParameterOption": "+ New parameter…",
+    "bodyCoerceToTitle": "Value type to use in the body (default: text)"
   },
   "group": {
     "repeating": "repeating",
@@ -174,6 +181,10 @@
       "pathLabel": "JSON path (relative to the parent scope, e.g. \"subcategories\")",
       "pathPlaceholder": "JSON path",
       "confirm": "Add"
+    },
+    "apiBodyParameterNew": {
+      "nameLabel": "Parameter name (e.g. \"category\")",
+      "namePlaceholder": "Name"
     }
   },
   "toast": {

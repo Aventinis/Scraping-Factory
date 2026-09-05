@@ -120,7 +120,14 @@
     "noHeadersRecorded": "Keine Request-Header aufgezeichnet.",
     "headerModeValue": "Wert",
     "headerModeEnv": "Umgebungsvariable",
-    "envNamePlaceholder": "ENV_NAME"
+    "envNamePlaceholder": "ENV_NAME",
+    "bodyLabel": "Request-Body",
+    "bodyRootLabel": "Body",
+    "bodyToVariableBtn": "→ Variabel",
+    "bodyToFixedBtn": "→ Fest",
+    "bodyPickParameterPlaceholder": "-- Parameter wählen --",
+    "bodyNewParameterOption": "+ Neuer Parameter…",
+    "bodyCoerceToTitle": "Werttyp für die Übernahme in den Body (Standard: Text)"
   },
   "group": {
     "repeating": "wiederholend",
@@ -174,6 +181,10 @@
       "pathLabel": "JSON-Pfad (relativ zur übergeordneten Ebene, z. B. \"subcategories\")",
       "pathPlaceholder": "JSON-Pfad",
       "confirm": "Hinzufügen"
+    },
+    "apiBodyParameterNew": {
+      "nameLabel": "Name des Parameters (z. B. \"kategorie\")",
+      "namePlaceholder": "Name"
     }
   },
   "toast": {
