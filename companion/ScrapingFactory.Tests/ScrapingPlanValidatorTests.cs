@@ -800,10 +800,11 @@ public class ScrapingPlanValidatorTests
     }
 
     [Theory]
-    [InlineData("POST")]
+    [InlineData("PUT")]
+    [InlineData("DELETE")]
     [InlineData("get")]
     [InlineData("")]
-    public void Validate_ApiConfigWithNonGetMethod_Fails(string method)
+    public void Validate_ApiConfigWithUnsupportedMethod_Fails(string method)
     {
         var api = ValidApiConfig();
         var invalid = new ApiConfig
@@ -814,6 +815,22 @@ public class ScrapingPlanValidatorTests
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
         Assert.Contains("GET", result.Error);
+    }
+
+    // POST (Issue #55) is now a supported method, unlike PUT/DELETE/etc.
+    // above — a bodyless POST (no ApiConfig.Body set) is still a fully
+    // valid config, exactly like the existing GET-based ValidApiConfig().
+    [Fact]
+    public void Validate_ApiConfigWithPostMethodAndNoBody_Succeeds()
+    {
+        var api = ValidApiConfig();
+        var valid = new ApiConfig
+        {
+            Method = "POST", UrlTemplate = api.UrlTemplate, ItemsPath = api.ItemsPath,
+            Fields = api.Fields, Parameters = api.Parameters,
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success, result.Error);
     }
 
     [Fact]
@@ -1309,4 +1326,208 @@ public class ScrapingPlanValidatorTests
     // No dedicated [Fact] for this branch specifically, for that reason —
     // there is no way to construct a finite, otherwise-valid tree that
     // would exercise it.
+
+    // ── API-Mode: request body (Issue #55) ──────────────────────────────
+
+    private static ApiConfig ApiConfigWithBody(ApiBodyNode body, List<ApiParameter>? parameters = null) => new()
+    {
+        Method = "POST",
+        UrlTemplate = "https://example.com/api/items?category={category}",
+        ItemsPath = "data.items",
+        Fields = [new ApiField { Name = "Titel", Path = "title" }],
+        Parameters = parameters ?? [new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["a"] } }],
+        Body = body,
+    };
+
+    private static ApiConfig ValidApiConfigWithPostBody() => ApiConfigWithBody(
+        new ApiBodyObject
+        {
+            Properties = new Dictionary<string, ApiBodyNode>
+            {
+                ["query"] = new ApiBodyLiteral { Kind = ApiBodyLiteralKind.String, StringValue = "fixed" },
+                ["term"] = new ApiBodyVariable { ParameterName = "search" },
+            },
+        },
+        [
+            new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["a"] } },
+            new ApiParameter { Name = "search", Source = new StaticListSource { Values = ["b"] } },
+        ]);
+
+    [Fact]
+    public void Validate_ApiConfigWithPostBodyAndFlatFields_Succeeds()
+    {
+        var result = ScrapingPlanValidator.Validate(ApiPlan(ValidApiConfigWithPostBody()));
+        Assert.True(result.Success, result.Error);
+    }
+
+    // Body (request-side) and Groups (response-side, Issue #54) are fully
+    // orthogonal — a POST body and a tree-shaped response must be able to
+    // coexist, exactly like a plain GET can already be combined with either
+    // response shape (see Validate_ValidApiConfig_Succeeds/
+    // Validate_ValidApiGroupsConfig_Succeeds above).
+    [Fact]
+    public void Validate_ApiConfigWithPostBodyAndGroupsTree_Succeeds()
+    {
+        var tree = ValidApiGroupsConfig();
+        var valid = new ApiConfig
+        {
+            Method = "POST",
+            UrlTemplate = tree.UrlTemplate,
+            Groups = tree.Groups,
+            Parameters = tree.Parameters,
+            Body = new ApiBodyObject
+            {
+                Properties = new Dictionary<string, ApiBodyNode> { ["category"] = new ApiBodyVariable { ParameterName = "category" } },
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithGetMethodAndBody_Fails()
+    {
+        var api = ValidApiConfigWithPostBody();
+        var invalid = new ApiConfig
+        {
+            Method = "GET", UrlTemplate = api.UrlTemplate, ItemsPath = api.ItemsPath,
+            Fields = api.Fields, Parameters = api.Parameters, Body = api.Body,
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Body", result.Error);
+        Assert.Contains("POST", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithBodyReferencingUnknownParameter_Fails()
+    {
+        var invalid = ApiConfigWithBody(
+            new ApiBodyObject { Properties = new Dictionary<string, ApiBodyNode> { ["term"] = new ApiBodyVariable { ParameterName = "doesNotExist" } } });
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("unbekannten Parameter", result.Error);
+        Assert.Contains("doesNotExist", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithBodyEmptyPropertyName_Fails()
+    {
+        var invalid = ApiConfigWithBody(
+            new ApiBodyObject { Properties = new Dictionary<string, ApiBodyNode> { [" "] = new ApiBodyLiteral { Kind = ApiBodyLiteralKind.String, StringValue = "x" } } });
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Property-Name", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithStringLiteralMissingStringValue_Fails()
+    {
+        var invalid = ApiConfigWithBody(
+            new ApiBodyObject { Properties = new Dictionary<string, ApiBodyNode> { ["x"] = new ApiBodyLiteral { Kind = ApiBodyLiteralKind.String } } });
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("String", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithNumberLiteralMissingNumberValue_Fails()
+    {
+        var invalid = ApiConfigWithBody(
+            new ApiBodyObject { Properties = new Dictionary<string, ApiBodyNode> { ["x"] = new ApiBodyLiteral { Kind = ApiBodyLiteralKind.Number } } });
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Number", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithBooleanLiteralMissingBoolValue_Fails()
+    {
+        var invalid = ApiConfigWithBody(
+            new ApiBodyObject { Properties = new Dictionary<string, ApiBodyNode> { ["x"] = new ApiBodyLiteral { Kind = ApiBodyLiteralKind.Boolean } } });
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Boolean", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithNullLiteralHavingAValueSet_Fails()
+    {
+        var invalid = ApiConfigWithBody(
+            new ApiBodyObject { Properties = new Dictionary<string, ApiBodyNode> { ["x"] = new ApiBodyLiteral { Kind = ApiBodyLiteralKind.Null, StringValue = "oops" } } });
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Null", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithValidLiteralOfEveryKind_Succeeds()
+    {
+        var valid = ApiConfigWithBody(new ApiBodyObject
+        {
+            Properties = new Dictionary<string, ApiBodyNode>
+            {
+                ["s"] = new ApiBodyLiteral { Kind = ApiBodyLiteralKind.String, StringValue = "x" },
+                ["n"] = new ApiBodyLiteral { Kind = ApiBodyLiteralKind.Number, NumberValue = 1 },
+                ["b"] = new ApiBodyLiteral { Kind = ApiBodyLiteralKind.Boolean, BoolValue = true },
+                ["nil"] = new ApiBodyLiteral { Kind = ApiBodyLiteralKind.Null },
+            },
+        });
+        var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success, result.Error);
+    }
+
+    // A parameter referenced only from the body — never from the
+    // UrlTemplate at all — must not be flagged as "unused": the unused-
+    // parameter check (originally UrlTemplate-only) now also looks at the
+    // body tree, see ValidateApiConfig.
+    [Fact]
+    public void Validate_ApiConfigWithParameterOnlyReferencedByBody_Succeeds()
+    {
+        var valid = new ApiConfig
+        {
+            Method = "POST",
+            UrlTemplate = "https://example.com/api/search",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters = [new ApiParameter { Name = "search", Source = new StaticListSource { Values = ["a"] } }],
+            Body = new ApiBodyObject { Properties = new Dictionary<string, ApiBodyNode> { ["term"] = new ApiBodyVariable { ParameterName = "search" } } },
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success, result.Error);
+    }
+
+    // Concretizes the case that actually motivated a typed body tree (see
+    // ApiBodyNode's doc comment): a GraphQL body is just an ordinary
+    // ApiBodyObject with a fixed "query" string and a nested "variables"
+    // object, requiring no dedicated GraphQL concept anywhere.
+    [Fact]
+    public void Validate_ApiConfigWithGraphQlShapedBody_Succeeds()
+    {
+        var valid = new ApiConfig
+        {
+            Method = "POST",
+            UrlTemplate = "https://example.com/graphql",
+            ItemsPath = "data.categoryProducts.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters = [new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["electronics"] } }],
+            Body = new ApiBodyObject
+            {
+                Properties = new Dictionary<string, ApiBodyNode>
+                {
+                    ["query"] = new ApiBodyLiteral
+                    {
+                        Kind = ApiBodyLiteralKind.String,
+                        StringValue = "query($category: String) { categoryProducts(category: $category) { items { title } } }",
+                    },
+                    ["variables"] = new ApiBodyObject
+                    {
+                        Properties = new Dictionary<string, ApiBodyNode> { ["category"] = new ApiBodyVariable { ParameterName = "category" } },
+                    },
+                },
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success, result.Error);
+    }
 }
