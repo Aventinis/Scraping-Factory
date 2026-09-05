@@ -24,7 +24,12 @@
   },
   "error": {
     "title": "Companion App nicht erreichbar",
-    "hint": "Starte ScrapingFactory.Companion und versuche es erneut."
+    "hint": "Starte ScrapingFactory.Companion und versuche es erneut.",
+    "currentUrl": "Versuchte Adresse: {url}",
+    "customUrlLabel": "Läuft die Companion App unter einer anderen Adresse?",
+    "customUrlPlaceholder": "z. B. http://localhost:5050",
+    "useCustomUrl": "Adresse verwenden",
+    "resetCustomUrl": "Standardadresse wiederherstellen"
   },
   "idle": {
     "urlLabel": "URL",
@@ -193,7 +198,8 @@
     "generationError": "Fehler: {message}",
     "selectionUnavailable": "Element-Auswahl auf dieser Seite nicht möglich.",
     "previewUnavailable": "Vorschau auf dieser Seite nicht möglich.",
-    "captureUnavailable": "Netzwerk-Aufzeichnung auf dieser Seite nicht möglich."
+    "captureUnavailable": "Netzwerk-Aufzeichnung auf dieser Seite nicht möglich.",
+    "invalidCompanionUrl": "Ungültige Adresse — bitte mit http:// oder https:// angeben."
   },
   "frame": {
     "badge": "iframe",

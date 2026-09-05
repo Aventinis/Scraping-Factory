@@ -38,6 +38,14 @@
     #screen-error { text-align: center; padding: 24px 16px; }
     .error-icon  { font-size: 32px; margin-bottom: 8px; }
     .error-hint  { color: #6b7280; font-size: 13px; margin: 6px 0 16px; }
+    .error-current-url { color: #9ca3af; font-size: 11px; font-family: monospace; margin: -8px 0 16px; word-break: break-all; }
+    .companion-url-override { text-align: left; margin-top: 20px; padding-top: 16px; border-top: 1px solid #e5e7eb; }
+    .companion-url-override label { display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px; }
+    .companion-url-override input[type="text"] {
+      width: 100%; box-sizing: border-box; border: 1px solid #d1d5db; border-radius: 6px;
+      padding: 5px 8px; font-size: 12px; font-family: inherit; outline: none; margin-bottom: 8px;
+    }
+    .companion-url-override input[type="text"]:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.2); }
 
     /* URL row */
     .url-row     { margin-bottom: 14px; }
@@ -327,9 +335,18 @@
     <p class="error-icon">⚠</p>
     <p data-i18n="error.title"></p>
     <p class="error-hint" data-i18n="error.hint"></p>
+    <p id="error-current-url" class="error-current-url"></p>
     <div class="actions">
       <button id="btn-retry" class="btn-primary" data-i18n="common.retry"></button>
       <button id="btn-report-bug-error" class="btn-secondary" data-i18n="common.reportBug"></button>
+    </div>
+    <div class="companion-url-override">
+      <label for="input-companion-url" data-i18n="error.customUrlLabel"></label>
+      <input type="text" id="input-companion-url" data-i18n-placeholder="error.customUrlPlaceholder" autocomplete="off" />
+      <div class="actions">
+        <button id="btn-use-companion-url" class="btn-secondary" data-i18n="error.useCustomUrl"></button>
+        <button id="btn-reset-companion-url" class="btn-secondary" data-i18n="error.resetCustomUrl"></button>
+      </div>
     </div>
   </section>
 
@@ -631,6 +648,7 @@
   </div>
 
   <script src="../shared/logger.js"></script>
+  <script src="../shared/companion-config.js"></script>
   <script src="../i18n/i18n.js"></script>
   <script src="popup.js"></script>
 </body>

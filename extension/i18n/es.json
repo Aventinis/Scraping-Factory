@@ -24,7 +24,12 @@
   },
   "error": {
     "title": "No se puede conectar con la app Companion",
-    "hint": "Inicia ScrapingFactory.Companion y vuelve a intentarlo."
+    "hint": "Inicia ScrapingFactory.Companion y vuelve a intentarlo.",
+    "currentUrl": "Dirección probada: {url}",
+    "customUrlLabel": "¿La app Companion se ejecuta en otra dirección?",
+    "customUrlPlaceholder": "p. ej. http://localhost:5050",
+    "useCustomUrl": "Usar esta dirección",
+    "resetCustomUrl": "Restablecer dirección predeterminada"
   },
   "idle": {
     "urlLabel": "URL",
@@ -193,7 +198,8 @@
     "generationError": "Error: {message}",
     "selectionUnavailable": "No es posible seleccionar elementos en esta página.",
     "previewUnavailable": "No es posible la vista previa en esta página.",
-    "captureUnavailable": "No es posible grabar red en esta página."
+    "captureUnavailable": "No es posible grabar red en esta página.",
+    "invalidCompanionUrl": "Dirección no válida — incluye http:// o https://."
   },
   "frame": {
     "badge": "iframe",
