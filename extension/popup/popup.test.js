@@ -2249,7 +2249,7 @@ describe('SELECTION_UNAVAILABLE handling', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   };
 
   beforeEach(async () => {
@@ -2309,7 +2309,7 @@ describe('DOM tree loading timeout', () => {
   // resolved) before settling on COMPANION_ERROR — flush those microtasks
   // with real timers before switching to fake ones for the timeout itself.
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   };
 
   beforeEach(async () => {
@@ -2500,7 +2500,7 @@ describe('buildVerificationErrorMessage', () => {
 
 describe('generate() surfaces companion verification failures', () => {
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   };
 
   beforeEach(async () => {
@@ -2576,7 +2576,7 @@ describe('generate() surfaces companion verification failures', () => {
 // prompted this).
 describe('generate() surfaces a 400 config rejection without inviting a bug report', () => {
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   };
 
   beforeEach(async () => {
@@ -2651,7 +2651,7 @@ describe('Container-Mode integration', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   };
 
   beforeEach(async () => {
@@ -2885,7 +2885,7 @@ describe('Engine + browser actions integration', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   };
 
   beforeEach(async () => {
@@ -3238,7 +3238,7 @@ describe('downloadConfigExport (btn-export-config)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   };
 
   beforeEach(async () => {
@@ -3357,7 +3357,7 @@ describe('downloadConfigExport (btn-export-config)', () => {
 
 describe('output settings (script/output filename)', () => {
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   };
 
   beforeEach(async () => {
@@ -3511,7 +3511,7 @@ describe('reportBug end-to-end via the COMPANION_ERROR screen button', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   };
 
   beforeEach(async () => {
@@ -3560,11 +3560,121 @@ describe('reportBug end-to-end via the COMPANION_ERROR screen button', () => {
   });
 });
 
+describe('COMPANION_ERROR screen: manual companion URL override', () => {
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  let storedOverride;
+  let storageSet;
+  let storageRemove;
+
+  beforeEach(async () => {
+    jest.resetModules();
+    storedOverride = {};
+
+    document.body.innerHTML = `
+      <section id="screen-error" class="hidden">
+        <p id="error-current-url"></p>
+        <button id="btn-retry"></button>
+        <div class="companion-url-override">
+          <input type="text" id="input-companion-url" />
+          <button id="btn-use-companion-url"></button>
+          <button id="btn-reset-companion-url"></button>
+        </div>
+      </section>
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+      </section>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+      </div>
+    `;
+
+    storageSet = jest.fn(async (values) => { storedOverride = { ...storedOverride, ...values }; });
+    storageRemove = jest.fn(async () => { storedOverride = {}; });
+
+    global.chrome = {
+      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({}),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+        local: {
+          get: jest.fn(async () => storedOverride),
+          set: storageSet,
+          remove: storageRemove,
+        },
+      },
+    };
+    // First call (init()'s own health check) always fails, landing on
+    // COMPANION_ERROR regardless of any stored override — the flow under
+    // test starts from there.
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 0 });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.COMPANION_ERROR
+  });
+
+  afterEach(() => {
+    delete global.chrome;
+    delete global.fetch;
+  });
+
+  test('shows the address the health check just tried', () => {
+    expect(document.getElementById('error-current-url').textContent).toContain('http://localhost:5000');
+  });
+
+  test('an invalid address is rejected with a toast and does not retry', () => {
+    document.getElementById('input-companion-url').value = 'not-a-url';
+    document.getElementById('btn-use-companion-url').click();
+
+    expect(document.getElementById('error-toast').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('error-toast-message').textContent).toContain('Ungültige Adresse');
+    expect(storageSet).not.toHaveBeenCalled();
+  });
+
+  test('a valid custom address is persisted and used for the retry health check', async () => {
+    global.fetch.mockResolvedValueOnce({ ok: true }); // the retry against the new address succeeds
+    document.getElementById('input-companion-url').value = 'http://localhost:5050/';
+    document.getElementById('btn-use-companion-url').click();
+    await flushMicrotasks();
+
+    expect(storageSet).toHaveBeenCalledWith({ companionUrlOverride: 'http://localhost:5050' });
+    expect(global.fetch).toHaveBeenLastCalledWith('http://localhost:5050/health');
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
+  });
+
+  test('a persisted override is reused on the next health check without re-entering it', async () => {
+    storedOverride = { companionUrlOverride: 'http://localhost:5050' };
+    global.fetch.mockResolvedValueOnce({ ok: true });
+
+    document.getElementById('btn-retry').click();
+    await flushMicrotasks();
+
+    expect(global.fetch).toHaveBeenLastCalledWith('http://localhost:5050/health');
+  });
+
+  test('resetting clears the stored override and retries against the default address', async () => {
+    storedOverride = { companionUrlOverride: 'http://localhost:5050' };
+    global.fetch.mockResolvedValueOnce({ ok: false, status: 0 });
+
+    document.getElementById('btn-reset-companion-url').click();
+    await flushMicrotasks();
+
+    expect(storageRemove).toHaveBeenCalledWith('companionUrlOverride');
+    expect(global.fetch).toHaveBeenLastCalledWith('http://localhost:5000/health');
+  });
+});
+
 describe('Preview toggle (btn-preview)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   };
 
   beforeEach(async () => {
@@ -3718,7 +3828,7 @@ describe('Preview toggle (btn-preview)', () => {
 
 describe('robots.txt check (btn-check-robots)', () => {
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   };
 
   beforeEach(async () => {
@@ -3842,7 +3952,7 @@ describe('Language selector (lang-select)', () => {
   // usual 5 keeps this reliably past STATES.IDLE without depending on
   // exact tick counts.
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    for (let i = 0; i < 15; i++) await Promise.resolve();
   };
 
   function baseHtml() {
@@ -3998,7 +4108,7 @@ describe('Network recording toggle (btn-api-capture)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   };
 
   beforeEach(async () => {
@@ -4137,7 +4247,7 @@ describe('API-mode candidate search (btn-api-search, Issue #53 Phase 4)', () => 
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   };
 
   beforeEach(async () => {
@@ -4261,7 +4371,7 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   };
 
   beforeEach(async () => {
@@ -4649,7 +4759,7 @@ describe('API-tree wiring end-to-end (Issue #54, Phase A5)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   };
 
   beforeEach(async () => {
@@ -4933,7 +5043,7 @@ describe('recorded-endpoints panel and pool-derived value-list autofill', () => 
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   };
 
   beforeEach(async () => {
@@ -5139,7 +5249,7 @@ describe('recorded-endpoints panel and pool-derived value-list autofill', () => 
 
 describe('API-Mode third mode integration (Issue #53 Phase 6)', () => {
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   };
 
   const seededApiConfig = {
@@ -5281,7 +5391,7 @@ describe('API-Mode range format presets (bug/api-range-format follow-up)', () =>
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   };
 
   beforeEach(async () => {
@@ -5479,7 +5589,7 @@ describe('API-Mode request-body tree end-to-end (Issue #55, Phase B4)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
   };
 
   const GRAPHQL_ENTRY = {
