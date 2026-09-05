@@ -46,6 +46,7 @@
     "apiEntriesShowBtn": "Aufgezeichnete Anfragen anzeigen ({count})",
     "apiEntriesHideBtn": "Aufgezeichnete Anfragen ausblenden",
     "apiEntriesEmpty": "Keine aufgezeichneten Anfragen.",
+    "apiEntriesBodyNotCaptured": "[nicht erfasst]",
     "apiConfigSummary": "API-Konfiguration bereit: {fields} Feld(er), {parameters} Parameter{headers}.",
     "apiConfigSummaryHeaders": ", {count} Header",
     "previewShowBtn": "Vorschau anzeigen",
