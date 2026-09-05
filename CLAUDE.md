@@ -85,9 +85,13 @@ language-modules/
 # Build the .NET solution
 dotnet build companion/ScrapingFactory.sln
 
-# Load the extension (Chrome/Edge)
+# Load the extension (Chrome/Edge/Opera)
 # Extension management → "Load unpacked" → extension/
 ```
+
+`extension/manifest.json` declares both Chrome/Edge's `side_panel`/`sidePanel` API and the older `sidebar_action`/`sidebarAction` manifest key that Opera (and Firefox) use instead — Opera has no `chrome.sidePanel` API at all, and without `sidebar_action` the toolbar icon did nothing there (see git history, `fix(opera): add sidebar_action ...`). `chrome.sidePanel?.setPanelBehavior(...)` in `service-worker.js` is guarded with optional chaining and is a no-op under Opera; Opera's sidebar opens automatically off the manifest key instead, no JS call needed. Firefox was evaluated as a further target (see closed PR #120) but abandoned — its content-script injection and `"world": "MAIN"` network recorder (API mode) didn't work as expected there, unlike Opera, which is a genuine Chromium fork and needed only the manifest key above.
+
+**Known issue (Chrome/Chromium on Linux):** under tiling Wayland compositors (observed on Hyprland, not fixed by updating the compositor), native `<select>` dropdowns in the side panel can render mispositioned, off-screen — this looks like an upstream Chromium/Ozone-Wayland popup-positioning quirk, not a bug in Scraping Factory. It wasn't reproducible in Opera on the same setup (possibly different Ozone/XWayland defaults; not confirmed), which makes Opera a working alternative for affected users that needs no extra setup beyond loading the same unpacked extension.
 
 ## Architecture Decisions
 
