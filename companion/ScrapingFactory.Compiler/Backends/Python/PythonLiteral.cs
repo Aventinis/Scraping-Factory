@@ -22,4 +22,11 @@ internal static class PythonLiteral
     // FramePath (Issue #42, Phase 3: GroupNode/DataFieldNode.FramePath).
     public static string StrList(IEnumerable<string> values) =>
         "[" + string.Join(", ", values.Select(Str)) + "]";
+
+    // An unquoted Python numeric literal (ApiBodyLiteral.NumberValue, Issue
+    // #55) — InvariantCulture so a whole value renders as e.g. "42", not a
+    // locale-dependent "42,0"; .NET's double.ToString() already picks the
+    // shortest round-trippable form (42.0 -> "42", 3.14 -> "3.14"), so no
+    // extra formatting is needed to avoid embedding a stray ".0".
+    public static string Num(double value) => value.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }
