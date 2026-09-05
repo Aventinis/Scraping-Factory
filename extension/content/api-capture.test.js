@@ -147,6 +147,75 @@ describe('buildEntry', () => {
     const entry = capture.buildEntry('https://example.com/a', 'GET', 200, 'application/json', '{}');
     expect(entry.bodySkipped).toBe(false);
   });
+
+  test('carries a captured request body through, truncating it the same way as the response body', () => {
+    const entry = capture.buildEntry('https://example.com/a', 'POST', 200, 'application/json', '{}', false, [], '{"x":1}', false);
+    expect(entry.requestBody).toBe('{"x":1}');
+    expect(entry.requestBodyTruncated).toBe(false);
+    expect(entry.requestBodySkipped).toBe(false);
+
+    const longBody = 'x'.repeat(capture.MAX_BODY_CHARS + 1);
+    const truncated = capture.buildEntry('https://example.com/a', 'POST', 200, 'application/json', '{}', false, [], longBody, false);
+    expect(truncated.requestBody).toHaveLength(capture.MAX_BODY_CHARS);
+    expect(truncated.requestBodyTruncated).toBe(true);
+  });
+
+  test('marks a skipped request body without keeping the passed-in text', () => {
+    const entry = capture.buildEntry('https://example.com/a', 'POST', 200, 'application/json', '{}', false, [], 'ignored', true);
+    expect(entry.requestBodySkipped).toBe(true);
+    expect(entry.requestBody).toBe('');
+  });
+
+  test('defaults request-body fields when none are given (e.g. a GET entry)', () => {
+    const entry = capture.buildEntry('https://example.com/a', 'GET', 200, 'application/json', '{}');
+    expect(entry.requestBody).toBe('');
+    expect(entry.requestBodyTruncated).toBe(false);
+    expect(entry.requestBodySkipped).toBe(false);
+  });
+});
+
+describe('classifyRequestBody (Issue #55 prep)', () => {
+  test('captures a string body as-is', () => {
+    expect(capture.classifyRequestBody('{"category":"electronics"}')).toEqual({ text: '{"category":"electronics"}', skipped: false });
+  });
+
+  test('treats a missing body as empty, not skipped', () => {
+    expect(capture.classifyRequestBody(null)).toEqual({ text: '', skipped: false });
+    expect(capture.classifyRequestBody(undefined)).toEqual({ text: '', skipped: false });
+  });
+
+  test('flags a non-string body (FormData) as not-capturable', () => {
+    const formData = new FormData();
+    formData.append('category', 'electronics');
+    expect(capture.classifyRequestBody(formData)).toEqual({ text: '', skipped: true });
+  });
+});
+
+describe('readFetchRequestBody (Issue #55 prep)', () => {
+  test('prefers init.body over a Request object body when both are given', async () => {
+    const request = { clone: () => ({ text: () => Promise.resolve('from-request') }) };
+    await expect(capture.readFetchRequestBody('{"a":1}', request)).resolves.toEqual({ text: '{"a":1}', skipped: false });
+  });
+
+  test('flags a non-string init.body (FormData) without falling back to the Request body', async () => {
+    const formData = new FormData();
+    const request = { clone: () => ({ text: () => Promise.resolve('from-request') }) };
+    await expect(capture.readFetchRequestBody(formData, request)).resolves.toEqual({ text: '', skipped: true });
+  });
+
+  test('reads a Request object body via clone().text() when init.body is absent', async () => {
+    const request = { clone: () => ({ text: () => Promise.resolve('{"category":"electronics"}') }) };
+    await expect(capture.readFetchRequestBody(undefined, request)).resolves.toEqual({ text: '{"category":"electronics"}', skipped: false });
+  });
+
+  test('resolves to an empty, non-skipped body when neither init.body nor a Request is available', async () => {
+    await expect(capture.readFetchRequestBody(undefined, null)).resolves.toEqual({ text: '', skipped: false });
+  });
+
+  test('falls back to skipped when the Request body cannot be read', async () => {
+    const request = { clone: () => ({ text: () => Promise.reject(new Error('unreadable')) }) };
+    await expect(capture.readFetchRequestBody(undefined, request)).resolves.toEqual({ text: '', skipped: true });
+  });
 });
 
 describe('recordEntry (buffering + cap)', () => {
