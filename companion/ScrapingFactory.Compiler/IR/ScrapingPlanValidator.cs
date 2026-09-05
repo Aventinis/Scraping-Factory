@@ -369,9 +369,12 @@ public static class ScrapingPlanValidator
                 return "Api-Konfiguration (Groups) muss mindestens ein Feld enthalten.";
         }
 
-        if (api.Parameters.Count == 0)
-            return "Api-Konfiguration muss mindestens einen Parameter enthalten.";
-
+        // Zero parameters is a valid, fully static endpoint (every URL part
+        // fixed, no enumeration) — the checks below (duplicate names,
+        // UrlTemplate placeholder matching, ...) already degrade correctly
+        // to no-ops on an empty list, and the generated script's
+        // itertools.product(*value_lists) over zero lists yields exactly one
+        // (parameterless) call, so no code-generation change was needed.
         foreach (var parameter in api.Parameters)
         {
             if (string.IsNullOrWhiteSpace(parameter.Name))
