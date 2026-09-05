@@ -1672,7 +1672,7 @@ describe('buildApiConfig', () => {
 
     expect(config.body).toEqual({
       properties: {
-        fixed: { kind: 'String', value: 'x' },
+        fixed: { kind: 'String', stringValue: 'x' },
         category: { parameterName: 'category' },
       },
     });
@@ -1807,14 +1807,18 @@ describe('serializeBodyTree', () => {
 
     expect(serializeBodyTree(tree, { 'body:0': 'category' })).toEqual({
       properties: {
-        query: { kind: 'String', value: 'query { items }' },
+        query: { kind: 'String', stringValue: 'query { items }' },
         variables: { properties: { category: { parameterName: 'category' } } },
-        tags: { items: [{ kind: 'Number', value: 1 }] },
+        tags: { items: [{ kind: 'Number', numberValue: 1 }] },
       },
     });
   });
 
-  test('omits "value" entirely for a Null literal', () => {
+  test('a Boolean literal serializes to boolValue', () => {
+    expect(serializeBodyTree({ kind: 'literal', literalKind: 'Boolean', value: true }, {})).toEqual({ kind: 'Boolean', boolValue: true });
+  });
+
+  test('omits any value property entirely for a Null literal', () => {
     expect(serializeBodyTree({ kind: 'literal', literalKind: 'Null', value: null }, {})).toEqual({ kind: 'Null' });
   });
 
@@ -5669,7 +5673,7 @@ describe('API-Mode request-body tree end-to-end (Issue #55, Phase B4)', () => {
       properties: {
         query: {
           kind: 'String',
-          value: 'query($category: String) { categoryProducts(category: $category) { items { title } } }',
+          stringValue: 'query($category: String) { categoryProducts(category: $category) { items { title } } }',
         },
         variables: { properties: { category: { parameterName: 'category' } } },
       },
