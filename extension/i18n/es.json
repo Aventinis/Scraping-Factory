@@ -120,7 +120,14 @@
     "noHeadersRecorded": "No se registraron cabeceras de solicitud.",
     "headerModeValue": "Valor",
     "headerModeEnv": "Variable de entorno",
-    "envNamePlaceholder": "ENV_NAME"
+    "envNamePlaceholder": "ENV_NAME",
+    "bodyLabel": "Cuerpo de la solicitud",
+    "bodyRootLabel": "Cuerpo",
+    "bodyToVariableBtn": "→ Variable",
+    "bodyToFixedBtn": "→ Fijo",
+    "bodyPickParameterPlaceholder": "-- elegir un parámetro --",
+    "bodyNewParameterOption": "+ Nuevo parámetro…",
+    "bodyCoerceToTitle": "Tipo de valor para usar en el cuerpo (por defecto: texto)"
   },
   "group": {
     "repeating": "repetitivo",
@@ -174,6 +181,10 @@
       "pathLabel": "Ruta JSON (relativa al ámbito superior, p. ej. \"subcategories\")",
       "pathPlaceholder": "Ruta JSON",
       "confirm": "Añadir"
+    },
+    "apiBodyParameterNew": {
+      "nameLabel": "Nombre del parámetro (p. ej. \"categoria\")",
+      "namePlaceholder": "Nombre"
     }
   },
   "toast": {

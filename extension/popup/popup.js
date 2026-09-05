@@ -90,6 +90,12 @@ let _state = {
   // confirmApiGroupModal), so there's no risk of losing it to a popup close.
   apiGroupModalOpen:  false,
   pendingApiTreeParentPath: null,
+  // modal-api-body-parameter-new visibility, and which body-tree path (see
+  // updateBodyTreeNode) its typed parameter name gets bound to — same
+  // "not persisted, no content-script round trip involved" reasoning as
+  // apiGroupModalOpen above (Issue #55, Phase B4).
+  bodyParameterModalOpen: false,
+  pendingBodyVariablePath: null,
   apiConfigDraft:     null, // set once a candidate is confirmed as the primary field — the in-progress ApiConfig being built, see buildApiConfig/confirmApiFieldCandidate
   apiConfig:          null, // the "Apply"-confirmed ApiConfig wire object — Phase 6 will read this; persisted like fields/groups
   robotsTxtChecking: false, // not persisted, always off on popup reopen (like previewActive/apiCaptureActive)
@@ -528,17 +534,34 @@ function buildApiHeaders(capturedHeaders, decisions) {
 // confirmApiFieldCandidate), but this branch is kept so the flat wire shape
 // stays directly testable/constructible here too, exactly mirroring how the
 // wire format itself keeps both shapes available (IR/ApiConfig.cs).
-function buildApiConfig({ urlParts, itemsPath, fields, groups, parameterSources, capturedHeaders, headerDecisions }) {
+//
+// Issue #55, Phase B4: `method` is omitted for a plain "GET" (matches the
+// companion's own default, ApiConfig.Method) — today's callers never pass
+// anything else, so this is purely forward-looking. `bodyParameterNames`
+// are body-only parameters (declared via the "+ Neuer Parameter" picker,
+// see openBodyParameterModal) that never appear in the URL at all — the
+// wire format's flat `parameters` list has no concept of "where" a
+// parameter is used, so these are simply unioned with the URL-derived ones.
+// `parameterIdToName` is only needed to serialize `bodyTree` (see
+// serializeBodyTree) — a variable leaf's draft-only `parameterId` doesn't
+// otherwise appear anywhere in this function.
+function buildApiConfig({
+  urlParts, itemsPath, fields, groups, parameterSources, capturedHeaders, headerDecisions,
+  method, bodyTree, bodyParameterNames = [], parameterIdToName = {},
+}) {
   const urlTemplate = buildUrlTemplate(urlParts);
   const variableParts = [...urlParts.pathSegments, ...urlParts.queryParams].filter(p => p.variable);
-  const parameters = variableParts.map(p => ({ name: p.name, source: parameterSources[p.name] }));
+  const parameterNames = [...variableParts.map(p => p.name), ...bodyParameterNames];
+  const parameters = parameterNames.map(name => ({ name, source: parameterSources[name] }));
   const headers = buildApiHeaders(capturedHeaders, headerDecisions);
 
   return {
     urlTemplate,
+    ...(method && method !== 'GET' ? { method } : {}),
     ...(groups ? { groups: serializeApiTree(groups) } : { itemsPath, fields }),
     parameters,
     ...(headers.length > 0 ? { headers } : {}),
+    ...(bodyTree ? { body: serializeBodyTree(bodyTree, parameterIdToName) } : {}),
   };
 }
 
@@ -625,6 +648,123 @@ function updateApiTreeNode(groups, path, updater) {
 // so can still be blanked out.
 function apiTreeNodesHaveNonBlankNames(nodes) {
   return nodes.every(node => !!node.name?.trim() && (node.kind !== 'group' || apiTreeNodesHaveNonBlankNames(node.children)));
+}
+
+// ── API-Mode request body (ApiBodyNode, Issue #55 Phase B4) ─────────────────
+// The write-side mirror of the tree above: describes what JSON to WRITE into
+// the outgoing request body rather than where to read one FROM a response.
+// Unlike the response tree, the shape is never edited structurally by the
+// user — it's derived once from the one already-captured request body
+// (jsonValueToBodyDraft) and all further editing just toggles a leaf between
+// 'literal' (fixed) and 'variable' (bound to one of ApiConfig.Parameters by
+// id, see allParameterParts) — so there's no insert/remove/scoped-search
+// machinery to mirror here, only a generic recursive walk/update pair.
+//
+// A draft node is one of:
+//   { kind: 'object', properties: { [key]: node, ... } }
+//   { kind: 'array', items: [node, ...] }
+//   { kind: 'literal', literalKind: 'String'|'Number'|'Boolean'|'Null', value }
+//   { kind: 'variable', literalKind, value, parameterId, coerceTo }
+// A 'variable' node keeps its own literalKind/value around unused so
+// toggling back to 'literal' (see toggleBodyLeafToFixed) restores the
+// original captured value exactly, instead of losing it.
+
+// Converts one already-JSON.parsed request body into an all-literal draft
+// tree — object/array recurse, anything else becomes a 'literal' leaf typed
+// by JS's own typeof (JSON has no separate "integer"/"float", so every
+// number becomes ApiBodyLiteralKind.Number regardless of ApiBodyLiteral's
+// own C#-side double NumberValue).
+function jsonValueToBodyDraft(value) {
+  if (Array.isArray(value)) return { kind: 'array', items: value.map(jsonValueToBodyDraft) };
+  if (value !== null && typeof value === 'object') {
+    const properties = {};
+    for (const [key, child] of Object.entries(value)) properties[key] = jsonValueToBodyDraft(child);
+    return { kind: 'object', properties };
+  }
+  if (value === null) return { kind: 'literal', literalKind: 'Null', value: null };
+  if (typeof value === 'number') return { kind: 'literal', literalKind: 'Number', value };
+  if (typeof value === 'boolean') return { kind: 'literal', literalKind: 'Boolean', value };
+  return { kind: 'literal', literalKind: 'String', value: String(value) };
+}
+
+// path steps are either a string (an object property key) or a number (an
+// array index) — object/array are never mixed at the same tree level, so
+// this is an unambiguous discriminator for which branch to take.
+function resolveBodyTreeNode(node, path) {
+  let current = node;
+  for (const step of path) current = typeof step === 'number' ? current.items[step] : current.properties[step];
+  return current;
+}
+
+// Immutable "map the one node at `path`" — the body tree's only edit
+// primitive (see this section's own doc comment on why there's no
+// insert/remove here, unlike the response tree's updateApiTreeNode).
+function updateBodyTreeNode(node, path, updater) {
+  if (path.length === 0) return updater(node);
+  const [step, ...rest] = path;
+  if (typeof step === 'number') {
+    return { ...node, items: node.items.map((item, i) => (i === step ? updateBodyTreeNode(item, rest, updater) : item)) };
+  }
+  return { ...node, properties: { ...node.properties, [step]: updateBodyTreeNode(node.properties[step], rest, updater) } };
+}
+
+// Whether any 'variable' leaf anywhere in the tree is still bound to
+// `parameterId` — used to decide whether reverting one such leaf back to
+// 'literal' also orphans the body-only parameter it referenced (see
+// toggleBodyLeafToFixed).
+function bodyTreeReferencesParameterId(node, parameterId) {
+  if (node.kind === 'object') return Object.values(node.properties).some(child => bodyTreeReferencesParameterId(child, parameterId));
+  if (node.kind === 'array') return node.items.some(child => bodyTreeReferencesParameterId(child, parameterId));
+  return node.kind === 'variable' && node.parameterId === parameterId;
+}
+
+// Gates "Übernehmen" alongside apiConfigDraftHasAllSourcesChosen's own
+// per-parameter check: a leaf toggled to 'variable' but not yet bound to a
+// parameter (parameterId still null, see toggleBodyLeafToVariable) must
+// block confirmation the same way an unchosen source kind already does.
+function bodyTreeLeavesAreBound(node) {
+  if (node.kind === 'object') return Object.values(node.properties).every(bodyTreeLeavesAreBound);
+  if (node.kind === 'array') return node.items.every(bodyTreeLeavesAreBound);
+  if (node.kind === 'variable') return !!node.parameterId;
+  return true; // literal
+}
+
+// Strips the popup's internal draft shape and shapes each node exactly like
+// the wire format the companion expects (IR/ApiBodyNode.cs's
+// ApiBodyObject/ApiBodyArray/ApiBodyLiteral/ApiBodyVariable, discriminated
+// structurally by ApiBodyNodeJsonConverter via presence of
+// properties/items/parameterName). `parameterIdToName` resolves a variable
+// leaf's draft-only `parameterId` to the actual declared parameter name the
+// wire format references it by — built once by the caller (confirmApiConfig)
+// from the same allParameterParts list the parameter-source cards render
+// from, since a draft-only id has no meaning outside this popup.
+function serializeBodyTree(node, parameterIdToName) {
+  if (node.kind === 'object') {
+    const properties = {};
+    for (const [key, child] of Object.entries(node.properties)) properties[key] = serializeBodyTree(child, parameterIdToName);
+    return { properties };
+  }
+  if (node.kind === 'array') {
+    return { items: node.items.map(item => serializeBodyTree(item, parameterIdToName)) };
+  }
+  if (node.kind === 'variable') {
+    return {
+      parameterName: parameterIdToName[node.parameterId],
+      ...(node.coerceTo ? { coerceTo: node.coerceTo } : {}),
+    };
+  }
+  // literal — IR/ApiBodyNode.cs's ApiBodyLiteral has three separate typed
+  // properties (StringValue/NumberValue/BoolValue), not one generic "value"
+  // like the companion's own internal Python-runtime literal shape
+  // (PythonApiConfigLiteral.RenderBody) uses — the wire format and that
+  // runtime-internal shape are two different things that happen to share a
+  // "kind" field. Null has no value property to set at all.
+  switch (node.literalKind) {
+    case 'String': return { kind: 'String', stringValue: node.value };
+    case 'Number': return { kind: 'Number', numberValue: node.value };
+    case 'Boolean': return { kind: 'Boolean', boolValue: node.value };
+    default: return { kind: 'Null' };
+  }
 }
 
 // Phase A5: JSON keys, unlike CSS selectors, already carry a meaningful name
@@ -946,6 +1086,7 @@ function render() {
   hide('modal-field-extended');
   hide('modal-container-new');
   hide('modal-api-group-new');
+  hide('modal-api-body-parameter-new');
 
   const screenKey = {
     [STATES.CHECKING_COMPANION]: 'checking',
@@ -1146,6 +1287,12 @@ function render() {
       if (nameInput) { nameInput.value = ''; nameInput.focus(); }
       const pathInput = document.getElementById('input-api-group-path');
       if (pathInput) pathInput.value = '';
+    }
+
+    if (_state.bodyParameterModalOpen) {
+      show('modal-api-body-parameter-new');
+      const nameInput = document.getElementById('input-api-body-parameter-name');
+      if (nameInput) { nameInput.value = ''; nameInput.focus(); }
     }
   }
 
@@ -1482,6 +1629,14 @@ function renderApiConfigScreen(draft, discoveryCandidates) {
   renderApiConfigUrlParts(draft.urlParts);
   renderApiConfigParameters(draft, discoveryCandidates);
   renderApiConfigHeaders(draft.capturedHeaders, draft.headerDecisions);
+  renderBodyTree(draft);
+
+  // The body section only exists for a POST candidate whose captured
+  // request body could actually be turned into a draft (see
+  // loadInitialBodyTreeForCandidate) — hidden entirely rather than shown
+  // empty for a GET config or an unparsable/bodyless POST.
+  const bodySection = document.getElementById('api-config-body-section');
+  if (bodySection) bodySection.classList.toggle('hidden', !draft.bodyTree);
 
   const confirmBtn = document.getElementById('btn-api-config-confirm');
   if (confirmBtn) confirmBtn.disabled = !apiConfigDraftHasAllSourcesChosen(draft);
@@ -1535,20 +1690,42 @@ function variableUrlParts(urlParts) {
   ].filter(p => p.variable);
 }
 
+// Every parameter-source card the API_CONFIG screen shows, regardless of
+// where it's actually used from: a variable URL part (variableUrlParts) or
+// a body-only parameter declared purely to be referenced from the request
+// body (draft.bodyParameters, Issue #55 Phase B4 — see
+// openBodyParameterModal/confirmBodyParameterModal). Both shapes carry
+// `{id, name}`, which is all renderApiConfigParameters/
+// apiConfigDraftHasAllSourcesChosen/confirmApiConfig actually need — a
+// body-only entry needs no more than that since its "value" (unlike a URL
+// part's) was never itself part of anything else to preserve.
+function allParameterParts(draft) {
+  return [...variableUrlParts(draft.urlParts), ...(draft.bodyParameters || [])];
+}
+
 // Gates "Übernehmen" — also the single place guarding against a blank
 // field/group name reaching buildApiConfig: a name could always be blanked
 // out again on the API_CONFIG screen (renderApiTree's editable name inputs;
 // the flat list before Phase A5 had the same gap), so nothing else enforces
 // this. draft.groups (Phase A5's tree shape) takes over from the older
 // draft.fields shape whenever present — see apiTreeNodesHaveNonBlankNames.
+//
+// Issue #55, Phase B4: `parts` now includes body-only parameters alongside
+// URL ones (see allParameterParts) — a config whose only variability lives
+// in the request body (e.g. a fixed GraphQL URL with a variable in
+// `variables`) still needs "at least one parameter" to be satisfied, same
+// as a plain URL-only config always has. A body leaf toggled to 'variable'
+// but not yet bound to any parameter (see bodyTreeLeavesAreBound) blocks
+// confirmation the same way an unchosen source kind already does.
 function apiConfigDraftHasAllSourcesChosen(draft) {
   const namesOk = draft.groups
     ? apiTreeNodesHaveNonBlankNames(draft.groups)
     : !(draft.fields || []).some(f => !f.name?.trim());
   if (!namesOk) return false;
-  const parts = variableUrlParts(draft.urlParts);
+  const parts = allParameterParts(draft);
   if (parts.length === 0) return false; // Api-Mode's whole premise is enumerating over at least one variable part
-  return parts.every(p => !!p.name?.trim() && !!draft.parameterSources[p.id]?.kind);
+  if (!parts.every(p => !!p.name?.trim() && !!draft.parameterSources[p.id]?.kind)) return false;
+  return draft.bodyTree ? bodyTreeLeavesAreBound(draft.bodyTree) : true;
 }
 
 function renderApiConfigParameters(draft, discoveryCandidates) {
@@ -1556,7 +1733,7 @@ function renderApiConfigParameters(draft, discoveryCandidates) {
   if (!container) return;
   container.innerHTML = '';
 
-  variableUrlParts(draft.urlParts).forEach((part) => {
+  allParameterParts(draft).forEach((part) => {
     const source = draft.parameterSources[part.id];
     const safePartId = escapeHtml(part.id); // see urlPartRowHtml's doc comment — part.id can embed an untrusted query key
     const card = document.createElement('div');
@@ -1705,6 +1882,92 @@ function renderApiConfigHeaders(capturedHeaders, headerDecisions) {
         : '');
     listEl.appendChild(li);
   });
+}
+
+// ── API-Mode request-body tree editor (Issue #55, Phase B4) ─────────────────
+// Visually mirrors the response tree above (buildApiTreeNodeEl/renderApiTree)
+// but simpler: a node's own JSON key/array index is a read-only label (the
+// body's shape itself is never edited, see this section's own doc comment
+// on jsonValueToBodyDraft), and only a 'literal'/'variable' leaf gets any
+// controls at all — object/array nodes just recurse.
+
+function bodyNodeLabel(key, node) {
+  if (node.kind === 'literal') return `${key}: ${node.literalKind === 'Null' ? 'null' : JSON.stringify(node.value)}`;
+  return key;
+}
+
+function buildBodyTreeNodeEl(key, node, path, depth, availableParameters) {
+  const li = document.createElement('li');
+  li.className = 'body-tree-node';
+  li.dataset.path = JSON.stringify(path);
+
+  const row = document.createElement('div');
+  row.className = 'body-tree-row';
+  row.style.paddingLeft = `${depth * 12}px`;
+
+  const label = document.createElement('span');
+  label.className = 'body-tree-label';
+  label.textContent = bodyNodeLabel(key, node);
+  row.appendChild(label);
+
+  if (node.kind === 'literal') {
+    const toVariableBtn = document.createElement('button');
+    toVariableBtn.type = 'button';
+    toVariableBtn.className = 'btn-secondary btn-tiny btn-body-to-variable';
+    toVariableBtn.textContent = t('apiConfig.bodyToVariableBtn');
+    row.appendChild(toVariableBtn);
+  } else if (node.kind === 'variable') {
+    const picker = document.createElement('select');
+    picker.className = 'body-tree-parameter-picker';
+    picker.innerHTML =
+      `<option value="">${escapeHtml(t('apiConfig.bodyPickParameterPlaceholder'))}</option>` +
+      availableParameters.map(p =>
+        `<option value="${escapeHtml(p.id)}" ${node.parameterId === p.id ? 'selected' : ''}>${escapeHtml(p.name?.trim() ? p.name : t('apiConfig.unnamedPart'))}</option>`
+      ).join('') +
+      `<option value="__new__">${escapeHtml(t('apiConfig.bodyNewParameterOption'))}</option>`;
+    row.appendChild(picker);
+
+    const coerceSelect = document.createElement('select');
+    coerceSelect.className = 'body-tree-coerce-to';
+    coerceSelect.title = t('apiConfig.bodyCoerceToTitle');
+    coerceSelect.innerHTML = ['String', 'Number', 'Boolean']
+      .map(kind => `<option value="${kind}" ${(node.coerceTo || 'String') === kind ? 'selected' : ''}>${kind}</option>`)
+      .join('');
+    row.appendChild(coerceSelect);
+
+    const toFixedBtn = document.createElement('button');
+    toFixedBtn.type = 'button';
+    toFixedBtn.className = 'btn-secondary btn-tiny btn-body-to-fixed';
+    toFixedBtn.textContent = t('apiConfig.bodyToFixedBtn');
+    row.appendChild(toFixedBtn);
+  }
+
+  li.appendChild(row);
+
+  if (node.kind === 'object' || node.kind === 'array') {
+    const childUl = document.createElement('ul');
+    childUl.className = 'body-tree-children';
+    if (node.kind === 'object') {
+      Object.entries(node.properties).forEach(([childKey, child]) =>
+        childUl.appendChild(buildBodyTreeNodeEl(childKey, child, [...path, childKey], depth + 1, availableParameters)));
+    } else {
+      node.items.forEach((child, i) =>
+        childUl.appendChild(buildBodyTreeNodeEl(`[${i}]`, child, [...path, i], depth + 1, availableParameters)));
+    }
+    li.appendChild(childUl);
+  }
+
+  return li;
+}
+
+// draft (not just draft.bodyTree) since a parameter picker needs the full
+// allParameterParts(draft) list to populate its options.
+function renderBodyTree(draft) {
+  const root = document.getElementById('body-tree-root');
+  if (!root) return;
+  root.innerHTML = '';
+  if (!draft.bodyTree) return;
+  root.appendChild(buildBodyTreeNodeEl(t('apiConfig.bodyRootLabel'), draft.bodyTree, [], 0, allParameterParts(draft)));
 }
 
 // ── Container tree editor ────────────────────────────────────────────────────
@@ -1992,8 +2255,51 @@ function confirmApiFieldCandidate(candidate, fieldName, siblingNames) {
       capturedHeaders: candidate.requestHeaders || [],
       parameterSources: {},
       headerDecisions: {},
+      // Issue #55, Phase B4: candidate.method is already there for free
+      // (content-script.js's findApiCandidates always carried it, just
+      // unused until now) — bodyTree starts null and is filled in
+      // asynchronously below since the captured body itself isn't attached
+      // to the candidate (only entryId is).
+      method: candidate.method || 'GET',
+      bodyTree: null,
+      bodyParameters: [],
+      nextBodyParameterSeq: 0,
     },
   });
+  loadInitialBodyTreeForCandidate(candidate);
+}
+
+// Fire-and-forget follow-up (Issue #55): a POST candidate's own captured
+// request body isn't attached to the click-correlated candidate object
+// itself (only entryId is — content-script.js's findApiCandidates never
+// needed the request body before this) — so once the primary field is
+// confirmed and the API_CONFIG screen is already showing, this looks the
+// matching entry up in the raw recorded pool (fetchApiCaptureEntries, the
+// same pool "Aufgezeichnete Anfragen" and the value-list autofill already
+// use) and, if it captured a JSON-string body, turns it into the initial
+// all-literal body draft (jsonValueToBodyDraft). Runs after the screen is
+// already up rather than blocking the transition on it — a bodyless POST is
+// still a fully valid config, so an extra async round trip just to maybe
+// populate the body tree isn't worth delaying the screen transition for.
+async function loadInitialBodyTreeForCandidate(candidate) {
+  if (!candidate.method || candidate.method === 'GET' || candidate.method === 'HEAD') return;
+
+  const entries = await fetchApiCaptureEntries();
+  const entry = entries.find(e => e.id === candidate.entryId);
+  if (!entry || entry.requestBodySkipped || !entry.requestBody) return;
+
+  let parsed;
+  try {
+    parsed = JSON.parse(entry.requestBody);
+  } catch {
+    return; // not JSON — no structured draft to build, request stays bodyless
+  }
+
+  // The screen may have moved on while the round trip was in flight
+  // (cancelled, or a different candidate confirmed) — only apply if we're
+  // still looking at the same, still-bodyless draft.
+  if (_state.current !== STATES.API_CONFIG || !_state.apiConfigDraft || _state.apiConfigDraft.bodyTree) return;
+  patchApiConfigDraft({ bodyTree: jsonValueToBodyDraft(parsed) });
 }
 
 function cancelApiConfig() {
@@ -2165,22 +2471,113 @@ function setApiConfigHeaderDecision(headerName, patch) {
   patchApiConfigDraft({ headerDecisions: { ...draft.headerDecisions, [headerName]: { ...current, ...patch } } });
 }
 
+// ── API-Mode request-body wiring (Issue #55, Phase B4) ──────────────────────
+// Toggling a leaf is the only structural edit the body tree ever gets (see
+// the section's own doc comment above jsonValueToBodyDraft) — everything
+// else here is either that toggle or routing a newly-variable leaf into the
+// exact same parameter-source configuration UI a URL variable part already
+// uses (allParameterParts/renderApiConfigParameters), rather than a second,
+// body-specific source picker.
+
+function toggleBodyLeafToVariable(path) {
+  const bodyTree = updateBodyTreeNode(_state.apiConfigDraft.bodyTree, path, node => ({
+    kind: 'variable', literalKind: node.literalKind, value: node.value, parameterId: null, coerceTo: null,
+  }));
+  patchApiConfigDraft({ bodyTree });
+}
+
+// A body-only parameter (unlike a URL part, which persists regardless of
+// whether the body still references it) only exists because some variable
+// leaf pointed at it — if this was the last one, drop it along with its
+// parameterSources entry rather than leaving an orphaned parameter card
+// that would still need a configured source just to satisfy
+// apiConfigDraftHasAllSourcesChosen (and the companion's own "declared but
+// unused parameter" rejection) for nothing. A leaf bound to a URL-derived
+// id is left alone either way — that part is still a real URL segment/query
+// param regardless of whether the body also referenced it.
+function toggleBodyLeafToFixed(path) {
+  const draft = _state.apiConfigDraft;
+  const node = resolveBodyTreeNode(draft.bodyTree, path);
+  const boundId = node.parameterId;
+  const bodyTree = updateBodyTreeNode(draft.bodyTree, path, n => ({ kind: 'literal', literalKind: n.literalKind, value: n.value }));
+
+  const isOrphanedBodyParameter = boundId?.startsWith('body:') && !bodyTreeReferencesParameterId(bodyTree, boundId);
+  const bodyParameters = isOrphanedBodyParameter
+    ? (draft.bodyParameters || []).filter(p => p.id !== boundId)
+    : draft.bodyParameters;
+  const parameterSources = isOrphanedBodyParameter
+    ? Object.fromEntries(Object.entries(draft.parameterSources).filter(([id]) => id !== boundId))
+    : draft.parameterSources;
+
+  patchApiConfigDraft({ bodyTree, bodyParameters, parameterSources });
+}
+
+function setBodyLeafParameter(path, parameterId) {
+  patchApiConfigDraft({ bodyTree: updateBodyTreeNode(_state.apiConfigDraft.bodyTree, path, node => ({ ...node, parameterId: parameterId || null })) });
+}
+
+// null (not "String") is the wire-omitted default — mirrors CoerceTo's own
+// optional nullable shape on the companion side (ApiBodyVariable.CoerceTo).
+function setBodyLeafCoerceTo(path, coerceTo) {
+  patchApiConfigDraft({ bodyTree: updateBodyTreeNode(_state.apiConfigDraft.bodyTree, path, node => ({ ...node, coerceTo: coerceTo === 'String' ? null : coerceTo })) });
+}
+
+function openBodyParameterModal(path) {
+  log('API_BODY_PARAMETER_MODAL open', { path });
+  patchState({ bodyParameterModalOpen: true, pendingBodyVariablePath: path });
+}
+
+// New body-only parameter ids are a monotonic sequence (draft.
+// nextBodyParameterSeq), not derived from the current array length —
+// toggleBodyLeafToFixed can remove entries again, and reusing a shrunk
+// array's length as the next id could otherwise collide with one still
+// referenced elsewhere in the tree.
+function confirmBodyParameterModal() {
+  const name = document.getElementById('input-api-body-parameter-name')?.value.trim();
+  if (!name) return;
+
+  const draft = _state.apiConfigDraft;
+  const seq = draft.nextBodyParameterSeq || 0;
+  const id = `body:${seq}`;
+  const bodyParameters = [...(draft.bodyParameters || []), { id, name }];
+  const bodyTree = updateBodyTreeNode(draft.bodyTree, _state.pendingBodyVariablePath, node => ({ ...node, parameterId: id }));
+
+  log('API_BODY_PARAMETER_ADD', { id, name });
+  setState(STATES.API_CONFIG, {
+    apiConfigDraft: { ...draft, bodyParameters, bodyTree, nextBodyParameterSeq: seq + 1 },
+    bodyParameterModalOpen: false, pendingBodyVariablePath: null,
+  });
+}
+
+function cancelBodyParameterModal() {
+  log('API_BODY_PARAMETER_MODAL cancel');
+  patchState({ bodyParameterModalOpen: false, pendingBodyVariablePath: null });
+}
+
 // Final assembly (Issue #53 Phase 5's "Apply"): staticList/range
 // sources are only ever kept as raw UI state (valuesText / type+from+to) in
 // apiConfigDraft, never as a built wire object — built here, once, from
 // whatever's currently in state. discovery sources are already complete
 // wire objects (built earlier by confirmDiscoveryCandidate) and passed
 // through as-is.
+//
+// Issue #55, Phase B4: iterates allParameterParts (URL + body-only) instead
+// of just variableUrlParts, so a body-only parameter's source is resolved
+// into the wire-ready parameterSources map exactly like a URL one already
+// was — idToName is then the one piece serializeBodyTree needs to turn a
+// variable leaf's draft-only parameterId into the actual declared name.
 function confirmApiConfig() {
   const draft = _state.apiConfigDraft;
   const parameterSources = {};
-  variableUrlParts(draft.urlParts).forEach((part) => {
+  const idToName = {};
+  allParameterParts(draft).forEach((part) => {
     const source = draft.parameterSources[part.id];
     parameterSources[part.name] = source.kind === 'staticList'
       ? buildStaticListSource(source.valuesText)
       : source.kind === 'range'
         ? buildRangeSource(source.type, source.from, source.to, source.format)
         : source;
+    idToName[part.id] = part.name;
   });
 
   const apiConfig = buildApiConfig({
@@ -2189,6 +2586,10 @@ function confirmApiConfig() {
     parameterSources,
     capturedHeaders: draft.capturedHeaders,
     headerDecisions: draft.headerDecisions,
+    method: draft.method,
+    bodyTree: draft.bodyTree,
+    bodyParameterNames: (draft.bodyParameters || []).map(p => p.name),
+    parameterIdToName: idToName,
   });
 
   log('API_CONFIG confirm', apiConfig);
@@ -2865,6 +3266,35 @@ function wireEvents() {
     if (envName) setApiConfigHeaderDecision(envName.dataset.headerName, { envName: envName.value.trim() });
   });
 
+  // ── API-Mode request-body tree (Issue #55, Phase B4) ─────────────────────
+  document.getElementById('body-tree-root')?.addEventListener('click', (e) => {
+    const toVariableBtn = e.target.closest('.btn-body-to-variable');
+    if (toVariableBtn) {
+      toggleBodyLeafToVariable(JSON.parse(toVariableBtn.closest('.body-tree-node').dataset.path));
+      return;
+    }
+    const toFixedBtn = e.target.closest('.btn-body-to-fixed');
+    if (toFixedBtn) toggleBodyLeafToFixed(JSON.parse(toFixedBtn.closest('.body-tree-node').dataset.path));
+  });
+
+  document.getElementById('body-tree-root')?.addEventListener('change', (e) => {
+    const picker = e.target.closest('.body-tree-parameter-picker');
+    if (picker) {
+      const path = JSON.parse(picker.closest('.body-tree-node').dataset.path);
+      if (picker.value === '__new__') { openBodyParameterModal(path); return; }
+      setBodyLeafParameter(path, picker.value);
+      return;
+    }
+    const coerceTo = e.target.closest('.body-tree-coerce-to');
+    if (coerceTo) setBodyLeafCoerceTo(JSON.parse(coerceTo.closest('.body-tree-node').dataset.path), coerceTo.value);
+  });
+
+  document.getElementById('btn-api-body-parameter-confirm')?.addEventListener('click', confirmBodyParameterModal);
+  document.getElementById('input-api-body-parameter-name')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') confirmBodyParameterModal();
+  });
+  document.getElementById('btn-api-body-parameter-cancel')?.addEventListener('click', cancelBodyParameterModal);
+
   document.getElementById('btn-api-config-cancel')?.addEventListener('click', () => {
     log('BTN api-config-cancel');
     cancelApiConfig();
@@ -3325,5 +3755,10 @@ if (typeof module !== 'undefined') {
     addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
     buildVerificationValues,
     frameBadgeHtml,
+    jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
+    bodyTreeLeavesAreBound, serializeBodyTree, allParameterParts, renderBodyTree,
+    confirmApiFieldCandidate, loadInitialBodyTreeForCandidate,
+    toggleBodyLeafToVariable, toggleBodyLeafToFixed, setBodyLeafParameter, setBodyLeafCoerceTo,
+    openBodyParameterModal, confirmBodyParameterModal, cancelBodyParameterModal, confirmApiConfig,
   };
 }
