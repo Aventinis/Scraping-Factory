@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
@@ -525,5 +526,217 @@ public class PythonApiScriptVerifierTests
         Assert.True(result.Success, result.Error);
         // 1 <Produkt> + 1 <Titel> = 2, "missing" skipped
         Assert.Equal(2, result.RowCount);
+    }
+
+    // ── Request body (Issue #55) ──────────────────────────────────────────
+    // Actually spawns the generated script and inspects what LocalTestServer
+    // received server-side (HttpMethod, InputStream) — proves the real
+    // wire-level request, not just the generated source text (already
+    // covered by PythonApiCodeGeneratorTests).
+
+    [Fact]
+    public async Task PostMethod_NoBody_SendsPostRequest_Succeeds()
+    {
+        string? observedMethod = null;
+        using var server = new LocalTestServer(request =>
+        {
+            observedMethod = request.HttpMethod;
+            return new LocalTestServerResponse("""{ "items": [ { "title": "A" } ] }""", "application/json");
+        });
+
+        var api = new ApiConfig
+        {
+            Method = "POST",
+            UrlTemplate = server.BaseUrl,
+            ItemsPath = "items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+        };
+
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateScript(api));
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("POST", observedMethod);
+    }
+
+    [Fact]
+    public async Task PostMethod_WithFixedLiteralBody_SendsExactBodyToServer_Succeeds()
+    {
+        string? observedBody = null;
+        using var server = new LocalTestServer(request =>
+        {
+            using var reader = new StreamReader(request.InputStream, request.ContentEncoding);
+            observedBody = reader.ReadToEnd();
+            return new LocalTestServerResponse("""{ "items": [ { "title": "A" } ] }""", "application/json");
+        });
+
+        var api = new ApiConfig
+        {
+            Method = "POST",
+            UrlTemplate = server.BaseUrl,
+            ItemsPath = "items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Body = new ApiBodyObject
+            {
+                Properties = new Dictionary<string, ApiBodyNode>
+                {
+                    ["category"] = new ApiBodyLiteral { Kind = ApiBodyLiteralKind.String, StringValue = "electronics" },
+                    ["maxPrice"] = new ApiBodyLiteral { Kind = ApiBodyLiteralKind.Number, NumberValue = 500 },
+                },
+            },
+        };
+
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateScript(api));
+
+        Assert.True(result.Success, result.Error);
+        Assert.NotNull(observedBody);
+        Assert.Contains("\"category\": \"electronics\"", observedBody);
+        Assert.Contains("\"maxPrice\": 500", observedBody);
+    }
+
+    [Fact]
+    public async Task PostMethod_WithVariableBody_SendsDifferentBodyPerCombination_Succeeds()
+    {
+        var observedBodies = new ConcurrentBag<string>();
+        using var server = new LocalTestServer(request =>
+        {
+            using var reader = new StreamReader(request.InputStream, request.ContentEncoding);
+            observedBodies.Add(reader.ReadToEnd());
+            return new LocalTestServerResponse("""{ "items": [ { "title": "A" } ] }""", "application/json");
+        });
+
+        var api = new ApiConfig
+        {
+            Method = "POST",
+            UrlTemplate = server.BaseUrl,
+            ItemsPath = "items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters = [new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["a", "b"] } }],
+            Body = new ApiBodyObject
+            {
+                Properties = new Dictionary<string, ApiBodyNode> { ["category"] = new ApiBodyVariable { ParameterName = "category" } },
+            },
+        };
+
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateScript(api));
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(2, observedBodies.Count);
+        Assert.Contains(observedBodies, body => body.Contains("\"category\": \"a\""));
+        Assert.Contains(observedBodies, body => body.Contains("\"category\": \"b\""));
+    }
+
+    [Fact]
+    public async Task PostMethod_WithCoerceToNumber_SendsNumericJsonValueNotString_Succeeds()
+    {
+        string? observedBody = null;
+        using var server = new LocalTestServer(request =>
+        {
+            using var reader = new StreamReader(request.InputStream, request.ContentEncoding);
+            observedBody = reader.ReadToEnd();
+            return new LocalTestServerResponse("""{ "items": [ { "title": "A" } ] }""", "application/json");
+        });
+
+        var api = new ApiConfig
+        {
+            Method = "POST",
+            UrlTemplate = server.BaseUrl,
+            ItemsPath = "items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters = [new ApiParameter { Name = "page", Source = new RangeSource { Type = RangeType.Number, From = "1", To = "1" } }],
+            Body = new ApiBodyObject
+            {
+                Properties = new Dictionary<string, ApiBodyNode> { ["page"] = new ApiBodyVariable { ParameterName = "page", CoerceTo = ApiBodyLiteralKind.Number } },
+            },
+        };
+
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateScript(api));
+
+        Assert.True(result.Success, result.Error);
+        Assert.NotNull(observedBody);
+        // Not '"page": "1"' — the string form an uncoerced parameter value
+        // (every ApiParameterSource value is string-typed end to end) would
+        // otherwise produce.
+        Assert.Contains("\"page\": 1", observedBody);
+        Assert.DoesNotContain("\"page\": \"1\"", observedBody);
+    }
+
+    // Concretizes the case that actually motivated a typed body tree: a
+    // GraphQL body's fixed "query" text never varies across the cartesian
+    // product, while its nested "variables" object does — with no dedicated
+    // GraphQL handling anywhere in the generated script either.
+    [Fact]
+    public async Task PostMethod_GraphQlShapedBody_QueryFixedVariablesVary_Succeeds()
+    {
+        var observedBodies = new ConcurrentBag<string>();
+        using var server = new LocalTestServer(request =>
+        {
+            using var reader = new StreamReader(request.InputStream, request.ContentEncoding);
+            observedBodies.Add(reader.ReadToEnd());
+            return new LocalTestServerResponse(
+                """{ "data": { "categoryProducts": { "items": [ { "title": "A" } ] } } }""", "application/json");
+        });
+
+        var api = new ApiConfig
+        {
+            Method = "POST",
+            UrlTemplate = server.BaseUrl,
+            ItemsPath = "data.categoryProducts.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters = [new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["electronics", "books"] } }],
+            Body = new ApiBodyObject
+            {
+                Properties = new Dictionary<string, ApiBodyNode>
+                {
+                    ["query"] = new ApiBodyLiteral
+                    {
+                        Kind = ApiBodyLiteralKind.String,
+                        StringValue = "query($category: String) { categoryProducts(category: $category) { items { title } } }",
+                    },
+                    ["variables"] = new ApiBodyObject
+                    {
+                        Properties = new Dictionary<string, ApiBodyNode> { ["category"] = new ApiBodyVariable { ParameterName = "category" } },
+                    },
+                },
+            },
+        };
+
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateScript(api));
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(2, observedBodies.Count);
+        Assert.All(observedBodies, body => Assert.Contains("categoryProducts(category: $category)", body));
+        Assert.Contains(observedBodies, body => body.Contains("\"category\": \"electronics\""));
+        Assert.Contains(observedBodies, body => body.Contains("\"category\": \"books\""));
+    }
+
+    [Fact]
+    public async Task GroupedScript_PostMethodWithBody_SendsBodyAndWritesXml_Succeeds()
+    {
+        string? observedBody = null;
+        using var server = new LocalTestServer(request =>
+        {
+            using var reader = new StreamReader(request.InputStream, request.ContentEncoding);
+            observedBody = reader.ReadToEnd();
+            return new LocalTestServerResponse("""{ "products": [ { "title": "A" } ] }""", "application/json");
+        });
+
+        var api = new ApiConfig
+        {
+            Method = "POST",
+            UrlTemplate = server.BaseUrl,
+            Groups = [new ApiGroup { Name = "Produkt", Path = "products", Children = [new ApiField { Name = "Titel", Path = "title" }] }],
+            Parameters = [new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["electronics"] } }],
+            Body = new ApiBodyObject
+            {
+                Properties = new Dictionary<string, ApiBodyNode> { ["category"] = new ApiBodyVariable { ParameterName = "category" } },
+            },
+        };
+
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateScript(api), OutputFormat.Xml);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(2, result.RowCount); // 1 <Produkt> + 1 <Titel>
+        Assert.NotNull(observedBody);
+        Assert.Contains("\"category\": \"electronics\"", observedBody);
     }
 }

@@ -24,7 +24,12 @@
   },
   "error": {
     "title": "No se puede conectar con la app Companion",
-    "hint": "Inicia ScrapingFactory.Companion y vuelve a intentarlo."
+    "hint": "Inicia ScrapingFactory.Companion y vuelve a intentarlo.",
+    "currentUrl": "Dirección probada: {url}",
+    "customUrlLabel": "¿La app Companion se ejecuta en otra dirección?",
+    "customUrlPlaceholder": "p. ej. http://localhost:5050",
+    "useCustomUrl": "Usar esta dirección",
+    "resetCustomUrl": "Restablecer dirección predeterminada"
   },
   "idle": {
     "urlLabel": "URL",
@@ -46,6 +51,7 @@
     "apiEntriesShowBtn": "Mostrar solicitudes grabadas ({count})",
     "apiEntriesHideBtn": "Ocultar solicitudes grabadas",
     "apiEntriesEmpty": "Aún no se han grabado solicitudes.",
+    "apiEntriesBodyNotCaptured": "[no capturado]",
     "apiConfigSummary": "Configuración de API lista: {fields} campo(s), {parameters} parámetro(s){headers}.",
     "apiConfigSummaryHeaders": ", {count} cabecera(s)",
     "previewShowBtn": "Mostrar vista previa",
@@ -119,7 +125,14 @@
     "noHeadersRecorded": "No se registraron cabeceras de solicitud.",
     "headerModeValue": "Valor",
     "headerModeEnv": "Variable de entorno",
-    "envNamePlaceholder": "ENV_NAME"
+    "envNamePlaceholder": "ENV_NAME",
+    "bodyLabel": "Cuerpo de la solicitud",
+    "bodyRootLabel": "Cuerpo",
+    "bodyToVariableBtn": "→ Variable",
+    "bodyToFixedBtn": "→ Fijo",
+    "bodyPickParameterPlaceholder": "-- elegir un parámetro --",
+    "bodyNewParameterOption": "+ Nuevo parámetro…",
+    "bodyCoerceToTitle": "Tipo de valor para usar en el cuerpo (por defecto: texto)"
   },
   "group": {
     "repeating": "repetitivo",
@@ -173,6 +186,10 @@
       "pathLabel": "Ruta JSON (relativa al ámbito superior, p. ej. \"subcategories\")",
       "pathPlaceholder": "Ruta JSON",
       "confirm": "Añadir"
+    },
+    "apiBodyParameterNew": {
+      "nameLabel": "Nombre del parámetro (p. ej. \"categoria\")",
+      "namePlaceholder": "Nombre"
     }
   },
   "toast": {
@@ -181,7 +198,8 @@
     "generationError": "Error: {message}",
     "selectionUnavailable": "No es posible seleccionar elementos en esta página.",
     "previewUnavailable": "No es posible la vista previa en esta página.",
-    "captureUnavailable": "No es posible grabar red en esta página."
+    "captureUnavailable": "No es posible grabar red en esta página.",
+    "invalidCompanionUrl": "Dirección no válida — incluye http:// o https://."
   },
   "frame": {
     "badge": "iframe",

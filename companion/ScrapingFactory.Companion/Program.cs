@@ -1,11 +1,12 @@
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
+using ScrapingFactory.Companion;
 using ScrapingFactory.Compiler.Backends;
 using ScrapingFactory.Compiler.IR;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.WebHost.UseUrls("http://localhost:5000");
+builder.WebHost.UseUrls(CompanionHostOptions.BuildListenUrl(builder.Configuration));
 
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy => policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
@@ -21,9 +22,13 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     // ApiGroup.Children: List<ApiNode>) needs the same treatment — see
     // ApiNodeJsonConverter.
     options.SerializerOptions.Converters.Add(new ApiNodeJsonConverter());
+    // Same reason again for API-Mode's request-body tree (Issue #55,
+    // ApiBodyObject.Properties/ApiBodyArray.Items: .../ApiBodyNode) — see
+    // ApiBodyNodeJsonConverter.
+    options.SerializerOptions.Converters.Add(new ApiBodyNodeJsonConverter());
 });
 
-builder.Services.AddSingleton<LanguageModuleRegistry>();
+builder.Services.AddSingleton(new LanguageModuleRegistry(CompanionBackendOverrides.Build(builder.Configuration)));
 
 var app = builder.Build();
 
