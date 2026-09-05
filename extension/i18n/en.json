@@ -46,6 +46,7 @@
     "apiEntriesShowBtn": "Show recorded requests ({count})",
     "apiEntriesHideBtn": "Hide recorded requests",
     "apiEntriesEmpty": "No requests recorded yet.",
+    "apiEntriesBodyNotCaptured": "[not captured]",
     "apiConfigSummary": "API configuration ready: {fields} field(s), {parameters} parameter(s){headers}.",
     "apiConfigSummaryHeaders": ", {count} header(s)",
     "previewShowBtn": "Show preview",
