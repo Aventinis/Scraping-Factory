@@ -891,17 +891,22 @@ public class ScrapingPlanValidatorTests
         Assert.Contains("category", result.Error);
     }
 
+    // A fully static endpoint — every URL part fixed, nothing to enumerate
+    // over — is a legitimate Api-Mode config, not just a degenerate one:
+    // the extension previously forced at least one variable part before
+    // "Übernehmen" was even enabled, but the underlying config format (and
+    // the generated script, via itertools.product over zero value lists)
+    // always supported zero parameters just fine.
     [Fact]
-    public void Validate_ApiConfigWithNoParameters_Fails()
+    public void Validate_ApiConfigWithNoParameters_Succeeds()
     {
         var api = ValidApiConfig();
-        var invalid = new ApiConfig
+        var valid = new ApiConfig
         {
             UrlTemplate = "https://example.com/api/items", ItemsPath = api.ItemsPath, Fields = api.Fields, Parameters = [],
         };
-        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
-        Assert.False(result.Success);
-        Assert.Contains("Parameter", result.Error);
+        var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success, result.Error);
     }
 
     [Fact]

@@ -1607,6 +1607,27 @@ describe('buildApiConfig', () => {
     expect(config).not.toHaveProperty('headers');
   });
 
+  // A fully static endpoint (every part left "fest") is a valid config in
+  // its own right, not just an intermediate state before adding a variable
+  // — see apiConfigDraftHasAllSourcesChosen, which no longer blocks
+  // confirmation in this case.
+  test('produces an empty parameters array when every URL part is fixed', () => {
+    const config = buildApiConfig({
+      urlParts: {
+        origin: 'https://example.com',
+        pathSegments: [{ value: 'api', variable: false, name: '' }, { value: 'items', variable: false, name: '' }],
+        queryParams: [],
+      },
+      itemsPath: 'data.items',
+      fields: [{ name: 'Titel', path: 'name' }],
+      parameterSources: {},
+      capturedHeaders: [],
+      headerDecisions: {},
+    });
+
+    expect(config.parameters).toEqual([]);
+  });
+
   test('collects a variable path segment and a variable query param together, in encounter order', () => {
     const config = buildApiConfig({
       urlParts: {
@@ -1861,9 +1882,9 @@ describe('variableUrlParts / apiConfigDraftHasAllSourcesChosen', () => {
     expect(variableUrlParts(urlParts).map(p => p.id)).toEqual(['path:1', 'query:category']);
   });
 
-  test('apiConfigDraftHasAllSourcesChosen is false with no variable parts (Api-Mode needs at least one)', () => {
+  test('apiConfigDraftHasAllSourcesChosen is true with no variable parts at all (a fully static endpoint is valid)', () => {
     const draft = { urlParts: { origin: 'x', pathSegments: [], queryParams: [] }, parameterSources: {} };
-    expect(apiConfigDraftHasAllSourcesChosen(draft)).toBe(false);
+    expect(apiConfigDraftHasAllSourcesChosen(draft)).toBe(true);
   });
 
   test('requires a chosen source kind for every variable part', () => {
@@ -1898,7 +1919,7 @@ describe('variableUrlParts / apiConfigDraftHasAllSourcesChosen', () => {
 
   // ── Body-only parameters / variable leaves (Issue #55, Phase B4) ───────
 
-  test('a body-only parameter with a chosen source satisfies "at least one parameter" even with no URL variables at all', () => {
+  test('a body-only parameter with a chosen source is enough on its own, even with no URL variables at all', () => {
     const noVariableUrlParts = { origin: 'https://example.com', pathSegments: [{ value: 'graphql', variable: false, name: '' }], queryParams: [] };
     const draft = {
       urlParts: noVariableUrlParts,
@@ -2083,13 +2104,19 @@ describe('renderApiConfigScreen (Issue #53 Phase 5)', () => {
     expect(document.querySelector('#api-config-headers .api-candidates-empty')).not.toBeNull();
   });
 
-  test('enables "Übernehmen" only once every variable part has a name and a source kind', () => {
+  test('"Übernehmen" is already enabled with no variable parts at all (a fully static endpoint is valid)', () => {
     const draft = baseDraft();
-    renderApiConfigScreen(draft, null); // no variable parts at all
-    expect(document.getElementById('btn-api-config-confirm').disabled).toBe(true);
+    renderApiConfigScreen(draft, null);
+    expect(document.getElementById('btn-api-config-confirm').disabled).toBe(false);
+  });
 
+  test('enables "Übernehmen" only once a declared variable part has a name and a source kind', () => {
+    const draft = baseDraft();
     draft.urlParts.pathSegments[2].variable = true;
     draft.urlParts.pathSegments[2].name = 'id';
+    renderApiConfigScreen(draft, null); // variable part declared, but no source kind chosen yet
+    expect(document.getElementById('btn-api-config-confirm').disabled).toBe(true);
+
     draft.parameterSources['path:2'] = { kind: 'staticList', valuesText: '42' };
     renderApiConfigScreen(draft, null);
     expect(document.getElementById('btn-api-config-confirm').disabled).toBe(false);

@@ -1724,20 +1724,21 @@ function allParameterParts(draft) {
 // this. draft.groups (Phase A5's tree shape) takes over from the older
 // draft.fields shape whenever present — see apiTreeNodesHaveNonBlankNames.
 //
-// Issue #55, Phase B4: `parts` now includes body-only parameters alongside
-// URL ones (see allParameterParts) — a config whose only variability lives
-// in the request body (e.g. a fixed GraphQL URL with a variable in
-// `variables`) still needs "at least one parameter" to be satisfied, same
-// as a plain URL-only config always has. A body leaf toggled to 'variable'
-// but not yet bound to any parameter (see bodyTreeLeavesAreBound) blocks
-// confirmation the same way an unchosen source kind already does.
+// Zero parameters (every URL part left "fest", no body-only parameter
+// declared) is a valid config — a fully static endpoint with nothing to
+// enumerate over, confirmable the same as a single "fixed" endpoint address
+// typed under a variable part would already be. `parts.every(...)` is
+// vacuously true on an empty list, so this only needs to validate whatever
+// parameters actually exist (Issue #55, Phase B4: `parts` includes
+// body-only parameters alongside URL ones, see allParameterParts — a body
+// leaf toggled to 'variable' but not yet bound to any parameter still blocks
+// confirmation the same way an unchosen source kind already does).
 function apiConfigDraftHasAllSourcesChosen(draft) {
   const namesOk = draft.groups
     ? apiTreeNodesHaveNonBlankNames(draft.groups)
     : !(draft.fields || []).some(f => !f.name?.trim());
   if (!namesOk) return false;
   const parts = allParameterParts(draft);
-  if (parts.length === 0) return false; // Api-Mode's whole premise is enumerating over at least one variable part
   if (!parts.every(p => !!p.name?.trim() && !!draft.parameterSources[p.id]?.kind)) return false;
   return draft.bodyTree ? bodyTreeLeavesAreBound(draft.bodyTree) : true;
 }
