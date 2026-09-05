@@ -753,10 +753,18 @@ function serializeBodyTree(node, parameterIdToName) {
       ...(node.coerceTo ? { coerceTo: node.coerceTo } : {}),
     };
   }
-  // literal — "value" is omitted entirely for Null, mirroring the
-  // companion's own PythonApiConfigLiteral.RenderBody (ApiBodyLiteral has no
-  // meaningful value to send there either).
-  return { kind: node.literalKind, ...(node.literalKind === 'Null' ? {} : { value: node.value }) };
+  // literal — IR/ApiBodyNode.cs's ApiBodyLiteral has three separate typed
+  // properties (StringValue/NumberValue/BoolValue), not one generic "value"
+  // like the companion's own internal Python-runtime literal shape
+  // (PythonApiConfigLiteral.RenderBody) uses — the wire format and that
+  // runtime-internal shape are two different things that happen to share a
+  // "kind" field. Null has no value property to set at all.
+  switch (node.literalKind) {
+    case 'String': return { kind: 'String', stringValue: node.value };
+    case 'Number': return { kind: 'Number', numberValue: node.value };
+    case 'Boolean': return { kind: 'Boolean', boolValue: node.value };
+    default: return { kind: 'Null' };
+  }
 }
 
 // Phase A5: JSON keys, unlike CSS selectors, already carry a meaningful name
