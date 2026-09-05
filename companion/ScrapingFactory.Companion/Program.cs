@@ -21,6 +21,10 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     // ApiGroup.Children: List<ApiNode>) needs the same treatment — see
     // ApiNodeJsonConverter.
     options.SerializerOptions.Converters.Add(new ApiNodeJsonConverter());
+    // Same reason again for API-Mode's request-body tree (Issue #55,
+    // ApiBodyObject.Properties/ApiBodyArray.Items: .../ApiBodyNode) — see
+    // ApiBodyNodeJsonConverter.
+    options.SerializerOptions.Converters.Add(new ApiBodyNodeJsonConverter());
 });
 
 builder.Services.AddSingleton<LanguageModuleRegistry>();
