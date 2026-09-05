@@ -46,6 +46,7 @@
     "apiEntriesShowBtn": "Mostrar solicitudes grabadas ({count})",
     "apiEntriesHideBtn": "Ocultar solicitudes grabadas",
     "apiEntriesEmpty": "Aún no se han grabado solicitudes.",
+    "apiEntriesBodyNotCaptured": "[no capturado]",
     "apiConfigSummary": "Configuración de API lista: {fields} campo(s), {parameters} parámetro(s){headers}.",
     "apiConfigSummaryHeaders": ", {count} cabecera(s)",
     "previewShowBtn": "Mostrar vista previa",

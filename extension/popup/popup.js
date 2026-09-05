@@ -1434,9 +1434,20 @@ function renderApiEntriesList(entries) {
   entries.forEach((entry) => {
     const li = document.createElement('li');
     li.className = 'api-candidate';
+    // Request-body display (Issue #55 prep): a GET/HEAD entry never has one
+    // (requestBody stays '' and requestBodySkipped stays false, see
+    // api-capture.js's buildEntry), so this naturally shows nothing for them
+    // without needing an explicit method check here.
+    let bodyHtml = '';
+    if (entry.requestBodySkipped) {
+      bodyHtml = `<div class="api-candidate-body api-candidate-body-skipped">${escapeHtml(t('idle.apiEntriesBodyNotCaptured'))}</div>`;
+    } else if (entry.requestBody) {
+      bodyHtml = `<div class="api-candidate-body">${escapeHtml(entry.requestBody)}</div>`;
+    }
     li.innerHTML =
       `<div class="api-candidate-url" title="${escapeHtml(entry.url)}">${escapeHtml(entry.method)} ${escapeHtml(String(entry.status))} ${escapeHtml(entry.url)}</div>` +
-      (entry.contentType ? `<div class="api-candidate-path">${escapeHtml(entry.contentType)}</div>` : '');
+      (entry.contentType ? `<div class="api-candidate-path">${escapeHtml(entry.contentType)}</div>` : '') +
+      bodyHtml;
     listEl.appendChild(li);
   });
 }
