@@ -170,6 +170,20 @@
     .api-tree-name { min-width: 70px; font-weight: 500; font-size: 11px; padding: 3px 6px; border: 1px solid #e5e7eb; border-radius: 4px; }
     .api-tree-path { flex: 1; min-width: 60px; font-family: monospace; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+    /* API-Mode request-body tree editor (Issue #55) — same visual pattern
+       as the API-Mode response tree above, no toggle arrow (every node
+       starts fully expanded, bodies are typically small) and no per-row
+       add/remove (the body's own shape is never edited, only a leaf's
+       fixed/variable state — see jsonValueToBodyDraft's doc comment). */
+    #body-tree-root { list-style: none; margin: 0 0 10px; padding: 0; }
+    .body-tree-children { list-style: none; margin: 0; padding: 0; }
+    .body-tree-row {
+      display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+      padding: 4px 2px; font-size: 12px; color: #374151;
+    }
+    .body-tree-label { flex: 1; min-width: 60px; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .body-tree-parameter-picker, .body-tree-coerce-to { font-size: 11px; padding: 2px 4px; }
+
     /* Radio row (container-type picker) — specificity beats .modal-inner label's block display */
     .radio-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; font-size: 13px; color: #374151; }
     .modal-inner .radio-row label { display: flex; align-items: center; gap: 6px; font-size: inherit; margin-bottom: 0; }
@@ -490,6 +504,15 @@
     <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.valueSourcesLabel"></div>
     <div id="api-config-parameters"></div>
 
+    <!-- Request-body tree (Issue #55, Phase B4) — only shown for a POST
+         candidate whose captured request body could be turned into a draft
+         (see loadInitialBodyTreeForCandidate); hidden entirely for a GET
+         config or an unparsable/bodyless POST. -->
+    <div id="api-config-body-section" class="hidden">
+      <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.bodyLabel"></div>
+      <ul id="body-tree-root" class="body-tree"></ul>
+    </div>
+
     <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.headersLabel"></div>
     <ul id="api-config-headers" class="api-config-headers"></ul>
 
@@ -580,6 +603,23 @@
       <div class="modal-actions">
         <button id="btn-api-group-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
         <button id="btn-api-group-confirm" class="btn-primary" data-i18n="modals.apiGroupNew.confirm"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: new body-only parameter name (Issue #55, Phase B4) — a body
+       variable can bind to an already-declared URL parameter, or create a
+       new one that exists purely to be referenced from the body; its value
+       source is then configured via the exact same parameter-source card a
+       URL variable part already uses (see allParameterParts/
+       renderApiConfigParameters), not a second body-specific source picker. -->
+  <div id="modal-api-body-parameter-new" class="modal hidden">
+    <div class="modal-inner">
+      <label for="input-api-body-parameter-name" data-i18n="modals.apiBodyParameterNew.nameLabel"></label>
+      <input id="input-api-body-parameter-name" type="text" data-i18n-placeholder="modals.apiBodyParameterNew.namePlaceholder" autocomplete="off" />
+      <div class="modal-actions">
+        <button id="btn-api-body-parameter-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-api-body-parameter-confirm" class="btn-primary" data-i18n="common.add"></button>
       </div>
     </div>
   </div>
