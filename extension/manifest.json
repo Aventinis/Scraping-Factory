@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Scraping Factory",
-  "version": "1.6.4",
+  "version": "1.7.0",
   "description": "Visueller Scraper-Builder — generiert eigenständige Python-Skripte.",
   "permissions": [
     "activeTab",
