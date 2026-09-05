@@ -57,6 +57,49 @@ internal static class PythonApiConfigLiteral
     private static string RenderField(ApiField field) =>
         $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "path": {{PythonLiteral.Str(field.Path)}}}""";
 
+    // Serializes ApiConfig.Body (Issue #55's request-body tree) into the
+    // same kind of dict-of-dicts literal RenderGroups already builds for the
+    // response-extraction tree — the runtime's _render_body (Phase B3) reads
+    // it back using the same "which key is present" discriminator this
+    // codebase already uses everywhere a JsonConverter sniffs structurally
+    // (ContainerNodeJsonConverter, ApiNodeJsonConverter, ApiBodyNodeJsonConverter).
+    // "None" (Python's null) for an absent Body — a bodyless GET/POST.
+    public static string RenderBody(ApiBodyNode? body) => body is null ? "None" : RenderBodyNode(body);
+
+    private static string RenderBodyNode(ApiBodyNode node) => node switch
+    {
+        ApiBodyObject obj => RenderBodyObject(obj),
+        ApiBodyArray array => RenderBodyArray(array),
+        ApiBodyVariable variable => RenderBodyVariable(variable),
+        ApiBodyLiteral literal => RenderBodyLiteral(literal),
+        _ => throw new InvalidOperationException($"Unbekannter ApiBodyNode-Typ: {node.GetType()}"),
+    };
+
+    private static string RenderBodyObject(ApiBodyObject obj)
+    {
+        var entries = obj.Properties.Select(property => $$"""{{PythonLiteral.Str(property.Key)}}: {{RenderBodyNode(property.Value)}}""");
+        return "{\"properties\": {" + string.Join(", ", entries) + "}}";
+    }
+
+    private static string RenderBodyArray(ApiBodyArray array) =>
+        $$"""{"items": [{{string.Join(", ", array.Items.Select(RenderBodyNode))}}]}""";
+
+    private static string RenderBodyVariable(ApiBodyVariable variable) => variable.CoerceTo is { } coerceTo
+        ? $$"""{"parameterName": {{PythonLiteral.Str(variable.ParameterName)}}, "coerceTo": {{PythonLiteral.Str(coerceTo.ToString())}}}"""
+        : $$"""{"parameterName": {{PythonLiteral.Str(variable.ParameterName)}}}""";
+
+    // "value" is omitted entirely for Null (mirrors RenderFormatSuffix's
+    // "omit rather than send a meaningless default" pattern above) — the
+    // runtime's _render_body never looks at it for kind == "Null" either.
+    private static string RenderBodyLiteral(ApiBodyLiteral literal) => literal.Kind switch
+    {
+        ApiBodyLiteralKind.String => $$"""{"kind": "String", "value": {{PythonLiteral.Str(literal.StringValue!)}}}""",
+        ApiBodyLiteralKind.Number => $$"""{"kind": "Number", "value": {{PythonLiteral.Num(literal.NumberValue!.Value)}}}""",
+        ApiBodyLiteralKind.Boolean => $$"""{"kind": "Boolean", "value": {{(literal.BoolValue!.Value ? "True" : "False")}}}""",
+        ApiBodyLiteralKind.Null => """{"kind": "Null"}""",
+        _ => throw new InvalidOperationException($"Unbekannter ApiBodyLiteralKind: {literal.Kind}"),
+    };
+
     public static string RenderParameters(List<ApiParameter> parameters) =>
         RenderList(parameters, parameter =>
             $$"""{"name": {{PythonLiteral.Str(parameter.Name)}}, "source": {{RenderSource(parameter.Source)}}}""");

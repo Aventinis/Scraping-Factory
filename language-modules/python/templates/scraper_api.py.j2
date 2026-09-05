@@ -15,6 +15,8 @@ import requests
 from urllib.parse import quote
 
 URL_TEMPLATE = {{ url_template_literal }}
+METHOD = {{ method_literal }}
+BODY = {{ body_literal }}
 ITEMS_PATH = {{ items_path_literal }}
 FIELDS = {{ fields_literal }}
 PARAMETERS = {{ parameters_literal }}
@@ -173,6 +175,43 @@ def _resolve_parameter_values(source, headers):
     raise ValueError(f"Unbekannte Parameter-Quelle: {kind}")
 
 
+# Best-effort: every ApiParameterSource value is a plain string end to end
+# (see _resolve_parameter_values above), so a body variable bound to a
+# Number/Boolean parameter needs converting before it fits a strictly-typed
+# request body (e.g. a GraphQL server rejecting a stringified number). An
+# unparsable value falls back to the raw string rather than raising — a
+# strictly-typed target server rejecting it is then a target-site problem
+# this can only mitigate, not fully solve (see ApiBodyVariable.CoerceTo).
+def _coerce_body_value(value, coerce_to):
+    if coerce_to == "Number":
+        try:
+            return float(value) if "." in value else int(value)
+        except ValueError:
+            return value
+    if coerce_to == "Boolean":
+        return value.strip().lower() in ("true", "1", "yes")
+    return value
+
+
+# Renders BODY (Issue #55's request-body tree) into a plain JSON-able Python
+# value for one already-resolved parameter combo — an object/array node just
+# recurses over its own children, a variable node looks its current value up
+# in combo (optionally coerced), and a literal node returns its fixed value
+# (kind == "Null" is the one case with no "value" key to read at all, see
+# PythonApiConfigLiteral.RenderBody).
+def _render_body(node, combo):
+    if node is None:
+        return None
+    if "properties" in node:
+        return {key: _render_body(child, combo) for key, child in node["properties"].items()}
+    if "items" in node:
+        return [_render_body(item, combo) for item in node["items"]]
+    if "parameterName" in node:
+        return _coerce_body_value(combo[node["parameterName"]], node.get("coerceTo"))
+    kind = node["kind"]
+    return None if kind == "Null" else node["value"]
+
+
 def _extract_row(record, combo):
     row = dict(combo)
     for field in FIELDS:
@@ -196,7 +235,11 @@ def scrape():
         encoded_combo = {name: quote(str(value), safe="") for name, value in combo.items()}
         url = URL_TEMPLATE.format(**encoded_combo)
 
-        response = requests.get(url, headers=headers, timeout=10)
+        body = _render_body(BODY, combo)
+        if METHOD == "POST":
+            response = requests.post(url, headers=headers, json=body, timeout=10)
+        else:
+            response = requests.get(url, headers=headers, timeout=10)
         # A 404 is treated as "this combination doesn't exist" and skipped
         # rather than aborting the whole run — Api-Mode tries the full
         # cartesian product of every parameter's values without knowing
