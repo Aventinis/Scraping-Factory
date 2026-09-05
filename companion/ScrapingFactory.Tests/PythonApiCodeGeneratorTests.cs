@@ -345,4 +345,119 @@ public class PythonApiCodeGeneratorTests
         var script = _generator.Generate(PlanWith(SampleGroupedApi()));
         Assert.DoesNotContain("import os", script);
     }
+
+    // ── Request body (Issue #55) ────────────────────────────────────────
+
+    [Fact]
+    public void Generate_DefaultsToGetMethodAndNoBody()
+    {
+        var script = _generator.Generate(PlanWith(SampleApi()));
+        Assert.Contains("METHOD = 'GET'", script);
+        Assert.Contains("BODY = None", script);
+    }
+
+    [Fact]
+    public void Generate_PostMethodWithLiteralBody_ContainsPostCallAndBodyLiteral()
+    {
+        var api = SampleApi();
+        var withBody = new ApiConfig
+        {
+            Method = "POST", UrlTemplate = api.UrlTemplate, ItemsPath = api.ItemsPath,
+            Fields = api.Fields, Parameters = api.Parameters,
+            Body = new ApiBodyObject { Properties = new Dictionary<string, ApiBodyNode> { ["active"] = new ApiBodyLiteral { Kind = ApiBodyLiteralKind.Boolean, BoolValue = true } } },
+        };
+
+        var script = _generator.Generate(PlanWith(withBody));
+
+        Assert.Contains("METHOD = 'POST'", script);
+        Assert.Contains("requests.post(url, headers=headers, json=body, timeout=10)", script);
+        Assert.Contains("\"kind\": \"Boolean\", \"value\": True", script);
+    }
+
+    [Fact]
+    public void Generate_BodyWithVariable_ContainsParameterNameAndCoerceTo()
+    {
+        var api = SampleApi();
+        var withBody = new ApiConfig
+        {
+            Method = "POST", UrlTemplate = api.UrlTemplate, ItemsPath = api.ItemsPath,
+            Fields = api.Fields, Parameters = api.Parameters,
+            Body = new ApiBodyObject { Properties = new Dictionary<string, ApiBodyNode> { ["category"] = new ApiBodyVariable { ParameterName = "category", CoerceTo = ApiBodyLiteralKind.Number } } },
+        };
+
+        var script = _generator.Generate(PlanWith(withBody));
+
+        Assert.Contains("\"parameterName\": 'category'", script);
+        Assert.Contains("\"coerceTo\": 'Number'", script);
+        Assert.Contains("def _coerce_body_value(", script);
+        Assert.Contains("def _render_body(", script);
+    }
+
+    [Fact]
+    public void Generate_NullLiteralBody_OmitsValueKey()
+    {
+        var api = SampleApi();
+        var withBody = new ApiConfig
+        {
+            Method = "POST", UrlTemplate = api.UrlTemplate, ItemsPath = api.ItemsPath,
+            Fields = api.Fields, Parameters = api.Parameters,
+            Body = new ApiBodyObject { Properties = new Dictionary<string, ApiBodyNode> { ["optional"] = new ApiBodyLiteral { Kind = ApiBodyLiteralKind.Null } } },
+        };
+
+        var script = _generator.Generate(PlanWith(withBody));
+
+        Assert.Contains("\"kind\": \"Null\"}", script);
+        Assert.DoesNotContain("\"kind\": \"Null\", \"value\"", script);
+    }
+
+    // Concretizes the case that actually motivated a typed body tree: a
+    // GraphQL body is just an ordinary ApiBodyObject with a fixed "query"
+    // string and a nested "variables" object — no dedicated GraphQL concept
+    // anywhere in codegen either.
+    [Fact]
+    public void Generate_GraphQlShapedBody_ContainsNestedPropertiesAndVariable()
+    {
+        var api = SampleApi();
+        var withBody = new ApiConfig
+        {
+            Method = "POST", UrlTemplate = api.UrlTemplate, ItemsPath = api.ItemsPath,
+            Fields = api.Fields, Parameters = api.Parameters,
+            Body = new ApiBodyObject
+            {
+                Properties = new Dictionary<string, ApiBodyNode>
+                {
+                    ["query"] = new ApiBodyLiteral { Kind = ApiBodyLiteralKind.String, StringValue = "query { items }" },
+                    ["variables"] = new ApiBodyObject
+                    {
+                        Properties = new Dictionary<string, ApiBodyNode> { ["category"] = new ApiBodyVariable { ParameterName = "category" } },
+                    },
+                },
+            },
+        };
+
+        var script = _generator.Generate(PlanWith(withBody));
+
+        Assert.Contains("'query { items }'", script);
+        Assert.Contains("\"parameterName\": 'category'", script);
+        // Two "properties" dicts — the outer body object and the nested
+        // "variables" object.
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(script, "\"properties\":").Count);
+    }
+
+    [Fact]
+    public void Generate_ApiConfigWithGroups_PostMethodWithBody_ContainsPostCall()
+    {
+        var api = SampleGroupedApi();
+        var withBody = new ApiConfig
+        {
+            Method = "POST", UrlTemplate = api.UrlTemplate, Groups = api.Groups, Parameters = api.Parameters,
+            Body = new ApiBodyObject { Properties = new Dictionary<string, ApiBodyNode> { ["category"] = new ApiBodyVariable { ParameterName = "category" } } },
+        };
+
+        var script = _generator.Generate(PlanWith(withBody));
+
+        Assert.Contains("METHOD = 'POST'", script);
+        Assert.Contains("requests.post(url, headers=headers, json=body, timeout=10)", script);
+        Assert.Contains("\"parameterName\": 'category'", script);
+    }
 }

@@ -221,6 +221,63 @@ public static class ScrapingPlanValidator
             _ => false,
         });
 
+    // Request-body tree (Issue #55): the write-side mirror of
+    // ValidateApiNodes above. Object/Array just recurse; a Variable must
+    // reference a declared parameter (collected into referencedParameterNames
+    // so the caller can fold body references into its own UrlTemplate
+    // "unused parameter" check); a Literal's Kind must agree with which
+    // value field is actually set — Kind itself isn't inferred structurally
+    // (see ApiBodyLiteral's doc comment), so a mismatch here would otherwise
+    // only surface as a silently-wrong value in the generated request body.
+    private static string? ValidateApiBodyNode(ApiBodyNode node, HashSet<string> parameterNames, HashSet<string> referencedParameterNames)
+    {
+        switch (node)
+        {
+            case ApiBodyObject obj:
+                foreach (var (key, child) in obj.Properties)
+                {
+                    if (string.IsNullOrWhiteSpace(key))
+                        return "Property-Name im Body darf nicht leer sein.";
+                    var propertyError = ValidateApiBodyNode(child, parameterNames, referencedParameterNames);
+                    if (propertyError is not null)
+                        return propertyError;
+                }
+                return null;
+
+            case ApiBodyArray array:
+                foreach (var item in array.Items)
+                {
+                    var itemError = ValidateApiBodyNode(item, parameterNames, referencedParameterNames);
+                    if (itemError is not null)
+                        return itemError;
+                }
+                return null;
+
+            case ApiBodyVariable variable:
+                if (!parameterNames.Contains(variable.ParameterName))
+                    return $"Body referenziert unbekannten Parameter '{variable.ParameterName}'.";
+                referencedParameterNames.Add(variable.ParameterName);
+                return null;
+
+            case ApiBodyLiteral literal:
+                return literal.Kind switch
+                {
+                    ApiBodyLiteralKind.String when literal.StringValue is null =>
+                        "Body-Literal vom Typ 'String' braucht StringValue.",
+                    ApiBodyLiteralKind.Number when literal.NumberValue is null =>
+                        "Body-Literal vom Typ 'Number' braucht NumberValue.",
+                    ApiBodyLiteralKind.Boolean when literal.BoolValue is null =>
+                        "Body-Literal vom Typ 'Boolean' braucht BoolValue.",
+                    ApiBodyLiteralKind.Null when literal.StringValue is not null || literal.NumberValue is not null || literal.BoolValue is not null =>
+                        "Body-Literal vom Typ 'Null' darf keinen Wert gesetzt haben.",
+                    _ => null,
+                };
+
+            default:
+                throw new NotSupportedException($"Unbekannter ApiBodyNode-Typ: {node.GetType()}");
+        }
+    }
+
     // Shared by ExtractStep.FramePath and GroupNode/DataFieldNode.FramePath
     // (Issue #42) — same three checks regardless of which node type carries
     // the FramePath.
@@ -245,8 +302,14 @@ public static class ScrapingPlanValidator
     // surfaces as a real runtime miss via PythonScriptVerifier, not here.
     private static string? ValidateApiConfig(ApiConfig api)
     {
-        if (api.Method != "GET")
-            return $"Nicht unterstützte HTTP-Methode '{api.Method}': Api-Mode unterstützt bisher nur GET.";
+        if (api.Method is not ("GET" or "POST"))
+            return $"Nicht unterstützte HTTP-Methode '{api.Method}': Api-Mode unterstützt bisher nur GET und POST.";
+
+        // Body (Issue #55) requires Method == "POST" — a bodyless POST is
+        // still valid, a GET with a Body makes no sense and is rejected
+        // here rather than silently ignored.
+        if (api.Body is not null && api.Method != "POST")
+            return "Body erfordert Methode 'POST'.";
 
         // Two mutually exclusive response shapes (Issue #54): the original
         // flat ItemsPath+Fields (exactly one repetition level), or the
@@ -306,9 +369,12 @@ public static class ScrapingPlanValidator
                 return "Api-Konfiguration (Groups) muss mindestens ein Feld enthalten.";
         }
 
-        if (api.Parameters.Count == 0)
-            return "Api-Konfiguration muss mindestens einen Parameter enthalten.";
-
+        // Zero parameters is a valid, fully static endpoint (every URL part
+        // fixed, no enumeration) — the checks below (duplicate names,
+        // UrlTemplate placeholder matching, ...) already degrade correctly
+        // to no-ops on an empty list, and the generated script's
+        // itertools.product(*value_lists) over zero lists yields exactly one
+        // (parameterless) call, so no code-generation change was needed.
         foreach (var parameter in api.Parameters)
         {
             if (string.IsNullOrWhiteSpace(parameter.Name))
@@ -328,7 +394,20 @@ public static class ScrapingPlanValidator
         if (missingParameters.Count > 0)
             return $"UrlTemplate referenziert unbekannte Parameter: {string.Join(", ", missingParameters)}.";
 
-        var unusedParameters = parameterNames.Except(placeholders).ToList();
+        // A declared parameter can now be referenced from either the
+        // UrlTemplate (checked above) or the request body (Issue #55) — only
+        // a parameter referenced by neither is truly unused. The body's own
+        // "unknown parameter" half gets its own distinct error message
+        // below, mirroring missingParameters' UrlTemplate-side check.
+        var referencedByBody = new HashSet<string>();
+        if (api.Body is not null)
+        {
+            var bodyError = ValidateApiBodyNode(api.Body, parameterNames, referencedByBody);
+            if (bodyError is not null)
+                return bodyError;
+        }
+
+        var unusedParameters = parameterNames.Except(placeholders).Except(referencedByBody).ToList();
         if (unusedParameters.Count > 0)
             return $"Parameter ohne Platzhalter im UrlTemplate: {string.Join(", ", unusedParameters)}.";
 

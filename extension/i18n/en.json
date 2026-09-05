@@ -24,7 +24,12 @@
   },
   "error": {
     "title": "Companion app unreachable",
-    "hint": "Start ScrapingFactory.Companion and try again."
+    "hint": "Start ScrapingFactory.Companion and try again.",
+    "currentUrl": "Address tried: {url}",
+    "customUrlLabel": "Is the companion app running at a different address?",
+    "customUrlPlaceholder": "e.g. http://localhost:5050",
+    "useCustomUrl": "Use this address",
+    "resetCustomUrl": "Reset to default address"
   },
   "idle": {
     "urlLabel": "URL",
@@ -46,6 +51,7 @@
     "apiEntriesShowBtn": "Show recorded requests ({count})",
     "apiEntriesHideBtn": "Hide recorded requests",
     "apiEntriesEmpty": "No requests recorded yet.",
+    "apiEntriesBodyNotCaptured": "[not captured]",
     "apiConfigSummary": "API configuration ready: {fields} field(s), {parameters} parameter(s){headers}.",
     "apiConfigSummaryHeaders": ", {count} header(s)",
     "previewShowBtn": "Show preview",
@@ -119,7 +125,14 @@
     "noHeadersRecorded": "No request headers recorded.",
     "headerModeValue": "Value",
     "headerModeEnv": "Environment variable",
-    "envNamePlaceholder": "ENV_NAME"
+    "envNamePlaceholder": "ENV_NAME",
+    "bodyLabel": "Request body",
+    "bodyRootLabel": "Body",
+    "bodyToVariableBtn": "→ Variable",
+    "bodyToFixedBtn": "→ Fixed",
+    "bodyPickParameterPlaceholder": "-- choose a parameter --",
+    "bodyNewParameterOption": "+ New parameter…",
+    "bodyCoerceToTitle": "Value type to use in the body (default: text)"
   },
   "group": {
     "repeating": "repeating",
@@ -173,6 +186,10 @@
       "pathLabel": "JSON path (relative to the parent scope, e.g. \"subcategories\")",
       "pathPlaceholder": "JSON path",
       "confirm": "Add"
+    },
+    "apiBodyParameterNew": {
+      "nameLabel": "Parameter name (e.g. \"category\")",
+      "namePlaceholder": "Name"
     }
   },
   "toast": {
@@ -181,7 +198,8 @@
     "generationError": "Error: {message}",
     "selectionUnavailable": "Element selection isn't possible on this page.",
     "previewUnavailable": "Preview isn't possible on this page.",
-    "captureUnavailable": "Network recording isn't possible on this page."
+    "captureUnavailable": "Network recording isn't possible on this page.",
+    "invalidCompanionUrl": "Invalid address — please include http:// or https://."
   },
   "frame": {
     "badge": "iframe",

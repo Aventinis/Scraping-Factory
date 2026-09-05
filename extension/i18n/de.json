@@ -24,7 +24,12 @@
   },
   "error": {
     "title": "Companion App nicht erreichbar",
-    "hint": "Starte ScrapingFactory.Companion und versuche es erneut."
+    "hint": "Starte ScrapingFactory.Companion und versuche es erneut.",
+    "currentUrl": "Versuchte Adresse: {url}",
+    "customUrlLabel": "Läuft die Companion App unter einer anderen Adresse?",
+    "customUrlPlaceholder": "z. B. http://localhost:5050",
+    "useCustomUrl": "Adresse verwenden",
+    "resetCustomUrl": "Standardadresse wiederherstellen"
   },
   "idle": {
     "urlLabel": "URL",
@@ -46,6 +51,7 @@
     "apiEntriesShowBtn": "Aufgezeichnete Anfragen anzeigen ({count})",
     "apiEntriesHideBtn": "Aufgezeichnete Anfragen ausblenden",
     "apiEntriesEmpty": "Keine aufgezeichneten Anfragen.",
+    "apiEntriesBodyNotCaptured": "[nicht erfasst]",
     "apiConfigSummary": "API-Konfiguration bereit: {fields} Feld(er), {parameters} Parameter{headers}.",
     "apiConfigSummaryHeaders": ", {count} Header",
     "previewShowBtn": "Vorschau anzeigen",
@@ -119,7 +125,14 @@
     "noHeadersRecorded": "Keine Request-Header aufgezeichnet.",
     "headerModeValue": "Wert",
     "headerModeEnv": "Umgebungsvariable",
-    "envNamePlaceholder": "ENV_NAME"
+    "envNamePlaceholder": "ENV_NAME",
+    "bodyLabel": "Request-Body",
+    "bodyRootLabel": "Body",
+    "bodyToVariableBtn": "→ Variabel",
+    "bodyToFixedBtn": "→ Fest",
+    "bodyPickParameterPlaceholder": "-- Parameter wählen --",
+    "bodyNewParameterOption": "+ Neuer Parameter…",
+    "bodyCoerceToTitle": "Werttyp für die Übernahme in den Body (Standard: Text)"
   },
   "group": {
     "repeating": "wiederholend",
@@ -173,6 +186,10 @@
       "pathLabel": "JSON-Pfad (relativ zur übergeordneten Ebene, z. B. \"subcategories\")",
       "pathPlaceholder": "JSON-Pfad",
       "confirm": "Hinzufügen"
+    },
+    "apiBodyParameterNew": {
+      "nameLabel": "Name des Parameters (z. B. \"kategorie\")",
+      "namePlaceholder": "Name"
     }
   },
   "toast": {
@@ -181,7 +198,8 @@
     "generationError": "Fehler: {message}",
     "selectionUnavailable": "Element-Auswahl auf dieser Seite nicht möglich.",
     "previewUnavailable": "Vorschau auf dieser Seite nicht möglich.",
-    "captureUnavailable": "Netzwerk-Aufzeichnung auf dieser Seite nicht möglich."
+    "captureUnavailable": "Netzwerk-Aufzeichnung auf dieser Seite nicht möglich.",
+    "invalidCompanionUrl": "Ungültige Adresse — bitte mit http:// oder https:// angeben."
   },
   "frame": {
     "badge": "iframe",
