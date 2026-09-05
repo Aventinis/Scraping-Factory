@@ -1,11 +1,12 @@
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
+using ScrapingFactory.Companion;
 using ScrapingFactory.Compiler.Backends;
 using ScrapingFactory.Compiler.IR;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.WebHost.UseUrls("http://localhost:5000");
+builder.WebHost.UseUrls(CompanionHostOptions.BuildListenUrl(builder.Configuration));
 
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy => policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
@@ -27,7 +28,23 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new ApiBodyNodeJsonConverter());
 });
 
-builder.Services.AddSingleton<LanguageModuleRegistry>();
+// PythonExecutable/VerifierTimeoutSeconds are the same kind of
+// hosting-machine-specific value as Host/Port above (Companion:PythonExecutable
+// lets a machine with a non-standard Python install point at the right
+// binary; Companion:VerifierTimeoutSeconds raises the trial-run timeout on a
+// slower machine) — routed into PythonScriptVerifier's own optional
+// (pythonExecutable, timeout) constructor parameters via LanguageModuleRegistry's
+// generic ctorOverrides, rather than this project needing a direct reference
+// to that Python-specific type.
+var ctorOverrides = new Dictionary<string, object?>();
+var pythonExecutable = builder.Configuration["Companion:PythonExecutable"];
+if (!string.IsNullOrWhiteSpace(pythonExecutable))
+    ctorOverrides["pythonExecutable"] = pythonExecutable;
+var verifierTimeoutSeconds = builder.Configuration.GetValue<int?>("Companion:VerifierTimeoutSeconds");
+if (verifierTimeoutSeconds is > 0)
+    ctorOverrides["timeout"] = TimeSpan.FromSeconds(verifierTimeoutSeconds.Value);
+
+builder.Services.AddSingleton(new LanguageModuleRegistry(ctorOverrides));
 
 var app = builder.Build();
 
