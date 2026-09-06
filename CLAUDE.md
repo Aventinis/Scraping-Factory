@@ -22,7 +22,7 @@ extension/                  Browser extension (Manifest V3)
   content/                  Content script — DOM highlighting, selector extraction
   popup/                    Popup UI
 
-companion/                  .NET 9 solution
+companion/                  .NET 10 solution
   ScrapingFactory.Companion/ Entry point — local HTTP server
   ScrapingFactory.Compiler/  IR types + language modules
     IR/ScrapingConfig.cs     Intermediate representation
@@ -52,7 +52,7 @@ language-modules/
 - **API mode: POST/GraphQL request bodies** (Issue #55): `extension/content/api-capture.js`'s network recorder captures the outgoing request body alongside the response for `fetch`/`XMLHttpRequest` calls (`requestBody`/`requestBodyTruncated`/`requestBodySkipped`, reusing the existing `MAX_BODY_CHARS`/`truncateBody` convention) — only a string body (a `JSON.stringify`'d object) is capturable; `FormData`/`Blob`/`ArrayBuffer`/`URLSearchParams` are flagged via `requestBodySkipped` instead of read, since form-encoded/multipart bodies are out of scope. The recorded-requests panel (`renderApiEntriesList`) shows a captured body inline, or a "not captured" note when skipped. Once a POST candidate is confirmed as the primary field, its own captured body is looked up in the recorded pool and turned into an all-literal draft tree (`jsonValueToBodyDraft`, run as a fire-and-forget follow-up — `loadInitialBodyTreeForCandidate` — so a bodyless POST doesn't block the `API_CONFIG` screen transition on an unnecessary round trip). A new body-tree editor (`renderBodyTree`/`buildBodyTreeNodeEl`, visually mirroring the response tree) shows this shape read-only — the body's own structure is never edited, only a leaf's fixed/variable state (see "Architecture Decisions"): a literal leaf's "→ Variabel" action opens a picker listing every already-declared parameter plus a "+ Neuer Parameter…" option (a small name-only modal), routing the choice into the *same* parameter-source cards a URL variable part already uses (`allParameterParts` unions URL-derived and body-only parameters) rather than a second, body-specific source picker. Reverting a leaf's only reference to a body-only parameter back to fixed drops that now-orphaned parameter (mirrors the existing "no stale `parameterSources` entry" pattern for URL parts); a URL-derived parameter is left untouched either way, since it's still a real URL segment/query part regardless of whether the body also referenced it. GraphQL needs no dedicated handling anywhere in this UI — a GraphQL body is just an ordinary nested object with a fixed `query` string and a `variables` object, edited with the same generic mechanism
 
 ### Companion App (`companion/ScrapingFactory.Companion`)
-- .NET 9 console application
+- .NET 10 console application
 - Starts a local HTTP server for the extension
 - `/generate` generates the script, then runs it as a trial via the language module's verifier (`Backends/Python/PythonScriptVerifier`) in a temporary directory and only returns it on success (exit code 0, at least one data row, or — for container mode — one XML element) — on failure, returns `422` with an error message instead of the script
 - **Runtime requirement:** `python3` (or `python`) including `requests` + `beautifulsoup4` must be available on the PATH of the machine running the companion app — not just for the end user who later runs the downloaded script. For the browser engine (`Engine: "Browser"`), `playwright` (`pip install playwright`) plus an installed Chromium (`playwright install chromium`) is additionally required
