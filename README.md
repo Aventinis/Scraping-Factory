@@ -9,7 +9,7 @@ The user selects elements on a web page by clicking, and Scraping Factory genera
 The project consists of two parts that communicate over a local HTTP server:
 
 - **Browser extension** (Manifest V3) — runs in the browser's side panel (Chrome/Edge) or sidebar (Opera), lets you select elements on the page via hover/click
-- **Companion app** (.NET 9) — a local server that builds an intermediate representation (IR) from the selection and generates the Python script from it
+- **Companion app** (.NET 10) — a local server that builds an intermediate representation (IR) from the selection and generates the Python script from it
 
 ## Features (as of v1.5.0)
 
@@ -31,7 +31,7 @@ extension/                  Browser extension (Manifest V3)
   content/                  Content script — DOM highlighting, selector extraction
   popup/                    Side panel UI
 
-companion/                  .NET 9 solution
+companion/                  .NET 10 solution
   ScrapingFactory.Companion/ Entry point — local HTTP server
   ScrapingFactory.Compiler/  IR types + language modules
     IR/ScrapingConfig.cs     Intermediate representation
