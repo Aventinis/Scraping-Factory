@@ -150,6 +150,16 @@ let _state = {
   apiConfig:          null, // the "Apply"-confirmed ApiConfig wire object — Phase 6 will read this; persisted like fields/groups
   robotsTxtChecking: false, // not persisted, always off on popup reopen (like previewActive/apiCaptureActive)
   robotsTxtResult:   null,  // {ok, robotsUrl, path, notFound, allowed, matchedRule} | {ok:false, error} from the content script's CHECK_ROBOTS_TXT response, or null before the first check
+  // Issue #122: opt-in trial-run data preview — deliberately named
+  // "dataPreview" throughout, not "preview", to avoid any confusion with
+  // the unrelated DOM-highlight feature above (previewActive/togglePreview/
+  // #btn-preview) — that one highlights matched elements on the live page;
+  // this one shows a sample of what the last /generate trial run actually
+  // scraped. includeDataPreview is the checkbox's own state (not persisted,
+  // always off on popup reopen, same as previewActive/apiCaptureActive —
+  // it's a per-generate opt-in, not a sticky preference).
+  includeDataPreview: false,
+  dataPreview:        null, // the companion's ScriptPreviewData from the last successful /generate with includeDataPreview on, or null
 };
 
 const DOM_TREE_TIMEOUT_MS = 5000;
@@ -197,26 +207,30 @@ function sanitizeFileNameBase(input, fallback) {
 // defaults to Static when the key is absent, so the 'Static' case round-trips
 // to byte-for-byte the same request body as before this existed), and
 // `browserActions` only on top of that when non-empty.
+// `includePreview` (Issue #122) is mode-independent too — only included when
+// true, so the default (checkbox unchecked) request stays byte-for-byte
+// identical to before this existed. See companion's ScrapingConfig.IncludePreview.
 function buildScrapingConfig(
   url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
-  engine = 'Static', browserActions = [],
+  engine = 'Static', browserActions = [], includePreview = false,
 ) {
   const engineFields = engine === 'Browser'
     ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
     : {};
+  const previewFields = includePreview ? { includePreview: true } : {};
 
   if (mode === 'container') {
     return {
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
-      ...engineFields,
+      ...engineFields, ...previewFields,
     };
   }
   if (mode === 'api') {
     return {
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
-      ...engineFields,
+      ...engineFields, ...previewFields,
     };
   }
   return {
@@ -229,7 +243,7 @@ function buildScrapingConfig(
     outputFormat: 'Csv',
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
-    ...engineFields,
+    ...engineFields, ...previewFields,
   };
 }
 
@@ -241,12 +255,12 @@ function buildScrapingConfig(
 // function instead of reaching into chrome.runtime itself.
 function buildConfigExport(
   url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
-  engine = 'Static', browserActions = [],
+  engine = 'Static', browserActions = [], includePreview = false,
 ) {
   return {
     exportedAt: new Date().toISOString(),
     extensionVersion: manifest.version || '?',
-    config: buildScrapingConfig(url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions),
+    config: buildScrapingConfig(url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview),
   };
 }
 
@@ -584,6 +598,9 @@ function render() {
     const outputExtEl = document.getElementById('output-filename-ext');
     if (outputExtEl) outputExtEl.textContent = _state.mode === 'container' ? '.xml' : '.csv';
 
+    const dataPreviewToggle = document.getElementById('toggle-include-data-preview');
+    if (dataPreviewToggle) dataPreviewToggle.checked = _state.includeDataPreview;
+
     if (_state.containerModalOpen) {
       show('modal-container-new');
       const nameInput = document.getElementById('input-container-name');
@@ -627,6 +644,7 @@ function render() {
       const filename = `${sanitizeFileNameBase(_state.scriptFileName, 'scraper')}.py`;
       downloadBtn.textContent = t('done.downloadBtn', { filename });
     }
+    renderDataPreview(_state.dataPreview);
   }
 
   // Show modal when an element has been captured during selection
@@ -1009,7 +1027,7 @@ async function generate() {
   setState(STATES.GENERATING);
   const config = buildScrapingConfig(
     _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
-    _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions,
+    _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
@@ -1048,9 +1066,22 @@ async function generate() {
       throw new Error(buildVerificationErrorMessage(data));
     }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const scriptText = await res.text();
-    log('GENERATE OK', `${scriptText.length} chars`);
-    setState(STATES.DONE, { scriptText });
+
+    // Issue #122: only when includeDataPreview asked for it does the
+    // companion respond with a JSON envelope ({ script, preview }) instead
+    // of the plain script text — the client already knows which one it
+    // requested, no need to sniff the response's Content-Type.
+    let scriptText;
+    let dataPreview = null;
+    if (_state.includeDataPreview) {
+      const data = await res.json();
+      scriptText = data.script;
+      dataPreview = data.preview ?? null;
+    } else {
+      scriptText = await res.text();
+    }
+    log('GENERATE OK', `${scriptText.length} chars` + (dataPreview ? `, preview: ${dataPreview.totalCount} rows/elements` : ''));
+    setState(STATES.DONE, { scriptText, dataPreview });
   } catch (err) {
     log('GENERATE FAIL', err.message);
     setState(STATES.IDLE);
@@ -1079,7 +1110,7 @@ function downloadConfigExport() {
   const manifest = typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest() : {};
   const exportObj = buildConfigExport(
     _state.url, _state.mode, _state.fields, _state.groups, manifest, _state.apiConfig,
-    _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions,
+    _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
   );
   log('DOWNLOAD scraping-config.json', exportObj);
 
@@ -1092,6 +1123,83 @@ function downloadConfigExport() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(objectUrl);
+}
+
+// Issue #122: renders the last successful /generate's trial-run data
+// sample on the DONE screen. `preview` is the companion's ScriptPreviewData
+// (see companion/ScrapingFactory.Compiler/Backends/ScriptPreviewData.cs),
+// or null — the checkbox was off, or (older companion) IncludePreview isn't
+// supported yet. Named "renderDataPreview"/"dataPreview" throughout, not
+// bare "preview" — that name already belongs to the unrelated DOM-highlight
+// feature (previewActive/togglePreview/#btn-preview above), which
+// highlights matched elements on the live page and has nothing to do with
+// the generated script's actual trial-run output.
+// Builds the table via DOM APIs + textContent (not innerHTML), so scraped
+// values never need HTML-escaping here at all.
+function renderDataPreview(preview) {
+  const panel = document.getElementById('data-preview-panel');
+  if (!panel) return;
+  if (!preview) { panel.classList.add('hidden'); return; }
+  panel.classList.remove('hidden');
+
+  const tableWrap = document.getElementById('data-preview-table-wrap');
+  const xmlWrap = document.getElementById('data-preview-xml');
+  const truncatedNote = document.getElementById('data-preview-truncated');
+
+  if (preview.outputFormat === 'Xml') {
+    tableWrap?.classList.add('hidden');
+    if (xmlWrap) {
+      xmlWrap.classList.remove('hidden');
+      xmlWrap.textContent = preview.xmlSample || '';
+    }
+    if (truncatedNote) {
+      truncatedNote.classList.toggle('hidden', !preview.truncated);
+      truncatedNote.textContent = preview.truncated ? t('done.dataPreviewTruncatedXml') : '';
+    }
+    return;
+  }
+
+  xmlWrap?.classList.add('hidden');
+  if (tableWrap) {
+    tableWrap.classList.remove('hidden');
+    tableWrap.innerHTML = '';
+
+    const columns = preview.columns || [];
+    const rows = preview.rows || [];
+
+    const table = document.createElement('table');
+    table.className = 'data-preview-table';
+
+    const headRow = document.createElement('tr');
+    columns.forEach((col) => {
+      const th = document.createElement('th');
+      th.textContent = col;
+      headRow.appendChild(th);
+    });
+    const thead = document.createElement('thead');
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    rows.forEach((row) => {
+      const tr = document.createElement('tr');
+      columns.forEach((col) => {
+        const td = document.createElement('td');
+        td.textContent = row[col] ?? '';
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    tableWrap.appendChild(table);
+  }
+
+  if (truncatedNote) {
+    truncatedNote.classList.toggle('hidden', !preview.truncated);
+    truncatedNote.textContent = preview.truncated
+      ? t('done.dataPreviewTruncatedCsv', { shown: (preview.rows || []).length, total: preview.totalCount })
+      : '';
+  }
 }
 
 // `context` is a short human label (e.g. "Script generation"); passing it
@@ -1345,6 +1453,11 @@ function wireEvents() {
   });
   document.getElementById('input-output-filename')?.addEventListener('input', (e) => {
     setState(_state.current, { outputFileName: e.target.value });
+  });
+
+  document.getElementById('toggle-include-data-preview')?.addEventListener('change', (e) => {
+    log('BTN toggle-include-data-preview', e.target.checked);
+    patchState({ includeDataPreview: e.target.checked });
   });
 
   document.getElementById('btn-api-search')?.addEventListener('click', () => {
@@ -2008,5 +2121,6 @@ if (typeof module !== 'undefined') {
     confirmApiFieldCandidate, loadInitialBodyTreeForCandidate,
     toggleBodyLeafToVariable, toggleBodyLeafToFixed, setBodyLeafParameter, setBodyLeafCoerceTo,
     openBodyParameterModal, confirmBodyParameterModal, cancelBodyParameterModal, confirmApiConfig,
+    renderDataPreview,
   };
 }
