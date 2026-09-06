@@ -9,4 +9,8 @@ public sealed class ScriptVerificationResult
     public string? Error { get; init; }
 
     public int RowCount { get; init; }
+
+    // Issue #122: only set when the caller opted in (VerifyAsync's
+    // includePreview parameter) and Success is true — see ScriptPreviewData.
+    public ScriptPreviewData? Preview { get; init; }
 }

@@ -23,7 +23,7 @@ public class LanguageModuleRegistryTests
         public Task<ScriptVerificationResult> VerifyAsync(
             string script, OutputFormat outputFormat = OutputFormat.Csv, string outputFileBaseName = "output",
             TimeSpan extraTimeout = default, IReadOnlyDictionary<string, string>? extraEnvironmentVariables = null,
-            CancellationToken ct = default) =>
+            bool includePreview = false, CancellationToken ct = default) =>
             throw new NotImplementedException();
     }
 

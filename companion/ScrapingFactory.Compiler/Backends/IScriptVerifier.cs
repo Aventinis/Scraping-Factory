@@ -21,8 +21,13 @@ public interface IScriptVerifier
     // extraEnvironmentVariables are set on the verification subprocess only
     // (e.g. one-time login test values, see IR/FillVerificationValues.cs) —
     // never persisted, never part of the script itself.
+    // includePreview (Issue #122): when true and verification succeeds, a
+    // capped sample of the actual scraped data is kept and returned via
+    // ScriptVerificationResult.Preview instead of being discarded — see
+    // ScriptPreviewData. Defaults to false (today's exact behavior:
+    // read-and-discard, only the row/element count survives).
     Task<ScriptVerificationResult> VerifyAsync(
         string script, OutputFormat outputFormat = OutputFormat.Csv, string outputFileBaseName = "output",
         TimeSpan extraTimeout = default, IReadOnlyDictionary<string, string>? extraEnvironmentVariables = null,
-        CancellationToken ct = default);
+        bool includePreview = false, CancellationToken ct = default);
 }

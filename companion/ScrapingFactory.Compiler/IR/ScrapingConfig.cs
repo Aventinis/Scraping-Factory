@@ -54,6 +54,14 @@ public sealed class ScrapingConfig
     // configurable. Sanitized server-side (see FileNameSanitizer). Null/blank
     // falls back to "output".
     public string? OutputFileName { get; init; }
+
+    // Issue #122: opt-in trial-run data preview. When true, /generate's
+    // trial run keeps a capped sample of the CSV rows/XML elements it reads
+    // to check "at least one data row" anyway (see PythonScriptVerifier),
+    // and the success response becomes a JSON envelope (script + preview)
+    // instead of the plain script text — see Program.cs's /generate handler.
+    // Additive, wire-compatible: null/false is today's exact behavior.
+    public bool? IncludePreview { get; init; }
 }
 
 public sealed class ScrapingField
