@@ -60,4 +60,6 @@ cd extension && npm test
 
 **Known issue (Chrome/Chromium on Linux):** under tiling Wayland compositors (observed on Hyprland), native `<select>` dropdowns in the side panel can render mispositioned, off-screen. This looks like an upstream Chromium/Ozone-Wayland popup-positioning quirk rather than a bug in Scraping Factory — it wasn't reproducible in Opera on the same setup (possibly different Ozone/XWayland defaults, not confirmed). If you hit this, Opera is a working alternative that needs no extra setup.
 
-For full developer documentation (architecture, open design decisions), see `CLAUDE.md`.
+For the full architecture map (system diagrams, feature → file index, cross-boundary
+class relationships), see `docs/ARCHITECTURE.md`. For behavioral detail, edge cases,
+and the reasoning behind design decisions, see `CLAUDE.md`.

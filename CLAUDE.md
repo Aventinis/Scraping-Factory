@@ -10,6 +10,12 @@ The MVP (v1.0.0) was reached a while ago — the current release is v1.5.0. The 
 
 Full architecture concept: `architekturkonzept.md` (in the repo root, not checked in / kept separately).
 
+For the structural map of the codebase — system diagrams, a feature-to-file index,
+and the cross-boundary class/wire-format relationship model between the extension
+and the companion — see `docs/ARCHITECTURE.md`. That document is the *where*; this
+file remains the *why* (behavioral detail, edge cases, the reasoning behind design
+decisions).
+
 ## Language
 
 Code comments, commit messages, pull requests, and all documentation (this file, `README.md`, `.claude/skills/**`) are written in **English**, regardless of what language a task request came in — conversations with the assistant (and the underlying issues/requests) are frequently in German, and that's fine; German task descriptions do not need to be pre-translated before work starts. The one deliberate exception is the extension's own end-user-facing UI (button labels, screen text in `extension/popup/popup.html`/`popup.js`) and any user-facing strings in generated scripts, which stay in German for now, since that's a product/UX decision independent of this policy — untranslated on purpose, not an oversight.
