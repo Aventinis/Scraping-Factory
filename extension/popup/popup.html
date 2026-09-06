@@ -237,11 +237,31 @@
     }
     .output-settings-row input[type="text"]:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.2); }
     .output-settings-ext { flex: none; font-size: 12px; color: #9ca3af; }
+    .data-preview-toggle {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: #374151; margin-top: 4px; cursor: pointer;
+    }
 
     /* Done screen */
     #screen-done    { text-align: center; padding: 24px 16px; }
     .success-icon   { font-size: 32px; color: #22c55e; margin-bottom: 8px; }
     .done-actions   { display: flex; gap: 8px; margin-top: 16px; justify-content: center; }
+
+    /* Issue #122: trial-run data preview panel (Done screen) */
+    .data-preview-panel     { text-align: left; margin-top: 20px; }
+    .data-preview-title     { font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+    .data-preview-table-wrap { max-height: 220px; overflow: auto; border: 1px solid #e5e7eb; border-radius: 6px; }
+    .data-preview-table     { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .data-preview-table th, .data-preview-table td {
+      padding: 4px 6px; border-bottom: 1px solid #e5e7eb; text-align: left;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;
+    }
+    .data-preview-table th { background: #f9fafb; position: sticky; top: 0; }
+    .data-preview-xml {
+      max-height: 220px; overflow: auto; border: 1px solid #e5e7eb; border-radius: 6px;
+      padding: 6px 8px; margin: 0; background: #f9fafb; font-size: 11px; white-space: pre-wrap;
+    }
+    .data-preview-truncated { font-size: 11px; color: #9ca3af; margin: 6px 0 0; }
 
     /* Buttons */
     button {
@@ -463,6 +483,13 @@
         <input type="text" id="input-output-filename" data-i18n-placeholder="idle.outputFilenamePlaceholder" autocomplete="off" />
         <span id="output-filename-ext" class="output-settings-ext">.csv</span>
       </div>
+      <!-- Issue #122: opt-in trial-run data preview — unrelated to the DOM-
+           highlight "Vorschau" above (preview-section); see popup.js's
+           renderDataPreview doc comment for the naming rationale. -->
+      <label class="data-preview-toggle">
+        <input type="checkbox" id="toggle-include-data-preview" />
+        <span data-i18n="idle.dataPreviewToggle"></span>
+      </label>
     </div>
 
     <div class="actions" style="margin-top: 10px;">
@@ -552,6 +579,16 @@
     <div class="done-actions">
       <button id="btn-new-scraper" class="btn-secondary" data-i18n="done.newBtn"></button>
       <button id="btn-download" class="btn-primary" data-i18n="done.downloadBtn"></button>
+    </div>
+
+    <!-- Issue #122: trial-run data preview — populated by renderDataPreview,
+         hidden entirely when includeDataPreview was off for this /generate
+         (or an older companion doesn't support it yet). -->
+    <div id="data-preview-panel" class="data-preview-panel hidden">
+      <p class="data-preview-title" data-i18n="done.dataPreviewTitle"></p>
+      <div id="data-preview-table-wrap" class="data-preview-table-wrap hidden"></div>
+      <pre id="data-preview-xml" class="data-preview-xml hidden"></pre>
+      <p id="data-preview-truncated" class="data-preview-truncated hidden"></p>
     </div>
   </section>
 

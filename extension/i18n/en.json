@@ -70,7 +70,8 @@
     "engineLabel": "Engine",
     "engineStatic": "Static",
     "engineBrowser": "Browser",
-    "engineBrowserTitle": "Renders JavaScript before extraction — for dynamically loaded pages or login flows. Slower than the static engine."
+    "engineBrowserTitle": "Renders JavaScript before extraction — for dynamically loaded pages or login flows. Slower than the static engine.",
+    "dataPreviewToggle": "Show trial-run data preview"
   },
   "robots": {
     "checkFailed": "robots.txt could not be checked ({error}).",
@@ -155,7 +156,10 @@
   "done": {
     "title": "Script generated successfully!",
     "newBtn": "New",
-    "downloadBtn": "Download {filename}"
+    "downloadBtn": "Download {filename}",
+    "dataPreviewTitle": "Trial-run data preview",
+    "dataPreviewTruncatedCsv": "Showing {shown} of {total} rows — truncated",
+    "dataPreviewTruncatedXml": "Excerpt — not all data is shown"
   },
   "modals": {
     "fieldName": {
