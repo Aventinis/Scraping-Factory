@@ -270,7 +270,7 @@ public class PythonApiScriptVerifierTests
         var result = await new PythonScriptVerifier().VerifyAsync(GenerateScript(api));
 
         Assert.False(result.Success);
-        Assert.Contains("keine Daten", result.Error);
+        Assert.Contains("no data", result.Error);
         Assert.Equal(0, result.RowCount);
     }
 
@@ -499,7 +499,7 @@ public class PythonApiScriptVerifierTests
         var result = await new PythonScriptVerifier().VerifyAsync(GenerateScript(api), OutputFormat.Xml);
 
         Assert.False(result.Success);
-        Assert.Contains("keine Daten", result.Error);
+        Assert.Contains("no data", result.Error);
         Assert.Equal(0, result.RowCount);
     }
 

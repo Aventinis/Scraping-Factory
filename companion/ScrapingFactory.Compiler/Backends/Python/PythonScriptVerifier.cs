@@ -53,8 +53,8 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                 return new ScriptVerificationResult
                 {
                     Success = false,
-                    Error = $"Kein Python-Interpreter gefunden (versucht: {string.Join(", ", _candidates)}). " +
-                            "Ist Python installiert und im PATH der Companion App verfügbar?",
+                    Error = $"No Python interpreter found (tried: {string.Join(", ", _candidates)}). " +
+                            "Is Python installed and available on the companion app's PATH?",
                 };
             }
 
@@ -77,7 +77,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                     return new ScriptVerificationResult
                     {
                         Success = false,
-                        Error = $"Skript-Ausführung hat das Zeitlimit von {effectiveTimeout.TotalSeconds:0}s überschritten.",
+                        Error = $"Script execution exceeded the {effectiveTimeout.TotalSeconds:0}s timeout.",
                     };
                 }
                 await stdoutTask;
@@ -87,7 +87,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                     return new ScriptVerificationResult
                     {
                         Success = false,
-                        Error = $"Skript ({executableUsed}) wurde mit Fehler beendet (Exit-Code {process.ExitCode}): " +
+                        Error = $"Script ({executableUsed}) exited with an error (exit code {process.ExitCode}): " +
                                 Truncate(stderrBuilder.ToString()),
                     };
                 }
@@ -100,7 +100,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
             var csvPath = Path.Combine(workDir, csvFileName);
             if (!File.Exists(csvPath))
             {
-                return new ScriptVerificationResult { Success = false, Error = $"Skript hat keine {csvFileName} erzeugt." };
+                return new ScriptVerificationResult { Success = false, Error = $"Script did not produce {csvFileName}." };
             }
 
             var lines = await File.ReadAllLinesAsync(csvPath, ct);
@@ -116,8 +116,8 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                 return new ScriptVerificationResult
                 {
                     Success = false,
-                    Error = "Skript lief fehlerfrei, hat aber keine Daten zurückgegeben " +
-                            $"({csvFileName} enthält nur die Kopfzeile) — mindestens ein Selektor bzw. eine Anfrage findet vermutlich nichts.",
+                    Error = "Script ran without errors but returned no data " +
+                            $"({csvFileName} contains only the header row) — at least one selector or request likely found nothing.",
                 };
             }
 
@@ -129,7 +129,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return new ScriptVerificationResult { Success = false, Error = $"Verifikation fehlgeschlagen: {ex.Message}" };
+            return new ScriptVerificationResult { Success = false, Error = $"Verification failed: {ex.Message}" };
         }
         finally
         {
@@ -147,7 +147,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
         var xmlFileName = $"{outputFileBaseName}.xml";
         var xmlPath = Path.Combine(workDir, xmlFileName);
         if (!File.Exists(xmlPath))
-            return new ScriptVerificationResult { Success = false, Error = $"Skript hat keine {xmlFileName} erzeugt." };
+            return new ScriptVerificationResult { Success = false, Error = $"Script did not produce {xmlFileName}." };
 
         var document = XDocument.Load(xmlPath);
         var elementCount = document.Root?.Descendants().Count() ?? 0;
@@ -157,8 +157,8 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
             return new ScriptVerificationResult
             {
                 Success = false,
-                Error = "Skript lief fehlerfrei, hat aber keine Daten zurückgegeben " +
-                        $"({xmlFileName} enthält keine Elemente) — mindestens ein Selektor findet vermutlich nichts.",
+                Error = "Script ran without errors but returned no data " +
+                        $"({xmlFileName} contains no elements) — at least one selector likely found nothing.",
             };
         }
 
@@ -294,6 +294,6 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
     private static string Truncate(string text, int max = 2000)
     {
         var trimmed = text.Trim();
-        return trimmed.Length <= max ? trimmed : trimmed[..max] + "… (gekürzt)";
+        return trimmed.Length <= max ? trimmed : trimmed[..max] + "… (truncated)";
     }
 }
