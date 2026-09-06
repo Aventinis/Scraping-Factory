@@ -19,6 +19,10 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Local agent/tooling config — machine-specific, may reference local paths;
+# not something a contributor's own clone should ever accidentally commit.
+.claude/settings.local.json
+
 # Node
 extension/node_modules/
 

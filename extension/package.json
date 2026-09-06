@@ -1,7 +1,7 @@
 {
   "name": "extension",
   "version": "1.0.0",
-  "description": "",
+  "description": "Scraping Factory browser extension — visual scraper builder UI.",
   "main": "index.js",
   "scripts": {
     "test": "jest"
@@ -11,7 +11,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1"
