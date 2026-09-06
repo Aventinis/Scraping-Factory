@@ -70,7 +70,8 @@
     "engineLabel": "Motor",
     "engineStatic": "Estático",
     "engineBrowser": "Navegador",
-    "engineBrowserTitle": "Renderiza JavaScript antes de la extracción — para páginas cargadas dinámicamente o flujos de inicio de sesión. Más lento que el motor estático."
+    "engineBrowserTitle": "Renderiza JavaScript antes de la extracción — para páginas cargadas dinámicamente o flujos de inicio de sesión. Más lento que el motor estático.",
+    "dataPreviewToggle": "Mostrar vista previa de los datos de la prueba"
   },
   "robots": {
     "checkFailed": "No se pudo comprobar el robots.txt ({error}).",
@@ -155,7 +156,10 @@
   "done": {
     "title": "¡Script generado correctamente!",
     "newBtn": "Nuevo",
-    "downloadBtn": "Descargar {filename}"
+    "downloadBtn": "Descargar {filename}",
+    "dataPreviewTitle": "Vista previa de los datos de la prueba",
+    "dataPreviewTruncatedCsv": "Mostrando {shown} de {total} filas — truncado",
+    "dataPreviewTruncatedXml": "Extracto — no se muestran todos los datos"
   },
   "modals": {
     "fieldName": {

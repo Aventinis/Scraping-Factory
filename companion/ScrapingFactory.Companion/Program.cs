@@ -113,7 +113,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     var verifier = registry.ResolveScriptVerifier("python");
     var verification = await verifier.VerifyAsync(
         script, plan.OutputFormat, plan.OutputFileBaseName, extraTimeout,
-        verificationEnv.Count > 0 ? verificationEnv : null);
+        verificationEnv.Count > 0 ? verificationEnv : null, config.IncludePreview == true);
     if (!verification.Success)
     {
         return Results.UnprocessableEntity(new
@@ -122,7 +122,12 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
         });
     }
 
-    return Results.Text(script, "text/plain");
+    // Issue #122: only a JSON envelope when the caller actually opted in —
+    // every other caller (and every existing test) keeps getting the exact
+    // same plain-text script response as before this existed.
+    return config.IncludePreview == true
+        ? Results.Json(new { script, preview = verification.Preview })
+        : Results.Text(script, "text/plain");
 });
 
 app.Run();

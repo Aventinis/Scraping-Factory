@@ -23,6 +23,13 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(45);
     private static readonly string[] DefaultCandidates = ["python3", "python"];
 
+    // Issue #122: how many rows/top-level XML elements a trial-run preview
+    // ever carries, regardless of how much data the script actually
+    // produced — a preview is a sanity check, not a full export, and this
+    // keeps the /generate response small even for a script that legitimately
+    // scrapes thousands of rows.
+    private const int PreviewSampleCap = 50;
+
     private readonly TimeSpan _timeout = timeout ?? DefaultTimeout;
     private readonly string[] _candidates = pythonExecutable is not null ? [pythonExecutable] : DefaultCandidates;
 
@@ -31,7 +38,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
     public async Task<ScriptVerificationResult> VerifyAsync(
         string script, OutputFormat outputFormat = OutputFormat.Csv, string outputFileBaseName = "output",
         TimeSpan extraTimeout = default, IReadOnlyDictionary<string, string>? extraEnvironmentVariables = null,
-        CancellationToken ct = default)
+        bool includePreview = false, CancellationToken ct = default)
     {
         var effectiveTimeout = _timeout + extraTimeout;
         var workDir = Directory.CreateTempSubdirectory("scrapingfactory-verify-").FullName;
@@ -46,8 +53,8 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                 return new ScriptVerificationResult
                 {
                     Success = false,
-                    Error = $"Kein Python-Interpreter gefunden (versucht: {string.Join(", ", _candidates)}). " +
-                            "Ist Python installiert und im PATH der Companion App verfügbar?",
+                    Error = $"No Python interpreter found (tried: {string.Join(", ", _candidates)}). " +
+                            "Is Python installed and available on the companion app's PATH?",
                 };
             }
 
@@ -70,7 +77,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                     return new ScriptVerificationResult
                     {
                         Success = false,
-                        Error = $"Skript-Ausführung hat das Zeitlimit von {effectiveTimeout.TotalSeconds:0}s überschritten.",
+                        Error = $"Script execution exceeded the {effectiveTimeout.TotalSeconds:0}s timeout.",
                     };
                 }
                 await stdoutTask;
@@ -80,20 +87,20 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                     return new ScriptVerificationResult
                     {
                         Success = false,
-                        Error = $"Skript ({executableUsed}) wurde mit Fehler beendet (Exit-Code {process.ExitCode}): " +
+                        Error = $"Script ({executableUsed}) exited with an error (exit code {process.ExitCode}): " +
                                 Truncate(stderrBuilder.ToString()),
                     };
                 }
             }
 
             if (outputFormat == OutputFormat.Xml)
-                return VerifyXmlOutput(workDir, outputFileBaseName);
+                return VerifyXmlOutput(workDir, outputFileBaseName, includePreview);
 
             var csvFileName = $"{outputFileBaseName}.csv";
             var csvPath = Path.Combine(workDir, csvFileName);
             if (!File.Exists(csvPath))
             {
-                return new ScriptVerificationResult { Success = false, Error = $"Skript hat keine {csvFileName} erzeugt." };
+                return new ScriptVerificationResult { Success = false, Error = $"Script did not produce {csvFileName}." };
             }
 
             var lines = await File.ReadAllLinesAsync(csvPath, ct);
@@ -104,18 +111,25 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
             // ScrapingPlanValidator requiring at least one parameter with a
             // non-empty static list/range at config time) — treated
             // identically to any other 0-row result, not a special case.
-            return rowCount > 0
-                ? new ScriptVerificationResult { Success = true, RowCount = rowCount }
-                : new ScriptVerificationResult
+            if (rowCount == 0)
+            {
+                return new ScriptVerificationResult
                 {
                     Success = false,
-                    Error = "Skript lief fehlerfrei, hat aber keine Daten zurückgegeben " +
-                            $"({csvFileName} enthält nur die Kopfzeile) — mindestens ein Selektor bzw. eine Anfrage findet vermutlich nichts.",
+                    Error = "Script ran without errors but returned no data " +
+                            $"({csvFileName} contains only the header row) — at least one selector or request likely found nothing.",
                 };
+            }
+
+            return new ScriptVerificationResult
+            {
+                Success = true, RowCount = rowCount,
+                Preview = includePreview ? BuildCsvPreview(lines, rowCount) : null,
+            };
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return new ScriptVerificationResult { Success = false, Error = $"Verifikation fehlgeschlagen: {ex.Message}" };
+            return new ScriptVerificationResult { Success = false, Error = $"Verification failed: {ex.Message}" };
         }
         finally
         {
@@ -128,24 +142,113 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
     // descendant element. Parse failures (e.g. an invalid XML tag name from
     // a Container-Mode Name the user typed) bubble up to VerifyAsync's outer
     // catch, same as any other unexpected exception during verification.
-    private static ScriptVerificationResult VerifyXmlOutput(string workDir, string outputFileBaseName)
+    private static ScriptVerificationResult VerifyXmlOutput(string workDir, string outputFileBaseName, bool includePreview)
     {
         var xmlFileName = $"{outputFileBaseName}.xml";
         var xmlPath = Path.Combine(workDir, xmlFileName);
         if (!File.Exists(xmlPath))
-            return new ScriptVerificationResult { Success = false, Error = $"Skript hat keine {xmlFileName} erzeugt." };
+            return new ScriptVerificationResult { Success = false, Error = $"Script did not produce {xmlFileName}." };
 
         var document = XDocument.Load(xmlPath);
         var elementCount = document.Root?.Descendants().Count() ?? 0;
 
-        return elementCount > 0
-            ? new ScriptVerificationResult { Success = true, RowCount = elementCount }
-            : new ScriptVerificationResult
+        if (elementCount == 0)
+        {
+            return new ScriptVerificationResult
             {
                 Success = false,
-                Error = "Skript lief fehlerfrei, hat aber keine Daten zurückgegeben " +
-                        $"({xmlFileName} enthält keine Elemente) — mindestens ein Selektor findet vermutlich nichts.",
+                Error = "Script ran without errors but returned no data " +
+                        $"({xmlFileName} contains no elements) — at least one selector likely found nothing.",
             };
+        }
+
+        return new ScriptVerificationResult
+        {
+            Success = true, RowCount = elementCount,
+            Preview = includePreview ? BuildXmlPreview(document, elementCount) : null,
+        };
+    }
+
+    // Csv preview: re-parses the header/data lines VerifyAsync already read
+    // for the row count above — no extra file I/O. Field-level parsing is
+    // needed here (unlike the row-count check, which only counts lines)
+    // since a quoted field can itself contain a comma (see ParseCsvLine).
+    private static ScriptPreviewData BuildCsvPreview(string[] lines, int rowCount)
+    {
+        var columns = ParseCsvLine(lines[0]);
+        var sampleRows = lines.Skip(1).Take(PreviewSampleCap)
+            .Select(line =>
+            {
+                var values = ParseCsvLine(line);
+                var row = new Dictionary<string, string>();
+                for (var i = 0; i < columns.Count; i++)
+                    row[columns[i]] = i < values.Count ? values[i] : "";
+                return (IReadOnlyDictionary<string, string>)row;
+            })
+            .ToList();
+
+        return new ScriptPreviewData
+        {
+            OutputFormat = "Csv",
+            TotalCount = rowCount,
+            Truncated = rowCount > PreviewSampleCap,
+            Columns = columns,
+            Rows = sampleRows,
+        };
+    }
+
+    // Xml preview (Phase A — see PLAN-trial-run-data-preview.md): a
+    // pretty-printed fragment containing only the first PreviewSampleCap
+    // top-level elements, reusing the XDocument VerifyXmlOutput already
+    // parsed for the element-count check above. "Truncated" compares
+    // top-level elements (what was actually capped here) rather than
+    // elementCount (every descendant at every nesting level, the metric
+    // RowCount/TotalCount mirrors) — the two only coincide for a flat,
+    // one-level tree.
+    private static ScriptPreviewData BuildXmlPreview(XDocument document, int elementCount)
+    {
+        var rootElements = document.Root!.Elements().ToList();
+        var sampleDocument = new XDocument(new XElement(document.Root.Name, rootElements.Take(PreviewSampleCap)));
+
+        return new ScriptPreviewData
+        {
+            OutputFormat = "Xml",
+            TotalCount = elementCount,
+            Truncated = rootElements.Count > PreviewSampleCap,
+            XmlSample = sampleDocument.ToString(),
+        };
+    }
+
+    // Splits one CSV line into its fields, matching Python's csv.DictWriter
+    // default ("excel") dialect the code generator always writes with:
+    // comma-separated, "..."-quoted fields may themselves contain commas/
+    // newlines, "" inside a quoted field is an escaped literal quote. Only
+    // used to build a human-readable preview sample — the row-count check
+    // above never needs field-level parsing, only line counting.
+    private static List<string> ParseCsvLine(string line)
+    {
+        var fields = new List<string>();
+        var current = new StringBuilder();
+        var inQuotes = false;
+        for (var i = 0; i < line.Length; i++)
+        {
+            var c = line[i];
+            if (inQuotes)
+            {
+                if (c != '"') { current.Append(c); continue; }
+                if (i + 1 < line.Length && line[i + 1] == '"') { current.Append('"'); i++; }
+                else inQuotes = false;
+                continue;
+            }
+            switch (c)
+            {
+                case '"': inQuotes = true; break;
+                case ',': fields.Add(current.ToString()); current.Clear(); break;
+                default: current.Append(c); break;
+            }
+        }
+        fields.Add(current.ToString());
+        return fields;
     }
 
     private (Process? Process, string? Executable) StartProcess(
@@ -191,6 +294,6 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
     private static string Truncate(string text, int max = 2000)
     {
         var trimmed = text.Trim();
-        return trimmed.Length <= max ? trimmed : trimmed[..max] + "… (gekürzt)";
+        return trimmed.Length <= max ? trimmed : trimmed[..max] + "… (truncated)";
     }
 }

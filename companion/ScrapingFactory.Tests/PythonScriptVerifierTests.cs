@@ -35,6 +35,39 @@ public class PythonScriptVerifierTests
     }
 
     [Fact]
+    public async Task IncludePreviewFalse_LeavesPreviewNull()
+    {
+        using var server = new LocalTestServer(
+            "<html><body><ul><li class='item'>A</li><li class='item'>B</li></ul></body></html>");
+        var script = GenerateScript(server.BaseUrl, ("Item", ".item"));
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.True(result.Success);
+        Assert.Null(result.Preview);
+    }
+
+    [Fact]
+    public async Task IncludePreviewTrue_CsvOutput_PopulatesCappedSample()
+    {
+        using var server = new LocalTestServer(
+            "<html><body><ul><li class='item'>A</li><li class='item'>B</li></ul></body></html>");
+        var script = GenerateScript(server.BaseUrl, ("Item", ".item"));
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, includePreview: true);
+
+        Assert.True(result.Success);
+        Assert.NotNull(result.Preview);
+        Assert.Equal("Csv", result.Preview.OutputFormat);
+        Assert.Equal(2, result.Preview.TotalCount);
+        Assert.False(result.Preview.Truncated);
+        Assert.Equal(["Item"], result.Preview.Columns);
+        Assert.Equal(2, result.Preview.Rows!.Count);
+        Assert.Equal("A", result.Preview.Rows[0]["Item"]);
+        Assert.Equal("B", result.Preview.Rows[1]["Item"]);
+    }
+
+    [Fact]
     public async Task SelectorMatchingNothing_FailsWithZeroDataRows()
     {
         using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
@@ -43,7 +76,7 @@ public class PythonScriptVerifierTests
         var result = await new PythonScriptVerifier().VerifyAsync(script);
 
         Assert.False(result.Success);
-        Assert.Contains("keine Daten", result.Error);
+        Assert.Contains("no data", result.Error);
         Assert.Equal(0, result.RowCount);
     }
 
@@ -109,7 +142,7 @@ public class PythonScriptVerifierTests
         var result = await new PythonScriptVerifier().VerifyAsync(script);
 
         Assert.False(result.Success);
-        Assert.Contains("keine output.csv erzeugt", result.Error);
+        Assert.Contains("did not produce output.csv", result.Error);
     }
 
     [Fact]
@@ -121,7 +154,7 @@ public class PythonScriptVerifierTests
         var result = await verifier.VerifyAsync(script);
 
         Assert.False(result.Success);
-        Assert.Contains("Kein Python-Interpreter gefunden", result.Error);
+        Assert.Contains("No Python interpreter found", result.Error);
     }
 
     // ── Container-Mode (OutputFormat.Xml) ────────────────────────────────
@@ -181,6 +214,34 @@ public class PythonScriptVerifierTests
     }
 
     [Fact]
+    public async Task IncludePreviewTrue_XmlOutput_PopulatesXmlSample()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+            <section class="menu-category"><h2>Vorspeisen</h2>
+              <li class="menu-item"><h3>Suppe</h3></li>
+            </section>
+            </body></html>
+            """);
+        var root = new GroupNode
+        {
+            Name = "Kategorie",
+            Selector = "section.menu-category",
+            Repeating = true,
+            Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }],
+        };
+        var script = GenerateGroupedScript(server.BaseUrl, root);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Xml, includePreview: true);
+
+        Assert.True(result.Success, result.Error);
+        Assert.NotNull(result.Preview);
+        Assert.Equal("Xml", result.Preview.OutputFormat);
+        Assert.False(result.Preview.Truncated);
+        Assert.Contains("Vorspeisen", result.Preview.XmlSample);
+    }
+
+    [Fact]
     public async Task GroupedScript_NonRepeatingGroupWithZeroMatches_IsOmittedNotError()
     {
         using var server = new LocalTestServer("""
@@ -232,7 +293,7 @@ public class PythonScriptVerifierTests
         var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Xml);
 
         Assert.False(result.Success);
-        Assert.Contains("keine Daten", result.Error);
+        Assert.Contains("no data", result.Error);
         Assert.Equal(0, result.RowCount);
     }
 

@@ -46,6 +46,7 @@ const {
   frameBadgeHtml,
   jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
   bodyTreeLeavesAreBound, serializeBodyTree, allParameterParts, renderBodyTree,
+  renderDataPreview,
 } = require('./popup');
 
 // jsdom's Blob doesn't implement .text() — read via FileReader instead.
@@ -164,6 +165,33 @@ describe('buildScrapingConfig (engine / browserActions, Issue #41/#42 Phase 5)',
 
     const apiResult = buildScrapingConfig('https://example.com', 'api', [], [], { fields: [] }, null, null, 'Browser');
     expect(apiResult.engine).toBe('Browser');
+  });
+});
+
+// Issue #122: includePreview is mode-independent (same "only include the
+// key when non-default" pattern as engine/browserActions above) — a
+// checkbox left unchecked must round-trip to byte-for-byte the same
+// request body as before this existed.
+describe('buildScrapingConfig (includePreview, Issue #122)', () => {
+  test('omits includePreview entirely when false (the default)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.includePreview).toBeUndefined();
+  });
+
+  test('includes includePreview: true when requested', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], true,
+    );
+    expect(result.includePreview).toBe(true);
+  });
+
+  test('works the same way for container and api modes', () => {
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig('https://example.com', 'container', [], groups, null, null, null, 'Static', [], true);
+    expect(containerResult.includePreview).toBe(true);
+
+    const apiResult = buildScrapingConfig('https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], true);
+    expect(apiResult.includePreview).toBe(true);
   });
 });
 
@@ -1122,6 +1150,86 @@ describe('renderFields', () => {
     expect(rows[0].querySelector('.frame-badge')).not.toBeNull();
     expect(rows[0].querySelector('.frame-badge').title).toContain('#price-widget');
     expect(rows[1].querySelector('.frame-badge')).toBeNull();
+  });
+});
+
+// Issue #122 — deliberately not named "renderPreview": that name already
+// belongs to the unrelated DOM-highlight feature (togglePreview et al.).
+describe('renderDataPreview', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div id="data-preview-panel" class="hidden">
+        <div id="data-preview-table-wrap" class="hidden"></div>
+        <pre id="data-preview-xml" class="hidden"></pre>
+        <p id="data-preview-truncated" class="hidden"></p>
+      </div>
+    `;
+  });
+
+  test('hides the panel entirely when preview is null', () => {
+    renderDataPreview(null);
+    expect(document.getElementById('data-preview-panel').classList.contains('hidden')).toBe(true);
+  });
+
+  test('renders a Csv preview as a table, one row per sample entry', () => {
+    renderDataPreview({
+      outputFormat: 'Csv', totalCount: 2, truncated: false, columns: ['Titel'],
+      rows: [{ Titel: 'Suppe' }, { Titel: 'Salat' }],
+    });
+
+    expect(document.getElementById('data-preview-panel').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('data-preview-xml').classList.contains('hidden')).toBe(true);
+    const table = document.querySelector('.data-preview-table');
+    expect(table.querySelectorAll('th')).toHaveLength(1);
+    expect(table.querySelectorAll('th')[0].textContent).toBe('Titel');
+    const rows = table.querySelectorAll('tbody tr');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].querySelector('td').textContent).toBe('Suppe');
+    expect(rows[1].querySelector('td').textContent).toBe('Salat');
+    expect(document.getElementById('data-preview-truncated').classList.contains('hidden')).toBe(true);
+  });
+
+  // Proves table cells use textContent, not innerHTML — a scraped value
+  // that happens to look like markup must show up as literal text, not be
+  // interpreted/dropped as an element.
+  test('does not interpret HTML-like scraped values', () => {
+    renderDataPreview({
+      outputFormat: 'Csv', totalCount: 1, truncated: false, columns: ['Titel'],
+      rows: [{ Titel: '<b>fett</b>' }],
+    });
+
+    const cell = document.querySelector('.data-preview-table tbody td');
+    expect(cell.textContent).toBe('<b>fett</b>');
+    expect(cell.querySelector('b')).toBeNull();
+  });
+
+  test('shows a "showing N of M" note when a Csv preview was truncated', () => {
+    renderDataPreview({
+      outputFormat: 'Csv', totalCount: 60, truncated: true, columns: ['Titel'],
+      rows: Array.from({ length: 50 }, (_, i) => ({ Titel: `Eintrag ${i}` })),
+    });
+
+    const note = document.getElementById('data-preview-truncated');
+    expect(note.classList.contains('hidden')).toBe(false);
+    expect(note.textContent).toContain('50');
+    expect(note.textContent).toContain('60');
+  });
+
+  test('renders an Xml preview as read-only text, not a table', () => {
+    renderDataPreview({ outputFormat: 'Xml', totalCount: 3, truncated: false, xmlSample: '<Ergebnis><Kategorie/></Ergebnis>' });
+
+    expect(document.getElementById('data-preview-table-wrap').classList.contains('hidden')).toBe(true);
+    const xmlEl = document.getElementById('data-preview-xml');
+    expect(xmlEl.classList.contains('hidden')).toBe(false);
+    expect(xmlEl.textContent).toBe('<Ergebnis><Kategorie/></Ergebnis>');
+  });
+
+  test('shows a generic truncation note for a truncated Xml preview (no shown/total counts)', () => {
+    renderDataPreview({ outputFormat: 'Xml', totalCount: 999, truncated: true, xmlSample: '<Ergebnis/>' });
+
+    const note = document.getElementById('data-preview-truncated');
+    expect(note.classList.contains('hidden')).toBe(false);
+    expect(note.textContent.length).toBeGreaterThan(0);
   });
 });
 
