@@ -4,15 +4,61 @@
 // via a full CHECKING_COMPANION -> checkCompanion() round trip anyway.
 let companionUrl = null;
 
-const STATES = {
-  CHECKING_COMPANION: 'CHECKING_COMPANION',
-  COMPANION_ERROR:    'COMPANION_ERROR',
-  IDLE:               'IDLE',
-  SELECTING:          'SELECTING',
-  API_CONFIG:         'API_CONFIG', // Issue #53 Phase 5 — configuring a confirmed candidate into an ApiConfig
-  GENERATING:         'GENERATING',
-  DONE:               'DONE',
-};
+// ── Logging ───────────────────────────────────────────────────────────────────
+
+const { createLogger, getLogBuffer } =
+  typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+const log = createLogger('SF:Popup');
+
+const { SUPPORTED_LANGUAGES, initI18n, setLanguage, getLanguage, t } =
+  typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
+
+const { DEFAULT_COMPANION_URL, getCompanionUrl, setCompanionUrlOverride, resetCompanionUrlOverride, normalizeUrl } =
+  typeof require !== 'undefined' ? require('../shared/companion-config') : self.SFCompanionConfig;
+
+const {
+  STATES, escapeHtml,
+  parseUrlTemplateParts, buildUrlTemplate, parseValueListInput, findUrlTemplateMatches, mergeValueListValues,
+  buildStaticListSource, buildDiscoverySource, buildRangeSource, RANGE_FORMAT_PRESETS,
+  detectRangeFormat, findUrlPartValue, rangeFormatExample,
+  buildApiHeaders, buildApiConfig,
+  buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
+  serializeApiTree, countApiConfigFields, updateApiTreeNode, apiTreeNodesHaveNonBlankNames,
+  jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
+  bodyTreeLeavesAreBound, serializeBodyTree, lastPathSegmentName, buildApiSubtreeFromCandidate,
+  resolveApiGroupScopePath, variableUrlParts, allParameterParts, apiConfigDraftHasAllSourcesChosen,
+} = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
+
+const {
+  buildGroupNode, buildFieldNode, resolveGroupNode, hasRepeatingAncestor,
+  insertContainerNode, removeGroupTreeNode, formatGroupNodeLabel, serializeGroupTree,
+} = typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
+
+const {
+  renderApiTree, renderApiCandidates, renderApiEntriesList,
+  renderApiConfigScreen, renderBodyTree,
+  startApiCapture, stopApiCapture, toggleApiCapture,
+  startApiFieldSearch, confirmApiFieldCandidate, loadInitialBodyTreeForCandidate, cancelApiConfig,
+  startApiTreeFieldSearch, confirmApiTreeFieldCandidate,
+  openApiGroupModal, confirmApiGroupModal, cancelApiGroupModal, setApiTreeNodeName,
+  startDiscoverySearch, confirmDiscoveryCandidate,
+  toggleApiConfigPartVariable, setApiConfigPartName, setApiConfigSourceKind,
+  patchApiConfigSource, setApiConfigHeaderDecision,
+  toggleBodyLeafToVariable, toggleBodyLeafToFixed, setBodyLeafParameter, setBodyLeafCoerceTo,
+  openBodyParameterModal, confirmBodyParameterModal, cancelBodyParameterModal, confirmApiConfig,
+  toggleApiEntriesPanel, fillStaticListFromPool,
+} = typeof require !== 'undefined' ? require('./api-config-ui') : self.SFApiConfigUI;
+
+const {
+  renderGroupTree,
+  openContainerModal, confirmContainerModal, cancelContainerModal,
+  startFieldSelection, confirmExtendedField, cancelExtendedField,
+} = typeof require !== 'undefined' ? require('./container-tree-ui') : self.SFContainerTreeUI;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (e) => log('UNCAUGHT_ERROR', e.message));
+  window.addEventListener('unhandledrejection', (e) => log('UNHANDLED_REJECTION', String(e.reason)));
+}
 
 let _state = {
   current:             STATES.CHECKING_COMPANION,
@@ -121,23 +167,6 @@ function requestDomTree() {
     setLastError('DOM tree request timed out', 'DOM tree view');
     patchState({ domTreeError: 'Tree could not be loaded.' });
   }, DOM_TREE_TIMEOUT_MS);
-}
-
-// ── Logging ───────────────────────────────────────────────────────────────────
-
-const { createLogger, getLogBuffer } =
-  typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
-const log = createLogger('SF:Popup');
-
-const { SUPPORTED_LANGUAGES, initI18n, setLanguage, getLanguage, t } =
-  typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
-
-const { DEFAULT_COMPANION_URL, getCompanionUrl, setCompanionUrlOverride, resetCompanionUrlOverride, normalizeUrl } =
-  typeof require !== 'undefined' ? require('../shared/companion-config') : self.SFCompanionConfig;
-
-if (typeof window !== 'undefined') {
-  window.addEventListener('error', (e) => log('UNCAUGHT_ERROR', e.message));
-  window.addEventListener('unhandledrejection', (e) => log('UNHANDLED_REJECTION', String(e.reason)));
 }
 
 // ── Pure functions (exported for testing) ────────────────────────────────────
@@ -293,716 +322,6 @@ function removeField(fields, index) {
   return fields.filter((_, i) => i !== index);
 }
 
-// ── API-Mode config assembly (Issue #53 Phase 5) ────────────────────────────
-// Turns a confirmed Phase-4 candidate request into a parameterized ApiConfig
-// (companion/ScrapingFactory.Compiler/IR/ApiConfig.cs) — URL decomposed into
-// literal/variable path segments and query params, each variable part given
-// a value source, captured request headers optionally adopted. Not wired
-// into buildScrapingConfig/`/generate` yet — that's Phase 6, which also adds
-// the third top-level mode; this only has to produce the right shape.
-
-// One entry per non-empty path segment / query param, `variable`/`name`
-// default to "not parameterized yet" so the URL-editor screen can render
-// the decomposed request before the user has toggled anything.
-function parseUrlTemplateParts(urlString) {
-  const url = new URL(urlString);
-  const pathSegments = url.pathname.split('/').filter(s => s !== '').map(value => ({ value, variable: false, name: '' }));
-  const queryParams = Array.from(url.searchParams.entries()).map(([key, value]) => ({ key, value, variable: false, name: key }));
-  return { origin: url.origin, pathSegments, queryParams };
-}
-
-// Inverse of parseUrlTemplateParts, given the (possibly since-edited)
-// segments/params — a "variable" part becomes a "{name}" placeholder,
-// otherwise its literal value is kept. Path segment values come straight
-// from url.pathname (already percent-encoded, so used as-is); query values
-// come from url.searchParams (percent-*decoded* by the URL API), so those
-// need re-encoding when rebuilt.
-function buildUrlTemplate({ origin, pathSegments, queryParams }) {
-  const path = pathSegments.map(seg => (seg.variable ? `{${seg.name}}` : seg.value)).join('/');
-  const query = queryParams
-    .map(p => `${encodeURIComponent(p.key)}=${p.variable ? `{${p.name}}` : encodeURIComponent(p.value)}`)
-    .join('&');
-  return `${origin}/${path}${query ? `?${query}` : ''}`;
-}
-
-// Werteliste source: comma- or newline-separated free text → trimmed,
-// non-empty values.
-function parseValueListInput(text) {
-  return String(text ?? '').split(/[,\n]/).map(s => s.trim()).filter(s => s.length > 0);
-}
-
-// API-mode follow-up: auto-fill a StaticListSource's value list from the
-// recorded request pool. `urlParts` is the confirmed candidate's own
-// decomposed URL (see parseUrlTemplateParts) with the user's current
-// variable/name toggles; `targetPartId` ("path:<index>" or "query:<key>")
-// is the one part being derived — every *other* fixed part must match
-// exactly for an entry to count as "the same endpoint, different value",
-// and every other *variable* part is left free (it's parameterized
-// separately, so siblings may legitimately disagree on it too). Each
-// candidate entry's URL is parsed with the same parseUrlTemplateParts used
-// to build urlParts in the first place, so a matched value comes back in
-// exactly the representation buildUrlTemplate expects to substitute back in
-// (percent-encoded-as-is for a path segment, percent-decoded for a query
-// param) — no extra normalization needed. Returns distinct values in
-// first-seen order.
-function findUrlTemplateMatches(urlParts, targetPartId, entries) {
-  const [targetScope, targetKey] = targetPartId.split(':');
-  const seen = new Set();
-  const values = [];
-
-  (entries || []).forEach((entry) => {
-    let candidate;
-    try {
-      candidate = parseUrlTemplateParts(entry.url);
-    } catch {
-      return; // not a resolvable absolute URL — can't compare
-    }
-    if (candidate.origin !== urlParts.origin) return;
-    if (candidate.pathSegments.length !== urlParts.pathSegments.length) return;
-
-    for (let i = 0; i < urlParts.pathSegments.length; i++) {
-      const partId = `path:${i}`;
-      if (partId === targetPartId) continue;
-      const seg = urlParts.pathSegments[i];
-      if (seg.variable) continue; // parameterized independently — free to differ
-      if (candidate.pathSegments[i].value !== seg.value) return;
-    }
-
-    const urlKeys = urlParts.queryParams.map(p => p.key).slice().sort().join(',');
-    const candidateKeys = candidate.queryParams.map(p => p.key).slice().sort().join(',');
-    if (urlKeys !== candidateKeys) return; // different query-key shape → not the same endpoint
-
-    for (const p of urlParts.queryParams) {
-      const partId = `query:${p.key}`;
-      if (partId === targetPartId) continue;
-      if (p.variable) continue;
-      const match = candidate.queryParams.find(q => q.key === p.key);
-      if (!match || match.value !== p.value) return;
-    }
-
-    const extracted = targetScope === 'path'
-      ? candidate.pathSegments[parseInt(targetKey, 10)]?.value
-      : candidate.queryParams.find(q => q.key === targetKey)?.value;
-
-    if (extracted && !seen.has(extracted)) {
-      seen.add(extracted);
-      values.push(extracted);
-    }
-  });
-
-  return values;
-}
-
-// Appends newly-derived values onto an existing value-list text without
-// touching anything already there — including a value the user has since
-// deleted, which a full re-derivation must not silently resurrect (see the
-// "merge, don't replace" decision this mirrors). Dedupes against
-// parseValueListInput's own reading of the existing text, the same split
-// the textarea itself is interpreted with everywhere else.
-function mergeValueListValues(existingText, newValues) {
-  const existing = new Set(parseValueListInput(existingText));
-  const added = newValues.filter(v => !existing.has(v));
-  if (added.length === 0) return { text: existingText || '', addedCount: 0 };
-  const prefix = existingText && existingText.trim() ? `${existingText.replace(/\s+$/, '')}\n` : '';
-  return { text: prefix + added.join('\n'), addedCount: added.length };
-}
-
-function buildStaticListSource(valuesText) {
-  return { kind: 'staticList', values: parseValueListInput(valuesText) };
-}
-
-// urlTemplate here is deliberately the confirmed candidate's raw URL, not
-// built from segments/params like the main request — DiscoverySource is
-// expected to be fully static (see ScrapingPlanValidator.ValidateDiscoverySource:
-// no cross-checking against the main request's parameters, by design, since
-// Phase 1 rules out dependencies between parameters).
-function buildDiscoverySource(urlTemplate, itemsPath, valuePath) {
-  return { kind: 'discovery', urlTemplate, itemsPath, valuePath };
-}
-
-// `format` is omitted from the wire object entirely when unset (Number has
-// no format concept, and an empty/undetected one shouldn't override the
-// backend's own default) — mirrors PythonApiConfigLiteral's RenderFormatSuffix
-// on the companion side, which does the same for the same reason: the
-// runtime's own hardcoded default (RangeFormat.Resolve) stays the single
-// source of truth for "what ISO-Standard actually means" when nothing was
-// explicitly chosen.
-function buildRangeSource(type, from, to, format) {
-  return { kind: 'range', type, from, to, ...(format ? { format } : {}) };
-}
-
-// ── Range format presets (bug/api-range-format follow-up) ──────────────────
-// A target site can encode a year-week or date however it likes in its own
-// URL — the reported bug: penny.de uses "2026-35" where the ISO-8601
-// default "{yyyy}-W{ww}" expects "2026-W35", crashing the generated script.
-// These presets cover the common shapes without the user ever typing the
-// "{yyyy}"-style token syntax by hand; "custom" (any format not in this
-// list) is the escape hatch for anything else. Order matters: the first
-// entry per type is also the "nothing else matched" fallback in
-// detectRangeFormat, so it must be the ISO-8601/RangeFormat.Resolve default.
-const RANGE_FORMAT_PRESETS = {
-  IsoWeek: [
-    { format: '{yyyy}-W{ww}', labelKey: 'apiConfig.presetIsoWeekStandard' },
-    { format: '{yyyy}-{ww}', labelKey: 'apiConfig.presetIsoWeekNoSeparator' },
-  ],
-  Date: [
-    { format: '{yyyy}-{mm}-{dd}', labelKey: 'apiConfig.presetDateStandard' },
-    { format: '{dd}.{mm}.{yyyy}', labelKey: 'apiConfig.presetDateGerman' },
-    { format: '{yyyy}{mm}{dd}', labelKey: 'apiConfig.presetDateNoSeparator' },
-  ],
-};
-
-const RANGE_FORMAT_TOKEN_PATTERNS = { yyyy: '\\d{4}', ww: '\\d{1,2}', mm: '\\d{1,2}', dd: '\\d{1,2}' };
-
-// Mirrors, character for character, RangeFormat.CompilePattern on the
-// companion side (companion/ScrapingFactory.Compiler/Backends/Python/RangeFormat.cs)
-// and _compile_range_format in scraper_api.py.j2 — a value this matches is
-// guaranteed to parse there too. Kept as its own small copy rather than
-// shared code across the extension/companion boundary, same as every other
-// piece of duplicated-but-consistent logic in this app (e.g. the JSON-path
-// DSL, per CLAUDE.md).
-function compileRangeFormatPattern(format) {
-  let pattern = format.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  for (const [token, valuePattern] of Object.entries(RANGE_FORMAT_TOKEN_PATTERNS)) {
-    pattern = pattern.replaceAll(`\\{${token}\\}`, valuePattern);
-  }
-  return new RegExp(`^${pattern}$`);
-}
-
-// Auto-suggests a format the moment "Range" is picked (or its Type is
-// changed): matches `rawValue` — the literal example captured from the
-// recording (see part.value below) — against each type's presets in order,
-// falling back to the ISO-Standard preset (always first, see
-// RANGE_FORMAT_PRESETS's doc comment) when nothing matches or there's no
-// raw value yet. For the reported bug's exact case ("2026-35"), this picks
-// "Jahr-Woche ohne Trennzeichen" with zero typing. Returns null for Number,
-// which has no format concept.
-function detectRangeFormat(type, rawValue) {
-  const presets = RANGE_FORMAT_PRESETS[type];
-  if (!presets) return null;
-  if (rawValue) {
-    const matched = presets.find(preset => compileRangeFormatPattern(preset.format).test(rawValue));
-    if (matched) return matched.format;
-  }
-  return presets[0].format;
-}
-
-// The captured literal a variable URL part started out as (e.g. "2026-35")
-// — parseUrlTemplateParts stores it in seg.value/p.value, the "variabel"
-// toggle preserves it via object spread, and variableUrlParts carries it
-// through as part.value; this just looks it up by partId for
-// detectRangeFormat's benefit.
-function findUrlPartValue(urlParts, partId) {
-  return variableUrlParts(urlParts).find(p => p.id === partId)?.value;
-}
-
-// "Example: …" text next to From/To: echoes `fromValue` back verbatim once
-// it actually matches `format` (proving the round-trip works), or shows the
-// bare token template as a hint otherwise (not-yet-matching From) — or,
-// null for an empty format (the "Custom format…" preset before anything's
-// been typed into its revealed input), leaving it to the caller to show a
-// translated "enter a format" prompt instead of silently falling back to a
-// different preset's template. Kept translation-free (unlike the render
-// functions that call it) so it stays a pure, load-order-independent
-// function to unit-test directly.
-function rangeFormatExample(format, fromValue) {
-  if (!format) return null;
-  if (fromValue && compileRangeFormatPattern(format).test(fromValue)) return fromValue;
-  return format;
-}
-
-// capturedHeaders: [{name, value}] from the confirmed candidate's recorded
-// request (api-capture.js's requestHeaders). decisions: {[headerName]:
-// {include, mode: 'literal'|'env', envName}} — the header-adoption table's
-// per-row choice. Mirrors FillStep's env-var pattern: a header adopted via
-// an environment variable is never embedded literally.
-function buildApiHeaders(capturedHeaders, decisions) {
-  return capturedHeaders
-    .filter(h => decisions[h.name]?.include)
-    .map((h) => {
-      const decision = decisions[h.name];
-      return decision.mode === 'env'
-        ? { name: h.name, environmentVariableName: decision.envName }
-        : { name: h.name, value: h.value };
-    });
-}
-
-// Top-level assembly: the ApiConfig wire object exactly as
-// companion/ScrapingFactory.Compiler/IR/ApiConfig.cs expects it (method
-// omitted — GET is the only supported value and also the backend default).
-// `itemsPath`/`fields` are the confirmed candidate's own flat shape (derived
-// once via content-script.js's deriveItemsAndValuePath when the candidate
-// was confirmed, not re-derived here) — this function only assembles, it
-// doesn't re-derive anything from a JSON body.
-//
-// Issue #54, Phase A5: `groups` (the tree draft, serialized via
-// serializeApiTree) takes over from `itemsPath`/`fields` whenever present —
-// the popup only ever builds tree drafts going forward (see
-// confirmApiFieldCandidate), but this branch is kept so the flat wire shape
-// stays directly testable/constructible here too, exactly mirroring how the
-// wire format itself keeps both shapes available (IR/ApiConfig.cs).
-//
-// Issue #55, Phase B4: `method` is omitted for a plain "GET" (matches the
-// companion's own default, ApiConfig.Method) — today's callers never pass
-// anything else, so this is purely forward-looking. `bodyParameterNames`
-// are body-only parameters (declared via the "+ Neuer Parameter" picker,
-// see openBodyParameterModal) that never appear in the URL at all — the
-// wire format's flat `parameters` list has no concept of "where" a
-// parameter is used, so these are simply unioned with the URL-derived ones.
-// `parameterIdToName` is only needed to serialize `bodyTree` (see
-// serializeBodyTree) — a variable leaf's draft-only `parameterId` doesn't
-// otherwise appear anywhere in this function.
-function buildApiConfig({
-  urlParts, itemsPath, fields, groups, parameterSources, capturedHeaders, headerDecisions,
-  method, bodyTree, bodyParameterNames = [], parameterIdToName = {},
-}) {
-  const urlTemplate = buildUrlTemplate(urlParts);
-  const variableParts = [...urlParts.pathSegments, ...urlParts.queryParams].filter(p => p.variable);
-  const parameterNames = [...variableParts.map(p => p.name), ...bodyParameterNames];
-  const parameters = parameterNames.map(name => ({ name, source: parameterSources[name] }));
-  const headers = buildApiHeaders(capturedHeaders, headerDecisions);
-
-  return {
-    urlTemplate,
-    ...(method && method !== 'GET' ? { method } : {}),
-    ...(groups ? { groups: serializeApiTree(groups) } : { itemsPath, fields }),
-    parameters,
-    ...(headers.length > 0 ? { headers } : {}),
-    ...(bodyTree ? { body: serializeBodyTree(bodyTree, parameterIdToName) } : {}),
-  };
-}
-
-// ── API-Mode tree (ApiGroup/ApiField, Issue #54 Phase A4) ───────────────────
-// The JSON-path counterpart to the Container-Mode tree below: near-verbatim
-// renames of the same helpers (`path` instead of `selector`, no
-// mode/attribute/repeating/framePath concept at all — ApiGroup's own
-// repeating-ness is inferred at runtime from JSON structure, never chosen
-// here, see companion/.../IR/ApiConfig.cs's ApiGroup doc comment) — the tree
-// machinery itself is generic over "a node has a name, is a
-// group-with-children or a leaf" and needed no new *shape* thinking.
-// Pure helpers only in this phase; event wiring into the API_CONFIG screen
-// is Phase A5.
-
-function buildApiGroupDraft(name, path) {
-  return { kind: 'group', name, path, children: [] };
-}
-
-function buildApiFieldDraft(name, path) {
-  return { kind: 'field', name, path };
-}
-
-function resolveApiTreeNode(groups, path) {
-  if (!path || path.length === 0) return null;
-  let node = groups[path[0]];
-  for (let i = 1; i < path.length; i++) node = node.children[path[i]];
-  return node;
-}
-
-// Appends `node` as the last child at `parentPath` (or at root level when
-// `parentPath` is null) — immutable, like insertContainerNode below.
-function insertApiTreeNode(groups, parentPath, node) {
-  const path = parentPath || [];
-  if (path.length === 0) return [...groups, node];
-  const [head, ...rest] = path;
-  return groups.map((n, i) => (i === head ? { ...n, children: insertApiTreeNode(n.children, rest, node) } : n));
-}
-
-// Removes the node (and its subtree) at `path` — always non-empty, unlike
-// insertApiTreeNode's parentPath.
-function removeApiTreeNode(groups, path) {
-  if (path.length === 1) return groups.filter((_, i) => i !== path[0]);
-  const [head, ...rest] = path;
-  return groups.map((n, i) => (i === head ? { ...n, children: removeApiTreeNode(n.children, rest) } : n));
-}
-
-// Strips the popup's internal `kind` tag and shapes each node exactly like
-// the wire format the companion expects (IR/ApiConfig.cs's
-// ApiGroup/ApiField, discriminated structurally by ApiNodeJsonConverter via
-// presence of `children` — see PythonApiConfigLiteral.RenderGroups on the
-// codegen side for the same discriminator).
-function serializeApiTree(groups) {
-  return groups.map(node => node.kind === 'group'
-    ? { name: node.name, path: node.path, children: serializeApiTree(node.children) }
-    : { name: node.name, path: node.path });
-}
-
-// The idle screen's "API-Konfiguration bereit: N Feld(er), …" summary wants
-// a leaf-field count regardless of shape: the older flat ApiConfig.Fields is
-// already flat, but a tree-shaped ApiConfig.Groups (Issue #54) needs
-// counting recursively — every ApiField anywhere in the tree, at any depth.
-function countApiConfigFields(apiConfig) {
-  if (!apiConfig.groups) return apiConfig.fields.length;
-  const countNodes = nodes => nodes.reduce((sum, node) => sum + (node.children ? countNodes(node.children) : 1), 0);
-  return countNodes(apiConfig.groups);
-}
-
-// Immutable "map the one node at `path`" — the third tree-shape primitive
-// alongside insert/remove, needed once node names became editable in place
-// (Phase A5, see setApiTreeNodeName) rather than only ever chosen once at
-// creation time.
-function updateApiTreeNode(groups, path, updater) {
-  const [head, ...rest] = path;
-  return groups.map((node, i) => {
-    if (i !== head) return node;
-    return rest.length === 0 ? updater(node) : { ...node, children: updateApiTreeNode(node.children, rest, updater) };
-  });
-}
-
-// Every node in the tree (recursively) has a non-blank name — gates
-// "Übernehmen" the same way apiConfigDraftHasAllSourcesChosen's flat-mode
-// check does, generalized: intermediate groups are auto-named (see
-// buildApiSubtreeFromCandidate) but that name is editable like any other and
-// so can still be blanked out.
-function apiTreeNodesHaveNonBlankNames(nodes) {
-  return nodes.every(node => !!node.name?.trim() && (node.kind !== 'group' || apiTreeNodesHaveNonBlankNames(node.children)));
-}
-
-// ── API-Mode request body (ApiBodyNode, Issue #55 Phase B4) ─────────────────
-// The write-side mirror of the tree above: describes what JSON to WRITE into
-// the outgoing request body rather than where to read one FROM a response.
-// Unlike the response tree, the shape is never edited structurally by the
-// user — it's derived once from the one already-captured request body
-// (jsonValueToBodyDraft) and all further editing just toggles a leaf between
-// 'literal' (fixed) and 'variable' (bound to one of ApiConfig.Parameters by
-// id, see allParameterParts) — so there's no insert/remove/scoped-search
-// machinery to mirror here, only a generic recursive walk/update pair.
-//
-// A draft node is one of:
-//   { kind: 'object', properties: { [key]: node, ... } }
-//   { kind: 'array', items: [node, ...] }
-//   { kind: 'literal', literalKind: 'String'|'Number'|'Boolean'|'Null', value }
-//   { kind: 'variable', literalKind, value, parameterId, coerceTo }
-// A 'variable' node keeps its own literalKind/value around unused so
-// toggling back to 'literal' (see toggleBodyLeafToFixed) restores the
-// original captured value exactly, instead of losing it.
-
-// Converts one already-JSON.parsed request body into an all-literal draft
-// tree — object/array recurse, anything else becomes a 'literal' leaf typed
-// by JS's own typeof (JSON has no separate "integer"/"float", so every
-// number becomes ApiBodyLiteralKind.Number regardless of ApiBodyLiteral's
-// own C#-side double NumberValue).
-function jsonValueToBodyDraft(value) {
-  if (Array.isArray(value)) return { kind: 'array', items: value.map(jsonValueToBodyDraft) };
-  if (value !== null && typeof value === 'object') {
-    const properties = {};
-    for (const [key, child] of Object.entries(value)) properties[key] = jsonValueToBodyDraft(child);
-    return { kind: 'object', properties };
-  }
-  if (value === null) return { kind: 'literal', literalKind: 'Null', value: null };
-  if (typeof value === 'number') return { kind: 'literal', literalKind: 'Number', value };
-  if (typeof value === 'boolean') return { kind: 'literal', literalKind: 'Boolean', value };
-  return { kind: 'literal', literalKind: 'String', value: String(value) };
-}
-
-// path steps are either a string (an object property key) or a number (an
-// array index) — object/array are never mixed at the same tree level, so
-// this is an unambiguous discriminator for which branch to take.
-function resolveBodyTreeNode(node, path) {
-  let current = node;
-  for (const step of path) current = typeof step === 'number' ? current.items[step] : current.properties[step];
-  return current;
-}
-
-// Immutable "map the one node at `path`" — the body tree's only edit
-// primitive (see this section's own doc comment on why there's no
-// insert/remove here, unlike the response tree's updateApiTreeNode).
-function updateBodyTreeNode(node, path, updater) {
-  if (path.length === 0) return updater(node);
-  const [step, ...rest] = path;
-  if (typeof step === 'number') {
-    return { ...node, items: node.items.map((item, i) => (i === step ? updateBodyTreeNode(item, rest, updater) : item)) };
-  }
-  return { ...node, properties: { ...node.properties, [step]: updateBodyTreeNode(node.properties[step], rest, updater) } };
-}
-
-// Whether any 'variable' leaf anywhere in the tree is still bound to
-// `parameterId` — used to decide whether reverting one such leaf back to
-// 'literal' also orphans the body-only parameter it referenced (see
-// toggleBodyLeafToFixed).
-function bodyTreeReferencesParameterId(node, parameterId) {
-  if (node.kind === 'object') return Object.values(node.properties).some(child => bodyTreeReferencesParameterId(child, parameterId));
-  if (node.kind === 'array') return node.items.some(child => bodyTreeReferencesParameterId(child, parameterId));
-  return node.kind === 'variable' && node.parameterId === parameterId;
-}
-
-// Gates "Übernehmen" alongside apiConfigDraftHasAllSourcesChosen's own
-// per-parameter check: a leaf toggled to 'variable' but not yet bound to a
-// parameter (parameterId still null, see toggleBodyLeafToVariable) must
-// block confirmation the same way an unchosen source kind already does.
-function bodyTreeLeavesAreBound(node) {
-  if (node.kind === 'object') return Object.values(node.properties).every(bodyTreeLeavesAreBound);
-  if (node.kind === 'array') return node.items.every(bodyTreeLeavesAreBound);
-  if (node.kind === 'variable') return !!node.parameterId;
-  return true; // literal
-}
-
-// Strips the popup's internal draft shape and shapes each node exactly like
-// the wire format the companion expects (IR/ApiBodyNode.cs's
-// ApiBodyObject/ApiBodyArray/ApiBodyLiteral/ApiBodyVariable, discriminated
-// structurally by ApiBodyNodeJsonConverter via presence of
-// properties/items/parameterName). `parameterIdToName` resolves a variable
-// leaf's draft-only `parameterId` to the actual declared parameter name the
-// wire format references it by — built once by the caller (confirmApiConfig)
-// from the same allParameterParts list the parameter-source cards render
-// from, since a draft-only id has no meaning outside this popup.
-function serializeBodyTree(node, parameterIdToName) {
-  if (node.kind === 'object') {
-    const properties = {};
-    for (const [key, child] of Object.entries(node.properties)) properties[key] = serializeBodyTree(child, parameterIdToName);
-    return { properties };
-  }
-  if (node.kind === 'array') {
-    return { items: node.items.map(item => serializeBodyTree(item, parameterIdToName)) };
-  }
-  if (node.kind === 'variable') {
-    return {
-      parameterName: parameterIdToName[node.parameterId],
-      ...(node.coerceTo ? { coerceTo: node.coerceTo } : {}),
-    };
-  }
-  // literal — IR/ApiBodyNode.cs's ApiBodyLiteral has three separate typed
-  // properties (StringValue/NumberValue/BoolValue), not one generic "value"
-  // like the companion's own internal Python-runtime literal shape
-  // (PythonApiConfigLiteral.RenderBody) uses — the wire format and that
-  // runtime-internal shape are two different things that happen to share a
-  // "kind" field. Null has no value property to set at all.
-  switch (node.literalKind) {
-    case 'String': return { kind: 'String', stringValue: node.value };
-    case 'Number': return { kind: 'Number', numberValue: node.value };
-    case 'Boolean': return { kind: 'Boolean', boolValue: node.value };
-    default: return { kind: 'Null' };
-  }
-}
-
-// Phase A5: JSON keys, unlike CSS selectors, already carry a meaningful name
-// — so a group auto-derived from a confirmed search candidate's path is
-// named after its own last path segment (e.g. "data.categories" →
-// "categories") instead of asking the user, the same way a sibling field is
-// already named after its own JSON key. Returns null for an empty path (the
-// array-of-arrays case, see ApiGroup.Path) or a path with no plain key
-// segment at all — callers fall back to a generic placeholder.
-function lastPathSegmentName(path) {
-  if (!path) return null;
-  const tokens = path.match(/[^.[\]]+|\[\d+\]/g) || [];
-  for (let i = tokens.length - 1; i >= 0; i--) {
-    if (!tokens[i].startsWith('[')) return tokens[i];
-  }
-  return null;
-}
-
-// Builds the new tree node(s) a confirmed API-search candidate becomes —
-// shared by the very first candidate (Phase A5's "root/primary field flow",
-// skipSegments 0, parentPath null) and every later "add root group"/"add
-// sub-field" search (skipSegments === the target group's own tree depth,
-// since that many of candidate.treeSkeleton's leading segments are already
-// represented by existing ancestor groups, see resolveApiGroupScopePath's
-// doc comment). candidate.treeSkeleton is content-script.js's
-// deriveApiTreeSkeleton output, pre-computed and attached to the candidate
-// message (findApiCandidates) — popup.js runs in a different execution
-// context and has no access to content-script.js's own functions, the same
-// reason candidate.itemsPath/valuePath are pre-derived there too. Auto-names
-// intermediate groups (see lastPathSegmentName); siblings are always direct
-// properties of the same matched record, so (exactly like flat mode before
-// it) each sibling's own JSON key doubles as its relative path. Returns an
-// array of one or more new sibling nodes to insert at the target
-// parentPath — one node if the click landed inside an already-represented
-// scope (the "sibling field" case), possibly several nested levels wrapped
-// in one outer node otherwise.
-function buildApiSubtreeFromCandidate(candidate, fieldName, siblingNames, skipSegments = 0) {
-  const skeleton = candidate.treeSkeleton.slice(skipSegments);
-  const leafField = buildApiFieldDraft(fieldName, skeleton[skeleton.length - 1].path);
-  const siblingDrafts = siblingNames.map(name => buildApiFieldDraft(name, name));
-  const groupSegments = skeleton.slice(0, -1);
-  return groupSegments.reduceRight((children, seg) => [
-    { ...buildApiGroupDraft(lastPathSegmentName(seg.path) || t('apiTree.defaultGroupName'), seg.path), children },
-  ], [leafField, ...siblingDrafts]);
-}
-
-// The absolute JSON path to scope an "add sub-field"/"add sub-group" search
-// to an existing ApiGroup at tree `path` — every ancestor's own (relative,
-// index-free) path segment gets its first-instance index appended, the same
-// "first instance is the template" assumption Container-Mode's own
-// scopeSelector already relies on (see content-script.js's
-// pathStartsWithScope). E.g. tree path [0, 1] under {path:'categories'} →
-// {path:'subcategories'} resolves to "categories[0].subcategories[0]".
-function resolveApiGroupScopePath(groups, path) {
-  let scope = '';
-  let nodes = groups;
-  for (const index of path) {
-    const node = nodes[index];
-    scope = node.path ? (scope ? `${scope}.${node.path}[0]` : `${node.path}[0]`) : `${scope}[0]`;
-    nodes = node.children;
-  }
-  return scope;
-}
-
-// Same visual pattern as the Container-Mode tree editor below (indentation,
-// toggle arrow, add/remove buttons, nodes start expanded) — see
-// buildGroupTreeNodeEl. Row content differs: an editable name input (Phase
-// A5 — every node's name stays editable, same precedent the flat API-Mode
-// field list already established) plus a read-only path display instead of
-// a single selector label, and there's no repeating/attribute/mode label
-// (see Container-Mode) or frame badge (JSON has no iframes) to add.
-function buildApiTreeNodeEl(node, path, depth) {
-  const li = document.createElement('li');
-  li.className = 'api-tree-node';
-  li.dataset.path = JSON.stringify(path);
-
-  const row = document.createElement('div');
-  row.className = 'api-tree-row';
-  row.style.paddingLeft = `${depth * 12}px`;
-
-  const hasChildren = node.kind === 'group' && node.children.length > 0;
-  const toggle = document.createElement('span');
-  toggle.className = 'api-tree-toggle';
-  toggle.textContent = hasChildren ? '▾' : '';
-  row.appendChild(toggle);
-
-  const nameInput = document.createElement('input');
-  nameInput.type = 'text';
-  nameInput.className = 'api-tree-name';
-  nameInput.dataset.path = JSON.stringify(path);
-  nameInput.value = node.name;
-  row.appendChild(nameInput);
-
-  const pathLabel = document.createElement('span');
-  pathLabel.className = 'api-tree-path';
-  pathLabel.textContent = node.path || '—';
-  pathLabel.title = node.path;
-  row.appendChild(pathLabel);
-
-  if (node.kind === 'group') {
-    const addSubgroupBtn = document.createElement('button');
-    addSubgroupBtn.className = 'btn-secondary btn-tiny btn-add-api-subgroup';
-    addSubgroupBtn.textContent = t('apiTree.addSubgroupBtn');
-    row.appendChild(addSubgroupBtn);
-
-    const addFieldBtn = document.createElement('button');
-    addFieldBtn.className = 'btn-secondary btn-tiny btn-add-api-subfield';
-    addFieldBtn.textContent = t('apiTree.addSubfieldBtn');
-    row.appendChild(addFieldBtn);
-  }
-
-  const removeBtn = document.createElement('button');
-  removeBtn.className = 'btn-danger btn-remove-api-node';
-  removeBtn.textContent = t('common.remove');
-  row.appendChild(removeBtn);
-
-  li.appendChild(row);
-
-  if (node.kind === 'group') {
-    const childUl = document.createElement('ul');
-    childUl.className = 'api-tree-children';
-    node.children.forEach((child, i) => childUl.appendChild(buildApiTreeNodeEl(child, [...path, i], depth + 1)));
-    li.appendChild(childUl);
-
-    if (hasChildren) {
-      toggle.addEventListener('click', () => {
-        const collapsed = childUl.classList.toggle('hidden');
-        toggle.textContent = collapsed ? '▸' : '▾';
-      });
-    }
-  }
-
-  return li;
-}
-
-function renderApiTree(groups) {
-  const root = document.getElementById('api-tree-root');
-  if (!root) return;
-  root.innerHTML = '';
-  groups.forEach((node, i) => root.appendChild(buildApiTreeNodeEl(node, [i], 0)));
-}
-
-// ── Container-Mode tree (GroupNode/DataFieldNode) ───────────────────────────
-// Mirrors the backend IR (ContainerNode.cs): a group node scopes its
-// children to matches of its own selector, a field node is the extraction
-// leaf. `path` addresses a node the same way the DOM-tree-view already does
-// (an array of child indices) — see buildTreeNodeEl's `node.path`.
-
-function buildGroupNode(name, selector, repeating, framePath = null) {
-  return { kind: 'group', name, selector, repeating, children: [], framePath: framePath || null };
-}
-
-function buildFieldNode(name, selector, mode, attribute, framePath = null) {
-  return { kind: 'field', name, selector, mode, attribute: mode === 'attribute' ? attribute : null, framePath: framePath || null };
-}
-
-function resolveGroupNode(groups, path) {
-  if (!path || path.length === 0) return null;
-  let node = groups[path[0]];
-  for (let i = 1; i < path.length; i++) node = node.children[path[i]];
-  return node;
-}
-
-// True if the node at `path` (or any of its ancestors) is a repeating
-// group — i.e. a selector added under this path will be re-evaluated once
-// per matched instance, not just once. Used to tell content-script to skip
-// its usual id-selector shortcut (see buildSelector's avoidId): an id is
-// page-unique, so a selector built from one can only ever match a single
-// instance, silently starving every other repetition of that field/nested
-// container.
-function hasRepeatingAncestor(groups, path) {
-  if (!path) return false;
-  let nodes = groups;
-  for (const index of path) {
-    const node = nodes[index];
-    if (node.kind === 'group' && node.repeating) return true;
-    nodes = node.children;
-  }
-  return false;
-}
-
-// Appends `node` as the last child at `parentPath` (or at root level when
-// `parentPath` is null) — immutable, like addField above.
-function insertContainerNode(groups, parentPath, node) {
-  const path = parentPath || [];
-  if (path.length === 0) return [...groups, node];
-  const [head, ...rest] = path;
-  return groups.map((n, i) => (i === head ? { ...n, children: insertContainerNode(n.children, rest, node) } : n));
-}
-
-// Removes the node (and its subtree) at `path` — always non-empty, unlike
-// insertContainerNode's parentPath.
-function removeGroupTreeNode(groups, path) {
-  if (path.length === 1) return groups.filter((_, i) => i !== path[0]);
-  const [head, ...rest] = path;
-  return groups.map((n, i) => (i === head ? { ...n, children: removeGroupTreeNode(n.children, rest) } : n));
-}
-
-function formatGroupNodeLabel(node) {
-  if (node.kind === 'group') {
-    return `${node.name} (${t(node.repeating ? 'group.repeating' : 'group.single')})`;
-  }
-  const modeLabel = {
-    text: t('group.textMode'),
-    attribute: t('group.attributeMode', { attribute: node.attribute }),
-    exists: t('group.existsMode'),
-  }[node.mode];
-  return `${node.name} — ${modeLabel}`;
-}
-
-const FIELD_MODE_WIRE_NAMES = { text: 'Text', attribute: 'Attribute', exists: 'Exists' };
-
-// Strips the popup's internal `kind` tag and shapes each node exactly like
-// the wire format the Companion expects (ContainerNode.cs / ContainerNodeJsonConverter):
-// `children` present only for groups, `attribute` present only when mode is Attribute.
-function serializeGroupTree(groups) {
-  return groups.map(node => node.kind === 'group'
-    ? {
-        name: node.name, selector: node.selector, repeating: node.repeating,
-        children: serializeGroupTree(node.children),
-        ...(node.framePath ? { framePath: node.framePath } : {}),
-      }
-    : {
-        name: node.name,
-        selector: node.selector,
-        mode: FIELD_MODE_WIRE_NAMES[node.mode],
-        ...(node.mode === 'attribute' ? { attribute: node.attribute } : {}),
-        ...(node.framePath ? { framePath: node.framePath } : {}),
-      });
-}
-
 // Issue #42, Phase 7: a small pill shown next to a field's/node's/action's
 // selector once ELEMENT_SELECTED resolved a non-null framePath for it — the
 // side panel's own, translated indicator of what content-script.js's
@@ -1014,14 +333,6 @@ function frameBadgeHtml(framePath) {
   if (!framePath || framePath.length === 0) return '';
   const title = escapeHtml(t('frame.badgeTitle', { path: framePath.join(' > ') }));
   return `<span class="frame-badge" title="${title}">${escapeHtml(t('frame.badge'))}</span>`;
-}
-
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -1480,589 +791,6 @@ function renderBrowserActions(actions = _state.browserActions, testValues = _sta
   });
 }
 
-// ── API-mode candidate search results (Issue #53 Phase 4) ──────────────────
-// Renders content-script.js's findApiCandidates output: one row per
-// candidate (request + JSON path + matched value), with the same object's
-// sibling scalar keys offered as click-to-toggle suggestions for additional
-// fields — purely a visual "picked" toggle for now, since there's no
-// ApiConfig to feed them into yet (that's Phase 5+).
-
-// ids (Phase A5): the primary-field search panel (#api-candidates-target/
-// -list, the default) and the "add root group"/"add sub-field" search panel
-// (#api-tree-search-target/-list) render the exact same candidate shape —
-// only the confirm action differs (confirmApiFieldCandidate vs.
-// confirmApiTreeFieldCandidate, see wireApiCandidateListEvents), so this one
-// function serves both rather than duplicating the whole render.
-function renderApiCandidates({ target, candidates }, ids = { targetEl: 'api-candidates-target', listEl: 'api-candidates-list' }) {
-  const targetEl = document.getElementById(ids.targetEl);
-  if (targetEl) targetEl.textContent = t('apiCandidates.searchedFor', { target });
-
-  const listEl = document.getElementById(ids.listEl);
-  if (!listEl) return;
-  listEl.innerHTML = '';
-
-  if (candidates.length === 0) {
-    const li = document.createElement('li');
-    li.className = 'api-candidates-empty';
-    li.textContent = t('common.noMatches');
-    listEl.appendChild(li);
-    return;
-  }
-
-  candidates.forEach((candidate, i) => {
-    const li = document.createElement('li');
-    li.className = 'api-candidate';
-    li.innerHTML =
-      `<div class="api-candidate-url" title="${escapeHtml(candidate.url)}">${escapeHtml(candidate.method)} ${escapeHtml(candidate.url)}</div>` +
-      `<div class="api-candidate-path">${escapeHtml(candidate.path)}</div>` +
-      `<div class="api-candidate-value">${escapeHtml(t('apiCandidates.matchLabel', { value: String(candidate.value) }))}</div>`;
-
-    if (candidate.siblings.length > 0) {
-      const siblingsEl = document.createElement('div');
-      siblingsEl.className = 'api-candidate-siblings';
-
-      // Picking one-by-one is fine for a handful of siblings, but a record
-      // with many keys is exactly the "I want most of these" case a user
-      // asked to no longer have to click through individually — one button
-      // to pick all of them, toggling back to none on a second click
-      // (mirrors this file's other state-reflecting toggle buttons, e.g.
-      // preview show/hide). Picked state itself stays DOM-only (see the
-      // click handler in wireEvents), so this button's own label is updated
-      // directly on click rather than through a render() pass.
-      const selectAllBtn = document.createElement('button');
-      selectAllBtn.type = 'button';
-      selectAllBtn.className = 'api-sibling-select-all';
-      selectAllBtn.textContent = t('apiCandidates.selectAllChips');
-      selectAllBtn.dataset.candidateIndex = String(i);
-      siblingsEl.appendChild(selectAllBtn);
-
-      candidate.siblings.forEach((sibling) => {
-        const chip = document.createElement('button');
-        chip.type = 'button';
-        chip.className = 'api-sibling-chip';
-        chip.textContent = t('apiCandidates.siblingChip', { name: sibling.name });
-        chip.title = String(sibling.value);
-        chip.dataset.candidateIndex = String(i);
-        chip.dataset.siblingName = sibling.name;
-        siblingsEl.appendChild(chip);
-      });
-      li.appendChild(siblingsEl);
-    }
-
-    // "Use" (Issue #53 Phase 5): only offered when the match sits
-    // inside an actual repeating record (candidate.itemsPath truthy,
-    // valuePath non-empty — see deriveItemsAndValuePath's doc comment for
-    // why an empty-but-non-null valuePath also isn't usable) — Api-Mode's
-    // whole model is "records extracted from a repeating array".
-    if (candidate.itemsPath && candidate.valuePath) {
-      const useRow = document.createElement('div');
-      useRow.className = 'api-candidate-use';
-      useRow.innerHTML =
-        `<input type="text" class="api-candidate-field-name" placeholder="${escapeHtml(t('apiCandidates.useFieldNamePlaceholder'))}" data-candidate-index="${i}" />` +
-        `<button type="button" class="btn-secondary btn-tiny api-candidate-confirm" data-candidate-index="${i}" disabled>${escapeHtml(t('common.use'))}</button>`;
-      li.appendChild(useRow);
-    } else {
-      const note = document.createElement('div');
-      note.className = 'api-candidate-unusable';
-      note.textContent = t('common.noRecordArray');
-      li.appendChild(note);
-    }
-
-    listEl.appendChild(li);
-  });
-}
-
-// API-mode follow-up: the raw recorded pool, for whoever wants to see it
-// directly instead of only going through a value-correlation search — e.g.
-// to sanity-check that a variable part's other values were actually
-// recorded before relying on the pool-derived autofill below. Reuses the
-// same .api-candidate/.api-candidate-url/.api-candidate-path row styling
-// renderApiCandidates already uses, just without the value/siblings/use
-// parts that only apply to a JSON-body match.
-function renderApiEntriesList(entries) {
-  const listEl = document.getElementById('api-entries-list');
-  if (!listEl) return;
-  listEl.innerHTML = '';
-
-  if (!entries || entries.length === 0) {
-    const li = document.createElement('li');
-    li.className = 'api-candidates-empty';
-    li.textContent = t('idle.apiEntriesEmpty');
-    listEl.appendChild(li);
-    return;
-  }
-
-  entries.forEach((entry) => {
-    const li = document.createElement('li');
-    li.className = 'api-candidate';
-    // Request-body display (Issue #55 prep): a GET/HEAD entry never has one
-    // (requestBody stays '' and requestBodySkipped stays false, see
-    // api-capture.js's buildEntry), so this naturally shows nothing for them
-    // without needing an explicit method check here.
-    let bodyHtml = '';
-    if (entry.requestBodySkipped) {
-      bodyHtml = `<div class="api-candidate-body api-candidate-body-skipped">${escapeHtml(t('idle.apiEntriesBodyNotCaptured'))}</div>`;
-    } else if (entry.requestBody) {
-      bodyHtml = `<div class="api-candidate-body">${escapeHtml(entry.requestBody)}</div>`;
-    }
-    li.innerHTML =
-      `<div class="api-candidate-url" title="${escapeHtml(entry.url)}">${escapeHtml(entry.method)} ${escapeHtml(String(entry.status))} ${escapeHtml(entry.url)}</div>` +
-      (entry.contentType ? `<div class="api-candidate-path">${escapeHtml(entry.contentType)}</div>` : '') +
-      bodyHtml;
-    listEl.appendChild(li);
-  });
-}
-
-// ── API-Mode config screen (Issue #53 Phase 5) ──────────────────────────────
-// Renders the in-progress apiConfigDraft: confirmed fields (read-only),
-// URL path segments/query params with a fest/variabel toggle per part, one
-// source-configuration card per variable part, and the header-adoption
-// table. Structural choices (variable toggle, source kind, header
-// include/mode) are reactive — patched into apiConfigDraft and immediately
-// re-rendered — but committed via the `change` event, not `input`, so
-// typing in a text field doesn't trigger a re-render (and thus lose focus)
-// on every keystroke; only leaving the field (or picking a different
-// control) does. A rerender triggered by one control can still visually
-// reset another field's *not yet committed* typing elsewhere on the same
-// screen — an accepted rough edge given how many independent inputs this
-// screen has, not a bug in the reactive fields themselves.
-//
-// partId identifies a variable-part-in-progress independently of its
-// (user-editable, only committed on blur) name — "path:<index>" or
-// "query:<key>" — so apiConfigDraft.parameterSources can be keyed by
-// something stable while the display name is still being typed.
-
-// Issue #54, Phase A5: the tree UI subsumes the flat field list entirely —
-// a single top-level match renders as a one-node-deep tree, visually almost
-// identical to the old flat list but wrapped in the same tree-editor chrome
-// every level beyond that reuses unchanged. renderApiConfigFieldsList is
-// gone; renderApiTree (Phase A4) is the only rendering left for this part
-// of the screen.
-function renderApiConfigScreen(draft, discoveryCandidates) {
-  renderApiTree(draft.groups);
-  renderApiConfigUrlParts(draft.urlParts);
-  renderApiConfigParameters(draft, discoveryCandidates);
-  renderApiConfigHeaders(draft.capturedHeaders, draft.headerDecisions);
-  renderBodyTree(draft);
-
-  // The body section only exists for a POST candidate whose captured
-  // request body could actually be turned into a draft (see
-  // loadInitialBodyTreeForCandidate) — hidden entirely rather than shown
-  // empty for a GET config or an unparsable/bodyless POST.
-  const bodySection = document.getElementById('api-config-body-section');
-  if (bodySection) bodySection.classList.toggle('hidden', !draft.bodyTree);
-
-  const confirmBtn = document.getElementById('btn-api-config-confirm');
-  if (confirmBtn) confirmBtn.disabled = !apiConfigDraftHasAllSourcesChosen(draft);
-}
-
-// `id` ("path:<index>" or "query:<key>") embeds the query param's own key
-// for the query-param case — which, like every other piece of a recorded
-// URL, came from the page being recorded and so must be treated as
-// untrusted the same way candidate.url/value already are elsewhere in this
-// file (escapeHtml, not raw interpolation into an innerHTML string).
-function urlPartRowHtml(id, valueLabel, variable, name) {
-  const safeId = escapeHtml(id);
-  return (
-    `<span class="api-config-part-value" title="${escapeHtml(valueLabel)}">${escapeHtml(valueLabel)}</span>` +
-    `<label><input type="checkbox" class="api-config-part-toggle" data-part-id="${safeId}" ${variable ? 'checked' : ''} /> ${escapeHtml(t('apiConfig.variableLabel'))}</label>` +
-    (variable ? `<input type="text" class="api-config-part-name" data-part-id="${safeId}" placeholder="${escapeHtml(t('common.namePlaceholder'))}" value="${escapeHtml(name || '')}" />` : '')
-  );
-}
-
-function renderApiConfigUrlParts(urlParts) {
-  const segEl = document.getElementById('api-config-segments');
-  if (segEl) {
-    segEl.innerHTML = '';
-    urlParts.pathSegments.forEach((seg, i) => {
-      const li = document.createElement('li');
-      li.className = 'api-config-part-row';
-      li.innerHTML = urlPartRowHtml(`path:${i}`, `/${seg.value}`, seg.variable, seg.name);
-      segEl.appendChild(li);
-    });
-  }
-
-  const queryEl = document.getElementById('api-config-query-params');
-  if (queryEl) {
-    queryEl.innerHTML = '';
-    urlParts.queryParams.forEach((p) => {
-      const li = document.createElement('li');
-      li.className = 'api-config-part-row';
-      li.innerHTML = urlPartRowHtml(`query:${p.key}`, `${p.key}=${p.value}`, p.variable, p.name);
-      queryEl.appendChild(li);
-    });
-  }
-}
-
-// Every {variable: true} part, tagged with its partId — the single source
-// of truth for "which parameter cards exist" (independent of whether a
-// name has been typed for it yet).
-function variableUrlParts(urlParts) {
-  return [
-    ...urlParts.pathSegments.map((seg, i) => ({ ...seg, id: `path:${i}` })),
-    ...urlParts.queryParams.map(p => ({ ...p, id: `query:${p.key}` })),
-  ].filter(p => p.variable);
-}
-
-// Every parameter-source card the API_CONFIG screen shows, regardless of
-// where it's actually used from: a variable URL part (variableUrlParts) or
-// a body-only parameter declared purely to be referenced from the request
-// body (draft.bodyParameters, Issue #55 Phase B4 — see
-// openBodyParameterModal/confirmBodyParameterModal). Both shapes carry
-// `{id, name}`, which is all renderApiConfigParameters/
-// apiConfigDraftHasAllSourcesChosen/confirmApiConfig actually need — a
-// body-only entry needs no more than that since its "value" (unlike a URL
-// part's) was never itself part of anything else to preserve.
-function allParameterParts(draft) {
-  return [...variableUrlParts(draft.urlParts), ...(draft.bodyParameters || [])];
-}
-
-// Gates "Übernehmen" — also the single place guarding against a blank
-// field/group name reaching buildApiConfig: a name could always be blanked
-// out again on the API_CONFIG screen (renderApiTree's editable name inputs;
-// the flat list before Phase A5 had the same gap), so nothing else enforces
-// this. draft.groups (Phase A5's tree shape) takes over from the older
-// draft.fields shape whenever present — see apiTreeNodesHaveNonBlankNames.
-//
-// Zero parameters (every URL part left "fest", no body-only parameter
-// declared) is a valid config — a fully static endpoint with nothing to
-// enumerate over, confirmable the same as a single "fixed" endpoint address
-// typed under a variable part would already be. `parts.every(...)` is
-// vacuously true on an empty list, so this only needs to validate whatever
-// parameters actually exist (Issue #55, Phase B4: `parts` includes
-// body-only parameters alongside URL ones, see allParameterParts — a body
-// leaf toggled to 'variable' but not yet bound to any parameter still blocks
-// confirmation the same way an unchosen source kind already does).
-function apiConfigDraftHasAllSourcesChosen(draft) {
-  const namesOk = draft.groups
-    ? apiTreeNodesHaveNonBlankNames(draft.groups)
-    : !(draft.fields || []).some(f => !f.name?.trim());
-  if (!namesOk) return false;
-  const parts = allParameterParts(draft);
-  if (!parts.every(p => !!p.name?.trim() && !!draft.parameterSources[p.id]?.kind)) return false;
-  return draft.bodyTree ? bodyTreeLeavesAreBound(draft.bodyTree) : true;
-}
-
-function renderApiConfigParameters(draft, discoveryCandidates) {
-  const container = document.getElementById('api-config-parameters');
-  if (!container) return;
-  container.innerHTML = '';
-
-  allParameterParts(draft).forEach((part) => {
-    const source = draft.parameterSources[part.id];
-    const safePartId = escapeHtml(part.id); // see urlPartRowHtml's doc comment — part.id can embed an untrusted query key
-    const card = document.createElement('div');
-    card.className = 'api-config-param-card';
-    card.dataset.partId = part.id; // DOM property assignment, not HTML parsing — safe regardless
-
-    const title = document.createElement('div');
-    title.className = 'row-label';
-    title.textContent = part.name ? part.name : t('apiConfig.unnamedPart');
-    card.appendChild(title);
-
-    const kindRow = document.createElement('div');
-    kindRow.className = 'api-config-source-kind';
-    const sourceKindLabels = {
-      staticList: t('apiConfig.sourceKindStaticList'),
-      discovery: t('apiConfig.sourceKindDiscovery'),
-      range: t('apiConfig.sourceKindRange'),
-    };
-    kindRow.innerHTML = ['staticList', 'discovery', 'range'].map(kind => `
-      <label>
-        <input type="radio" name="source-kind-${safePartId}" class="api-config-source-kind-radio"
-          data-part-id="${safePartId}" value="${kind}" ${source?.kind === kind ? 'checked' : ''} />
-        ${escapeHtml(sourceKindLabels[kind])}
-      </label>
-    `).join('');
-    card.appendChild(kindRow);
-
-    const fieldsEl = document.createElement('div');
-    fieldsEl.className = 'api-config-source-fields';
-    if (source?.kind === 'staticList') {
-      fieldsEl.innerHTML =
-        `<textarea class="api-config-static-list" data-part-id="${safePartId}" rows="2" placeholder="${escapeHtml(t('apiConfig.valueListPlaceholder'))}">${escapeHtml(source.valuesText || '')}</textarea>` +
-        `<button type="button" class="btn-secondary btn-tiny api-config-autofill-pool" data-part-id="${safePartId}" title="${escapeHtml(t('apiConfig.autoFillFromPoolTitle'))}">${escapeHtml(t('apiConfig.autoFillFromPoolBtn'))}</button>`;
-    } else if (source?.kind === 'discovery') {
-      fieldsEl.appendChild(renderDiscoverySourceFields(part, source, discoveryCandidates));
-    } else if (source?.kind === 'range') {
-      fieldsEl.innerHTML = `
-        <div class="api-config-range-row">
-          <select class="api-config-range-type" data-part-id="${safePartId}">
-            ${['IsoWeek', 'Number', 'Date'].map(rangeType => `<option value="${rangeType}" ${source.type === rangeType ? 'selected' : ''}>${rangeType}</option>`).join('')}
-          </select>
-          <input type="text" class="api-config-range-from" data-part-id="${safePartId}" placeholder="${escapeHtml(t('apiConfig.rangeFromPlaceholder'))}" value="${escapeHtml(source.from || '')}" />
-          <input type="text" class="api-config-range-to" data-part-id="${safePartId}" placeholder="${escapeHtml(t('apiConfig.rangeToPlaceholder'))}" value="${escapeHtml(source.to || '')}" />
-        </div>
-        ${renderRangeFormatFields(source, safePartId)}
-      `;
-    }
-    card.appendChild(fieldsEl);
-
-    container.appendChild(card);
-  });
-}
-
-// The preset dropdown + revealed custom-format input + live "Example: …"
-// text below From/To, for IsoWeek/Date only (Number has no format concept).
-// `source.format` is always already set by the time this renders — either
-// auto-detected (setApiConfigSourceKind/the Type-change handler both call
-// detectRangeFormat) or explicitly chosen by the user — so "custom" here
-// just means "not one of this Type's presets", not "unset".
-function renderRangeFormatFields(source, safePartId) {
-  if (source.type === 'Number') return '';
-
-  const presets = RANGE_FORMAT_PRESETS[source.type];
-  const isCustom = !presets.some(preset => preset.format === source.format);
-  const options = presets
-    .map(preset => `<option value="${escapeHtml(preset.format)}" ${preset.format === source.format ? 'selected' : ''}>${escapeHtml(t(preset.labelKey))}</option>`)
-    .join('') + `<option value="custom" ${isCustom ? 'selected' : ''}>${escapeHtml(t('apiConfig.customFormatOption'))}</option>`;
-  const example = rangeFormatExample(source.format, source.from) ?? t('apiConfig.formatEnterPrompt');
-
-  return `
-    <div class="api-config-range-format-row">
-      <select class="api-config-range-format-preset" data-part-id="${safePartId}">${options}</select>
-      ${isCustom ? `<input type="text" class="api-config-range-format-custom" data-part-id="${safePartId}" placeholder="{yyyy}-{ww}" value="${escapeHtml(source.format || '')}" />` : ''}
-      <p class="api-config-range-format-example">${escapeHtml(t('apiConfig.formatExample', { example }))}</p>
-    </div>
-  `;
-}
-
-function renderDiscoverySourceFields(part, source, discoveryCandidates) {
-  const wrap = document.createElement('div');
-
-  if (source.urlTemplate) {
-    const summary = document.createElement('p');
-    summary.className = 'api-candidates-target';
-    summary.textContent = t('apiConfig.discoverySource', { urlTemplate: source.urlTemplate, itemsPath: source.itemsPath, valuePath: source.valuePath });
-    wrap.appendChild(summary);
-  }
-
-  const searchBtn = document.createElement('button');
-  searchBtn.type = 'button';
-  searchBtn.className = 'btn-secondary btn-tiny api-config-discovery-search';
-  searchBtn.dataset.partId = part.id;
-  searchBtn.textContent = t(source.urlTemplate ? 'apiConfig.discoverySearchAgainBtn' : 'apiConfig.discoverySearchBtn');
-  wrap.appendChild(searchBtn);
-
-  if (discoveryCandidates && discoveryCandidates.parameter === part.id) {
-    const list = document.createElement('ul');
-    list.className = 'api-candidates-list';
-    if (discoveryCandidates.candidates.length === 0) {
-      list.innerHTML = `<li class="api-candidates-empty">${escapeHtml(t('common.noMatches'))}</li>`;
-    } else {
-      discoveryCandidates.candidates.forEach((candidate, i) => {
-        const li = document.createElement('li');
-        li.className = 'api-candidate';
-        const usable = candidate.itemsPath && candidate.valuePath;
-        li.innerHTML =
-          `<div class="api-candidate-url" title="${escapeHtml(candidate.url)}">${escapeHtml(candidate.method)} ${escapeHtml(candidate.url)}</div>` +
-          `<div class="api-candidate-path">${escapeHtml(candidate.path)}</div>` +
-          (usable
-            ? `<button type="button" class="btn-secondary btn-tiny api-config-discovery-confirm" data-part-id="${escapeHtml(part.id)}" data-candidate-index="${i}">${escapeHtml(t('common.use'))}</button>`
-            : `<div class="api-candidate-unusable">${escapeHtml(t('common.noRecordArray'))}</div>`);
-        list.appendChild(li);
-      });
-    }
-    wrap.appendChild(list);
-  }
-
-  return wrap;
-}
-
-function renderApiConfigHeaders(capturedHeaders, headerDecisions) {
-  const listEl = document.getElementById('api-config-headers');
-  if (!listEl) return;
-  listEl.innerHTML = '';
-
-  if (capturedHeaders.length === 0) {
-    listEl.innerHTML = `<li class="api-candidates-empty">${escapeHtml(t('apiConfig.noHeadersRecorded'))}</li>`;
-    return;
-  }
-
-  capturedHeaders.forEach((header) => {
-    const decision = headerDecisions[header.name] || { include: false, mode: 'literal', envName: '' };
-    const li = document.createElement('li');
-    li.className = 'api-config-header-row';
-    li.innerHTML =
-      `<label><input type="checkbox" class="api-config-header-include" data-header-name="${escapeHtml(header.name)}" ${decision.include ? 'checked' : ''} /></label>` +
-      `<span class="api-config-header-name" title="${escapeHtml(header.name)}: ${escapeHtml(header.value)}">${escapeHtml(header.name)}</span>` +
-      (decision.include
-        ? `<span class="api-config-header-mode">
-             <label><input type="radio" name="header-mode-${escapeHtml(header.name)}" class="api-config-header-mode-radio" data-header-name="${escapeHtml(header.name)}" value="literal" ${decision.mode === 'literal' ? 'checked' : ''} /> ${escapeHtml(t('apiConfig.headerModeValue'))}</label>
-             <label><input type="radio" name="header-mode-${escapeHtml(header.name)}" class="api-config-header-mode-radio" data-header-name="${escapeHtml(header.name)}" value="env" ${decision.mode === 'env' ? 'checked' : ''} /> ${escapeHtml(t('apiConfig.headerModeEnv'))}</label>
-           </span>` +
-          (decision.mode === 'env'
-            ? `<input type="text" class="api-config-env-name" data-header-name="${escapeHtml(header.name)}" placeholder="${escapeHtml(t('apiConfig.envNamePlaceholder'))}" value="${escapeHtml(decision.envName || '')}" />`
-            : '')
-        : '');
-    listEl.appendChild(li);
-  });
-}
-
-// ── API-Mode request-body tree editor (Issue #55, Phase B4) ─────────────────
-// Visually mirrors the response tree above (buildApiTreeNodeEl/renderApiTree)
-// but simpler: a node's own JSON key/array index is a read-only label (the
-// body's shape itself is never edited, see this section's own doc comment
-// on jsonValueToBodyDraft), and only a 'literal'/'variable' leaf gets any
-// controls at all — object/array nodes just recurse.
-
-function bodyNodeLabel(key, node) {
-  if (node.kind === 'literal') return `${key}: ${node.literalKind === 'Null' ? 'null' : JSON.stringify(node.value)}`;
-  return key;
-}
-
-function buildBodyTreeNodeEl(key, node, path, depth, availableParameters) {
-  const li = document.createElement('li');
-  li.className = 'body-tree-node';
-  li.dataset.path = JSON.stringify(path);
-
-  const row = document.createElement('div');
-  row.className = 'body-tree-row';
-  row.style.paddingLeft = `${depth * 12}px`;
-
-  const label = document.createElement('span');
-  label.className = 'body-tree-label';
-  label.textContent = bodyNodeLabel(key, node);
-  row.appendChild(label);
-
-  if (node.kind === 'literal') {
-    const toVariableBtn = document.createElement('button');
-    toVariableBtn.type = 'button';
-    toVariableBtn.className = 'btn-secondary btn-tiny btn-body-to-variable';
-    toVariableBtn.textContent = t('apiConfig.bodyToVariableBtn');
-    row.appendChild(toVariableBtn);
-  } else if (node.kind === 'variable') {
-    const picker = document.createElement('select');
-    picker.className = 'body-tree-parameter-picker';
-    picker.innerHTML =
-      `<option value="">${escapeHtml(t('apiConfig.bodyPickParameterPlaceholder'))}</option>` +
-      availableParameters.map(p =>
-        `<option value="${escapeHtml(p.id)}" ${node.parameterId === p.id ? 'selected' : ''}>${escapeHtml(p.name?.trim() ? p.name : t('apiConfig.unnamedPart'))}</option>`
-      ).join('') +
-      `<option value="__new__">${escapeHtml(t('apiConfig.bodyNewParameterOption'))}</option>`;
-    row.appendChild(picker);
-
-    const coerceSelect = document.createElement('select');
-    coerceSelect.className = 'body-tree-coerce-to';
-    coerceSelect.title = t('apiConfig.bodyCoerceToTitle');
-    coerceSelect.innerHTML = ['String', 'Number', 'Boolean']
-      .map(kind => `<option value="${kind}" ${(node.coerceTo || 'String') === kind ? 'selected' : ''}>${kind}</option>`)
-      .join('');
-    row.appendChild(coerceSelect);
-
-    const toFixedBtn = document.createElement('button');
-    toFixedBtn.type = 'button';
-    toFixedBtn.className = 'btn-secondary btn-tiny btn-body-to-fixed';
-    toFixedBtn.textContent = t('apiConfig.bodyToFixedBtn');
-    row.appendChild(toFixedBtn);
-  }
-
-  li.appendChild(row);
-
-  if (node.kind === 'object' || node.kind === 'array') {
-    const childUl = document.createElement('ul');
-    childUl.className = 'body-tree-children';
-    if (node.kind === 'object') {
-      Object.entries(node.properties).forEach(([childKey, child]) =>
-        childUl.appendChild(buildBodyTreeNodeEl(childKey, child, [...path, childKey], depth + 1, availableParameters)));
-    } else {
-      node.items.forEach((child, i) =>
-        childUl.appendChild(buildBodyTreeNodeEl(`[${i}]`, child, [...path, i], depth + 1, availableParameters)));
-    }
-    li.appendChild(childUl);
-  }
-
-  return li;
-}
-
-// draft (not just draft.bodyTree) since a parameter picker needs the full
-// allParameterParts(draft) list to populate its options.
-function renderBodyTree(draft) {
-  const root = document.getElementById('body-tree-root');
-  if (!root) return;
-  root.innerHTML = '';
-  if (!draft.bodyTree) return;
-  root.appendChild(buildBodyTreeNodeEl(t('apiConfig.bodyRootLabel'), draft.bodyTree, [], 0, allParameterParts(draft)));
-}
-
-// ── Container tree editor ────────────────────────────────────────────────────
-// Same visual pattern as the DOM-tree-view below (indentation, toggle arrow,
-// click-to-collapse — see buildTreeNodeEl) but editable: rows carry
-// add-container/add-field/remove buttons, and nodes start expanded since
-// this tree is user-authored and typically small, unlike a full page DOM.
-
-function buildGroupTreeNodeEl(node, path, depth) {
-  const li = document.createElement('li');
-  li.className = 'group-tree-node';
-  li.dataset.path = JSON.stringify(path);
-
-  const row = document.createElement('div');
-  row.className = 'group-tree-row';
-  row.style.paddingLeft = `${depth * 12}px`;
-
-  const hasChildren = node.kind === 'group' && node.children.length > 0;
-  const toggle = document.createElement('span');
-  toggle.className = 'group-tree-toggle';
-  toggle.textContent = hasChildren ? '▾' : '';
-  row.appendChild(toggle);
-
-  const label = document.createElement('span');
-  label.className = 'group-tree-label';
-  label.textContent = formatGroupNodeLabel(node);
-  label.title = node.selector;
-  row.appendChild(label);
-
-  if (node.framePath) {
-    const badge = document.createElement('span');
-    badge.className = 'frame-badge';
-    badge.title = t('frame.badgeTitle', { path: node.framePath.join(' > ') });
-    badge.textContent = t('frame.badge');
-    row.appendChild(badge);
-  }
-
-  if (node.kind === 'group') {
-    const addContainerBtn = document.createElement('button');
-    addContainerBtn.className = 'btn-secondary btn-tiny btn-add-subcontainer';
-    addContainerBtn.textContent = t('group.addSubcontainerBtn');
-    row.appendChild(addContainerBtn);
-
-    const addFieldBtn = document.createElement('button');
-    addFieldBtn.className = 'btn-secondary btn-tiny btn-add-subfield';
-    addFieldBtn.textContent = t('group.addSubfieldBtn');
-    row.appendChild(addFieldBtn);
-  }
-
-  const removeBtn = document.createElement('button');
-  removeBtn.className = 'btn-danger btn-remove-group-node';
-  removeBtn.textContent = t('common.remove');
-  row.appendChild(removeBtn);
-
-  li.appendChild(row);
-
-  if (node.kind === 'group') {
-    const childUl = document.createElement('ul');
-    childUl.className = 'group-tree-children';
-    node.children.forEach((child, i) => childUl.appendChild(buildGroupTreeNodeEl(child, [...path, i], depth + 1)));
-    li.appendChild(childUl);
-
-    if (hasChildren) {
-      toggle.addEventListener('click', () => {
-        const collapsed = childUl.classList.toggle('hidden');
-        toggle.textContent = collapsed ? '▸' : '▾';
-      });
-    }
-  }
-
-  return li;
-}
-
-function renderGroupTree(groups) {
-  const root = document.getElementById('group-tree-root');
-  if (!root) return;
-  root.innerHTML = '';
-  groups.forEach((node, i) => root.appendChild(buildGroupTreeNodeEl(node, [i], 0)));
-}
-
 // ── DOM tree view ────────────────────────────────────────────────────────────
 // Rendered imperatively (not through render()) so a user's expand/collapse
 // clicks survive unrelated state updates (e.g. adding/removing a field).
@@ -2194,423 +922,6 @@ function stopPreviewIfActive() {
   if (_state.previewActive) stopPreview();
 }
 
-// ── API-Mode network recording (Issue #53 Phase 3) ───────────────────────────
-// Unlike preview, this doesn't depend on Fields/Groups — it's a standalone
-// recording of the page's own fetch/XHR traffic, meant to feed the future
-// API-Mode's request-discovery flow (Phase 4+). See content-script.js's
-// API_CAPTURE bridge and api-capture.js (MAIN world) for where the actual
-// interception happens.
-
-function startApiCapture() {
-  log('API_CAPTURE_START');
-  chrome.runtime.sendMessage({ type: 'API_CAPTURE_START' });
-  patchState({ apiCaptureActive: true, apiCaptureCount: 0 });
-}
-
-function stopApiCapture() {
-  log('API_CAPTURE_STOP');
-  chrome.runtime.sendMessage({ type: 'API_CAPTURE_STOP' });
-  // Keep apiCaptureCount — Phase 4's search below runs on what was recorded
-  // *after* stopping, so the user still needs to see it stayed non-zero.
-  patchState({ apiCaptureActive: false });
-}
-
-function toggleApiCapture() {
-  if (_state.apiCaptureActive) stopApiCapture(); else startApiCapture();
-}
-
-// ── API-Mode candidate search (Issue #53 Phase 4) ───────────────────────────
-// Reuses the existing click-selection mechanism (START_SELECTION/
-// ELEMENT_SELECTED) with an extra apiSearch flag — content-script.js still
-// sends ELEMENT_SELECTED as always (see the guard in the message listener
-// below), but additionally correlates the clicked element's text against
-// the entries buffered during the (now stopped) recording and reports
-// candidates via a separate API_CANDIDATES message.
-
-function startApiFieldSearch() {
-  if (_state.apiCaptureCount === 0) return;
-  log('API_SEARCH start → START_SELECTION(apiSearch)');
-  stopPreviewIfActive();
-  chrome.runtime.sendMessage({ type: 'START_SELECTION', apiSearch: true });
-  setState(STATES.SELECTING, {
-    apiSearchTarget: 'field', pendingSelector: null, apiCandidates: null,
-    domTree: null, domTreeTruncated: false, domTreeError: null,
-  });
-  if (_state.domViewEnabled) requestDomTree();
-}
-
-// ── API-Mode parameter configuration (Issue #53 Phase 5) ────────────────────
-// Turns a confirmed primary-field candidate into an in-progress ApiConfig
-// draft and enters STATES.API_CONFIG — see buildApiConfig (the pure wire-
-// format assembly) for what this eventually becomes once the user finishes
-// configuring URL segments/params/headers there.
-
-// `siblingNames` are JSON keys the user picked as one-click extra fields —
-// each already IS a valid field name/path (a sibling's own key, always a
-// direct property of the same record, see content-script.js's
-// siblingFields) so no separate naming step is needed for those, unlike the
-// primary field which needs a user-chosen name.
-//
-// Issue #54, Phase A5: builds the full nested tree draft (buildApiSubtree
-// FromCandidate, using A3's deriveApiTreeSkeleton) instead of a flat fields
-// array — a single top-level match still ends up a one-node-deep tree, see
-// buildApiConfig's own doc comment on why the flat wire shape stays
-// available even though the popup only ever builds trees now.
-function confirmApiFieldCandidate(candidate, fieldName, siblingNames) {
-  const groups = buildApiSubtreeFromCandidate(candidate, fieldName, siblingNames);
-
-  log('API_FIELD_CONFIRM', { url: candidate.url, groups });
-  stopPreviewIfActive();
-  setState(STATES.API_CONFIG, {
-    apiCandidates: null,
-    apiConfigDraft: {
-      sourceUrl: candidate.url,
-      urlParts: parseUrlTemplateParts(candidate.url),
-      groups,
-      capturedHeaders: candidate.requestHeaders || [],
-      parameterSources: {},
-      headerDecisions: {},
-      // Issue #55, Phase B4: candidate.method is already there for free
-      // (content-script.js's findApiCandidates always carried it, just
-      // unused until now) — bodyTree starts null and is filled in
-      // asynchronously below since the captured body itself isn't attached
-      // to the candidate (only entryId is).
-      method: candidate.method || 'GET',
-      bodyTree: null,
-      bodyParameters: [],
-      nextBodyParameterSeq: 0,
-    },
-  });
-  loadInitialBodyTreeForCandidate(candidate);
-}
-
-// Fire-and-forget follow-up (Issue #55): a POST candidate's own captured
-// request body isn't attached to the click-correlated candidate object
-// itself (only entryId is — content-script.js's findApiCandidates never
-// needed the request body before this) — so once the primary field is
-// confirmed and the API_CONFIG screen is already showing, this looks the
-// matching entry up in the raw recorded pool (fetchApiCaptureEntries, the
-// same pool "Aufgezeichnete Anfragen" and the value-list autofill already
-// use) and, if it captured a JSON-string body, turns it into the initial
-// all-literal body draft (jsonValueToBodyDraft). Runs after the screen is
-// already up rather than blocking the transition on it — a bodyless POST is
-// still a fully valid config, so an extra async round trip just to maybe
-// populate the body tree isn't worth delaying the screen transition for.
-async function loadInitialBodyTreeForCandidate(candidate) {
-  if (!candidate.method || candidate.method === 'GET' || candidate.method === 'HEAD') return;
-
-  const entries = await fetchApiCaptureEntries();
-  const entry = entries.find(e => e.id === candidate.entryId);
-  if (!entry || entry.requestBodySkipped || !entry.requestBody) return;
-
-  let parsed;
-  try {
-    parsed = JSON.parse(entry.requestBody);
-  } catch {
-    return; // not JSON — no structured draft to build, request stays bodyless
-  }
-
-  // The screen may have moved on while the round trip was in flight
-  // (cancelled, or a different candidate confirmed) — only apply if we're
-  // still looking at the same, still-bodyless draft.
-  if (_state.current !== STATES.API_CONFIG || !_state.apiConfigDraft || _state.apiConfigDraft.bodyTree) return;
-  patchApiConfigDraft({ bodyTree: jsonValueToBodyDraft(parsed) });
-}
-
-function cancelApiConfig() {
-  log('API_CONFIG cancel');
-  setState(STATES.IDLE, { apiConfigDraft: null, apiDiscoveryCandidates: null, apiTreeSearchResult: null });
-}
-
-// ── API-Mode tree wiring (Issue #54, Phase A5) ──────────────────────────────
-// Adding to an already-confirmed tree: a new independent root group
-// (treeParentPath null) or a sub-field under an existing ApiGroup
-// (treeParentPath its tree path) both start a click-based JSON search the
-// same way startApiFieldSearch does above — scoped via resolveApiGroupScopePath
-// for the nested case, unscoped for a new root (Groups is a list; a second,
-// unrelated top-level array in the *same* response body is exactly as valid
-// a root as the first, see ApiConfig.Groups's own doc comment) — and the
-// confirmed candidate is inserted via insertApiTreeNode rather than
-// replacing the draft outright.
-//
-// A *sub-group* is different: unlike a field/root search, there's no single
-// clicked value to derive it from that wouldn't also imply a field the user
-// never asked for — so modal-api-group-new collects name **and** path
-// directly (no click at all), mirroring Container-Mode's "name first" order
-// while side-stepping the "what would the click's own leaf field be called"
-// question entirely. See openApiGroupModal/confirmApiGroupModal below.
-
-function startApiTreeFieldSearch(parentPath) {
-  const scopePath = parentPath ? resolveApiGroupScopePath(_state.apiConfigDraft.groups, parentPath) : null;
-  log('API_TREE_FIELD_SEARCH start', { parentPath, scopePath });
-  chrome.runtime.sendMessage({ type: 'START_SELECTION', apiSearch: true, apiScopePath: scopePath });
-  setState(STATES.SELECTING, {
-    apiSearchTarget: { treeParentPath: parentPath }, pendingSelector: null, apiTreeSearchResult: null,
-    domTree: null, domTreeTruncated: false, domTreeError: null,
-  });
-  if (_state.domViewEnabled) requestDomTree();
-}
-
-// skipSegments = the target group's own tree depth: that many of the
-// candidate's derived skeleton segments are already represented by existing
-// ancestor groups (see resolveApiGroupScopePath) — 0 for a new root.
-function confirmApiTreeFieldCandidate(candidate, fieldName, siblingNames) {
-  const { treeParentPath } = _state.apiTreeSearchResult;
-  const skipSegments = treeParentPath ? treeParentPath.length : 0;
-  const newNodes = buildApiSubtreeFromCandidate(candidate, fieldName, siblingNames, skipSegments);
-  log('API_TREE_FIELD_CONFIRM', { treeParentPath, fieldName, siblingNames });
-  const groups = newNodes.reduce((acc, node) => insertApiTreeNode(acc, treeParentPath, node), _state.apiConfigDraft.groups);
-  setState(STATES.API_CONFIG, { apiTreeSearchResult: null, apiConfigDraft: { ..._state.apiConfigDraft, groups } });
-}
-
-function openApiGroupModal(parentPath) {
-  log('API_GROUP_MODAL open', { parentPath });
-  patchState({ apiGroupModalOpen: true, pendingApiTreeParentPath: parentPath });
-}
-
-function confirmApiGroupModal() {
-  const name = document.getElementById('input-api-group-name')?.value.trim();
-  const path = document.getElementById('input-api-group-path')?.value.trim();
-  // Unlike a CSS selector, a JSON path can legitimately be "" (see
-  // ApiGroup.Path's array-of-arrays case) — but that's only ever reachable
-  // through the automatic skeleton derivation above; requiring a non-empty
-  // path here keeps this small, no-click modal unambiguous (was it really
-  // meant to be empty, or just not filled in yet?).
-  if (!name || !path) return;
-
-  const node = buildApiGroupDraft(name, path);
-  log('API_TREE_GROUP_ADD', { name, path, parentPath: _state.pendingApiTreeParentPath });
-  setState(STATES.API_CONFIG, {
-    apiConfigDraft: { ..._state.apiConfigDraft, groups: insertApiTreeNode(_state.apiConfigDraft.groups, _state.pendingApiTreeParentPath, node) },
-    apiGroupModalOpen: false, pendingApiTreeParentPath: null,
-  });
-}
-
-function cancelApiGroupModal() {
-  log('API_GROUP_MODAL cancel');
-  patchState({ apiGroupModalOpen: false, pendingApiTreeParentPath: null });
-}
-
-// Renames a tree node in place — Phase A5 generalization of
-// setApiConfigFieldName (the old flat-only version), see updateApiTreeNode.
-function setApiTreeNodeName(path, name) {
-  patchApiConfigDraft({ groups: updateApiTreeNode(_state.apiConfigDraft.groups, path, node => ({ ...node, name })) });
-}
-
-// Starts a *second* search round, reusing the exact same click-selection
-// mechanism as startApiFieldSearch (content-script.js doesn't need to know
-// which purpose this one serves) — its result becomes a DiscoverySource for
-// one specific variable part of the config being drafted, instead of the
-// primary field. `partId` (not the user-editable display name — see the
-// API-Mode config screen's own doc comment) identifies which one.
-function startDiscoverySearch(partId) {
-  log('API_DISCOVERY_SEARCH start', partId);
-  chrome.runtime.sendMessage({ type: 'START_SELECTION', apiSearch: true });
-  setState(STATES.SELECTING, {
-    apiSearchTarget: { parameter: partId }, pendingSelector: null, apiDiscoveryCandidates: null,
-    domTree: null, domTreeTruncated: false, domTreeError: null,
-  });
-  if (_state.domViewEnabled) requestDomTree();
-}
-
-function confirmDiscoveryCandidate(partId, candidate) {
-  const source = buildDiscoverySource(candidate.url, candidate.itemsPath, candidate.valuePath);
-  log('API_DISCOVERY_CONFIRM', { partId, source });
-  setState(STATES.API_CONFIG, {
-    apiDiscoveryCandidates: null,
-    apiConfigDraft: {
-      ..._state.apiConfigDraft,
-      parameterSources: { ..._state.apiConfigDraft.parameterSources, [partId]: source },
-    },
-  });
-}
-
-// Persists every apiConfigDraft edit through setState (not patchState) so it
-// survives a popup close/reopen mid-configuration, same as fields/groups.
-function patchApiConfigDraft(patch) {
-  setState(_state.current, { apiConfigDraft: { ..._state.apiConfigDraft, ...patch } });
-}
-
-function toggleApiConfigPartVariable(partId) {
-  const draft = _state.apiConfigDraft;
-  const [scope, key] = partId.split(':');
-  const urlParts = scope === 'path'
-    ? { ...draft.urlParts, pathSegments: draft.urlParts.pathSegments.map((seg, i) => (String(i) === key ? { ...seg, variable: !seg.variable } : seg)) }
-    : { ...draft.urlParts, queryParams: draft.urlParts.queryParams.map(p => (p.key === key ? { ...p, variable: !p.variable } : p)) };
-
-  // Toggling either way drops any source config for this part — avoids an
-  // orphaned/stale parameterSources entry for a part that just became
-  // "fest" again, or a half-configured one lingering under a name that no
-  // longer means anything after a second toggle.
-  const parameterSources = { ...draft.parameterSources };
-  delete parameterSources[partId];
-
-  patchApiConfigDraft({ urlParts, parameterSources });
-}
-
-function setApiConfigPartName(partId, name) {
-  const draft = _state.apiConfigDraft;
-  const [scope, key] = partId.split(':');
-  const urlParts = scope === 'path'
-    ? { ...draft.urlParts, pathSegments: draft.urlParts.pathSegments.map((seg, i) => (String(i) === key ? { ...seg, name } : seg)) }
-    : { ...draft.urlParts, queryParams: draft.urlParts.queryParams.map(p => (p.key === key ? { ...p, name } : p)) };
-  patchApiConfigDraft({ urlParts });
-}
-
-const API_CONFIG_SOURCE_DEFAULTS = {
-  staticList: { kind: 'staticList', valuesText: '' },
-  range: { kind: 'range', type: 'IsoWeek', from: '', to: '' },
-  discovery: { kind: 'discovery' }, // incomplete until confirmDiscoveryCandidate fills in urlTemplate/itemsPath/valuePath
-};
-
-// Range sources get their format auto-detected from the part's own
-// captured example value the moment "Range" is picked — see
-// detectRangeFormat's doc comment.
-function setApiConfigSourceKind(partId, kind) {
-  const draft = _state.apiConfigDraft;
-  const defaults = API_CONFIG_SOURCE_DEFAULTS[kind];
-  const source = kind === 'range'
-    ? { ...defaults, format: detectRangeFormat(defaults.type, findUrlPartValue(draft.urlParts, partId)) }
-    : defaults;
-  patchApiConfigDraft({ parameterSources: { ...draft.parameterSources, [partId]: source } });
-}
-
-function patchApiConfigSource(partId, patch) {
-  const draft = _state.apiConfigDraft;
-  patchApiConfigDraft({ parameterSources: { ...draft.parameterSources, [partId]: { ...draft.parameterSources[partId], ...patch } } });
-}
-
-function setApiConfigHeaderDecision(headerName, patch) {
-  const draft = _state.apiConfigDraft;
-  const current = draft.headerDecisions[headerName] || { include: false, mode: 'literal', envName: '' };
-  patchApiConfigDraft({ headerDecisions: { ...draft.headerDecisions, [headerName]: { ...current, ...patch } } });
-}
-
-// ── API-Mode request-body wiring (Issue #55, Phase B4) ──────────────────────
-// Toggling a leaf is the only structural edit the body tree ever gets (see
-// the section's own doc comment above jsonValueToBodyDraft) — everything
-// else here is either that toggle or routing a newly-variable leaf into the
-// exact same parameter-source configuration UI a URL variable part already
-// uses (allParameterParts/renderApiConfigParameters), rather than a second,
-// body-specific source picker.
-
-function toggleBodyLeafToVariable(path) {
-  const bodyTree = updateBodyTreeNode(_state.apiConfigDraft.bodyTree, path, node => ({
-    kind: 'variable', literalKind: node.literalKind, value: node.value, parameterId: null, coerceTo: null,
-  }));
-  patchApiConfigDraft({ bodyTree });
-}
-
-// A body-only parameter (unlike a URL part, which persists regardless of
-// whether the body still references it) only exists because some variable
-// leaf pointed at it — if this was the last one, drop it along with its
-// parameterSources entry rather than leaving an orphaned parameter card
-// that would still need a configured source just to satisfy
-// apiConfigDraftHasAllSourcesChosen (and the companion's own "declared but
-// unused parameter" rejection) for nothing. A leaf bound to a URL-derived
-// id is left alone either way — that part is still a real URL segment/query
-// param regardless of whether the body also referenced it.
-function toggleBodyLeafToFixed(path) {
-  const draft = _state.apiConfigDraft;
-  const node = resolveBodyTreeNode(draft.bodyTree, path);
-  const boundId = node.parameterId;
-  const bodyTree = updateBodyTreeNode(draft.bodyTree, path, n => ({ kind: 'literal', literalKind: n.literalKind, value: n.value }));
-
-  const isOrphanedBodyParameter = boundId?.startsWith('body:') && !bodyTreeReferencesParameterId(bodyTree, boundId);
-  const bodyParameters = isOrphanedBodyParameter
-    ? (draft.bodyParameters || []).filter(p => p.id !== boundId)
-    : draft.bodyParameters;
-  const parameterSources = isOrphanedBodyParameter
-    ? Object.fromEntries(Object.entries(draft.parameterSources).filter(([id]) => id !== boundId))
-    : draft.parameterSources;
-
-  patchApiConfigDraft({ bodyTree, bodyParameters, parameterSources });
-}
-
-function setBodyLeafParameter(path, parameterId) {
-  patchApiConfigDraft({ bodyTree: updateBodyTreeNode(_state.apiConfigDraft.bodyTree, path, node => ({ ...node, parameterId: parameterId || null })) });
-}
-
-// null (not "String") is the wire-omitted default — mirrors CoerceTo's own
-// optional nullable shape on the companion side (ApiBodyVariable.CoerceTo).
-function setBodyLeafCoerceTo(path, coerceTo) {
-  patchApiConfigDraft({ bodyTree: updateBodyTreeNode(_state.apiConfigDraft.bodyTree, path, node => ({ ...node, coerceTo: coerceTo === 'String' ? null : coerceTo })) });
-}
-
-function openBodyParameterModal(path) {
-  log('API_BODY_PARAMETER_MODAL open', { path });
-  patchState({ bodyParameterModalOpen: true, pendingBodyVariablePath: path });
-}
-
-// New body-only parameter ids are a monotonic sequence (draft.
-// nextBodyParameterSeq), not derived from the current array length —
-// toggleBodyLeafToFixed can remove entries again, and reusing a shrunk
-// array's length as the next id could otherwise collide with one still
-// referenced elsewhere in the tree.
-function confirmBodyParameterModal() {
-  const name = document.getElementById('input-api-body-parameter-name')?.value.trim();
-  if (!name) return;
-
-  const draft = _state.apiConfigDraft;
-  const seq = draft.nextBodyParameterSeq || 0;
-  const id = `body:${seq}`;
-  const bodyParameters = [...(draft.bodyParameters || []), { id, name }];
-  const bodyTree = updateBodyTreeNode(draft.bodyTree, _state.pendingBodyVariablePath, node => ({ ...node, parameterId: id }));
-
-  log('API_BODY_PARAMETER_ADD', { id, name });
-  setState(STATES.API_CONFIG, {
-    apiConfigDraft: { ...draft, bodyParameters, bodyTree, nextBodyParameterSeq: seq + 1 },
-    bodyParameterModalOpen: false, pendingBodyVariablePath: null,
-  });
-}
-
-function cancelBodyParameterModal() {
-  log('API_BODY_PARAMETER_MODAL cancel');
-  patchState({ bodyParameterModalOpen: false, pendingBodyVariablePath: null });
-}
-
-// Final assembly (Issue #53 Phase 5's "Apply"): staticList/range
-// sources are only ever kept as raw UI state (valuesText / type+from+to) in
-// apiConfigDraft, never as a built wire object — built here, once, from
-// whatever's currently in state. discovery sources are already complete
-// wire objects (built earlier by confirmDiscoveryCandidate) and passed
-// through as-is.
-//
-// Issue #55, Phase B4: iterates allParameterParts (URL + body-only) instead
-// of just variableUrlParts, so a body-only parameter's source is resolved
-// into the wire-ready parameterSources map exactly like a URL one already
-// was — idToName is then the one piece serializeBodyTree needs to turn a
-// variable leaf's draft-only parameterId into the actual declared name.
-function confirmApiConfig() {
-  const draft = _state.apiConfigDraft;
-  const parameterSources = {};
-  const idToName = {};
-  allParameterParts(draft).forEach((part) => {
-    const source = draft.parameterSources[part.id];
-    parameterSources[part.name] = source.kind === 'staticList'
-      ? buildStaticListSource(source.valuesText)
-      : source.kind === 'range'
-        ? buildRangeSource(source.type, source.from, source.to, source.format)
-        : source;
-    idToName[part.id] = part.name;
-  });
-
-  const apiConfig = buildApiConfig({
-    urlParts: draft.urlParts,
-    groups: draft.groups,
-    parameterSources,
-    capturedHeaders: draft.capturedHeaders,
-    headerDecisions: draft.headerDecisions,
-    method: draft.method,
-    bodyTree: draft.bodyTree,
-    bodyParameterNames: (draft.bodyParameters || []).map(p => p.name),
-    parameterIdToName: idToName,
-  });
-
-  log('API_CONFIG confirm', apiConfig);
-  setState(STATES.IDLE, { apiConfig, apiConfigDraft: null, apiDiscoveryCandidates: null, apiTreeSearchResult: null });
-}
-
 // ── Async actions ─────────────────────────────────────────────────────────────
 
 async function checkCompanion() {
@@ -2679,69 +990,6 @@ async function checkRobotsTxt() {
   } catch (err) {
     log('ROBOTS_TXT_CHECK failed', err.message);
     patchState({ robotsTxtChecking: false, robotsTxtResult: { ok: false, error: err.message } });
-  }
-}
-
-// Low-level GET_API_CAPTURE_ENTRIES round trip, shared by the "view
-// recorded endpoints" panel below and the value-list autofill further down
-// — same request/response shape as GET_LOGS/CHECK_ROBOTS_TXT, just no
-// dedicated loading/result state of its own since both callers keep their
-// own.
-async function fetchApiCaptureEntries() {
-  try {
-    return await chrome.runtime.sendMessage({ type: 'GET_API_CAPTURE_ENTRIES' }) || [];
-  } catch (err) {
-    log('GET_API_CAPTURE_ENTRIES failed', err.message);
-    return [];
-  }
-}
-
-// API-mode follow-up: toggles the inline "view recorded endpoints" panel —
-// fetches a fresh snapshot of the pool on every open (not just once) so a
-// user who recorded more requests, closed the panel, and reopens it sees
-// them without needing to stop/restart recording.
-async function toggleApiEntriesPanel() {
-  if (_state.apiEntriesPanelOpen) {
-    log('API_ENTRIES_PANEL close');
-    patchState({ apiEntriesPanelOpen: false });
-    return;
-  }
-  log('API_ENTRIES_PANEL open');
-  const entries = await fetchApiCaptureEntries();
-  patchState({ apiEntriesPanelOpen: true, apiEntries: entries });
-}
-
-// API-mode follow-up: derives sibling values for one variable URL part from
-// the recorded pool and merges them into that part's StaticListSource value
-// list — see findUrlTemplateMatches/mergeValueListValues above for the
-// actual matching/merging logic. Runs once automatically the moment
-// "Werteliste" is picked as the source kind, and again on demand via the
-// per-card "Aus Aufzeichnung übernehmen" button (e.g. after scrolling the
-// inspected page further to trigger more recorded requests).
-async function fillStaticListFromPool(partId) {
-  log('API_AUTOFILL start', partId);
-  const entries = await fetchApiCaptureEntries();
-
-  // The round trip is async — re-read state instead of trusting a
-  // closed-over draft, and bail if the screen/parameter moved on while it
-  // was in flight (config screen left, part removed, or its source kind
-  // switched away from staticList in the meantime).
-  const draft = _state.apiConfigDraft;
-  const source = draft?.parameterSources?.[partId];
-  if (!draft || source?.kind !== 'staticList') return;
-
-  const matches = findUrlTemplateMatches(draft.urlParts, partId, entries);
-  const { text, addedCount } = mergeValueListValues(source.valuesText || '', matches);
-  log('API_AUTOFILL result', { partId, found: matches.length, added: addedCount });
-
-  // A successful fill is already visible in the textarea itself — no need
-  // to also announce it via the (otherwise error-only, red) toast. Only the
-  // no-op case gets one, since nothing else on screen would otherwise
-  // confirm that the button/auto-run actually did something.
-  if (addedCount > 0) {
-    patchApiConfigSource(partId, { valuesText: text });
-  } else {
-    showToast(t('apiConfig.autoFillNoMatches'));
   }
 }
 
@@ -3034,85 +1282,21 @@ function switchMode(mode) {
   setState(_state.current, { mode, ...MODE_SWITCH_CLEARS[mode] });
 }
 
-function openContainerModal(parentPath) {
-  log('CONTAINER_MODAL open', { parentPath });
-  patchState({ containerModalOpen: true, pendingParentPath: parentPath });
-}
-
-// Container-add order is deliberately "name/type first, then click an
-// element" (unlike field-add below) — see planning-container-scraping.md.
-function confirmContainerModal() {
-  const name = document.getElementById('input-container-name')?.value.trim();
-  if (!name) return;
-  const repeating = document.getElementById('radio-container-repeating')?.checked ?? false;
-  const parentPath = _state.pendingParentPath;
-  const scopeSelector = parentPath ? resolveGroupNode(_state.groups, parentPath)?.selector : null;
-  // This container's own selector must itself be able to match N times when
-  // repeating, on top of the usual "nested inside a repeating ancestor" case.
-  const avoidId = repeating || hasRepeatingAncestor(_state.groups, parentPath);
-
-  log('CONTAINER_ADD start', { name, repeating, parentPath, scopeSelector, avoidId });
-  stopPreviewIfActive();
-  chrome.runtime.sendMessage({ type: 'START_SELECTION', scopeSelector, avoidId });
-  setState(STATES.SELECTING, {
-    containerModalOpen:  false,
-    selectionKind:       'container',
-    pendingNewContainer: { name, repeating },
-    pendingSelector:     null,
-    domTree: null, domTreeTruncated: false, domTreeError: null,
-  });
-  if (_state.domViewEnabled) requestDomTree();
-}
-
-function cancelContainerModal() {
-  log('CONTAINER_MODAL cancel');
-  setState(_state.current, { containerModalOpen: false, pendingParentPath: null });
-}
-
-// Field-add within a container keeps the flat mode's order — click first,
-// name/type after — since the field type doesn't affect what gets clicked.
-function startFieldSelection(parentPath) {
-  const scopeSelector = resolveGroupNode(_state.groups, parentPath)?.selector ?? null;
-  const avoidId = hasRepeatingAncestor(_state.groups, parentPath);
-  log('FIELD_ADD(container) start', { parentPath, scopeSelector, avoidId });
-  stopPreviewIfActive();
-  chrome.runtime.sendMessage({ type: 'START_SELECTION', scopeSelector, avoidId });
-  setState(STATES.SELECTING, {
-    selectionKind:       'field',
-    pendingParentPath:   parentPath,
-    pendingNewContainer: null,
-    pendingSelector:     null,
-    domTree: null, domTreeTruncated: false, domTreeError: null,
-  });
-  if (_state.domViewEnabled) requestDomTree();
-}
-
-function confirmExtendedField() {
-  const name = document.getElementById('input-field-extended-name')?.value.trim();
-  if (!name) return;
-  const mode = document.getElementById('select-field-mode')?.value ?? 'text';
-  const attribute = document.getElementById('input-field-attribute')?.value.trim();
-  if (mode === 'attribute' && !attribute) return;
-
-  const node = buildFieldNode(name, _state.pendingSelector, mode, attribute, _state.pendingFramePath);
-  log('FIELD_ADD(container) confirm', node);
-  setState(STATES.IDLE, {
-    groups:            insertContainerNode(_state.groups, _state.pendingParentPath, node),
-    pendingSelector:   null,
-    pendingFramePath:  null,
-    pendingParentPath: null,
-    selectionKind:     null,
-  });
-}
-
-function cancelExtendedField() {
-  log('FIELD_ADD(container) cancel');
-  setState(STATES.IDLE, { pendingSelector: null, pendingFramePath: null, pendingParentPath: null, selectionKind: null });
-}
-
 // ── Event wiring ──────────────────────────────────────────────────────────────
 
 function wireEvents() {
+  // Passed to every api-config-ui.js/container-tree-ui.js handler below,
+  // instead of those functions closing over this file's own module-level
+  // state — see api-config-ui.js's own doc comment for why.
+  const bridge = {
+    getState: () => _state,
+    setState,
+    patchState,
+    stopPreviewIfActive,
+    requestDomTree,
+    showToast,
+  };
+
   document.getElementById('lang-select')?.addEventListener('change', async (e) => {
     log('LANG_SELECT change', e.target.value);
     await setLanguage(e.target.value);
@@ -3153,7 +1337,7 @@ function wireEvents() {
 
   document.getElementById('btn-api-capture')?.addEventListener('click', () => {
     log('BTN api-capture');
-    toggleApiCapture();
+    toggleApiCapture(bridge);
   });
 
   document.getElementById('input-script-filename')?.addEventListener('input', (e) => {
@@ -3165,12 +1349,12 @@ function wireEvents() {
 
   document.getElementById('btn-api-search')?.addEventListener('click', () => {
     log('BTN api-search');
-    startApiFieldSearch();
+    startApiFieldSearch(bridge);
   });
 
   document.getElementById('btn-api-entries-toggle')?.addEventListener('click', () => {
     log('BTN api-entries-toggle');
-    toggleApiEntriesPanel();
+    toggleApiEntriesPanel(bridge);
   });
 
   // Event delegation for the sibling-field suggestion chips and the "Use"
@@ -3221,10 +1405,16 @@ function wireEvents() {
     });
   }
 
-  wireApiCandidateListEvents('api-candidates-list', () => _state.apiCandidates?.candidates, confirmApiFieldCandidate);
-  wireApiCandidateListEvents('api-tree-search-list', () => _state.apiTreeSearchResult?.candidates, confirmApiTreeFieldCandidate);
+  wireApiCandidateListEvents(
+    'api-candidates-list', () => _state.apiCandidates?.candidates,
+    (candidate, fieldName, siblingNames) => confirmApiFieldCandidate(bridge, candidate, fieldName, siblingNames),
+  );
+  wireApiCandidateListEvents(
+    'api-tree-search-list', () => _state.apiTreeSearchResult?.candidates,
+    (candidate, fieldName, siblingNames) => confirmApiTreeFieldCandidate(bridge, candidate, fieldName, siblingNames),
+  );
 
-  document.getElementById('btn-api-tree-add-root')?.addEventListener('click', () => startApiTreeFieldSearch(null));
+  document.getElementById('btn-api-tree-add-root')?.addEventListener('click', () => startApiTreeFieldSearch(bridge, null));
 
   // Event delegation for the API-tree's per-row add/remove buttons and name
   // input — mirrors the Container-tree's own delegation below.
@@ -3233,8 +1423,8 @@ function wireEvents() {
     if (!li) return;
     const path = JSON.parse(li.dataset.path);
 
-    if (e.target.closest('.btn-add-api-subgroup')) { openApiGroupModal(path); return; }
-    if (e.target.closest('.btn-add-api-subfield')) { startApiTreeFieldSearch(path); return; }
+    if (e.target.closest('.btn-add-api-subgroup')) { openApiGroupModal(bridge, path); return; }
+    if (e.target.closest('.btn-add-api-subfield')) { startApiTreeFieldSearch(bridge, path); return; }
     if (e.target.closest('.btn-remove-api-node')) {
       log('API_TREE_NODE_REMOVE', { path });
       setState(_state.current, { apiConfigDraft: { ..._state.apiConfigDraft, groups: removeApiTreeNode(_state.apiConfigDraft.groups, path) } });
@@ -3243,14 +1433,14 @@ function wireEvents() {
 
   document.getElementById('api-tree-root')?.addEventListener('change', (e) => {
     const nameInput = e.target.closest('.api-tree-name');
-    if (nameInput) setApiTreeNodeName(JSON.parse(nameInput.dataset.path), nameInput.value.trim());
+    if (nameInput) setApiTreeNodeName(bridge, JSON.parse(nameInput.dataset.path), nameInput.value.trim());
   });
 
-  document.getElementById('btn-api-group-confirm')?.addEventListener('click', confirmApiGroupModal);
+  document.getElementById('btn-api-group-confirm')?.addEventListener('click', () => confirmApiGroupModal(bridge));
   document.getElementById('input-api-group-path')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') confirmApiGroupModal();
+    if (e.key === 'Enter') confirmApiGroupModal(bridge);
   });
-  document.getElementById('btn-api-group-cancel')?.addEventListener('click', cancelApiGroupModal);
+  document.getElementById('btn-api-group-cancel')?.addEventListener('click', () => cancelApiGroupModal(bridge));
 
   // ── API-Mode config screen (Issue #53 Phase 5) ─────────────────────────────
   // Delegated `change` listeners (not `input`) so typing in a text field
@@ -3259,9 +1449,9 @@ function wireEvents() {
 
   const handleUrlPartControlChange = (e) => {
     const toggle = e.target.closest('.api-config-part-toggle');
-    if (toggle) { toggleApiConfigPartVariable(toggle.dataset.partId); return; }
+    if (toggle) { toggleApiConfigPartVariable(bridge, toggle.dataset.partId); return; }
     const nameInput = e.target.closest('.api-config-part-name');
-    if (nameInput) setApiConfigPartName(nameInput.dataset.partId, nameInput.value.trim());
+    if (nameInput) setApiConfigPartName(bridge, nameInput.dataset.partId, nameInput.value.trim());
   };
   document.getElementById('api-config-segments')?.addEventListener('change', handleUrlPartControlChange);
   document.getElementById('api-config-query-params')?.addEventListener('change', handleUrlPartControlChange);
@@ -3269,17 +1459,17 @@ function wireEvents() {
   document.getElementById('api-config-parameters')?.addEventListener('change', (e) => {
     const kindRadio = e.target.closest('.api-config-source-kind-radio');
     if (kindRadio) {
-      setApiConfigSourceKind(kindRadio.dataset.partId, kindRadio.value);
+      setApiConfigSourceKind(bridge, kindRadio.dataset.partId, kindRadio.value);
       // Best-effort, automatic first pass — picking "Werteliste" is exactly
       // the moment a user would otherwise go hunting through DevTools for
       // sibling requests, so try the pool first and let them refine/refresh
       // via the button rendered alongside the textarea (see
       // fillStaticListFromPool's own doc comment).
-      if (kindRadio.value === 'staticList') fillStaticListFromPool(kindRadio.dataset.partId);
+      if (kindRadio.value === 'staticList') fillStaticListFromPool(bridge, kindRadio.dataset.partId);
       return;
     }
     const staticList = e.target.closest('.api-config-static-list');
-    if (staticList) { patchApiConfigSource(staticList.dataset.partId, { valuesText: staticList.value }); return; }
+    if (staticList) { patchApiConfigSource(bridge, staticList.dataset.partId, { valuesText: staticList.value }); return; }
     const rangeType = e.target.closest('.api-config-range-type');
     if (rangeType) {
       const partId = rangeType.dataset.partId;
@@ -3288,79 +1478,79 @@ function wireEvents() {
       // raw value against Date's own presets instead of keeping a format
       // string that no longer means anything for the new Type.
       const rawValue = findUrlPartValue(_state.apiConfigDraft.urlParts, partId);
-      patchApiConfigSource(partId, { type: rangeType.value, format: detectRangeFormat(rangeType.value, rawValue) });
+      patchApiConfigSource(bridge, partId, { type: rangeType.value, format: detectRangeFormat(rangeType.value, rawValue) });
       return;
     }
     const rangeFrom = e.target.closest('.api-config-range-from');
-    if (rangeFrom) { patchApiConfigSource(rangeFrom.dataset.partId, { from: rangeFrom.value.trim() }); return; }
+    if (rangeFrom) { patchApiConfigSource(bridge, rangeFrom.dataset.partId, { from: rangeFrom.value.trim() }); return; }
     const rangeTo = e.target.closest('.api-config-range-to');
-    if (rangeTo) { patchApiConfigSource(rangeTo.dataset.partId, { to: rangeTo.value.trim() }); return; }
+    if (rangeTo) { patchApiConfigSource(bridge, rangeTo.dataset.partId, { to: rangeTo.value.trim() }); return; }
     const formatPreset = e.target.closest('.api-config-range-format-preset');
-    if (formatPreset) { patchApiConfigSource(formatPreset.dataset.partId, { format: formatPreset.value === 'custom' ? '' : formatPreset.value }); return; }
+    if (formatPreset) { patchApiConfigSource(bridge, formatPreset.dataset.partId, { format: formatPreset.value === 'custom' ? '' : formatPreset.value }); return; }
     const formatCustom = e.target.closest('.api-config-range-format-custom');
-    if (formatCustom) patchApiConfigSource(formatCustom.dataset.partId, { format: formatCustom.value.trim() });
+    if (formatCustom) patchApiConfigSource(bridge, formatCustom.dataset.partId, { format: formatCustom.value.trim() });
   });
 
   document.getElementById('api-config-parameters')?.addEventListener('click', (e) => {
     const searchBtn = e.target.closest('.api-config-discovery-search');
-    if (searchBtn) { startDiscoverySearch(searchBtn.dataset.partId); return; }
+    if (searchBtn) { startDiscoverySearch(bridge, searchBtn.dataset.partId); return; }
     const confirmBtn = e.target.closest('.api-config-discovery-confirm');
     if (confirmBtn) {
       const index = parseInt(confirmBtn.dataset.candidateIndex, 10);
       const candidate = _state.apiDiscoveryCandidates?.candidates?.[index];
-      if (candidate) confirmDiscoveryCandidate(confirmBtn.dataset.partId, candidate);
+      if (candidate) confirmDiscoveryCandidate(bridge, confirmBtn.dataset.partId, candidate);
       return;
     }
     const autofillBtn = e.target.closest('.api-config-autofill-pool');
-    if (autofillBtn) fillStaticListFromPool(autofillBtn.dataset.partId);
+    if (autofillBtn) fillStaticListFromPool(bridge, autofillBtn.dataset.partId);
   });
 
   document.getElementById('api-config-headers')?.addEventListener('change', (e) => {
     const include = e.target.closest('.api-config-header-include');
-    if (include) { setApiConfigHeaderDecision(include.dataset.headerName, { include: include.checked }); return; }
+    if (include) { setApiConfigHeaderDecision(bridge, include.dataset.headerName, { include: include.checked }); return; }
     const modeRadio = e.target.closest('.api-config-header-mode-radio');
-    if (modeRadio) { setApiConfigHeaderDecision(modeRadio.dataset.headerName, { mode: modeRadio.value }); return; }
+    if (modeRadio) { setApiConfigHeaderDecision(bridge, modeRadio.dataset.headerName, { mode: modeRadio.value }); return; }
     const envName = e.target.closest('.api-config-env-name');
-    if (envName) setApiConfigHeaderDecision(envName.dataset.headerName, { envName: envName.value.trim() });
+    if (envName) setApiConfigHeaderDecision(bridge, envName.dataset.headerName, { envName: envName.value.trim() });
   });
 
   // ── API-Mode request-body tree (Issue #55, Phase B4) ─────────────────────
   document.getElementById('body-tree-root')?.addEventListener('click', (e) => {
     const toVariableBtn = e.target.closest('.btn-body-to-variable');
     if (toVariableBtn) {
-      toggleBodyLeafToVariable(JSON.parse(toVariableBtn.closest('.body-tree-node').dataset.path));
+      toggleBodyLeafToVariable(bridge, JSON.parse(toVariableBtn.closest('.body-tree-node').dataset.path));
       return;
     }
     const toFixedBtn = e.target.closest('.btn-body-to-fixed');
-    if (toFixedBtn) toggleBodyLeafToFixed(JSON.parse(toFixedBtn.closest('.body-tree-node').dataset.path));
+    if (toFixedBtn) toggleBodyLeafToFixed(bridge, JSON.parse(toFixedBtn.closest('.body-tree-node').dataset.path));
   });
 
   document.getElementById('body-tree-root')?.addEventListener('change', (e) => {
     const picker = e.target.closest('.body-tree-parameter-picker');
     if (picker) {
       const path = JSON.parse(picker.closest('.body-tree-node').dataset.path);
-      if (picker.value === '__new__') { openBodyParameterModal(path); return; }
-      setBodyLeafParameter(path, picker.value);
+      if (picker.value === '__new__') { openBodyParameterModal(bridge, path); return; }
+      setBodyLeafParameter(bridge, path, picker.value);
       return;
     }
     const coerceTo = e.target.closest('.body-tree-coerce-to');
-    if (coerceTo) setBodyLeafCoerceTo(JSON.parse(coerceTo.closest('.body-tree-node').dataset.path), coerceTo.value);
+    if (coerceTo) setBodyLeafCoerceTo(bridge, JSON.parse(coerceTo.closest('.body-tree-node').dataset.path), coerceTo.value);
   });
 
-  document.getElementById('btn-api-body-parameter-confirm')?.addEventListener('click', confirmBodyParameterModal);
+  document.getElementById('btn-api-body-parameter-confirm')?.addEventListener('click', () => confirmBodyParameterModal(bridge));
   document.getElementById('input-api-body-parameter-name')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') confirmBodyParameterModal();
+    if (e.key === 'Enter') confirmBodyParameterModal(bridge);
   });
-  document.getElementById('btn-api-body-parameter-cancel')?.addEventListener('click', cancelBodyParameterModal);
+  document.getElementById('btn-api-body-parameter-cancel')?.addEventListener('click', () => cancelBodyParameterModal(bridge));
 
   document.getElementById('btn-api-config-cancel')?.addEventListener('click', () => {
     log('BTN api-config-cancel');
-    cancelApiConfig();
+    cancelApiConfig(bridge);
   });
 
   document.getElementById('btn-api-config-confirm')?.addEventListener('click', () => {
     log('BTN api-config-confirm');
-    confirmApiConfig();
+    confirmApiConfig(bridge);
   });
 
   document.getElementById('btn-api-config-discard')?.addEventListener('click', () => {
@@ -3383,7 +1573,7 @@ function wireEvents() {
   document.getElementById('btn-mode-container')?.addEventListener('click', () => switchMode('container'));
   document.getElementById('btn-mode-api')?.addEventListener('click', () => switchMode('api'));
 
-  document.getElementById('btn-add-root-container')?.addEventListener('click', () => openContainerModal(null));
+  document.getElementById('btn-add-root-container')?.addEventListener('click', () => openContainerModal(bridge, null));
 
   // Event delegation for the container tree's per-row add/remove buttons
   document.getElementById('group-tree-root')?.addEventListener('click', (e) => {
@@ -3391,8 +1581,8 @@ function wireEvents() {
     if (!li) return;
     const path = JSON.parse(li.dataset.path);
 
-    if (e.target.closest('.btn-add-subcontainer')) { openContainerModal(path); return; }
-    if (e.target.closest('.btn-add-subfield')) { startFieldSelection(path); return; }
+    if (e.target.closest('.btn-add-subcontainer')) { openContainerModal(bridge, path); return; }
+    if (e.target.closest('.btn-add-subfield')) { startFieldSelection(bridge, path); return; }
     if (e.target.closest('.btn-remove-group-node')) {
       log('GROUP_NODE_REMOVE', { path });
       stopPreviewIfActive();
@@ -3400,17 +1590,17 @@ function wireEvents() {
     }
   });
 
-  document.getElementById('btn-container-confirm')?.addEventListener('click', confirmContainerModal);
+  document.getElementById('btn-container-confirm')?.addEventListener('click', () => confirmContainerModal(bridge));
   document.getElementById('input-container-name')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') confirmContainerModal();
+    if (e.key === 'Enter') confirmContainerModal(bridge);
   });
-  document.getElementById('btn-container-cancel')?.addEventListener('click', cancelContainerModal);
+  document.getElementById('btn-container-cancel')?.addEventListener('click', () => cancelContainerModal(bridge));
 
-  document.getElementById('btn-field-extended-confirm')?.addEventListener('click', confirmExtendedField);
+  document.getElementById('btn-field-extended-confirm')?.addEventListener('click', () => confirmExtendedField(bridge));
   document.getElementById('input-field-extended-name')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') confirmExtendedField();
+    if (e.key === 'Enter') confirmExtendedField(bridge);
   });
-  document.getElementById('btn-field-extended-cancel')?.addEventListener('click', cancelExtendedField);
+  document.getElementById('btn-field-extended-cancel')?.addEventListener('click', () => cancelExtendedField(bridge));
   document.getElementById('select-field-mode')?.addEventListener('change', (e) => {
     document.getElementById('field-attribute-row')?.classList.toggle('hidden', e.target.value !== 'attribute');
   });

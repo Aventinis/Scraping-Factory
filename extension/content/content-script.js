@@ -97,9 +97,10 @@ function serializeDomTree() {
 //   resolves its selector once (select_one) or repeatedly (select, when
 //   `repeating`) against the current scope and recurses into each match; a
 //   field leaf is always a single match (select_one). The wire format from
-//   serializeGroupTree (popup.js) already distinguishes group vs. field by
-//   whether `children` is present, exactly like extract_group's `"children"
-//   in node` check — so the same tree can be walked here unmodified.
+//   serializeGroupTree (popup/container-tree.js) already distinguishes group
+//   vs. field by whether `children` is present, exactly like extract_group's
+//   `"children" in node` check — so the same tree can be walked here
+//   unmodified.
 //
 // Each querySelector(All) call is wrapped individually: an invalid/
 // incompatible selector is treated as zero matches instead of aborting the
@@ -301,8 +302,8 @@ function findApiCandidates(entries, targetText, scopePath = null) {
       // itemsPath/valuePath (Issue #53 Phase 5) and treeSkeleton (Issue #54
       // Phase A5) are derived once here so the popup — which only ever sees
       // this message's plain data, never content-script.js's own functions
-      // (a different execution context entirely; see popup.js's own
-      // buildApiSubtreeFromCandidate) — doesn't need its own copy of
+      // (a different execution context entirely; see popup/api-config.js's
+      // own buildApiSubtreeFromCandidate) — doesn't need its own copy of
       // deriveItemsAndValuePath/deriveApiTreeSkeleton to know whether/how a
       // candidate can become an API-mode source. itemsPath/valuePath are
       // null when the match isn't inside a repeating array at all;
