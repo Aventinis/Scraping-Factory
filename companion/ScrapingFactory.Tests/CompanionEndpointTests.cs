@@ -49,6 +49,151 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.Contains("import requests", body);
     }
 
+    // Issue #122: IncludePreview absent — same config shape as the test
+    // above, just spelled out explicitly here as the regression proof that
+    // opting into a preview is genuinely additive.
+    [Fact]
+    public async Task Generate_WithoutIncludePreview_Returns200WithTextPlain()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var config = new ScrapingConfig
+        {
+            Url = server.BaseUrl,
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+            IncludePreview = false,
+        };
+        var content = new StringContent(JsonSerializer.Serialize(config), Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/plain", response.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("import requests", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Generate_WithIncludePreview_ReturnsJsonWithCsvRows()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+              <li class="item"><h3>Suppe</h3></li>
+              <li class="item"><h3>Salat</h3></li>
+            </body></html>
+            """);
+        var config = new ScrapingConfig
+        {
+            Url = server.BaseUrl,
+            Fields = [new ScrapingField { Name = "Gericht", Selector = "li.item h3" }],
+            IncludePreview = true,
+        };
+        var content = new StringContent(JsonSerializer.Serialize(config), Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+
+        using var doc = JsonDocument.Parse(body);
+        Assert.Contains("import requests", doc.RootElement.GetProperty("script").GetString());
+        var preview = doc.RootElement.GetProperty("preview");
+        Assert.Equal("Csv", preview.GetProperty("outputFormat").GetString());
+        Assert.Equal(2, preview.GetProperty("totalCount").GetInt32());
+        Assert.False(preview.GetProperty("truncated").GetBoolean());
+        Assert.Equal("Gericht", preview.GetProperty("columns")[0].GetString());
+        var rows = preview.GetProperty("rows");
+        Assert.Equal(2, rows.GetArrayLength());
+        Assert.Equal("Suppe", rows[0].GetProperty("Gericht").GetString());
+        Assert.Equal("Salat", rows[1].GetProperty("Gericht").GetString());
+    }
+
+    // A field value containing a comma must round-trip through the preview
+    // unmangled — proves ParseCsvLine actually respects csv.DictWriter's own
+    // quoting instead of naively splitting on every comma.
+    [Fact]
+    public async Task Generate_WithIncludePreview_CsvValueContainingComma_ParsedCorrectly()
+    {
+        using var server = new LocalTestServer("""<html><body><h3>Suppe, Salat und Brot</h3></body></html>""");
+        var config = new ScrapingConfig
+        {
+            Url = server.BaseUrl,
+            Fields = [new ScrapingField { Name = "Gericht", Selector = "h3" }],
+            IncludePreview = true,
+        };
+        var content = new StringContent(JsonSerializer.Serialize(config), Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+
+        using var doc = JsonDocument.Parse(body);
+        var rows = doc.RootElement.GetProperty("preview").GetProperty("rows");
+        Assert.Equal("Suppe, Salat und Brot", rows[0].GetProperty("Gericht").GetString());
+    }
+
+    [Fact]
+    public async Task Generate_WithIncludePreview_MoreRowsThanCap_ReturnsTruncatedSample()
+    {
+        var items = string.Concat(Enumerable.Range(1, 60).Select(i => $"<li class=\"item\">Eintrag {i}</li>"));
+        using var server = new LocalTestServer($"<html><body>{items}</body></html>");
+        var config = new ScrapingConfig
+        {
+            Url = server.BaseUrl,
+            Fields = [new ScrapingField { Name = "Eintrag", Selector = "li.item" }],
+            IncludePreview = true,
+        };
+        var content = new StringContent(JsonSerializer.Serialize(config), Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+
+        using var doc = JsonDocument.Parse(body);
+        var preview = doc.RootElement.GetProperty("preview");
+        Assert.Equal(60, preview.GetProperty("totalCount").GetInt32());
+        Assert.True(preview.GetProperty("truncated").GetBoolean());
+        Assert.Equal(50, preview.GetProperty("rows").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Generate_WithIncludePreview_GroupsPayload_ReturnsJsonWithXmlSample()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+            <section class="menu-category"><h2>Vorspeisen</h2>
+              <li class="menu-item"><h3>Suppe</h3></li>
+            </section>
+            </body></html>
+            """);
+        var payload = $$"""
+            {
+              "version": "1",
+              "url": "{{server.BaseUrl}}",
+              "includePreview": true,
+              "groups": [
+                {
+                  "name": "Kategorie",
+                  "selector": "section.menu-category",
+                  "repeating": true,
+                  "children": [ { "name": "Titel", "selector": "h2" } ]
+                }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+
+        using var doc = JsonDocument.Parse(body);
+        var preview = doc.RootElement.GetProperty("preview");
+        Assert.Equal("Xml", preview.GetProperty("outputFormat").GetString());
+        Assert.False(preview.GetProperty("truncated").GetBoolean());
+        Assert.Contains("Vorspeisen", preview.GetProperty("xmlSample").GetString());
+    }
+
     // Proves ScriptFileName/OutputFileName are wired end-to-end: sanitized,
     // baked into the generated script's comment/open() calls, and verified
     // against the *same* sanitized output filename (not the "output.csv"
