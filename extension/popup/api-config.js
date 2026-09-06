@@ -15,6 +15,30 @@
 const SFApiConfig = (function () {
   const { t } = typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
 
+  // Popup screen names. Lives here (rather than in popup.js, which loads
+  // after this module) purely so api-config-ui.js/container-tree-ui.js's
+  // event handlers can reference it too; it has no other tie to API mode
+  // specifically.
+  const STATES = {
+    CHECKING_COMPANION: 'CHECKING_COMPANION',
+    COMPANION_ERROR:    'COMPANION_ERROR',
+    IDLE:               'IDLE',
+    SELECTING:          'SELECTING',
+    API_CONFIG:         'API_CONFIG', // Issue #53 Phase 5 — configuring a confirmed candidate into an ApiConfig
+    GENERATING:         'GENERATING',
+    DONE:               'DONE',
+  };
+
+  // Generic, dependency-free HTML-escaping helper — lives here for the same
+  // reason as STATES above.
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
   // ── API-Mode config assembly (Issue #53 Phase 5) ────────────────────────────
   // Turns a confirmed Phase-4 candidate request into a parameterized ApiConfig
   // (companion/ScrapingFactory.Compiler/IR/ApiConfig.cs) — URL decomposed into
@@ -608,6 +632,7 @@ const SFApiConfig = (function () {
   }
 
   return {
+    STATES, escapeHtml,
     parseUrlTemplateParts, buildUrlTemplate, parseValueListInput, findUrlTemplateMatches, mergeValueListValues,
     buildStaticListSource, buildDiscoverySource, buildRangeSource, RANGE_FORMAT_PRESETS,
     compileRangeFormatPattern, detectRangeFormat, findUrlPartValue, rangeFormatExample,
