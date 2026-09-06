@@ -76,7 +76,7 @@ public class PythonScriptVerifierTests
         var result = await new PythonScriptVerifier().VerifyAsync(script);
 
         Assert.False(result.Success);
-        Assert.Contains("keine Daten", result.Error);
+        Assert.Contains("no data", result.Error);
         Assert.Equal(0, result.RowCount);
     }
 
@@ -142,7 +142,7 @@ public class PythonScriptVerifierTests
         var result = await new PythonScriptVerifier().VerifyAsync(script);
 
         Assert.False(result.Success);
-        Assert.Contains("keine output.csv erzeugt", result.Error);
+        Assert.Contains("did not produce output.csv", result.Error);
     }
 
     [Fact]
@@ -154,7 +154,7 @@ public class PythonScriptVerifierTests
         var result = await verifier.VerifyAsync(script);
 
         Assert.False(result.Success);
-        Assert.Contains("Kein Python-Interpreter gefunden", result.Error);
+        Assert.Contains("No Python interpreter found", result.Error);
     }
 
     // ── Container-Mode (OutputFormat.Xml) ────────────────────────────────
@@ -293,7 +293,7 @@ public class PythonScriptVerifierTests
         var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Xml);
 
         Assert.False(result.Success);
-        Assert.Contains("keine Daten", result.Error);
+        Assert.Contains("no data", result.Error);
         Assert.Equal(0, result.RowCount);
     }
 

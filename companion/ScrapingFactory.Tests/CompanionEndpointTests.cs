@@ -463,7 +463,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
 
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("keine Daten", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("no data", doc.RootElement.GetProperty("error").GetString());
     }
 
     [Fact]
