@@ -57,7 +57,11 @@ internal static class PythonGroupTreeLiteral
         };
         var attributePart = field.Mode == ExtractMode.Attribute ? $""", "attribute": {PythonLiteral.Str(field.Attribute!)}""" : "";
         var framePathPart = FramePathPart(field.FramePath);
-        return $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "selector": {{PythonLiteral.Str(field.Selector)}}, "mode": {{PythonLiteral.Str(mode)}}{{attributePart}}{{framePathPart}}}""";
+        // Always present (never omitted like attribute/frame_path above) —
+        // Issue #84's transform chain isn't tied to a specific Mode branch,
+        // so extract_group() can just do node.get("transform", []) uniformly.
+        var transformPart = $$""", "transform": {{PythonFieldTransformLiteral.Render(field.Transforms)}}""";
+        return $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "selector": {{PythonLiteral.Str(field.Selector)}}, "mode": {{PythonLiteral.Str(mode)}}{{attributePart}}{{framePathPart}}{{transformPart}}}""";
     }
 
     private static string FramePathPart(List<string>? framePath) =>

@@ -36,7 +36,11 @@ public sealed class PythonCodeGenerator : ICodeGenerator
         // template, which has no need for per-step composition (unlike the
         // Browser engine's Playwright template).
         var fields = plan.Steps.OfType<ExtractStep>()
-            .Select(step => new { name = step.Name, selector = step.Selector, attribute = step.Attribute })
+            .Select(step => new
+            {
+                name = step.Name, selector = step.Selector, attribute = step.Attribute,
+                transforms_literal = PythonFieldTransformLiteral.Render(step.Transforms),
+            })
             .ToList();
 
         var template = EmbeddedScribanTemplate.Load(assembly, "scraper.py.j2");
