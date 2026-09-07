@@ -30,6 +30,26 @@ public class PythonPlaywrightCodeGeneratorTests
         ],
     };
 
+    [Fact]
+    public void Generate_FieldWithTransforms_RendersTransformChainAndRuntimeHelper()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ExtractStep { Name = "Preis", Selector = ".price", Transforms = [new TrimTransform(), new ToNumberTransform()] },
+            ],
+        };
+
+        var script = _generator.Generate(plan);
+        Assert.Contains("""{"kind": "trim"}""", script);
+        Assert.Contains("""{"kind": "toNumber"}""", script);
+        Assert.Contains("def _apply_transforms(value, transforms):", script);
+        Assert.Contains("row[name] = _apply_transforms(raw_value, TRANSFORMS.get(name, []))", script);
+    }
+
     private static ScrapingPlan LoginPlan() => new()
     {
         Engine = ScrapingEngine.Browser,

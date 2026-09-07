@@ -26,6 +26,38 @@ public class PythonCodeGeneratorTests
     }
 
     [Fact]
+    public void Generate_FieldWithoutTransforms_HasEmptyTransformsListInDict()
+    {
+        var script = _generator.Generate(TwoFieldPlan());
+        Assert.Contains("\"Titel\": [],", script);
+    }
+
+    [Fact]
+    public void Generate_FieldWithTransforms_RendersTransformChainAndRuntimeHelper()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ExtractStep
+                {
+                    Name = "Preis", Selector = ".price",
+                    Transforms = [new TrimTransform(), new ReplaceTransform { Find = "€", Replacement = "" }, new ToNumberTransform()],
+                },
+            ],
+        };
+
+        var script = _generator.Generate(plan);
+        Assert.Contains("""{"kind": "trim"}""", script);
+        Assert.Contains(""""kind": "replace", "find": '€', "replacement": ''"""", script);
+        Assert.Contains("""{"kind": "toNumber"}""", script);
+        Assert.Contains("def _apply_transforms(value, transforms):", script);
+        Assert.Contains("def _to_number(value):", script);
+        Assert.Contains("row[name] = _apply_transforms(raw_value, TRANSFORMS.get(name, []))", script);
+    }
+
+    [Fact]
     public void Generate_ContainsAllFieldNames()
     {
         var script = _generator.Generate(TwoFieldPlan());
