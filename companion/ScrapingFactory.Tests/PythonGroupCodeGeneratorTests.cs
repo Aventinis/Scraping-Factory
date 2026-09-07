@@ -65,7 +65,8 @@ public class PythonGroupCodeGeneratorTests
     public void Generate_TextFieldHasTextModeAndNoAttributeKey()
     {
         var script = _generator.Generate(NestedGroupPlan());
-        Assert.Contains("{\"name\": 'Titel', \"selector\": 'h2', \"mode\": 'text'}", script);
+        // "transform" (Issue #84) is always present, even when empty.
+        Assert.Contains("{\"name\": 'Titel', \"selector\": 'h2', \"mode\": 'text', \"transform\": []}", script);
     }
 
     [Fact]

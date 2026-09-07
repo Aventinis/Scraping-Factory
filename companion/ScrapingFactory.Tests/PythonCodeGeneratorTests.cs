@@ -79,9 +79,12 @@ public class PythonCodeGeneratorTests
     public void Generate_FieldWithoutAttributeNotInAttributesDict()
     {
         var script = _generator.Generate(TwoFieldPlan());
-        // "Titel" has no attribute — must not appear in ATTRIBUTES block
+        // "Titel" has no attribute — must not appear in the ATTRIBUTES dict
+        // itself (sliced up to its own closing brace, not further — Issue
+        // #84's TRANSFORMS dict right below legitimately has a "Titel" key
+        // regardless of attribute, so it must be excluded from this check).
         var attributesSection = script[(script.IndexOf("ATTRIBUTES") + "ATTRIBUTES".Length)..];
-        Assert.DoesNotContain("\"Titel\"", attributesSection.Split("def scrape")[0]);
+        Assert.DoesNotContain("\"Titel\"", attributesSection.Split("}")[0]);
     }
 
     [Fact]

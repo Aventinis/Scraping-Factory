@@ -234,7 +234,11 @@ public class PythonPlaywrightCodeGeneratorTests
     {
         var script = _generator.Generate(PlanWithFramedField());
         Assert.Contains("\"Preis\": [\"iframe#outer\", \"iframe.inner\"]", script);
-        Assert.DoesNotContain("\"Titel\": [", script);
+        // Scoped to the FRAME_PATHS dict itself (up to its own closing
+        // brace), not the whole script — Issue #84's TRANSFORMS dict further
+        // down legitimately has a "Titel": [] entry regardless of FramePath.
+        var framePathsSection = script[(script.IndexOf("FRAME_PATHS") + "FRAME_PATHS".Length)..].Split("}")[0];
+        Assert.DoesNotContain("\"Titel\": [", framePathsSection);
     }
 
     [Fact]
