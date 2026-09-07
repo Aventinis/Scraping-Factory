@@ -462,6 +462,23 @@ concept of frames at all, so this only applies to the Browser engine (§2.6).
   `BrowserAction` variant, `ScrapingPlanValidator.ValidateFramePath`, every
   Playwright template's frame-locator chaining
 
+### 2.17 Live selector match-count preview (Issue #85)
+
+Existence/quantity feedback ("N elements found") the instant a selector is
+picked, instead of only surfacing much later via a full `/generate` round-trip
+and trial run (§2.7). Purely client-side — the content script already has the
+live DOM in front of it, so it can just ask it directly.
+
+- Extension: `content/content-script.js` (`countSelectorMatches`, called from
+  `onClick` alongside `buildSelector`; result travels as `matchCount` on the
+  `ELEMENT_SELECTED` message), `background/service-worker.js`
+  (`pendingMatchCount` in the same session-storage fallback as
+  `pendingSelector`/`pendingFramePath`), `popup/popup.js`
+  (`_state.pendingMatchCount`, `renderMatchCountHint` for the flat/container
+  field modals, `showMatchCountToast` for container-group creation, which has
+  no confirmation modal of its own to show a hint in)
+- No companion involvement — entirely client-side.
+
 ---
 
 ## 3. Class & Module Relationship Model
