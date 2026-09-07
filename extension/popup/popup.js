@@ -55,8 +55,10 @@ const {
   startFieldSelection, confirmExtendedField, cancelExtendedField,
 } = typeof require !== 'undefined' ? require('./container-tree-ui') : self.SFContainerTreeUI;
 
-const { addTransform, transformsAreValid } =
-  typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
+const {
+  createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
+  moveTransform, transformsAreValid,
+} = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
 
 const { renderTransformList, wireTransformList } =
   typeof require !== 'undefined' ? require('./field-transforms-ui') : self.SFFieldTransformsUI;
@@ -2261,5 +2263,7 @@ if (typeof module !== 'undefined') {
     toggleBodyLeafToVariable, toggleBodyLeafToFixed, setBodyLeafParameter, setBodyLeafCoerceTo,
     openBodyParameterModal, confirmBodyParameterModal, cancelBodyParameterModal, confirmApiConfig,
     renderDataPreview,
+    createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
+    moveTransform, transformsAreValid, renderTransformList,
   };
 }

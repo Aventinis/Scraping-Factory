@@ -47,6 +47,8 @@ const {
   jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
   bodyTreeLeavesAreBound, serializeBodyTree, allParameterParts, renderBodyTree,
   renderDataPreview,
+  createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
+  moveTransform, transformsAreValid, renderTransformList,
 } = require('./popup');
 
 // jsdom's Blob doesn't implement .text() — read via FileReader instead.
@@ -689,6 +691,85 @@ describe('serializeGroupTree', () => {
     expect(group.framePath).toEqual(['#price-widget']);
     expect(group.children[0].framePath).toEqual(['#price-widget']);
     expect(group.children[1]).not.toHaveProperty('framePath');
+  });
+
+  // Issue #84
+  test('includes transforms on a field node when set, omits it when null', () => {
+    const groups = [
+      {
+        kind: 'group', name: 'Kategorie', selector: 'section', repeating: true,
+        children: [
+          { kind: 'field', name: 'Preis', selector: '.price', mode: 'text', transforms: [{ kind: 'trim' }, { kind: 'toNumber' }] },
+          { kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', transforms: null },
+        ],
+      },
+    ];
+    const [group] = serializeGroupTree(groups);
+    expect(group.children[0].transforms).toEqual([{ kind: 'trim' }, { kind: 'toNumber' }]);
+    expect(group.children[1]).not.toHaveProperty('transforms');
+  });
+});
+
+// Issue #84: pure data helpers for a field's transform chain.
+describe('field-transforms.js (createDefaultTransform / add / remove / update / changeKind / move / validate)', () => {
+  test('createDefaultTransform returns the right shape per kind', () => {
+    expect(createDefaultTransform('trim')).toEqual({ kind: 'trim' });
+    expect(createDefaultTransform('regexExtract')).toEqual({ kind: 'regexExtract', pattern: '', group: 0 });
+    expect(createDefaultTransform('replace')).toEqual({ kind: 'replace', find: '', replacement: '' });
+    expect(createDefaultTransform('toNumber')).toEqual({ kind: 'toNumber' });
+  });
+
+  test('createDefaultTransform falls back to trim for an unknown kind', () => {
+    expect(createDefaultTransform('nonsense')).toEqual({ kind: 'trim' });
+  });
+
+  test('addTransform appends a default trim step', () => {
+    const result = addTransform([{ kind: 'toNumber' }]);
+    expect(result).toEqual([{ kind: 'toNumber' }, { kind: 'trim' }]);
+  });
+
+  test('addTransform does not mutate the original array', () => {
+    const original = [{ kind: 'trim' }];
+    addTransform(original);
+    expect(original).toHaveLength(1);
+  });
+
+  test('removeTransform removes only the given index', () => {
+    const transforms = [{ kind: 'trim' }, { kind: 'toNumber' }, { kind: 'replace', find: 'a', replacement: 'b' }];
+    expect(removeTransform(transforms, 1)).toEqual([{ kind: 'trim' }, { kind: 'replace', find: 'a', replacement: 'b' }]);
+  });
+
+  test('updateTransform patches only the given index', () => {
+    const transforms = [{ kind: 'regexExtract', pattern: '', group: 0 }, { kind: 'trim' }];
+    const result = updateTransform(transforms, 0, { pattern: '\\d+' });
+    expect(result[0]).toEqual({ kind: 'regexExtract', pattern: '\\d+', group: 0 });
+    expect(result[1]).toEqual({ kind: 'trim' });
+  });
+
+  test('changeTransformKind replaces the step with fresh defaults for the new kind', () => {
+    const transforms = [{ kind: 'replace', find: 'a', replacement: 'b' }];
+    expect(changeTransformKind(transforms, 0, 'regexExtract')).toEqual([{ kind: 'regexExtract', pattern: '', group: 0 }]);
+  });
+
+  test('moveTransform swaps with the previous/next step', () => {
+    const transforms = [{ kind: 'trim' }, { kind: 'toNumber' }];
+    expect(moveTransform(transforms, 1, -1)).toEqual([{ kind: 'toNumber' }, { kind: 'trim' }]);
+    expect(moveTransform(transforms, 0, 1)).toEqual([{ kind: 'toNumber' }, { kind: 'trim' }]);
+  });
+
+  test('moveTransform is a no-op past either end', () => {
+    const transforms = [{ kind: 'trim' }, { kind: 'toNumber' }];
+    expect(moveTransform(transforms, 0, -1)).toBe(transforms);
+    expect(moveTransform(transforms, 1, 1)).toBe(transforms);
+  });
+
+  test('transformsAreValid rejects a regexExtract step with a blank pattern', () => {
+    expect(transformsAreValid([{ kind: 'trim' }, { kind: 'regexExtract', pattern: '  ', group: 0 }])).toBe(false);
+    expect(transformsAreValid([{ kind: 'trim' }, { kind: 'regexExtract', pattern: '\\d+', group: 0 }])).toBe(true);
+  });
+
+  test('transformsAreValid accepts an empty chain', () => {
+    expect(transformsAreValid([])).toBe(true);
   });
 });
 
@@ -3214,6 +3295,290 @@ describe('Live selector match-count preview (Issue #85)', () => {
     await flushMicrotasks();
 
     expect(document.getElementById('error-toast').classList.contains('hidden')).toBe(true);
+  });
+});
+
+// ── Field transform-chain editor (Issue #84) ────────────────────────────────
+// Same DOM-mocking pattern as "Live selector match-count preview" above, plus
+// the transform-list/add-button markup in both field modals.
+
+describe('Field transform-chain editor (Issue #84)', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div class="mode-toggle">
+          <button id="btn-mode-flat" class="mode-btn active"></button>
+          <button id="btn-mode-container" class="mode-btn"></button>
+        </div>
+        <div id="flat-mode-section">
+          <div id="fields-list"></div>
+          <button id="btn-add-field"></button>
+        </div>
+        <div id="container-mode-section" class="hidden">
+          <ul id="group-tree-root"></ul>
+          <button id="btn-add-root-container"></button>
+        </div>
+        <button id="btn-generate" disabled></button>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <input type="checkbox" id="toggle-dom-view" />
+        <div id="dom-tree-wrapper" class="hidden">
+          <p id="dom-tree-loading"></p>
+          <p id="dom-tree-error" class="hidden"></p>
+          <p id="dom-tree-truncated" class="hidden"></p>
+          <ul id="dom-tree-root"></ul>
+        </div>
+        <button id="btn-cancel-selection"></button>
+      </section>
+      <div id="modal-field-name" class="hidden">
+        <input id="input-field-name" />
+        <p id="field-name-match-count" class="match-count-hint hidden"></p>
+        <div class="field-transforms-section">
+          <ul id="field-transform-list"></ul>
+          <button type="button" id="btn-field-transform-add"></button>
+        </div>
+        <button id="btn-field-confirm"></button>
+        <button id="btn-field-cancel"></button>
+      </div>
+      <div id="modal-container-new" class="hidden">
+        <input id="input-container-name" />
+        <input type="radio" name="container-type" id="radio-container-single" checked />
+        <input type="radio" name="container-type" id="radio-container-repeating" />
+        <button id="btn-container-confirm"></button>
+        <button id="btn-container-cancel"></button>
+      </div>
+      <div id="modal-field-extended" class="hidden">
+        <input id="input-field-extended-name" />
+        <select id="select-field-mode">
+          <option value="text">Text</option>
+          <option value="attribute">Attribute</option>
+          <option value="exists">Exists</option>
+        </select>
+        <div id="field-attribute-row" class="hidden">
+          <input id="input-field-attribute" />
+        </div>
+        <p id="field-extended-match-count" class="match-count-hint hidden"></p>
+        <div id="field-extended-transforms-section" class="field-transforms-section">
+          <ul id="field-extended-transform-list"></ul>
+          <button type="button" id="btn-field-extended-transform-add"></button>
+        </div>
+        <button id="btn-field-extended-confirm"></button>
+        <button id="btn-field-extended-cancel"></button>
+      </div>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({}),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+  });
+
+  test('the flat field modal starts with no transform rows', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+
+    expect(document.querySelectorAll('#field-transform-list .transform-row')).toHaveLength(0);
+  });
+
+  test('"+ Transformation" adds a default trim row', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+
+    document.getElementById('btn-field-transform-add').click();
+
+    const rows = document.querySelectorAll('#field-transform-list .transform-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].querySelector('.transform-kind-select').value).toBe('trim');
+    // trim has no parameters — no pattern/find/replacement inputs rendered.
+    expect(rows[0].querySelector('.transform-pattern-input')).toBeNull();
+  });
+
+  test('changing kind to regexExtract reveals pattern/group inputs', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+    document.getElementById('btn-field-transform-add').click();
+
+    const select = document.querySelector('#field-transform-list .transform-kind-select');
+    select.value = 'regexExtract';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const row = document.querySelector('#field-transform-list .transform-row');
+    expect(row.querySelector('.transform-pattern-input')).not.toBeNull();
+    expect(row.querySelector('.transform-group-input').value).toBe('0');
+  });
+
+  test('editing the pattern input updates state and survives a re-render', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+    document.getElementById('btn-field-transform-add').click();
+    const select = document.querySelector('#field-transform-list .transform-kind-select');
+    select.value = 'regexExtract';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const patternInput = document.querySelector('#field-transform-list .transform-pattern-input');
+    patternInput.value = '\\d+';
+    patternInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(document.querySelector('#field-transform-list .transform-pattern-input').value).toBe('\\d+');
+  });
+
+  // Regression: render()'s modal-open block resets the name input/mode select
+  // to their defaults on every render — editing a transform row goes through
+  // patchState (a full re-render) the same way any other state change does,
+  // so without lastFieldModalSelector's "only reset on a genuinely new pick"
+  // guard, every transform edit would silently wipe the field name the user
+  // already typed.
+  test('editing a transform row does not reset the already-typed field name', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+    document.getElementById('input-field-name').value = 'Preis';
+    document.getElementById('btn-field-transform-add').click();
+
+    expect(document.getElementById('input-field-name').value).toBe('Preis');
+  });
+
+  test('remove button deletes only that row', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+    document.getElementById('btn-field-transform-add').click();
+    document.getElementById('btn-field-transform-add').click();
+
+    document.querySelectorAll('#field-transform-list .btn-transform-remove')[0].click();
+
+    expect(document.querySelectorAll('#field-transform-list .transform-row')).toHaveLength(1);
+  });
+
+  test('move-down then move-up round-trips the order', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+    document.getElementById('btn-field-transform-add').click(); // trim
+    const firstSelect = document.querySelector('#field-transform-list .transform-row').querySelector('.transform-kind-select');
+    firstSelect.value = 'toNumber';
+    firstSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('btn-field-transform-add').click(); // trim (second row)
+
+    document.querySelector('#field-transform-list .btn-transform-move-down').click();
+    let kinds = [...document.querySelectorAll('#field-transform-list .transform-kind-select')].map(s => s.value);
+    expect(kinds).toEqual(['trim', 'toNumber']);
+
+    document.querySelectorAll('#field-transform-list .btn-transform-move-up')[1].click();
+    kinds = [...document.querySelectorAll('#field-transform-list .transform-kind-select')].map(s => s.value);
+    expect(kinds).toEqual(['toNumber', 'trim']);
+  });
+
+  test('confirming a flat field with a valid transform chain includes it on the wire-shaped field object', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price' });
+    document.getElementById('input-field-name').value = 'Preis';
+    document.getElementById('btn-field-transform-add').click();
+    document.getElementById('btn-field-confirm').click();
+
+    const fieldRow = document.querySelector('#fields-list .field-row');
+    expect(fieldRow.textContent).toContain('Preis');
+
+    // pendingTransforms itself was reset (even though the now-hidden modal's
+    // stale DOM isn't re-rendered until it's actually shown again) — the
+    // next pick starts from an empty chain, not a leftover one.
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.other' });
+    expect(document.querySelectorAll('#field-transform-list .transform-row')).toHaveLength(0);
+  });
+
+  test('confirming is blocked when a regexExtract step has a blank pattern', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price' });
+    document.getElementById('input-field-name').value = 'Preis';
+    document.getElementById('btn-field-transform-add').click();
+    const select = document.querySelector('#field-transform-list .transform-kind-select');
+    select.value = 'regexExtract';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    document.getElementById('btn-field-confirm').click();
+
+    // Still on the SELECTING screen / modal open — nothing was added.
+    expect(document.querySelectorAll('#fields-list .field-row')).toHaveLength(0);
+  });
+
+  test('cancelling clears the transform chain for the next pick', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price' });
+    document.getElementById('btn-field-transform-add').click();
+    document.getElementById('btn-field-cancel').click();
+
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.other' });
+    expect(document.querySelectorAll('#field-transform-list .transform-row')).toHaveLength(0);
+  });
+
+  test('the transforms section is hidden for "Vorhanden?" (exists) mode in container mode', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+    chrome.runtime.sendMessage.mockClear();
+
+    document.querySelector('.btn-add-subfield').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.vegan' });
+    await flushMicrotasks();
+
+    const modeSelect = document.getElementById('select-field-mode');
+    modeSelect.value = 'exists';
+    modeSelect.dispatchEvent(new Event('change'));
+
+    expect(document.getElementById('field-extended-transforms-section').classList.contains('hidden')).toBe(true);
+  });
+
+  test('confirming a container field with transforms carries them onto the serialized node', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+    chrome.runtime.sendMessage.mockClear();
+
+    document.querySelector('.btn-add-subfield').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price' });
+    await flushMicrotasks();
+
+    document.getElementById('input-field-extended-name').value = 'Preis';
+    document.getElementById('btn-field-extended-transform-add').click();
+    const select = document.querySelector('#field-extended-transform-list .transform-kind-select');
+    select.value = 'toNumber';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('btn-field-extended-confirm').click();
+
+    const rows = document.querySelectorAll('#group-tree-root .group-tree-row');
+    expect(rows[1].textContent).toContain('Preis');
   });
 });
 
