@@ -61,6 +61,7 @@ public static class ScrapingPlanBuilder
             (ScrapingStep)new ExtractStep
             {
                 Name = field.Name, Selector = field.Selector, Attribute = field.Attribute, FramePath = field.FramePath,
+                Transforms = field.Transforms,
             }));
 
         return new ScrapingPlan

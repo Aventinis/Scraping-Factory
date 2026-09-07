@@ -174,4 +174,9 @@ public sealed class ApiField : ApiNode
     // instance in the tree shape (Issue #54) — e.g. "title" or
     // "meta.price".
     public required string Path { get; init; }
+
+    // See ExtractStep.Transforms (Issue #84) — same meaning, applied to
+    // whatever value Path resolves to (already string-coerced by the
+    // runtime's JSON-path resolver before the chain runs).
+    public List<FieldTransform>? Transforms { get; init; }
 }

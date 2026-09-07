@@ -45,6 +45,11 @@ public sealed class DataFieldNode : ContainerNode
     // See GroupNode.FramePath — same meaning and same "absolute, not
     // inherited" semantics.
     public List<string>? FramePath { get; init; }
+
+    // See ExtractStep.Transforms (Issue #84) — same meaning. Not applied
+    // when Mode == Exists (a boolean-ish presence check, not a string
+    // pipeline); the extension UI hides the transform section for that mode.
+    public List<FieldTransform>? Transforms { get; init; }
 }
 
 public enum ExtractMode { Text, Attribute, Exists }

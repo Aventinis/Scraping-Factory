@@ -73,6 +73,10 @@ public sealed class ScrapingField
 
     // See ExtractStep.FramePath — same meaning, just the wire-format mirror.
     public List<string>? FramePath { get; init; }
+
+    // See ExtractStep.Transforms (Issue #84) — same meaning, just the
+    // wire-format mirror.
+    public List<FieldTransform>? Transforms { get; init; }
 }
 
 public enum OutputFormat { Csv, Xml }
