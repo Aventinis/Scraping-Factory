@@ -479,6 +479,35 @@ live DOM in front of it, so it can just ask it directly.
   no confirmation modal of its own to show a hint in)
 - No companion involvement — entirely client-side.
 
+### 2.18 Per-field data transformations (Issue #84)
+
+An optional, ordered post-processing chain (trim/regex-extract/find-replace/
+to-number) applied to a field's raw extracted value before it's written to the
+output row — e.g. turning `"Preis: 12,99 €"` into `"12.99"` without the user
+hand-editing the generated script. Added independently to all three field
+shapes (flat/container/API) since none of them share a common leaf type.
+
+- Extension: `popup/field-transforms.js` (pure data helpers — create/add/
+  remove/update/changeKind/move/validate), `popup/field-transforms-ui.js`
+  (DOM rendering + delegated event wiring, shared between `modal-field-name`
+  and `modal-field-extended`), `popup/popup.js` (`_state.pendingTransforms`,
+  `lastFieldModalSelector` — tells a genuine modal reopen apart from a
+  re-render triggered by editing a transform row)
+- Companion: `IR/FieldTransform.cs` (`TrimTransform`/`RegexExtractTransform`/
+  `ReplaceTransform`/`ToNumberTransform`, polymorphic via an explicit `"kind"`
+  tag), `Transforms` on `ScrapingField`/`ExtractStep`/`DataFieldNode`/
+  `ApiField`, `Backends/Python/FieldTransformValidator` (regex syntax
+  pre-check, mirrors `RangeFormat.ValidateFormat`'s pattern),
+  `Backends/Python/PythonFieldTransformLiteral` (the one canonical
+  Python-literal serialization, reused by `PythonGroupTreeLiteral`,
+  `PythonApiConfigLiteral`, and flat mode's own `TRANSFORMS` dict)
+- All six leaf templates (§2.6/§2.3/§2.4's own template list) carry the same
+  hand-duplicated `_apply_transforms`/`_to_number` runtime helper pair — see
+  the Python Templates section of `CLAUDE.md` for the `_to_number` heuristic's
+  documented ambiguity.
+- Live preview of the chain's output against the picked element's raw value
+  is a deferred follow-up, not part of this feature (Issue #143).
+
 ---
 
 ## 3. Class & Module Relationship Model
