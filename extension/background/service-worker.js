@@ -108,7 +108,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // the user closed it manually, or it hasn't finished loading yet).
     log('STORE pendingSelector', message.selector);
     chrome.storage.session
-      .set({ pendingSelector: message.selector, pendingFramePath: message.framePath ?? null })
+      .set({
+        pendingSelector: message.selector,
+        pendingFramePath: message.framePath ?? null,
+        pendingMatchCount: typeof message.matchCount === 'number' ? message.matchCount : null,
+      })
       .then(() => log('STORE OK'))
       .catch(err => log('STORE ERR', err.message));
 
