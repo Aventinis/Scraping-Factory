@@ -150,6 +150,18 @@
     "addRootGroupBtn": "+ New group (top level)",
     "defaultGroupName": "Group"
   },
+  "transforms": {
+    "sectionLabel": "Transformations (optional)",
+    "addBtn": "+ Transformation",
+    "trimOption": "Trim (remove whitespace)",
+    "regexExtractOption": "Regex extract",
+    "replaceOption": "Find/replace",
+    "toNumberOption": "Convert to number",
+    "patternPlaceholder": "Regex pattern (e.g. \"\\d+\")",
+    "groupPlaceholder": "Group (0 = whole match)",
+    "findPlaceholder": "Find",
+    "replacementPlaceholder": "Replace with"
+  },
   "generating": {
     "message": "Generating script…"
   },

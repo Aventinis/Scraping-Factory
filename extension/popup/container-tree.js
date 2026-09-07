@@ -22,8 +22,15 @@ const SFContainerTree = (function () {
     return { kind: 'group', name, selector, repeating, children: [], framePath: framePath || null };
   }
 
-  function buildFieldNode(name, selector, mode, attribute, framePath = null) {
-    return { kind: 'field', name, selector, mode, attribute: mode === 'attribute' ? attribute : null, framePath: framePath || null };
+  function buildFieldNode(name, selector, mode, attribute, framePath = null, transforms = []) {
+    return {
+      kind: 'field', name, selector, mode, attribute: mode === 'attribute' ? attribute : null,
+      framePath: framePath || null,
+      // Issue #84: not meaningful for Exists mode (see FieldTransform's own
+      // doc comment) — dropped here rather than trusting every call site to
+      // pass [] for that mode itself.
+      transforms: mode !== 'exists' && transforms.length > 0 ? transforms : null,
+    };
   }
 
   function resolveGroupNode(groups, path) {
@@ -98,6 +105,7 @@ const SFContainerTree = (function () {
           mode: FIELD_MODE_WIRE_NAMES[node.mode],
           ...(node.mode === 'attribute' ? { attribute: node.attribute } : {}),
           ...(node.framePath ? { framePath: node.framePath } : {}),
+          ...(node.transforms && node.transforms.length > 0 ? { transforms: node.transforms } : {}),
         });
   }
 

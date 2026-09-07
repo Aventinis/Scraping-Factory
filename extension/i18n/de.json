@@ -150,6 +150,18 @@
     "addRootGroupBtn": "+ Neue Gruppe (oberste Ebene)",
     "defaultGroupName": "Gruppe"
   },
+  "transforms": {
+    "sectionLabel": "Transformationen (optional)",
+    "addBtn": "+ Transformation",
+    "trimOption": "Trimmen (Leerzeichen entfernen)",
+    "regexExtractOption": "Regex-Extraktion",
+    "replaceOption": "Suchen/Ersetzen",
+    "toNumberOption": "In Zahl umwandeln",
+    "patternPlaceholder": "Regex-Muster (z. B. \"\\d+\")",
+    "groupPlaceholder": "Gruppe (0 = ganzer Treffer)",
+    "findPlaceholder": "Suchen",
+    "replacementPlaceholder": "Ersetzen durch"
+  },
   "generating": {
     "message": "Generiere Skript…"
   },

@@ -150,6 +150,18 @@
     "addRootGroupBtn": "+ Nuevo grupo (nivel superior)",
     "defaultGroupName": "Grupo"
   },
+  "transforms": {
+    "sectionLabel": "Transformaciones (opcional)",
+    "addBtn": "+ Transformación",
+    "trimOption": "Recortar (eliminar espacios)",
+    "regexExtractOption": "Extracción con regex",
+    "replaceOption": "Buscar/reemplazar",
+    "toNumberOption": "Convertir a número",
+    "patternPlaceholder": "Patrón regex (p. ej. \"\\d+\")",
+    "groupPlaceholder": "Grupo (0 = coincidencia completa)",
+    "findPlaceholder": "Buscar",
+    "replacementPlaceholder": "Reemplazar con"
+  },
   "generating": {
     "message": "Generando script…"
   },
