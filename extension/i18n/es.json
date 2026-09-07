@@ -194,6 +194,9 @@
     "apiBodyParameterNew": {
       "nameLabel": "Nombre del parámetro (p. ej. \"categoria\")",
       "namePlaceholder": "Nombre"
+    },
+    "matchCount": {
+      "found": "{count} elemento(s) encontrado(s)"
     }
   },
   "toast": {
@@ -203,7 +206,8 @@
     "selectionUnavailable": "No es posible seleccionar elementos en esta página.",
     "previewUnavailable": "No es posible la vista previa en esta página.",
     "captureUnavailable": "No es posible grabar red en esta página.",
-    "invalidCompanionUrl": "Dirección no válida — incluye http:// o https://."
+    "invalidCompanionUrl": "Dirección no válida — incluye http:// o https://.",
+    "containerAdded": "Contenedor «{name}» añadido — {count} elemento(s) encontrado(s)"
   },
   "frame": {
     "badge": "iframe",

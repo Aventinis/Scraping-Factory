@@ -194,6 +194,9 @@
     "apiBodyParameterNew": {
       "nameLabel": "Name des Parameters (z. B. \"kategorie\")",
       "namePlaceholder": "Name"
+    },
+    "matchCount": {
+      "found": "{count} Element(e) gefunden"
     }
   },
   "toast": {
@@ -203,7 +206,8 @@
     "selectionUnavailable": "Element-Auswahl auf dieser Seite nicht möglich.",
     "previewUnavailable": "Vorschau auf dieser Seite nicht möglich.",
     "captureUnavailable": "Netzwerk-Aufzeichnung auf dieser Seite nicht möglich.",
-    "invalidCompanionUrl": "Ungültige Adresse — bitte mit http:// oder https:// angeben."
+    "invalidCompanionUrl": "Ungültige Adresse — bitte mit http:// oder https:// angeben.",
+    "containerAdded": "Container „{name}“ hinzugefügt — {count} Element(e) gefunden"
   },
   "frame": {
     "badge": "iframe",

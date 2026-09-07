@@ -81,6 +81,7 @@ test('ELEMENT_SELECTED stores selector in session storage', async () => {
   expect(chrome.storage.session.set).toHaveBeenCalledWith({
     pendingSelector: 'li.card > h2',
     pendingFramePath: null,
+    pendingMatchCount: null,
   });
 });
 
@@ -96,6 +97,22 @@ test('ELEMENT_SELECTED with a framePath stores it alongside the selector', async
   expect(chrome.storage.session.set).toHaveBeenCalledWith({
     pendingSelector: 'h2',
     pendingFramePath: ['#price-widget'],
+    pendingMatchCount: null,
+  });
+});
+
+// Issue #85: same session-storage fallback path as pendingSelector/
+// pendingFramePath above, so a popup closed at click time can still recover
+// the match count on reopen.
+test('ELEMENT_SELECTED with a matchCount stores it alongside the selector', async () => {
+  capturedListener({ type: 'ELEMENT_SELECTED', selector: 'h2', matchCount: 3 }, {});
+
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  expect(chrome.storage.session.set).toHaveBeenCalledWith({
+    pendingSelector: 'h2',
+    pendingFramePath: null,
+    pendingMatchCount: 3,
   });
 });
 

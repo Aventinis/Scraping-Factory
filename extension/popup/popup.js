@@ -91,6 +91,12 @@ let _state = {
   // same modal round trip and written onto the resulting field/node once
   // confirmed (see confirmField/confirmExtendedField).
   pendingFramePath:    null,
+  // Issue #85: how many elements the just-picked selector matches on the
+  // page right now (scoped to the container instance, when applicable) — the
+  // content script's own document.querySelectorAll(selector).length,
+  // reported alongside pendingSelector on the same ELEMENT_SELECTED message.
+  // null before any pick, or if the content script couldn't compute it.
+  pendingMatchCount:   null,
   selectionKind:       null,  // 'field' | 'container' | 'browserAction' | null — which kind the current SELECTING round is for
   pendingParentPath:   null,  // number[] | null — where the next inserted group-tree node goes; null = root level
   pendingNewContainer: null,  // {name, repeating} captured by modal-container-new before element-selection starts
@@ -347,6 +353,26 @@ function frameBadgeHtml(framePath) {
   if (!framePath || framePath.length === 0) return '';
   const title = escapeHtml(t('frame.badgeTitle', { path: framePath.join(' > ') }));
   return `<span class="frame-badge" title="${title}">${escapeHtml(t('frame.badge'))}</span>`;
+}
+
+// Issue #85: existence/quantity feedback next to the name input in
+// modal-field-name/modal-field-extended, the instant a selector is picked —
+// mirrors previewSummary's own count/warn-styling pattern (idle.
+// previewSummaryMatched + .preview-summary.warn), just scoped to a single
+// in-flight pick instead of every configured field/group at once. count is
+// null before any pick, or if the content script couldn't compute it — the
+// hint simply stays hidden then, same as it would if this feature didn't exist.
+function renderMatchCountHint(elId, count) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (count === null || count === undefined) {
+    el.textContent = '';
+    el.classList.add('hidden');
+    return;
+  }
+  el.textContent = t('modals.matchCount.found', { count });
+  el.classList.toggle('warn', count === 0);
+  el.classList.remove('hidden');
 }
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -658,10 +684,12 @@ function render() {
       document.getElementById('field-attribute-row')?.classList.add('hidden');
       const attrInput = document.getElementById('input-field-attribute');
       if (attrInput) attrInput.value = '';
+      renderMatchCountHint('field-extended-match-count', _state.pendingMatchCount);
     } else {
       show('modal-field-name');
       const input = document.getElementById('input-field-name');
       if (input) { input.value = ''; input.focus(); }
+      renderMatchCountHint('field-name-match-count', _state.pendingMatchCount);
     }
   }
 
@@ -1205,7 +1233,10 @@ function renderDataPreview(preview) {
 // `context` is a short human label (e.g. "Script generation"); passing it
 // marks the error as reportable — the toast then also offers "Report
 // bug" and the message/context are attached to the next bug report.
-function showToast(message, context) {
+// `variant` ('info' | 'warn') is Issue #85's own non-error use of this same
+// toast (container-group match-count feedback, see showMatchCountToast) —
+// omitted, it's the original red error styling, unchanged.
+function showToast(message, context, variant) {
   const toast = document.getElementById('error-toast');
   if (!toast) return;
 
@@ -1216,8 +1247,26 @@ function showToast(message, context) {
   if (reportBtn) reportBtn.classList.toggle('hidden', !context);
   if (context) setLastError(message, context);
 
+  toast.classList.remove('toast-info', 'toast-warn');
+  if (variant === 'info') toast.classList.add('toast-info');
+  if (variant === 'warn') toast.classList.add('toast-warn');
+
   toast.classList.remove('hidden');
   setTimeout(() => toast.classList.add('hidden'), context ? 8000 : 4000);
+}
+
+// Issue #85: existence/quantity feedback for a container-group's own
+// selector, right after it was inserted straight into the tree (see the
+// ELEMENT_SELECTED handler above) — the direct-insert flow has no
+// confirmation modal to show a match-count hint in the way
+// renderMatchCountHint does for a flat/container field pick, so a toast is
+// the next best surfacing. Amber for a 0-match pick (the exact case this
+// issue exists to catch early, instead of only failing much later at
+// /generate), green otherwise. Silently skipped if the content script
+// couldn't compute a count at all (matchCount === null).
+function showMatchCountToast(containerName, matchCount) {
+  if (matchCount === null) return;
+  showToast(t('toast.containerAdded', { name: containerName, count: matchCount }), null, matchCount === 0 ? 'warn' : 'info');
 }
 
 // ── Bug reporting ─────────────────────────────────────────────────────────────
@@ -1364,6 +1413,7 @@ function confirmField() {
     fields:           addField(_state.fields, name, _state.pendingSelector, _state.pendingFramePath),
     pendingSelector:  null,
     pendingFramePath: null,
+    pendingMatchCount: null,
   });
 }
 
@@ -1675,7 +1725,7 @@ function wireEvents() {
     log('BTN add-field → START_SELECTION');
     stopPreviewIfActive();
     chrome.runtime.sendMessage({ type: 'START_SELECTION' });
-    setState(STATES.SELECTING, { pendingSelector: null, domTree: null, domTreeTruncated: false, domTreeError: null });
+    setState(STATES.SELECTING, { pendingSelector: null, pendingMatchCount: null, domTree: null, domTreeTruncated: false, domTreeError: null });
     if (_state.domViewEnabled) {
       log('DOM view was enabled → re-requesting tree');
       requestDomTree();
@@ -1727,7 +1777,7 @@ function wireEvents() {
     // or the in-progress apiConfigDraft would appear to have vanished.
     const returnTo = _state.apiConfigDraft ? STATES.API_CONFIG : STATES.IDLE;
     setState(returnTo, {
-      selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null,
+      selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingMatchCount: null,
       pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', apiSearchTarget: null,
     });
   });
@@ -1753,7 +1803,7 @@ function wireEvents() {
 
   document.getElementById('btn-field-cancel')?.addEventListener('click', () => {
     log('BTN field-cancel');
-    setState(STATES.IDLE, { pendingSelector: null });
+    setState(STATES.IDLE, { pendingSelector: null, pendingMatchCount: null });
   });
 
   // Event delegation for "Remove" buttons in the field list
@@ -1827,7 +1877,7 @@ function wireEvents() {
       stopPreviewIfActive();
       chrome.runtime.sendMessage({ type: 'START_SELECTION' });
       setState(STATES.SELECTING, {
-        pendingSelector: null, selectionKind: 'browserAction', pendingBrowserActionIndex: index, pendingBrowserActionField: field,
+        pendingSelector: null, pendingMatchCount: null, selectionKind: 'browserAction', pendingBrowserActionIndex: index, pendingBrowserActionField: field,
         domTree: null, domTreeTruncated: false, domTreeError: null,
       });
     }
@@ -1910,14 +1960,20 @@ function wireEvents() {
       // Clear the storage entry the service worker wrote — we have it now.
       chrome.storage.session.remove('pendingSelector');
       const framePath = message.framePath || null;
+      const matchCount = typeof message.matchCount === 'number' ? message.matchCount : null;
       if (_state.mode === 'container' && _state.selectionKind === 'container') {
         // Name/type were already collected by modal-container-new — insert
-        // the new group node straight away, no further modal needed.
+        // the new group node straight away, no further modal needed. There's
+        // no modal left open at this point to show the match count in (Issue
+        // #85), so it's surfaced as a toast instead — read the name before
+        // setState() clears pendingNewContainer.
+        const containerName = _state.pendingNewContainer.name;
         const node = buildGroupNode(_state.pendingNewContainer.name, message.selector, _state.pendingNewContainer.repeating, framePath);
         setState(STATES.IDLE, {
           groups: insertContainerNode(_state.groups, _state.pendingParentPath, node),
-          selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null,
+          selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null,
         });
+        showMatchCountToast(containerName, matchCount);
       } else if (_state.selectionKind === 'browserAction' && _state.pendingBrowserActionIndex !== null) {
         // The action card already exists (kind chosen when it was added via
         // btn-add-action-*) — write the selector straight into the field
@@ -1934,10 +1990,10 @@ function wireEvents() {
             [_state.pendingBrowserActionField]: message.selector,
             framePath,
           }),
-          selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null,
+          selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null,
         });
       } else {
-        setState(STATES.SELECTING, { pendingSelector: message.selector, pendingFramePath: framePath });
+        setState(STATES.SELECTING, { pendingSelector: message.selector, pendingFramePath: framePath, pendingMatchCount: matchCount });
       }
       if (message.path) highlightSelected(message.path);
     }
@@ -2006,7 +2062,7 @@ async function init() {
 
   log('INIT reading session storage');
   const stored = await chrome.storage.session.get([
-    'fields', 'url', 'pendingSelector', 'pendingFramePath', 'mode', 'groups',
+    'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount', 'mode', 'groups',
     'engine', 'browserActions', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
@@ -2055,8 +2111,9 @@ async function init() {
       const groups = insertContainerNode(_state.groups, stored.pendingParentPath, node);
       await chrome.storage.session.set({ groups });
       setState(STATES.IDLE, {
-        groups, selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null,
+        groups, selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null,
       });
+      showMatchCountToast(stored.pendingNewContainer.name, typeof stored.pendingMatchCount === 'number' ? stored.pendingMatchCount : null);
       return;
     }
 
@@ -2071,7 +2128,7 @@ async function init() {
       });
       await chrome.storage.session.set({ browserActions });
       setState(STATES.IDLE, {
-        browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null,
+        browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null,
       });
       return;
     }
@@ -2079,7 +2136,10 @@ async function init() {
     // Flat field or container field — show the (extended, in container
     // mode) field-name modal without re-checking the companion.
     log('INIT pending selector found → show modal', stored.pendingSelector);
-    setState(STATES.SELECTING, { pendingSelector: stored.pendingSelector, pendingFramePath: stored.pendingFramePath || null });
+    setState(STATES.SELECTING, {
+      pendingSelector: stored.pendingSelector, pendingFramePath: stored.pendingFramePath || null,
+      pendingMatchCount: typeof stored.pendingMatchCount === 'number' ? stored.pendingMatchCount : null,
+    });
     return;
   }
 

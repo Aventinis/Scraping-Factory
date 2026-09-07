@@ -49,6 +49,24 @@ function buildSelector(element, scopeRoot, avoidId) {
   return segments.join(' > ');
 }
 
+// Existence/quantity feedback the instant a selector is built (Issue #85) —
+// purely a client-side UX nicety, no companion round-trip needed. Scoped to
+// scopeRoot the same way buildSelector's own boundary already is, so a
+// nested container/field's count reflects only the current container
+// instance, not the whole page. Returns null (not 0) if the selector
+// somehow doesn't even parse, so callers can tell "no matches" from
+// "couldn't check" — practically unreachable since buildSelector only ever
+// emits tag/class/id segments, but defensive rather than letting a thrown
+// SyntaxError break the whole click handler.
+function countSelectorMatches(selector, scopeRoot) {
+  try {
+    return (scopeRoot || document).querySelectorAll(selector).length;
+  } catch (err) {
+    log('countSelectorMatches failed', err.message);
+    return null;
+  }
+}
+
 // Identifies an element by its position within the DOM tree, relative to
 // document.body (same boundary buildSelector stops at). Used to correlate
 // page-side hover/click events with nodes in the side panel's tree view.
@@ -618,7 +636,7 @@ if (typeof window !== 'undefined') {
 
 if (typeof module !== 'undefined') {
   module.exports = {
-    buildSelector, elementPath, serializeDomTree,
+    buildSelector, countSelectorMatches, elementPath, serializeDomTree,
     matchFlatFields, matchGroupTree, computePreviewMatches,
     findValueInJson, siblingFields, siblingFieldsAt, findApiCandidates,
     deriveItemsAndValuePath, deriveApiTreeSkeleton,
@@ -880,10 +898,11 @@ function onClick(e) {
   }
 
   const selector = buildSelector(target, scopeRootEl, avoidIdInSelector);
+  const matchCount = countSelectorMatches(selector, scopeRootEl);
   const wasApiSearch = apiSearchActive; // read before stopSelection() clears it
   const apiScopePathForSearch = apiScopePathActive; // read before stopSelection() clears it
   const clickedText = (target.textContent || '').trim();
-  log('CLICK → selector', selector);
+  log('CLICK → selector', selector, 'matchCount', matchCount);
   stopSelection();
 
   // Path is a nice-to-have for the optional tree-view highlight — never let
@@ -901,7 +920,7 @@ function onClick(e) {
   resolveFramePath().then((framePath) => {
     log('MSG_OUT ELEMENT_SELECTED', selector, framePath);
     chrome.runtime.sendMessage({
-      type: 'ELEMENT_SELECTED', selector, path,
+      type: 'ELEMENT_SELECTED', selector, path, matchCount,
       framePath: framePath && framePath.length > 0 ? framePath : null,
     });
 

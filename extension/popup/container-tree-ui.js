@@ -128,6 +128,7 @@ const SFContainerTreeUI = (function () {
       selectionKind:       'container',
       pendingNewContainer: { name, repeating },
       pendingSelector:     null,
+      pendingMatchCount:   null,
       domTree: null, domTreeTruncated: false, domTreeError: null,
     });
     if (state.domViewEnabled) bridge.requestDomTree();
@@ -152,6 +153,7 @@ const SFContainerTreeUI = (function () {
       pendingParentPath:   parentPath,
       pendingNewContainer: null,
       pendingSelector:     null,
+      pendingMatchCount:   null,
       domTree: null, domTreeTruncated: false, domTreeError: null,
     });
     if (state.domViewEnabled) bridge.requestDomTree();
@@ -171,6 +173,7 @@ const SFContainerTreeUI = (function () {
       groups:            insertContainerNode(state.groups, state.pendingParentPath, node),
       pendingSelector:   null,
       pendingFramePath:  null,
+      pendingMatchCount: null,
       pendingParentPath: null,
       selectionKind:     null,
     });
@@ -178,7 +181,9 @@ const SFContainerTreeUI = (function () {
 
   function cancelExtendedField(bridge) {
     log('FIELD_ADD(container) cancel');
-    bridge.setState(STATES.IDLE, { pendingSelector: null, pendingFramePath: null, pendingParentPath: null, selectionKind: null });
+    bridge.setState(STATES.IDLE, {
+      pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingParentPath: null, selectionKind: null,
+    });
   }
 
   return {

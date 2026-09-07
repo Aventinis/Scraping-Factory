@@ -104,6 +104,10 @@
     .preview-summary { font-size: 11px; color: #6b7280; margin-top: 6px; text-align: center; }
     .preview-summary.warn { color: #d97706; }
 
+    /* Live selector match-count hint (Issue #85) — modal-field-name/-extended */
+    .match-count-hint { font-size: 11px; color: #6b7280; margin: -8px 0 12px; }
+    .match-count-hint.warn { color: #d97706; }
+
     /* API-mode candidate search (Phase 4) */
     .api-candidates-panel { margin-top: 8px; padding: 8px; background: #f9fafb; border-radius: 6px; }
     .api-candidates-target { font-size: 11px; color: #6b7280; margin-bottom: 6px; word-break: break-word; }
@@ -316,6 +320,9 @@
       padding: 4px 8px; flex: none; white-space: nowrap;
     }
     .toast-report-btn:hover { background: rgba(255,255,255,.32); }
+    /* Issue #85: non-error toast variants (container-group match count) */
+    .toast.toast-info { background: #16a34a; }
+    .toast.toast-warn { background: #d97706; }
 
     /* "Fehler melden" affordances */
     .report-bug-link {
@@ -597,6 +604,8 @@
     <div class="modal-inner">
       <label for="input-field-name" data-i18n="modals.fieldName.label"></label>
       <input id="input-field-name" type="text" data-i18n-placeholder="modals.fieldName.placeholder" autocomplete="off" />
+      <!-- Issue #85: live match count for the just-picked selector -->
+      <p id="field-name-match-count" class="match-count-hint hidden"></p>
       <div class="modal-actions">
         <button id="btn-field-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
         <button id="btn-field-confirm" class="btn-primary" data-i18n="common.add"></button>
@@ -636,6 +645,8 @@
         <label for="input-field-attribute" data-i18n="modals.fieldExtended.attributeLabel"></label>
         <input id="input-field-attribute" type="text" data-i18n-placeholder="modals.fieldExtended.attributePlaceholder" autocomplete="off" />
       </div>
+      <!-- Issue #85: live match count for the just-picked selector -->
+      <p id="field-extended-match-count" class="match-count-hint hidden"></p>
       <div class="modal-actions">
         <button id="btn-field-extended-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
         <button id="btn-field-extended-confirm" class="btn-primary" data-i18n="common.add"></button>
