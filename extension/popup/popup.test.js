@@ -3011,6 +3011,194 @@ describe('Container-Mode integration', () => {
   });
 });
 
+// ── Live selector match-count preview (Issue #85) ───────────────────────────
+// Same DOM-mocking pattern as "Container-Mode integration" above, plus the
+// match-count hint elements and the toast markup (container-group creation
+// has no modal of its own, so its feedback goes through showToast instead).
+
+describe('Live selector match-count preview (Issue #85)', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div class="mode-toggle">
+          <button id="btn-mode-flat" class="mode-btn active"></button>
+          <button id="btn-mode-container" class="mode-btn"></button>
+        </div>
+        <div id="flat-mode-section">
+          <div id="fields-list"></div>
+          <button id="btn-add-field"></button>
+        </div>
+        <div id="container-mode-section" class="hidden">
+          <ul id="group-tree-root"></ul>
+          <button id="btn-add-root-container"></button>
+        </div>
+        <button id="btn-generate" disabled></button>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <input type="checkbox" id="toggle-dom-view" />
+        <div id="dom-tree-wrapper" class="hidden">
+          <p id="dom-tree-loading"></p>
+          <p id="dom-tree-error" class="hidden"></p>
+          <p id="dom-tree-truncated" class="hidden"></p>
+          <ul id="dom-tree-root"></ul>
+        </div>
+        <button id="btn-cancel-selection"></button>
+      </section>
+      <div id="modal-field-name" class="hidden">
+        <input id="input-field-name" />
+        <p id="field-name-match-count" class="match-count-hint hidden"></p>
+        <button id="btn-field-confirm"></button>
+        <button id="btn-field-cancel"></button>
+      </div>
+      <div id="modal-container-new" class="hidden">
+        <input id="input-container-name" />
+        <input type="radio" name="container-type" id="radio-container-single" checked />
+        <input type="radio" name="container-type" id="radio-container-repeating" />
+        <button id="btn-container-confirm"></button>
+        <button id="btn-container-cancel"></button>
+      </div>
+      <div id="modal-field-extended" class="hidden">
+        <input id="input-field-extended-name" />
+        <select id="select-field-mode">
+          <option value="text">Text</option>
+          <option value="attribute">Attribute</option>
+          <option value="exists">Exists</option>
+        </select>
+        <div id="field-attribute-row" class="hidden">
+          <input id="input-field-attribute" />
+        </div>
+        <p id="field-extended-match-count" class="match-count-hint hidden"></p>
+        <button id="btn-field-extended-confirm"></button>
+        <button id="btn-field-extended-cancel"></button>
+      </div>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({}),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+  });
+
+  test('a flat field pick shows the match count next to the name input', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item', matchCount: 12 });
+
+    const hint = document.getElementById('field-name-match-count');
+    expect(hint.classList.contains('hidden')).toBe(false);
+    expect(hint.textContent).toBe('12 Element(e) gefunden');
+    expect(hint.classList.contains('warn')).toBe(false);
+  });
+
+  test('a flat field pick matching nothing shows the hint with warn styling', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.does-not-exist', matchCount: 0 });
+
+    const hint = document.getElementById('field-name-match-count');
+    expect(hint.classList.contains('hidden')).toBe(false);
+    expect(hint.textContent).toBe('0 Element(e) gefunden');
+    expect(hint.classList.contains('warn')).toBe(true);
+  });
+
+  test('a pick with no matchCount (content script could not compute it) keeps the hint hidden', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' }); // no matchCount field at all
+
+    expect(document.getElementById('field-name-match-count').classList.contains('hidden')).toBe(true);
+  });
+
+  test('a container field pick shows the match count in the extended modal', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category', matchCount: 4 });
+    await flushMicrotasks();
+    chrome.runtime.sendMessage.mockClear();
+
+    document.querySelector('.btn-add-subfield').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'h2.category-title', matchCount: 1 });
+    await flushMicrotasks();
+
+    const hint = document.getElementById('field-extended-match-count');
+    expect(hint.classList.contains('hidden')).toBe(false);
+    expect(hint.textContent).toBe('1 Element(e) gefunden');
+  });
+
+  test('creating a root container shows a match-count toast instead (no confirmation modal for containers)', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category', matchCount: 7 });
+    await flushMicrotasks();
+
+    const toast = document.getElementById('error-toast');
+    expect(toast.classList.contains('hidden')).toBe(false);
+    expect(toast.classList.contains('toast-info')).toBe(true);
+    expect(toast.classList.contains('toast-warn')).toBe(false);
+    expect(document.getElementById('error-toast-message').textContent)
+      .toBe('Container „Vorspeisen“ hinzugefügt — 7 Element(e) gefunden');
+    // Insertion itself is unaffected by the toast — same "no extra modal" flow as before.
+    expect(document.querySelector('#group-tree-root .group-tree-row').textContent).toContain('Vorspeisen');
+  });
+
+  test('creating a root container whose selector matches nothing shows the toast in its warn variant', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Leer';
+    document.getElementById('btn-container-confirm').click();
+
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.does-not-exist', matchCount: 0 });
+    await flushMicrotasks();
+
+    const toast = document.getElementById('error-toast');
+    expect(toast.classList.contains('toast-warn')).toBe(true);
+    expect(toast.classList.contains('toast-info')).toBe(false);
+    expect(document.getElementById('error-toast-message').textContent)
+      .toBe('Container „Leer“ hinzugefügt — 0 Element(e) gefunden');
+  });
+
+  test('creating a root container with no matchCount at all shows no toast', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' }); // no matchCount field
+    await flushMicrotasks();
+
+    expect(document.getElementById('error-toast').classList.contains('hidden')).toBe(true);
+  });
+});
+
 // ── Engine + browser actions integration (Issue #41/#42, Phase 5) ───────────
 // Mode-independent (see buildScrapingConfig's doc comment) — mirrors the
 // Container-Mode integration block's DOM-mocking pattern above, but the
