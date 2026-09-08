@@ -14,8 +14,17 @@
 const SFFieldTransformsUI = (function () {
   const { t } = typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
   const {
-    removeTransform, updateTransform, changeTransformKind, moveTransform,
+    removeTransform, updateTransform, changeTransformKind, moveTransform, applyTransformsPreview,
   } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
+
+  // Long raw values (a whole paragraph clicked in Text mode) would otherwise
+  // stretch the modal — same defensive-cap spirit as api-capture.js's own
+  // MAX_BODY_CHARS, just a much smaller number since this is a one-line hint.
+  const MAX_PREVIEW_CHARS = 200;
+
+  function truncatePreviewValue(value) {
+    return value.length > MAX_PREVIEW_CHARS ? `${value.slice(0, MAX_PREVIEW_CHARS)}…` : value;
+  }
 
   const KIND_OPTIONS = [
     ['trim', 'transforms.trimOption'],
@@ -101,6 +110,34 @@ const SFFieldTransformsUI = (function () {
     transforms.forEach((transform, i) => root.appendChild(buildTransformRowEl(transform, i, transforms.length)));
   }
 
+  // Issue #143: live "what would this chain actually produce" hint, run
+  // against the raw value of the element the user just picked. rawValue is
+  // null/undefined when there's nothing to preview yet — no pick at all, or
+  // (container mode, attribute type) the attribute name input is still
+  // blank — in which case the hint is hidden entirely rather than showing a
+  // misleading empty result.
+  function renderTransformPreview(elId, rawValue, transforms) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    if (rawValue === null || rawValue === undefined) {
+      el.textContent = '';
+      el.classList.add('hidden');
+      el.classList.remove('warn');
+      return;
+    }
+    el.classList.remove('hidden');
+    const result = applyTransformsPreview(rawValue, transforms);
+    if (result === null) {
+      el.textContent = t('transforms.previewUnavailable');
+      el.classList.add('warn');
+    } else {
+      el.classList.remove('warn');
+      el.textContent = t('transforms.previewLabel', {
+        value: result === '' ? t('transforms.previewEmptyValue') : truncatePreviewValue(result),
+      });
+    }
+  }
+
   // Wired once (in popup.js's wireEvents()) per list root — event delegation
   // survives renderTransformList's innerHTML rebuild, same as the group
   // tree's own delegated click handler.
@@ -140,7 +177,7 @@ const SFFieldTransformsUI = (function () {
     });
   }
 
-  return { renderTransformList, wireTransformList };
+  return { renderTransformList, wireTransformList, renderTransformPreview };
 })();
 
 if (typeof module !== 'undefined') module.exports = SFFieldTransformsUI;

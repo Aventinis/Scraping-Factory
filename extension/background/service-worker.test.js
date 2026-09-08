@@ -82,6 +82,8 @@ test('ELEMENT_SELECTED stores selector in session storage', async () => {
     pendingSelector: 'li.card > h2',
     pendingFramePath: null,
     pendingMatchCount: null,
+    pendingRawText: null,
+    pendingElementAttributes: null,
   });
 });
 
@@ -98,6 +100,8 @@ test('ELEMENT_SELECTED with a framePath stores it alongside the selector', async
     pendingSelector: 'h2',
     pendingFramePath: ['#price-widget'],
     pendingMatchCount: null,
+    pendingRawText: null,
+    pendingElementAttributes: null,
   });
 });
 
@@ -113,6 +117,25 @@ test('ELEMENT_SELECTED with a matchCount stores it alongside the selector', asyn
     pendingSelector: 'h2',
     pendingFramePath: null,
     pendingMatchCount: 3,
+    pendingRawText: null,
+    pendingElementAttributes: null,
+  });
+});
+
+// Issue #143: same session-storage fallback path as pendingSelector/
+// pendingMatchCount above, so a popup closed at click time can still recover
+// the raw text/attributes needed for the transform-chain live preview.
+test('ELEMENT_SELECTED with rawText/attributes stores them alongside the selector', async () => {
+  capturedListener({ type: 'ELEMENT_SELECTED', selector: 'h2', rawText: 'Preis: 12,99 €', attributes: { 'data-id': '42' } }, {});
+
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  expect(chrome.storage.session.set).toHaveBeenCalledWith({
+    pendingSelector: 'h2',
+    pendingFramePath: null,
+    pendingMatchCount: null,
+    pendingRawText: 'Preis: 12,99 €',
+    pendingElementAttributes: { 'data-id': '42' },
   });
 });
 

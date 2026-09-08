@@ -58,10 +58,10 @@ const {
 
 const {
   createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
-  moveTransform, transformsAreValid,
+  moveTransform, transformsAreValid, applyTransformsPreview, toNumberPreview,
 } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
 
-const { renderTransformList, wireTransformList } =
+const { renderTransformList, wireTransformList, renderTransformPreview } =
   typeof require !== 'undefined' ? require('./field-transforms-ui') : self.SFFieldTransformsUI;
 
 if (typeof window !== 'undefined') {
@@ -106,6 +106,15 @@ let _state = {
   // reported alongside pendingSelector on the same ELEMENT_SELECTED message.
   // null before any pick, or if the content script couldn't compute it.
   pendingMatchCount:   null,
+  // Issue #143: the just-picked element's own trimmed text/attribute map,
+  // reported alongside pendingSelector on the same ELEMENT_SELECTED message
+  // — underlying-selection state like pendingMatchCount above (not
+  // user-typed form input), so it's carried through the same session-storage
+  // popup-reopen recovery path. Feeds the transform-chain live preview
+  // (see refreshFlatTransformPreview/refreshExtendedTransformPreview) —
+  // null before any pick.
+  pendingRawText:            null,
+  pendingElementAttributes:  null,
   // Issue #84: the transform chain (trim/regexExtract/replace/toNumber, in
   // order) being built up while modal-field-name/modal-field-extended is
   // open — form state, not underlying-selection state, so unlike
@@ -403,6 +412,33 @@ function renderMatchCountHint(elId, count) {
   el.textContent = t('modals.matchCount.found', { count });
   el.classList.toggle('warn', count === 0);
   el.classList.remove('hidden');
+}
+
+// Issue #143: live preview of the transform chain's output — flat mode has
+// no attribute/exists mode, so the raw value is always the picked element's
+// trimmed text.
+function refreshFlatTransformPreview() {
+  renderTransformPreview('field-transform-preview', _state.pendingRawText, _state.pendingTransforms);
+}
+
+// Issue #143: container mode's raw value depends on the mode/attribute the
+// user is currently typing into the modal — read directly from those DOM
+// inputs (like the attribute-row visibility toggle already does), not from
+// _state, since neither is state-managed. "exists" mode always passes null
+// (its own transforms section is hidden, see the select-field-mode change
+// handler below) and attribute mode passes null until an attribute name has
+// actually been typed, so the hint doesn't show a misleading result before
+// then.
+function refreshExtendedTransformPreview() {
+  const mode = document.getElementById('select-field-mode')?.value ?? 'text';
+  let rawValue = null;
+  if (mode === 'text') {
+    rawValue = _state.pendingRawText;
+  } else if (mode === 'attribute') {
+    const attrName = document.getElementById('input-field-attribute')?.value.trim();
+    if (attrName) rawValue = (_state.pendingElementAttributes?.[attrName] ?? '').trim();
+  }
+  renderTransformPreview('field-extended-transform-preview', rawValue, _state.pendingTransforms);
 }
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -745,6 +781,7 @@ function render() {
       }
       renderMatchCountHint('field-extended-match-count', _state.pendingMatchCount);
       renderTransformList('field-extended-transform-list', _state.pendingTransforms);
+      refreshExtendedTransformPreview();
     } else {
       show('modal-field-name');
       if (isNewPick) {
@@ -753,6 +790,7 @@ function render() {
       }
       renderMatchCountHint('field-name-match-count', _state.pendingMatchCount);
       renderTransformList('field-transform-list', _state.pendingTransforms);
+      refreshFlatTransformPreview();
     }
   } else {
     lastFieldModalSelector = null;
@@ -1480,6 +1518,8 @@ function confirmField() {
     pendingSelector:  null,
     pendingFramePath: null,
     pendingMatchCount: null,
+    pendingRawText: null,
+    pendingElementAttributes: null,
     pendingTransforms: [],
   });
 }
@@ -1808,7 +1848,7 @@ function wireEvents() {
     stopPreviewIfActive();
     chrome.runtime.sendMessage({ type: 'START_SELECTION' });
     setState(STATES.SELECTING, {
-      pendingSelector: null, pendingMatchCount: null, pendingTransforms: [],
+      pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
       domTree: null, domTreeTruncated: false, domTreeError: null,
     });
     if (_state.domViewEnabled) {
@@ -1854,7 +1894,12 @@ function wireEvents() {
     // Issue #84: transforms are a string post-processing pipeline — not
     // meaningful for "Vorhanden?" (a boolean-ish presence check).
     document.getElementById('field-extended-transforms-section')?.classList.toggle('hidden', e.target.value === 'exists');
+    // Issue #143: the raw value the preview runs against depends on the mode.
+    refreshExtendedTransformPreview();
   });
+  // Issue #143: typing an attribute name updates the preview live, without
+  // requiring a transform edit first.
+  document.getElementById('input-field-attribute')?.addEventListener('input', refreshExtendedTransformPreview);
 
   // Issue #84: transform-chain editor, shared between the flat and
   // container field modals — both read/write the same _state.pendingTransforms.
@@ -1884,7 +1929,7 @@ function wireEvents() {
     // or the in-progress apiConfigDraft would appear to have vanished.
     const returnTo = _state.apiConfigDraft ? STATES.API_CONFIG : STATES.IDLE;
     setState(returnTo, {
-      selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingMatchCount: null, pendingTransforms: [],
+      selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
       pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', apiSearchTarget: null,
     });
   });
@@ -1910,7 +1955,7 @@ function wireEvents() {
 
   document.getElementById('btn-field-cancel')?.addEventListener('click', () => {
     log('BTN field-cancel');
-    setState(STATES.IDLE, { pendingSelector: null, pendingMatchCount: null, pendingTransforms: [] });
+    setState(STATES.IDLE, { pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [] });
   });
 
   // Event delegation for "Remove" buttons in the field list
@@ -1984,7 +2029,7 @@ function wireEvents() {
       stopPreviewIfActive();
       chrome.runtime.sendMessage({ type: 'START_SELECTION' });
       setState(STATES.SELECTING, {
-        pendingSelector: null, pendingMatchCount: null, pendingTransforms: [], selectionKind: 'browserAction', pendingBrowserActionIndex: index, pendingBrowserActionField: field,
+        pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [], selectionKind: 'browserAction', pendingBrowserActionIndex: index, pendingBrowserActionField: field,
         domTree: null, domTreeTruncated: false, domTreeError: null,
       });
     }
@@ -2078,7 +2123,7 @@ function wireEvents() {
         const node = buildGroupNode(_state.pendingNewContainer.name, message.selector, _state.pendingNewContainer.repeating, framePath);
         setState(STATES.IDLE, {
           groups: insertContainerNode(_state.groups, _state.pendingParentPath, node),
-          selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingTransforms: [],
+          selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
         });
         showMatchCountToast(containerName, matchCount);
       } else if (_state.selectionKind === 'browserAction' && _state.pendingBrowserActionIndex !== null) {
@@ -2097,10 +2142,15 @@ function wireEvents() {
             [_state.pendingBrowserActionField]: message.selector,
             framePath,
           }),
-          selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingTransforms: [],
+          selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
         });
       } else {
-        setState(STATES.SELECTING, { pendingSelector: message.selector, pendingFramePath: framePath, pendingMatchCount: matchCount, pendingTransforms: [] });
+        setState(STATES.SELECTING, {
+          pendingSelector: message.selector, pendingFramePath: framePath, pendingMatchCount: matchCount,
+          pendingRawText: typeof message.rawText === 'string' ? message.rawText : null,
+          pendingElementAttributes: message.attributes ?? null,
+          pendingTransforms: [],
+        });
       }
       if (message.path) highlightSelected(message.path);
     }
@@ -2169,7 +2219,8 @@ async function init() {
 
   log('INIT reading session storage');
   const stored = await chrome.storage.session.get([
-    'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount', 'mode', 'groups',
+    'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
+    'pendingRawText', 'pendingElementAttributes', 'mode', 'groups',
     'engine', 'browserActions', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
@@ -2218,7 +2269,7 @@ async function init() {
       const groups = insertContainerNode(_state.groups, stored.pendingParentPath, node);
       await chrome.storage.session.set({ groups });
       setState(STATES.IDLE, {
-        groups, selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingTransforms: [],
+        groups, selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
       });
       showMatchCountToast(stored.pendingNewContainer.name, typeof stored.pendingMatchCount === 'number' ? stored.pendingMatchCount : null);
       return;
@@ -2235,7 +2286,7 @@ async function init() {
       });
       await chrome.storage.session.set({ browserActions });
       setState(STATES.IDLE, {
-        browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingTransforms: [],
+        browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
       });
       return;
     }
@@ -2249,6 +2300,8 @@ async function init() {
     setState(STATES.SELECTING, {
       pendingSelector: stored.pendingSelector, pendingFramePath: stored.pendingFramePath || null,
       pendingMatchCount: typeof stored.pendingMatchCount === 'number' ? stored.pendingMatchCount : null,
+      pendingRawText: typeof stored.pendingRawText === 'string' ? stored.pendingRawText : null,
+      pendingElementAttributes: stored.pendingElementAttributes ?? null,
       pendingTransforms: [],
     });
     return;
@@ -2295,5 +2348,7 @@ if (typeof module !== 'undefined') {
     renderDataPreview,
     createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
     moveTransform, transformsAreValid, renderTransformList,
+    applyTransformsPreview, toNumberPreview, renderTransformPreview,
+    refreshFlatTransformPreview, refreshExtendedTransformPreview,
   };
 }

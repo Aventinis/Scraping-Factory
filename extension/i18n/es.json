@@ -162,7 +162,10 @@
     "patternPlaceholder": "Patrón regex (p. ej. \"\\d+\")",
     "groupPlaceholder": "Grupo (0 = coincidencia completa)",
     "findPlaceholder": "Buscar",
-    "replacementPlaceholder": "Reemplazar con"
+    "replacementPlaceholder": "Reemplazar con",
+    "previewLabel": "Vista previa: {value}",
+    "previewEmptyValue": "(vacío)",
+    "previewUnavailable": "Vista previa no disponible (patrón no válido)"
   },
   "generating": {
     "message": "Generando script…"

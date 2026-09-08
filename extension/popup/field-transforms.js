@@ -59,9 +59,73 @@ const SFFieldTransforms = (function () {
     return transforms.every(t => t.kind !== 'regexExtract' || t.pattern.trim() !== '');
   }
 
+  // Issue #143: hand-kept JS mirror of the Python runtime's own _to_number
+  // (see any of the six .py.j2 templates) — same "both sides must
+  // independently reach the same result" pattern as sanitizeFileNameBase's
+  // relationship to the companion's FileNameSanitizer, since this only ever
+  // has to *look* right in the popup, never actually run server-side.
+  function toNumberPreview(value) {
+    const match = value.match(/-?\d[\d.,]*/);
+    if (!match) return '';
+    const raw = match[0];
+    const lastDot = raw.lastIndexOf('.');
+    const lastComma = raw.lastIndexOf(',');
+    if (lastDot !== -1 && lastComma !== -1) {
+      const decimalPos = Math.max(lastDot, lastComma);
+      const integerPart = raw.slice(0, decimalPos).replace(/[.,]/g, '');
+      const fractionalPart = raw.slice(decimalPos + 1);
+      return `${integerPart}.${fractionalPart}`;
+    }
+    if ((raw.match(/,/g) || []).length > 1 || (raw.match(/\./g) || []).length > 1) {
+      return raw.replace(/[.,]/g, '');
+    }
+    return raw.replace(',', '.');
+  }
+
+  // Issue #143: applies the chain against a raw picked value the same way
+  // _apply_transforms does at runtime, for a live "what would this produce"
+  // preview while the user is still editing the chain — no companion round
+  // trip. regexExtract runs through JS's own RegExp/exec rather than
+  // Python's `re.search`, which is the same "not 100% syntax-identical"
+  // known risk already documented on RegexExtractTransform/
+  // FieldTransformValidator — a pattern that fails to compile as a JS
+  // RegExp makes this return null (distinct from a valid empty-string
+  // result) so the caller can show "preview unavailable" instead of a wrong
+  // value.
+  function applyTransformsPreview(rawValue, transforms) {
+    let value = rawValue;
+    for (const t of transforms) {
+      switch (t.kind) {
+        case 'trim':
+          value = value.trim();
+          break;
+        case 'regexExtract': {
+          if (!t.pattern) { value = ''; break; }
+          let match;
+          try {
+            match = new RegExp(t.pattern).exec(value);
+          } catch (err) {
+            return null;
+          }
+          const group = match ? match[t.group ?? 0] : undefined;
+          value = group !== undefined ? group : '';
+          break;
+        }
+        case 'replace':
+          value = value.replaceAll(t.find, t.replacement);
+          break;
+        case 'toNumber':
+          value = toNumberPreview(value);
+          break;
+      }
+    }
+    return value;
+  }
+
   return {
     createDefaultTransform, addTransform, removeTransform, updateTransform,
     changeTransformKind, moveTransform, transformsAreValid,
+    toNumberPreview, applyTransformsPreview,
   };
 })();
 

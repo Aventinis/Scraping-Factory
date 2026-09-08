@@ -112,6 +112,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         pendingSelector: message.selector,
         pendingFramePath: message.framePath ?? null,
         pendingMatchCount: typeof message.matchCount === 'number' ? message.matchCount : null,
+        // Issue #143: underlying-selection state like pendingMatchCount
+        // above (tied to the DOM pick, not user-typed form input), so it
+        // survives a reopened popup the same way.
+        pendingRawText: typeof message.rawText === 'string' ? message.rawText : null,
+        pendingElementAttributes: message.attributes ?? null,
       })
       .then(() => log('STORE OK'))
       .catch(err => log('STORE ERR', err.message));

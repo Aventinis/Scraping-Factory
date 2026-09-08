@@ -162,7 +162,10 @@
     "patternPlaceholder": "Regex pattern (e.g. \"\\d+\")",
     "groupPlaceholder": "Group (0 = whole match)",
     "findPlaceholder": "Find",
-    "replacementPlaceholder": "Replace with"
+    "replacementPlaceholder": "Replace with",
+    "previewLabel": "Preview: {value}",
+    "previewEmptyValue": "(empty)",
+    "previewUnavailable": "Preview unavailable (invalid pattern)"
   },
   "generating": {
     "message": "Generating script…"
