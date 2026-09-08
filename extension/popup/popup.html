@@ -108,6 +108,10 @@
     .match-count-hint { font-size: 11px; color: #6b7280; margin: -8px 0 12px; }
     .match-count-hint.warn { color: #d97706; }
 
+    /* Transform-chain live preview (Issue #143) — modal-field-name/-extended */
+    .transform-preview { font-size: 11px; color: #6b7280; margin: 4px 0 8px; word-break: break-word; }
+    .transform-preview.warn { color: #d97706; }
+
     /* API-mode candidate search (Phase 4) */
     .api-candidates-panel { margin-top: 8px; padding: 8px; background: #f9fafb; border-radius: 6px; }
     .api-candidates-target { font-size: 11px; color: #6b7280; margin-bottom: 6px; word-break: break-word; }
@@ -628,6 +632,8 @@
         <label data-i18n="transforms.sectionLabel"></label>
         <ul id="field-transform-list" class="field-transform-list"></ul>
         <button type="button" id="btn-field-transform-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
+        <!-- Issue #143: live preview of the chain's output against the picked element's raw value -->
+        <p id="field-transform-preview" class="transform-preview hidden"></p>
       </div>
       <div class="modal-actions">
         <button id="btn-field-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
@@ -677,6 +683,8 @@
         <label data-i18n="transforms.sectionLabel"></label>
         <ul id="field-extended-transform-list" class="field-transform-list"></ul>
         <button type="button" id="btn-field-extended-transform-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
+        <!-- Issue #143: live preview of the chain's output against the picked element's raw value -->
+        <p id="field-extended-transform-preview" class="transform-preview hidden"></p>
       </div>
       <div class="modal-actions">
         <button id="btn-field-extended-cancel" class="btn-secondary" data-i18n="common.cancel"></button>

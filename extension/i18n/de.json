@@ -160,7 +160,10 @@
     "patternPlaceholder": "Regex-Muster (z. B. \"\\d+\")",
     "groupPlaceholder": "Gruppe (0 = ganzer Treffer)",
     "findPlaceholder": "Suchen",
-    "replacementPlaceholder": "Ersetzen durch"
+    "replacementPlaceholder": "Ersetzen durch",
+    "previewLabel": "Vorschau: {value}",
+    "previewEmptyValue": "(leer)",
+    "previewUnavailable": "Vorschau nicht möglich (ungültiges Muster)"
   },
   "generating": {
     "message": "Generiere Skript…"

@@ -378,6 +378,27 @@ describe('scoped selection (START_SELECTION with scopeSelector)', () => {
     }));
   });
 
+  // Issue #143: rawText/attributes travel alongside the selector so a
+  // transform-chain live preview can run against the real picked value
+  // without a second content-script round trip.
+  test('ELEMENT_SELECTED carries the clicked element\'s trimmed text and attributes', async () => {
+    document.body.innerHTML = `
+      <section class="menu-category">
+        <li class="menu-item"><h3 class="item-name" data-id="42">  Suppe  </h3></li>
+      </section>
+    `;
+    capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
+
+    document.querySelector('h3.item-name').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ELEMENT_SELECTED',
+      rawText: 'Suppe',
+      attributes: { class: 'item-name', 'data-id': '42' },
+    }));
+  });
+
   test('a click outside the scope is ignored — no ELEMENT_SELECTED, selection stays active', async () => {
     capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
 

@@ -49,6 +49,7 @@ const {
   renderDataPreview,
   createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
   moveTransform, transformsAreValid, renderTransformList,
+  applyTransformsPreview, toNumberPreview, renderTransformPreview,
 } = require('./popup');
 
 // jsdom's Blob doesn't implement .text() — read via FileReader instead.
@@ -770,6 +771,61 @@ describe('field-transforms.js (createDefaultTransform / add / remove / update / 
 
   test('transformsAreValid accepts an empty chain', () => {
     expect(transformsAreValid([])).toBe(true);
+  });
+});
+
+// Issue #143: JS mirror of the Python runtime's _apply_transforms/_to_number
+// (see any of the six .py.j2 templates) — used for the transform-chain live
+// preview, so both sides must independently reach the same result for the
+// same input.
+describe('applyTransformsPreview / toNumberPreview', () => {
+  test('empty chain returns the raw value unchanged', () => {
+    expect(applyTransformsPreview('  Suppe  ', [])).toBe('  Suppe  ');
+  });
+
+  test('trim strips leading/trailing whitespace', () => {
+    expect(applyTransformsPreview('  Suppe  ', [{ kind: 'trim' }])).toBe('Suppe');
+  });
+
+  test('regexExtract returns the given capture group', () => {
+    expect(applyTransformsPreview('SKU-12345', [{ kind: 'regexExtract', pattern: 'SKU-(\\d+)', group: 1 }])).toBe('12345');
+  });
+
+  test('regexExtract with no match returns an empty string', () => {
+    expect(applyTransformsPreview('no digits here', [{ kind: 'regexExtract', pattern: '\\d+', group: 0 }])).toBe('');
+  });
+
+  test('regexExtract with an invalid-for-JS pattern returns null', () => {
+    expect(applyTransformsPreview('anything', [{ kind: 'regexExtract', pattern: '(unclosed', group: 0 }])).toBeNull();
+  });
+
+  test('replace replaces every occurrence', () => {
+    expect(applyTransformsPreview('a-b-c', [{ kind: 'replace', find: '-', replacement: '_' }])).toBe('a_b_c');
+  });
+
+  test('toNumber normalizes a comma-decimal price', () => {
+    expect(toNumberPreview('Preis: 12,99 €')).toBe('12.99');
+  });
+
+  test('toNumber normalizes a dot-decimal price', () => {
+    expect(toNumberPreview('12.99')).toBe('12.99');
+  });
+
+  test('toNumber strips thousands separators', () => {
+    expect(toNumberPreview('1.234,56')).toBe('1234.56');
+  });
+
+  test('toNumber returns an empty string when nothing numeric is found', () => {
+    expect(toNumberPreview('no number here')).toBe('');
+  });
+
+  test('a chained trim -> regexExtract -> toNumber pipeline', () => {
+    const transforms = [
+      { kind: 'trim' },
+      { kind: 'regexExtract', pattern: '[\\d,]+', group: 0 },
+      { kind: 'toNumber' },
+    ];
+    expect(applyTransformsPreview('  Preis: 12,99 €  ', transforms)).toBe('12.99');
   });
 });
 
@@ -3345,6 +3401,7 @@ describe('Field transform-chain editor (Issue #84)', () => {
         <div class="field-transforms-section">
           <ul id="field-transform-list"></ul>
           <button type="button" id="btn-field-transform-add"></button>
+          <p id="field-transform-preview" class="transform-preview hidden"></p>
         </div>
         <button id="btn-field-confirm"></button>
         <button id="btn-field-cancel"></button>
@@ -3370,6 +3427,7 @@ describe('Field transform-chain editor (Issue #84)', () => {
         <div id="field-extended-transforms-section" class="field-transforms-section">
           <ul id="field-extended-transform-list"></ul>
           <button type="button" id="btn-field-extended-transform-add"></button>
+          <p id="field-extended-transform-preview" class="transform-preview hidden"></p>
         </div>
         <button id="btn-field-extended-confirm"></button>
         <button id="btn-field-extended-cancel"></button>
@@ -3579,6 +3637,235 @@ describe('Field transform-chain editor (Issue #84)', () => {
 
     const rows = document.querySelectorAll('#group-tree-root .group-tree-row');
     expect(rows[1].textContent).toContain('Preis');
+  });
+});
+
+// ── Transform-chain live preview (Issue #143) ───────────────────────────────
+// Same DOM-mocking pattern as "Field transform-chain editor" above, plus
+// rawText/attributes on the ELEMENT_SELECTED fixture messages.
+
+describe('Transform-chain live preview (Issue #143)', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div class="mode-toggle">
+          <button id="btn-mode-flat" class="mode-btn active"></button>
+          <button id="btn-mode-container" class="mode-btn"></button>
+        </div>
+        <div id="flat-mode-section">
+          <div id="fields-list"></div>
+          <button id="btn-add-field"></button>
+        </div>
+        <div id="container-mode-section" class="hidden">
+          <ul id="group-tree-root"></ul>
+          <button id="btn-add-root-container"></button>
+        </div>
+        <button id="btn-generate" disabled></button>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <input type="checkbox" id="toggle-dom-view" />
+        <div id="dom-tree-wrapper" class="hidden">
+          <p id="dom-tree-loading"></p>
+          <p id="dom-tree-error" class="hidden"></p>
+          <p id="dom-tree-truncated" class="hidden"></p>
+          <ul id="dom-tree-root"></ul>
+        </div>
+        <button id="btn-cancel-selection"></button>
+      </section>
+      <div id="modal-field-name" class="hidden">
+        <input id="input-field-name" />
+        <p id="field-name-match-count" class="match-count-hint hidden"></p>
+        <div class="field-transforms-section">
+          <ul id="field-transform-list"></ul>
+          <button type="button" id="btn-field-transform-add"></button>
+          <p id="field-transform-preview" class="transform-preview hidden"></p>
+        </div>
+        <button id="btn-field-confirm"></button>
+        <button id="btn-field-cancel"></button>
+      </div>
+      <div id="modal-container-new" class="hidden">
+        <input id="input-container-name" />
+        <input type="radio" name="container-type" id="radio-container-single" checked />
+        <input type="radio" name="container-type" id="radio-container-repeating" />
+        <button id="btn-container-confirm"></button>
+        <button id="btn-container-cancel"></button>
+      </div>
+      <div id="modal-field-extended" class="hidden">
+        <input id="input-field-extended-name" />
+        <select id="select-field-mode">
+          <option value="text">Text</option>
+          <option value="attribute">Attribute</option>
+          <option value="exists">Exists</option>
+        </select>
+        <div id="field-attribute-row" class="hidden">
+          <input id="input-field-attribute" />
+        </div>
+        <p id="field-extended-match-count" class="match-count-hint hidden"></p>
+        <div id="field-extended-transforms-section" class="field-transforms-section">
+          <ul id="field-extended-transform-list"></ul>
+          <button type="button" id="btn-field-extended-transform-add"></button>
+          <p id="field-extended-transform-preview" class="transform-preview hidden"></p>
+        </div>
+        <button id="btn-field-extended-confirm"></button>
+        <button id="btn-field-extended-cancel"></button>
+      </div>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({}),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+  });
+
+  test('no preview shown before any transform is added', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price', rawText: 'Preis: 12,99 €' });
+
+    const preview = document.getElementById('field-transform-preview');
+    expect(preview.classList.contains('hidden')).toBe(false);
+    expect(preview.textContent).toContain('Preis: 12,99 €');
+  });
+
+  test('flat mode preview updates live as transform steps are edited', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price', rawText: 'Preis: 12,99 €' });
+
+    document.getElementById('btn-field-transform-add').click(); // trim
+    const kindSelect = document.querySelector('#field-transform-list .transform-kind-select');
+    kindSelect.value = 'regexExtract';
+    kindSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    const patternInput = document.querySelector('#field-transform-list .transform-pattern-input');
+    patternInput.value = '[\\d,]+';
+    patternInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(document.getElementById('field-transform-preview').textContent).toContain('12,99');
+  });
+
+  test('flat mode preview flags an unmatched regex as an empty result', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price', rawText: 'Preis: 12,99 €' });
+
+    document.getElementById('btn-field-transform-add').click();
+    const kindSelect = document.querySelector('#field-transform-list .transform-kind-select');
+    kindSelect.value = 'regexExtract';
+    kindSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    const patternInput = document.querySelector('#field-transform-list .transform-pattern-input');
+    patternInput.value = 'nomatch\\d';
+    patternInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const preview = document.getElementById('field-transform-preview');
+    expect(preview.classList.contains('warn')).toBe(false);
+    expect(preview.textContent).not.toContain('12,99');
+  });
+
+  test('an invalid-for-JS regex pattern shows "preview unavailable"', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price', rawText: 'Preis: 12,99 €' });
+
+    document.getElementById('btn-field-transform-add').click();
+    const kindSelect = document.querySelector('#field-transform-list .transform-kind-select');
+    kindSelect.value = 'regexExtract';
+    kindSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    const patternInput = document.querySelector('#field-transform-list .transform-pattern-input');
+    patternInput.value = '(unclosed';
+    patternInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const preview = document.getElementById('field-transform-preview');
+    expect(preview.classList.contains('warn')).toBe(true);
+  });
+
+  test('container mode: text-mode preview uses the picked element\'s raw text', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+    chrome.runtime.sendMessage.mockClear();
+
+    document.querySelector('.btn-add-subfield').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price', rawText: 'Preis: 12,99 €' });
+    await flushMicrotasks();
+
+    document.getElementById('btn-field-extended-transform-add').click();
+
+    expect(document.getElementById('field-extended-transform-preview').textContent).toContain('Preis: 12,99 €');
+  });
+
+  test('container mode: attribute-mode preview is hidden until an attribute name is typed', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+    chrome.runtime.sendMessage.mockClear();
+
+    document.querySelector('.btn-add-subfield').click();
+    capturedListener({
+      type: 'ELEMENT_SELECTED', selector: 'a.link', rawText: 'Zum Produkt', attributes: { href: '/produkt/42' },
+    });
+    await flushMicrotasks();
+
+    const modeSelect = document.getElementById('select-field-mode');
+    modeSelect.value = 'attribute';
+    modeSelect.dispatchEvent(new Event('change'));
+
+    expect(document.getElementById('field-extended-transform-preview').classList.contains('hidden')).toBe(true);
+
+    document.getElementById('input-field-attribute').value = 'href';
+    document.getElementById('input-field-attribute').dispatchEvent(new Event('input', { bubbles: true }));
+
+    const preview = document.getElementById('field-extended-transform-preview');
+    expect(preview.classList.contains('hidden')).toBe(false);
+    expect(preview.textContent).toContain('/produkt/42');
+  });
+
+  test('container mode: "Vorhanden?" (exists) mode never shows a preview', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+    chrome.runtime.sendMessage.mockClear();
+
+    document.querySelector('.btn-add-subfield').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.vegan', rawText: 'Vegan' });
+    await flushMicrotasks();
+
+    const modeSelect = document.getElementById('select-field-mode');
+    modeSelect.value = 'exists';
+    modeSelect.dispatchEvent(new Event('change'));
+
+    expect(document.getElementById('field-extended-transform-preview').classList.contains('hidden')).toBe(true);
   });
 });
 
