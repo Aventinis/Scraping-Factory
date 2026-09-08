@@ -130,6 +130,8 @@ const SFContainerTreeUI = (function () {
       pendingNewContainer: { name, repeating },
       pendingSelector:     null,
       pendingMatchCount:   null,
+      pendingRawText:      null,
+      pendingElementAttributes: null,
       pendingTransforms:   [],
       domTree: null, domTreeTruncated: false, domTreeError: null,
     });
@@ -156,6 +158,8 @@ const SFContainerTreeUI = (function () {
       pendingNewContainer: null,
       pendingSelector:     null,
       pendingMatchCount:   null,
+      pendingRawText:      null,
+      pendingElementAttributes: null,
       pendingTransforms:   [],
       domTree: null, domTreeTruncated: false, domTreeError: null,
     });
@@ -178,6 +182,8 @@ const SFContainerTreeUI = (function () {
       pendingSelector:   null,
       pendingFramePath:  null,
       pendingMatchCount: null,
+      pendingRawText: null,
+      pendingElementAttributes: null,
       pendingTransforms: [],
       pendingParentPath: null,
       selectionKind:     null,
@@ -187,7 +193,9 @@ const SFContainerTreeUI = (function () {
   function cancelExtendedField(bridge) {
     log('FIELD_ADD(container) cancel');
     bridge.setState(STATES.IDLE, {
-      pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingTransforms: [], pendingParentPath: null, selectionKind: null,
+      pendingSelector: null, pendingFramePath: null, pendingMatchCount: null,
+      pendingRawText: null, pendingElementAttributes: null,
+      pendingTransforms: [], pendingParentPath: null, selectionKind: null,
     });
   }
 
