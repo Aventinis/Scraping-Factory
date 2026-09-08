@@ -904,6 +904,19 @@ describe('resolveApiTreeNode / insertApiTreeNode / removeApiTreeNode', () => {
   });
 });
 
+// Issue #84 follow-up: buildApiFieldDraft carries an optional transform
+// chain, mirroring Container-Mode's own buildFieldNode default.
+describe('buildApiFieldDraft transforms', () => {
+  test('defaults to null when no transforms are given', () => {
+    expect(buildApiFieldDraft('Preis', 'price')).toEqual({ kind: 'field', name: 'Preis', path: 'price', transforms: null });
+  });
+
+  test('carries an explicit transform chain', () => {
+    const transforms = [{ kind: 'trim' }, { kind: 'toNumber' }];
+    expect(buildApiFieldDraft('Preis', 'price', transforms)).toEqual({ kind: 'field', name: 'Preis', path: 'price', transforms });
+  });
+});
+
 describe('serializeApiTree', () => {
   test('strips internal `kind` and shapes group/field nodes for the wire, round-tripping a 3-level tree', () => {
     const groups = [
@@ -950,6 +963,23 @@ describe('serializeApiTree', () => {
   test('a field node never has a `children` key', () => {
     const groups = [{ kind: 'field', name: 'Titel', path: 'title' }];
     expect(serializeApiTree(groups)[0]).not.toHaveProperty('children');
+  });
+
+  // Issue #84 follow-up: same "omit rather than send an empty/null key"
+  // convention Container-Mode's own serializeGroupTree already uses.
+  test('a field with a non-empty transform chain includes it on the wire', () => {
+    const groups = [{ kind: 'field', name: 'Preis', path: 'price', transforms: [{ kind: 'trim' }, { kind: 'toNumber' }] }];
+    expect(serializeApiTree(groups)[0].transforms).toEqual([{ kind: 'trim' }, { kind: 'toNumber' }]);
+  });
+
+  test('a field with a null or empty transform chain omits the key entirely', () => {
+    const groups = [
+      { kind: 'field', name: 'A', path: 'a', transforms: null },
+      { kind: 'field', name: 'B', path: 'b', transforms: [] },
+    ];
+    const result = serializeApiTree(groups);
+    expect(result[0]).not.toHaveProperty('transforms');
+    expect(result[1]).not.toHaveProperty('transforms');
   });
 });
 
@@ -5735,6 +5765,184 @@ describe('API-tree wiring end-to-end (Issue #54, Phase A5)', () => {
 
     expect(document.getElementById('modal-api-group-new').classList.contains('hidden')).toBe(true);
     expect(document.querySelectorAll('[data-path="[0,0,0]"] .api-tree-children > .api-tree-node')).toHaveLength(1);
+  });
+});
+
+// ── API-mode field transforms (Issue #84 follow-up) ─────────────────────────
+// Same DOM-mocking pattern as "API-tree wiring end-to-end" above, trimmed to
+// what's needed to reach a confirmed one-field API tree, plus the new
+// "Transformieren" button/modal markup.
+
+describe('API-mode field transforms (Issue #84 follow-up)', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <button id="btn-add-field"></button>
+        <button id="btn-api-capture"></button>
+        <p id="api-capture-summary" class="hidden"></p>
+        <button id="btn-api-search" disabled></button>
+        <div id="api-candidates-panel" class="hidden">
+          <p id="api-candidates-target"></p>
+          <ul id="api-candidates-list"></ul>
+        </div>
+        <div id="api-config-panel" class="hidden">
+          <p id="api-config-summary"></p>
+          <button id="btn-api-config-discard"></button>
+        </div>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <button id="btn-cancel-selection"></button>
+      </section>
+      <section id="screen-api-config" class="hidden">
+        <ul id="api-tree-root"></ul>
+        <button id="btn-api-tree-add-root"></button>
+        <div id="api-tree-search-panel" class="hidden">
+          <p id="api-tree-search-target"></p>
+          <ul id="api-tree-search-list"></ul>
+        </div>
+        <ul id="api-config-segments"></ul>
+        <ul id="api-config-query-params"></ul>
+        <div id="api-config-parameters"></div>
+        <ul id="api-config-headers"></ul>
+        <button id="btn-api-config-cancel"></button>
+        <button id="btn-api-config-confirm" disabled></button>
+      </section>
+      <div id="modal-field-name" class="hidden">
+        <input id="input-field-name" />
+        <button id="btn-field-confirm"></button>
+        <button id="btn-field-cancel"></button>
+      </div>
+      <div id="modal-api-group-new" class="hidden">
+        <input id="input-api-group-name" />
+        <input id="input-api-group-path" />
+        <button id="btn-api-group-confirm"></button>
+        <button id="btn-api-group-cancel"></button>
+      </div>
+      <div id="modal-api-field-transforms" class="hidden">
+        <ul id="api-field-transform-list"></ul>
+        <button type="button" id="btn-api-field-transforms-add"></button>
+        <button id="btn-api-field-transforms-confirm"></button>
+        <button id="btn-api-field-transforms-cancel"></button>
+      </div>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({ url: 'https://example.com' }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+
+    // Reach a confirmed one-field API tree (categories[*] → Titel).
+    document.getElementById('btn-api-capture').click();
+    capturedListener({ type: 'API_CAPTURE_ENTRY', entry: { id: 1, url: 'https://example.com/api/catalog' } });
+    document.getElementById('btn-api-capture').click();
+    document.getElementById('btn-api-search').click();
+    capturedListener({
+      type: 'API_CANDIDATES', target: 'Smartphone X',
+      candidates: [{
+        entryId: 1, url: 'https://example.com/api/catalog', method: 'GET',
+        path: 'categories[0].title', value: 'Smartphone X', siblings: [],
+        itemsPath: 'categories', valuePath: 'title',
+        treeSkeleton: [{ kind: 'group', path: 'categories' }, { kind: 'field', path: 'title' }],
+        requestHeaders: [],
+      }],
+    });
+    const nameInput = document.querySelector('.api-candidate-field-name');
+    nameInput.value = 'Titel';
+    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('.api-candidate-confirm').click();
+  });
+
+  test('a field with no transforms shows the plain "Transformieren" label', () => {
+    const btn = document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms');
+    expect(btn.textContent).toBe('Transformieren');
+  });
+
+  test('clicking "Transformieren" opens the modal with an empty chain', () => {
+    document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms').click();
+
+    expect(document.getElementById('modal-api-field-transforms').classList.contains('hidden')).toBe(false);
+    expect(document.querySelectorAll('#api-field-transform-list .transform-row')).toHaveLength(0);
+  });
+
+  test('adding a step and confirming persists it onto the tree node and the button gets a count badge', () => {
+    document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms').click();
+    document.getElementById('btn-api-field-transforms-add').click();
+    const select = document.querySelector('#api-field-transform-list .transform-kind-select');
+    select.value = 'toNumber';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    document.getElementById('btn-api-field-transforms-confirm').click();
+
+    expect(document.getElementById('modal-api-field-transforms').classList.contains('hidden')).toBe(true);
+    const btn = document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms');
+    expect(btn.textContent).toBe('Transformieren (1)');
+  });
+
+  test('re-opening after confirming shows the previously saved chain', () => {
+    document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms').click();
+    document.getElementById('btn-api-field-transforms-add').click();
+    document.getElementById('btn-api-field-transforms-confirm').click();
+
+    document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms').click();
+
+    expect(document.querySelectorAll('#api-field-transform-list .transform-row')).toHaveLength(1);
+  });
+
+  test('cancelling discards the in-progress edit', () => {
+    document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms').click();
+    document.getElementById('btn-api-field-transforms-add').click();
+    document.getElementById('btn-api-field-transforms-cancel').click();
+
+    expect(document.getElementById('modal-api-field-transforms').classList.contains('hidden')).toBe(true);
+    const btn = document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms');
+    expect(btn.textContent).toBe('Transformieren');
+  });
+
+  test('confirming is blocked when a regexExtract step has a blank pattern', () => {
+    document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms').click();
+    document.getElementById('btn-api-field-transforms-add').click();
+    const select = document.querySelector('#api-field-transform-list .transform-kind-select');
+    select.value = 'regexExtract';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    document.getElementById('btn-api-field-transforms-confirm').click();
+
+    // Still open — nothing was persisted.
+    expect(document.getElementById('modal-api-field-transforms').classList.contains('hidden')).toBe(false);
+  });
+
+  test('a group node never gets a "Transformieren" button', () => {
+    // .api-tree-row is the group's own row (appended before its childUl
+    // sibling) — scoping the lookup to it, not the whole <li> subtree, which
+    // would also match the nested field's own button.
+    const groupRow = document.querySelector('[data-path="[0]"] .api-tree-row');
+    expect(groupRow.querySelector('.btn-api-field-transforms')).toBeNull();
   });
 });
 
