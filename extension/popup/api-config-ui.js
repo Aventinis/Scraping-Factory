@@ -32,10 +32,11 @@ const SFApiConfigUI = (function () {
     parseUrlTemplateParts, findUrlTemplateMatches, mergeValueListValues,
     buildStaticListSource, buildDiscoverySource, buildRangeSource, RANGE_FORMAT_PRESETS,
     detectRangeFormat, findUrlPartValue, rangeFormatExample,
-    buildApiConfig, buildApiGroupDraft, insertApiTreeNode, updateApiTreeNode,
+    buildApiConfig, buildApiGroupDraft, insertApiTreeNode, updateApiTreeNode, resolveApiTreeNode,
     jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
     buildApiSubtreeFromCandidate, resolveApiGroupScopePath, allParameterParts, apiConfigDraftHasAllSourcesChosen,
   } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
+  const { transformsAreValid } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
 
   // Same visual pattern as the Container-Mode tree editor below (indentation,
   // toggle arrow, add/remove buttons, nodes start expanded) — see
@@ -82,6 +83,19 @@ const SFApiConfigUI = (function () {
       addFieldBtn.className = 'btn-secondary btn-tiny btn-add-api-subfield';
       addFieldBtn.textContent = t('apiTree.addSubfieldBtn');
       row.appendChild(addFieldBtn);
+    }
+
+    // Issue #84 follow-up: only a leaf actually extracts a value (ApiGroup
+    // has no Transforms property on the companion side, see IR/ApiConfig.cs)
+    // — same reasoning Container-Mode's own transforms section already
+    // follows for "Vorhanden?" mode.
+    if (node.kind === 'field') {
+      const transformsBtn = document.createElement('button');
+      transformsBtn.className = 'btn-secondary btn-tiny btn-api-field-transforms';
+      transformsBtn.textContent = node.transforms && node.transforms.length > 0
+        ? t('apiTree.transformsBtnCount', { count: node.transforms.length })
+        : t('apiTree.transformsBtn');
+      row.appendChild(transformsBtn);
     }
 
     const removeBtn = document.createElement('button');
@@ -776,6 +790,53 @@ const SFApiConfigUI = (function () {
     patchApiConfigDraft(bridge, { groups: updateApiTreeNode(bridge.getState().apiConfigDraft.groups, path, node => ({ ...node, name })) });
   }
 
+  // ── API-mode field transforms (Issue #84 follow-up) ─────────────────────────
+  // Reuses the exact same field-transforms.js/field-transforms-ui.js editor
+  // flat/container mode's own field modals already use, plus
+  // _state.pendingTransforms as the in-progress chain — the API_CONFIG screen
+  // and those two modals are never open at the same time, so there's no
+  // conflict reusing that one slot instead of adding a second. Live preview
+  // (Issue #147) reuses _state.pendingRawText the exact same way — the
+  // node's own sampleValue (see buildApiFieldDraft/buildApiSubtreeFromCandidate
+  // in api-config.js), stringified the same way the Python runtime resolves
+  // a field value before applying transforms (`"" if value is None else
+  // str(value)`, see scraper_api.py.j2's _resolve_field call site).
+  // undefined (no sample ever captured — e.g. a hand-typed path with no
+  // click behind it) maps to null instead, so renderTransformPreview hides
+  // the hint entirely rather than showing a misleading empty result.
+  function sampleValueToRawText(sampleValue) {
+    if (sampleValue === undefined) return null;
+    return sampleValue === null ? '' : String(sampleValue);
+  }
+
+  function openApiFieldTransformsModal(bridge, path) {
+    const node = resolveApiTreeNode(bridge.getState().apiConfigDraft.groups, path);
+    log('API_FIELD_TRANSFORMS_MODAL open', { path });
+    bridge.patchState({
+      apiFieldTransformModalOpen: true, pendingApiFieldTransformPath: path,
+      pendingTransforms: node.transforms || [],
+      pendingRawText: sampleValueToRawText(node.sampleValue),
+    });
+  }
+
+  function confirmApiFieldTransformsModal(bridge) {
+    const state = bridge.getState();
+    if (!transformsAreValid(state.pendingTransforms)) return;
+    const transforms = state.pendingTransforms.length > 0 ? state.pendingTransforms : null;
+    const groups = updateApiTreeNode(state.apiConfigDraft.groups, state.pendingApiFieldTransformPath, node => ({ ...node, transforms }));
+
+    log('API_FIELD_TRANSFORMS_CONFIRM', { path: state.pendingApiFieldTransformPath, transforms });
+    bridge.setState(STATES.API_CONFIG, {
+      apiConfigDraft: { ...state.apiConfigDraft, groups },
+      apiFieldTransformModalOpen: false, pendingApiFieldTransformPath: null, pendingTransforms: [], pendingRawText: null,
+    });
+  }
+
+  function cancelApiFieldTransformsModal(bridge) {
+    log('API_FIELD_TRANSFORMS_MODAL cancel');
+    bridge.patchState({ apiFieldTransformModalOpen: false, pendingApiFieldTransformPath: null, pendingTransforms: [], pendingRawText: null });
+  }
+
   // Starts a *second* search round, reusing the exact same click-selection
   // mechanism as startApiFieldSearch (content-script.js doesn't need to know
   // which purpose this one serves) — its result becomes a DiscoverySource for
@@ -1066,6 +1127,7 @@ const SFApiConfigUI = (function () {
     startApiFieldSearch, confirmApiFieldCandidate, loadInitialBodyTreeForCandidate, cancelApiConfig,
     startApiTreeFieldSearch, confirmApiTreeFieldCandidate,
     openApiGroupModal, confirmApiGroupModal, cancelApiGroupModal, setApiTreeNodeName,
+    openApiFieldTransformsModal, confirmApiFieldTransformsModal, cancelApiFieldTransformsModal,
     startDiscoverySearch, confirmDiscoveryCandidate,
     toggleApiConfigPartVariable, setApiConfigPartName, setApiConfigSourceKind,
     patchApiConfigSource, setApiConfigHeaderDecision,

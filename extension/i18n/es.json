@@ -148,7 +148,24 @@
     "addSubgroupBtn": "+ Grupo",
     "addSubfieldBtn": "+ Campo de datos",
     "addRootGroupBtn": "+ Nuevo grupo (nivel superior)",
-    "defaultGroupName": "Grupo"
+    "defaultGroupName": "Grupo",
+    "transformsBtn": "Transformar",
+    "transformsBtnCount": "Transformar ({count})"
+  },
+  "transforms": {
+    "sectionLabel": "Transformaciones (opcional)",
+    "addBtn": "+ Transformación",
+    "trimOption": "Recortar (eliminar espacios)",
+    "regexExtractOption": "Extracción con regex",
+    "replaceOption": "Buscar/reemplazar",
+    "toNumberOption": "Convertir a número",
+    "patternPlaceholder": "Patrón regex (p. ej. \"\\d+\")",
+    "groupPlaceholder": "Grupo (0 = coincidencia completa)",
+    "findPlaceholder": "Buscar",
+    "replacementPlaceholder": "Reemplazar con",
+    "previewLabel": "Vista previa: {value}",
+    "previewEmptyValue": "(vacío)",
+    "previewUnavailable": "Vista previa no disponible (patrón no válido)"
   },
   "generating": {
     "message": "Generando script…"
@@ -194,6 +211,9 @@
     "apiBodyParameterNew": {
       "nameLabel": "Nombre del parámetro (p. ej. \"categoria\")",
       "namePlaceholder": "Nombre"
+    },
+    "matchCount": {
+      "found": "{count} elemento(s) encontrado(s)"
     }
   },
   "toast": {
@@ -203,7 +223,8 @@
     "selectionUnavailable": "No es posible seleccionar elementos en esta página.",
     "previewUnavailable": "No es posible la vista previa en esta página.",
     "captureUnavailable": "No es posible grabar red en esta página.",
-    "invalidCompanionUrl": "Dirección no válida — incluye http:// o https://."
+    "invalidCompanionUrl": "Dirección no válida — incluye http:// o https://.",
+    "containerAdded": "Contenedor «{name}» añadido — {count} elemento(s) encontrado(s)"
   },
   "frame": {
     "badge": "iframe",

@@ -67,6 +67,37 @@ public class PythonScriptVerifierTests
         Assert.Equal("B", result.Preview.Rows[1]["Item"]);
     }
 
+    // Issue #84: proves the transform chain actually runs correctly in the
+    // real generated script, not just that the C#/template-level string
+    // content looks right (see PythonCodeGeneratorTests for that) — the
+    // whole point of this test class, per its own doc comment.
+    [Fact]
+    public async Task FieldWithTransformChain_AppliesTrimAndToNumber_InRealScript()
+    {
+        using var server = new LocalTestServer(
+            "<html><body><p class='price'>  Preis: 12,99 &euro;  </p></body></html>");
+        var steps = new List<ScrapingStep>
+        {
+            new NavigateStep { Url = server.BaseUrl },
+            new ExtractStep
+            {
+                Name = "Preis", Selector = ".price",
+                Transforms =
+                [
+                    new TrimTransform(),
+                    new RegexExtractTransform { Pattern = @"[\d,]+" },
+                    new ToNumberTransform(),
+                ],
+            },
+        };
+        var script = new PythonCodeGenerator().Generate(new ScrapingPlan { Steps = steps });
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, includePreview: true);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("12.99", result.Preview!.Rows![0]["Preis"]);
+    }
+
     [Fact]
     public async Task SelectorMatchingNothing_FailsWithZeroDataRows()
     {

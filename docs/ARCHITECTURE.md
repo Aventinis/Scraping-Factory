@@ -462,6 +462,90 @@ concept of frames at all, so this only applies to the Browser engine (§2.6).
   `BrowserAction` variant, `ScrapingPlanValidator.ValidateFramePath`, every
   Playwright template's frame-locator chaining
 
+### 2.17 Live selector match-count preview (Issue #85)
+
+Existence/quantity feedback ("N elements found") the instant a selector is
+picked, instead of only surfacing much later via a full `/generate` round-trip
+and trial run (§2.7). Purely client-side — the content script already has the
+live DOM in front of it, so it can just ask it directly.
+
+- Extension: `content/content-script.js` (`countSelectorMatches`, called from
+  `onClick` alongside `buildSelector`; result travels as `matchCount` on the
+  `ELEMENT_SELECTED` message), `background/service-worker.js`
+  (`pendingMatchCount` in the same session-storage fallback as
+  `pendingSelector`/`pendingFramePath`), `popup/popup.js`
+  (`_state.pendingMatchCount`, `renderMatchCountHint` for the flat/container
+  field modals, `showMatchCountToast` for container-group creation, which has
+  no confirmation modal of its own to show a hint in)
+- No companion involvement — entirely client-side.
+
+### 2.18 Per-field data transformations (Issue #84)
+
+An optional, ordered post-processing chain (trim/regex-extract/find-replace/
+to-number) applied to a field's raw extracted value before it's written to the
+output row — e.g. turning `"Preis: 12,99 €"` into `"12.99"` without the user
+hand-editing the generated script. Added independently to all three field
+shapes (flat/container/API) since none of them share a common leaf type.
+
+- Extension: `popup/field-transforms.js` (pure data helpers — create/add/
+  remove/update/changeKind/move/validate), `popup/field-transforms-ui.js`
+  (DOM rendering + delegated event wiring, shared between `modal-field-name`
+  and `modal-field-extended`), `popup/popup.js` (`_state.pendingTransforms`,
+  `lastFieldModalSelector` — tells a genuine modal reopen apart from a
+  re-render triggered by editing a transform row)
+- Companion: `IR/FieldTransform.cs` (`TrimTransform`/`RegexExtractTransform`/
+  `ReplaceTransform`/`ToNumberTransform`, polymorphic via an explicit `"kind"`
+  tag), `Transforms` on `ScrapingField`/`ExtractStep`/`DataFieldNode`/
+  `ApiField`, `Backends/Python/FieldTransformValidator` (regex syntax
+  pre-check, mirrors `RangeFormat.ValidateFormat`'s pattern),
+  `Backends/Python/PythonFieldTransformLiteral` (the one canonical
+  Python-literal serialization, reused by `PythonGroupTreeLiteral`,
+  `PythonApiConfigLiteral`, and flat mode's own `TRANSFORMS` dict)
+- All six leaf templates (§2.6/§2.3/§2.4's own template list) carry the same
+  hand-duplicated `_apply_transforms`/`_to_number` runtime helper pair — see
+  the Python Templates section of `CLAUDE.md` for the `_to_number` heuristic's
+  documented ambiguity.
+- **Live preview** (Issue #143): a hint below the transform list in
+  `modal-field-name`/`modal-field-extended` shows what the chain actually
+  produces against the picked element's real raw value, updating live as
+  steps are added/edited/reordered/removed — entirely client-side, no
+  `/generate` round trip. `content-script.js`'s `onClick` collects the
+  clicked element's trimmed text and full attribute map
+  (`collectElementAttributes`), sent as `rawText`/`attributes` on the same
+  `ELEMENT_SELECTED` message the selector/matchCount already travel on;
+  `service-worker.js`'s session-storage fallback persists them as
+  `pendingRawText`/`pendingElementAttributes` alongside `pendingMatchCount`.
+  `field-transforms.js`'s `applyTransformsPreview`/`toNumberPreview` are a
+  hand-kept JS mirror of the Python runtime's own
+  `_apply_transforms`/`_to_number` — an invalid-for-JS regex pattern makes
+  the preview return `null` (rendered as "preview unavailable") instead of
+  throwing.
+- **API mode follow-up:** the same editor is also reachable from the
+  `API_CONFIG` tree screen (§2.16), via a "Transformieren" button rendered
+  next to every leaf `ApiField` row in `popup/api-config-ui.js`'s
+  `buildApiTreeNodeEl` (never for a group node — only a leaf actually
+  extracts a value, matching `ApiGroup` having no `Transforms` property on
+  the companion side). Opens `modal-api-field-transforms`, reusing the exact
+  same `field-transforms.js`/`field-transforms-ui.js` editor and
+  `_state.pendingTransforms` slot the flat/container modals already use
+  (mutually exclusive screens, no conflict); confirming writes the chain
+  onto the `ApiField` draft node via `updateApiTreeNode`, and
+  `serializeApiTree` omits the key on the wire when the chain is empty
+  (mirroring `serializeGroupTree`'s own convention).
+- **API mode live preview** (Issue #147): unlike a DOM pick, a tree field
+  node has no raw value to preview against once inserted — the only value
+  ever available is the one matched at candidate-confirm time.
+  `buildApiFieldDraft` (`api-config.js`) gained an optional `sampleValue`
+  (the raw JSON scalar the field/sibling resolved to — `candidate.value` for
+  the primary field, or the matching entry's own `.value` in
+  `candidate.siblings` for a picked sibling, see `content-script.js`'s
+  `siblingFields`) — popup-internal only, never sent to the companion.
+  `openApiFieldTransformsModal` converts it into `pendingRawText` the same
+  way the Python runtime resolves a value before applying transforms (`""`
+  for a real JSON `null`, `undefined`/no-sample maps to `null` so the
+  preview stays hidden) and reuses the exact same `renderTransformPreview`
+  call flat mode's own modal already makes.
+
 ---
 
 ## 3. Class & Module Relationship Model

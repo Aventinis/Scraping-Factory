@@ -1,5 +1,5 @@
 const {
-  buildSelector, elementPath, serializeDomTree,
+  buildSelector, countSelectorMatches, elementPath, serializeDomTree,
   matchFlatFields, matchGroupTree, computePreviewMatches,
   findValueInJson, siblingFields, siblingFieldsAt, findApiCandidates,
   deriveItemsAndValuePath, deriveApiTreeSkeleton,
@@ -128,6 +128,41 @@ describe('buildSelector with avoidId', () => {
     document.body.appendChild(section);
 
     expect(buildSelector(h2)).toBe('#vorspeisen > h2.category-title');
+  });
+});
+
+// ── countSelectorMatches (Issue #85) ─────────────────────────────────────────
+
+describe('countSelectorMatches', () => {
+  test('counts every match on the page when no scope root is given', () => {
+    document.body.innerHTML = `
+      <li class="item"></li>
+      <li class="item"></li>
+      <li class="item"></li>
+    `;
+    expect(countSelectorMatches('li.item')).toBe(3);
+  });
+
+  test('returns 0 for a selector matching nothing', () => {
+    document.body.innerHTML = '<div></div>';
+    expect(countSelectorMatches('.does-not-exist')).toBe(0);
+  });
+
+  test('scoped to a container root, only counts matches within that instance', () => {
+    document.body.innerHTML = `
+      <section class="category">
+        <li class="item"></li>
+        <li class="item"></li>
+      </section>
+      <li class="item"></li>
+    `;
+    const scopeRoot = document.querySelector('section.category');
+    expect(countSelectorMatches('li.item', scopeRoot)).toBe(2);
+  });
+
+  test('an invalid selector is reported as null rather than throwing', () => {
+    document.body.innerHTML = '<div></div>';
+    expect(countSelectorMatches(':::not-a-selector')).toBeNull();
   });
 });
 
@@ -316,6 +351,52 @@ describe('scoped selection (START_SELECTION with scopeSelector)', () => {
       framePath: null,
     }));
     expect(section).toBeTruthy(); // sanity: the scope root itself was found, not just any element
+  });
+
+  // Issue #85: the match count travels alongside the selector on the same
+  // ELEMENT_SELECTED message, scoped to the container instance exactly like
+  // the selector itself already is — a second, unscoped category elsewhere
+  // on the page must not inflate the count.
+  test('ELEMENT_SELECTED carries a matchCount scoped to the container instance', async () => {
+    document.body.innerHTML = `
+      <section class="menu-category">
+        <li class="menu-item"><h3 class="item-name">Suppe</h3></li>
+      </section>
+      <section class="menu-category">
+        <li class="menu-item"><h3 class="item-name">Salat</h3></li>
+      </section>
+    `;
+    capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
+
+    document.querySelector('h3.item-name').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ELEMENT_SELECTED',
+      selector: 'li.menu-item > h3.item-name',
+      matchCount: 1, // only the scoped instance's own h3, not the second section's
+    }));
+  });
+
+  // Issue #143: rawText/attributes travel alongside the selector so a
+  // transform-chain live preview can run against the real picked value
+  // without a second content-script round trip.
+  test('ELEMENT_SELECTED carries the clicked element\'s trimmed text and attributes', async () => {
+    document.body.innerHTML = `
+      <section class="menu-category">
+        <li class="menu-item"><h3 class="item-name" data-id="42">  Suppe  </h3></li>
+      </section>
+    `;
+    capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
+
+    document.querySelector('h3.item-name').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ELEMENT_SELECTED',
+      rawText: 'Suppe',
+      attributes: { class: 'item-name', 'data-id': '42' },
+    }));
   });
 
   test('a click outside the scope is ignored — no ELEMENT_SELECTED, selection stays active', async () => {

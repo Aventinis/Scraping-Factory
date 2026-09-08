@@ -333,8 +333,22 @@ const SFApiConfig = (function () {
     return { kind: 'group', name, path, children: [] };
   }
 
-  function buildApiFieldDraft(name, path) {
-    return { kind: 'field', name, path };
+  // transforms mirrors Container-Mode's own buildFieldNode default (Issue
+  // #84) — null means "no chain configured", the same value the field-
+  // transforms modal (see api-config-ui.js's openApiFieldTransformsModal)
+  // resets it to when the chain is emptied back out.
+  //
+  // sampleValue (Issue #147): the raw JSON value this field resolved to at
+  // candidate-confirm time — popup-internal only, never sent to the
+  // companion (serializeApiTree below doesn't carry it over), it exists
+  // purely to drive the transform-chain modal's live preview the same way
+  // pendingRawText does for flat/container mode. undefined (not null) when
+  // no sample was ever available — e.g. a field added by hand via
+  // modal-api-group-new's sibling flows some day — so the preview can tell
+  // "no sample" apart from a real JSON `null` (which the runtime turns into
+  // an empty string, see scraper_api.py.j2's own "value is None" check).
+  function buildApiFieldDraft(name, path, transforms = null, sampleValue = undefined) {
+    return { kind: 'field', name, path, transforms, sampleValue };
   }
 
   function resolveApiTreeNode(groups, path) {
@@ -365,11 +379,16 @@ const SFApiConfig = (function () {
   // the wire format the companion expects (IR/ApiConfig.cs's
   // ApiGroup/ApiField, discriminated structurally by ApiNodeJsonConverter via
   // presence of `children` — see PythonApiConfigLiteral.RenderGroups on the
-  // codegen side for the same discriminator).
+  // codegen side for the same discriminator). transforms (Issue #84) is only
+  // included when non-empty, the same "omit rather than send an empty/null
+  // key" convention Container-Mode's own serializeGroupTree already uses.
   function serializeApiTree(groups) {
-    return groups.map(node => node.kind === 'group'
+    return groups.map(node => (node.kind === 'group'
       ? { name: node.name, path: node.path, children: serializeApiTree(node.children) }
-      : { name: node.name, path: node.path });
+      : {
+          name: node.name, path: node.path,
+          ...(node.transforms && node.transforms.length > 0 ? { transforms: node.transforms } : {}),
+        }));
   }
 
   // The idle screen's "API-Konfiguration bereit: N Feld(er), …" summary wants
@@ -554,10 +573,17 @@ const SFApiConfig = (function () {
   // parentPath — one node if the click landed inside an already-represented
   // scope (the "sibling field" case), possibly several nested levels wrapped
   // in one outer node otherwise.
+  // Issue #147: candidate.value (the leaf) and each picked sibling's own
+  // .value (from candidate.siblings, see content-script.js's siblingFields)
+  // are carried onto the new field drafts as sampleValue — the raw JSON
+  // value the transform-chain modal's live preview runs against later.
   function buildApiSubtreeFromCandidate(candidate, fieldName, siblingNames, skipSegments = 0) {
     const skeleton = candidate.treeSkeleton.slice(skipSegments);
-    const leafField = buildApiFieldDraft(fieldName, skeleton[skeleton.length - 1].path);
-    const siblingDrafts = siblingNames.map(name => buildApiFieldDraft(name, name));
+    const leafField = buildApiFieldDraft(fieldName, skeleton[skeleton.length - 1].path, null, candidate.value);
+    const siblingDrafts = siblingNames.map((name) => {
+      const sibling = (candidate.siblings || []).find(s => s.name === name);
+      return buildApiFieldDraft(name, name, null, sibling ? sibling.value : undefined);
+    });
     const groupSegments = skeleton.slice(0, -1);
     return groupSegments.reduceRight((children, seg) => [
       { ...buildApiGroupDraft(lastPathSegmentName(seg.path) || t('apiTree.defaultGroupName'), seg.path), children },

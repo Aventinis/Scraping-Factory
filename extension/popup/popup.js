@@ -41,6 +41,7 @@ const {
   startApiFieldSearch, confirmApiFieldCandidate, loadInitialBodyTreeForCandidate, cancelApiConfig,
   startApiTreeFieldSearch, confirmApiTreeFieldCandidate,
   openApiGroupModal, confirmApiGroupModal, cancelApiGroupModal, setApiTreeNodeName,
+  openApiFieldTransformsModal, confirmApiFieldTransformsModal, cancelApiFieldTransformsModal,
   startDiscoverySearch, confirmDiscoveryCandidate,
   toggleApiConfigPartVariable, setApiConfigPartName, setApiConfigSourceKind,
   patchApiConfigSource, setApiConfigHeaderDecision,
@@ -54,6 +55,14 @@ const {
   openContainerModal, confirmContainerModal, cancelContainerModal,
   startFieldSelection, confirmExtendedField, cancelExtendedField,
 } = typeof require !== 'undefined' ? require('./container-tree-ui') : self.SFContainerTreeUI;
+
+const {
+  createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
+  moveTransform, transformsAreValid, applyTransformsPreview, toNumberPreview,
+} = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
+
+const { renderTransformList, wireTransformList, renderTransformPreview } =
+  typeof require !== 'undefined' ? require('./field-transforms-ui') : self.SFFieldTransformsUI;
 
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (e) => log('UNCAUGHT_ERROR', e.message));
@@ -91,6 +100,30 @@ let _state = {
   // same modal round trip and written onto the resulting field/node once
   // confirmed (see confirmField/confirmExtendedField).
   pendingFramePath:    null,
+  // Issue #85: how many elements the just-picked selector matches on the
+  // page right now (scoped to the container instance, when applicable) — the
+  // content script's own document.querySelectorAll(selector).length,
+  // reported alongside pendingSelector on the same ELEMENT_SELECTED message.
+  // null before any pick, or if the content script couldn't compute it.
+  pendingMatchCount:   null,
+  // Issue #143: the just-picked element's own trimmed text/attribute map,
+  // reported alongside pendingSelector on the same ELEMENT_SELECTED message
+  // — underlying-selection state like pendingMatchCount above (not
+  // user-typed form input), so it's carried through the same session-storage
+  // popup-reopen recovery path. Feeds the transform-chain live preview
+  // (see refreshFlatTransformPreview/refreshExtendedTransformPreview) —
+  // null before any pick.
+  pendingRawText:            null,
+  pendingElementAttributes:  null,
+  // Issue #84: the transform chain (trim/regexExtract/replace/toNumber, in
+  // order) being built up while modal-field-name/modal-field-extended is
+  // open — form state, not underlying-selection state, so unlike
+  // pendingSelector/pendingMatchCount it's deliberately NOT carried through
+  // the session-storage popup-reopen recovery path (same "typed-but-
+  // unconfirmed input is lost on reopen" treatment the field-name input
+  // itself already gets). Written onto the resulting field/node once
+  // confirmed (see confirmField/confirmExtendedField).
+  pendingTransforms:   [],
   selectionKind:       null,  // 'field' | 'container' | 'browserAction' | null — which kind the current SELECTING round is for
   pendingParentPath:   null,  // number[] | null — where the next inserted group-tree node goes; null = root level
   pendingNewContainer: null,  // {name, repeating} captured by modal-container-new before element-selection starts
@@ -146,6 +179,14 @@ let _state = {
   // apiGroupModalOpen above (Issue #55, Phase B4).
   bodyParameterModalOpen: false,
   pendingBodyVariablePath: null,
+  // modal-api-field-transforms visibility, and which tree path's chain is
+  // being edited — same "not persisted, no content-script round trip"
+  // reasoning as apiGroupModalOpen/bodyParameterModalOpen above (Issue #84
+  // follow-up). The chain itself reuses pendingTransforms, the same slot
+  // flat/container mode's own field modals already use — API_CONFIG and
+  // those two modals are never open at once.
+  apiFieldTransformModalOpen: false,
+  pendingApiFieldTransformPath: null,
   apiConfigDraft:     null, // set once a candidate is confirmed as the primary field — the in-progress ApiConfig being built, see buildApiConfig/confirmApiFieldCandidate
   apiConfig:          null, // the "Apply"-confirmed ApiConfig wire object — Phase 6 will read this; persisted like fields/groups
   robotsTxtChecking: false, // not persisted, always off on popup reopen (like previewActive/apiCaptureActive)
@@ -239,6 +280,7 @@ function buildScrapingConfig(
     fields: fields.map(f => ({
       name: f.name, selector: f.selector, attribute: f.attribute ?? null,
       ...(f.framePath ? { framePath: f.framePath } : {}),
+      ...(f.transforms && f.transforms.length > 0 ? { transforms: f.transforms } : {}),
     })),
     outputFormat: 'Csv',
     scriptFileName: scriptFileName || null,
@@ -264,8 +306,11 @@ function buildConfigExport(
   };
 }
 
-function addField(fields, name, selector, framePath = null) {
-  return [...fields, { name, selector, attribute: null, framePath: framePath || null }];
+function addField(fields, name, selector, framePath = null, transforms = []) {
+  return [...fields, {
+    name, selector, attribute: null, framePath: framePath || null,
+    transforms: transforms.length > 0 ? transforms : null,
+  }];
 }
 
 // Issue #41/#42, Phase 5/6: browser actions (WaitFor/Fill/Click/Scroll,
@@ -349,6 +394,53 @@ function frameBadgeHtml(framePath) {
   return `<span class="frame-badge" title="${title}">${escapeHtml(t('frame.badge'))}</span>`;
 }
 
+// Issue #85: existence/quantity feedback next to the name input in
+// modal-field-name/modal-field-extended, the instant a selector is picked —
+// mirrors previewSummary's own count/warn-styling pattern (idle.
+// previewSummaryMatched + .preview-summary.warn), just scoped to a single
+// in-flight pick instead of every configured field/group at once. count is
+// null before any pick, or if the content script couldn't compute it — the
+// hint simply stays hidden then, same as it would if this feature didn't exist.
+function renderMatchCountHint(elId, count) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (count === null || count === undefined) {
+    el.textContent = '';
+    el.classList.add('hidden');
+    return;
+  }
+  el.textContent = t('modals.matchCount.found', { count });
+  el.classList.toggle('warn', count === 0);
+  el.classList.remove('hidden');
+}
+
+// Issue #143: live preview of the transform chain's output — flat mode has
+// no attribute/exists mode, so the raw value is always the picked element's
+// trimmed text.
+function refreshFlatTransformPreview() {
+  renderTransformPreview('field-transform-preview', _state.pendingRawText, _state.pendingTransforms);
+}
+
+// Issue #143: container mode's raw value depends on the mode/attribute the
+// user is currently typing into the modal — read directly from those DOM
+// inputs (like the attribute-row visibility toggle already does), not from
+// _state, since neither is state-managed. "exists" mode always passes null
+// (its own transforms section is hidden, see the select-field-mode change
+// handler below) and attribute mode passes null until an attribute name has
+// actually been typed, so the hint doesn't show a misleading result before
+// then.
+function refreshExtendedTransformPreview() {
+  const mode = document.getElementById('select-field-mode')?.value ?? 'text';
+  let rawValue = null;
+  if (mode === 'text') {
+    rawValue = _state.pendingRawText;
+  } else if (mode === 'attribute') {
+    const attrName = document.getElementById('input-field-attribute')?.value.trim();
+    if (attrName) rawValue = (_state.pendingElementAttributes?.[attrName] ?? '').trim();
+  }
+  renderTransformPreview('field-extended-transform-preview', rawValue, _state.pendingTransforms);
+}
+
 // ── State ────────────────────────────────────────────────────────────────────
 
 function setState(newState, patch = {}) {
@@ -410,6 +502,16 @@ function applyStaticTranslations() {
   if (typeof document !== 'undefined' && document.documentElement) document.documentElement.lang = getLanguage();
 }
 
+// Issue #84: render() hides every modal unconditionally at its own top
+// (see below) and re-shows modal-field-name/-extended each pass while a
+// pick is pending — so a DOM-visibility check can't tell "just reopened"
+// apart from "already open, re-rendering because a transform row changed".
+// Tracks the last pendingSelector the modal-open block actually reset
+// inputs for; null whenever that block didn't run (mirrors the modal being
+// closed), so the same selector picked again after a cancel still resets on
+// its next genuine open.
+let lastFieldModalSelector = null;
+
 function render() {
   ['checking', 'error', 'idle', 'selecting', 'api-config', 'generating', 'done'].forEach(s =>
     hide(`screen-${s}`)
@@ -419,6 +521,7 @@ function render() {
   hide('modal-container-new');
   hide('modal-api-group-new');
   hide('modal-api-body-parameter-new');
+  hide('modal-api-field-transforms');
 
   const screenKey = {
     [STATES.CHECKING_COMPANION]: 'checking',
@@ -636,6 +739,15 @@ function render() {
       const nameInput = document.getElementById('input-api-body-parameter-name');
       if (nameInput) { nameInput.value = ''; nameInput.focus(); }
     }
+
+    if (_state.apiFieldTransformModalOpen) {
+      show('modal-api-field-transforms');
+      renderTransformList('api-field-transform-list', _state.pendingTransforms);
+      // Issue #147: live preview against the node's own sampleValue, threaded
+      // through as pendingRawText by openApiFieldTransformsModal — reuses the
+      // same renderTransformPreview flat mode's own preview already calls.
+      renderTransformPreview('api-field-transform-preview', _state.pendingRawText, _state.pendingTransforms);
+    }
   }
 
   if (_state.current === STATES.DONE) {
@@ -647,22 +759,45 @@ function render() {
     renderDataPreview(_state.dataPreview);
   }
 
-  // Show modal when an element has been captured during selection
+  // Show modal when an element has been captured during selection. Editing
+  // the transform chain (Issue #84) re-renders while this modal stays open
+  // (each row edit goes through patchState) — the reset-to-defaults/focus
+  // block below must therefore only run on the actual closed→open
+  // transition, not on every one of those re-renders, or it would wipe the
+  // name/mode the user already typed on every transform edit. See
+  // lastFieldModalSelector's own doc comment for why this can't just check
+  // the modal's current DOM visibility instead.
   if (_state.current === STATES.SELECTING && _state.pendingSelector !== null) {
+    const isNewPick = _state.pendingSelector !== lastFieldModalSelector;
+    lastFieldModalSelector = _state.pendingSelector;
+
     if (_state.mode === 'container') {
       show('modal-field-extended');
-      const nameInput = document.getElementById('input-field-extended-name');
-      if (nameInput) { nameInput.value = ''; nameInput.focus(); }
-      const modeSelect = document.getElementById('select-field-mode');
-      if (modeSelect) modeSelect.value = 'text';
-      document.getElementById('field-attribute-row')?.classList.add('hidden');
-      const attrInput = document.getElementById('input-field-attribute');
-      if (attrInput) attrInput.value = '';
+      if (isNewPick) {
+        const nameInput = document.getElementById('input-field-extended-name');
+        if (nameInput) { nameInput.value = ''; nameInput.focus(); }
+        const modeSelect = document.getElementById('select-field-mode');
+        if (modeSelect) modeSelect.value = 'text';
+        document.getElementById('field-attribute-row')?.classList.add('hidden');
+        document.getElementById('field-extended-transforms-section')?.classList.remove('hidden');
+        const attrInput = document.getElementById('input-field-attribute');
+        if (attrInput) attrInput.value = '';
+      }
+      renderMatchCountHint('field-extended-match-count', _state.pendingMatchCount);
+      renderTransformList('field-extended-transform-list', _state.pendingTransforms);
+      refreshExtendedTransformPreview();
     } else {
       show('modal-field-name');
-      const input = document.getElementById('input-field-name');
-      if (input) { input.value = ''; input.focus(); }
+      if (isNewPick) {
+        const input = document.getElementById('input-field-name');
+        if (input) { input.value = ''; input.focus(); }
+      }
+      renderMatchCountHint('field-name-match-count', _state.pendingMatchCount);
+      renderTransformList('field-transform-list', _state.pendingTransforms);
+      refreshFlatTransformPreview();
     }
+  } else {
+    lastFieldModalSelector = null;
   }
 
   if (_state.current === STATES.SELECTING) {
@@ -1205,7 +1340,10 @@ function renderDataPreview(preview) {
 // `context` is a short human label (e.g. "Script generation"); passing it
 // marks the error as reportable — the toast then also offers "Report
 // bug" and the message/context are attached to the next bug report.
-function showToast(message, context) {
+// `variant` ('info' | 'warn') is Issue #85's own non-error use of this same
+// toast (container-group match-count feedback, see showMatchCountToast) —
+// omitted, it's the original red error styling, unchanged.
+function showToast(message, context, variant) {
   const toast = document.getElementById('error-toast');
   if (!toast) return;
 
@@ -1216,8 +1354,26 @@ function showToast(message, context) {
   if (reportBtn) reportBtn.classList.toggle('hidden', !context);
   if (context) setLastError(message, context);
 
+  toast.classList.remove('toast-info', 'toast-warn');
+  if (variant === 'info') toast.classList.add('toast-info');
+  if (variant === 'warn') toast.classList.add('toast-warn');
+
   toast.classList.remove('hidden');
   setTimeout(() => toast.classList.add('hidden'), context ? 8000 : 4000);
+}
+
+// Issue #85: existence/quantity feedback for a container-group's own
+// selector, right after it was inserted straight into the tree (see the
+// ELEMENT_SELECTED handler above) — the direct-insert flow has no
+// confirmation modal to show a match-count hint in the way
+// renderMatchCountHint does for a flat/container field pick, so a toast is
+// the next best surfacing. Amber for a 0-match pick (the exact case this
+// issue exists to catch early, instead of only failing much later at
+// /generate), green otherwise. Silently skipped if the content script
+// couldn't compute a count at all (matchCount === null).
+function showMatchCountToast(containerName, matchCount) {
+  if (matchCount === null) return;
+  showToast(t('toast.containerAdded', { name: containerName, count: matchCount }), null, matchCount === 0 ? 'warn' : 'info');
 }
 
 // ── Bug reporting ─────────────────────────────────────────────────────────────
@@ -1359,11 +1515,16 @@ async function reportBug() {
 function confirmField() {
   const name = document.getElementById('input-field-name')?.value.trim();
   if (!name) return;
-  log('FIELD_ADD', { name, selector: _state.pendingSelector, framePath: _state.pendingFramePath });
+  if (!transformsAreValid(_state.pendingTransforms)) return;
+  log('FIELD_ADD', { name, selector: _state.pendingSelector, framePath: _state.pendingFramePath, transforms: _state.pendingTransforms });
   setState(STATES.IDLE, {
-    fields:           addField(_state.fields, name, _state.pendingSelector, _state.pendingFramePath),
+    fields:           addField(_state.fields, name, _state.pendingSelector, _state.pendingFramePath, _state.pendingTransforms),
     pendingSelector:  null,
     pendingFramePath: null,
+    pendingMatchCount: null,
+    pendingRawText: null,
+    pendingElementAttributes: null,
+    pendingTransforms: [],
   });
 }
 
@@ -1538,6 +1699,7 @@ function wireEvents() {
 
     if (e.target.closest('.btn-add-api-subgroup')) { openApiGroupModal(bridge, path); return; }
     if (e.target.closest('.btn-add-api-subfield')) { startApiTreeFieldSearch(bridge, path); return; }
+    if (e.target.closest('.btn-api-field-transforms')) { openApiFieldTransformsModal(bridge, path); return; }
     if (e.target.closest('.btn-remove-api-node')) {
       log('API_TREE_NODE_REMOVE', { path });
       setState(_state.current, { apiConfigDraft: { ..._state.apiConfigDraft, groups: removeApiTreeNode(_state.apiConfigDraft.groups, path) } });
@@ -1554,6 +1716,20 @@ function wireEvents() {
     if (e.key === 'Enter') confirmApiGroupModal(bridge);
   });
   document.getElementById('btn-api-group-cancel')?.addEventListener('click', () => cancelApiGroupModal(bridge));
+
+  // Issue #84 follow-up: API-mode field transforms modal — reuses the same
+  // transform-chain editor (field-transforms.js/field-transforms-ui.js) the
+  // flat/container field modals already wire up above.
+  document.getElementById('btn-api-field-transforms-add')?.addEventListener('click', () => {
+    patchState({ pendingTransforms: addTransform(_state.pendingTransforms) });
+  });
+  wireTransformList(
+    'api-field-transform-list',
+    () => _state.pendingTransforms,
+    (transforms) => patchState({ pendingTransforms: transforms }),
+  );
+  document.getElementById('btn-api-field-transforms-confirm')?.addEventListener('click', () => confirmApiFieldTransformsModal(bridge));
+  document.getElementById('btn-api-field-transforms-cancel')?.addEventListener('click', () => cancelApiFieldTransformsModal(bridge));
 
   // ── API-Mode config screen (Issue #53 Phase 5) ─────────────────────────────
   // Delegated `change` listeners (not `input`) so typing in a text field
@@ -1675,7 +1851,10 @@ function wireEvents() {
     log('BTN add-field → START_SELECTION');
     stopPreviewIfActive();
     chrome.runtime.sendMessage({ type: 'START_SELECTION' });
-    setState(STATES.SELECTING, { pendingSelector: null, domTree: null, domTreeTruncated: false, domTreeError: null });
+    setState(STATES.SELECTING, {
+      pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
+      domTree: null, domTreeTruncated: false, domTreeError: null,
+    });
     if (_state.domViewEnabled) {
       log('DOM view was enabled → re-requesting tree');
       requestDomTree();
@@ -1716,7 +1895,34 @@ function wireEvents() {
   document.getElementById('btn-field-extended-cancel')?.addEventListener('click', () => cancelExtendedField(bridge));
   document.getElementById('select-field-mode')?.addEventListener('change', (e) => {
     document.getElementById('field-attribute-row')?.classList.toggle('hidden', e.target.value !== 'attribute');
+    // Issue #84: transforms are a string post-processing pipeline — not
+    // meaningful for "Vorhanden?" (a boolean-ish presence check).
+    document.getElementById('field-extended-transforms-section')?.classList.toggle('hidden', e.target.value === 'exists');
+    // Issue #143: the raw value the preview runs against depends on the mode.
+    refreshExtendedTransformPreview();
   });
+  // Issue #143: typing an attribute name updates the preview live, without
+  // requiring a transform edit first.
+  document.getElementById('input-field-attribute')?.addEventListener('input', refreshExtendedTransformPreview);
+
+  // Issue #84: transform-chain editor, shared between the flat and
+  // container field modals — both read/write the same _state.pendingTransforms.
+  document.getElementById('btn-field-transform-add')?.addEventListener('click', () => {
+    patchState({ pendingTransforms: addTransform(_state.pendingTransforms) });
+  });
+  document.getElementById('btn-field-extended-transform-add')?.addEventListener('click', () => {
+    patchState({ pendingTransforms: addTransform(_state.pendingTransforms) });
+  });
+  wireTransformList(
+    'field-transform-list',
+    () => _state.pendingTransforms,
+    (transforms) => patchState({ pendingTransforms: transforms }),
+  );
+  wireTransformList(
+    'field-extended-transform-list',
+    () => _state.pendingTransforms,
+    (transforms) => patchState({ pendingTransforms: transforms }),
+  );
 
   document.getElementById('btn-cancel-selection')?.addEventListener('click', () => {
     log('BTN cancel-selection → STOP_SELECTION');
@@ -1727,7 +1933,7 @@ function wireEvents() {
     // or the in-progress apiConfigDraft would appear to have vanished.
     const returnTo = _state.apiConfigDraft ? STATES.API_CONFIG : STATES.IDLE;
     setState(returnTo, {
-      selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null,
+      selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
       pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', apiSearchTarget: null,
     });
   });
@@ -1753,7 +1959,7 @@ function wireEvents() {
 
   document.getElementById('btn-field-cancel')?.addEventListener('click', () => {
     log('BTN field-cancel');
-    setState(STATES.IDLE, { pendingSelector: null });
+    setState(STATES.IDLE, { pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [] });
   });
 
   // Event delegation for "Remove" buttons in the field list
@@ -1827,7 +2033,7 @@ function wireEvents() {
       stopPreviewIfActive();
       chrome.runtime.sendMessage({ type: 'START_SELECTION' });
       setState(STATES.SELECTING, {
-        pendingSelector: null, selectionKind: 'browserAction', pendingBrowserActionIndex: index, pendingBrowserActionField: field,
+        pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [], selectionKind: 'browserAction', pendingBrowserActionIndex: index, pendingBrowserActionField: field,
         domTree: null, domTreeTruncated: false, domTreeError: null,
       });
     }
@@ -1910,14 +2116,20 @@ function wireEvents() {
       // Clear the storage entry the service worker wrote — we have it now.
       chrome.storage.session.remove('pendingSelector');
       const framePath = message.framePath || null;
+      const matchCount = typeof message.matchCount === 'number' ? message.matchCount : null;
       if (_state.mode === 'container' && _state.selectionKind === 'container') {
         // Name/type were already collected by modal-container-new — insert
-        // the new group node straight away, no further modal needed.
+        // the new group node straight away, no further modal needed. There's
+        // no modal left open at this point to show the match count in (Issue
+        // #85), so it's surfaced as a toast instead — read the name before
+        // setState() clears pendingNewContainer.
+        const containerName = _state.pendingNewContainer.name;
         const node = buildGroupNode(_state.pendingNewContainer.name, message.selector, _state.pendingNewContainer.repeating, framePath);
         setState(STATES.IDLE, {
           groups: insertContainerNode(_state.groups, _state.pendingParentPath, node),
-          selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null,
+          selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
         });
+        showMatchCountToast(containerName, matchCount);
       } else if (_state.selectionKind === 'browserAction' && _state.pendingBrowserActionIndex !== null) {
         // The action card already exists (kind chosen when it was added via
         // btn-add-action-*) — write the selector straight into the field
@@ -1934,10 +2146,15 @@ function wireEvents() {
             [_state.pendingBrowserActionField]: message.selector,
             framePath,
           }),
-          selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null,
+          selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
         });
       } else {
-        setState(STATES.SELECTING, { pendingSelector: message.selector, pendingFramePath: framePath });
+        setState(STATES.SELECTING, {
+          pendingSelector: message.selector, pendingFramePath: framePath, pendingMatchCount: matchCount,
+          pendingRawText: typeof message.rawText === 'string' ? message.rawText : null,
+          pendingElementAttributes: message.attributes ?? null,
+          pendingTransforms: [],
+        });
       }
       if (message.path) highlightSelected(message.path);
     }
@@ -2006,7 +2223,8 @@ async function init() {
 
   log('INIT reading session storage');
   const stored = await chrome.storage.session.get([
-    'fields', 'url', 'pendingSelector', 'pendingFramePath', 'mode', 'groups',
+    'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
+    'pendingRawText', 'pendingElementAttributes', 'mode', 'groups',
     'engine', 'browserActions', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
@@ -2055,8 +2273,9 @@ async function init() {
       const groups = insertContainerNode(_state.groups, stored.pendingParentPath, node);
       await chrome.storage.session.set({ groups });
       setState(STATES.IDLE, {
-        groups, selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null,
+        groups, selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
       });
+      showMatchCountToast(stored.pendingNewContainer.name, typeof stored.pendingMatchCount === 'number' ? stored.pendingMatchCount : null);
       return;
     }
 
@@ -2071,15 +2290,24 @@ async function init() {
       });
       await chrome.storage.session.set({ browserActions });
       setState(STATES.IDLE, {
-        browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null,
+        browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
       });
       return;
     }
 
     // Flat field or container field — show the (extended, in container
-    // mode) field-name modal without re-checking the companion.
+    // mode) field-name modal without re-checking the companion. The
+    // transform chain itself is never persisted (see pendingTransforms'
+    // own doc comment) — a reopened popup shows the modal with an empty
+    // chain, same as the name input itself starting blank again.
     log('INIT pending selector found → show modal', stored.pendingSelector);
-    setState(STATES.SELECTING, { pendingSelector: stored.pendingSelector, pendingFramePath: stored.pendingFramePath || null });
+    setState(STATES.SELECTING, {
+      pendingSelector: stored.pendingSelector, pendingFramePath: stored.pendingFramePath || null,
+      pendingMatchCount: typeof stored.pendingMatchCount === 'number' ? stored.pendingMatchCount : null,
+      pendingRawText: typeof stored.pendingRawText === 'string' ? stored.pendingRawText : null,
+      pendingElementAttributes: stored.pendingElementAttributes ?? null,
+      pendingTransforms: [],
+    });
     return;
   }
 
@@ -2122,5 +2350,9 @@ if (typeof module !== 'undefined') {
     toggleBodyLeafToVariable, toggleBodyLeafToFixed, setBodyLeafParameter, setBodyLeafCoerceTo,
     openBodyParameterModal, confirmBodyParameterModal, cancelBodyParameterModal, confirmApiConfig,
     renderDataPreview,
+    createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
+    moveTransform, transformsAreValid, renderTransformList,
+    applyTransformsPreview, toNumberPreview, renderTransformPreview,
+    refreshFlatTransformPreview, refreshExtendedTransformPreview,
   };
 }

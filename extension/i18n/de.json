@@ -148,7 +148,24 @@
     "addSubgroupBtn": "+ Gruppe",
     "addSubfieldBtn": "+ Datenfeld",
     "addRootGroupBtn": "+ Neue Gruppe (oberste Ebene)",
-    "defaultGroupName": "Gruppe"
+    "defaultGroupName": "Gruppe",
+    "transformsBtn": "Transformieren",
+    "transformsBtnCount": "Transformieren ({count})"
+  },
+  "transforms": {
+    "sectionLabel": "Transformationen (optional)",
+    "addBtn": "+ Transformation",
+    "trimOption": "Trimmen (Leerzeichen entfernen)",
+    "regexExtractOption": "Regex-Extraktion",
+    "replaceOption": "Suchen/Ersetzen",
+    "toNumberOption": "In Zahl umwandeln",
+    "patternPlaceholder": "Regex-Muster (z. B. \"\\d+\")",
+    "groupPlaceholder": "Gruppe (0 = ganzer Treffer)",
+    "findPlaceholder": "Suchen",
+    "replacementPlaceholder": "Ersetzen durch",
+    "previewLabel": "Vorschau: {value}",
+    "previewEmptyValue": "(leer)",
+    "previewUnavailable": "Vorschau nicht möglich (ungültiges Muster)"
   },
   "generating": {
     "message": "Generiere Skript…"
@@ -194,6 +211,9 @@
     "apiBodyParameterNew": {
       "nameLabel": "Name des Parameters (z. B. \"kategorie\")",
       "namePlaceholder": "Name"
+    },
+    "matchCount": {
+      "found": "{count} Element(e) gefunden"
     }
   },
   "toast": {
@@ -203,7 +223,8 @@
     "selectionUnavailable": "Element-Auswahl auf dieser Seite nicht möglich.",
     "previewUnavailable": "Vorschau auf dieser Seite nicht möglich.",
     "captureUnavailable": "Netzwerk-Aufzeichnung auf dieser Seite nicht möglich.",
-    "invalidCompanionUrl": "Ungültige Adresse — bitte mit http:// oder https:// angeben."
+    "invalidCompanionUrl": "Ungültige Adresse — bitte mit http:// oder https:// angeben.",
+    "containerAdded": "Container „{name}“ hinzugefügt — {count} Element(e) gefunden"
   },
   "frame": {
     "badge": "iframe",

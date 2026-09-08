@@ -122,6 +122,10 @@ public static class ScrapingPlanValidator
             var frameError = ValidateFramePath(step.FramePath, $"Feld '{step.Name}'", plan.Engine);
             if (frameError is not null)
                 return Invalid(frameError);
+
+            var transformError = FieldTransformValidator.Validate(step.Transforms, $"Feld '{step.Name}'");
+            if (transformError is not null)
+                return Invalid(transformError);
         }
 
         var duplicateNames = FindDuplicates(extractSteps, step => step.Name);
@@ -171,6 +175,9 @@ public static class ScrapingPlanValidator
                     var fieldFrameError = ValidateFramePath(field.FramePath, $"Datenfeld '{field.Name}'", engine);
                     if (fieldFrameError is not null)
                         return fieldFrameError;
+                    var fieldTransformError = FieldTransformValidator.Validate(field.Transforms, $"Datenfeld '{field.Name}'");
+                    if (fieldTransformError is not null)
+                        return fieldTransformError;
                     break;
             }
         }
@@ -204,6 +211,9 @@ public static class ScrapingPlanValidator
                 case ApiField field:
                     if (string.IsNullOrWhiteSpace(field.Path))
                         return $"Pfad des Felds '{field.Name}' darf nicht leer sein.";
+                    var apiFieldTransformError = FieldTransformValidator.Validate(field.Transforms, $"Feld '{field.Name}'");
+                    if (apiFieldTransformError is not null)
+                        return apiFieldTransformError;
                     break;
             }
         }
@@ -340,6 +350,9 @@ public static class ScrapingPlanValidator
                     return "Feldname darf nicht leer sein.";
                 if (string.IsNullOrWhiteSpace(field.Path))
                     return $"Pfad für Feld '{field.Name}' darf nicht leer sein.";
+                var transformError = FieldTransformValidator.Validate(field.Transforms, $"Feld '{field.Name}'");
+                if (transformError is not null)
+                    return transformError;
             }
 
             var duplicateFieldNames = FindDuplicates(api.Fields, field => field.Name);

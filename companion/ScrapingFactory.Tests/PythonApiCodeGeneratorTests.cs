@@ -24,6 +24,30 @@ public class PythonApiCodeGeneratorTests
     };
 
     [Fact]
+    public void Generate_FieldWithTransforms_RendersTransformChainAndRuntimeHelper()
+    {
+        var api = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Preis", Path = "price", Transforms = [new TrimTransform(), new ToNumberTransform()] }],
+        };
+
+        var script = _generator.Generate(PlanWith(api));
+        Assert.Contains("""{"kind": "trim"}""", script);
+        Assert.Contains("""{"kind": "toNumber"}""", script);
+        Assert.Contains("def _apply_transforms(value, transforms):", script);
+        Assert.Contains("_apply_transforms(str(value), field[\"transform\"])", script);
+    }
+
+    [Fact]
+    public void Generate_FieldWithoutTransforms_HasEmptyTransformKeyInFieldLiteral()
+    {
+        var script = _generator.Generate(PlanWith(SampleApi()));
+        Assert.Contains("\"transform\": []", script);
+    }
+
+    [Fact]
     public void Generate_ContainsUrlTemplateAndItemsPath()
     {
         var script = _generator.Generate(PlanWith(SampleApi()));
@@ -272,6 +296,28 @@ public class PythonApiCodeGeneratorTests
         Assert.Contains("'products'", script);
         Assert.Contains("def _extract_api_group(", script);
         Assert.Contains("\"children\" in node", script);
+    }
+
+    [Fact]
+    public void Generate_ApiGroupsFieldWithTransforms_RendersTransformChainAndRuntimeHelper()
+    {
+        var api = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/catalog",
+            Groups =
+            [
+                new ApiGroup
+                {
+                    Name = "Kategorie", Path = "categories",
+                    Children = [new ApiField { Name = "Preis", Path = "price", Transforms = [new ToNumberTransform()] }],
+                },
+            ],
+        };
+
+        var script = _generator.Generate(PlanWith(api));
+        Assert.Contains("""{"kind": "toNumber"}""", script);
+        Assert.Contains("def _apply_transforms(value, transforms):", script);
+        Assert.Contains("_apply_transforms(str(value), node[\"transform\"])", script);
     }
 
     [Fact]

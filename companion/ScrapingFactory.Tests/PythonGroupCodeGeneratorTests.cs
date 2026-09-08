@@ -65,7 +65,8 @@ public class PythonGroupCodeGeneratorTests
     public void Generate_TextFieldHasTextModeAndNoAttributeKey()
     {
         var script = _generator.Generate(NestedGroupPlan());
-        Assert.Contains("{\"name\": 'Titel', \"selector\": 'h2', \"mode\": 'text'}", script);
+        // "transform" (Issue #84) is always present, even when empty.
+        Assert.Contains("{\"name\": 'Titel', \"selector\": 'h2', \"mode\": 'text', \"transform\": []}", script);
     }
 
     [Fact]
@@ -80,6 +81,45 @@ public class PythonGroupCodeGeneratorTests
     {
         var script = _generator.Generate(NestedGroupPlan());
         Assert.Contains("\"mode\": 'exists'", script);
+    }
+
+    [Fact]
+    public void Generate_FieldWithTransforms_RendersTransformKeyAndRuntimeHelper()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com/speisekarte" },
+                new ExtractGroupStep
+                {
+                    Roots =
+                    [
+                        new GroupNode
+                        {
+                            Name = "Kategorie", Selector = "section", Repeating = true,
+                            Children =
+                            [
+                                new DataFieldNode
+                                {
+                                    Name = "Preis", Selector = ".price",
+                                    Transforms = [new TrimTransform(), new RegexExtractTransform { Pattern = @"[\d,]+", Group = 0 }, new ToNumberTransform()],
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var script = _generator.Generate(plan);
+        Assert.Contains("""{"kind": "trim"}""", script);
+        // PythonLiteral.Str escapes '\' to '\\', so the C# raw string's own
+        // literal backslash (from @"[\d,]+") comes out doubled in the
+        // generated Python source.
+        Assert.Contains(""""kind": "regexExtract", "pattern": '[\\d,]+', "group": 0"""", script);
+        Assert.Contains("""{"kind": "toNumber"}""", script);
+        Assert.Contains("def _apply_transforms(value, transforms):", script);
     }
 
     [Fact]

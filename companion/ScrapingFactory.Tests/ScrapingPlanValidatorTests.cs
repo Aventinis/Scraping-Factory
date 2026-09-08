@@ -104,6 +104,58 @@ public class ScrapingPlanValidatorTests
         Assert.Contains("Selector", result.Error);
     }
 
+    // ── Issue #84: field transform chains ────────────────────────────────
+
+    [Fact]
+    public void Validate_ExtractStepWithValidTransforms_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ExtractStep
+                {
+                    Name = "Preis", Selector = ".price",
+                    Transforms = [new TrimTransform(), new RegexExtractTransform { Pattern = @"\d+" }, new ToNumberTransform()],
+                },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ExtractStepWithInvalidRegexTransform_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ExtractStep { Name = "Preis", Selector = ".price", Transforms = [new RegexExtractTransform { Pattern = "[unclosed" }] },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Preis", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ExtractStepWithNegativeTransformGroup_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ExtractStep { Name = "Preis", Selector = ".price", Transforms = [new RegexExtractTransform { Pattern = @"\d+", Group = -1 }] },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+    }
+
     [Fact]
     public void Validate_ValidWaitForStep_Succeeds()
     {
@@ -775,6 +827,37 @@ public class ScrapingPlanValidatorTests
         Assert.Contains("FramePath", result.Error);
     }
 
+    [Fact]
+    public void Validate_DataFieldNodeWithInvalidRegexTransform_Fails()
+    {
+        var roots = new List<GroupNode>
+        {
+            new()
+            {
+                Name = "Kategorie", Selector = "section", Repeating = true,
+                Children = [new DataFieldNode { Name = "Preis", Selector = ".price", Transforms = [new RegexExtractTransform { Pattern = "(" }] }],
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(GroupPlan(roots, ScrapingEngine.Static));
+        Assert.False(result.Success);
+        Assert.Contains("Preis", result.Error);
+    }
+
+    [Fact]
+    public void Validate_DataFieldNodeWithValidTransforms_Succeeds()
+    {
+        var roots = new List<GroupNode>
+        {
+            new()
+            {
+                Name = "Kategorie", Selector = "section", Repeating = true,
+                Children = [new DataFieldNode { Name = "Preis", Selector = ".price", Transforms = [new ToNumberTransform()] }],
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(GroupPlan(roots, ScrapingEngine.Static));
+        Assert.True(result.Success, result.Error);
+    }
+
     // ── API-Mode (ApiCallStep) ────────────────────────────────────────────
 
     private static ApiConfig ValidApiConfig() => new()
@@ -889,6 +972,22 @@ public class ScrapingPlanValidatorTests
         Assert.False(result.Success);
         Assert.Contains("kollidieren", result.Error);
         Assert.Contains("category", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithInvalidRegexTransform_Fails()
+    {
+        var api = ValidApiConfig();
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = api.UrlTemplate,
+            ItemsPath = api.ItemsPath,
+            Fields = [new ApiField { Name = "Titel", Path = "title", Transforms = [new RegexExtractTransform { Pattern = "(" }] }],
+            Parameters = api.Parameters,
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Titel", result.Error);
     }
 
     // A fully static endpoint — every URL part fixed, nothing to enumerate
@@ -1285,6 +1384,21 @@ public class ScrapingPlanValidatorTests
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
         Assert.Contains("Pfad des Felds 'Titel'", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiGroupsConfigWithInvalidRegexTransform_Fails()
+    {
+        var invalid = WithGroups([
+            new ApiGroup
+            {
+                Name = "Kategorie", Path = "categories",
+                Children = [new ApiField { Name = "Titel", Path = "title", Transforms = [new RegexExtractTransform { Pattern = "[unclosed" }] }],
+            },
+        ]);
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("Titel", result.Error);
     }
 
     // Unlike ApiField.Path, an empty ApiGroup.Path is legitimate (see

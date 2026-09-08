@@ -5,6 +5,7 @@
 # Run:    python {{ script_filename }}.py
 
 import csv
+import re
 {{~ if needs_os_import ~}}
 import os
 {{~ end ~}}
@@ -24,6 +25,15 @@ ATTRIBUTES = {
 {{- end }}{{- end }}
 }
 
+# Issue #84: per-field post-processing chain (trim/regex extract/replace/
+# to-number), applied in order after the raw value is read — see
+# _apply_transforms below. Empty list = today's behavior, value unchanged.
+TRANSFORMS = {
+{{- for field in fields }}
+    "{{ field.name }}": {{ field.transforms_literal }},
+{{- end }}
+}
+
 # A field's own selector is evaluated against the top-level page unless it
 # has a FRAME_PATH entry — an ordered list of CSS selectors identifying each
 # iframe from the top document down to the frame the field actually lives
@@ -34,6 +44,63 @@ FRAME_PATHS = {
     "{{ field.name }}": [{{ for sel in field.frame_path }}"{{ sel }}"{{ if !for.last }}, {{ end }}{{ end }}],
 {{- end }}{{- end }}
 }
+
+
+# Issue #84: best-effort numeric normalization for a "toNumber" transform —
+# finds the first numeric-looking substring and normalizes its decimal
+# separator to '.', stripping thousands separators/currency symbols. When
+# both '.' and ',' appear, the rightmost one is treated as the decimal point
+# (handles both "1.234,56" and "1,234.56"); a single separator appearing more
+# than once is treated as a thousands separator and stripped; a single
+# separator appearing exactly once is treated as the decimal point (so
+# "12,99"/"12.99" both work, at the cost of a genuinely ambiguous
+# single-occurrence case like "1.234" always being read as 1.234, never as
+# 1234 — chain a regex-extract transform first if that's not what's wanted).
+# Empty string if nothing numeric is found.
+def _to_number(value):
+    match = re.search(r"-?\d[\d.,]*", value)
+    if not match:
+        return ""
+    raw = match.group(0)
+    last_dot = raw.rfind(".")
+    last_comma = raw.rfind(",")
+    if last_dot != -1 and last_comma != -1:
+        decimal_pos = max(last_dot, last_comma)
+        integer_part = raw[:decimal_pos].replace(".", "").replace(",", "")
+        fractional_part = raw[decimal_pos + 1:]
+        normalized = f"{integer_part}.{fractional_part}"
+    elif raw.count(",") > 1 or raw.count(".") > 1:
+        normalized = raw.replace(",", "").replace(".", "")
+    else:
+        normalized = raw.replace(",", ".")
+    try:
+        numeric = float(normalized)
+    except ValueError:
+        return ""
+    return str(int(numeric)) if numeric.is_integer() else str(numeric)
+
+
+# Applies a field's ordered transform chain — each step's output feeds the
+# next step's input, in the order the user configured them in.
+def _apply_transforms(value, transforms):
+    for t in transforms:
+        kind = t["kind"]
+        if kind == "trim":
+            value = value.strip()
+        elif kind == "regexExtract":
+            match = re.search(t["pattern"], value)
+            if match:
+                try:
+                    value = match.group(t.get("group", 0)) or ""
+                except (IndexError, re.error):
+                    value = ""
+            else:
+                value = ""
+        elif kind == "replace":
+            value = value.replace(t["find"], t["replacement"])
+        elif kind == "toNumber":
+            value = _to_number(value)
+    return value
 
 
 def _resolve_frame_locator(page, frame_path):
@@ -78,7 +145,8 @@ def scrape(url):
             for name, elements in columns.items():
                 if i < len(elements):
                     attr = ATTRIBUTES.get(name)
-                    row[name] = (elements[i].get_attribute(attr) or "") if attr else (elements[i].text_content() or "").strip()
+                    raw_value = (elements[i].get_attribute(attr) or "") if attr else (elements[i].text_content() or "").strip()
+                    row[name] = _apply_transforms(raw_value, TRANSFORMS.get(name, []))
                 else:
                     row[name] = ""
             rows.append(row)

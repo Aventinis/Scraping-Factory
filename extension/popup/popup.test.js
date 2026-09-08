@@ -47,6 +47,9 @@ const {
   jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
   bodyTreeLeavesAreBound, serializeBodyTree, allParameterParts, renderBodyTree,
   renderDataPreview,
+  createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
+  moveTransform, transformsAreValid, renderTransformList,
+  applyTransformsPreview, toNumberPreview, renderTransformPreview,
 } = require('./popup');
 
 // jsdom's Blob doesn't implement .text() — read via FileReader instead.
@@ -308,13 +311,20 @@ describe('buildConfigExport', () => {
 describe('addField', () => {
   test('appends field with null attribute', () => {
     const result = addField([], 'Titel', 'h1');
-    expect(result).toEqual([{ name: 'Titel', selector: 'h1', attribute: null, framePath: null }]);
+    expect(result).toEqual([{ name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null }]);
   });
 
   // Issue #42, Phase 7
   test('appends field with framePath when given', () => {
     const result = addField([], 'Preis', 'h2', ['#price-widget']);
-    expect(result).toEqual([{ name: 'Preis', selector: 'h2', attribute: null, framePath: ['#price-widget'] }]);
+    expect(result).toEqual([{ name: 'Preis', selector: 'h2', attribute: null, framePath: ['#price-widget'], transforms: null }]);
+  });
+
+  // Issue #84
+  test('appends field with transforms when given', () => {
+    const transforms = [{ kind: 'trim' }, { kind: 'toNumber' }];
+    const result = addField([], 'Preis', '.price', null, transforms);
+    expect(result).toEqual([{ name: 'Preis', selector: '.price', attribute: null, framePath: null, transforms }]);
   });
 
   test('does not mutate original array', () => {
@@ -513,10 +523,21 @@ describe('buildGroupNode / buildFieldNode', () => {
 
   test('buildFieldNode nulls attribute unless mode is attribute', () => {
     expect(buildFieldNode('Titel', 'h2', 'text', 'href')).toEqual({
-      kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null, framePath: null,
+      kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null, framePath: null, transforms: null,
     });
     expect(buildFieldNode('Link', 'a', 'attribute', 'href')).toEqual({
-      kind: 'field', name: 'Link', selector: 'a', mode: 'attribute', attribute: 'href', framePath: null,
+      kind: 'field', name: 'Link', selector: 'a', mode: 'attribute', attribute: 'href', framePath: null, transforms: null,
+    });
+  });
+
+  // Issue #84
+  test('buildFieldNode carries transforms except for Exists mode', () => {
+    const transforms = [{ kind: 'regexExtract', pattern: '\\d+', group: 0 }];
+    expect(buildFieldNode('Preis', '.price', 'text', null, null, transforms)).toEqual({
+      kind: 'field', name: 'Preis', selector: '.price', mode: 'text', attribute: null, framePath: null, transforms,
+    });
+    expect(buildFieldNode('Vegan', '.vegan', 'exists', null, null, transforms)).toEqual({
+      kind: 'field', name: 'Vegan', selector: '.vegan', mode: 'exists', attribute: null, framePath: null, transforms: null,
     });
   });
 
@@ -672,6 +693,140 @@ describe('serializeGroupTree', () => {
     expect(group.children[0].framePath).toEqual(['#price-widget']);
     expect(group.children[1]).not.toHaveProperty('framePath');
   });
+
+  // Issue #84
+  test('includes transforms on a field node when set, omits it when null', () => {
+    const groups = [
+      {
+        kind: 'group', name: 'Kategorie', selector: 'section', repeating: true,
+        children: [
+          { kind: 'field', name: 'Preis', selector: '.price', mode: 'text', transforms: [{ kind: 'trim' }, { kind: 'toNumber' }] },
+          { kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', transforms: null },
+        ],
+      },
+    ];
+    const [group] = serializeGroupTree(groups);
+    expect(group.children[0].transforms).toEqual([{ kind: 'trim' }, { kind: 'toNumber' }]);
+    expect(group.children[1]).not.toHaveProperty('transforms');
+  });
+});
+
+// Issue #84: pure data helpers for a field's transform chain.
+describe('field-transforms.js (createDefaultTransform / add / remove / update / changeKind / move / validate)', () => {
+  test('createDefaultTransform returns the right shape per kind', () => {
+    expect(createDefaultTransform('trim')).toEqual({ kind: 'trim' });
+    expect(createDefaultTransform('regexExtract')).toEqual({ kind: 'regexExtract', pattern: '', group: 0 });
+    expect(createDefaultTransform('replace')).toEqual({ kind: 'replace', find: '', replacement: '' });
+    expect(createDefaultTransform('toNumber')).toEqual({ kind: 'toNumber' });
+  });
+
+  test('createDefaultTransform falls back to trim for an unknown kind', () => {
+    expect(createDefaultTransform('nonsense')).toEqual({ kind: 'trim' });
+  });
+
+  test('addTransform appends a default trim step', () => {
+    const result = addTransform([{ kind: 'toNumber' }]);
+    expect(result).toEqual([{ kind: 'toNumber' }, { kind: 'trim' }]);
+  });
+
+  test('addTransform does not mutate the original array', () => {
+    const original = [{ kind: 'trim' }];
+    addTransform(original);
+    expect(original).toHaveLength(1);
+  });
+
+  test('removeTransform removes only the given index', () => {
+    const transforms = [{ kind: 'trim' }, { kind: 'toNumber' }, { kind: 'replace', find: 'a', replacement: 'b' }];
+    expect(removeTransform(transforms, 1)).toEqual([{ kind: 'trim' }, { kind: 'replace', find: 'a', replacement: 'b' }]);
+  });
+
+  test('updateTransform patches only the given index', () => {
+    const transforms = [{ kind: 'regexExtract', pattern: '', group: 0 }, { kind: 'trim' }];
+    const result = updateTransform(transforms, 0, { pattern: '\\d+' });
+    expect(result[0]).toEqual({ kind: 'regexExtract', pattern: '\\d+', group: 0 });
+    expect(result[1]).toEqual({ kind: 'trim' });
+  });
+
+  test('changeTransformKind replaces the step with fresh defaults for the new kind', () => {
+    const transforms = [{ kind: 'replace', find: 'a', replacement: 'b' }];
+    expect(changeTransformKind(transforms, 0, 'regexExtract')).toEqual([{ kind: 'regexExtract', pattern: '', group: 0 }]);
+  });
+
+  test('moveTransform swaps with the previous/next step', () => {
+    const transforms = [{ kind: 'trim' }, { kind: 'toNumber' }];
+    expect(moveTransform(transforms, 1, -1)).toEqual([{ kind: 'toNumber' }, { kind: 'trim' }]);
+    expect(moveTransform(transforms, 0, 1)).toEqual([{ kind: 'toNumber' }, { kind: 'trim' }]);
+  });
+
+  test('moveTransform is a no-op past either end', () => {
+    const transforms = [{ kind: 'trim' }, { kind: 'toNumber' }];
+    expect(moveTransform(transforms, 0, -1)).toBe(transforms);
+    expect(moveTransform(transforms, 1, 1)).toBe(transforms);
+  });
+
+  test('transformsAreValid rejects a regexExtract step with a blank pattern', () => {
+    expect(transformsAreValid([{ kind: 'trim' }, { kind: 'regexExtract', pattern: '  ', group: 0 }])).toBe(false);
+    expect(transformsAreValid([{ kind: 'trim' }, { kind: 'regexExtract', pattern: '\\d+', group: 0 }])).toBe(true);
+  });
+
+  test('transformsAreValid accepts an empty chain', () => {
+    expect(transformsAreValid([])).toBe(true);
+  });
+});
+
+// Issue #143: JS mirror of the Python runtime's _apply_transforms/_to_number
+// (see any of the six .py.j2 templates) — used for the transform-chain live
+// preview, so both sides must independently reach the same result for the
+// same input.
+describe('applyTransformsPreview / toNumberPreview', () => {
+  test('empty chain returns the raw value unchanged', () => {
+    expect(applyTransformsPreview('  Suppe  ', [])).toBe('  Suppe  ');
+  });
+
+  test('trim strips leading/trailing whitespace', () => {
+    expect(applyTransformsPreview('  Suppe  ', [{ kind: 'trim' }])).toBe('Suppe');
+  });
+
+  test('regexExtract returns the given capture group', () => {
+    expect(applyTransformsPreview('SKU-12345', [{ kind: 'regexExtract', pattern: 'SKU-(\\d+)', group: 1 }])).toBe('12345');
+  });
+
+  test('regexExtract with no match returns an empty string', () => {
+    expect(applyTransformsPreview('no digits here', [{ kind: 'regexExtract', pattern: '\\d+', group: 0 }])).toBe('');
+  });
+
+  test('regexExtract with an invalid-for-JS pattern returns null', () => {
+    expect(applyTransformsPreview('anything', [{ kind: 'regexExtract', pattern: '(unclosed', group: 0 }])).toBeNull();
+  });
+
+  test('replace replaces every occurrence', () => {
+    expect(applyTransformsPreview('a-b-c', [{ kind: 'replace', find: '-', replacement: '_' }])).toBe('a_b_c');
+  });
+
+  test('toNumber normalizes a comma-decimal price', () => {
+    expect(toNumberPreview('Preis: 12,99 €')).toBe('12.99');
+  });
+
+  test('toNumber normalizes a dot-decimal price', () => {
+    expect(toNumberPreview('12.99')).toBe('12.99');
+  });
+
+  test('toNumber strips thousands separators', () => {
+    expect(toNumberPreview('1.234,56')).toBe('1234.56');
+  });
+
+  test('toNumber returns an empty string when nothing numeric is found', () => {
+    expect(toNumberPreview('no number here')).toBe('');
+  });
+
+  test('a chained trim -> regexExtract -> toNumber pipeline', () => {
+    const transforms = [
+      { kind: 'trim' },
+      { kind: 'regexExtract', pattern: '[\\d,]+', group: 0 },
+      { kind: 'toNumber' },
+    ];
+    expect(applyTransformsPreview('  Preis: 12,99 €  ', transforms)).toBe('12.99');
+  });
 });
 
 describe('formatGroupNodeLabel', () => {
@@ -805,6 +960,29 @@ describe('resolveApiTreeNode / insertApiTreeNode / removeApiTreeNode', () => {
   });
 });
 
+// Issue #84 follow-up: buildApiFieldDraft carries an optional transform
+// chain, mirroring Container-Mode's own buildFieldNode default.
+describe('buildApiFieldDraft transforms', () => {
+  test('defaults to null when no transforms are given', () => {
+    expect(buildApiFieldDraft('Preis', 'price')).toEqual({ kind: 'field', name: 'Preis', path: 'price', transforms: null });
+  });
+
+  test('carries an explicit transform chain', () => {
+    const transforms = [{ kind: 'trim' }, { kind: 'toNumber' }];
+    expect(buildApiFieldDraft('Preis', 'price', transforms)).toEqual({ kind: 'field', name: 'Preis', path: 'price', transforms });
+  });
+
+  // Issue #147: sampleValue is the popup-internal raw value the
+  // transform-chain modal's live preview runs against later.
+  test('sampleValue defaults to undefined when not given', () => {
+    expect(buildApiFieldDraft('Preis', 'price').sampleValue).toBeUndefined();
+  });
+
+  test('carries an explicit sampleValue', () => {
+    expect(buildApiFieldDraft('Preis', 'price', null, '12,99 €').sampleValue).toBe('12,99 €');
+  });
+});
+
 describe('serializeApiTree', () => {
   test('strips internal `kind` and shapes group/field nodes for the wire, round-tripping a 3-level tree', () => {
     const groups = [
@@ -851,6 +1029,23 @@ describe('serializeApiTree', () => {
   test('a field node never has a `children` key', () => {
     const groups = [{ kind: 'field', name: 'Titel', path: 'title' }];
     expect(serializeApiTree(groups)[0]).not.toHaveProperty('children');
+  });
+
+  // Issue #84 follow-up: same "omit rather than send an empty/null key"
+  // convention Container-Mode's own serializeGroupTree already uses.
+  test('a field with a non-empty transform chain includes it on the wire', () => {
+    const groups = [{ kind: 'field', name: 'Preis', path: 'price', transforms: [{ kind: 'trim' }, { kind: 'toNumber' }] }];
+    expect(serializeApiTree(groups)[0].transforms).toEqual([{ kind: 'trim' }, { kind: 'toNumber' }]);
+  });
+
+  test('a field with a null or empty transform chain omits the key entirely', () => {
+    const groups = [
+      { kind: 'field', name: 'A', path: 'a', transforms: null },
+      { kind: 'field', name: 'B', path: 'b', transforms: [] },
+    ];
+    const result = serializeApiTree(groups);
+    expect(result[0]).not.toHaveProperty('transforms');
+    expect(result[1]).not.toHaveProperty('transforms');
   });
 });
 
@@ -942,7 +1137,7 @@ describe('buildApiSubtreeFromCandidate (Phase A5)', () => {
   test('a single-level match (skipSegments 0) becomes one auto-named group wrapping the named field', () => {
     const oneLevel = { path: 'data.items[0].name', treeSkeleton: [{ kind: 'group', path: 'data.items' }, { kind: 'field', path: 'name' }] };
     expect(buildApiSubtreeFromCandidate(oneLevel, 'Titel', [])).toEqual([
-      { kind: 'group', name: 'items', path: 'data.items', children: [{ kind: 'field', name: 'Titel', path: 'name' }] },
+      { kind: 'group', name: 'items', path: 'data.items', children: [{ kind: 'field', name: 'Titel', path: 'name', transforms: null }] },
     ]);
   });
 
@@ -954,7 +1149,7 @@ describe('buildApiSubtreeFromCandidate (Phase A5)', () => {
         kind: 'group', name: 'subcategories', path: 'subcategories',
         children: [{
           kind: 'group', name: 'products', path: 'products',
-          children: [{ kind: 'field', name: 'Titel', path: 'title' }],
+          children: [{ kind: 'field', name: 'Titel', path: 'title', transforms: null }],
         }],
       }],
     });
@@ -964,24 +1159,52 @@ describe('buildApiSubtreeFromCandidate (Phase A5)', () => {
     const oneLevel = { path: 'data.items[0].name', treeSkeleton: [{ kind: 'group', path: 'data.items' }, { kind: 'field', path: 'name' }] };
     const [root] = buildApiSubtreeFromCandidate(oneLevel, 'Titel', ['price', 'unit']);
     expect(root.children).toEqual([
-      { kind: 'field', name: 'Titel', path: 'name' },
-      { kind: 'field', name: 'price', path: 'price' },
-      { kind: 'field', name: 'unit', path: 'unit' },
+      { kind: 'field', name: 'Titel', path: 'name', transforms: null },
+      { kind: 'field', name: 'price', path: 'price', transforms: null },
+      { kind: 'field', name: 'unit', path: 'unit', transforms: null },
     ]);
+  });
+
+  // Issue #147: the leaf field's own sampleValue comes from candidate.value;
+  // each picked sibling's sampleValue is looked up by name in
+  // candidate.siblings (content-script.js's siblingFields shape).
+  test('the leaf field and picked siblings carry their own sampleValue from the candidate', () => {
+    const oneLevel = {
+      path: 'data.items[0].name', value: 'Smartphone X',
+      treeSkeleton: [{ kind: 'group', path: 'data.items' }, { kind: 'field', path: 'name' }],
+      siblings: [{ name: 'price', path: 'price', value: 499 }, { name: 'unit', path: 'unit', value: null }],
+    };
+    const [root] = buildApiSubtreeFromCandidate(oneLevel, 'Titel', ['price', 'unit']);
+    expect(root.children.map(c => c.sampleValue)).toEqual(['Smartphone X', 499, null]);
+  });
+
+  test('a sibling name with no matching candidate.siblings entry gets an undefined sampleValue', () => {
+    const oneLevel = {
+      path: 'data.items[0].name', value: 'Smartphone X',
+      treeSkeleton: [{ kind: 'group', path: 'data.items' }, { kind: 'field', path: 'name' }],
+      siblings: [],
+    };
+    const [root] = buildApiSubtreeFromCandidate(oneLevel, 'Titel', ['price']);
+    expect(root.children[1].sampleValue).toBeUndefined();
+  });
+
+  test('a candidate with no siblings array at all (older fixture shape) does not throw', () => {
+    const oneLevel = { path: 'data.items[0].name', treeSkeleton: [{ kind: 'group', path: 'data.items' }, { kind: 'field', path: 'name' }] };
+    expect(() => buildApiSubtreeFromCandidate(oneLevel, 'Titel', ['price'])).not.toThrow();
   });
 
   // skipSegments (Phase A5's "add sub-field"/"add root group" reuse): the
   // target group's own tree depth's worth of leading skeleton segments are
   // already represented by existing ancestors — see resolveApiGroupScopePath.
   test('skipSegments strips already-represented ancestor levels — a sibling field at the innermost scope needs no new group at all', () => {
-    expect(buildApiSubtreeFromCandidate(deepCandidate, 'Titel', [], 3)).toEqual([{ kind: 'field', name: 'Titel', path: 'title' }]);
+    expect(buildApiSubtreeFromCandidate(deepCandidate, 'Titel', [], 3)).toEqual([{ kind: 'field', name: 'Titel', path: 'title', transforms: null }]);
   });
 
   test('skipSegments partway through still nests the remaining levels', () => {
     const [node] = buildApiSubtreeFromCandidate(deepCandidate, 'Titel', [], 1);
     expect(node).toEqual({
       kind: 'group', name: 'subcategories', path: 'subcategories',
-      children: [{ kind: 'group', name: 'products', path: 'products', children: [{ kind: 'field', name: 'Titel', path: 'title' }] }],
+      children: [{ kind: 'group', name: 'products', path: 'products', children: [{ kind: 'field', name: 'Titel', path: 'title', transforms: null }] }],
     });
   });
 
@@ -3008,6 +3231,709 @@ describe('Container-Mode integration', () => {
     await flushMicrotasks();
 
     expect(document.querySelector('#group-tree-root .frame-badge')).toBeNull();
+  });
+});
+
+// ── Live selector match-count preview (Issue #85) ───────────────────────────
+// Same DOM-mocking pattern as "Container-Mode integration" above, plus the
+// match-count hint elements and the toast markup (container-group creation
+// has no modal of its own, so its feedback goes through showToast instead).
+
+describe('Live selector match-count preview (Issue #85)', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div class="mode-toggle">
+          <button id="btn-mode-flat" class="mode-btn active"></button>
+          <button id="btn-mode-container" class="mode-btn"></button>
+        </div>
+        <div id="flat-mode-section">
+          <div id="fields-list"></div>
+          <button id="btn-add-field"></button>
+        </div>
+        <div id="container-mode-section" class="hidden">
+          <ul id="group-tree-root"></ul>
+          <button id="btn-add-root-container"></button>
+        </div>
+        <button id="btn-generate" disabled></button>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <input type="checkbox" id="toggle-dom-view" />
+        <div id="dom-tree-wrapper" class="hidden">
+          <p id="dom-tree-loading"></p>
+          <p id="dom-tree-error" class="hidden"></p>
+          <p id="dom-tree-truncated" class="hidden"></p>
+          <ul id="dom-tree-root"></ul>
+        </div>
+        <button id="btn-cancel-selection"></button>
+      </section>
+      <div id="modal-field-name" class="hidden">
+        <input id="input-field-name" />
+        <p id="field-name-match-count" class="match-count-hint hidden"></p>
+        <button id="btn-field-confirm"></button>
+        <button id="btn-field-cancel"></button>
+      </div>
+      <div id="modal-container-new" class="hidden">
+        <input id="input-container-name" />
+        <input type="radio" name="container-type" id="radio-container-single" checked />
+        <input type="radio" name="container-type" id="radio-container-repeating" />
+        <button id="btn-container-confirm"></button>
+        <button id="btn-container-cancel"></button>
+      </div>
+      <div id="modal-field-extended" class="hidden">
+        <input id="input-field-extended-name" />
+        <select id="select-field-mode">
+          <option value="text">Text</option>
+          <option value="attribute">Attribute</option>
+          <option value="exists">Exists</option>
+        </select>
+        <div id="field-attribute-row" class="hidden">
+          <input id="input-field-attribute" />
+        </div>
+        <p id="field-extended-match-count" class="match-count-hint hidden"></p>
+        <button id="btn-field-extended-confirm"></button>
+        <button id="btn-field-extended-cancel"></button>
+      </div>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({}),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+  });
+
+  test('a flat field pick shows the match count next to the name input', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item', matchCount: 12 });
+
+    const hint = document.getElementById('field-name-match-count');
+    expect(hint.classList.contains('hidden')).toBe(false);
+    expect(hint.textContent).toBe('12 Element(e) gefunden');
+    expect(hint.classList.contains('warn')).toBe(false);
+  });
+
+  test('a flat field pick matching nothing shows the hint with warn styling', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.does-not-exist', matchCount: 0 });
+
+    const hint = document.getElementById('field-name-match-count');
+    expect(hint.classList.contains('hidden')).toBe(false);
+    expect(hint.textContent).toBe('0 Element(e) gefunden');
+    expect(hint.classList.contains('warn')).toBe(true);
+  });
+
+  test('a pick with no matchCount (content script could not compute it) keeps the hint hidden', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' }); // no matchCount field at all
+
+    expect(document.getElementById('field-name-match-count').classList.contains('hidden')).toBe(true);
+  });
+
+  test('a container field pick shows the match count in the extended modal', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category', matchCount: 4 });
+    await flushMicrotasks();
+    chrome.runtime.sendMessage.mockClear();
+
+    document.querySelector('.btn-add-subfield').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'h2.category-title', matchCount: 1 });
+    await flushMicrotasks();
+
+    const hint = document.getElementById('field-extended-match-count');
+    expect(hint.classList.contains('hidden')).toBe(false);
+    expect(hint.textContent).toBe('1 Element(e) gefunden');
+  });
+
+  test('creating a root container shows a match-count toast instead (no confirmation modal for containers)', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category', matchCount: 7 });
+    await flushMicrotasks();
+
+    const toast = document.getElementById('error-toast');
+    expect(toast.classList.contains('hidden')).toBe(false);
+    expect(toast.classList.contains('toast-info')).toBe(true);
+    expect(toast.classList.contains('toast-warn')).toBe(false);
+    expect(document.getElementById('error-toast-message').textContent)
+      .toBe('Container „Vorspeisen“ hinzugefügt — 7 Element(e) gefunden');
+    // Insertion itself is unaffected by the toast — same "no extra modal" flow as before.
+    expect(document.querySelector('#group-tree-root .group-tree-row').textContent).toContain('Vorspeisen');
+  });
+
+  test('creating a root container whose selector matches nothing shows the toast in its warn variant', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Leer';
+    document.getElementById('btn-container-confirm').click();
+
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.does-not-exist', matchCount: 0 });
+    await flushMicrotasks();
+
+    const toast = document.getElementById('error-toast');
+    expect(toast.classList.contains('toast-warn')).toBe(true);
+    expect(toast.classList.contains('toast-info')).toBe(false);
+    expect(document.getElementById('error-toast-message').textContent)
+      .toBe('Container „Leer“ hinzugefügt — 0 Element(e) gefunden');
+  });
+
+  test('creating a root container with no matchCount at all shows no toast', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' }); // no matchCount field
+    await flushMicrotasks();
+
+    expect(document.getElementById('error-toast').classList.contains('hidden')).toBe(true);
+  });
+});
+
+// ── Field transform-chain editor (Issue #84) ────────────────────────────────
+// Same DOM-mocking pattern as "Live selector match-count preview" above, plus
+// the transform-list/add-button markup in both field modals.
+
+describe('Field transform-chain editor (Issue #84)', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div class="mode-toggle">
+          <button id="btn-mode-flat" class="mode-btn active"></button>
+          <button id="btn-mode-container" class="mode-btn"></button>
+        </div>
+        <div id="flat-mode-section">
+          <div id="fields-list"></div>
+          <button id="btn-add-field"></button>
+        </div>
+        <div id="container-mode-section" class="hidden">
+          <ul id="group-tree-root"></ul>
+          <button id="btn-add-root-container"></button>
+        </div>
+        <button id="btn-generate" disabled></button>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <input type="checkbox" id="toggle-dom-view" />
+        <div id="dom-tree-wrapper" class="hidden">
+          <p id="dom-tree-loading"></p>
+          <p id="dom-tree-error" class="hidden"></p>
+          <p id="dom-tree-truncated" class="hidden"></p>
+          <ul id="dom-tree-root"></ul>
+        </div>
+        <button id="btn-cancel-selection"></button>
+      </section>
+      <div id="modal-field-name" class="hidden">
+        <input id="input-field-name" />
+        <p id="field-name-match-count" class="match-count-hint hidden"></p>
+        <div class="field-transforms-section">
+          <ul id="field-transform-list"></ul>
+          <button type="button" id="btn-field-transform-add"></button>
+          <p id="field-transform-preview" class="transform-preview hidden"></p>
+        </div>
+        <button id="btn-field-confirm"></button>
+        <button id="btn-field-cancel"></button>
+      </div>
+      <div id="modal-container-new" class="hidden">
+        <input id="input-container-name" />
+        <input type="radio" name="container-type" id="radio-container-single" checked />
+        <input type="radio" name="container-type" id="radio-container-repeating" />
+        <button id="btn-container-confirm"></button>
+        <button id="btn-container-cancel"></button>
+      </div>
+      <div id="modal-field-extended" class="hidden">
+        <input id="input-field-extended-name" />
+        <select id="select-field-mode">
+          <option value="text">Text</option>
+          <option value="attribute">Attribute</option>
+          <option value="exists">Exists</option>
+        </select>
+        <div id="field-attribute-row" class="hidden">
+          <input id="input-field-attribute" />
+        </div>
+        <p id="field-extended-match-count" class="match-count-hint hidden"></p>
+        <div id="field-extended-transforms-section" class="field-transforms-section">
+          <ul id="field-extended-transform-list"></ul>
+          <button type="button" id="btn-field-extended-transform-add"></button>
+          <p id="field-extended-transform-preview" class="transform-preview hidden"></p>
+        </div>
+        <button id="btn-field-extended-confirm"></button>
+        <button id="btn-field-extended-cancel"></button>
+      </div>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({}),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+  });
+
+  test('the flat field modal starts with no transform rows', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+
+    expect(document.querySelectorAll('#field-transform-list .transform-row')).toHaveLength(0);
+  });
+
+  test('"+ Transformation" adds a default trim row', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+
+    document.getElementById('btn-field-transform-add').click();
+
+    const rows = document.querySelectorAll('#field-transform-list .transform-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].querySelector('.transform-kind-select').value).toBe('trim');
+    // trim has no parameters — no pattern/find/replacement inputs rendered.
+    expect(rows[0].querySelector('.transform-pattern-input')).toBeNull();
+  });
+
+  test('changing kind to regexExtract reveals pattern/group inputs', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+    document.getElementById('btn-field-transform-add').click();
+
+    const select = document.querySelector('#field-transform-list .transform-kind-select');
+    select.value = 'regexExtract';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const row = document.querySelector('#field-transform-list .transform-row');
+    expect(row.querySelector('.transform-pattern-input')).not.toBeNull();
+    expect(row.querySelector('.transform-group-input').value).toBe('0');
+  });
+
+  test('editing the pattern input updates state and survives a re-render', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+    document.getElementById('btn-field-transform-add').click();
+    const select = document.querySelector('#field-transform-list .transform-kind-select');
+    select.value = 'regexExtract';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const patternInput = document.querySelector('#field-transform-list .transform-pattern-input');
+    patternInput.value = '\\d+';
+    patternInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(document.querySelector('#field-transform-list .transform-pattern-input').value).toBe('\\d+');
+  });
+
+  // Regression: render()'s modal-open block resets the name input/mode select
+  // to their defaults on every render — editing a transform row goes through
+  // patchState (a full re-render) the same way any other state change does,
+  // so without lastFieldModalSelector's "only reset on a genuinely new pick"
+  // guard, every transform edit would silently wipe the field name the user
+  // already typed.
+  test('editing a transform row does not reset the already-typed field name', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+    document.getElementById('input-field-name').value = 'Preis';
+    document.getElementById('btn-field-transform-add').click();
+
+    expect(document.getElementById('input-field-name').value).toBe('Preis');
+  });
+
+  test('remove button deletes only that row', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+    document.getElementById('btn-field-transform-add').click();
+    document.getElementById('btn-field-transform-add').click();
+
+    document.querySelectorAll('#field-transform-list .btn-transform-remove')[0].click();
+
+    expect(document.querySelectorAll('#field-transform-list .transform-row')).toHaveLength(1);
+  });
+
+  test('move-down then move-up round-trips the order', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+    document.getElementById('btn-field-transform-add').click(); // trim
+    const firstSelect = document.querySelector('#field-transform-list .transform-row').querySelector('.transform-kind-select');
+    firstSelect.value = 'toNumber';
+    firstSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('btn-field-transform-add').click(); // trim (second row)
+
+    document.querySelector('#field-transform-list .btn-transform-move-down').click();
+    let kinds = [...document.querySelectorAll('#field-transform-list .transform-kind-select')].map(s => s.value);
+    expect(kinds).toEqual(['trim', 'toNumber']);
+
+    document.querySelectorAll('#field-transform-list .btn-transform-move-up')[1].click();
+    kinds = [...document.querySelectorAll('#field-transform-list .transform-kind-select')].map(s => s.value);
+    expect(kinds).toEqual(['toNumber', 'trim']);
+  });
+
+  test('confirming a flat field with a valid transform chain includes it on the wire-shaped field object', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price' });
+    document.getElementById('input-field-name').value = 'Preis';
+    document.getElementById('btn-field-transform-add').click();
+    document.getElementById('btn-field-confirm').click();
+
+    const fieldRow = document.querySelector('#fields-list .field-row');
+    expect(fieldRow.textContent).toContain('Preis');
+
+    // pendingTransforms itself was reset (even though the now-hidden modal's
+    // stale DOM isn't re-rendered until it's actually shown again) — the
+    // next pick starts from an empty chain, not a leftover one.
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.other' });
+    expect(document.querySelectorAll('#field-transform-list .transform-row')).toHaveLength(0);
+  });
+
+  test('confirming is blocked when a regexExtract step has a blank pattern', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price' });
+    document.getElementById('input-field-name').value = 'Preis';
+    document.getElementById('btn-field-transform-add').click();
+    const select = document.querySelector('#field-transform-list .transform-kind-select');
+    select.value = 'regexExtract';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    document.getElementById('btn-field-confirm').click();
+
+    // Still on the SELECTING screen / modal open — nothing was added.
+    expect(document.querySelectorAll('#fields-list .field-row')).toHaveLength(0);
+  });
+
+  test('cancelling clears the transform chain for the next pick', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price' });
+    document.getElementById('btn-field-transform-add').click();
+    document.getElementById('btn-field-cancel').click();
+
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.other' });
+    expect(document.querySelectorAll('#field-transform-list .transform-row')).toHaveLength(0);
+  });
+
+  test('the transforms section is hidden for "Vorhanden?" (exists) mode in container mode', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+    chrome.runtime.sendMessage.mockClear();
+
+    document.querySelector('.btn-add-subfield').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.vegan' });
+    await flushMicrotasks();
+
+    const modeSelect = document.getElementById('select-field-mode');
+    modeSelect.value = 'exists';
+    modeSelect.dispatchEvent(new Event('change'));
+
+    expect(document.getElementById('field-extended-transforms-section').classList.contains('hidden')).toBe(true);
+  });
+
+  test('confirming a container field with transforms carries them onto the serialized node', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+    chrome.runtime.sendMessage.mockClear();
+
+    document.querySelector('.btn-add-subfield').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price' });
+    await flushMicrotasks();
+
+    document.getElementById('input-field-extended-name').value = 'Preis';
+    document.getElementById('btn-field-extended-transform-add').click();
+    const select = document.querySelector('#field-extended-transform-list .transform-kind-select');
+    select.value = 'toNumber';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('btn-field-extended-confirm').click();
+
+    const rows = document.querySelectorAll('#group-tree-root .group-tree-row');
+    expect(rows[1].textContent).toContain('Preis');
+  });
+});
+
+// ── Transform-chain live preview (Issue #143) ───────────────────────────────
+// Same DOM-mocking pattern as "Field transform-chain editor" above, plus
+// rawText/attributes on the ELEMENT_SELECTED fixture messages.
+
+describe('Transform-chain live preview (Issue #143)', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div class="mode-toggle">
+          <button id="btn-mode-flat" class="mode-btn active"></button>
+          <button id="btn-mode-container" class="mode-btn"></button>
+        </div>
+        <div id="flat-mode-section">
+          <div id="fields-list"></div>
+          <button id="btn-add-field"></button>
+        </div>
+        <div id="container-mode-section" class="hidden">
+          <ul id="group-tree-root"></ul>
+          <button id="btn-add-root-container"></button>
+        </div>
+        <button id="btn-generate" disabled></button>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <input type="checkbox" id="toggle-dom-view" />
+        <div id="dom-tree-wrapper" class="hidden">
+          <p id="dom-tree-loading"></p>
+          <p id="dom-tree-error" class="hidden"></p>
+          <p id="dom-tree-truncated" class="hidden"></p>
+          <ul id="dom-tree-root"></ul>
+        </div>
+        <button id="btn-cancel-selection"></button>
+      </section>
+      <div id="modal-field-name" class="hidden">
+        <input id="input-field-name" />
+        <p id="field-name-match-count" class="match-count-hint hidden"></p>
+        <div class="field-transforms-section">
+          <ul id="field-transform-list"></ul>
+          <button type="button" id="btn-field-transform-add"></button>
+          <p id="field-transform-preview" class="transform-preview hidden"></p>
+        </div>
+        <button id="btn-field-confirm"></button>
+        <button id="btn-field-cancel"></button>
+      </div>
+      <div id="modal-container-new" class="hidden">
+        <input id="input-container-name" />
+        <input type="radio" name="container-type" id="radio-container-single" checked />
+        <input type="radio" name="container-type" id="radio-container-repeating" />
+        <button id="btn-container-confirm"></button>
+        <button id="btn-container-cancel"></button>
+      </div>
+      <div id="modal-field-extended" class="hidden">
+        <input id="input-field-extended-name" />
+        <select id="select-field-mode">
+          <option value="text">Text</option>
+          <option value="attribute">Attribute</option>
+          <option value="exists">Exists</option>
+        </select>
+        <div id="field-attribute-row" class="hidden">
+          <input id="input-field-attribute" />
+        </div>
+        <p id="field-extended-match-count" class="match-count-hint hidden"></p>
+        <div id="field-extended-transforms-section" class="field-transforms-section">
+          <ul id="field-extended-transform-list"></ul>
+          <button type="button" id="btn-field-extended-transform-add"></button>
+          <p id="field-extended-transform-preview" class="transform-preview hidden"></p>
+        </div>
+        <button id="btn-field-extended-confirm"></button>
+        <button id="btn-field-extended-cancel"></button>
+      </div>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({}),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+  });
+
+  test('no preview shown before any transform is added', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price', rawText: 'Preis: 12,99 €' });
+
+    const preview = document.getElementById('field-transform-preview');
+    expect(preview.classList.contains('hidden')).toBe(false);
+    expect(preview.textContent).toContain('Preis: 12,99 €');
+  });
+
+  test('flat mode preview updates live as transform steps are edited', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price', rawText: 'Preis: 12,99 €' });
+
+    document.getElementById('btn-field-transform-add').click(); // trim
+    const kindSelect = document.querySelector('#field-transform-list .transform-kind-select');
+    kindSelect.value = 'regexExtract';
+    kindSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    const patternInput = document.querySelector('#field-transform-list .transform-pattern-input');
+    patternInput.value = '[\\d,]+';
+    patternInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(document.getElementById('field-transform-preview').textContent).toContain('12,99');
+  });
+
+  test('flat mode preview flags an unmatched regex as an empty result', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price', rawText: 'Preis: 12,99 €' });
+
+    document.getElementById('btn-field-transform-add').click();
+    const kindSelect = document.querySelector('#field-transform-list .transform-kind-select');
+    kindSelect.value = 'regexExtract';
+    kindSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    const patternInput = document.querySelector('#field-transform-list .transform-pattern-input');
+    patternInput.value = 'nomatch\\d';
+    patternInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const preview = document.getElementById('field-transform-preview');
+    expect(preview.classList.contains('warn')).toBe(false);
+    expect(preview.textContent).not.toContain('12,99');
+  });
+
+  test('an invalid-for-JS regex pattern shows "preview unavailable"', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price', rawText: 'Preis: 12,99 €' });
+
+    document.getElementById('btn-field-transform-add').click();
+    const kindSelect = document.querySelector('#field-transform-list .transform-kind-select');
+    kindSelect.value = 'regexExtract';
+    kindSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    const patternInput = document.querySelector('#field-transform-list .transform-pattern-input');
+    patternInput.value = '(unclosed';
+    patternInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const preview = document.getElementById('field-transform-preview');
+    expect(preview.classList.contains('warn')).toBe(true);
+  });
+
+  test('container mode: text-mode preview uses the picked element\'s raw text', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+    chrome.runtime.sendMessage.mockClear();
+
+    document.querySelector('.btn-add-subfield').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price', rawText: 'Preis: 12,99 €' });
+    await flushMicrotasks();
+
+    document.getElementById('btn-field-extended-transform-add').click();
+
+    expect(document.getElementById('field-extended-transform-preview').textContent).toContain('Preis: 12,99 €');
+  });
+
+  test('container mode: attribute-mode preview is hidden until an attribute name is typed', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+    chrome.runtime.sendMessage.mockClear();
+
+    document.querySelector('.btn-add-subfield').click();
+    capturedListener({
+      type: 'ELEMENT_SELECTED', selector: 'a.link', rawText: 'Zum Produkt', attributes: { href: '/produkt/42' },
+    });
+    await flushMicrotasks();
+
+    const modeSelect = document.getElementById('select-field-mode');
+    modeSelect.value = 'attribute';
+    modeSelect.dispatchEvent(new Event('change'));
+
+    expect(document.getElementById('field-extended-transform-preview').classList.contains('hidden')).toBe(true);
+
+    document.getElementById('input-field-attribute').value = 'href';
+    document.getElementById('input-field-attribute').dispatchEvent(new Event('input', { bubbles: true }));
+
+    const preview = document.getElementById('field-extended-transform-preview');
+    expect(preview.classList.contains('hidden')).toBe(false);
+    expect(preview.textContent).toContain('/produkt/42');
+  });
+
+  test('container mode: "Vorhanden?" (exists) mode never shows a preview', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+    chrome.runtime.sendMessage.mockClear();
+
+    document.querySelector('.btn-add-subfield').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.vegan', rawText: 'Vegan' });
+    await flushMicrotasks();
+
+    const modeSelect = document.getElementById('select-field-mode');
+    modeSelect.value = 'exists';
+    modeSelect.dispatchEvent(new Event('change'));
+
+    expect(document.getElementById('field-extended-transform-preview').classList.contains('hidden')).toBe(true);
   });
 });
 
@@ -5164,6 +6090,231 @@ describe('API-tree wiring end-to-end (Issue #54, Phase A5)', () => {
 
     expect(document.getElementById('modal-api-group-new').classList.contains('hidden')).toBe(true);
     expect(document.querySelectorAll('[data-path="[0,0,0]"] .api-tree-children > .api-tree-node')).toHaveLength(1);
+  });
+});
+
+// ── API-mode field transforms (Issue #84 follow-up) ─────────────────────────
+// Same DOM-mocking pattern as "API-tree wiring end-to-end" above, trimmed to
+// what's needed to reach a confirmed one-field API tree, plus the new
+// "Transformieren" button/modal markup.
+
+describe('API-mode field transforms (Issue #84 follow-up)', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <button id="btn-add-field"></button>
+        <button id="btn-api-capture"></button>
+        <p id="api-capture-summary" class="hidden"></p>
+        <button id="btn-api-search" disabled></button>
+        <div id="api-candidates-panel" class="hidden">
+          <p id="api-candidates-target"></p>
+          <ul id="api-candidates-list"></ul>
+        </div>
+        <div id="api-config-panel" class="hidden">
+          <p id="api-config-summary"></p>
+          <button id="btn-api-config-discard"></button>
+        </div>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <button id="btn-cancel-selection"></button>
+      </section>
+      <section id="screen-api-config" class="hidden">
+        <ul id="api-tree-root"></ul>
+        <button id="btn-api-tree-add-root"></button>
+        <div id="api-tree-search-panel" class="hidden">
+          <p id="api-tree-search-target"></p>
+          <ul id="api-tree-search-list"></ul>
+        </div>
+        <ul id="api-config-segments"></ul>
+        <ul id="api-config-query-params"></ul>
+        <div id="api-config-parameters"></div>
+        <ul id="api-config-headers"></ul>
+        <button id="btn-api-config-cancel"></button>
+        <button id="btn-api-config-confirm" disabled></button>
+      </section>
+      <div id="modal-field-name" class="hidden">
+        <input id="input-field-name" />
+        <button id="btn-field-confirm"></button>
+        <button id="btn-field-cancel"></button>
+      </div>
+      <div id="modal-api-group-new" class="hidden">
+        <input id="input-api-group-name" />
+        <input id="input-api-group-path" />
+        <button id="btn-api-group-confirm"></button>
+        <button id="btn-api-group-cancel"></button>
+      </div>
+      <div id="modal-api-field-transforms" class="hidden">
+        <ul id="api-field-transform-list"></ul>
+        <button type="button" id="btn-api-field-transforms-add"></button>
+        <p id="api-field-transform-preview" class="transform-preview hidden"></p>
+        <button id="btn-api-field-transforms-confirm"></button>
+        <button id="btn-api-field-transforms-cancel"></button>
+      </div>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({ url: 'https://example.com' }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+
+    // Reach a confirmed one-field API tree (categories[*] → Titel).
+    document.getElementById('btn-api-capture').click();
+    capturedListener({ type: 'API_CAPTURE_ENTRY', entry: { id: 1, url: 'https://example.com/api/catalog' } });
+    document.getElementById('btn-api-capture').click();
+    document.getElementById('btn-api-search').click();
+    capturedListener({
+      type: 'API_CANDIDATES', target: 'Smartphone X',
+      candidates: [{
+        entryId: 1, url: 'https://example.com/api/catalog', method: 'GET',
+        path: 'categories[0].title', value: 'Smartphone X', siblings: [{ name: 'note', path: 'note', value: null }],
+        itemsPath: 'categories', valuePath: 'title',
+        treeSkeleton: [{ kind: 'group', path: 'categories' }, { kind: 'field', path: 'title' }],
+        requestHeaders: [],
+      }],
+    });
+    const nameInput = document.querySelector('.api-candidate-field-name');
+    nameInput.value = 'Titel';
+    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('.api-sibling-chip').click(); // picks "note" (sampleValue: null) too
+    document.querySelector('.api-candidate-confirm').click();
+  });
+
+  test('a field with no transforms shows the plain "Transformieren" label', () => {
+    const btn = document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms');
+    expect(btn.textContent).toBe('Transformieren');
+  });
+
+  test('clicking "Transformieren" opens the modal with an empty chain', () => {
+    document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms').click();
+
+    expect(document.getElementById('modal-api-field-transforms').classList.contains('hidden')).toBe(false);
+    expect(document.querySelectorAll('#api-field-transform-list .transform-row')).toHaveLength(0);
+  });
+
+  test('adding a step and confirming persists it onto the tree node and the button gets a count badge', () => {
+    document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms').click();
+    document.getElementById('btn-api-field-transforms-add').click();
+    const select = document.querySelector('#api-field-transform-list .transform-kind-select');
+    select.value = 'toNumber';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    document.getElementById('btn-api-field-transforms-confirm').click();
+
+    expect(document.getElementById('modal-api-field-transforms').classList.contains('hidden')).toBe(true);
+    const btn = document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms');
+    expect(btn.textContent).toBe('Transformieren (1)');
+  });
+
+  test('re-opening after confirming shows the previously saved chain', () => {
+    document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms').click();
+    document.getElementById('btn-api-field-transforms-add').click();
+    document.getElementById('btn-api-field-transforms-confirm').click();
+
+    document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms').click();
+
+    expect(document.querySelectorAll('#api-field-transform-list .transform-row')).toHaveLength(1);
+  });
+
+  test('cancelling discards the in-progress edit', () => {
+    document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms').click();
+    document.getElementById('btn-api-field-transforms-add').click();
+    document.getElementById('btn-api-field-transforms-cancel').click();
+
+    expect(document.getElementById('modal-api-field-transforms').classList.contains('hidden')).toBe(true);
+    const btn = document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms');
+    expect(btn.textContent).toBe('Transformieren');
+  });
+
+  test('confirming is blocked when a regexExtract step has a blank pattern', () => {
+    document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms').click();
+    document.getElementById('btn-api-field-transforms-add').click();
+    const select = document.querySelector('#api-field-transform-list .transform-kind-select');
+    select.value = 'regexExtract';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    document.getElementById('btn-api-field-transforms-confirm').click();
+
+    // Still open — nothing was persisted.
+    expect(document.getElementById('modal-api-field-transforms').classList.contains('hidden')).toBe(false);
+  });
+
+  test('a group node never gets a "Transformieren" button', () => {
+    // .api-tree-row is the group's own row (appended before its childUl
+    // sibling) — scoping the lookup to it, not the whole <li> subtree, which
+    // would also match the nested field's own button.
+    const groupRow = document.querySelector('[data-path="[0]"] .api-tree-row');
+    expect(groupRow.querySelector('.btn-api-field-transforms')).toBeNull();
+  });
+
+  // Issue #147: live preview against the field's own captured sampleValue.
+  describe('live preview (Issue #147)', () => {
+    test('opening the modal shows a preview against the candidate\'s own value, even with an empty chain', () => {
+      document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms').click();
+
+      const preview = document.getElementById('api-field-transform-preview');
+      expect(preview.classList.contains('hidden')).toBe(false);
+      expect(preview.textContent).toContain('Smartphone X');
+    });
+
+    test('the preview updates live as a transform step is added', () => {
+      document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms').click();
+      document.getElementById('btn-api-field-transforms-add').click();
+      const select = document.querySelector('#api-field-transform-list .transform-kind-select');
+      select.value = 'regexExtract';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      const patternInput = document.querySelector('#api-field-transform-list .transform-pattern-input');
+      patternInput.value = 'phone';
+      patternInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+      expect(document.getElementById('api-field-transform-preview').textContent).toContain('phone');
+    });
+
+    // The "note" sibling was picked with sampleValue: null (see beforeEach) —
+    // a real JSON null, which the runtime turns into an empty string
+    // (scraper_api.py.j2's "value is None" check) rather than hiding the field.
+    test('a field whose sample value is JSON null shows an empty-result preview, not a hidden one', () => {
+      document.querySelector('[data-path="[0,1]"] .btn-api-field-transforms').click();
+
+      const preview = document.getElementById('api-field-transform-preview');
+      expect(preview.classList.contains('hidden')).toBe(false);
+      expect(preview.textContent).not.toContain('Smartphone X');
+    });
+
+    test('closing the modal (confirm or cancel) resets the preview for the next field opened', () => {
+      document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms').click();
+      document.getElementById('btn-api-field-transforms-cancel').click();
+
+      document.querySelector('[data-path="[0,1]"] .btn-api-field-transforms').click();
+
+      // The "note" field's own (null) sample, not a leftover "Smartphone X".
+      expect(document.getElementById('api-field-transform-preview').textContent).not.toContain('Smartphone X');
+    });
   });
 });
 

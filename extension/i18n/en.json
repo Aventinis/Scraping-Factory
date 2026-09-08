@@ -148,7 +148,24 @@
     "addSubgroupBtn": "+ Group",
     "addSubfieldBtn": "+ Data field",
     "addRootGroupBtn": "+ New group (top level)",
-    "defaultGroupName": "Group"
+    "defaultGroupName": "Group",
+    "transformsBtn": "Transform",
+    "transformsBtnCount": "Transform ({count})"
+  },
+  "transforms": {
+    "sectionLabel": "Transformations (optional)",
+    "addBtn": "+ Transformation",
+    "trimOption": "Trim (remove whitespace)",
+    "regexExtractOption": "Regex extract",
+    "replaceOption": "Find/replace",
+    "toNumberOption": "Convert to number",
+    "patternPlaceholder": "Regex pattern (e.g. \"\\d+\")",
+    "groupPlaceholder": "Group (0 = whole match)",
+    "findPlaceholder": "Find",
+    "replacementPlaceholder": "Replace with",
+    "previewLabel": "Preview: {value}",
+    "previewEmptyValue": "(empty)",
+    "previewUnavailable": "Preview unavailable (invalid pattern)"
   },
   "generating": {
     "message": "Generating script…"
@@ -194,6 +211,9 @@
     "apiBodyParameterNew": {
       "nameLabel": "Parameter name (e.g. \"category\")",
       "namePlaceholder": "Name"
+    },
+    "matchCount": {
+      "found": "{count} element(s) found"
     }
   },
   "toast": {
@@ -203,7 +223,8 @@
     "selectionUnavailable": "Element selection isn't possible on this page.",
     "previewUnavailable": "Preview isn't possible on this page.",
     "captureUnavailable": "Network recording isn't possible on this page.",
-    "invalidCompanionUrl": "Invalid address — please include http:// or https://."
+    "invalidCompanionUrl": "Invalid address — please include http:// or https://.",
+    "containerAdded": "Container \"{name}\" added — {count} element(s) found"
   },
   "frame": {
     "badge": "iframe",
