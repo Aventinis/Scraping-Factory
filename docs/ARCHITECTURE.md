@@ -507,6 +507,21 @@ shapes (flat/container/API) since none of them share a common leaf type.
   documented ambiguity.
 - Live preview of the chain's output against the picked element's raw value
   is a deferred follow-up, not part of this feature (Issue #143).
+- **API mode follow-up:** the same editor is also reachable from the
+  `API_CONFIG` tree screen (§2.16), via a "Transformieren" button rendered
+  next to every leaf `ApiField` row in `popup/api-config-ui.js`'s
+  `buildApiTreeNodeEl` (never for a group node — only a leaf actually
+  extracts a value, matching `ApiGroup` having no `Transforms` property on
+  the companion side). Opens `modal-api-field-transforms`, reusing the exact
+  same `field-transforms.js`/`field-transforms-ui.js` editor and
+  `_state.pendingTransforms` slot the flat/container modals already use
+  (mutually exclusive screens, no conflict); confirming writes the chain
+  onto the `ApiField` draft node via `updateApiTreeNode`, and
+  `serializeApiTree` omits the key on the wire when the chain is empty
+  (mirroring `serializeGroupTree`'s own convention). No live preview here —
+  a tree field node carries no sample raw value once inserted into the tree,
+  only ever briefly available at candidate-confirm time; tracked separately
+  as Issue #147.
 
 ---
 
