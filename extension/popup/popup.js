@@ -743,6 +743,10 @@ function render() {
     if (_state.apiFieldTransformModalOpen) {
       show('modal-api-field-transforms');
       renderTransformList('api-field-transform-list', _state.pendingTransforms);
+      // Issue #147: live preview against the node's own sampleValue, threaded
+      // through as pendingRawText by openApiFieldTransformsModal — reuses the
+      // same renderTransformPreview flat mode's own preview already calls.
+      renderTransformPreview('api-field-transform-preview', _state.pendingRawText, _state.pendingTransforms);
     }
   }
 

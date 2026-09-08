@@ -337,8 +337,18 @@ const SFApiConfig = (function () {
   // #84) — null means "no chain configured", the same value the field-
   // transforms modal (see api-config-ui.js's openApiFieldTransformsModal)
   // resets it to when the chain is emptied back out.
-  function buildApiFieldDraft(name, path, transforms = null) {
-    return { kind: 'field', name, path, transforms };
+  //
+  // sampleValue (Issue #147): the raw JSON value this field resolved to at
+  // candidate-confirm time — popup-internal only, never sent to the
+  // companion (serializeApiTree below doesn't carry it over), it exists
+  // purely to drive the transform-chain modal's live preview the same way
+  // pendingRawText does for flat/container mode. undefined (not null) when
+  // no sample was ever available — e.g. a field added by hand via
+  // modal-api-group-new's sibling flows some day — so the preview can tell
+  // "no sample" apart from a real JSON `null` (which the runtime turns into
+  // an empty string, see scraper_api.py.j2's own "value is None" check).
+  function buildApiFieldDraft(name, path, transforms = null, sampleValue = undefined) {
+    return { kind: 'field', name, path, transforms, sampleValue };
   }
 
   function resolveApiTreeNode(groups, path) {
@@ -563,10 +573,17 @@ const SFApiConfig = (function () {
   // parentPath — one node if the click landed inside an already-represented
   // scope (the "sibling field" case), possibly several nested levels wrapped
   // in one outer node otherwise.
+  // Issue #147: candidate.value (the leaf) and each picked sibling's own
+  // .value (from candidate.siblings, see content-script.js's siblingFields)
+  // are carried onto the new field drafts as sampleValue — the raw JSON
+  // value the transform-chain modal's live preview runs against later.
   function buildApiSubtreeFromCandidate(candidate, fieldName, siblingNames, skipSegments = 0) {
     const skeleton = candidate.treeSkeleton.slice(skipSegments);
-    const leafField = buildApiFieldDraft(fieldName, skeleton[skeleton.length - 1].path);
-    const siblingDrafts = siblingNames.map(name => buildApiFieldDraft(name, name));
+    const leafField = buildApiFieldDraft(fieldName, skeleton[skeleton.length - 1].path, null, candidate.value);
+    const siblingDrafts = siblingNames.map((name) => {
+      const sibling = (candidate.siblings || []).find(s => s.name === name);
+      return buildApiFieldDraft(name, name, null, sibling ? sibling.value : undefined);
+    });
     const groupSegments = skeleton.slice(0, -1);
     return groupSegments.reduceRight((children, seg) => [
       { ...buildApiGroupDraft(lastPathSegmentName(seg.path) || t('apiTree.defaultGroupName'), seg.path), children },

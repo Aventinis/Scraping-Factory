@@ -505,8 +505,21 @@ shapes (flat/container/API) since none of them share a common leaf type.
   hand-duplicated `_apply_transforms`/`_to_number` runtime helper pair — see
   the Python Templates section of `CLAUDE.md` for the `_to_number` heuristic's
   documented ambiguity.
-- Live preview of the chain's output against the picked element's raw value
-  is a deferred follow-up, not part of this feature (Issue #143).
+- **Live preview** (Issue #143): a hint below the transform list in
+  `modal-field-name`/`modal-field-extended` shows what the chain actually
+  produces against the picked element's real raw value, updating live as
+  steps are added/edited/reordered/removed — entirely client-side, no
+  `/generate` round trip. `content-script.js`'s `onClick` collects the
+  clicked element's trimmed text and full attribute map
+  (`collectElementAttributes`), sent as `rawText`/`attributes` on the same
+  `ELEMENT_SELECTED` message the selector/matchCount already travel on;
+  `service-worker.js`'s session-storage fallback persists them as
+  `pendingRawText`/`pendingElementAttributes` alongside `pendingMatchCount`.
+  `field-transforms.js`'s `applyTransformsPreview`/`toNumberPreview` are a
+  hand-kept JS mirror of the Python runtime's own
+  `_apply_transforms`/`_to_number` — an invalid-for-JS regex pattern makes
+  the preview return `null` (rendered as "preview unavailable") instead of
+  throwing.
 - **API mode follow-up:** the same editor is also reachable from the
   `API_CONFIG` tree screen (§2.16), via a "Transformieren" button rendered
   next to every leaf `ApiField` row in `popup/api-config-ui.js`'s
@@ -518,10 +531,20 @@ shapes (flat/container/API) since none of them share a common leaf type.
   (mutually exclusive screens, no conflict); confirming writes the chain
   onto the `ApiField` draft node via `updateApiTreeNode`, and
   `serializeApiTree` omits the key on the wire when the chain is empty
-  (mirroring `serializeGroupTree`'s own convention). No live preview here —
-  a tree field node carries no sample raw value once inserted into the tree,
-  only ever briefly available at candidate-confirm time; tracked separately
-  as Issue #147.
+  (mirroring `serializeGroupTree`'s own convention).
+- **API mode live preview** (Issue #147): unlike a DOM pick, a tree field
+  node has no raw value to preview against once inserted — the only value
+  ever available is the one matched at candidate-confirm time.
+  `buildApiFieldDraft` (`api-config.js`) gained an optional `sampleValue`
+  (the raw JSON scalar the field/sibling resolved to — `candidate.value` for
+  the primary field, or the matching entry's own `.value` in
+  `candidate.siblings` for a picked sibling, see `content-script.js`'s
+  `siblingFields`) — popup-internal only, never sent to the companion.
+  `openApiFieldTransformsModal` converts it into `pendingRawText` the same
+  way the Python runtime resolves a value before applying transforms (`""`
+  for a real JSON `null`, `undefined`/no-sample maps to `null` so the
+  preview stays hidden) and reuses the exact same `renderTransformPreview`
+  call flat mode's own modal already makes.
 
 ---
 
