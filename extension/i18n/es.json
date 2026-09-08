@@ -148,7 +148,9 @@
     "addSubgroupBtn": "+ Grupo",
     "addSubfieldBtn": "+ Campo de datos",
     "addRootGroupBtn": "+ Nuevo grupo (nivel superior)",
-    "defaultGroupName": "Grupo"
+    "defaultGroupName": "Grupo",
+    "transformsBtn": "Transformar",
+    "transformsBtnCount": "Transformar ({count})"
   },
   "transforms": {
     "sectionLabel": "Transformaciones (opcional)",

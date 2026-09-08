@@ -333,8 +333,12 @@ const SFApiConfig = (function () {
     return { kind: 'group', name, path, children: [] };
   }
 
-  function buildApiFieldDraft(name, path) {
-    return { kind: 'field', name, path };
+  // transforms mirrors Container-Mode's own buildFieldNode default (Issue
+  // #84) — null means "no chain configured", the same value the field-
+  // transforms modal (see api-config-ui.js's openApiFieldTransformsModal)
+  // resets it to when the chain is emptied back out.
+  function buildApiFieldDraft(name, path, transforms = null) {
+    return { kind: 'field', name, path, transforms };
   }
 
   function resolveApiTreeNode(groups, path) {
@@ -365,11 +369,16 @@ const SFApiConfig = (function () {
   // the wire format the companion expects (IR/ApiConfig.cs's
   // ApiGroup/ApiField, discriminated structurally by ApiNodeJsonConverter via
   // presence of `children` — see PythonApiConfigLiteral.RenderGroups on the
-  // codegen side for the same discriminator).
+  // codegen side for the same discriminator). transforms (Issue #84) is only
+  // included when non-empty, the same "omit rather than send an empty/null
+  // key" convention Container-Mode's own serializeGroupTree already uses.
   function serializeApiTree(groups) {
-    return groups.map(node => node.kind === 'group'
+    return groups.map(node => (node.kind === 'group'
       ? { name: node.name, path: node.path, children: serializeApiTree(node.children) }
-      : { name: node.name, path: node.path });
+      : {
+          name: node.name, path: node.path,
+          ...(node.transforms && node.transforms.length > 0 ? { transforms: node.transforms } : {}),
+        }));
   }
 
   // The idle screen's "API-Konfiguration bereit: N Feld(er), …" summary wants

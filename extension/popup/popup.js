@@ -41,6 +41,7 @@ const {
   startApiFieldSearch, confirmApiFieldCandidate, loadInitialBodyTreeForCandidate, cancelApiConfig,
   startApiTreeFieldSearch, confirmApiTreeFieldCandidate,
   openApiGroupModal, confirmApiGroupModal, cancelApiGroupModal, setApiTreeNodeName,
+  openApiFieldTransformsModal, confirmApiFieldTransformsModal, cancelApiFieldTransformsModal,
   startDiscoverySearch, confirmDiscoveryCandidate,
   toggleApiConfigPartVariable, setApiConfigPartName, setApiConfigSourceKind,
   patchApiConfigSource, setApiConfigHeaderDecision,
@@ -178,6 +179,14 @@ let _state = {
   // apiGroupModalOpen above (Issue #55, Phase B4).
   bodyParameterModalOpen: false,
   pendingBodyVariablePath: null,
+  // modal-api-field-transforms visibility, and which tree path's chain is
+  // being edited — same "not persisted, no content-script round trip"
+  // reasoning as apiGroupModalOpen/bodyParameterModalOpen above (Issue #84
+  // follow-up). The chain itself reuses pendingTransforms, the same slot
+  // flat/container mode's own field modals already use — API_CONFIG and
+  // those two modals are never open at once.
+  apiFieldTransformModalOpen: false,
+  pendingApiFieldTransformPath: null,
   apiConfigDraft:     null, // set once a candidate is confirmed as the primary field — the in-progress ApiConfig being built, see buildApiConfig/confirmApiFieldCandidate
   apiConfig:          null, // the "Apply"-confirmed ApiConfig wire object — Phase 6 will read this; persisted like fields/groups
   robotsTxtChecking: false, // not persisted, always off on popup reopen (like previewActive/apiCaptureActive)
@@ -512,6 +521,7 @@ function render() {
   hide('modal-container-new');
   hide('modal-api-group-new');
   hide('modal-api-body-parameter-new');
+  hide('modal-api-field-transforms');
 
   const screenKey = {
     [STATES.CHECKING_COMPANION]: 'checking',
@@ -728,6 +738,11 @@ function render() {
       show('modal-api-body-parameter-new');
       const nameInput = document.getElementById('input-api-body-parameter-name');
       if (nameInput) { nameInput.value = ''; nameInput.focus(); }
+    }
+
+    if (_state.apiFieldTransformModalOpen) {
+      show('modal-api-field-transforms');
+      renderTransformList('api-field-transform-list', _state.pendingTransforms);
     }
   }
 
@@ -1680,6 +1695,7 @@ function wireEvents() {
 
     if (e.target.closest('.btn-add-api-subgroup')) { openApiGroupModal(bridge, path); return; }
     if (e.target.closest('.btn-add-api-subfield')) { startApiTreeFieldSearch(bridge, path); return; }
+    if (e.target.closest('.btn-api-field-transforms')) { openApiFieldTransformsModal(bridge, path); return; }
     if (e.target.closest('.btn-remove-api-node')) {
       log('API_TREE_NODE_REMOVE', { path });
       setState(_state.current, { apiConfigDraft: { ..._state.apiConfigDraft, groups: removeApiTreeNode(_state.apiConfigDraft.groups, path) } });
@@ -1696,6 +1712,20 @@ function wireEvents() {
     if (e.key === 'Enter') confirmApiGroupModal(bridge);
   });
   document.getElementById('btn-api-group-cancel')?.addEventListener('click', () => cancelApiGroupModal(bridge));
+
+  // Issue #84 follow-up: API-mode field transforms modal — reuses the same
+  // transform-chain editor (field-transforms.js/field-transforms-ui.js) the
+  // flat/container field modals already wire up above.
+  document.getElementById('btn-api-field-transforms-add')?.addEventListener('click', () => {
+    patchState({ pendingTransforms: addTransform(_state.pendingTransforms) });
+  });
+  wireTransformList(
+    'api-field-transform-list',
+    () => _state.pendingTransforms,
+    (transforms) => patchState({ pendingTransforms: transforms }),
+  );
+  document.getElementById('btn-api-field-transforms-confirm')?.addEventListener('click', () => confirmApiFieldTransformsModal(bridge));
+  document.getElementById('btn-api-field-transforms-cancel')?.addEventListener('click', () => cancelApiFieldTransformsModal(bridge));
 
   // ── API-Mode config screen (Issue #53 Phase 5) ─────────────────────────────
   // Delegated `change` listeners (not `input`) so typing in a text field
