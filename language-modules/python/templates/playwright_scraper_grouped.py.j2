@@ -5,6 +5,7 @@
 # Gruppen: {{ for name in root_names }}{{ name }}{{ if !for.last }}, {{ end }}{{ end }}
 # Run:    python {{ script_filename }}.py
 
+import re
 {{~ if needs_os_import ~}}
 import os
 {{~ end ~}}
@@ -14,6 +15,65 @@ from playwright.sync_api import sync_playwright
 URL = "{{ url }}"
 
 GROUPS = {{ groups_literal }}
+
+
+# Issue #84: best-effort numeric normalization for a "toNumber" transform —
+# finds the first numeric-looking substring and normalizes its decimal
+# separator to '.', stripping thousands separators/currency symbols. When
+# both '.' and ',' appear, the rightmost one is treated as the decimal point
+# (handles both "1.234,56" and "1,234.56"); a single separator appearing more
+# than once is treated as a thousands separator and stripped; a single
+# separator appearing exactly once is treated as the decimal point (so
+# "12,99"/"12.99" both work, at the cost of a genuinely ambiguous
+# single-occurrence case like "1.234" always being read as 1.234, never as
+# 1234 — chain a regex-extract transform first if that's not what's wanted).
+# Empty string if nothing numeric is found.
+def _to_number(value):
+    match = re.search(r"-?\d[\d.,]*", value)
+    if not match:
+        return ""
+    raw = match.group(0)
+    last_dot = raw.rfind(".")
+    last_comma = raw.rfind(",")
+    if last_dot != -1 and last_comma != -1:
+        decimal_pos = max(last_dot, last_comma)
+        integer_part = raw[:decimal_pos].replace(".", "").replace(",", "")
+        fractional_part = raw[decimal_pos + 1:]
+        normalized = f"{integer_part}.{fractional_part}"
+    elif raw.count(",") > 1 or raw.count(".") > 1:
+        normalized = raw.replace(",", "").replace(".", "")
+    else:
+        normalized = raw.replace(",", ".")
+    try:
+        numeric = float(normalized)
+    except ValueError:
+        return ""
+    return str(int(numeric)) if numeric.is_integer() else str(numeric)
+
+
+# Applies a field's ordered transform chain (node["transform"], built by
+# PythonFieldTransformLiteral) — each step's output feeds the next step's
+# input, in the order the user configured them in. Not called for
+# node["mode"] == "exists" — see extract_group below.
+def _apply_transforms(value, transforms):
+    for t in transforms:
+        kind = t["kind"]
+        if kind == "trim":
+            value = value.strip()
+        elif kind == "regexExtract":
+            match = re.search(t["pattern"], value)
+            if match:
+                try:
+                    value = match.group(t.get("group", 0)) or ""
+                except (IndexError, re.error):
+                    value = ""
+            else:
+                value = ""
+        elif kind == "replace":
+            value = value.replace(t["find"], t["replacement"])
+        elif kind == "toNumber":
+            value = _to_number(value)
+    return value
 
 
 # A node's own "frame_path" (Issue #42, Phase 3) is always resolved fresh
@@ -94,9 +154,9 @@ def extract_group(page, scope, node):
     elif found is None:
         el.text = ""
     elif node["mode"] == "attribute":
-        el.text = found.get_attribute(node["attribute"]) or ""
+        el.text = _apply_transforms(found.get_attribute(node["attribute"]) or "", node["transform"])
     else:
-        el.text = (found.text_content() or "").strip()
+        el.text = _apply_transforms((found.text_content() or "").strip(), node["transform"])
     return el
 
 

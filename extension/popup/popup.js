@@ -55,6 +55,14 @@ const {
   startFieldSelection, confirmExtendedField, cancelExtendedField,
 } = typeof require !== 'undefined' ? require('./container-tree-ui') : self.SFContainerTreeUI;
 
+const {
+  createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
+  moveTransform, transformsAreValid,
+} = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
+
+const { renderTransformList, wireTransformList } =
+  typeof require !== 'undefined' ? require('./field-transforms-ui') : self.SFFieldTransformsUI;
+
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (e) => log('UNCAUGHT_ERROR', e.message));
   window.addEventListener('unhandledrejection', (e) => log('UNHANDLED_REJECTION', String(e.reason)));
@@ -97,6 +105,15 @@ let _state = {
   // reported alongside pendingSelector on the same ELEMENT_SELECTED message.
   // null before any pick, or if the content script couldn't compute it.
   pendingMatchCount:   null,
+  // Issue #84: the transform chain (trim/regexExtract/replace/toNumber, in
+  // order) being built up while modal-field-name/modal-field-extended is
+  // open — form state, not underlying-selection state, so unlike
+  // pendingSelector/pendingMatchCount it's deliberately NOT carried through
+  // the session-storage popup-reopen recovery path (same "typed-but-
+  // unconfirmed input is lost on reopen" treatment the field-name input
+  // itself already gets). Written onto the resulting field/node once
+  // confirmed (see confirmField/confirmExtendedField).
+  pendingTransforms:   [],
   selectionKind:       null,  // 'field' | 'container' | 'browserAction' | null — which kind the current SELECTING round is for
   pendingParentPath:   null,  // number[] | null — where the next inserted group-tree node goes; null = root level
   pendingNewContainer: null,  // {name, repeating} captured by modal-container-new before element-selection starts
@@ -245,6 +262,7 @@ function buildScrapingConfig(
     fields: fields.map(f => ({
       name: f.name, selector: f.selector, attribute: f.attribute ?? null,
       ...(f.framePath ? { framePath: f.framePath } : {}),
+      ...(f.transforms && f.transforms.length > 0 ? { transforms: f.transforms } : {}),
     })),
     outputFormat: 'Csv',
     scriptFileName: scriptFileName || null,
@@ -270,8 +288,11 @@ function buildConfigExport(
   };
 }
 
-function addField(fields, name, selector, framePath = null) {
-  return [...fields, { name, selector, attribute: null, framePath: framePath || null }];
+function addField(fields, name, selector, framePath = null, transforms = []) {
+  return [...fields, {
+    name, selector, attribute: null, framePath: framePath || null,
+    transforms: transforms.length > 0 ? transforms : null,
+  }];
 }
 
 // Issue #41/#42, Phase 5/6: browser actions (WaitFor/Fill/Click/Scroll,
@@ -435,6 +456,16 @@ function applyStaticTranslations() {
   if (langSelect) langSelect.value = getLanguage();
   if (typeof document !== 'undefined' && document.documentElement) document.documentElement.lang = getLanguage();
 }
+
+// Issue #84: render() hides every modal unconditionally at its own top
+// (see below) and re-shows modal-field-name/-extended each pass while a
+// pick is pending — so a DOM-visibility check can't tell "just reopened"
+// apart from "already open, re-rendering because a transform row changed".
+// Tracks the last pendingSelector the modal-open block actually reset
+// inputs for; null whenever that block didn't run (mirrors the modal being
+// closed), so the same selector picked again after a cancel still resets on
+// its next genuine open.
+let lastFieldModalSelector = null;
 
 function render() {
   ['checking', 'error', 'idle', 'selecting', 'api-config', 'generating', 'done'].forEach(s =>
@@ -673,24 +704,43 @@ function render() {
     renderDataPreview(_state.dataPreview);
   }
 
-  // Show modal when an element has been captured during selection
+  // Show modal when an element has been captured during selection. Editing
+  // the transform chain (Issue #84) re-renders while this modal stays open
+  // (each row edit goes through patchState) — the reset-to-defaults/focus
+  // block below must therefore only run on the actual closed→open
+  // transition, not on every one of those re-renders, or it would wipe the
+  // name/mode the user already typed on every transform edit. See
+  // lastFieldModalSelector's own doc comment for why this can't just check
+  // the modal's current DOM visibility instead.
   if (_state.current === STATES.SELECTING && _state.pendingSelector !== null) {
+    const isNewPick = _state.pendingSelector !== lastFieldModalSelector;
+    lastFieldModalSelector = _state.pendingSelector;
+
     if (_state.mode === 'container') {
       show('modal-field-extended');
-      const nameInput = document.getElementById('input-field-extended-name');
-      if (nameInput) { nameInput.value = ''; nameInput.focus(); }
-      const modeSelect = document.getElementById('select-field-mode');
-      if (modeSelect) modeSelect.value = 'text';
-      document.getElementById('field-attribute-row')?.classList.add('hidden');
-      const attrInput = document.getElementById('input-field-attribute');
-      if (attrInput) attrInput.value = '';
+      if (isNewPick) {
+        const nameInput = document.getElementById('input-field-extended-name');
+        if (nameInput) { nameInput.value = ''; nameInput.focus(); }
+        const modeSelect = document.getElementById('select-field-mode');
+        if (modeSelect) modeSelect.value = 'text';
+        document.getElementById('field-attribute-row')?.classList.add('hidden');
+        document.getElementById('field-extended-transforms-section')?.classList.remove('hidden');
+        const attrInput = document.getElementById('input-field-attribute');
+        if (attrInput) attrInput.value = '';
+      }
       renderMatchCountHint('field-extended-match-count', _state.pendingMatchCount);
+      renderTransformList('field-extended-transform-list', _state.pendingTransforms);
     } else {
       show('modal-field-name');
-      const input = document.getElementById('input-field-name');
-      if (input) { input.value = ''; input.focus(); }
+      if (isNewPick) {
+        const input = document.getElementById('input-field-name');
+        if (input) { input.value = ''; input.focus(); }
+      }
       renderMatchCountHint('field-name-match-count', _state.pendingMatchCount);
+      renderTransformList('field-transform-list', _state.pendingTransforms);
     }
+  } else {
+    lastFieldModalSelector = null;
   }
 
   if (_state.current === STATES.SELECTING) {
@@ -1408,12 +1458,14 @@ async function reportBug() {
 function confirmField() {
   const name = document.getElementById('input-field-name')?.value.trim();
   if (!name) return;
-  log('FIELD_ADD', { name, selector: _state.pendingSelector, framePath: _state.pendingFramePath });
+  if (!transformsAreValid(_state.pendingTransforms)) return;
+  log('FIELD_ADD', { name, selector: _state.pendingSelector, framePath: _state.pendingFramePath, transforms: _state.pendingTransforms });
   setState(STATES.IDLE, {
-    fields:           addField(_state.fields, name, _state.pendingSelector, _state.pendingFramePath),
+    fields:           addField(_state.fields, name, _state.pendingSelector, _state.pendingFramePath, _state.pendingTransforms),
     pendingSelector:  null,
     pendingFramePath: null,
     pendingMatchCount: null,
+    pendingTransforms: [],
   });
 }
 
@@ -1725,7 +1777,10 @@ function wireEvents() {
     log('BTN add-field → START_SELECTION');
     stopPreviewIfActive();
     chrome.runtime.sendMessage({ type: 'START_SELECTION' });
-    setState(STATES.SELECTING, { pendingSelector: null, pendingMatchCount: null, domTree: null, domTreeTruncated: false, domTreeError: null });
+    setState(STATES.SELECTING, {
+      pendingSelector: null, pendingMatchCount: null, pendingTransforms: [],
+      domTree: null, domTreeTruncated: false, domTreeError: null,
+    });
     if (_state.domViewEnabled) {
       log('DOM view was enabled → re-requesting tree');
       requestDomTree();
@@ -1766,7 +1821,29 @@ function wireEvents() {
   document.getElementById('btn-field-extended-cancel')?.addEventListener('click', () => cancelExtendedField(bridge));
   document.getElementById('select-field-mode')?.addEventListener('change', (e) => {
     document.getElementById('field-attribute-row')?.classList.toggle('hidden', e.target.value !== 'attribute');
+    // Issue #84: transforms are a string post-processing pipeline — not
+    // meaningful for "Vorhanden?" (a boolean-ish presence check).
+    document.getElementById('field-extended-transforms-section')?.classList.toggle('hidden', e.target.value === 'exists');
   });
+
+  // Issue #84: transform-chain editor, shared between the flat and
+  // container field modals — both read/write the same _state.pendingTransforms.
+  document.getElementById('btn-field-transform-add')?.addEventListener('click', () => {
+    patchState({ pendingTransforms: addTransform(_state.pendingTransforms) });
+  });
+  document.getElementById('btn-field-extended-transform-add')?.addEventListener('click', () => {
+    patchState({ pendingTransforms: addTransform(_state.pendingTransforms) });
+  });
+  wireTransformList(
+    'field-transform-list',
+    () => _state.pendingTransforms,
+    (transforms) => patchState({ pendingTransforms: transforms }),
+  );
+  wireTransformList(
+    'field-extended-transform-list',
+    () => _state.pendingTransforms,
+    (transforms) => patchState({ pendingTransforms: transforms }),
+  );
 
   document.getElementById('btn-cancel-selection')?.addEventListener('click', () => {
     log('BTN cancel-selection → STOP_SELECTION');
@@ -1777,7 +1854,7 @@ function wireEvents() {
     // or the in-progress apiConfigDraft would appear to have vanished.
     const returnTo = _state.apiConfigDraft ? STATES.API_CONFIG : STATES.IDLE;
     setState(returnTo, {
-      selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingMatchCount: null,
+      selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingMatchCount: null, pendingTransforms: [],
       pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', apiSearchTarget: null,
     });
   });
@@ -1803,7 +1880,7 @@ function wireEvents() {
 
   document.getElementById('btn-field-cancel')?.addEventListener('click', () => {
     log('BTN field-cancel');
-    setState(STATES.IDLE, { pendingSelector: null, pendingMatchCount: null });
+    setState(STATES.IDLE, { pendingSelector: null, pendingMatchCount: null, pendingTransforms: [] });
   });
 
   // Event delegation for "Remove" buttons in the field list
@@ -1877,7 +1954,7 @@ function wireEvents() {
       stopPreviewIfActive();
       chrome.runtime.sendMessage({ type: 'START_SELECTION' });
       setState(STATES.SELECTING, {
-        pendingSelector: null, pendingMatchCount: null, selectionKind: 'browserAction', pendingBrowserActionIndex: index, pendingBrowserActionField: field,
+        pendingSelector: null, pendingMatchCount: null, pendingTransforms: [], selectionKind: 'browserAction', pendingBrowserActionIndex: index, pendingBrowserActionField: field,
         domTree: null, domTreeTruncated: false, domTreeError: null,
       });
     }
@@ -1971,7 +2048,7 @@ function wireEvents() {
         const node = buildGroupNode(_state.pendingNewContainer.name, message.selector, _state.pendingNewContainer.repeating, framePath);
         setState(STATES.IDLE, {
           groups: insertContainerNode(_state.groups, _state.pendingParentPath, node),
-          selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null,
+          selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingTransforms: [],
         });
         showMatchCountToast(containerName, matchCount);
       } else if (_state.selectionKind === 'browserAction' && _state.pendingBrowserActionIndex !== null) {
@@ -1990,10 +2067,10 @@ function wireEvents() {
             [_state.pendingBrowserActionField]: message.selector,
             framePath,
           }),
-          selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null,
+          selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingTransforms: [],
         });
       } else {
-        setState(STATES.SELECTING, { pendingSelector: message.selector, pendingFramePath: framePath, pendingMatchCount: matchCount });
+        setState(STATES.SELECTING, { pendingSelector: message.selector, pendingFramePath: framePath, pendingMatchCount: matchCount, pendingTransforms: [] });
       }
       if (message.path) highlightSelected(message.path);
     }
@@ -2111,7 +2188,7 @@ async function init() {
       const groups = insertContainerNode(_state.groups, stored.pendingParentPath, node);
       await chrome.storage.session.set({ groups });
       setState(STATES.IDLE, {
-        groups, selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null,
+        groups, selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingTransforms: [],
       });
       showMatchCountToast(stored.pendingNewContainer.name, typeof stored.pendingMatchCount === 'number' ? stored.pendingMatchCount : null);
       return;
@@ -2128,17 +2205,21 @@ async function init() {
       });
       await chrome.storage.session.set({ browserActions });
       setState(STATES.IDLE, {
-        browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null,
+        browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingTransforms: [],
       });
       return;
     }
 
     // Flat field or container field — show the (extended, in container
-    // mode) field-name modal without re-checking the companion.
+    // mode) field-name modal without re-checking the companion. The
+    // transform chain itself is never persisted (see pendingTransforms'
+    // own doc comment) — a reopened popup shows the modal with an empty
+    // chain, same as the name input itself starting blank again.
     log('INIT pending selector found → show modal', stored.pendingSelector);
     setState(STATES.SELECTING, {
       pendingSelector: stored.pendingSelector, pendingFramePath: stored.pendingFramePath || null,
       pendingMatchCount: typeof stored.pendingMatchCount === 'number' ? stored.pendingMatchCount : null,
+      pendingTransforms: [],
     });
     return;
   }
@@ -2182,5 +2263,7 @@ if (typeof module !== 'undefined') {
     toggleBodyLeafToVariable, toggleBodyLeafToFixed, setBodyLeafParameter, setBodyLeafCoerceTo,
     openBodyParameterModal, confirmBodyParameterModal, cancelBodyParameterModal, confirmApiConfig,
     renderDataPreview,
+    createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
+    moveTransform, transformsAreValid, renderTransformList,
   };
 }

@@ -24,6 +24,7 @@ const SFContainerTreeUI = (function () {
   const {
     formatGroupNodeLabel, resolveGroupNode, hasRepeatingAncestor, buildFieldNode, insertContainerNode,
   } = typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
+  const { transformsAreValid } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
 
   // ── Container tree editor ────────────────────────────────────────────────────
   // Same visual pattern as the DOM-tree-view below (indentation, toggle arrow,
@@ -129,6 +130,7 @@ const SFContainerTreeUI = (function () {
       pendingNewContainer: { name, repeating },
       pendingSelector:     null,
       pendingMatchCount:   null,
+      pendingTransforms:   [],
       domTree: null, domTreeTruncated: false, domTreeError: null,
     });
     if (state.domViewEnabled) bridge.requestDomTree();
@@ -154,6 +156,7 @@ const SFContainerTreeUI = (function () {
       pendingNewContainer: null,
       pendingSelector:     null,
       pendingMatchCount:   null,
+      pendingTransforms:   [],
       domTree: null, domTreeTruncated: false, domTreeError: null,
     });
     if (state.domViewEnabled) bridge.requestDomTree();
@@ -167,13 +170,15 @@ const SFContainerTreeUI = (function () {
     if (mode === 'attribute' && !attribute) return;
 
     const state = bridge.getState();
-    const node = buildFieldNode(name, state.pendingSelector, mode, attribute, state.pendingFramePath);
+    if (!transformsAreValid(state.pendingTransforms)) return;
+    const node = buildFieldNode(name, state.pendingSelector, mode, attribute, state.pendingFramePath, state.pendingTransforms);
     log('FIELD_ADD(container) confirm', node);
     bridge.setState(STATES.IDLE, {
       groups:            insertContainerNode(state.groups, state.pendingParentPath, node),
       pendingSelector:   null,
       pendingFramePath:  null,
       pendingMatchCount: null,
+      pendingTransforms: [],
       pendingParentPath: null,
       selectionKind:     null,
     });
@@ -182,7 +187,7 @@ const SFContainerTreeUI = (function () {
   function cancelExtendedField(bridge) {
     log('FIELD_ADD(container) cancel');
     bridge.setState(STATES.IDLE, {
-      pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingParentPath: null, selectionKind: null,
+      pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingTransforms: [], pendingParentPath: null, selectionKind: null,
     });
   }
 

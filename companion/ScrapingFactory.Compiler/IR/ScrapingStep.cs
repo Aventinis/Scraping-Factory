@@ -26,6 +26,12 @@ public sealed class ExtractStep : ScrapingStep
     // CSS selector passed to query_selector/query_selector_all/locator, so
     // Selector alone is already enough there.
     public List<string>? FramePath { get; init; }
+
+    // Issue #84: an optional, ordered post-processing chain (trim/regex
+    // extract/replace/to-number) applied to the raw extracted value before
+    // it's written to the output row — see IR/FieldTransform.cs. Null/empty
+    // = today's behavior, the raw value unchanged.
+    public List<FieldTransform>? Transforms { get; init; }
 }
 
 // Browser-engine only: waits for a selector to appear before continuing,

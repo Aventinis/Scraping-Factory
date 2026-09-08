@@ -88,6 +88,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
             .Select(step => new
             {
                 name = step.Name, selector = step.Selector, attribute = step.Attribute, frame_path = step.FramePath,
+                transforms_literal = PythonFieldTransformLiteral.Render(step.Transforms),
             })
             .ToList();
 

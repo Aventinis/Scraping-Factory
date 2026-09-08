@@ -30,6 +30,26 @@ public class PythonPlaywrightCodeGeneratorTests
         ],
     };
 
+    [Fact]
+    public void Generate_FieldWithTransforms_RendersTransformChainAndRuntimeHelper()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ExtractStep { Name = "Preis", Selector = ".price", Transforms = [new TrimTransform(), new ToNumberTransform()] },
+            ],
+        };
+
+        var script = _generator.Generate(plan);
+        Assert.Contains("""{"kind": "trim"}""", script);
+        Assert.Contains("""{"kind": "toNumber"}""", script);
+        Assert.Contains("def _apply_transforms(value, transforms):", script);
+        Assert.Contains("row[name] = _apply_transforms(raw_value, TRANSFORMS.get(name, []))", script);
+    }
+
     private static ScrapingPlan LoginPlan() => new()
     {
         Engine = ScrapingEngine.Browser,
@@ -234,7 +254,11 @@ public class PythonPlaywrightCodeGeneratorTests
     {
         var script = _generator.Generate(PlanWithFramedField());
         Assert.Contains("\"Preis\": [\"iframe#outer\", \"iframe.inner\"]", script);
-        Assert.DoesNotContain("\"Titel\": [", script);
+        // Scoped to the FRAME_PATHS dict itself (up to its own closing
+        // brace), not the whole script — Issue #84's TRANSFORMS dict further
+        // down legitimately has a "Titel": [] entry regardless of FramePath.
+        var framePathsSection = script[(script.IndexOf("FRAME_PATHS") + "FRAME_PATHS".Length)..].Split("}")[0];
+        Assert.DoesNotContain("\"Titel\": [", framePathsSection);
     }
 
     [Fact]

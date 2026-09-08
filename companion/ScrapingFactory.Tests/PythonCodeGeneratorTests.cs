@@ -26,6 +26,38 @@ public class PythonCodeGeneratorTests
     }
 
     [Fact]
+    public void Generate_FieldWithoutTransforms_HasEmptyTransformsListInDict()
+    {
+        var script = _generator.Generate(TwoFieldPlan());
+        Assert.Contains("\"Titel\": [],", script);
+    }
+
+    [Fact]
+    public void Generate_FieldWithTransforms_RendersTransformChainAndRuntimeHelper()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Url = "https://example.com" },
+                new ExtractStep
+                {
+                    Name = "Preis", Selector = ".price",
+                    Transforms = [new TrimTransform(), new ReplaceTransform { Find = "€", Replacement = "" }, new ToNumberTransform()],
+                },
+            ],
+        };
+
+        var script = _generator.Generate(plan);
+        Assert.Contains("""{"kind": "trim"}""", script);
+        Assert.Contains(""""kind": "replace", "find": '€', "replacement": ''"""", script);
+        Assert.Contains("""{"kind": "toNumber"}""", script);
+        Assert.Contains("def _apply_transforms(value, transforms):", script);
+        Assert.Contains("def _to_number(value):", script);
+        Assert.Contains("row[name] = _apply_transforms(raw_value, TRANSFORMS.get(name, []))", script);
+    }
+
+    [Fact]
     public void Generate_ContainsAllFieldNames()
     {
         var script = _generator.Generate(TwoFieldPlan());
@@ -79,9 +111,12 @@ public class PythonCodeGeneratorTests
     public void Generate_FieldWithoutAttributeNotInAttributesDict()
     {
         var script = _generator.Generate(TwoFieldPlan());
-        // "Titel" has no attribute — must not appear in ATTRIBUTES block
+        // "Titel" has no attribute — must not appear in the ATTRIBUTES dict
+        // itself (sliced up to its own closing brace, not further — Issue
+        // #84's TRANSFORMS dict right below legitimately has a "Titel" key
+        // regardless of attribute, so it must be excluded from this check).
         var attributesSection = script[(script.IndexOf("ATTRIBUTES") + "ATTRIBUTES".Length)..];
-        Assert.DoesNotContain("\"Titel\"", attributesSection.Split("def scrape")[0]);
+        Assert.DoesNotContain("\"Titel\"", attributesSection.Split("}")[0]);
     }
 
     [Fact]

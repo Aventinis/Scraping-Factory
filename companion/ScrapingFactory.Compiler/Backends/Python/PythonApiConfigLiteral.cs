@@ -14,8 +14,7 @@ namespace ScrapingFactory.Compiler.Backends.Python;
 internal static class PythonApiConfigLiteral
 {
     public static string RenderFields(List<ApiField> fields) =>
-        RenderList(fields, field =>
-            $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "path": {{PythonLiteral.Str(field.Path)}}}""");
+        RenderList(fields, RenderField);
 
     // Serializes ApiConfig.Groups (Issue #54's tree shape) the same way
     // PythonGroupTreeLiteral serializes Container-Mode's GroupNode tree:
@@ -54,8 +53,12 @@ internal static class PythonApiConfigLiteral
         return $$"""{"name": {{PythonLiteral.Str(group.Name)}}, "path": {{PythonLiteral.Str(group.Path)}}, "children": {{children}}}""";
     }
 
+    // Always includes "transform" (Issue #84), even when empty — used by
+    // both the flat RenderFields (FIELDS constant) and the tree shape's
+    // RenderNode above, so _resolve_field/_extract_api_group can apply it
+    // uniformly via a plain node.get("transform", []) either way.
     private static string RenderField(ApiField field) =>
-        $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "path": {{PythonLiteral.Str(field.Path)}}}""";
+        $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "path": {{PythonLiteral.Str(field.Path)}}, "transform": {{PythonFieldTransformLiteral.Render(field.Transforms)}}}""";
 
     // Serializes ApiConfig.Body (Issue #55's request-body tree) into the
     // same kind of dict-of-dicts literal RenderGroups already builds for the
