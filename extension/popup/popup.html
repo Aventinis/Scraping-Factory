@@ -720,6 +720,24 @@
     </div>
   </div>
 
+  <!-- Modal: API-mode field transforms (Issue #84 follow-up) — reuses the
+       exact same transform-chain editor as modal-field-name/-extended
+       (field-transforms.js/field-transforms-ui.js), opened via the
+       "Transformieren" button next to each field in the API_CONFIG tree. -->
+  <div id="modal-api-field-transforms" class="modal hidden">
+    <div class="modal-inner">
+      <div class="field-transforms-section">
+        <label data-i18n="transforms.sectionLabel"></label>
+        <ul id="api-field-transform-list" class="field-transform-list"></ul>
+        <button type="button" id="btn-api-field-transforms-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-api-field-transforms-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-api-field-transforms-confirm" class="btn-primary" data-i18n="common.apply"></button>
+      </div>
+    </div>
+  </div>
+
   <!-- Error toast -->
   <div id="error-toast" class="toast hidden">
     <span id="error-toast-message"></span>
