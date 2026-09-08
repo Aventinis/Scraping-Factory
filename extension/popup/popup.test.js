@@ -1041,7 +1041,7 @@ describe('buildApiSubtreeFromCandidate (Phase A5)', () => {
   test('a single-level match (skipSegments 0) becomes one auto-named group wrapping the named field', () => {
     const oneLevel = { path: 'data.items[0].name', treeSkeleton: [{ kind: 'group', path: 'data.items' }, { kind: 'field', path: 'name' }] };
     expect(buildApiSubtreeFromCandidate(oneLevel, 'Titel', [])).toEqual([
-      { kind: 'group', name: 'items', path: 'data.items', children: [{ kind: 'field', name: 'Titel', path: 'name' }] },
+      { kind: 'group', name: 'items', path: 'data.items', children: [{ kind: 'field', name: 'Titel', path: 'name', transforms: null }] },
     ]);
   });
 
@@ -1053,7 +1053,7 @@ describe('buildApiSubtreeFromCandidate (Phase A5)', () => {
         kind: 'group', name: 'subcategories', path: 'subcategories',
         children: [{
           kind: 'group', name: 'products', path: 'products',
-          children: [{ kind: 'field', name: 'Titel', path: 'title' }],
+          children: [{ kind: 'field', name: 'Titel', path: 'title', transforms: null }],
         }],
       }],
     });
@@ -1063,9 +1063,9 @@ describe('buildApiSubtreeFromCandidate (Phase A5)', () => {
     const oneLevel = { path: 'data.items[0].name', treeSkeleton: [{ kind: 'group', path: 'data.items' }, { kind: 'field', path: 'name' }] };
     const [root] = buildApiSubtreeFromCandidate(oneLevel, 'Titel', ['price', 'unit']);
     expect(root.children).toEqual([
-      { kind: 'field', name: 'Titel', path: 'name' },
-      { kind: 'field', name: 'price', path: 'price' },
-      { kind: 'field', name: 'unit', path: 'unit' },
+      { kind: 'field', name: 'Titel', path: 'name', transforms: null },
+      { kind: 'field', name: 'price', path: 'price', transforms: null },
+      { kind: 'field', name: 'unit', path: 'unit', transforms: null },
     ]);
   });
 
@@ -1073,14 +1073,14 @@ describe('buildApiSubtreeFromCandidate (Phase A5)', () => {
   // target group's own tree depth's worth of leading skeleton segments are
   // already represented by existing ancestors — see resolveApiGroupScopePath.
   test('skipSegments strips already-represented ancestor levels — a sibling field at the innermost scope needs no new group at all', () => {
-    expect(buildApiSubtreeFromCandidate(deepCandidate, 'Titel', [], 3)).toEqual([{ kind: 'field', name: 'Titel', path: 'title' }]);
+    expect(buildApiSubtreeFromCandidate(deepCandidate, 'Titel', [], 3)).toEqual([{ kind: 'field', name: 'Titel', path: 'title', transforms: null }]);
   });
 
   test('skipSegments partway through still nests the remaining levels', () => {
     const [node] = buildApiSubtreeFromCandidate(deepCandidate, 'Titel', [], 1);
     expect(node).toEqual({
       kind: 'group', name: 'subcategories', path: 'subcategories',
-      children: [{ kind: 'group', name: 'products', path: 'products', children: [{ kind: 'field', name: 'Titel', path: 'title' }] }],
+      children: [{ kind: 'group', name: 'products', path: 'products', children: [{ kind: 'field', name: 'Titel', path: 'title', transforms: null }] }],
     });
   });
 
