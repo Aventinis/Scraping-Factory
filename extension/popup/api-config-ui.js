@@ -795,17 +795,27 @@ const SFApiConfigUI = (function () {
   // flat/container mode's own field modals already use, plus
   // _state.pendingTransforms as the in-progress chain — the API_CONFIG screen
   // and those two modals are never open at the same time, so there's no
-  // conflict reusing that one slot instead of adding a second. No live
-  // preview here yet (unlike Issue #143's flat/container modals): a tree
-  // field node carries no sample raw value once inserted, only ever briefly
-  // available at candidate-confirm time — tracked as a follow-up (Issue
-  // #147) rather than silently included or silently skipped.
+  // conflict reusing that one slot instead of adding a second. Live preview
+  // (Issue #147) reuses _state.pendingRawText the exact same way — the
+  // node's own sampleValue (see buildApiFieldDraft/buildApiSubtreeFromCandidate
+  // in api-config.js), stringified the same way the Python runtime resolves
+  // a field value before applying transforms (`"" if value is None else
+  // str(value)`, see scraper_api.py.j2's _resolve_field call site).
+  // undefined (no sample ever captured — e.g. a hand-typed path with no
+  // click behind it) maps to null instead, so renderTransformPreview hides
+  // the hint entirely rather than showing a misleading empty result.
+  function sampleValueToRawText(sampleValue) {
+    if (sampleValue === undefined) return null;
+    return sampleValue === null ? '' : String(sampleValue);
+  }
+
   function openApiFieldTransformsModal(bridge, path) {
     const node = resolveApiTreeNode(bridge.getState().apiConfigDraft.groups, path);
     log('API_FIELD_TRANSFORMS_MODAL open', { path });
     bridge.patchState({
       apiFieldTransformModalOpen: true, pendingApiFieldTransformPath: path,
       pendingTransforms: node.transforms || [],
+      pendingRawText: sampleValueToRawText(node.sampleValue),
     });
   }
 
@@ -818,13 +828,13 @@ const SFApiConfigUI = (function () {
     log('API_FIELD_TRANSFORMS_CONFIRM', { path: state.pendingApiFieldTransformPath, transforms });
     bridge.setState(STATES.API_CONFIG, {
       apiConfigDraft: { ...state.apiConfigDraft, groups },
-      apiFieldTransformModalOpen: false, pendingApiFieldTransformPath: null, pendingTransforms: [],
+      apiFieldTransformModalOpen: false, pendingApiFieldTransformPath: null, pendingTransforms: [], pendingRawText: null,
     });
   }
 
   function cancelApiFieldTransformsModal(bridge) {
     log('API_FIELD_TRANSFORMS_MODAL cancel');
-    bridge.patchState({ apiFieldTransformModalOpen: false, pendingApiFieldTransformPath: null, pendingTransforms: [] });
+    bridge.patchState({ apiFieldTransformModalOpen: false, pendingApiFieldTransformPath: null, pendingTransforms: [], pendingRawText: null });
   }
 
   // Starts a *second* search round, reusing the exact same click-selection
