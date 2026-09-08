@@ -971,6 +971,16 @@ describe('buildApiFieldDraft transforms', () => {
     const transforms = [{ kind: 'trim' }, { kind: 'toNumber' }];
     expect(buildApiFieldDraft('Preis', 'price', transforms)).toEqual({ kind: 'field', name: 'Preis', path: 'price', transforms });
   });
+
+  // Issue #147: sampleValue is the popup-internal raw value the
+  // transform-chain modal's live preview runs against later.
+  test('sampleValue defaults to undefined when not given', () => {
+    expect(buildApiFieldDraft('Preis', 'price').sampleValue).toBeUndefined();
+  });
+
+  test('carries an explicit sampleValue', () => {
+    expect(buildApiFieldDraft('Preis', 'price', null, '12,99 €').sampleValue).toBe('12,99 €');
+  });
 });
 
 describe('serializeApiTree', () => {
@@ -1153,6 +1163,34 @@ describe('buildApiSubtreeFromCandidate (Phase A5)', () => {
       { kind: 'field', name: 'price', path: 'price', transforms: null },
       { kind: 'field', name: 'unit', path: 'unit', transforms: null },
     ]);
+  });
+
+  // Issue #147: the leaf field's own sampleValue comes from candidate.value;
+  // each picked sibling's sampleValue is looked up by name in
+  // candidate.siblings (content-script.js's siblingFields shape).
+  test('the leaf field and picked siblings carry their own sampleValue from the candidate', () => {
+    const oneLevel = {
+      path: 'data.items[0].name', value: 'Smartphone X',
+      treeSkeleton: [{ kind: 'group', path: 'data.items' }, { kind: 'field', path: 'name' }],
+      siblings: [{ name: 'price', path: 'price', value: 499 }, { name: 'unit', path: 'unit', value: null }],
+    };
+    const [root] = buildApiSubtreeFromCandidate(oneLevel, 'Titel', ['price', 'unit']);
+    expect(root.children.map(c => c.sampleValue)).toEqual(['Smartphone X', 499, null]);
+  });
+
+  test('a sibling name with no matching candidate.siblings entry gets an undefined sampleValue', () => {
+    const oneLevel = {
+      path: 'data.items[0].name', value: 'Smartphone X',
+      treeSkeleton: [{ kind: 'group', path: 'data.items' }, { kind: 'field', path: 'name' }],
+      siblings: [],
+    };
+    const [root] = buildApiSubtreeFromCandidate(oneLevel, 'Titel', ['price']);
+    expect(root.children[1].sampleValue).toBeUndefined();
+  });
+
+  test('a candidate with no siblings array at all (older fixture shape) does not throw', () => {
+    const oneLevel = { path: 'data.items[0].name', treeSkeleton: [{ kind: 'group', path: 'data.items' }, { kind: 'field', path: 'name' }] };
+    expect(() => buildApiSubtreeFromCandidate(oneLevel, 'Titel', ['price'])).not.toThrow();
   });
 
   // skipSegments (Phase A5's "add sub-field"/"add root group" reuse): the
@@ -6116,6 +6154,7 @@ describe('API-mode field transforms (Issue #84 follow-up)', () => {
       <div id="modal-api-field-transforms" class="hidden">
         <ul id="api-field-transform-list"></ul>
         <button type="button" id="btn-api-field-transforms-add"></button>
+        <p id="api-field-transform-preview" class="transform-preview hidden"></p>
         <button id="btn-api-field-transforms-confirm"></button>
         <button id="btn-api-field-transforms-cancel"></button>
       </div>
@@ -6153,7 +6192,7 @@ describe('API-mode field transforms (Issue #84 follow-up)', () => {
       type: 'API_CANDIDATES', target: 'Smartphone X',
       candidates: [{
         entryId: 1, url: 'https://example.com/api/catalog', method: 'GET',
-        path: 'categories[0].title', value: 'Smartphone X', siblings: [],
+        path: 'categories[0].title', value: 'Smartphone X', siblings: [{ name: 'note', path: 'note', value: null }],
         itemsPath: 'categories', valuePath: 'title',
         treeSkeleton: [{ kind: 'group', path: 'categories' }, { kind: 'field', path: 'title' }],
         requestHeaders: [],
@@ -6162,6 +6201,7 @@ describe('API-mode field transforms (Issue #84 follow-up)', () => {
     const nameInput = document.querySelector('.api-candidate-field-name');
     nameInput.value = 'Titel';
     nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('.api-sibling-chip').click(); // picks "note" (sampleValue: null) too
     document.querySelector('.api-candidate-confirm').click();
   });
 
@@ -6230,6 +6270,51 @@ describe('API-mode field transforms (Issue #84 follow-up)', () => {
     // would also match the nested field's own button.
     const groupRow = document.querySelector('[data-path="[0]"] .api-tree-row');
     expect(groupRow.querySelector('.btn-api-field-transforms')).toBeNull();
+  });
+
+  // Issue #147: live preview against the field's own captured sampleValue.
+  describe('live preview (Issue #147)', () => {
+    test('opening the modal shows a preview against the candidate\'s own value, even with an empty chain', () => {
+      document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms').click();
+
+      const preview = document.getElementById('api-field-transform-preview');
+      expect(preview.classList.contains('hidden')).toBe(false);
+      expect(preview.textContent).toContain('Smartphone X');
+    });
+
+    test('the preview updates live as a transform step is added', () => {
+      document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms').click();
+      document.getElementById('btn-api-field-transforms-add').click();
+      const select = document.querySelector('#api-field-transform-list .transform-kind-select');
+      select.value = 'regexExtract';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      const patternInput = document.querySelector('#api-field-transform-list .transform-pattern-input');
+      patternInput.value = 'phone';
+      patternInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+      expect(document.getElementById('api-field-transform-preview').textContent).toContain('phone');
+    });
+
+    // The "note" sibling was picked with sampleValue: null (see beforeEach) —
+    // a real JSON null, which the runtime turns into an empty string
+    // (scraper_api.py.j2's "value is None" check) rather than hiding the field.
+    test('a field whose sample value is JSON null shows an empty-result preview, not a hidden one', () => {
+      document.querySelector('[data-path="[0,1]"] .btn-api-field-transforms').click();
+
+      const preview = document.getElementById('api-field-transform-preview');
+      expect(preview.classList.contains('hidden')).toBe(false);
+      expect(preview.textContent).not.toContain('Smartphone X');
+    });
+
+    test('closing the modal (confirm or cancel) resets the preview for the next field opened', () => {
+      document.querySelector('[data-path="[0,0]"] .btn-api-field-transforms').click();
+      document.getElementById('btn-api-field-transforms-cancel').click();
+
+      document.querySelector('[data-path="[0,1]"] .btn-api-field-transforms').click();
+
+      // The "note" field's own (null) sample, not a leftover "Smartphone X".
+      expect(document.getElementById('api-field-transform-preview').textContent).not.toContain('Smartphone X');
+    });
   });
 });
 
