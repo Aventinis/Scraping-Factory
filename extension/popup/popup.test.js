@@ -198,6 +198,43 @@ describe('buildScrapingConfig (includePreview, Issue #122)', () => {
   });
 });
 
+// Issue #86: useJsonOutput is mode-independent, like includePreview above,
+// but with a different "default" shape per mode — flat mode always sends an
+// explicit outputFormat (Csv by default), while container/api mode omit the
+// key entirely by default and only add it when Json is requested.
+describe('buildScrapingConfig (useJsonOutput, Issue #86)', () => {
+  test('flat mode sends outputFormat: "Csv" by default, "Json" when requested', () => {
+    const defaultResult = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(defaultResult.outputFormat).toBe('Csv');
+
+    const jsonResult = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false, true,
+    );
+    expect(jsonResult.outputFormat).toBe('Json');
+  });
+
+  test('container mode omits outputFormat by default, sends "Json" when requested', () => {
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const defaultResult = buildScrapingConfig('https://example.com', 'container', [], groups);
+    expect(defaultResult.outputFormat).toBeUndefined();
+
+    const jsonResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, true,
+    );
+    expect(jsonResult.outputFormat).toBe('Json');
+  });
+
+  test('api mode omits outputFormat by default, sends "Json" when requested', () => {
+    const defaultResult = buildScrapingConfig('https://example.com', 'api', [], [], { fields: [] });
+    expect(defaultResult.outputFormat).toBeUndefined();
+
+    const jsonResult = buildScrapingConfig(
+      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, true,
+    );
+    expect(jsonResult.outputFormat).toBe('Json');
+  });
+});
+
 describe('buildScrapingConfig (container mode)', () => {
   test('sends groups instead of fields, no outputFormat', () => {
     const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
@@ -1383,7 +1420,7 @@ describe('renderDataPreview', () => {
     document.body.innerHTML = `
       <div id="data-preview-panel" class="hidden">
         <div id="data-preview-table-wrap" class="hidden"></div>
-        <pre id="data-preview-xml" class="hidden"></pre>
+        <pre id="data-preview-text" class="hidden"></pre>
         <p id="data-preview-truncated" class="hidden"></p>
       </div>
     `;
@@ -1401,7 +1438,7 @@ describe('renderDataPreview', () => {
     });
 
     expect(document.getElementById('data-preview-panel').classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('data-preview-xml').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('data-preview-text').classList.contains('hidden')).toBe(true);
     const table = document.querySelector('.data-preview-table');
     expect(table.querySelectorAll('th')).toHaveLength(1);
     expect(table.querySelectorAll('th')[0].textContent).toBe('Titel');
@@ -1442,9 +1479,9 @@ describe('renderDataPreview', () => {
     renderDataPreview({ outputFormat: 'Xml', totalCount: 3, truncated: false, xmlSample: '<Ergebnis><Kategorie/></Ergebnis>' });
 
     expect(document.getElementById('data-preview-table-wrap').classList.contains('hidden')).toBe(true);
-    const xmlEl = document.getElementById('data-preview-xml');
-    expect(xmlEl.classList.contains('hidden')).toBe(false);
-    expect(xmlEl.textContent).toBe('<Ergebnis><Kategorie/></Ergebnis>');
+    const textEl = document.getElementById('data-preview-text');
+    expect(textEl.classList.contains('hidden')).toBe(false);
+    expect(textEl.textContent).toBe('<Ergebnis><Kategorie/></Ergebnis>');
   });
 
   test('shows a generic truncation note for a truncated Xml preview (no shown/total counts)', () => {
@@ -1453,6 +1490,33 @@ describe('renderDataPreview', () => {
     const note = document.getElementById('data-preview-truncated');
     expect(note.classList.contains('hidden')).toBe(false);
     expect(note.textContent.length).toBeGreaterThan(0);
+  });
+
+  // Issue #86: Json's flat shape (an array of records) reuses the table
+  // renderer exactly like Csv — driven by the presence of columns/rows, not
+  // by outputFormat === 'Csv' specifically.
+  test('renders a flat Json preview as a table, same as Csv', () => {
+    renderDataPreview({
+      outputFormat: 'Json', totalCount: 2, truncated: false, columns: ['Titel'],
+      rows: [{ Titel: 'Suppe' }, { Titel: 'Salat' }],
+    });
+
+    expect(document.getElementById('data-preview-text').classList.contains('hidden')).toBe(true);
+    const table = document.querySelector('.data-preview-table');
+    const rows = table.querySelectorAll('tbody tr');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].querySelector('td').textContent).toBe('Suppe');
+  });
+
+  // Json's tree shape (a nested object) reuses the same text-sample renderer
+  // as Xml, via jsonSample instead of xmlSample.
+  test('renders a tree-shaped Json preview as read-only text, not a table', () => {
+    renderDataPreview({ outputFormat: 'Json', totalCount: 3, truncated: false, jsonSample: '{"Kategorie": []}' });
+
+    expect(document.getElementById('data-preview-table-wrap').classList.contains('hidden')).toBe(true);
+    const textEl = document.getElementById('data-preview-text');
+    expect(textEl.classList.contains('hidden')).toBe(false);
+    expect(textEl.textContent).toBe('{"Kategorie": []}');
   });
 });
 
