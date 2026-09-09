@@ -48,6 +48,7 @@ public static class ScrapingPlanBuilder
             {
                 Steps = steps, OutputFormat = groupsOutputFormat, Engine = config.Engine,
                 ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
+                ChangeDetection = config.ChangeDetection,
             };
         }
 
@@ -72,6 +73,7 @@ public static class ScrapingPlanBuilder
             {
                 Steps = steps, OutputFormat = apiOutputFormat, Engine = ScrapingEngine.Api,
                 ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
+                ChangeDetection = config.ChangeDetection,
             };
         }
 
@@ -86,6 +88,7 @@ public static class ScrapingPlanBuilder
         {
             Steps = steps, OutputFormat = config.OutputFormat, Engine = config.Engine,
             ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
+            ChangeDetection = config.ChangeDetection,
         };
     }
 

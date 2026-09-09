@@ -36,6 +36,16 @@ public static class ScrapingPlanValidator
             }
         }
 
+        // Issue #87: mode-independent (Fields/Groups/Api alike), so this
+        // runs before the mode-specific branches below, which each return
+        // early.
+        if (plan.ChangeDetection is { } changeDetection)
+        {
+            var changeDetectionError = ValidateChangeDetection(changeDetection);
+            if (changeDetectionError is not null)
+                return Invalid(changeDetectionError);
+        }
+
         // WaitFor/Fill/Click/Scroll all need a real browser to mean anything —
         // the Static engine's codegen simply doesn't look at them, so
         // silently generating a script that just drops them would be
@@ -527,5 +537,54 @@ public static class ScrapingPlanValidator
             return $"Doppelte Header-Namen: {string.Join(", ", duplicateHeaderNames)}.";
 
         return null;
+    }
+
+    // Issue #87: every field here is an env var *name* (like
+    // FillAction.EnvironmentVariableName), never a literal value — same
+    // EnvironmentVariableNamePattern check as everywhere else that's true.
+    private static string? ValidateChangeDetection(ChangeDetectionConfig changeDetection)
+    {
+        if (changeDetection.Notify is not ("Email" or "Webhook"))
+            return $"Nicht unterstützte Notify-Methode '{changeDetection.Notify}': erwartet 'Email' oder 'Webhook'.";
+
+        if (changeDetection.Notify == "Email")
+        {
+            if (changeDetection.Email is null)
+                return "ChangeDetection mit Notify 'Email' braucht eine Email-Konfiguration.";
+            if (changeDetection.Webhook is not null)
+                return "ChangeDetection darf nicht sowohl Email als auch Webhook konfigurieren.";
+
+            var email = changeDetection.Email;
+            var requiredNames = new (string Value, string Field)[]
+            {
+                (email.SmtpHostEnvVar, "SmtpHostEnvVar"), (email.FromEnvVar, "FromEnvVar"), (email.ToEnvVar, "ToEnvVar"),
+            };
+            foreach (var (value, field) in requiredNames)
+            {
+                if (!EnvironmentVariableNamePattern.IsMatch(value))
+                    return $"Ungültiger Umgebungsvariablen-Name '{value}' in ChangeDetection.Email.{field}.";
+            }
+
+            var optionalNames = new (string? Value, string Field)[]
+            {
+                (email.SmtpPortEnvVar, "SmtpPortEnvVar"),
+                (email.SmtpUsernameEnvVar, "SmtpUsernameEnvVar"),
+                (email.SmtpPasswordEnvVar, "SmtpPasswordEnvVar"),
+            };
+            foreach (var (value, field) in optionalNames)
+            {
+                if (value is not null && !EnvironmentVariableNamePattern.IsMatch(value))
+                    return $"Ungültiger Umgebungsvariablen-Name '{value}' in ChangeDetection.Email.{field}.";
+            }
+
+            return null;
+        }
+
+        if (changeDetection.Webhook is null)
+            return "ChangeDetection mit Notify 'Webhook' braucht eine Webhook-Konfiguration.";
+
+        return EnvironmentVariableNamePattern.IsMatch(changeDetection.Webhook.UrlEnvVar)
+            ? null
+            : $"Ungültiger Umgebungsvariablen-Name '{changeDetection.Webhook.UrlEnvVar}' in ChangeDetection.Webhook.UrlEnvVar.";
     }
 }

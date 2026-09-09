@@ -74,6 +74,11 @@ public sealed class ScrapingConfig
     // instead of the plain script text — see Program.cs's /generate handler.
     // Additive, wire-compatible: null/false is today's exact behavior.
     public bool? IncludePreview { get; init; }
+
+    // Issue #87: opt-in change-detection + notification, mode-independent
+    // (Fields/Groups/Api alike) — see IR/ChangeDetectionConfig.cs. Null is
+    // today's exact behavior (no previous-run comparison, no notification).
+    public ChangeDetectionConfig? ChangeDetection { get; init; }
 }
 
 public sealed class ScrapingField
