@@ -29,6 +29,7 @@ public sealed class PythonCodeGenerator : ICodeGenerator
                 urls = navigate.Urls, groups_literal = groupsLiteral, root_names = rootNames,
                 script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
                 output_is_json = plan.OutputFormat == OutputFormat.Json,
+                change_detection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection),
             });
         }
 
@@ -52,6 +53,7 @@ public sealed class PythonCodeGenerator : ICodeGenerator
                 urls = navigate.Urls, fields,
                 script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
                 output_is_json = plan.OutputFormat == OutputFormat.Json,
+                change_detection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection),
             },
         });
     }
