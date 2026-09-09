@@ -33,6 +33,39 @@ public class PythonPlaywrightScriptVerifierTests
         Assert.Equal(2, result.RowCount);
     }
 
+    // Issue #83: also proves the earlier-latent playwright_navigate_step.py.j2
+    // fix (page.goto(url, ...) instead of a baked-in literal) actually
+    // navigates each loop iteration to the right URL, not just the first.
+    [Fact]
+    public async Task MultipleUrls_CombinesRowsFromBothPagesIntoOneOutput()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var html = request.Url!.AbsolutePath switch
+            {
+                "/a" => "<html><body><li class='item'>A1</li><li class='item'>A2</li></body></html>",
+                "/b" => "<html><body><li class='item'>B1</li></body></html>",
+                _ => "<html><body></body></html>",
+            };
+            return new LocalTestServerResponse(html, "text/html; charset=utf-8");
+        });
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Urls = [$"{server.BaseUrl}a", $"{server.BaseUrl}b"] },
+                new ExtractStep { Name = "Item", Selector = ".item" },
+            ],
+        };
+        var script = Generator.Generate(plan);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(3, result.RowCount);
+    }
+
     // The whole point of the Browser engine: content inserted by JavaScript
     // after the initial page load. A requests+BeautifulSoup script (Static
     // engine) could never see this — it never runs the <script> tag.

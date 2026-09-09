@@ -88,6 +88,27 @@ public class PythonPlaywrightCodeGeneratorTests
         Assert.Contains("\"https://books.toscrape.com\"", script);
     }
 
+    // Issue #83
+    [Fact]
+    public void Generate_MultipleUrls_LoopsOverUrlsAndCombinesData()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com/a", "https://example.com/b"] },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("""URLS = ["https://example.com/a", "https://example.com/b"]""", script);
+        Assert.Contains("for url in URLS:", script);
+        Assert.Contains("data.extend(scrape(url))", script);
+    }
+
     [Fact]
     public void Generate_WithoutWaitForStep_DoesNotContainWaitForSelector()
     {

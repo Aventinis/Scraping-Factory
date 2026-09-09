@@ -71,6 +71,51 @@ public class ScrapingPlanValidatorTests
         Assert.Contains("Ungültige Start-URL", result.Error);
     }
 
+    // Issue #83
+    [Fact]
+    public void Validate_MultipleValidUrls_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com/a", "https://example.com/b"] },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success);
+        Assert.Null(result.Error);
+    }
+
+    [Fact]
+    public void Validate_SecondUrlInvalid_FailsWithItsIndex()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com/a", "not-a-url"] },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Start-URL #2", result.Error);
+    }
+
+    [Fact]
+    public void Validate_EmptyUrls_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = [new NavigateStep { Urls = [] }, new ExtractStep { Name = "Titel", Selector = "h1" }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("mindestens eine URL", result.Error);
+    }
+
     [Fact]
     public void Validate_NoExtractSteps_Fails()
     {

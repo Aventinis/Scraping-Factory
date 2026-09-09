@@ -688,6 +688,29 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
     }
 
+    // Issue #83: Api builds its own request URL from urlTemplate/parameters
+    // and never reads the page-scraping start URL at all, so combining it
+    // with additionalUrls would silently do nothing — rejected outright,
+    // same as the other three mode combinations above.
+    [Fact]
+    public async Task Generate_AdditionalUrlsAndApiBothSet_Returns400()
+    {
+        var payload = $$"""
+            {
+              "url": "https://example.com",
+              "additionalUrls": ["https://example.com/2"],
+              "api": {{SampleApiPayload}}
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
+    }
+
     // End-to-end through the real HTTP endpoint: engine selection resolves
     // PythonApiCodeGenerator, and the generated script is actually run
     // against a fake JSON API (real subprocess + real HTTP request, like
