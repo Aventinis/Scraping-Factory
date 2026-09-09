@@ -14,10 +14,34 @@ public class PythonScriptVerifierTests
 {
     private static string GenerateScript(string url, params (string Name, string Selector)[] fields)
     {
-        var steps = new List<ScrapingStep> { new NavigateStep { Url = url } };
+        var steps = new List<ScrapingStep> { new NavigateStep { Urls = [url] } };
         steps.AddRange(fields.Select(f => (ScrapingStep)new ExtractStep { Name = f.Name, Selector = f.Selector }));
 
         return new PythonCodeGenerator().Generate(new ScrapingPlan { Steps = steps });
+    }
+
+    // Reproduces the real-world 403 (e.g. Wikipedia): a server that rejects
+    // the bare "python-requests/x.y" default User-Agent, but accepts any
+    // other value — proves the generated script actually sends a
+    // non-default User-Agent, not just that the C#/template-level string
+    // content looks right (see PythonCodeGeneratorTests for that).
+    [Fact]
+    public async Task ScriptWithoutCustomUserAgent_WouldGet403_ButGeneratedScriptSendsOneAndSucceeds()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var userAgent = request.UserAgent ?? "";
+            var isDefaultRequestsAgent = userAgent.Length == 0 || userAgent.StartsWith("python-requests");
+            return isDefaultRequestsAgent
+                ? new LocalTestServerResponse("Forbidden", "text/plain", HttpStatusCode.Forbidden)
+                : new LocalTestServerResponse("<html><body><h1>Titel</h1></body></html>", "text/html; charset=utf-8");
+        });
+        var script = GenerateScript(server.BaseUrl, ("Titel", "h1"));
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(1, result.RowCount);
     }
 
     [Fact]
@@ -32,6 +56,39 @@ public class PythonScriptVerifierTests
         Assert.True(result.Success);
         Assert.Null(result.Error);
         Assert.Equal(2, result.RowCount);
+    }
+
+    // Issue #83: two real HTTP requests against distinct paths on the same
+    // test server, proving the generated script actually visits every
+    // configured start URL and combines the results into one output — not
+    // just that the C#/template-level string content looks right (see
+    // PythonCodeGeneratorTests for that).
+    [Fact]
+    public async Task MultipleUrls_CombinesRowsFromBothPagesIntoOneOutput()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var html = request.Url!.AbsolutePath switch
+            {
+                "/a" => "<html><body><li class='item'>A1</li><li class='item'>A2</li></body></html>",
+                "/b" => "<html><body><li class='item'>B1</li></body></html>",
+                _ => "<html><body></body></html>",
+            };
+            return new LocalTestServerResponse(html, "text/html; charset=utf-8");
+        });
+        var steps = new List<ScrapingStep>
+        {
+            new NavigateStep { Urls = [$"{server.BaseUrl}a", $"{server.BaseUrl}b"] },
+            new ExtractStep { Name = "Item", Selector = ".item" },
+        };
+        var script = new PythonCodeGenerator().Generate(new ScrapingPlan { Steps = steps });
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, includePreview: true);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(3, result.RowCount);
+        var values = result.Preview!.Rows!.Select(row => row["Item"]).ToList();
+        Assert.Equal(["A1", "A2", "B1"], values);
     }
 
     [Fact]
@@ -78,7 +135,7 @@ public class PythonScriptVerifierTests
             "<html><body><p class='price'>  Preis: 12,99 &euro;  </p></body></html>");
         var steps = new List<ScrapingStep>
         {
-            new NavigateStep { Url = server.BaseUrl },
+            new NavigateStep { Urls = [server.BaseUrl] },
             new ExtractStep
             {
                 Name = "Preis", Selector = ".price",
@@ -143,7 +200,7 @@ public class PythonScriptVerifierTests
             "<html><body><ul><li class='item'>A</li><li class='item'>B</li></ul></body></html>");
         var steps = new List<ScrapingStep>
         {
-            new NavigateStep { Url = server.BaseUrl },
+            new NavigateStep { Urls = [server.BaseUrl] },
             new ExtractStep { Name = "Item", Selector = ".item" },
         };
         var script = new PythonCodeGenerator().Generate(
@@ -162,7 +219,7 @@ public class PythonScriptVerifierTests
             "<html><body><ul><li class='item'>A</li></ul></body></html>");
         var steps = new List<ScrapingStep>
         {
-            new NavigateStep { Url = server.BaseUrl },
+            new NavigateStep { Urls = [server.BaseUrl] },
             new ExtractStep { Name = "Item", Selector = ".item" },
         };
         // Script writes "ergebnisse.csv", but we ask the verifier to look for
@@ -180,7 +237,7 @@ public class PythonScriptVerifierTests
 
     private static string GenerateJsonScript(string url, params (string Name, string Selector)[] fields)
     {
-        var steps = new List<ScrapingStep> { new NavigateStep { Url = url } };
+        var steps = new List<ScrapingStep> { new NavigateStep { Urls = [url] } };
         steps.AddRange(fields.Select(f => (ScrapingStep)new ExtractStep { Name = f.Name, Selector = f.Selector }));
 
         return new PythonCodeGenerator().Generate(new ScrapingPlan { Steps = steps, OutputFormat = OutputFormat.Json });
@@ -251,7 +308,7 @@ public class PythonScriptVerifierTests
 
     private static string GenerateGroupedScript(string url, GroupNode root)
     {
-        var steps = new List<ScrapingStep> { new NavigateStep { Url = url }, new ExtractGroupStep { Roots = [root] } };
+        var steps = new List<ScrapingStep> { new NavigateStep { Urls = [url] }, new ExtractGroupStep { Roots = [root] } };
         return new PythonCodeGenerator().Generate(new ScrapingPlan { Steps = steps, OutputFormat = OutputFormat.Xml });
     }
 
@@ -298,6 +355,43 @@ public class PythonScriptVerifierTests
         Assert.Null(result.Error);
         // 2 <Kategorie> + 2 <Titel> + 3 <Gericht> + 3 <Name> + 3 <Preis> = 13
         Assert.Equal(13, result.RowCount);
+    }
+
+    // Issue #83: two real HTTP requests against distinct paths on the same
+    // test server — proves each URL's own <Ergebnis> matches are merged into
+    // one combined root instead of overwriting each other.
+    [Fact]
+    public async Task GroupedScript_MultipleUrls_CombinesElementsFromBothPagesIntoOneErgebnis()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var html = request.Url!.AbsolutePath switch
+            {
+                "/a" => "<html><body><section class='menu-category'><h2>Vorspeisen</h2></section></body></html>",
+                "/b" => "<html><body><section class='menu-category'><h2>Suppen</h2></section></body></html>",
+                _ => "<html><body></body></html>",
+            };
+            return new LocalTestServerResponse(html, "text/html; charset=utf-8");
+        });
+        var root = new GroupNode
+        {
+            Name = "Kategorie", Selector = "section.menu-category", Repeating = true,
+            Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }],
+        };
+        var steps = new List<ScrapingStep>
+        {
+            new NavigateStep { Urls = [$"{server.BaseUrl}a", $"{server.BaseUrl}b"] },
+            new ExtractGroupStep { Roots = [root] },
+        };
+        var script = new PythonCodeGenerator().Generate(new ScrapingPlan { Steps = steps, OutputFormat = OutputFormat.Xml });
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Xml, includePreview: true);
+
+        Assert.True(result.Success, result.Error);
+        // 2 <Kategorie> + 2 <Titel> = 4, one pair from each page
+        Assert.Equal(4, result.RowCount);
+        Assert.Contains("Vorspeisen", result.Preview!.XmlSample);
+        Assert.Contains("Suppen", result.Preview.XmlSample);
     }
 
     [Fact]
@@ -388,7 +482,7 @@ public class PythonScriptVerifierTests
 
     private static string GenerateGroupedJsonScript(string url, GroupNode root)
     {
-        var steps = new List<ScrapingStep> { new NavigateStep { Url = url }, new ExtractGroupStep { Roots = [root] } };
+        var steps = new List<ScrapingStep> { new NavigateStep { Urls = [url] }, new ExtractGroupStep { Roots = [root] } };
         return new PythonCodeGenerator().Generate(new ScrapingPlan { Steps = steps, OutputFormat = OutputFormat.Json });
     }
 

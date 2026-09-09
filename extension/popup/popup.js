@@ -85,6 +85,15 @@ let _state = {
   // Phase 6 added 'scroll' — see also pendingBrowserActionField below, since
   // it's the only kind with more than one pickable selector per card.
   browserActions:      [],
+  // Issue #83: extra start URLs the same Fields/Groups extraction config
+  // runs against, in addition to `url` above — mode-independent like
+  // engine/browserActions, but rejected server-side for API mode (which
+  // builds its own request URL from apiConfig.urlTemplate and never reads
+  // `url`/this list at all), so the UI hides the input there instead of
+  // silently sending something the companion would reject. Persisted like
+  // fields/groups/scriptFileName (real scrape-target configuration, not a
+  // per-generate opt-in toggle like includeDataPreview/useJsonOutput below).
+  additionalStartUrls: [],
   // Issue #43: one-time Fill test values for the /generate verification
   // trial run only — keyed by FillAction.environmentVariableName. Deliberately
   // absent from persistState()'s chrome.storage.session write and from
@@ -240,6 +249,17 @@ function sanitizeFileNameBase(input, fallback) {
   return sanitized || fallback;
 }
 
+// Issue #83: one URL per line, pasted/typed into the additional-start-urls
+// textarea — blank lines (a trailing newline, or blank lines between pasted
+// entries) are a formatting artifact, not a URL the user meant to add, so
+// they're dropped here rather than surfacing as a companion-side validation
+// error later. A genuinely malformed non-blank entry is deliberately left
+// as-is — it's still sent to the companion, which rejects it the same way
+// it already rejects a malformed primary `url` (ScrapingPlanValidator).
+function parseAdditionalUrls(text) {
+  return (text || '').split('\n').map(line => line.trim()).filter(line => line.length > 0);
+}
+
 // `apiConfig` is only read when mode === 'api' — the confirmed ApiConfig
 // wire object built by buildApiConfig (Issue #53 Phase 5), passed straight
 // through as the request body's `api` field. Method is forced server-side
@@ -263,28 +283,37 @@ function sanitizeFileNameBase(input, fallback) {
 // the literal 'Csv' for 'Json'. The companion decides — per mode/shape —
 // whether Json actually fits, same "server is the source of truth" pattern
 // as everything else here.
+// `additionalUrls` (Issue #83) is only included when non-empty, same
+// omit-when-default convention as browserActions — the companion runs the
+// same Fields/Groups extraction config against every one of these in
+// addition to `url`, combining the results. The UI never lets this be
+// non-empty for mode === 'api' (the input is hidden there), since API mode
+// builds its own request URL and the companion rejects the combination
+// outright rather than silently ignoring it.
 function buildScrapingConfig(
   url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
+  additionalUrls = [],
 ) {
   const engineFields = engine === 'Browser'
     ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
     : {};
   const previewFields = includePreview ? { includePreview: true } : {};
   const outputFormatFields = useJsonOutput ? { outputFormat: 'Json' } : {};
+  const additionalUrlsFields = additionalUrls.length > 0 ? { additionalUrls } : {};
 
   if (mode === 'container') {
     return {
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
-      ...engineFields, ...previewFields, ...outputFormatFields,
+      ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields,
     };
   }
   if (mode === 'api') {
     return {
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
-      ...engineFields, ...previewFields, ...outputFormatFields,
+      ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields,
     };
   }
   return {
@@ -298,7 +327,7 @@ function buildScrapingConfig(
     outputFormat: useJsonOutput ? 'Json' : 'Csv',
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
-    ...engineFields, ...previewFields,
+    ...engineFields, ...previewFields, ...additionalUrlsFields,
   };
 }
 
@@ -310,14 +339,14 @@ function buildScrapingConfig(
 // function instead of reaching into chrome.runtime itself.
 function buildConfigExport(
   url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
-  engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
+  engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false, additionalUrls = [],
 ) {
   return {
     exportedAt: new Date().toISOString(),
     extensionVersion: manifest.version || '?',
     config: buildScrapingConfig(
       url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview,
-      useJsonOutput,
+      useJsonOutput, additionalUrls,
     ),
   };
 }
@@ -485,6 +514,7 @@ function persistState() {
       groups: _state.groups,
       engine: _state.engine,
       browserActions: _state.browserActions,
+      additionalStartUrls: _state.additionalStartUrls,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
       selectionKind: _state.selectionKind,
@@ -730,6 +760,15 @@ function render() {
 
     const dataPreviewToggle = document.getElementById('toggle-include-data-preview');
     if (dataPreviewToggle) dataPreviewToggle.checked = _state.includeDataPreview;
+
+    // Issue #83: hidden for API mode — Api builds its own request URL from
+    // apiConfig.urlTemplate and never reads this list at all (the companion
+    // rejects the combination outright, see Program.cs).
+    document.getElementById('additional-urls-row')?.classList.toggle('hidden', _state.mode === 'api');
+    const additionalUrlsInput = document.getElementById('input-additional-urls');
+    if (additionalUrlsInput && document.activeElement !== additionalUrlsInput) {
+      additionalUrlsInput.value = _state.additionalStartUrls.join('\n');
+    }
 
     if (_state.containerModalOpen) {
       show('modal-container-new');
@@ -1190,7 +1229,7 @@ async function generate() {
   const config = buildScrapingConfig(
     _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
-    _state.useJsonOutput,
+    _state.useJsonOutput, _state.additionalStartUrls,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
@@ -1274,7 +1313,7 @@ function downloadConfigExport() {
   const exportObj = buildConfigExport(
     _state.url, _state.mode, _state.fields, _state.groups, manifest, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
-    _state.useJsonOutput,
+    _state.useJsonOutput, _state.additionalStartUrls,
   );
   log('DOWNLOAD scraping-config.json', exportObj);
 
@@ -1649,6 +1688,9 @@ function wireEvents() {
   });
   document.getElementById('input-output-filename')?.addEventListener('input', (e) => {
     setState(_state.current, { outputFileName: e.target.value });
+  });
+  document.getElementById('input-additional-urls')?.addEventListener('input', (e) => {
+    setState(_state.current, { additionalStartUrls: parseAdditionalUrls(e.target.value) });
   });
 
   document.getElementById('toggle-include-data-preview')?.addEventListener('change', (e) => {
@@ -2265,7 +2307,7 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'mode', 'groups',
-    'engine', 'browserActions', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
     'scriptFileName', 'outputFileName',
@@ -2279,6 +2321,7 @@ async function init() {
   if (stored.mode)                  _state = { ..._state, mode: stored.mode };
   if (stored.engine)                _state = { ..._state, engine: stored.engine };
   if (Array.isArray(stored.browserActions)) _state = { ..._state, browserActions: stored.browserActions };
+  if (Array.isArray(stored.additionalStartUrls)) _state = { ..._state, additionalStartUrls: stored.additionalStartUrls };
   if (stored.scriptFileName)        _state = { ..._state, scriptFileName: stored.scriptFileName };
   if (stored.outputFileName)        _state = { ..._state, outputFileName: stored.outputFileName };
   if (stored.selectionKind)         _state = { ..._state, selectionKind: stored.selectionKind };
@@ -2380,7 +2423,7 @@ if (typeof module !== 'undefined') {
     findUrlTemplateMatches, mergeValueListValues,
     variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
     detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
-    applyStaticTranslations, sanitizeFileNameBase,
+    applyStaticTranslations, sanitizeFileNameBase, parseAdditionalUrls,
     addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
     buildVerificationValues,
     frameBadgeHtml,

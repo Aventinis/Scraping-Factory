@@ -33,7 +33,11 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         var actionLines = plan.Steps
             .Select(step => step switch
             {
-                NavigateStep s => navigateTemplate.Render(new { step = new { url = s.Url } }),
+                // Issue #83: the target URL is no longer baked in as a
+                // literal here — it comes from scrape()'s own `url`
+                // parameter at runtime, since the same action sequence now
+                // runs once per start URL. See playwright_navigate_step.py.j2.
+                NavigateStep => navigateTemplate.Render(new { }),
                 WaitForStep s => waitTemplate.Render(new
                 {
                     step = new { selector = s.Selector, timeout_ms = s.TimeoutMs, frame_path = s.FramePath },
@@ -74,7 +78,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
             var groupedShellTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_scraper_grouped.py.j2");
             return groupedShellTemplate.Render(new
             {
-                url = navigate.Url,
+                urls = navigate.Urls,
                 groups_literal = groupsLiteral,
                 root_names = rootNames,
                 actions,
@@ -95,7 +99,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
 
         return shellTemplate.Render(new
         {
-            url = navigate.Url, fields, actions, needs_os_import = needsOsImport,
+            urls = navigate.Urls, fields, actions, needs_os_import = needsOsImport,
             script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
             output_is_json = plan.OutputFormat == OutputFormat.Json,
         });

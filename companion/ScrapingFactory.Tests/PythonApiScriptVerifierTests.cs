@@ -14,7 +14,7 @@ public class PythonApiScriptVerifierTests
 {
     private static ScrapingPlan PlanWith(ApiConfig api) => new()
     {
-        Steps = [new NavigateStep { Url = "https://example.com" }, new ApiCallStep { Config = api }],
+        Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = api }],
         OutputFormat = OutputFormat.Csv,
         Engine = ScrapingEngine.Api,
     };
@@ -27,7 +27,7 @@ public class PythonApiScriptVerifierTests
     // output.json's own root JsonNode type (see PythonScriptVerifier).
     private static ScrapingPlan PlanWithJson(ApiConfig api) => new()
     {
-        Steps = [new NavigateStep { Url = "https://example.com" }, new ApiCallStep { Config = api }],
+        Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = api }],
         OutputFormat = OutputFormat.Json,
         Engine = ScrapingEngine.Api,
     };

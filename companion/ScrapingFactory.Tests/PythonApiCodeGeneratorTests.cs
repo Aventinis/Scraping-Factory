@@ -10,7 +10,7 @@ public class PythonApiCodeGeneratorTests
 
     private static ScrapingPlan PlanWith(ApiConfig api) => new()
     {
-        Steps = [new NavigateStep { Url = "https://example.com" }, new ApiCallStep { Config = api }],
+        Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = api }],
         OutputFormat = OutputFormat.Csv,
         Engine = ScrapingEngine.Api,
     };
@@ -22,6 +22,16 @@ public class PythonApiCodeGeneratorTests
         Fields = [new ApiField { Name = "Titel", Path = "title" }, new ApiField { Name = "Preis", Path = "meta.price" }],
         Parameters = [new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["a", "b"] } }],
     };
+
+    // Many sites reject the bare "python-requests/x.y" default User-Agent
+    // with 403 Forbidden — see PythonScriptVerifierTests for a real
+    // end-to-end reproduction/fix proof.
+    [Fact]
+    public void Generate_BuildHeaders_SetsDefaultUserAgentFirst()
+    {
+        var script = _generator.Generate(PlanWith(SampleApi()));
+        Assert.Contains("headers = {\"User-Agent\":", script);
+    }
 
     [Fact]
     public void Generate_FieldWithTransforms_RendersTransformChainAndRuntimeHelper()
@@ -105,7 +115,7 @@ public class PythonApiCodeGeneratorTests
     {
         var plan = new ScrapingPlan
         {
-            Steps = [new NavigateStep { Url = "https://example.com" }, new ApiCallStep { Config = SampleApi() }],
+            Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = SampleApi() }],
             OutputFormat = OutputFormat.Csv,
             Engine = ScrapingEngine.Api,
             ScriptFileName = "api_scraper",
@@ -298,6 +308,16 @@ public class PythonApiCodeGeneratorTests
         Assert.Contains("\"children\" in node", script);
     }
 
+    // scraper_api_grouped.py.j2 has its own copy of _build_headers() (no
+    // cross-template includes, see scraper_grouped.py.j2's own doc comment
+    // on the same duplication) — proves the grouped template got the fix too.
+    [Fact]
+    public void Generate_ApiGroups_BuildHeaders_SetsDefaultUserAgentFirst()
+    {
+        var script = _generator.Generate(PlanWith(SampleGroupedApi()));
+        Assert.Contains("headers = {\"User-Agent\":", script);
+    }
+
     [Fact]
     public void Generate_ApiGroupsFieldWithTransforms_RendersTransformChainAndRuntimeHelper()
     {
@@ -346,7 +366,7 @@ public class PythonApiCodeGeneratorTests
     {
         var plan = new ScrapingPlan
         {
-            Steps = [new NavigateStep { Url = "https://example.com" }, new ApiCallStep { Config = SampleGroupedApi() }],
+            Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = SampleGroupedApi() }],
             OutputFormat = OutputFormat.Xml,
             Engine = ScrapingEngine.Api,
             ScriptFileName = "api_scraper",

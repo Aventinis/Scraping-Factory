@@ -548,6 +548,43 @@ shapes (flat/container/API) since none of them share a common leaf type.
   preview stays hidden) and reuses the exact same `renderTransformPreview`
   call flat mode's own modal already makes.
 
+### 2.19 Multiple start URLs (Issue #83)
+
+Lets the same Fields/Groups extraction config run against a static,
+user-supplied list of start URLs in one script run, instead of exactly one —
+results from every URL are combined into a single output file. Applies to
+flat and container mode only; API mode already builds its own request URL
+from `urlTemplate`/`Parameters` and rejects the combination outright.
+
+- Extension: `popup/popup.js` (`_state.additionalStartUrls`,
+  `parseAdditionalUrls` — splits the textarea on newlines and drops blank
+  lines, threaded through `buildScrapingConfig`/`buildConfigExport` as
+  `additionalUrls`), `popup/popup.html` (`#input-additional-urls`, hidden for
+  API mode via the same `_state.mode === 'api'` toggle `#preview-section`
+  already uses)
+- Companion: `IR/ScrapingConfig.cs` (`AdditionalUrls`, additive/wire-
+  compatible), `IR/ScrapingPlanBuilder.cs` (combines `Url` + trimmed,
+  non-blank `AdditionalUrls` entries into `NavigateStep.Urls`),
+  `IR/ScrapingStep.cs` (`NavigateStep.Urls`, `List<string>` instead of a
+  single `Url` — the one breaking change to the canonical `ScrapingPlan`,
+  confined to the two code generators below), `IR/ScrapingPlanValidator.cs`
+  (validates every entry, identifying a failure by index), `Program.cs` (the
+  `Api`+`AdditionalUrls` `400` guard, same style as the existing Fields/
+  Groups/Api mutual-exclusivity checks)
+- `Backends/Python/PythonCodeGenerator.cs`/`PythonPlaywrightCodeGenerator.cs`
+  read `NavigateStep.Urls` (a list) instead of `.Url`, rendered into each
+  template as `URLS` instead of `URL`. `scraper.py.j2`/
+  `playwright_scraper.py.j2` loop `main()` over `URLS`, combining every
+  URL's rows into one `data` list; `scraper_grouped.py.j2`/
+  `playwright_scraper_grouped.py.j2` combine every URL's own `scrape(url)`
+  children into one `<Ergebnis>` root, reusing the same sibling-merging
+  pattern already used for multiple root groups from a single URL.
+  `scraper_api.py.j2`/`scraper_api_grouped.py.j2` (§2.3/§2.4) are untouched.
+- Fixes a latent bug surfaced by this change: `playwright_navigate_step.py.j2`
+  used to bake the target URL in as a literal, ignoring `scrape(url)`'s own
+  parameter — it now emits `page.goto(url, ...)`, which is what makes
+  per-URL looping possible for the Browser engine at all.
+
 ---
 
 ## 3. Class & Module Relationship Model
@@ -558,6 +595,7 @@ shapes (flat/container/API) since none of them share a common leaf type.
 classDiagram
     class ScrapingConfig {
         +string Url
+        +List~string~? AdditionalUrls
         +List~ScrapingField~ Fields
         +List~GroupNode~? Groups
         +ApiConfig? Api
@@ -577,7 +615,7 @@ classDiagram
         +string OutputFileBaseName
     }
     class ScrapingStep { <<abstract>> }
-    class NavigateStep
+    class NavigateStep { +List~string~ Urls }
     class ExtractStep
     class WaitForStep
     class FillStep
@@ -753,6 +791,7 @@ compile time anywhere.
 | Verification values (login test values) | `popup.js`: `buildVerificationValues()` (from `_state.fillTestValues`, never persisted) | `{verificationValues: {ENV_NAME: "value"}}` | `IR/FillVerificationValues.cs`: `Filter()` reads `ScrapingConfig.VerificationValues` |
 | Data-preview opt-in / result | `popup.js`: `_state.includeDataPreview` toggle → `buildScrapingConfig`'s `includePreview` key; `renderDataPreview()` consumes the response | request: `{includePreview: true}`; response: `{script, preview: {outputFormat, totalCount, truncated, columns?, rows?, xmlSample?}}` | `IR/ScrapingConfig.cs`: `IncludePreview`; `Backends/ScriptPreviewData.cs` |
 | Script/output filenames | `popup.js`: `sanitizeFileNameBase()` (client-side mirror, download only) | `{scriptFileName?, outputFileName?}` | `IR/FileNameSanitizer.cs`: `SanitizeBaseName()` (server-side, authoritative) |
+| Additional start URLs | `popup.js`: `parseAdditionalUrls()` (splits textarea on newlines, drops blank lines) → `buildScrapingConfig`'s `additionalUrls` key | `{additionalUrls?: ["https://..."]}` | `IR/ScrapingConfig.cs`: `AdditionalUrls`; combined with `Url` into `IR/ScrapingStep.cs`: `NavigateStep.Urls` |
 | Range format mini-template | `api-config.js`: `RANGE_FORMAT_PRESETS`, `compileRangeFormatPattern()` (client-side mirror) | `{format?: "{yyyy}-W{ww}"}` inside a `RangeSource` | `Backends/Python/RangeFormat.cs` (server-side, authoritative) |
 
 Two rows above are explicitly **hand-kept mirrors**, not generated from a shared
