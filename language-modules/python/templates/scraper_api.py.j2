@@ -210,7 +210,13 @@ def _number_range(from_value, to_value):
 
 
 def _build_headers():
-    headers = {}
+    # Many sites (Wikipedia among them) reject the bare "python-requests/x.y"
+    # default User-Agent with 403 Forbidden — an honest, identifying UA (not
+    # a spoofed browser) is enough to pass that check on most sites. Set
+    # first so a user-configured "User-Agent" header below still overrides
+    # it (dict assignment order + requests' own case-insensitive header
+    # handling means the later entry wins regardless of casing).
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"}
     for header in HEADERS:
         headers[header["name"]] = header["value"] if "value" in header else os.environ[header["envVar"]]
     return headers

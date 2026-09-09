@@ -16,6 +16,11 @@ from bs4 import BeautifulSoup
 # and results are combined into a single output file.
 URLS = [{{ for u in config.urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 
+# Many sites (Wikipedia among them) reject the bare "python-requests/x.y"
+# default User-Agent with 403 Forbidden — an honest, identifying UA (not a
+# spoofed browser) is enough to pass that check on most sites.
+HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"}
+
 SELECTORS = {
 {{- for field in config.fields }}
     "{{ field.name }}": "{{ field.selector }}",
@@ -96,7 +101,7 @@ def _apply_transforms(value, transforms):
 
 
 def scrape(url):
-    response = requests.get(url, timeout=10)
+    response = requests.get(url, headers=HEADERS, timeout=10)
     response.raise_for_status()
     # Use response.content (bytes) instead of response.text: requests guesses
     # the encoding from the Content-Type header, defaulting to ISO-8859-1 when
