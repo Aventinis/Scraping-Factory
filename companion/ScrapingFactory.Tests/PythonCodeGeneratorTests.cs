@@ -12,7 +12,7 @@ public class PythonCodeGeneratorTests
     {
         Steps =
         [
-            new NavigateStep { Url = "https://books.toscrape.com" },
+            new NavigateStep { Urls = ["https://books.toscrape.com"] },
             new ExtractStep { Name = "Titel", Selector = "h3 > a" },
             new ExtractStep { Name = "Link", Selector = "h3 > a", Attribute = "href" }
         ]
@@ -36,6 +36,26 @@ public class PythonCodeGeneratorTests
         Assert.Contains("requests.get(url, headers=HEADERS, timeout=10)", script);
     }
 
+    // Issue #83
+    [Fact]
+    public void Generate_MultipleUrls_LoopsOverUrlsAndCombinesData()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com/a", "https://example.com/b"] },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("""URLS = ["https://example.com/a", "https://example.com/b"]""", script);
+        Assert.Contains("for url in URLS:", script);
+        Assert.Contains("data.extend(scrape(url))", script);
+    }
+
     [Fact]
     public void Generate_FieldWithoutTransforms_HasEmptyTransformsListInDict()
     {
@@ -50,7 +70,7 @@ public class PythonCodeGeneratorTests
         {
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ExtractStep
                 {
                     Name = "Preis", Selector = ".price",

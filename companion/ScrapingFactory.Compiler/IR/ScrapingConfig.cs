@@ -4,6 +4,17 @@ public sealed class ScrapingConfig
 {
     public string Version { get; init; } = "1";
     public required string Url { get; init; }
+
+    // Issue #83: extra start URLs the same Fields/Groups extraction config
+    // runs against, in addition to Url — results are combined into one
+    // output file (see ScrapingPlanBuilder/NavigateStep.Urls). Additive,
+    // wire-compatible: null/empty is today's exact single-URL behavior.
+    // Mutually exclusive with Api (enforced in the /generate endpoint) —
+    // Api mode builds its own request URL from UrlTemplate/Parameters and
+    // never consumes the page-scraping start URL at all, so a URL list here
+    // would silently do nothing rather than express what the caller intended.
+    public List<string>? AdditionalUrls { get; init; }
+
     public List<ScrapingField> Fields { get; init; } = [];
 
     // Container-Mode: mutually exclusive with Fields (enforced in the

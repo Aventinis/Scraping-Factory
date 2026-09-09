@@ -12,7 +12,7 @@ public class PythonGroupCodeGeneratorTests
     {
         Steps =
         [
-            new NavigateStep { Url = "https://example.com/speisekarte" },
+            new NavigateStep { Urls = ["https://example.com/speisekarte"] },
             new ExtractGroupStep
             {
                 Roots =
@@ -61,6 +61,37 @@ public class PythonGroupCodeGeneratorTests
         Assert.Contains("requests.get(url, headers=HEADERS, timeout=10)", script);
     }
 
+    // Issue #83
+    [Fact]
+    public void Generate_MultipleUrls_LoopsOverUrlsAndCombinesIntoOneErgebnis()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com/a", "https://example.com/b"] },
+                new ExtractGroupStep
+                {
+                    Roots =
+                    [
+                        new GroupNode
+                        {
+                            Name = "Kategorie", Selector = "section", Repeating = true,
+                            Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }],
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("""URLS = ["https://example.com/a", "https://example.com/b"]""", script);
+        Assert.Contains("for url in URLS:", script);
+        Assert.Contains("for el in scrape(url):", script);
+        Assert.Contains("root.append(el)", script);
+    }
+
     [Fact]
     public void Generate_ContainsGroupsLiteralWithNestedChildren()
     {
@@ -100,7 +131,7 @@ public class PythonGroupCodeGeneratorTests
         {
             Steps =
             [
-                new NavigateStep { Url = "https://example.com/speisekarte" },
+                new NavigateStep { Urls = ["https://example.com/speisekarte"] },
                 new ExtractGroupStep
                 {
                     Roots =
@@ -182,7 +213,7 @@ public class PythonGroupCodeGeneratorTests
         {
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ExtractGroupStep
                 {
                     Roots =
@@ -210,7 +241,7 @@ public class PythonGroupCodeGeneratorTests
         {
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ExtractGroupStep
                 {
                     Roots =

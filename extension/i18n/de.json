@@ -72,7 +72,9 @@
     "engineBrowser": "Browser",
     "engineBrowserTitle": "Rendert JavaScript vor der Extraktion — für dynamisch geladene Seiten oder Login-Flows. Langsamer als die statische Engine.",
     "outputJsonToggle": "Ausgabe als JSON (statt CSV/XML)",
-    "dataPreviewToggle": "Testlauf-Datenvorschau anzeigen"
+    "dataPreviewToggle": "Testlauf-Datenvorschau anzeigen",
+    "additionalUrlsLabel": "Weitere Start-URLs",
+    "additionalUrlsPlaceholder": "Eine URL pro Zeile (zusätzlich zur obigen Seite)"
   },
   "robots": {
     "checkFailed": "robots.txt konnte nicht geprüft werden ({error}).",

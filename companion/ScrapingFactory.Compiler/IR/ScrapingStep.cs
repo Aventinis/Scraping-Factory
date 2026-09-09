@@ -4,9 +4,14 @@ public abstract class ScrapingStep
 {
 }
 
+// Issue #83: carries every start URL the same extraction config runs
+// against (the wire-format's Url plus any AdditionalUrls, combined in
+// ScrapingPlanBuilder) — always at least one entry. Only PythonCodeGenerator/
+// PythonPlaywrightCodeGenerator read this; PythonApiCodeGenerator has its own
+// per-request URL templating (ApiConfig.UrlTemplate) and ignores it entirely.
 public sealed class NavigateStep : ScrapingStep
 {
-    public required string Url { get; init; }
+    public required List<string> Urls { get; init; }
 }
 
 public sealed class ExtractStep : ScrapingStep

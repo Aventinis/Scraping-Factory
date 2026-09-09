@@ -23,7 +23,7 @@ public class ScrapingPlanBuilderTests
         Assert.Equal(3, plan.Steps.Count);
 
         var navigate = Assert.IsType<NavigateStep>(plan.Steps[0]);
-        Assert.Equal("https://example.com", navigate.Url);
+        Assert.Equal(["https://example.com"], navigate.Urls);
 
         var titel = Assert.IsType<ExtractStep>(plan.Steps[1]);
         Assert.Equal("Titel", titel.Name);
@@ -60,6 +60,58 @@ public class ScrapingPlanBuilderTests
 
         var step = Assert.Single(plan.Steps);
         Assert.IsType<NavigateStep>(step);
+    }
+
+    // Issue #83
+    [Fact]
+    public void Build_AdditionalUrls_CombinesWithPrimaryUrlInOrder()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com/a",
+            AdditionalUrls = ["https://example.com/b", "https://example.com/c"],
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        var navigate = Assert.IsType<NavigateStep>(plan.Steps[0]);
+        Assert.Equal(
+            ["https://example.com/a", "https://example.com/b", "https://example.com/c"],
+            navigate.Urls);
+    }
+
+    [Fact]
+    public void Build_AdditionalUrls_TrimsAndDropsBlankEntries()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com/a",
+            AdditionalUrls = ["  https://example.com/b  ", "", "   ", "https://example.com/c"],
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        var navigate = Assert.IsType<NavigateStep>(plan.Steps[0]);
+        Assert.Equal(
+            ["https://example.com/a", "https://example.com/b", "https://example.com/c"],
+            navigate.Urls);
+    }
+
+    [Fact]
+    public void Build_NoAdditionalUrls_UrlsContainsOnlyPrimaryUrl()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        var navigate = Assert.IsType<NavigateStep>(plan.Steps[0]);
+        Assert.Equal(["https://example.com"], navigate.Urls);
     }
 
     [Fact]

@@ -23,10 +23,17 @@ public static class ScrapingPlanValidator
         if (plan.Steps.Skip(1).Any(step => step is NavigateStep))
             return Invalid("Plan darf nur einen NavigateStep enthalten.");
 
-        if (!Uri.TryCreate(navigate.Url, UriKind.Absolute, out var uri) ||
-            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        if (navigate.Urls.Count == 0)
+            return Invalid("NavigateStep muss mindestens eine URL enthalten.");
+
+        for (var i = 0; i < navigate.Urls.Count; i++)
         {
-            return Invalid($"Ungültige URL '{navigate.Url}': muss eine absolute http(s)-URL sein.");
+            var url = navigate.Urls[i];
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                return Invalid($"Ungültige Start-URL #{i + 1} '{url}': muss eine absolute http(s)-URL sein.");
+            }
         }
 
         // WaitFor/Fill/Click/Scroll all need a real browser to mean anything —

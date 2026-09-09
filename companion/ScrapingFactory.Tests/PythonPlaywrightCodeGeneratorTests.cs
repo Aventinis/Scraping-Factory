@@ -13,7 +13,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://books.toscrape.com" },
+            new NavigateStep { Urls = ["https://books.toscrape.com"] },
             new ExtractStep { Name = "Titel", Selector = "h3 > a" },
             new ExtractStep { Name = "Link", Selector = "h3 > a", Attribute = "href" },
         ],
@@ -24,7 +24,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://books.toscrape.com" },
+            new NavigateStep { Urls = ["https://books.toscrape.com"] },
             new WaitForStep { Selector = ".loaded", TimeoutMs = 7000 },
             new ExtractStep { Name = "Titel", Selector = "h3 > a" },
         ],
@@ -38,7 +38,7 @@ public class PythonPlaywrightCodeGeneratorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ExtractStep { Name = "Preis", Selector = ".price", Transforms = [new TrimTransform(), new ToNumberTransform()] },
             ],
         };
@@ -55,7 +55,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://example.com/login" },
+            new NavigateStep { Urls = ["https://example.com/login"] },
             new FillStep { Selector = "#username", EnvironmentVariableName = "SF_USERNAME" },
             new FillStep { Selector = "#password", EnvironmentVariableName = "SF_PASSWORD" },
             new ClickStep { Selector = "#submit" },
@@ -81,7 +81,32 @@ public class PythonPlaywrightCodeGeneratorTests
     public void Generate_ContainsPageGoto()
     {
         var script = _generator.Generate(PlanWithoutWait());
-        Assert.Contains("page.goto(\"https://books.toscrape.com\"", script);
+        // Issue #83: the target is no longer baked in as a literal — it
+        // comes from scrape()'s own `url` parameter, since the same action
+        // sequence now runs once per configured start URL (see URLS/main()).
+        Assert.Contains("page.goto(url,", script);
+        Assert.Contains("\"https://books.toscrape.com\"", script);
+    }
+
+    // Issue #83
+    [Fact]
+    public void Generate_MultipleUrls_LoopsOverUrlsAndCombinesData()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com/a", "https://example.com/b"] },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("""URLS = ["https://example.com/a", "https://example.com/b"]""", script);
+        Assert.Contains("for url in URLS:", script);
+        Assert.Contains("data.extend(scrape(url))", script);
     }
 
     [Fact]
@@ -173,7 +198,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://example.com" },
+            new NavigateStep { Urls = ["https://example.com"] },
             new ScrollStep { MaxIterations = 5, WaitAfterMs = 250 },
             new ExtractStep { Name = "Titel", Selector = ".item" },
         ],
@@ -184,7 +209,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://example.com" },
+            new NavigateStep { Urls = ["https://example.com"] },
             new ScrollStep
             {
                 ContainerSelector = "#list", LoadMoreButtonSelector = ".load-more",
@@ -230,7 +255,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://example.com" },
+            new NavigateStep { Urls = ["https://example.com"] },
             new ExtractStep { Name = "Titel", Selector = "h3 > a" },
             new ExtractStep { Name = "Preis", Selector = ".price", FramePath = ["iframe#outer", "iframe.inner"] },
         ],
@@ -276,7 +301,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://example.com/speisekarte" },
+            new NavigateStep { Urls = ["https://example.com/speisekarte"] },
             new ExtractGroupStep
             {
                 Roots =
@@ -301,7 +326,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://example.com/login" },
+            new NavigateStep { Urls = ["https://example.com/login"] },
             new FillStep { Selector = "#user", EnvironmentVariableName = "SF_USERNAME" },
             new ClickStep { Selector = "#submit" },
             new ExtractGroupStep
@@ -386,7 +411,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://example.com/speisekarte" },
+            new NavigateStep { Urls = ["https://example.com/speisekarte"] },
             new ExtractGroupStep
             {
                 Roots =
@@ -412,7 +437,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://example.com/speisekarte" },
+            new NavigateStep { Urls = ["https://example.com/speisekarte"] },
             new ExtractGroupStep
             {
                 Roots =
@@ -469,7 +494,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://example.com/login" },
+            new NavigateStep { Urls = ["https://example.com/login"] },
             new FillStep { Selector = "#user", EnvironmentVariableName = "SF_USERNAME", FramePath = ["iframe#sso"] },
             new ClickStep { Selector = "#submit", FramePath = ["iframe#sso"] },
             new WaitForStep { Selector = ".welcome", TimeoutMs = 3000, FramePath = ["iframe#sso"] },
