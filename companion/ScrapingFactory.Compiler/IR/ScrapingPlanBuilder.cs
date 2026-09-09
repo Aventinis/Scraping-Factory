@@ -26,13 +26,16 @@ public static class ScrapingPlanBuilder
         // Container-Mode: Groups replaces Fields wholesale, and forces Xml
         // regardless of what the wire payload set OutputFormat to — the
         // extension doesn't need to know this any more than it needs to set
-        // Engine=Browser for a login flow (see ScrapingConfig.Groups).
+        // Engine=Browser for a login flow (see ScrapingConfig.Groups) —
+        // unless the caller explicitly asked for Json (Issue #86), which
+        // fits a tree just as well as Xml does and is honored instead.
         if (config.Groups is { Count: > 0 } groups)
         {
+            var groupsOutputFormat = config.OutputFormat == OutputFormat.Json ? OutputFormat.Json : OutputFormat.Xml;
             steps.Add(new ExtractGroupStep { Roots = groups });
             return new ScrapingPlan
             {
-                Steps = steps, OutputFormat = OutputFormat.Xml, Engine = config.Engine,
+                Steps = steps, OutputFormat = groupsOutputFormat, Engine = config.Engine,
                 ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
             };
         }
@@ -45,10 +48,14 @@ public static class ScrapingPlanBuilder
         // ItemsPath/Fields shape still forces Csv exactly as before, but
         // the tree shape (Groups) forces Xml instead — tree data doesn't
         // fit CSV's column model, the same reason Container-Mode's own
-        // tree forces Xml above.
+        // tree forces Xml above. Either forced default yields to an
+        // explicit Json request (Issue #86), same as Container-Mode.
         if (config.Api is { } api)
         {
-            var apiOutputFormat = api.Groups is { Count: > 0 } ? OutputFormat.Xml : OutputFormat.Csv;
+            var isJson = config.OutputFormat == OutputFormat.Json;
+            var apiOutputFormat = api.Groups is { Count: > 0 }
+                ? (isJson ? OutputFormat.Json : OutputFormat.Xml)
+                : (isJson ? OutputFormat.Json : OutputFormat.Csv);
             steps.Add(new ApiCallStep { Config = api });
             return new ScrapingPlan
             {
