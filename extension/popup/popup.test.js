@@ -40,7 +40,7 @@ const {
   buildStaticListSource, buildDiscoverySource, buildRangeSource, buildApiHeaders, buildApiConfig,
   findUrlTemplateMatches, mergeValueListValues,
   variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
-  detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase,
+  detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase, parseAdditionalUrls,
   addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
   buildVerificationValues,
   frameBadgeHtml,
@@ -235,6 +235,38 @@ describe('buildScrapingConfig (useJsonOutput, Issue #86)', () => {
   });
 });
 
+// Issue #83: additionalUrls is mode-independent too, like includePreview/
+// useJsonOutput above — only included when non-empty, so the default
+// (empty textarea) request stays byte-for-byte identical to before this
+// existed.
+describe('buildScrapingConfig (additionalUrls, Issue #83)', () => {
+  test('omits additionalUrls entirely when empty (the default)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.additionalUrls).toBeUndefined();
+  });
+
+  test('includes additionalUrls when non-empty', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, ['https://example.com/2', 'https://example.com/3'],
+    );
+    expect(result.additionalUrls).toEqual(['https://example.com/2', 'https://example.com/3']);
+  });
+
+  test('works the same way for container and api modes', () => {
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, ['https://example.com/2'],
+    );
+    expect(containerResult.additionalUrls).toEqual(['https://example.com/2']);
+
+    const apiResult = buildScrapingConfig(
+      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, ['https://example.com/2'],
+    );
+    expect(apiResult.additionalUrls).toEqual(['https://example.com/2']);
+  });
+});
+
 describe('buildScrapingConfig (container mode)', () => {
   test('sends groups instead of fields, no outputFormat', () => {
     const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
@@ -297,6 +329,32 @@ describe('sanitizeFileNameBase', () => {
 
   test('falls back when every character is invalid', () => {
     expect(sanitizeFileNameBase('///', 'output')).toBe('output');
+  });
+});
+
+// ── parseAdditionalUrls ──────────────────────────────────────────────────────
+// Issue #83: one URL per line, pasted/typed into the additional-start-urls
+// textarea.
+
+describe('parseAdditionalUrls', () => {
+  test('splits on newlines and trims each entry', () => {
+    expect(parseAdditionalUrls('https://example.com/a\n  https://example.com/b  '))
+      .toEqual(['https://example.com/a', 'https://example.com/b']);
+  });
+
+  test('drops blank lines', () => {
+    expect(parseAdditionalUrls('https://example.com/a\n\n   \nhttps://example.com/b\n'))
+      .toEqual(['https://example.com/a', 'https://example.com/b']);
+  });
+
+  test('returns an empty array for empty/null/undefined input', () => {
+    expect(parseAdditionalUrls('')).toEqual([]);
+    expect(parseAdditionalUrls(null)).toEqual([]);
+    expect(parseAdditionalUrls(undefined)).toEqual([]);
+  });
+
+  test('leaves a malformed non-blank entry as-is (the companion validates it)', () => {
+    expect(parseAdditionalUrls('not-a-url')).toEqual(['not-a-url']);
   });
 });
 
