@@ -3,7 +3,11 @@
 # Fields: {{ for field in config.fields }}{{ field.name }}{{ if !for.last }}, {{ end }}{{ end }}
 # Run:    python {{ config.script_filename }}.py
 
+{{~ if config.output_is_json ~}}
+import json
+{{~ else ~}}
 import csv
+{{~ end ~}}
 import re
 import requests
 from bs4 import BeautifulSoup
@@ -117,11 +121,17 @@ def scrape(url):
 
 def main():
     data = scrape(URL)
+{{~ if config.output_is_json ~}}
+    with open("{{ config.output_filename }}.json", "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    print(f"Done — {len(data)} rows written to {{ config.output_filename }}.json")
+{{~ else ~}}
     with open("{{ config.output_filename }}.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=list(SELECTORS.keys()))
         writer.writeheader()
         writer.writerows(data)
     print(f"Done — {len(data)} rows written to {{ config.output_filename }}.csv")
+{{~ end ~}}
 
 
 if __name__ == "__main__":

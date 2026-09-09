@@ -171,7 +171,7 @@ any change:
   execution.
 - **Verification is real execution, not a simulation.** `PythonScriptVerifier`
   writes the generated script to a temp directory and runs it via `python3`/
-  `python`, then reads back `output.csv`/`output.xml`. This is why a separate
+  `python`, then reads back `output.csv`/`output.xml`/`output.json`. This is why a separate
   Playwright-/AngleSharp-based verification path was rejected (`CLAUDE.md`'s
   "Consistency Rule") — only real execution can catch encoding issues, selector
   incompatibilities, and network errors the way the eventual downloaded script
@@ -184,7 +184,9 @@ Two largely-orthogonal axes run through the whole system:
 - **Mode** (what shape the extracted data has): `Fields` (flat) | `Groups`
   (nested tree, forces `OutputFormat.Xml`) | `Api` (forces `Engine.Api`;
   `OutputFormat` then depends on the *response* shape — flat `ItemsPath`/`Fields`
-  → `Csv`, tree `Groups` → `Xml`).
+  → `Csv`, tree `Groups` → `Xml`). Any forced default yields to an explicit
+  `OutputFormat.Json` request (Issue #86) — Json fits a flat record list just
+  as well as `Csv` and a tree just as well as `Xml`.
 - **Engine** (how the page is fetched/rendered): `Static` (requests +
   BeautifulSoup) | `Browser` (Playwright + Chromium) | `Api` (plain `requests`,
   forced by API mode regardless of what the wire payload sent). Browser-only

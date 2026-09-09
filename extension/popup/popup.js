@@ -201,6 +201,11 @@ let _state = {
   // it's a per-generate opt-in, not a sticky preference).
   includeDataPreview: false,
   dataPreview:        null, // the companion's ScriptPreviewData from the last successful /generate with includeDataPreview on, or null
+  // Issue #86: opt-in Json output, mode-independent (like includeDataPreview
+  // above) — not persisted, always off on popup reopen; a per-generate
+  // choice, not a sticky preference. See buildScrapingConfig for exactly
+  // what this adds/replaces per mode.
+  useJsonOutput:      false,
 };
 
 const DOM_TREE_TIMEOUT_MS = 5000;
@@ -237,9 +242,9 @@ function sanitizeFileNameBase(input, fallback) {
 
 // `apiConfig` is only read when mode === 'api' — the confirmed ApiConfig
 // wire object built by buildApiConfig (Issue #53 Phase 5), passed straight
-// through as the request body's `api` field. Method/OutputFormat are forced
-// server-side (see companion's ScrapingPlanBuilder), so nothing extra is
-// added here the way outputFormat is for flat mode.
+// through as the request body's `api` field. Method is forced server-side
+// (see companion's ScrapingPlanBuilder); OutputFormat is forced too, unless
+// `useJsonOutput` opts into Json (Issue #86, see below).
 // `scriptFileName`/`outputFileName` are sent as-is (possibly blank) — the
 // companion sanitizes and defaults them itself (see FileNameSanitizer),
 // same "server is the source of truth" pattern as OutputFormat.
@@ -251,27 +256,35 @@ function sanitizeFileNameBase(input, fallback) {
 // `includePreview` (Issue #122) is mode-independent too — only included when
 // true, so the default (checkbox unchecked) request stays byte-for-byte
 // identical to before this existed. See companion's ScrapingConfig.IncludePreview.
+// `useJsonOutput` (Issue #86) is mode-independent as well: container/api mode
+// send no `outputFormat` key at all by default (the companion forces its own
+// Xml/Csv default per shape) and only add `outputFormat: 'Json'` when this
+// is true; flat mode always sends an explicit outputFormat, so it just swaps
+// the literal 'Csv' for 'Json'. The companion decides — per mode/shape —
+// whether Json actually fits, same "server is the source of truth" pattern
+// as everything else here.
 function buildScrapingConfig(
   url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
-  engine = 'Static', browserActions = [], includePreview = false,
+  engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
 ) {
   const engineFields = engine === 'Browser'
     ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
     : {};
   const previewFields = includePreview ? { includePreview: true } : {};
+  const outputFormatFields = useJsonOutput ? { outputFormat: 'Json' } : {};
 
   if (mode === 'container') {
     return {
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
-      ...engineFields, ...previewFields,
+      ...engineFields, ...previewFields, ...outputFormatFields,
     };
   }
   if (mode === 'api') {
     return {
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
-      ...engineFields, ...previewFields,
+      ...engineFields, ...previewFields, ...outputFormatFields,
     };
   }
   return {
@@ -282,7 +295,7 @@ function buildScrapingConfig(
       ...(f.framePath ? { framePath: f.framePath } : {}),
       ...(f.transforms && f.transforms.length > 0 ? { transforms: f.transforms } : {}),
     })),
-    outputFormat: 'Csv',
+    outputFormat: useJsonOutput ? 'Json' : 'Csv',
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
     ...engineFields, ...previewFields,
@@ -297,12 +310,15 @@ function buildScrapingConfig(
 // function instead of reaching into chrome.runtime itself.
 function buildConfigExport(
   url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
-  engine = 'Static', browserActions = [], includePreview = false,
+  engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
 ) {
   return {
     exportedAt: new Date().toISOString(),
     extensionVersion: manifest.version || '?',
-    config: buildScrapingConfig(url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview),
+    config: buildScrapingConfig(
+      url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview,
+      useJsonOutput,
+    ),
   };
 }
 
@@ -698,8 +714,19 @@ function render() {
     if (scriptNameInput && document.activeElement !== scriptNameInput) scriptNameInput.value = _state.scriptFileName;
     const outputNameInput = document.getElementById('input-output-filename');
     if (outputNameInput && document.activeElement !== outputNameInput) outputNameInput.value = _state.outputFileName;
+    // Container mode always forces Xml server-side (absent Json); API mode
+    // forces Xml too, but only for its tree shape (Groups) — its flat shape
+    // forces Csv, same as flat mode itself. Issue #86's useJsonOutput
+    // toggle overrides whichever of those would otherwise apply.
+    const isTreeShapedMode = _state.mode === 'container'
+      || (_state.mode === 'api' && !!_state.apiConfig?.groups?.length);
     const outputExtEl = document.getElementById('output-filename-ext');
-    if (outputExtEl) outputExtEl.textContent = _state.mode === 'container' ? '.xml' : '.csv';
+    if (outputExtEl) {
+      outputExtEl.textContent = _state.useJsonOutput ? '.json' : (isTreeShapedMode ? '.xml' : '.csv');
+    }
+
+    const outputJsonToggle = document.getElementById('toggle-output-json');
+    if (outputJsonToggle) outputJsonToggle.checked = _state.useJsonOutput;
 
     const dataPreviewToggle = document.getElementById('toggle-include-data-preview');
     if (dataPreviewToggle) dataPreviewToggle.checked = _state.includeDataPreview;
@@ -1163,6 +1190,7 @@ async function generate() {
   const config = buildScrapingConfig(
     _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
+    _state.useJsonOutput,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
@@ -1246,6 +1274,7 @@ function downloadConfigExport() {
   const exportObj = buildConfigExport(
     _state.url, _state.mode, _state.fields, _state.groups, manifest, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
+    _state.useJsonOutput,
   );
   log('DOWNLOAD scraping-config.json', exportObj);
 
@@ -1271,6 +1300,11 @@ function downloadConfigExport() {
 // the generated script's actual trial-run output.
 // Builds the table via DOM APIs + textContent (not innerHTML), so scraped
 // values never need HTML-escaping here at all.
+// Issue #86: Json covers two shapes (flat array → table, tree → text
+// sample), so which renderer to use is decided by which sample field is
+// actually populated (xmlSample/jsonSample vs. columns/rows) rather than by
+// outputFormat alone — outputFormat is still shown to the user via i18n
+// copy, but no longer drives the branch itself.
 function renderDataPreview(preview) {
   const panel = document.getElementById('data-preview-panel');
   if (!panel) return;
@@ -1278,14 +1312,15 @@ function renderDataPreview(preview) {
   panel.classList.remove('hidden');
 
   const tableWrap = document.getElementById('data-preview-table-wrap');
-  const xmlWrap = document.getElementById('data-preview-xml');
+  const textWrap = document.getElementById('data-preview-text');
   const truncatedNote = document.getElementById('data-preview-truncated');
+  const textSample = preview.xmlSample ?? preview.jsonSample;
 
-  if (preview.outputFormat === 'Xml') {
+  if (textSample != null) {
     tableWrap?.classList.add('hidden');
-    if (xmlWrap) {
-      xmlWrap.classList.remove('hidden');
-      xmlWrap.textContent = preview.xmlSample || '';
+    if (textWrap) {
+      textWrap.classList.remove('hidden');
+      textWrap.textContent = textSample;
     }
     if (truncatedNote) {
       truncatedNote.classList.toggle('hidden', !preview.truncated);
@@ -1294,7 +1329,7 @@ function renderDataPreview(preview) {
     return;
   }
 
-  xmlWrap?.classList.add('hidden');
+  textWrap?.classList.add('hidden');
   if (tableWrap) {
     tableWrap.classList.remove('hidden');
     tableWrap.innerHTML = '';
@@ -1619,6 +1654,11 @@ function wireEvents() {
   document.getElementById('toggle-include-data-preview')?.addEventListener('change', (e) => {
     log('BTN toggle-include-data-preview', e.target.checked);
     patchState({ includeDataPreview: e.target.checked });
+  });
+
+  document.getElementById('toggle-output-json')?.addEventListener('change', (e) => {
+    log('BTN toggle-output-json', e.target.checked);
+    patchState({ useJsonOutput: e.target.checked });
   });
 
   document.getElementById('btn-api-search')?.addEventListener('click', () => {

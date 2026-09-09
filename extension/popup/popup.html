@@ -262,7 +262,7 @@
     }
     .output-settings-row input[type="text"]:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.2); }
     .output-settings-ext { flex: none; font-size: 12px; color: #9ca3af; }
-    .data-preview-toggle {
+    .output-settings-toggle {
       display: flex; align-items: center; gap: 6px;
       font-size: 12px; color: #374151; margin-top: 4px; cursor: pointer;
     }
@@ -282,7 +282,9 @@
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;
     }
     .data-preview-table th { background: #f9fafb; position: sticky; top: 0; }
-    .data-preview-xml {
+    /* Issue #86: shared by the Xml sample and the Json tree-shape sample —
+       both are a pretty-printed, read-only text fragment. */
+    .data-preview-text {
       max-height: 220px; overflow: auto; border: 1px solid #e5e7eb; border-radius: 6px;
       padding: 6px 8px; margin: 0; background: #f9fafb; font-size: 11px; white-space: pre-wrap;
     }
@@ -511,10 +513,17 @@
         <input type="text" id="input-output-filename" data-i18n-placeholder="idle.outputFilenamePlaceholder" autocomplete="off" />
         <span id="output-filename-ext" class="output-settings-ext">.csv</span>
       </div>
+      <!-- Issue #86: opt-in Json output — mode-independent, like the data
+           preview toggle below; see buildScrapingConfig's own doc comment
+           for exactly which wire field this adds/replaces per mode. -->
+      <label class="output-settings-toggle">
+        <input type="checkbox" id="toggle-output-json" />
+        <span data-i18n="idle.outputJsonToggle"></span>
+      </label>
       <!-- Issue #122: opt-in trial-run data preview — unrelated to the DOM-
            highlight "Vorschau" above (preview-section); see popup.js's
            renderDataPreview doc comment for the naming rationale. -->
-      <label class="data-preview-toggle">
+      <label class="output-settings-toggle">
         <input type="checkbox" id="toggle-include-data-preview" />
         <span data-i18n="idle.dataPreviewToggle"></span>
       </label>
@@ -615,7 +624,9 @@
     <div id="data-preview-panel" class="data-preview-panel hidden">
       <p class="data-preview-title" data-i18n="done.dataPreviewTitle"></p>
       <div id="data-preview-table-wrap" class="data-preview-table-wrap hidden"></div>
-      <pre id="data-preview-xml" class="data-preview-xml hidden"></pre>
+      <!-- Issue #86: also holds the Json tree-shape sample, not just Xml —
+           see renderDataPreview's own doc comment. -->
+      <pre id="data-preview-text" class="data-preview-text hidden"></pre>
       <p id="data-preview-truncated" class="data-preview-truncated hidden"></p>
     </div>
   </section>

@@ -71,6 +71,7 @@
     "engineStatic": "Estático",
     "engineBrowser": "Navegador",
     "engineBrowserTitle": "Renderiza JavaScript antes de la extracción — para páginas cargadas dinámicamente o flujos de inicio de sesión. Más lento que el motor estático.",
+    "outputJsonToggle": "Salida como JSON (en lugar de CSV/XML)",
     "dataPreviewToggle": "Mostrar vista previa de los datos de la prueba"
   },
   "robots": {

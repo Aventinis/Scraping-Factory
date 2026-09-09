@@ -81,6 +81,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
                 needs_os_import = needsOsImport,
                 script_filename = plan.ScriptFileName,
                 output_filename = plan.OutputFileBaseName,
+                output_is_json = plan.OutputFormat == OutputFormat.Json,
             });
         }
 
@@ -96,6 +97,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         {
             url = navigate.Url, fields, actions, needs_os_import = needsOsImport,
             script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
+            output_is_json = plan.OutputFormat == OutputFormat.Json,
         });
     }
 }

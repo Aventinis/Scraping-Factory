@@ -45,6 +45,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
                 headers_literal = PythonApiConfigLiteral.RenderHeaders(api.Headers),
                 script_filename = plan.ScriptFileName,
                 output_filename = plan.OutputFileBaseName,
+                output_is_json = plan.OutputFormat == OutputFormat.Json,
             });
         }
 
@@ -65,6 +66,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
             headers_literal = PythonApiConfigLiteral.RenderHeaders(api.Headers),
             script_filename = plan.ScriptFileName,
             output_filename = plan.OutputFileBaseName,
+            output_is_json = plan.OutputFormat == OutputFormat.Json,
         });
     }
 

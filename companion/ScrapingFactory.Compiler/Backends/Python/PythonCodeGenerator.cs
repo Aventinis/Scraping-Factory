@@ -28,6 +28,7 @@ public sealed class PythonCodeGenerator : ICodeGenerator
             {
                 url = navigate.Url, groups_literal = groupsLiteral, root_names = rootNames,
                 script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
+                output_is_json = plan.OutputFormat == OutputFormat.Json,
             });
         }
 
@@ -50,6 +51,7 @@ public sealed class PythonCodeGenerator : ICodeGenerator
             {
                 url = navigate.Url, fields,
                 script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
+                output_is_json = plan.OutputFormat == OutputFormat.Json,
             },
         });
     }

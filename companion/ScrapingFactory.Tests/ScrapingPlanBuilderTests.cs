@@ -161,6 +161,16 @@ public class ScrapingPlanBuilderTests
     }
 
     [Fact]
+    public void Build_Groups_WithJsonOutputFormat_KeepsJsonInsteadOfXml()
+    {
+        var config = new ScrapingConfig { Url = "https://example.com", Groups = SampleGroups(), OutputFormat = OutputFormat.Json };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal(OutputFormat.Json, plan.OutputFormat);
+    }
+
+    [Fact]
     public void Build_Groups_AlsoSanitizesFileNames()
     {
         var config = new ScrapingConfig
@@ -291,6 +301,16 @@ public class ScrapingPlanBuilderTests
     }
 
     [Fact]
+    public void Build_ApiWithFlatShape_WithJsonOutputFormat_KeepsJsonInsteadOfCsv()
+    {
+        var config = new ScrapingConfig { Url = "https://example.com", Api = SampleApiConfig(), OutputFormat = OutputFormat.Json };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal(OutputFormat.Json, plan.OutputFormat);
+    }
+
+    [Fact]
     public void Build_Api_AlsoSanitizesFileNames()
     {
         var config = new ScrapingConfig
@@ -343,5 +363,15 @@ public class ScrapingPlanBuilderTests
         var plan = ScrapingPlanBuilder.Build(config);
 
         Assert.Equal(OutputFormat.Csv, plan.OutputFormat);
+    }
+
+    [Fact]
+    public void Build_ApiWithGroups_WithJsonOutputFormat_KeepsJsonInsteadOfXml()
+    {
+        var config = new ScrapingConfig { Url = "https://example.com", Api = SampleApiGroupsConfig(), OutputFormat = OutputFormat.Json };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal(OutputFormat.Json, plan.OutputFormat);
     }
 }

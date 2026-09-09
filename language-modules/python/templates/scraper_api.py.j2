@@ -4,7 +4,11 @@
 # Felder: {{ for field in fields }}{{ field.name }}{{ if !for.last }}, {{ end }}{{ end }}
 # Run:    python {{ script_filename }}.py
 
+{{~ if output_is_json ~}}
+import json
+{{~ else ~}}
 import csv
+{{~ end ~}}
 import datetime
 import itertools
 import re
@@ -322,12 +326,18 @@ def scrape():
 
 def main():
     data = scrape()
+{{~ if output_is_json ~}}
+    with open("{{ output_filename }}.json", "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    print(f"Done — {len(data)} rows written to {{ output_filename }}.json")
+{{~ else ~}}
     fieldnames = [parameter["name"] for parameter in PARAMETERS] + [field["name"] for field in FIELDS]
     with open("{{ output_filename }}.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(data)
     print(f"Done — {len(data)} rows written to {{ output_filename }}.csv")
+{{~ end ~}}
 
 
 if __name__ == "__main__":

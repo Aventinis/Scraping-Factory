@@ -8,14 +8,15 @@ public sealed class ScrapingConfig
 
     // Container-Mode: mutually exclusive with Fields (enforced in the
     // /generate endpoint, before ScrapingPlanBuilder ever sees the config).
-    // When set, OutputFormat is forced to Xml server-side — see
-    // ScrapingPlanBuilder.
+    // When set, OutputFormat is forced to Xml server-side, unless the caller
+    // explicitly asked for Json (Issue #86) — see ScrapingPlanBuilder.
     public List<GroupNode>? Groups { get; init; }
 
     // API-Mode (Issue #53): mutually exclusive with both Fields and Groups
-    // (enforced in the /generate endpoint). When set, OutputFormat is forced
-    // to Csv and Engine to ScrapingEngine.Api server-side — see
-    // ScrapingPlanBuilder.
+    // (enforced in the /generate endpoint). When set, Engine is forced to
+    // ScrapingEngine.Api server-side, and OutputFormat is forced to Csv/Xml
+    // depending on the response shape (flat/tree, see below), unless the
+    // caller explicitly asked for Json (Issue #86) — see ScrapingPlanBuilder.
     public ApiConfig? Api { get; init; }
 
     public OutputFormat OutputFormat { get; init; } = OutputFormat.Csv;
@@ -79,4 +80,9 @@ public sealed class ScrapingField
     public List<FieldTransform>? Transforms { get; init; }
 }
 
-public enum OutputFormat { Csv, Xml }
+// Json (Issue #86) is a third, user-choosable alternative to Csv/Xml for
+// every mode — a flat list-of-records dump for Fields/API-flat, a nested
+// object mirroring the group/API tree for Groups/API-tree. See
+// ScrapingPlanBuilder for exactly when each mode honors it vs. still forcing
+// its own default.
+public enum OutputFormat { Csv, Xml, Json }
