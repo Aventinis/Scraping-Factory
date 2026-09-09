@@ -23,7 +23,7 @@ public class ScrapingPlanBuilderTests
         Assert.Equal(3, plan.Steps.Count);
 
         var navigate = Assert.IsType<NavigateStep>(plan.Steps[0]);
-        Assert.Equal("https://example.com", navigate.Url);
+        Assert.Equal(["https://example.com"], navigate.Urls);
 
         var titel = Assert.IsType<ExtractStep>(plan.Steps[1]);
         Assert.Equal("Titel", titel.Name);

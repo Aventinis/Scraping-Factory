@@ -12,7 +12,7 @@ public class PythonCodeGeneratorTests
     {
         Steps =
         [
-            new NavigateStep { Url = "https://books.toscrape.com" },
+            new NavigateStep { Urls = ["https://books.toscrape.com"] },
             new ExtractStep { Name = "Titel", Selector = "h3 > a" },
             new ExtractStep { Name = "Link", Selector = "h3 > a", Attribute = "href" }
         ]
@@ -39,7 +39,7 @@ public class PythonCodeGeneratorTests
         {
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ExtractStep
                 {
                     Name = "Preis", Selector = ".price",

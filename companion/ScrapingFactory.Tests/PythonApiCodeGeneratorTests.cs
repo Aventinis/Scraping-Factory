@@ -10,7 +10,7 @@ public class PythonApiCodeGeneratorTests
 
     private static ScrapingPlan PlanWith(ApiConfig api) => new()
     {
-        Steps = [new NavigateStep { Url = "https://example.com" }, new ApiCallStep { Config = api }],
+        Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = api }],
         OutputFormat = OutputFormat.Csv,
         Engine = ScrapingEngine.Api,
     };
@@ -105,7 +105,7 @@ public class PythonApiCodeGeneratorTests
     {
         var plan = new ScrapingPlan
         {
-            Steps = [new NavigateStep { Url = "https://example.com" }, new ApiCallStep { Config = SampleApi() }],
+            Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = SampleApi() }],
             OutputFormat = OutputFormat.Csv,
             Engine = ScrapingEngine.Api,
             ScriptFileName = "api_scraper",
@@ -346,7 +346,7 @@ public class PythonApiCodeGeneratorTests
     {
         var plan = new ScrapingPlan
         {
-            Steps = [new NavigateStep { Url = "https://example.com" }, new ApiCallStep { Config = SampleGroupedApi() }],
+            Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = SampleGroupedApi() }],
             OutputFormat = OutputFormat.Xml,
             Engine = ScrapingEngine.Api,
             ScriptFileName = "api_scraper",

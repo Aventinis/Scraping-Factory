@@ -12,7 +12,7 @@ public class PythonGroupCodeGeneratorTests
     {
         Steps =
         [
-            new NavigateStep { Url = "https://example.com/speisekarte" },
+            new NavigateStep { Urls = ["https://example.com/speisekarte"] },
             new ExtractGroupStep
             {
                 Roots =
@@ -90,7 +90,7 @@ public class PythonGroupCodeGeneratorTests
         {
             Steps =
             [
-                new NavigateStep { Url = "https://example.com/speisekarte" },
+                new NavigateStep { Urls = ["https://example.com/speisekarte"] },
                 new ExtractGroupStep
                 {
                     Roots =
@@ -172,7 +172,7 @@ public class PythonGroupCodeGeneratorTests
         {
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ExtractGroupStep
                 {
                     Roots =
@@ -200,7 +200,7 @@ public class PythonGroupCodeGeneratorTests
         {
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ExtractGroupStep
                 {
                     Roots =

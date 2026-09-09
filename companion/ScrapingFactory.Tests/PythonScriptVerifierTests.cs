@@ -14,7 +14,7 @@ public class PythonScriptVerifierTests
 {
     private static string GenerateScript(string url, params (string Name, string Selector)[] fields)
     {
-        var steps = new List<ScrapingStep> { new NavigateStep { Url = url } };
+        var steps = new List<ScrapingStep> { new NavigateStep { Urls = [url] } };
         steps.AddRange(fields.Select(f => (ScrapingStep)new ExtractStep { Name = f.Name, Selector = f.Selector }));
 
         return new PythonCodeGenerator().Generate(new ScrapingPlan { Steps = steps });
@@ -78,7 +78,7 @@ public class PythonScriptVerifierTests
             "<html><body><p class='price'>  Preis: 12,99 &euro;  </p></body></html>");
         var steps = new List<ScrapingStep>
         {
-            new NavigateStep { Url = server.BaseUrl },
+            new NavigateStep { Urls = [server.BaseUrl] },
             new ExtractStep
             {
                 Name = "Preis", Selector = ".price",
@@ -143,7 +143,7 @@ public class PythonScriptVerifierTests
             "<html><body><ul><li class='item'>A</li><li class='item'>B</li></ul></body></html>");
         var steps = new List<ScrapingStep>
         {
-            new NavigateStep { Url = server.BaseUrl },
+            new NavigateStep { Urls = [server.BaseUrl] },
             new ExtractStep { Name = "Item", Selector = ".item" },
         };
         var script = new PythonCodeGenerator().Generate(
@@ -162,7 +162,7 @@ public class PythonScriptVerifierTests
             "<html><body><ul><li class='item'>A</li></ul></body></html>");
         var steps = new List<ScrapingStep>
         {
-            new NavigateStep { Url = server.BaseUrl },
+            new NavigateStep { Urls = [server.BaseUrl] },
             new ExtractStep { Name = "Item", Selector = ".item" },
         };
         // Script writes "ergebnisse.csv", but we ask the verifier to look for
@@ -180,7 +180,7 @@ public class PythonScriptVerifierTests
 
     private static string GenerateJsonScript(string url, params (string Name, string Selector)[] fields)
     {
-        var steps = new List<ScrapingStep> { new NavigateStep { Url = url } };
+        var steps = new List<ScrapingStep> { new NavigateStep { Urls = [url] } };
         steps.AddRange(fields.Select(f => (ScrapingStep)new ExtractStep { Name = f.Name, Selector = f.Selector }));
 
         return new PythonCodeGenerator().Generate(new ScrapingPlan { Steps = steps, OutputFormat = OutputFormat.Json });
@@ -251,7 +251,7 @@ public class PythonScriptVerifierTests
 
     private static string GenerateGroupedScript(string url, GroupNode root)
     {
-        var steps = new List<ScrapingStep> { new NavigateStep { Url = url }, new ExtractGroupStep { Roots = [root] } };
+        var steps = new List<ScrapingStep> { new NavigateStep { Urls = [url] }, new ExtractGroupStep { Roots = [root] } };
         return new PythonCodeGenerator().Generate(new ScrapingPlan { Steps = steps, OutputFormat = OutputFormat.Xml });
     }
 
@@ -388,7 +388,7 @@ public class PythonScriptVerifierTests
 
     private static string GenerateGroupedJsonScript(string url, GroupNode root)
     {
-        var steps = new List<ScrapingStep> { new NavigateStep { Url = url }, new ExtractGroupStep { Roots = [root] } };
+        var steps = new List<ScrapingStep> { new NavigateStep { Urls = [url] }, new ExtractGroupStep { Roots = [root] } };
         return new PythonCodeGenerator().Generate(new ScrapingPlan { Steps = steps, OutputFormat = OutputFormat.Json });
     }
 

@@ -22,7 +22,7 @@ public class PythonPlaywrightScriptVerifierTests
         var plan = new ScrapingPlan
         {
             Engine = ScrapingEngine.Browser,
-            Steps = [new NavigateStep { Url = server.BaseUrl }, new ExtractStep { Name = "Item", Selector = ".item" }],
+            Steps = [new NavigateStep { Urls = [server.BaseUrl] }, new ExtractStep { Name = "Item", Selector = ".item" }],
         };
         var script = Generator.Generate(plan);
 
@@ -57,7 +57,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new WaitForStep { Selector = ".item", TimeoutMs = 5000 },
                 new ExtractStep { Name = "Item", Selector = ".item" },
             ],
@@ -106,7 +106,7 @@ public class PythonPlaywrightScriptVerifierTests
                 Engine = ScrapingEngine.Browser,
                 Steps =
                 [
-                    new NavigateStep { Url = server.BaseUrl },
+                    new NavigateStep { Urls = [server.BaseUrl] },
                     new FillStep { Selector = "#username", EnvironmentVariableName = usernameVar },
                     new FillStep { Selector = "#password", EnvironmentVariableName = passwordVar },
                     new ClickStep { Selector = "#submit" },
@@ -164,7 +164,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new FillStep { Selector = "#username", EnvironmentVariableName = usernameVar },
                 new FillStep { Selector = "#password", EnvironmentVariableName = passwordVar },
                 new ClickStep { Selector = "#submit" },
@@ -227,7 +227,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new ScrollStep { MaxIterations = 10, WaitAfterMs = 300 },
                 new ExtractStep { Name = "Item", Selector = ".item" },
             ],
@@ -279,7 +279,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new ScrollStep { ContainerSelector = "#box", MaxIterations = 10, WaitAfterMs = 300 },
                 new ExtractStep { Name = "Item", Selector = ".item" },
             ],
@@ -321,7 +321,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new ScrollStep { LoadMoreButtonSelector = "#load-more", MaxIterations = 6, WaitAfterMs = 200 },
                 new ExtractStep { Name = "Item", Selector = ".item" },
             ],
@@ -350,7 +350,7 @@ public class PythonPlaywrightScriptVerifierTests
         {
             Engine = ScrapingEngine.Browser,
             OutputFormat = OutputFormat.Json,
-            Steps = [new NavigateStep { Url = server.BaseUrl }, new ExtractStep { Name = "Item", Selector = ".item" }],
+            Steps = [new NavigateStep { Urls = [server.BaseUrl] }, new ExtractStep { Name = "Item", Selector = ".item" }],
         };
         var script = Generator.Generate(plan);
 
@@ -380,7 +380,7 @@ public class PythonPlaywrightScriptVerifierTests
         {
             Engine = ScrapingEngine.Browser,
             OutputFormat = OutputFormat.Json,
-            Steps = [new NavigateStep { Url = server.BaseUrl }, new ExtractGroupStep { Roots = [root] }],
+            Steps = [new NavigateStep { Urls = [server.BaseUrl] }, new ExtractGroupStep { Roots = [root] }],
         };
         var script = Generator.Generate(plan);
 
@@ -419,7 +419,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new ExtractStep { Name = "Preis", Selector = ".price" },
             ],
         };
@@ -448,7 +448,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new ExtractStep { Name = "Preis", Selector = ".price", FramePath = ["#outer"] },
             ],
         };
@@ -478,7 +478,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new ExtractStep { Name = "Preis", Selector = ".price", FramePath = ["#outer", "#inner-frame"] },
             ],
         };
@@ -510,7 +510,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new ExtractStep { Name = "Titel", Selector = ".title" },
                 new ExtractStep { Name = "Preis", Selector = ".price", FramePath = ["#outer"] },
             ],
@@ -530,7 +530,7 @@ public class PythonPlaywrightScriptVerifierTests
         var plan = new ScrapingPlan
         {
             Engine = ScrapingEngine.Browser,
-            Steps = [new NavigateStep { Url = url }, new ExtractGroupStep { Roots = [root] }],
+            Steps = [new NavigateStep { Urls = [url] }, new ExtractGroupStep { Roots = [root] }],
         };
         return Generator.Generate(plan);
     }
@@ -664,7 +664,7 @@ public class PythonPlaywrightScriptVerifierTests
                 Engine = ScrapingEngine.Browser,
                 Steps =
                 [
-                    new NavigateStep { Url = server.BaseUrl },
+                    new NavigateStep { Urls = [server.BaseUrl] },
                     new FillStep { Selector = "#username", EnvironmentVariableName = usernameVar, FramePath = ["#sso"] },
                     new FillStep { Selector = "#password", EnvironmentVariableName = passwordVar, FramePath = ["#sso"] },
                     new ClickStep { Selector = "#submit", FramePath = ["#sso"] },
@@ -724,7 +724,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new ScrollStep
                 {
                     LoadMoreButtonSelector = "#load-more", MaxIterations = 6, WaitAfterMs = 200, FramePath = ["#widget"],

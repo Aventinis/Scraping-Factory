@@ -522,7 +522,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("Ungültige URL", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("Ungültige Start-URL", doc.RootElement.GetProperty("error").GetString());
     }
 
     [Fact]

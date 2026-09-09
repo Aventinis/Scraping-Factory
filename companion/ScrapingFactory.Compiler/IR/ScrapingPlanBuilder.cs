@@ -9,7 +9,18 @@ public static class ScrapingPlanBuilder
 {
     public static ScrapingPlan Build(ScrapingConfig config)
     {
-        var steps = new List<ScrapingStep> { new NavigateStep { Url = config.Url } };
+        // Issue #83: AdditionalUrls entries are trimmed and blank ones
+        // dropped — a pasted list's stray empty line is a formatting
+        // artifact, not a URL the caller actually meant to add, unlike a
+        // genuinely malformed non-blank entry, which still surfaces as a
+        // real validation error in ScrapingPlanValidator.
+        var urls = new List<string> { config.Url };
+        if (config.AdditionalUrls is { Count: > 0 } additionalUrls)
+        {
+            urls.AddRange(additionalUrls.Select(u => u.Trim()).Where(u => u.Length > 0));
+        }
+
+        var steps = new List<ScrapingStep> { new NavigateStep { Urls = urls } };
 
         // Browser actions run before extraction regardless of mode (Fields/
         // Groups/Api) — same "runs first, extraction phase after differs"
