@@ -20,6 +20,13 @@ internal static class PythonChangeDetectionLiteral
             return new
             {
                 enabled = false,
+                // Plain "Email"/"Webhook" (not Python-literal-quoted) — used
+                // for Scriban {{ if }} branching on which imports/helper to
+                // render, kept separate from notify_literal below (the
+                // quoted form actually emitted as Python source), so the
+                // template layer never has to compare against a
+                // string-with-quotes.
+                notify_method = (string?)null,
                 notify_literal = "None",
                 smtp_host_env_var_literal = "None",
                 smtp_port_env_var_literal = "None",
@@ -36,6 +43,7 @@ internal static class PythonChangeDetectionLiteral
         return new
         {
             enabled = true,
+            notify_method = changeDetection.Notify,
             notify_literal = PythonLiteral.Str(changeDetection.Notify),
             smtp_host_env_var_literal = email is null ? "None" : PythonLiteral.Str(email.SmtpHostEnvVar),
             smtp_port_env_var_literal = email?.SmtpPortEnvVar is { } port ? PythonLiteral.Str(port) : "None",

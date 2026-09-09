@@ -142,7 +142,7 @@ public class PythonPlaywrightCodeGeneratorTests
     {
         var script = _generator.Generate(PlanWithoutWait());
         Assert.Contains("python scraper.py", script);
-        Assert.Contains("open(\"output.csv\"", script);
+        Assert.Contains("OUTPUT_PATH = \"output.csv\"", script);
     }
 
     [Fact]
@@ -158,7 +158,7 @@ public class PythonPlaywrightCodeGeneratorTests
         var script = _generator.Generate(plan);
 
         Assert.Contains("python browser_scraper.py", script);
-        Assert.Contains("open(\"browser_output.csv\"", script);
+        Assert.Contains("OUTPUT_PATH = \"browser_output.csv\"", script);
         Assert.DoesNotContain("\"output.csv\"", script);
     }
 

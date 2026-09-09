@@ -155,7 +155,8 @@ public class PythonCodeGeneratorTests
     {
         var script = _generator.Generate(TwoFieldPlan());
         Assert.Contains("python scraper.py", script);
-        Assert.Contains("open(\"output.csv\"", script);
+        Assert.Contains("OUTPUT_PATH = \"output.csv\"", script);
+        Assert.Contains("open(OUTPUT_PATH,", script);
         Assert.Contains("written to output.csv", script);
     }
 
@@ -172,7 +173,7 @@ public class PythonCodeGeneratorTests
         var script = _generator.Generate(plan);
 
         Assert.Contains("python mein_scraper.py", script);
-        Assert.Contains("open(\"ergebnisse.csv\"", script);
+        Assert.Contains("OUTPUT_PATH = \"ergebnisse.csv\"", script);
         Assert.Contains("written to ergebnisse.csv", script);
         Assert.DoesNotContain("output.csv", script);
     }
