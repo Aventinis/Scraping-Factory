@@ -334,6 +334,64 @@ public class PythonPlaywrightScriptVerifierTests
         Assert.Equal(10, result.RowCount);
     }
 
+    // ── Json output (Issue #86) ─────────────────────────────────────────
+    // Both templates (flat/grouped) share the same import-swap/write-branch
+    // shape as the Static engine's own templates — one flat and one grouped
+    // case here is enough to prove the Playwright-generated script actually
+    // writes valid Json too, the rest is already covered by
+    // PythonScriptVerifierTests' more exhaustive Json coverage.
+
+    [Fact]
+    public async Task JsonOutput_FlatFields_Succeeds()
+    {
+        using var server = new LocalTestServer(
+            "<html><body><ul><li class='item'>A</li><li class='item'>B</li></ul></body></html>");
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            OutputFormat = OutputFormat.Json,
+            Steps = [new NavigateStep { Url = server.BaseUrl }, new ExtractStep { Name = "Item", Selector = ".item" }],
+        };
+        var script = Generator.Generate(plan);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Json);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(2, result.RowCount);
+    }
+
+    [Fact]
+    public async Task JsonOutput_GroupedContainer_Succeeds()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+            <section class="cat"><h2>Suppe</h2></section>
+            <section class="cat"><h2>Salat</h2></section>
+            </body></html>
+            """);
+        var root = new GroupNode
+        {
+            Name = "Kategorie",
+            Selector = ".cat",
+            Repeating = true,
+            Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }],
+        };
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            OutputFormat = OutputFormat.Json,
+            Steps = [new NavigateStep { Url = server.BaseUrl }, new ExtractGroupStep { Roots = [root] }],
+        };
+        var script = Generator.Generate(plan);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Json, includePreview: true);
+
+        Assert.True(result.Success, result.Error);
+        Assert.NotNull(result.Preview);
+        Assert.Equal("Json", result.Preview.OutputFormat);
+        Assert.Contains("Suppe", result.Preview.JsonSample);
+    }
+
     // ── FramePath / Shadow DOM (Issue #42) ──────────────────────────────────
 
     // Regression/verification test for Spike B's finding: Playwright's own

@@ -176,6 +176,62 @@ public class PythonScriptVerifierTests
         Assert.Contains("did not produce output.csv", result.Error);
     }
 
+    // ── Flat mode (OutputFormat.Json, Issue #86) ────────────────────────
+
+    private static string GenerateJsonScript(string url, params (string Name, string Selector)[] fields)
+    {
+        var steps = new List<ScrapingStep> { new NavigateStep { Url = url } };
+        steps.AddRange(fields.Select(f => (ScrapingStep)new ExtractStep { Name = f.Name, Selector = f.Selector }));
+
+        return new PythonCodeGenerator().Generate(new ScrapingPlan { Steps = steps, OutputFormat = OutputFormat.Json });
+    }
+
+    [Fact]
+    public async Task JsonOutput_ScriptThatFindsData_Succeeds()
+    {
+        using var server = new LocalTestServer(
+            "<html><body><ul><li class='item'>A</li><li class='item'>B</li></ul></body></html>");
+        var script = GenerateJsonScript(server.BaseUrl, ("Item", ".item"));
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Json);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(2, result.RowCount);
+    }
+
+    [Fact]
+    public async Task JsonOutput_IncludePreviewTrue_PopulatesCappedSample()
+    {
+        using var server = new LocalTestServer(
+            "<html><body><ul><li class='item'>A</li><li class='item'>B</li></ul></body></html>");
+        var script = GenerateJsonScript(server.BaseUrl, ("Item", ".item"));
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Json, includePreview: true);
+
+        Assert.True(result.Success, result.Error);
+        Assert.NotNull(result.Preview);
+        Assert.Equal("Json", result.Preview.OutputFormat);
+        Assert.Equal(2, result.Preview.TotalCount);
+        Assert.False(result.Preview.Truncated);
+        Assert.Equal(["Item"], result.Preview.Columns);
+        Assert.Equal(2, result.Preview.Rows!.Count);
+        Assert.Equal("A", result.Preview.Rows[0]["Item"]);
+        Assert.Equal("B", result.Preview.Rows[1]["Item"]);
+    }
+
+    [Fact]
+    public async Task JsonOutput_SelectorMatchingNothing_FailsWithZeroDataRows()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var script = GenerateJsonScript(server.BaseUrl, ("Preis", ".price"));
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Json);
+
+        Assert.False(result.Success);
+        Assert.Contains("no data", result.Error);
+        Assert.Equal(0, result.RowCount);
+    }
+
     [Fact]
     public async Task MissingPythonExecutable_FailsGracefully()
     {
@@ -322,6 +378,87 @@ public class PythonScriptVerifierTests
         var script = GenerateGroupedScript(server.BaseUrl, root);
 
         var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Xml);
+
+        Assert.False(result.Success);
+        Assert.Contains("no data", result.Error);
+        Assert.Equal(0, result.RowCount);
+    }
+
+    // ── Container-Mode (OutputFormat.Json, Issue #86) ────────────────────
+
+    private static string GenerateGroupedJsonScript(string url, GroupNode root)
+    {
+        var steps = new List<ScrapingStep> { new NavigateStep { Url = url }, new ExtractGroupStep { Roots = [root] } };
+        return new PythonCodeGenerator().Generate(new ScrapingPlan { Steps = steps, OutputFormat = OutputFormat.Json });
+    }
+
+    [Fact]
+    public async Task GroupedScript_JsonOutput_NestedRepeatingGroups_SucceedsAndWritesNestedJson()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+            <section class="menu-category"><h2>Vorspeisen</h2>
+              <li class="menu-item"><h3>Suppe</h3><span class="price">5 €</span></li>
+              <li class="menu-item"><h3>Salat</h3><span class="price">6 €</span></li>
+            </section>
+            <section class="menu-category"><h2>Suppen</h2>
+              <li class="menu-item"><h3>Bouillabaisse</h3><span class="price">13 €</span></li>
+            </section>
+            </body></html>
+            """);
+        var root = new GroupNode
+        {
+            Name = "Kategorie",
+            Selector = "section.menu-category",
+            Repeating = true,
+            Children =
+            [
+                new DataFieldNode { Name = "Titel", Selector = "h2" },
+                new GroupNode
+                {
+                    Name = "Gericht",
+                    Selector = "li.menu-item",
+                    Repeating = true,
+                    Children =
+                    [
+                        new DataFieldNode { Name = "Name", Selector = "h3" },
+                        new DataFieldNode { Name = "Preis", Selector = ".price" },
+                    ],
+                },
+            ],
+        };
+        var script = GenerateGroupedJsonScript(server.BaseUrl, root);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Json, includePreview: true);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Null(result.Error);
+        // Not the same count as the Xml equivalent test (13): CountJsonNodes
+        // counts object properties/array items, not per-tag elements, so a
+        // leaf field folded into its parent's dict (no element of its own,
+        // unlike XML) counts differently than a repeating group folded into
+        // an array. Only "greater than zero" is actually load-bearing here.
+        Assert.Equal(15, result.RowCount);
+        Assert.NotNull(result.Preview);
+        Assert.Equal("Json", result.Preview.OutputFormat);
+        Assert.Contains("Vorspeisen", result.Preview.JsonSample);
+        Assert.Contains("Suppe", result.Preview.JsonSample);
+    }
+
+    [Fact]
+    public async Task GroupedScript_JsonOutput_SelectorMatchingNothing_FailsWithZeroElements()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var root = new GroupNode
+        {
+            Name = "Kategorie",
+            Selector = ".does-not-exist",
+            Repeating = true,
+            Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }],
+        };
+        var script = GenerateGroupedJsonScript(server.BaseUrl, root);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Json);
 
         Assert.False(result.Success);
         Assert.Contains("no data", result.Error);
