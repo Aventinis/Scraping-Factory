@@ -51,6 +51,16 @@ public class PythonGroupCodeGeneratorTests
         Assert.Contains("https://example.com/speisekarte", script);
     }
 
+    // Many sites (Wikipedia among them) reject the bare "python-requests/x.y"
+    // default User-Agent with 403 Forbidden.
+    [Fact]
+    public void Generate_SendsUserAgentHeader()
+    {
+        var script = _generator.Generate(NestedGroupPlan());
+        Assert.Contains("HEADERS = {\"User-Agent\":", script);
+        Assert.Contains("requests.get(url, headers=HEADERS, timeout=10)", script);
+    }
+
     [Fact]
     public void Generate_ContainsGroupsLiteralWithNestedChildren()
     {

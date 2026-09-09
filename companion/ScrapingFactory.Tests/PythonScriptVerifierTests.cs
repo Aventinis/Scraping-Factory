@@ -20,6 +20,30 @@ public class PythonScriptVerifierTests
         return new PythonCodeGenerator().Generate(new ScrapingPlan { Steps = steps });
     }
 
+    // Reproduces the real-world 403 (e.g. Wikipedia): a server that rejects
+    // the bare "python-requests/x.y" default User-Agent, but accepts any
+    // other value — proves the generated script actually sends a
+    // non-default User-Agent, not just that the C#/template-level string
+    // content looks right (see PythonCodeGeneratorTests for that).
+    [Fact]
+    public async Task ScriptWithoutCustomUserAgent_WouldGet403_ButGeneratedScriptSendsOneAndSucceeds()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var userAgent = request.UserAgent ?? "";
+            var isDefaultRequestsAgent = userAgent.Length == 0 || userAgent.StartsWith("python-requests");
+            return isDefaultRequestsAgent
+                ? new LocalTestServerResponse("Forbidden", "text/plain", HttpStatusCode.Forbidden)
+                : new LocalTestServerResponse("<html><body><h1>Titel</h1></body></html>", "text/html; charset=utf-8");
+        });
+        var script = GenerateScript(server.BaseUrl, ("Titel", "h1"));
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(1, result.RowCount);
+    }
+
     [Fact]
     public async Task ScriptThatFindsData_Succeeds()
     {

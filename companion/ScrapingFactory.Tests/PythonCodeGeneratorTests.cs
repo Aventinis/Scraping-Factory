@@ -25,6 +25,17 @@ public class PythonCodeGeneratorTests
         Assert.Contains("https://books.toscrape.com", script);
     }
 
+    // Many sites (Wikipedia among them) reject the bare "python-requests/x.y"
+    // default User-Agent with 403 Forbidden — see PythonScriptVerifierTests
+    // for a real end-to-end reproduction/fix proof.
+    [Fact]
+    public void Generate_SendsUserAgentHeader()
+    {
+        var script = _generator.Generate(TwoFieldPlan());
+        Assert.Contains("HEADERS = {\"User-Agent\":", script);
+        Assert.Contains("requests.get(url, headers=HEADERS, timeout=10)", script);
+    }
+
     [Fact]
     public void Generate_FieldWithoutTransforms_HasEmptyTransformsListInDict()
     {
