@@ -9,7 +9,7 @@ public class ScrapingPlanValidatorTests
     {
         Steps =
         [
-            new NavigateStep { Url = "https://example.com" },
+            new NavigateStep { Urls = ["https://example.com"] },
             new ExtractStep { Name = "Titel", Selector = "h1" },
         ],
     };
@@ -46,8 +46,8 @@ public class ScrapingPlanValidatorTests
         {
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
-                new NavigateStep { Url = "https://example.org" },
+                new NavigateStep { Urls = ["https://example.com"] },
+                new NavigateStep { Urls = ["https://example.org"] },
                 new ExtractStep { Name = "Titel", Selector = "h1" },
             ],
         };
@@ -64,17 +64,62 @@ public class ScrapingPlanValidatorTests
     {
         var plan = new ScrapingPlan
         {
-            Steps = [new NavigateStep { Url = url }, new ExtractStep { Name = "Titel", Selector = "h1" }],
+            Steps = [new NavigateStep { Urls = [url] }, new ExtractStep { Name = "Titel", Selector = "h1" }],
         };
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
-        Assert.Contains("Ungültige URL", result.Error);
+        Assert.Contains("Ungültige Start-URL", result.Error);
+    }
+
+    // Issue #83
+    [Fact]
+    public void Validate_MultipleValidUrls_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com/a", "https://example.com/b"] },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success);
+        Assert.Null(result.Error);
+    }
+
+    [Fact]
+    public void Validate_SecondUrlInvalid_FailsWithItsIndex()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com/a", "not-a-url"] },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Start-URL #2", result.Error);
+    }
+
+    [Fact]
+    public void Validate_EmptyUrls_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = [new NavigateStep { Urls = [] }, new ExtractStep { Name = "Titel", Selector = "h1" }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("mindestens eine URL", result.Error);
     }
 
     [Fact]
     public void Validate_NoExtractSteps_Fails()
     {
-        var plan = new ScrapingPlan { Steps = [new NavigateStep { Url = "https://example.com" }] };
+        var plan = new ScrapingPlan { Steps = [new NavigateStep { Urls = ["https://example.com"] }] };
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
         Assert.Contains("ExtractStep", result.Error);
@@ -85,7 +130,7 @@ public class ScrapingPlanValidatorTests
     {
         var plan = new ScrapingPlan
         {
-            Steps = [new NavigateStep { Url = "https://example.com" }, new ExtractStep { Name = "  ", Selector = "h1" }],
+            Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ExtractStep { Name = "  ", Selector = "h1" }],
         };
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
@@ -97,7 +142,7 @@ public class ScrapingPlanValidatorTests
     {
         var plan = new ScrapingPlan
         {
-            Steps = [new NavigateStep { Url = "https://example.com" }, new ExtractStep { Name = "Titel", Selector = " " }],
+            Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ExtractStep { Name = "Titel", Selector = " " }],
         };
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
@@ -113,7 +158,7 @@ public class ScrapingPlanValidatorTests
         {
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ExtractStep
                 {
                     Name = "Preis", Selector = ".price",
@@ -132,7 +177,7 @@ public class ScrapingPlanValidatorTests
         {
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ExtractStep { Name = "Preis", Selector = ".price", Transforms = [new RegexExtractTransform { Pattern = "[unclosed" }] },
             ],
         };
@@ -148,7 +193,7 @@ public class ScrapingPlanValidatorTests
         {
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ExtractStep { Name = "Preis", Selector = ".price", Transforms = [new RegexExtractTransform { Pattern = @"\d+", Group = -1 }] },
             ],
         };
@@ -164,7 +209,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new WaitForStep { Selector = ".loaded", TimeoutMs = 3000 },
                 new ExtractStep { Name = "Titel", Selector = "h1" },
             ],
@@ -181,7 +226,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new WaitForStep { Selector = " " },
                 new ExtractStep { Name = "Titel", Selector = "h1" },
             ],
@@ -199,7 +244,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new WaitForStep { Selector = ".loaded", TimeoutMs = 0 },
                 new ExtractStep { Name = "Titel", Selector = "h1" },
             ],
@@ -217,7 +262,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Static,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new WaitForStep { Selector = ".loaded" },
                 new ExtractStep { Name = "Titel", Selector = "h1" },
             ],
@@ -235,7 +280,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com/login" },
+                new NavigateStep { Urls = ["https://example.com/login"] },
                 new FillStep { Selector = "#user", EnvironmentVariableName = "SF_USERNAME" },
                 new ClickStep { Selector = "#submit" },
                 new ExtractStep { Name = "Titel", Selector = "h1" },
@@ -253,7 +298,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new FillStep { Selector = " ", EnvironmentVariableName = "SF_USERNAME" },
                 new ExtractStep { Name = "Titel", Selector = "h1" },
             ],
@@ -275,7 +320,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new FillStep { Selector = "#user", EnvironmentVariableName = envVarName },
                 new ExtractStep { Name = "Titel", Selector = "h1" },
             ],
@@ -293,7 +338,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ClickStep { Selector = " " },
                 new ExtractStep { Name = "Titel", Selector = "h1" },
             ],
@@ -313,7 +358,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ScrollStep { ContainerSelector = "#list", LoadMoreButtonSelector = ".more", MaxIterations = 5, WaitAfterMs = 500 },
                 new ExtractStep { Name = "Titel", Selector = ".item" },
             ],
@@ -330,7 +375,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Static,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ScrollStep(),
                 new ExtractStep { Name = "Titel", Selector = ".item" },
             ],
@@ -348,7 +393,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ScrollStep { ContainerSelector = " " },
                 new ExtractStep { Name = "Titel", Selector = ".item" },
             ],
@@ -366,7 +411,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ScrollStep { LoadMoreButtonSelector = " " },
                 new ExtractStep { Name = "Titel", Selector = ".item" },
             ],
@@ -384,7 +429,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ScrollStep { MaxIterations = 0 },
                 new ExtractStep { Name = "Titel", Selector = ".item" },
             ],
@@ -402,7 +447,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ScrollStep { WaitAfterMs = -1 },
                 new ExtractStep { Name = "Titel", Selector = ".item" },
             ],
@@ -422,7 +467,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new FillStep { Selector = "#user", EnvironmentVariableName = "SF_USER", FramePath = ["iframe#sso"] },
                 new ClickStep { Selector = "#submit", FramePath = ["iframe#sso"] },
                 new WaitForStep { Selector = ".welcome", FramePath = ["iframe#sso"] },
@@ -442,7 +487,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new WaitForStep { Selector = ".welcome", FramePath = [] },
                 new ExtractStep { Name = "Titel", Selector = "h1" },
             ],
@@ -460,7 +505,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new FillStep { Selector = "#user", EnvironmentVariableName = "SF_USER", FramePath = [" "] },
                 new ExtractStep { Name = "Titel", Selector = "h1" },
             ],
@@ -478,7 +523,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ClickStep { Selector = "#submit", FramePath = [] },
                 new ExtractStep { Name = "Titel", Selector = "h1" },
             ],
@@ -496,7 +541,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ScrollStep { LoadMoreButtonSelector = "#more", FramePath = [] },
                 new ExtractStep { Name = "Titel", Selector = "h1" },
             ],
@@ -513,7 +558,7 @@ public class ScrapingPlanValidatorTests
         {
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ExtractStep { Name = "Titel", Selector = "h1" },
                 new ExtractStep { Name = "Titel", Selector = "h2" },
             ],
@@ -534,7 +579,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ExtractStep { Name = "Preis", Selector = ".price", FramePath = ["iframe#outer", "iframe.inner"] },
             ],
         };
@@ -550,7 +595,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Static,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ExtractStep { Name = "Preis", Selector = ".price", FramePath = ["iframe#outer"] },
             ],
         };
@@ -568,7 +613,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ExtractStep { Name = "Preis", Selector = ".price", FramePath = [] },
             ],
         };
@@ -585,7 +630,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ExtractStep { Name = "Preis", Selector = ".price", FramePath = ["iframe#outer", " "] },
             ],
         };
@@ -602,7 +647,7 @@ public class ScrapingPlanValidatorTests
             Engine = ScrapingEngine.Static,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ExtractStep { Name = "Titel", Selector = "h1" },
             ],
         };
@@ -615,7 +660,7 @@ public class ScrapingPlanValidatorTests
     private static ScrapingPlan GroupPlan(List<GroupNode> roots, ScrapingEngine engine = ScrapingEngine.Static) => new()
     {
         Engine = engine,
-        Steps = [new NavigateStep { Url = "https://example.com" }, new ExtractGroupStep { Roots = roots }],
+        Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ExtractGroupStep { Roots = roots }],
     };
 
     [Fact]
@@ -871,7 +916,7 @@ public class ScrapingPlanValidatorTests
     private static ScrapingPlan ApiPlan(ApiConfig api) => new()
     {
         Engine = ScrapingEngine.Api,
-        Steps = [new NavigateStep { Url = "https://example.com" }, new ApiCallStep { Config = api }],
+        Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = api }],
     };
 
     [Fact]
@@ -1647,6 +1692,179 @@ public class ScrapingPlanValidatorTests
             },
         };
         var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success, result.Error);
+    }
+
+    // Issue #87
+    [Fact]
+    public void Validate_ValidEmailChangeDetection_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            ChangeDetection = new ChangeDetectionConfig
+            {
+                Notify = "Email",
+                Email = new EmailNotificationConfig
+                {
+                    SmtpHostEnvVar = "SF_SMTP_HOST", FromEnvVar = "SF_FROM", ToEnvVar = "SF_TO",
+                },
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ValidWebhookChangeDetection_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            ChangeDetection = new ChangeDetectionConfig
+            {
+                Notify = "Webhook",
+                Webhook = new WebhookNotificationConfig { UrlEnvVar = "SF_WEBHOOK_URL" },
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ChangeDetectionWithUnknownNotifyMethod_Fails()
+    {
+        var plan = new ScrapingPlan { Steps = ValidPlan().Steps, ChangeDetection = new ChangeDetectionConfig { Notify = "Sms" } };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Notify-Methode", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ChangeDetectionEmailWithoutEmailConfig_Fails()
+    {
+        var plan = new ScrapingPlan { Steps = ValidPlan().Steps, ChangeDetection = new ChangeDetectionConfig { Notify = "Email" } };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Email-Konfiguration", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ChangeDetectionWebhookWithoutWebhookConfig_Fails()
+    {
+        var plan = new ScrapingPlan { Steps = ValidPlan().Steps, ChangeDetection = new ChangeDetectionConfig { Notify = "Webhook" } };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Webhook-Konfiguration", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ChangeDetectionEmailWithInvalidHostEnvVarName_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            ChangeDetection = new ChangeDetectionConfig
+            {
+                Notify = "Email",
+                Email = new EmailNotificationConfig
+                {
+                    SmtpHostEnvVar = "not a valid name", FromEnvVar = "SF_FROM", ToEnvVar = "SF_TO",
+                },
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Ungültiger Umgebungsvariablen-Name", result.Error);
+        Assert.Contains("SmtpHostEnvVar", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ChangeDetectionEmailWithInvalidOptionalPortEnvVarName_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            ChangeDetection = new ChangeDetectionConfig
+            {
+                Notify = "Email",
+                Email = new EmailNotificationConfig
+                {
+                    SmtpHostEnvVar = "SF_SMTP_HOST", SmtpPortEnvVar = "1invalid", FromEnvVar = "SF_FROM", ToEnvVar = "SF_TO",
+                },
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("SmtpPortEnvVar", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ChangeDetectionWebhookWithInvalidUrlEnvVarName_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            ChangeDetection = new ChangeDetectionConfig
+            {
+                Notify = "Webhook",
+                Webhook = new WebhookNotificationConfig { UrlEnvVar = "" },
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("UrlEnvVar", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ChangeDetectionEmailAndWebhookBothSet_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            ChangeDetection = new ChangeDetectionConfig
+            {
+                Notify = "Email",
+                Email = new EmailNotificationConfig { SmtpHostEnvVar = "SF_SMTP_HOST", FromEnvVar = "SF_FROM", ToEnvVar = "SF_TO" },
+                Webhook = new WebhookNotificationConfig { UrlEnvVar = "SF_WEBHOOK_URL" },
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("nicht sowohl Email als auch Webhook", result.Error);
+    }
+
+    // Issue #88
+    [Fact]
+    public void Validate_ValidProxy_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Proxy = new ProxyConfig { EnvironmentVariableName = "SF_PROXIES" },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ProxyWithInvalidEnvironmentVariableName_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Proxy = new ProxyConfig { EnvironmentVariableName = "not a valid name" },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Ungültiger Umgebungsvariablen-Name", result.Error);
+        Assert.Contains("Proxy.EnvironmentVariableName", result.Error);
+    }
+
+    [Fact]
+    public void Validate_NoProxy_Succeeds()
+    {
+        var result = ScrapingPlanValidator.Validate(ValidPlan());
         Assert.True(result.Success, result.Error);
     }
 }

@@ -8,8 +8,13 @@ namespace ScrapingFactory.Compiler.Backends;
 // default (no preview) path allocates nothing extra beyond today.
 public sealed class ScriptPreviewData
 {
-    // "Csv" | "Xml" — mirrors OutputFormat, so the extension knows which of
-    // Columns/Rows vs. XmlSample is populated without re-deriving it.
+    // "Csv" | "Xml" | "Json" — mirrors OutputFormat, so the extension knows
+    // which of Columns/Rows vs. XmlSample/JsonSample is populated without
+    // re-deriving it. Json covers two structurally different shapes (Issue
+    // #86) — a flat array of records populates Columns/Rows exactly like
+    // Csv does, a nested tree populates JsonSample exactly like Xml does —
+    // so the extension still only needs to check "is there a text sample"
+    // vs. "is there a table" rather than a third distinct rendering path.
     public required string OutputFormat { get; init; }
 
     // The same count VerifyAsync already computed for pass/fail (CSV data-row
@@ -22,18 +27,25 @@ public sealed class ScriptPreviewData
     // the actual total — lets the extension show a "showing N of M" note.
     public required bool Truncated { get; init; }
 
-    // Csv only: header names in the order they appear in output.csv.
+    // Csv, and Json's flat-array shape: header names in the order they
+    // appear in output.csv/the first record of output.json.
     public IReadOnlyList<string>? Columns { get; init; }
 
-    // Csv only: up to PythonScriptVerifier's row cap, each row keyed by
-    // column name (matches Columns) rather than a plain positional array —
-    // easier for the extension to render as a table without also shipping
-    // Columns' order-dependent zip logic client-side.
+    // Csv, and Json's flat-array shape: up to PythonScriptVerifier's row
+    // cap, each row keyed by column name (matches Columns) rather than a
+    // plain positional array — easier for the extension to render as a
+    // table without also shipping Columns' order-dependent zip logic
+    // client-side.
     public IReadOnlyList<IReadOnlyDictionary<string, string>>? Rows { get; init; }
 
     // Xml only (Phase A — see PLAN-trial-run-data-preview.md): a pretty-
     // printed, capped fragment of output.xml, shown read-only as text. A
-    // structured JSON tree (mirroring the container/API config tree UI) is
+    // structured tree view (mirroring the container/API config tree UI) is
     // deliberately out of scope for this phase.
     public string? XmlSample { get; init; }
+
+    // Json's tree shape only (Issue #86) — same "Phase A, no structured
+    // tree view yet" scope as XmlSample above, just for output.json's
+    // nested-object shape instead of output.xml.
+    public string? JsonSample { get; init; }
 }

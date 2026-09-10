@@ -261,8 +261,13 @@
       padding: 5px 8px; font-size: 12px; font-family: inherit; outline: none;
     }
     .output-settings-row input[type="text"]:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.2); }
+    .output-settings-row textarea {
+      flex: 1; min-width: 0; border: 1px solid #d1d5db; border-radius: 6px;
+      padding: 5px 8px; font-size: 12px; font-family: inherit; outline: none; resize: vertical;
+    }
+    .output-settings-row textarea:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.2); }
     .output-settings-ext { flex: none; font-size: 12px; color: #9ca3af; }
-    .data-preview-toggle {
+    .output-settings-toggle {
       display: flex; align-items: center; gap: 6px;
       font-size: 12px; color: #374151; margin-top: 4px; cursor: pointer;
     }
@@ -282,7 +287,9 @@
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;
     }
     .data-preview-table th { background: #f9fafb; position: sticky; top: 0; }
-    .data-preview-xml {
+    /* Issue #86: shared by the Xml sample and the Json tree-shape sample —
+       both are a pretty-printed, read-only text fragment. */
+    .data-preview-text {
       max-height: 220px; overflow: auto; border: 1px solid #e5e7eb; border-radius: 6px;
       padding: 6px 8px; margin: 0; background: #f9fafb; font-size: 11px; white-space: pre-wrap;
     }
@@ -511,13 +518,93 @@
         <input type="text" id="input-output-filename" data-i18n-placeholder="idle.outputFilenamePlaceholder" autocomplete="off" />
         <span id="output-filename-ext" class="output-settings-ext">.csv</span>
       </div>
+      <!-- Issue #86: opt-in Json output — mode-independent, like the data
+           preview toggle below; see buildScrapingConfig's own doc comment
+           for exactly which wire field this adds/replaces per mode. -->
+      <label class="output-settings-toggle">
+        <input type="checkbox" id="toggle-output-json" />
+        <span data-i18n="idle.outputJsonToggle"></span>
+      </label>
       <!-- Issue #122: opt-in trial-run data preview — unrelated to the DOM-
            highlight "Vorschau" above (preview-section); see popup.js's
            renderDataPreview doc comment for the naming rationale. -->
-      <label class="data-preview-toggle">
+      <label class="output-settings-toggle">
         <input type="checkbox" id="toggle-include-data-preview" />
         <span data-i18n="idle.dataPreviewToggle"></span>
       </label>
+      <!-- Issue #83: extra start URLs the same extraction config runs
+           against, in addition to the page above — mode-independent like
+           engine/browser-actions, but hidden for API mode (Api builds its
+           own request URL and the companion rejects the combination). -->
+      <div id="additional-urls-row" class="output-settings-row" style="align-items: flex-start;">
+        <label for="input-additional-urls" data-i18n="idle.additionalUrlsLabel"></label>
+        <textarea id="input-additional-urls" rows="3" data-i18n-placeholder="idle.additionalUrlsPlaceholder"></textarea>
+      </div>
+      <!-- Issue #87: opt-in change detection + notification — every
+           credential/target field below is the *name* of an environment
+           variable, never a literal value (mirrors FillAction's own
+           environmentVariableName input), read by the generated script at
+           runtime via os.environ[...]. -->
+      <label class="output-settings-toggle">
+        <input type="checkbox" id="toggle-change-detection" />
+        <span data-i18n="idle.changeDetectionToggle"></span>
+      </label>
+      <div id="change-detection-config" class="hidden">
+        <div class="mode-toggle" style="margin-bottom: 8px;">
+          <button id="btn-notify-email" class="mode-btn active" type="button" data-i18n="idle.notifyEmail"></button>
+          <button id="btn-notify-webhook" class="mode-btn" type="button" data-i18n="idle.notifyWebhook"></button>
+        </div>
+        <div id="notify-email-fields">
+          <div class="output-settings-row">
+            <label for="input-cd-smtp-host" data-i18n="idle.smtpHostEnvVarLabel"></label>
+            <input type="text" id="input-cd-smtp-host" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+          </div>
+          <div class="output-settings-row">
+            <label for="input-cd-smtp-port" data-i18n="idle.smtpPortEnvVarLabel"></label>
+            <input type="text" id="input-cd-smtp-port" data-i18n-placeholder="idle.envVarPlaceholderOptional" autocomplete="off" />
+          </div>
+          <div class="output-settings-row">
+            <label for="input-cd-smtp-username" data-i18n="idle.smtpUsernameEnvVarLabel"></label>
+            <input type="text" id="input-cd-smtp-username" data-i18n-placeholder="idle.envVarPlaceholderOptional" autocomplete="off" />
+          </div>
+          <div class="output-settings-row">
+            <label for="input-cd-smtp-password" data-i18n="idle.smtpPasswordEnvVarLabel"></label>
+            <input type="text" id="input-cd-smtp-password" data-i18n-placeholder="idle.envVarPlaceholderOptional" autocomplete="off" />
+          </div>
+          <div class="output-settings-row">
+            <label for="input-cd-email-from" data-i18n="idle.notifyEmailFromEnvVarLabel"></label>
+            <input type="text" id="input-cd-email-from" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+          </div>
+          <div class="output-settings-row">
+            <label for="input-cd-email-to" data-i18n="idle.notifyEmailToEnvVarLabel"></label>
+            <input type="text" id="input-cd-email-to" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+          </div>
+        </div>
+        <div id="notify-webhook-fields" class="hidden">
+          <div class="output-settings-row">
+            <label for="input-cd-webhook-url" data-i18n="idle.webhookUrlEnvVarLabel"></label>
+            <input type="text" id="input-cd-webhook-url" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+          </div>
+        </div>
+        <p class="preview-summary" data-i18n="idle.changeDetectionHint"></p>
+      </div>
+      <!-- Issue #88: opt-in proxy support — like the change-detection
+           fields above, this is the *name* of an environment variable
+           holding a comma-separated proxy URL list, never a literal proxy
+           address (mirrors FillAction's own environmentVariableName
+           input), read by the generated script at runtime via
+           os.environ[...]. -->
+      <label class="output-settings-toggle">
+        <input type="checkbox" id="toggle-proxy" />
+        <span data-i18n="idle.proxyToggle"></span>
+      </label>
+      <div id="proxy-config" class="hidden">
+        <div class="output-settings-row">
+          <label for="input-proxy-env-var" data-i18n="idle.proxyEnvVarLabel"></label>
+          <input type="text" id="input-proxy-env-var" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+        </div>
+        <p class="preview-summary" data-i18n="idle.proxyHint"></p>
+      </div>
     </div>
 
     <div class="actions" style="margin-top: 10px;">
@@ -615,7 +702,9 @@
     <div id="data-preview-panel" class="data-preview-panel hidden">
       <p class="data-preview-title" data-i18n="done.dataPreviewTitle"></p>
       <div id="data-preview-table-wrap" class="data-preview-table-wrap hidden"></div>
-      <pre id="data-preview-xml" class="data-preview-xml hidden"></pre>
+      <!-- Issue #86: also holds the Json tree-shape sample, not just Xml —
+           see renderDataPreview's own doc comment. -->
+      <pre id="data-preview-text" class="data-preview-text hidden"></pre>
       <p id="data-preview-truncated" class="data-preview-truncated hidden"></p>
     </div>
   </section>

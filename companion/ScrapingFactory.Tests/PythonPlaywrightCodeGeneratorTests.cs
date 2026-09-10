@@ -13,7 +13,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://books.toscrape.com" },
+            new NavigateStep { Urls = ["https://books.toscrape.com"] },
             new ExtractStep { Name = "Titel", Selector = "h3 > a" },
             new ExtractStep { Name = "Link", Selector = "h3 > a", Attribute = "href" },
         ],
@@ -24,7 +24,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://books.toscrape.com" },
+            new NavigateStep { Urls = ["https://books.toscrape.com"] },
             new WaitForStep { Selector = ".loaded", TimeoutMs = 7000 },
             new ExtractStep { Name = "Titel", Selector = "h3 > a" },
         ],
@@ -38,7 +38,7 @@ public class PythonPlaywrightCodeGeneratorTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ExtractStep { Name = "Preis", Selector = ".price", Transforms = [new TrimTransform(), new ToNumberTransform()] },
             ],
         };
@@ -55,7 +55,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://example.com/login" },
+            new NavigateStep { Urls = ["https://example.com/login"] },
             new FillStep { Selector = "#username", EnvironmentVariableName = "SF_USERNAME" },
             new FillStep { Selector = "#password", EnvironmentVariableName = "SF_PASSWORD" },
             new ClickStep { Selector = "#submit" },
@@ -81,7 +81,32 @@ public class PythonPlaywrightCodeGeneratorTests
     public void Generate_ContainsPageGoto()
     {
         var script = _generator.Generate(PlanWithoutWait());
-        Assert.Contains("page.goto(\"https://books.toscrape.com\"", script);
+        // Issue #83: the target is no longer baked in as a literal — it
+        // comes from scrape()'s own `url` parameter, since the same action
+        // sequence now runs once per configured start URL (see URLS/main()).
+        Assert.Contains("page.goto(url,", script);
+        Assert.Contains("\"https://books.toscrape.com\"", script);
+    }
+
+    // Issue #83
+    [Fact]
+    public void Generate_MultipleUrls_LoopsOverUrlsAndCombinesData()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com/a", "https://example.com/b"] },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("""URLS = ["https://example.com/a", "https://example.com/b"]""", script);
+        Assert.Contains("for url in URLS:", script);
+        Assert.Contains("data.extend(scrape(url))", script);
     }
 
     [Fact]
@@ -117,7 +142,7 @@ public class PythonPlaywrightCodeGeneratorTests
     {
         var script = _generator.Generate(PlanWithoutWait());
         Assert.Contains("python scraper.py", script);
-        Assert.Contains("open(\"output.csv\"", script);
+        Assert.Contains("OUTPUT_PATH = \"output.csv\"", script);
     }
 
     [Fact]
@@ -133,7 +158,7 @@ public class PythonPlaywrightCodeGeneratorTests
         var script = _generator.Generate(plan);
 
         Assert.Contains("python browser_scraper.py", script);
-        Assert.Contains("open(\"browser_output.csv\"", script);
+        Assert.Contains("OUTPUT_PATH = \"browser_output.csv\"", script);
         Assert.DoesNotContain("\"output.csv\"", script);
     }
 
@@ -151,12 +176,45 @@ public class PythonPlaywrightCodeGeneratorTests
         Assert.Contains("import os", script);
     }
 
+    // Issue #88
+    [Fact]
+    public void Generate_WithoutProxy_DoesNotContainProxyEnvVarAndLaunchTakesNoArgs()
+    {
+        var script = _generator.Generate(PlanWithoutWait());
+        Assert.DoesNotContain("PROXY_ENV_VAR", script);
+        Assert.Contains("p.chromium.launch()", script);
+    }
+
+    [Fact]
+    public void Generate_WithProxy_ImportsOsAndParsesProxyUrlForLaunch()
+    {
+        var plan = PlanWithoutWait();
+        plan = new ScrapingPlan
+        {
+            Engine = plan.Engine, Steps = plan.Steps, OutputFormat = plan.OutputFormat,
+            Proxy = new ProxyConfig { EnvironmentVariableName = "SF_PROXIES" },
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("import os", script);
+        Assert.Contains("import sys", script);
+        Assert.Contains("import itertools", script);
+        Assert.Contains("import urllib.parse", script);
+        Assert.Contains("PROXY_ENV_VAR = 'SF_PROXIES'", script);
+        Assert.Contains("_PROXY_ENV_VALUE = os.environ.get(PROXY_ENV_VAR)", script);
+        Assert.Contains("def _next_playwright_proxy():", script);
+        Assert.Contains("p.chromium.launch(proxy=_next_playwright_proxy())", script);
+        Assert.Contains("EXIT_MISSING_ENV_VAR = 78", script);
+    }
+
     [Fact]
     public void Generate_WithFillStep_ReadsValueFromEnvironmentVariable()
     {
         var script = _generator.Generate(LoginPlan());
-        Assert.Contains("_resolve_locator(page, \"#username\", None).fill(os.environ[\"SF_USERNAME\"])", script);
-        Assert.Contains("_resolve_locator(page, \"#password\", None).fill(os.environ[\"SF_PASSWORD\"])", script);
+        Assert.Contains("_resolve_locator(page, \"#username\", None).fill(_require_env(\"SF_USERNAME\"))", script);
+        Assert.Contains("_resolve_locator(page, \"#password\", None).fill(_require_env(\"SF_PASSWORD\"))", script);
+        Assert.Contains("def _require_env(name):", script);
     }
 
     [Fact]
@@ -173,7 +231,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://example.com" },
+            new NavigateStep { Urls = ["https://example.com"] },
             new ScrollStep { MaxIterations = 5, WaitAfterMs = 250 },
             new ExtractStep { Name = "Titel", Selector = ".item" },
         ],
@@ -184,7 +242,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://example.com" },
+            new NavigateStep { Urls = ["https://example.com"] },
             new ScrollStep
             {
                 ContainerSelector = "#list", LoadMoreButtonSelector = ".load-more",
@@ -230,7 +288,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://example.com" },
+            new NavigateStep { Urls = ["https://example.com"] },
             new ExtractStep { Name = "Titel", Selector = "h3 > a" },
             new ExtractStep { Name = "Preis", Selector = ".price", FramePath = ["iframe#outer", "iframe.inner"] },
         ],
@@ -276,7 +334,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://example.com/speisekarte" },
+            new NavigateStep { Urls = ["https://example.com/speisekarte"] },
             new ExtractGroupStep
             {
                 Roots =
@@ -301,7 +359,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://example.com/login" },
+            new NavigateStep { Urls = ["https://example.com/login"] },
             new FillStep { Selector = "#user", EnvironmentVariableName = "SF_USERNAME" },
             new ClickStep { Selector = "#submit" },
             new ExtractGroupStep
@@ -367,7 +425,7 @@ public class PythonPlaywrightCodeGeneratorTests
     public void Generate_GroupPlanWithLogin_RendersFillAndClickBeforeExtraction()
     {
         var script = _generator.Generate(GroupPlanWithLogin());
-        Assert.Contains("_resolve_locator(page, \"#user\", None).fill(os.environ[\"SF_USERNAME\"])", script);
+        Assert.Contains("_resolve_locator(page, \"#user\", None).fill(_require_env(\"SF_USERNAME\"))", script);
         Assert.Contains("_resolve_locator(page, \"#submit\", None).click()", script);
 
         // Textual order inside scrape() is execution order: the rendered
@@ -379,6 +437,23 @@ public class PythonPlaywrightCodeGeneratorTests
         Assert.True(clickIndex < extractionLoopIndex);
     }
 
+    // Issue #88
+    [Fact]
+    public void Generate_GroupPlanWithProxy_WiresProxyIntoLaunch()
+    {
+        var plan = GroupPlan();
+        plan = new ScrapingPlan
+        {
+            Engine = plan.Engine, Steps = plan.Steps, OutputFormat = plan.OutputFormat,
+            Proxy = new ProxyConfig { EnvironmentVariableName = "SF_PROXIES" },
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("PROXY_ENV_VAR = 'SF_PROXIES'", script);
+        Assert.Contains("p.chromium.launch(proxy=_next_playwright_proxy())", script);
+    }
+
     // ── Container-Mode FramePath (Issue #42, Phase 3) ───────────────────────
 
     private static ScrapingPlan GroupPlanWithFramedField() => new()
@@ -386,7 +461,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://example.com/speisekarte" },
+            new NavigateStep { Urls = ["https://example.com/speisekarte"] },
             new ExtractGroupStep
             {
                 Roots =
@@ -412,7 +487,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://example.com/speisekarte" },
+            new NavigateStep { Urls = ["https://example.com/speisekarte"] },
             new ExtractGroupStep
             {
                 Roots =
@@ -469,7 +544,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Engine = ScrapingEngine.Browser,
         Steps =
         [
-            new NavigateStep { Url = "https://example.com/login" },
+            new NavigateStep { Urls = ["https://example.com/login"] },
             new FillStep { Selector = "#user", EnvironmentVariableName = "SF_USERNAME", FramePath = ["iframe#sso"] },
             new ClickStep { Selector = "#submit", FramePath = ["iframe#sso"] },
             new WaitForStep { Selector = ".welcome", TimeoutMs = 3000, FramePath = ["iframe#sso"] },
@@ -482,7 +557,7 @@ public class PythonPlaywrightCodeGeneratorTests
     public void Generate_FramedFillStep_ChainsResolveLocatorWithFramePath()
     {
         var script = _generator.Generate(FramedActionStepsPlan());
-        Assert.Contains("_resolve_locator(page, \"#user\", [\"iframe#sso\"]).fill(os.environ[\"SF_USERNAME\"])", script);
+        Assert.Contains("_resolve_locator(page, \"#user\", [\"iframe#sso\"]).fill(_require_env(\"SF_USERNAME\"))", script);
     }
 
     [Fact]

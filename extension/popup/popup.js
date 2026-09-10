@@ -85,6 +85,38 @@ let _state = {
   // Phase 6 added 'scroll' — see also pendingBrowserActionField below, since
   // it's the only kind with more than one pickable selector per card.
   browserActions:      [],
+  // Issue #83: extra start URLs the same Fields/Groups extraction config
+  // runs against, in addition to `url` above — mode-independent like
+  // engine/browserActions, but rejected server-side for API mode (which
+  // builds its own request URL from apiConfig.urlTemplate and never reads
+  // `url`/this list at all), so the UI hides the input there instead of
+  // silently sending something the companion would reject. Persisted like
+  // fields/groups/scriptFileName (real scrape-target configuration, not a
+  // per-generate opt-in toggle like includeDataPreview/useJsonOutput below).
+  additionalStartUrls: [],
+  // Issue #87: opt-in change detection + notification — mode-independent
+  // like engine/additionalStartUrls above, persisted the same way (real
+  // scrape-target configuration, not a per-generate toggle). Every
+  // credential/target field is an environment-variable *name* the user
+  // types, never a literal value — mirrors FillAction's own
+  // environmentVariableName input, read by the generated script at
+  // runtime via os.environ[...] (see buildChangeDetectionConfig).
+  changeDetection: {
+    enabled: false,
+    notify: 'Email', // 'Email' | 'Webhook'
+    email: {
+      smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '',
+      fromEnvVar: '', toEnvVar: '',
+    },
+    webhook: { urlEnvVar: '' },
+  },
+  // Issue #88: opt-in proxy support — mode-independent like engine/
+  // additionalStartUrls/changeDetection above, persisted the same way (real
+  // scrape-target configuration, not a per-generate toggle). envVar is the
+  // *name* of an environment variable holding a comma-separated proxy URL
+  // list, never a literal address — same environmentVariableName pattern as
+  // FillAction/ChangeDetection (see buildProxyConfig).
+  proxy: { enabled: false, envVar: '' },
   // Issue #43: one-time Fill test values for the /generate verification
   // trial run only — keyed by FillAction.environmentVariableName. Deliberately
   // absent from persistState()'s chrome.storage.session write and from
@@ -201,6 +233,11 @@ let _state = {
   // it's a per-generate opt-in, not a sticky preference).
   includeDataPreview: false,
   dataPreview:        null, // the companion's ScriptPreviewData from the last successful /generate with includeDataPreview on, or null
+  // Issue #86: opt-in Json output, mode-independent (like includeDataPreview
+  // above) — not persisted, always off on popup reopen; a per-generate
+  // choice, not a sticky preference. See buildScrapingConfig for exactly
+  // what this adds/replaces per mode.
+  useJsonOutput:      false,
 };
 
 const DOM_TREE_TIMEOUT_MS = 5000;
@@ -235,11 +272,68 @@ function sanitizeFileNameBase(input, fallback) {
   return sanitized || fallback;
 }
 
+// Issue #83: one URL per line, pasted/typed into the additional-start-urls
+// textarea — blank lines (a trailing newline, or blank lines between pasted
+// entries) are a formatting artifact, not a URL the user meant to add, so
+// they're dropped here rather than surfacing as a companion-side validation
+// error later. A genuinely malformed non-blank entry is deliberately left
+// as-is — it's still sent to the companion, which rejects it the same way
+// it already rejects a malformed primary `url` (ScrapingPlanValidator).
+function parseAdditionalUrls(text) {
+  return (text || '').split('\n').map(line => line.trim()).filter(line => line.length > 0);
+}
+
+// Issue #87: converts _state.changeDetection's editable draft shape into
+// the wire ChangeDetectionConfig, or null when disabled or not yet fully
+// configured (a required env-var-name field left blank) — buildScrapingConfig
+// only adds the `changeDetection` key at all when this returns non-null, so
+// an incomplete draft is simply treated the same as the toggle being off
+// rather than sending a partial config the companion would reject with 400.
+// Every field here is an environment-variable *name*, never a value.
+function buildChangeDetectionConfig(changeDetection) {
+  if (!changeDetection?.enabled) return null;
+
+  if (changeDetection.notify === 'Webhook') {
+    const urlEnvVar = (changeDetection.webhook.urlEnvVar || '').trim();
+    return urlEnvVar ? { notify: 'Webhook', webhook: { urlEnvVar } } : null;
+  }
+
+  const email = changeDetection.email;
+  const smtpHostEnvVar = (email.smtpHostEnvVar || '').trim();
+  const fromEnvVar = (email.fromEnvVar || '').trim();
+  const toEnvVar = (email.toEnvVar || '').trim();
+  if (!smtpHostEnvVar || !fromEnvVar || !toEnvVar) return null;
+
+  const smtpPortEnvVar = (email.smtpPortEnvVar || '').trim();
+  const smtpUsernameEnvVar = (email.smtpUsernameEnvVar || '').trim();
+  const smtpPasswordEnvVar = (email.smtpPasswordEnvVar || '').trim();
+  return {
+    notify: 'Email',
+    email: {
+      smtpHostEnvVar, fromEnvVar, toEnvVar,
+      ...(smtpPortEnvVar ? { smtpPortEnvVar } : {}),
+      ...(smtpUsernameEnvVar ? { smtpUsernameEnvVar } : {}),
+      ...(smtpPasswordEnvVar ? { smtpPasswordEnvVar } : {}),
+    },
+  };
+}
+
+// Issue #88: converts _state.proxy's editable draft shape into the wire
+// ProxyConfig, or null when disabled or the env-var-name field is left
+// blank — same "incomplete draft treated as toggle-off" convention as
+// buildChangeDetectionConfig. The field is an environment-variable *name*,
+// never a literal proxy address.
+function buildProxyConfig(proxy) {
+  if (!proxy?.enabled) return null;
+  const environmentVariableName = (proxy.envVar || '').trim();
+  return environmentVariableName ? { environmentVariableName } : null;
+}
+
 // `apiConfig` is only read when mode === 'api' — the confirmed ApiConfig
 // wire object built by buildApiConfig (Issue #53 Phase 5), passed straight
-// through as the request body's `api` field. Method/OutputFormat are forced
-// server-side (see companion's ScrapingPlanBuilder), so nothing extra is
-// added here the way outputFormat is for flat mode.
+// through as the request body's `api` field. Method is forced server-side
+// (see companion's ScrapingPlanBuilder); OutputFormat is forced too, unless
+// `useJsonOutput` opts into Json (Issue #86, see below).
 // `scriptFileName`/`outputFileName` are sent as-is (possibly blank) — the
 // companion sanitizes and defaults them itself (see FileNameSanitizer),
 // same "server is the source of truth" pattern as OutputFormat.
@@ -251,27 +345,50 @@ function sanitizeFileNameBase(input, fallback) {
 // `includePreview` (Issue #122) is mode-independent too — only included when
 // true, so the default (checkbox unchecked) request stays byte-for-byte
 // identical to before this existed. See companion's ScrapingConfig.IncludePreview.
+// `useJsonOutput` (Issue #86) is mode-independent as well: container/api mode
+// send no `outputFormat` key at all by default (the companion forces its own
+// Xml/Csv default per shape) and only add `outputFormat: 'Json'` when this
+// is true; flat mode always sends an explicit outputFormat, so it just swaps
+// the literal 'Csv' for 'Json'. The companion decides — per mode/shape —
+// whether Json actually fits, same "server is the source of truth" pattern
+// as everything else here.
+// `additionalUrls` (Issue #83) is only included when non-empty, same
+// omit-when-default convention as browserActions — the companion runs the
+// same Fields/Groups extraction config against every one of these in
+// addition to `url`, combining the results. The UI never lets this be
+// non-empty for mode === 'api' (the input is hidden there), since API mode
+// builds its own request URL and the companion rejects the combination
+// outright rather than silently ignoring it.
 function buildScrapingConfig(
   url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
-  engine = 'Static', browserActions = [], includePreview = false,
+  engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
+  additionalUrls = [], changeDetection = null, proxy = null,
 ) {
   const engineFields = engine === 'Browser'
     ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
     : {};
   const previewFields = includePreview ? { includePreview: true } : {};
+  const outputFormatFields = useJsonOutput ? { outputFormat: 'Json' } : {};
+  const additionalUrlsFields = additionalUrls.length > 0 ? { additionalUrls } : {};
+  const changeDetectionConfig = buildChangeDetectionConfig(changeDetection);
+  const changeDetectionFields = changeDetectionConfig ? { changeDetection: changeDetectionConfig } : {};
+  const proxyConfig = buildProxyConfig(proxy);
+  const proxyFields = proxyConfig ? { proxy: proxyConfig } : {};
 
   if (mode === 'container') {
     return {
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
-      ...engineFields, ...previewFields,
+      ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
+      ...proxyFields,
     };
   }
   if (mode === 'api') {
     return {
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
-      ...engineFields, ...previewFields,
+      ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
+      ...proxyFields,
     };
   }
   return {
@@ -282,10 +399,10 @@ function buildScrapingConfig(
       ...(f.framePath ? { framePath: f.framePath } : {}),
       ...(f.transforms && f.transforms.length > 0 ? { transforms: f.transforms } : {}),
     })),
-    outputFormat: 'Csv',
+    outputFormat: useJsonOutput ? 'Json' : 'Csv',
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
-    ...engineFields, ...previewFields,
+    ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields,
   };
 }
 
@@ -297,12 +414,16 @@ function buildScrapingConfig(
 // function instead of reaching into chrome.runtime itself.
 function buildConfigExport(
   url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
-  engine = 'Static', browserActions = [], includePreview = false,
+  engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false, additionalUrls = [],
+  changeDetection = null, proxy = null,
 ) {
   return {
     exportedAt: new Date().toISOString(),
     extensionVersion: manifest.version || '?',
-    config: buildScrapingConfig(url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview),
+    config: buildScrapingConfig(
+      url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview,
+      useJsonOutput, additionalUrls, changeDetection, proxy,
+    ),
   };
 }
 
@@ -469,6 +590,9 @@ function persistState() {
       groups: _state.groups,
       engine: _state.engine,
       browserActions: _state.browserActions,
+      additionalStartUrls: _state.additionalStartUrls,
+      changeDetection: _state.changeDetection,
+      proxy: _state.proxy,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
       selectionKind: _state.selectionKind,
@@ -698,11 +822,62 @@ function render() {
     if (scriptNameInput && document.activeElement !== scriptNameInput) scriptNameInput.value = _state.scriptFileName;
     const outputNameInput = document.getElementById('input-output-filename');
     if (outputNameInput && document.activeElement !== outputNameInput) outputNameInput.value = _state.outputFileName;
+    // Container mode always forces Xml server-side (absent Json); API mode
+    // forces Xml too, but only for its tree shape (Groups) — its flat shape
+    // forces Csv, same as flat mode itself. Issue #86's useJsonOutput
+    // toggle overrides whichever of those would otherwise apply.
+    const isTreeShapedMode = _state.mode === 'container'
+      || (_state.mode === 'api' && !!_state.apiConfig?.groups?.length);
     const outputExtEl = document.getElementById('output-filename-ext');
-    if (outputExtEl) outputExtEl.textContent = _state.mode === 'container' ? '.xml' : '.csv';
+    if (outputExtEl) {
+      outputExtEl.textContent = _state.useJsonOutput ? '.json' : (isTreeShapedMode ? '.xml' : '.csv');
+    }
+
+    const outputJsonToggle = document.getElementById('toggle-output-json');
+    if (outputJsonToggle) outputJsonToggle.checked = _state.useJsonOutput;
 
     const dataPreviewToggle = document.getElementById('toggle-include-data-preview');
     if (dataPreviewToggle) dataPreviewToggle.checked = _state.includeDataPreview;
+
+    // Issue #83: hidden for API mode — Api builds its own request URL from
+    // apiConfig.urlTemplate and never reads this list at all (the companion
+    // rejects the combination outright, see Program.cs).
+    document.getElementById('additional-urls-row')?.classList.toggle('hidden', _state.mode === 'api');
+    const additionalUrlsInput = document.getElementById('input-additional-urls');
+    if (additionalUrlsInput && document.activeElement !== additionalUrlsInput) {
+      additionalUrlsInput.value = _state.additionalStartUrls.join('\n');
+    }
+
+    // Issue #87: opt-in change detection + notification.
+    const changeDetectionToggle = document.getElementById('toggle-change-detection');
+    if (changeDetectionToggle) changeDetectionToggle.checked = _state.changeDetection.enabled;
+    document.getElementById('change-detection-config')?.classList.toggle('hidden', !_state.changeDetection.enabled);
+    document.getElementById('btn-notify-email')?.classList.toggle('active', _state.changeDetection.notify === 'Email');
+    document.getElementById('btn-notify-webhook')?.classList.toggle('active', _state.changeDetection.notify === 'Webhook');
+    document.getElementById('notify-email-fields')?.classList.toggle('hidden', _state.changeDetection.notify !== 'Email');
+    document.getElementById('notify-webhook-fields')?.classList.toggle('hidden', _state.changeDetection.notify !== 'Webhook');
+    const changeDetectionInputs = {
+      'input-cd-smtp-host': _state.changeDetection.email.smtpHostEnvVar,
+      'input-cd-smtp-port': _state.changeDetection.email.smtpPortEnvVar,
+      'input-cd-smtp-username': _state.changeDetection.email.smtpUsernameEnvVar,
+      'input-cd-smtp-password': _state.changeDetection.email.smtpPasswordEnvVar,
+      'input-cd-email-from': _state.changeDetection.email.fromEnvVar,
+      'input-cd-email-to': _state.changeDetection.email.toEnvVar,
+      'input-cd-webhook-url': _state.changeDetection.webhook.urlEnvVar,
+    };
+    for (const [id, value] of Object.entries(changeDetectionInputs)) {
+      const input = document.getElementById(id);
+      if (input && document.activeElement !== input) input.value = value;
+    }
+
+    // Issue #88: opt-in proxy support.
+    const proxyToggle = document.getElementById('toggle-proxy');
+    if (proxyToggle) proxyToggle.checked = _state.proxy.enabled;
+    document.getElementById('proxy-config')?.classList.toggle('hidden', !_state.proxy.enabled);
+    const proxyEnvVarInput = document.getElementById('input-proxy-env-var');
+    if (proxyEnvVarInput && document.activeElement !== proxyEnvVarInput) {
+      proxyEnvVarInput.value = _state.proxy.envVar;
+    }
 
     if (_state.containerModalOpen) {
       show('modal-container-new');
@@ -1163,6 +1338,7 @@ async function generate() {
   const config = buildScrapingConfig(
     _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
+    _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
@@ -1246,6 +1422,7 @@ function downloadConfigExport() {
   const exportObj = buildConfigExport(
     _state.url, _state.mode, _state.fields, _state.groups, manifest, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
+    _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy,
   );
   log('DOWNLOAD scraping-config.json', exportObj);
 
@@ -1271,6 +1448,11 @@ function downloadConfigExport() {
 // the generated script's actual trial-run output.
 // Builds the table via DOM APIs + textContent (not innerHTML), so scraped
 // values never need HTML-escaping here at all.
+// Issue #86: Json covers two shapes (flat array → table, tree → text
+// sample), so which renderer to use is decided by which sample field is
+// actually populated (xmlSample/jsonSample vs. columns/rows) rather than by
+// outputFormat alone — outputFormat is still shown to the user via i18n
+// copy, but no longer drives the branch itself.
 function renderDataPreview(preview) {
   const panel = document.getElementById('data-preview-panel');
   if (!panel) return;
@@ -1278,14 +1460,15 @@ function renderDataPreview(preview) {
   panel.classList.remove('hidden');
 
   const tableWrap = document.getElementById('data-preview-table-wrap');
-  const xmlWrap = document.getElementById('data-preview-xml');
+  const textWrap = document.getElementById('data-preview-text');
   const truncatedNote = document.getElementById('data-preview-truncated');
+  const textSample = preview.xmlSample ?? preview.jsonSample;
 
-  if (preview.outputFormat === 'Xml') {
+  if (textSample != null) {
     tableWrap?.classList.add('hidden');
-    if (xmlWrap) {
-      xmlWrap.classList.remove('hidden');
-      xmlWrap.textContent = preview.xmlSample || '';
+    if (textWrap) {
+      textWrap.classList.remove('hidden');
+      textWrap.textContent = textSample;
     }
     if (truncatedNote) {
       truncatedNote.classList.toggle('hidden', !preview.truncated);
@@ -1294,7 +1477,7 @@ function renderDataPreview(preview) {
     return;
   }
 
-  xmlWrap?.classList.add('hidden');
+  textWrap?.classList.add('hidden');
   if (tableWrap) {
     tableWrap.classList.remove('hidden');
     tableWrap.innerHTML = '';
@@ -1615,10 +1798,57 @@ function wireEvents() {
   document.getElementById('input-output-filename')?.addEventListener('input', (e) => {
     setState(_state.current, { outputFileName: e.target.value });
   });
+  document.getElementById('input-additional-urls')?.addEventListener('input', (e) => {
+    setState(_state.current, { additionalStartUrls: parseAdditionalUrls(e.target.value) });
+  });
+
+  // Issue #87: opt-in change detection + notification.
+  document.getElementById('toggle-change-detection')?.addEventListener('change', (e) => {
+    setState(_state.current, { changeDetection: { ..._state.changeDetection, enabled: e.target.checked } });
+  });
+  document.getElementById('btn-notify-email')?.addEventListener('click', () => {
+    setState(_state.current, { changeDetection: { ..._state.changeDetection, notify: 'Email' } });
+  });
+  document.getElementById('btn-notify-webhook')?.addEventListener('click', () => {
+    setState(_state.current, { changeDetection: { ..._state.changeDetection, notify: 'Webhook' } });
+  });
+  const changeDetectionEmailFieldInputs = {
+    'input-cd-smtp-host': 'smtpHostEnvVar',
+    'input-cd-smtp-port': 'smtpPortEnvVar',
+    'input-cd-smtp-username': 'smtpUsernameEnvVar',
+    'input-cd-smtp-password': 'smtpPasswordEnvVar',
+    'input-cd-email-from': 'fromEnvVar',
+    'input-cd-email-to': 'toEnvVar',
+  };
+  for (const [id, field] of Object.entries(changeDetectionEmailFieldInputs)) {
+    document.getElementById(id)?.addEventListener('input', (e) => {
+      setState(_state.current, {
+        changeDetection: { ..._state.changeDetection, email: { ..._state.changeDetection.email, [field]: e.target.value } },
+      });
+    });
+  }
+  document.getElementById('input-cd-webhook-url')?.addEventListener('input', (e) => {
+    setState(_state.current, {
+      changeDetection: { ..._state.changeDetection, webhook: { ..._state.changeDetection.webhook, urlEnvVar: e.target.value } },
+    });
+  });
+
+  // Issue #88: opt-in proxy support.
+  document.getElementById('toggle-proxy')?.addEventListener('change', (e) => {
+    setState(_state.current, { proxy: { ..._state.proxy, enabled: e.target.checked } });
+  });
+  document.getElementById('input-proxy-env-var')?.addEventListener('input', (e) => {
+    setState(_state.current, { proxy: { ..._state.proxy, envVar: e.target.value } });
+  });
 
   document.getElementById('toggle-include-data-preview')?.addEventListener('change', (e) => {
     log('BTN toggle-include-data-preview', e.target.checked);
     patchState({ includeDataPreview: e.target.checked });
+  });
+
+  document.getElementById('toggle-output-json')?.addEventListener('change', (e) => {
+    log('BTN toggle-output-json', e.target.checked);
+    patchState({ useJsonOutput: e.target.checked });
   });
 
   document.getElementById('btn-api-search')?.addEventListener('click', () => {
@@ -2225,7 +2455,7 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'mode', 'groups',
-    'engine', 'browserActions', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
     'scriptFileName', 'outputFileName',
@@ -2239,6 +2469,9 @@ async function init() {
   if (stored.mode)                  _state = { ..._state, mode: stored.mode };
   if (stored.engine)                _state = { ..._state, engine: stored.engine };
   if (Array.isArray(stored.browserActions)) _state = { ..._state, browserActions: stored.browserActions };
+  if (Array.isArray(stored.additionalStartUrls)) _state = { ..._state, additionalStartUrls: stored.additionalStartUrls };
+  if (stored.changeDetection) _state = { ..._state, changeDetection: stored.changeDetection };
+  if (stored.proxy)                 _state = { ..._state, proxy: stored.proxy };
   if (stored.scriptFileName)        _state = { ..._state, scriptFileName: stored.scriptFileName };
   if (stored.outputFileName)        _state = { ..._state, outputFileName: stored.outputFileName };
   if (stored.selectionKind)         _state = { ..._state, selectionKind: stored.selectionKind };
@@ -2340,7 +2573,7 @@ if (typeof module !== 'undefined') {
     findUrlTemplateMatches, mergeValueListValues,
     variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
     detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
-    applyStaticTranslations, sanitizeFileNameBase,
+    applyStaticTranslations, sanitizeFileNameBase, parseAdditionalUrls, buildChangeDetectionConfig, buildProxyConfig,
     addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
     buildVerificationValues,
     frameBadgeHtml,

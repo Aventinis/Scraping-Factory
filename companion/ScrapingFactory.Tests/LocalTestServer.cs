@@ -10,7 +10,15 @@ namespace ScrapingFactory.Tests;
 // depending on the internet.
 internal sealed class LocalTestServer : IDisposable
 {
-    private readonly HttpListener _listener = new();
+    // Parallel test classes each pick a "free" port via GetFreePort(), but
+    // that check and the later HttpListener.Start() below aren't atomic —
+    // another instance can grab the same port in between (TOCTOU race),
+    // which surfaces as "Address already in use" either here or, more
+    // confusingly, from a since-unrelated instance's later Dispose(). Retry
+    // with a fresh port instead of letting that flakiness fail the test.
+    private const int MaxStartAttempts = 5;
+
+    private readonly HttpListener _listener;
     private readonly Func<HttpListenerRequest, LocalTestServerResponse> _responder;
     private readonly CancellationTokenSource _cts = new();
 
@@ -28,10 +36,26 @@ internal sealed class LocalTestServer : IDisposable
     public LocalTestServer(Func<HttpListenerRequest, LocalTestServerResponse> responder)
     {
         _responder = responder;
-        var port = GetFreePort();
-        BaseUrl = $"http://127.0.0.1:{port}/";
-        _listener.Prefixes.Add(BaseUrl);
-        _listener.Start();
+
+        for (var attempt = 1; ; attempt++)
+        {
+            var port = GetFreePort();
+            var baseUrl = $"http://127.0.0.1:{port}/";
+            var listener = new HttpListener();
+            listener.Prefixes.Add(baseUrl);
+            try
+            {
+                listener.Start();
+                _listener = listener;
+                BaseUrl = baseUrl;
+                break;
+            }
+            catch (HttpListenerException) when (attempt < MaxStartAttempts)
+            {
+                listener.Close();
+            }
+        }
+
         _ = Task.Run(ListenLoopAsync);
     }
 
@@ -71,8 +95,19 @@ internal sealed class LocalTestServer : IDisposable
     public void Dispose()
     {
         _cts.Cancel();
-        _listener.Stop();
-        _listener.Close();
+        try
+        {
+            _listener.Stop();
+            _listener.Close();
+        }
+        catch (HttpListenerException)
+        {
+            // Cleanup-time port bookkeeping can race with another
+            // LocalTestServer instance under parallel test execution (see
+            // the comment on MaxStartAttempts above) — by this point the
+            // test itself has already run to completion, so a failure here
+            // must not fail the test.
+        }
     }
 }
 

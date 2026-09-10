@@ -14,12 +14,25 @@ public class PythonApiScriptVerifierTests
 {
     private static ScrapingPlan PlanWith(ApiConfig api) => new()
     {
-        Steps = [new NavigateStep { Url = "https://example.com" }, new ApiCallStep { Config = api }],
+        Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = api }],
         OutputFormat = OutputFormat.Csv,
         Engine = ScrapingEngine.Api,
     };
 
     private static string GenerateScript(ApiConfig api) => new PythonApiCodeGenerator().Generate(PlanWith(api));
+
+    // Issue #86: same shape as PlanWith/GenerateScript above, just with
+    // OutputFormat.Json instead of the hardcoded Csv — used for both the
+    // flat and tree API shapes, which self-describe via the written
+    // output.json's own root JsonNode type (see PythonScriptVerifier).
+    private static ScrapingPlan PlanWithJson(ApiConfig api) => new()
+    {
+        Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = api }],
+        OutputFormat = OutputFormat.Json,
+        Engine = ScrapingEngine.Api,
+    };
+
+    private static string GenerateJsonScript(ApiConfig api) => new PythonApiCodeGenerator().Generate(PlanWithJson(api));
 
     [Fact]
     public async Task StaticListParameter_FetchesOneCombinationPerValue_Succeeds()
@@ -738,5 +751,54 @@ public class PythonApiScriptVerifierTests
         Assert.Equal(2, result.RowCount); // 1 <Produkt> + 1 <Titel>
         Assert.NotNull(observedBody);
         Assert.Contains("\"category\": \"electronics\"", observedBody);
+    }
+
+    // ── Json output (Issue #86) ─────────────────────────────────────────
+
+    [Fact]
+    public async Task JsonOutput_FlatShape_Succeeds()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var category = request.QueryString["category"];
+            var json = $$"""{ "data": { "items": [ { "title": "Item-{{category}}" } ] } }""";
+            return new LocalTestServerResponse(json, "application/json");
+        });
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = $"{server.BaseUrl}?category={{category}}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters = [new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["a", "b"] } }],
+        };
+
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateJsonScript(api), OutputFormat.Json, includePreview: true);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(2, result.RowCount);
+        Assert.NotNull(result.Preview);
+        Assert.Equal("Json", result.Preview.OutputFormat);
+        Assert.Contains("Titel", result.Preview.Columns!);
+    }
+
+    [Fact]
+    public async Task JsonOutput_TreeShape_Succeeds()
+    {
+        using var server = new LocalTestServer(_ => new LocalTestServerResponse(
+            """{ "products": [ { "title": "A" }, { "title": "B" } ] }""", "application/json"));
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = server.BaseUrl,
+            Groups = [new ApiGroup { Name = "Produkt", Path = "products", Children = [new ApiField { Name = "Titel", Path = "title" }] }],
+        };
+
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateJsonScript(api), OutputFormat.Json, includePreview: true);
+
+        Assert.True(result.Success, result.Error);
+        Assert.NotNull(result.Preview);
+        Assert.Equal("Json", result.Preview.OutputFormat);
+        Assert.Contains("\"Titel\"", result.Preview.JsonSample);
     }
 }

@@ -4,18 +4,30 @@ public sealed class ScrapingConfig
 {
     public string Version { get; init; } = "1";
     public required string Url { get; init; }
+
+    // Issue #83: extra start URLs the same Fields/Groups extraction config
+    // runs against, in addition to Url — results are combined into one
+    // output file (see ScrapingPlanBuilder/NavigateStep.Urls). Additive,
+    // wire-compatible: null/empty is today's exact single-URL behavior.
+    // Mutually exclusive with Api (enforced in the /generate endpoint) —
+    // Api mode builds its own request URL from UrlTemplate/Parameters and
+    // never consumes the page-scraping start URL at all, so a URL list here
+    // would silently do nothing rather than express what the caller intended.
+    public List<string>? AdditionalUrls { get; init; }
+
     public List<ScrapingField> Fields { get; init; } = [];
 
     // Container-Mode: mutually exclusive with Fields (enforced in the
     // /generate endpoint, before ScrapingPlanBuilder ever sees the config).
-    // When set, OutputFormat is forced to Xml server-side — see
-    // ScrapingPlanBuilder.
+    // When set, OutputFormat is forced to Xml server-side, unless the caller
+    // explicitly asked for Json (Issue #86) — see ScrapingPlanBuilder.
     public List<GroupNode>? Groups { get; init; }
 
     // API-Mode (Issue #53): mutually exclusive with both Fields and Groups
-    // (enforced in the /generate endpoint). When set, OutputFormat is forced
-    // to Csv and Engine to ScrapingEngine.Api server-side — see
-    // ScrapingPlanBuilder.
+    // (enforced in the /generate endpoint). When set, Engine is forced to
+    // ScrapingEngine.Api server-side, and OutputFormat is forced to Csv/Xml
+    // depending on the response shape (flat/tree, see below), unless the
+    // caller explicitly asked for Json (Issue #86) — see ScrapingPlanBuilder.
     public ApiConfig? Api { get; init; }
 
     public OutputFormat OutputFormat { get; init; } = OutputFormat.Csv;
@@ -62,6 +74,16 @@ public sealed class ScrapingConfig
     // instead of the plain script text — see Program.cs's /generate handler.
     // Additive, wire-compatible: null/false is today's exact behavior.
     public bool? IncludePreview { get; init; }
+
+    // Issue #87: opt-in change-detection + notification, mode-independent
+    // (Fields/Groups/Api alike) — see IR/ChangeDetectionConfig.cs. Null is
+    // today's exact behavior (no previous-run comparison, no notification).
+    public ChangeDetectionConfig? ChangeDetection { get; init; }
+
+    // Issue #88: opt-in proxy support, mode-independent (Fields/Groups/Api
+    // alike) — see IR/ProxyConfig.cs. Null is today's exact behavior (direct
+    // connection, no proxying).
+    public ProxyConfig? Proxy { get; init; }
 }
 
 public sealed class ScrapingField
@@ -79,4 +101,9 @@ public sealed class ScrapingField
     public List<FieldTransform>? Transforms { get; init; }
 }
 
-public enum OutputFormat { Csv, Xml }
+// Json (Issue #86) is a third, user-choosable alternative to Csv/Xml for
+// every mode — a flat list-of-records dump for Fields/API-flat, a nested
+// object mirroring the group/API tree for Groups/API-tree. See
+// ScrapingPlanBuilder for exactly when each mode honors it vs. still forcing
+// its own default.
+public enum OutputFormat { Csv, Xml, Json }

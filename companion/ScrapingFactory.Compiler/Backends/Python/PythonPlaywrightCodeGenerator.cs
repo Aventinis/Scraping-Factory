@@ -33,7 +33,11 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         var actionLines = plan.Steps
             .Select(step => step switch
             {
-                NavigateStep s => navigateTemplate.Render(new { step = new { url = s.Url } }),
+                // Issue #83: the target URL is no longer baked in as a
+                // literal here — it comes from scrape()'s own `url`
+                // parameter at runtime, since the same action sequence now
+                // runs once per start URL. See playwright_navigate_step.py.j2.
+                NavigateStep => navigateTemplate.Render(new { }),
                 WaitForStep s => waitTemplate.Render(new
                 {
                     step = new { selector = s.Selector, timeout_ms = s.TimeoutMs, frame_path = s.FramePath },
@@ -60,7 +64,18 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
             .Select(line => line!.TrimEnd());
 
         var actions = string.Join("\n", actionLines);
-        var needsOsImport = plan.Steps.OfType<FillStep>().Any();
+        // Issue #87/#88: change detection and proxy support also read env
+        // vars at runtime (SMTP/webhook credentials, proxy URL list), same
+        // reason FillStep already needs `import os`.
+        var needsOsImport = plan.Steps.OfType<FillStep>().Any() || plan.ChangeDetection is not null || plan.Proxy is not null;
+        // A FillStep's credential or Proxy's URL list must come from an
+        // environment variable that's actually set at runtime — both share
+        // the `_require_env`/`EXIT_MISSING_ENV_VAR` helper (see the shell
+        // templates) instead of a raw, unhandled KeyError. Change detection
+        // isn't included: its own env-var reads are unaffected by this.
+        var needsExitHelper = plan.Steps.OfType<FillStep>().Any() || plan.Proxy is not null;
+        var changeDetection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection);
+        var proxy = PythonProxyLiteral.BuildContext(plan.Proxy);
 
         // Container-Mode: login/wait steps (if any) still run first — only
         // the extraction phase after them differs (group tree → XML instead
@@ -74,13 +89,17 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
             var groupedShellTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_scraper_grouped.py.j2");
             return groupedShellTemplate.Render(new
             {
-                url = navigate.Url,
+                urls = navigate.Urls,
                 groups_literal = groupsLiteral,
                 root_names = rootNames,
                 actions,
                 needs_os_import = needsOsImport,
+                needs_exit_helper = needsExitHelper,
                 script_filename = plan.ScriptFileName,
                 output_filename = plan.OutputFileBaseName,
+                output_is_json = plan.OutputFormat == OutputFormat.Json,
+                change_detection = changeDetection,
+                proxy,
             });
         }
 
@@ -94,8 +113,12 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
 
         return shellTemplate.Render(new
         {
-            url = navigate.Url, fields, actions, needs_os_import = needsOsImport,
+            urls = navigate.Urls, fields, actions, needs_os_import = needsOsImport,
+            needs_exit_helper = needsExitHelper,
             script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
+            output_is_json = plan.OutputFormat == OutputFormat.Json,
+            change_detection = changeDetection,
+            proxy,
         });
     }
 }

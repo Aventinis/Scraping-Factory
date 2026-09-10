@@ -171,7 +171,7 @@ any change:
   execution.
 - **Verification is real execution, not a simulation.** `PythonScriptVerifier`
   writes the generated script to a temp directory and runs it via `python3`/
-  `python`, then reads back `output.csv`/`output.xml`. This is why a separate
+  `python`, then reads back `output.csv`/`output.xml`/`output.json`. This is why a separate
   Playwright-/AngleSharp-based verification path was rejected (`CLAUDE.md`'s
   "Consistency Rule") — only real execution can catch encoding issues, selector
   incompatibilities, and network errors the way the eventual downloaded script
@@ -184,7 +184,9 @@ Two largely-orthogonal axes run through the whole system:
 - **Mode** (what shape the extracted data has): `Fields` (flat) | `Groups`
   (nested tree, forces `OutputFormat.Xml`) | `Api` (forces `Engine.Api`;
   `OutputFormat` then depends on the *response* shape — flat `ItemsPath`/`Fields`
-  → `Csv`, tree `Groups` → `Xml`).
+  → `Csv`, tree `Groups` → `Xml`). Any forced default yields to an explicit
+  `OutputFormat.Json` request (Issue #86) — Json fits a flat record list just
+  as well as `Csv` and a tree just as well as `Xml`.
 - **Engine** (how the page is fetched/rendered): `Static` (requests +
   BeautifulSoup) | `Browser` (Playwright + Chromium) | `Api` (plain `requests`,
   forced by API mode regardless of what the wire payload sent). Browser-only
@@ -546,6 +548,152 @@ shapes (flat/container/API) since none of them share a common leaf type.
   preview stays hidden) and reuses the exact same `renderTransformPreview`
   call flat mode's own modal already makes.
 
+### 2.19 Multiple start URLs (Issue #83)
+
+Lets the same Fields/Groups extraction config run against a static,
+user-supplied list of start URLs in one script run, instead of exactly one —
+results from every URL are combined into a single output file. Applies to
+flat and container mode only; API mode already builds its own request URL
+from `urlTemplate`/`Parameters` and rejects the combination outright.
+
+- Extension: `popup/popup.js` (`_state.additionalStartUrls`,
+  `parseAdditionalUrls` — splits the textarea on newlines and drops blank
+  lines, threaded through `buildScrapingConfig`/`buildConfigExport` as
+  `additionalUrls`), `popup/popup.html` (`#input-additional-urls`, hidden for
+  API mode via the same `_state.mode === 'api'` toggle `#preview-section`
+  already uses)
+- Companion: `IR/ScrapingConfig.cs` (`AdditionalUrls`, additive/wire-
+  compatible), `IR/ScrapingPlanBuilder.cs` (combines `Url` + trimmed,
+  non-blank `AdditionalUrls` entries into `NavigateStep.Urls`),
+  `IR/ScrapingStep.cs` (`NavigateStep.Urls`, `List<string>` instead of a
+  single `Url` — the one breaking change to the canonical `ScrapingPlan`,
+  confined to the two code generators below), `IR/ScrapingPlanValidator.cs`
+  (validates every entry, identifying a failure by index), `Program.cs` (the
+  `Api`+`AdditionalUrls` `400` guard, same style as the existing Fields/
+  Groups/Api mutual-exclusivity checks)
+- `Backends/Python/PythonCodeGenerator.cs`/`PythonPlaywrightCodeGenerator.cs`
+  read `NavigateStep.Urls` (a list) instead of `.Url`, rendered into each
+  template as `URLS` instead of `URL`. `scraper.py.j2`/
+  `playwright_scraper.py.j2` loop `main()` over `URLS`, combining every
+  URL's rows into one `data` list; `scraper_grouped.py.j2`/
+  `playwright_scraper_grouped.py.j2` combine every URL's own `scrape(url)`
+  children into one `<Ergebnis>` root, reusing the same sibling-merging
+  pattern already used for multiple root groups from a single URL.
+  `scraper_api.py.j2`/`scraper_api_grouped.py.j2` (§2.3/§2.4) are untouched.
+- Fixes a latent bug surfaced by this change: `playwright_navigate_step.py.j2`
+  used to bake the target URL in as a literal, ignoring `scrape(url)`'s own
+  parameter — it now emits `page.goto(url, ...)`, which is what makes
+  per-URL looping possible for the Browser engine at all.
+
+### 2.20 Change detection + notification (Issue #87)
+
+Lets the generated script compare each run's output against the previous
+run's and notify (email or webhook) only when something actually changed —
+mode-independent (Fields/Groups/Api alike). No companion-side diffing logic
+at all; the companion only validates the config and renders the right
+literals, the actual diff/notify happens entirely at runtime inside the
+generated script.
+
+- Extension: `popup/popup.js` (`_state.changeDetection`,
+  `buildChangeDetectionConfig` — converts the editable draft into the wire
+  shape, returning `null` when disabled or a *required* env-var-name field
+  is still blank, threaded through `buildScrapingConfig`/`buildConfigExport`
+  as `changeDetection`), `popup/popup.html` (`#toggle-change-detection`,
+  Email/Webhook method buttons, one text input per env-var name — every
+  field is a name the user types, mirroring `FillAction`'s own
+  `environmentVariableName` input, never a fixed/conventional name)
+- Companion: `IR/ChangeDetectionConfig.cs` (`ChangeDetectionConfig`/
+  `EmailNotificationConfig`/`WebhookNotificationConfig`, additive/wire-
+  compatible), `IR/ScrapingPlan.cs` (`ChangeDetection`, carried through
+  unchanged by `IR/ScrapingPlanBuilder.cs` in all three shape branches — no
+  forcing/translation needed), `IR/ScrapingPlanValidator.cs` (notify method,
+  matching sub-config present, every env-var name valid),
+  `Backends/Python/PythonChangeDetectionLiteral.cs` (`BuildContext` — the
+  one `change_detection.*` Scriban context object every one of the six
+  templates renders from, always emitting all seven possible fields
+  regardless of which method is active)
+- All six templates gain an `OUTPUT_PATH` constant and, when enabled, a
+  `_read_previous_output`/`_notify_email`/`_notify_webhook`/`_notify_change`
+  helper set wrapped around the existing write logic: read the previous
+  output before writing the new one, write as always, then diff the two via
+  `difflib.unified_diff` — a notification fires only on an actual
+  difference, never on the first run (no previous file yet = baseline
+  only), which also means this path never executes during `/generate`'s
+  trial-run verification (always a fresh temp directory). Email uses
+  `smtplib` with opportunistic STARTTLS (`server.has_extn("starttls")`);
+  webhook uses `urllib.request` — both stdlib-only. A notification failure
+  is caught and printed as a warning, never re-raised, since the current
+  run's own output was already written successfully by that point.
+- Tests: `ChangeDetectionEndToEndTests.cs` runs the real generated script as
+  a raw subprocess twice in one shared, test-controlled directory (unlike
+  `PythonScriptVerifierTests`, which always uses a fresh temp directory per
+  call — the reason this couldn't just be a `PythonScriptVerifier` test),
+  proving a genuine cross-run diff actually triggers delivery for both
+  methods (webhook via the existing `LocalTestServer`, email via a new
+  `LocalSmtpTestServer` — a minimal fake SMTP server that never advertises
+  STARTTLS, exercising the generated script's own "upgrade only if offered"
+  logic for real).
+
+### 2.21 Proxy support (Issue #88)
+
+Lets the generated script route its outbound requests through proxies the
+user already has access to, instead of connecting directly — mode-
+independent (Fields/Groups/Api alike). The extension/companion never see a
+literal proxy address, only the name of an environment variable holding a
+comma-separated list; the generated script resolves and rotates through it
+entirely at runtime, mirroring how `ChangeDetectionConfig` (Issue #87)
+already keeps credentials env-var-name-only.
+
+- Extension: `popup/popup.js` (`_state.proxy`, `buildProxyConfig` —
+  converts the editable draft into the wire shape, returning `null` when
+  disabled or the env-var-name field is still blank, threaded through
+  `buildScrapingConfig`/`buildConfigExport` as `proxy`), `popup/popup.html`
+  (`#toggle-proxy`, one text input for the env-var name, right below the
+  change-detection block, same `environmentVariableName`-only pattern as
+  `FillAction`)
+- Companion: `IR/ProxyConfig.cs` (`ProxyConfig`, a single required
+  `EnvironmentVariableName`, additive/wire-compatible), `IR/ScrapingPlan.cs`
+  (`Proxy`, carried through unchanged by `IR/ScrapingPlanBuilder.cs` in all
+  three shape branches), `IR/ScrapingPlanValidator.cs` (env-var name valid),
+  `Backends/Python/PythonProxyLiteral.cs` (`BuildContext` — the one
+  `proxy.*` Scriban context object every one of the six templates renders
+  from, mirroring `PythonChangeDetectionLiteral`). All three code
+  generators extend their `needs_os_import`/`NeedsOsImport` checks with a
+  configured `Proxy`, since the generated script reads the proxy list via
+  `os.environ.get(...)` too. `Backends/Python/PythonScriptVerifier.cs`
+  treats a generated script's dedicated `EXIT_MISSING_ENV_VAR` (78) exit
+  code as compatible with success (falls through to the normal "did it
+  produce data" check instead of failing immediately like any other
+  nonzero code); only combined with no output file at all (the `FillStep`
+  case, see below) does it short-circuit with the script's own clean
+  stderr message.
+- All six templates gain, when enabled, a `PROXY_ENV_VAR` constant plus a
+  duplicated `_next_proxy()` helper (the env var's comma-separated value
+  parsed into a list, cycled round-robin via `itertools.cycle`). The
+  static/API engines (`requests`) wire a `_proxies_for_requests()` helper
+  (`{"http": p, "https": p}`) into every `requests.get`/`requests.post`
+  call site, including the API templates' discovery-source request; the
+  browser engine (Playwright) instead parses the picked URL via
+  `urllib.parse.urlsplit` into Playwright's `{"server", "username",
+  "password"}` proxy shape (`_next_playwright_proxy()`) and passes it to
+  `p.chromium.launch(proxy=...)`. A missing env var no longer raises a raw
+  `KeyError` — it's read via `os.environ.get(...)`, prints a German warning
+  to stderr, and is treated the same as an empty/blank value ("no proxies
+  configured", direct connection); the run is still flagged via a shared
+  `EXIT_MISSING_ENV_VAR = 78` sentinel once `main()` otherwise completes
+  successfully (also used by `FillStep`'s `_require_env` helper in the two
+  Playwright templates, replacing its own former raw `os.environ[...]`
+  read — a missing credential there is still a hard stop, just with a
+  clean message instead of an unhandled traceback).
+- Tests: `ProxyEndToEndTests.cs` runs the real generated static-engine
+  script as a subprocess against a new `LocalHttpProxyTestServer` — a
+  minimal raw-socket fake forward proxy (mirroring `LocalSmtpTestServer`'s
+  style) that records every request line it receives and answers with its
+  own canned body, proving both that a request actually routes through the
+  configured proxy (the real target's content never reaches the output) and
+  that round-robin rotation picks a different proxy per request across
+  multiple start URLs.
+
 ---
 
 ## 3. Class & Module Relationship Model
@@ -556,6 +704,7 @@ shapes (flat/container/API) since none of them share a common leaf type.
 classDiagram
     class ScrapingConfig {
         +string Url
+        +List~string~? AdditionalUrls
         +List~ScrapingField~ Fields
         +List~GroupNode~? Groups
         +ApiConfig? Api
@@ -566,6 +715,8 @@ classDiagram
         +string? ScriptFileName
         +string? OutputFileName
         +bool? IncludePreview
+        +ChangeDetectionConfig? ChangeDetection
+        +ProxyConfig? Proxy
     }
     class ScrapingPlan {
         +List~ScrapingStep~ Steps
@@ -573,9 +724,11 @@ classDiagram
         +ScrapingEngine Engine
         +string ScriptFileName
         +string OutputFileBaseName
+        +ChangeDetectionConfig? ChangeDetection
+        +ProxyConfig? Proxy
     }
     class ScrapingStep { <<abstract>> }
-    class NavigateStep
+    class NavigateStep { +List~string~ Urls }
     class ExtractStep
     class WaitForStep
     class FillStep
@@ -751,6 +904,9 @@ compile time anywhere.
 | Verification values (login test values) | `popup.js`: `buildVerificationValues()` (from `_state.fillTestValues`, never persisted) | `{verificationValues: {ENV_NAME: "value"}}` | `IR/FillVerificationValues.cs`: `Filter()` reads `ScrapingConfig.VerificationValues` |
 | Data-preview opt-in / result | `popup.js`: `_state.includeDataPreview` toggle → `buildScrapingConfig`'s `includePreview` key; `renderDataPreview()` consumes the response | request: `{includePreview: true}`; response: `{script, preview: {outputFormat, totalCount, truncated, columns?, rows?, xmlSample?}}` | `IR/ScrapingConfig.cs`: `IncludePreview`; `Backends/ScriptPreviewData.cs` |
 | Script/output filenames | `popup.js`: `sanitizeFileNameBase()` (client-side mirror, download only) | `{scriptFileName?, outputFileName?}` | `IR/FileNameSanitizer.cs`: `SanitizeBaseName()` (server-side, authoritative) |
+| Additional start URLs | `popup.js`: `parseAdditionalUrls()` (splits textarea on newlines, drops blank lines) → `buildScrapingConfig`'s `additionalUrls` key | `{additionalUrls?: ["https://..."]}` | `IR/ScrapingConfig.cs`: `AdditionalUrls`; combined with `Url` into `IR/ScrapingStep.cs`: `NavigateStep.Urls` |
+| Change detection + notification | `popup.js`: `buildChangeDetectionConfig()` (returns `null` when disabled or a required field is blank) → `buildScrapingConfig`'s `changeDetection` key | `{changeDetection?: {notify:"Email"\|"Webhook", email?:{...EnvVar fields}, webhook?:{urlEnvVar}}}` | `IR/ChangeDetectionConfig.cs`: `ChangeDetectionConfig`/`EmailNotificationConfig`/`WebhookNotificationConfig` |
+| Proxy support | `popup.js`: `buildProxyConfig()` (returns `null` when disabled or the env-var-name field is blank) → `buildScrapingConfig`'s `proxy` key | `{proxy?: {environmentVariableName}}` | `IR/ProxyConfig.cs`: `ProxyConfig` |
 | Range format mini-template | `api-config.js`: `RANGE_FORMAT_PRESETS`, `compileRangeFormatPattern()` (client-side mirror) | `{format?: "{yyyy}-W{ww}"}` inside a `RangeSource` | `Backends/Python/RangeFormat.cs` (server-side, authoritative) |
 
 Two rows above are explicitly **hand-kept mirrors**, not generated from a shared

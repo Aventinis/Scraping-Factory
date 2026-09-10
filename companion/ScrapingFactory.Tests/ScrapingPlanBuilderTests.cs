@@ -23,7 +23,7 @@ public class ScrapingPlanBuilderTests
         Assert.Equal(3, plan.Steps.Count);
 
         var navigate = Assert.IsType<NavigateStep>(plan.Steps[0]);
-        Assert.Equal("https://example.com", navigate.Url);
+        Assert.Equal(["https://example.com"], navigate.Urls);
 
         var titel = Assert.IsType<ExtractStep>(plan.Steps[1]);
         Assert.Equal("Titel", titel.Name);
@@ -60,6 +60,58 @@ public class ScrapingPlanBuilderTests
 
         var step = Assert.Single(plan.Steps);
         Assert.IsType<NavigateStep>(step);
+    }
+
+    // Issue #83
+    [Fact]
+    public void Build_AdditionalUrls_CombinesWithPrimaryUrlInOrder()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com/a",
+            AdditionalUrls = ["https://example.com/b", "https://example.com/c"],
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        var navigate = Assert.IsType<NavigateStep>(plan.Steps[0]);
+        Assert.Equal(
+            ["https://example.com/a", "https://example.com/b", "https://example.com/c"],
+            navigate.Urls);
+    }
+
+    [Fact]
+    public void Build_AdditionalUrls_TrimsAndDropsBlankEntries()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com/a",
+            AdditionalUrls = ["  https://example.com/b  ", "", "   ", "https://example.com/c"],
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        var navigate = Assert.IsType<NavigateStep>(plan.Steps[0]);
+        Assert.Equal(
+            ["https://example.com/a", "https://example.com/b", "https://example.com/c"],
+            navigate.Urls);
+    }
+
+    [Fact]
+    public void Build_NoAdditionalUrls_UrlsContainsOnlyPrimaryUrl()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        var navigate = Assert.IsType<NavigateStep>(plan.Steps[0]);
+        Assert.Equal(["https://example.com"], navigate.Urls);
     }
 
     [Fact]
@@ -158,6 +210,16 @@ public class ScrapingPlanBuilderTests
         var plan = ScrapingPlanBuilder.Build(config);
 
         Assert.Equal(OutputFormat.Xml, plan.OutputFormat);
+    }
+
+    [Fact]
+    public void Build_Groups_WithJsonOutputFormat_KeepsJsonInsteadOfXml()
+    {
+        var config = new ScrapingConfig { Url = "https://example.com", Groups = SampleGroups(), OutputFormat = OutputFormat.Json };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal(OutputFormat.Json, plan.OutputFormat);
     }
 
     [Fact]
@@ -291,6 +353,16 @@ public class ScrapingPlanBuilderTests
     }
 
     [Fact]
+    public void Build_ApiWithFlatShape_WithJsonOutputFormat_KeepsJsonInsteadOfCsv()
+    {
+        var config = new ScrapingConfig { Url = "https://example.com", Api = SampleApiConfig(), OutputFormat = OutputFormat.Json };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal(OutputFormat.Json, plan.OutputFormat);
+    }
+
+    [Fact]
     public void Build_Api_AlsoSanitizesFileNames()
     {
         var config = new ScrapingConfig
@@ -343,5 +415,123 @@ public class ScrapingPlanBuilderTests
         var plan = ScrapingPlanBuilder.Build(config);
 
         Assert.Equal(OutputFormat.Csv, plan.OutputFormat);
+    }
+
+    [Fact]
+    public void Build_ApiWithGroups_WithJsonOutputFormat_KeepsJsonInsteadOfXml()
+    {
+        var config = new ScrapingConfig { Url = "https://example.com", Api = SampleApiGroupsConfig(), OutputFormat = OutputFormat.Json };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Equal(OutputFormat.Json, plan.OutputFormat);
+    }
+
+    // Issue #87
+    [Fact]
+    public void Build_CarriesChangeDetectionThroughUnchanged_FlatMode()
+    {
+        var changeDetection = new ChangeDetectionConfig { Notify = "Webhook", Webhook = new WebhookNotificationConfig { UrlEnvVar = "SF_WEBHOOK_URL" } };
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+            ChangeDetection = changeDetection,
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Same(changeDetection, plan.ChangeDetection);
+    }
+
+    [Fact]
+    public void Build_CarriesChangeDetectionThroughUnchanged_ContainerMode()
+    {
+        var changeDetection = new ChangeDetectionConfig { Notify = "Webhook", Webhook = new WebhookNotificationConfig { UrlEnvVar = "SF_WEBHOOK_URL" } };
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Groups = [new GroupNode { Name = "Kategorie", Selector = "section", Repeating = true, Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }] }],
+            ChangeDetection = changeDetection,
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Same(changeDetection, plan.ChangeDetection);
+    }
+
+    [Fact]
+    public void Build_CarriesChangeDetectionThroughUnchanged_ApiMode()
+    {
+        var changeDetection = new ChangeDetectionConfig { Notify = "Webhook", Webhook = new WebhookNotificationConfig { UrlEnvVar = "SF_WEBHOOK_URL" } };
+        var config = new ScrapingConfig { Url = "https://example.com", Api = SampleApiGroupsConfig(), ChangeDetection = changeDetection };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Same(changeDetection, plan.ChangeDetection);
+    }
+
+    [Fact]
+    public void Build_NoChangeDetection_PlanChangeDetectionIsNull()
+    {
+        var config = new ScrapingConfig { Url = "https://example.com", Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }] };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Null(plan.ChangeDetection);
+    }
+
+    // Issue #88
+    [Fact]
+    public void Build_CarriesProxyThroughUnchanged_FlatMode()
+    {
+        var proxy = new ProxyConfig { EnvironmentVariableName = "SF_PROXIES" };
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+            Proxy = proxy,
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Same(proxy, plan.Proxy);
+    }
+
+    [Fact]
+    public void Build_CarriesProxyThroughUnchanged_ContainerMode()
+    {
+        var proxy = new ProxyConfig { EnvironmentVariableName = "SF_PROXIES" };
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Groups = [new GroupNode { Name = "Kategorie", Selector = "section", Repeating = true, Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }] }],
+            Proxy = proxy,
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Same(proxy, plan.Proxy);
+    }
+
+    [Fact]
+    public void Build_CarriesProxyThroughUnchanged_ApiMode()
+    {
+        var proxy = new ProxyConfig { EnvironmentVariableName = "SF_PROXIES" };
+        var config = new ScrapingConfig { Url = "https://example.com", Api = SampleApiGroupsConfig(), Proxy = proxy };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Same(proxy, plan.Proxy);
+    }
+
+    [Fact]
+    public void Build_NoProxy_PlanProxyIsNull()
+    {
+        var config = new ScrapingConfig { Url = "https://example.com", Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }] };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Null(plan.Proxy);
     }
 }

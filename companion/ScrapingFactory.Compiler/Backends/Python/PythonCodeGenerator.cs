@@ -26,8 +26,11 @@ public sealed class PythonCodeGenerator : ICodeGenerator
             var groupedTemplate = EmbeddedScribanTemplate.Load(assembly, "scraper_grouped.py.j2");
             return groupedTemplate.Render(new
             {
-                url = navigate.Url, groups_literal = groupsLiteral, root_names = rootNames,
+                urls = navigate.Urls, groups_literal = groupsLiteral, root_names = rootNames,
                 script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
+                output_is_json = plan.OutputFormat == OutputFormat.Json,
+                change_detection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection),
+                proxy = PythonProxyLiteral.BuildContext(plan.Proxy),
             });
         }
 
@@ -48,8 +51,11 @@ public sealed class PythonCodeGenerator : ICodeGenerator
         {
             config = new
             {
-                url = navigate.Url, fields,
+                urls = navigate.Urls, fields,
                 script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
+                output_is_json = plan.OutputFormat == OutputFormat.Json,
+                change_detection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection),
+                proxy = PythonProxyLiteral.BuildContext(plan.Proxy),
             },
         });
     }

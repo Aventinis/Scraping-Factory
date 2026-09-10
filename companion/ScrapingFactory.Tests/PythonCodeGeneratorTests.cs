@@ -12,7 +12,7 @@ public class PythonCodeGeneratorTests
     {
         Steps =
         [
-            new NavigateStep { Url = "https://books.toscrape.com" },
+            new NavigateStep { Urls = ["https://books.toscrape.com"] },
             new ExtractStep { Name = "Titel", Selector = "h3 > a" },
             new ExtractStep { Name = "Link", Selector = "h3 > a", Attribute = "href" }
         ]
@@ -23,6 +23,37 @@ public class PythonCodeGeneratorTests
     {
         var script = _generator.Generate(TwoFieldPlan());
         Assert.Contains("https://books.toscrape.com", script);
+    }
+
+    // Many sites (Wikipedia among them) reject the bare "python-requests/x.y"
+    // default User-Agent with 403 Forbidden — see PythonScriptVerifierTests
+    // for a real end-to-end reproduction/fix proof.
+    [Fact]
+    public void Generate_SendsUserAgentHeader()
+    {
+        var script = _generator.Generate(TwoFieldPlan());
+        Assert.Contains("HEADERS = {\"User-Agent\":", script);
+        Assert.Contains("requests.get(url, headers=HEADERS, timeout=10)", script);
+    }
+
+    // Issue #83
+    [Fact]
+    public void Generate_MultipleUrls_LoopsOverUrlsAndCombinesData()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com/a", "https://example.com/b"] },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("""URLS = ["https://example.com/a", "https://example.com/b"]""", script);
+        Assert.Contains("for url in URLS:", script);
+        Assert.Contains("data.extend(scrape(url))", script);
     }
 
     [Fact]
@@ -39,7 +70,7 @@ public class PythonCodeGeneratorTests
         {
             Steps =
             [
-                new NavigateStep { Url = "https://example.com" },
+                new NavigateStep { Urls = ["https://example.com"] },
                 new ExtractStep
                 {
                     Name = "Preis", Selector = ".price",
@@ -124,7 +155,8 @@ public class PythonCodeGeneratorTests
     {
         var script = _generator.Generate(TwoFieldPlan());
         Assert.Contains("python scraper.py", script);
-        Assert.Contains("open(\"output.csv\"", script);
+        Assert.Contains("OUTPUT_PATH = \"output.csv\"", script);
+        Assert.Contains("open(OUTPUT_PATH,", script);
         Assert.Contains("written to output.csv", script);
     }
 
@@ -141,8 +173,47 @@ public class PythonCodeGeneratorTests
         var script = _generator.Generate(plan);
 
         Assert.Contains("python mein_scraper.py", script);
-        Assert.Contains("open(\"ergebnisse.csv\"", script);
+        Assert.Contains("OUTPUT_PATH = \"ergebnisse.csv\"", script);
         Assert.Contains("written to ergebnisse.csv", script);
         Assert.DoesNotContain("output.csv", script);
+    }
+
+    // Issue #88
+    [Fact]
+    public void Generate_WithoutProxy_DoesNotImportOsOrItertools()
+    {
+        var script = _generator.Generate(TwoFieldPlan());
+        Assert.DoesNotContain("import os", script);
+        Assert.DoesNotContain("import itertools", script);
+        Assert.DoesNotContain("PROXY_ENV_VAR", script);
+        Assert.Contains("requests.get(url, headers=HEADERS, timeout=10)", script);
+    }
+
+    [Fact]
+    public void Generate_WithProxy_ReadsListFromEnvironmentVariableAndRotates()
+    {
+        var plan = TwoFieldPlan();
+        plan = new ScrapingPlan
+        {
+            Steps = plan.Steps, OutputFormat = plan.OutputFormat, Engine = plan.Engine,
+            ScriptFileName = plan.ScriptFileName, OutputFileBaseName = plan.OutputFileBaseName,
+            Proxy = new ProxyConfig { EnvironmentVariableName = "SF_PROXIES" },
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("import os", script);
+        Assert.Contains("import itertools", script);
+        Assert.Contains("import sys", script);
+        Assert.Contains("PROXY_ENV_VAR = 'SF_PROXIES'", script);
+        Assert.Contains("_PROXY_ENV_VALUE = os.environ.get(PROXY_ENV_VAR)", script);
+        Assert.Contains("itertools.cycle(_PROXY_LIST)", script);
+        Assert.Contains(
+            "requests.get(url, headers=HEADERS, proxies=_proxies_for_requests(), timeout=10)", script);
+        // Issue #88 follow-up: a missing (not just empty) env var no longer
+        // crashes the run with a raw KeyError — it warns and continues, only
+        // flagged via a dedicated exit code once the run otherwise succeeds.
+        Assert.Contains("EXIT_MISSING_ENV_VAR = 78", script);
+        Assert.Contains("if _PROXY_ENV_MISSING:\n        sys.exit(EXIT_MISSING_ENV_VAR)", script);
     }
 }

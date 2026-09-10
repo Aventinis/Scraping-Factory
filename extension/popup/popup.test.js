@@ -40,7 +40,8 @@ const {
   buildStaticListSource, buildDiscoverySource, buildRangeSource, buildApiHeaders, buildApiConfig,
   findUrlTemplateMatches, mergeValueListValues,
   variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
-  detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase,
+  detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase, parseAdditionalUrls,
+  buildChangeDetectionConfig, buildProxyConfig,
   addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
   buildVerificationValues,
   frameBadgeHtml,
@@ -198,6 +199,228 @@ describe('buildScrapingConfig (includePreview, Issue #122)', () => {
   });
 });
 
+// Issue #86: useJsonOutput is mode-independent, like includePreview above,
+// but with a different "default" shape per mode — flat mode always sends an
+// explicit outputFormat (Csv by default), while container/api mode omit the
+// key entirely by default and only add it when Json is requested.
+describe('buildScrapingConfig (useJsonOutput, Issue #86)', () => {
+  test('flat mode sends outputFormat: "Csv" by default, "Json" when requested', () => {
+    const defaultResult = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(defaultResult.outputFormat).toBe('Csv');
+
+    const jsonResult = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false, true,
+    );
+    expect(jsonResult.outputFormat).toBe('Json');
+  });
+
+  test('container mode omits outputFormat by default, sends "Json" when requested', () => {
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const defaultResult = buildScrapingConfig('https://example.com', 'container', [], groups);
+    expect(defaultResult.outputFormat).toBeUndefined();
+
+    const jsonResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, true,
+    );
+    expect(jsonResult.outputFormat).toBe('Json');
+  });
+
+  test('api mode omits outputFormat by default, sends "Json" when requested', () => {
+    const defaultResult = buildScrapingConfig('https://example.com', 'api', [], [], { fields: [] });
+    expect(defaultResult.outputFormat).toBeUndefined();
+
+    const jsonResult = buildScrapingConfig(
+      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, true,
+    );
+    expect(jsonResult.outputFormat).toBe('Json');
+  });
+});
+
+// Issue #83: additionalUrls is mode-independent too, like includePreview/
+// useJsonOutput above — only included when non-empty, so the default
+// (empty textarea) request stays byte-for-byte identical to before this
+// existed.
+describe('buildScrapingConfig (additionalUrls, Issue #83)', () => {
+  test('omits additionalUrls entirely when empty (the default)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.additionalUrls).toBeUndefined();
+  });
+
+  test('includes additionalUrls when non-empty', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, ['https://example.com/2', 'https://example.com/3'],
+    );
+    expect(result.additionalUrls).toEqual(['https://example.com/2', 'https://example.com/3']);
+  });
+
+  test('works the same way for container and api modes', () => {
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, ['https://example.com/2'],
+    );
+    expect(containerResult.additionalUrls).toEqual(['https://example.com/2']);
+
+    const apiResult = buildScrapingConfig(
+      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, ['https://example.com/2'],
+    );
+    expect(apiResult.additionalUrls).toEqual(['https://example.com/2']);
+  });
+});
+
+// Issue #87: every field is an environment-variable *name*, never a value.
+describe('buildChangeDetectionConfig', () => {
+  const draft = (overrides = {}) => ({
+    enabled: true,
+    notify: 'Email',
+    email: { smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: '', toEnvVar: '' },
+    webhook: { urlEnvVar: '' },
+    ...overrides,
+  });
+
+  test('returns null when disabled', () => {
+    expect(buildChangeDetectionConfig(draft({ enabled: false }))).toBeNull();
+  });
+
+  test('returns null for null/undefined input', () => {
+    expect(buildChangeDetectionConfig(null)).toBeNull();
+    expect(buildChangeDetectionConfig(undefined)).toBeNull();
+  });
+
+  test('email: returns null when a required field is blank', () => {
+    expect(buildChangeDetectionConfig(draft({
+      email: { smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: 'SF_FROM', toEnvVar: 'SF_TO' },
+    }))).toBeNull();
+  });
+
+  test('email: builds the wire shape with only required fields set', () => {
+    const result = buildChangeDetectionConfig(draft({
+      email: { smtpHostEnvVar: 'SF_SMTP_HOST', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: 'SF_FROM', toEnvVar: 'SF_TO' },
+    }));
+    expect(result).toEqual({
+      notify: 'Email',
+      email: { smtpHostEnvVar: 'SF_SMTP_HOST', fromEnvVar: 'SF_FROM', toEnvVar: 'SF_TO' },
+    });
+  });
+
+  test('email: includes optional fields when set', () => {
+    const result = buildChangeDetectionConfig(draft({
+      email: {
+        smtpHostEnvVar: 'SF_SMTP_HOST', smtpPortEnvVar: 'SF_SMTP_PORT', smtpUsernameEnvVar: 'SF_SMTP_USER',
+        smtpPasswordEnvVar: 'SF_SMTP_PASS', fromEnvVar: 'SF_FROM', toEnvVar: 'SF_TO',
+      },
+    }));
+    expect(result).toEqual({
+      notify: 'Email',
+      email: {
+        smtpHostEnvVar: 'SF_SMTP_HOST', fromEnvVar: 'SF_FROM', toEnvVar: 'SF_TO',
+        smtpPortEnvVar: 'SF_SMTP_PORT', smtpUsernameEnvVar: 'SF_SMTP_USER', smtpPasswordEnvVar: 'SF_SMTP_PASS',
+      },
+    });
+  });
+
+  test('webhook: returns null when urlEnvVar is blank', () => {
+    expect(buildChangeDetectionConfig(draft({ notify: 'Webhook', webhook: { urlEnvVar: '' } }))).toBeNull();
+  });
+
+  test('webhook: builds the wire shape', () => {
+    const result = buildChangeDetectionConfig(draft({ notify: 'Webhook', webhook: { urlEnvVar: 'SF_WEBHOOK_URL' } }));
+    expect(result).toEqual({ notify: 'Webhook', webhook: { urlEnvVar: 'SF_WEBHOOK_URL' } });
+  });
+});
+
+describe('buildScrapingConfig (changeDetection, Issue #87)', () => {
+  test('omits changeDetection entirely when disabled (the default)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.changeDetection).toBeUndefined();
+  });
+
+  test('includes changeDetection when enabled and fully configured', () => {
+    const changeDetection = {
+      enabled: true, notify: 'Webhook',
+      email: { smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: '', toEnvVar: '' },
+      webhook: { urlEnvVar: 'SF_WEBHOOK_URL' },
+    };
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], changeDetection,
+    );
+    expect(result.changeDetection).toEqual({ notify: 'Webhook', webhook: { urlEnvVar: 'SF_WEBHOOK_URL' } });
+  });
+
+  test('works the same way for container and api modes', () => {
+    const changeDetection = {
+      enabled: true, notify: 'Webhook',
+      email: { smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: '', toEnvVar: '' },
+      webhook: { urlEnvVar: 'SF_WEBHOOK_URL' },
+    };
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], changeDetection,
+    );
+    expect(containerResult.changeDetection).toEqual({ notify: 'Webhook', webhook: { urlEnvVar: 'SF_WEBHOOK_URL' } });
+
+    const apiResult = buildScrapingConfig(
+      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], changeDetection,
+    );
+    expect(apiResult.changeDetection).toEqual({ notify: 'Webhook', webhook: { urlEnvVar: 'SF_WEBHOOK_URL' } });
+  });
+});
+
+// Issue #88: the env var holds a comma-separated proxy URL list, never a
+// literal proxy address.
+describe('buildProxyConfig', () => {
+  test('returns null when disabled', () => {
+    expect(buildProxyConfig({ enabled: false, envVar: 'SF_PROXIES' })).toBeNull();
+  });
+
+  test('returns null for null/undefined input', () => {
+    expect(buildProxyConfig(null)).toBeNull();
+    expect(buildProxyConfig(undefined)).toBeNull();
+  });
+
+  test('returns null when enabled but envVar is blank', () => {
+    expect(buildProxyConfig({ enabled: true, envVar: '' })).toBeNull();
+    expect(buildProxyConfig({ enabled: true, envVar: '   ' })).toBeNull();
+  });
+
+  test('builds the wire shape with a trimmed env var name', () => {
+    expect(buildProxyConfig({ enabled: true, envVar: '  SF_PROXIES  ' })).toEqual({
+      environmentVariableName: 'SF_PROXIES',
+    });
+  });
+});
+
+describe('buildScrapingConfig (proxy, Issue #88)', () => {
+  test('omits proxy entirely when disabled (the default)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.proxy).toBeUndefined();
+  });
+
+  test('includes proxy when enabled and configured', () => {
+    const proxy = { enabled: true, envVar: 'SF_PROXIES' };
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, proxy,
+    );
+    expect(result.proxy).toEqual({ environmentVariableName: 'SF_PROXIES' });
+  });
+
+  test('works the same way for container and api modes', () => {
+    const proxy = { enabled: true, envVar: 'SF_PROXIES' };
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, proxy,
+    );
+    expect(containerResult.proxy).toEqual({ environmentVariableName: 'SF_PROXIES' });
+
+    const apiResult = buildScrapingConfig(
+      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], null, proxy,
+    );
+    expect(apiResult.proxy).toEqual({ environmentVariableName: 'SF_PROXIES' });
+  });
+});
+
 describe('buildScrapingConfig (container mode)', () => {
   test('sends groups instead of fields, no outputFormat', () => {
     const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
@@ -260,6 +483,32 @@ describe('sanitizeFileNameBase', () => {
 
   test('falls back when every character is invalid', () => {
     expect(sanitizeFileNameBase('///', 'output')).toBe('output');
+  });
+});
+
+// ── parseAdditionalUrls ──────────────────────────────────────────────────────
+// Issue #83: one URL per line, pasted/typed into the additional-start-urls
+// textarea.
+
+describe('parseAdditionalUrls', () => {
+  test('splits on newlines and trims each entry', () => {
+    expect(parseAdditionalUrls('https://example.com/a\n  https://example.com/b  '))
+      .toEqual(['https://example.com/a', 'https://example.com/b']);
+  });
+
+  test('drops blank lines', () => {
+    expect(parseAdditionalUrls('https://example.com/a\n\n   \nhttps://example.com/b\n'))
+      .toEqual(['https://example.com/a', 'https://example.com/b']);
+  });
+
+  test('returns an empty array for empty/null/undefined input', () => {
+    expect(parseAdditionalUrls('')).toEqual([]);
+    expect(parseAdditionalUrls(null)).toEqual([]);
+    expect(parseAdditionalUrls(undefined)).toEqual([]);
+  });
+
+  test('leaves a malformed non-blank entry as-is (the companion validates it)', () => {
+    expect(parseAdditionalUrls('not-a-url')).toEqual(['not-a-url']);
   });
 });
 
@@ -1383,7 +1632,7 @@ describe('renderDataPreview', () => {
     document.body.innerHTML = `
       <div id="data-preview-panel" class="hidden">
         <div id="data-preview-table-wrap" class="hidden"></div>
-        <pre id="data-preview-xml" class="hidden"></pre>
+        <pre id="data-preview-text" class="hidden"></pre>
         <p id="data-preview-truncated" class="hidden"></p>
       </div>
     `;
@@ -1401,7 +1650,7 @@ describe('renderDataPreview', () => {
     });
 
     expect(document.getElementById('data-preview-panel').classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('data-preview-xml').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('data-preview-text').classList.contains('hidden')).toBe(true);
     const table = document.querySelector('.data-preview-table');
     expect(table.querySelectorAll('th')).toHaveLength(1);
     expect(table.querySelectorAll('th')[0].textContent).toBe('Titel');
@@ -1442,9 +1691,9 @@ describe('renderDataPreview', () => {
     renderDataPreview({ outputFormat: 'Xml', totalCount: 3, truncated: false, xmlSample: '<Ergebnis><Kategorie/></Ergebnis>' });
 
     expect(document.getElementById('data-preview-table-wrap').classList.contains('hidden')).toBe(true);
-    const xmlEl = document.getElementById('data-preview-xml');
-    expect(xmlEl.classList.contains('hidden')).toBe(false);
-    expect(xmlEl.textContent).toBe('<Ergebnis><Kategorie/></Ergebnis>');
+    const textEl = document.getElementById('data-preview-text');
+    expect(textEl.classList.contains('hidden')).toBe(false);
+    expect(textEl.textContent).toBe('<Ergebnis><Kategorie/></Ergebnis>');
   });
 
   test('shows a generic truncation note for a truncated Xml preview (no shown/total counts)', () => {
@@ -1453,6 +1702,33 @@ describe('renderDataPreview', () => {
     const note = document.getElementById('data-preview-truncated');
     expect(note.classList.contains('hidden')).toBe(false);
     expect(note.textContent.length).toBeGreaterThan(0);
+  });
+
+  // Issue #86: Json's flat shape (an array of records) reuses the table
+  // renderer exactly like Csv — driven by the presence of columns/rows, not
+  // by outputFormat === 'Csv' specifically.
+  test('renders a flat Json preview as a table, same as Csv', () => {
+    renderDataPreview({
+      outputFormat: 'Json', totalCount: 2, truncated: false, columns: ['Titel'],
+      rows: [{ Titel: 'Suppe' }, { Titel: 'Salat' }],
+    });
+
+    expect(document.getElementById('data-preview-text').classList.contains('hidden')).toBe(true);
+    const table = document.querySelector('.data-preview-table');
+    const rows = table.querySelectorAll('tbody tr');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].querySelector('td').textContent).toBe('Suppe');
+  });
+
+  // Json's tree shape (a nested object) reuses the same text-sample renderer
+  // as Xml, via jsonSample instead of xmlSample.
+  test('renders a tree-shaped Json preview as read-only text, not a table', () => {
+    renderDataPreview({ outputFormat: 'Json', totalCount: 3, truncated: false, jsonSample: '{"Kategorie": []}' });
+
+    expect(document.getElementById('data-preview-table-wrap').classList.contains('hidden')).toBe(true);
+    const textEl = document.getElementById('data-preview-text');
+    expect(textEl.classList.contains('hidden')).toBe(false);
+    expect(textEl.textContent).toBe('{"Kategorie": []}');
   });
 });
 

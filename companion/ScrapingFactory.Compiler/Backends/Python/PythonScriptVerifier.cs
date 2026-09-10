@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Xml.Linq;
 using ScrapingFactory.Compiler.Backends;
 using ScrapingFactory.Compiler.IR;
@@ -22,6 +24,17 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
     // WaitForStep). Avoids needing a per-engine verifier just for timing.
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(45);
     private static readonly string[] DefaultCandidates = ["python3", "python"];
+
+    // A generated script exits with this code (instead of the default 1
+    // from an unhandled exception) when a required environment variable
+    // (a FillStep credential, or Proxy's env var) was missing at runtime —
+    // see EXIT_MISSING_ENV_VAR in the Python shell templates. Proxy's own
+    // missing-var case is a soft warning that still produces real data, so
+    // this exit code alone must not immediately fail verification the way
+    // any other nonzero code does — whether the run is ultimately treated
+    // as a success still comes down to the same "did it produce data"
+    // check every other exit code goes through.
+    private const int MissingEnvVarExitCode = 78;
 
     // Issue #122: how many rows/top-level XML elements a trial-run preview
     // ever carries, regardless of how much data the script actually
@@ -82,7 +95,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                 }
                 await stdoutTask;
 
-                if (process.ExitCode != 0)
+                if (process.ExitCode != 0 && process.ExitCode != MissingEnvVarExitCode)
                 {
                     return new ScriptVerificationResult
                     {
@@ -91,10 +104,35 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                                 Truncate(stderrBuilder.ToString()),
                     };
                 }
+
+                // A FillStep with a missing credential exits before writing
+                // any output at all (it can't meaningfully continue) — in
+                // that case, surface its own clean stderr message instead of
+                // falling through to the generic "did not produce X" below.
+                // Proxy's own missing-var case still writes real output
+                // (see the doc comment on MissingEnvVarExitCode above), so
+                // this only short-circuits when there's genuinely nothing to
+                // verify.
+                if (process.ExitCode == MissingEnvVarExitCode)
+                {
+                    var expectedFileName = outputFormat switch
+                    {
+                        OutputFormat.Xml => $"{outputFileBaseName}.xml",
+                        OutputFormat.Json => $"{outputFileBaseName}.json",
+                        _ => $"{outputFileBaseName}.csv",
+                    };
+                    if (!File.Exists(Path.Combine(workDir, expectedFileName)))
+                    {
+                        return new ScriptVerificationResult { Success = false, Error = Truncate(stderrBuilder.ToString()) };
+                    }
+                }
             }
 
             if (outputFormat == OutputFormat.Xml)
                 return VerifyXmlOutput(workDir, outputFileBaseName, includePreview);
+
+            if (outputFormat == OutputFormat.Json)
+                return VerifyJsonOutput(workDir, outputFileBaseName, includePreview);
 
             var csvFileName = $"{outputFileBaseName}.csv";
             var csvPath = Path.Combine(workDir, csvFileName);
@@ -166,6 +204,134 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
         {
             Success = true, RowCount = elementCount,
             Preview = includePreview ? BuildXmlPreview(document, elementCount) : null,
+        };
+    }
+
+    // Json analog of the CSV/XML "at least one data row" checks above
+    // (Issue #86): output.json must exist and parse as valid JSON. Json is
+    // used for two structurally different shapes — a flat array of records
+    // (Fields/API-flat, the Csv analog) or a nested object mirroring the
+    // group/API tree (Groups/API-tree, the Xml analog) — which of the two
+    // it is self-describes via the root's JsonNode type, so (unlike Csv vs.
+    // Xml) no separate code path needs to be selected by the caller.
+    private static ScriptVerificationResult VerifyJsonOutput(string workDir, string outputFileBaseName, bool includePreview)
+    {
+        var jsonFileName = $"{outputFileBaseName}.json";
+        var jsonPath = Path.Combine(workDir, jsonFileName);
+        if (!File.Exists(jsonPath))
+            return new ScriptVerificationResult { Success = false, Error = $"Script did not produce {jsonFileName}." };
+
+        var root = JsonNode.Parse(File.ReadAllText(jsonPath));
+
+        if (root is JsonArray array)
+        {
+            if (array.Count == 0)
+            {
+                return new ScriptVerificationResult
+                {
+                    Success = false,
+                    Error = "Script ran without errors but returned no data " +
+                            $"({jsonFileName} contains no records) — at least one selector or request likely found nothing.",
+                };
+            }
+
+            return new ScriptVerificationResult
+            {
+                Success = true, RowCount = array.Count,
+                Preview = includePreview ? BuildJsonFlatPreview(array) : null,
+            };
+        }
+
+        // Same "at least one" role as XDocument's Descendants().Count() for
+        // Xml, but not numerically equivalent to it: counts every object
+        // property and array item recursively (excluding the root itself),
+        // which — unlike an XML element per tag — folds a leaf field
+        // straight into its parent's dict, so a JSON tree's count for the
+        // same data will generally differ from the XML count. Only the
+        // "greater than zero" outcome is actually load-bearing.
+        var elementCount = CountJsonNodes(root);
+        if (elementCount == 0)
+        {
+            return new ScriptVerificationResult
+            {
+                Success = false,
+                Error = "Script ran without errors but returned no data " +
+                        $"({jsonFileName} contains no elements) — at least one selector likely found nothing.",
+            };
+        }
+
+        return new ScriptVerificationResult
+        {
+            Success = true, RowCount = elementCount,
+            Preview = includePreview ? BuildJsonTreePreview(root!, elementCount) : null,
+        };
+    }
+
+    private static int CountJsonNodes(JsonNode? node) => node switch
+    {
+        JsonObject obj => obj.Sum(property => 1 + CountJsonNodes(property.Value)),
+        JsonArray arr => arr.Sum(item => 1 + CountJsonNodes(item)),
+        _ => 0,
+    };
+
+    // Json preview, flat shape: an array of uniform record objects — the
+    // same Columns/Rows table BuildCsvPreview already produces, just read
+    // from JsonNode instead of a raw CSV line. Every value the generator's
+    // own templates ever write here is a plain string (record values,
+    // parameter columns alike), so GetValue<string>() is safe.
+    private static ScriptPreviewData BuildJsonFlatPreview(JsonArray array)
+    {
+        var sampleRecords = array.Take(PreviewSampleCap).OfType<JsonObject>().ToList();
+        var columns = sampleRecords.Count > 0 ? sampleRecords[0].Select(property => property.Key).ToList() : [];
+        var rows = sampleRecords
+            .Select(record =>
+            {
+                var row = new Dictionary<string, string>();
+                foreach (var column in columns)
+                    row[column] = record[column]?.GetValue<string>() ?? "";
+                return (IReadOnlyDictionary<string, string>)row;
+            })
+            .ToList();
+
+        return new ScriptPreviewData
+        {
+            OutputFormat = "Json",
+            TotalCount = array.Count,
+            Truncated = array.Count > PreviewSampleCap,
+            Columns = columns,
+            Rows = rows,
+        };
+    }
+
+    // Json preview, tree shape: mirrors BuildXmlPreview's own "cap only the
+    // top-level repeating structure, not the whole tree" approach — a
+    // top-level property whose value is an array (a repeating root group,
+    // or several same-named root-level matches) is capped at
+    // PreviewSampleCap items; any other top-level property is left as-is.
+    // Re-parses instead of mutating the caller's own root (JsonArray.RemoveAt
+    // needs an already-owned array to mutate in place).
+    private static ScriptPreviewData BuildJsonTreePreview(JsonNode root, int elementCount)
+    {
+        var truncated = false;
+        var sample = JsonNode.Parse(root.ToJsonString())!;
+        if (sample is JsonObject obj)
+        {
+            foreach (var key in obj.Select(property => property.Key).ToList())
+            {
+                if (obj[key] is not JsonArray propertyArray || propertyArray.Count <= PreviewSampleCap)
+                    continue;
+                truncated = true;
+                while (propertyArray.Count > PreviewSampleCap)
+                    propertyArray.RemoveAt(propertyArray.Count - 1);
+            }
+        }
+
+        return new ScriptPreviewData
+        {
+            OutputFormat = "Json",
+            TotalCount = elementCount,
+            Truncated = truncated,
+            JsonSample = sample.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
         };
     }
 

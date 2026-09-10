@@ -22,7 +22,7 @@ public class PythonPlaywrightScriptVerifierTests
         var plan = new ScrapingPlan
         {
             Engine = ScrapingEngine.Browser,
-            Steps = [new NavigateStep { Url = server.BaseUrl }, new ExtractStep { Name = "Item", Selector = ".item" }],
+            Steps = [new NavigateStep { Urls = [server.BaseUrl] }, new ExtractStep { Name = "Item", Selector = ".item" }],
         };
         var script = Generator.Generate(plan);
 
@@ -31,6 +31,39 @@ public class PythonPlaywrightScriptVerifierTests
         Assert.True(result.Success);
         Assert.Null(result.Error);
         Assert.Equal(2, result.RowCount);
+    }
+
+    // Issue #83: also proves the earlier-latent playwright_navigate_step.py.j2
+    // fix (page.goto(url, ...) instead of a baked-in literal) actually
+    // navigates each loop iteration to the right URL, not just the first.
+    [Fact]
+    public async Task MultipleUrls_CombinesRowsFromBothPagesIntoOneOutput()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var html = request.Url!.AbsolutePath switch
+            {
+                "/a" => "<html><body><li class='item'>A1</li><li class='item'>A2</li></body></html>",
+                "/b" => "<html><body><li class='item'>B1</li></body></html>",
+                _ => "<html><body></body></html>",
+            };
+            return new LocalTestServerResponse(html, "text/html; charset=utf-8");
+        });
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Urls = [$"{server.BaseUrl}a", $"{server.BaseUrl}b"] },
+                new ExtractStep { Name = "Item", Selector = ".item" },
+            ],
+        };
+        var script = Generator.Generate(plan);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(3, result.RowCount);
     }
 
     // The whole point of the Browser engine: content inserted by JavaScript
@@ -57,7 +90,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new WaitForStep { Selector = ".item", TimeoutMs = 5000 },
                 new ExtractStep { Name = "Item", Selector = ".item" },
             ],
@@ -106,7 +139,7 @@ public class PythonPlaywrightScriptVerifierTests
                 Engine = ScrapingEngine.Browser,
                 Steps =
                 [
-                    new NavigateStep { Url = server.BaseUrl },
+                    new NavigateStep { Urls = [server.BaseUrl] },
                     new FillStep { Selector = "#username", EnvironmentVariableName = usernameVar },
                     new FillStep { Selector = "#password", EnvironmentVariableName = passwordVar },
                     new ClickStep { Selector = "#submit" },
@@ -164,7 +197,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new FillStep { Selector = "#username", EnvironmentVariableName = usernameVar },
                 new FillStep { Selector = "#password", EnvironmentVariableName = passwordVar },
                 new ClickStep { Selector = "#submit" },
@@ -184,6 +217,49 @@ public class PythonPlaywrightScriptVerifierTests
         Assert.Equal(1, result.RowCount);
         Assert.Null(Environment.GetEnvironmentVariable(usernameVar));
         Assert.Null(Environment.GetEnvironmentVariable(passwordVar));
+    }
+
+    // Issue #88 follow-up: unlike Proxy, a FillStep genuinely can't continue
+    // without its credential — but it must still fail *cleanly*, with a
+    // readable message pointing at the missing variable name, instead of a
+    // raw unhandled KeyError traceback (which is confusing to read from the
+    // extension's own error display). Verification must still report
+    // failure here — a login page's own selector never matches without a
+    // successful login, so this is also covered by the ordinary
+    // "no data produced" safety net, just with a better message on top.
+    [Fact]
+    public async Task LoginFlow_MissingCredentialEnvVar_FailsWithCleanMessageInsteadOfRawTraceback()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+            <input id="username" type="text" />
+            <button id="submit" onclick="document.body.innerHTML += '<div class=welcome>hi</div>'">Login</button>
+            </body></html>
+            """);
+
+        const string usernameVar = "SCRAPINGFACTORY_TEST_USERNAME_MISSING";
+        Assert.Null(Environment.GetEnvironmentVariable(usernameVar));
+
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Urls = [server.BaseUrl] },
+                new FillStep { Selector = "#username", EnvironmentVariableName = usernameVar },
+                new ClickStep { Selector = "#submit" },
+                new WaitForStep { Selector = ".welcome", TimeoutMs = 2000 },
+                new ExtractStep { Name = "Welcome", Selector = ".welcome" },
+            ],
+        };
+        var script = Generator.Generate(plan);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.False(result.Success);
+        Assert.Contains(usernameVar, result.Error);
+        Assert.DoesNotContain("Traceback", result.Error);
+        Assert.DoesNotContain("KeyError", result.Error);
     }
 
     // Proves ScrollStep's actual point: content that only appears after
@@ -227,7 +303,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new ScrollStep { MaxIterations = 10, WaitAfterMs = 300 },
                 new ExtractStep { Name = "Item", Selector = ".item" },
             ],
@@ -279,7 +355,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new ScrollStep { ContainerSelector = "#box", MaxIterations = 10, WaitAfterMs = 300 },
                 new ExtractStep { Name = "Item", Selector = ".item" },
             ],
@@ -321,7 +397,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new ScrollStep { LoadMoreButtonSelector = "#load-more", MaxIterations = 6, WaitAfterMs = 200 },
                 new ExtractStep { Name = "Item", Selector = ".item" },
             ],
@@ -332,6 +408,64 @@ public class PythonPlaywrightScriptVerifierTests
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(10, result.RowCount);
+    }
+
+    // ── Json output (Issue #86) ─────────────────────────────────────────
+    // Both templates (flat/grouped) share the same import-swap/write-branch
+    // shape as the Static engine's own templates — one flat and one grouped
+    // case here is enough to prove the Playwright-generated script actually
+    // writes valid Json too, the rest is already covered by
+    // PythonScriptVerifierTests' more exhaustive Json coverage.
+
+    [Fact]
+    public async Task JsonOutput_FlatFields_Succeeds()
+    {
+        using var server = new LocalTestServer(
+            "<html><body><ul><li class='item'>A</li><li class='item'>B</li></ul></body></html>");
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            OutputFormat = OutputFormat.Json,
+            Steps = [new NavigateStep { Urls = [server.BaseUrl] }, new ExtractStep { Name = "Item", Selector = ".item" }],
+        };
+        var script = Generator.Generate(plan);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Json);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(2, result.RowCount);
+    }
+
+    [Fact]
+    public async Task JsonOutput_GroupedContainer_Succeeds()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+            <section class="cat"><h2>Suppe</h2></section>
+            <section class="cat"><h2>Salat</h2></section>
+            </body></html>
+            """);
+        var root = new GroupNode
+        {
+            Name = "Kategorie",
+            Selector = ".cat",
+            Repeating = true,
+            Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }],
+        };
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            OutputFormat = OutputFormat.Json,
+            Steps = [new NavigateStep { Urls = [server.BaseUrl] }, new ExtractGroupStep { Roots = [root] }],
+        };
+        var script = Generator.Generate(plan);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Json, includePreview: true);
+
+        Assert.True(result.Success, result.Error);
+        Assert.NotNull(result.Preview);
+        Assert.Equal("Json", result.Preview.OutputFormat);
+        Assert.Contains("Suppe", result.Preview.JsonSample);
     }
 
     // ── FramePath / Shadow DOM (Issue #42) ──────────────────────────────────
@@ -361,7 +495,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new ExtractStep { Name = "Preis", Selector = ".price" },
             ],
         };
@@ -390,7 +524,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new ExtractStep { Name = "Preis", Selector = ".price", FramePath = ["#outer"] },
             ],
         };
@@ -420,7 +554,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new ExtractStep { Name = "Preis", Selector = ".price", FramePath = ["#outer", "#inner-frame"] },
             ],
         };
@@ -452,7 +586,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new ExtractStep { Name = "Titel", Selector = ".title" },
                 new ExtractStep { Name = "Preis", Selector = ".price", FramePath = ["#outer"] },
             ],
@@ -472,7 +606,7 @@ public class PythonPlaywrightScriptVerifierTests
         var plan = new ScrapingPlan
         {
             Engine = ScrapingEngine.Browser,
-            Steps = [new NavigateStep { Url = url }, new ExtractGroupStep { Roots = [root] }],
+            Steps = [new NavigateStep { Urls = [url] }, new ExtractGroupStep { Roots = [root] }],
         };
         return Generator.Generate(plan);
     }
@@ -606,7 +740,7 @@ public class PythonPlaywrightScriptVerifierTests
                 Engine = ScrapingEngine.Browser,
                 Steps =
                 [
-                    new NavigateStep { Url = server.BaseUrl },
+                    new NavigateStep { Urls = [server.BaseUrl] },
                     new FillStep { Selector = "#username", EnvironmentVariableName = usernameVar, FramePath = ["#sso"] },
                     new FillStep { Selector = "#password", EnvironmentVariableName = passwordVar, FramePath = ["#sso"] },
                     new ClickStep { Selector = "#submit", FramePath = ["#sso"] },
@@ -666,7 +800,7 @@ public class PythonPlaywrightScriptVerifierTests
             Engine = ScrapingEngine.Browser,
             Steps =
             [
-                new NavigateStep { Url = server.BaseUrl },
+                new NavigateStep { Urls = [server.BaseUrl] },
                 new ScrollStep
                 {
                     LoadMoreButtonSelector = "#load-more", MaxIterations = 6, WaitAfterMs = 200, FramePath = ["#widget"],
