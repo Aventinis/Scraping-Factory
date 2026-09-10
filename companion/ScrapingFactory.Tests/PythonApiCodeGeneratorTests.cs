@@ -265,6 +265,94 @@ public class PythonApiCodeGeneratorTests
         Assert.DoesNotContain("import os", script);
     }
 
+    // ── Proxy support (Issue #88) ─────────────────────────────────────────
+
+    [Fact]
+    public void Generate_NoProxy_DoesNotContainProxyEnvVar()
+    {
+        var script = _generator.Generate(PlanWith(SampleApi()));
+        Assert.DoesNotContain("PROXY_ENV_VAR", script);
+        Assert.Contains("requests.get(url, headers=headers, timeout=10)", script);
+    }
+
+    [Fact]
+    public void Generate_WithProxy_ReadsListFromEnvironmentVariableAndWiresIntoMainRequest()
+    {
+        var plan = PlanWith(SampleApi());
+        plan = new ScrapingPlan
+        {
+            Steps = plan.Steps, OutputFormat = plan.OutputFormat, Engine = plan.Engine,
+            Proxy = new ProxyConfig { EnvironmentVariableName = "SF_PROXIES" },
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("import os", script);
+        Assert.Contains("PROXY_ENV_VAR = 'SF_PROXIES'", script);
+        Assert.Contains("os.environ[PROXY_ENV_VAR]", script);
+        Assert.Contains("itertools.cycle(_PROXY_LIST)", script);
+        Assert.Contains("requests.get(url, headers=headers, proxies=_proxies_for_requests(), timeout=10)", script);
+    }
+
+    [Fact]
+    public void Generate_WithProxy_WiresIntoDiscoverySourceRequest()
+    {
+        var api = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter
+                {
+                    Name = "category",
+                    Source = new DiscoverySource
+                    {
+                        UrlTemplate = "https://example.com/api/categories",
+                        ItemsPath = "data",
+                        ValuePath = "slug",
+                    },
+                },
+            ],
+        };
+        var plan = PlanWith(api);
+        plan = new ScrapingPlan
+        {
+            Steps = plan.Steps, OutputFormat = plan.OutputFormat, Engine = plan.Engine,
+            Proxy = new ProxyConfig { EnvironmentVariableName = "SF_PROXIES" },
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains(
+            "requests.get(source[\"urlTemplate\"], headers=headers, proxies=_proxies_for_requests(), timeout=10)",
+            script);
+    }
+
+    [Fact]
+    public void Generate_WithProxy_PostMethod_WiresProxiesIntoPostCall()
+    {
+        var withBody = new ApiConfig
+        {
+            Method = "POST",
+            UrlTemplate = "https://example.com/api/items",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Body = new ApiBodyObject { Properties = new Dictionary<string, ApiBodyNode> { ["q"] = new ApiBodyLiteral { Kind = ApiBodyLiteralKind.String, StringValue = "all" } } },
+        };
+        var plan = PlanWith(withBody);
+        plan = new ScrapingPlan
+        {
+            Steps = plan.Steps, OutputFormat = plan.OutputFormat, Engine = plan.Engine,
+            Proxy = new ProxyConfig { EnvironmentVariableName = "SF_PROXIES" },
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("requests.post(url, headers=headers, json=body, proxies=_proxies_for_requests(), timeout=10)", script);
+    }
+
     // ── Groups (Issue #54's tree shape) ──────────────────────────────────
     // Picks scraper_api_grouped.py.j2 instead of scraper_api.py.j2 — same
     // "a second template, not an if-branch inside the flat one" precedent
@@ -525,5 +613,23 @@ public class PythonApiCodeGeneratorTests
         Assert.Contains("METHOD = 'POST'", script);
         Assert.Contains("requests.post(url, headers=headers, json=body, timeout=10)", script);
         Assert.Contains("\"parameterName\": 'category'", script);
+    }
+
+    // Issue #88
+    [Fact]
+    public void Generate_ApiConfigWithGroups_WithProxy_WiresIntoRequest()
+    {
+        var plan = PlanWith(SampleGroupedApi());
+        plan = new ScrapingPlan
+        {
+            Steps = plan.Steps, OutputFormat = plan.OutputFormat, Engine = plan.Engine,
+            Proxy = new ProxyConfig { EnvironmentVariableName = "SF_PROXIES" },
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("import os", script);
+        Assert.Contains("PROXY_ENV_VAR = 'SF_PROXIES'", script);
+        Assert.Contains("requests.get(url, headers=headers, proxies=_proxies_for_requests(), timeout=10)", script);
     }
 }
