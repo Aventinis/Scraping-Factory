@@ -64,11 +64,12 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
             .Select(line => line!.TrimEnd());
 
         var actions = string.Join("\n", actionLines);
-        // Issue #87: change detection also reads env vars at runtime
-        // (SMTP/webhook credentials), same reason FillStep already needs
-        // `import os`.
-        var needsOsImport = plan.Steps.OfType<FillStep>().Any() || plan.ChangeDetection is not null;
+        // Issue #87/#88: change detection and proxy support also read env
+        // vars at runtime (SMTP/webhook credentials, proxy URL list), same
+        // reason FillStep already needs `import os`.
+        var needsOsImport = plan.Steps.OfType<FillStep>().Any() || plan.ChangeDetection is not null || plan.Proxy is not null;
         var changeDetection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection);
+        var proxy = PythonProxyLiteral.BuildContext(plan.Proxy);
 
         // Container-Mode: login/wait steps (if any) still run first — only
         // the extraction phase after them differs (group tree → XML instead
@@ -91,6 +92,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
                 output_filename = plan.OutputFileBaseName,
                 output_is_json = plan.OutputFormat == OutputFormat.Json,
                 change_detection = changeDetection,
+                proxy,
             });
         }
 
@@ -108,6 +110,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
             script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
             output_is_json = plan.OutputFormat == OutputFormat.Json,
             change_detection = changeDetection,
+            proxy,
         });
     }
 }

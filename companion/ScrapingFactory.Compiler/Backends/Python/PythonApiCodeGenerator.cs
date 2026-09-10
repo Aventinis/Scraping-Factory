@@ -29,6 +29,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
         // literal in C# (PythonApiConfigLiteral.RenderGroups) and a generic
         // runtime walk (_extract_api_group) consumes it.
         var changeDetection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection);
+        var proxy = PythonProxyLiteral.BuildContext(plan.Proxy);
 
         if (api.Groups is { Count: > 0 })
         {
@@ -38,7 +39,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
             {
                 url_template = api.UrlTemplate,
                 root_names = rootNames,
-                needs_os_import = NeedsOsImport(api.Headers, plan.ChangeDetection),
+                needs_os_import = NeedsOsImport(api.Headers, plan.ChangeDetection, plan.Proxy),
                 url_template_literal = PythonLiteral.Str(api.UrlTemplate),
                 method_literal = PythonLiteral.Str(api.Method),
                 body_literal = PythonApiConfigLiteral.RenderBody(api.Body),
@@ -49,6 +50,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
                 output_filename = plan.OutputFileBaseName,
                 output_is_json = plan.OutputFormat == OutputFormat.Json,
                 change_detection = changeDetection,
+                proxy,
             });
         }
 
@@ -59,7 +61,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
         {
             url_template = api.UrlTemplate,
             fields,
-            needs_os_import = NeedsOsImport(api.Headers, plan.ChangeDetection),
+            needs_os_import = NeedsOsImport(api.Headers, plan.ChangeDetection, plan.Proxy),
             url_template_literal = PythonLiteral.Str(api.UrlTemplate),
             method_literal = PythonLiteral.Str(api.Method),
             body_literal = PythonApiConfigLiteral.RenderBody(api.Body),
@@ -71,6 +73,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
             output_filename = plan.OutputFileBaseName,
             output_is_json = plan.OutputFormat == OutputFormat.Json,
             change_detection = changeDetection,
+            proxy,
         });
     }
 
@@ -78,10 +81,10 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
     // empty-string EnvironmentVariableName never reaches os.environ[...] at
     // runtime, so it shouldn't trigger the import either. Shared by both
     // templates above — the header-handling side is identical either way.
-    // Issue #87: change detection also reads env vars at runtime (SMTP/
-    // webhook credentials), same reason a configured header already needs
-    // `import os`.
-    private static bool NeedsOsImport(List<ApiHeader>? headers, ChangeDetectionConfig? changeDetection) =>
+    // Issue #87/#88: change detection and proxy support also read env vars
+    // at runtime (SMTP/webhook credentials, proxy URL list), same reason a
+    // configured header already needs `import os`.
+    private static bool NeedsOsImport(List<ApiHeader>? headers, ChangeDetectionConfig? changeDetection, ProxyConfig? proxy) =>
         (headers?.Any(header => !string.IsNullOrWhiteSpace(header.EnvironmentVariableName)) ?? false) ||
-        changeDetection is not null;
+        changeDetection is not null || proxy is not null;
 }
