@@ -30,6 +30,7 @@ public sealed class PythonCodeGenerator : ICodeGenerator
                 script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
                 output_is_json = plan.OutputFormat == OutputFormat.Json,
                 change_detection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection),
+                proxy = PythonProxyLiteral.BuildContext(plan.Proxy),
             });
         }
 
@@ -54,6 +55,7 @@ public sealed class PythonCodeGenerator : ICodeGenerator
                 script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
                 output_is_json = plan.OutputFormat == OutputFormat.Json,
                 change_detection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection),
+                proxy = PythonProxyLiteral.BuildContext(plan.Proxy),
             },
         });
     }

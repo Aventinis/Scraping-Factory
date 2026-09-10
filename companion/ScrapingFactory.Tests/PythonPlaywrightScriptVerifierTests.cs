@@ -219,6 +219,49 @@ public class PythonPlaywrightScriptVerifierTests
         Assert.Null(Environment.GetEnvironmentVariable(passwordVar));
     }
 
+    // Issue #88 follow-up: unlike Proxy, a FillStep genuinely can't continue
+    // without its credential — but it must still fail *cleanly*, with a
+    // readable message pointing at the missing variable name, instead of a
+    // raw unhandled KeyError traceback (which is confusing to read from the
+    // extension's own error display). Verification must still report
+    // failure here — a login page's own selector never matches without a
+    // successful login, so this is also covered by the ordinary
+    // "no data produced" safety net, just with a better message on top.
+    [Fact]
+    public async Task LoginFlow_MissingCredentialEnvVar_FailsWithCleanMessageInsteadOfRawTraceback()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+            <input id="username" type="text" />
+            <button id="submit" onclick="document.body.innerHTML += '<div class=welcome>hi</div>'">Login</button>
+            </body></html>
+            """);
+
+        const string usernameVar = "SCRAPINGFACTORY_TEST_USERNAME_MISSING";
+        Assert.Null(Environment.GetEnvironmentVariable(usernameVar));
+
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Urls = [server.BaseUrl] },
+                new FillStep { Selector = "#username", EnvironmentVariableName = usernameVar },
+                new ClickStep { Selector = "#submit" },
+                new WaitForStep { Selector = ".welcome", TimeoutMs = 2000 },
+                new ExtractStep { Name = "Welcome", Selector = ".welcome" },
+            ],
+        };
+        var script = Generator.Generate(plan);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.False(result.Success);
+        Assert.Contains(usernameVar, result.Error);
+        Assert.DoesNotContain("Traceback", result.Error);
+        Assert.DoesNotContain("KeyError", result.Error);
+    }
+
     // Proves ScrollStep's actual point: content that only appears after
     // repeated scrolling (infinite scroll), not just a single WaitForStep's
     // worth of async-loaded content. The page loads 5 more .item elements

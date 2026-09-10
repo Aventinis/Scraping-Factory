@@ -1833,4 +1833,38 @@ public class ScrapingPlanValidatorTests
         Assert.False(result.Success);
         Assert.Contains("nicht sowohl Email als auch Webhook", result.Error);
     }
+
+    // Issue #88
+    [Fact]
+    public void Validate_ValidProxy_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Proxy = new ProxyConfig { EnvironmentVariableName = "SF_PROXIES" },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ProxyWithInvalidEnvironmentVariableName_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Proxy = new ProxyConfig { EnvironmentVariableName = "not a valid name" },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Ungültiger Umgebungsvariablen-Name", result.Error);
+        Assert.Contains("Proxy.EnvironmentVariableName", result.Error);
+    }
+
+    [Fact]
+    public void Validate_NoProxy_Succeeds()
+    {
+        var result = ScrapingPlanValidator.Validate(ValidPlan());
+        Assert.True(result.Success, result.Error);
+    }
 }

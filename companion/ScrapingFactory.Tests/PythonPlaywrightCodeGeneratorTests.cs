@@ -176,12 +176,45 @@ public class PythonPlaywrightCodeGeneratorTests
         Assert.Contains("import os", script);
     }
 
+    // Issue #88
+    [Fact]
+    public void Generate_WithoutProxy_DoesNotContainProxyEnvVarAndLaunchTakesNoArgs()
+    {
+        var script = _generator.Generate(PlanWithoutWait());
+        Assert.DoesNotContain("PROXY_ENV_VAR", script);
+        Assert.Contains("p.chromium.launch()", script);
+    }
+
+    [Fact]
+    public void Generate_WithProxy_ImportsOsAndParsesProxyUrlForLaunch()
+    {
+        var plan = PlanWithoutWait();
+        plan = new ScrapingPlan
+        {
+            Engine = plan.Engine, Steps = plan.Steps, OutputFormat = plan.OutputFormat,
+            Proxy = new ProxyConfig { EnvironmentVariableName = "SF_PROXIES" },
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("import os", script);
+        Assert.Contains("import sys", script);
+        Assert.Contains("import itertools", script);
+        Assert.Contains("import urllib.parse", script);
+        Assert.Contains("PROXY_ENV_VAR = 'SF_PROXIES'", script);
+        Assert.Contains("_PROXY_ENV_VALUE = os.environ.get(PROXY_ENV_VAR)", script);
+        Assert.Contains("def _next_playwright_proxy():", script);
+        Assert.Contains("p.chromium.launch(proxy=_next_playwright_proxy())", script);
+        Assert.Contains("EXIT_MISSING_ENV_VAR = 78", script);
+    }
+
     [Fact]
     public void Generate_WithFillStep_ReadsValueFromEnvironmentVariable()
     {
         var script = _generator.Generate(LoginPlan());
-        Assert.Contains("_resolve_locator(page, \"#username\", None).fill(os.environ[\"SF_USERNAME\"])", script);
-        Assert.Contains("_resolve_locator(page, \"#password\", None).fill(os.environ[\"SF_PASSWORD\"])", script);
+        Assert.Contains("_resolve_locator(page, \"#username\", None).fill(_require_env(\"SF_USERNAME\"))", script);
+        Assert.Contains("_resolve_locator(page, \"#password\", None).fill(_require_env(\"SF_PASSWORD\"))", script);
+        Assert.Contains("def _require_env(name):", script);
     }
 
     [Fact]
@@ -392,7 +425,7 @@ public class PythonPlaywrightCodeGeneratorTests
     public void Generate_GroupPlanWithLogin_RendersFillAndClickBeforeExtraction()
     {
         var script = _generator.Generate(GroupPlanWithLogin());
-        Assert.Contains("_resolve_locator(page, \"#user\", None).fill(os.environ[\"SF_USERNAME\"])", script);
+        Assert.Contains("_resolve_locator(page, \"#user\", None).fill(_require_env(\"SF_USERNAME\"))", script);
         Assert.Contains("_resolve_locator(page, \"#submit\", None).click()", script);
 
         // Textual order inside scrape() is execution order: the rendered
@@ -402,6 +435,23 @@ public class PythonPlaywrightCodeGeneratorTests
         var clickIndex = script.IndexOf(".click()", StringComparison.Ordinal);
         var extractionLoopIndex = script.IndexOf("for node in GROUPS:", StringComparison.Ordinal);
         Assert.True(clickIndex < extractionLoopIndex);
+    }
+
+    // Issue #88
+    [Fact]
+    public void Generate_GroupPlanWithProxy_WiresProxyIntoLaunch()
+    {
+        var plan = GroupPlan();
+        plan = new ScrapingPlan
+        {
+            Engine = plan.Engine, Steps = plan.Steps, OutputFormat = plan.OutputFormat,
+            Proxy = new ProxyConfig { EnvironmentVariableName = "SF_PROXIES" },
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("PROXY_ENV_VAR = 'SF_PROXIES'", script);
+        Assert.Contains("p.chromium.launch(proxy=_next_playwright_proxy())", script);
     }
 
     // ── Container-Mode FramePath (Issue #42, Phase 3) ───────────────────────
@@ -507,7 +557,7 @@ public class PythonPlaywrightCodeGeneratorTests
     public void Generate_FramedFillStep_ChainsResolveLocatorWithFramePath()
     {
         var script = _generator.Generate(FramedActionStepsPlan());
-        Assert.Contains("_resolve_locator(page, \"#user\", [\"iframe#sso\"]).fill(os.environ[\"SF_USERNAME\"])", script);
+        Assert.Contains("_resolve_locator(page, \"#user\", [\"iframe#sso\"]).fill(_require_env(\"SF_USERNAME\"))", script);
     }
 
     [Fact]

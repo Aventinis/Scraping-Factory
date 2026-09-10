@@ -598,4 +598,60 @@ public class PythonScriptVerifierTests
         // 1 Kategorie + 2 Gericht + 2 Name + 2 Vegan = 7
         Assert.Equal(7, result.RowCount);
     }
+
+    // Issue #88 follow-up: before this, /generate could only ever verify a
+    // proxy-enabled config if the companion process's own OS environment
+    // already had the proxy env var set — an awkward requirement purely for
+    // testing (unlike FillStep, which has FillVerificationValues for
+    // exactly this). Now a missing var just warns and connects directly, so
+    // verification succeeds regardless of whether the companion host has it
+    // configured (see ProxyEndToEndTests for the "does the warning/exit
+    // code actually appear" half of this, and the sibling
+    // MissingProxyEnvVar_WithNoOtherData_StillFailsNormally test below for
+    // the "this doesn't mask a real zero-data failure" half).
+    [Fact]
+    public async Task MissingProxyEnvVar_StillSucceedsWithRealData()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var steps = new List<ScrapingStep>
+        {
+            new NavigateStep { Urls = [server.BaseUrl] },
+            new ExtractStep { Name = "Titel", Selector = "h1" },
+        };
+        var script = new PythonCodeGenerator().Generate(new ScrapingPlan
+        {
+            Steps = steps,
+            Proxy = new ProxyConfig { EnvironmentVariableName = "SF_TEST_VERIFIER_UNSET_PROXY_VAR" },
+        });
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(1, result.RowCount);
+    }
+
+    // The dedicated exit code only makes verification lenient about *how*
+    // the script exited — the existing "did it actually produce data" check
+    // still applies on top, so a selector that legitimately matches nothing
+    // still fails verification even when combined with a missing proxy var.
+    [Fact]
+    public async Task MissingProxyEnvVar_WithSelectorMatchingNothing_StillFails()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var steps = new List<ScrapingStep>
+        {
+            new NavigateStep { Urls = [server.BaseUrl] },
+            new ExtractStep { Name = "Titel", Selector = ".does-not-exist" },
+        };
+        var script = new PythonCodeGenerator().Generate(new ScrapingPlan
+        {
+            Steps = steps,
+            Proxy = new ProxyConfig { EnvironmentVariableName = "SF_TEST_VERIFIER_UNSET_PROXY_VAR" },
+        });
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.False(result.Success);
+        Assert.Contains("no data", result.Error);
+    }
 }

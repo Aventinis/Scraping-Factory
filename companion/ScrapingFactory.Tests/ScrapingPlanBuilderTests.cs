@@ -480,4 +480,58 @@ public class ScrapingPlanBuilderTests
 
         Assert.Null(plan.ChangeDetection);
     }
+
+    // Issue #88
+    [Fact]
+    public void Build_CarriesProxyThroughUnchanged_FlatMode()
+    {
+        var proxy = new ProxyConfig { EnvironmentVariableName = "SF_PROXIES" };
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+            Proxy = proxy,
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Same(proxy, plan.Proxy);
+    }
+
+    [Fact]
+    public void Build_CarriesProxyThroughUnchanged_ContainerMode()
+    {
+        var proxy = new ProxyConfig { EnvironmentVariableName = "SF_PROXIES" };
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Groups = [new GroupNode { Name = "Kategorie", Selector = "section", Repeating = true, Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }] }],
+            Proxy = proxy,
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Same(proxy, plan.Proxy);
+    }
+
+    [Fact]
+    public void Build_CarriesProxyThroughUnchanged_ApiMode()
+    {
+        var proxy = new ProxyConfig { EnvironmentVariableName = "SF_PROXIES" };
+        var config = new ScrapingConfig { Url = "https://example.com", Api = SampleApiGroupsConfig(), Proxy = proxy };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Same(proxy, plan.Proxy);
+    }
+
+    [Fact]
+    public void Build_NoProxy_PlanProxyIsNull()
+    {
+        var config = new ScrapingConfig { Url = "https://example.com", Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }] };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Null(plan.Proxy);
+    }
 }

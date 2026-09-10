@@ -177,4 +177,43 @@ public class PythonCodeGeneratorTests
         Assert.Contains("written to ergebnisse.csv", script);
         Assert.DoesNotContain("output.csv", script);
     }
+
+    // Issue #88
+    [Fact]
+    public void Generate_WithoutProxy_DoesNotImportOsOrItertools()
+    {
+        var script = _generator.Generate(TwoFieldPlan());
+        Assert.DoesNotContain("import os", script);
+        Assert.DoesNotContain("import itertools", script);
+        Assert.DoesNotContain("PROXY_ENV_VAR", script);
+        Assert.Contains("requests.get(url, headers=HEADERS, timeout=10)", script);
+    }
+
+    [Fact]
+    public void Generate_WithProxy_ReadsListFromEnvironmentVariableAndRotates()
+    {
+        var plan = TwoFieldPlan();
+        plan = new ScrapingPlan
+        {
+            Steps = plan.Steps, OutputFormat = plan.OutputFormat, Engine = plan.Engine,
+            ScriptFileName = plan.ScriptFileName, OutputFileBaseName = plan.OutputFileBaseName,
+            Proxy = new ProxyConfig { EnvironmentVariableName = "SF_PROXIES" },
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("import os", script);
+        Assert.Contains("import itertools", script);
+        Assert.Contains("import sys", script);
+        Assert.Contains("PROXY_ENV_VAR = 'SF_PROXIES'", script);
+        Assert.Contains("_PROXY_ENV_VALUE = os.environ.get(PROXY_ENV_VAR)", script);
+        Assert.Contains("itertools.cycle(_PROXY_LIST)", script);
+        Assert.Contains(
+            "requests.get(url, headers=HEADERS, proxies=_proxies_for_requests(), timeout=10)", script);
+        // Issue #88 follow-up: a missing (not just empty) env var no longer
+        // crashes the run with a raw KeyError — it warns and continues, only
+        // flagged via a dedicated exit code once the run otherwise succeeds.
+        Assert.Contains("EXIT_MISSING_ENV_VAR = 78", script);
+        Assert.Contains("if _PROXY_ENV_MISSING:\n        sys.exit(EXIT_MISSING_ENV_VAR)", script);
+    }
 }

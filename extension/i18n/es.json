@@ -87,7 +87,10 @@
     "webhookUrlEnvVarLabel": "URL del webhook (var. de entorno)",
     "envVarPlaceholder": "Nombre de la variable de entorno",
     "envVarPlaceholderOptional": "Nombre de la variable de entorno (opcional)",
-    "changeDetectionHint": "Cada campo es el nombre de una variable de entorno, no el valor en sí — el valor real se lee del entorno en la ejecución real, nunca se escribe en el script."
+    "changeDetectionHint": "Cada campo es el nombre de una variable de entorno, no el valor en sí — el valor real se lee del entorno en la ejecución real, nunca se escribe en el script.",
+    "proxyToggle": "Usar un proxy",
+    "proxyEnvVarLabel": "Lista de proxies (variable de entorno)",
+    "proxyHint": "El nombre de una variable de entorno con una lista de URLs de proxy separadas por comas (p. ej. \"http://usuario:contraseña@host:puerto\"), no las direcciones en sí — con más de una, el script rota entre ellas en cada solicitud."
   },
   "robots": {
     "checkFailed": "No se pudo comprobar el robots.txt ({error}).",

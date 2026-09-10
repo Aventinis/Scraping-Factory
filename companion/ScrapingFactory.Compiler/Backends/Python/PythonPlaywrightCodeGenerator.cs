@@ -64,11 +64,18 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
             .Select(line => line!.TrimEnd());
 
         var actions = string.Join("\n", actionLines);
-        // Issue #87: change detection also reads env vars at runtime
-        // (SMTP/webhook credentials), same reason FillStep already needs
-        // `import os`.
-        var needsOsImport = plan.Steps.OfType<FillStep>().Any() || plan.ChangeDetection is not null;
+        // Issue #87/#88: change detection and proxy support also read env
+        // vars at runtime (SMTP/webhook credentials, proxy URL list), same
+        // reason FillStep already needs `import os`.
+        var needsOsImport = plan.Steps.OfType<FillStep>().Any() || plan.ChangeDetection is not null || plan.Proxy is not null;
+        // A FillStep's credential or Proxy's URL list must come from an
+        // environment variable that's actually set at runtime — both share
+        // the `_require_env`/`EXIT_MISSING_ENV_VAR` helper (see the shell
+        // templates) instead of a raw, unhandled KeyError. Change detection
+        // isn't included: its own env-var reads are unaffected by this.
+        var needsExitHelper = plan.Steps.OfType<FillStep>().Any() || plan.Proxy is not null;
         var changeDetection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection);
+        var proxy = PythonProxyLiteral.BuildContext(plan.Proxy);
 
         // Container-Mode: login/wait steps (if any) still run first — only
         // the extraction phase after them differs (group tree → XML instead
@@ -87,10 +94,12 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
                 root_names = rootNames,
                 actions,
                 needs_os_import = needsOsImport,
+                needs_exit_helper = needsExitHelper,
                 script_filename = plan.ScriptFileName,
                 output_filename = plan.OutputFileBaseName,
                 output_is_json = plan.OutputFormat == OutputFormat.Json,
                 change_detection = changeDetection,
+                proxy,
             });
         }
 
@@ -105,9 +114,11 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         return shellTemplate.Render(new
         {
             urls = navigate.Urls, fields, actions, needs_os_import = needsOsImport,
+            needs_exit_helper = needsExitHelper,
             script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
             output_is_json = plan.OutputFormat == OutputFormat.Json,
             change_detection = changeDetection,
+            proxy,
         });
     }
 }

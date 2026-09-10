@@ -21,4 +21,8 @@ public sealed class ScrapingPlan
     // ScrapingConfig.ChangeDetection by ScrapingPlanBuilder — see
     // IR/ChangeDetectionConfig.cs.
     public ChangeDetectionConfig? ChangeDetection { get; init; }
+
+    // Issue #88: mode-independent, carried through unchanged from
+    // ScrapingConfig.Proxy by ScrapingPlanBuilder — see IR/ProxyConfig.cs.
+    public ProxyConfig? Proxy { get; init; }
 }
