@@ -634,6 +634,54 @@ generated script.
   STARTTLS, exercising the generated script's own "upgrade only if offered"
   logic for real).
 
+### 2.21 Proxy support (Issue #88)
+
+Lets the generated script route its outbound requests through proxies the
+user already has access to, instead of connecting directly — mode-
+independent (Fields/Groups/Api alike). The extension/companion never see a
+literal proxy address, only the name of an environment variable holding a
+comma-separated list; the generated script resolves and rotates through it
+entirely at runtime, mirroring how `ChangeDetectionConfig` (Issue #87)
+already keeps credentials env-var-name-only.
+
+- Extension: `popup/popup.js` (`_state.proxy`, `buildProxyConfig` —
+  converts the editable draft into the wire shape, returning `null` when
+  disabled or the env-var-name field is still blank, threaded through
+  `buildScrapingConfig`/`buildConfigExport` as `proxy`), `popup/popup.html`
+  (`#toggle-proxy`, one text input for the env-var name, right below the
+  change-detection block, same `environmentVariableName`-only pattern as
+  `FillAction`)
+- Companion: `IR/ProxyConfig.cs` (`ProxyConfig`, a single required
+  `EnvironmentVariableName`, additive/wire-compatible), `IR/ScrapingPlan.cs`
+  (`Proxy`, carried through unchanged by `IR/ScrapingPlanBuilder.cs` in all
+  three shape branches), `IR/ScrapingPlanValidator.cs` (env-var name valid),
+  `Backends/Python/PythonProxyLiteral.cs` (`BuildContext` — the one
+  `proxy.*` Scriban context object every one of the six templates renders
+  from, mirroring `PythonChangeDetectionLiteral`). All three code
+  generators extend their `needs_os_import`/`NeedsOsImport` checks with a
+  configured `Proxy`, since the generated script reads the proxy list via
+  `os.environ[...]` too.
+- All six templates gain, when enabled, a `PROXY_ENV_VAR` constant plus a
+  duplicated `_next_proxy()` helper (the env var's comma-separated value
+  parsed into a list, cycled round-robin via `itertools.cycle`). The
+  static/API engines (`requests`) wire a `_proxies_for_requests()` helper
+  (`{"http": p, "https": p}`) into every `requests.get`/`requests.post`
+  call site, including the API templates' discovery-source request; the
+  browser engine (Playwright) instead parses the picked URL via
+  `urllib.parse.urlsplit` into Playwright's `{"server", "username",
+  "password"}` proxy shape (`_next_playwright_proxy()`) and passes it to
+  `p.chromium.launch(proxy=...)`. A missing env var raises a plain
+  `KeyError` at runtime (same as `FillStep`'s own `os.environ[...]` read);
+  an empty/blank value is silently treated as "no proxies configured".
+- Tests: `ProxyEndToEndTests.cs` runs the real generated static-engine
+  script as a subprocess against a new `LocalHttpProxyTestServer` — a
+  minimal raw-socket fake forward proxy (mirroring `LocalSmtpTestServer`'s
+  style) that records every request line it receives and answers with its
+  own canned body, proving both that a request actually routes through the
+  configured proxy (the real target's content never reaches the output) and
+  that round-robin rotation picks a different proxy per request across
+  multiple start URLs.
+
 ---
 
 ## 3. Class & Module Relationship Model
@@ -656,6 +704,7 @@ classDiagram
         +string? OutputFileName
         +bool? IncludePreview
         +ChangeDetectionConfig? ChangeDetection
+        +ProxyConfig? Proxy
     }
     class ScrapingPlan {
         +List~ScrapingStep~ Steps
@@ -664,6 +713,7 @@ classDiagram
         +string ScriptFileName
         +string OutputFileBaseName
         +ChangeDetectionConfig? ChangeDetection
+        +ProxyConfig? Proxy
     }
     class ScrapingStep { <<abstract>> }
     class NavigateStep { +List~string~ Urls }
@@ -844,6 +894,7 @@ compile time anywhere.
 | Script/output filenames | `popup.js`: `sanitizeFileNameBase()` (client-side mirror, download only) | `{scriptFileName?, outputFileName?}` | `IR/FileNameSanitizer.cs`: `SanitizeBaseName()` (server-side, authoritative) |
 | Additional start URLs | `popup.js`: `parseAdditionalUrls()` (splits textarea on newlines, drops blank lines) → `buildScrapingConfig`'s `additionalUrls` key | `{additionalUrls?: ["https://..."]}` | `IR/ScrapingConfig.cs`: `AdditionalUrls`; combined with `Url` into `IR/ScrapingStep.cs`: `NavigateStep.Urls` |
 | Change detection + notification | `popup.js`: `buildChangeDetectionConfig()` (returns `null` when disabled or a required field is blank) → `buildScrapingConfig`'s `changeDetection` key | `{changeDetection?: {notify:"Email"\|"Webhook", email?:{...EnvVar fields}, webhook?:{urlEnvVar}}}` | `IR/ChangeDetectionConfig.cs`: `ChangeDetectionConfig`/`EmailNotificationConfig`/`WebhookNotificationConfig` |
+| Proxy support | `popup.js`: `buildProxyConfig()` (returns `null` when disabled or the env-var-name field is blank) → `buildScrapingConfig`'s `proxy` key | `{proxy?: {environmentVariableName}}` | `IR/ProxyConfig.cs`: `ProxyConfig` |
 | Range format mini-template | `api-config.js`: `RANGE_FORMAT_PRESETS`, `compileRangeFormatPattern()` (client-side mirror) | `{format?: "{yyyy}-W{ww}"}` inside a `RangeSource` | `Backends/Python/RangeFormat.cs` (server-side, authoritative) |
 
 Two rows above are explicitly **hand-kept mirrors**, not generated from a shared
