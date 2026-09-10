@@ -660,7 +660,13 @@ already keeps credentials env-var-name-only.
   from, mirroring `PythonChangeDetectionLiteral`). All three code
   generators extend their `needs_os_import`/`NeedsOsImport` checks with a
   configured `Proxy`, since the generated script reads the proxy list via
-  `os.environ[...]` too.
+  `os.environ.get(...)` too. `Backends/Python/PythonScriptVerifier.cs`
+  treats a generated script's dedicated `EXIT_MISSING_ENV_VAR` (78) exit
+  code as compatible with success (falls through to the normal "did it
+  produce data" check instead of failing immediately like any other
+  nonzero code); only combined with no output file at all (the `FillStep`
+  case, see below) does it short-circuit with the script's own clean
+  stderr message.
 - All six templates gain, when enabled, a `PROXY_ENV_VAR` constant plus a
   duplicated `_next_proxy()` helper (the env var's comma-separated value
   parsed into a list, cycled round-robin via `itertools.cycle`). The
@@ -670,9 +676,15 @@ already keeps credentials env-var-name-only.
   browser engine (Playwright) instead parses the picked URL via
   `urllib.parse.urlsplit` into Playwright's `{"server", "username",
   "password"}` proxy shape (`_next_playwright_proxy()`) and passes it to
-  `p.chromium.launch(proxy=...)`. A missing env var raises a plain
-  `KeyError` at runtime (same as `FillStep`'s own `os.environ[...]` read);
-  an empty/blank value is silently treated as "no proxies configured".
+  `p.chromium.launch(proxy=...)`. A missing env var no longer raises a raw
+  `KeyError` — it's read via `os.environ.get(...)`, prints a German warning
+  to stderr, and is treated the same as an empty/blank value ("no proxies
+  configured", direct connection); the run is still flagged via a shared
+  `EXIT_MISSING_ENV_VAR = 78` sentinel once `main()` otherwise completes
+  successfully (also used by `FillStep`'s `_require_env` helper in the two
+  Playwright templates, replacing its own former raw `os.environ[...]`
+  read — a missing credential there is still a hard stop, just with a
+  clean message instead of an unhandled traceback).
 - Tests: `ProxyEndToEndTests.cs` runs the real generated static-engine
   script as a subprocess against a new `LocalHttpProxyTestServer` — a
   minimal raw-socket fake forward proxy (mirroring `LocalSmtpTestServer`'s

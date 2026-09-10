@@ -145,4 +145,53 @@ public class ProxyEndToEndTests
             Directory.Delete(workDir, recursive: true);
         }
     }
+
+    // Issue #88 follow-up: when SF_TEST_PROXIES is missing entirely (as
+    // opposed to set-but-empty) at runtime, the script must not crash with
+    // a raw KeyError the way it used to — it should warn, connect directly,
+    // still produce real data, and only flag the gap via a dedicated exit
+    // code instead of the generic "something went wrong" code 1. This is
+    // what makes /generate's own trial-run verification succeed even when
+    // the companion's own process never had the env var set (see
+    // PythonScriptVerifierTests.MissingProxyEnvVar_* for that side).
+    [Fact]
+    public async Task Static_MissingProxyEnvVar_WarnsAndConnectsDirectlyWithDedicatedExitCode()
+    {
+        using var pageServer = new LocalTestServer("<html><body><h1>Real Page</h1></body></html>");
+
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = [pageServer.BaseUrl] },
+                new ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+            Proxy = new ProxyConfig { EnvironmentVariableName = "SF_TEST_PROXIES_UNSET" },
+        };
+        var script = new PythonCodeGenerator().Generate(plan);
+
+        var workDir = Directory.CreateTempSubdirectory("scrapingfactory-proxy-test-").FullName;
+        try
+        {
+            var scriptPath = Path.Combine(workDir, "scraper.py");
+            await File.WriteAllTextAsync(scriptPath, script);
+
+            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir, new Dictionary<string, string>());
+            Assert.Equal(78, exit);
+            Assert.Contains("SF_TEST_PROXIES_UNSET", stderr);
+            Assert.Contains("Warnung", stderr);
+
+            // Connected directly (no proxy configured) — the real page
+            // server's own content reaches the output, unlike the
+            // through-a-proxy test above.
+            var outputPath = Path.Combine(workDir, "output.csv");
+            var lines = await File.ReadAllLinesAsync(outputPath);
+            Assert.Equal(2, lines.Length); // header + one data row
+            Assert.Contains("Real Page", lines[1]);
+        }
+        finally
+        {
+            Directory.Delete(workDir, recursive: true);
+        }
+    }
 }

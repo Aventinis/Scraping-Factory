@@ -25,6 +25,17 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(45);
     private static readonly string[] DefaultCandidates = ["python3", "python"];
 
+    // A generated script exits with this code (instead of the default 1
+    // from an unhandled exception) when a required environment variable
+    // (a FillStep credential, or Proxy's env var) was missing at runtime —
+    // see EXIT_MISSING_ENV_VAR in the Python shell templates. Proxy's own
+    // missing-var case is a soft warning that still produces real data, so
+    // this exit code alone must not immediately fail verification the way
+    // any other nonzero code does — whether the run is ultimately treated
+    // as a success still comes down to the same "did it produce data"
+    // check every other exit code goes through.
+    private const int MissingEnvVarExitCode = 78;
+
     // Issue #122: how many rows/top-level XML elements a trial-run preview
     // ever carries, regardless of how much data the script actually
     // produced — a preview is a sanity check, not a full export, and this
@@ -84,7 +95,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                 }
                 await stdoutTask;
 
-                if (process.ExitCode != 0)
+                if (process.ExitCode != 0 && process.ExitCode != MissingEnvVarExitCode)
                 {
                     return new ScriptVerificationResult
                     {
@@ -92,6 +103,28 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                         Error = $"Script ({executableUsed}) exited with an error (exit code {process.ExitCode}): " +
                                 Truncate(stderrBuilder.ToString()),
                     };
+                }
+
+                // A FillStep with a missing credential exits before writing
+                // any output at all (it can't meaningfully continue) — in
+                // that case, surface its own clean stderr message instead of
+                // falling through to the generic "did not produce X" below.
+                // Proxy's own missing-var case still writes real output
+                // (see the doc comment on MissingEnvVarExitCode above), so
+                // this only short-circuits when there's genuinely nothing to
+                // verify.
+                if (process.ExitCode == MissingEnvVarExitCode)
+                {
+                    var expectedFileName = outputFormat switch
+                    {
+                        OutputFormat.Xml => $"{outputFileBaseName}.xml",
+                        OutputFormat.Json => $"{outputFileBaseName}.json",
+                        _ => $"{outputFileBaseName}.csv",
+                    };
+                    if (!File.Exists(Path.Combine(workDir, expectedFileName)))
+                    {
+                        return new ScriptVerificationResult { Success = false, Error = Truncate(stderrBuilder.ToString()) };
+                    }
                 }
             }
 

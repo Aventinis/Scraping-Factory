@@ -15,6 +15,9 @@ import re
 {{~ if needs_os_import ~}}
 import os
 {{~ end ~}}
+{{~ if proxy.enabled ~}}
+import sys
+{{~ end ~}}
 {{~ if change_detection.enabled ~}}
 import difflib
 {{~ if change_detection.notify_method == "Email" ~}}
@@ -57,9 +60,19 @@ WEBHOOK_URL_ENV_VAR = {{ change_detection.webhook_url_env_var_literal }}
 # Issue #88 (proxy support): PROXY_ENV_VAR is an environment-variable
 # *name* holding a comma-separated list of proxy URLs — never a literal
 # proxy address baked into the script, same as FillStep credentials. If
-# more than one is present, requests rotate through them round-robin.
+# more than one is present, requests rotate through them round-robin. A
+# missing (not just empty) env var doesn't abort the run — it's treated as
+# "no proxy configured", with a warning printed and the run flagged via
+# EXIT_MISSING_ENV_VAR at the very end, once the script has otherwise
+# completed successfully.
+EXIT_MISSING_ENV_VAR = 78
+
 PROXY_ENV_VAR = {{ proxy.env_var_literal }}
-_PROXY_LIST = [p.strip() for p in os.environ[PROXY_ENV_VAR].split(",") if p.strip()]
+_PROXY_ENV_VALUE = os.environ.get(PROXY_ENV_VAR)
+_PROXY_ENV_MISSING = _PROXY_ENV_VALUE is None
+if _PROXY_ENV_MISSING:
+    print(f"Warnung: Umgebungsvariable '{PROXY_ENV_VAR}' ist nicht gesetzt — es wird ohne Proxy verbunden.", file=sys.stderr)
+_PROXY_LIST = [p.strip() for p in (_PROXY_ENV_VALUE or "").split(",") if p.strip()]
 _proxy_cycle = itertools.cycle(_PROXY_LIST) if _PROXY_LIST else None
 
 
@@ -458,6 +471,10 @@ def main():
         new_content = f.read()
     if previous_content is not None and previous_content != new_content:
         _notify_change(previous_content, new_content)
+{{~ end ~}}
+{{~ if proxy.enabled ~}}
+    if _PROXY_ENV_MISSING:
+        sys.exit(EXIT_MISSING_ENV_VAR)
 {{~ end ~}}
 
 

@@ -288,10 +288,12 @@ public class PythonApiCodeGeneratorTests
         var script = _generator.Generate(plan);
 
         Assert.Contains("import os", script);
+        Assert.Contains("import sys", script);
         Assert.Contains("PROXY_ENV_VAR = 'SF_PROXIES'", script);
-        Assert.Contains("os.environ[PROXY_ENV_VAR]", script);
+        Assert.Contains("_PROXY_ENV_VALUE = os.environ.get(PROXY_ENV_VAR)", script);
         Assert.Contains("itertools.cycle(_PROXY_LIST)", script);
         Assert.Contains("requests.get(url, headers=headers, proxies=_proxies_for_requests(), timeout=10)", script);
+        Assert.Contains("EXIT_MISSING_ENV_VAR = 78", script);
     }
 
     [Fact]
