@@ -41,7 +41,7 @@ const {
   findUrlTemplateMatches, mergeValueListValues,
   variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
   detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase, parseAdditionalUrls,
-  buildChangeDetectionConfig,
+  buildChangeDetectionConfig, buildProxyConfig,
   addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
   buildVerificationValues,
   frameBadgeHtml,
@@ -364,6 +364,60 @@ describe('buildScrapingConfig (changeDetection, Issue #87)', () => {
       'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], changeDetection,
     );
     expect(apiResult.changeDetection).toEqual({ notify: 'Webhook', webhook: { urlEnvVar: 'SF_WEBHOOK_URL' } });
+  });
+});
+
+// Issue #88: the env var holds a comma-separated proxy URL list, never a
+// literal proxy address.
+describe('buildProxyConfig', () => {
+  test('returns null when disabled', () => {
+    expect(buildProxyConfig({ enabled: false, envVar: 'SF_PROXIES' })).toBeNull();
+  });
+
+  test('returns null for null/undefined input', () => {
+    expect(buildProxyConfig(null)).toBeNull();
+    expect(buildProxyConfig(undefined)).toBeNull();
+  });
+
+  test('returns null when enabled but envVar is blank', () => {
+    expect(buildProxyConfig({ enabled: true, envVar: '' })).toBeNull();
+    expect(buildProxyConfig({ enabled: true, envVar: '   ' })).toBeNull();
+  });
+
+  test('builds the wire shape with a trimmed env var name', () => {
+    expect(buildProxyConfig({ enabled: true, envVar: '  SF_PROXIES  ' })).toEqual({
+      environmentVariableName: 'SF_PROXIES',
+    });
+  });
+});
+
+describe('buildScrapingConfig (proxy, Issue #88)', () => {
+  test('omits proxy entirely when disabled (the default)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.proxy).toBeUndefined();
+  });
+
+  test('includes proxy when enabled and configured', () => {
+    const proxy = { enabled: true, envVar: 'SF_PROXIES' };
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, proxy,
+    );
+    expect(result.proxy).toEqual({ environmentVariableName: 'SF_PROXIES' });
+  });
+
+  test('works the same way for container and api modes', () => {
+    const proxy = { enabled: true, envVar: 'SF_PROXIES' };
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, proxy,
+    );
+    expect(containerResult.proxy).toEqual({ environmentVariableName: 'SF_PROXIES' });
+
+    const apiResult = buildScrapingConfig(
+      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], null, proxy,
+    );
+    expect(apiResult.proxy).toEqual({ environmentVariableName: 'SF_PROXIES' });
   });
 });
 
