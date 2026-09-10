@@ -46,6 +46,15 @@ public static class ScrapingPlanValidator
                 return Invalid(changeDetectionError);
         }
 
+        // Issue #88: mode-independent (Fields/Groups/Api alike), same
+        // "before the mode-specific branches" placement as ChangeDetection.
+        if (plan.Proxy is { } proxy)
+        {
+            var proxyError = ValidateProxy(proxy);
+            if (proxyError is not null)
+                return Invalid(proxyError);
+        }
+
         // WaitFor/Fill/Click/Scroll all need a real browser to mean anything —
         // the Static engine's codegen simply doesn't look at them, so
         // silently generating a script that just drops them would be
@@ -587,4 +596,12 @@ public static class ScrapingPlanValidator
             ? null
             : $"Ungültiger Umgebungsvariablen-Name '{changeDetection.Webhook.UrlEnvVar}' in ChangeDetection.Webhook.UrlEnvVar.";
     }
+
+    // Issue #88: only the env var *name* is validated here — the companion
+    // never sees the actual proxy URLs (same boundary as FillAction/
+    // ChangeDetection credentials).
+    private static string? ValidateProxy(ProxyConfig proxy) =>
+        EnvironmentVariableNamePattern.IsMatch(proxy.EnvironmentVariableName)
+            ? null
+            : $"Ungültiger Umgebungsvariablen-Name '{proxy.EnvironmentVariableName}' in Proxy.EnvironmentVariableName.";
 }
