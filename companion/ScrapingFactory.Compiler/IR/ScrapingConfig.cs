@@ -79,6 +79,11 @@ public sealed class ScrapingConfig
     // (Fields/Groups/Api alike) — see IR/ChangeDetectionConfig.cs. Null is
     // today's exact behavior (no previous-run comparison, no notification).
     public ChangeDetectionConfig? ChangeDetection { get; init; }
+
+    // Issue #88: opt-in proxy support, mode-independent (Fields/Groups/Api
+    // alike) — see IR/ProxyConfig.cs. Null is today's exact behavior (direct
+    // connection, no proxying).
+    public ProxyConfig? Proxy { get; init; }
 }
 
 public sealed class ScrapingField
