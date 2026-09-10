@@ -41,6 +41,7 @@ const {
   findUrlTemplateMatches, mergeValueListValues,
   variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
   detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase, parseAdditionalUrls,
+  buildChangeDetectionConfig,
   addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
   buildVerificationValues,
   frameBadgeHtml,
@@ -264,6 +265,105 @@ describe('buildScrapingConfig (additionalUrls, Issue #83)', () => {
       'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, ['https://example.com/2'],
     );
     expect(apiResult.additionalUrls).toEqual(['https://example.com/2']);
+  });
+});
+
+// Issue #87: every field is an environment-variable *name*, never a value.
+describe('buildChangeDetectionConfig', () => {
+  const draft = (overrides = {}) => ({
+    enabled: true,
+    notify: 'Email',
+    email: { smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: '', toEnvVar: '' },
+    webhook: { urlEnvVar: '' },
+    ...overrides,
+  });
+
+  test('returns null when disabled', () => {
+    expect(buildChangeDetectionConfig(draft({ enabled: false }))).toBeNull();
+  });
+
+  test('returns null for null/undefined input', () => {
+    expect(buildChangeDetectionConfig(null)).toBeNull();
+    expect(buildChangeDetectionConfig(undefined)).toBeNull();
+  });
+
+  test('email: returns null when a required field is blank', () => {
+    expect(buildChangeDetectionConfig(draft({
+      email: { smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: 'SF_FROM', toEnvVar: 'SF_TO' },
+    }))).toBeNull();
+  });
+
+  test('email: builds the wire shape with only required fields set', () => {
+    const result = buildChangeDetectionConfig(draft({
+      email: { smtpHostEnvVar: 'SF_SMTP_HOST', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: 'SF_FROM', toEnvVar: 'SF_TO' },
+    }));
+    expect(result).toEqual({
+      notify: 'Email',
+      email: { smtpHostEnvVar: 'SF_SMTP_HOST', fromEnvVar: 'SF_FROM', toEnvVar: 'SF_TO' },
+    });
+  });
+
+  test('email: includes optional fields when set', () => {
+    const result = buildChangeDetectionConfig(draft({
+      email: {
+        smtpHostEnvVar: 'SF_SMTP_HOST', smtpPortEnvVar: 'SF_SMTP_PORT', smtpUsernameEnvVar: 'SF_SMTP_USER',
+        smtpPasswordEnvVar: 'SF_SMTP_PASS', fromEnvVar: 'SF_FROM', toEnvVar: 'SF_TO',
+      },
+    }));
+    expect(result).toEqual({
+      notify: 'Email',
+      email: {
+        smtpHostEnvVar: 'SF_SMTP_HOST', fromEnvVar: 'SF_FROM', toEnvVar: 'SF_TO',
+        smtpPortEnvVar: 'SF_SMTP_PORT', smtpUsernameEnvVar: 'SF_SMTP_USER', smtpPasswordEnvVar: 'SF_SMTP_PASS',
+      },
+    });
+  });
+
+  test('webhook: returns null when urlEnvVar is blank', () => {
+    expect(buildChangeDetectionConfig(draft({ notify: 'Webhook', webhook: { urlEnvVar: '' } }))).toBeNull();
+  });
+
+  test('webhook: builds the wire shape', () => {
+    const result = buildChangeDetectionConfig(draft({ notify: 'Webhook', webhook: { urlEnvVar: 'SF_WEBHOOK_URL' } }));
+    expect(result).toEqual({ notify: 'Webhook', webhook: { urlEnvVar: 'SF_WEBHOOK_URL' } });
+  });
+});
+
+describe('buildScrapingConfig (changeDetection, Issue #87)', () => {
+  test('omits changeDetection entirely when disabled (the default)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.changeDetection).toBeUndefined();
+  });
+
+  test('includes changeDetection when enabled and fully configured', () => {
+    const changeDetection = {
+      enabled: true, notify: 'Webhook',
+      email: { smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: '', toEnvVar: '' },
+      webhook: { urlEnvVar: 'SF_WEBHOOK_URL' },
+    };
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], changeDetection,
+    );
+    expect(result.changeDetection).toEqual({ notify: 'Webhook', webhook: { urlEnvVar: 'SF_WEBHOOK_URL' } });
+  });
+
+  test('works the same way for container and api modes', () => {
+    const changeDetection = {
+      enabled: true, notify: 'Webhook',
+      email: { smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: '', toEnvVar: '' },
+      webhook: { urlEnvVar: 'SF_WEBHOOK_URL' },
+    };
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], changeDetection,
+    );
+    expect(containerResult.changeDetection).toEqual({ notify: 'Webhook', webhook: { urlEnvVar: 'SF_WEBHOOK_URL' } });
+
+    const apiResult = buildScrapingConfig(
+      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], changeDetection,
+    );
+    expect(apiResult.changeDetection).toEqual({ notify: 'Webhook', webhook: { urlEnvVar: 'SF_WEBHOOK_URL' } });
   });
 });
 

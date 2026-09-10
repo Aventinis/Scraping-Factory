@@ -426,4 +426,58 @@ public class ScrapingPlanBuilderTests
 
         Assert.Equal(OutputFormat.Json, plan.OutputFormat);
     }
+
+    // Issue #87
+    [Fact]
+    public void Build_CarriesChangeDetectionThroughUnchanged_FlatMode()
+    {
+        var changeDetection = new ChangeDetectionConfig { Notify = "Webhook", Webhook = new WebhookNotificationConfig { UrlEnvVar = "SF_WEBHOOK_URL" } };
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+            ChangeDetection = changeDetection,
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Same(changeDetection, plan.ChangeDetection);
+    }
+
+    [Fact]
+    public void Build_CarriesChangeDetectionThroughUnchanged_ContainerMode()
+    {
+        var changeDetection = new ChangeDetectionConfig { Notify = "Webhook", Webhook = new WebhookNotificationConfig { UrlEnvVar = "SF_WEBHOOK_URL" } };
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Groups = [new GroupNode { Name = "Kategorie", Selector = "section", Repeating = true, Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }] }],
+            ChangeDetection = changeDetection,
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Same(changeDetection, plan.ChangeDetection);
+    }
+
+    [Fact]
+    public void Build_CarriesChangeDetectionThroughUnchanged_ApiMode()
+    {
+        var changeDetection = new ChangeDetectionConfig { Notify = "Webhook", Webhook = new WebhookNotificationConfig { UrlEnvVar = "SF_WEBHOOK_URL" } };
+        var config = new ScrapingConfig { Url = "https://example.com", Api = SampleApiGroupsConfig(), ChangeDetection = changeDetection };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Same(changeDetection, plan.ChangeDetection);
+    }
+
+    [Fact]
+    public void Build_NoChangeDetection_PlanChangeDetectionIsNull()
+    {
+        var config = new ScrapingConfig { Url = "https://example.com", Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }] };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Null(plan.ChangeDetection);
+    }
 }

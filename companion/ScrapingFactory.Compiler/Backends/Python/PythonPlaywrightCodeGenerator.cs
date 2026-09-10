@@ -64,7 +64,11 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
             .Select(line => line!.TrimEnd());
 
         var actions = string.Join("\n", actionLines);
-        var needsOsImport = plan.Steps.OfType<FillStep>().Any();
+        // Issue #87: change detection also reads env vars at runtime
+        // (SMTP/webhook credentials), same reason FillStep already needs
+        // `import os`.
+        var needsOsImport = plan.Steps.OfType<FillStep>().Any() || plan.ChangeDetection is not null;
+        var changeDetection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection);
 
         // Container-Mode: login/wait steps (if any) still run first — only
         // the extraction phase after them differs (group tree → XML instead
@@ -86,6 +90,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
                 script_filename = plan.ScriptFileName,
                 output_filename = plan.OutputFileBaseName,
                 output_is_json = plan.OutputFormat == OutputFormat.Json,
+                change_detection = changeDetection,
             });
         }
 
@@ -102,6 +107,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
             urls = navigate.Urls, fields, actions, needs_os_import = needsOsImport,
             script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
             output_is_json = plan.OutputFormat == OutputFormat.Json,
+            change_detection = changeDetection,
         });
     }
 }

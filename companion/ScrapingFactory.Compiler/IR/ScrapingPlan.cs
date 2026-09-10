@@ -16,4 +16,9 @@ public sealed class ScrapingPlan
     // OutputFileName for what these mean).
     public string ScriptFileName { get; init; } = "scraper";
     public string OutputFileBaseName { get; init; } = "output";
+
+    // Issue #87: mode-independent, carried through unchanged from
+    // ScrapingConfig.ChangeDetection by ScrapingPlanBuilder — see
+    // IR/ChangeDetectionConfig.cs.
+    public ChangeDetectionConfig? ChangeDetection { get; init; }
 }

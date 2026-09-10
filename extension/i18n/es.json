@@ -74,7 +74,20 @@
     "outputJsonToggle": "Salida como JSON (en lugar de CSV/XML)",
     "dataPreviewToggle": "Mostrar vista previa de los datos de la prueba",
     "additionalUrlsLabel": "URLs de inicio adicionales",
-    "additionalUrlsPlaceholder": "Una URL por línea (además de la página anterior)"
+    "additionalUrlsPlaceholder": "Una URL por línea (además de la página anterior)",
+    "changeDetectionToggle": "Activar detección de cambios (notificar ante cambios)",
+    "notifyEmail": "Correo electrónico",
+    "notifyWebhook": "Webhook",
+    "smtpHostEnvVarLabel": "Host SMTP (var. de entorno)",
+    "smtpPortEnvVarLabel": "Puerto SMTP (var. de entorno)",
+    "smtpUsernameEnvVarLabel": "Usuario SMTP (var. de entorno)",
+    "smtpPasswordEnvVarLabel": "Contraseña SMTP (var. de entorno)",
+    "notifyEmailFromEnvVarLabel": "Remitente (var. de entorno)",
+    "notifyEmailToEnvVarLabel": "Destinatario (var. de entorno)",
+    "webhookUrlEnvVarLabel": "URL del webhook (var. de entorno)",
+    "envVarPlaceholder": "Nombre de la variable de entorno",
+    "envVarPlaceholderOptional": "Nombre de la variable de entorno (opcional)",
+    "changeDetectionHint": "Cada campo es el nombre de una variable de entorno, no el valor en sí — el valor real se lee del entorno en la ejecución real, nunca se escribe en el script."
   },
   "robots": {
     "checkFailed": "No se pudo comprobar el robots.txt ({error}).",

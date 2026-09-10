@@ -94,6 +94,22 @@ let _state = {
   // fields/groups/scriptFileName (real scrape-target configuration, not a
   // per-generate opt-in toggle like includeDataPreview/useJsonOutput below).
   additionalStartUrls: [],
+  // Issue #87: opt-in change detection + notification — mode-independent
+  // like engine/additionalStartUrls above, persisted the same way (real
+  // scrape-target configuration, not a per-generate toggle). Every
+  // credential/target field is an environment-variable *name* the user
+  // types, never a literal value — mirrors FillAction's own
+  // environmentVariableName input, read by the generated script at
+  // runtime via os.environ[...] (see buildChangeDetectionConfig).
+  changeDetection: {
+    enabled: false,
+    notify: 'Email', // 'Email' | 'Webhook'
+    email: {
+      smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '',
+      fromEnvVar: '', toEnvVar: '',
+    },
+    webhook: { urlEnvVar: '' },
+  },
   // Issue #43: one-time Fill test values for the /generate verification
   // trial run only — keyed by FillAction.environmentVariableName. Deliberately
   // absent from persistState()'s chrome.storage.session write and from
@@ -260,6 +276,41 @@ function parseAdditionalUrls(text) {
   return (text || '').split('\n').map(line => line.trim()).filter(line => line.length > 0);
 }
 
+// Issue #87: converts _state.changeDetection's editable draft shape into
+// the wire ChangeDetectionConfig, or null when disabled or not yet fully
+// configured (a required env-var-name field left blank) — buildScrapingConfig
+// only adds the `changeDetection` key at all when this returns non-null, so
+// an incomplete draft is simply treated the same as the toggle being off
+// rather than sending a partial config the companion would reject with 400.
+// Every field here is an environment-variable *name*, never a value.
+function buildChangeDetectionConfig(changeDetection) {
+  if (!changeDetection?.enabled) return null;
+
+  if (changeDetection.notify === 'Webhook') {
+    const urlEnvVar = (changeDetection.webhook.urlEnvVar || '').trim();
+    return urlEnvVar ? { notify: 'Webhook', webhook: { urlEnvVar } } : null;
+  }
+
+  const email = changeDetection.email;
+  const smtpHostEnvVar = (email.smtpHostEnvVar || '').trim();
+  const fromEnvVar = (email.fromEnvVar || '').trim();
+  const toEnvVar = (email.toEnvVar || '').trim();
+  if (!smtpHostEnvVar || !fromEnvVar || !toEnvVar) return null;
+
+  const smtpPortEnvVar = (email.smtpPortEnvVar || '').trim();
+  const smtpUsernameEnvVar = (email.smtpUsernameEnvVar || '').trim();
+  const smtpPasswordEnvVar = (email.smtpPasswordEnvVar || '').trim();
+  return {
+    notify: 'Email',
+    email: {
+      smtpHostEnvVar, fromEnvVar, toEnvVar,
+      ...(smtpPortEnvVar ? { smtpPortEnvVar } : {}),
+      ...(smtpUsernameEnvVar ? { smtpUsernameEnvVar } : {}),
+      ...(smtpPasswordEnvVar ? { smtpPasswordEnvVar } : {}),
+    },
+  };
+}
+
 // `apiConfig` is only read when mode === 'api' — the confirmed ApiConfig
 // wire object built by buildApiConfig (Issue #53 Phase 5), passed straight
 // through as the request body's `api` field. Method is forced server-side
@@ -293,7 +344,7 @@ function parseAdditionalUrls(text) {
 function buildScrapingConfig(
   url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
-  additionalUrls = [],
+  additionalUrls = [], changeDetection = null,
 ) {
   const engineFields = engine === 'Browser'
     ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
@@ -301,19 +352,21 @@ function buildScrapingConfig(
   const previewFields = includePreview ? { includePreview: true } : {};
   const outputFormatFields = useJsonOutput ? { outputFormat: 'Json' } : {};
   const additionalUrlsFields = additionalUrls.length > 0 ? { additionalUrls } : {};
+  const changeDetectionConfig = buildChangeDetectionConfig(changeDetection);
+  const changeDetectionFields = changeDetectionConfig ? { changeDetection: changeDetectionConfig } : {};
 
   if (mode === 'container') {
     return {
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
-      ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields,
+      ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
     };
   }
   if (mode === 'api') {
     return {
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
-      ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields,
+      ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
     };
   }
   return {
@@ -327,7 +380,7 @@ function buildScrapingConfig(
     outputFormat: useJsonOutput ? 'Json' : 'Csv',
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
-    ...engineFields, ...previewFields, ...additionalUrlsFields,
+    ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields,
   };
 }
 
@@ -340,13 +393,14 @@ function buildScrapingConfig(
 function buildConfigExport(
   url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false, additionalUrls = [],
+  changeDetection = null,
 ) {
   return {
     exportedAt: new Date().toISOString(),
     extensionVersion: manifest.version || '?',
     config: buildScrapingConfig(
       url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview,
-      useJsonOutput, additionalUrls,
+      useJsonOutput, additionalUrls, changeDetection,
     ),
   };
 }
@@ -515,6 +569,7 @@ function persistState() {
       engine: _state.engine,
       browserActions: _state.browserActions,
       additionalStartUrls: _state.additionalStartUrls,
+      changeDetection: _state.changeDetection,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
       selectionKind: _state.selectionKind,
@@ -768,6 +823,28 @@ function render() {
     const additionalUrlsInput = document.getElementById('input-additional-urls');
     if (additionalUrlsInput && document.activeElement !== additionalUrlsInput) {
       additionalUrlsInput.value = _state.additionalStartUrls.join('\n');
+    }
+
+    // Issue #87: opt-in change detection + notification.
+    const changeDetectionToggle = document.getElementById('toggle-change-detection');
+    if (changeDetectionToggle) changeDetectionToggle.checked = _state.changeDetection.enabled;
+    document.getElementById('change-detection-config')?.classList.toggle('hidden', !_state.changeDetection.enabled);
+    document.getElementById('btn-notify-email')?.classList.toggle('active', _state.changeDetection.notify === 'Email');
+    document.getElementById('btn-notify-webhook')?.classList.toggle('active', _state.changeDetection.notify === 'Webhook');
+    document.getElementById('notify-email-fields')?.classList.toggle('hidden', _state.changeDetection.notify !== 'Email');
+    document.getElementById('notify-webhook-fields')?.classList.toggle('hidden', _state.changeDetection.notify !== 'Webhook');
+    const changeDetectionInputs = {
+      'input-cd-smtp-host': _state.changeDetection.email.smtpHostEnvVar,
+      'input-cd-smtp-port': _state.changeDetection.email.smtpPortEnvVar,
+      'input-cd-smtp-username': _state.changeDetection.email.smtpUsernameEnvVar,
+      'input-cd-smtp-password': _state.changeDetection.email.smtpPasswordEnvVar,
+      'input-cd-email-from': _state.changeDetection.email.fromEnvVar,
+      'input-cd-email-to': _state.changeDetection.email.toEnvVar,
+      'input-cd-webhook-url': _state.changeDetection.webhook.urlEnvVar,
+    };
+    for (const [id, value] of Object.entries(changeDetectionInputs)) {
+      const input = document.getElementById(id);
+      if (input && document.activeElement !== input) input.value = value;
     }
 
     if (_state.containerModalOpen) {
@@ -1229,7 +1306,7 @@ async function generate() {
   const config = buildScrapingConfig(
     _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
-    _state.useJsonOutput, _state.additionalStartUrls,
+    _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
@@ -1313,7 +1390,7 @@ function downloadConfigExport() {
   const exportObj = buildConfigExport(
     _state.url, _state.mode, _state.fields, _state.groups, manifest, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
-    _state.useJsonOutput, _state.additionalStartUrls,
+    _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection,
   );
   log('DOWNLOAD scraping-config.json', exportObj);
 
@@ -1691,6 +1768,37 @@ function wireEvents() {
   });
   document.getElementById('input-additional-urls')?.addEventListener('input', (e) => {
     setState(_state.current, { additionalStartUrls: parseAdditionalUrls(e.target.value) });
+  });
+
+  // Issue #87: opt-in change detection + notification.
+  document.getElementById('toggle-change-detection')?.addEventListener('change', (e) => {
+    setState(_state.current, { changeDetection: { ..._state.changeDetection, enabled: e.target.checked } });
+  });
+  document.getElementById('btn-notify-email')?.addEventListener('click', () => {
+    setState(_state.current, { changeDetection: { ..._state.changeDetection, notify: 'Email' } });
+  });
+  document.getElementById('btn-notify-webhook')?.addEventListener('click', () => {
+    setState(_state.current, { changeDetection: { ..._state.changeDetection, notify: 'Webhook' } });
+  });
+  const changeDetectionEmailFieldInputs = {
+    'input-cd-smtp-host': 'smtpHostEnvVar',
+    'input-cd-smtp-port': 'smtpPortEnvVar',
+    'input-cd-smtp-username': 'smtpUsernameEnvVar',
+    'input-cd-smtp-password': 'smtpPasswordEnvVar',
+    'input-cd-email-from': 'fromEnvVar',
+    'input-cd-email-to': 'toEnvVar',
+  };
+  for (const [id, field] of Object.entries(changeDetectionEmailFieldInputs)) {
+    document.getElementById(id)?.addEventListener('input', (e) => {
+      setState(_state.current, {
+        changeDetection: { ..._state.changeDetection, email: { ..._state.changeDetection.email, [field]: e.target.value } },
+      });
+    });
+  }
+  document.getElementById('input-cd-webhook-url')?.addEventListener('input', (e) => {
+    setState(_state.current, {
+      changeDetection: { ..._state.changeDetection, webhook: { ..._state.changeDetection.webhook, urlEnvVar: e.target.value } },
+    });
   });
 
   document.getElementById('toggle-include-data-preview')?.addEventListener('change', (e) => {
@@ -2307,7 +2415,7 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
     'scriptFileName', 'outputFileName',
@@ -2322,6 +2430,7 @@ async function init() {
   if (stored.engine)                _state = { ..._state, engine: stored.engine };
   if (Array.isArray(stored.browserActions)) _state = { ..._state, browserActions: stored.browserActions };
   if (Array.isArray(stored.additionalStartUrls)) _state = { ..._state, additionalStartUrls: stored.additionalStartUrls };
+  if (stored.changeDetection) _state = { ..._state, changeDetection: stored.changeDetection };
   if (stored.scriptFileName)        _state = { ..._state, scriptFileName: stored.scriptFileName };
   if (stored.outputFileName)        _state = { ..._state, outputFileName: stored.outputFileName };
   if (stored.selectionKind)         _state = { ..._state, selectionKind: stored.selectionKind };
@@ -2423,7 +2532,7 @@ if (typeof module !== 'undefined') {
     findUrlTemplateMatches, mergeValueListValues,
     variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
     detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
-    applyStaticTranslations, sanitizeFileNameBase, parseAdditionalUrls,
+    applyStaticTranslations, sanitizeFileNameBase, parseAdditionalUrls, buildChangeDetectionConfig,
     addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
     buildVerificationValues,
     frameBadgeHtml,

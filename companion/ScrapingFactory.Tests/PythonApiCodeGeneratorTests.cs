@@ -107,7 +107,7 @@ public class PythonApiCodeGeneratorTests
     {
         var script = _generator.Generate(PlanWith(SampleApi()));
         Assert.Contains("python scraper.py", script);
-        Assert.Contains("open(\"output.csv\"", script);
+        Assert.Contains("OUTPUT_PATH = \"output.csv\"", script);
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public class PythonApiCodeGeneratorTests
         var script = _generator.Generate(plan);
 
         Assert.Contains("python api_scraper.py", script);
-        Assert.Contains("open(\"api_results.csv\"", script);
+        Assert.Contains("OUTPUT_PATH = \"api_results.csv\"", script);
         Assert.DoesNotContain("output.csv", script);
     }
 
@@ -346,7 +346,7 @@ public class PythonApiCodeGeneratorTests
         var script = _generator.Generate(PlanWith(SampleGroupedApi()));
 
         Assert.Contains("import xml.etree.ElementTree as ET", script);
-        Assert.Contains("tree.write(\"output.xml\"", script);
+        Assert.Contains("OUTPUT_PATH = \"output.xml\"", script);
         Assert.DoesNotContain("import csv", script);
         Assert.DoesNotContain("ITEMS_PATH", script);
         Assert.DoesNotContain("FIELDS = ", script);
@@ -376,7 +376,7 @@ public class PythonApiCodeGeneratorTests
         var script = _generator.Generate(plan);
 
         Assert.Contains("python api_scraper.py", script);
-        Assert.Contains("tree.write(\"api_results.xml\"", script);
+        Assert.Contains("OUTPUT_PATH = \"api_results.xml\"", script);
         Assert.DoesNotContain("output.xml", script);
     }
 

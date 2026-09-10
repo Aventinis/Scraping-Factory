@@ -74,7 +74,20 @@
     "outputJsonToggle": "Output as JSON (instead of CSV/XML)",
     "dataPreviewToggle": "Show trial-run data preview",
     "additionalUrlsLabel": "Additional start URLs",
-    "additionalUrlsPlaceholder": "One URL per line (in addition to the page above)"
+    "additionalUrlsPlaceholder": "One URL per line (in addition to the page above)",
+    "changeDetectionToggle": "Enable change detection (notify on changes)",
+    "notifyEmail": "Email",
+    "notifyWebhook": "Webhook",
+    "smtpHostEnvVarLabel": "SMTP host (env var)",
+    "smtpPortEnvVarLabel": "SMTP port (env var)",
+    "smtpUsernameEnvVarLabel": "SMTP username (env var)",
+    "smtpPasswordEnvVarLabel": "SMTP password (env var)",
+    "notifyEmailFromEnvVarLabel": "From address (env var)",
+    "notifyEmailToEnvVarLabel": "To address (env var)",
+    "webhookUrlEnvVarLabel": "Webhook URL (env var)",
+    "envVarPlaceholder": "Environment variable name",
+    "envVarPlaceholderOptional": "Environment variable name (optional)",
+    "changeDetectionHint": "Every field here is the name of an environment variable, not the value itself — the real value is read from the environment at the actual run, never written into the script."
   },
   "robots": {
     "checkFailed": "robots.txt could not be checked ({error}).",

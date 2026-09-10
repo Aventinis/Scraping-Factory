@@ -1694,4 +1694,143 @@ public class ScrapingPlanValidatorTests
         var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
         Assert.True(result.Success, result.Error);
     }
+
+    // Issue #87
+    [Fact]
+    public void Validate_ValidEmailChangeDetection_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            ChangeDetection = new ChangeDetectionConfig
+            {
+                Notify = "Email",
+                Email = new EmailNotificationConfig
+                {
+                    SmtpHostEnvVar = "SF_SMTP_HOST", FromEnvVar = "SF_FROM", ToEnvVar = "SF_TO",
+                },
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ValidWebhookChangeDetection_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            ChangeDetection = new ChangeDetectionConfig
+            {
+                Notify = "Webhook",
+                Webhook = new WebhookNotificationConfig { UrlEnvVar = "SF_WEBHOOK_URL" },
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ChangeDetectionWithUnknownNotifyMethod_Fails()
+    {
+        var plan = new ScrapingPlan { Steps = ValidPlan().Steps, ChangeDetection = new ChangeDetectionConfig { Notify = "Sms" } };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Notify-Methode", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ChangeDetectionEmailWithoutEmailConfig_Fails()
+    {
+        var plan = new ScrapingPlan { Steps = ValidPlan().Steps, ChangeDetection = new ChangeDetectionConfig { Notify = "Email" } };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Email-Konfiguration", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ChangeDetectionWebhookWithoutWebhookConfig_Fails()
+    {
+        var plan = new ScrapingPlan { Steps = ValidPlan().Steps, ChangeDetection = new ChangeDetectionConfig { Notify = "Webhook" } };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Webhook-Konfiguration", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ChangeDetectionEmailWithInvalidHostEnvVarName_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            ChangeDetection = new ChangeDetectionConfig
+            {
+                Notify = "Email",
+                Email = new EmailNotificationConfig
+                {
+                    SmtpHostEnvVar = "not a valid name", FromEnvVar = "SF_FROM", ToEnvVar = "SF_TO",
+                },
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Ungültiger Umgebungsvariablen-Name", result.Error);
+        Assert.Contains("SmtpHostEnvVar", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ChangeDetectionEmailWithInvalidOptionalPortEnvVarName_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            ChangeDetection = new ChangeDetectionConfig
+            {
+                Notify = "Email",
+                Email = new EmailNotificationConfig
+                {
+                    SmtpHostEnvVar = "SF_SMTP_HOST", SmtpPortEnvVar = "1invalid", FromEnvVar = "SF_FROM", ToEnvVar = "SF_TO",
+                },
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("SmtpPortEnvVar", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ChangeDetectionWebhookWithInvalidUrlEnvVarName_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            ChangeDetection = new ChangeDetectionConfig
+            {
+                Notify = "Webhook",
+                Webhook = new WebhookNotificationConfig { UrlEnvVar = "" },
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("UrlEnvVar", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ChangeDetectionEmailAndWebhookBothSet_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            ChangeDetection = new ChangeDetectionConfig
+            {
+                Notify = "Email",
+                Email = new EmailNotificationConfig { SmtpHostEnvVar = "SF_SMTP_HOST", FromEnvVar = "SF_FROM", ToEnvVar = "SF_TO" },
+                Webhook = new WebhookNotificationConfig { UrlEnvVar = "SF_WEBHOOK_URL" },
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("nicht sowohl Email als auch Webhook", result.Error);
+    }
 }

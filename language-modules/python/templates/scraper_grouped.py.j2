@@ -11,6 +11,17 @@ import re
 import requests
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
+{{~ if change_detection.enabled ~}}
+import os
+import difflib
+{{~ if change_detection.notify_method == "Email" ~}}
+import smtplib
+from email.mime.text import MIMEText
+{{~ else ~}}
+import json
+import urllib.request
+{{~ end ~}}
+{{~ end ~}}
 
 # Issue #83: one or more start URLs — the same extraction runs against each,
 # and results are combined into a single output file.
@@ -20,6 +31,23 @@ URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 # default User-Agent with 403 Forbidden — an honest, identifying UA (not a
 # spoofed browser) is enough to pass that check on most sites.
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"}
+
+OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else }}xml{{ end }}"
+
+{{~ if change_detection.enabled ~}}
+# Issue #87 (change detection): every *_ENV_VAR below is an environment-
+# variable *name* (never the actual credential/target value) — read via
+# os.environ[...] at runtime, exactly like FillStep already does for login
+# credentials.
+CHANGE_DETECTION_NOTIFY = {{ change_detection.notify_literal }}
+SMTP_HOST_ENV_VAR = {{ change_detection.smtp_host_env_var_literal }}
+SMTP_PORT_ENV_VAR = {{ change_detection.smtp_port_env_var_literal }}
+SMTP_USERNAME_ENV_VAR = {{ change_detection.smtp_username_env_var_literal }}
+SMTP_PASSWORD_ENV_VAR = {{ change_detection.smtp_password_env_var_literal }}
+NOTIFY_EMAIL_FROM_ENV_VAR = {{ change_detection.from_env_var_literal }}
+NOTIFY_EMAIL_TO_ENV_VAR = {{ change_detection.to_env_var_literal }}
+WEBHOOK_URL_ENV_VAR = {{ change_detection.webhook_url_env_var_literal }}
+{{~ end ~}}
 
 GROUPS = {{ groups_literal }}
 
@@ -151,6 +179,66 @@ def _xml_to_dict(element):
 {{~ end ~}}
 
 
+{{~ if change_detection.enabled ~}}
+def _read_previous_output(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return None
+
+
+def _notify_email(diff_text):
+    host = os.environ[SMTP_HOST_ENV_VAR]
+    port = int(os.environ[SMTP_PORT_ENV_VAR]) if SMTP_PORT_ENV_VAR else 587
+    username = os.environ.get(SMTP_USERNAME_ENV_VAR) if SMTP_USERNAME_ENV_VAR else None
+    password = os.environ.get(SMTP_PASSWORD_ENV_VAR) if SMTP_PASSWORD_ENV_VAR else None
+    sender = os.environ[NOTIFY_EMAIL_FROM_ENV_VAR]
+    recipient = os.environ[NOTIFY_EMAIL_TO_ENV_VAR]
+
+    msg = MIMEText(diff_text)
+    msg["Subject"] = "Scraping Factory: changes detected"
+    msg["From"] = sender
+    msg["To"] = recipient
+
+    # EHLO first so has_extn() actually knows what the server advertises —
+    # opportunistic STARTTLS (upgrade only if offered) works against both a
+    # real provider and an unauthenticated local/internal relay that never
+    # advertises it, without needing the caller to say which kind it is.
+    with smtplib.SMTP(host, port, timeout=10) as server:
+        server.ehlo()
+        if server.has_extn("starttls"):
+            server.starttls()
+            server.ehlo()
+        if username and password:
+            server.login(username, password)
+        server.sendmail(sender, [recipient], msg.as_string())
+
+
+def _notify_webhook(diff_text):
+    url = os.environ[WEBHOOK_URL_ENV_VAR]
+    payload = json.dumps({"subject": "Scraping Factory: changes detected", "diff": diff_text}).encode("utf-8")
+    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+    urllib.request.urlopen(req, timeout=10)
+
+
+# Best-effort: by the time this runs, the current run's own output has
+# already been written successfully — a notification failure (unreachable
+# SMTP host, webhook down, ...) is reported but never fails the overall run.
+def _notify_change(old_content, new_content):
+    diff_text = "\n".join(difflib.unified_diff(
+        old_content.splitlines(), new_content.splitlines(), fromfile="previous", tofile="current", lineterm="",
+    ))
+    try:
+        if CHANGE_DETECTION_NOTIFY == "Email":
+            _notify_email(diff_text)
+        else:
+            _notify_webhook(diff_text)
+    except Exception as e:
+        print(f"Warning: change notification failed: {e}")
+{{~ end ~}}
+
+
 def scrape(url):
     response = requests.get(url, headers=HEADERS, timeout=10)
     response.raise_for_status()
@@ -171,6 +259,9 @@ def scrape(url):
 
 
 def main():
+{{~ if change_detection.enabled ~}}
+    previous_content = _read_previous_output(OUTPUT_PATH)
+{{~ end ~}}
     # Issue #83: each URL's own scrape() already wraps its matches in an
     # <Ergebnis> element (see above) — combine every URL's children into one
     # final <Ergebnis>, the same sibling-merging pattern already used for
@@ -180,16 +271,22 @@ def main():
         for el in scrape(url):
             root.append(el)
 {{~ if output_is_json ~}}
-    with open("{{ output_filename }}.json", "w", encoding="utf-8") as f:
+    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(_xml_to_dict(root), f, ensure_ascii=False, indent=2)
     count = len(root.findall(".//*"))
     print(f"Done — {count} elements written to {{ output_filename }}.json")
 {{~ else ~}}
     tree = ET.ElementTree(root)
     ET.indent(tree)
-    tree.write("{{ output_filename }}.xml", encoding="utf-8", xml_declaration=True)
+    tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
     count = len(root.findall(".//*"))
     print(f"Done — {count} elements written to {{ output_filename }}.xml")
+{{~ end ~}}
+{{~ if change_detection.enabled ~}}
+    with open(OUTPUT_PATH, "r", encoding="utf-8") as f:
+        new_content = f.read()
+    if previous_content is not None and previous_content != new_content:
+        _notify_change(previous_content, new_content)
 {{~ end ~}}
 
 

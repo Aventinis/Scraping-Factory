@@ -585,6 +585,55 @@ from `urlTemplate`/`Parameters` and rejects the combination outright.
   parameter — it now emits `page.goto(url, ...)`, which is what makes
   per-URL looping possible for the Browser engine at all.
 
+### 2.20 Change detection + notification (Issue #87)
+
+Lets the generated script compare each run's output against the previous
+run's and notify (email or webhook) only when something actually changed —
+mode-independent (Fields/Groups/Api alike). No companion-side diffing logic
+at all; the companion only validates the config and renders the right
+literals, the actual diff/notify happens entirely at runtime inside the
+generated script.
+
+- Extension: `popup/popup.js` (`_state.changeDetection`,
+  `buildChangeDetectionConfig` — converts the editable draft into the wire
+  shape, returning `null` when disabled or a *required* env-var-name field
+  is still blank, threaded through `buildScrapingConfig`/`buildConfigExport`
+  as `changeDetection`), `popup/popup.html` (`#toggle-change-detection`,
+  Email/Webhook method buttons, one text input per env-var name — every
+  field is a name the user types, mirroring `FillAction`'s own
+  `environmentVariableName` input, never a fixed/conventional name)
+- Companion: `IR/ChangeDetectionConfig.cs` (`ChangeDetectionConfig`/
+  `EmailNotificationConfig`/`WebhookNotificationConfig`, additive/wire-
+  compatible), `IR/ScrapingPlan.cs` (`ChangeDetection`, carried through
+  unchanged by `IR/ScrapingPlanBuilder.cs` in all three shape branches — no
+  forcing/translation needed), `IR/ScrapingPlanValidator.cs` (notify method,
+  matching sub-config present, every env-var name valid),
+  `Backends/Python/PythonChangeDetectionLiteral.cs` (`BuildContext` — the
+  one `change_detection.*` Scriban context object every one of the six
+  templates renders from, always emitting all seven possible fields
+  regardless of which method is active)
+- All six templates gain an `OUTPUT_PATH` constant and, when enabled, a
+  `_read_previous_output`/`_notify_email`/`_notify_webhook`/`_notify_change`
+  helper set wrapped around the existing write logic: read the previous
+  output before writing the new one, write as always, then diff the two via
+  `difflib.unified_diff` — a notification fires only on an actual
+  difference, never on the first run (no previous file yet = baseline
+  only), which also means this path never executes during `/generate`'s
+  trial-run verification (always a fresh temp directory). Email uses
+  `smtplib` with opportunistic STARTTLS (`server.has_extn("starttls")`);
+  webhook uses `urllib.request` — both stdlib-only. A notification failure
+  is caught and printed as a warning, never re-raised, since the current
+  run's own output was already written successfully by that point.
+- Tests: `ChangeDetectionEndToEndTests.cs` runs the real generated script as
+  a raw subprocess twice in one shared, test-controlled directory (unlike
+  `PythonScriptVerifierTests`, which always uses a fresh temp directory per
+  call — the reason this couldn't just be a `PythonScriptVerifier` test),
+  proving a genuine cross-run diff actually triggers delivery for both
+  methods (webhook via the existing `LocalTestServer`, email via a new
+  `LocalSmtpTestServer` — a minimal fake SMTP server that never advertises
+  STARTTLS, exercising the generated script's own "upgrade only if offered"
+  logic for real).
+
 ---
 
 ## 3. Class & Module Relationship Model
@@ -606,6 +655,7 @@ classDiagram
         +string? ScriptFileName
         +string? OutputFileName
         +bool? IncludePreview
+        +ChangeDetectionConfig? ChangeDetection
     }
     class ScrapingPlan {
         +List~ScrapingStep~ Steps
@@ -613,6 +663,7 @@ classDiagram
         +ScrapingEngine Engine
         +string ScriptFileName
         +string OutputFileBaseName
+        +ChangeDetectionConfig? ChangeDetection
     }
     class ScrapingStep { <<abstract>> }
     class NavigateStep { +List~string~ Urls }
@@ -792,6 +843,7 @@ compile time anywhere.
 | Data-preview opt-in / result | `popup.js`: `_state.includeDataPreview` toggle → `buildScrapingConfig`'s `includePreview` key; `renderDataPreview()` consumes the response | request: `{includePreview: true}`; response: `{script, preview: {outputFormat, totalCount, truncated, columns?, rows?, xmlSample?}}` | `IR/ScrapingConfig.cs`: `IncludePreview`; `Backends/ScriptPreviewData.cs` |
 | Script/output filenames | `popup.js`: `sanitizeFileNameBase()` (client-side mirror, download only) | `{scriptFileName?, outputFileName?}` | `IR/FileNameSanitizer.cs`: `SanitizeBaseName()` (server-side, authoritative) |
 | Additional start URLs | `popup.js`: `parseAdditionalUrls()` (splits textarea on newlines, drops blank lines) → `buildScrapingConfig`'s `additionalUrls` key | `{additionalUrls?: ["https://..."]}` | `IR/ScrapingConfig.cs`: `AdditionalUrls`; combined with `Url` into `IR/ScrapingStep.cs`: `NavigateStep.Urls` |
+| Change detection + notification | `popup.js`: `buildChangeDetectionConfig()` (returns `null` when disabled or a required field is blank) → `buildScrapingConfig`'s `changeDetection` key | `{changeDetection?: {notify:"Email"\|"Webhook", email?:{...EnvVar fields}, webhook?:{urlEnvVar}}}` | `IR/ChangeDetectionConfig.cs`: `ChangeDetectionConfig`/`EmailNotificationConfig`/`WebhookNotificationConfig` |
 | Range format mini-template | `api-config.js`: `RANGE_FORMAT_PRESETS`, `compileRangeFormatPattern()` (client-side mirror) | `{format?: "{yyyy}-W{ww}"}` inside a `RangeSource` | `Backends/Python/RangeFormat.cs` (server-side, authoritative) |
 
 Two rows above are explicitly **hand-kept mirrors**, not generated from a shared
