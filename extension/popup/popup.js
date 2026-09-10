@@ -110,6 +110,13 @@ let _state = {
     },
     webhook: { urlEnvVar: '' },
   },
+  // Issue #88: opt-in proxy support — mode-independent like engine/
+  // additionalStartUrls/changeDetection above, persisted the same way (real
+  // scrape-target configuration, not a per-generate toggle). envVar is the
+  // *name* of an environment variable holding a comma-separated proxy URL
+  // list, never a literal address — same environmentVariableName pattern as
+  // FillAction/ChangeDetection (see buildProxyConfig).
+  proxy: { enabled: false, envVar: '' },
   // Issue #43: one-time Fill test values for the /generate verification
   // trial run only — keyed by FillAction.environmentVariableName. Deliberately
   // absent from persistState()'s chrome.storage.session write and from
@@ -311,6 +318,17 @@ function buildChangeDetectionConfig(changeDetection) {
   };
 }
 
+// Issue #88: converts _state.proxy's editable draft shape into the wire
+// ProxyConfig, or null when disabled or the env-var-name field is left
+// blank — same "incomplete draft treated as toggle-off" convention as
+// buildChangeDetectionConfig. The field is an environment-variable *name*,
+// never a literal proxy address.
+function buildProxyConfig(proxy) {
+  if (!proxy?.enabled) return null;
+  const environmentVariableName = (proxy.envVar || '').trim();
+  return environmentVariableName ? { environmentVariableName } : null;
+}
+
 // `apiConfig` is only read when mode === 'api' — the confirmed ApiConfig
 // wire object built by buildApiConfig (Issue #53 Phase 5), passed straight
 // through as the request body's `api` field. Method is forced server-side
@@ -344,7 +362,7 @@ function buildChangeDetectionConfig(changeDetection) {
 function buildScrapingConfig(
   url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
-  additionalUrls = [], changeDetection = null,
+  additionalUrls = [], changeDetection = null, proxy = null,
 ) {
   const engineFields = engine === 'Browser'
     ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
@@ -354,12 +372,15 @@ function buildScrapingConfig(
   const additionalUrlsFields = additionalUrls.length > 0 ? { additionalUrls } : {};
   const changeDetectionConfig = buildChangeDetectionConfig(changeDetection);
   const changeDetectionFields = changeDetectionConfig ? { changeDetection: changeDetectionConfig } : {};
+  const proxyConfig = buildProxyConfig(proxy);
+  const proxyFields = proxyConfig ? { proxy: proxyConfig } : {};
 
   if (mode === 'container') {
     return {
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
+      ...proxyFields,
     };
   }
   if (mode === 'api') {
@@ -367,6 +388,7 @@ function buildScrapingConfig(
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
+      ...proxyFields,
     };
   }
   return {
@@ -380,7 +402,7 @@ function buildScrapingConfig(
     outputFormat: useJsonOutput ? 'Json' : 'Csv',
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
-    ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields,
+    ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields,
   };
 }
 
@@ -393,14 +415,14 @@ function buildScrapingConfig(
 function buildConfigExport(
   url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false, additionalUrls = [],
-  changeDetection = null,
+  changeDetection = null, proxy = null,
 ) {
   return {
     exportedAt: new Date().toISOString(),
     extensionVersion: manifest.version || '?',
     config: buildScrapingConfig(
       url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview,
-      useJsonOutput, additionalUrls, changeDetection,
+      useJsonOutput, additionalUrls, changeDetection, proxy,
     ),
   };
 }
@@ -570,6 +592,7 @@ function persistState() {
       browserActions: _state.browserActions,
       additionalStartUrls: _state.additionalStartUrls,
       changeDetection: _state.changeDetection,
+      proxy: _state.proxy,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
       selectionKind: _state.selectionKind,
@@ -845,6 +868,15 @@ function render() {
     for (const [id, value] of Object.entries(changeDetectionInputs)) {
       const input = document.getElementById(id);
       if (input && document.activeElement !== input) input.value = value;
+    }
+
+    // Issue #88: opt-in proxy support.
+    const proxyToggle = document.getElementById('toggle-proxy');
+    if (proxyToggle) proxyToggle.checked = _state.proxy.enabled;
+    document.getElementById('proxy-config')?.classList.toggle('hidden', !_state.proxy.enabled);
+    const proxyEnvVarInput = document.getElementById('input-proxy-env-var');
+    if (proxyEnvVarInput && document.activeElement !== proxyEnvVarInput) {
+      proxyEnvVarInput.value = _state.proxy.envVar;
     }
 
     if (_state.containerModalOpen) {
@@ -1306,7 +1338,7 @@ async function generate() {
   const config = buildScrapingConfig(
     _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
-    _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection,
+    _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
@@ -1390,7 +1422,7 @@ function downloadConfigExport() {
   const exportObj = buildConfigExport(
     _state.url, _state.mode, _state.fields, _state.groups, manifest, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
-    _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection,
+    _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy,
   );
   log('DOWNLOAD scraping-config.json', exportObj);
 
@@ -1799,6 +1831,14 @@ function wireEvents() {
     setState(_state.current, {
       changeDetection: { ..._state.changeDetection, webhook: { ..._state.changeDetection.webhook, urlEnvVar: e.target.value } },
     });
+  });
+
+  // Issue #88: opt-in proxy support.
+  document.getElementById('toggle-proxy')?.addEventListener('change', (e) => {
+    setState(_state.current, { proxy: { ..._state.proxy, enabled: e.target.checked } });
+  });
+  document.getElementById('input-proxy-env-var')?.addEventListener('input', (e) => {
+    setState(_state.current, { proxy: { ..._state.proxy, envVar: e.target.value } });
   });
 
   document.getElementById('toggle-include-data-preview')?.addEventListener('change', (e) => {
@@ -2415,7 +2455,7 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
     'scriptFileName', 'outputFileName',
@@ -2431,6 +2471,7 @@ async function init() {
   if (Array.isArray(stored.browserActions)) _state = { ..._state, browserActions: stored.browserActions };
   if (Array.isArray(stored.additionalStartUrls)) _state = { ..._state, additionalStartUrls: stored.additionalStartUrls };
   if (stored.changeDetection) _state = { ..._state, changeDetection: stored.changeDetection };
+  if (stored.proxy)                 _state = { ..._state, proxy: stored.proxy };
   if (stored.scriptFileName)        _state = { ..._state, scriptFileName: stored.scriptFileName };
   if (stored.outputFileName)        _state = { ..._state, outputFileName: stored.outputFileName };
   if (stored.selectionKind)         _state = { ..._state, selectionKind: stored.selectionKind };
@@ -2532,7 +2573,7 @@ if (typeof module !== 'undefined') {
     findUrlTemplateMatches, mergeValueListValues,
     variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
     detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
-    applyStaticTranslations, sanitizeFileNameBase, parseAdditionalUrls, buildChangeDetectionConfig,
+    applyStaticTranslations, sanitizeFileNameBase, parseAdditionalUrls, buildChangeDetectionConfig, buildProxyConfig,
     addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
     buildVerificationValues,
     frameBadgeHtml,

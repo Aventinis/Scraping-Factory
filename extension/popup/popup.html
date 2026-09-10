@@ -588,6 +588,23 @@
         </div>
         <p class="preview-summary" data-i18n="idle.changeDetectionHint"></p>
       </div>
+      <!-- Issue #88: opt-in proxy support — like the change-detection
+           fields above, this is the *name* of an environment variable
+           holding a comma-separated proxy URL list, never a literal proxy
+           address (mirrors FillAction's own environmentVariableName
+           input), read by the generated script at runtime via
+           os.environ[...]. -->
+      <label class="output-settings-toggle">
+        <input type="checkbox" id="toggle-proxy" />
+        <span data-i18n="idle.proxyToggle"></span>
+      </label>
+      <div id="proxy-config" class="hidden">
+        <div class="output-settings-row">
+          <label for="input-proxy-env-var" data-i18n="idle.proxyEnvVarLabel"></label>
+          <input type="text" id="input-proxy-env-var" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+        </div>
+        <p class="preview-summary" data-i18n="idle.proxyHint"></p>
+      </div>
     </div>
 
     <div class="actions" style="margin-top: 10px;">

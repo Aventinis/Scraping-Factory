@@ -87,7 +87,10 @@
     "webhookUrlEnvVarLabel": "Webhook URL (env var)",
     "envVarPlaceholder": "Environment variable name",
     "envVarPlaceholderOptional": "Environment variable name (optional)",
-    "changeDetectionHint": "Every field here is the name of an environment variable, not the value itself — the real value is read from the environment at the actual run, never written into the script."
+    "changeDetectionHint": "Every field here is the name of an environment variable, not the value itself — the real value is read from the environment at the actual run, never written into the script.",
+    "proxyToggle": "Use a proxy",
+    "proxyEnvVarLabel": "Proxy list (env var)",
+    "proxyHint": "The name of an environment variable holding a comma-separated list of proxy URLs (e.g. \"http://user:pass@host:port\"), not the addresses themselves — with more than one, the script rotates through them per request."
   },
   "robots": {
     "checkFailed": "robots.txt could not be checked ({error}).",
