@@ -53,6 +53,25 @@ NOTIFY_EMAIL_TO_ENV_VAR = {{ change_detection.to_env_var_literal }}
 WEBHOOK_URL_ENV_VAR = {{ change_detection.webhook_url_env_var_literal }}
 {{~ end ~}}
 
+{{~ if proxy.enabled ~}}
+# Issue #88 (proxy support): PROXY_ENV_VAR is an environment-variable
+# *name* holding a comma-separated list of proxy URLs — never a literal
+# proxy address baked into the script, same as FillStep credentials. If
+# more than one is present, requests rotate through them round-robin.
+PROXY_ENV_VAR = {{ proxy.env_var_literal }}
+_PROXY_LIST = [p.strip() for p in os.environ[PROXY_ENV_VAR].split(",") if p.strip()]
+_proxy_cycle = itertools.cycle(_PROXY_LIST) if _PROXY_LIST else None
+
+
+def _next_proxy():
+    return next(_proxy_cycle) if _proxy_cycle else None
+
+
+def _proxies_for_requests():
+    proxy = _next_proxy()
+    return {"http": proxy, "https": proxy} if proxy else None
+{{~ end ~}}
+
 _PATH_TOKEN_PATTERN = re.compile(r"[^.\[\]]+|\[\*\]|\[\d+\]")
 
 
@@ -263,7 +282,7 @@ def _resolve_parameter_values(source, headers):
             return _date_range(source["from"], source["to"], source.get("format", _DEFAULT_DATE_FORMAT))
         return _number_range(source["from"], source["to"])
     if kind == "discovery":
-        response = requests.get(source["urlTemplate"], headers=headers, timeout=10)
+        response = requests.get(source["urlTemplate"], headers=headers, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
         response.raise_for_status()
         items = _resolve_items(response.json(), source["itemsPath"])
         return [str(_resolve_field(item, source["valuePath"])) for item in items]
@@ -392,9 +411,9 @@ def scrape():
 
         body = _render_body(BODY, combo)
         if METHOD == "POST":
-            response = requests.post(url, headers=headers, json=body, timeout=10)
+            response = requests.post(url, headers=headers, json=body, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
         else:
-            response = requests.get(url, headers=headers, timeout=10)
+            response = requests.get(url, headers=headers, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
         # A 404 is treated as "this combination doesn't exist" and skipped
         # rather than aborting the whole run — Api-Mode tries the full
         # cartesian product of every parameter's values without knowing

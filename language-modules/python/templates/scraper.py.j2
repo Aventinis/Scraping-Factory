@@ -11,8 +11,13 @@ import csv
 import re
 import requests
 from bs4 import BeautifulSoup
-{{~ if config.change_detection.enabled ~}}
+{{~ if config.change_detection.enabled || config.proxy.enabled ~}}
 import os
+{{~ end ~}}
+{{~ if config.proxy.enabled ~}}
+import itertools
+{{~ end ~}}
+{{~ if config.change_detection.enabled ~}}
 import difflib
 {{~ if config.change_detection.notify_method == "Email" ~}}
 import smtplib
@@ -47,6 +52,25 @@ SMTP_PASSWORD_ENV_VAR = {{ config.change_detection.smtp_password_env_var_literal
 NOTIFY_EMAIL_FROM_ENV_VAR = {{ config.change_detection.from_env_var_literal }}
 NOTIFY_EMAIL_TO_ENV_VAR = {{ config.change_detection.to_env_var_literal }}
 WEBHOOK_URL_ENV_VAR = {{ config.change_detection.webhook_url_env_var_literal }}
+{{~ end ~}}
+
+{{~ if config.proxy.enabled ~}}
+# Issue #88 (proxy support): PROXY_ENV_VAR is an environment-variable
+# *name* holding a comma-separated list of proxy URLs — never a literal
+# proxy address baked into the script, same as FillStep credentials. If
+# more than one is present, requests rotate through them round-robin.
+PROXY_ENV_VAR = {{ config.proxy.env_var_literal }}
+_PROXY_LIST = [p.strip() for p in os.environ[PROXY_ENV_VAR].split(",") if p.strip()]
+_proxy_cycle = itertools.cycle(_PROXY_LIST) if _PROXY_LIST else None
+
+
+def _next_proxy():
+    return next(_proxy_cycle) if _proxy_cycle else None
+
+
+def _proxies_for_requests():
+    proxy = _next_proxy()
+    return {"http": proxy, "https": proxy} if proxy else None
 {{~ end ~}}
 
 SELECTORS = {
@@ -189,7 +213,7 @@ def _notify_change(old_content, new_content):
 
 
 def scrape(url):
-    response = requests.get(url, headers=HEADERS, timeout=10)
+    response = requests.get(url, headers=HEADERS, {{ if config.proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
     response.raise_for_status()
     # Use response.content (bytes) instead of response.text: requests guesses
     # the encoding from the Content-Type header, defaulting to ISO-8859-1 when
