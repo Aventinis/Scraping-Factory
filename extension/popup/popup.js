@@ -167,6 +167,9 @@ let _state = {
   // null before any pick.
   pendingRawText:            null,
   pendingElementAttributes:  null,
+  // Issue #169: same treatment as pendingRawText/pendingElementAttributes
+  // above, for OwnText mode's own live preview.
+  pendingOwnText:            null,
   // Issue #84: the transform chain (trim/regexExtract/replace/toNumber, in
   // order) being built up while modal-field-name/modal-field-extended is
   // open — form state, not underlying-selection state, so unlike
@@ -569,7 +572,9 @@ function refreshFlatTransformPreview() {
 // (its own transforms section is hidden, see the select-field-mode change
 // handler below) and attribute mode passes null until an attribute name has
 // actually been typed, so the hint doesn't show a misleading result before
-// then.
+// then. Issue #169: "ownText" mode reads pendingOwnText, computed at click
+// time by content-script.js's collectOwnText — no DOM input to wait on,
+// unlike attribute mode's attribute-name field.
 function refreshExtendedTransformPreview() {
   const mode = document.getElementById('select-field-mode')?.value ?? 'text';
   let rawValue = null;
@@ -578,6 +583,9 @@ function refreshExtendedTransformPreview() {
   } else if (mode === 'attribute') {
     const attrName = document.getElementById('input-field-attribute')?.value.trim();
     if (attrName) rawValue = (_state.pendingElementAttributes?.[attrName] ?? '').trim();
+  } else if (mode === 'ownText') {
+    // Issue #169
+    rawValue = _state.pendingOwnText;
   }
   renderTransformPreview('field-extended-transform-preview', rawValue, _state.pendingTransforms);
 }
@@ -1791,6 +1799,7 @@ function confirmField() {
     pendingMatchCount: null,
     pendingRawText: null,
     pendingElementAttributes: null,
+    pendingOwnText: null,
     pendingTransforms: [],
   });
 }
@@ -2177,7 +2186,7 @@ function wireEvents() {
     stopPreviewIfActive();
     chrome.runtime.sendMessage({ type: 'START_SELECTION' });
     setState(STATES.SELECTING, {
-      pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
+      pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
       domTree: null, domTreeTruncated: false, domTreeError: null,
     });
     if (_state.domViewEnabled) {
@@ -2258,7 +2267,7 @@ function wireEvents() {
     // or the in-progress apiConfigDraft would appear to have vanished.
     const returnTo = _state.apiConfigDraft ? STATES.API_CONFIG : STATES.IDLE;
     setState(returnTo, {
-      selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
+      selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
       pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', apiSearchTarget: null,
     });
   });
@@ -2284,7 +2293,7 @@ function wireEvents() {
 
   document.getElementById('btn-field-cancel')?.addEventListener('click', () => {
     log('BTN field-cancel');
-    setState(STATES.IDLE, { pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [] });
+    setState(STATES.IDLE, { pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [] });
   });
 
   // Event delegation for "Remove" buttons in the field list
@@ -2369,7 +2378,7 @@ function wireEvents() {
       stopPreviewIfActive();
       chrome.runtime.sendMessage({ type: 'START_SELECTION' });
       setState(STATES.SELECTING, {
-        pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [], selectionKind: 'browserAction', pendingBrowserActionIndex: index, pendingBrowserActionField: field,
+        pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [], selectionKind: 'browserAction', pendingBrowserActionIndex: index, pendingBrowserActionField: field,
         domTree: null, domTreeTruncated: false, domTreeError: null,
       });
     }
@@ -2470,7 +2479,7 @@ function wireEvents() {
         const node = buildGroupNode(_state.pendingNewContainer.name, message.selector, _state.pendingNewContainer.repeating, framePath);
         setState(STATES.IDLE, {
           groups: insertContainerNode(_state.groups, _state.pendingParentPath, node),
-          selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
+          selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
         });
         showMatchCountToast(containerName, matchCount);
       } else if (_state.selectionKind === 'browserAction' && _state.pendingBrowserActionIndex !== null) {
@@ -2489,13 +2498,14 @@ function wireEvents() {
             [_state.pendingBrowserActionField]: message.selector,
             framePath,
           }),
-          selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
+          selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
         });
       } else {
         setState(STATES.SELECTING, {
           pendingSelector: message.selector, pendingFramePath: framePath, pendingMatchCount: matchCount,
           pendingRawText: typeof message.rawText === 'string' ? message.rawText : null,
           pendingElementAttributes: message.attributes ?? null,
+          pendingOwnText: typeof message.ownText === 'string' ? message.ownText : null,
           pendingTransforms: [],
         });
       }
@@ -2571,7 +2581,7 @@ async function init() {
   log('INIT reading session storage');
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
-    'pendingRawText', 'pendingElementAttributes', 'mode', 'groups',
+    'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
     'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
@@ -2623,7 +2633,7 @@ async function init() {
       const groups = insertContainerNode(_state.groups, stored.pendingParentPath, node);
       await chrome.storage.session.set({ groups });
       setState(STATES.IDLE, {
-        groups, selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
+        groups, selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
       });
       showMatchCountToast(stored.pendingNewContainer.name, typeof stored.pendingMatchCount === 'number' ? stored.pendingMatchCount : null);
       return;
@@ -2640,7 +2650,7 @@ async function init() {
       });
       await chrome.storage.session.set({ browserActions });
       setState(STATES.IDLE, {
-        browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
+        browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
       });
       return;
     }
@@ -2656,6 +2666,7 @@ async function init() {
       pendingMatchCount: typeof stored.pendingMatchCount === 'number' ? stored.pendingMatchCount : null,
       pendingRawText: typeof stored.pendingRawText === 'string' ? stored.pendingRawText : null,
       pendingElementAttributes: stored.pendingElementAttributes ?? null,
+      pendingOwnText: typeof stored.pendingOwnText === 'string' ? stored.pendingOwnText : null,
       pendingTransforms: [],
     });
     return;

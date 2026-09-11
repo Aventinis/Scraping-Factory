@@ -3906,6 +3906,7 @@ describe('Field transform-chain editor (Issue #84)', () => {
           <option value="text">Text</option>
           <option value="attribute">Attribute</option>
           <option value="exists">Exists</option>
+          <option value="ownText">Own text</option>
         </select>
         <div id="field-attribute-row" class="hidden">
           <input id="input-field-attribute" />
@@ -4192,6 +4193,7 @@ describe('Transform-chain live preview (Issue #143)', () => {
           <option value="text">Text</option>
           <option value="attribute">Attribute</option>
           <option value="exists">Exists</option>
+          <option value="ownText">Own text</option>
         </select>
         <div id="field-attribute-row" class="hidden">
           <input id="input-field-attribute" />
@@ -4333,6 +4335,33 @@ describe('Transform-chain live preview (Issue #143)', () => {
     const preview = document.getElementById('field-extended-transform-preview');
     expect(preview.classList.contains('hidden')).toBe(false);
     expect(preview.textContent).toContain('/produkt/42');
+  });
+
+  // Issue #169
+  test('container mode: ownText-mode preview uses the picked element\'s own text, not rawText', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+    chrome.runtime.sendMessage.mockClear();
+
+    document.querySelector('.btn-add-subfield').click();
+    capturedListener({
+      type: 'ELEMENT_SELECTED', selector: 'h3.item-name',
+      rawText: 'Burrata mit Tomatenvegan möglich', ownText: 'Burrata mit Tomaten',
+    });
+    await flushMicrotasks();
+
+    const modeSelect = document.getElementById('select-field-mode');
+    modeSelect.value = 'ownText';
+    modeSelect.dispatchEvent(new Event('change'));
+
+    const preview = document.getElementById('field-extended-transform-preview');
+    expect(preview.classList.contains('hidden')).toBe(false);
+    expect(preview.textContent).toContain('Burrata mit Tomaten');
+    expect(preview.textContent).not.toContain('vegan möglich');
   });
 
   test('container mode: "Vorhanden?" (exists) mode never shows a preview', async () => {
