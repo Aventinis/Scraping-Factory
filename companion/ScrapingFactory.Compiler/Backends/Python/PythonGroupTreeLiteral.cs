@@ -53,6 +53,7 @@ internal static class PythonGroupTreeLiteral
             ExtractMode.Text => "text",
             ExtractMode.Attribute => "attribute",
             ExtractMode.Exists => "exists",
+            ExtractMode.OwnText => "ownText",
             _ => throw new InvalidOperationException($"Unbekannter ExtractMode: {field.Mode}"),
         };
         var attributePart = field.Mode == ExtractMode.Attribute ? $""", "attribute": {PythonLiteral.Str(field.Attribute!)}""" : "";
