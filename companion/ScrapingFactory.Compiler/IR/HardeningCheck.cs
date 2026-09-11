@@ -23,6 +23,7 @@ namespace ScrapingFactory.Compiler.IR;
 // not the wire-format prose in the issue itself.
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(NoResultCheck), "noResult")]
+[JsonDerivedType(typeof(NullRateCheck), "nullRate")]
 public abstract class HardeningCheck
 {
     public required HardeningSeverity Severity { get; init; }
@@ -34,3 +35,24 @@ public enum HardeningSeverity { Warning, Error }
 // after scraping — the classic "site redesign broke a selector, scheduled
 // job silently produces nothing" case. No kind-specific parameters.
 public sealed class NoResultCheck : HardeningCheck;
+
+// Issue #130: catches the narrower case NoResultCheck can't — the row/
+// element count stays healthy, but one specific field's selector quietly
+// starts matching the wrong thing and returns empty for every occurrence.
+// Threshold is a fraction (0.0-1.0, not a 0-100 percentage) of empty
+// occurrences that triggers the check; the extension's own UI collects it
+// as a percentage and divides by 100 before sending it. Unlike
+// NoResultCheck, more than one NullRateCheck is expected — one per field
+// the caller wants monitored — so ScrapingPlanValidator's "duplicate kind"
+// rule is relaxed to a "duplicate FieldName" rule for this kind
+// specifically (see ValidateHardening). FieldName is matched at runtime
+// against the flat row's dict key (flat/API-flat) or, container/API-tree
+// mode, every element with that tag name anywhere in the output tree —
+// i.e. globally per field name, not scoped to whichever parent group it's
+// nested under (a deliberate simplification; see the issue's own "open
+// design questions" section and CLAUDE.md).
+public sealed class NullRateCheck : HardeningCheck
+{
+    public required string FieldName { get; init; }
+    public required double Threshold { get; init; }
+}

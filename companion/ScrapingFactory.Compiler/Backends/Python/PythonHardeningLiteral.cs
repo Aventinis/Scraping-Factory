@@ -8,8 +8,9 @@ namespace ScrapingFactory.Compiler.Backends.Python;
 // checks_literal is a Python list-of-dicts literal (e.g.
 // [{"kind": "noResult", "severity": "Error"}]) or "[]" when no checks are
 // configured; the runtime side (_run_hardening_checks in the templates)
-// dispatches on each dict's "kind" — only "noResult" exists today, see
-// HardeningCheck's own doc comment for the other four planned kinds.
+// dispatches on each dict's "kind" — "noResult" and, since Issue #130,
+// "nullRate" (see HardeningCheck's own doc comment for the other three
+// still-planned kinds).
 internal static class PythonHardeningLiteral
 {
     public static object BuildContext(List<HardeningCheck>? checks)
@@ -24,13 +25,17 @@ internal static class PythonHardeningLiteral
         return "[" + string.Join(", ", checks.Select(RenderCheck)) + "]";
     }
 
-    private static string RenderCheck(HardeningCheck check)
+    private static string RenderCheck(HardeningCheck check) => check switch
     {
-        var kind = check switch
-        {
-            NoResultCheck => "noResult",
-            _ => throw new InvalidOperationException($"Unbekannter HardeningCheck-Typ: {check.GetType()}"),
-        };
-        return $$"""{"kind": {{PythonLiteral.Str(kind)}}, "severity": {{PythonLiteral.Str(check.Severity.ToString())}}}""";
-    }
+        NoResultCheck => $$"""{"kind": {{PythonLiteral.Str("noResult")}}, "severity": {{PythonLiteral.Str(check.Severity.ToString())}}}""",
+        // Issue #130: "field" is matched against a flat row's dict key or,
+        // in container/API-tree mode, an element's tag name anywhere in the
+        // output tree (see NullRateCheck's own doc comment on the "global
+        // per field name" scoping decision). "threshold" is a plain 0.0-1.0
+        // fraction, not a percentage — PythonLiteral.Num already renders the
+        // shortest round-trippable form (0.3 -> "0.3", not "0.30" or
+        // scientific notation).
+        NullRateCheck nullRate => $$"""{"kind": {{PythonLiteral.Str("nullRate")}}, "severity": {{PythonLiteral.Str(check.Severity.ToString())}}, "field": {{PythonLiteral.Str(nullRate.FieldName)}}, "threshold": {{PythonLiteral.Num(nullRate.Threshold)}}}""",
+        _ => throw new InvalidOperationException($"Unbekannter HardeningCheck-Typ: {check.GetType()}"),
+    };
 }
