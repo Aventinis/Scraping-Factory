@@ -19,6 +19,9 @@
   "language": {
     "label": "Idioma"
   },
+  "theme": {
+    "toggleTitle": "Cambiar tema (Sistema / Claro / Oscuro)"
+  },
   "checking": {
     "message": "Conectando con Companion…"
   },
@@ -191,6 +194,7 @@
   },
   "done": {
     "title": "¡Script generado correctamente!",
+    "backBtn": "Atrás",
     "newBtn": "Nuevo",
     "downloadBtn": "Descargar {filename}",
     "dataPreviewTitle": "Vista previa de los datos de la prueba",

@@ -19,6 +19,9 @@
   "language": {
     "label": "Language"
   },
+  "theme": {
+    "toggleTitle": "Toggle theme (System / Light / Dark)"
+  },
   "checking": {
     "message": "Connecting to companion…"
   },
@@ -191,6 +194,7 @@
   },
   "done": {
     "title": "Script generated successfully!",
+    "backBtn": "Back",
     "newBtn": "New",
     "downloadBtn": "Download {filename}",
     "dataPreviewTitle": "Trial-run data preview",

@@ -19,6 +19,9 @@
   "language": {
     "label": "Sprache"
   },
+  "theme": {
+    "toggleTitle": "Design umschalten (System / Hell / Dunkel)"
+  },
   "checking": {
     "message": "Verbinde mit Companion…"
   },
@@ -191,6 +194,7 @@
   },
   "done": {
     "title": "Skript erfolgreich generiert!",
+    "backBtn": "Zurück",
     "newBtn": "Neu",
     "downloadBtn": "{filename} herunterladen",
     "dataPreviewTitle": "Testlauf-Datenvorschau",

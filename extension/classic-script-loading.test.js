@@ -50,6 +50,7 @@ test('shared/logger.js + i18n/i18n.js + popup/popup.js load together without a r
   expect(() => runClassicScripts([
     'shared/logger.js',
     'shared/companion-config.js',
+    'shared/theme.js',
     'i18n/i18n.js',
     'popup/api-config.js',
     'popup/container-tree.js',

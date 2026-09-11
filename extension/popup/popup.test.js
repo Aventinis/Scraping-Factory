@@ -51,6 +51,7 @@ const {
   createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
   moveTransform, transformsAreValid, renderTransformList,
   applyTransformsPreview, toNumberPreview, renderTransformPreview,
+  syncModeToggleThumbs,
 } = require('./popup');
 
 // jsdom's Blob doesn't implement .text() — read via FileReader instead.
@@ -1130,6 +1131,30 @@ describe('renderGroupTree', () => {
     expect(childUl.classList.contains('hidden')).toBe(false);
   });
 
+  // Issue #139: the toggle used to swap between two Unicode glyphs (▸/▾) via
+  // textContent; it's now one static chevron SVG rotated via a .collapsed
+  // class, toggled together with the existing .hidden class on the children.
+  test('the toggle renders a chevron icon and toggles .collapsed together with the children', () => {
+    renderGroupTree([
+      {
+        kind: 'group', name: 'Kategorie', selector: 'section', repeating: true,
+        children: [{ kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null }],
+      },
+    ]);
+    const toggle = document.querySelector('[data-path="[0]"] > .group-tree-row .group-tree-toggle');
+    expect(toggle.querySelector('svg')).not.toBeNull();
+    expect(toggle.classList.contains('collapsed')).toBe(false); // starts expanded
+
+    const childUl = document.querySelector('[data-path="[0]"] > .group-tree-children');
+    toggle.click();
+    expect(childUl.classList.contains('hidden')).toBe(true);
+    expect(toggle.classList.contains('collapsed')).toBe(true);
+
+    toggle.click();
+    expect(childUl.classList.contains('hidden')).toBe(false);
+    expect(toggle.classList.contains('collapsed')).toBe(false);
+  });
+
   // Issue #42, Phase 7
   test('shows an iframe badge only for a node with a framePath', () => {
     renderGroupTree([
@@ -1514,6 +1539,25 @@ describe('renderApiTree', () => {
     expect(fieldRow.querySelector('.api-tree-path').textContent).toBe('name');
     expect(fieldRow.querySelector('.btn-add-api-subgroup')).toBeNull(); // fields can't have children
     expect(fieldRow.querySelector('.btn-remove-api-node')).not.toBeNull();
+  });
+
+  // Issue #139: same chevron-SVG-plus-.collapsed-class refactor as the
+  // Container-Mode tree above, applied identically here.
+  test('the toggle renders a chevron icon and toggles .collapsed together with the children', () => {
+    renderApiTree([
+      {
+        kind: 'group', name: 'Kategorie', path: 'categories',
+        children: [{ kind: 'field', name: 'Titel', path: 'name' }],
+      },
+    ]);
+    const toggle = document.querySelector('[data-path="[0]"] > .api-tree-row .api-tree-toggle');
+    expect(toggle.querySelector('svg')).not.toBeNull();
+    expect(toggle.classList.contains('collapsed')).toBe(false); // starts expanded
+
+    const childUl = document.querySelector('[data-path="[0]"] > .api-tree-children');
+    toggle.click();
+    expect(childUl.classList.contains('hidden')).toBe(true);
+    expect(toggle.classList.contains('collapsed')).toBe(true);
   });
 
   test('a 3-level tree renders with correct nesting/indentation', () => {
@@ -2842,6 +2886,22 @@ describe('renderDomTree / highlightHover / highlightSelected', () => {
     expect(childUl.classList.contains('hidden')).toBe(true);
   });
 
+  // Issue #139: same chevron-SVG-plus-.collapsed-class refactor as the
+  // Container/API-Mode trees, except this toggle starts *collapsed* (unlike
+  // those two, which start expanded) — so .collapsed is applied at build
+  // time here, matching the pre-existing "nested nodes start collapsed" test
+  // above for the .hidden class on the children themselves.
+  test('the toggle renders a chevron icon and starts with the .collapsed class', () => {
+    const toggle = document.querySelector('[data-path="[0]"] > .dom-tree-row .dom-tree-toggle');
+    expect(toggle.querySelector('svg')).not.toBeNull();
+    expect(toggle.classList.contains('collapsed')).toBe(true);
+
+    const childUl = document.querySelector('[data-path="[0]"] > .dom-tree-children');
+    toggle.click();
+    expect(childUl.classList.contains('hidden')).toBe(false);
+    expect(toggle.classList.contains('collapsed')).toBe(false);
+  });
+
   test('highlightHover marks the matching row and expands its ancestors', () => {
     highlightHover([0, 0]);
     const row = document.querySelector('[data-path="[0,0]"] > .dom-tree-row');
@@ -2849,6 +2909,10 @@ describe('renderDomTree / highlightHover / highlightSelected', () => {
 
     const ancestorUl = document.querySelector('[data-path="[0]"] > .dom-tree-children');
     expect(ancestorUl.classList.contains('hidden')).toBe(false);
+
+    // Issue #139: expandAncestors also un-rotates the ancestor's own chevron.
+    const ancestorToggle = document.querySelector('[data-path="[0]"] > .dom-tree-row .dom-tree-toggle');
+    expect(ancestorToggle.classList.contains('collapsed')).toBe(false);
   });
 
   test('highlightHover clears the previous hover highlight', () => {
@@ -4725,6 +4789,7 @@ describe('output settings (script/output filename)', () => {
       </section>
       <section id="screen-generating" class="hidden"></section>
       <section id="screen-done" class="hidden">
+        <button id="btn-back-to-config"></button>
         <button id="btn-download"></button>
       </section>
     `;
@@ -4841,6 +4906,28 @@ describe('output settings (script/output filename)', () => {
     await flushMicrotasks();
 
     expect(document.getElementById('btn-download').textContent).toBe('scraper.py herunterladen');
+  });
+
+  test('btn-back-to-config returns to the idle screen without resetting the existing configuration', async () => {
+    global.fetch.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('# script') });
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    expect(document.getElementById('screen-done').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(true);
+
+    global.chrome.storage.session.set.mockClear();
+    document.getElementById('btn-back-to-config').click();
+
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('screen-done').classList.contains('hidden')).toBe(true);
+    // Unlike btn-new-scraper, going back must not clear the configuration —
+    // the field picked up from session storage in beforeEach should still
+    // render, and no reset write should have gone out.
+    expect(document.getElementById('fields-list').textContent).toContain('Titel');
+    expect(global.chrome.storage.session.set).not.toHaveBeenCalledWith(
+      expect.objectContaining({ fields: [] }),
+    );
   });
 });
 
@@ -7382,5 +7469,84 @@ describe('API-Mode request-body tree end-to-end (Issue #55, Phase B4)', () => {
     expect(document.getElementById('modal-api-body-parameter-new').classList.contains('hidden')).toBe(true);
     expect(document.querySelectorAll('#api-config-parameters .api-config-param-card')).toHaveLength(0);
     expect(document.getElementById('btn-api-config-confirm').disabled).toBe(true); // still no parameter bound anywhere
+  });
+});
+
+// ── Issue #140 modernization: animated mode-toggle thumb ────────────────────
+// jsdom does no real layout, so offsetWidth/offsetLeft are always 0 — these
+// tests stub them (a standard jsdom workaround) to verify the actual
+// positioning math instead of just "doesn't throw". Real-browser visual
+// verification (Playwright) was done manually for the actual animation.
+describe('syncModeToggleThumbs', () => {
+  function stubOffsets(el, { width, left }) {
+    Object.defineProperty(el, 'offsetWidth', { configurable: true, value: width });
+    Object.defineProperty(el, 'offsetLeft', { configurable: true, value: left });
+  }
+
+  test('sizes and positions the thumb behind the active button', () => {
+    document.body.innerHTML = `
+      <div class="mode-toggle">
+        <div class="mode-toggle-thumb"></div>
+        <button id="a" class="mode-btn active"></button>
+        <button id="b" class="mode-btn"></button>
+      </div>
+    `;
+    stubOffsets(document.getElementById('a'), { width: 60, left: 3 });
+
+    syncModeToggleThumbs();
+
+    const thumb = document.querySelector('.mode-toggle-thumb');
+    expect(thumb.style.width).toBe('60px');
+    expect(thumb.style.transform).toBe('translateX(0px)'); // offsetLeft(3) - 3 = 0
+  });
+
+  test('re-syncing after the active button changes moves the thumb', () => {
+    document.body.innerHTML = `
+      <div class="mode-toggle">
+        <div class="mode-toggle-thumb"></div>
+        <button id="a" class="mode-btn"></button>
+        <button id="b" class="mode-btn active"></button>
+      </div>
+    `;
+    stubOffsets(document.getElementById('b'), { width: 40, left: 67 });
+
+    syncModeToggleThumbs();
+
+    const thumb = document.querySelector('.mode-toggle-thumb');
+    expect(thumb.style.width).toBe('40px');
+    expect(thumb.style.transform).toBe('translateX(64px)'); // offsetLeft(67) - 3
+  });
+
+  test('does nothing for a .mode-toggle with no .active button (e.g. mid-transition)', () => {
+    document.body.innerHTML = `
+      <div class="mode-toggle">
+        <div class="mode-toggle-thumb"></div>
+        <button id="a" class="mode-btn"></button>
+      </div>
+    `;
+    expect(() => syncModeToggleThumbs()).not.toThrow();
+    expect(document.querySelector('.mode-toggle-thumb').style.width).toBe('');
+  });
+
+  test('handles multiple independent .mode-toggle groups on the same screen', () => {
+    document.body.innerHTML = `
+      <div class="mode-toggle" id="toggle1">
+        <div class="mode-toggle-thumb"></div>
+        <button class="mode-btn active"></button>
+      </div>
+      <div class="mode-toggle" id="toggle2">
+        <div class="mode-toggle-thumb"></div>
+        <button class="mode-btn"></button>
+        <button class="mode-btn active"></button>
+      </div>
+    `;
+    stubOffsets(document.querySelector('#toggle1 .mode-btn'), { width: 50, left: 3 });
+    stubOffsets(document.querySelector('#toggle2 .mode-btn.active'), { width: 30, left: 53 });
+
+    syncModeToggleThumbs();
+
+    expect(document.querySelector('#toggle1 .mode-toggle-thumb').style.width).toBe('50px');
+    expect(document.querySelector('#toggle2 .mode-toggle-thumb').style.width).toBe('30px');
+    expect(document.querySelector('#toggle2 .mode-toggle-thumb').style.transform).toBe('translateX(50px)');
   });
 });

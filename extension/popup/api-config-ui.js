@@ -38,6 +38,14 @@ const SFApiConfigUI = (function () {
   } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
   const { transformsAreValid } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
 
+  // Issue #139: one static inline chevron per row instead of swapping between
+  // two different Unicode glyphs (▸/▾) on click — see container-tree-ui.js's
+  // own copy of this constant for the full rationale.
+  const TREE_TOGGLE_CHEVRON_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<polyline points="6 9 12 15 18 9"></polyline></svg>';
+
   // Same visual pattern as the Container-Mode tree editor below (indentation,
   // toggle arrow, add/remove buttons, nodes start expanded) — see
   // buildGroupTreeNodeEl. Row content differs: an editable name input (Phase
@@ -57,7 +65,7 @@ const SFApiConfigUI = (function () {
     const hasChildren = node.kind === 'group' && node.children.length > 0;
     const toggle = document.createElement('span');
     toggle.className = 'api-tree-toggle';
-    toggle.textContent = hasChildren ? '▾' : '';
+    if (hasChildren) toggle.innerHTML = TREE_TOGGLE_CHEVRON_SVG; // starts expanded, see below
     row.appendChild(toggle);
 
     const nameInput = document.createElement('input');
@@ -114,7 +122,7 @@ const SFApiConfigUI = (function () {
       if (hasChildren) {
         toggle.addEventListener('click', () => {
           const collapsed = childUl.classList.toggle('hidden');
-          toggle.textContent = collapsed ? '▸' : '▾';
+          toggle.classList.toggle('collapsed', collapsed);
         });
       }
     }
