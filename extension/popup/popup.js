@@ -137,6 +137,15 @@ let _state = {
   // list, never a literal address — same environmentVariableName pattern as
   // FillAction/ChangeDetection (see buildProxyConfig).
   proxy: { enabled: false, envVar: '' },
+  // Issue #129: opt-in script hardening checks — mode-independent like
+  // engine/changeDetection/proxy above, persisted the same way (real
+  // scrape-target configuration, not a per-generate toggle). Nested one
+  // level per check (only `noResult` exists so far) so the other four
+  // planned checks (see CLAUDE.md) can each add their own key without
+  // restructuring this or buildHardeningConfig. `severity` is 'Warning' or
+  // 'Error', matching the wire format's own PascalCase enum values exactly
+  // (see buildHardeningConfig) — no client-side translation needed.
+  hardening: { noResult: { enabled: false, severity: 'Warning' } },
   // Issue #43: one-time Fill test values for the /generate verification
   // trial run only — keyed by FillAction.environmentVariableName. Deliberately
   // absent from persistState()'s chrome.storage.session write and from
@@ -352,6 +361,24 @@ function buildProxyConfig(proxy) {
   return environmentVariableName ? { environmentVariableName } : null;
 }
 
+// Issue #129: builds the wire-format Hardening list (companion's
+// List<HardeningCheck>?) from every enabled check in _state.hardening — an
+// array even though only one check exists today, since the wire format is
+// inherently a list (see HardeningCheck.cs) to make room for the other four
+// planned checks (see CLAUDE.md) without a breaking change. `kind` is the
+// camelCase discriminator the companion's [JsonDerivedType] expects
+// (mirrors FieldTransform's own kind values, e.g. 'trim'/'toNumber' — not
+// PascalCase like `severity`, which is a plain enum). Returns null (not [])
+// when nothing is enabled, same "omit the key entirely" convention
+// buildChangeDetectionConfig/buildProxyConfig already use.
+function buildHardeningConfig(hardening) {
+  const checks = [];
+  if (hardening?.noResult?.enabled) {
+    checks.push({ kind: 'noResult', severity: hardening.noResult.severity });
+  }
+  return checks.length > 0 ? checks : null;
+}
+
 // `apiConfig` is only read when mode === 'api' — the confirmed ApiConfig
 // wire object built by buildApiConfig (Issue #53 Phase 5), passed straight
 // through as the request body's `api` field. Method is forced server-side
@@ -385,7 +412,7 @@ function buildProxyConfig(proxy) {
 function buildScrapingConfig(
   url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
-  additionalUrls = [], changeDetection = null, proxy = null,
+  additionalUrls = [], changeDetection = null, proxy = null, hardening = null,
 ) {
   const engineFields = engine === 'Browser'
     ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
@@ -397,13 +424,15 @@ function buildScrapingConfig(
   const changeDetectionFields = changeDetectionConfig ? { changeDetection: changeDetectionConfig } : {};
   const proxyConfig = buildProxyConfig(proxy);
   const proxyFields = proxyConfig ? { proxy: proxyConfig } : {};
+  const hardeningConfig = buildHardeningConfig(hardening);
+  const hardeningFields = hardeningConfig ? { hardening: hardeningConfig } : {};
 
   if (mode === 'container') {
     return {
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields,
+      ...proxyFields, ...hardeningFields,
     };
   }
   if (mode === 'api') {
@@ -411,7 +440,7 @@ function buildScrapingConfig(
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields,
+      ...proxyFields, ...hardeningFields,
     };
   }
   return {
@@ -426,6 +455,7 @@ function buildScrapingConfig(
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
     ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields,
+    ...hardeningFields,
   };
 }
 
@@ -438,14 +468,14 @@ function buildScrapingConfig(
 function buildConfigExport(
   url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false, additionalUrls = [],
-  changeDetection = null, proxy = null,
+  changeDetection = null, proxy = null, hardening = null,
 ) {
   return {
     exportedAt: new Date().toISOString(),
     extensionVersion: manifest.version || '?',
     config: buildScrapingConfig(
       url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview,
-      useJsonOutput, additionalUrls, changeDetection, proxy,
+      useJsonOutput, additionalUrls, changeDetection, proxy, hardening,
     ),
   };
 }
@@ -621,6 +651,7 @@ function persistState() {
       additionalStartUrls: _state.additionalStartUrls,
       changeDetection: _state.changeDetection,
       proxy: _state.proxy,
+      hardening: _state.hardening,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
       selectionKind: _state.selectionKind,
@@ -1430,7 +1461,7 @@ async function generate() {
   const config = buildScrapingConfig(
     _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
-    _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy,
+    _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy, _state.hardening,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
@@ -1514,7 +1545,7 @@ function downloadConfigExport() {
   const exportObj = buildConfigExport(
     _state.url, _state.mode, _state.fields, _state.groups, manifest, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
-    _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy,
+    _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy, _state.hardening,
   );
   log('DOWNLOAD scraping-config.json', exportObj);
 
@@ -2582,7 +2613,7 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
     'scriptFileName', 'outputFileName',
@@ -2599,6 +2630,7 @@ async function init() {
   if (Array.isArray(stored.additionalStartUrls)) _state = { ..._state, additionalStartUrls: stored.additionalStartUrls };
   if (stored.changeDetection) _state = { ..._state, changeDetection: stored.changeDetection };
   if (stored.proxy)                 _state = { ..._state, proxy: stored.proxy };
+  if (stored.hardening)             _state = { ..._state, hardening: stored.hardening };
   if (stored.scriptFileName)        _state = { ..._state, scriptFileName: stored.scriptFileName };
   if (stored.outputFileName)        _state = { ..._state, outputFileName: stored.outputFileName };
   if (stored.selectionKind)         _state = { ..._state, selectionKind: stored.selectionKind };
@@ -2702,6 +2734,7 @@ if (typeof module !== 'undefined') {
     variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
     detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
     applyStaticTranslations, sanitizeFileNameBase, parseAdditionalUrls, buildChangeDetectionConfig, buildProxyConfig,
+    buildHardeningConfig,
     addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
     buildVerificationValues,
     frameBadgeHtml,
