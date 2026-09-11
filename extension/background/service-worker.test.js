@@ -84,6 +84,7 @@ test('ELEMENT_SELECTED stores selector in session storage', async () => {
     pendingMatchCount: null,
     pendingRawText: null,
     pendingElementAttributes: null,
+    pendingOwnText: null,
   });
 });
 
@@ -102,6 +103,7 @@ test('ELEMENT_SELECTED with a framePath stores it alongside the selector', async
     pendingMatchCount: null,
     pendingRawText: null,
     pendingElementAttributes: null,
+    pendingOwnText: null,
   });
 });
 
@@ -119,6 +121,7 @@ test('ELEMENT_SELECTED with a matchCount stores it alongside the selector', asyn
     pendingMatchCount: 3,
     pendingRawText: null,
     pendingElementAttributes: null,
+    pendingOwnText: null,
   });
 });
 
@@ -136,6 +139,24 @@ test('ELEMENT_SELECTED with rawText/attributes stores them alongside the selecto
     pendingMatchCount: null,
     pendingRawText: 'Preis: 12,99 €',
     pendingElementAttributes: { 'data-id': '42' },
+    pendingOwnText: null,
+  });
+});
+
+// Issue #169: same session-storage fallback path as pendingRawText/
+// pendingElementAttributes above, for OwnText mode's own live preview.
+test('ELEMENT_SELECTED with ownText stores it alongside the selector', async () => {
+  capturedListener({ type: 'ELEMENT_SELECTED', selector: 'h3.item-name', ownText: 'Burrata mit Tomaten' }, {});
+
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  expect(chrome.storage.session.set).toHaveBeenCalledWith({
+    pendingSelector: 'h3.item-name',
+    pendingFramePath: null,
+    pendingMatchCount: null,
+    pendingRawText: null,
+    pendingElementAttributes: null,
+    pendingOwnText: 'Burrata mit Tomaten',
   });
 });
 

@@ -117,6 +117,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // survives a reopened popup the same way.
         pendingRawText: typeof message.rawText === 'string' ? message.rawText : null,
         pendingElementAttributes: message.attributes ?? null,
+        // Issue #169: same treatment, for OwnText mode's own live preview.
+        pendingOwnText: typeof message.ownText === 'string' ? message.ownText : null,
       })
       .then(() => log('STORE OK'))
       .catch(err => log('STORE ERR', err.message));
