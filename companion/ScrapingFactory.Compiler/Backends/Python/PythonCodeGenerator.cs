@@ -31,6 +31,7 @@ public sealed class PythonCodeGenerator : ICodeGenerator
                 output_is_json = plan.OutputFormat == OutputFormat.Json,
                 change_detection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection),
                 proxy = PythonProxyLiteral.BuildContext(plan.Proxy),
+                hardening = PythonHardeningLiteral.BuildContext(plan.Hardening),
             });
         }
 
@@ -56,6 +57,7 @@ public sealed class PythonCodeGenerator : ICodeGenerator
                 output_is_json = plan.OutputFormat == OutputFormat.Json,
                 change_detection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection),
                 proxy = PythonProxyLiteral.BuildContext(plan.Proxy),
+                hardening = PythonHardeningLiteral.BuildContext(plan.Hardening),
             },
         });
     }

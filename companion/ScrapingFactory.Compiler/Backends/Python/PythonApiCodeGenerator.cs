@@ -30,6 +30,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
         // runtime walk (_extract_api_group) consumes it.
         var changeDetection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection);
         var proxy = PythonProxyLiteral.BuildContext(plan.Proxy);
+        var hardening = PythonHardeningLiteral.BuildContext(plan.Hardening);
 
         if (api.Groups is { Count: > 0 })
         {
@@ -51,6 +52,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
                 output_is_json = plan.OutputFormat == OutputFormat.Json,
                 change_detection = changeDetection,
                 proxy,
+                hardening,
             });
         }
 
@@ -74,6 +76,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
             output_is_json = plan.OutputFormat == OutputFormat.Json,
             change_detection = changeDetection,
             proxy,
+            hardening,
         });
     }
 
