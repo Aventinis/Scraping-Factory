@@ -1867,4 +1867,42 @@ public class ScrapingPlanValidatorTests
         var result = ScrapingPlanValidator.Validate(ValidPlan());
         Assert.True(result.Success, result.Error);
     }
+
+    // Issue #129
+    [Fact]
+    public void Validate_ValidHardening_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new NoResultCheck { Severity = HardeningSeverity.Error }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_DuplicateHardeningCheckKind_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening =
+            [
+                new NoResultCheck { Severity = HardeningSeverity.Warning },
+                new NoResultCheck { Severity = HardeningSeverity.Error },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("NoResultCheck", result.Error);
+        Assert.Contains("mehrfach konfiguriert", result.Error);
+    }
+
+    [Fact]
+    public void Validate_NoHardening_Succeeds()
+    {
+        var result = ScrapingPlanValidator.Validate(ValidPlan());
+        Assert.True(result.Success, result.Error);
+    }
 }

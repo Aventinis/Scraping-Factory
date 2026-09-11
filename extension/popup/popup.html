@@ -922,6 +922,25 @@
         </div>
         <p class="preview-summary" data-i18n="idle.proxyHint"></p>
       </div>
+      <!-- Issue #129: opt-in script hardening — the generated script
+           re-checks its own result after scraping (e.g. before a
+           cron-scheduled re-run, weeks after generation) and either warns
+           (script still exits 0) or fails the run (script exits a distinct
+           non-zero code) per check, independently configurable. This is
+           the first of five planned checks (see CLAUDE.md) — one row per
+           check, built so each of the other four can add its own row below
+           without restructuring #hardening-config. -->
+      <div id="hardening-config">
+        <label class="output-settings-toggle">
+          <input type="checkbox" id="toggle-hardening-no-result" />
+          <span data-i18n="idle.hardeningNoResultToggle"></span>
+        </label>
+        <div id="hardening-no-result-severity" class="mode-toggle hidden" style="margin: 6px 0 8px;">
+          <div class="mode-toggle-thumb"></div>
+          <button id="btn-hardening-no-result-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning" data-i18n-title="idle.hardeningSeverityWarningTitle"></button>
+          <button id="btn-hardening-no-result-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError" data-i18n-title="idle.hardeningSeverityErrorTitle"></button>
+        </div>
+      </div>
       <!-- Filenames last: a final naming step right before Export/Generate,
            below every other output-settings toggle. -->
       <div class="output-settings-row">

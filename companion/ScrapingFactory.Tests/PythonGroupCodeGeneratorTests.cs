@@ -90,6 +90,47 @@ public class PythonGroupCodeGeneratorTests
         Assert.Contains("""elif node["mode"] == "ownText":""", script);
     }
 
+    // Issue #129
+    [Fact]
+    public void Generate_HardeningConfigured_EmitsChecksLiteralAndRuntimeHelper()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com/speisekarte"] },
+                new ExtractGroupStep
+                {
+                    Roots =
+                    [
+                        new GroupNode
+                        {
+                            Name = "Gericht", Selector = "li.menu-item", Repeating = true,
+                            Children = [new DataFieldNode { Name = "Name", Selector = "h3" }],
+                        },
+                    ],
+                },
+            ],
+            Hardening = [new NoResultCheck { Severity = HardeningSeverity.Error }],
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains(""""kind": 'noResult', "severity": 'Error'"""", script);
+        Assert.Contains("EXIT_HARDENING_FAILED = 2", script);
+        Assert.Contains("def _run_hardening_checks(result_count):", script);
+        Assert.Contains("if _run_hardening_checks(count):", script);
+    }
+
+    [Fact]
+    public void Generate_NoHardening_OmitsHardeningCodeEntirely()
+    {
+        var script = _generator.Generate(NestedGroupPlan());
+
+        Assert.DoesNotContain("EXIT_HARDENING_FAILED", script);
+        Assert.DoesNotContain("_run_hardening_checks", script);
+    }
+
     // Issue #83
     [Fact]
     public void Generate_MultipleUrls_LoopsOverUrlsAndCombinesIntoOneErgebnis()

@@ -55,6 +55,15 @@ public static class ScrapingPlanValidator
                 return Invalid(proxyError);
         }
 
+        // Issue #129: mode-independent, same placement as ChangeDetection/
+        // Proxy above.
+        if (plan.Hardening is { Count: > 0 } hardening)
+        {
+            var hardeningError = ValidateHardening(hardening);
+            if (hardeningError is not null)
+                return Invalid(hardeningError);
+        }
+
         // WaitFor/Fill/Click/Scroll all need a real browser to mean anything —
         // the Static engine's codegen simply doesn't look at them, so
         // silently generating a script that just drops them would be
@@ -604,4 +613,21 @@ public static class ScrapingPlanValidator
         EnvironmentVariableNamePattern.IsMatch(proxy.EnvironmentVariableName)
             ? null
             : $"Ungültiger Umgebungsvariablen-Name '{proxy.EnvironmentVariableName}' in Proxy.EnvironmentVariableName.";
+
+    // Issue #129: the only structural rule today — each check kind (the
+    // concrete HardeningCheck subtype, since there's no separate string
+    // "Kind" property to compare on the C# side; that string only exists on
+    // the wire/in the generated script) may appear at most once. Nothing
+    // else to validate: Severity is a required enum (an invalid string
+    // already fails deserialization before this ever runs), and
+    // NoResultCheck — the only kind implemented so far — has no parameters
+    // of its own.
+    private static string? ValidateHardening(List<HardeningCheck> hardening)
+    {
+        var duplicateKind = hardening
+            .GroupBy(check => check.GetType())
+            .FirstOrDefault(group => group.Count() > 1)
+            ?.Key.Name;
+        return duplicateKind is null ? null : $"Hardening-Check '{duplicateKind}' ist mehrfach konfiguriert.";
+    }
 }

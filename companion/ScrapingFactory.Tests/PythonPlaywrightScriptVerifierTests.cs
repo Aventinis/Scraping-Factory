@@ -857,4 +857,28 @@ public class PythonPlaywrightScriptVerifierTests
         Assert.True(result.Success, result.Error);
         Assert.Equal(9, result.RowCount);
     }
+
+    // Issue #129: browser-engine counterpart to PythonScriptVerifierTests'
+    // own HardeningNoResultCheck_ErrorSeverity_ZeroRows_StillFailsWithClearMessage
+    // — proves EXIT_HARDENING_FAILED is whitelisted correctly against the
+    // real python3 process regardless of which template generated the
+    // script.
+    [Fact]
+    public async Task HardeningNoResultCheck_ErrorSeverity_ZeroRows_StillFailsWithClearMessage()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps = [new NavigateStep { Urls = [server.BaseUrl] }, new ExtractStep { Name = "Titel", Selector = ".does-not-exist" }],
+            Hardening = [new NoResultCheck { Severity = HardeningSeverity.Error }],
+        };
+        var script = Generator.Generate(plan);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.False(result.Success);
+        Assert.Contains("no data", result.Error);
+        Assert.DoesNotContain("exited with an error", result.Error);
+    }
 }
