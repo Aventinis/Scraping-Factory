@@ -600,6 +600,32 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.True(HttpStatusCode.OK == response.StatusCode, body);
     }
 
+    // Issue #131: same "post the extension's actual raw wire shape" style as
+    // the NullRate test above — written for the exact same reason (Issue
+    // #130's own wire-key mismatch bug), so any future property-name drift
+    // between the extension and BaselineCheck.DropThreshold is caught here
+    // too, not just via a same-process C#-object round trip.
+    [Fact]
+    public async Task Generate_ExtensionStyleBaselineHardeningPayload_Returns200()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var payload = $$"""
+            {
+              "version": "1",
+              "url": "{{server.BaseUrl}}",
+              "fields": [ { "name": "Titel", "selector": "h1", "attribute": null } ],
+              "hardening": [
+                { "kind": "baseline", "severity": "Warning", "dropThreshold": 0.2 }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+    }
+
     [Fact]
     public async Task Generate_NullRateHardeningPayload_WrongLegacyFieldKey_FailsWithUsableError()
     {

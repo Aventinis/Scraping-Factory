@@ -1987,4 +1987,67 @@ public class ScrapingPlanValidatorTests
         Assert.False(result.Success);
         Assert.Contains("Schwelle", result.Error);
     }
+
+    // Issue #131
+    [Fact]
+    public void Validate_ValidBaselineCheck_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new BaselineCheck { Severity = HardeningSeverity.Error, DropThreshold = 0.2 }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_DuplicateBaselineCheck_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening =
+            [
+                new BaselineCheck { Severity = HardeningSeverity.Warning, DropThreshold = 0.2 },
+                new BaselineCheck { Severity = HardeningSeverity.Error, DropThreshold = 0.3 },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("BaselineCheck", result.Error);
+        Assert.Contains("mehrfach konfiguriert", result.Error);
+    }
+
+    [Theory]
+    [InlineData(-0.1)]
+    [InlineData(1.1)]
+    public void Validate_BaselineDropThresholdOutOfRange_Fails(double threshold)
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new BaselineCheck { Severity = HardeningSeverity.Warning, DropThreshold = threshold }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Schwelle", result.Error);
+    }
+
+    [Fact]
+    public void Validate_BaselineAndNullRateAndNoResultTogether_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening =
+            [
+                new NoResultCheck { Severity = HardeningSeverity.Error },
+                new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "Preis", Threshold = 0.3 },
+                new BaselineCheck { Severity = HardeningSeverity.Warning, DropThreshold = 0.2 },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
 }

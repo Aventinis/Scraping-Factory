@@ -20,6 +20,9 @@ import itertools
 {{~ if proxy.enabled || hardening.enabled ~}}
 import sys
 {{~ end ~}}
+{{~ if hardening.has_baseline ~}}
+import json
+{{~ end ~}}
 {{~ if change_detection.enabled ~}}
 import difflib
 {{~ if change_detection.notify_method == "Email" ~}}
@@ -97,6 +100,29 @@ EXIT_HARDENING_FAILED = 2
 
 HARDENING = {{ hardening.checks_literal }}
 
+{{~ if hardening.has_baseline ~}}
+# Issue #131 (baseline check): a small sidecar file next to the script's own
+# output records the result count from the last run that passed cleanly
+# (see main()'s own "only write when not hardening_failed" call site) — a
+# bad run must never become the new normal for the next comparison. Missing/
+# corrupt sidecar (first run ever, or the file was deleted) is treated the
+# same as "no baseline yet", not an error.
+BASELINE_PATH = OUTPUT_PATH + ".hardening-baseline.json"
+
+
+def _read_baseline():
+    try:
+        with open(BASELINE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f).get("count")
+    except (FileNotFoundError, ValueError, OSError):
+        return None
+
+
+def _write_baseline(count):
+    with open(BASELINE_PATH, "w", encoding="utf-8") as f:
+        json.dump({"count": count}, f)
+{{~ end ~}}
+
 
 def _run_hardening_checks(root):
     has_error = False
@@ -131,6 +157,23 @@ def _run_hardening_checks(root):
                     has_error = True
                 else:
                     print(f"WARNUNG: {message}", file=sys.stderr)
+        elif check["kind"] == "baseline":
+            # Issue #131: catches a gradual drop in result volume that
+            # neither noResult (only fires at exactly zero) nor nullRate
+            # (only watches one field) would ever trip — e.g. a paginated
+            # list quietly losing entries. No baseline yet (first run, or
+            # the sidecar file was deleted) simply has nothing to compare
+            # against.
+            baseline = _read_baseline()
+            if baseline:
+                drop = (baseline - result_count) / baseline
+                if drop > check["dropThreshold"]:
+                    message = f"Ergebnis-Anzahl von {baseline} auf {result_count} gesunken (mehr als {check['dropThreshold']:.0%} Schwelle)."
+                    if check["severity"] == "Error":
+                        print(f"FEHLER: {message}", file=sys.stderr)
+                        has_error = True
+                    else:
+                        print(f"WARNUNG: {message}", file=sys.stderr)
     return has_error
 {{~ end ~}}
 
@@ -383,7 +426,12 @@ def main():
         _notify_change(previous_content, new_content)
 {{~ end ~}}
 {{~ if hardening.enabled ~}}
-    if _run_hardening_checks(root):
+    hardening_failed = _run_hardening_checks(root)
+{{~ if hardening.has_baseline ~}}
+    if not hardening_failed:
+        _write_baseline(count)
+{{~ end ~}}
+    if hardening_failed:
         sys.exit(EXIT_HARDENING_FAILED)
 {{~ end ~}}
 {{~ if proxy.enabled ~}}

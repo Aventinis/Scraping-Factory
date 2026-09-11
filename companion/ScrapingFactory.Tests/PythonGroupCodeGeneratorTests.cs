@@ -119,7 +119,8 @@ public class PythonGroupCodeGeneratorTests
         Assert.Contains(""""kind": 'noResult', "severity": 'Error'"""", script);
         Assert.Contains("EXIT_HARDENING_FAILED = 2", script);
         Assert.Contains("def _run_hardening_checks(root):", script);
-        Assert.Contains("if _run_hardening_checks(root):", script);
+        Assert.Contains("hardening_failed = _run_hardening_checks(root)", script);
+        Assert.Contains("if hardening_failed:", script);
     }
 
     [Fact]
@@ -149,6 +150,40 @@ public class PythonGroupCodeGeneratorTests
 
         Assert.Contains(""""kind": 'nullRate', "severity": 'Warning', "field": 'Preis', "threshold": 0.3"""", script);
         Assert.Contains("root.iter(check[\"field\"])", script);
+    }
+
+    [Fact]
+    public void Generate_BaselineHardeningConfigured_EmitsSidecarHelpersAndImport()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com/speisekarte"] },
+                new ExtractGroupStep
+                {
+                    Roots =
+                    [
+                        new GroupNode
+                        {
+                            Name = "Gericht", Selector = "li.menu-item", Repeating = true,
+                            Children = [new DataFieldNode { Name = "Name", Selector = "h3" }],
+                        },
+                    ],
+                },
+            ],
+            Hardening = [new BaselineCheck { Severity = HardeningSeverity.Error, DropThreshold = 0.2 }],
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains(""""kind": 'baseline', "severity": 'Error', "dropThreshold": 0.2"""", script);
+        Assert.Contains("import json", script);
+        Assert.Contains("BASELINE_PATH = OUTPUT_PATH + \".hardening-baseline.json\"", script);
+        Assert.Contains("def _read_baseline():", script);
+        Assert.Contains("def _write_baseline(count):", script);
+        Assert.Contains("hardening_failed = _run_hardening_checks(root)", script);
+        Assert.Contains("if not hardening_failed:\n        _write_baseline(count)", script);
     }
 
     [Fact]

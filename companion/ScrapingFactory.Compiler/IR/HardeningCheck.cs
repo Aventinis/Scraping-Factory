@@ -78,11 +78,16 @@ public sealed class NullRateCheck : HardeningCheck
 // output" mechanism: that one diffs the *entire* output file's content on
 // every run, unconditionally; this one only ever needs one integer, and —
 // per the issue's own "a bad run must never become the new normal"
-// requirement — must only update after a run that didn't itself fail any
-// hardening check, including this one, which is a materially different
-// update rule from ChangeDetection's unconditional overwrite-every-run).
-// See the Python templates' own _read_baseline/_write_baseline for the
-// actual file format and update logic.
+// requirement — must only update after a run that didn't itself hard-fail,
+// which is a materially different update rule from ChangeDetection's
+// unconditional overwrite-every-run). "Didn't hard-fail" means the same
+// thing it does everywhere else in this mechanism: no *Error*-severity
+// check reported a problem — a Warning-severity trigger (including from
+// this very check comparing against the old baseline) still advances the
+// baseline forward, exactly as a Warning never changes anything else about
+// how a run is treated. See the Python templates' own
+// _read_baseline/_write_baseline for the actual file format and update
+// logic.
 public sealed class BaselineCheck : HardeningCheck
 {
     public required double DropThreshold { get; init; }
