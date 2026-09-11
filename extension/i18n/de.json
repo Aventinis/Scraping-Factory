@@ -19,6 +19,9 @@
   "language": {
     "label": "Sprache"
   },
+  "theme": {
+    "toggleTitle": "Design umschalten (System / Hell / Dunkel)"
+  },
   "checking": {
     "message": "Verbinde mit Companion…"
   },
