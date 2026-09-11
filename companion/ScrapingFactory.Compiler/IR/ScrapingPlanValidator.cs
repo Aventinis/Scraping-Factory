@@ -652,6 +652,15 @@ public static class ScrapingPlanValidator
                 return $"Hardening-Check 'NullRate' für Feld '{check.FieldName}': Schwelle muss zwischen 0 und 1 liegen (war {check.Threshold}).";
         }
 
+        // Issue #131: only DropThreshold's own range needs checking —
+        // BaselineCheck already goes through the generic duplicate-kind rule
+        // above like NoResultCheck, since more than one never makes sense.
+        foreach (var check in hardening.OfType<BaselineCheck>())
+        {
+            if (check.DropThreshold is < 0 or > 1)
+                return $"Hardening-Check 'Baseline': Schwelle muss zwischen 0 und 1 liegen (war {check.DropThreshold}).";
+        }
+
         return null;
     }
 }

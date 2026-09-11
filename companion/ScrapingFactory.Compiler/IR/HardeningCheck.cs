@@ -24,6 +24,7 @@ namespace ScrapingFactory.Compiler.IR;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(NoResultCheck), "noResult")]
 [JsonDerivedType(typeof(NullRateCheck), "nullRate")]
+[JsonDerivedType(typeof(BaselineCheck), "baseline")]
 public abstract class HardeningCheck
 {
     public required HardeningSeverity Severity { get; init; }
@@ -55,4 +56,34 @@ public sealed class NullRateCheck : HardeningCheck
 {
     public required string FieldName { get; init; }
     public required double Threshold { get; init; }
+}
+
+// Issue #131: catches a gradual drop in result volume that neither
+// NoResultCheck (only fires at exactly zero) nor NullRateCheck (only
+// watches one field's own emptiness) would ever trip — e.g. a paginated
+// list quietly losing entries because a "load more" selector broke, while
+// every individual field on every remaining row still extracts fine.
+// DropThreshold is a fraction (0.0-1.0, same convention as
+// NullRateCheck.Threshold) of the *previous* run's own result count — a
+// drop strictly greater than this fraction triggers the check. Unlike
+// NullRateCheck, only one BaselineCheck ever makes sense (there's only one
+// "the" result count to track), so ScrapingPlanValidator's existing
+// duplicate-kind rule applies unchanged, with no NullRateCheck-style
+// exemption needed.
+//
+// The "previous run's own result count" itself is not part of this wire
+// type at all — it's runtime state the generated script tracks for itself
+// in a small sidecar JSON file next to its own output file (deliberately
+// not reusing #87 ChangeDetectionConfig's "compare against the previous
+// output" mechanism: that one diffs the *entire* output file's content on
+// every run, unconditionally; this one only ever needs one integer, and —
+// per the issue's own "a bad run must never become the new normal"
+// requirement — must only update after a run that didn't itself fail any
+// hardening check, including this one, which is a materially different
+// update rule from ChangeDetection's unconditional overwrite-every-run).
+// See the Python templates' own _read_baseline/_write_baseline for the
+// actual file format and update logic.
+public sealed class BaselineCheck : HardeningCheck
+{
+    public required double DropThreshold { get; init; }
 }
