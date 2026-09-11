@@ -4,7 +4,7 @@
 
 A browser extension that lets users without programming knowledge visually configure web scrapers. The result is a standalone, readable **Python script** (v1). The architecture is designed to support additional target languages later on.
 
-The MVP (v1.0.0) was reached a while ago — the current release is v1.9.0. The project is therefore no longer in MVP buildout but in normal, ongoing feature development beyond it, including well beyond the feature set originally planned for v1. Foundational decisions made during the prototyping phase (IR schema, extension↔companion communication) are considered settled and are evolved during ongoing development rather than re-litigated — see "Architecture Decisions" below.
+The MVP (v1.0.0) was reached a while ago — the current release is v1.10.0. The project is therefore no longer in MVP buildout but in normal, ongoing feature development beyond it, including well beyond the feature set originally planned for v1. Foundational decisions made during the prototyping phase (IR schema, extension↔companion communication) are considered settled and are evolved during ongoing development rather than re-litigated — see "Architecture Decisions" below.
 
 **Principle:** Scraping Factory is meant to remain a free plugin (no cost, no dependency on paid third-party services). This specifically rules out commercial stealth-browser/anti-bot SDKs with a session or license model (see "Feature Scope").
 
