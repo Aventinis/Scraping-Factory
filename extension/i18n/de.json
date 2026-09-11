@@ -191,6 +191,7 @@
   },
   "done": {
     "title": "Skript erfolgreich generiert!",
+    "backBtn": "Zurück",
     "newBtn": "Neu",
     "downloadBtn": "{filename} herunterladen",
     "dataPreviewTitle": "Testlauf-Datenvorschau",

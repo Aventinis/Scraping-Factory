@@ -2217,6 +2217,17 @@ function wireEvents() {
     checkCompanion();
   });
 
+  // Unlike btn-new-scraper above, this keeps fields/groups/apiConfig/url/
+  // output-settings exactly as they were — the same "no patch" pattern
+  // generate()'s own error paths already use to fall back to IDLE without
+  // losing the current configuration (see generate()'s 400/422/catch
+  // branches). Lets the user tweak a selector/transform and regenerate
+  // instead of starting over when the sample data preview isn't right yet.
+  document.getElementById('btn-back-to-config')?.addEventListener('click', () => {
+    log('BTN back-to-config');
+    setState(STATES.IDLE);
+  });
+
   // ── Engine + browser actions (Issue #41/#42, Phase 5) ────────────────────
   // Mode-independent, unlike fields/groups/apiConfig — no interaction with
   // switchMode/MODE_SWITCH_CLEARS.
