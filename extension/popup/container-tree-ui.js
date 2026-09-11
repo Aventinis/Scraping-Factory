@@ -26,6 +26,16 @@ const SFContainerTreeUI = (function () {
   } = typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
   const { transformsAreValid } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
 
+  // Issue #139: one static inline chevron per row instead of swapping between
+  // two different Unicode glyphs (▸/▾) on click — collapsed/expanded is now a
+  // CSS rotation driven by the .collapsed class (see popup.html's shared
+  // .group-tree-toggle svg / .collapsed rule). Same duplicated-per-file
+  // pattern api-config-ui.js/popup.js use for their own tree toggles.
+  const TREE_TOGGLE_CHEVRON_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<polyline points="6 9 12 15 18 9"></polyline></svg>';
+
   // ── Container tree editor ────────────────────────────────────────────────────
   // Same visual pattern as the DOM-tree-view below (indentation, toggle arrow,
   // click-to-collapse — see buildTreeNodeEl) but editable: rows carry
@@ -44,7 +54,7 @@ const SFContainerTreeUI = (function () {
     const hasChildren = node.kind === 'group' && node.children.length > 0;
     const toggle = document.createElement('span');
     toggle.className = 'group-tree-toggle';
-    toggle.textContent = hasChildren ? '▾' : '';
+    if (hasChildren) toggle.innerHTML = TREE_TOGGLE_CHEVRON_SVG; // starts expanded, see below
     row.appendChild(toggle);
 
     const label = document.createElement('span');
@@ -89,7 +99,7 @@ const SFContainerTreeUI = (function () {
       if (hasChildren) {
         toggle.addEventListener('click', () => {
           const collapsed = childUl.classList.toggle('hidden');
-          toggle.textContent = collapsed ? '▸' : '▾';
+          toggle.classList.toggle('collapsed', collapsed);
         });
       }
     }

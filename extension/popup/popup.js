@@ -1123,6 +1123,16 @@ function renderBrowserActions(actions = _state.browserActions, testValues = _sta
 // Rendered imperatively (not through render()) so a user's expand/collapse
 // clicks survive unrelated state updates (e.g. adding/removing a field).
 
+// Issue #139: one static inline chevron per row instead of swapping between
+// two different Unicode glyphs (▸/▾) on click — see container-tree-ui.js's
+// own copy of this constant for the full rationale. Unlike the group/api
+// trees, this one starts *collapsed* (see buildTreeNodeEl/expandAncestors
+// below), so the .collapsed class is applied at build time here too.
+const TREE_TOGGLE_CHEVRON_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<polyline points="6 9 12 15 18 9"></polyline></svg>';
+
 function formatTreeLabel(node) {
   let label = node.tag;
   if (node.id) label += `#${node.id}`;
@@ -1142,7 +1152,8 @@ function buildTreeNodeEl(node, depth) {
   const hasChildren = node.children.length > 0;
   const toggle = document.createElement('span');
   toggle.className = 'dom-tree-toggle';
-  toggle.textContent = hasChildren ? '▸' : '';
+  if (hasChildren) toggle.innerHTML = TREE_TOGGLE_CHEVRON_SVG;
+  toggle.classList.toggle('collapsed', hasChildren); // starts collapsed, unlike the group/api trees
   row.appendChild(toggle);
 
   const label = document.createElement('span');
@@ -1159,7 +1170,7 @@ function buildTreeNodeEl(node, depth) {
 
     toggle.addEventListener('click', () => {
       const collapsed = childUl.classList.toggle('hidden');
-      toggle.textContent = collapsed ? '▸' : '▾';
+      toggle.classList.toggle('collapsed', collapsed);
     });
   }
 
@@ -1184,7 +1195,7 @@ function expandAncestors(li) {
     ul.classList.remove('hidden');
     const ownerLi = ul.parentElement;
     const toggle = ownerLi.firstElementChild.querySelector('.dom-tree-toggle');
-    if (toggle) toggle.textContent = '▾';
+    if (toggle) toggle.classList.remove('collapsed');
     ul = ownerLi.parentElement;
   }
 }
