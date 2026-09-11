@@ -83,11 +83,12 @@ const SFContainerTree = (function () {
       text: t('group.textMode'),
       attribute: t('group.attributeMode', { attribute: node.attribute }),
       exists: t('group.existsMode'),
+      ownText: t('group.ownTextMode'),
     }[node.mode];
     return `${node.name} — ${modeLabel}`;
   }
 
-  const FIELD_MODE_WIRE_NAMES = { text: 'Text', attribute: 'Attribute', exists: 'Exists' };
+  const FIELD_MODE_WIRE_NAMES = { text: 'Text', attribute: 'Attribute', exists: 'Exists', ownText: 'OwnText' };
 
   // Strips the popup's internal `kind` tag and shapes each node exactly like
   // the wire format the Companion expects (ContainerNode.cs / ContainerNodeJsonConverter):

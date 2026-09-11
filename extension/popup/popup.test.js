@@ -926,6 +926,14 @@ describe('serializeGroupTree', () => {
     expect(serializeGroupTree(groups)[0]).not.toHaveProperty('attribute');
   });
 
+  // Issue #169
+  test('an ownText field serializes to wire mode "OwnText" with no attribute key', () => {
+    const groups = [{ kind: 'field', name: 'Name', selector: 'h3.item-name', mode: 'ownText', attribute: null }];
+    const [field] = serializeGroupTree(groups);
+    expect(field.mode).toBe('OwnText');
+    expect(field).not.toHaveProperty('attribute');
+  });
+
   // Issue #42, Phase 7
   test('includes framePath on both group and field nodes when set, omits it when null', () => {
     const groups = [
@@ -1089,6 +1097,8 @@ describe('formatGroupNodeLabel', () => {
     expect(formatGroupNodeLabel(buildFieldNode('Titel', 'h2', 'text', null))).toBe('Titel — Text');
     expect(formatGroupNodeLabel(buildFieldNode('Link', 'a', 'attribute', 'href'))).toBe('Link — Attribut: href');
     expect(formatGroupNodeLabel(buildFieldNode('Vegan', '.v', 'exists', null))).toBe('Vegan — Vorhanden?');
+    // Issue #169
+    expect(formatGroupNodeLabel(buildFieldNode('Name', 'h3.item-name', 'ownText', null))).toBe('Name — Nur eigener Text');
   });
 });
 

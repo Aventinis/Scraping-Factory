@@ -1099,6 +1099,11 @@
         <option value="text" data-i18n="modals.fieldExtended.textOption"></option>
         <option value="attribute" data-i18n="modals.fieldExtended.attributeOption"></option>
         <option value="exists" data-i18n="modals.fieldExtended.existsOption"></option>
+        <!-- Issue #169: extracts only an element's direct text-node
+             children, excluding text contributed by any nested element
+             (e.g. a badge <span> inside a name heading) — see
+             ExtractMode.OwnText's own doc comment on the companion side. -->
+        <option value="ownText" data-i18n="modals.fieldExtended.ownTextOption"></option>
       </select>
       <div id="field-attribute-row" class="hidden">
         <label for="input-field-attribute" data-i18n="modals.fieldExtended.attributeLabel"></label>
