@@ -534,4 +534,58 @@ public class ScrapingPlanBuilderTests
 
         Assert.Null(plan.Proxy);
     }
+
+    // Issue #129
+    [Fact]
+    public void Build_CarriesHardeningThroughUnchanged_FlatMode()
+    {
+        var hardening = new List<HardeningCheck> { new NoResultCheck { Severity = HardeningSeverity.Error } };
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+            Hardening = hardening,
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Same(hardening, plan.Hardening);
+    }
+
+    [Fact]
+    public void Build_CarriesHardeningThroughUnchanged_ContainerMode()
+    {
+        var hardening = new List<HardeningCheck> { new NoResultCheck { Severity = HardeningSeverity.Warning } };
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Groups = [new GroupNode { Name = "Kategorie", Selector = "section", Repeating = true, Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }] }],
+            Hardening = hardening,
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Same(hardening, plan.Hardening);
+    }
+
+    [Fact]
+    public void Build_CarriesHardeningThroughUnchanged_ApiMode()
+    {
+        var hardening = new List<HardeningCheck> { new NoResultCheck { Severity = HardeningSeverity.Error } };
+        var config = new ScrapingConfig { Url = "https://example.com", Api = SampleApiGroupsConfig(), Hardening = hardening };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Same(hardening, plan.Hardening);
+    }
+
+    [Fact]
+    public void Build_NoHardening_PlanHardeningIsNull()
+    {
+        var config = new ScrapingConfig { Url = "https://example.com", Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }] };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.Null(plan.Hardening);
+    }
 }

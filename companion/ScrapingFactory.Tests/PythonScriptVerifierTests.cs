@@ -698,4 +698,111 @@ public class PythonScriptVerifierTests
         Assert.False(result.Success);
         Assert.Contains("no data", result.Error);
     }
+
+    // ── Script hardening (Issue #129) ────────────────────────────────────────
+    // Same "prove it against the real python3 process" philosophy as the
+    // Proxy tests above.
+
+    [Fact]
+    public async Task HardeningNoResultCheck_WithData_ErrorSeverity_Succeeds()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var steps = new List<ScrapingStep>
+        {
+            new NavigateStep { Urls = [server.BaseUrl] },
+            new ExtractStep { Name = "Titel", Selector = "h1" },
+        };
+        var script = new PythonCodeGenerator().Generate(new ScrapingPlan
+        {
+            Steps = steps,
+            Hardening = [new NoResultCheck { Severity = HardeningSeverity.Error }],
+        });
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(1, result.RowCount);
+    }
+
+    // The dedicated EXIT_HARDENING_FAILED exit code only makes verification
+    // lenient about *how* the script exited — the existing "did it actually
+    // produce data" check still applies, so a genuinely empty result still
+    // fails verification with the same clear message it always has, not a
+    // raw "exited with error code 2" dump — the same property
+    // MissingProxyEnvVar_WithSelectorMatchingNothing_StillFails above proves
+    // for exit code 78.
+    [Fact]
+    public async Task HardeningNoResultCheck_ErrorSeverity_ZeroRows_StillFailsWithClearMessage()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var steps = new List<ScrapingStep>
+        {
+            new NavigateStep { Urls = [server.BaseUrl] },
+            new ExtractStep { Name = "Titel", Selector = ".does-not-exist" },
+        };
+        var script = new PythonCodeGenerator().Generate(new ScrapingPlan
+        {
+            Steps = steps,
+            Hardening = [new NoResultCheck { Severity = HardeningSeverity.Error }],
+        });
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.False(result.Success);
+        Assert.Contains("no data", result.Error);
+        Assert.DoesNotContain("exited with an error", result.Error);
+    }
+
+    // Warning severity never changes the script's own exit code (always 0),
+    // so this is really just confirming the pre-existing "no data" check is
+    // completely unaffected by hardening being configured at all.
+    [Fact]
+    public async Task HardeningNoResultCheck_WarningSeverity_ZeroRows_StillFailsWithClearMessage()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var steps = new List<ScrapingStep>
+        {
+            new NavigateStep { Urls = [server.BaseUrl] },
+            new ExtractStep { Name = "Titel", Selector = ".does-not-exist" },
+        };
+        var script = new PythonCodeGenerator().Generate(new ScrapingPlan
+        {
+            Steps = steps,
+            Hardening = [new NoResultCheck { Severity = HardeningSeverity.Warning }],
+        });
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.False(result.Success);
+        Assert.Contains("no data", result.Error);
+    }
+
+    // Container mode's own count (root.findall(".//*")) reaches
+    // _run_hardening_checks the same way the flat engine's len(data) does —
+    // proves the wiring isn't flat-mode-specific.
+    [Fact]
+    public async Task HardeningNoResultCheck_ContainerMode_ErrorSeverity_ZeroElements_ExitsWithHardeningCode()
+    {
+        using var server = new LocalTestServer("<html><body><p>Keine Gerichte hier</p></body></html>");
+        var root = new GroupNode
+        {
+            Name = "Gericht", Selector = ".menu-item", Repeating = true,
+            Children = [new DataFieldNode { Name = "Name", Selector = "h3" }],
+        };
+        var steps = new List<ScrapingStep>
+        {
+            new NavigateStep { Urls = [server.BaseUrl] },
+            new ExtractGroupStep { Roots = [root] },
+        };
+        var script = new PythonCodeGenerator().Generate(new ScrapingPlan
+        {
+            Steps = steps, OutputFormat = OutputFormat.Xml,
+            Hardening = [new NoResultCheck { Severity = HardeningSeverity.Error }],
+        });
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Xml);
+
+        Assert.False(result.Success);
+        Assert.Contains("no elements", result.Error);
+    }
 }
