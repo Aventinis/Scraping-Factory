@@ -119,12 +119,34 @@ EXIT_HARDENING_FAILED = 2
 HARDENING = {{ hardening.checks_literal }}
 
 
-def _run_hardening_checks(result_count):
+def _run_hardening_checks(root):
     has_error = False
+    result_count = len(root.findall(".//*"))
     for check in HARDENING:
         if check["kind"] == "noResult":
             if result_count == 0:
                 message = "Es wurden keine Daten extrahiert — mindestens ein Selektor hat wahrscheinlich nichts gefunden."
+                if check["severity"] == "Error":
+                    print(f"FEHLER: {message}", file=sys.stderr)
+                    has_error = True
+                else:
+                    print(f"WARNUNG: {message}", file=sys.stderr)
+        elif check["kind"] == "nullRate":
+            # Issue #130: matched globally by tag name across the whole
+            # output tree, not scoped to whichever parent group the field is
+            # nested under (see NullRateCheck's own doc comment) — catches a
+            # field whose selector quietly starts matching the wrong thing
+            # (still returns a value, always empty) even though the overall
+            # element count stays healthy.
+            field = check["field"]
+            elements = list(root.iter(check["field"]))
+            total = len(elements)
+            if total == 0:
+                continue
+            empty = sum(1 for el in elements if not (el.text or "").strip())
+            rate = empty / total
+            if rate > check["threshold"]:
+                message = f"Feld '{field}': {rate:.0%} der Vorkommen sind leer (Schwelle: {check['threshold']:.0%})."
                 if check["severity"] == "Error":
                     print(f"FEHLER: {message}", file=sys.stderr)
                     has_error = True
@@ -422,7 +444,7 @@ def main():
         _notify_change(previous_content, new_content)
 {{~ end ~}}
 {{~ if hardening.enabled ~}}
-    if _run_hardening_checks(count):
+    if _run_hardening_checks(root):
         sys.exit(EXIT_HARDENING_FAILED)
 {{~ end ~}}
 {{~ if proxy.enabled ~}}
