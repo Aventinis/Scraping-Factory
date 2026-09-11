@@ -4,12 +4,58 @@
   <meta charset="UTF-8" />
   <title>Scraping Factory</title>
   <style>
-    /* Issue #139: design tokens — the small, shared source of truth every
-       rule below references instead of one-off color/radius/shadow
-       literals. Also the direct prerequisite for a future dark-mode pass
-       (see the issue): a `[data-theme="dark"]` block/`prefers-color-scheme`
-       query would only need to redefine these, not every rule using them. */
+    /* Issue #139/#140: design tokens — the small, shared source of truth
+       every rule below references instead of one-off color/radius/shadow
+       literals. Colors/overlays/elevation live in a separate light/dark
+       block pair further down (see "Theme (Issue #140)" below); everything
+       theme-agnostic (radius/motion scale) stays here in :root since it
+       never needs to change when the theme does. */
     :root {
+      /* Radius scale — Issue #140 modernization pass: nudged up from the
+         original #139 scale (4/6/8/10) for a softer, less "boxy" feel. */
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 10px;
+      --radius-xl: 14px;
+      --radius-pill: 999px;
+
+      /* One shared interaction timing, applied uniformly across buttons/
+         toggles/tree rows/inputs. Issue #140: switched from a plain linear
+         ease to the "standard" Material easing curve (ease-out-ish
+         accelerate/decelerate) for a slightly less mechanical feel. */
+      --transition-fast: 160ms cubic-bezier(0.4, 0, 0.2, 1);
+
+      /* Text color to use on top of a saturated accent background (primary
+         button, toast, picked chip, ...) — deliberately NOT the same as
+         --color-surface: the former is always near-white regardless of
+         theme (light or dark, the accent colors themselves stay readable
+         with white text), the latter is the page/card background color,
+         which inverts to near-black in dark mode. Conflating the two was
+         exactly the "assumes a light background" bug Issue #140 called out
+         checking for — see the theme block below for the concrete fix. */
+      --color-on-accent: #fff;
+    }
+
+    /* Theme (Issue #140) — light values live directly on :root as the
+       default; @media (prefers-color-scheme: dark) below redefines them
+       automatically when the OS prefers dark AND the user hasn't made an
+       explicit choice (:root:not([data-theme])); an explicit choice
+       (html[data-theme="light"|"dark"], set by #btn-theme-toggle via
+       shared/theme.js, mirroring i18n.js's own chrome.storage.local
+       pattern) always wins over both, and for "light" specifically needs no
+       *custom-property* rule of its own — the media query already stays out
+       of its way, so :root's own defaults show through unchanged (it still
+       needs a color-scheme rule below, for native form-control rendering). */
+    :root {
+      /* Tells the browser this page supports both schemes and to pick
+         automatically per prefers-color-scheme — native widgets a custom
+         --color-* token can't reach (checkbox/select-popup chrome, and any
+         input/textarea, like #input-additional-urls, that has no explicit
+         background/color of its own) get a correct dark rendering for free
+         instead of staying stuck with the light-mode UA default. The two
+         explicit-override rules further down narrow this to one scheme when
+         the user picked one manually, overriding the OS preference. */
+      color-scheme: light dark;
       /* Brand / primary action */
       --color-primary: #3b82f6;
       --color-primary-hover: #2563eb;
@@ -37,31 +83,101 @@
       --color-border: #e5e7eb;
       --color-border-input: #d1d5db;
 
-      /* Overlays / shadows — kept as standalone tokens (not derived from the
-         color tokens above via color-mix()) so each one stays pixel-identical
-         to the literal it replaces; Chrome's extension-page CSS engine is
-         evergreen so color-mix() would work, but isn't worth the indirection
-         at this scale. */
+      /* Overlays */
       --overlay-scrim: rgba(0, 0, 0, .45);
       --overlay-primary-hover: rgba(59, 130, 246, .15);
       --overlay-success-selected: rgba(34, 197, 94, .2);
       --overlay-white-weak: rgba(255, 255, 255, .2);
       --overlay-white-strong: rgba(255, 255, 255, .32);
-      --shadow-sm: 0 1px 2px rgba(0, 0, 0, .08);
-      --shadow-md: 0 8px 24px rgba(0, 0, 0, .18);
-      --focus-ring: 0 0 0 2px rgba(59, 130, 246, .2);
+      --focus-ring: 0 0 0 3px rgba(59, 130, 246, .18);
+      /* Issue #140 modernization: a soft colored glow for primary-action
+         hover (see .btn-primary:hover), on top of the plain background
+         swap it already had — a common "raised, glowing" accent treatment
+         that a flat color change alone doesn't give. */
+      --glow-primary: 0 4px 14px rgba(59, 130, 246, .35);
 
-      /* Radius scale */
-      --radius-sm: 4px;
-      --radius-md: 6px;
-      --radius-lg: 8px;
-      --radius-xl: 10px;
-      --radius-pill: 999px;
+      /* Elevation scale — Issue #140 modernization: replaces the old flat
+         --shadow-sm/--shadow-md pair with a graded system (resting card /
+         hover-lifted / modal), each a layered pair of shadows (tight+dark
+         for definition, soft+wide for spread) instead of one single shadow,
+         for a softer, more "floating" depth. */
+      --elevation-1: 0 1px 2px rgba(0, 0, 0, .06), 0 1px 1px rgba(0, 0, 0, .04);
+      --elevation-2: 0 4px 12px rgba(0, 0, 0, .10), 0 2px 4px rgba(0, 0, 0, .06);
+      --elevation-3: 0 16px 40px rgba(0, 0, 0, .20), 0 4px 10px rgba(0, 0, 0, .08);
+    }
 
-      /* One shared interaction timing, applied uniformly across buttons/
-         toggles/tree rows (see the button/mode-btn/btn-toggle/tree-row rules
-         below) instead of each component hand-rolling its own transition. */
-      --transition-fast: 120ms ease;
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme]) {
+        --color-primary: #60a5fa;
+        --color-primary-hover: #3b82f6;
+        --color-primary-disabled: #3a4a63;
+        --color-primary-soft: #17243a;
+
+        --color-success: #22c55e;
+        --color-danger: #f87171;
+        --color-danger-soft: #3f1d1d;
+        --color-warning: #fbbf24;
+        --color-warning-soft: #3a2f12;
+        --color-warning-strong: #fcd34d;
+
+        --color-text: #f3f4f6;
+        --color-text-secondary: #d1d5db;
+        --color-text-muted: #9ca3af;
+        --color-text-faint: #6b7280;
+
+        --color-surface: #1a1d23;
+        --color-surface-subtle: #23262e;
+        --color-surface-muted: #2a2e37;
+        --color-border: #343841;
+        --color-border-input: #3f4451;
+
+        --overlay-scrim: rgba(0, 0, 0, .6);
+        --overlay-primary-hover: rgba(96, 165, 250, .18);
+        --overlay-success-selected: rgba(74, 222, 128, .22);
+        --focus-ring: 0 0 0 3px rgba(96, 165, 250, .28);
+        --glow-primary: 0 4px 16px rgba(96, 165, 250, .45);
+
+        --elevation-1: 0 1px 2px rgba(0, 0, 0, .4), 0 1px 1px rgba(0, 0, 0, .3);
+        --elevation-2: 0 4px 14px rgba(0, 0, 0, .5), 0 2px 6px rgba(0, 0, 0, .35);
+        --elevation-3: 0 20px 48px rgba(0, 0, 0, .6), 0 6px 14px rgba(0, 0, 0, .4);
+      }
+    }
+
+    :root[data-theme="light"] { color-scheme: light; }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --color-primary: #60a5fa;
+      --color-primary-hover: #3b82f6;
+      --color-primary-disabled: #3a4a63;
+      --color-primary-soft: #17243a;
+
+      --color-success: #22c55e;
+      --color-danger: #f87171;
+      --color-danger-soft: #3f1d1d;
+      --color-warning: #fbbf24;
+      --color-warning-soft: #3a2f12;
+      --color-warning-strong: #fcd34d;
+
+      --color-text: #f3f4f6;
+      --color-text-secondary: #d1d5db;
+      --color-text-muted: #9ca3af;
+      --color-text-faint: #6b7280;
+
+      --color-surface: #1a1d23;
+      --color-surface-subtle: #23262e;
+      --color-surface-muted: #2a2e37;
+      --color-border: #343841;
+      --color-border-input: #3f4451;
+
+      --overlay-scrim: rgba(0, 0, 0, .6);
+      --overlay-primary-hover: rgba(96, 165, 250, .18);
+      --overlay-success-selected: rgba(74, 222, 128, .22);
+      --focus-ring: 0 0 0 3px rgba(96, 165, 250, .28);
+      --glow-primary: 0 4px 16px rgba(96, 165, 250, .45);
+
+      --elevation-1: 0 1px 2px rgba(0, 0, 0, .4), 0 1px 1px rgba(0, 0, 0, .3);
+      --elevation-2: 0 4px 14px rgba(0, 0, 0, .5), 0 2px 6px rgba(0, 0, 0, .35);
+      --elevation-3: 0 20px 48px rgba(0, 0, 0, .6), 0 6px 14px rgba(0, 0, 0, .4);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -179,7 +295,7 @@
       flex: 1; background: transparent; color: var(--color-text-muted); font-size: 12px; padding: 6px 8px; border-radius: var(--radius-md);
     }
     .mode-btn:hover:not(.active) { color: var(--color-text-secondary); }
-    .mode-btn.active { background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-sm); font-weight: 500; }
+    .mode-btn.active { background: var(--color-surface); color: var(--color-text); box-shadow: var(--elevation-1); font-weight: 500; }
 
     /* Engine toggle + browser actions (Issue #41/#42, Phase 5) */
     .engine-section { margin-bottom: 14px; }
@@ -198,7 +314,7 @@
     .btn-toggle           { background: var(--color-surface-muted); color: var(--color-text-secondary); width: 100%; }
     .btn-toggle:hover     { background: var(--color-border); }
     .btn-toggle:disabled  { color: var(--color-text-faint); cursor: default; }
-    .btn-toggle.active         { background: var(--color-primary); color: var(--color-surface); }
+    .btn-toggle.active         { background: var(--color-primary); color: var(--color-on-accent); }
     .btn-toggle.active:hover   { background: var(--color-primary-hover); }
     .preview-summary { font-size: 11px; color: var(--color-text-muted); margin-top: 6px; text-align: center; }
     .preview-summary.warn { color: var(--color-warning); }
@@ -227,7 +343,7 @@
       font-size: 10px; padding: 2px 6px; background: var(--color-surface-muted); color: var(--color-text-secondary); border-radius: var(--radius-pill);
     }
     .api-sibling-chip:hover { background: var(--color-border); }
-    .api-sibling-chip.picked { background: var(--color-primary); color: var(--color-surface); }
+    .api-sibling-chip.picked { background: var(--color-primary); color: var(--color-on-accent); }
     .api-sibling-select-all {
       font-size: 10px; padding: 2px 6px; background: none; color: var(--color-primary); border: 1px dashed var(--color-primary-disabled); border-radius: var(--radius-pill);
     }
@@ -424,9 +540,9 @@
         box-shadow var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
     }
     button:active:not(:disabled) { transform: translateY(1px); }
-    .btn-primary             { background: var(--color-primary); color: var(--color-surface); }
-    .btn-primary:hover       { background: var(--color-primary-hover); }
-    .btn-primary:disabled    { background: var(--color-primary-disabled); cursor: default; }
+    .btn-primary             { background: var(--color-primary); color: var(--color-on-accent); }
+    .btn-primary:hover       { background: var(--color-primary-hover); box-shadow: var(--glow-primary); }
+    .btn-primary:disabled    { background: var(--color-primary-disabled); cursor: default; box-shadow: none; }
     .btn-secondary           { background: var(--color-surface-muted); color: var(--color-text-secondary); }
     .btn-secondary:hover     { background: var(--color-border); }
     .btn-danger              { background: transparent; color: var(--color-danger); font-size: 12px; padding: 3px 6px; }
@@ -445,7 +561,7 @@
     }
     .modal-inner {
       background: var(--color-surface); border-radius: var(--radius-xl); padding: 18px;
-      width: 320px; box-shadow: var(--shadow-md);
+      width: 320px; box-shadow: var(--elevation-3);
     }
     .modal-inner label { display: block; font-size: 12px; color: var(--color-text-muted); margin-bottom: 6px; }
     .modal-inner input {
@@ -463,12 +579,12 @@
     /* Toast */
     .toast {
       position: fixed; bottom: 10px; left: 10px; right: 10px;
-      background: var(--color-danger); color: var(--color-surface); padding: 8px 12px;
+      background: var(--color-danger); color: var(--color-on-accent); padding: 8px 12px;
       border-radius: var(--radius-md); font-size: 13px; z-index: 20;
       display: flex; align-items: center; gap: 8px; justify-content: space-between;
     }
     .toast-report-btn {
-      background: var(--overlay-white-weak); color: var(--color-surface); font-size: 12px;
+      background: var(--overlay-white-weak); color: var(--color-on-accent); font-size: 12px;
       padding: 4px 8px; flex: none; white-space: nowrap;
     }
     .toast-report-btn:hover { background: var(--overlay-white-strong); }
