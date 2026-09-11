@@ -65,6 +65,10 @@
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    /* Issue #139: one shared focus/border transition for every text input/
+       textarea/select in the file, instead of each section's own input rule
+       only ever snapping its border-color/box-shadow instantly. */
+    input, textarea, select { transition: border-color var(--transition-fast), box-shadow var(--transition-fast); }
     /* Issue #138: the side panel is full browser-window height by default,
        unlike the classic dropdown popup this layout originally sized to
        content — html/body need an explicit height for a flex-column screen
@@ -174,6 +178,7 @@
     .mode-btn {
       flex: 1; background: transparent; color: var(--color-text-muted); font-size: 12px; padding: 6px 8px; border-radius: var(--radius-md);
     }
+    .mode-btn:hover:not(.active) { color: var(--color-text-secondary); }
     .mode-btn.active { background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-sm); font-weight: 500; }
 
     /* Engine toggle + browser actions (Issue #41/#42, Phase 5) */
@@ -280,6 +285,7 @@
     .group-tree-toggle.collapsed svg, .api-tree-toggle.collapsed svg, .dom-tree-toggle.collapsed svg {
       transform: rotate(-90deg);
     }
+    .group-tree-row, .api-tree-row, .body-tree-row { transition: background-color var(--transition-fast); }
     .group-tree-row:hover, .api-tree-row:hover, .body-tree-row:hover {
       background: var(--color-surface-subtle); border-radius: var(--radius-sm);
     }
@@ -406,11 +412,18 @@
     }
     .data-preview-truncated { font-size: 11px; color: var(--color-text-faint); margin: 6px 0 0; }
 
-    /* Buttons */
+    /* Buttons. Issue #139: one shared interaction treatment for every button
+       in the file (transition token + a uniform :active "press" feedback)
+       instead of each variant only ever defining its own hover — mode-btn/
+       btn-toggle below are plain <button>s too, so they inherit both from
+       here for free. */
     button {
       border: none; border-radius: var(--radius-md); cursor: pointer;
-      font-size: 13px; padding: 7px 12px; font-family: inherit; transition: background .1s;
+      font-size: 13px; padding: 7px 12px; font-family: inherit;
+      transition: background-color var(--transition-fast), color var(--transition-fast),
+        box-shadow var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
     }
+    button:active:not(:disabled) { transform: translateY(1px); }
     .btn-primary             { background: var(--color-primary); color: var(--color-surface); }
     .btn-primary:hover       { background: var(--color-primary-hover); }
     .btn-primary:disabled    { background: var(--color-primary-disabled); cursor: default; }
