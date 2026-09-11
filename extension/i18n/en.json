@@ -93,7 +93,12 @@
     "changeDetectionHint": "Every field here is the name of an environment variable, not the value itself — the real value is read from the environment at the actual run, never written into the script.",
     "proxyToggle": "Use a proxy",
     "proxyEnvVarLabel": "Proxy list (env var)",
-    "proxyHint": "The name of an environment variable holding a comma-separated list of proxy URLs (e.g. \"http://user:pass@host:port\"), not the addresses themselves — with more than one, the script rotates through them per request."
+    "proxyHint": "The name of an environment variable holding a comma-separated list of proxy URLs (e.g. \"http://user:pass@host:port\"), not the addresses themselves — with more than one, the script rotates through them per request.",
+    "hardeningNoResultToggle": "Check for empty result",
+    "hardeningSeverityWarning": "Warning",
+    "hardeningSeverityWarningTitle": "The script prints a warning but still exits with code 0.",
+    "hardeningSeverityError": "Error",
+    "hardeningSeverityErrorTitle": "The script prints an error and exits with its own code (2), distinguishable from a crash (1)."
   },
   "robots": {
     "checkFailed": "robots.txt could not be checked ({error}).",

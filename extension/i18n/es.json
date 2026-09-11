@@ -93,7 +93,12 @@
     "changeDetectionHint": "Cada campo es el nombre de una variable de entorno, no el valor en sí — el valor real se lee del entorno en la ejecución real, nunca se escribe en el script.",
     "proxyToggle": "Usar un proxy",
     "proxyEnvVarLabel": "Lista de proxies (variable de entorno)",
-    "proxyHint": "El nombre de una variable de entorno con una lista de URLs de proxy separadas por comas (p. ej. \"http://usuario:contraseña@host:puerto\"), no las direcciones en sí — con más de una, el script rota entre ellas en cada solicitud."
+    "proxyHint": "El nombre de una variable de entorno con una lista de URLs de proxy separadas por comas (p. ej. \"http://usuario:contraseña@host:puerto\"), no las direcciones en sí — con más de una, el script rota entre ellas en cada solicitud.",
+    "hardeningNoResultToggle": "Comprobar resultado vacío",
+    "hardeningSeverityWarning": "Advertencia",
+    "hardeningSeverityWarningTitle": "El script imprime una advertencia, pero sigue terminando con código de salida 0.",
+    "hardeningSeverityError": "Error",
+    "hardeningSeverityErrorTitle": "El script imprime un error y termina con su propio código (2), distinguible de un fallo (1)."
   },
   "robots": {
     "checkFailed": "No se pudo comprobar el robots.txt ({error}).",

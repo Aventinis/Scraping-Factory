@@ -93,7 +93,12 @@
     "changeDetectionHint": "Jedes Feld ist der Name einer Umgebungsvariable, nicht der Wert selbst — der eigentliche Wert wird beim echten Lauf aus der Umgebung gelesen, niemals ins Skript geschrieben.",
     "proxyToggle": "Proxy verwenden",
     "proxyEnvVarLabel": "Proxy-Liste (Env-Var)",
-    "proxyHint": "Der Name einer Umgebungsvariable mit einer durch Kommas getrennten Liste von Proxy-URLs (z. B. \"http://user:pass@host:port\"), nicht die Adressen selbst — bei mehreren Proxys wechselt das Skript bei jeder Anfrage reihum durch."
+    "proxyHint": "Der Name einer Umgebungsvariable mit einer durch Kommas getrennten Liste von Proxy-URLs (z. B. \"http://user:pass@host:port\"), nicht die Adressen selbst — bei mehreren Proxys wechselt das Skript bei jeder Anfrage reihum durch.",
+    "hardeningNoResultToggle": "Auf leeres Ergebnis prüfen",
+    "hardeningSeverityWarning": "Warnung",
+    "hardeningSeverityWarningTitle": "Das Skript druckt eine Warnung, beendet sich aber weiterhin mit Exit-Code 0.",
+    "hardeningSeverityError": "Fehler",
+    "hardeningSeverityErrorTitle": "Das Skript druckt einen Fehler und beendet sich mit einem eigenen Exit-Code (2), unterscheidbar von einem Absturz (1)."
   },
   "robots": {
     "checkFailed": "robots.txt konnte nicht geprüft werden ({error}).",

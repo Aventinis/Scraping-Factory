@@ -968,6 +968,13 @@ function render() {
       proxyEnvVarInput.value = _state.proxy.envVar;
     }
 
+    // Issue #129: opt-in script hardening.
+    const hardeningNoResultToggle = document.getElementById('toggle-hardening-no-result');
+    if (hardeningNoResultToggle) hardeningNoResultToggle.checked = _state.hardening.noResult.enabled;
+    document.getElementById('hardening-no-result-severity')?.classList.toggle('hidden', !_state.hardening.noResult.enabled);
+    document.getElementById('btn-hardening-no-result-warning')?.classList.toggle('active', _state.hardening.noResult.severity === 'Warning');
+    document.getElementById('btn-hardening-no-result-error')?.classList.toggle('active', _state.hardening.noResult.severity === 'Error');
+
     if (_state.containerModalOpen) {
       show('modal-container-new');
       const nameInput = document.getElementById('input-container-name');
@@ -1974,6 +1981,23 @@ function wireEvents() {
   });
   document.getElementById('input-proxy-env-var')?.addEventListener('input', (e) => {
     setState(_state.current, { proxy: { ..._state.proxy, envVar: e.target.value } });
+  });
+
+  // Issue #129: opt-in script hardening — the "no result" check.
+  document.getElementById('toggle-hardening-no-result')?.addEventListener('change', (e) => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, noResult: { ..._state.hardening.noResult, enabled: e.target.checked } },
+    });
+  });
+  document.getElementById('btn-hardening-no-result-warning')?.addEventListener('click', () => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, noResult: { ..._state.hardening.noResult, severity: 'Warning' } },
+    });
+  });
+  document.getElementById('btn-hardening-no-result-error')?.addEventListener('click', () => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, noResult: { ..._state.hardening.noResult, severity: 'Error' } },
+    });
   });
 
   document.getElementById('toggle-include-data-preview')?.addEventListener('change', (e) => {
