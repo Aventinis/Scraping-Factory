@@ -1130,6 +1130,30 @@ describe('renderGroupTree', () => {
     expect(childUl.classList.contains('hidden')).toBe(false);
   });
 
+  // Issue #139: the toggle used to swap between two Unicode glyphs (▸/▾) via
+  // textContent; it's now one static chevron SVG rotated via a .collapsed
+  // class, toggled together with the existing .hidden class on the children.
+  test('the toggle renders a chevron icon and toggles .collapsed together with the children', () => {
+    renderGroupTree([
+      {
+        kind: 'group', name: 'Kategorie', selector: 'section', repeating: true,
+        children: [{ kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null }],
+      },
+    ]);
+    const toggle = document.querySelector('[data-path="[0]"] > .group-tree-row .group-tree-toggle');
+    expect(toggle.querySelector('svg')).not.toBeNull();
+    expect(toggle.classList.contains('collapsed')).toBe(false); // starts expanded
+
+    const childUl = document.querySelector('[data-path="[0]"] > .group-tree-children');
+    toggle.click();
+    expect(childUl.classList.contains('hidden')).toBe(true);
+    expect(toggle.classList.contains('collapsed')).toBe(true);
+
+    toggle.click();
+    expect(childUl.classList.contains('hidden')).toBe(false);
+    expect(toggle.classList.contains('collapsed')).toBe(false);
+  });
+
   // Issue #42, Phase 7
   test('shows an iframe badge only for a node with a framePath', () => {
     renderGroupTree([
@@ -1514,6 +1538,25 @@ describe('renderApiTree', () => {
     expect(fieldRow.querySelector('.api-tree-path').textContent).toBe('name');
     expect(fieldRow.querySelector('.btn-add-api-subgroup')).toBeNull(); // fields can't have children
     expect(fieldRow.querySelector('.btn-remove-api-node')).not.toBeNull();
+  });
+
+  // Issue #139: same chevron-SVG-plus-.collapsed-class refactor as the
+  // Container-Mode tree above, applied identically here.
+  test('the toggle renders a chevron icon and toggles .collapsed together with the children', () => {
+    renderApiTree([
+      {
+        kind: 'group', name: 'Kategorie', path: 'categories',
+        children: [{ kind: 'field', name: 'Titel', path: 'name' }],
+      },
+    ]);
+    const toggle = document.querySelector('[data-path="[0]"] > .api-tree-row .api-tree-toggle');
+    expect(toggle.querySelector('svg')).not.toBeNull();
+    expect(toggle.classList.contains('collapsed')).toBe(false); // starts expanded
+
+    const childUl = document.querySelector('[data-path="[0]"] > .api-tree-children');
+    toggle.click();
+    expect(childUl.classList.contains('hidden')).toBe(true);
+    expect(toggle.classList.contains('collapsed')).toBe(true);
   });
 
   test('a 3-level tree renders with correct nesting/indentation', () => {
@@ -2842,6 +2885,22 @@ describe('renderDomTree / highlightHover / highlightSelected', () => {
     expect(childUl.classList.contains('hidden')).toBe(true);
   });
 
+  // Issue #139: same chevron-SVG-plus-.collapsed-class refactor as the
+  // Container/API-Mode trees, except this toggle starts *collapsed* (unlike
+  // those two, which start expanded) — so .collapsed is applied at build
+  // time here, matching the pre-existing "nested nodes start collapsed" test
+  // above for the .hidden class on the children themselves.
+  test('the toggle renders a chevron icon and starts with the .collapsed class', () => {
+    const toggle = document.querySelector('[data-path="[0]"] > .dom-tree-row .dom-tree-toggle');
+    expect(toggle.querySelector('svg')).not.toBeNull();
+    expect(toggle.classList.contains('collapsed')).toBe(true);
+
+    const childUl = document.querySelector('[data-path="[0]"] > .dom-tree-children');
+    toggle.click();
+    expect(childUl.classList.contains('hidden')).toBe(false);
+    expect(toggle.classList.contains('collapsed')).toBe(false);
+  });
+
   test('highlightHover marks the matching row and expands its ancestors', () => {
     highlightHover([0, 0]);
     const row = document.querySelector('[data-path="[0,0]"] > .dom-tree-row');
@@ -2849,6 +2908,10 @@ describe('renderDomTree / highlightHover / highlightSelected', () => {
 
     const ancestorUl = document.querySelector('[data-path="[0]"] > .dom-tree-children');
     expect(ancestorUl.classList.contains('hidden')).toBe(false);
+
+    // Issue #139: expandAncestors also un-rotates the ancestor's own chevron.
+    const ancestorToggle = document.querySelector('[data-path="[0]"] > .dom-tree-row .dom-tree-toggle');
+    expect(ancestorToggle.classList.contains('collapsed')).toBe(false);
   });
 
   test('highlightHover clears the previous hover highlight', () => {
