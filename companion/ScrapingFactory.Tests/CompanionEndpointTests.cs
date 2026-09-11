@@ -567,6 +567,69 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    // Issue #130 regression: NullRateCheck's wire property is FieldName
+    // (camelCase-serialized "fieldName"), a `required` member — an earlier
+    // extension build sent "field" instead, which the companion silently
+    // rejected as a raw 400 with no usable .error message (a JsonException
+    // for a missing required member, thrown during minimal-API model
+    // binding, before any of the app's own friendly-error code runs) —
+    // exactly the failure a real user hit. Posts the extension's actual raw
+    // wire shape (not a round-tripped C# object, which would only ever test
+    // itself) so a future property-name drift between the two sides is
+    // caught here instead of only surfacing as a confusing user-facing
+    // error. See CompanionEndpointTests.Generate_ExtensionStylePayload_
+    // Returns200 above for the same "raw extension JSON" testing style.
+    [Fact]
+    public async Task Generate_ExtensionStyleNullRateHardeningPayload_Returns200()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var payload = $$"""
+            {
+              "version": "1",
+              "url": "{{server.BaseUrl}}",
+              "fields": [ { "name": "Titel", "selector": "h1", "attribute": null } ],
+              "hardening": [
+                { "kind": "nullRate", "severity": "Warning", "fieldName": "Titel", "threshold": 0.3 }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+    }
+
+    [Fact]
+    public async Task Generate_NullRateHardeningPayload_WrongLegacyFieldKey_FailsWithUsableError()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var payload = $$"""
+            {
+              "version": "1",
+              "url": "{{server.BaseUrl}}",
+              "fields": [ { "name": "Titel", "selector": "h1", "attribute": null } ],
+              "hardening": [
+                { "kind": "nullRate", "severity": "Warning", "field": "Titel", "threshold": 0.3 }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        // Documents the actual (poor) failure mode this regression test
+        // guards against: a missing required member fails JSON model
+        // binding itself, before the app's own Results.BadRequest(new
+        // {error = ...}) code ever runs — so today this is a bare 400 with
+        // no JSON {error: ...} body at all, not a friendly validation
+        // message. If this assertion ever needs to change because ASP.NET
+        // Core's default JSON-binding-failure response gains a body shape
+        // this app could read a usable message from, that's a genuine
+        // improvement — not a sign this test should just be deleted.
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     // Container-Mode wire payload: "groups" instead of "fields", nested
     // "children" — no "outputFormat" needed, the server forces Xml itself
     // (see ScrapingPlanBuilder).

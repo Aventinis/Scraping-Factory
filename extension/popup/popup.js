@@ -393,7 +393,7 @@ function buildHardeningConfig(hardening) {
     if (!fieldName) continue;
     const percent = Number.isFinite(row.threshold) ? row.threshold : 50;
     const threshold = Math.min(100, Math.max(0, percent)) / 100;
-    checks.push({ kind: 'nullRate', severity: row.severity, field: fieldName, threshold });
+    checks.push({ kind: 'nullRate', severity: row.severity, fieldName, threshold });
   }
   return checks.length > 0 ? checks : null;
 }

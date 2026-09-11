@@ -484,19 +484,19 @@ describe('buildHardeningConfig (nullRate)', () => {
 
   test('converts the percent threshold into a 0.0-1.0 fraction', () => {
     expect(buildHardeningConfig({ nullRate: [{ fieldName: 'Preis', threshold: 30, severity: 'Error' }] })).toEqual([
-      { kind: 'nullRate', severity: 'Error', field: 'Preis', threshold: 0.3 },
+      { kind: 'nullRate', severity: 'Error', fieldName: 'Preis', threshold: 0.3 },
     ]);
   });
 
   test('clamps an out-of-range or non-numeric threshold, defaulting to 50%', () => {
     expect(buildHardeningConfig({ nullRate: [{ fieldName: 'A', threshold: 150, severity: 'Warning' }] })).toEqual([
-      { kind: 'nullRate', severity: 'Warning', field: 'A', threshold: 1 },
+      { kind: 'nullRate', severity: 'Warning', fieldName: 'A', threshold: 1 },
     ]);
     expect(buildHardeningConfig({ nullRate: [{ fieldName: 'A', threshold: -20, severity: 'Warning' }] })).toEqual([
-      { kind: 'nullRate', severity: 'Warning', field: 'A', threshold: 0 },
+      { kind: 'nullRate', severity: 'Warning', fieldName: 'A', threshold: 0 },
     ]);
     expect(buildHardeningConfig({ nullRate: [{ fieldName: 'A', threshold: NaN, severity: 'Warning' }] })).toEqual([
-      { kind: 'nullRate', severity: 'Warning', field: 'A', threshold: 0.5 },
+      { kind: 'nullRate', severity: 'Warning', fieldName: 'A', threshold: 0.5 },
     ]);
   });
 
@@ -511,8 +511,8 @@ describe('buildHardeningConfig (nullRate)', () => {
     };
     expect(buildHardeningConfig(hardening)).toEqual([
       { kind: 'noResult', severity: 'Error' },
-      { kind: 'nullRate', severity: 'Error', field: 'Preis', threshold: 0.3 },
-      { kind: 'nullRate', severity: 'Warning', field: 'Titel', threshold: 0.1 },
+      { kind: 'nullRate', severity: 'Error', fieldName: 'Preis', threshold: 0.3 },
+      { kind: 'nullRate', severity: 'Warning', fieldName: 'Titel', threshold: 0.1 },
     ]);
   });
 
