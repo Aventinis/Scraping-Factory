@@ -184,6 +184,15 @@ def extract_group(scope, node):
             el.text = ""
         elif node["mode"] == "attribute":
             el.text = _apply_transforms(found.get(node["attribute"], "") or "", node["transform"])
+        elif node["mode"] == "ownText":
+            # Direct text-node children only, excluding any nested element's
+            # own text — e.g. a badge <span> inside a name <h3> no longer
+            # gets pulled into the name (unlike plain get_text() below, which
+            # walks every descendant). NavigableString is itself a str
+            # subclass, so this filters out child Tags without a separate
+            # import.
+            own_text = "".join(c for c in found.contents if isinstance(c, str)).strip()
+            el.text = _apply_transforms(own_text, node["transform"])
         else:
             el.text = _apply_transforms(found.get_text(strip=True), node["transform"])
     return el

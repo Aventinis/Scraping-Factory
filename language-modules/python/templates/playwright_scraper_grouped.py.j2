@@ -248,6 +248,16 @@ def extract_group(page, scope, node):
         el.text = ""
     elif node["mode"] == "attribute":
         el.text = _apply_transforms(found.get_attribute(node["attribute"]) or "", node["transform"])
+    elif node["mode"] == "ownText":
+        # Direct text-node children only, excluding any nested element's own
+        # text — see scraper_grouped.py.j2's own doc comment on this same
+        # branch for the "why" (a badge inside a name heading, etc.).
+        # ElementHandle has no built-in "own text" accessor, unlike
+        # BeautifulSoup's .contents, so this needs a small evaluate() call.
+        own_text = found.evaluate(
+            "el => Array.from(el.childNodes).filter(n => n.nodeType === 3).map(n => n.textContent).join('')"
+        ).strip()
+        el.text = _apply_transforms(own_text, node["transform"])
     else:
         el.text = _apply_transforms((found.text_content() or "").strip(), node["transform"])
     return el
