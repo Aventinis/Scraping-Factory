@@ -41,7 +41,7 @@ const {
   findUrlTemplateMatches, mergeValueListValues,
   variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
   detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase, parseAdditionalUrls,
-  buildChangeDetectionConfig, buildProxyConfig,
+  buildChangeDetectionConfig, buildProxyConfig, buildHardeningConfig,
   addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
   buildVerificationValues,
   frameBadgeHtml,
@@ -419,6 +419,59 @@ describe('buildScrapingConfig (proxy, Issue #88)', () => {
       'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], null, proxy,
     );
     expect(apiResult.proxy).toEqual({ environmentVariableName: 'SF_PROXIES' });
+  });
+});
+
+// Issue #129
+describe('buildHardeningConfig', () => {
+  test('returns null when noResult is disabled', () => {
+    expect(buildHardeningConfig({ noResult: { enabled: false, severity: 'Warning' } })).toBeNull();
+  });
+
+  test('returns null for null/undefined input', () => {
+    expect(buildHardeningConfig(null)).toBeNull();
+    expect(buildHardeningConfig(undefined)).toBeNull();
+  });
+
+  test('builds a one-item array with the camelCase kind and the severity as-is', () => {
+    expect(buildHardeningConfig({ noResult: { enabled: true, severity: 'Error' } })).toEqual([
+      { kind: 'noResult', severity: 'Error' },
+    ]);
+    expect(buildHardeningConfig({ noResult: { enabled: true, severity: 'Warning' } })).toEqual([
+      { kind: 'noResult', severity: 'Warning' },
+    ]);
+  });
+});
+
+describe('buildScrapingConfig (hardening, Issue #129)', () => {
+  test('omits hardening entirely when disabled (the default)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.hardening).toBeUndefined();
+  });
+
+  test('includes hardening when enabled and configured', () => {
+    const hardening = { noResult: { enabled: true, severity: 'Error' } };
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, hardening,
+    );
+    expect(result.hardening).toEqual([{ kind: 'noResult', severity: 'Error' }]);
+  });
+
+  test('works the same way for container and api modes', () => {
+    const hardening = { noResult: { enabled: true, severity: 'Warning' } };
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null,
+      hardening,
+    );
+    expect(containerResult.hardening).toEqual([{ kind: 'noResult', severity: 'Warning' }]);
+
+    const apiResult = buildScrapingConfig(
+      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], null, null,
+      hardening,
+    );
+    expect(apiResult.hardening).toEqual([{ kind: 'noResult', severity: 'Warning' }]);
   });
 });
 
