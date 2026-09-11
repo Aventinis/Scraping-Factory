@@ -1327,12 +1327,13 @@ function renderBrowserActions(actions = _state.browserActions, testValues = _sta
 // was renamed or removed after this row was added) — otherwise the browser
 // would silently fall back to whichever option happens to be first,
 // silently corrupting the row instead of leaving it visibly stale.
-function renderHardeningNullRateList(nullRate = _state.hardening.nullRate) {
+function renderHardeningNullRateList(
+  nullRate = _state.hardening.nullRate,
+  fieldNames = collectFieldNames(_state.mode, _state.fields, _state.groups, _state.apiConfig),
+) {
   const container = document.getElementById('hardening-null-rate-list');
   if (!container) return;
   container.innerHTML = '';
-
-  const fieldNames = collectFieldNames(_state.mode, _state.fields, _state.groups, _state.apiConfig);
 
   nullRate.forEach((row, i) => {
     const options = fieldNames.includes(row.fieldName) || !row.fieldName
