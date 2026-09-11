@@ -70,6 +70,23 @@ const { renderTransformList, wireTransformList, renderTransformPreview } =
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (e) => log('UNCAUGHT_ERROR', e.message));
   window.addEventListener('unhandledrejection', (e) => log('UNHANDLED_REJECTION', String(e.reason)));
+
+  // Issue #140 modernization: the side panel is user-resizable (see #138),
+  // and .mode-toggle-thumb's position/width is measured in pixels — without
+  // this it would stay wherever it was drawn at the last render() until the
+  // next state change recomputes it, visibly detached from its button while
+  // the panel is being dragged. rAF-throttled (not debounced) so it tracks
+  // the drag continuously instead of only snapping into place once dragging
+  // stops.
+  let resizeSyncScheduled = false;
+  window.addEventListener('resize', () => {
+    if (resizeSyncScheduled) return;
+    resizeSyncScheduled = true;
+    requestAnimationFrame(() => {
+      resizeSyncScheduled = false;
+      syncModeToggleThumbs();
+    });
+  });
 }
 
 let _state = {
@@ -1024,6 +1041,29 @@ function render() {
     const truncated = document.getElementById('dom-tree-truncated');
     if (truncated) truncated.classList.toggle('hidden', !_state.domTreeTruncated);
   }
+
+  syncModeToggleThumbs();
+}
+
+// Issue #140 modernization: positions every .mode-toggle-thumb behind its
+// container's current .active .mode-btn (mode/engine/notify-method toggles
+// all share this markup pattern) — see popup.html's own doc comment on
+// .mode-toggle-thumb for why this is JS rather than CSS-only. A no-op
+// (0-width thumb) for any toggle currently inside a hidden .screen, since
+// offsetWidth/offsetLeft read 0 while display: none — harmless, the next
+// render() call after that screen becomes visible again recomputes it
+// correctly. Called at the end of every render() rather than only after a
+// mode/engine/notify-method change specifically, since that's simpler than
+// threading a "did the active button change" flag through every one of
+// those call sites for a cheap, idempotent DOM read.
+function syncModeToggleThumbs() {
+  document.querySelectorAll('.mode-toggle').forEach((toggleEl) => {
+    const thumb = toggleEl.querySelector('.mode-toggle-thumb');
+    const active = toggleEl.querySelector('.mode-btn.active');
+    if (!thumb || !active) return;
+    thumb.style.width = `${active.offsetWidth}px`;
+    thumb.style.transform = `translateX(${active.offsetLeft - 3}px)`;
+  });
 }
 
 function renderFields(fields = _state.fields) {
@@ -2657,6 +2697,6 @@ if (typeof module !== 'undefined') {
     moveTransform, transformsAreValid, renderTransformList,
     applyTransformsPreview, toNumberPreview, renderTransformPreview,
     refreshFlatTransformPreview, refreshExtendedTransformPreview,
-    renderThemeToggle,
+    renderThemeToggle, syncModeToggleThumbs,
   };
 }

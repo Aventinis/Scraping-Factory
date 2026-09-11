@@ -290,12 +290,27 @@
     }
 
     /* Mode toggle */
-    .mode-toggle { display: flex; gap: 4px; margin-bottom: 14px; background: var(--color-surface-muted); border-radius: var(--radius-lg); padding: 3px; }
+    .mode-toggle {
+      display: flex; gap: 4px; margin-bottom: 14px; background: var(--color-surface-muted);
+      border-radius: var(--radius-lg); padding: 3px; position: relative;
+    }
+    /* Issue #140 modernization: an animated sliding "thumb" behind whichever
+       .mode-btn is .active, instead of each button just recoloring itself in
+       place — see popup.js's syncModeToggleThumbs for the positioning (JS,
+       not CSS-only, since it depends on the active button's actual rendered
+       width/offset, not a fixed value). Sits behind the buttons (z-index: 0
+       vs. 1) so their own transparent background lets it show through. */
+    .mode-toggle-thumb {
+      position: absolute; top: 3px; bottom: 3px; left: 3px; z-index: 0;
+      background: var(--color-surface); border-radius: var(--radius-md); box-shadow: var(--elevation-1);
+      transition: transform var(--transition-fast), width var(--transition-fast);
+    }
     .mode-btn {
+      position: relative; z-index: 1;
       flex: 1; background: transparent; color: var(--color-text-muted); font-size: 12px; padding: 6px 8px; border-radius: var(--radius-md);
     }
     .mode-btn:hover:not(.active) { color: var(--color-text-secondary); }
-    .mode-btn.active { background: var(--color-surface); color: var(--color-text); box-shadow: var(--elevation-1); font-weight: 500; }
+    .mode-btn.active { color: var(--color-text); font-weight: 500; }
 
     /* Engine toggle + browser actions (Issue #41/#42, Phase 5) */
     .engine-section { margin-bottom: 14px; }
@@ -688,6 +703,7 @@
     </div>
 
     <div class="mode-toggle">
+      <div class="mode-toggle-thumb"></div>
       <button id="btn-mode-flat" class="mode-btn active" type="button" data-i18n="idle.modeFlat"></button>
       <button id="btn-mode-container" class="mode-btn" type="button" data-i18n="idle.modeContainer"></button>
       <button id="btn-mode-api" class="mode-btn" type="button" data-i18n="idle.modeApi"></button>
@@ -701,6 +717,7 @@
     <div class="engine-section">
       <div class="row-label" data-i18n="idle.engineLabel"></div>
       <div class="mode-toggle" style="margin-bottom: 8px;">
+        <div class="mode-toggle-thumb"></div>
         <button id="btn-engine-static" class="mode-btn active" type="button" data-i18n="idle.engineStatic"></button>
         <button id="btn-engine-browser" class="mode-btn" type="button" data-i18n="idle.engineBrowser" data-i18n-title="idle.engineBrowserTitle"></button>
       </div>
@@ -806,6 +823,7 @@
       </label>
       <div id="change-detection-config" class="hidden">
         <div class="mode-toggle" style="margin-bottom: 8px;">
+          <div class="mode-toggle-thumb"></div>
           <button id="btn-notify-email" class="mode-btn active" type="button" data-i18n="idle.notifyEmail"></button>
           <button id="btn-notify-webhook" class="mode-btn" type="button" data-i18n="idle.notifyWebhook"></button>
         </div>

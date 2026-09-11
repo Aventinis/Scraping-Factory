@@ -51,6 +51,7 @@ const {
   createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
   moveTransform, transformsAreValid, renderTransformList,
   applyTransformsPreview, toNumberPreview, renderTransformPreview,
+  syncModeToggleThumbs,
 } = require('./popup');
 
 // jsdom's Blob doesn't implement .text() — read via FileReader instead.
@@ -7468,5 +7469,84 @@ describe('API-Mode request-body tree end-to-end (Issue #55, Phase B4)', () => {
     expect(document.getElementById('modal-api-body-parameter-new').classList.contains('hidden')).toBe(true);
     expect(document.querySelectorAll('#api-config-parameters .api-config-param-card')).toHaveLength(0);
     expect(document.getElementById('btn-api-config-confirm').disabled).toBe(true); // still no parameter bound anywhere
+  });
+});
+
+// ── Issue #140 modernization: animated mode-toggle thumb ────────────────────
+// jsdom does no real layout, so offsetWidth/offsetLeft are always 0 — these
+// tests stub them (a standard jsdom workaround) to verify the actual
+// positioning math instead of just "doesn't throw". Real-browser visual
+// verification (Playwright) was done manually for the actual animation.
+describe('syncModeToggleThumbs', () => {
+  function stubOffsets(el, { width, left }) {
+    Object.defineProperty(el, 'offsetWidth', { configurable: true, value: width });
+    Object.defineProperty(el, 'offsetLeft', { configurable: true, value: left });
+  }
+
+  test('sizes and positions the thumb behind the active button', () => {
+    document.body.innerHTML = `
+      <div class="mode-toggle">
+        <div class="mode-toggle-thumb"></div>
+        <button id="a" class="mode-btn active"></button>
+        <button id="b" class="mode-btn"></button>
+      </div>
+    `;
+    stubOffsets(document.getElementById('a'), { width: 60, left: 3 });
+
+    syncModeToggleThumbs();
+
+    const thumb = document.querySelector('.mode-toggle-thumb');
+    expect(thumb.style.width).toBe('60px');
+    expect(thumb.style.transform).toBe('translateX(0px)'); // offsetLeft(3) - 3 = 0
+  });
+
+  test('re-syncing after the active button changes moves the thumb', () => {
+    document.body.innerHTML = `
+      <div class="mode-toggle">
+        <div class="mode-toggle-thumb"></div>
+        <button id="a" class="mode-btn"></button>
+        <button id="b" class="mode-btn active"></button>
+      </div>
+    `;
+    stubOffsets(document.getElementById('b'), { width: 40, left: 67 });
+
+    syncModeToggleThumbs();
+
+    const thumb = document.querySelector('.mode-toggle-thumb');
+    expect(thumb.style.width).toBe('40px');
+    expect(thumb.style.transform).toBe('translateX(64px)'); // offsetLeft(67) - 3
+  });
+
+  test('does nothing for a .mode-toggle with no .active button (e.g. mid-transition)', () => {
+    document.body.innerHTML = `
+      <div class="mode-toggle">
+        <div class="mode-toggle-thumb"></div>
+        <button id="a" class="mode-btn"></button>
+      </div>
+    `;
+    expect(() => syncModeToggleThumbs()).not.toThrow();
+    expect(document.querySelector('.mode-toggle-thumb').style.width).toBe('');
+  });
+
+  test('handles multiple independent .mode-toggle groups on the same screen', () => {
+    document.body.innerHTML = `
+      <div class="mode-toggle" id="toggle1">
+        <div class="mode-toggle-thumb"></div>
+        <button class="mode-btn active"></button>
+      </div>
+      <div class="mode-toggle" id="toggle2">
+        <div class="mode-toggle-thumb"></div>
+        <button class="mode-btn"></button>
+        <button class="mode-btn active"></button>
+      </div>
+    `;
+    stubOffsets(document.querySelector('#toggle1 .mode-btn'), { width: 50, left: 3 });
+    stubOffsets(document.querySelector('#toggle2 .mode-btn.active'), { width: 30, left: 53 });
+
+    syncModeToggleThumbs();
+
+    expect(document.querySelector('#toggle1 .mode-toggle-thumb').style.width).toBe('50px');
+    expect(document.querySelector('#toggle2 .mode-toggle-thumb').style.width).toBe('30px');
+    expect(document.querySelector('#toggle2 .mode-toggle-thumb').style.transform).toBe('translateX(50px)');
   });
 });
