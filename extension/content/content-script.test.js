@@ -466,6 +466,79 @@ describe('scoped selection (START_SELECTION with scopeSelector)', () => {
       selector: '#vorspeisen',
     }));
   });
+
+  // Issue #167: a sub-element only present in a *later* instance of the
+  // repeating group (e.g. an optional "vegan" badge some menu items don't
+  // have) used to be permanently unselectable, because scoping bound to
+  // document.querySelector's implicit first match only. It must now be
+  // pickable by clicking it in whichever instance actually has it.
+  test('a click on a sub-element only present in the second (not first) instance is selectable', async () => {
+    document.body.innerHTML = `
+      <section class="menu-category">
+        <li class="menu-item"><h3 class="item-name">Suppe</h3></li>
+      </section>
+      <section class="menu-category">
+        <li class="menu-item"><h3 class="item-name">Salat</h3><span class="badge-vegan">Vegan</span></li>
+      </section>
+    `;
+    capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
+
+    document.querySelector('.badge-vegan').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ELEMENT_SELECTED',
+      selector: 'li.menu-item > span.badge-vegan',
+    }));
+  });
+
+  // The selector must stay relative to whichever instance was actually
+  // clicked (here, the second one) — matchCount counts only within that
+  // instance, exactly like the existing "scoped to the container instance"
+  // test above does for the first-instance case.
+  test('matchCount for a second-instance click stays scoped to that instance, not the whole page', async () => {
+    document.body.innerHTML = `
+      <section class="menu-category">
+        <li class="menu-item"><h3 class="item-name">Suppe</h3></li>
+      </section>
+      <section class="menu-category">
+        <li class="menu-item"><h3 class="item-name">Salat</h3></li>
+        <li class="menu-item"><h3 class="item-name">Tomate</h3></li>
+      </section>
+    `;
+    capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
+
+    document.querySelectorAll('h3.item-name')[1].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ELEMENT_SELECTED',
+      selector: 'li.menu-item > h3.item-name',
+      matchCount: 2, // both h3s in the second section, not the first section's one
+    }));
+  });
+
+  // A click genuinely outside every instance must still be rejected exactly
+  // as before, and now also nudges the popup with a toast hint instead of
+  // being silent.
+  test('a click outside every instance is still ignored, and now also sends SELECTION_CLICK_OUT_OF_SCOPE', async () => {
+    document.body.innerHTML = `
+      <section class="menu-category">
+        <li class="menu-item"><h3 class="item-name">Suppe</h3></li>
+      </section>
+      <section class="menu-category">
+        <li class="menu-item"><h3 class="item-name">Salat</h3></li>
+      </section>
+      <div id="outside">Outside</div>
+    `;
+    capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
+
+    document.getElementById('outside').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
+
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'ELEMENT_SELECTED' }));
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'SELECTION_CLICK_OUT_OF_SCOPE' }));
+  });
 });
 
 // ── API-mode search selection (START_SELECTION with apiSearch) ─────────────

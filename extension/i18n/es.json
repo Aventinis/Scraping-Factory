@@ -244,6 +244,7 @@
     "configInvalid": "Configuración no válida: {message}",
     "generationError": "Error: {message}",
     "selectionUnavailable": "No es posible seleccionar elementos en esta página.",
+    "clickOutsideScope": "Selecciona un elemento dentro de un contenedor.",
     "previewUnavailable": "No es posible la vista previa en esta página.",
     "captureUnavailable": "No es posible grabar red en esta página.",
     "invalidCompanionUrl": "Dirección no válida — incluye http:// o https://.",

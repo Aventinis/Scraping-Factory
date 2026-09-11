@@ -287,8 +287,8 @@ const MAX_API_CANDIDATES = 20; // caps the UI list on a heavily-recorded session
 
 // True when `path`'s own tokens start with every one of `scopeTokens`, in
 // order — the JSON-side analogue of Container-Mode's DOM scoping (an
-// element must be a descendant of scopeRootEl to be selectable). An empty
-// scopeTokens list (the default, unscoped search) matches everything.
+// element must be a descendant of one of scopeRootEls to be selectable). An
+// empty scopeTokens list (the default, unscoped search) matches everything.
 function pathStartsWithScope(path, scopeTokens) {
   if (scopeTokens.length === 0) return true;
   const tokens = pathTokens(path);
@@ -826,17 +826,27 @@ const HOVER_THROTTLE_MS = 16;
 let hoverTimeoutId = null;
 let pendingHoverTarget = null;
 
-// Set while a Container-Mode selection is scoped to a container instance
-// (see startSelection's scopeSelector) — null means the whole page is fair
-// game, same as today's flat-mode selection.
-let scopeRootEl = null;
+// Set while a Container-Mode selection is scoped to a repeating group's
+// instances (see startSelection's scopeSelector) — null means the whole
+// page is fair game, same as today's flat-mode selection. An *array* of
+// every DOM instance the group's own selector matches, not just one
+// (Issue #167 fix): restricting selection to only the document-order-first
+// instance made any sub-element absent from that particular instance (e.g.
+// an optional "vegan" badge that only some menu items carry) permanently
+// unselectable, even though the resulting selector would already have
+// matched it correctly wherever it does appear — the extraction runtime's
+// own per-instance handling of a non-matching selector was already
+// null-safe (empty string / "false" / an omitted sub-element, never an
+// error), so the bug was purely in what could be *clicked*, not in how a
+// once-built selector behaves at scrape time.
+let scopeRootEls = null;
 
 // Set for the duration of a selection round that must produce a selector
 // capable of matching more than once — see buildSelector's avoidId.
 let avoidIdInSelector = false;
 
 // Set for the duration of a Phase-4 "find in recording" selection round —
-// see startSelection's apiSearch param. Orthogonal to scopeRootEl/
+// see startSelection's apiSearch param. Orthogonal to scopeRootEls/
 // avoidIdInSelector: API-mode search doesn't restrict which elements are
 // clickable, it changes what a click produces (see onClick below).
 let apiSearchActive = false;
@@ -845,12 +855,24 @@ let apiSearchActive = false;
 // already-confirmed ApiGroup (Phase A5) — see startSelection's apiScopePath
 // param. Passed through to findApiCandidates' own scopePath so the search
 // stays confined to that group's scope. null (the default) reproduces
-// today's whole-pool search — unrelated to scopeRootEl/isInScope above,
+// today's whole-pool search — unrelated to scopeRootEls/isInScope above,
 // which scope *DOM* clickability, not the JSON search a click produces.
 let apiScopePathActive = null;
 
 function isInScope(element) {
-  return !scopeRootEl || scopeRootEl.contains(element);
+  return !scopeRootEls || scopeRootEls.some(root => root.contains(element));
+}
+
+// Issue #167: which *specific* instance (of possibly several) the given
+// element actually belongs to — resolved at click time, not fixed once at
+// startSelection() time, so a selector gets built relative to whichever
+// instance the user actually clicked in rather than always the first one.
+// Only meaningful for an element that already passed isInScope(); returns
+// null for the unscoped case (scopeRootEls === null), same as isInScope's
+// own "whole page is fair game" meaning there.
+function scopeRootFor(element) {
+  if (!scopeRootEls) return null;
+  return scopeRootEls.find(root => root.contains(element)) || null;
 }
 
 function flushHover() {
@@ -902,14 +924,28 @@ function onClick(e) {
   const target = eventTargetElement(e);
 
   if (!isInScope(target)) {
-    // Stay in selection mode — the user just clicked outside the container
-    // instance they're supposed to be picking a descendant of.
+    // Stay in selection mode — the user just clicked outside every instance
+    // of the container they're supposed to be picking a descendant of.
+    // Issue #167: previously silent (only logged) — a brief toast tells the
+    // user why nothing happened instead of leaving them to guess, without
+    // otherwise interrupting the selection round.
     log('CLICK outside scope, ignored');
+    try {
+      chrome.runtime.sendMessage({ type: 'SELECTION_CLICK_OUT_OF_SCOPE' });
+    } catch (err) {
+      log('SELECTION_CLICK_OUT_OF_SCOPE send failed', err.message);
+    }
     return;
   }
 
-  const selector = buildSelector(target, scopeRootEl, avoidIdInSelector);
-  const matchCount = countSelectorMatches(selector, scopeRootEl);
+  // Issue #167: build the selector relative to whichever instance the click
+  // actually landed in (scopeRootFor), not a single instance fixed in
+  // advance — lets a sub-element that's only present in some instances
+  // (e.g. an optional badge) be picked from any of them, not just the
+  // document-order-first one.
+  const clickScopeRoot = scopeRootFor(target);
+  const selector = buildSelector(target, clickScopeRoot, avoidIdInSelector);
+  const matchCount = countSelectorMatches(selector, clickScopeRoot);
   const wasApiSearch = apiSearchActive; // read before stopSelection() clears it
   const apiScopePathForSearch = apiScopePathActive; // read before stopSelection() clears it
   const clickedText = (target.textContent || '').trim();
@@ -969,8 +1005,10 @@ function startSelection(scopeSelector, avoidId, apiSearch, apiScopePath) {
   apiSearchActive = !!apiSearch;
   apiScopePathActive = apiSearch ? (apiScopePath || null) : null;
   if (scopeSelector) {
-    scopeRootEl = document.querySelector(scopeSelector);
-    if (!scopeRootEl) {
+    // Issue #167: every matching instance, not just document.querySelector's
+    // implicit first one — see scopeRootEls' own doc comment for why.
+    const roots = Array.from(document.querySelectorAll(scopeSelector));
+    if (roots.length === 0) {
       log('SELECTION scope not found', scopeSelector);
       chrome.runtime.sendMessage({
         type: 'SELECTION_UNAVAILABLE',
@@ -978,8 +1016,9 @@ function startSelection(scopeSelector, avoidId, apiSearch, apiScopePath) {
       });
       return;
     }
+    scopeRootEls = roots;
   } else {
-    scopeRootEl = null;
+    scopeRootEls = null;
   }
   createOverlay();
   document.addEventListener('mouseover', onMouseOver);
@@ -991,7 +1030,7 @@ function stopSelection() {
   document.removeEventListener('mouseover', onMouseOver);
   document.removeEventListener('click', onClick, true);
   removeOverlay();
-  scopeRootEl = null;
+  scopeRootEls = null;
   avoidIdInSelector = false;
   apiSearchActive = false;
   apiScopePathActive = null;

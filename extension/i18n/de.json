@@ -244,6 +244,7 @@
     "configInvalid": "Konfiguration ungültig: {message}",
     "generationError": "Fehler: {message}",
     "selectionUnavailable": "Element-Auswahl auf dieser Seite nicht möglich.",
+    "clickOutsideScope": "Bitte ein Element innerhalb eines Containers auswählen.",
     "previewUnavailable": "Vorschau auf dieser Seite nicht möglich.",
     "captureUnavailable": "Netzwerk-Aufzeichnung auf dieser Seite nicht möglich.",
     "invalidCompanionUrl": "Ungültige Adresse — bitte mit http:// oder https:// angeben.",

@@ -244,6 +244,7 @@
     "configInvalid": "Invalid configuration: {message}",
     "generationError": "Error: {message}",
     "selectionUnavailable": "Element selection isn't possible on this page.",
+    "clickOutsideScope": "Please select an element inside a container.",
     "previewUnavailable": "Preview isn't possible on this page.",
     "captureUnavailable": "Network recording isn't possible on this page.",
     "invalidCompanionUrl": "Invalid address — please include http:// or https://.",
