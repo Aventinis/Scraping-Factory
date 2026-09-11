@@ -2440,6 +2440,13 @@ function wireEvents() {
       });
       showToast(t('toast.selectionUnavailable'));
     }
+    // Issue #167: a click that landed outside every instance of the
+    // container being edited — selection stays active (unlike
+    // SELECTION_UNAVAILABLE above, which is a hard failure), this is just a
+    // brief nudge so the user isn't left guessing why nothing happened.
+    if (message.type === 'SELECTION_CLICK_OUT_OF_SCOPE' && _state.current === STATES.SELECTING) {
+      showToast(t('toast.clickOutsideScope'), null, 'warn');
+    }
     if (message.type === 'ELEMENT_SELECTED' && _state.current === STATES.SELECTING) {
       log('ELEMENT_SELECTED received (real-time)', message.selector);
       if (_state.apiSearchTarget) {

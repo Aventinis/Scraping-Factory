@@ -2995,6 +2995,75 @@ describe('SELECTION_UNAVAILABLE handling', () => {
   });
 });
 
+// ── SELECTION_CLICK_OUT_OF_SCOPE (Issue #167) ────────────────────────────────
+// Unlike SELECTION_UNAVAILABLE above (a hard failure), a click outside every
+// instance of the container being edited must NOT kick the user back to
+// IDLE — selection stays active, only a brief toast hint is shown.
+
+describe('SELECTION_CLICK_OUT_OF_SCOPE handling', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden"></section>
+      <section id="screen-selecting" class="hidden">
+        <button id="btn-add-field"></button>
+      </section>
+      <div id="error-toast" class="hidden"></div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn() },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({}),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: false });
+
+    require('./popup');
+    await flushMicrotasks();
+
+    document.getElementById('btn-add-field').click(); // → STATES.SELECTING
+  });
+
+  test('shows a toast but stays on the selecting screen', () => {
+    capturedListener({ type: 'SELECTION_CLICK_OUT_OF_SCOPE' });
+
+    expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(true);
+
+    const toast = document.getElementById('error-toast');
+    expect(toast.classList.contains('hidden')).toBe(false);
+    expect(toast.classList.contains('toast-warn')).toBe(true);
+  });
+
+  test('is ignored outside the SELECTING state', () => {
+    // Leave SELECTING first (any transition works; SELECTION_UNAVAILABLE is
+    // a convenient one already wired) and reset the toast it shows along
+    // the way, so the assertion below is only about this message's own guard.
+    capturedListener({ type: 'SELECTION_UNAVAILABLE', reason: 'x' }); // → falls back to IDLE
+    document.getElementById('error-toast').classList.add('hidden');
+
+    capturedListener({ type: 'SELECTION_CLICK_OUT_OF_SCOPE' });
+
+    expect(document.getElementById('error-toast').classList.contains('hidden')).toBe(true);
+  });
+});
+
 // ── DOM tree loading timeout ─────────────────────────────────────────────────
 // Regression coverage: a lost/never-arriving DOM_TREE response used to leave
 // the "Lade DOM-Baum…" spinner stuck forever. A timeout must now surface an
