@@ -4725,6 +4725,7 @@ describe('output settings (script/output filename)', () => {
       </section>
       <section id="screen-generating" class="hidden"></section>
       <section id="screen-done" class="hidden">
+        <button id="btn-back-to-config"></button>
         <button id="btn-download"></button>
       </section>
     `;
@@ -4841,6 +4842,28 @@ describe('output settings (script/output filename)', () => {
     await flushMicrotasks();
 
     expect(document.getElementById('btn-download').textContent).toBe('scraper.py herunterladen');
+  });
+
+  test('btn-back-to-config returns to the idle screen without resetting the existing configuration', async () => {
+    global.fetch.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('# script') });
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    expect(document.getElementById('screen-done').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(true);
+
+    global.chrome.storage.session.set.mockClear();
+    document.getElementById('btn-back-to-config').click();
+
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('screen-done').classList.contains('hidden')).toBe(true);
+    // Unlike btn-new-scraper, going back must not clear the configuration —
+    // the field picked up from session storage in beforeEach should still
+    // render, and no reset write should have gone out.
+    expect(document.getElementById('fields-list').textContent).toContain('Titel');
+    expect(global.chrome.storage.session.set).not.toHaveBeenCalledWith(
+      expect.objectContaining({ fields: [] }),
+    );
   });
 });
 
