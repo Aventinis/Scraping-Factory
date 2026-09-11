@@ -118,8 +118,37 @@ public class PythonGroupCodeGeneratorTests
 
         Assert.Contains(""""kind": 'noResult', "severity": 'Error'"""", script);
         Assert.Contains("EXIT_HARDENING_FAILED = 2", script);
-        Assert.Contains("def _run_hardening_checks(result_count):", script);
-        Assert.Contains("if _run_hardening_checks(count):", script);
+        Assert.Contains("def _run_hardening_checks(root):", script);
+        Assert.Contains("if _run_hardening_checks(root):", script);
+    }
+
+    [Fact]
+    public void Generate_NullRateHardeningConfigured_EmitsChecksLiteralAndFieldLookup()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com/speisekarte"] },
+                new ExtractGroupStep
+                {
+                    Roots =
+                    [
+                        new GroupNode
+                        {
+                            Name = "Gericht", Selector = "li.menu-item", Repeating = true,
+                            Children = [new DataFieldNode { Name = "Preis", Selector = ".price" }],
+                        },
+                    ],
+                },
+            ],
+            Hardening = [new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "Preis", Threshold = 0.3 }],
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains(""""kind": 'nullRate', "severity": 'Warning', "field": 'Preis', "threshold": 0.3"""", script);
+        Assert.Contains("root.iter(check[\"field\"])", script);
     }
 
     [Fact]

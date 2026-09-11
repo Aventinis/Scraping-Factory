@@ -614,20 +614,44 @@ public static class ScrapingPlanValidator
             ? null
             : $"Ungültiger Umgebungsvariablen-Name '{proxy.EnvironmentVariableName}' in Proxy.EnvironmentVariableName.";
 
-    // Issue #129: the only structural rule today — each check kind (the
-    // concrete HardeningCheck subtype, since there's no separate string
-    // "Kind" property to compare on the C# side; that string only exists on
-    // the wire/in the generated script) may appear at most once. Nothing
-    // else to validate: Severity is a required enum (an invalid string
-    // already fails deserialization before this ever runs), and
-    // NoResultCheck — the only kind implemented so far — has no parameters
-    // of its own.
+    // Issue #129/#130: every non-NullRate check kind (the concrete
+    // HardeningCheck subtype, since there's no separate string "Kind"
+    // property to compare on the C# side; that string only exists on the
+    // wire/in the generated script) may appear at most once — Severity is a
+    // required enum (an invalid string already fails deserialization before
+    // this ever runs), and NoResultCheck has no parameters of its own, so
+    // there's nothing that would distinguish two instances of it anyway.
+    // NullRateCheck is deliberately exempt from that rule (see its own doc
+    // comment) — more than one is expected, one per monitored field — so it
+    // gets its own "duplicate FieldName" rule plus its own parameter checks
+    // instead.
     private static string? ValidateHardening(List<HardeningCheck> hardening)
     {
         var duplicateKind = hardening
+            .Where(check => check is not NullRateCheck)
             .GroupBy(check => check.GetType())
             .FirstOrDefault(group => group.Count() > 1)
             ?.Key.Name;
-        return duplicateKind is null ? null : $"Hardening-Check '{duplicateKind}' ist mehrfach konfiguriert.";
+        if (duplicateKind is not null)
+            return $"Hardening-Check '{duplicateKind}' ist mehrfach konfiguriert.";
+
+        var nullRateChecks = hardening.OfType<NullRateCheck>().ToList();
+
+        var duplicateField = nullRateChecks
+            .GroupBy(check => check.FieldName)
+            .FirstOrDefault(group => group.Count() > 1)
+            ?.Key;
+        if (duplicateField is not null)
+            return $"Hardening-Check 'NullRate' ist für Feld '{duplicateField}' mehrfach konfiguriert.";
+
+        foreach (var check in nullRateChecks)
+        {
+            if (string.IsNullOrWhiteSpace(check.FieldName))
+                return "Hardening-Check 'NullRate' braucht einen Feldnamen.";
+            if (check.Threshold is < 0 or > 1)
+                return $"Hardening-Check 'NullRate' für Feld '{check.FieldName}': Schwelle muss zwischen 0 und 1 liegen (war {check.Threshold}).";
+        }
+
+        return null;
     }
 }

@@ -1905,4 +1905,86 @@ public class ScrapingPlanValidatorTests
         var result = ScrapingPlanValidator.Validate(ValidPlan());
         Assert.True(result.Success, result.Error);
     }
+
+    // Issue #130: unlike NoResultCheck, more than one NullRateCheck is
+    // expected — one per monitored field — so this must succeed rather than
+    // tripping the "duplicate kind" rule.
+    [Fact]
+    public void Validate_MultipleDistinctNullRateChecks_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening =
+            [
+                new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "Preis", Threshold = 0.3 },
+                new NullRateCheck { Severity = HardeningSeverity.Error, FieldName = "Titel", Threshold = 0.1 },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_NullRateAndNoResultTogether_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening =
+            [
+                new NoResultCheck { Severity = HardeningSeverity.Error },
+                new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "Preis", Threshold = 0.3 },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_DuplicateNullRateFieldName_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening =
+            [
+                new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "Preis", Threshold = 0.3 },
+                new NullRateCheck { Severity = HardeningSeverity.Error, FieldName = "Preis", Threshold = 0.5 },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("NullRate", result.Error);
+        Assert.Contains("Preis", result.Error);
+        Assert.Contains("mehrfach konfiguriert", result.Error);
+    }
+
+    [Fact]
+    public void Validate_NullRateBlankFieldName_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "  ", Threshold = 0.3 }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Feldnamen", result.Error);
+    }
+
+    [Theory]
+    [InlineData(-0.1)]
+    [InlineData(1.1)]
+    public void Validate_NullRateThresholdOutOfRange_Fails(double threshold)
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "Preis", Threshold = threshold }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Schwelle", result.Error);
+    }
 }

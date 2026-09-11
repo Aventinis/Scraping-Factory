@@ -42,6 +42,7 @@ const {
   variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
   detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase, parseAdditionalUrls,
   buildChangeDetectionConfig, buildProxyConfig, buildHardeningConfig,
+  collectFieldNames, addNullRateCheck, removeNullRateCheck, updateNullRateCheck, renderHardeningNullRateList,
   addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
   buildVerificationValues,
   frameBadgeHtml,
@@ -472,6 +473,129 @@ describe('buildScrapingConfig (hardening, Issue #129)', () => {
       hardening,
     );
     expect(apiResult.hardening).toEqual([{ kind: 'noResult', severity: 'Warning' }]);
+  });
+});
+
+// Issue #130
+describe('buildHardeningConfig (nullRate)', () => {
+  test('omits an incomplete row (no field chosen)', () => {
+    expect(buildHardeningConfig({ nullRate: [{ fieldName: '', threshold: 30, severity: 'Warning' }] })).toBeNull();
+  });
+
+  test('converts the percent threshold into a 0.0-1.0 fraction', () => {
+    expect(buildHardeningConfig({ nullRate: [{ fieldName: 'Preis', threshold: 30, severity: 'Error' }] })).toEqual([
+      { kind: 'nullRate', severity: 'Error', fieldName: 'Preis', threshold: 0.3 },
+    ]);
+  });
+
+  test('clamps an out-of-range or non-numeric threshold, defaulting to 50%', () => {
+    expect(buildHardeningConfig({ nullRate: [{ fieldName: 'A', threshold: 150, severity: 'Warning' }] })).toEqual([
+      { kind: 'nullRate', severity: 'Warning', fieldName: 'A', threshold: 1 },
+    ]);
+    expect(buildHardeningConfig({ nullRate: [{ fieldName: 'A', threshold: -20, severity: 'Warning' }] })).toEqual([
+      { kind: 'nullRate', severity: 'Warning', fieldName: 'A', threshold: 0 },
+    ]);
+    expect(buildHardeningConfig({ nullRate: [{ fieldName: 'A', threshold: NaN, severity: 'Warning' }] })).toEqual([
+      { kind: 'nullRate', severity: 'Warning', fieldName: 'A', threshold: 0.5 },
+    ]);
+  });
+
+  test('combines multiple complete rows with noResult', () => {
+    const hardening = {
+      noResult: { enabled: true, severity: 'Error' },
+      nullRate: [
+        { fieldName: 'Preis', threshold: 30, severity: 'Error' },
+        { fieldName: '', threshold: 10, severity: 'Warning' }, // incomplete, skipped
+        { fieldName: 'Titel', threshold: 10, severity: 'Warning' },
+      ],
+    };
+    expect(buildHardeningConfig(hardening)).toEqual([
+      { kind: 'noResult', severity: 'Error' },
+      { kind: 'nullRate', severity: 'Error', fieldName: 'Preis', threshold: 0.3 },
+      { kind: 'nullRate', severity: 'Warning', fieldName: 'Titel', threshold: 0.1 },
+    ]);
+  });
+
+  test('returns null when everything is empty/disabled', () => {
+    expect(buildHardeningConfig({ noResult: { enabled: false, severity: 'Warning' }, nullRate: [] })).toBeNull();
+  });
+});
+
+describe('collectFieldNames (Issue #130)', () => {
+  test('flat mode: reads field names straight off the fields array', () => {
+    const fields = [{ name: 'Titel', selector: 'h1' }, { name: 'Preis', selector: '.price' }];
+    expect(collectFieldNames('flat', fields, [], null)).toEqual(['Titel', 'Preis']);
+  });
+
+  test('container mode: walks the live draft tree, deduplicating repeated leaf names', () => {
+    const groups = [
+      {
+        kind: 'group', name: 'Kategorie', children: [
+          { kind: 'field', name: 'Titel' },
+          { kind: 'field', name: 'Preis' },
+          {
+            kind: 'group', name: 'Unterkategorie', children: [
+              { kind: 'field', name: 'Preis' }, // same leaf name, nested deeper
+            ],
+          },
+        ],
+      },
+    ];
+    expect(collectFieldNames('container', [], groups, null)).toEqual(['Titel', 'Preis']);
+  });
+
+  test('api mode, flat shape: reads apiConfig.fields', () => {
+    const apiConfig = { fields: [{ name: 'Titel' }, { name: 'Preis' }] };
+    expect(collectFieldNames('api', [], [], apiConfig)).toEqual(['Titel', 'Preis']);
+  });
+
+  test('api mode, tree shape: walks the serialized apiConfig.groups (structural children discriminator)', () => {
+    const apiConfig = {
+      groups: [
+        {
+          name: 'Kategorie', path: 'categories[*]', children: [
+            { name: 'Titel', path: 'name' },
+            { name: 'Unterkategorie', path: 'items[*]', children: [{ name: 'Preis', path: 'price' }] },
+          ],
+        },
+      ],
+    };
+    expect(collectFieldNames('api', [], [], apiConfig)).toEqual(['Titel', 'Preis']);
+  });
+
+  test('returns an empty array when there is nothing configured yet', () => {
+    expect(collectFieldNames('flat', [], [], null)).toEqual([]);
+    expect(collectFieldNames('container', [], [], null)).toEqual([]);
+    expect(collectFieldNames('api', [], [], null)).toEqual([]);
+  });
+});
+
+describe('addNullRateCheck / removeNullRateCheck / updateNullRateCheck (Issue #130)', () => {
+  test('addNullRateCheck appends a row with a default 50% threshold and Warning severity', () => {
+    expect(addNullRateCheck([], 'Preis')).toEqual([{ fieldName: 'Preis', threshold: 50, severity: 'Warning' }]);
+  });
+
+  test('addNullRateCheck tolerates no field chosen yet', () => {
+    expect(addNullRateCheck([], undefined)).toEqual([{ fieldName: '', threshold: 50, severity: 'Warning' }]);
+  });
+
+  test('removeNullRateCheck drops the row at the given index only', () => {
+    const rows = [
+      { fieldName: 'A', threshold: 10, severity: 'Warning' },
+      { fieldName: 'B', threshold: 20, severity: 'Error' },
+    ];
+    expect(removeNullRateCheck(rows, 0)).toEqual([{ fieldName: 'B', threshold: 20, severity: 'Error' }]);
+  });
+
+  test('updateNullRateCheck patches only the targeted row, leaving others untouched', () => {
+    const rows = [
+      { fieldName: 'A', threshold: 10, severity: 'Warning' },
+      { fieldName: 'B', threshold: 20, severity: 'Error' },
+    ];
+    expect(updateNullRateCheck(rows, 1, { severity: 'Warning' })).toEqual([
+      { fieldName: 'A', threshold: 10, severity: 'Warning' },
+      { fieldName: 'B', threshold: 20, severity: 'Warning' },
+    ]);
   });
 });
 
@@ -1864,6 +1988,46 @@ describe('renderBrowserActions — Fill test-value row', () => {
   test('does not render a test-value input for non-fill actions', () => {
     renderBrowserActions([{ kind: 'click', selector: '#submit' }], {});
     expect(document.querySelector('.browser-action-test-value')).toBeNull();
+  });
+});
+
+describe('renderHardeningNullRateList (Issue #130)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="hardening-null-rate-list"></div>';
+  });
+
+  test('renders one row per entry, with the field select populated from fieldNames', () => {
+    renderHardeningNullRateList(
+      [{ fieldName: 'Preis', threshold: 30, severity: 'Warning' }],
+      ['Titel', 'Preis'],
+    );
+
+    const rows = document.querySelectorAll('.hardening-null-rate-row');
+    expect(rows).toHaveLength(1);
+    const select = rows[0].querySelector('.hardening-null-rate-field');
+    const optionValues = [...select.options].map(o => o.value);
+    expect(optionValues).toEqual(['', 'Titel', 'Preis']);
+    expect(select.value).toBe('Preis');
+    expect(rows[0].querySelector('.hardening-null-rate-threshold').value).toBe('30');
+    expect(rows[0].querySelector('.btn-null-rate-warning').classList.contains('active')).toBe(true);
+    expect(rows[0].querySelector('.btn-null-rate-error').classList.contains('active')).toBe(false);
+  });
+
+  test('keeps a stale field name (renamed/removed since the row was added) selectable instead of silently switching it', () => {
+    renderHardeningNullRateList(
+      [{ fieldName: 'AlterName', threshold: 50, severity: 'Error' }],
+      ['Titel', 'Preis'],
+    );
+
+    const select = document.querySelector('.hardening-null-rate-field');
+    const optionValues = [...select.options].map(o => o.value);
+    expect(optionValues).toContain('AlterName');
+    expect(select.value).toBe('AlterName');
+  });
+
+  test('renders nothing for an empty list', () => {
+    renderHardeningNullRateList([], ['Titel']);
+    expect(document.querySelectorAll('.hardening-null-rate-row')).toHaveLength(0);
   });
 });
 

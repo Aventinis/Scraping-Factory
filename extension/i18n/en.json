@@ -98,7 +98,10 @@
     "hardeningSeverityWarning": "Warning",
     "hardeningSeverityWarningTitle": "The script prints a warning but still exits with code 0.",
     "hardeningSeverityError": "Error",
-    "hardeningSeverityErrorTitle": "The script prints an error and exits with its own code (2), distinguishable from a crash (1)."
+    "hardeningSeverityErrorTitle": "The script prints an error and exits with its own code (2), distinguishable from a crash (1).",
+    "hardeningNullRateSectionLabel": "Check for empty values per field",
+    "hardeningNullRateFieldPlaceholder": "-- choose field --",
+    "hardeningNullRateAddBtn": "+ Add field"
   },
   "robots": {
     "checkFailed": "robots.txt could not be checked ({error}).",

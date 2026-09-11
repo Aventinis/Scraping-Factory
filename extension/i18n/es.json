@@ -98,7 +98,10 @@
     "hardeningSeverityWarning": "Advertencia",
     "hardeningSeverityWarningTitle": "El script imprime una advertencia, pero sigue terminando con código de salida 0.",
     "hardeningSeverityError": "Error",
-    "hardeningSeverityErrorTitle": "El script imprime un error y termina con su propio código (2), distinguible de un fallo (1)."
+    "hardeningSeverityErrorTitle": "El script imprime un error y termina con su propio código (2), distinguible de un fallo (1).",
+    "hardeningNullRateSectionLabel": "Comprobar valores vacíos por campo",
+    "hardeningNullRateFieldPlaceholder": "-- elegir campo --",
+    "hardeningNullRateAddBtn": "+ Añadir campo"
   },
   "robots": {
     "checkFailed": "No se pudo comprobar el robots.txt ({error}).",

@@ -140,12 +140,17 @@ let _state = {
   // Issue #129: opt-in script hardening checks — mode-independent like
   // engine/changeDetection/proxy above, persisted the same way (real
   // scrape-target configuration, not a per-generate toggle). Nested one
-  // level per check (only `noResult` exists so far) so the other four
-  // planned checks (see CLAUDE.md) can each add their own key without
-  // restructuring this or buildHardeningConfig. `severity` is 'Warning' or
-  // 'Error', matching the wire format's own PascalCase enum values exactly
-  // (see buildHardeningConfig) — no client-side translation needed.
-  hardening: { noResult: { enabled: false, severity: 'Warning' } },
+  // level per check (`noResult`, plus `nullRate` since Issue #130) so the
+  // three still-planned checks (see CLAUDE.md) can each add their own key
+  // without restructuring this or buildHardeningConfig. `severity` is
+  // 'Warning' or 'Error', matching the wire format's own PascalCase enum
+  // values exactly (see buildHardeningConfig) — no client-side translation
+  // needed. Issue #130's `nullRate` is an array, not a single object like
+  // `noResult` — unlike NoResultCheck, more than one is expected (one per
+  // monitored field); each row is `{ fieldName, threshold, severity }`,
+  // `threshold` a whole percent (0-100) for the UI — buildHardeningConfig
+  // divides by 100 to reach the wire format's 0.0-1.0 fraction.
+  hardening: { noResult: { enabled: false, severity: 'Warning' }, nullRate: [] },
   // Issue #43: one-time Fill test values for the /generate verification
   // trial run only — keyed by FillAction.environmentVariableName. Deliberately
   // absent from persistState()'s chrome.storage.session write and from
@@ -376,7 +381,61 @@ function buildHardeningConfig(hardening) {
   if (hardening?.noResult?.enabled) {
     checks.push({ kind: 'noResult', severity: hardening.noResult.severity });
   }
+  // Issue #130: unlike noResult, a row with no field chosen yet is simply
+  // skipped rather than blocking generation — same "incomplete draft, not
+  // an error" convention as an unfinished Fill/Proxy env-var name. Threshold
+  // is stored as a whole percent (0-100) in the UI for a friendlier input,
+  // divided by 100 to reach the wire format's 0.0-1.0 fraction — clamped and
+  // defaulted here too, since a cleared/invalid number input can leave
+  // `threshold` as NaN or out of range.
+  for (const row of hardening?.nullRate || []) {
+    const fieldName = (row.fieldName || '').trim();
+    if (!fieldName) continue;
+    const percent = Number.isFinite(row.threshold) ? row.threshold : 50;
+    const threshold = Math.min(100, Math.max(0, percent)) / 100;
+    checks.push({ kind: 'nullRate', severity: row.severity, fieldName, threshold });
+  }
   return checks.length > 0 ? checks : null;
+}
+
+// Issue #130: collects every leaf field name currently configured, across
+// whichever mode/shape is active — feeds the NullRateCheck field picker in
+// the hardening UI, reusing the exact field list the user already built
+// instead of a second, free-text name input that could too easily drift out
+// of sync with an actual (or renamed) field. Container mode's `groups` is
+// still the live draft tree (GroupNode/DataFieldNode, `kind: 'group'|'field'`
+// — see container-tree.js); API mode's `apiConfig` is instead the *already
+// serialized* wire object built once at API_CONFIG-confirm time, so its tree
+// shape (if any) is discriminated structurally by `children` presence
+// instead, the same way countApiConfigFields already reads it. Deduplicated
+// (a tree can repeat the same field name at several nesting depths —
+// NullRateCheck itself matches by name globally, see the companion-side doc
+// comment on NullRateCheck) and order-preserving.
+function collectFieldNames(mode, fields, groups, apiConfig) {
+  const names = [];
+  const add = (name) => { if (name && !names.includes(name)) names.push(name); };
+
+  if (mode === 'container') {
+    const walk = (nodes) => {
+      for (const node of nodes || []) {
+        if (node.kind === 'field') add(node.name);
+        else if (node.kind === 'group') walk(node.children);
+      }
+    };
+    walk(groups);
+  } else if (mode === 'api') {
+    const walk = (nodes) => {
+      for (const node of nodes || []) {
+        if (node.children) walk(node.children);
+        else add(node.name);
+      }
+    };
+    if (apiConfig?.groups) walk(apiConfig.groups);
+    else for (const f of apiConfig?.fields || []) add(f.name);
+  } else {
+    for (const f of fields || []) add(f.name);
+  }
+  return names;
 }
 
 // `apiConfig` is only read when mode === 'api' — the confirmed ApiConfig
@@ -553,6 +612,23 @@ function buildVerificationValues(browserActions, fillTestValues) {
 
 function removeField(fields, index) {
   return fields.filter((_, i) => i !== index);
+}
+
+// Issue #130: same pure add/remove/update shape as addBrowserAction/
+// removeBrowserAction/updateBrowserAction below, for _state.hardening.
+// nullRate rows. threshold defaults to 50 (%) — an arbitrary but reasonable
+// starting point, the same role addBrowserAction's own kind-specific
+// defaults play.
+function addNullRateCheck(nullRate, fieldName) {
+  return [...nullRate, { fieldName: fieldName || '', threshold: 50, severity: 'Warning' }];
+}
+
+function removeNullRateCheck(nullRate, index) {
+  return nullRate.filter((_, i) => i !== index);
+}
+
+function updateNullRateCheck(nullRate, index, patch) {
+  return nullRate.map((row, i) => (i === index ? { ...row, ...patch } : row));
 }
 
 // Issue #42, Phase 7: a small pill shown next to a field's/node's/action's
@@ -974,6 +1050,7 @@ function render() {
     document.getElementById('hardening-no-result-severity')?.classList.toggle('hidden', !_state.hardening.noResult.enabled);
     document.getElementById('btn-hardening-no-result-warning')?.classList.toggle('active', _state.hardening.noResult.severity === 'Warning');
     document.getElementById('btn-hardening-no-result-error')?.classList.toggle('active', _state.hardening.noResult.severity === 'Error');
+    renderHardeningNullRateList();
 
     if (_state.containerModalOpen) {
       show('modal-container-new');
@@ -1235,6 +1312,50 @@ function renderBrowserActions(actions = _state.browserActions, testValues = _sta
     }
 
     container.appendChild(card);
+  });
+}
+
+// Issue #130: one row per _state.hardening.nullRate entry — a field
+// dropdown (options from collectFieldNames, reusing whatever fields/groups/
+// apiConfig the current mode already has, see that function's own doc
+// comment), a threshold % number input, a Warning/Error severity toggle
+// (the same .mode-toggle pattern the no-result check above already uses —
+// syncModeToggleThumbs() picks these up automatically on every render()),
+// and a remove button. Mirrors renderBrowserActions' DOM-building style.
+// The field <select> always includes the row's own currently chosen value
+// even if it's since dropped out of collectFieldNames' list (e.g. the field
+// was renamed or removed after this row was added) — otherwise the browser
+// would silently fall back to whichever option happens to be first,
+// silently corrupting the row instead of leaving it visibly stale.
+function renderHardeningNullRateList(
+  nullRate = _state.hardening.nullRate,
+  fieldNames = collectFieldNames(_state.mode, _state.fields, _state.groups, _state.apiConfig),
+) {
+  const container = document.getElementById('hardening-null-rate-list');
+  if (!container) return;
+  container.innerHTML = '';
+
+  nullRate.forEach((row, i) => {
+    const options = fieldNames.includes(row.fieldName) || !row.fieldName
+      ? fieldNames
+      : [row.fieldName, ...fieldNames];
+
+    const rowEl = document.createElement('div');
+    rowEl.className = 'hardening-null-rate-row';
+    rowEl.dataset.index = i;
+    rowEl.innerHTML =
+      `<select class="hardening-null-rate-field" data-index="${i}">` +
+      `<option value="">${escapeHtml(t('idle.hardeningNullRateFieldPlaceholder'))}</option>` +
+      options.map(name => `<option value="${escapeHtml(name)}"${name === row.fieldName ? ' selected' : ''}>${escapeHtml(name)}</option>`).join('') +
+      `</select>` +
+      `<input type="number" min="0" max="100" class="hardening-null-rate-threshold" data-index="${i}" value="${row.threshold}" />%` +
+      `<div class="mode-toggle hardening-null-rate-severity">` +
+      `<div class="mode-toggle-thumb"></div>` +
+      `<button type="button" class="mode-btn btn-null-rate-warning${row.severity === 'Warning' ? ' active' : ''}" data-index="${i}">${escapeHtml(t('idle.hardeningSeverityWarning'))}</button>` +
+      `<button type="button" class="mode-btn btn-null-rate-error${row.severity === 'Error' ? ' active' : ''}" data-index="${i}">${escapeHtml(t('idle.hardeningSeverityError'))}</button>` +
+      `</div>` +
+      `<button type="button" class="btn-danger btn-tiny btn-remove-null-rate" data-index="${i}">${escapeHtml(t('common.remove'))}</button>`;
+    container.appendChild(rowEl);
   });
 }
 
@@ -2000,6 +2121,66 @@ function wireEvents() {
     });
   });
 
+  // Issue #130: the per-field null-rate check — a dynamic list, same
+  // delegated-event-on-the-container pattern as browser-actions-list above.
+  document.getElementById('btn-add-null-rate-check')?.addEventListener('click', () => {
+    const [firstField] = collectFieldNames(_state.mode, _state.fields, _state.groups, _state.apiConfig);
+    setState(_state.current, {
+      hardening: { ..._state.hardening, nullRate: addNullRateCheck(_state.hardening.nullRate, firstField) },
+    });
+  });
+  document.getElementById('hardening-null-rate-list')?.addEventListener('click', (e) => {
+    const removeBtn = e.target.closest('.btn-remove-null-rate');
+    if (removeBtn) {
+      const index = parseInt(removeBtn.dataset.index, 10);
+      setState(_state.current, {
+        hardening: { ..._state.hardening, nullRate: removeNullRateCheck(_state.hardening.nullRate, index) },
+      });
+      return;
+    }
+    const warningBtn = e.target.closest('.btn-null-rate-warning');
+    if (warningBtn) {
+      const index = parseInt(warningBtn.dataset.index, 10);
+      setState(_state.current, {
+        hardening: { ..._state.hardening, nullRate: updateNullRateCheck(_state.hardening.nullRate, index, { severity: 'Warning' }) },
+      });
+      return;
+    }
+    const errorBtn = e.target.closest('.btn-null-rate-error');
+    if (errorBtn) {
+      const index = parseInt(errorBtn.dataset.index, 10);
+      setState(_state.current, {
+        hardening: { ..._state.hardening, nullRate: updateNullRateCheck(_state.hardening.nullRate, index, { severity: 'Error' }) },
+      });
+    }
+  });
+  // change (not input/click) for the field select and threshold number —
+  // same "don't reset the cursor/dropdown on every keystroke" reasoning as
+  // the browser-actions-list change listener above.
+  document.getElementById('hardening-null-rate-list')?.addEventListener('change', (e) => {
+    const fieldSelect = e.target.closest('.hardening-null-rate-field');
+    if (fieldSelect) {
+      const index = parseInt(fieldSelect.dataset.index, 10);
+      setState(_state.current, {
+        hardening: { ..._state.hardening, nullRate: updateNullRateCheck(_state.hardening.nullRate, index, { fieldName: fieldSelect.value }) },
+      });
+      return;
+    }
+    const thresholdInput = e.target.closest('.hardening-null-rate-threshold');
+    if (thresholdInput) {
+      const index = parseInt(thresholdInput.dataset.index, 10);
+      const threshold = parseInt(thresholdInput.value, 10);
+      setState(_state.current, {
+        hardening: {
+          ..._state.hardening,
+          nullRate: updateNullRateCheck(_state.hardening.nullRate, index, {
+            threshold: Number.isFinite(threshold) ? Math.min(100, Math.max(0, threshold)) : 50,
+          }),
+        },
+      });
+    }
+  });
+
   document.getElementById('toggle-include-data-preview')?.addEventListener('change', (e) => {
     log('BTN toggle-include-data-preview', e.target.checked);
     patchState({ includeDataPreview: e.target.checked });
@@ -2758,7 +2939,8 @@ if (typeof module !== 'undefined') {
     variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
     detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
     applyStaticTranslations, sanitizeFileNameBase, parseAdditionalUrls, buildChangeDetectionConfig, buildProxyConfig,
-    buildHardeningConfig,
+    buildHardeningConfig, collectFieldNames, addNullRateCheck, removeNullRateCheck, updateNullRateCheck,
+    renderHardeningNullRateList,
     addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
     buildVerificationValues,
     frameBadgeHtml,
