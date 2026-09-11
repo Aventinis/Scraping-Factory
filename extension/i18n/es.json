@@ -19,6 +19,9 @@
   "language": {
     "label": "Idioma"
   },
+  "theme": {
+    "toggleTitle": "Cambiar tema (Sistema / Claro / Oscuro)"
+  },
   "checking": {
     "message": "Conectando con Companion…"
   },

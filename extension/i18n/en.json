@@ -19,6 +19,9 @@
   "language": {
     "label": "Language"
   },
+  "theme": {
+    "toggleTitle": "Toggle theme (System / Light / Dark)"
+  },
   "checking": {
     "message": "Connecting to companion…"
   },

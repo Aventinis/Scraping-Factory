@@ -4,12 +4,58 @@
   <meta charset="UTF-8" />
   <title>Scraping Factory</title>
   <style>
-    /* Issue #139: design tokens — the small, shared source of truth every
-       rule below references instead of one-off color/radius/shadow
-       literals. Also the direct prerequisite for a future dark-mode pass
-       (see the issue): a `[data-theme="dark"]` block/`prefers-color-scheme`
-       query would only need to redefine these, not every rule using them. */
+    /* Issue #139/#140: design tokens — the small, shared source of truth
+       every rule below references instead of one-off color/radius/shadow
+       literals. Colors/overlays/elevation live in a separate light/dark
+       block pair further down (see "Theme (Issue #140)" below); everything
+       theme-agnostic (radius/motion scale) stays here in :root since it
+       never needs to change when the theme does. */
     :root {
+      /* Radius scale — Issue #140 modernization pass: nudged up from the
+         original #139 scale (4/6/8/10) for a softer, less "boxy" feel. */
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 10px;
+      --radius-xl: 14px;
+      --radius-pill: 999px;
+
+      /* One shared interaction timing, applied uniformly across buttons/
+         toggles/tree rows/inputs. Issue #140: switched from a plain linear
+         ease to the "standard" Material easing curve (ease-out-ish
+         accelerate/decelerate) for a slightly less mechanical feel. */
+      --transition-fast: 160ms cubic-bezier(0.4, 0, 0.2, 1);
+
+      /* Text color to use on top of a saturated accent background (primary
+         button, toast, picked chip, ...) — deliberately NOT the same as
+         --color-surface: the former is always near-white regardless of
+         theme (light or dark, the accent colors themselves stay readable
+         with white text), the latter is the page/card background color,
+         which inverts to near-black in dark mode. Conflating the two was
+         exactly the "assumes a light background" bug Issue #140 called out
+         checking for — see the theme block below for the concrete fix. */
+      --color-on-accent: #fff;
+    }
+
+    /* Theme (Issue #140) — light values live directly on :root as the
+       default; @media (prefers-color-scheme: dark) below redefines them
+       automatically when the OS prefers dark AND the user hasn't made an
+       explicit choice (:root:not([data-theme])); an explicit choice
+       (html[data-theme="light"|"dark"], set by #btn-theme-toggle via
+       shared/theme.js, mirroring i18n.js's own chrome.storage.local
+       pattern) always wins over both, and for "light" specifically needs no
+       *custom-property* rule of its own — the media query already stays out
+       of its way, so :root's own defaults show through unchanged (it still
+       needs a color-scheme rule below, for native form-control rendering). */
+    :root {
+      /* Tells the browser this page supports both schemes and to pick
+         automatically per prefers-color-scheme — native widgets a custom
+         --color-* token can't reach (checkbox/select-popup chrome, and any
+         input/textarea, like #input-additional-urls, that has no explicit
+         background/color of its own) get a correct dark rendering for free
+         instead of staying stuck with the light-mode UA default. The two
+         explicit-override rules further down narrow this to one scheme when
+         the user picked one manually, overriding the OS preference. */
+      color-scheme: light dark;
       /* Brand / primary action */
       --color-primary: #3b82f6;
       --color-primary-hover: #2563eb;
@@ -37,31 +83,101 @@
       --color-border: #e5e7eb;
       --color-border-input: #d1d5db;
 
-      /* Overlays / shadows — kept as standalone tokens (not derived from the
-         color tokens above via color-mix()) so each one stays pixel-identical
-         to the literal it replaces; Chrome's extension-page CSS engine is
-         evergreen so color-mix() would work, but isn't worth the indirection
-         at this scale. */
+      /* Overlays */
       --overlay-scrim: rgba(0, 0, 0, .45);
       --overlay-primary-hover: rgba(59, 130, 246, .15);
       --overlay-success-selected: rgba(34, 197, 94, .2);
       --overlay-white-weak: rgba(255, 255, 255, .2);
       --overlay-white-strong: rgba(255, 255, 255, .32);
-      --shadow-sm: 0 1px 2px rgba(0, 0, 0, .08);
-      --shadow-md: 0 8px 24px rgba(0, 0, 0, .18);
-      --focus-ring: 0 0 0 2px rgba(59, 130, 246, .2);
+      --focus-ring: 0 0 0 3px rgba(59, 130, 246, .18);
+      /* Issue #140 modernization: a soft colored glow for primary-action
+         hover (see .btn-primary:hover), on top of the plain background
+         swap it already had — a common "raised, glowing" accent treatment
+         that a flat color change alone doesn't give. */
+      --glow-primary: 0 4px 14px rgba(59, 130, 246, .35);
 
-      /* Radius scale */
-      --radius-sm: 4px;
-      --radius-md: 6px;
-      --radius-lg: 8px;
-      --radius-xl: 10px;
-      --radius-pill: 999px;
+      /* Elevation scale — Issue #140 modernization: replaces the old flat
+         --shadow-sm/--shadow-md pair with a graded system (resting card /
+         hover-lifted / modal), each a layered pair of shadows (tight+dark
+         for definition, soft+wide for spread) instead of one single shadow,
+         for a softer, more "floating" depth. */
+      --elevation-1: 0 1px 2px rgba(0, 0, 0, .06), 0 1px 1px rgba(0, 0, 0, .04);
+      --elevation-2: 0 4px 12px rgba(0, 0, 0, .10), 0 2px 4px rgba(0, 0, 0, .06);
+      --elevation-3: 0 16px 40px rgba(0, 0, 0, .20), 0 4px 10px rgba(0, 0, 0, .08);
+    }
 
-      /* One shared interaction timing, applied uniformly across buttons/
-         toggles/tree rows (see the button/mode-btn/btn-toggle/tree-row rules
-         below) instead of each component hand-rolling its own transition. */
-      --transition-fast: 120ms ease;
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme]) {
+        --color-primary: #60a5fa;
+        --color-primary-hover: #3b82f6;
+        --color-primary-disabled: #3a4a63;
+        --color-primary-soft: #17243a;
+
+        --color-success: #22c55e;
+        --color-danger: #f87171;
+        --color-danger-soft: #3f1d1d;
+        --color-warning: #fbbf24;
+        --color-warning-soft: #3a2f12;
+        --color-warning-strong: #fcd34d;
+
+        --color-text: #f3f4f6;
+        --color-text-secondary: #d1d5db;
+        --color-text-muted: #9ca3af;
+        --color-text-faint: #6b7280;
+
+        --color-surface: #1a1d23;
+        --color-surface-subtle: #23262e;
+        --color-surface-muted: #2a2e37;
+        --color-border: #343841;
+        --color-border-input: #3f4451;
+
+        --overlay-scrim: rgba(0, 0, 0, .6);
+        --overlay-primary-hover: rgba(96, 165, 250, .18);
+        --overlay-success-selected: rgba(74, 222, 128, .22);
+        --focus-ring: 0 0 0 3px rgba(96, 165, 250, .28);
+        --glow-primary: 0 4px 16px rgba(96, 165, 250, .45);
+
+        --elevation-1: 0 1px 2px rgba(0, 0, 0, .4), 0 1px 1px rgba(0, 0, 0, .3);
+        --elevation-2: 0 4px 14px rgba(0, 0, 0, .5), 0 2px 6px rgba(0, 0, 0, .35);
+        --elevation-3: 0 20px 48px rgba(0, 0, 0, .6), 0 6px 14px rgba(0, 0, 0, .4);
+      }
+    }
+
+    :root[data-theme="light"] { color-scheme: light; }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --color-primary: #60a5fa;
+      --color-primary-hover: #3b82f6;
+      --color-primary-disabled: #3a4a63;
+      --color-primary-soft: #17243a;
+
+      --color-success: #22c55e;
+      --color-danger: #f87171;
+      --color-danger-soft: #3f1d1d;
+      --color-warning: #fbbf24;
+      --color-warning-soft: #3a2f12;
+      --color-warning-strong: #fcd34d;
+
+      --color-text: #f3f4f6;
+      --color-text-secondary: #d1d5db;
+      --color-text-muted: #9ca3af;
+      --color-text-faint: #6b7280;
+
+      --color-surface: #1a1d23;
+      --color-surface-subtle: #23262e;
+      --color-surface-muted: #2a2e37;
+      --color-border: #343841;
+      --color-border-input: #3f4451;
+
+      --overlay-scrim: rgba(0, 0, 0, .6);
+      --overlay-primary-hover: rgba(96, 165, 250, .18);
+      --overlay-success-selected: rgba(74, 222, 128, .22);
+      --focus-ring: 0 0 0 3px rgba(96, 165, 250, .28);
+      --glow-primary: 0 4px 16px rgba(96, 165, 250, .45);
+
+      --elevation-1: 0 1px 2px rgba(0, 0, 0, .4), 0 1px 1px rgba(0, 0, 0, .3);
+      --elevation-2: 0 4px 14px rgba(0, 0, 0, .5), 0 2px 6px rgba(0, 0, 0, .35);
+      --elevation-3: 0 20px 48px rgba(0, 0, 0, .6), 0 6px 14px rgba(0, 0, 0, .4);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -69,6 +185,34 @@
        textarea/select in the file, instead of each section's own input rule
        only ever snapping its border-color/box-shadow instantly. */
     input, textarea, select { transition: border-color var(--transition-fast), box-shadow var(--transition-fast); }
+    /* Issue #140 modernization: slim, theme-aware scrollbars for every
+       scrollable container introduced across #138/#122 — ::-webkit-scrollbar
+       is Chromium-only, which is exactly the extension's own supported
+       range (Chrome/Edge/Opera, see CLAUDE.md's Build section), so no
+       Firefox-specific scrollbar-* fallback is needed. Listed once here as
+       a combined selector rather than a new shared class, so none of these
+       five elements' existing class lists (and anything that queries them)
+       needs to change. */
+    .screen-idle-scroll::-webkit-scrollbar, #screen-api-config::-webkit-scrollbar,
+    .dom-tree-wrapper::-webkit-scrollbar, .data-preview-table-wrap::-webkit-scrollbar,
+    .data-preview-text::-webkit-scrollbar {
+      width: 8px; height: 8px;
+    }
+    .screen-idle-scroll::-webkit-scrollbar-track, #screen-api-config::-webkit-scrollbar-track,
+    .dom-tree-wrapper::-webkit-scrollbar-track, .data-preview-table-wrap::-webkit-scrollbar-track,
+    .data-preview-text::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .screen-idle-scroll::-webkit-scrollbar-thumb, #screen-api-config::-webkit-scrollbar-thumb,
+    .dom-tree-wrapper::-webkit-scrollbar-thumb, .data-preview-table-wrap::-webkit-scrollbar-thumb,
+    .data-preview-text::-webkit-scrollbar-thumb {
+      background: var(--color-border); border-radius: var(--radius-pill); border: 2px solid transparent; background-clip: padding-box;
+    }
+    .screen-idle-scroll::-webkit-scrollbar-thumb:hover, #screen-api-config::-webkit-scrollbar-thumb:hover,
+    .dom-tree-wrapper::-webkit-scrollbar-thumb:hover, .data-preview-table-wrap::-webkit-scrollbar-thumb:hover,
+    .data-preview-text::-webkit-scrollbar-thumb:hover {
+      background: var(--color-text-faint); background-clip: padding-box;
+    }
     /* Issue #138: the side panel is full browser-window height by default,
        unlike the classic dropdown popup this layout originally sized to
        content — html/body need an explicit height for a flex-column screen
@@ -174,15 +318,39 @@
     }
 
     /* Mode toggle */
-    .mode-toggle { display: flex; gap: 4px; margin-bottom: 14px; background: var(--color-surface-muted); border-radius: var(--radius-lg); padding: 3px; }
+    .mode-toggle {
+      display: flex; gap: 4px; margin-bottom: 14px; background: var(--color-surface-muted);
+      border-radius: var(--radius-lg); padding: 3px; position: relative;
+    }
+    /* Issue #140 modernization: an animated sliding "thumb" behind whichever
+       .mode-btn is .active, instead of each button just recoloring itself in
+       place — see popup.js's syncModeToggleThumbs for the positioning (JS,
+       not CSS-only, since it depends on the active button's actual rendered
+       width/offset, not a fixed value). Sits behind the buttons (z-index: 0
+       vs. 1) so their own transparent background lets it show through. */
+    .mode-toggle-thumb {
+      position: absolute; top: 3px; bottom: 3px; left: 3px; z-index: 0;
+      background: var(--color-surface); border-radius: var(--radius-md); box-shadow: var(--elevation-1);
+      transition: transform var(--transition-fast), width var(--transition-fast);
+    }
     .mode-btn {
+      position: relative; z-index: 1;
       flex: 1; background: transparent; color: var(--color-text-muted); font-size: 12px; padding: 6px 8px; border-radius: var(--radius-md);
     }
     .mode-btn:hover:not(.active) { color: var(--color-text-secondary); }
-    .mode-btn.active { background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-sm); font-weight: 500; }
+    .mode-btn.active { color: var(--color-text); font-weight: 500; }
 
-    /* Engine toggle + browser actions (Issue #41/#42, Phase 5) */
-    .engine-section { margin-bottom: 14px; }
+    /* Engine toggle + browser actions (Issue #41/#42, Phase 5). Issue #140
+       modernization: an outlined "card" (border, no fill — the section's
+       own children, like .browser-action-card below, already use
+       --color-surface-subtle, so filling the card too would collide with
+       them) instead of just floating in the page flow with no grouping at
+       all, to break up what otherwise reads as one long undifferentiated
+       list of settings (see the same treatment on .output-settings). */
+    .engine-section {
+      margin-bottom: 14px; padding: 12px;
+      border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+    }
     .browser-actions-hint { font-size: 11px; color: var(--color-text-muted); margin-bottom: 8px; }
     .browser-action-card { padding: 8px; background: var(--color-surface-subtle); border-radius: var(--radius-md); margin-bottom: 6px; }
     .browser-action-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
@@ -198,7 +366,7 @@
     .btn-toggle           { background: var(--color-surface-muted); color: var(--color-text-secondary); width: 100%; }
     .btn-toggle:hover     { background: var(--color-border); }
     .btn-toggle:disabled  { color: var(--color-text-faint); cursor: default; }
-    .btn-toggle.active         { background: var(--color-primary); color: var(--color-surface); }
+    .btn-toggle.active         { background: var(--color-primary); color: var(--color-on-accent); }
     .btn-toggle.active:hover   { background: var(--color-primary-hover); }
     .preview-summary { font-size: 11px; color: var(--color-text-muted); margin-top: 6px; text-align: center; }
     .preview-summary.warn { color: var(--color-warning); }
@@ -227,7 +395,7 @@
       font-size: 10px; padding: 2px 6px; background: var(--color-surface-muted); color: var(--color-text-secondary); border-radius: var(--radius-pill);
     }
     .api-sibling-chip:hover { background: var(--color-border); }
-    .api-sibling-chip.picked { background: var(--color-primary); color: var(--color-surface); }
+    .api-sibling-chip.picked { background: var(--color-primary); color: var(--color-on-accent); }
     .api-sibling-select-all {
       font-size: 10px; padding: 2px 6px; background: none; color: var(--color-primary); border: 1px dashed var(--color-primary-disabled); border-radius: var(--radius-pill);
     }
@@ -370,7 +538,14 @@
     .dom-tree-row.selected { background: var(--overlay-success-selected); font-weight: 600; }
 
     /* Output settings (script/output filename) — shared across all three modes */
-    .output-settings     { margin: 12px 0; }
+    /* Issue #140 modernization: same outlined-card treatment as
+       .engine-section above — groups the Json/preview/change-detection/
+       proxy toggles and the filename fields into one visually distinct
+       block instead of them just running into whatever came before. */
+    .output-settings {
+      margin: 12px 0; padding: 12px;
+      border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+    }
     .output-settings-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
     .output-settings-row label { flex: none; width: 110px; font-size: 11px; color: var(--color-text-muted); }
     .output-settings-row input[type="text"] {
@@ -424,9 +599,9 @@
         box-shadow var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
     }
     button:active:not(:disabled) { transform: translateY(1px); }
-    .btn-primary             { background: var(--color-primary); color: var(--color-surface); }
-    .btn-primary:hover       { background: var(--color-primary-hover); }
-    .btn-primary:disabled    { background: var(--color-primary-disabled); cursor: default; }
+    .btn-primary             { background: var(--color-primary); color: var(--color-on-accent); }
+    .btn-primary:hover       { background: var(--color-primary-hover); box-shadow: var(--glow-primary); }
+    .btn-primary:disabled    { background: var(--color-primary-disabled); cursor: default; box-shadow: none; }
     .btn-secondary           { background: var(--color-surface-muted); color: var(--color-text-secondary); }
     .btn-secondary:hover     { background: var(--color-border); }
     .btn-danger              { background: transparent; color: var(--color-danger); font-size: 12px; padding: 3px 6px; }
@@ -445,7 +620,7 @@
     }
     .modal-inner {
       background: var(--color-surface); border-radius: var(--radius-xl); padding: 18px;
-      width: 320px; box-shadow: var(--shadow-md);
+      width: 320px; box-shadow: var(--elevation-3);
     }
     .modal-inner label { display: block; font-size: 12px; color: var(--color-text-muted); margin-bottom: 6px; }
     .modal-inner input {
@@ -463,12 +638,12 @@
     /* Toast */
     .toast {
       position: fixed; bottom: 10px; left: 10px; right: 10px;
-      background: var(--color-danger); color: var(--color-surface); padding: 8px 12px;
+      background: var(--color-danger); color: var(--color-on-accent); padding: 8px 12px;
       border-radius: var(--radius-md); font-size: 13px; z-index: 20;
       display: flex; align-items: center; gap: 8px; justify-content: space-between;
     }
     .toast-report-btn {
-      background: var(--overlay-white-weak); color: var(--color-surface); font-size: 12px;
+      background: var(--overlay-white-weak); color: var(--color-on-accent); font-size: 12px;
       padding: 4px 8px; flex: none; white-space: nowrap;
     }
     .toast-report-btn:hover { background: var(--overlay-white-strong); }
@@ -483,11 +658,22 @@
     }
 
     /* Language selector — always visible, independent of the current screen */
-    #lang-switcher { display: flex; justify-content: flex-end; padding: 6px 10px 0; }
+    #lang-switcher { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 6px 10px 0; }
     #lang-select {
       font-size: 11px; padding: 2px 4px; border: 1px solid var(--color-border); border-radius: var(--radius-sm);
       background: var(--color-surface); color: var(--color-text-secondary); font-family: inherit;
     }
+    /* Theme toggle (Issue #140) — cycles system/light/dark, see shared/
+       theme.js's own doc comment for why a single compact button instead of
+       a dropdown (no room for a second select next to the language one at
+       this panel width). */
+    #theme-toggle {
+      display: flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px; padding: 0;
+      border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+      background: var(--color-surface); color: var(--color-text-secondary);
+    }
+    #theme-toggle svg { width: 14px; height: 14px; }
   </style>
 </head>
 <body>
@@ -496,6 +682,11 @@
        language is always possible, regardless of app state (checking,
        error, idle, …). See popup.js's applyStaticTranslations/setLanguage. -->
   <div id="lang-switcher">
+    <!-- Theme toggle (Issue #140): cycles system -> light -> dark -> system
+         on click (SFTheme.cycleTheme); the icon shown always reflects the
+         *current* state, same as the language <select>'s own value does —
+         see popup.js's renderThemeToggle. -->
+    <button id="theme-toggle" type="button" data-i18n-title="theme.toggleTitle"></button>
     <select id="lang-select" aria-label="Language / Sprache / Idioma" title="Language / Sprache / Idioma">
       <option value="de">Deutsch</option>
       <option value="en">English</option>
@@ -556,6 +747,7 @@
     </div>
 
     <div class="mode-toggle">
+      <div class="mode-toggle-thumb"></div>
       <button id="btn-mode-flat" class="mode-btn active" type="button" data-i18n="idle.modeFlat"></button>
       <button id="btn-mode-container" class="mode-btn" type="button" data-i18n="idle.modeContainer"></button>
       <button id="btn-mode-api" class="mode-btn" type="button" data-i18n="idle.modeApi"></button>
@@ -569,6 +761,7 @@
     <div class="engine-section">
       <div class="row-label" data-i18n="idle.engineLabel"></div>
       <div class="mode-toggle" style="margin-bottom: 8px;">
+        <div class="mode-toggle-thumb"></div>
         <button id="btn-engine-static" class="mode-btn active" type="button" data-i18n="idle.engineStatic"></button>
         <button id="btn-engine-browser" class="mode-btn" type="button" data-i18n="idle.engineBrowser" data-i18n-title="idle.engineBrowserTitle"></button>
       </div>
@@ -674,6 +867,7 @@
       </label>
       <div id="change-detection-config" class="hidden">
         <div class="mode-toggle" style="margin-bottom: 8px;">
+          <div class="mode-toggle-thumb"></div>
           <button id="btn-notify-email" class="mode-btn active" type="button" data-i18n="idle.notifyEmail"></button>
           <button id="btn-notify-webhook" class="mode-btn" type="button" data-i18n="idle.notifyWebhook"></button>
         </div>
@@ -992,6 +1186,7 @@
 
   <script src="../shared/logger.js"></script>
   <script src="../shared/companion-config.js"></script>
+  <script src="../shared/theme.js"></script>
   <script src="../i18n/i18n.js"></script>
   <script src="api-config.js"></script>
   <script src="container-tree.js"></script>

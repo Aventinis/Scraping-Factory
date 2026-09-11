@@ -16,6 +16,9 @@ const { SUPPORTED_LANGUAGES, initI18n, setLanguage, getLanguage, t } =
 const { DEFAULT_COMPANION_URL, getCompanionUrl, setCompanionUrlOverride, resetCompanionUrlOverride, normalizeUrl } =
   typeof require !== 'undefined' ? require('../shared/companion-config') : self.SFCompanionConfig;
 
+const { initTheme, getTheme, cycleTheme } =
+  typeof require !== 'undefined' ? require('../shared/theme') : self.SFTheme;
+
 const {
   STATES, escapeHtml,
   parseUrlTemplateParts, buildUrlTemplate, parseValueListInput, findUrlTemplateMatches, mergeValueListValues,
@@ -67,6 +70,23 @@ const { renderTransformList, wireTransformList, renderTransformPreview } =
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (e) => log('UNCAUGHT_ERROR', e.message));
   window.addEventListener('unhandledrejection', (e) => log('UNHANDLED_REJECTION', String(e.reason)));
+
+  // Issue #140 modernization: the side panel is user-resizable (see #138),
+  // and .mode-toggle-thumb's position/width is measured in pixels — without
+  // this it would stay wherever it was drawn at the last render() until the
+  // next state change recomputes it, visibly detached from its button while
+  // the panel is being dragged. rAF-throttled (not debounced) so it tracks
+  // the drag continuously instead of only snapping into place once dragging
+  // stops.
+  let resizeSyncScheduled = false;
+  window.addEventListener('resize', () => {
+    if (resizeSyncScheduled) return;
+    resizeSyncScheduled = true;
+    requestAnimationFrame(() => {
+      resizeSyncScheduled = false;
+      syncModeToggleThumbs();
+    });
+  });
 }
 
 let _state = {
@@ -617,6 +637,35 @@ function hide(id) { document.getElementById(id)?.classList.add('hidden'); }
 // init and again after an explicit language switch — render() rebuilds
 // dynamic subtrees (group tree, API candidates, …) itself and those call
 // t() directly, so they don't rely on this sweep at all.
+// Issue #140: one hand-drawn inline SVG per theme state — 'system' (the
+// null/no-override state) gets its own half-filled-circle glyph, distinct
+// from the sun/moon icons already established for status glyphs/tree
+// toggles (#139). Keyed by string 'system' rather than null since object
+// keys can't be null anyway, and this is purely a private rendering lookup.
+const THEME_TOGGLE_ICONS = {
+  light:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<circle cx="12" cy="12" r="4.5"></circle>' +
+    '<line x1="12" y1="2.5" x2="12" y2="5"></line><line x1="12" y1="19" x2="12" y2="21.5"></line>' +
+    '<line x1="2.5" y1="12" x2="5" y2="12"></line><line x1="19" y1="12" x2="21.5" y2="12"></line>' +
+    '<line x1="5" y1="5" x2="6.8" y2="6.8"></line><line x1="17.2" y1="17.2" x2="19" y2="19"></line>' +
+    '<line x1="5" y1="19" x2="6.8" y2="17.2"></line><line x1="17.2" y1="6.8" x2="19" y2="5"></line></svg>',
+  dark:
+    '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">' +
+    '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z"></path></svg>',
+  system:
+    '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+    '<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"></circle>' +
+    '<path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none"></path></svg>',
+};
+
+function renderThemeToggle() {
+  const btn = document.getElementById('theme-toggle');
+  if (!btn) return;
+  const theme = getTheme();
+  btn.innerHTML = THEME_TOGGLE_ICONS[theme === null ? 'system' : theme];
+}
+
 function applyStaticTranslations() {
   document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-title]').forEach((el) => { el.title = t(el.dataset.i18nTitle); });
@@ -624,6 +673,7 @@ function applyStaticTranslations() {
   const langSelect = document.getElementById('lang-select');
   if (langSelect) langSelect.value = getLanguage();
   if (typeof document !== 'undefined' && document.documentElement) document.documentElement.lang = getLanguage();
+  renderThemeToggle();
 }
 
 // Issue #84: render() hides every modal unconditionally at its own top
@@ -991,6 +1041,29 @@ function render() {
     const truncated = document.getElementById('dom-tree-truncated');
     if (truncated) truncated.classList.toggle('hidden', !_state.domTreeTruncated);
   }
+
+  syncModeToggleThumbs();
+}
+
+// Issue #140 modernization: positions every .mode-toggle-thumb behind its
+// container's current .active .mode-btn (mode/engine/notify-method toggles
+// all share this markup pattern) — see popup.html's own doc comment on
+// .mode-toggle-thumb for why this is JS rather than CSS-only. A no-op
+// (0-width thumb) for any toggle currently inside a hidden .screen, since
+// offsetWidth/offsetLeft read 0 while display: none — harmless, the next
+// render() call after that screen becomes visible again recomputes it
+// correctly. Called at the end of every render() rather than only after a
+// mode/engine/notify-method change specifically, since that's simpler than
+// threading a "did the active button change" flag through every one of
+// those call sites for a cheap, idempotent DOM read.
+function syncModeToggleThumbs() {
+  document.querySelectorAll('.mode-toggle').forEach((toggleEl) => {
+    const thumb = toggleEl.querySelector('.mode-toggle-thumb');
+    const active = toggleEl.querySelector('.mode-btn.active');
+    if (!thumb || !active) return;
+    thumb.style.width = `${active.offsetWidth}px`;
+    thumb.style.transform = `translateX(${active.offsetLeft - 3}px)`;
+  });
 }
 
 function renderFields(fields = _state.fields) {
@@ -1767,6 +1840,17 @@ function wireEvents() {
     render(); // re-render currently-visible dynamic content (group tree, API candidates, …) in the new language
   });
 
+  // Issue #140: system -> light -> dark -> system, see shared/theme.js's
+  // own doc comment. Applying/persisting the new theme is all synchronous-
+  // feeling from the user's perspective (cycleTheme sets the data-theme
+  // attribute immediately, the chrome.storage.local write just happens to
+  // also be awaited here) — only the icon needs a re-render, no full render().
+  document.getElementById('theme-toggle')?.addEventListener('click', async () => {
+    const next = await cycleTheme();
+    log('THEME_TOGGLE click', next ?? 'system');
+    renderThemeToggle();
+  });
+
   document.getElementById('btn-report-bug-error')?.addEventListener('click', reportBug);
   document.getElementById('btn-report-bug-toast')?.addEventListener('click', reportBug);
   document.getElementById('btn-report-bug-domtree')?.addEventListener('click', reportBug);
@@ -2469,6 +2553,10 @@ function wireEvents() {
 async function init() {
   const language = await initI18n(typeof navigator !== 'undefined' ? navigator.language : '');
   log('INIT language', language);
+
+  const theme = await initTheme();
+  log('INIT theme', theme ?? 'system');
+
   applyStaticTranslations();
 
   wireEvents();
@@ -2609,5 +2697,6 @@ if (typeof module !== 'undefined') {
     moveTransform, transformsAreValid, renderTransformList,
     applyTransformsPreview, toNumberPreview, renderTransformPreview,
     refreshFlatTransformPreview, refreshExtendedTransformPreview,
+    renderThemeToggle, syncModeToggleThumbs,
   };
 }
