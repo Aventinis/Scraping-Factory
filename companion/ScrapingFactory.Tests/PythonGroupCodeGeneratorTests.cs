@@ -61,6 +61,35 @@ public class PythonGroupCodeGeneratorTests
         Assert.Contains("requests.get(url, headers=HEADERS, timeout=10)", script);
     }
 
+    // Issue #169
+    [Fact]
+    public void Generate_OwnTextMode_SerializesModeAndEmitsRuntimeBranch()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com/speisekarte"] },
+                new ExtractGroupStep
+                {
+                    Roots =
+                    [
+                        new GroupNode
+                        {
+                            Name = "Gericht", Selector = "li.menu-item", Repeating = true,
+                            Children = [new DataFieldNode { Name = "Name", Selector = "h3", Mode = ExtractMode.OwnText }],
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains(""""mode": 'ownText'"""", script);
+        Assert.Contains("""elif node["mode"] == "ownText":""", script);
+    }
+
     // Issue #83
     [Fact]
     public void Generate_MultipleUrls_LoopsOverUrlsAndCombinesIntoOneErgebnis()

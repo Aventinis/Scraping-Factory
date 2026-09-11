@@ -163,6 +163,7 @@
     "textMode": "Text",
     "attributeMode": "Attribut: {attribute}",
     "existsMode": "Vorhanden?",
+    "ownTextMode": "Nur eigener Text",
     "addSubcontainerBtn": "+ Container",
     "addSubfieldBtn": "+ Datenfeld"
   },
@@ -221,6 +222,7 @@
       "textOption": "Text",
       "attributeOption": "Attribut",
       "existsOption": "Vorhanden?",
+      "ownTextOption": "Nur eigener Text (ohne verschachtelte Elemente)",
       "attributeLabel": "Attribut-Name (z. B. \"href\")",
       "attributePlaceholder": "Attribut"
     },

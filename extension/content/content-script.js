@@ -78,6 +78,21 @@ function collectElementAttributes(element) {
   return attributes;
 }
 
+// Issue #169: the raw value an OwnText-mode field's transform-chain live
+// preview runs against — direct text-node children only (nodeType === 3),
+// excluding text contributed by any nested element. A JS-side mirror of
+// scraper_grouped.py.j2's own runtime own-text extraction (found.contents
+// filtered by isinstance(c, str)), the same "both sides must independently
+// reach the same result" relationship rawText/attributes already have to
+// the Python runtime's own get_text()/attribute reads.
+function collectOwnText(element) {
+  return Array.from(element.childNodes)
+    .filter((node) => node.nodeType === Node.TEXT_NODE)
+    .map((node) => node.textContent)
+    .join('')
+    .trim();
+}
+
 // Identifies an element by its position within the DOM tree, relative to
 // document.body (same boundary buildSelector stops at). Used to correlate
 // page-side hover/click events with nodes in the side panel's tree view.
@@ -647,7 +662,7 @@ if (typeof window !== 'undefined') {
 
 if (typeof module !== 'undefined') {
   module.exports = {
-    buildSelector, countSelectorMatches, collectElementAttributes, elementPath, serializeDomTree,
+    buildSelector, countSelectorMatches, collectElementAttributes, collectOwnText, elementPath, serializeDomTree,
     matchFlatFields, matchGroupTree, computePreviewMatches,
     findValueInJson, siblingFields, siblingFieldsAt, findApiCandidates,
     deriveItemsAndValuePath, deriveApiTreeSkeleton,
@@ -950,6 +965,7 @@ function onClick(e) {
   const apiScopePathForSearch = apiScopePathActive; // read before stopSelection() clears it
   const clickedText = (target.textContent || '').trim();
   const clickedAttributes = collectElementAttributes(target);
+  const clickedOwnText = collectOwnText(target);
   log('CLICK → selector', selector, 'matchCount', matchCount);
   stopSelection();
 
@@ -972,7 +988,8 @@ function onClick(e) {
       // Issue #143: the raw values a transform-chain live preview runs
       // against — trimmed the same way the actual Python extraction already
       // strips both text (get_text(strip=True)) and attribute values.
-      rawText: clickedText, attributes: clickedAttributes,
+      // Issue #169: ownText is the third such raw value, for OwnText mode.
+      rawText: clickedText, attributes: clickedAttributes, ownText: clickedOwnText,
       framePath: framePath && framePath.length > 0 ? framePath : null,
     });
 
