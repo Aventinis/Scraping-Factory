@@ -599,6 +599,50 @@ public class PythonScriptVerifierTests
         Assert.Equal(7, result.RowCount);
     }
 
+    // Issue #169: the exact real-world bug report — a badge <span> nested
+    // directly inside the name <h3>, no separating whitespace in the
+    // markup. Plain Text mode (the pre-existing default) would concatenate
+    // both into one string; OwnText mode must extract only the direct text
+    // node, proving the fix against the actual Python runtime rather than
+    // just the C#-side codegen output (see PythonGroupCodeGeneratorTests for
+    // that half).
+    [Fact]
+    public async Task GroupedScript_OwnTextField_ExcludesNestedBadgeText()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+            <section class="menu-category">
+              <li class="menu-item"><h3 class="item-name">Burrata mit Tomaten<span class="item-badge vegan">vegan möglich</span></h3></li>
+              <li class="menu-item"><h3 class="item-name">Gebeizter Lachs</h3></li>
+            </section>
+            </body></html>
+            """);
+        var root = new GroupNode
+        {
+            Name = "Kategorie",
+            Selector = "section.menu-category",
+            Repeating = true,
+            Children =
+            [
+                new GroupNode
+                {
+                    Name = "Gericht",
+                    Selector = "li.menu-item",
+                    Repeating = true,
+                    Children = [new DataFieldNode { Name = "Name", Selector = "h3.item-name", Mode = ExtractMode.OwnText }],
+                },
+            ],
+        };
+        var script = GenerateGroupedScript(server.BaseUrl, root);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Xml, includePreview: true);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Contains("Burrata mit Tomaten</Name>", result.Preview!.XmlSample);
+        Assert.DoesNotContain("vegan möglich", result.Preview.XmlSample);
+        Assert.Contains("Gebeizter Lachs</Name>", result.Preview.XmlSample);
+    }
+
     // Issue #88 follow-up: before this, /generate could only ever verify a
     // proxy-enabled config if the companion process's own OS environment
     // already had the proxy env var set — an awkward requirement purely for
