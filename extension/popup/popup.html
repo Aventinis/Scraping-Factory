@@ -185,6 +185,34 @@
        textarea/select in the file, instead of each section's own input rule
        only ever snapping its border-color/box-shadow instantly. */
     input, textarea, select { transition: border-color var(--transition-fast), box-shadow var(--transition-fast); }
+    /* Issue #140 modernization: slim, theme-aware scrollbars for every
+       scrollable container introduced across #138/#122 — ::-webkit-scrollbar
+       is Chromium-only, which is exactly the extension's own supported
+       range (Chrome/Edge/Opera, see CLAUDE.md's Build section), so no
+       Firefox-specific scrollbar-* fallback is needed. Listed once here as
+       a combined selector rather than a new shared class, so none of these
+       five elements' existing class lists (and anything that queries them)
+       needs to change. */
+    .screen-idle-scroll::-webkit-scrollbar, #screen-api-config::-webkit-scrollbar,
+    .dom-tree-wrapper::-webkit-scrollbar, .data-preview-table-wrap::-webkit-scrollbar,
+    .data-preview-text::-webkit-scrollbar {
+      width: 8px; height: 8px;
+    }
+    .screen-idle-scroll::-webkit-scrollbar-track, #screen-api-config::-webkit-scrollbar-track,
+    .dom-tree-wrapper::-webkit-scrollbar-track, .data-preview-table-wrap::-webkit-scrollbar-track,
+    .data-preview-text::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .screen-idle-scroll::-webkit-scrollbar-thumb, #screen-api-config::-webkit-scrollbar-thumb,
+    .dom-tree-wrapper::-webkit-scrollbar-thumb, .data-preview-table-wrap::-webkit-scrollbar-thumb,
+    .data-preview-text::-webkit-scrollbar-thumb {
+      background: var(--color-border); border-radius: var(--radius-pill); border: 2px solid transparent; background-clip: padding-box;
+    }
+    .screen-idle-scroll::-webkit-scrollbar-thumb:hover, #screen-api-config::-webkit-scrollbar-thumb:hover,
+    .dom-tree-wrapper::-webkit-scrollbar-thumb:hover, .data-preview-table-wrap::-webkit-scrollbar-thumb:hover,
+    .data-preview-text::-webkit-scrollbar-thumb:hover {
+      background: var(--color-text-faint); background-clip: padding-box;
+    }
     /* Issue #138: the side panel is full browser-window height by default,
        unlike the classic dropdown popup this layout originally sized to
        content — html/body need an explicit height for a flex-column screen
@@ -312,8 +340,17 @@
     .mode-btn:hover:not(.active) { color: var(--color-text-secondary); }
     .mode-btn.active { color: var(--color-text); font-weight: 500; }
 
-    /* Engine toggle + browser actions (Issue #41/#42, Phase 5) */
-    .engine-section { margin-bottom: 14px; }
+    /* Engine toggle + browser actions (Issue #41/#42, Phase 5). Issue #140
+       modernization: an outlined "card" (border, no fill — the section's
+       own children, like .browser-action-card below, already use
+       --color-surface-subtle, so filling the card too would collide with
+       them) instead of just floating in the page flow with no grouping at
+       all, to break up what otherwise reads as one long undifferentiated
+       list of settings (see the same treatment on .output-settings). */
+    .engine-section {
+      margin-bottom: 14px; padding: 12px;
+      border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+    }
     .browser-actions-hint { font-size: 11px; color: var(--color-text-muted); margin-bottom: 8px; }
     .browser-action-card { padding: 8px; background: var(--color-surface-subtle); border-radius: var(--radius-md); margin-bottom: 6px; }
     .browser-action-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
@@ -501,7 +538,14 @@
     .dom-tree-row.selected { background: var(--overlay-success-selected); font-weight: 600; }
 
     /* Output settings (script/output filename) — shared across all three modes */
-    .output-settings     { margin: 12px 0; }
+    /* Issue #140 modernization: same outlined-card treatment as
+       .engine-section above — groups the Json/preview/change-detection/
+       proxy toggles and the filename fields into one visually distinct
+       block instead of them just running into whatever came before. */
+    .output-settings {
+      margin: 12px 0; padding: 12px;
+      border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+    }
     .output-settings-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
     .output-settings-row label { flex: none; width: 110px; font-size: 11px; color: var(--color-text-muted); }
     .output-settings-row input[type="text"] {
