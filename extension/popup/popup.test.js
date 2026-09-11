@@ -521,6 +521,55 @@ describe('buildHardeningConfig (nullRate)', () => {
   });
 });
 
+// Issue #131
+describe('buildHardeningConfig (baseline)', () => {
+  test('returns null when baseline is disabled', () => {
+    expect(buildHardeningConfig({ baseline: { enabled: false, severity: 'Warning', dropThresholdPercent: 20 } })).toBeNull();
+  });
+
+  test('converts dropThresholdPercent into a 0.0-1.0 fraction', () => {
+    expect(buildHardeningConfig({ baseline: { enabled: true, severity: 'Error', dropThresholdPercent: 20 } })).toEqual([
+      { kind: 'baseline', severity: 'Error', dropThreshold: 0.2 },
+    ]);
+  });
+
+  test('clamps an out-of-range or non-numeric percent, defaulting to 20%', () => {
+    expect(buildHardeningConfig({ baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: 150 } })).toEqual([
+      { kind: 'baseline', severity: 'Warning', dropThreshold: 1 },
+    ]);
+    expect(buildHardeningConfig({ baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: -10 } })).toEqual([
+      { kind: 'baseline', severity: 'Warning', dropThreshold: 0 },
+    ]);
+    expect(buildHardeningConfig({ baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: NaN } })).toEqual([
+      { kind: 'baseline', severity: 'Warning', dropThreshold: 0.2 },
+    ]);
+  });
+
+  test('combines with noResult and nullRate', () => {
+    const hardening = {
+      noResult: { enabled: true, severity: 'Error' },
+      nullRate: [{ fieldName: 'Preis', threshold: 30, severity: 'Error' }],
+      baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: 20 },
+    };
+    expect(buildHardeningConfig(hardening)).toEqual([
+      { kind: 'noResult', severity: 'Error' },
+      { kind: 'nullRate', severity: 'Error', fieldName: 'Preis', threshold: 0.3 },
+      { kind: 'baseline', severity: 'Warning', dropThreshold: 0.2 },
+    ]);
+  });
+});
+
+describe('buildScrapingConfig (baseline hardening, Issue #131)', () => {
+  test('threads a baseline check through the wire config', () => {
+    const hardening = { baseline: { enabled: true, severity: 'Error', dropThresholdPercent: 25 } };
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, hardening,
+    );
+    expect(result.hardening).toEqual([{ kind: 'baseline', severity: 'Error', dropThreshold: 0.25 }]);
+  });
+});
+
 describe('collectFieldNames (Issue #130)', () => {
   test('flat mode: reads field names straight off the fields array', () => {
     const fields = [{ name: 'Titel', selector: 'h1' }, { name: 'Preis', selector: '.price' }];
