@@ -84,6 +84,12 @@ public sealed class ScrapingConfig
     // alike) — see IR/ProxyConfig.cs. Null is today's exact behavior (direct
     // connection, no proxying).
     public ProxyConfig? Proxy { get; init; }
+
+    // Issue #129: opt-in script hardening checks, mode-independent
+    // (Fields/Groups/Api alike) — see IR/HardeningCheck.cs. Null/empty is
+    // today's exact behavior (the generated script never re-checks its own
+    // result, byte-for-byte the same script as before this existed).
+    public List<HardeningCheck>? Hardening { get; init; }
 }
 
 public sealed class ScrapingField
