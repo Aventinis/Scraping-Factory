@@ -396,6 +396,28 @@ describe('scoped selection (START_SELECTION with scopeSelector)', () => {
       type: 'ELEMENT_SELECTED',
       rawText: 'Suppe',
       attributes: { class: 'item-name', 'data-id': '42' },
+      ownText: 'Suppe', // no nested elements here, so same as rawText
+    }));
+  });
+
+  // Issue #169: the exact real-world bug report — ownText must differ from
+  // rawText when a nested element (the badge) contributes some of the
+  // element's full text content.
+  test('ELEMENT_SELECTED carries an ownText that excludes a nested element\'s text, unlike rawText', async () => {
+    document.body.innerHTML = `
+      <section class="menu-category">
+        <li class="menu-item"><h3 class="item-name">Burrata mit Tomaten<span class="item-badge vegan">vegan möglich</span></h3></li>
+      </section>
+    `;
+    capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
+
+    document.querySelector('h3.item-name').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ELEMENT_SELECTED',
+      rawText: 'Burrata mit Tomatenvegan möglich', // full descendant text, badge included
+      ownText: 'Burrata mit Tomaten', // direct text node only, badge excluded
     }));
   });
 
