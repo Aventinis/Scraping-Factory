@@ -5,16 +5,37 @@
   <title>Scraping Factory</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    /* Issue #138: the side panel is full browser-window height by default,
+       unlike the classic dropdown popup this layout originally sized to
+       content — html/body need an explicit height for a flex-column screen
+       below to stretch to it instead of leaving dead whitespace. */
+    html, body { height: 100%; }
     body {
       font-family: system-ui, sans-serif;
       font-size: 14px;
       width: 100%;
-      max-width: 380px;
+      /* The side panel is user-resizable (unlike the old dropdown popup this
+         380px cap was written for) — only guard against absurdly long lines
+         of text on a genuinely wide panel, don't cap the common case. */
+      max-width: 640px;
       min-width: 280px;
+      margin: 0 auto;
       background: #fff;
       color: #1a1a1a;
+      display: flex;
+      flex-direction: column;
+      min-height: 100%;
     }
-    .screen { padding: 16px; }
+    /* Only one .screen is ever unhidden at a time (see popup.js's render());
+       flex:1 lets it fill whatever height the panel actually has instead of
+       being intrinsically sized to its own content. */
+    .screen {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
     .hidden { display: none !important; }
 
     /* Spinner */
@@ -46,6 +67,13 @@
       padding: 5px 8px; font-size: 12px; font-family: inherit; outline: none; margin-bottom: 8px;
     }
     .companion-url-override input[type="text"]:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.2); }
+
+    /* Issue #138: screen-idle is by far the longest screen (url/mode/engine/
+       field/output-settings sections) — this wrapper is everything except
+       the bottom actions row, so that row (Export/Generate) stays pinned at
+       the bottom of the panel and only the content above it scrolls,
+       instead of the whole document scrolling past the buttons. */
+    .screen-idle-scroll { flex: 1; min-height: 0; overflow-y: auto; }
 
     /* URL row */
     .url-row     { margin-bottom: 14px; }
@@ -138,8 +166,11 @@
     .api-candidate-field-name { flex: 1; font-size: 11px; padding: 3px 6px; border: 1px solid #e5e7eb; border-radius: 4px; }
     .api-candidate-unusable { font-size: 10px; color: #9ca3af; margin-top: 6px; }
 
-    /* API-mode config screen (Phase 5) */
-    #screen-api-config { padding: 16px; max-height: 480px; overflow-y: auto; }
+    /* API-mode config screen (Phase 5). Issue #138: was hard-capped at
+       max-height: 480px regardless of the actual (resizable) panel height —
+       now grows via the shared .screen flex:1 rule and just scrolls
+       internally within whatever height that ends up being. */
+    #screen-api-config { padding: 16px; overflow-y: auto; min-height: 0; }
     .api-config-parts, .api-config-headers { list-style: none; margin-bottom: 4px; }
     .api-config-part-row, .api-config-header-row {
       display: flex; align-items: center; gap: 6px; padding: 5px 6px; background: #f9fafb; border-radius: 6px; margin-bottom: 4px; font-size: 11px;
@@ -407,6 +438,7 @@
 
   <!-- IDLE -->
   <section id="screen-idle" class="screen hidden">
+    <div class="screen-idle-scroll">
     <div class="url-row">
       <div class="row-label" data-i18n="idle.urlLabel"></div>
       <div id="url-display" class="url-value"></div>
@@ -605,6 +637,7 @@
         </div>
         <p class="preview-summary" data-i18n="idle.proxyHint"></p>
       </div>
+    </div>
     </div>
 
     <div class="actions" style="margin-top: 10px;">
