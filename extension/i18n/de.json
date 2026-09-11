@@ -101,7 +101,9 @@
     "hardeningSeverityErrorTitle": "Das Skript druckt einen Fehler und beendet sich mit einem eigenen Exit-Code (2), unterscheidbar von einem Absturz (1).",
     "hardeningNullRateSectionLabel": "Auf leere Werte pro Feld prüfen",
     "hardeningNullRateFieldPlaceholder": "-- Feld wählen --",
-    "hardeningNullRateAddBtn": "+ Feld hinzufügen"
+    "hardeningNullRateAddBtn": "+ Feld hinzufügen",
+    "hardeningBaselineToggle": "Auf Rückgang zum letzten Lauf prüfen",
+    "hardeningBaselineThresholdLabel": "Schwelle (Rückgang)"
   },
   "robots": {
     "checkFailed": "robots.txt konnte nicht geprüft werden ({error}).",
