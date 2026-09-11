@@ -117,7 +117,13 @@
 
     /* Error screen */
     #screen-error { text-align: center; padding: 24px 16px; }
-    .error-icon  { font-size: 32px; margin-bottom: 8px; }
+    /* Issue #139: inline SVG status icons instead of the old Unicode glyphs
+       (⚠/✓) — hand-drawn simple shapes, no icon font/CDN. stroke="currentColor"
+       on the svg itself means these two rules only need to set size + color,
+       both status colors already coming from the token set above. */
+    .error-icon, .success-icon { margin-bottom: 8px; }
+    .error-icon svg, .success-icon svg { width: 32px; height: 32px; }
+    .error-icon  { color: var(--color-danger); }
     .error-hint  { color: var(--color-text-muted); font-size: 13px; margin: 6px 0 16px; }
     .error-current-url { color: var(--color-text-faint); font-size: 11px; font-family: monospace; margin: -8px 0 16px; word-break: break-all; }
     .companion-url-override { text-align: left; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--color-border); }
@@ -263,6 +269,20 @@
     .group-tree-toggle { width: 12px; flex: none; color: var(--color-text-faint); cursor: pointer; user-select: none; }
     .group-tree-label  { flex: 1; min-width: 60px; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .btn-tiny { font-size: 11px; padding: 3px 6px; }
+    /* Issue #139: shared chevron icon for all three tree-toggle implementations
+       (group/api/dom) — one static down-pointing SVG per row instead of each
+       swapping between two different Unicode glyphs on click; collapsed state
+       is just a rotation via the .collapsed class (see container-tree-ui.js/
+       api-config-ui.js/popup.js's buildTreeNodeEl for the class toggling). */
+    .group-tree-toggle svg, .api-tree-toggle svg, .dom-tree-toggle svg {
+      width: 12px; height: 12px; display: block; transition: transform var(--transition-fast);
+    }
+    .group-tree-toggle.collapsed svg, .api-tree-toggle.collapsed svg, .dom-tree-toggle.collapsed svg {
+      transform: rotate(-90deg);
+    }
+    .group-tree-row:hover, .api-tree-row:hover, .body-tree-row:hover {
+      background: var(--color-surface-subtle); border-radius: var(--radius-sm);
+    }
 
     /* API-Mode tree editor (Issue #54) — same visual pattern as the Container
        tree editor above, no repeating/attribute/mode label or frame badge. */
@@ -365,7 +385,7 @@
 
     /* Done screen */
     #screen-done    { text-align: center; padding: 24px 16px; }
-    .success-icon   { font-size: 32px; color: var(--color-success); margin-bottom: 8px; }
+    .success-icon   { color: var(--color-success); }
     .done-actions   { display: flex; gap: 8px; margin-top: 16px; justify-content: center; }
 
     /* Issue #122: trial-run data preview panel (Done screen) */
@@ -478,7 +498,13 @@
 
   <!-- COMPANION_ERROR -->
   <section id="screen-error" class="screen hidden">
-    <p class="error-icon">⚠</p>
+    <p class="error-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polygon points="12 3 22 20 2 20"></polygon>
+        <line x1="12" y1="9" x2="12" y2="14"></line>
+        <circle cx="12" cy="17.3" r="0.6" fill="currentColor" stroke="none"></circle>
+      </svg>
+    </p>
     <p data-i18n="error.title"></p>
     <p class="error-hint" data-i18n="error.hint"></p>
     <p id="error-current-url" class="error-current-url"></p>
@@ -786,7 +812,12 @@
 
   <!-- DONE -->
   <section id="screen-done" class="screen hidden">
-    <p class="success-icon">✓</p>
+    <p class="success-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"></circle>
+        <polyline points="7 12.5 10.5 16 17 8"></polyline>
+      </svg>
+    </p>
     <p data-i18n="done.title"></p>
     <div class="done-actions">
       <!-- Returns to IDLE with the just-used configuration (fields/groups/
