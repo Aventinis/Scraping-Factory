@@ -362,6 +362,12 @@
     .browser-action-field-row input { flex: 1; min-width: 0; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
     .browser-action-hint { font-size: 10px; color: var(--color-text-faint); margin: 4px 0 0; }
 
+    /* Issue #130: one row per hardening null-rate check. */
+    .hardening-null-rate-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 11px; }
+    .hardening-null-rate-row .hardening-null-rate-field { flex: 1; min-width: 0; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+    .hardening-null-rate-row .hardening-null-rate-threshold { width: 44px; font-size: 11px; padding: 3px 4px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+    .hardening-null-rate-row .hardening-null-rate-severity { flex: none; margin: 0; }
+
     /* Preview toggle */
     .btn-toggle           { background: var(--color-surface-muted); color: var(--color-text-secondary); width: 100%; }
     .btn-toggle:hover     { background: var(--color-border); }
@@ -940,6 +946,20 @@
           <button id="btn-hardening-no-result-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning" data-i18n-title="idle.hardeningSeverityWarningTitle"></button>
           <button id="btn-hardening-no-result-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError" data-i18n-title="idle.hardeningSeverityErrorTitle"></button>
         </div>
+        <!-- Issue #130: per-field empty-value-rate check — catches a
+             field whose selector silently starts matching the wrong thing
+             (row/element count stays healthy, but the value is always
+             empty), which #129's own "no result" check above can't detect
+             at all. One row per monitored field, reusing the exact field
+             list already built in the current mode (see
+             collectFieldNames) instead of a free-text field name input.
+             Rows are entirely JS-rendered (renderHardeningNullRateList) —
+             this div is just the mount point. -->
+        <div class="output-settings-toggle" style="margin-top: 10px;">
+          <span data-i18n="idle.hardeningNullRateSectionLabel"></span>
+        </div>
+        <div id="hardening-null-rate-list"></div>
+        <button type="button" id="btn-add-null-rate-check" class="btn-secondary btn-tiny" data-i18n="idle.hardeningNullRateAddBtn"></button>
       </div>
       <!-- Filenames last: a final naming step right before Export/Generate,
            below every other output-settings toggle. -->
