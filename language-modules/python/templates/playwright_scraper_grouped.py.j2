@@ -12,7 +12,7 @@ import re
 {{~ if needs_os_import ~}}
 import os
 {{~ end ~}}
-{{~ if needs_exit_helper ~}}
+{{~ if needs_exit_helper || hardening.enabled ~}}
 import sys
 {{~ end ~}}
 {{~ if proxy.enabled ~}}
@@ -105,6 +105,32 @@ def _next_playwright_proxy():
     if parsed.password:
         result["password"] = parsed.password
     return result
+{{~ end ~}}
+
+{{~ if hardening.enabled ~}}
+# Issue #129 (script hardening): each configured check independently prints
+# a warning (script still exits 0) or an error (script exits
+# EXIT_HARDENING_FAILED) once scraping is done — lets a script re-run later
+# (e.g. via cron, weeks after generation) detect that it silently stopped
+# finding anything, instead of writing an empty output file and exiting 0
+# as if nothing were wrong.
+EXIT_HARDENING_FAILED = 2
+
+HARDENING = {{ hardening.checks_literal }}
+
+
+def _run_hardening_checks(result_count):
+    has_error = False
+    for check in HARDENING:
+        if check["kind"] == "noResult":
+            if result_count == 0:
+                message = "Es wurden keine Daten extrahiert — mindestens ein Selektor hat wahrscheinlich nichts gefunden."
+                if check["severity"] == "Error":
+                    print(f"FEHLER: {message}", file=sys.stderr)
+                    has_error = True
+                else:
+                    print(f"WARNUNG: {message}", file=sys.stderr)
+    return has_error
 {{~ end ~}}
 
 GROUPS = {{ groups_literal }}
@@ -394,6 +420,10 @@ def main():
         new_content = f.read()
     if previous_content is not None and previous_content != new_content:
         _notify_change(previous_content, new_content)
+{{~ end ~}}
+{{~ if hardening.enabled ~}}
+    if _run_hardening_checks(count):
+        sys.exit(EXIT_HARDENING_FAILED)
 {{~ end ~}}
 {{~ if proxy.enabled ~}}
     if _PROXY_ENV_MISSING:

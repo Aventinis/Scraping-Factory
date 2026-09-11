@@ -36,6 +36,18 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
     // check every other exit code goes through.
     private const int MissingEnvVarExitCode = 78;
 
+    // Issue #129: a generated script exits with this code (see
+    // EXIT_HARDENING_FAILED in the Python shell templates) when a
+    // configured hardening check fails at Error severity — always emitted
+    // *after* the output file has already been written (unlike a FillStep's
+    // early exit, there's no "nothing to verify yet" case to short-circuit
+    // for), so this exit code alone must not immediately fail verification
+    // either: whether the run is ultimately a success still comes down to
+    // the same "did it produce data" check every other exit code goes
+    // through — which, for the one check implemented so far (NoResult),
+    // already agrees with the hardening check's own verdict by construction.
+    private const int HardeningFailedExitCode = 2;
+
     // Issue #122: how many rows/top-level XML elements a trial-run preview
     // ever carries, regardless of how much data the script actually
     // produced — a preview is a sanity check, not a full export, and this
@@ -95,7 +107,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                 }
                 await stdoutTask;
 
-                if (process.ExitCode != 0 && process.ExitCode != MissingEnvVarExitCode)
+                if (process.ExitCode != 0 && process.ExitCode != MissingEnvVarExitCode && process.ExitCode != HardeningFailedExitCode)
                 {
                     return new ScriptVerificationResult
                     {
