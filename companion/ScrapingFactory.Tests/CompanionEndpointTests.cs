@@ -626,6 +626,33 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.True(HttpStatusCode.OK == response.StatusCode, body);
     }
 
+    // Issue #132: same "post the extension's actual raw wire shape" style as
+    // NullRate/Baseline above — MinBodyLength/BlockPhrases are both
+    // optional, so this exercises the "both set" case; the wire payload
+    // itself already contains no blocking phrases in the fixture body, so
+    // the trial run still succeeds cleanly (a passing trial run, not the
+    // check actually triggering, is all this test needs to prove).
+    [Fact]
+    public async Task Generate_ExtensionStyleBlockingHardeningPayload_Returns200()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var payload = $$"""
+            {
+              "version": "1",
+              "url": "{{server.BaseUrl}}",
+              "fields": [ { "name": "Titel", "selector": "h1", "attribute": null } ],
+              "hardening": [
+                { "kind": "blocking", "severity": "Warning", "minBodyLength": 20, "blockPhrases": ["Access Denied"] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+    }
+
     [Fact]
     public async Task Generate_NullRateHardeningPayload_WrongLegacyFieldKey_FailsWithUsableError()
     {
