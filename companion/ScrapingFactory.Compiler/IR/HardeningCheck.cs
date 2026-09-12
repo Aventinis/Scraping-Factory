@@ -26,6 +26,7 @@ namespace ScrapingFactory.Compiler.IR;
 [JsonDerivedType(typeof(NullRateCheck), "nullRate")]
 [JsonDerivedType(typeof(BaselineCheck), "baseline")]
 [JsonDerivedType(typeof(BlockingCheck), "blocking")]
+[JsonDerivedType(typeof(RequiredFieldsCheck), "requiredFields")]
 public abstract class HardeningCheck
 {
     public required HardeningSeverity Severity { get; init; }
@@ -124,4 +125,42 @@ public sealed class BlockingCheck : HardeningCheck
 {
     public int? MinBodyLength { get; init; }
     public List<string>? BlockPhrases { get; init; }
+}
+
+// Issue #133: unlike the four checks above, this one changes what actually
+// gets written, not just what gets reported about what was already
+// written — a row missing a non-empty value for any of FieldNames is
+// dropped from the output entirely (rather than written with a blank
+// cell), serving the issue's own "safe for DB import" motivation (a
+// NOT NULL column that would otherwise silently break on import). The
+// filtering itself always happens regardless of Severity; only whether the
+// *run* is flagged as failed afterward depends on it — an all-Warning
+// configuration still guarantees the output file never contains a row
+// missing a required value, without necessarily failing the whole run.
+//
+// Flat-shaped output (Fields/flat mode, Api-mode's flat ItemsPath/Fields
+// shape) and container mode both support this check; Api-mode's tree shape
+// (Groups) still doesn't — ScrapingPlanValidator rejects that specific
+// combination (see ValidateApiConfig's call site in Validate()).
+//
+// Container mode has no flat "row" the way flat mode does, so FieldNames
+// is matched *globally by tag name anywhere in the built output tree* —
+// the same simplification NullRateCheck already established for this
+// exact ambiguity (see its own doc comment). What gets dropped when a
+// match is empty is the *nearest enclosing repeating group instance*: the
+// runtime's extract_group() walker (language-modules/python/templates/
+// scraper_grouped.py.j2/playwright_scraper_grouped.py.j2) already builds
+// each repeating instance bottom-up before deciding whether to append it
+// to its parent, so checking "does this instance's own subtree contain an
+// empty required field" at exactly that point naturally drops whichever
+// nesting level actually contains the problem, without needing to track
+// "nearest repeating ancestor" as separate schema metadata. A required
+// field with no repeating ancestor above it (or only non-repeating
+// ancestors) has no "instance" to drop, so it's simply left as an empty
+// element — a deliberate, documented limitation, not a bug. Only one
+// RequiredFieldsCheck ever makes sense, so the existing duplicate-kind
+// rule applies unchanged.
+public sealed class RequiredFieldsCheck : HardeningCheck
+{
+    public required List<string> FieldNames { get; init; }
 }

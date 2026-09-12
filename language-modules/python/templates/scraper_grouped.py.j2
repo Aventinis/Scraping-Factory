@@ -111,6 +111,51 @@ HARDENING = {{ hardening.checks_literal }}
 # the runtime cost of appending an already-in-memory string is negligible.
 _BLOCKING_RESPONSES = []
 
+# Issue #133 (required-fields check, container mode): matched globally by
+# tag name anywhere in the built tree (same convention the nullRate check
+# already established for this exact ambiguity) — REQUIRED_FIELD_NAMES is
+# the plain list of names to check, empty when no "requiredFields" check is
+# configured, in which case extract_group()'s own call site below is a
+# guaranteed no-op.
+_REQUIRED_FIELDS_CHECK = next((c for c in HARDENING if c["kind"] == "requiredFields"), None)
+REQUIRED_FIELD_NAMES = _REQUIRED_FIELDS_CHECK["fieldNames"] if _REQUIRED_FIELDS_CHECK else []
+_required_fields_dropped_count = 0
+
+
+# Called from extract_group() right after a *repeating* group's one
+# instance is fully built (never for a non-repeating group, which has no
+# "instance" to drop) — checks whether any required field anywhere in this
+# instance's own subtree is empty, dropping the whole instance if so.
+# extract_group() already recurses bottom-up, so this naturally drops the
+# nearest enclosing repeating instance, whichever nesting level actually
+# contains the problem — an inner repeating group's own bad instance is
+# dropped without disturbing its outer container. A required field name
+# matching nothing in this subtree is a silent no-op (typo/renamed field),
+# the same "skip rather than error" convention the nullRate check's own
+# zero-match case already uses.
+def _passes_required_fields(el):
+    global _required_fields_dropped_count
+    for name in REQUIRED_FIELD_NAMES:
+        for match in el.iter(name):
+            if not (match.text or "").strip():
+                _required_fields_dropped_count += 1
+                return False
+    return True
+
+
+# Unlike flat mode's "N of M rows" message, dropping can happen at more
+# than one nesting level in one run, so there's no single well-defined "of
+# M" denominator here — a plain count is reported instead.
+def _report_required_fields_drops():
+    if _REQUIRED_FIELDS_CHECK is None or _required_fields_dropped_count == 0:
+        return False
+    message = f"Dropped {_required_fields_dropped_count} element(s) missing a required field."
+    if _REQUIRED_FIELDS_CHECK["severity"] == "Error":
+        print(f"ERROR: {message}", file=sys.stderr)
+        return True
+    print(f"WARNING: {message}", file=sys.stderr)
+    return False
+
 {{~ if hardening.has_baseline ~}}
 # Issue #131 (baseline check): a small sidecar file next to the script's own
 # output records the result count from the last run that passed cleanly
@@ -297,6 +342,10 @@ def extract_group(scope, node):
                     el.extend(result)
                 else:
                     el.append(result)
+{{~ if hardening.enabled ~}}
+            if node["repeating"] and not _passes_required_fields(el):
+                continue
+{{~ end ~}}
             elements.append(el)
         return elements
 
@@ -461,7 +510,7 @@ def main():
         _notify_change(previous_content, new_content)
 {{~ end ~}}
 {{~ if hardening.enabled ~}}
-    hardening_failed = _run_hardening_checks(root)
+    hardening_failed = _run_hardening_checks(root) or _report_required_fields_drops()
 {{~ if hardening.has_baseline ~}}
     if not hardening_failed:
         _write_baseline(count)

@@ -43,6 +43,7 @@ const {
   detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase, parseAdditionalUrls,
   buildChangeDetectionConfig, buildProxyConfig, buildHardeningConfig,
   collectFieldNames, addNullRateCheck, removeNullRateCheck, updateNullRateCheck, renderHardeningNullRateList,
+  addRequiredField, removeRequiredField, renderHardeningRequiredFieldsList,
   addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
   buildVerificationValues,
   frameBadgeHtml,
@@ -635,6 +636,75 @@ describe('buildScrapingConfig (blocking hardening, Issue #132)', () => {
       false, [], null, null, hardening,
     );
     expect(result.hardening).toEqual([{ kind: 'blocking', severity: 'Error', minBodyLength: 200, blockPhrases: ['Access Denied'] }]);
+  });
+});
+
+// Issue #133
+describe('addRequiredField / removeRequiredField', () => {
+  test('adds a field name', () => {
+    expect(addRequiredField(['Titel'], 'Preis')).toEqual(['Titel', 'Preis']);
+  });
+
+  test('adding an already-present field name is a no-op', () => {
+    expect(addRequiredField(['Titel', 'Preis'], 'Preis')).toEqual(['Titel', 'Preis']);
+  });
+
+  test('adding a blank/undefined field name is a no-op', () => {
+    expect(addRequiredField(['Titel'], '')).toEqual(['Titel']);
+    expect(addRequiredField(['Titel'], undefined)).toEqual(['Titel']);
+  });
+
+  test('removes a field name by index', () => {
+    expect(removeRequiredField(['Titel', 'Preis', 'Menge'], 1)).toEqual(['Titel', 'Menge']);
+  });
+});
+
+describe('buildHardeningConfig (requiredFields)', () => {
+  test('returns null when disabled', () => {
+    expect(buildHardeningConfig({ requiredFields: { enabled: false, severity: 'Warning', fields: ['Titel'] } })).toBeNull();
+  });
+
+  // Unlike blocking (still meaningful with nothing configured, thanks to
+  // its always-on redirect signal), an enabled requiredFields check with no
+  // fields chosen yet has nothing to do at all — same "incomplete draft,
+  // not sent" convention as an unfinished nullRate row.
+  test('returns null when enabled but no fields chosen yet', () => {
+    expect(buildHardeningConfig({ requiredFields: { enabled: true, severity: 'Warning', fields: [] } })).toBeNull();
+  });
+
+  test('includes the configured field names and shared severity', () => {
+    const hardening = { requiredFields: { enabled: true, severity: 'Error', fields: ['Titel', 'Preis'] } };
+    expect(buildHardeningConfig(hardening)).toEqual([
+      { kind: 'requiredFields', severity: 'Error', fieldNames: ['Titel', 'Preis'] },
+    ]);
+  });
+
+  test('combines with the other four checks', () => {
+    const hardening = {
+      noResult: { enabled: true, severity: 'Error' },
+      nullRate: [{ fieldName: 'Preis', threshold: 30, severity: 'Error' }],
+      baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: 20 },
+      blocking: { enabled: true, severity: 'Error', minBodyLengthText: '200', phrasesText: 'Access Denied' },
+      requiredFields: { enabled: true, severity: 'Error', fields: ['Titel'] },
+    };
+    expect(buildHardeningConfig(hardening)).toEqual([
+      { kind: 'noResult', severity: 'Error' },
+      { kind: 'nullRate', severity: 'Error', fieldName: 'Preis', threshold: 0.3 },
+      { kind: 'baseline', severity: 'Warning', dropThreshold: 0.2 },
+      { kind: 'blocking', severity: 'Error', minBodyLength: 200, blockPhrases: ['Access Denied'] },
+      { kind: 'requiredFields', severity: 'Error', fieldNames: ['Titel'] },
+    ]);
+  });
+});
+
+describe('buildScrapingConfig (requiredFields hardening, Issue #133)', () => {
+  test('threads a requiredFields check through the wire config', () => {
+    const hardening = { requiredFields: { enabled: true, severity: 'Error', fields: ['Titel'] } };
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, hardening,
+    );
+    expect(result.hardening).toEqual([{ kind: 'requiredFields', severity: 'Error', fieldNames: ['Titel'] }]);
   });
 });
 

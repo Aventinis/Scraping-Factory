@@ -161,11 +161,21 @@ let _state = {
   // and `phrasesText` (one block phrase per line, same raw-textarea-text
   // convention as `_state.additionalStartUrls`/API mode's own value-list
   // inputs — parsed into an array only in buildHardeningConfig).
+  // Issue #133's `requiredFields` is closer in shape to `blocking` than
+  // `nullRate` — one shared severity, not per-field — but unlike
+  // `blocking`'s free-text phrase list, `fields` holds field names picked
+  // from a dropdown (collectFieldNames), the same source `nullRate`'s own
+  // per-row field picker already reads from. Supported for flat and
+  // container mode; hidden only for Api-mode's tree shape (see
+  // ScrapingPlanValidator and render()'s own requiredFieldsUnsupported
+  // check) — collectFieldNames already walks container mode's live
+  // GroupNode/DataFieldNode tree, so no extra plumbing was needed there.
   hardening: {
     noResult: { enabled: false, severity: 'Warning' },
     nullRate: [],
     baseline: { enabled: false, severity: 'Warning', dropThresholdPercent: 20 },
     blocking: { enabled: false, severity: 'Warning', minBodyLengthText: '', phrasesText: '' },
+    requiredFields: { enabled: false, severity: 'Warning', fields: [] },
   },
   // Issue #43: one-time Fill test values for the /generate verification
   // trial run only — keyed by FillAction.environmentVariableName. Deliberately
@@ -439,6 +449,14 @@ function buildHardeningConfig(hardening) {
       blockPhrases,
     });
   }
+  // Issue #133: like nullRate's own "incomplete draft" rows, an enabled
+  // check with no fields picked yet is simply skipped rather than sent as
+  // an empty list — ScrapingPlanValidator rejects an empty FieldNames list
+  // outright, and there's nothing incomplete-but-useful to send here the
+  // way an unfinished env-var name still is for Fill/Proxy.
+  if (hardening?.requiredFields?.enabled && hardening.requiredFields.fields.length > 0) {
+    checks.push({ kind: 'requiredFields', severity: hardening.requiredFields.severity, fieldNames: hardening.requiredFields.fields });
+  }
   return checks.length > 0 ? checks : null;
 }
 
@@ -673,6 +691,21 @@ function removeNullRateCheck(nullRate, index) {
 
 function updateNullRateCheck(nullRate, index, patch) {
   return nullRate.map((row, i) => (i === index ? { ...row, ...patch } : row));
+}
+
+// Issue #133: unlike nullRate's rows (each its own draft object with a
+// field/threshold/severity), requiredFields.fields is just a plain array of
+// already-chosen field names — there's nothing else to configure per entry,
+// so no updateRequiredField counterpart exists. A duplicate add is a no-op
+// rather than an error, mirroring how the add-field <select> below is
+// itself already filtered to exclude already-added names.
+function addRequiredField(fields, fieldName) {
+  if (!fieldName || fields.includes(fieldName)) return fields;
+  return [...fields, fieldName];
+}
+
+function removeRequiredField(fields, index) {
+  return fields.filter((_, i) => i !== index);
 }
 
 // Issue #42, Phase 7: a small pill shown next to a field's/node's/action's
@@ -1125,6 +1158,20 @@ function render() {
       hardeningBlockingPhrasesInput.value = _state.hardening.blocking.phrasesText;
     }
 
+    // Issue #133 (+ container-mode follow-up): required-fields check —
+    // supported for flat mode and container mode, but not yet Api-mode's
+    // tree shape (see ScrapingPlanValidator) — the subsection is hidden
+    // only for that, same "hidden when not applicable" treatment
+    // #additional-urls-row already gets for API mode generally.
+    const requiredFieldsUnsupported = _state.mode === 'api' && !!_state.apiConfig?.groups;
+    document.getElementById('hardening-required-fields-section')?.classList.toggle('hidden', requiredFieldsUnsupported);
+    const hardeningRequiredFieldsToggle = document.getElementById('toggle-hardening-required-fields');
+    if (hardeningRequiredFieldsToggle) hardeningRequiredFieldsToggle.checked = _state.hardening.requiredFields.enabled;
+    document.getElementById('hardening-required-fields-config')?.classList.toggle('hidden', !_state.hardening.requiredFields.enabled);
+    document.getElementById('btn-hardening-required-fields-warning')?.classList.toggle('active', _state.hardening.requiredFields.severity === 'Warning');
+    document.getElementById('btn-hardening-required-fields-error')?.classList.toggle('active', _state.hardening.requiredFields.severity === 'Error');
+    renderHardeningRequiredFieldsList();
+
     if (_state.containerModalOpen) {
       show('modal-container-new');
       const nameInput = document.getElementById('input-container-name');
@@ -1430,6 +1477,38 @@ function renderHardeningNullRateList(
       `<button type="button" class="btn-danger btn-tiny btn-remove-null-rate" data-index="${i}">${escapeHtml(t('common.remove'))}</button>`;
     container.appendChild(rowEl);
   });
+}
+
+// Issue #133: unlike renderHardeningNullRateList's per-row field pickers
+// (each row starts as an unfinished draft), a required field is already a
+// complete, chosen name the moment it exists in the list — so each row is
+// just a name + remove button, and picking a *new* one to add happens via
+// one shared <select>/button pair (#select-hardening-required-field/
+// #btn-add-required-field) outside the list itself, filtered to exclude
+// names already added.
+function renderHardeningRequiredFieldsList(
+  fields = _state.hardening.requiredFields.fields,
+  fieldNames = collectFieldNames(_state.mode, _state.fields, _state.groups, _state.apiConfig),
+) {
+  const container = document.getElementById('hardening-required-fields-list');
+  if (container) {
+    container.innerHTML = '';
+    fields.forEach((name, i) => {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'hardening-required-field-row';
+      rowEl.innerHTML =
+        `<span class="hardening-required-field-name">${escapeHtml(name)}</span>` +
+        `<button type="button" class="btn-danger btn-tiny btn-remove-required-field" data-index="${i}">${escapeHtml(t('common.remove'))}</button>`;
+      container.appendChild(rowEl);
+    });
+  }
+
+  const available = fieldNames.filter(name => !fields.includes(name));
+  const select = document.getElementById('select-hardening-required-field');
+  if (select) select.innerHTML = available.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
+  const addBtn = document.getElementById('btn-add-required-field');
+  if (addBtn) addBtn.disabled = available.length === 0;
+  if (select) select.disabled = available.length === 0;
 }
 
 // ── DOM tree view ────────────────────────────────────────────────────────────
@@ -2310,6 +2389,44 @@ function wireEvents() {
     });
   });
 
+  // Issue #133: opt-in script hardening — the required-fields check.
+  document.getElementById('toggle-hardening-required-fields')?.addEventListener('change', (e) => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, requiredFields: { ..._state.hardening.requiredFields, enabled: e.target.checked } },
+    });
+  });
+  document.getElementById('btn-hardening-required-fields-warning')?.addEventListener('click', () => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, requiredFields: { ..._state.hardening.requiredFields, severity: 'Warning' } },
+    });
+  });
+  document.getElementById('btn-hardening-required-fields-error')?.addEventListener('click', () => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, requiredFields: { ..._state.hardening.requiredFields, severity: 'Error' } },
+    });
+  });
+  document.getElementById('btn-add-required-field')?.addEventListener('click', () => {
+    const fieldName = document.getElementById('select-hardening-required-field')?.value;
+    setState(_state.current, {
+      hardening: {
+        ..._state.hardening,
+        requiredFields: { ..._state.hardening.requiredFields, fields: addRequiredField(_state.hardening.requiredFields.fields, fieldName) },
+      },
+    });
+  });
+  document.getElementById('hardening-required-fields-list')?.addEventListener('click', (e) => {
+    const removeBtn = e.target.closest('.btn-remove-required-field');
+    if (removeBtn) {
+      const index = parseInt(removeBtn.dataset.index, 10);
+      setState(_state.current, {
+        hardening: {
+          ..._state.hardening,
+          requiredFields: { ..._state.hardening.requiredFields, fields: removeRequiredField(_state.hardening.requiredFields.fields, index) },
+        },
+      });
+    }
+  });
+
   document.getElementById('toggle-include-data-preview')?.addEventListener('change', (e) => {
     log('BTN toggle-include-data-preview', e.target.checked);
     patchState({ includeDataPreview: e.target.checked });
@@ -3069,7 +3186,7 @@ if (typeof module !== 'undefined') {
     detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
     applyStaticTranslations, sanitizeFileNameBase, parseAdditionalUrls, buildChangeDetectionConfig, buildProxyConfig,
     buildHardeningConfig, collectFieldNames, addNullRateCheck, removeNullRateCheck, updateNullRateCheck,
-    renderHardeningNullRateList,
+    renderHardeningNullRateList, addRequiredField, removeRequiredField, renderHardeningRequiredFieldsList,
     addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
     buildVerificationValues,
     frameBadgeHtml,

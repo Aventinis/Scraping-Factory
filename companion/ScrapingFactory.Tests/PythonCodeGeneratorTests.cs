@@ -216,4 +216,37 @@ public class PythonCodeGeneratorTests
         Assert.Contains("EXIT_MISSING_ENV_VAR = 78", script);
         Assert.Contains("if _PROXY_ENV_MISSING:\n        sys.exit(EXIT_MISSING_ENV_VAR)", script);
     }
+
+    // Issue #133: unlike NoResult/NullRate/Baseline/Blocking (all covered
+    // via PythonGroupCodeGeneratorTests' container-mode plan), this check
+    // is flat-shaped-output only, so its checks-literal/runtime-code
+    // emission is tested here instead, against the flat engine this file
+    // otherwise already exercises.
+    [Fact]
+    public void Generate_RequiredFieldsHardeningConfigured_EmitsChecksLiteralAndFilterCall()
+    {
+        var plan = TwoFieldPlan();
+        plan = new ScrapingPlan
+        {
+            Steps = plan.Steps, OutputFormat = plan.OutputFormat, Engine = plan.Engine,
+            ScriptFileName = plan.ScriptFileName, OutputFileBaseName = plan.OutputFileBaseName,
+            Hardening = [new RequiredFieldsCheck { Severity = HardeningSeverity.Error, FieldNames = ["Titel", "Link"] }],
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains(""""kind": 'requiredFields', "severity": 'Error', "fieldNames": ['Titel', 'Link']"""", script);
+        Assert.Contains("def _filter_required_fields(data):", script);
+        Assert.Contains("data, required_fields_failed = _filter_required_fields(data)", script);
+        Assert.Contains("hardening_failed = _run_hardening_checks(data) or required_fields_failed", script);
+    }
+
+    [Fact]
+    public void Generate_NoHardening_OmitsRequiredFieldsCodeEntirely()
+    {
+        var script = _generator.Generate(TwoFieldPlan());
+
+        Assert.DoesNotContain("_filter_required_fields", script);
+        Assert.DoesNotContain("required_fields_failed", script);
+    }
 }

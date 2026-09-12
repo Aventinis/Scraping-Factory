@@ -108,7 +108,9 @@
     "hardeningBlockingMinBodyLengthLabel": "Min. Antwortlänge (Bytes)",
     "hardeningBlockingMinBodyLengthPlaceholder": "optional",
     "hardeningBlockingPhrasesLabel": "Sperr-Phrasen (eine pro Zeile)",
-    "hardeningBlockingPhrasesPlaceholder": "z. B. \"Access Denied\", \"Bitte bestätigen Sie, dass Sie ein Mensch sind\""
+    "hardeningBlockingPhrasesPlaceholder": "z. B. \"Access Denied\", \"Bitte bestätigen Sie, dass Sie ein Mensch sind\"",
+    "hardeningRequiredFieldsToggle": "Felder verpflichtend machen (unvollständige Zeilen verwerfen)",
+    "hardeningRequiredFieldsAddBtn": "+ Feld hinzufügen"
   },
   "robots": {
     "checkFailed": "robots.txt konnte nicht geprüft werden ({error}).",

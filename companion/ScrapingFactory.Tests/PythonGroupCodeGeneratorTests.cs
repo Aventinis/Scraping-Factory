@@ -241,6 +241,30 @@ public class PythonGroupCodeGeneratorTests
         Assert.DoesNotContain("EXIT_HARDENING_FAILED", script);
         Assert.DoesNotContain("_run_hardening_checks", script);
         Assert.DoesNotContain("_BLOCKING_RESPONSES", script);
+        Assert.DoesNotContain("_passes_required_fields", script);
+    }
+
+    // Issue #133 follow-up: container mode supports RequiredFieldsCheck too
+    // (unlike Api-mode's tree shape, still rejected) — matched globally by
+    // tag name, dropping happens inside extract_group()'s own recursion
+    // rather than a separate pre-write filter the way flat mode's does.
+    [Fact]
+    public void Generate_RequiredFieldsHardeningConfigured_EmitsDropLogicInsideExtractGroup()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = NestedGroupPlan().Steps,
+            Hardening = [new RequiredFieldsCheck { Severity = HardeningSeverity.Error, FieldNames = ["Preis"] }],
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains(""""kind": 'requiredFields', "severity": 'Error', "fieldNames": ['Preis']"""", script);
+        Assert.Contains("REQUIRED_FIELD_NAMES = _REQUIRED_FIELDS_CHECK[\"fieldNames\"]", script);
+        Assert.Contains("def _passes_required_fields(el):", script);
+        Assert.Contains("if node[\"repeating\"] and not _passes_required_fields(el):", script);
+        Assert.Contains("def _report_required_fields_drops():", script);
+        Assert.Contains("hardening_failed = _run_hardening_checks(root) or _report_required_fields_drops()", script);
     }
 
     // Issue #83
