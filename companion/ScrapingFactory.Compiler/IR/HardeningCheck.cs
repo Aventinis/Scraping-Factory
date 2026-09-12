@@ -25,6 +25,7 @@ namespace ScrapingFactory.Compiler.IR;
 [JsonDerivedType(typeof(NoResultCheck), "noResult")]
 [JsonDerivedType(typeof(NullRateCheck), "nullRate")]
 [JsonDerivedType(typeof(BaselineCheck), "baseline")]
+[JsonDerivedType(typeof(BlockingCheck), "blocking")]
 public abstract class HardeningCheck
 {
     public required HardeningSeverity Severity { get; init; }
@@ -91,4 +92,36 @@ public sealed class NullRateCheck : HardeningCheck
 public sealed class BaselineCheck : HardeningCheck
 {
     public required double DropThreshold { get; init; }
+}
+
+// Issue #132: catches a site that starts blocking the script (rate-limiting,
+// IP ban, a CAPTCHA wall, a redirect to a login page) while still responding
+// with a normal-looking HTTP 200 — response.raise_for_status() alone won't
+// catch it, and the "blocked" response can still contain enough markup to
+// produce a non-empty result that passes NoResultCheck and doesn't
+// necessarily trip NullRateCheck either. Unlike NoResultCheck/NullRateCheck,
+// this evaluates the *raw* response captured at request time (final URL,
+// body length, body text), not the already-extracted data/output tree.
+//
+// Three signals, all evaluated per captured response:
+//  - the final URL's host differs from the requested URL's host (a redirect
+//    to a different origin, e.g. a CAPTCHA vendor or a login subdomain) —
+//    always checked, no configuration needed;
+//  - the response body is shorter than MinBodyLength bytes (null = signal
+//    disabled) — for the Browser engine, "bytes" is approximated as the
+//    UTF-8-encoded length of the rendered page content, since Playwright has
+//    no single raw response body to measure after JS execution;
+//  - the response body contains one of BlockPhrases (case-insensitive
+//    substring match, e.g. "Access Denied", "Please verify you are human") —
+//    empty/null list = signal disabled.
+//
+// Only one BlockingCheck ever makes sense (like BaselineCheck), so
+// ScrapingPlanValidator's existing duplicate-kind rule applies unchanged.
+// Detection-and-reporting only — actually bypassing/solving a block or
+// CAPTCHA is explicitly out of scope (see CLAUDE.md's Feature Scope "No
+// CAPTCHA solving/bypassing" boundary).
+public sealed class BlockingCheck : HardeningCheck
+{
+    public int? MinBodyLength { get; init; }
+    public List<string>? BlockPhrases { get; init; }
 }
