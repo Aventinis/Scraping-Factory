@@ -3524,9 +3524,9 @@ describe('buildGithubIssueUrl', () => {
 describe('buildVerificationErrorMessage', () => {
   test('uses the error message from the response', () => {
     const msg = buildVerificationErrorMessage({
-      error: 'Skript lief fehlerfrei, hat aber keine Daten zurückgegeben (output.csv enthält nur die Kopfzeile).',
+      error: 'Script ran without errors but returned no data (output.csv only contains the header row).',
     });
-    expect(msg).toBe('Skript lief fehlerfrei, hat aber keine Daten zurückgegeben (output.csv enthält nur die Kopfzeile).');
+    expect(msg).toBe('Script ran without errors but returned no data (output.csv only contains the header row).');
   });
 
   test('passes through a script-crash error message', () => {
@@ -3587,7 +3587,7 @@ describe('generate() surfaces companion verification failures', () => {
           ok: false,
           status: 422,
           json: () => Promise.resolve({
-            error: 'Skript lief fehlerfrei, hat aber keine Daten zurückgegeben (output.csv enthält nur die Kopfzeile).',
+            error: 'Script ran without errors but returned no data (output.csv only contains the header row).',
           }),
         });
       }
@@ -3604,7 +3604,7 @@ describe('generate() surfaces companion verification failures', () => {
 
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('error-toast-message').textContent).toContain('keine Daten zurückgegeben');
+    expect(document.getElementById('error-toast-message').textContent).toContain('returned no data');
     expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
   });
 });
@@ -3663,7 +3663,7 @@ describe('generate() surfaces a 400 config rejection without inviting a bug repo
           ok: false,
           status: 400,
           json: () => Promise.resolve({
-            error: 'FramePath ist nur mit Engine "Browser" zulässig.',
+            error: "FramePath is only allowed with Engine 'Browser'.",
           }),
         });
       }
@@ -3680,7 +3680,7 @@ describe('generate() surfaces a 400 config rejection without inviting a bug repo
 
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('error-toast-message').textContent).toContain('FramePath ist nur mit Engine');
+    expect(document.getElementById('error-toast-message').textContent).toContain('FramePath is only allowed with Engine');
     expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(true);
   });
 });
