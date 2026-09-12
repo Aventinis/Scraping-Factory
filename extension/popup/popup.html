@@ -861,23 +861,38 @@
     </div>
 
     <div class="output-settings">
+      <!-- Vorschau highlights matched DOM elements — meaningless for
+           API-Mode, which extracts from a JSON body instead, so it's hidden
+           there. Deliberately kept above/outside the collapsible "Settings"
+           section below (Issue #184 follow-up) rather than inside it like
+           the other two toggles — it's a live, on-page action the user
+           reaches for on every pick, not an infrequent format/inspection
+           setting the way Json output/data-preview/proxy are. -->
+      <div id="preview-section">
+        <div class="actions" style="margin-top: 10px;">
+          <button id="btn-preview" class="btn-toggle" disabled data-i18n="idle.previewShowBtn" data-i18n-title="idle.previewTitle"></button>
+        </div>
+        <p id="preview-summary" class="preview-summary hidden"></p>
+      </div>
+
       <!-- Issue #184: output-format/inspection toggles (Json output, Issue
-           #86; trial-run data preview, Issue #122; and the unrelated
-           DOM-highlight "Vorschau" feature, previewActive/#btn-preview —
-           see popup.js's renderDataPreview doc comment for why that one has
-           a deliberately different name) are comparatively infrequent
-           settings, not part of the field/container/API configuration flow
-           the user touches on every scraper build — grouped into their own
-           collapsible section for the same reason Issue #183 grouped
-           change-detection/hardening into "Monitoring" below, reusing the
-           exact same chevron+.collapsed convention (Issue #139). Unlike
-           Monitoring, there's no auto-expand-if-already-configured logic
-           here (_state.settingsSectionOpen has no
-           computeInitialMonitoringSectionOpen equivalent): all three
-           toggles inside are non-persisted, per-generate opt-ins that are
-           always off again on a fresh popup open, so there's no "returning
-           user's existing settings" to reveal — collapsed by default is
-           always the right starting state. -->
+           #86; trial-run data preview, Issue #122; proxy support, Issue
+           #88) are comparatively infrequent settings, not part of the
+           field/container/API configuration flow the user touches on every
+           scraper build — grouped into their own collapsible section for
+           the same reason Issue #183 grouped change-detection/hardening
+           into "Monitoring" below, reusing the exact same chevron+.collapsed
+           convention (Issue #139). Unlike Monitoring, there's no
+           auto-expand-if-already-configured logic here
+           (_state.settingsSectionOpen has no
+           computeInitialMonitoringSectionOpen equivalent): Json output/data
+           preview are non-persisted, per-generate opt-ins that are always
+           off again on a fresh popup open, and while Proxy *is* persisted
+           (real scrape-target configuration, like change detection), there's
+           still no auto-expand override for it here the way Monitoring has
+           for change detection/hardening — collapsed by default is still
+           the starting state, a returning user with a proxy configured
+           re-expands this section once themselves. -->
       <div id="settings-section">
         <div id="settings-section-toggle" class="monitoring-section-header" role="button" tabindex="0">
           <span class="monitoring-section-chevron">
@@ -896,35 +911,26 @@
             <input type="checkbox" id="toggle-include-data-preview" />
             <span data-i18n="idle.dataPreviewToggle"></span>
           </label>
-          <!-- Vorschau highlights matched DOM elements — meaningless for
-               API-Mode, which extracts from a JSON body instead, so it's
-               hidden there (unchanged id/logic, just relocated). -->
-          <div id="preview-section">
-            <div class="actions" style="margin-top: 10px;">
-              <button id="btn-preview" class="btn-toggle" disabled data-i18n="idle.previewShowBtn" data-i18n-title="idle.previewTitle"></button>
+          <!-- Issue #88: opt-in proxy support — like the change-detection
+               fields below, this is the *name* of an environment variable
+               holding a comma-separated proxy URL list, never a literal
+               proxy address (mirrors FillAction's own
+               environmentVariableName input), read by the generated script
+               at runtime via os.environ[...]. Moved into this section by
+               the Issue #184 follow-up (previously sat directly in
+               .output-settings, between this section and Monitoring). -->
+          <label class="output-settings-toggle">
+            <input type="checkbox" id="toggle-proxy" />
+            <span data-i18n="idle.proxyToggle"></span>
+          </label>
+          <div id="proxy-config" class="hidden">
+            <div class="output-settings-row">
+              <label for="input-proxy-env-var" data-i18n="idle.proxyEnvVarLabel"></label>
+              <input type="text" id="input-proxy-env-var" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
             </div>
-            <p id="preview-summary" class="preview-summary hidden"></p>
+            <p class="preview-summary" data-i18n="idle.proxyHint"></p>
           </div>
         </div>
-      </div>
-      <!-- Issue #88: opt-in proxy support — like the change-detection
-           fields below, this is the *name* of an environment variable
-           holding a comma-separated proxy URL list, never a literal proxy
-           address (mirrors FillAction's own environmentVariableName
-           input), read by the generated script at runtime via
-           os.environ[...]. Deliberately kept outside the "Monitoring"
-           section below (Issue #183) — proxy isn't itself a monitoring
-           concern the way change detection/hardening are. -->
-      <label class="output-settings-toggle">
-        <input type="checkbox" id="toggle-proxy" />
-        <span data-i18n="idle.proxyToggle"></span>
-      </label>
-      <div id="proxy-config" class="hidden">
-        <div class="output-settings-row">
-          <label for="input-proxy-env-var" data-i18n="idle.proxyEnvVarLabel"></label>
-          <input type="text" id="input-proxy-env-var" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
-        </div>
-        <p class="preview-summary" data-i18n="idle.proxyHint"></p>
       </div>
       <!-- Issue #183: change detection (#87) and script hardening (#129-
            #133) are grouped into one collapsible section — both are about
