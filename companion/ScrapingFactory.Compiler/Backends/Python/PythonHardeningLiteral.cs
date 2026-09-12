@@ -58,6 +58,11 @@ internal static class PythonHardeningLiteral
         // PythonLiteral.StrList, which already renders an empty list as
         // "[]" for a null/empty BlockPhrases.
         BlockingCheck blocking => $$"""{"kind": {{PythonLiteral.Str("blocking")}}, "severity": {{PythonLiteral.Str(check.Severity.ToString())}}, "minBodyLength": {{(blocking.MinBodyLength is { } min ? min.ToString() : "None")}}, "blockPhrases": {{PythonLiteral.StrList(blocking.BlockPhrases ?? [])}}}""",
+        // Issue #133: "fieldNames" is a plain list of strings — unlike
+        // BlockingCheck's optional signals, this is the one thing the check
+        // configures at all, so it's never empty (ScrapingPlanValidator
+        // rejects an empty list before this ever runs).
+        RequiredFieldsCheck requiredFields => $$"""{"kind": {{PythonLiteral.Str("requiredFields")}}, "severity": {{PythonLiteral.Str(check.Severity.ToString())}}, "fieldNames": {{PythonLiteral.StrList(requiredFields.FieldNames)}}}""",
         _ => throw new InvalidOperationException($"Unknown HardeningCheck type: {check.GetType()}"),
     };
 }

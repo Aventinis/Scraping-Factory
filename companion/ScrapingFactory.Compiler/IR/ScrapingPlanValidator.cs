@@ -127,6 +127,12 @@ public static class ScrapingPlanValidator
             if (extractGroupStep.Roots.Count == 0)
                 return Invalid("ExtractGroupStep must contain at least one group.");
 
+            // Issue #133: container mode has no unambiguous "row" to drop —
+            // RequiredFieldsCheck is flat-shaped-output only (see its own
+            // doc comment on HardeningCheck.cs).
+            if (plan.Hardening?.OfType<RequiredFieldsCheck>().Any() == true)
+                return Invalid("Hardening check 'RequiredFields' is not supported for container-mode (tree-shaped) output.");
+
             var groupError = ValidateContainerNodes(extractGroupStep.Roots, plan.Engine);
             return groupError is null ? new PlanValidationResult { Success = true } : Invalid(groupError);
         }
@@ -136,6 +142,13 @@ public static class ScrapingPlanValidator
         var apiCallStep = plan.Steps.OfType<ApiCallStep>().SingleOrDefault();
         if (apiCallStep is not null)
         {
+            // Issue #133: same restriction as container mode above, but
+            // only for Api's own tree shape (Groups) — Api's flat
+            // ItemsPath/Fields shape has just as unambiguous a "row" as
+            // flat Fields mode, so it's allowed there.
+            if (apiCallStep.Config.Groups is { Count: > 0 } && plan.Hardening?.OfType<RequiredFieldsCheck>().Any() == true)
+                return Invalid("Hardening check 'RequiredFields' is not supported for Api-mode's tree-shaped (Groups) output.");
+
             var apiError = ValidateApiConfig(apiCallStep.Config);
             return apiError is null ? new PlanValidationResult { Success = true } : Invalid(apiError);
         }
@@ -673,6 +686,25 @@ public static class ScrapingPlanValidator
                 return $"Hardening check 'Blocking': MinBodyLength must be positive (was {check.MinBodyLength}).";
             if (check.BlockPhrases?.Any(string.IsNullOrWhiteSpace) == true)
                 return "Hardening check 'Blocking': block phrases must not be blank.";
+        }
+
+        // Issue #133: unlike BlockingCheck's optional signals, FieldNames is
+        // the one thing this check configures at all, so — unlike an
+        // incomplete NullRateCheck row, which is simply skipped client-side
+        // — an empty list is rejected here rather than silently doing
+        // nothing. The flat-shaped-output-only restriction itself is
+        // enforced at the ExtractGroupStep/ApiCallStep(tree) branches in
+        // Validate() above, not here, since shape isn't known yet at this
+        // point in validation.
+        foreach (var check in hardening.OfType<RequiredFieldsCheck>())
+        {
+            if (check.FieldNames.Count == 0)
+                return "Hardening check 'RequiredFields' needs at least one field name.";
+            if (check.FieldNames.Any(string.IsNullOrWhiteSpace))
+                return "Hardening check 'RequiredFields': field names must not be blank.";
+            var duplicateFieldName = FindDuplicates(check.FieldNames, name => name).FirstOrDefault();
+            if (duplicateFieldName is not null)
+                return $"Hardening check 'RequiredFields': duplicate field name '{duplicateFieldName}'.";
         }
 
         return null;

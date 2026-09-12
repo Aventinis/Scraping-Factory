@@ -26,6 +26,7 @@ namespace ScrapingFactory.Compiler.IR;
 [JsonDerivedType(typeof(NullRateCheck), "nullRate")]
 [JsonDerivedType(typeof(BaselineCheck), "baseline")]
 [JsonDerivedType(typeof(BlockingCheck), "blocking")]
+[JsonDerivedType(typeof(RequiredFieldsCheck), "requiredFields")]
 public abstract class HardeningCheck
 {
     public required HardeningSeverity Severity { get; init; }
@@ -124,4 +125,29 @@ public sealed class BlockingCheck : HardeningCheck
 {
     public int? MinBodyLength { get; init; }
     public List<string>? BlockPhrases { get; init; }
+}
+
+// Issue #133: unlike the four checks above, this one changes what actually
+// gets written, not just what gets reported about what was already
+// written — a row missing a non-empty value for any of FieldNames is
+// dropped from the output entirely (rather than written with a blank
+// cell), serving the issue's own "safe for DB import" motivation (a
+// NOT NULL column that would otherwise silently break on import). The
+// filtering itself always happens regardless of Severity; only whether the
+// *run* is flagged as failed afterward depends on it — an all-Warning
+// configuration still guarantees the output file never contains a row
+// missing a required value, without necessarily failing the whole run.
+//
+// Flat-shaped output only (Fields/flat mode, Api-mode's flat ItemsPath/
+// Fields shape) — container mode and Api-mode's tree shape (Groups) have
+// no unambiguous "row" to drop, and the issue's own "safe for DB import"
+// motivation is inherently a flat-table concept anyway, so
+// ScrapingPlanValidator rejects the combination outright (see
+// ValidateContainerNodes/ValidateApiConfig call sites in Validate())
+// rather than inventing an unrequested tree-dropping semantic. Only one
+// RequiredFieldsCheck ever makes sense, so the existing duplicate-kind
+// rule applies unchanged.
+public sealed class RequiredFieldsCheck : HardeningCheck
+{
+    public required List<string> FieldNames { get; init; }
 }
