@@ -1017,17 +1017,18 @@
             <textarea id="input-hardening-blocking-phrases" rows="2" data-i18n-placeholder="idle.hardeningBlockingPhrasesPlaceholder"></textarea>
           </div>
         </div>
-        <!-- Issue #133: required-fields check — a row missing a value for
-             any of these fields is dropped from the output entirely
-             (rather than written with a blank cell), e.g. for a NOT NULL
-             database column. Flat-shaped output only (no unambiguous "row"
-             in container/API-tree mode, see ScrapingPlanValidator) — the
-             whole section is hidden for those, mirroring how
-             #additional-urls-row is already hidden for API mode. Unlike
-             the null-rate list above (each row its own draft object), a
-             required field is already a complete, chosen name the moment
-             it's in the list — picking a *new* one uses one shared
-             select/button pair instead of a per-row field picker. -->
+        <!-- Issue #133 (+ container-mode follow-up): required-fields check
+             — a row (flat mode) or repeating group instance (container
+             mode) missing a value for any of these fields is dropped from
+             the output entirely (rather than written with a blank cell),
+             e.g. for a NOT NULL database column. Api-mode's tree shape has
+             no such support yet (see ScrapingPlanValidator) — the whole
+             section is hidden only for that, mirroring how
+             #additional-urls-row is already hidden for API mode generally.
+             Unlike the null-rate list above (each row its own draft
+             object), a required field is already a complete, chosen name
+             the moment it's in the list — picking a *new* one uses one
+             shared select/button pair instead of a per-row field picker. -->
         <div id="hardening-required-fields-section">
           <label class="output-settings-toggle" style="margin-top: 10px;">
             <input type="checkbox" id="toggle-hardening-required-fields" />
