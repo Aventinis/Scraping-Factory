@@ -653,6 +653,87 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.True(HttpStatusCode.OK == response.StatusCode, body);
     }
 
+    // Issue #133: same "post the extension's actual raw wire shape" style
+    // as NullRate/Baseline/Blocking above. Uses the field it's already
+    // extracting ("Titel") as the required one, so the trial run's real
+    // scrape still passes it and generation succeeds.
+    [Fact]
+    public async Task Generate_ExtensionStyleRequiredFieldsHardeningPayload_Returns200()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var payload = $$"""
+            {
+              "version": "1",
+              "url": "{{server.BaseUrl}}",
+              "fields": [ { "name": "Titel", "selector": "h1", "attribute": null } ],
+              "hardening": [
+                { "kind": "requiredFields", "severity": "Warning", "fieldNames": ["Titel"] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+    }
+
+    // Issue #133: proves the flat-shaped-output-only restriction is
+    // actually enforced through the real HTTP endpoint, not just the C#
+    // object model — container mode has no unambiguous "row" to drop.
+    [Fact]
+    public async Task Generate_RequiredFieldsHardeningWithContainerMode_Returns400()
+    {
+        var payload = """
+            {
+              "url": "https://example.com",
+              "groups": [
+                { "name": "Kategorie", "selector": "section", "repeating": true, "children": [ { "name": "Titel", "selector": "h2" } ] }
+              ],
+              "hardening": [
+                { "kind": "requiredFields", "severity": "Warning", "fieldNames": ["Titel"] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("RequiredFields", doc.RootElement.GetProperty("error").GetString());
+    }
+
+    // Same restriction, but for Api-mode's own tree shape specifically —
+    // Api's flat ItemsPath/Fields shape is allowed (see the Returns200 test
+    // above's flat-Fields-mode sibling), only Groups (tree) is rejected.
+    [Fact]
+    public async Task Generate_RequiredFieldsHardeningWithApiTreeShape_Returns400()
+    {
+        var payload = """
+            {
+              "url": "https://example.com",
+              "api": {
+                "urlTemplate": "https://example.com/api/catalog?category={category}",
+                "groups": [
+                  { "name": "Kategorie", "path": "categories", "children": [ { "name": "Titel", "path": "title" } ] }
+                ],
+                "parameters": [ { "name": "category", "source": { "kind": "staticList", "values": ["a"] } } ]
+              },
+              "hardening": [
+                { "kind": "requiredFields", "severity": "Warning", "fieldNames": ["Titel"] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("RequiredFields", doc.RootElement.GetProperty("error").GetString());
+    }
+
     [Fact]
     public async Task Generate_NullRateHardeningPayload_WrongLegacyFieldKey_FailsWithUsableError()
     {
@@ -930,5 +1011,69 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.True(HttpStatusCode.OK == response.StatusCode, body);
         Assert.Contains("_BLOCKING_RESPONSES", body);
+    }
+
+    // Issue #133: a real /generate trial run (subprocess execution via
+    // PythonScriptVerifier) is the only way to catch a Scriban syntax error
+    // inside `{{ if hardening.enabled }}` in the Browser-engine flat
+    // template — no other test in this session exercises
+    // playwright_scraper.py.j2 with RequiredFieldsCheck configured.
+    [Fact]
+    public async Task Generate_BrowserEnginePayloadWithRequiredFieldsHardening_Returns200()
+    {
+        using var server = new LocalTestServer("<html><body><h1 class='item'>Item</h1></body></html>");
+
+        var payload = $$"""
+            {
+              "url": "{{server.BaseUrl}}",
+              "engine": "Browser",
+              "fields": [ { "name": "Item", "selector": ".item" } ],
+              "hardening": [
+                { "kind": "requiredFields", "severity": "Warning", "fieldNames": ["Item"] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Contains("_filter_required_fields", body);
+    }
+
+    [Fact]
+    public async Task Generate_ApiPayloadWithRequiredFieldsHardening_Returns200()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var category = request.QueryString["category"];
+            var json = $$"""{ "data": { "items": [ { "title": "Item-{{category}}" } ] } }""";
+            return new LocalTestServerResponse(json, "application/json");
+        });
+
+        var payload = $$"""
+            {
+              "url": "https://example.com",
+              "api": {
+                "urlTemplate": "{{server.BaseUrl}}?category={category}",
+                "itemsPath": "data.items",
+                "fields": [ { "name": "Titel", "path": "title" } ],
+                "parameters": [
+                  { "name": "category", "source": { "kind": "staticList", "values": ["a"] } }
+                ]
+              },
+              "hardening": [
+                { "kind": "requiredFields", "severity": "Warning", "fieldNames": ["Titel"] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Contains("_filter_required_fields", body);
     }
 }
