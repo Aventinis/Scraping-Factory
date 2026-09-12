@@ -53,7 +53,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
-        Assert.Contains("nur einen NavigateStep", result.Error);
+        Assert.Contains("more than one NavigateStep", result.Error);
     }
 
     [Theory]
@@ -68,7 +68,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
-        Assert.Contains("Ungültige Start-URL", result.Error);
+        Assert.Contains("Invalid start URL", result.Error);
     }
 
     // Issue #83
@@ -101,7 +101,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
-        Assert.Contains("Start-URL #2", result.Error);
+        Assert.Contains("start URL #2", result.Error);
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
-        Assert.Contains("mindestens eine URL", result.Error);
+        Assert.Contains("at least one URL", result.Error);
     }
 
     [Fact]
@@ -134,7 +134,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
-        Assert.Contains("Feldname", result.Error);
+        Assert.Contains("Field name", result.Error);
     }
 
     [Fact]
@@ -327,7 +327,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
-        Assert.Contains("Umgebungsvariablen-Name", result.Error);
+        Assert.Contains("environment variable name", result.Error);
     }
 
     [Fact]
@@ -565,7 +565,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
-        Assert.Contains("Doppelte Feldnamen", result.Error);
+        Assert.Contains("Duplicate field names", result.Error);
         Assert.Contains("Titel", result.Error);
     }
 
@@ -770,7 +770,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(GroupPlan(roots));
         Assert.False(result.Success);
-        Assert.Contains("Attribut", result.Error);
+        Assert.Contains("attribute", result.Error);
         Assert.Contains("Link", result.Error);
     }
 
@@ -984,7 +984,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
-        Assert.Contains("Feld", result.Error);
+        Assert.Contains("field", result.Error);
     }
 
     [Fact]
@@ -1000,7 +1000,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
-        Assert.Contains("Doppelte Feldnamen", result.Error);
+        Assert.Contains("Duplicate field names", result.Error);
     }
 
     [Fact]
@@ -1015,7 +1015,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
-        Assert.Contains("kollidieren", result.Error);
+        Assert.Contains("collide", result.Error);
         Assert.Contains("category", result.Error);
     }
 
@@ -1097,7 +1097,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
-        Assert.Contains("Doppelte Parameternamen", result.Error);
+        Assert.Contains("Duplicate parameter names", result.Error);
     }
 
     [Fact]
@@ -1112,7 +1112,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
-        Assert.Contains("Werteliste", result.Error);
+        Assert.Contains("value list", result.Error);
     }
 
     [Fact]
@@ -1149,7 +1149,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
-        Assert.Contains("Bereich", result.Error);
+        Assert.Contains("Range for parameter", result.Error);
     }
 
     // Reproduces the reported bug exactly: a site (penny.de) uses "2026-35"
@@ -1170,7 +1170,7 @@ public class ScrapingPlanValidatorTests
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
         Assert.Contains("2026-35", result.Error);
-        Assert.Contains("Format", result.Error);
+        Assert.Contains("format", result.Error);
     }
 
     // The same From/To values succeed once a matching Format is set — this
@@ -1280,7 +1280,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
-        Assert.Contains("Umgebungsvariablen-Name", result.Error);
+        Assert.Contains("environment variable name", result.Error);
     }
 
     [Fact]
@@ -1298,7 +1298,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
-        Assert.Contains("Doppelte Header-Namen", result.Error);
+        Assert.Contains("Duplicate header names", result.Error);
     }
 
     [Fact]
@@ -1363,7 +1363,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
-        Assert.Contains("schließen sich", result.Error);
+        Assert.Contains("mutually exclusive", result.Error);
     }
 
     [Fact]
@@ -1391,7 +1391,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
-        Assert.Contains("ItemsPath und Fields", result.Error);
+        Assert.Contains("ItemsPath and Fields", result.Error);
     }
 
     // ApiConfig isn't a record, so these build a fresh instance per test
@@ -1410,7 +1410,7 @@ public class ScrapingPlanValidatorTests
         var invalid = WithGroups([new ApiGroup { Name = " ", Path = "categories", Children = [new ApiField { Name = "Titel", Path = "title" }] }]);
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
-        Assert.Contains("Name eines Api-Knotens", result.Error);
+        Assert.Contains("Name of an Api node", result.Error);
     }
 
     [Fact]
@@ -1419,7 +1419,7 @@ public class ScrapingPlanValidatorTests
         var invalid = WithGroups([new ApiGroup { Name = "Kategorie", Path = "categories", Children = [] }]);
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
-        Assert.Contains("Kind-Element", result.Error);
+        Assert.Contains("child element", result.Error);
     }
 
     [Fact]
@@ -1428,7 +1428,7 @@ public class ScrapingPlanValidatorTests
         var invalid = WithGroups([new ApiGroup { Name = "Kategorie", Path = "categories", Children = [new ApiField { Name = "Titel", Path = " " }] }]);
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
-        Assert.Contains("Pfad des Felds 'Titel'", result.Error);
+        Assert.Contains("Path of field 'Titel'", result.Error);
     }
 
     [Fact]
@@ -1570,7 +1570,7 @@ public class ScrapingPlanValidatorTests
             new ApiBodyObject { Properties = new Dictionary<string, ApiBodyNode> { ["term"] = new ApiBodyVariable { ParameterName = "doesNotExist" } } });
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
-        Assert.Contains("unbekannten Parameter", result.Error);
+        Assert.Contains("unknown parameter", result.Error);
         Assert.Contains("doesNotExist", result.Error);
     }
 
@@ -1581,7 +1581,7 @@ public class ScrapingPlanValidatorTests
             new ApiBodyObject { Properties = new Dictionary<string, ApiBodyNode> { [" "] = new ApiBodyLiteral { Kind = ApiBodyLiteralKind.String, StringValue = "x" } } });
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
-        Assert.Contains("Property-Name", result.Error);
+        Assert.Contains("Property name", result.Error);
     }
 
     [Fact]
@@ -1737,7 +1737,7 @@ public class ScrapingPlanValidatorTests
         var plan = new ScrapingPlan { Steps = ValidPlan().Steps, ChangeDetection = new ChangeDetectionConfig { Notify = "Sms" } };
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
-        Assert.Contains("Notify-Methode", result.Error);
+        Assert.Contains("notify method", result.Error);
     }
 
     [Fact]
@@ -1746,7 +1746,7 @@ public class ScrapingPlanValidatorTests
         var plan = new ScrapingPlan { Steps = ValidPlan().Steps, ChangeDetection = new ChangeDetectionConfig { Notify = "Email" } };
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
-        Assert.Contains("Email-Konfiguration", result.Error);
+        Assert.Contains("Email configuration", result.Error);
     }
 
     [Fact]
@@ -1755,7 +1755,7 @@ public class ScrapingPlanValidatorTests
         var plan = new ScrapingPlan { Steps = ValidPlan().Steps, ChangeDetection = new ChangeDetectionConfig { Notify = "Webhook" } };
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
-        Assert.Contains("Webhook-Konfiguration", result.Error);
+        Assert.Contains("Webhook configuration", result.Error);
     }
 
     [Fact]
@@ -1775,7 +1775,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
-        Assert.Contains("Ungültiger Umgebungsvariablen-Name", result.Error);
+        Assert.Contains("Invalid environment variable name", result.Error);
         Assert.Contains("SmtpHostEnvVar", result.Error);
     }
 
@@ -1831,7 +1831,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
-        Assert.Contains("nicht sowohl Email als auch Webhook", result.Error);
+        Assert.Contains("must not configure both Email and Webhook", result.Error);
     }
 
     // Issue #88
@@ -1857,7 +1857,7 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
-        Assert.Contains("Ungültiger Umgebungsvariablen-Name", result.Error);
+        Assert.Contains("Invalid environment variable name", result.Error);
         Assert.Contains("Proxy.EnvironmentVariableName", result.Error);
     }
 
@@ -1865,6 +1865,422 @@ public class ScrapingPlanValidatorTests
     public void Validate_NoProxy_Succeeds()
     {
         var result = ScrapingPlanValidator.Validate(ValidPlan());
+        Assert.True(result.Success, result.Error);
+    }
+
+    // Issue #129
+    [Fact]
+    public void Validate_ValidHardening_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new NoResultCheck { Severity = HardeningSeverity.Error }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_DuplicateHardeningCheckKind_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening =
+            [
+                new NoResultCheck { Severity = HardeningSeverity.Warning },
+                new NoResultCheck { Severity = HardeningSeverity.Error },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("NoResultCheck", result.Error);
+        Assert.Contains("configured more than once", result.Error);
+    }
+
+    [Fact]
+    public void Validate_NoHardening_Succeeds()
+    {
+        var result = ScrapingPlanValidator.Validate(ValidPlan());
+        Assert.True(result.Success, result.Error);
+    }
+
+    // Issue #130: unlike NoResultCheck, more than one NullRateCheck is
+    // expected — one per monitored field — so this must succeed rather than
+    // tripping the "duplicate kind" rule.
+    [Fact]
+    public void Validate_MultipleDistinctNullRateChecks_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening =
+            [
+                new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "Preis", Threshold = 0.3 },
+                new NullRateCheck { Severity = HardeningSeverity.Error, FieldName = "Titel", Threshold = 0.1 },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_NullRateAndNoResultTogether_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening =
+            [
+                new NoResultCheck { Severity = HardeningSeverity.Error },
+                new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "Preis", Threshold = 0.3 },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_DuplicateNullRateFieldName_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening =
+            [
+                new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "Preis", Threshold = 0.3 },
+                new NullRateCheck { Severity = HardeningSeverity.Error, FieldName = "Preis", Threshold = 0.5 },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("NullRate", result.Error);
+        Assert.Contains("Preis", result.Error);
+        Assert.Contains("configured more than once", result.Error);
+    }
+
+    [Fact]
+    public void Validate_NullRateBlankFieldName_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "  ", Threshold = 0.3 }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("needs a field name", result.Error);
+    }
+
+    [Theory]
+    [InlineData(-0.1)]
+    [InlineData(1.1)]
+    public void Validate_NullRateThresholdOutOfRange_Fails(double threshold)
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "Preis", Threshold = threshold }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("threshold must be between", result.Error);
+    }
+
+    // Issue #131
+    [Fact]
+    public void Validate_ValidBaselineCheck_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new BaselineCheck { Severity = HardeningSeverity.Error, DropThreshold = 0.2 }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_DuplicateBaselineCheck_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening =
+            [
+                new BaselineCheck { Severity = HardeningSeverity.Warning, DropThreshold = 0.2 },
+                new BaselineCheck { Severity = HardeningSeverity.Error, DropThreshold = 0.3 },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("BaselineCheck", result.Error);
+        Assert.Contains("configured more than once", result.Error);
+    }
+
+    [Theory]
+    [InlineData(-0.1)]
+    [InlineData(1.1)]
+    public void Validate_BaselineDropThresholdOutOfRange_Fails(double threshold)
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new BaselineCheck { Severity = HardeningSeverity.Warning, DropThreshold = threshold }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("threshold must be between", result.Error);
+    }
+
+    [Fact]
+    public void Validate_BaselineAndNullRateAndNoResultTogether_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening =
+            [
+                new NoResultCheck { Severity = HardeningSeverity.Error },
+                new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "Preis", Threshold = 0.3 },
+                new BaselineCheck { Severity = HardeningSeverity.Warning, DropThreshold = 0.2 },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    // Issue #132
+    [Fact]
+    public void Validate_ValidBlockingCheck_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new BlockingCheck { Severity = HardeningSeverity.Error, MinBodyLength = 200, BlockPhrases = ["Access Denied"] }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    // Unlike NullRate, there's no "at least one signal configured"
+    // requirement — the cross-origin-redirect signal is always active, so a
+    // BlockingCheck with neither MinBodyLength nor BlockPhrases set is still
+    // a meaningful, valid configuration.
+    [Fact]
+    public void Validate_BlockingCheckWithNoOptionalFieldsSet_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new BlockingCheck { Severity = HardeningSeverity.Warning }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_DuplicateBlockingCheck_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening =
+            [
+                new BlockingCheck { Severity = HardeningSeverity.Warning },
+                new BlockingCheck { Severity = HardeningSeverity.Error },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("BlockingCheck", result.Error);
+        Assert.Contains("configured more than once", result.Error);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public void Validate_BlockingCheckWithNonPositiveMinBodyLength_Fails(int minBodyLength)
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new BlockingCheck { Severity = HardeningSeverity.Warning, MinBodyLength = minBodyLength }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("MinBodyLength must be positive", result.Error);
+    }
+
+    [Fact]
+    public void Validate_BlockingCheckWithBlankBlockPhrase_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new BlockingCheck { Severity = HardeningSeverity.Warning, BlockPhrases = ["Access Denied", "  "] }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("block phrases must not be blank", result.Error);
+    }
+
+    [Fact]
+    public void Validate_AllFourHardeningChecksTogether_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening =
+            [
+                new NoResultCheck { Severity = HardeningSeverity.Error },
+                new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "Preis", Threshold = 0.3 },
+                new BaselineCheck { Severity = HardeningSeverity.Warning, DropThreshold = 0.2 },
+                new BlockingCheck { Severity = HardeningSeverity.Error, MinBodyLength = 200, BlockPhrases = ["Access Denied"] },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    // Issue #133
+    [Fact]
+    public void Validate_ValidRequiredFieldsCheck_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new RequiredFieldsCheck { Severity = HardeningSeverity.Error, FieldNames = ["Titel"] }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_DuplicateRequiredFieldsCheck_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening =
+            [
+                new RequiredFieldsCheck { Severity = HardeningSeverity.Warning, FieldNames = ["Titel"] },
+                new RequiredFieldsCheck { Severity = HardeningSeverity.Error, FieldNames = ["Preis"] },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("RequiredFieldsCheck", result.Error);
+        Assert.Contains("configured more than once", result.Error);
+    }
+
+    [Fact]
+    public void Validate_RequiredFieldsCheckWithEmptyFieldNames_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new RequiredFieldsCheck { Severity = HardeningSeverity.Warning, FieldNames = [] }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("needs at least one field name", result.Error);
+    }
+
+    [Fact]
+    public void Validate_RequiredFieldsCheckWithBlankFieldName_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new RequiredFieldsCheck { Severity = HardeningSeverity.Warning, FieldNames = ["Titel", "  "] }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("field names must not be blank", result.Error);
+    }
+
+    [Fact]
+    public void Validate_RequiredFieldsCheckWithDuplicateFieldName_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new RequiredFieldsCheck { Severity = HardeningSeverity.Warning, FieldNames = ["Titel", "Titel"] }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("duplicate field name 'Titel'", result.Error);
+    }
+
+    // Follow-up: container mode supports RequiredFieldsCheck (matched
+    // globally by tag name, dropping the nearest enclosing repeating
+    // instance — see RequiredFieldsCheck's own doc comment). Only Api-mode's
+    // tree shape still rejects it (see the test below).
+    [Fact]
+    public void Validate_RequiredFieldsCheckWithContainerMode_Succeeds()
+    {
+        var roots = new List<GroupNode>
+        {
+            new() { Name = "Kategorie", Selector = "section", Repeating = true, Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }] },
+        };
+        var plan = new ScrapingPlan
+        {
+            Steps = GroupPlan(roots).Steps,
+            Hardening = [new RequiredFieldsCheck { Severity = HardeningSeverity.Warning, FieldNames = ["Titel"] }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    // Api-mode's flat shape has just as unambiguous a "row" as flat Fields
+    // mode, so it's allowed there — only Api's own tree shape is rejected
+    // (see the test below).
+    [Fact]
+    public void Validate_RequiredFieldsCheckWithApiFlatShape_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ApiPlan(ValidApiConfig()).Steps,
+            Engine = ScrapingEngine.Api,
+            Hardening = [new RequiredFieldsCheck { Severity = HardeningSeverity.Warning, FieldNames = ["Titel"] }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_RequiredFieldsCheckWithApiTreeShape_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ApiPlan(ValidApiGroupsConfig()).Steps,
+            Engine = ScrapingEngine.Api,
+            Hardening = [new RequiredFieldsCheck { Severity = HardeningSeverity.Warning, FieldNames = ["Titel"] }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("RequiredFields", result.Error);
+        Assert.Contains("tree-shaped", result.Error);
+    }
+
+    [Fact]
+    public void Validate_AllFiveHardeningChecksTogether_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening =
+            [
+                new NoResultCheck { Severity = HardeningSeverity.Error },
+                new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "Preis", Threshold = 0.3 },
+                new BaselineCheck { Severity = HardeningSeverity.Warning, DropThreshold = 0.2 },
+                new BlockingCheck { Severity = HardeningSeverity.Error, MinBodyLength = 200, BlockPhrases = ["Access Denied"] },
+                new RequiredFieldsCheck { Severity = HardeningSeverity.Error, FieldNames = ["Titel"] },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
         Assert.True(result.Success, result.Error);
     }
 }

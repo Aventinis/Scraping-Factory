@@ -41,7 +41,9 @@ const {
   findUrlTemplateMatches, mergeValueListValues,
   variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
   detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase, parseAdditionalUrls,
-  buildChangeDetectionConfig, buildProxyConfig,
+  buildChangeDetectionConfig, buildProxyConfig, buildHardeningConfig,
+  collectFieldNames, addNullRateCheck, removeNullRateCheck, updateNullRateCheck, renderHardeningNullRateList,
+  addRequiredField, removeRequiredField, renderHardeningRequiredFieldsList, computeInitialMonitoringSectionOpen,
   addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
   buildVerificationValues,
   frameBadgeHtml,
@@ -419,6 +421,412 @@ describe('buildScrapingConfig (proxy, Issue #88)', () => {
       'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], null, proxy,
     );
     expect(apiResult.proxy).toEqual({ environmentVariableName: 'SF_PROXIES' });
+  });
+});
+
+// Issue #129
+describe('buildHardeningConfig', () => {
+  test('returns null when noResult is disabled', () => {
+    expect(buildHardeningConfig({ noResult: { enabled: false, severity: 'Warning' } })).toBeNull();
+  });
+
+  test('returns null for null/undefined input', () => {
+    expect(buildHardeningConfig(null)).toBeNull();
+    expect(buildHardeningConfig(undefined)).toBeNull();
+  });
+
+  test('builds a one-item array with the camelCase kind and the severity as-is', () => {
+    expect(buildHardeningConfig({ noResult: { enabled: true, severity: 'Error' } })).toEqual([
+      { kind: 'noResult', severity: 'Error' },
+    ]);
+    expect(buildHardeningConfig({ noResult: { enabled: true, severity: 'Warning' } })).toEqual([
+      { kind: 'noResult', severity: 'Warning' },
+    ]);
+  });
+});
+
+describe('buildScrapingConfig (hardening, Issue #129)', () => {
+  test('omits hardening entirely when disabled (the default)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.hardening).toBeUndefined();
+  });
+
+  test('includes hardening when enabled and configured', () => {
+    const hardening = { noResult: { enabled: true, severity: 'Error' } };
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, hardening,
+    );
+    expect(result.hardening).toEqual([{ kind: 'noResult', severity: 'Error' }]);
+  });
+
+  test('works the same way for container and api modes', () => {
+    const hardening = { noResult: { enabled: true, severity: 'Warning' } };
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null,
+      hardening,
+    );
+    expect(containerResult.hardening).toEqual([{ kind: 'noResult', severity: 'Warning' }]);
+
+    const apiResult = buildScrapingConfig(
+      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], null, null,
+      hardening,
+    );
+    expect(apiResult.hardening).toEqual([{ kind: 'noResult', severity: 'Warning' }]);
+  });
+});
+
+// Issue #130
+describe('buildHardeningConfig (nullRate)', () => {
+  test('omits an incomplete row (no field chosen)', () => {
+    expect(buildHardeningConfig({ nullRate: [{ fieldName: '', threshold: 30, severity: 'Warning' }] })).toBeNull();
+  });
+
+  test('converts the percent threshold into a 0.0-1.0 fraction', () => {
+    expect(buildHardeningConfig({ nullRate: [{ fieldName: 'Preis', threshold: 30, severity: 'Error' }] })).toEqual([
+      { kind: 'nullRate', severity: 'Error', fieldName: 'Preis', threshold: 0.3 },
+    ]);
+  });
+
+  test('clamps an out-of-range or non-numeric threshold, defaulting to 50%', () => {
+    expect(buildHardeningConfig({ nullRate: [{ fieldName: 'A', threshold: 150, severity: 'Warning' }] })).toEqual([
+      { kind: 'nullRate', severity: 'Warning', fieldName: 'A', threshold: 1 },
+    ]);
+    expect(buildHardeningConfig({ nullRate: [{ fieldName: 'A', threshold: -20, severity: 'Warning' }] })).toEqual([
+      { kind: 'nullRate', severity: 'Warning', fieldName: 'A', threshold: 0 },
+    ]);
+    expect(buildHardeningConfig({ nullRate: [{ fieldName: 'A', threshold: NaN, severity: 'Warning' }] })).toEqual([
+      { kind: 'nullRate', severity: 'Warning', fieldName: 'A', threshold: 0.5 },
+    ]);
+  });
+
+  test('combines multiple complete rows with noResult', () => {
+    const hardening = {
+      noResult: { enabled: true, severity: 'Error' },
+      nullRate: [
+        { fieldName: 'Preis', threshold: 30, severity: 'Error' },
+        { fieldName: '', threshold: 10, severity: 'Warning' }, // incomplete, skipped
+        { fieldName: 'Titel', threshold: 10, severity: 'Warning' },
+      ],
+    };
+    expect(buildHardeningConfig(hardening)).toEqual([
+      { kind: 'noResult', severity: 'Error' },
+      { kind: 'nullRate', severity: 'Error', fieldName: 'Preis', threshold: 0.3 },
+      { kind: 'nullRate', severity: 'Warning', fieldName: 'Titel', threshold: 0.1 },
+    ]);
+  });
+
+  test('returns null when everything is empty/disabled', () => {
+    expect(buildHardeningConfig({ noResult: { enabled: false, severity: 'Warning' }, nullRate: [] })).toBeNull();
+  });
+});
+
+// Issue #131
+describe('buildHardeningConfig (baseline)', () => {
+  test('returns null when baseline is disabled', () => {
+    expect(buildHardeningConfig({ baseline: { enabled: false, severity: 'Warning', dropThresholdPercent: 20 } })).toBeNull();
+  });
+
+  test('converts dropThresholdPercent into a 0.0-1.0 fraction', () => {
+    expect(buildHardeningConfig({ baseline: { enabled: true, severity: 'Error', dropThresholdPercent: 20 } })).toEqual([
+      { kind: 'baseline', severity: 'Error', dropThreshold: 0.2 },
+    ]);
+  });
+
+  test('clamps an out-of-range or non-numeric percent, defaulting to 20%', () => {
+    expect(buildHardeningConfig({ baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: 150 } })).toEqual([
+      { kind: 'baseline', severity: 'Warning', dropThreshold: 1 },
+    ]);
+    expect(buildHardeningConfig({ baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: -10 } })).toEqual([
+      { kind: 'baseline', severity: 'Warning', dropThreshold: 0 },
+    ]);
+    expect(buildHardeningConfig({ baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: NaN } })).toEqual([
+      { kind: 'baseline', severity: 'Warning', dropThreshold: 0.2 },
+    ]);
+  });
+
+  test('combines with noResult and nullRate', () => {
+    const hardening = {
+      noResult: { enabled: true, severity: 'Error' },
+      nullRate: [{ fieldName: 'Preis', threshold: 30, severity: 'Error' }],
+      baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: 20 },
+    };
+    expect(buildHardeningConfig(hardening)).toEqual([
+      { kind: 'noResult', severity: 'Error' },
+      { kind: 'nullRate', severity: 'Error', fieldName: 'Preis', threshold: 0.3 },
+      { kind: 'baseline', severity: 'Warning', dropThreshold: 0.2 },
+    ]);
+  });
+});
+
+describe('buildScrapingConfig (baseline hardening, Issue #131)', () => {
+  test('threads a baseline check through the wire config', () => {
+    const hardening = { baseline: { enabled: true, severity: 'Error', dropThresholdPercent: 25 } };
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, hardening,
+    );
+    expect(result.hardening).toEqual([{ kind: 'baseline', severity: 'Error', dropThreshold: 0.25 }]);
+  });
+});
+
+// Issue #132
+describe('buildHardeningConfig (blocking)', () => {
+  test('returns null when blocking is disabled', () => {
+    expect(buildHardeningConfig({ blocking: { enabled: false, severity: 'Warning', minBodyLengthText: '', phrasesText: '' } })).toBeNull();
+  });
+
+  test('includes minBodyLength and blockPhrases when both are set', () => {
+    const hardening = { blocking: { enabled: true, severity: 'Error', minBodyLengthText: '200', phrasesText: 'Access Denied\nPlease verify you are human' } };
+    expect(buildHardeningConfig(hardening)).toEqual([
+      { kind: 'blocking', severity: 'Error', minBodyLength: 200, blockPhrases: ['Access Denied', 'Please verify you are human'] },
+    ]);
+  });
+
+  // Unlike nullRate, there's no "at least one signal configured"
+  // requirement — the cross-origin-redirect signal is always active, so an
+  // enabled BlockingCheck with neither field filled in is still valid.
+  test('omits minBodyLength (null) and blockPhrases (empty array) when both are blank', () => {
+    const hardening = { blocking: { enabled: true, severity: 'Warning', minBodyLengthText: '', phrasesText: '' } };
+    expect(buildHardeningConfig(hardening)).toEqual([
+      { kind: 'blocking', severity: 'Warning', minBodyLength: null, blockPhrases: [] },
+    ]);
+  });
+
+  test('treats a non-positive or non-numeric minBodyLengthText as unset', () => {
+    expect(buildHardeningConfig({ blocking: { enabled: true, severity: 'Warning', minBodyLengthText: '0', phrasesText: '' } })).toEqual([
+      { kind: 'blocking', severity: 'Warning', minBodyLength: null, blockPhrases: [] },
+    ]);
+    expect(buildHardeningConfig({ blocking: { enabled: true, severity: 'Warning', minBodyLengthText: 'not a number', phrasesText: '' } })).toEqual([
+      { kind: 'blocking', severity: 'Warning', minBodyLength: null, blockPhrases: [] },
+    ]);
+  });
+
+  // One phrase per line (not comma-split like API mode's value list) —
+  // blank lines are dropped, a comma inside a phrase is preserved verbatim.
+  test('splits phrasesText on newlines only, dropping blank lines', () => {
+    const hardening = { blocking: { enabled: true, severity: 'Warning', minBodyLengthText: '', phrasesText: 'Access Denied\n\n  \nRate limit, try again later' } };
+    expect(buildHardeningConfig(hardening)).toEqual([
+      { kind: 'blocking', severity: 'Warning', minBodyLength: null, blockPhrases: ['Access Denied', 'Rate limit, try again later'] },
+    ]);
+  });
+
+  test('combines with noResult, nullRate, and baseline', () => {
+    const hardening = {
+      noResult: { enabled: true, severity: 'Error' },
+      nullRate: [{ fieldName: 'Preis', threshold: 30, severity: 'Error' }],
+      baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: 20 },
+      blocking: { enabled: true, severity: 'Error', minBodyLengthText: '200', phrasesText: 'Access Denied' },
+    };
+    expect(buildHardeningConfig(hardening)).toEqual([
+      { kind: 'noResult', severity: 'Error' },
+      { kind: 'nullRate', severity: 'Error', fieldName: 'Preis', threshold: 0.3 },
+      { kind: 'baseline', severity: 'Warning', dropThreshold: 0.2 },
+      { kind: 'blocking', severity: 'Error', minBodyLength: 200, blockPhrases: ['Access Denied'] },
+    ]);
+  });
+});
+
+describe('buildScrapingConfig (blocking hardening, Issue #132)', () => {
+  test('threads a blocking check through the wire config', () => {
+    const hardening = { blocking: { enabled: true, severity: 'Error', minBodyLengthText: '200', phrasesText: 'Access Denied' } };
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, hardening,
+    );
+    expect(result.hardening).toEqual([{ kind: 'blocking', severity: 'Error', minBodyLength: 200, blockPhrases: ['Access Denied'] }]);
+  });
+});
+
+// Issue #133
+describe('addRequiredField / removeRequiredField', () => {
+  test('adds a field name', () => {
+    expect(addRequiredField(['Titel'], 'Preis')).toEqual(['Titel', 'Preis']);
+  });
+
+  test('adding an already-present field name is a no-op', () => {
+    expect(addRequiredField(['Titel', 'Preis'], 'Preis')).toEqual(['Titel', 'Preis']);
+  });
+
+  test('adding a blank/undefined field name is a no-op', () => {
+    expect(addRequiredField(['Titel'], '')).toEqual(['Titel']);
+    expect(addRequiredField(['Titel'], undefined)).toEqual(['Titel']);
+  });
+
+  test('removes a field name by index', () => {
+    expect(removeRequiredField(['Titel', 'Preis', 'Menge'], 1)).toEqual(['Titel', 'Menge']);
+  });
+});
+
+describe('buildHardeningConfig (requiredFields)', () => {
+  test('returns null when disabled', () => {
+    expect(buildHardeningConfig({ requiredFields: { enabled: false, severity: 'Warning', fields: ['Titel'] } })).toBeNull();
+  });
+
+  // Unlike blocking (still meaningful with nothing configured, thanks to
+  // its always-on redirect signal), an enabled requiredFields check with no
+  // fields chosen yet has nothing to do at all — same "incomplete draft,
+  // not sent" convention as an unfinished nullRate row.
+  test('returns null when enabled but no fields chosen yet', () => {
+    expect(buildHardeningConfig({ requiredFields: { enabled: true, severity: 'Warning', fields: [] } })).toBeNull();
+  });
+
+  test('includes the configured field names and shared severity', () => {
+    const hardening = { requiredFields: { enabled: true, severity: 'Error', fields: ['Titel', 'Preis'] } };
+    expect(buildHardeningConfig(hardening)).toEqual([
+      { kind: 'requiredFields', severity: 'Error', fieldNames: ['Titel', 'Preis'] },
+    ]);
+  });
+
+  test('combines with the other four checks', () => {
+    const hardening = {
+      noResult: { enabled: true, severity: 'Error' },
+      nullRate: [{ fieldName: 'Preis', threshold: 30, severity: 'Error' }],
+      baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: 20 },
+      blocking: { enabled: true, severity: 'Error', minBodyLengthText: '200', phrasesText: 'Access Denied' },
+      requiredFields: { enabled: true, severity: 'Error', fields: ['Titel'] },
+    };
+    expect(buildHardeningConfig(hardening)).toEqual([
+      { kind: 'noResult', severity: 'Error' },
+      { kind: 'nullRate', severity: 'Error', fieldName: 'Preis', threshold: 0.3 },
+      { kind: 'baseline', severity: 'Warning', dropThreshold: 0.2 },
+      { kind: 'blocking', severity: 'Error', minBodyLength: 200, blockPhrases: ['Access Denied'] },
+      { kind: 'requiredFields', severity: 'Error', fieldNames: ['Titel'] },
+    ]);
+  });
+});
+
+describe('buildScrapingConfig (requiredFields hardening, Issue #133)', () => {
+  test('threads a requiredFields check through the wire config', () => {
+    const hardening = { requiredFields: { enabled: true, severity: 'Error', fields: ['Titel'] } };
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, hardening,
+    );
+    expect(result.hardening).toEqual([{ kind: 'requiredFields', severity: 'Error', fieldNames: ['Titel'] }]);
+  });
+});
+
+// Issue #183
+describe('computeInitialMonitoringSectionOpen', () => {
+  const allDisabledHardening = {
+    noResult: { enabled: false, severity: 'Warning' },
+    nullRate: [],
+    baseline: { enabled: false, severity: 'Warning', dropThresholdPercent: 20 },
+    blocking: { enabled: false, severity: 'Warning', minBodyLengthText: '', phrasesText: '' },
+    requiredFields: { enabled: false, severity: 'Warning', fields: [] },
+  };
+
+  test('returns false when neither change detection nor any hardening check is configured', () => {
+    expect(computeInitialMonitoringSectionOpen(null, allDisabledHardening)).toBe(false);
+  });
+
+  test('returns true when change detection is configured', () => {
+    const changeDetection = {
+      enabled: true, notify: 'Webhook', email: null, webhook: { urlEnvVar: 'SF_WEBHOOK' },
+    };
+    expect(computeInitialMonitoringSectionOpen(changeDetection, allDisabledHardening)).toBe(true);
+  });
+
+  test('returns true when a hardening check is configured', () => {
+    const hardening = { ...allDisabledHardening, noResult: { enabled: true, severity: 'Error' } };
+    expect(computeInitialMonitoringSectionOpen(null, hardening)).toBe(true);
+  });
+
+  // An enabled-but-incomplete draft (e.g. change detection toggled on but
+  // its required fields still blank) is exactly what
+  // buildChangeDetectionConfig/buildHardeningConfig already treat as "not
+  // actually configured" — reusing that logic means this stays consistent
+  // automatically, with no separate "is it complete" check duplicated here.
+  test('returns false for an enabled-but-incomplete change-detection draft', () => {
+    const changeDetection = {
+      enabled: true, notify: 'Webhook', email: null, webhook: { urlEnvVar: '' },
+    };
+    expect(computeInitialMonitoringSectionOpen(changeDetection, allDisabledHardening)).toBe(false);
+  });
+
+  test('returns false for an enabled-but-empty requiredFields draft', () => {
+    const hardening = { ...allDisabledHardening, requiredFields: { enabled: true, severity: 'Warning', fields: [] } };
+    expect(computeInitialMonitoringSectionOpen(null, hardening)).toBe(false);
+  });
+});
+
+describe('collectFieldNames (Issue #130)', () => {
+  test('flat mode: reads field names straight off the fields array', () => {
+    const fields = [{ name: 'Titel', selector: 'h1' }, { name: 'Preis', selector: '.price' }];
+    expect(collectFieldNames('flat', fields, [], null)).toEqual(['Titel', 'Preis']);
+  });
+
+  test('container mode: walks the live draft tree, deduplicating repeated leaf names', () => {
+    const groups = [
+      {
+        kind: 'group', name: 'Kategorie', children: [
+          { kind: 'field', name: 'Titel' },
+          { kind: 'field', name: 'Preis' },
+          {
+            kind: 'group', name: 'Unterkategorie', children: [
+              { kind: 'field', name: 'Preis' }, // same leaf name, nested deeper
+            ],
+          },
+        ],
+      },
+    ];
+    expect(collectFieldNames('container', [], groups, null)).toEqual(['Titel', 'Preis']);
+  });
+
+  test('api mode, flat shape: reads apiConfig.fields', () => {
+    const apiConfig = { fields: [{ name: 'Titel' }, { name: 'Preis' }] };
+    expect(collectFieldNames('api', [], [], apiConfig)).toEqual(['Titel', 'Preis']);
+  });
+
+  test('api mode, tree shape: walks the serialized apiConfig.groups (structural children discriminator)', () => {
+    const apiConfig = {
+      groups: [
+        {
+          name: 'Kategorie', path: 'categories[*]', children: [
+            { name: 'Titel', path: 'name' },
+            { name: 'Unterkategorie', path: 'items[*]', children: [{ name: 'Preis', path: 'price' }] },
+          ],
+        },
+      ],
+    };
+    expect(collectFieldNames('api', [], [], apiConfig)).toEqual(['Titel', 'Preis']);
+  });
+
+  test('returns an empty array when there is nothing configured yet', () => {
+    expect(collectFieldNames('flat', [], [], null)).toEqual([]);
+    expect(collectFieldNames('container', [], [], null)).toEqual([]);
+    expect(collectFieldNames('api', [], [], null)).toEqual([]);
+  });
+});
+
+describe('addNullRateCheck / removeNullRateCheck / updateNullRateCheck (Issue #130)', () => {
+  test('addNullRateCheck appends a row with a default 50% threshold and Warning severity', () => {
+    expect(addNullRateCheck([], 'Preis')).toEqual([{ fieldName: 'Preis', threshold: 50, severity: 'Warning' }]);
+  });
+
+  test('addNullRateCheck tolerates no field chosen yet', () => {
+    expect(addNullRateCheck([], undefined)).toEqual([{ fieldName: '', threshold: 50, severity: 'Warning' }]);
+  });
+
+  test('removeNullRateCheck drops the row at the given index only', () => {
+    const rows = [
+      { fieldName: 'A', threshold: 10, severity: 'Warning' },
+      { fieldName: 'B', threshold: 20, severity: 'Error' },
+    ];
+    expect(removeNullRateCheck(rows, 0)).toEqual([{ fieldName: 'B', threshold: 20, severity: 'Error' }]);
+  });
+
+  test('updateNullRateCheck patches only the targeted row, leaving others untouched', () => {
+    const rows = [
+      { fieldName: 'A', threshold: 10, severity: 'Warning' },
+      { fieldName: 'B', threshold: 20, severity: 'Error' },
+    ];
+    expect(updateNullRateCheck(rows, 1, { severity: 'Warning' })).toEqual([
+      { fieldName: 'A', threshold: 10, severity: 'Warning' },
+      { fieldName: 'B', threshold: 20, severity: 'Warning' },
+    ]);
   });
 });
 
@@ -926,6 +1334,14 @@ describe('serializeGroupTree', () => {
     expect(serializeGroupTree(groups)[0]).not.toHaveProperty('attribute');
   });
 
+  // Issue #169
+  test('an ownText field serializes to wire mode "OwnText" with no attribute key', () => {
+    const groups = [{ kind: 'field', name: 'Name', selector: 'h3.item-name', mode: 'ownText', attribute: null }];
+    const [field] = serializeGroupTree(groups);
+    expect(field.mode).toBe('OwnText');
+    expect(field).not.toHaveProperty('attribute');
+  });
+
   // Issue #42, Phase 7
   test('includes framePath on both group and field nodes when set, omits it when null', () => {
     const groups = [
@@ -1089,6 +1505,8 @@ describe('formatGroupNodeLabel', () => {
     expect(formatGroupNodeLabel(buildFieldNode('Titel', 'h2', 'text', null))).toBe('Titel — Text');
     expect(formatGroupNodeLabel(buildFieldNode('Link', 'a', 'attribute', 'href'))).toBe('Link — Attribut: href');
     expect(formatGroupNodeLabel(buildFieldNode('Vegan', '.v', 'exists', null))).toBe('Vegan — Vorhanden?');
+    // Issue #169
+    expect(formatGroupNodeLabel(buildFieldNode('Name', 'h3.item-name', 'ownText', null))).toBe('Name — Nur eigener Text');
   });
 });
 
@@ -1801,6 +2219,46 @@ describe('renderBrowserActions — Fill test-value row', () => {
   test('does not render a test-value input for non-fill actions', () => {
     renderBrowserActions([{ kind: 'click', selector: '#submit' }], {});
     expect(document.querySelector('.browser-action-test-value')).toBeNull();
+  });
+});
+
+describe('renderHardeningNullRateList (Issue #130)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="hardening-null-rate-list"></div>';
+  });
+
+  test('renders one row per entry, with the field select populated from fieldNames', () => {
+    renderHardeningNullRateList(
+      [{ fieldName: 'Preis', threshold: 30, severity: 'Warning' }],
+      ['Titel', 'Preis'],
+    );
+
+    const rows = document.querySelectorAll('.hardening-null-rate-row');
+    expect(rows).toHaveLength(1);
+    const select = rows[0].querySelector('.hardening-null-rate-field');
+    const optionValues = [...select.options].map(o => o.value);
+    expect(optionValues).toEqual(['', 'Titel', 'Preis']);
+    expect(select.value).toBe('Preis');
+    expect(rows[0].querySelector('.hardening-null-rate-threshold').value).toBe('30');
+    expect(rows[0].querySelector('.btn-null-rate-warning').classList.contains('active')).toBe(true);
+    expect(rows[0].querySelector('.btn-null-rate-error').classList.contains('active')).toBe(false);
+  });
+
+  test('keeps a stale field name (renamed/removed since the row was added) selectable instead of silently switching it', () => {
+    renderHardeningNullRateList(
+      [{ fieldName: 'AlterName', threshold: 50, severity: 'Error' }],
+      ['Titel', 'Preis'],
+    );
+
+    const select = document.querySelector('.hardening-null-rate-field');
+    const optionValues = [...select.options].map(o => o.value);
+    expect(optionValues).toContain('AlterName');
+    expect(select.value).toBe('AlterName');
+  });
+
+  test('renders nothing for an empty list', () => {
+    renderHardeningNullRateList([], ['Titel']);
+    expect(document.querySelectorAll('.hardening-null-rate-row')).toHaveLength(0);
   });
 });
 
@@ -2995,6 +3453,75 @@ describe('SELECTION_UNAVAILABLE handling', () => {
   });
 });
 
+// ── SELECTION_CLICK_OUT_OF_SCOPE (Issue #167) ────────────────────────────────
+// Unlike SELECTION_UNAVAILABLE above (a hard failure), a click outside every
+// instance of the container being edited must NOT kick the user back to
+// IDLE — selection stays active, only a brief toast hint is shown.
+
+describe('SELECTION_CLICK_OUT_OF_SCOPE handling', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden"></section>
+      <section id="screen-selecting" class="hidden">
+        <button id="btn-add-field"></button>
+      </section>
+      <div id="error-toast" class="hidden"></div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn() },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({}),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: false });
+
+    require('./popup');
+    await flushMicrotasks();
+
+    document.getElementById('btn-add-field').click(); // → STATES.SELECTING
+  });
+
+  test('shows a toast but stays on the selecting screen', () => {
+    capturedListener({ type: 'SELECTION_CLICK_OUT_OF_SCOPE' });
+
+    expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(true);
+
+    const toast = document.getElementById('error-toast');
+    expect(toast.classList.contains('hidden')).toBe(false);
+    expect(toast.classList.contains('toast-warn')).toBe(true);
+  });
+
+  test('is ignored outside the SELECTING state', () => {
+    // Leave SELECTING first (any transition works; SELECTION_UNAVAILABLE is
+    // a convenient one already wired) and reset the toast it shows along
+    // the way, so the assertion below is only about this message's own guard.
+    capturedListener({ type: 'SELECTION_UNAVAILABLE', reason: 'x' }); // → falls back to IDLE
+    document.getElementById('error-toast').classList.add('hidden');
+
+    capturedListener({ type: 'SELECTION_CLICK_OUT_OF_SCOPE' });
+
+    expect(document.getElementById('error-toast').classList.contains('hidden')).toBe(true);
+  });
+});
+
 // ── DOM tree loading timeout ─────────────────────────────────────────────────
 // Regression coverage: a lost/never-arriving DOM_TREE response used to leave
 // the "Lade DOM-Baum…" spinner stuck forever. A timeout must now surface an
@@ -3179,9 +3706,9 @@ describe('buildGithubIssueUrl', () => {
 describe('buildVerificationErrorMessage', () => {
   test('uses the error message from the response', () => {
     const msg = buildVerificationErrorMessage({
-      error: 'Skript lief fehlerfrei, hat aber keine Daten zurückgegeben (output.csv enthält nur die Kopfzeile).',
+      error: 'Script ran without errors but returned no data (output.csv only contains the header row).',
     });
-    expect(msg).toBe('Skript lief fehlerfrei, hat aber keine Daten zurückgegeben (output.csv enthält nur die Kopfzeile).');
+    expect(msg).toBe('Script ran without errors but returned no data (output.csv only contains the header row).');
   });
 
   test('passes through a script-crash error message', () => {
@@ -3242,7 +3769,7 @@ describe('generate() surfaces companion verification failures', () => {
           ok: false,
           status: 422,
           json: () => Promise.resolve({
-            error: 'Skript lief fehlerfrei, hat aber keine Daten zurückgegeben (output.csv enthält nur die Kopfzeile).',
+            error: 'Script ran without errors but returned no data (output.csv only contains the header row).',
           }),
         });
       }
@@ -3259,7 +3786,7 @@ describe('generate() surfaces companion verification failures', () => {
 
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('error-toast-message').textContent).toContain('keine Daten zurückgegeben');
+    expect(document.getElementById('error-toast-message').textContent).toContain('returned no data');
     expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
   });
 });
@@ -3318,7 +3845,7 @@ describe('generate() surfaces a 400 config rejection without inviting a bug repo
           ok: false,
           status: 400,
           json: () => Promise.resolve({
-            error: 'FramePath ist nur mit Engine "Browser" zulässig.',
+            error: "FramePath is only allowed with Engine 'Browser'.",
           }),
         });
       }
@@ -3335,7 +3862,7 @@ describe('generate() surfaces a 400 config rejection without inviting a bug repo
 
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('error-toast-message').textContent).toContain('FramePath ist nur mit Engine');
+    expect(document.getElementById('error-toast-message').textContent).toContain('FramePath is only allowed with Engine');
     expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(true);
   });
 });
@@ -3827,6 +4354,7 @@ describe('Field transform-chain editor (Issue #84)', () => {
           <option value="text">Text</option>
           <option value="attribute">Attribute</option>
           <option value="exists">Exists</option>
+          <option value="ownText">Own text</option>
         </select>
         <div id="field-attribute-row" class="hidden">
           <input id="input-field-attribute" />
@@ -4113,6 +4641,7 @@ describe('Transform-chain live preview (Issue #143)', () => {
           <option value="text">Text</option>
           <option value="attribute">Attribute</option>
           <option value="exists">Exists</option>
+          <option value="ownText">Own text</option>
         </select>
         <div id="field-attribute-row" class="hidden">
           <input id="input-field-attribute" />
@@ -4254,6 +4783,33 @@ describe('Transform-chain live preview (Issue #143)', () => {
     const preview = document.getElementById('field-extended-transform-preview');
     expect(preview.classList.contains('hidden')).toBe(false);
     expect(preview.textContent).toContain('/produkt/42');
+  });
+
+  // Issue #169
+  test('container mode: ownText-mode preview uses the picked element\'s own text, not rawText', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+    chrome.runtime.sendMessage.mockClear();
+
+    document.querySelector('.btn-add-subfield').click();
+    capturedListener({
+      type: 'ELEMENT_SELECTED', selector: 'h3.item-name',
+      rawText: 'Burrata mit Tomatenvegan möglich', ownText: 'Burrata mit Tomaten',
+    });
+    await flushMicrotasks();
+
+    const modeSelect = document.getElementById('select-field-mode');
+    modeSelect.value = 'ownText';
+    modeSelect.dispatchEvent(new Event('change'));
+
+    const preview = document.getElementById('field-extended-transform-preview');
+    expect(preview.classList.contains('hidden')).toBe(false);
+    expect(preview.textContent).toContain('Burrata mit Tomaten');
+    expect(preview.textContent).not.toContain('vegan möglich');
   });
 
   test('container mode: "Vorhanden?" (exists) mode never shows a preview', async () => {

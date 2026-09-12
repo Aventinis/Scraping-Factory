@@ -31,7 +31,7 @@ internal static class PythonGroupTreeLiteral
     {
         GroupNode group => RenderGroup(group, indent),
         DataFieldNode field => RenderField(field),
-        _ => throw new InvalidOperationException($"Unbekannter Container-Knoten-Typ: {node.GetType()}"),
+        _ => throw new InvalidOperationException($"Unknown container node type: {node.GetType()}"),
     };
 
     // Presence of the "children" key (even if empty) is what extract_group()
@@ -53,7 +53,8 @@ internal static class PythonGroupTreeLiteral
             ExtractMode.Text => "text",
             ExtractMode.Attribute => "attribute",
             ExtractMode.Exists => "exists",
-            _ => throw new InvalidOperationException($"Unbekannter ExtractMode: {field.Mode}"),
+            ExtractMode.OwnText => "ownText",
+            _ => throw new InvalidOperationException($"Unknown ExtractMode: {field.Mode}"),
         };
         var attributePart = field.Mode == ExtractMode.Attribute ? $""", "attribute": {PythonLiteral.Str(field.Attribute!)}""" : "";
         var framePathPart = FramePathPart(field.FramePath);

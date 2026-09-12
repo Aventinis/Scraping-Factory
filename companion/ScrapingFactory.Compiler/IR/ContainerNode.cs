@@ -52,4 +52,12 @@ public sealed class DataFieldNode : ContainerNode
     public List<FieldTransform>? Transforms { get; init; }
 }
 
-public enum ExtractMode { Text, Attribute, Exists }
+// Issue #169: OwnText extracts only the direct text-node children of the
+// matched element, excluding text contributed by any nested element — e.g.
+// <h3>Burrata mit Tomaten<span class="badge">vegan möglich</span></h3>
+// yields "Burrata mit Tomaten", not the two concatenated (which is what
+// Text mode's plain get_text()/text_content() would produce, since that
+// walks every descendant). See scraper_grouped.py.j2/
+// playwright_scraper_grouped.py.j2's own extract_group() for the runtime
+// implementation difference between the two.
+public enum ExtractMode { Text, Attribute, Exists, OwnText }

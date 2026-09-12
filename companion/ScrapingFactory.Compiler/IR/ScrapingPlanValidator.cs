@@ -11,20 +11,20 @@ namespace ScrapingFactory.Compiler.IR;
 //
 // Deliberately does NOT validate CSS selector syntax or compatibility with
 // BeautifulSoup/soupsieve — that's a known, accepted limitation of the
-// chosen approach (see CLAUDE.md "Selektor-Kompatibilität") and is only
+// chosen approach (see CLAUDE.md "Selector compatibility") and is only
 // ever proven by PythonScriptVerifier actually running the script.
 public static class ScrapingPlanValidator
 {
     public static PlanValidationResult Validate(ScrapingPlan plan)
     {
         if (plan.Steps.Count == 0 || plan.Steps[0] is not NavigateStep navigate)
-            return Invalid("Plan muss mit einem NavigateStep beginnen.");
+            return Invalid("Plan must start with a NavigateStep.");
 
         if (plan.Steps.Skip(1).Any(step => step is NavigateStep))
-            return Invalid("Plan darf nur einen NavigateStep enthalten.");
+            return Invalid("Plan must not contain more than one NavigateStep.");
 
         if (navigate.Urls.Count == 0)
-            return Invalid("NavigateStep muss mindestens eine URL enthalten.");
+            return Invalid("NavigateStep must contain at least one URL.");
 
         for (var i = 0; i < navigate.Urls.Count; i++)
         {
@@ -32,7 +32,7 @@ public static class ScrapingPlanValidator
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
                 (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
             {
-                return Invalid($"Ungültige Start-URL #{i + 1} '{url}': muss eine absolute http(s)-URL sein.");
+                return Invalid($"Invalid start URL #{i + 1} '{url}': must be an absolute http(s) URL.");
             }
         }
 
@@ -55,20 +55,29 @@ public static class ScrapingPlanValidator
                 return Invalid(proxyError);
         }
 
+        // Issue #129: mode-independent, same placement as ChangeDetection/
+        // Proxy above.
+        if (plan.Hardening is { Count: > 0 } hardening)
+        {
+            var hardeningError = ValidateHardening(hardening);
+            if (hardeningError is not null)
+                return Invalid(hardeningError);
+        }
+
         // WaitFor/Fill/Click/Scroll all need a real browser to mean anything —
         // the Static engine's codegen simply doesn't look at them, so
         // silently generating a script that just drops them would be
         // confusing.
         var browserOnlySteps = plan.Steps.Where(step => step is WaitForStep or FillStep or ClickStep or ScrollStep).ToList();
         if (plan.Engine != ScrapingEngine.Browser && browserOnlySteps.Count > 0)
-            return Invalid("WaitForStep/FillStep/ClickStep/ScrollStep erfordern Engine 'Browser'.");
+            return Invalid("WaitForStep/FillStep/ClickStep/ScrollStep require Engine 'Browser'.");
 
         foreach (var waitStep in plan.Steps.OfType<WaitForStep>())
         {
             if (string.IsNullOrWhiteSpace(waitStep.Selector))
-                return Invalid("Selector eines WaitForStep darf nicht leer sein.");
+                return Invalid("Selector of a WaitForStep must not be empty.");
             if (waitStep.TimeoutMs <= 0)
-                return Invalid("Timeout eines WaitForStep muss positiv sein.");
+                return Invalid("Timeout of a WaitForStep must be positive.");
             var waitFrameError = ValidateFramePath(waitStep.FramePath, "WaitForStep", plan.Engine);
             if (waitFrameError is not null)
                 return Invalid(waitFrameError);
@@ -77,9 +86,9 @@ public static class ScrapingPlanValidator
         foreach (var fillStep in plan.Steps.OfType<FillStep>())
         {
             if (string.IsNullOrWhiteSpace(fillStep.Selector))
-                return Invalid("Selector eines FillStep darf nicht leer sein.");
+                return Invalid("Selector of a FillStep must not be empty.");
             if (!EnvironmentVariableNamePattern.IsMatch(fillStep.EnvironmentVariableName))
-                return Invalid($"Ungültiger Umgebungsvariablen-Name '{fillStep.EnvironmentVariableName}' in FillStep.");
+                return Invalid($"Invalid environment variable name '{fillStep.EnvironmentVariableName}' in FillStep.");
             var fillFrameError = ValidateFramePath(fillStep.FramePath, "FillStep", plan.Engine);
             if (fillFrameError is not null)
                 return Invalid(fillFrameError);
@@ -88,7 +97,7 @@ public static class ScrapingPlanValidator
         foreach (var clickStep in plan.Steps.OfType<ClickStep>())
         {
             if (string.IsNullOrWhiteSpace(clickStep.Selector))
-                return Invalid("Selector eines ClickStep darf nicht leer sein.");
+                return Invalid("Selector of a ClickStep must not be empty.");
             var clickFrameError = ValidateFramePath(clickStep.FramePath, "ClickStep", plan.Engine);
             if (clickFrameError is not null)
                 return Invalid(clickFrameError);
@@ -97,13 +106,13 @@ public static class ScrapingPlanValidator
         foreach (var scrollStep in plan.Steps.OfType<ScrollStep>())
         {
             if (scrollStep.ContainerSelector is not null && string.IsNullOrWhiteSpace(scrollStep.ContainerSelector))
-                return Invalid("ContainerSelector eines ScrollStep darf, wenn gesetzt, nicht leer sein.");
+                return Invalid("ContainerSelector of a ScrollStep must not be empty when set.");
             if (scrollStep.LoadMoreButtonSelector is not null && string.IsNullOrWhiteSpace(scrollStep.LoadMoreButtonSelector))
-                return Invalid("LoadMoreButtonSelector eines ScrollStep darf, wenn gesetzt, nicht leer sein.");
+                return Invalid("LoadMoreButtonSelector of a ScrollStep must not be empty when set.");
             if (scrollStep.MaxIterations <= 0)
-                return Invalid("MaxIterations eines ScrollStep muss positiv sein.");
+                return Invalid("MaxIterations of a ScrollStep must be positive.");
             if (scrollStep.WaitAfterMs < 0)
-                return Invalid("WaitAfterMs eines ScrollStep darf nicht negativ sein.");
+                return Invalid("WaitAfterMs of a ScrollStep must not be negative.");
             var scrollFrameError = ValidateFramePath(scrollStep.FramePath, "ScrollStep", plan.Engine);
             if (scrollFrameError is not null)
                 return Invalid(scrollFrameError);
@@ -116,7 +125,7 @@ public static class ScrapingPlanValidator
         if (extractGroupStep is not null)
         {
             if (extractGroupStep.Roots.Count == 0)
-                return Invalid("ExtractGroupStep muss mindestens eine Gruppe enthalten.");
+                return Invalid("ExtractGroupStep must contain at least one group.");
 
             var groupError = ValidateContainerNodes(extractGroupStep.Roots, plan.Engine);
             return groupError is null ? new PlanValidationResult { Success = true } : Invalid(groupError);
@@ -127,36 +136,47 @@ public static class ScrapingPlanValidator
         var apiCallStep = plan.Steps.OfType<ApiCallStep>().SingleOrDefault();
         if (apiCallStep is not null)
         {
+            // Issue #133: unlike container mode (which supports
+            // RequiredFieldsCheck — see its own doc comment on
+            // HardeningCheck.cs), Api-mode's tree shape (Groups) doesn't:
+            // out of scope for now, kept simple rather than porting the
+            // same "drop the nearest repeating instance" mechanism here
+            // too without it having been asked for. Api's flat
+            // ItemsPath/Fields shape has just as unambiguous a "row" as
+            // flat Fields mode, so it's allowed there.
+            if (apiCallStep.Config.Groups is { Count: > 0 } && plan.Hardening?.OfType<RequiredFieldsCheck>().Any() == true)
+                return Invalid("Hardening check 'RequiredFields' is not supported for Api-mode's tree-shaped (Groups) output.");
+
             var apiError = ValidateApiConfig(apiCallStep.Config);
             return apiError is null ? new PlanValidationResult { Success = true } : Invalid(apiError);
         }
 
         var extractSteps = plan.Steps.OfType<ExtractStep>().ToList();
         if (extractSteps.Count == 0)
-            return Invalid("Plan muss mindestens einen ExtractStep enthalten.");
+            return Invalid("Plan must contain at least one ExtractStep.");
 
         foreach (var step in extractSteps)
         {
             if (string.IsNullOrWhiteSpace(step.Name))
-                return Invalid("Feldname darf nicht leer sein.");
+                return Invalid("Field name must not be empty.");
             if (string.IsNullOrWhiteSpace(step.Selector))
-                return Invalid($"Selector für Feld '{step.Name}' darf nicht leer sein.");
+                return Invalid($"Selector for field '{step.Name}' must not be empty.");
 
             // FramePath is Browser-engine-only, unlike ExtractStep itself
             // (used by both engines) — so this can't join browserOnlySteps
             // above, which gates on step *type*, not a per-step property.
-            var frameError = ValidateFramePath(step.FramePath, $"Feld '{step.Name}'", plan.Engine);
+            var frameError = ValidateFramePath(step.FramePath, $"field '{step.Name}'", plan.Engine);
             if (frameError is not null)
                 return Invalid(frameError);
 
-            var transformError = FieldTransformValidator.Validate(step.Transforms, $"Feld '{step.Name}'");
+            var transformError = FieldTransformValidator.Validate(step.Transforms, $"field '{step.Name}'");
             if (transformError is not null)
                 return Invalid(transformError);
         }
 
         var duplicateNames = FindDuplicates(extractSteps, step => step.Name);
         if (duplicateNames.Count > 0)
-            return Invalid($"Doppelte Feldnamen: {string.Join(", ", duplicateNames)}.");
+            return Invalid($"Duplicate field names: {string.Join(", ", duplicateNames)}.");
 
         return new PlanValidationResult { Success = true };
     }
@@ -178,14 +198,14 @@ public static class ScrapingPlanValidator
         foreach (var node in nodes)
         {
             if (string.IsNullOrWhiteSpace(node.Name))
-                return "Name eines Container-Knotens darf nicht leer sein.";
+                return "Name of a container node must not be empty.";
 
             switch (node)
             {
                 case GroupNode group:
                     if (string.IsNullOrWhiteSpace(group.Selector))
-                        return $"Selector der Gruppe '{group.Name}' darf nicht leer sein.";
-                    var groupFrameError = ValidateFramePath(group.FramePath, $"Gruppe '{group.Name}'", engine);
+                        return $"Selector of group '{group.Name}' must not be empty.";
+                    var groupFrameError = ValidateFramePath(group.FramePath, $"group '{group.Name}'", engine);
                     if (groupFrameError is not null)
                         return groupFrameError;
                     var childError = ValidateContainerNodes(group.Children, engine);
@@ -195,13 +215,13 @@ public static class ScrapingPlanValidator
 
                 case DataFieldNode field:
                     if (string.IsNullOrWhiteSpace(field.Selector))
-                        return $"Selector des Datenfelds '{field.Name}' darf nicht leer sein.";
+                        return $"Selector of data field '{field.Name}' must not be empty.";
                     if (field.Mode == ExtractMode.Attribute && string.IsNullOrWhiteSpace(field.Attribute))
-                        return $"Datenfeld '{field.Name}' mit Modus 'Attribute' braucht ein Attribut.";
-                    var fieldFrameError = ValidateFramePath(field.FramePath, $"Datenfeld '{field.Name}'", engine);
+                        return $"Data field '{field.Name}' with mode 'Attribute' needs an attribute.";
+                    var fieldFrameError = ValidateFramePath(field.FramePath, $"data field '{field.Name}'", engine);
                     if (fieldFrameError is not null)
                         return fieldFrameError;
-                    var fieldTransformError = FieldTransformValidator.Validate(field.Transforms, $"Datenfeld '{field.Name}'");
+                    var fieldTransformError = FieldTransformValidator.Validate(field.Transforms, $"data field '{field.Name}'");
                     if (fieldTransformError is not null)
                         return fieldTransformError;
                     break;
@@ -222,13 +242,13 @@ public static class ScrapingPlanValidator
         foreach (var node in nodes)
         {
             if (string.IsNullOrWhiteSpace(node.Name))
-                return "Name eines Api-Knotens darf nicht leer sein.";
+                return "Name of an Api node must not be empty.";
 
             switch (node)
             {
                 case ApiGroup group:
                     if (group.Children.Count == 0)
-                        return $"Gruppe '{group.Name}' braucht mindestens ein Kind-Element.";
+                        return $"Group '{group.Name}' needs at least one child element.";
                     var childError = ValidateApiNodes(group.Children);
                     if (childError is not null)
                         return childError;
@@ -236,8 +256,8 @@ public static class ScrapingPlanValidator
 
                 case ApiField field:
                     if (string.IsNullOrWhiteSpace(field.Path))
-                        return $"Pfad des Felds '{field.Name}' darf nicht leer sein.";
-                    var apiFieldTransformError = FieldTransformValidator.Validate(field.Transforms, $"Feld '{field.Name}'");
+                        return $"Path of field '{field.Name}' must not be empty.";
+                    var apiFieldTransformError = FieldTransformValidator.Validate(field.Transforms, $"field '{field.Name}'");
                     if (apiFieldTransformError is not null)
                         return apiFieldTransformError;
                     break;
@@ -273,7 +293,7 @@ public static class ScrapingPlanValidator
                 foreach (var (key, child) in obj.Properties)
                 {
                     if (string.IsNullOrWhiteSpace(key))
-                        return "Property-Name im Body darf nicht leer sein.";
+                        return "Property name in Body must not be empty.";
                     var propertyError = ValidateApiBodyNode(child, parameterNames, referencedParameterNames);
                     if (propertyError is not null)
                         return propertyError;
@@ -291,7 +311,7 @@ public static class ScrapingPlanValidator
 
             case ApiBodyVariable variable:
                 if (!parameterNames.Contains(variable.ParameterName))
-                    return $"Body referenziert unbekannten Parameter '{variable.ParameterName}'.";
+                    return $"Body references unknown parameter '{variable.ParameterName}'.";
                 referencedParameterNames.Add(variable.ParameterName);
                 return null;
 
@@ -299,18 +319,18 @@ public static class ScrapingPlanValidator
                 return literal.Kind switch
                 {
                     ApiBodyLiteralKind.String when literal.StringValue is null =>
-                        "Body-Literal vom Typ 'String' braucht StringValue.",
+                        "Body literal of type 'String' needs StringValue.",
                     ApiBodyLiteralKind.Number when literal.NumberValue is null =>
-                        "Body-Literal vom Typ 'Number' braucht NumberValue.",
+                        "Body literal of type 'Number' needs NumberValue.",
                     ApiBodyLiteralKind.Boolean when literal.BoolValue is null =>
-                        "Body-Literal vom Typ 'Boolean' braucht BoolValue.",
+                        "Body literal of type 'Boolean' needs BoolValue.",
                     ApiBodyLiteralKind.Null when literal.StringValue is not null || literal.NumberValue is not null || literal.BoolValue is not null =>
-                        "Body-Literal vom Typ 'Null' darf keinen Wert gesetzt haben.",
+                        "Body literal of type 'Null' must not have any value set.",
                     _ => null,
                 };
 
             default:
-                throw new NotSupportedException($"Unbekannter ApiBodyNode-Typ: {node.GetType()}");
+                throw new NotSupportedException($"Unknown ApiBodyNode type: {node.GetType()}");
         }
     }
 
@@ -322,11 +342,11 @@ public static class ScrapingPlanValidator
         if (framePath is null)
             return null;
         if (engine != ScrapingEngine.Browser)
-            return $"FramePath für {context} erfordert Engine 'Browser'.";
+            return $"FramePath for {context} requires Engine 'Browser'.";
         if (framePath.Count == 0)
-            return $"FramePath für {context} darf, wenn gesetzt, nicht leer sein.";
+            return $"FramePath for {context} must not be empty when set.";
         if (framePath.Any(string.IsNullOrWhiteSpace))
-            return $"FramePath für {context} darf keine leeren Segmente enthalten.";
+            return $"FramePath for {context} must not contain empty segments.";
         return null;
     }
 
@@ -339,13 +359,13 @@ public static class ScrapingPlanValidator
     private static string? ValidateApiConfig(ApiConfig api)
     {
         if (api.Method is not ("GET" or "POST"))
-            return $"Nicht unterstützte HTTP-Methode '{api.Method}': Api-Mode unterstützt bisher nur GET und POST.";
+            return $"Unsupported HTTP method '{api.Method}': Api mode currently only supports GET and POST.";
 
         // Body (Issue #55) requires Method == "POST" — a bodyless POST is
         // still valid, a GET with a Body makes no sense and is rejected
         // here rather than silently ignored.
         if (api.Body is not null && api.Method != "POST")
-            return "Body erfordert Methode 'POST'.";
+            return "Body requires method 'POST'.";
 
         // Two mutually exclusive response shapes (Issue #54): the original
         // flat ItemsPath+Fields (exactly one repetition level), or the
@@ -355,35 +375,35 @@ public static class ScrapingPlanValidator
         var hasGroups = api.Groups is { Count: > 0 };
 
         if (hasFlat && hasGroups)
-            return "ItemsPath/Fields und Groups schließen sich gegenseitig aus.";
+            return "ItemsPath/Fields and Groups are mutually exclusive.";
         if (!hasFlat && !hasGroups)
-            return "Api-Konfiguration braucht entweder ItemsPath und Fields, oder Groups.";
+            return "Api configuration needs either ItemsPath and Fields, or Groups.";
 
         if (hasFlat)
         {
             if (api.ItemsPath is null || api.Fields is null)
-                return "ItemsPath und Fields müssen beide gesetzt sein, wenn eines von beiden gesetzt ist.";
+                return "ItemsPath and Fields must both be set if either one is set.";
 
             if (string.IsNullOrWhiteSpace(api.ItemsPath))
-                return "ItemsPath darf nicht leer sein.";
+                return "ItemsPath must not be empty.";
 
             if (api.Fields.Count == 0)
-                return "Api-Konfiguration muss mindestens ein Feld enthalten.";
+                return "Api configuration must contain at least one field.";
 
             foreach (var field in api.Fields)
             {
                 if (string.IsNullOrWhiteSpace(field.Name))
-                    return "Feldname darf nicht leer sein.";
+                    return "Field name must not be empty.";
                 if (string.IsNullOrWhiteSpace(field.Path))
-                    return $"Pfad für Feld '{field.Name}' darf nicht leer sein.";
-                var transformError = FieldTransformValidator.Validate(field.Transforms, $"Feld '{field.Name}'");
+                    return $"Path for field '{field.Name}' must not be empty.";
+                var transformError = FieldTransformValidator.Validate(field.Transforms, $"field '{field.Name}'");
                 if (transformError is not null)
                     return transformError;
             }
 
             var duplicateFieldNames = FindDuplicates(api.Fields, field => field.Name);
             if (duplicateFieldNames.Count > 0)
-                return $"Doppelte Feldnamen: {string.Join(", ", duplicateFieldNames)}.";
+                return $"Duplicate field names: {string.Join(", ", duplicateFieldNames)}.";
 
             // Parameter values become extra CSV columns alongside the
             // extracted fields (see PythonApiCodeGenerator) — a name shared
@@ -396,7 +416,7 @@ public static class ScrapingPlanValidator
                 .Intersect(api.Parameters.Select(parameter => parameter.Name))
                 .ToList();
             if (collidingNames.Count > 0)
-                return $"Feldname(n) kollidieren mit Parameternamen: {string.Join(", ", collidingNames)}.";
+                return $"Field name(s) collide with parameter names: {string.Join(", ", collidingNames)}.";
         }
         else
         {
@@ -405,7 +425,7 @@ public static class ScrapingPlanValidator
                 return treeError;
 
             if (!ApiNodesContainField(api.Groups!))
-                return "Api-Konfiguration (Groups) muss mindestens ein Feld enthalten.";
+                return "Api configuration (Groups) must contain at least one field.";
         }
 
         // Zero parameters is a valid, fully static endpoint (every URL part
@@ -417,12 +437,12 @@ public static class ScrapingPlanValidator
         foreach (var parameter in api.Parameters)
         {
             if (string.IsNullOrWhiteSpace(parameter.Name))
-                return "Parametername darf nicht leer sein.";
+                return "Parameter name must not be empty.";
         }
 
         var duplicateParameterNames = FindDuplicates(api.Parameters, parameter => parameter.Name);
         if (duplicateParameterNames.Count > 0)
-            return $"Doppelte Parameternamen: {string.Join(", ", duplicateParameterNames)}.";
+            return $"Duplicate parameter names: {string.Join(", ", duplicateParameterNames)}.";
 
         var placeholders = UrlTemplatePlaceholderPattern.Matches(api.UrlTemplate)
             .Select(match => match.Groups[1].Value)
@@ -431,7 +451,7 @@ public static class ScrapingPlanValidator
 
         var missingParameters = placeholders.Except(parameterNames).ToList();
         if (missingParameters.Count > 0)
-            return $"UrlTemplate referenziert unbekannte Parameter: {string.Join(", ", missingParameters)}.";
+            return $"UrlTemplate references unknown parameters: {string.Join(", ", missingParameters)}.";
 
         // A declared parameter can now be referenced from either the
         // UrlTemplate (checked above) or the request body (Issue #55) — only
@@ -448,14 +468,14 @@ public static class ScrapingPlanValidator
 
         var unusedParameters = parameterNames.Except(placeholders).Except(referencedByBody).ToList();
         if (unusedParameters.Count > 0)
-            return $"Parameter ohne Platzhalter im UrlTemplate: {string.Join(", ", unusedParameters)}.";
+            return $"Parameters with no placeholder in UrlTemplate: {string.Join(", ", unusedParameters)}.";
 
         foreach (var parameter in api.Parameters)
         {
             var sourceError = parameter.Source switch
             {
                 StaticListSource { Values.Count: 0 } =>
-                    $"Parameter '{parameter.Name}' mit Werteliste braucht mindestens einen Wert.",
+                    $"Parameter '{parameter.Name}' with a value list needs at least one value.",
                 DiscoverySource discovery => ValidateDiscoverySource(parameter.Name, discovery),
                 RangeSource range => ValidateRangeSource(parameter.Name, range),
                 _ => null,
@@ -475,13 +495,13 @@ public static class ScrapingPlanValidator
     private static string? ValidateDiscoverySource(string parameterName, DiscoverySource discovery)
     {
         if (discovery.Method != "GET")
-            return $"Discovery-Endpunkt für Parameter '{parameterName}': Api-Mode unterstützt bisher nur GET.";
+            return $"Discovery endpoint for parameter '{parameterName}': Api mode currently only supports GET.";
         if (string.IsNullOrWhiteSpace(discovery.UrlTemplate))
-            return $"Discovery-Endpunkt für Parameter '{parameterName}' braucht ein UrlTemplate.";
+            return $"Discovery endpoint for parameter '{parameterName}' needs a UrlTemplate.";
         if (string.IsNullOrWhiteSpace(discovery.ItemsPath))
-            return $"Discovery-Endpunkt für Parameter '{parameterName}' braucht ein ItemsPath.";
+            return $"Discovery endpoint for parameter '{parameterName}' needs an ItemsPath.";
         if (string.IsNullOrWhiteSpace(discovery.ValuePath))
-            return $"Discovery-Endpunkt für Parameter '{parameterName}' braucht ein ValuePath.";
+            return $"Discovery endpoint for parameter '{parameterName}' needs a ValuePath.";
         return null;
     }
 
@@ -496,28 +516,28 @@ public static class ScrapingPlanValidator
     private static string? ValidateRangeSource(string parameterName, RangeSource range)
     {
         if (string.IsNullOrWhiteSpace(range.From) || string.IsNullOrWhiteSpace(range.To))
-            return $"Bereich für Parameter '{parameterName}' braucht Start und Ende.";
+            return $"Range for parameter '{parameterName}' needs a start and an end.";
 
         if (range.Type == RangeType.Number)
         {
             if (!int.TryParse(range.From, out _))
-                return $"Start-Wert '{range.From}' für Parameter '{parameterName}' ist keine ganze Zahl.";
+                return $"Start value '{range.From}' for parameter '{parameterName}' is not an integer.";
             if (!int.TryParse(range.To, out _))
-                return $"Ende-Wert '{range.To}' für Parameter '{parameterName}' ist keine ganze Zahl.";
+                return $"End value '{range.To}' for parameter '{parameterName}' is not an integer.";
             return null;
         }
 
         var formatError = RangeFormat.ValidateFormat(range.Type, range.Format);
         if (formatError is not null)
-            return $"Format für Parameter '{parameterName}': {formatError}";
+            return $"Format for parameter '{parameterName}': {formatError}";
 
         var format = RangeFormat.Resolve(range.Type, range.Format);
         // See RangeFormat.IsValid's doc comment for why allowToday differs
         // between From and To here.
         if (!RangeFormat.IsValid(range.From, format, allowToday: range.Type == RangeType.IsoWeek))
-            return $"Start-Wert '{range.From}' für Parameter '{parameterName}' passt nicht zum Format '{format}'.";
+            return $"Start value '{range.From}' for parameter '{parameterName}' does not match format '{format}'.";
         if (!RangeFormat.IsValid(range.To, format, allowToday: true))
-            return $"Ende-Wert '{range.To}' für Parameter '{parameterName}' passt nicht zum Format '{format}'.";
+            return $"End value '{range.To}' for parameter '{parameterName}' does not match format '{format}'.";
 
         return null;
     }
@@ -527,15 +547,15 @@ public static class ScrapingPlanValidator
         foreach (var header in headers)
         {
             if (string.IsNullOrWhiteSpace(header.Name))
-                return "Name eines Api-Headers darf nicht leer sein.";
+                return "Name of an Api header must not be empty.";
 
             var hasValue = !string.IsNullOrWhiteSpace(header.Value);
             var hasEnvironmentVariable = !string.IsNullOrWhiteSpace(header.EnvironmentVariableName);
             if (hasValue == hasEnvironmentVariable)
-                return $"Header '{header.Name}' braucht genau eines von Value/EnvironmentVariableName.";
+                return $"Header '{header.Name}' needs exactly one of Value/EnvironmentVariableName.";
 
             if (hasEnvironmentVariable && !EnvironmentVariableNamePattern.IsMatch(header.EnvironmentVariableName!))
-                return $"Ungültiger Umgebungsvariablen-Name '{header.EnvironmentVariableName}' in Header '{header.Name}'.";
+                return $"Invalid environment variable name '{header.EnvironmentVariableName}' in header '{header.Name}'.";
         }
 
         // _build_headers() in scraper_api.py.j2 builds a dict keyed by name —
@@ -543,7 +563,7 @@ public static class ScrapingPlanValidator
         // surfacing as an error.
         var duplicateHeaderNames = FindDuplicates(headers, header => header.Name);
         if (duplicateHeaderNames.Count > 0)
-            return $"Doppelte Header-Namen: {string.Join(", ", duplicateHeaderNames)}.";
+            return $"Duplicate header names: {string.Join(", ", duplicateHeaderNames)}.";
 
         return null;
     }
@@ -554,14 +574,14 @@ public static class ScrapingPlanValidator
     private static string? ValidateChangeDetection(ChangeDetectionConfig changeDetection)
     {
         if (changeDetection.Notify is not ("Email" or "Webhook"))
-            return $"Nicht unterstützte Notify-Methode '{changeDetection.Notify}': erwartet 'Email' oder 'Webhook'.";
+            return $"Unsupported notify method '{changeDetection.Notify}': expected 'Email' or 'Webhook'.";
 
         if (changeDetection.Notify == "Email")
         {
             if (changeDetection.Email is null)
-                return "ChangeDetection mit Notify 'Email' braucht eine Email-Konfiguration.";
+                return "ChangeDetection with Notify 'Email' needs an Email configuration.";
             if (changeDetection.Webhook is not null)
-                return "ChangeDetection darf nicht sowohl Email als auch Webhook konfigurieren.";
+                return "ChangeDetection must not configure both Email and Webhook.";
 
             var email = changeDetection.Email;
             var requiredNames = new (string Value, string Field)[]
@@ -571,7 +591,7 @@ public static class ScrapingPlanValidator
             foreach (var (value, field) in requiredNames)
             {
                 if (!EnvironmentVariableNamePattern.IsMatch(value))
-                    return $"Ungültiger Umgebungsvariablen-Name '{value}' in ChangeDetection.Email.{field}.";
+                    return $"Invalid environment variable name '{value}' in ChangeDetection.Email.{field}.";
             }
 
             var optionalNames = new (string? Value, string Field)[]
@@ -583,18 +603,18 @@ public static class ScrapingPlanValidator
             foreach (var (value, field) in optionalNames)
             {
                 if (value is not null && !EnvironmentVariableNamePattern.IsMatch(value))
-                    return $"Ungültiger Umgebungsvariablen-Name '{value}' in ChangeDetection.Email.{field}.";
+                    return $"Invalid environment variable name '{value}' in ChangeDetection.Email.{field}.";
             }
 
             return null;
         }
 
         if (changeDetection.Webhook is null)
-            return "ChangeDetection mit Notify 'Webhook' braucht eine Webhook-Konfiguration.";
+            return "ChangeDetection with Notify 'Webhook' needs a Webhook configuration.";
 
         return EnvironmentVariableNamePattern.IsMatch(changeDetection.Webhook.UrlEnvVar)
             ? null
-            : $"Ungültiger Umgebungsvariablen-Name '{changeDetection.Webhook.UrlEnvVar}' in ChangeDetection.Webhook.UrlEnvVar.";
+            : $"Invalid environment variable name '{changeDetection.Webhook.UrlEnvVar}' in ChangeDetection.Webhook.UrlEnvVar.";
     }
 
     // Issue #88: only the env var *name* is validated here — the companion
@@ -603,5 +623,88 @@ public static class ScrapingPlanValidator
     private static string? ValidateProxy(ProxyConfig proxy) =>
         EnvironmentVariableNamePattern.IsMatch(proxy.EnvironmentVariableName)
             ? null
-            : $"Ungültiger Umgebungsvariablen-Name '{proxy.EnvironmentVariableName}' in Proxy.EnvironmentVariableName.";
+            : $"Invalid environment variable name '{proxy.EnvironmentVariableName}' in Proxy.EnvironmentVariableName.";
+
+    // Issue #129/#130: every non-NullRate check kind (the concrete
+    // HardeningCheck subtype, since there's no separate string "Kind"
+    // property to compare on the C# side; that string only exists on the
+    // wire/in the generated script) may appear at most once — Severity is a
+    // required enum (an invalid string already fails deserialization before
+    // this ever runs), and NoResultCheck has no parameters of its own, so
+    // there's nothing that would distinguish two instances of it anyway.
+    // NullRateCheck is deliberately exempt from that rule (see its own doc
+    // comment) — more than one is expected, one per monitored field — so it
+    // gets its own "duplicate FieldName" rule plus its own parameter checks
+    // instead.
+    private static string? ValidateHardening(List<HardeningCheck> hardening)
+    {
+        var duplicateKind = hardening
+            .Where(check => check is not NullRateCheck)
+            .GroupBy(check => check.GetType())
+            .FirstOrDefault(group => group.Count() > 1)
+            ?.Key.Name;
+        if (duplicateKind is not null)
+            return $"Hardening check '{duplicateKind}' is configured more than once.";
+
+        var nullRateChecks = hardening.OfType<NullRateCheck>().ToList();
+
+        var duplicateField = nullRateChecks
+            .GroupBy(check => check.FieldName)
+            .FirstOrDefault(group => group.Count() > 1)
+            ?.Key;
+        if (duplicateField is not null)
+            return $"Hardening check 'NullRate' is configured more than once for field '{duplicateField}'.";
+
+        foreach (var check in nullRateChecks)
+        {
+            if (string.IsNullOrWhiteSpace(check.FieldName))
+                return "Hardening check 'NullRate' needs a field name.";
+            if (check.Threshold is < 0 or > 1)
+                return $"Hardening check 'NullRate' for field '{check.FieldName}': threshold must be between 0 and 1 (was {check.Threshold}).";
+        }
+
+        // Issue #131: only DropThreshold's own range needs checking —
+        // BaselineCheck already goes through the generic duplicate-kind rule
+        // above like NoResultCheck, since more than one never makes sense.
+        foreach (var check in hardening.OfType<BaselineCheck>())
+        {
+            if (check.DropThreshold is < 0 or > 1)
+                return $"Hardening check 'Baseline': threshold must be between 0 and 1 (was {check.DropThreshold}).";
+        }
+
+        // Issue #132: like BaselineCheck, only one BlockingCheck ever makes
+        // sense (already covered by the generic duplicate-kind rule above).
+        // MinBodyLength/BlockPhrases are both optional — a BlockingCheck
+        // with neither set is still meaningful (the cross-origin-redirect
+        // signal is always active), so there's no "at least one signal
+        // configured" requirement here.
+        foreach (var check in hardening.OfType<BlockingCheck>())
+        {
+            if (check.MinBodyLength is <= 0)
+                return $"Hardening check 'Blocking': MinBodyLength must be positive (was {check.MinBodyLength}).";
+            if (check.BlockPhrases?.Any(string.IsNullOrWhiteSpace) == true)
+                return "Hardening check 'Blocking': block phrases must not be blank.";
+        }
+
+        // Issue #133: unlike BlockingCheck's optional signals, FieldNames is
+        // the one thing this check configures at all, so — unlike an
+        // incomplete NullRateCheck row, which is simply skipped client-side
+        // — an empty list is rejected here rather than silently doing
+        // nothing. The Api-tree-shape restriction itself is enforced at the
+        // ApiCallStep branch in Validate() above, not here, since shape
+        // isn't known yet at this point in validation (container mode has
+        // no such restriction — see RequiredFieldsCheck's own doc comment).
+        foreach (var check in hardening.OfType<RequiredFieldsCheck>())
+        {
+            if (check.FieldNames.Count == 0)
+                return "Hardening check 'RequiredFields' needs at least one field name.";
+            if (check.FieldNames.Any(string.IsNullOrWhiteSpace))
+                return "Hardening check 'RequiredFields': field names must not be blank.";
+            var duplicateFieldName = FindDuplicates(check.FieldNames, name => name).FirstOrDefault();
+            if (duplicateFieldName is not null)
+                return $"Hardening check 'RequiredFields': duplicate field name '{duplicateFieldName}'.";
+        }
+
+        return null;
+    }
 }

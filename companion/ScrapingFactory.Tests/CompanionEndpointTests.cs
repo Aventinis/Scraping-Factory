@@ -522,7 +522,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("Ungültige Start-URL", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("Invalid start URL", doc.RootElement.GetProperty("error").GetString());
     }
 
     [Fact]
@@ -543,7 +543,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("Doppelte Feldnamen", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("Duplicate field names", doc.RootElement.GetProperty("error").GetString());
     }
 
     // Reproduces the exact wire format sent by the browser extension
@@ -565,6 +565,237 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         var response = await _client.PostAsync("/generate", content);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    // Issue #130 regression: NullRateCheck's wire property is FieldName
+    // (camelCase-serialized "fieldName"), a `required` member — an earlier
+    // extension build sent "field" instead, which the companion silently
+    // rejected as a raw 400 with no usable .error message (a JsonException
+    // for a missing required member, thrown during minimal-API model
+    // binding, before any of the app's own friendly-error code runs) —
+    // exactly the failure a real user hit. Posts the extension's actual raw
+    // wire shape (not a round-tripped C# object, which would only ever test
+    // itself) so a future property-name drift between the two sides is
+    // caught here instead of only surfacing as a confusing user-facing
+    // error. See CompanionEndpointTests.Generate_ExtensionStylePayload_
+    // Returns200 above for the same "raw extension JSON" testing style.
+    [Fact]
+    public async Task Generate_ExtensionStyleNullRateHardeningPayload_Returns200()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var payload = $$"""
+            {
+              "version": "1",
+              "url": "{{server.BaseUrl}}",
+              "fields": [ { "name": "Titel", "selector": "h1", "attribute": null } ],
+              "hardening": [
+                { "kind": "nullRate", "severity": "Warning", "fieldName": "Titel", "threshold": 0.3 }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+    }
+
+    // Issue #131: same "post the extension's actual raw wire shape" style as
+    // the NullRate test above — written for the exact same reason (Issue
+    // #130's own wire-key mismatch bug), so any future property-name drift
+    // between the extension and BaselineCheck.DropThreshold is caught here
+    // too, not just via a same-process C#-object round trip.
+    [Fact]
+    public async Task Generate_ExtensionStyleBaselineHardeningPayload_Returns200()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var payload = $$"""
+            {
+              "version": "1",
+              "url": "{{server.BaseUrl}}",
+              "fields": [ { "name": "Titel", "selector": "h1", "attribute": null } ],
+              "hardening": [
+                { "kind": "baseline", "severity": "Warning", "dropThreshold": 0.2 }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+    }
+
+    // Issue #132: same "post the extension's actual raw wire shape" style as
+    // NullRate/Baseline above — MinBodyLength/BlockPhrases are both
+    // optional, so this exercises the "both set" case; the wire payload
+    // itself already contains no blocking phrases in the fixture body, so
+    // the trial run still succeeds cleanly (a passing trial run, not the
+    // check actually triggering, is all this test needs to prove).
+    [Fact]
+    public async Task Generate_ExtensionStyleBlockingHardeningPayload_Returns200()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var payload = $$"""
+            {
+              "version": "1",
+              "url": "{{server.BaseUrl}}",
+              "fields": [ { "name": "Titel", "selector": "h1", "attribute": null } ],
+              "hardening": [
+                { "kind": "blocking", "severity": "Warning", "minBodyLength": 20, "blockPhrases": ["Access Denied"] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+    }
+
+    // Issue #133: same "post the extension's actual raw wire shape" style
+    // as NullRate/Baseline/Blocking above. Uses the field it's already
+    // extracting ("Titel") as the required one, so the trial run's real
+    // scrape still passes it and generation succeeds.
+    [Fact]
+    public async Task Generate_ExtensionStyleRequiredFieldsHardeningPayload_Returns200()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var payload = $$"""
+            {
+              "version": "1",
+              "url": "{{server.BaseUrl}}",
+              "fields": [ { "name": "Titel", "selector": "h1", "attribute": null } ],
+              "hardening": [
+                { "kind": "requiredFields", "severity": "Warning", "fieldNames": ["Titel"] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+    }
+
+    // Issue #133 follow-up: unlike Api-mode's tree shape (still rejected,
+    // see the test below), container mode supports RequiredFieldsCheck —
+    // matched globally by tag name, dropping the nearest enclosing
+    // repeating instance (see RequiredFieldsCheck's own doc comment). A
+    // real /generate trial run (subprocess execution) is the only way to
+    // catch a Scriban syntax error inside extract_group()'s new
+    // conditional — see HardeningRequiredFieldsEndToEndTests for the full
+    // behavioral proof that dropping actually happens.
+    [Fact]
+    public async Task Generate_ContainerModeWithRequiredFieldsHardening_Returns200()
+    {
+        using var server = new LocalTestServer(
+            "<html><body><section><h2>Titel</h2></section></body></html>");
+        var payload = $$"""
+            {
+              "url": "{{server.BaseUrl}}",
+              "groups": [
+                { "name": "Kategorie", "selector": "section", "repeating": true, "children": [ { "name": "Titel", "selector": "h2" } ] }
+              ],
+              "hardening": [
+                { "kind": "requiredFields", "severity": "Warning", "fieldNames": ["Titel"] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Contains("_passes_required_fields", body);
+    }
+
+    [Fact]
+    public async Task Generate_ContainerModeBrowserEngineWithRequiredFieldsHardening_Returns200()
+    {
+        using var server = new LocalTestServer(
+            "<html><body><section><h2>Titel</h2></section></body></html>");
+        var payload = $$"""
+            {
+              "url": "{{server.BaseUrl}}",
+              "engine": "Browser",
+              "groups": [
+                { "name": "Kategorie", "selector": "section", "repeating": true, "children": [ { "name": "Titel", "selector": "h2" } ] }
+              ],
+              "hardening": [
+                { "kind": "requiredFields", "severity": "Warning", "fieldNames": ["Titel"] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Contains("_passes_required_fields", body);
+    }
+
+    // Unlike container mode (supported, see the test above), Api-mode's
+    // tree shape still isn't — Api's flat ItemsPath/Fields shape is allowed
+    // (see the Returns200 test above's flat-Fields-mode sibling), only
+    // Groups (tree) is rejected.
+    [Fact]
+    public async Task Generate_RequiredFieldsHardeningWithApiTreeShape_Returns400()
+    {
+        var payload = """
+            {
+              "url": "https://example.com",
+              "api": {
+                "urlTemplate": "https://example.com/api/catalog?category={category}",
+                "groups": [
+                  { "name": "Kategorie", "path": "categories", "children": [ { "name": "Titel", "path": "title" } ] }
+                ],
+                "parameters": [ { "name": "category", "source": { "kind": "staticList", "values": ["a"] } } ]
+              },
+              "hardening": [
+                { "kind": "requiredFields", "severity": "Warning", "fieldNames": ["Titel"] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("RequiredFields", doc.RootElement.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task Generate_NullRateHardeningPayload_WrongLegacyFieldKey_FailsWithUsableError()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var payload = $$"""
+            {
+              "version": "1",
+              "url": "{{server.BaseUrl}}",
+              "fields": [ { "name": "Titel", "selector": "h1", "attribute": null } ],
+              "hardening": [
+                { "kind": "nullRate", "severity": "Warning", "field": "Titel", "threshold": 0.3 }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        // Documents the actual (poor) failure mode this regression test
+        // guards against: a missing required member fails JSON model
+        // binding itself, before the app's own Results.BadRequest(new
+        // {error = ...}) code ever runs — so today this is a bare 400 with
+        // no JSON {error: ...} body at all, not a friendly validation
+        // message. If this assertion ever needs to change because ASP.NET
+        // Core's default JSON-binding-failure response gains a body shape
+        // this app could read a usable message from, that's a genuine
+        // improvement — not a sign this test should just be deleted.
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     // Container-Mode wire payload: "groups" instead of "fields", nested
@@ -629,7 +860,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("mutually exclusive", doc.RootElement.GetProperty("error").GetString());
     }
 
     // API-Mode (Issue #53): a third alternative to Fields/Groups, exclusive
@@ -664,7 +895,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("mutually exclusive", doc.RootElement.GetProperty("error").GetString());
     }
 
     [Fact]
@@ -685,7 +916,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("mutually exclusive", doc.RootElement.GetProperty("error").GetString());
     }
 
     // Issue #83: Api builds its own request URL from urlTemplate/parameters
@@ -708,7 +939,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("mutually exclusive", doc.RootElement.GetProperty("error").GetString());
     }
 
     // End-to-end through the real HTTP endpoint: engine selection resolves
@@ -747,5 +978,136 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.Contains("import requests", body);
         Assert.DoesNotContain("BeautifulSoup", body);
         Assert.Contains("itertools.product", body);
+    }
+
+    // Issue #132: a full /generate trial run (real subprocess execution via
+    // PythonScriptVerifier) is the only way to catch a Scriban syntax error
+    // inside a template's `{{ if hardening.enabled }}` block that a test
+    // never actually renders otherwise — NullRate/Baseline's own coverage
+    // above only ever exercises the flat/static engine, so this and the
+    // Browser-engine test below close that gap for BlockingCheck
+    // specifically across the two engines/shapes not otherwise touched by
+    // this file's or PythonGroupCodeGeneratorTests' hardening coverage.
+    [Fact]
+    public async Task Generate_ApiPayloadWithBlockingHardening_Returns200()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var category = request.QueryString["category"];
+            var json = $$"""{ "data": { "items": [ { "title": "Item-{{category}}" } ] } }""";
+            return new LocalTestServerResponse(json, "application/json");
+        });
+
+        var payload = $$"""
+            {
+              "url": "https://example.com",
+              "api": {
+                "urlTemplate": "{{server.BaseUrl}}?category={category}",
+                "itemsPath": "data.items",
+                "fields": [ { "name": "Titel", "path": "title" } ],
+                "parameters": [
+                  { "name": "category", "source": { "kind": "staticList", "values": ["a"] } }
+                ]
+              },
+              "hardening": [
+                { "kind": "blocking", "severity": "Warning", "minBodyLength": 5, "blockPhrases": ["Access Denied"] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Contains("_BLOCKING_RESPONSES", body);
+    }
+
+    [Fact]
+    public async Task Generate_BrowserEnginePayloadWithBlockingHardening_Returns200()
+    {
+        using var server = new LocalTestServer("<html><body><h1 class='item'>Item</h1></body></html>");
+
+        var payload = $$"""
+            {
+              "url": "{{server.BaseUrl}}",
+              "engine": "Browser",
+              "fields": [ { "name": "Item", "selector": ".item" } ],
+              "hardening": [
+                { "kind": "blocking", "severity": "Warning", "minBodyLength": 5, "blockPhrases": ["Access Denied"] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Contains("_BLOCKING_RESPONSES", body);
+    }
+
+    // Issue #133: a real /generate trial run (subprocess execution via
+    // PythonScriptVerifier) is the only way to catch a Scriban syntax error
+    // inside `{{ if hardening.enabled }}` in the Browser-engine flat
+    // template — no other test in this session exercises
+    // playwright_scraper.py.j2 with RequiredFieldsCheck configured.
+    [Fact]
+    public async Task Generate_BrowserEnginePayloadWithRequiredFieldsHardening_Returns200()
+    {
+        using var server = new LocalTestServer("<html><body><h1 class='item'>Item</h1></body></html>");
+
+        var payload = $$"""
+            {
+              "url": "{{server.BaseUrl}}",
+              "engine": "Browser",
+              "fields": [ { "name": "Item", "selector": ".item" } ],
+              "hardening": [
+                { "kind": "requiredFields", "severity": "Warning", "fieldNames": ["Item"] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Contains("_filter_required_fields", body);
+    }
+
+    [Fact]
+    public async Task Generate_ApiPayloadWithRequiredFieldsHardening_Returns200()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var category = request.QueryString["category"];
+            var json = $$"""{ "data": { "items": [ { "title": "Item-{{category}}" } ] } }""";
+            return new LocalTestServerResponse(json, "application/json");
+        });
+
+        var payload = $$"""
+            {
+              "url": "https://example.com",
+              "api": {
+                "urlTemplate": "{{server.BaseUrl}}?category={category}",
+                "itemsPath": "data.items",
+                "fields": [ { "name": "Titel", "path": "title" } ],
+                "parameters": [
+                  { "name": "category", "source": { "kind": "staticList", "values": ["a"] } }
+                ]
+              },
+              "hardening": [
+                { "kind": "requiredFields", "severity": "Warning", "fieldNames": ["Titel"] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Contains("_filter_required_fields", body);
     }
 }

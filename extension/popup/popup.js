@@ -137,6 +137,46 @@ let _state = {
   // list, never a literal address — same environmentVariableName pattern as
   // FillAction/ChangeDetection (see buildProxyConfig).
   proxy: { enabled: false, envVar: '' },
+  // Issue #129: opt-in script hardening checks — mode-independent like
+  // engine/changeDetection/proxy above, persisted the same way (real
+  // scrape-target configuration, not a per-generate toggle). Nested one
+  // level per check (`noResult`, `nullRate` since Issue #130, `baseline`
+  // since Issue #131) so the two still-planned checks (see CLAUDE.md) can
+  // each add their own key without restructuring this or
+  // buildHardeningConfig. `severity` is 'Warning' or 'Error', matching the
+  // wire format's own PascalCase enum values exactly (see
+  // buildHardeningConfig) — no client-side translation needed. Issue #130's
+  // `nullRate` is an array, not a single object like `noResult`/`baseline`
+  // — unlike NoResultCheck/BaselineCheck, more than one is expected (one
+  // per monitored field); each row is `{ fieldName, threshold, severity }`,
+  // `threshold` a whole percent (0-100) for the UI — buildHardeningConfig
+  // divides by 100 to reach the wire format's 0.0-1.0 fraction. Issue
+  // #131's `baseline` mirrors `noResult`'s single-object shape (only one
+  // "the" result count makes sense to track) plus its own
+  // `dropThresholdPercent`, converted the same way `nullRate.threshold` is.
+  // Issue #132's `blocking` mirrors `baseline`'s single-object shape (only
+  // one blocking check ever makes sense) plus its own `minBodyLengthText`
+  // (raw number-input text, '' = signal disabled — kept as text rather
+  // than a number so a cleared input round-trips to '' instead of NaN/0)
+  // and `phrasesText` (one block phrase per line, same raw-textarea-text
+  // convention as `_state.additionalStartUrls`/API mode's own value-list
+  // inputs — parsed into an array only in buildHardeningConfig).
+  // Issue #133's `requiredFields` is closer in shape to `blocking` than
+  // `nullRate` — one shared severity, not per-field — but unlike
+  // `blocking`'s free-text phrase list, `fields` holds field names picked
+  // from a dropdown (collectFieldNames), the same source `nullRate`'s own
+  // per-row field picker already reads from. Supported for flat and
+  // container mode; hidden only for Api-mode's tree shape (see
+  // ScrapingPlanValidator and render()'s own requiredFieldsUnsupported
+  // check) — collectFieldNames already walks container mode's live
+  // GroupNode/DataFieldNode tree, so no extra plumbing was needed there.
+  hardening: {
+    noResult: { enabled: false, severity: 'Warning' },
+    nullRate: [],
+    baseline: { enabled: false, severity: 'Warning', dropThresholdPercent: 20 },
+    blocking: { enabled: false, severity: 'Warning', minBodyLengthText: '', phrasesText: '' },
+    requiredFields: { enabled: false, severity: 'Warning', fields: [] },
+  },
   // Issue #43: one-time Fill test values for the /generate verification
   // trial run only — keyed by FillAction.environmentVariableName. Deliberately
   // absent from persistState()'s chrome.storage.session write and from
@@ -167,6 +207,9 @@ let _state = {
   // null before any pick.
   pendingRawText:            null,
   pendingElementAttributes:  null,
+  // Issue #169: same treatment as pendingRawText/pendingElementAttributes
+  // above, for OwnText mode's own live preview.
+  pendingOwnText:            null,
   // Issue #84: the transform chain (trim/regexExtract/replace/toNumber, in
   // order) being built up while modal-field-name/modal-field-extended is
   // open — form state, not underlying-selection state, so unlike
@@ -201,6 +244,24 @@ let _state = {
   // a pull-based fetch is the only way to reliably see the whole pool.
   apiEntriesPanelOpen: false,
   apiEntries:          null,
+  // Issue #183: collapsible "Monitoring" section (change detection +
+  // hardening) — not persisted across popup close/reopen the way
+  // apiEntriesPanelOpen above isn't either, but init() below overrides
+  // this default to `true` (once, at startup) if change detection or any
+  // hardening check is already configured, via
+  // computeInitialMonitoringSectionOpen — a returning user isn't forced to
+  // re-expand it just to see their own settings. After that one-time
+  // computation, this behaves like a plain toggle for the rest of the
+  // session.
+  monitoringSectionOpen: false,
+  // Issue #184: collapsible "Settings" section (Json output toggle, trial-
+  // run data preview toggle, DOM-highlight "Vorschau" button) — unlike
+  // monitoringSectionOpen above, there's no auto-expand-on-load override in
+  // init(): all three toggles inside are non-persisted, per-generate
+  // opt-ins that reset to off on every popup open anyway, so there's no
+  // "returning user's existing settings" this would ever need to reveal.
+  // Always starts (and stays, until clicked) collapsed.
+  settingsSectionOpen: false,
   // Issue #53 Phase 4/5 — null while no "find in recording" selection round is
   // in progress; 'field' while searching for the primary field (from IDLE);
   // {parameter: name} while searching a Discovery source's example value for
@@ -349,6 +410,124 @@ function buildProxyConfig(proxy) {
   return environmentVariableName ? { environmentVariableName } : null;
 }
 
+// Issue #129: builds the wire-format Hardening list (companion's
+// List<HardeningCheck>?) from every enabled check in _state.hardening — an
+// array even though only one check exists today, since the wire format is
+// inherently a list (see HardeningCheck.cs) to make room for the other four
+// planned checks (see CLAUDE.md) without a breaking change. `kind` is the
+// camelCase discriminator the companion's [JsonDerivedType] expects
+// (mirrors FieldTransform's own kind values, e.g. 'trim'/'toNumber' — not
+// PascalCase like `severity`, which is a plain enum). Returns null (not [])
+// when nothing is enabled, same "omit the key entirely" convention
+// buildChangeDetectionConfig/buildProxyConfig already use.
+function buildHardeningConfig(hardening) {
+  const checks = [];
+  if (hardening?.noResult?.enabled) {
+    checks.push({ kind: 'noResult', severity: hardening.noResult.severity });
+  }
+  // Issue #130: unlike noResult, a row with no field chosen yet is simply
+  // skipped rather than blocking generation — same "incomplete draft, not
+  // an error" convention as an unfinished Fill/Proxy env-var name. Threshold
+  // is stored as a whole percent (0-100) in the UI for a friendlier input,
+  // divided by 100 to reach the wire format's 0.0-1.0 fraction — clamped and
+  // defaulted here too, since a cleared/invalid number input can leave
+  // `threshold` as NaN or out of range.
+  for (const row of hardening?.nullRate || []) {
+    const fieldName = (row.fieldName || '').trim();
+    if (!fieldName) continue;
+    const percent = Number.isFinite(row.threshold) ? row.threshold : 50;
+    const threshold = Math.min(100, Math.max(0, percent)) / 100;
+    checks.push({ kind: 'nullRate', severity: row.severity, fieldName, threshold });
+  }
+  // Issue #131: same percent-to-fraction conversion as nullRate above.
+  // Unlike nullRate, there's only ever one baseline row (a single object,
+  // not an array) — an unfinished/invalid dropThresholdPercent is clamped/
+  // defaulted rather than skipping the check entirely, since there's no
+  // "which field" completeness gate the way nullRate has.
+  if (hardening?.baseline?.enabled) {
+    const percent = Number.isFinite(hardening.baseline.dropThresholdPercent) ? hardening.baseline.dropThresholdPercent : 20;
+    const dropThreshold = Math.min(100, Math.max(0, percent)) / 100;
+    checks.push({ kind: 'baseline', severity: hardening.baseline.severity, dropThreshold });
+  }
+  // Issue #132: unlike baseline's percent, minBodyLengthText has no
+  // meaningful default to fall back to (there's no "at least one signal
+  // configured" requirement — the cross-origin-redirect signal is always
+  // active) — a blank/invalid input simply omits minBodyLength (signal
+  // disabled) rather than substituting a guessed number. phrasesText is
+  // one phrase per line (not comma-split like API mode's value list — a
+  // block phrase such as "Please verify you are human" could plausibly
+  // contain a comma of its own); blank lines are dropped.
+  if (hardening?.blocking?.enabled) {
+    const minBodyLength = parseInt(hardening.blocking.minBodyLengthText, 10);
+    const blockPhrases = String(hardening.blocking.phrasesText || '').split('\n').map(s => s.trim()).filter(s => s.length > 0);
+    checks.push({
+      kind: 'blocking',
+      severity: hardening.blocking.severity,
+      minBodyLength: Number.isFinite(minBodyLength) && minBodyLength > 0 ? minBodyLength : null,
+      blockPhrases,
+    });
+  }
+  // Issue #133: like nullRate's own "incomplete draft" rows, an enabled
+  // check with no fields picked yet is simply skipped rather than sent as
+  // an empty list — ScrapingPlanValidator rejects an empty FieldNames list
+  // outright, and there's nothing incomplete-but-useful to send here the
+  // way an unfinished env-var name still is for Fill/Proxy.
+  if (hardening?.requiredFields?.enabled && hardening.requiredFields.fields.length > 0) {
+    checks.push({ kind: 'requiredFields', severity: hardening.requiredFields.severity, fieldNames: hardening.requiredFields.fields });
+  }
+  return checks.length > 0 ? checks : null;
+}
+
+// Issue #183: the "Monitoring" section (change detection + hardening)
+// should start expanded, not collapsed, for a returning user who already
+// has something configured in it — reuses buildHardeningConfig/
+// buildChangeDetectionConfig's own "does this actually produce a wire
+// config" logic rather than re-deriving "is anything enabled" separately,
+// so the two can never quietly disagree about what counts as "configured".
+function computeInitialMonitoringSectionOpen(changeDetection, hardening) {
+  return buildChangeDetectionConfig(changeDetection) !== null || buildHardeningConfig(hardening) !== null;
+}
+
+// Issue #130: collects every leaf field name currently configured, across
+// whichever mode/shape is active — feeds the NullRateCheck field picker in
+// the hardening UI, reusing the exact field list the user already built
+// instead of a second, free-text name input that could too easily drift out
+// of sync with an actual (or renamed) field. Container mode's `groups` is
+// still the live draft tree (GroupNode/DataFieldNode, `kind: 'group'|'field'`
+// — see container-tree.js); API mode's `apiConfig` is instead the *already
+// serialized* wire object built once at API_CONFIG-confirm time, so its tree
+// shape (if any) is discriminated structurally by `children` presence
+// instead, the same way countApiConfigFields already reads it. Deduplicated
+// (a tree can repeat the same field name at several nesting depths —
+// NullRateCheck itself matches by name globally, see the companion-side doc
+// comment on NullRateCheck) and order-preserving.
+function collectFieldNames(mode, fields, groups, apiConfig) {
+  const names = [];
+  const add = (name) => { if (name && !names.includes(name)) names.push(name); };
+
+  if (mode === 'container') {
+    const walk = (nodes) => {
+      for (const node of nodes || []) {
+        if (node.kind === 'field') add(node.name);
+        else if (node.kind === 'group') walk(node.children);
+      }
+    };
+    walk(groups);
+  } else if (mode === 'api') {
+    const walk = (nodes) => {
+      for (const node of nodes || []) {
+        if (node.children) walk(node.children);
+        else add(node.name);
+      }
+    };
+    if (apiConfig?.groups) walk(apiConfig.groups);
+    else for (const f of apiConfig?.fields || []) add(f.name);
+  } else {
+    for (const f of fields || []) add(f.name);
+  }
+  return names;
+}
+
 // `apiConfig` is only read when mode === 'api' — the confirmed ApiConfig
 // wire object built by buildApiConfig (Issue #53 Phase 5), passed straight
 // through as the request body's `api` field. Method is forced server-side
@@ -382,7 +561,7 @@ function buildProxyConfig(proxy) {
 function buildScrapingConfig(
   url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
-  additionalUrls = [], changeDetection = null, proxy = null,
+  additionalUrls = [], changeDetection = null, proxy = null, hardening = null,
 ) {
   const engineFields = engine === 'Browser'
     ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
@@ -394,13 +573,15 @@ function buildScrapingConfig(
   const changeDetectionFields = changeDetectionConfig ? { changeDetection: changeDetectionConfig } : {};
   const proxyConfig = buildProxyConfig(proxy);
   const proxyFields = proxyConfig ? { proxy: proxyConfig } : {};
+  const hardeningConfig = buildHardeningConfig(hardening);
+  const hardeningFields = hardeningConfig ? { hardening: hardeningConfig } : {};
 
   if (mode === 'container') {
     return {
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields,
+      ...proxyFields, ...hardeningFields,
     };
   }
   if (mode === 'api') {
@@ -408,7 +589,7 @@ function buildScrapingConfig(
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields,
+      ...proxyFields, ...hardeningFields,
     };
   }
   return {
@@ -423,6 +604,7 @@ function buildScrapingConfig(
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
     ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields,
+    ...hardeningFields,
   };
 }
 
@@ -435,14 +617,14 @@ function buildScrapingConfig(
 function buildConfigExport(
   url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false, additionalUrls = [],
-  changeDetection = null, proxy = null,
+  changeDetection = null, proxy = null, hardening = null,
 ) {
   return {
     exportedAt: new Date().toISOString(),
     extensionVersion: manifest.version || '?',
     config: buildScrapingConfig(
       url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview,
-      useJsonOutput, additionalUrls, changeDetection, proxy,
+      useJsonOutput, additionalUrls, changeDetection, proxy, hardening,
     ),
   };
 }
@@ -522,6 +704,38 @@ function removeField(fields, index) {
   return fields.filter((_, i) => i !== index);
 }
 
+// Issue #130: same pure add/remove/update shape as addBrowserAction/
+// removeBrowserAction/updateBrowserAction below, for _state.hardening.
+// nullRate rows. threshold defaults to 50 (%) — an arbitrary but reasonable
+// starting point, the same role addBrowserAction's own kind-specific
+// defaults play.
+function addNullRateCheck(nullRate, fieldName) {
+  return [...nullRate, { fieldName: fieldName || '', threshold: 50, severity: 'Warning' }];
+}
+
+function removeNullRateCheck(nullRate, index) {
+  return nullRate.filter((_, i) => i !== index);
+}
+
+function updateNullRateCheck(nullRate, index, patch) {
+  return nullRate.map((row, i) => (i === index ? { ...row, ...patch } : row));
+}
+
+// Issue #133: unlike nullRate's rows (each its own draft object with a
+// field/threshold/severity), requiredFields.fields is just a plain array of
+// already-chosen field names — there's nothing else to configure per entry,
+// so no updateRequiredField counterpart exists. A duplicate add is a no-op
+// rather than an error, mirroring how the add-field <select> below is
+// itself already filtered to exclude already-added names.
+function addRequiredField(fields, fieldName) {
+  if (!fieldName || fields.includes(fieldName)) return fields;
+  return [...fields, fieldName];
+}
+
+function removeRequiredField(fields, index) {
+  return fields.filter((_, i) => i !== index);
+}
+
 // Issue #42, Phase 7: a small pill shown next to a field's/node's/action's
 // selector once ELEMENT_SELECTED resolved a non-null framePath for it — the
 // side panel's own, translated indicator of what content-script.js's
@@ -569,7 +783,9 @@ function refreshFlatTransformPreview() {
 // (its own transforms section is hidden, see the select-field-mode change
 // handler below) and attribute mode passes null until an attribute name has
 // actually been typed, so the hint doesn't show a misleading result before
-// then.
+// then. Issue #169: "ownText" mode reads pendingOwnText, computed at click
+// time by content-script.js's collectOwnText — no DOM input to wait on,
+// unlike attribute mode's attribute-name field.
 function refreshExtendedTransformPreview() {
   const mode = document.getElementById('select-field-mode')?.value ?? 'text';
   let rawValue = null;
@@ -578,6 +794,9 @@ function refreshExtendedTransformPreview() {
   } else if (mode === 'attribute') {
     const attrName = document.getElementById('input-field-attribute')?.value.trim();
     if (attrName) rawValue = (_state.pendingElementAttributes?.[attrName] ?? '').trim();
+  } else if (mode === 'ownText') {
+    // Issue #169
+    rawValue = _state.pendingOwnText;
   }
   renderTransformPreview('field-extended-transform-preview', rawValue, _state.pendingTransforms);
 }
@@ -613,6 +832,7 @@ function persistState() {
       additionalStartUrls: _state.additionalStartUrls,
       changeDetection: _state.changeDetection,
       proxy: _state.proxy,
+      hardening: _state.hardening,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
       selectionKind: _state.selectionKind,
@@ -929,6 +1149,70 @@ function render() {
       proxyEnvVarInput.value = _state.proxy.envVar;
     }
 
+    // Issue #183: collapsible "Monitoring" section (change detection +
+    // hardening) — see popup.html's own comment on this markup for why a
+    // chevron+.collapsed toggle was chosen over the API panel's Show/Hide
+    // button-text-swap pattern.
+    document.getElementById('monitoring-section-toggle')?.classList.toggle('collapsed', !_state.monitoringSectionOpen);
+    document.getElementById('monitoring-section-content')?.classList.toggle('hidden', !_state.monitoringSectionOpen);
+
+    // Issue #184: collapsible "Settings" section (Json output, trial-run
+    // data preview, DOM-highlight "Vorschau") — same chevron+.collapsed
+    // mechanism as Monitoring above.
+    document.getElementById('settings-section-toggle')?.classList.toggle('collapsed', !_state.settingsSectionOpen);
+    document.getElementById('settings-section-content')?.classList.toggle('hidden', !_state.settingsSectionOpen);
+
+    // Issue #129: opt-in script hardening.
+    const hardeningNoResultToggle = document.getElementById('toggle-hardening-no-result');
+    if (hardeningNoResultToggle) hardeningNoResultToggle.checked = _state.hardening.noResult.enabled;
+    document.getElementById('hardening-no-result-severity')?.classList.toggle('hidden', !_state.hardening.noResult.enabled);
+    document.getElementById('btn-hardening-no-result-warning')?.classList.toggle('active', _state.hardening.noResult.severity === 'Warning');
+    document.getElementById('btn-hardening-no-result-error')?.classList.toggle('active', _state.hardening.noResult.severity === 'Error');
+    renderHardeningNullRateList();
+
+    // Issue #131: opt-in baseline check — single-row toggle+severity,
+    // same shape as noResult above (unlike nullRate's dynamic list).
+    const hardeningBaselineToggle = document.getElementById('toggle-hardening-baseline');
+    if (hardeningBaselineToggle) hardeningBaselineToggle.checked = _state.hardening.baseline.enabled;
+    document.getElementById('hardening-baseline-config')?.classList.toggle('hidden', !_state.hardening.baseline.enabled);
+    document.getElementById('btn-hardening-baseline-warning')?.classList.toggle('active', _state.hardening.baseline.severity === 'Warning');
+    document.getElementById('btn-hardening-baseline-error')?.classList.toggle('active', _state.hardening.baseline.severity === 'Error');
+    const hardeningBaselineThresholdInput = document.getElementById('input-hardening-baseline-threshold');
+    if (hardeningBaselineThresholdInput && document.activeElement !== hardeningBaselineThresholdInput) {
+      hardeningBaselineThresholdInput.value = _state.hardening.baseline.dropThresholdPercent;
+    }
+
+    // Issue #132: opt-in blocking-detection check — same single-row
+    // toggle+severity shape as baseline above, plus an optional
+    // min-body-length number input and a one-phrase-per-line textarea.
+    const hardeningBlockingToggle = document.getElementById('toggle-hardening-blocking');
+    if (hardeningBlockingToggle) hardeningBlockingToggle.checked = _state.hardening.blocking.enabled;
+    document.getElementById('hardening-blocking-config')?.classList.toggle('hidden', !_state.hardening.blocking.enabled);
+    document.getElementById('btn-hardening-blocking-warning')?.classList.toggle('active', _state.hardening.blocking.severity === 'Warning');
+    document.getElementById('btn-hardening-blocking-error')?.classList.toggle('active', _state.hardening.blocking.severity === 'Error');
+    const hardeningBlockingMinBodyLengthInput = document.getElementById('input-hardening-blocking-min-body-length');
+    if (hardeningBlockingMinBodyLengthInput && document.activeElement !== hardeningBlockingMinBodyLengthInput) {
+      hardeningBlockingMinBodyLengthInput.value = _state.hardening.blocking.minBodyLengthText;
+    }
+    const hardeningBlockingPhrasesInput = document.getElementById('input-hardening-blocking-phrases');
+    if (hardeningBlockingPhrasesInput && document.activeElement !== hardeningBlockingPhrasesInput) {
+      hardeningBlockingPhrasesInput.value = _state.hardening.blocking.phrasesText;
+    }
+
+    // Issue #133 (+ container-mode follow-up): required-fields check —
+    // supported for flat mode and container mode, but not yet Api-mode's
+    // tree shape (see ScrapingPlanValidator) — the subsection is hidden
+    // only for that, same "hidden when not applicable" treatment
+    // #additional-urls-row already gets for API mode generally.
+    const requiredFieldsUnsupported = _state.mode === 'api' && !!_state.apiConfig?.groups;
+    document.getElementById('hardening-required-fields-section')?.classList.toggle('hidden', requiredFieldsUnsupported);
+    const hardeningRequiredFieldsToggle = document.getElementById('toggle-hardening-required-fields');
+    if (hardeningRequiredFieldsToggle) hardeningRequiredFieldsToggle.checked = _state.hardening.requiredFields.enabled;
+    document.getElementById('hardening-required-fields-config')?.classList.toggle('hidden', !_state.hardening.requiredFields.enabled);
+    document.getElementById('btn-hardening-required-fields-warning')?.classList.toggle('active', _state.hardening.requiredFields.severity === 'Warning');
+    document.getElementById('btn-hardening-required-fields-error')?.classList.toggle('active', _state.hardening.requiredFields.severity === 'Error');
+    renderHardeningRequiredFieldsList();
+
     if (_state.containerModalOpen) {
       show('modal-container-new');
       const nameInput = document.getElementById('input-container-name');
@@ -1192,6 +1476,82 @@ function renderBrowserActions(actions = _state.browserActions, testValues = _sta
   });
 }
 
+// Issue #130: one row per _state.hardening.nullRate entry — a field
+// dropdown (options from collectFieldNames, reusing whatever fields/groups/
+// apiConfig the current mode already has, see that function's own doc
+// comment), a threshold % number input, a Warning/Error severity toggle
+// (the same .mode-toggle pattern the no-result check above already uses —
+// syncModeToggleThumbs() picks these up automatically on every render()),
+// and a remove button. Mirrors renderBrowserActions' DOM-building style.
+// The field <select> always includes the row's own currently chosen value
+// even if it's since dropped out of collectFieldNames' list (e.g. the field
+// was renamed or removed after this row was added) — otherwise the browser
+// would silently fall back to whichever option happens to be first,
+// silently corrupting the row instead of leaving it visibly stale.
+function renderHardeningNullRateList(
+  nullRate = _state.hardening.nullRate,
+  fieldNames = collectFieldNames(_state.mode, _state.fields, _state.groups, _state.apiConfig),
+) {
+  const container = document.getElementById('hardening-null-rate-list');
+  if (!container) return;
+  container.innerHTML = '';
+
+  nullRate.forEach((row, i) => {
+    const options = fieldNames.includes(row.fieldName) || !row.fieldName
+      ? fieldNames
+      : [row.fieldName, ...fieldNames];
+
+    const rowEl = document.createElement('div');
+    rowEl.className = 'hardening-null-rate-row';
+    rowEl.dataset.index = i;
+    rowEl.innerHTML =
+      `<select class="hardening-null-rate-field" data-index="${i}">` +
+      `<option value="">${escapeHtml(t('idle.hardeningNullRateFieldPlaceholder'))}</option>` +
+      options.map(name => `<option value="${escapeHtml(name)}"${name === row.fieldName ? ' selected' : ''}>${escapeHtml(name)}</option>`).join('') +
+      `</select>` +
+      `<input type="number" min="0" max="100" class="hardening-null-rate-threshold" data-index="${i}" value="${row.threshold}" />%` +
+      `<div class="mode-toggle hardening-null-rate-severity">` +
+      `<div class="mode-toggle-thumb"></div>` +
+      `<button type="button" class="mode-btn btn-null-rate-warning${row.severity === 'Warning' ? ' active' : ''}" data-index="${i}">${escapeHtml(t('idle.hardeningSeverityWarning'))}</button>` +
+      `<button type="button" class="mode-btn btn-null-rate-error${row.severity === 'Error' ? ' active' : ''}" data-index="${i}">${escapeHtml(t('idle.hardeningSeverityError'))}</button>` +
+      `</div>` +
+      `<button type="button" class="btn-danger btn-tiny btn-remove-null-rate" data-index="${i}">${escapeHtml(t('common.remove'))}</button>`;
+    container.appendChild(rowEl);
+  });
+}
+
+// Issue #133: unlike renderHardeningNullRateList's per-row field pickers
+// (each row starts as an unfinished draft), a required field is already a
+// complete, chosen name the moment it exists in the list — so each row is
+// just a name + remove button, and picking a *new* one to add happens via
+// one shared <select>/button pair (#select-hardening-required-field/
+// #btn-add-required-field) outside the list itself, filtered to exclude
+// names already added.
+function renderHardeningRequiredFieldsList(
+  fields = _state.hardening.requiredFields.fields,
+  fieldNames = collectFieldNames(_state.mode, _state.fields, _state.groups, _state.apiConfig),
+) {
+  const container = document.getElementById('hardening-required-fields-list');
+  if (container) {
+    container.innerHTML = '';
+    fields.forEach((name, i) => {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'hardening-required-field-row';
+      rowEl.innerHTML =
+        `<span class="hardening-required-field-name">${escapeHtml(name)}</span>` +
+        `<button type="button" class="btn-danger btn-tiny btn-remove-required-field" data-index="${i}">${escapeHtml(t('common.remove'))}</button>`;
+      container.appendChild(rowEl);
+    });
+  }
+
+  const available = fieldNames.filter(name => !fields.includes(name));
+  const select = document.getElementById('select-hardening-required-field');
+  if (select) select.innerHTML = available.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
+  const addBtn = document.getElementById('btn-add-required-field');
+  if (addBtn) addBtn.disabled = available.length === 0;
+  if (select) select.disabled = available.length === 0;
+}
+
 // ── DOM tree view ────────────────────────────────────────────────────────────
 // Rendered imperatively (not through render()) so a user's expand/collapse
 // clicks survive unrelated state updates (e.g. adding/removing a field).
@@ -1422,7 +1782,7 @@ async function generate() {
   const config = buildScrapingConfig(
     _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
-    _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy,
+    _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy, _state.hardening,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
@@ -1506,7 +1866,7 @@ function downloadConfigExport() {
   const exportObj = buildConfigExport(
     _state.url, _state.mode, _state.fields, _state.groups, manifest, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
-    _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy,
+    _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy, _state.hardening,
   );
   log('DOWNLOAD scraping-config.json', exportObj);
 
@@ -1791,6 +2151,7 @@ function confirmField() {
     pendingMatchCount: null,
     pendingRawText: null,
     pendingElementAttributes: null,
+    pendingOwnText: null,
     pendingTransforms: [],
   });
 }
@@ -1897,6 +2258,32 @@ function wireEvents() {
     setState(_state.current, { additionalStartUrls: parseAdditionalUrls(e.target.value) });
   });
 
+  // Issue #183: collapsible "Monitoring" section toggle — a plain click
+  // (and Enter/Space, since the header is a div with role="button", not a
+  // real <button>) flips monitoringSectionOpen; nothing else about
+  // change-detection/hardening's own state is touched.
+  document.getElementById('monitoring-section-toggle')?.addEventListener('click', () => {
+    setState(_state.current, { monitoringSectionOpen: !_state.monitoringSectionOpen });
+  });
+  document.getElementById('monitoring-section-toggle')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setState(_state.current, { monitoringSectionOpen: !_state.monitoringSectionOpen });
+    }
+  });
+
+  // Issue #184: collapsible "Settings" section toggle — same click/Enter/
+  // Space pattern as Monitoring above.
+  document.getElementById('settings-section-toggle')?.addEventListener('click', () => {
+    setState(_state.current, { settingsSectionOpen: !_state.settingsSectionOpen });
+  });
+  document.getElementById('settings-section-toggle')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setState(_state.current, { settingsSectionOpen: !_state.settingsSectionOpen });
+    }
+  });
+
   // Issue #87: opt-in change detection + notification.
   document.getElementById('toggle-change-detection')?.addEventListener('change', (e) => {
     setState(_state.current, { changeDetection: { ..._state.changeDetection, enabled: e.target.checked } });
@@ -1934,6 +2321,177 @@ function wireEvents() {
   });
   document.getElementById('input-proxy-env-var')?.addEventListener('input', (e) => {
     setState(_state.current, { proxy: { ..._state.proxy, envVar: e.target.value } });
+  });
+
+  // Issue #129: opt-in script hardening — the "no result" check.
+  document.getElementById('toggle-hardening-no-result')?.addEventListener('change', (e) => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, noResult: { ..._state.hardening.noResult, enabled: e.target.checked } },
+    });
+  });
+  document.getElementById('btn-hardening-no-result-warning')?.addEventListener('click', () => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, noResult: { ..._state.hardening.noResult, severity: 'Warning' } },
+    });
+  });
+  document.getElementById('btn-hardening-no-result-error')?.addEventListener('click', () => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, noResult: { ..._state.hardening.noResult, severity: 'Error' } },
+    });
+  });
+
+  // Issue #130: the per-field null-rate check — a dynamic list, same
+  // delegated-event-on-the-container pattern as browser-actions-list above.
+  document.getElementById('btn-add-null-rate-check')?.addEventListener('click', () => {
+    const [firstField] = collectFieldNames(_state.mode, _state.fields, _state.groups, _state.apiConfig);
+    setState(_state.current, {
+      hardening: { ..._state.hardening, nullRate: addNullRateCheck(_state.hardening.nullRate, firstField) },
+    });
+  });
+  document.getElementById('hardening-null-rate-list')?.addEventListener('click', (e) => {
+    const removeBtn = e.target.closest('.btn-remove-null-rate');
+    if (removeBtn) {
+      const index = parseInt(removeBtn.dataset.index, 10);
+      setState(_state.current, {
+        hardening: { ..._state.hardening, nullRate: removeNullRateCheck(_state.hardening.nullRate, index) },
+      });
+      return;
+    }
+    const warningBtn = e.target.closest('.btn-null-rate-warning');
+    if (warningBtn) {
+      const index = parseInt(warningBtn.dataset.index, 10);
+      setState(_state.current, {
+        hardening: { ..._state.hardening, nullRate: updateNullRateCheck(_state.hardening.nullRate, index, { severity: 'Warning' }) },
+      });
+      return;
+    }
+    const errorBtn = e.target.closest('.btn-null-rate-error');
+    if (errorBtn) {
+      const index = parseInt(errorBtn.dataset.index, 10);
+      setState(_state.current, {
+        hardening: { ..._state.hardening, nullRate: updateNullRateCheck(_state.hardening.nullRate, index, { severity: 'Error' }) },
+      });
+    }
+  });
+  // change (not input/click) for the field select and threshold number —
+  // same "don't reset the cursor/dropdown on every keystroke" reasoning as
+  // the browser-actions-list change listener above.
+  document.getElementById('hardening-null-rate-list')?.addEventListener('change', (e) => {
+    const fieldSelect = e.target.closest('.hardening-null-rate-field');
+    if (fieldSelect) {
+      const index = parseInt(fieldSelect.dataset.index, 10);
+      setState(_state.current, {
+        hardening: { ..._state.hardening, nullRate: updateNullRateCheck(_state.hardening.nullRate, index, { fieldName: fieldSelect.value }) },
+      });
+      return;
+    }
+    const thresholdInput = e.target.closest('.hardening-null-rate-threshold');
+    if (thresholdInput) {
+      const index = parseInt(thresholdInput.dataset.index, 10);
+      const threshold = parseInt(thresholdInput.value, 10);
+      setState(_state.current, {
+        hardening: {
+          ..._state.hardening,
+          nullRate: updateNullRateCheck(_state.hardening.nullRate, index, {
+            threshold: Number.isFinite(threshold) ? Math.min(100, Math.max(0, threshold)) : 50,
+          }),
+        },
+      });
+    }
+  });
+
+  // Issue #131: opt-in script hardening — the baseline-drop check.
+  document.getElementById('toggle-hardening-baseline')?.addEventListener('change', (e) => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, baseline: { ..._state.hardening.baseline, enabled: e.target.checked } },
+    });
+  });
+  document.getElementById('btn-hardening-baseline-warning')?.addEventListener('click', () => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, baseline: { ..._state.hardening.baseline, severity: 'Warning' } },
+    });
+  });
+  document.getElementById('btn-hardening-baseline-error')?.addEventListener('click', () => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, baseline: { ..._state.hardening.baseline, severity: 'Error' } },
+    });
+  });
+  document.getElementById('input-hardening-baseline-threshold')?.addEventListener('change', (e) => {
+    const percent = parseInt(e.target.value, 10);
+    setState(_state.current, {
+      hardening: {
+        ..._state.hardening,
+        baseline: {
+          ..._state.hardening.baseline,
+          dropThresholdPercent: Number.isFinite(percent) ? Math.min(100, Math.max(0, percent)) : 20,
+        },
+      },
+    });
+  });
+
+  // Issue #132: opt-in script hardening — the blocking-detection check.
+  document.getElementById('toggle-hardening-blocking')?.addEventListener('change', (e) => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, blocking: { ..._state.hardening.blocking, enabled: e.target.checked } },
+    });
+  });
+  document.getElementById('btn-hardening-blocking-warning')?.addEventListener('click', () => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, blocking: { ..._state.hardening.blocking, severity: 'Warning' } },
+    });
+  });
+  document.getElementById('btn-hardening-blocking-error')?.addEventListener('click', () => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, blocking: { ..._state.hardening.blocking, severity: 'Error' } },
+    });
+  });
+  document.getElementById('input-hardening-blocking-min-body-length')?.addEventListener('change', (e) => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, blocking: { ..._state.hardening.blocking, minBodyLengthText: e.target.value } },
+    });
+  });
+  document.getElementById('input-hardening-blocking-phrases')?.addEventListener('change', (e) => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, blocking: { ..._state.hardening.blocking, phrasesText: e.target.value } },
+    });
+  });
+
+  // Issue #133: opt-in script hardening — the required-fields check.
+  document.getElementById('toggle-hardening-required-fields')?.addEventListener('change', (e) => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, requiredFields: { ..._state.hardening.requiredFields, enabled: e.target.checked } },
+    });
+  });
+  document.getElementById('btn-hardening-required-fields-warning')?.addEventListener('click', () => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, requiredFields: { ..._state.hardening.requiredFields, severity: 'Warning' } },
+    });
+  });
+  document.getElementById('btn-hardening-required-fields-error')?.addEventListener('click', () => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, requiredFields: { ..._state.hardening.requiredFields, severity: 'Error' } },
+    });
+  });
+  document.getElementById('btn-add-required-field')?.addEventListener('click', () => {
+    const fieldName = document.getElementById('select-hardening-required-field')?.value;
+    setState(_state.current, {
+      hardening: {
+        ..._state.hardening,
+        requiredFields: { ..._state.hardening.requiredFields, fields: addRequiredField(_state.hardening.requiredFields.fields, fieldName) },
+      },
+    });
+  });
+  document.getElementById('hardening-required-fields-list')?.addEventListener('click', (e) => {
+    const removeBtn = e.target.closest('.btn-remove-required-field');
+    if (removeBtn) {
+      const index = parseInt(removeBtn.dataset.index, 10);
+      setState(_state.current, {
+        hardening: {
+          ..._state.hardening,
+          requiredFields: { ..._state.hardening.requiredFields, fields: removeRequiredField(_state.hardening.requiredFields.fields, index) },
+        },
+      });
+    }
   });
 
   document.getElementById('toggle-include-data-preview')?.addEventListener('change', (e) => {
@@ -2177,7 +2735,7 @@ function wireEvents() {
     stopPreviewIfActive();
     chrome.runtime.sendMessage({ type: 'START_SELECTION' });
     setState(STATES.SELECTING, {
-      pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
+      pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
       domTree: null, domTreeTruncated: false, domTreeError: null,
     });
     if (_state.domViewEnabled) {
@@ -2258,7 +2816,7 @@ function wireEvents() {
     // or the in-progress apiConfigDraft would appear to have vanished.
     const returnTo = _state.apiConfigDraft ? STATES.API_CONFIG : STATES.IDLE;
     setState(returnTo, {
-      selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
+      selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
       pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', apiSearchTarget: null,
     });
   });
@@ -2284,7 +2842,7 @@ function wireEvents() {
 
   document.getElementById('btn-field-cancel')?.addEventListener('click', () => {
     log('BTN field-cancel');
-    setState(STATES.IDLE, { pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [] });
+    setState(STATES.IDLE, { pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [] });
   });
 
   // Event delegation for "Remove" buttons in the field list
@@ -2369,7 +2927,7 @@ function wireEvents() {
       stopPreviewIfActive();
       chrome.runtime.sendMessage({ type: 'START_SELECTION' });
       setState(STATES.SELECTING, {
-        pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [], selectionKind: 'browserAction', pendingBrowserActionIndex: index, pendingBrowserActionField: field,
+        pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [], selectionKind: 'browserAction', pendingBrowserActionIndex: index, pendingBrowserActionField: field,
         domTree: null, domTreeTruncated: false, domTreeError: null,
       });
     }
@@ -2440,6 +2998,13 @@ function wireEvents() {
       });
       showToast(t('toast.selectionUnavailable'));
     }
+    // Issue #167: a click that landed outside every instance of the
+    // container being edited — selection stays active (unlike
+    // SELECTION_UNAVAILABLE above, which is a hard failure), this is just a
+    // brief nudge so the user isn't left guessing why nothing happened.
+    if (message.type === 'SELECTION_CLICK_OUT_OF_SCOPE' && _state.current === STATES.SELECTING) {
+      showToast(t('toast.clickOutsideScope'), null, 'warn');
+    }
     if (message.type === 'ELEMENT_SELECTED' && _state.current === STATES.SELECTING) {
       log('ELEMENT_SELECTED received (real-time)', message.selector);
       if (_state.apiSearchTarget) {
@@ -2463,7 +3028,7 @@ function wireEvents() {
         const node = buildGroupNode(_state.pendingNewContainer.name, message.selector, _state.pendingNewContainer.repeating, framePath);
         setState(STATES.IDLE, {
           groups: insertContainerNode(_state.groups, _state.pendingParentPath, node),
-          selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
+          selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
         });
         showMatchCountToast(containerName, matchCount);
       } else if (_state.selectionKind === 'browserAction' && _state.pendingBrowserActionIndex !== null) {
@@ -2482,13 +3047,14 @@ function wireEvents() {
             [_state.pendingBrowserActionField]: message.selector,
             framePath,
           }),
-          selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
+          selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
         });
       } else {
         setState(STATES.SELECTING, {
           pendingSelector: message.selector, pendingFramePath: framePath, pendingMatchCount: matchCount,
           pendingRawText: typeof message.rawText === 'string' ? message.rawText : null,
           pendingElementAttributes: message.attributes ?? null,
+          pendingOwnText: typeof message.ownText === 'string' ? message.ownText : null,
           pendingTransforms: [],
         });
       }
@@ -2564,8 +3130,8 @@ async function init() {
   log('INIT reading session storage');
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
-    'pendingRawText', 'pendingElementAttributes', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
     'scriptFileName', 'outputFileName',
@@ -2582,6 +3148,7 @@ async function init() {
   if (Array.isArray(stored.additionalStartUrls)) _state = { ..._state, additionalStartUrls: stored.additionalStartUrls };
   if (stored.changeDetection) _state = { ..._state, changeDetection: stored.changeDetection };
   if (stored.proxy)                 _state = { ..._state, proxy: stored.proxy };
+  if (stored.hardening)             _state = { ..._state, hardening: stored.hardening };
   if (stored.scriptFileName)        _state = { ..._state, scriptFileName: stored.scriptFileName };
   if (stored.outputFileName)        _state = { ..._state, outputFileName: stored.outputFileName };
   if (stored.selectionKind)         _state = { ..._state, selectionKind: stored.selectionKind };
@@ -2591,6 +3158,14 @@ async function init() {
   if (stored.pendingBrowserActionField)   _state = { ..._state, pendingBrowserActionField: stored.pendingBrowserActionField };
   if (stored.apiConfigDraft)        _state = { ..._state, apiConfigDraft: stored.apiConfigDraft };
   if (stored.apiConfig)             _state = { ..._state, apiConfig: stored.apiConfig };
+
+  // Issue #183: one-time default-open computation, now that changeDetection/
+  // hardening have been restored from storage above — a returning user with
+  // something already configured in the "Monitoring" section shouldn't have
+  // to re-expand it just to see it.
+  if (computeInitialMonitoringSectionOpen(_state.changeDetection, _state.hardening)) {
+    _state = { ..._state, monitoringSectionOpen: true };
+  }
 
   if (stored.pendingSelector) {
     // The user clicked an element while the side panel was closed (e.g. it
@@ -2616,7 +3191,7 @@ async function init() {
       const groups = insertContainerNode(_state.groups, stored.pendingParentPath, node);
       await chrome.storage.session.set({ groups });
       setState(STATES.IDLE, {
-        groups, selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
+        groups, selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
       });
       showMatchCountToast(stored.pendingNewContainer.name, typeof stored.pendingMatchCount === 'number' ? stored.pendingMatchCount : null);
       return;
@@ -2633,7 +3208,7 @@ async function init() {
       });
       await chrome.storage.session.set({ browserActions });
       setState(STATES.IDLE, {
-        browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingTransforms: [],
+        browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
       });
       return;
     }
@@ -2649,6 +3224,7 @@ async function init() {
       pendingMatchCount: typeof stored.pendingMatchCount === 'number' ? stored.pendingMatchCount : null,
       pendingRawText: typeof stored.pendingRawText === 'string' ? stored.pendingRawText : null,
       pendingElementAttributes: stored.pendingElementAttributes ?? null,
+      pendingOwnText: typeof stored.pendingOwnText === 'string' ? stored.pendingOwnText : null,
       pendingTransforms: [],
     });
     return;
@@ -2684,6 +3260,9 @@ if (typeof module !== 'undefined') {
     variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
     detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
     applyStaticTranslations, sanitizeFileNameBase, parseAdditionalUrls, buildChangeDetectionConfig, buildProxyConfig,
+    buildHardeningConfig, collectFieldNames, addNullRateCheck, removeNullRateCheck, updateNullRateCheck,
+    renderHardeningNullRateList, addRequiredField, removeRequiredField, renderHardeningRequiredFieldsList,
+    computeInitialMonitoringSectionOpen,
     addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
     buildVerificationValues,
     frameBadgeHtml,

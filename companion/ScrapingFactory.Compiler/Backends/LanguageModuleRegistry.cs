@@ -43,12 +43,12 @@ public sealed class LanguageModuleRegistry
         _codeGenerators.TryGetValue((languageId, engine), out var generator)
             ? generator
             : throw new InvalidOperationException(
-                $"Kein Codegenerator für Sprache '{languageId}' und Engine '{engine}' registriert.");
+                $"No code generator registered for language '{languageId}' and engine '{engine}'.");
 
     public IScriptVerifier ResolveScriptVerifier(string languageId) =>
         _scriptVerifiers.TryGetValue(languageId, out var verifier)
             ? verifier
-            : throw new InvalidOperationException($"Kein Skript-Verifier für Sprache '{languageId}' registriert.");
+            : throw new InvalidOperationException($"No script verifier registered for language '{languageId}'.");
 
     private static Dictionary<TKey, T> Discover<T, TKey>(
         Assembly assembly, Func<T, TKey> keySelector, IReadOnlyDictionary<string, object?>? ctorOverrides)

@@ -48,7 +48,7 @@ public static class ScrapingPlanBuilder
             {
                 Steps = steps, OutputFormat = groupsOutputFormat, Engine = config.Engine,
                 ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
-                ChangeDetection = config.ChangeDetection, Proxy = config.Proxy,
+                ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, Hardening = config.Hardening,
             };
         }
 
@@ -73,7 +73,7 @@ public static class ScrapingPlanBuilder
             {
                 Steps = steps, OutputFormat = apiOutputFormat, Engine = ScrapingEngine.Api,
                 ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
-                ChangeDetection = config.ChangeDetection, Proxy = config.Proxy,
+                ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, Hardening = config.Hardening,
             };
         }
 
@@ -88,7 +88,7 @@ public static class ScrapingPlanBuilder
         {
             Steps = steps, OutputFormat = config.OutputFormat, Engine = config.Engine,
             ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
-            ChangeDetection = config.ChangeDetection, Proxy = config.Proxy,
+            ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, Hardening = config.Hardening,
         };
     }
 
@@ -108,6 +108,6 @@ public static class ScrapingPlanBuilder
             WaitAfterMs = a.WaitAfterMs,
             FramePath = a.FramePath,
         },
-        _ => throw new InvalidOperationException($"Unbekannter BrowserAction-Typ: {action.GetType().Name}"),
+        _ => throw new InvalidOperationException($"Unknown BrowserAction type: {action.GetType().Name}"),
     };
 }

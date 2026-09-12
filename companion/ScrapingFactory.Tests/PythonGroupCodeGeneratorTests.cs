@@ -61,6 +61,212 @@ public class PythonGroupCodeGeneratorTests
         Assert.Contains("requests.get(url, headers=HEADERS, timeout=10)", script);
     }
 
+    // Issue #169
+    [Fact]
+    public void Generate_OwnTextMode_SerializesModeAndEmitsRuntimeBranch()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com/speisekarte"] },
+                new ExtractGroupStep
+                {
+                    Roots =
+                    [
+                        new GroupNode
+                        {
+                            Name = "Gericht", Selector = "li.menu-item", Repeating = true,
+                            Children = [new DataFieldNode { Name = "Name", Selector = "h3", Mode = ExtractMode.OwnText }],
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains(""""mode": 'ownText'"""", script);
+        Assert.Contains("""elif node["mode"] == "ownText":""", script);
+    }
+
+    // Issue #129
+    [Fact]
+    public void Generate_HardeningConfigured_EmitsChecksLiteralAndRuntimeHelper()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com/speisekarte"] },
+                new ExtractGroupStep
+                {
+                    Roots =
+                    [
+                        new GroupNode
+                        {
+                            Name = "Gericht", Selector = "li.menu-item", Repeating = true,
+                            Children = [new DataFieldNode { Name = "Name", Selector = "h3" }],
+                        },
+                    ],
+                },
+            ],
+            Hardening = [new NoResultCheck { Severity = HardeningSeverity.Error }],
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains(""""kind": 'noResult', "severity": 'Error'"""", script);
+        Assert.Contains("EXIT_HARDENING_FAILED = 2", script);
+        Assert.Contains("def _run_hardening_checks(root):", script);
+        Assert.Contains("hardening_failed = _run_hardening_checks(root)", script);
+        Assert.Contains("if hardening_failed:", script);
+    }
+
+    [Fact]
+    public void Generate_NullRateHardeningConfigured_EmitsChecksLiteralAndFieldLookup()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com/speisekarte"] },
+                new ExtractGroupStep
+                {
+                    Roots =
+                    [
+                        new GroupNode
+                        {
+                            Name = "Gericht", Selector = "li.menu-item", Repeating = true,
+                            Children = [new DataFieldNode { Name = "Preis", Selector = ".price" }],
+                        },
+                    ],
+                },
+            ],
+            Hardening = [new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "Preis", Threshold = 0.3 }],
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains(""""kind": 'nullRate', "severity": 'Warning', "field": 'Preis', "threshold": 0.3"""", script);
+        Assert.Contains("root.iter(check[\"field\"])", script);
+    }
+
+    [Fact]
+    public void Generate_BaselineHardeningConfigured_EmitsSidecarHelpersAndImport()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com/speisekarte"] },
+                new ExtractGroupStep
+                {
+                    Roots =
+                    [
+                        new GroupNode
+                        {
+                            Name = "Gericht", Selector = "li.menu-item", Repeating = true,
+                            Children = [new DataFieldNode { Name = "Name", Selector = "h3" }],
+                        },
+                    ],
+                },
+            ],
+            Hardening = [new BaselineCheck { Severity = HardeningSeverity.Error, DropThreshold = 0.2 }],
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains(""""kind": 'baseline', "severity": 'Error', "dropThreshold": 0.2"""", script);
+        Assert.Contains("import json", script);
+        Assert.Contains("BASELINE_PATH = OUTPUT_PATH + \".hardening-baseline.json\"", script);
+        Assert.Contains("def _read_baseline():", script);
+        Assert.Contains("def _write_baseline(count):", script);
+        Assert.Contains("hardening_failed = _run_hardening_checks(root)", script);
+        Assert.Contains("if not hardening_failed:\n        _write_baseline(count)", script);
+    }
+
+    [Fact]
+    public void Generate_BlockingHardeningConfigured_EmitsChecksLiteralAndResponseCapture()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com/speisekarte"] },
+                new ExtractGroupStep
+                {
+                    Roots =
+                    [
+                        new GroupNode
+                        {
+                            Name = "Gericht", Selector = "li.menu-item", Repeating = true,
+                            Children = [new DataFieldNode { Name = "Name", Selector = "h3" }],
+                        },
+                    ],
+                },
+            ],
+            Hardening = [new BlockingCheck { Severity = HardeningSeverity.Error, MinBodyLength = 200, BlockPhrases = ["Access Denied"] }],
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains(""""kind": 'blocking', "severity": 'Error', "minBodyLength": 200, "blockPhrases": ['Access Denied']"""", script);
+        Assert.Contains("from urllib.parse import urlsplit", script);
+        Assert.Contains("_BLOCKING_RESPONSES = []", script);
+        Assert.Contains("_BLOCKING_RESPONSES.append(", script);
+        Assert.Contains("elif check[\"kind\"] == \"blocking\":", script);
+        Assert.Contains("hardening_failed = _run_hardening_checks(root)", script);
+    }
+
+    [Fact]
+    public void Generate_BlockingHardeningConfiguredWithNoOptionalFields_RendersNoneAndEmptyList()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = NestedGroupPlan().Steps,
+            Hardening = [new BlockingCheck { Severity = HardeningSeverity.Warning }],
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains(""""kind": 'blocking', "severity": 'Warning', "minBodyLength": None, "blockPhrases": []"""", script);
+    }
+
+    [Fact]
+    public void Generate_NoHardening_OmitsHardeningCodeEntirely()
+    {
+        var script = _generator.Generate(NestedGroupPlan());
+
+        Assert.DoesNotContain("EXIT_HARDENING_FAILED", script);
+        Assert.DoesNotContain("_run_hardening_checks", script);
+        Assert.DoesNotContain("_BLOCKING_RESPONSES", script);
+        Assert.DoesNotContain("_passes_required_fields", script);
+    }
+
+    // Issue #133 follow-up: container mode supports RequiredFieldsCheck too
+    // (unlike Api-mode's tree shape, still rejected) — matched globally by
+    // tag name, dropping happens inside extract_group()'s own recursion
+    // rather than a separate pre-write filter the way flat mode's does.
+    [Fact]
+    public void Generate_RequiredFieldsHardeningConfigured_EmitsDropLogicInsideExtractGroup()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = NestedGroupPlan().Steps,
+            Hardening = [new RequiredFieldsCheck { Severity = HardeningSeverity.Error, FieldNames = ["Preis"] }],
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains(""""kind": 'requiredFields', "severity": 'Error', "fieldNames": ['Preis']"""", script);
+        Assert.Contains("REQUIRED_FIELD_NAMES = _REQUIRED_FIELDS_CHECK[\"fieldNames\"]", script);
+        Assert.Contains("def _passes_required_fields(el):", script);
+        Assert.Contains("if node[\"repeating\"] and not _passes_required_fields(el):", script);
+        Assert.Contains("def _report_required_fields_drops():", script);
+        Assert.Contains("hardening_failed = _run_hardening_checks(root) or _report_required_fields_drops()", script);
+    }
+
     // Issue #83
     [Fact]
     public void Generate_MultipleUrls_LoopsOverUrlsAndCombinesIntoOneErgebnis()

@@ -53,7 +53,7 @@ public sealed class ApiBodyNodeJsonConverter : JsonConverter<ApiBodyNode>
                 JsonSerializer.Serialize(writer, literal, options);
                 break;
             default:
-                throw new NotSupportedException($"Unbekannter ApiBodyNode-Typ: {value.GetType()}");
+                throw new NotSupportedException($"Unknown ApiBodyNode type: {value.GetType()}");
         }
     }
 }

@@ -362,6 +362,18 @@
     .browser-action-field-row input { flex: 1; min-width: 0; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
     .browser-action-hint { font-size: 10px; color: var(--color-text-faint); margin: 4px 0 0; }
 
+    /* Issue #130: one row per hardening null-rate check. */
+    .hardening-null-rate-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 11px; }
+    .hardening-null-rate-row .hardening-null-rate-field { flex: 1; min-width: 0; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+    .hardening-null-rate-row .hardening-null-rate-threshold { width: 44px; font-size: 11px; padding: 3px 4px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+    .hardening-null-rate-row .hardening-null-rate-severity { flex: none; margin: 0; }
+
+    /* Issue #133: one row per already-chosen required field, plus a
+       separate add row (select + button) below the list. */
+    .hardening-required-field-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px; font-size: 11px; }
+    .hardening-required-field-add-row { display: flex; align-items: center; gap: 6px; }
+    .hardening-required-field-add-row select { flex: 1; min-width: 0; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+
     /* Preview toggle */
     .btn-toggle           { background: var(--color-surface-muted); color: var(--color-text-secondary); width: 100%; }
     .btn-toggle:hover     { background: var(--color-border); }
@@ -453,6 +465,22 @@
     .group-tree-toggle.collapsed svg, .api-tree-toggle.collapsed svg, .dom-tree-toggle.collapsed svg {
       transform: rotate(-90deg);
     }
+    /* Issue #183: collapsible "Monitoring" section header — same shared
+       chevron+.collapsed convention as the tree-toggle rule above, applied
+       to a single fixed-title section header instead of a per-row tree
+       toggle. Starts expanded (not collapsed) in the markup itself — see
+       popup.js's own render()-time default-open computation for why the
+       .collapsed class is instead toggled entirely from JS on first
+       render, never left implicit in the HTML the way tree rows do. */
+    .monitoring-section-header {
+      display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
+      font-size: 12px; font-weight: 600; color: var(--color-text-secondary); padding: 4px 0;
+    }
+    .monitoring-section-chevron { width: 12px; flex: none; color: var(--color-text-faint); }
+    .monitoring-section-chevron svg { width: 12px; height: 12px; display: block; transition: transform var(--transition-fast); }
+    .monitoring-section-header.collapsed .monitoring-section-chevron svg { transform: rotate(-90deg); }
+    #monitoring-section-content, #settings-section-content { margin-top: 6px; }
+
     .group-tree-row, .api-tree-row, .body-tree-row { transition: background-color var(--transition-fast); }
     .group-tree-row:hover, .api-tree-row:hover, .body-tree-row:hover {
       background: var(--color-surface-subtle); border-radius: var(--radius-sm);
@@ -832,95 +860,274 @@
       </div>
     </div>
 
-    <!-- Vorschau highlights matched DOM elements — meaningless for API-Mode,
-         which extracts from a JSON body instead, so it's hidden there. -->
-    <div id="preview-section">
-      <div class="actions" style="margin-top: 10px;">
-        <button id="btn-preview" class="btn-toggle" disabled data-i18n="idle.previewShowBtn" data-i18n-title="idle.previewTitle"></button>
-      </div>
-      <p id="preview-summary" class="preview-summary hidden"></p>
-    </div>
-
     <div class="output-settings">
-      <!-- Issue #86: opt-in Json output — mode-independent, like the data
-           preview toggle below; see buildScrapingConfig's own doc comment
-           for exactly which wire field this adds/replaces per mode. -->
-      <label class="output-settings-toggle">
-        <input type="checkbox" id="toggle-output-json" />
-        <span data-i18n="idle.outputJsonToggle"></span>
-      </label>
-      <!-- Issue #122: opt-in trial-run data preview — unrelated to the DOM-
-           highlight "Vorschau" above (preview-section); see popup.js's
-           renderDataPreview doc comment for the naming rationale. -->
-      <label class="output-settings-toggle">
-        <input type="checkbox" id="toggle-include-data-preview" />
-        <span data-i18n="idle.dataPreviewToggle"></span>
-      </label>
-      <!-- Issue #87: opt-in change detection + notification — every
-           credential/target field below is the *name* of an environment
-           variable, never a literal value (mirrors FillAction's own
-           environmentVariableName input), read by the generated script at
-           runtime via os.environ[...]. -->
-      <label class="output-settings-toggle">
-        <input type="checkbox" id="toggle-change-detection" />
-        <span data-i18n="idle.changeDetectionToggle"></span>
-      </label>
-      <div id="change-detection-config" class="hidden">
-        <div class="mode-toggle" style="margin-bottom: 8px;">
-          <div class="mode-toggle-thumb"></div>
-          <button id="btn-notify-email" class="mode-btn active" type="button" data-i18n="idle.notifyEmail"></button>
-          <button id="btn-notify-webhook" class="mode-btn" type="button" data-i18n="idle.notifyWebhook"></button>
+      <!-- Vorschau highlights matched DOM elements — meaningless for
+           API-Mode, which extracts from a JSON body instead, so it's hidden
+           there. Deliberately kept above/outside the collapsible "Settings"
+           section below (Issue #184 follow-up) rather than inside it like
+           the other two toggles — it's a live, on-page action the user
+           reaches for on every pick, not an infrequent format/inspection
+           setting the way Json output/data-preview/proxy are. -->
+      <div id="preview-section">
+        <div class="actions" style="margin-top: 10px;">
+          <button id="btn-preview" class="btn-toggle" disabled data-i18n="idle.previewShowBtn" data-i18n-title="idle.previewTitle"></button>
         </div>
-        <div id="notify-email-fields">
-          <div class="output-settings-row">
-            <label for="input-cd-smtp-host" data-i18n="idle.smtpHostEnvVarLabel"></label>
-            <input type="text" id="input-cd-smtp-host" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
-          </div>
-          <div class="output-settings-row">
-            <label for="input-cd-smtp-port" data-i18n="idle.smtpPortEnvVarLabel"></label>
-            <input type="text" id="input-cd-smtp-port" data-i18n-placeholder="idle.envVarPlaceholderOptional" autocomplete="off" />
-          </div>
-          <div class="output-settings-row">
-            <label for="input-cd-smtp-username" data-i18n="idle.smtpUsernameEnvVarLabel"></label>
-            <input type="text" id="input-cd-smtp-username" data-i18n-placeholder="idle.envVarPlaceholderOptional" autocomplete="off" />
-          </div>
-          <div class="output-settings-row">
-            <label for="input-cd-smtp-password" data-i18n="idle.smtpPasswordEnvVarLabel"></label>
-            <input type="text" id="input-cd-smtp-password" data-i18n-placeholder="idle.envVarPlaceholderOptional" autocomplete="off" />
-          </div>
-          <div class="output-settings-row">
-            <label for="input-cd-email-from" data-i18n="idle.notifyEmailFromEnvVarLabel"></label>
-            <input type="text" id="input-cd-email-from" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
-          </div>
-          <div class="output-settings-row">
-            <label for="input-cd-email-to" data-i18n="idle.notifyEmailToEnvVarLabel"></label>
-            <input type="text" id="input-cd-email-to" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
-          </div>
-        </div>
-        <div id="notify-webhook-fields" class="hidden">
-          <div class="output-settings-row">
-            <label for="input-cd-webhook-url" data-i18n="idle.webhookUrlEnvVarLabel"></label>
-            <input type="text" id="input-cd-webhook-url" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
-          </div>
-        </div>
-        <p class="preview-summary" data-i18n="idle.changeDetectionHint"></p>
+        <p id="preview-summary" class="preview-summary hidden"></p>
       </div>
-      <!-- Issue #88: opt-in proxy support — like the change-detection
-           fields above, this is the *name* of an environment variable
-           holding a comma-separated proxy URL list, never a literal proxy
-           address (mirrors FillAction's own environmentVariableName
-           input), read by the generated script at runtime via
-           os.environ[...]. -->
-      <label class="output-settings-toggle">
-        <input type="checkbox" id="toggle-proxy" />
-        <span data-i18n="idle.proxyToggle"></span>
-      </label>
-      <div id="proxy-config" class="hidden">
-        <div class="output-settings-row">
-          <label for="input-proxy-env-var" data-i18n="idle.proxyEnvVarLabel"></label>
-          <input type="text" id="input-proxy-env-var" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+
+      <!-- Issue #184: output-format/inspection toggles (Json output, Issue
+           #86; trial-run data preview, Issue #122; proxy support, Issue
+           #88) are comparatively infrequent settings, not part of the
+           field/container/API configuration flow the user touches on every
+           scraper build — grouped into their own collapsible section for
+           the same reason Issue #183 grouped change-detection/hardening
+           into "Monitoring" below, reusing the exact same chevron+.collapsed
+           convention (Issue #139). Unlike Monitoring, there's no
+           auto-expand-if-already-configured logic here
+           (_state.settingsSectionOpen has no
+           computeInitialMonitoringSectionOpen equivalent): Json output/data
+           preview are non-persisted, per-generate opt-ins that are always
+           off again on a fresh popup open, and while Proxy *is* persisted
+           (real scrape-target configuration, like change detection), there's
+           still no auto-expand override for it here the way Monitoring has
+           for change detection/hardening — collapsed by default is still
+           the starting state, a returning user with a proxy configured
+           re-expands this section once themselves. -->
+      <div id="settings-section">
+        <div id="settings-section-toggle" class="monitoring-section-header" role="button" tabindex="0">
+          <span class="monitoring-section-chevron">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </span>
+          <span data-i18n="idle.settingsSectionToggle"></span>
         </div>
-        <p class="preview-summary" data-i18n="idle.proxyHint"></p>
+        <div id="settings-section-content" class="hidden">
+          <label class="output-settings-toggle">
+            <input type="checkbox" id="toggle-output-json" />
+            <span data-i18n="idle.outputJsonToggle"></span>
+          </label>
+          <label class="output-settings-toggle">
+            <input type="checkbox" id="toggle-include-data-preview" />
+            <span data-i18n="idle.dataPreviewToggle"></span>
+          </label>
+          <!-- Issue #88: opt-in proxy support — like the change-detection
+               fields below, this is the *name* of an environment variable
+               holding a comma-separated proxy URL list, never a literal
+               proxy address (mirrors FillAction's own
+               environmentVariableName input), read by the generated script
+               at runtime via os.environ[...]. Moved into this section by
+               the Issue #184 follow-up (previously sat directly in
+               .output-settings, between this section and Monitoring). -->
+          <label class="output-settings-toggle">
+            <input type="checkbox" id="toggle-proxy" />
+            <span data-i18n="idle.proxyToggle"></span>
+          </label>
+          <div id="proxy-config" class="hidden">
+            <div class="output-settings-row">
+              <label for="input-proxy-env-var" data-i18n="idle.proxyEnvVarLabel"></label>
+              <input type="text" id="input-proxy-env-var" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+            </div>
+            <p class="preview-summary" data-i18n="idle.proxyHint"></p>
+          </div>
+        </div>
+      </div>
+      <!-- Issue #183: change detection (#87) and script hardening (#129-
+           #133) are grouped into one collapsible section — both are about
+           monitoring a script over repeated, unattended runs (change
+           detection notifies when the *data* changes between runs,
+           hardening catches when the *scrape itself* silently breaks),
+           unlike the rest of .output-settings, which is about the one-time
+           act of generating the script. Collapsed by default; render()
+           auto-expands it once, on the first render after a popup (re)open
+           if either change detection or any hardening check is already
+           configured (see _state.monitoringSectionOpen/
+           computeInitialMonitoringSectionOpen in popup.js) — a returning
+           user isn't forced to re-expand it just to see their own
+           settings. Reuses the shared chevron+.collapsed convention
+           (Issue #139) already used by the group/api/DOM tree views,
+           rather than the "Show/Hide" button-text-swap pattern the API
+           mode recorded-requests panel uses — a fixed section title that
+           expands fits a "collapsible section" better than a panel whose
+           own visibility is the primary thing being toggled. -->
+      <div id="monitoring-section">
+        <div id="monitoring-section-toggle" class="monitoring-section-header" role="button" tabindex="0">
+          <span class="monitoring-section-chevron">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </span>
+          <span data-i18n="idle.monitoringSectionToggle"></span>
+        </div>
+        <div id="monitoring-section-content" class="hidden">
+          <!-- Issue #87: opt-in change detection + notification — every
+               credential/target field below is the *name* of an
+               environment variable, never a literal value (mirrors
+               FillAction's own environmentVariableName input), read by the
+               generated script at runtime via os.environ[...]. -->
+          <label class="output-settings-toggle">
+            <input type="checkbox" id="toggle-change-detection" />
+            <span data-i18n="idle.changeDetectionToggle"></span>
+          </label>
+          <div id="change-detection-config" class="hidden">
+            <div class="mode-toggle" style="margin-bottom: 8px;">
+              <div class="mode-toggle-thumb"></div>
+              <button id="btn-notify-email" class="mode-btn active" type="button" data-i18n="idle.notifyEmail"></button>
+              <button id="btn-notify-webhook" class="mode-btn" type="button" data-i18n="idle.notifyWebhook"></button>
+            </div>
+            <div id="notify-email-fields">
+              <div class="output-settings-row">
+                <label for="input-cd-smtp-host" data-i18n="idle.smtpHostEnvVarLabel"></label>
+                <input type="text" id="input-cd-smtp-host" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+              </div>
+              <div class="output-settings-row">
+                <label for="input-cd-smtp-port" data-i18n="idle.smtpPortEnvVarLabel"></label>
+                <input type="text" id="input-cd-smtp-port" data-i18n-placeholder="idle.envVarPlaceholderOptional" autocomplete="off" />
+              </div>
+              <div class="output-settings-row">
+                <label for="input-cd-smtp-username" data-i18n="idle.smtpUsernameEnvVarLabel"></label>
+                <input type="text" id="input-cd-smtp-username" data-i18n-placeholder="idle.envVarPlaceholderOptional" autocomplete="off" />
+              </div>
+              <div class="output-settings-row">
+                <label for="input-cd-smtp-password" data-i18n="idle.smtpPasswordEnvVarLabel"></label>
+                <input type="text" id="input-cd-smtp-password" data-i18n-placeholder="idle.envVarPlaceholderOptional" autocomplete="off" />
+              </div>
+              <div class="output-settings-row">
+                <label for="input-cd-email-from" data-i18n="idle.notifyEmailFromEnvVarLabel"></label>
+                <input type="text" id="input-cd-email-from" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+              </div>
+              <div class="output-settings-row">
+                <label for="input-cd-email-to" data-i18n="idle.notifyEmailToEnvVarLabel"></label>
+                <input type="text" id="input-cd-email-to" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+              </div>
+            </div>
+            <div id="notify-webhook-fields" class="hidden">
+              <div class="output-settings-row">
+                <label for="input-cd-webhook-url" data-i18n="idle.webhookUrlEnvVarLabel"></label>
+                <input type="text" id="input-cd-webhook-url" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+              </div>
+            </div>
+            <p class="preview-summary" data-i18n="idle.changeDetectionHint"></p>
+          </div>
+          <!-- Issue #129: opt-in script hardening — the generated script
+               re-checks its own result after scraping (e.g. before a
+               cron-scheduled re-run, weeks after generation) and either
+               warns (script still exits 0) or fails the run (script exits
+               a distinct non-zero code) per check, independently
+               configurable. This is the first of five planned checks (see
+               CLAUDE.md) — one row per check, built so each of the other
+               four can add its own row below without restructuring
+               #hardening-config. -->
+          <div id="hardening-config">
+            <label class="output-settings-toggle">
+              <input type="checkbox" id="toggle-hardening-no-result" />
+              <span data-i18n="idle.hardeningNoResultToggle"></span>
+            </label>
+            <div id="hardening-no-result-severity" class="mode-toggle hidden" style="margin: 6px 0 8px;">
+              <div class="mode-toggle-thumb"></div>
+              <button id="btn-hardening-no-result-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning" data-i18n-title="idle.hardeningSeverityWarningTitle"></button>
+              <button id="btn-hardening-no-result-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError" data-i18n-title="idle.hardeningSeverityErrorTitle"></button>
+            </div>
+            <!-- Issue #130: per-field empty-value-rate check — catches a
+                 field whose selector silently starts matching the wrong
+                 thing (row/element count stays healthy, but the value is
+                 always empty), which #129's own "no result" check above
+                 can't detect at all. One row per monitored field, reusing
+                 the exact field list already built in the current mode
+                 (see collectFieldNames) instead of a free-text field name
+                 input. Rows are entirely JS-rendered
+                 (renderHardeningNullRateList) — this div is just the mount
+                 point. -->
+            <div class="output-settings-toggle" style="margin-top: 10px;">
+              <span data-i18n="idle.hardeningNullRateSectionLabel"></span>
+            </div>
+            <div id="hardening-null-rate-list"></div>
+            <button type="button" id="btn-add-null-rate-check" class="btn-secondary btn-tiny" data-i18n="idle.hardeningNullRateAddBtn"></button>
+            <!-- Issue #131: baseline-drop check — catches a gradual volume
+                 drop (e.g. a broken "load more"/pagination selector) that
+                 neither #129's "no result" nor #130's per-field null-rate
+                 would ever trip, by comparing this run's own result count
+                 against the last run's (tracked by the generated script
+                 itself in a small sidecar file next to its own output, not
+                 sent to/known by the companion at all). Single toggle+
+                 severity+percent row, same shape as the "no result" check
+                 above (unlike #130's dynamic per-field list). -->
+            <label class="output-settings-toggle" style="margin-top: 10px;">
+              <input type="checkbox" id="toggle-hardening-baseline" />
+              <span data-i18n="idle.hardeningBaselineToggle"></span>
+            </label>
+            <div id="hardening-baseline-config" class="hidden">
+              <div id="hardening-baseline-severity" class="mode-toggle" style="margin: 6px 0 8px;">
+                <div class="mode-toggle-thumb"></div>
+                <button id="btn-hardening-baseline-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning" data-i18n-title="idle.hardeningSeverityWarningTitle"></button>
+                <button id="btn-hardening-baseline-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError" data-i18n-title="idle.hardeningSeverityErrorTitle"></button>
+              </div>
+              <label class="browser-action-field-row">
+                <span data-i18n="idle.hardeningBaselineThresholdLabel"></span>
+                <input type="number" min="0" max="100" id="input-hardening-baseline-threshold" />%
+              </label>
+            </div>
+            <!-- Issue #132: blocking-detection check — catches a site that
+                 starts blocking the script (rate-limiting, IP ban, CAPTCHA
+                 wall, redirect to a login page) while still responding
+                 with a normal-looking HTTP 200, which none of the checks
+                 above would necessarily catch. Same single toggle+severity
+                 shape as baseline above, plus an optional min-body-length
+                 number input and a one-phrase-per-line textarea (a
+                 redirect to a different host is always checked, no input
+                 needed for that signal). -->
+            <label class="output-settings-toggle" style="margin-top: 10px;">
+              <input type="checkbox" id="toggle-hardening-blocking" />
+              <span data-i18n="idle.hardeningBlockingToggle"></span>
+            </label>
+            <div id="hardening-blocking-config" class="hidden">
+              <div id="hardening-blocking-severity" class="mode-toggle" style="margin: 6px 0 8px;">
+                <div class="mode-toggle-thumb"></div>
+                <button id="btn-hardening-blocking-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning" data-i18n-title="idle.hardeningSeverityWarningTitle"></button>
+                <button id="btn-hardening-blocking-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError" data-i18n-title="idle.hardeningSeverityErrorTitle"></button>
+              </div>
+              <label class="browser-action-field-row">
+                <span data-i18n="idle.hardeningBlockingMinBodyLengthLabel"></span>
+                <input type="number" min="1" id="input-hardening-blocking-min-body-length" data-i18n-placeholder="idle.hardeningBlockingMinBodyLengthPlaceholder" />
+              </label>
+              <div class="output-settings-row" style="align-items: flex-start; margin-top: 6px;">
+                <label for="input-hardening-blocking-phrases" data-i18n="idle.hardeningBlockingPhrasesLabel"></label>
+                <textarea id="input-hardening-blocking-phrases" rows="2" data-i18n-placeholder="idle.hardeningBlockingPhrasesPlaceholder"></textarea>
+              </div>
+            </div>
+            <!-- Issue #133 (+ container-mode follow-up): required-fields
+                 check — a row (flat mode) or repeating group instance
+                 (container mode) missing a value for any of these fields
+                 is dropped from the output entirely (rather than written
+                 with a blank cell), e.g. for a NOT NULL database column.
+                 Api-mode's tree shape has no such support yet (see
+                 ScrapingPlanValidator) — the whole section is hidden only
+                 for that, mirroring how #additional-urls-row is already
+                 hidden for API mode generally. Unlike the null-rate list
+                 above (each row its own draft object), a required field is
+                 already a complete, chosen name the moment it's in the
+                 list — picking a *new* one uses one shared select/button
+                 pair instead of a per-row field picker. -->
+            <div id="hardening-required-fields-section">
+              <label class="output-settings-toggle" style="margin-top: 10px;">
+                <input type="checkbox" id="toggle-hardening-required-fields" />
+                <span data-i18n="idle.hardeningRequiredFieldsToggle"></span>
+              </label>
+              <div id="hardening-required-fields-config" class="hidden">
+                <div id="hardening-required-fields-severity" class="mode-toggle" style="margin: 6px 0 8px;">
+                  <div class="mode-toggle-thumb"></div>
+                  <button id="btn-hardening-required-fields-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning" data-i18n-title="idle.hardeningSeverityWarningTitle"></button>
+                  <button id="btn-hardening-required-fields-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError" data-i18n-title="idle.hardeningSeverityErrorTitle"></button>
+                </div>
+                <div id="hardening-required-fields-list"></div>
+                <div class="hardening-required-field-add-row">
+                  <select id="select-hardening-required-field"></select>
+                  <button type="button" id="btn-add-required-field" class="btn-secondary btn-tiny" data-i18n="idle.hardeningRequiredFieldsAddBtn"></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       <!-- Filenames last: a final naming step right before Export/Generate,
            below every other output-settings toggle. -->
@@ -1099,6 +1306,11 @@
         <option value="text" data-i18n="modals.fieldExtended.textOption"></option>
         <option value="attribute" data-i18n="modals.fieldExtended.attributeOption"></option>
         <option value="exists" data-i18n="modals.fieldExtended.existsOption"></option>
+        <!-- Issue #169: extracts only an element's direct text-node
+             children, excluding text contributed by any nested element
+             (e.g. a badge <span> inside a name heading) — see
+             ExtractMode.OwnText's own doc comment on the companion side. -->
+        <option value="ownText" data-i18n="modals.fieldExtended.ownTextOption"></option>
       </select>
       <div id="field-attribute-row" class="hidden">
         <label for="input-field-attribute" data-i18n="modals.fieldExtended.attributeLabel"></label>

@@ -76,6 +76,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         var needsExitHelper = plan.Steps.OfType<FillStep>().Any() || plan.Proxy is not null;
         var changeDetection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection);
         var proxy = PythonProxyLiteral.BuildContext(plan.Proxy);
+        var hardening = PythonHardeningLiteral.BuildContext(plan.Hardening);
 
         // Container-Mode: login/wait steps (if any) still run first — only
         // the extraction phase after them differs (group tree → XML instead
@@ -100,6 +101,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
                 output_is_json = plan.OutputFormat == OutputFormat.Json,
                 change_detection = changeDetection,
                 proxy,
+                hardening,
             });
         }
 
@@ -119,6 +121,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
             output_is_json = plan.OutputFormat == OutputFormat.Json,
             change_detection = changeDetection,
             proxy,
+            hardening,
         });
     }
 }

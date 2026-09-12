@@ -13,11 +13,16 @@ import re
 {{~ if needs_os_import ~}}
 import os
 {{~ end ~}}
-{{~ if needs_exit_helper ~}}
+{{~ if needs_exit_helper || hardening.enabled ~}}
 import sys
+{{~ end ~}}
+{{~ if hardening.has_baseline ~}}
+import json
 {{~ end ~}}
 {{~ if proxy.enabled ~}}
 import itertools
+{{~ end ~}}
+{{~ if proxy.enabled || hardening.enabled ~}}
 import urllib.parse
 {{~ end ~}}
 {{~ if change_detection.enabled ~}}
@@ -64,7 +69,7 @@ EXIT_MISSING_ENV_VAR = 78
 def _require_env(name):
     value = os.environ.get(name)
     if value is None:
-        print(f"Fehler: Erforderliche Umgebungsvariable '{name}' ist nicht gesetzt.", file=sys.stderr)
+        print(f"Error: required environment variable '{name}' is not set.", file=sys.stderr)
         sys.exit(EXIT_MISSING_ENV_VAR)
     return value
 {{~ end ~}}
@@ -82,7 +87,7 @@ PROXY_ENV_VAR = {{ proxy.env_var_literal }}
 _PROXY_ENV_VALUE = os.environ.get(PROXY_ENV_VAR)
 _PROXY_ENV_MISSING = _PROXY_ENV_VALUE is None
 if _PROXY_ENV_MISSING:
-    print(f"Warnung: Umgebungsvariable '{PROXY_ENV_VAR}' ist nicht gesetzt — es wird ohne Proxy verbunden.", file=sys.stderr)
+    print(f"Warning: environment variable '{PROXY_ENV_VAR}' is not set — connecting without a proxy.", file=sys.stderr)
 _PROXY_LIST = [p.strip() for p in (_PROXY_ENV_VALUE or "").split(",") if p.strip()]
 _proxy_cycle = itertools.cycle(_PROXY_LIST) if _PROXY_LIST else None
 
@@ -105,6 +110,142 @@ def _next_playwright_proxy():
     if parsed.password:
         result["password"] = parsed.password
     return result
+{{~ end ~}}
+
+{{~ if hardening.enabled ~}}
+# Issue #129 (script hardening): each configured check independently prints
+# a warning (script still exits 0) or an error (script exits
+# EXIT_HARDENING_FAILED) once scraping is done — lets a script re-run later
+# (e.g. via cron, weeks after generation) detect that it silently stopped
+# finding anything, instead of writing an empty output file and exiting 0
+# as if nothing were wrong.
+EXIT_HARDENING_FAILED = 2
+
+HARDENING = {{ hardening.checks_literal }}
+
+# Issue #132 (blocking-detection check): a snapshot of each URL's rendered
+# page (final URL, content length, content) is captured in scrape() below,
+# right after all browser actions complete — the page actually about to be
+# scraped, not an intermediate redirect a login flow legitimately passes
+# through. Populated even when no "blocking" check is configured; the
+# runtime cost of appending an already-in-memory string is negligible.
+_BLOCKING_RESPONSES = []
+
+{{~ if hardening.has_baseline ~}}
+# Issue #131 (baseline check): a small sidecar file next to the script's own
+# output records the result count from the last run that passed cleanly
+# (see main()'s own "only write when not hardening_failed" call site) — a
+# bad run must never become the new normal for the next comparison. Missing/
+# corrupt sidecar (first run ever, or the file was deleted) is treated the
+# same as "no baseline yet", not an error.
+BASELINE_PATH = OUTPUT_PATH + ".hardening-baseline.json"
+
+
+def _read_baseline():
+    try:
+        with open(BASELINE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f).get("count")
+    except (FileNotFoundError, ValueError, OSError):
+        return None
+
+
+def _write_baseline(count):
+    with open(BASELINE_PATH, "w", encoding="utf-8") as f:
+        json.dump({"count": count}, f)
+{{~ end ~}}
+
+
+def _run_hardening_checks(data):
+    has_error = False
+    result_count = len(data)
+    for check in HARDENING:
+        if check["kind"] == "noResult":
+            if result_count == 0:
+                message = "No data was extracted — at least one selector likely matched nothing."
+                if check["severity"] == "Error":
+                    print(f"ERROR: {message}", file=sys.stderr)
+                    has_error = True
+                else:
+                    print(f"WARNING: {message}", file=sys.stderr)
+        elif check["kind"] == "nullRate":
+            # Issue #130: catches a field whose selector quietly starts
+            # matching the wrong thing (still returns a value, always empty)
+            # even though the overall row count stays healthy.
+            field = check["field"]
+            if result_count == 0:
+                continue
+            empty = sum(1 for row in data if not str(row.get(field, "")).strip())
+            rate = empty / result_count
+            if rate > check["threshold"]:
+                message = f"Field '{field}': {rate:.0%} of rows are empty (threshold: {check['threshold']:.0%})."
+                if check["severity"] == "Error":
+                    print(f"ERROR: {message}", file=sys.stderr)
+                    has_error = True
+                else:
+                    print(f"WARNING: {message}", file=sys.stderr)
+        elif check["kind"] == "baseline":
+            # Issue #131: catches a gradual drop in result volume that
+            # neither noResult (only fires at exactly zero) nor nullRate
+            # (only watches one field) would ever trip — e.g. a paginated
+            # list quietly losing entries. No baseline yet (first run, or
+            # the sidecar file was deleted) simply has nothing to compare
+            # against.
+            baseline = _read_baseline()
+            if baseline:
+                drop = (baseline - result_count) / baseline
+                if drop > check["dropThreshold"]:
+                    message = f"Result count dropped from {baseline} to {result_count} (more than the {check['dropThreshold']:.0%} threshold)."
+                    if check["severity"] == "Error":
+                        print(f"ERROR: {message}", file=sys.stderr)
+                        has_error = True
+                    else:
+                        print(f"WARNING: {message}", file=sys.stderr)
+        elif check["kind"] == "blocking":
+            # Issue #132: three signals, all evaluated per captured response
+            # — a redirect to a different host (always checked), a body
+            # shorter than minBodyLength (skipped when None), and a
+            # case-insensitive match against blockPhrases.
+            for entry in _BLOCKING_RESPONSES:
+                reasons = []
+                if urllib.parse.urlsplit(entry["url"]).netloc != urllib.parse.urlsplit(entry["final_url"]).netloc:
+                    reasons.append(f"redirected to a different host ({entry['final_url']})")
+                if check["minBodyLength"] is not None and entry["length"] < check["minBodyLength"]:
+                    reasons.append(f"response body is only {entry['length']} bytes (minimum: {check['minBodyLength']})")
+                matched_phrases = [p for p in check["blockPhrases"] if p.lower() in entry["text"].lower()]
+                if matched_phrases:
+                    reasons.append(f"matched block phrase(s): {', '.join(matched_phrases)}")
+                if reasons:
+                    message = f"Possible blocking detected for {entry['url']}: {'; '.join(reasons)}."
+                    if check["severity"] == "Error":
+                        print(f"ERROR: {message}", file=sys.stderr)
+                        has_error = True
+                    else:
+                        print(f"WARNING: {message}", file=sys.stderr)
+    return has_error
+
+
+# Issue #133: unlike _run_hardening_checks above (a post-hoc pass over
+# already-final data), this changes what actually gets written — called
+# from main() before the output file is written, not after. Filtering
+# always happens regardless of severity; only whether the run itself is
+# flagged as failed depends on it, so an all-Warning configuration still
+# guarantees the output file never contains a row missing a required
+# value, without necessarily failing the whole run.
+def _filter_required_fields(data):
+    check = next((c for c in HARDENING if c["kind"] == "requiredFields"), None)
+    if check is None:
+        return data, False
+    total = len(data)
+    filtered = [row for row in data if all(str(row.get(name, "")).strip() for name in check["fieldNames"])]
+    dropped = total - len(filtered)
+    if dropped == 0:
+        return filtered, False
+    message = f"Dropped {dropped} of {total} row(s) missing a required field."
+    if check["severity"] == "Error":
+        print(f"ERROR: {message}", file=sys.stderr)
+        return filtered, True
+    print(f"WARNING: {message}", file=sys.stderr)
+    return filtered, False
 {{~ end ~}}
 
 SELECTORS = {
@@ -289,6 +430,15 @@ def scrape(url):
         browser = p.chromium.launch({{ if proxy.enabled }}proxy=_next_playwright_proxy(){{ end }})
         page = browser.new_page()
 {{ actions }}
+{{~ if hardening.enabled ~}}
+        # Playwright has no single raw response body to measure after JS
+        # execution — "length" approximates it as the rendered page's own
+        # UTF-8-encoded size instead of a true network byte count.
+        _page_content = page.content()
+        _BLOCKING_RESPONSES.append(
+            {"url": url, "final_url": page.url, "length": len(_page_content.encode("utf-8")), "text": _page_content}
+        )
+{{~ end ~}}
 
         columns = {name: _resolve_elements(page, sel, FRAME_PATHS.get(name)) for name, sel in SELECTORS.items()}
         n = max((len(v) for v in columns.values()), default=0)
@@ -316,6 +466,9 @@ def main():
     data = []
     for url in URLS:
         data.extend(scrape(url))
+{{~ if hardening.enabled ~}}
+    data, required_fields_failed = _filter_required_fields(data)
+{{~ end ~}}
 {{~ if output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -332,6 +485,15 @@ def main():
         new_content = f.read()
     if previous_content is not None and previous_content != new_content:
         _notify_change(previous_content, new_content)
+{{~ end ~}}
+{{~ if hardening.enabled ~}}
+    hardening_failed = _run_hardening_checks(data) or required_fields_failed
+{{~ if hardening.has_baseline ~}}
+    if not hardening_failed:
+        _write_baseline(len(data))
+{{~ end ~}}
+    if hardening_failed:
+        sys.exit(EXIT_HARDENING_FAILED)
 {{~ end ~}}
 {{~ if proxy.enabled ~}}
     if _PROXY_ENV_MISSING:

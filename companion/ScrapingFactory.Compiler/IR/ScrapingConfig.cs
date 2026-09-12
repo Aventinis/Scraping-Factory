@@ -84,13 +84,19 @@ public sealed class ScrapingConfig
     // alike) — see IR/ProxyConfig.cs. Null is today's exact behavior (direct
     // connection, no proxying).
     public ProxyConfig? Proxy { get; init; }
+
+    // Issue #129: opt-in script hardening checks, mode-independent
+    // (Fields/Groups/Api alike) — see IR/HardeningCheck.cs. Null/empty is
+    // today's exact behavior (the generated script never re-checks its own
+    // result, byte-for-byte the same script as before this existed).
+    public List<HardeningCheck>? Hardening { get; init; }
 }
 
 public sealed class ScrapingField
 {
     public required string Name { get; init; }
     public required string Selector { get; init; }
-    // null = Textinhalt; "href", "src" usw. für Attribut-Extraktion
+    // null = text content; "href", "src" etc. for attribute extraction
     public string? Attribute { get; init; }
 
     // See ExtractStep.FramePath — same meaning, just the wire-format mirror.

@@ -54,18 +54,18 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     // would leave it ambiguous which extraction phase (and OutputFormat)
     // the caller wants.
     if (hasFields && hasGroups)
-        return Results.BadRequest(new { error = "Fields und Groups schließen sich aus." });
+        return Results.BadRequest(new { error = "Fields and Groups are mutually exclusive." });
     if (hasFields && hasApi)
-        return Results.BadRequest(new { error = "Fields und Api schließen sich aus." });
+        return Results.BadRequest(new { error = "Fields and Api are mutually exclusive." });
     if (hasGroups && hasApi)
-        return Results.BadRequest(new { error = "Groups und Api schließen sich aus." });
+        return Results.BadRequest(new { error = "Groups and Api are mutually exclusive." });
 
     // Issue #83: Api-Mode builds its own request URL from UrlTemplate/
     // Parameters and never reads the page-scraping start URL at all — an
     // AdditionalUrls list here would silently do nothing, so it's rejected
     // outright instead, same as the other three mode combinations above.
     if (hasApi && config.AdditionalUrls is { Count: > 0 })
-        return Results.BadRequest(new { error = "AdditionalUrls und Api schließen sich aus." });
+        return Results.BadRequest(new { error = "AdditionalUrls and Api are mutually exclusive." });
 
     // Wire format (Fields/Groups) is unchanged; internally it's compiled
     // into the canonical Steps-based ScrapingPlan that backends actually
@@ -125,7 +125,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     {
         return Results.UnprocessableEntity(new
         {
-            error = verification.Error ?? "Skript-Verifikation fehlgeschlagen.",
+            error = verification.Error ?? "Script verification failed.",
         });
     }
 
