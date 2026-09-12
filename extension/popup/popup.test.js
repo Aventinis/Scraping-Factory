@@ -43,7 +43,7 @@ const {
   detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase, parseAdditionalUrls,
   buildChangeDetectionConfig, buildProxyConfig, buildHardeningConfig,
   collectFieldNames, addNullRateCheck, removeNullRateCheck, updateNullRateCheck, renderHardeningNullRateList,
-  addRequiredField, removeRequiredField, renderHardeningRequiredFieldsList,
+  addRequiredField, removeRequiredField, renderHardeningRequiredFieldsList, computeInitialMonitoringSectionOpen,
   addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
   buildVerificationValues,
   frameBadgeHtml,
@@ -705,6 +705,50 @@ describe('buildScrapingConfig (requiredFields hardening, Issue #133)', () => {
       false, [], null, null, hardening,
     );
     expect(result.hardening).toEqual([{ kind: 'requiredFields', severity: 'Error', fieldNames: ['Titel'] }]);
+  });
+});
+
+// Issue #183
+describe('computeInitialMonitoringSectionOpen', () => {
+  const allDisabledHardening = {
+    noResult: { enabled: false, severity: 'Warning' },
+    nullRate: [],
+    baseline: { enabled: false, severity: 'Warning', dropThresholdPercent: 20 },
+    blocking: { enabled: false, severity: 'Warning', minBodyLengthText: '', phrasesText: '' },
+    requiredFields: { enabled: false, severity: 'Warning', fields: [] },
+  };
+
+  test('returns false when neither change detection nor any hardening check is configured', () => {
+    expect(computeInitialMonitoringSectionOpen(null, allDisabledHardening)).toBe(false);
+  });
+
+  test('returns true when change detection is configured', () => {
+    const changeDetection = {
+      enabled: true, notify: 'Webhook', email: null, webhook: { urlEnvVar: 'SF_WEBHOOK' },
+    };
+    expect(computeInitialMonitoringSectionOpen(changeDetection, allDisabledHardening)).toBe(true);
+  });
+
+  test('returns true when a hardening check is configured', () => {
+    const hardening = { ...allDisabledHardening, noResult: { enabled: true, severity: 'Error' } };
+    expect(computeInitialMonitoringSectionOpen(null, hardening)).toBe(true);
+  });
+
+  // An enabled-but-incomplete draft (e.g. change detection toggled on but
+  // its required fields still blank) is exactly what
+  // buildChangeDetectionConfig/buildHardeningConfig already treat as "not
+  // actually configured" — reusing that logic means this stays consistent
+  // automatically, with no separate "is it complete" check duplicated here.
+  test('returns false for an enabled-but-incomplete change-detection draft', () => {
+    const changeDetection = {
+      enabled: true, notify: 'Webhook', email: null, webhook: { urlEnvVar: '' },
+    };
+    expect(computeInitialMonitoringSectionOpen(changeDetection, allDisabledHardening)).toBe(false);
+  });
+
+  test('returns false for an enabled-but-empty requiredFields draft', () => {
+    const hardening = { ...allDisabledHardening, requiredFields: { enabled: true, severity: 'Warning', fields: [] } };
+    expect(computeInitialMonitoringSectionOpen(null, hardening)).toBe(false);
   });
 });
 

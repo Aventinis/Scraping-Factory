@@ -244,6 +244,16 @@ let _state = {
   // a pull-based fetch is the only way to reliably see the whole pool.
   apiEntriesPanelOpen: false,
   apiEntries:          null,
+  // Issue #183: collapsible "Monitoring" section (change detection +
+  // hardening) — not persisted across popup close/reopen the way
+  // apiEntriesPanelOpen above isn't either, but init() below overrides
+  // this default to `true` (once, at startup) if change detection or any
+  // hardening check is already configured, via
+  // computeInitialMonitoringSectionOpen — a returning user isn't forced to
+  // re-expand it just to see their own settings. After that one-time
+  // computation, this behaves like a plain toggle for the rest of the
+  // session.
+  monitoringSectionOpen: false,
   // Issue #53 Phase 4/5 — null while no "find in recording" selection round is
   // in progress; 'field' while searching for the primary field (from IDLE);
   // {parameter: name} while searching a Discovery source's example value for
@@ -458,6 +468,16 @@ function buildHardeningConfig(hardening) {
     checks.push({ kind: 'requiredFields', severity: hardening.requiredFields.severity, fieldNames: hardening.requiredFields.fields });
   }
   return checks.length > 0 ? checks : null;
+}
+
+// Issue #183: the "Monitoring" section (change detection + hardening)
+// should start expanded, not collapsed, for a returning user who already
+// has something configured in it — reuses buildHardeningConfig/
+// buildChangeDetectionConfig's own "does this actually produce a wire
+// config" logic rather than re-deriving "is anything enabled" separately,
+// so the two can never quietly disagree about what counts as "configured".
+function computeInitialMonitoringSectionOpen(changeDetection, hardening) {
+  return buildChangeDetectionConfig(changeDetection) !== null || buildHardeningConfig(hardening) !== null;
 }
 
 // Issue #130: collects every leaf field name currently configured, across
@@ -1120,6 +1140,13 @@ function render() {
     if (proxyEnvVarInput && document.activeElement !== proxyEnvVarInput) {
       proxyEnvVarInput.value = _state.proxy.envVar;
     }
+
+    // Issue #183: collapsible "Monitoring" section (change detection +
+    // hardening) — see popup.html's own comment on this markup for why a
+    // chevron+.collapsed toggle was chosen over the API panel's Show/Hide
+    // button-text-swap pattern.
+    document.getElementById('monitoring-section-toggle')?.classList.toggle('collapsed', !_state.monitoringSectionOpen);
+    document.getElementById('monitoring-section-content')?.classList.toggle('hidden', !_state.monitoringSectionOpen);
 
     // Issue #129: opt-in script hardening.
     const hardeningNoResultToggle = document.getElementById('toggle-hardening-no-result');
@@ -2217,6 +2244,20 @@ function wireEvents() {
     setState(_state.current, { additionalStartUrls: parseAdditionalUrls(e.target.value) });
   });
 
+  // Issue #183: collapsible "Monitoring" section toggle — a plain click
+  // (and Enter/Space, since the header is a div with role="button", not a
+  // real <button>) flips monitoringSectionOpen; nothing else about
+  // change-detection/hardening's own state is touched.
+  document.getElementById('monitoring-section-toggle')?.addEventListener('click', () => {
+    setState(_state.current, { monitoringSectionOpen: !_state.monitoringSectionOpen });
+  });
+  document.getElementById('monitoring-section-toggle')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setState(_state.current, { monitoringSectionOpen: !_state.monitoringSectionOpen });
+    }
+  });
+
   // Issue #87: opt-in change detection + notification.
   document.getElementById('toggle-change-detection')?.addEventListener('change', (e) => {
     setState(_state.current, { changeDetection: { ..._state.changeDetection, enabled: e.target.checked } });
@@ -3092,6 +3133,14 @@ async function init() {
   if (stored.apiConfigDraft)        _state = { ..._state, apiConfigDraft: stored.apiConfigDraft };
   if (stored.apiConfig)             _state = { ..._state, apiConfig: stored.apiConfig };
 
+  // Issue #183: one-time default-open computation, now that changeDetection/
+  // hardening have been restored from storage above — a returning user with
+  // something already configured in the "Monitoring" section shouldn't have
+  // to re-expand it just to see it.
+  if (computeInitialMonitoringSectionOpen(_state.changeDetection, _state.hardening)) {
+    _state = { ..._state, monitoringSectionOpen: true };
+  }
+
   if (stored.pendingSelector) {
     // The user clicked an element while the side panel was closed (e.g. it
     // hadn't finished loading yet, or was closed manually).
@@ -3187,6 +3236,7 @@ if (typeof module !== 'undefined') {
     applyStaticTranslations, sanitizeFileNameBase, parseAdditionalUrls, buildChangeDetectionConfig, buildProxyConfig,
     buildHardeningConfig, collectFieldNames, addNullRateCheck, removeNullRateCheck, updateNullRateCheck,
     renderHardeningNullRateList, addRequiredField, removeRequiredField, renderHardeningRequiredFieldsList,
+    computeInitialMonitoringSectionOpen,
     addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
     buildVerificationValues,
     frameBadgeHtml,
