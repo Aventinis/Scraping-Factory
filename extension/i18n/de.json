@@ -103,7 +103,12 @@
     "hardeningNullRateFieldPlaceholder": "-- Feld wählen --",
     "hardeningNullRateAddBtn": "+ Feld hinzufügen",
     "hardeningBaselineToggle": "Auf Rückgang zum letzten Lauf prüfen",
-    "hardeningBaselineThresholdLabel": "Schwelle (Rückgang)"
+    "hardeningBaselineThresholdLabel": "Schwelle (Rückgang)",
+    "hardeningBlockingToggle": "Auf Blockierung prüfen (Weiterleitung, kurze Antwort, Sperr-Phrasen)",
+    "hardeningBlockingMinBodyLengthLabel": "Min. Antwortlänge (Bytes)",
+    "hardeningBlockingMinBodyLengthPlaceholder": "optional",
+    "hardeningBlockingPhrasesLabel": "Sperr-Phrasen (eine pro Zeile)",
+    "hardeningBlockingPhrasesPlaceholder": "z. B. \"Access Denied\", \"Bitte bestätigen Sie, dass Sie ein Mensch sind\""
   },
   "robots": {
     "checkFailed": "robots.txt konnte nicht geprüft werden ({error}).",

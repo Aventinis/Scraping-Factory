@@ -570,6 +570,74 @@ describe('buildScrapingConfig (baseline hardening, Issue #131)', () => {
   });
 });
 
+// Issue #132
+describe('buildHardeningConfig (blocking)', () => {
+  test('returns null when blocking is disabled', () => {
+    expect(buildHardeningConfig({ blocking: { enabled: false, severity: 'Warning', minBodyLengthText: '', phrasesText: '' } })).toBeNull();
+  });
+
+  test('includes minBodyLength and blockPhrases when both are set', () => {
+    const hardening = { blocking: { enabled: true, severity: 'Error', minBodyLengthText: '200', phrasesText: 'Access Denied\nPlease verify you are human' } };
+    expect(buildHardeningConfig(hardening)).toEqual([
+      { kind: 'blocking', severity: 'Error', minBodyLength: 200, blockPhrases: ['Access Denied', 'Please verify you are human'] },
+    ]);
+  });
+
+  // Unlike nullRate, there's no "at least one signal configured"
+  // requirement — the cross-origin-redirect signal is always active, so an
+  // enabled BlockingCheck with neither field filled in is still valid.
+  test('omits minBodyLength (null) and blockPhrases (empty array) when both are blank', () => {
+    const hardening = { blocking: { enabled: true, severity: 'Warning', minBodyLengthText: '', phrasesText: '' } };
+    expect(buildHardeningConfig(hardening)).toEqual([
+      { kind: 'blocking', severity: 'Warning', minBodyLength: null, blockPhrases: [] },
+    ]);
+  });
+
+  test('treats a non-positive or non-numeric minBodyLengthText as unset', () => {
+    expect(buildHardeningConfig({ blocking: { enabled: true, severity: 'Warning', minBodyLengthText: '0', phrasesText: '' } })).toEqual([
+      { kind: 'blocking', severity: 'Warning', minBodyLength: null, blockPhrases: [] },
+    ]);
+    expect(buildHardeningConfig({ blocking: { enabled: true, severity: 'Warning', minBodyLengthText: 'not a number', phrasesText: '' } })).toEqual([
+      { kind: 'blocking', severity: 'Warning', minBodyLength: null, blockPhrases: [] },
+    ]);
+  });
+
+  // One phrase per line (not comma-split like API mode's value list) —
+  // blank lines are dropped, a comma inside a phrase is preserved verbatim.
+  test('splits phrasesText on newlines only, dropping blank lines', () => {
+    const hardening = { blocking: { enabled: true, severity: 'Warning', minBodyLengthText: '', phrasesText: 'Access Denied\n\n  \nRate limit, try again later' } };
+    expect(buildHardeningConfig(hardening)).toEqual([
+      { kind: 'blocking', severity: 'Warning', minBodyLength: null, blockPhrases: ['Access Denied', 'Rate limit, try again later'] },
+    ]);
+  });
+
+  test('combines with noResult, nullRate, and baseline', () => {
+    const hardening = {
+      noResult: { enabled: true, severity: 'Error' },
+      nullRate: [{ fieldName: 'Preis', threshold: 30, severity: 'Error' }],
+      baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: 20 },
+      blocking: { enabled: true, severity: 'Error', minBodyLengthText: '200', phrasesText: 'Access Denied' },
+    };
+    expect(buildHardeningConfig(hardening)).toEqual([
+      { kind: 'noResult', severity: 'Error' },
+      { kind: 'nullRate', severity: 'Error', fieldName: 'Preis', threshold: 0.3 },
+      { kind: 'baseline', severity: 'Warning', dropThreshold: 0.2 },
+      { kind: 'blocking', severity: 'Error', minBodyLength: 200, blockPhrases: ['Access Denied'] },
+    ]);
+  });
+});
+
+describe('buildScrapingConfig (blocking hardening, Issue #132)', () => {
+  test('threads a blocking check through the wire config', () => {
+    const hardening = { blocking: { enabled: true, severity: 'Error', minBodyLengthText: '200', phrasesText: 'Access Denied' } };
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, hardening,
+    );
+    expect(result.hardening).toEqual([{ kind: 'blocking', severity: 'Error', minBodyLength: 200, blockPhrases: ['Access Denied'] }]);
+  });
+});
+
 describe('collectFieldNames (Issue #130)', () => {
   test('flat mode: reads field names straight off the fields array', () => {
     const fields = [{ name: 'Titel', selector: 'h1' }, { name: 'Preis', selector: '.price' }];

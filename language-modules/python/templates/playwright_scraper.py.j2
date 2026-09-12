@@ -21,6 +21,8 @@ import json
 {{~ end ~}}
 {{~ if proxy.enabled ~}}
 import itertools
+{{~ end ~}}
+{{~ if proxy.enabled || hardening.enabled ~}}
 import urllib.parse
 {{~ end ~}}
 {{~ if change_detection.enabled ~}}
@@ -121,6 +123,14 @@ EXIT_HARDENING_FAILED = 2
 
 HARDENING = {{ hardening.checks_literal }}
 
+# Issue #132 (blocking-detection check): a snapshot of each URL's rendered
+# page (final URL, content length, content) is captured in scrape() below,
+# right after all browser actions complete — the page actually about to be
+# scraped, not an intermediate redirect a login flow legitimately passes
+# through. Populated even when no "blocking" check is configured; the
+# runtime cost of appending an already-in-memory string is negligible.
+_BLOCKING_RESPONSES = []
+
 {{~ if hardening.has_baseline ~}}
 # Issue #131 (baseline check): a small sidecar file next to the script's own
 # output records the result count from the last run that passed cleanly
@@ -185,6 +195,27 @@ def _run_hardening_checks(data):
                 drop = (baseline - result_count) / baseline
                 if drop > check["dropThreshold"]:
                     message = f"Result count dropped from {baseline} to {result_count} (more than the {check['dropThreshold']:.0%} threshold)."
+                    if check["severity"] == "Error":
+                        print(f"ERROR: {message}", file=sys.stderr)
+                        has_error = True
+                    else:
+                        print(f"WARNING: {message}", file=sys.stderr)
+        elif check["kind"] == "blocking":
+            # Issue #132: three signals, all evaluated per captured response
+            # — a redirect to a different host (always checked), a body
+            # shorter than minBodyLength (skipped when None), and a
+            # case-insensitive match against blockPhrases.
+            for entry in _BLOCKING_RESPONSES:
+                reasons = []
+                if urllib.parse.urlsplit(entry["url"]).netloc != urllib.parse.urlsplit(entry["final_url"]).netloc:
+                    reasons.append(f"redirected to a different host ({entry['final_url']})")
+                if check["minBodyLength"] is not None and entry["length"] < check["minBodyLength"]:
+                    reasons.append(f"response body is only {entry['length']} bytes (minimum: {check['minBodyLength']})")
+                matched_phrases = [p for p in check["blockPhrases"] if p.lower() in entry["text"].lower()]
+                if matched_phrases:
+                    reasons.append(f"matched block phrase(s): {', '.join(matched_phrases)}")
+                if reasons:
+                    message = f"Possible blocking detected for {entry['url']}: {'; '.join(reasons)}."
                     if check["severity"] == "Error":
                         print(f"ERROR: {message}", file=sys.stderr)
                         has_error = True
@@ -375,6 +406,15 @@ def scrape(url):
         browser = p.chromium.launch({{ if proxy.enabled }}proxy=_next_playwright_proxy(){{ end }})
         page = browser.new_page()
 {{ actions }}
+{{~ if hardening.enabled ~}}
+        # Playwright has no single raw response body to measure after JS
+        # execution — "length" approximates it as the rendered page's own
+        # UTF-8-encoded size instead of a true network byte count.
+        _page_content = page.content()
+        _BLOCKING_RESPONSES.append(
+            {"url": url, "final_url": page.url, "length": len(_page_content.encode("utf-8")), "text": _page_content}
+        )
+{{~ end ~}}
 
         columns = {name: _resolve_elements(page, sel, FRAME_PATHS.get(name)) for name, sel in SELECTORS.items()}
         n = max((len(v) for v in columns.values()), default=0)

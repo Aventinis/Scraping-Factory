@@ -103,7 +103,12 @@
     "hardeningNullRateFieldPlaceholder": "-- elegir campo --",
     "hardeningNullRateAddBtn": "+ Añadir campo",
     "hardeningBaselineToggle": "Comprobar descenso frente a la última ejecución",
-    "hardeningBaselineThresholdLabel": "Umbral (descenso)"
+    "hardeningBaselineThresholdLabel": "Umbral (descenso)",
+    "hardeningBlockingToggle": "Comprobar bloqueo (redirección, respuesta corta, frases de bloqueo)",
+    "hardeningBlockingMinBodyLengthLabel": "Longitud mín. de respuesta (bytes)",
+    "hardeningBlockingMinBodyLengthPlaceholder": "opcional",
+    "hardeningBlockingPhrasesLabel": "Frases de bloqueo (una por línea)",
+    "hardeningBlockingPhrasesPlaceholder": "p. ej. \"Access Denied\", \"Por favor verifica que eres humano\""
   },
   "robots": {
     "checkFailed": "No se pudo comprobar el robots.txt ({error}).",

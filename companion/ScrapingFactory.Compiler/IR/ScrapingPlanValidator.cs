@@ -661,6 +661,20 @@ public static class ScrapingPlanValidator
                 return $"Hardening check 'Baseline': threshold must be between 0 and 1 (was {check.DropThreshold}).";
         }
 
+        // Issue #132: like BaselineCheck, only one BlockingCheck ever makes
+        // sense (already covered by the generic duplicate-kind rule above).
+        // MinBodyLength/BlockPhrases are both optional — a BlockingCheck
+        // with neither set is still meaningful (the cross-origin-redirect
+        // signal is always active), so there's no "at least one signal
+        // configured" requirement here.
+        foreach (var check in hardening.OfType<BlockingCheck>())
+        {
+            if (check.MinBodyLength is <= 0)
+                return $"Hardening check 'Blocking': MinBodyLength must be positive (was {check.MinBodyLength}).";
+            if (check.BlockPhrases?.Any(string.IsNullOrWhiteSpace) == true)
+                return "Hardening check 'Blocking': block phrases must not be blank.";
+        }
+
         return null;
     }
 }

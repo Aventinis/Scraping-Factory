@@ -51,6 +51,13 @@ internal static class PythonHardeningLiteral
         // value to render here at all, since it doesn't exist yet at
         // generation time.
         BaselineCheck baseline => $$"""{"kind": {{PythonLiteral.Str("baseline")}}, "severity": {{PythonLiteral.Str(check.Severity.ToString())}}, "dropThreshold": {{PythonLiteral.Num(baseline.DropThreshold)}}}""",
+        // Issue #132: "minBodyLength" is an unquoted int literal or "None"
+        // when the signal is disabled — PythonLiteral has no dedicated
+        // int-or-None helper since this is the only nullable-int field
+        // across every literal builder so far. "blockPhrases" reuses
+        // PythonLiteral.StrList, which already renders an empty list as
+        // "[]" for a null/empty BlockPhrases.
+        BlockingCheck blocking => $$"""{"kind": {{PythonLiteral.Str("blocking")}}, "severity": {{PythonLiteral.Str(check.Severity.ToString())}}, "minBodyLength": {{(blocking.MinBodyLength is { } min ? min.ToString() : "None")}}, "blockPhrases": {{PythonLiteral.StrList(blocking.BlockPhrases ?? [])}}}""",
         _ => throw new InvalidOperationException($"Unknown HardeningCheck type: {check.GetType()}"),
     };
 }

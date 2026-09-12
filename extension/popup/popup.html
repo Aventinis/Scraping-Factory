@@ -984,6 +984,33 @@
             <input type="number" min="0" max="100" id="input-hardening-baseline-threshold" />%
           </label>
         </div>
+        <!-- Issue #132: blocking-detection check — catches a site that
+             starts blocking the script (rate-limiting, IP ban, CAPTCHA
+             wall, redirect to a login page) while still responding with a
+             normal-looking HTTP 200, which none of the checks above would
+             necessarily catch. Same single toggle+severity shape as
+             baseline above, plus an optional min-body-length number input
+             and a one-phrase-per-line textarea (a redirect to a different
+             host is always checked, no input needed for that signal). -->
+        <label class="output-settings-toggle" style="margin-top: 10px;">
+          <input type="checkbox" id="toggle-hardening-blocking" />
+          <span data-i18n="idle.hardeningBlockingToggle"></span>
+        </label>
+        <div id="hardening-blocking-config" class="hidden">
+          <div id="hardening-blocking-severity" class="mode-toggle" style="margin: 6px 0 8px;">
+            <div class="mode-toggle-thumb"></div>
+            <button id="btn-hardening-blocking-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning" data-i18n-title="idle.hardeningSeverityWarningTitle"></button>
+            <button id="btn-hardening-blocking-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError" data-i18n-title="idle.hardeningSeverityErrorTitle"></button>
+          </div>
+          <label class="browser-action-field-row">
+            <span data-i18n="idle.hardeningBlockingMinBodyLengthLabel"></span>
+            <input type="number" min="1" id="input-hardening-blocking-min-body-length" data-i18n-placeholder="idle.hardeningBlockingMinBodyLengthPlaceholder" />
+          </label>
+          <div class="output-settings-row" style="align-items: flex-start; margin-top: 6px;">
+            <label for="input-hardening-blocking-phrases" data-i18n="idle.hardeningBlockingPhrasesLabel"></label>
+            <textarea id="input-hardening-blocking-phrases" rows="2" data-i18n-placeholder="idle.hardeningBlockingPhrasesPlaceholder"></textarea>
+          </div>
+        </div>
       </div>
       <!-- Filenames last: a final naming step right before Export/Generate,
            below every other output-settings toggle. -->
