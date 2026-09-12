@@ -202,6 +202,30 @@ def _run_hardening_checks(data):
                     else:
                         print(f"WARNING: {message}", file=sys.stderr)
     return has_error
+
+
+# Issue #133: unlike _run_hardening_checks above (a post-hoc pass over
+# already-final data), this changes what actually gets written — called
+# from main() before the output file is written, not after. Filtering
+# always happens regardless of severity; only whether the run itself is
+# flagged as failed depends on it, so an all-Warning configuration still
+# guarantees the output file never contains a row missing a required
+# value, without necessarily failing the whole run.
+def _filter_required_fields(data):
+    check = next((c for c in HARDENING if c["kind"] == "requiredFields"), None)
+    if check is None:
+        return data, False
+    total = len(data)
+    filtered = [row for row in data if all(str(row.get(name, "")).strip() for name in check["fieldNames"])]
+    dropped = total - len(filtered)
+    if dropped == 0:
+        return filtered, False
+    message = f"Dropped {dropped} of {total} row(s) missing a required field."
+    if check["severity"] == "Error":
+        print(f"ERROR: {message}", file=sys.stderr)
+        return filtered, True
+    print(f"WARNING: {message}", file=sys.stderr)
+    return filtered, False
 {{~ end ~}}
 
 SELECTORS = {
@@ -379,6 +403,9 @@ def main():
     data = []
     for url in URLS:
         data.extend(scrape(url))
+{{~ if config.hardening.enabled ~}}
+    data, required_fields_failed = _filter_required_fields(data)
+{{~ end ~}}
 {{~ if config.output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -397,7 +424,7 @@ def main():
         _notify_change(previous_content, new_content)
 {{~ end ~}}
 {{~ if config.hardening.enabled ~}}
-    hardening_failed = _run_hardening_checks(data)
+    hardening_failed = _run_hardening_checks(data) or required_fields_failed
 {{~ if config.hardening.has_baseline ~}}
     if not hardening_failed:
         _write_baseline(len(data))
