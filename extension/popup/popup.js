@@ -3183,7 +3183,7 @@ if (typeof module !== 'undefined') {
     detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
     applyStaticTranslations, sanitizeFileNameBase, parseAdditionalUrls, buildChangeDetectionConfig, buildProxyConfig,
     buildHardeningConfig, collectFieldNames, addNullRateCheck, removeNullRateCheck, updateNullRateCheck,
-    renderHardeningNullRateList,
+    renderHardeningNullRateList, addRequiredField, removeRequiredField, renderHardeningRequiredFieldsList,
     addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
     buildVerificationValues,
     frameBadgeHtml,
