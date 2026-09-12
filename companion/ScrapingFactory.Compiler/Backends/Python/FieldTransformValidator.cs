@@ -30,7 +30,7 @@ internal static class FieldTransformValidator
             if (transform is RegexExtractTransform regexExtract)
             {
                 if (string.IsNullOrEmpty(regexExtract.Pattern))
-                    return $"Regex-Muster für {fieldLabel} darf nicht leer sein.";
+                    return $"Regex pattern for {fieldLabel} must not be empty.";
 
                 try
                 {
@@ -38,11 +38,11 @@ internal static class FieldTransformValidator
                 }
                 catch (ArgumentException ex)
                 {
-                    return $"Ungültiger regulärer Ausdruck '{regexExtract.Pattern}' für {fieldLabel}: {ex.Message}";
+                    return $"Invalid regular expression '{regexExtract.Pattern}' for {fieldLabel}: {ex.Message}";
                 }
 
                 if (regexExtract.Group < 0)
-                    return $"Gruppenindex für {fieldLabel} darf nicht negativ sein.";
+                    return $"Group index for {fieldLabel} must not be negative.";
             }
 
             // TrimTransform/ReplaceTransform/ToNumberTransform: nothing to

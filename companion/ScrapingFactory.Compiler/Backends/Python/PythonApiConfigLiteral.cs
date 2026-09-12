@@ -44,7 +44,7 @@ internal static class PythonApiConfigLiteral
     {
         ApiGroup group => RenderGroup(group, indent),
         ApiField field => RenderField(field),
-        _ => throw new InvalidOperationException($"Unbekannter Api-Knoten-Typ: {node.GetType()}"),
+        _ => throw new InvalidOperationException($"Unknown Api node type: {node.GetType()}"),
     };
 
     private static string RenderGroup(ApiGroup group, int indent)
@@ -75,7 +75,7 @@ internal static class PythonApiConfigLiteral
         ApiBodyArray array => RenderBodyArray(array),
         ApiBodyVariable variable => RenderBodyVariable(variable),
         ApiBodyLiteral literal => RenderBodyLiteral(literal),
-        _ => throw new InvalidOperationException($"Unbekannter ApiBodyNode-Typ: {node.GetType()}"),
+        _ => throw new InvalidOperationException($"Unknown ApiBodyNode type: {node.GetType()}"),
     };
 
     private static string RenderBodyObject(ApiBodyObject obj)
@@ -100,7 +100,7 @@ internal static class PythonApiConfigLiteral
         ApiBodyLiteralKind.Number => $$"""{"kind": "Number", "value": {{PythonLiteral.Num(literal.NumberValue!.Value)}}}""",
         ApiBodyLiteralKind.Boolean => $$"""{"kind": "Boolean", "value": {{(literal.BoolValue!.Value ? "True" : "False")}}}""",
         ApiBodyLiteralKind.Null => """{"kind": "Null"}""",
-        _ => throw new InvalidOperationException($"Unbekannter ApiBodyLiteralKind: {literal.Kind}"),
+        _ => throw new InvalidOperationException($"Unknown ApiBodyLiteralKind: {literal.Kind}"),
     };
 
     public static string RenderParameters(List<ApiParameter> parameters) =>
@@ -127,7 +127,7 @@ internal static class PythonApiConfigLiteral
         // (_resolve_parameter_values's `source.get("format")` fallback in
         // scraper_api.py.j2) stays the single source of truth for defaults.
         RangeSource r => $$"""{"kind": "range", "type": {{PythonLiteral.Str(r.Type.ToString())}}, "from": {{PythonLiteral.Str(r.From)}}, "to": {{PythonLiteral.Str(r.To)}}{{RenderFormatSuffix(r.Format)}}}""",
-        _ => throw new InvalidOperationException($"Unbekannter ApiParameterSource-Typ: {source.GetType()}"),
+        _ => throw new InvalidOperationException($"Unknown ApiParameterSource type: {source.GetType()}"),
     };
 
     private static string RenderFormatSuffix(string? format) =>

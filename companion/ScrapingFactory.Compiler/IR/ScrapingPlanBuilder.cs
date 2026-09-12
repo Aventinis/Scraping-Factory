@@ -108,6 +108,6 @@ public static class ScrapingPlanBuilder
             WaitAfterMs = a.WaitAfterMs,
             FramePath = a.FramePath,
         },
-        _ => throw new InvalidOperationException($"Unbekannter BrowserAction-Typ: {action.GetType().Name}"),
+        _ => throw new InvalidOperationException($"Unknown BrowserAction type: {action.GetType().Name}"),
     };
 }

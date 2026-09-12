@@ -51,6 +51,6 @@ internal static class PythonHardeningLiteral
         // value to render here at all, since it doesn't exist yet at
         // generation time.
         BaselineCheck baseline => $$"""{"kind": {{PythonLiteral.Str("baseline")}}, "severity": {{PythonLiteral.Str(check.Severity.ToString())}}, "dropThreshold": {{PythonLiteral.Num(baseline.DropThreshold)}}}""",
-        _ => throw new InvalidOperationException($"Unbekannter HardeningCheck-Typ: {check.GetType()}"),
+        _ => throw new InvalidOperationException($"Unknown HardeningCheck type: {check.GetType()}"),
     };
 }

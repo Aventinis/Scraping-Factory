@@ -522,7 +522,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("Ungültige Start-URL", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("Invalid start URL", doc.RootElement.GetProperty("error").GetString());
     }
 
     [Fact]
@@ -543,7 +543,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("Doppelte Feldnamen", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("Duplicate field names", doc.RootElement.GetProperty("error").GetString());
     }
 
     // Reproduces the exact wire format sent by the browser extension
@@ -718,7 +718,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("mutually exclusive", doc.RootElement.GetProperty("error").GetString());
     }
 
     // API-Mode (Issue #53): a third alternative to Fields/Groups, exclusive
@@ -753,7 +753,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("mutually exclusive", doc.RootElement.GetProperty("error").GetString());
     }
 
     [Fact]
@@ -774,7 +774,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("mutually exclusive", doc.RootElement.GetProperty("error").GetString());
     }
 
     // Issue #83: Api builds its own request URL from urlTemplate/parameters
@@ -797,7 +797,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("mutually exclusive", doc.RootElement.GetProperty("error").GetString());
     }
 
     // End-to-end through the real HTTP endpoint: engine selection resolves

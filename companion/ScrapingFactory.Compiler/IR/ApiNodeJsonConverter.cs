@@ -40,7 +40,7 @@ public sealed class ApiNodeJsonConverter : JsonConverter<ApiNode>
                 JsonSerializer.Serialize(writer, field, options);
                 break;
             default:
-                throw new NotSupportedException($"Unbekannter ApiNode-Typ: {value.GetType()}");
+                throw new NotSupportedException($"Unknown ApiNode type: {value.GetType()}");
         }
     }
 }
