@@ -864,4 +864,71 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.DoesNotContain("BeautifulSoup", body);
         Assert.Contains("itertools.product", body);
     }
+
+    // Issue #132: a full /generate trial run (real subprocess execution via
+    // PythonScriptVerifier) is the only way to catch a Scriban syntax error
+    // inside a template's `{{ if hardening.enabled }}` block that a test
+    // never actually renders otherwise — NullRate/Baseline's own coverage
+    // above only ever exercises the flat/static engine, so this and the
+    // Browser-engine test below close that gap for BlockingCheck
+    // specifically across the two engines/shapes not otherwise touched by
+    // this file's or PythonGroupCodeGeneratorTests' hardening coverage.
+    [Fact]
+    public async Task Generate_ApiPayloadWithBlockingHardening_Returns200()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var category = request.QueryString["category"];
+            var json = $$"""{ "data": { "items": [ { "title": "Item-{{category}}" } ] } }""";
+            return new LocalTestServerResponse(json, "application/json");
+        });
+
+        var payload = $$"""
+            {
+              "url": "https://example.com",
+              "api": {
+                "urlTemplate": "{{server.BaseUrl}}?category={category}",
+                "itemsPath": "data.items",
+                "fields": [ { "name": "Titel", "path": "title" } ],
+                "parameters": [
+                  { "name": "category", "source": { "kind": "staticList", "values": ["a"] } }
+                ]
+              },
+              "hardening": [
+                { "kind": "blocking", "severity": "Warning", "minBodyLength": 5, "blockPhrases": ["Access Denied"] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Contains("_BLOCKING_RESPONSES", body);
+    }
+
+    [Fact]
+    public async Task Generate_BrowserEnginePayloadWithBlockingHardening_Returns200()
+    {
+        using var server = new LocalTestServer("<html><body><h1 class='item'>Item</h1></body></html>");
+
+        var payload = $$"""
+            {
+              "url": "{{server.BaseUrl}}",
+              "engine": "Browser",
+              "fields": [ { "name": "Item", "selector": ".item" } ],
+              "hardening": [
+                { "kind": "blocking", "severity": "Warning", "minBodyLength": 5, "blockPhrases": ["Access Denied"] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Contains("_BLOCKING_RESPONSES", body);
+    }
 }

@@ -77,6 +77,8 @@ internal sealed class LocalTestServer : IDisposable
             var bytes = Encoding.UTF8.GetBytes(response.Body);
             ctx.Response.StatusCode = (int)response.StatusCode;
             ctx.Response.ContentType = response.ContentType;
+            if (response.Location is not null)
+                ctx.Response.RedirectLocation = response.Location;
             ctx.Response.ContentLength64 = bytes.Length;
             await ctx.Response.OutputStream.WriteAsync(bytes);
             ctx.Response.OutputStream.Close();
@@ -111,4 +113,9 @@ internal sealed class LocalTestServer : IDisposable
     }
 }
 
-internal sealed record LocalTestServerResponse(string Body, string ContentType, HttpStatusCode StatusCode = HttpStatusCode.OK);
+// Location is only meaningful alongside a redirect StatusCode (e.g. 302) —
+// added for Issue #132's blocking-detection check, whose cross-origin-
+// redirect signal needs a real HTTP redirect to a different LocalTestServer
+// instance (a different loopback port counts as a different host) to
+// exercise end-to-end.
+internal sealed record LocalTestServerResponse(string Body, string ContentType, HttpStatusCode StatusCode = HttpStatusCode.OK, string? Location = null);
