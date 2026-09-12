@@ -94,6 +94,7 @@
     "proxyToggle": "Usar un proxy",
     "proxyEnvVarLabel": "Lista de proxies (variable de entorno)",
     "proxyHint": "El nombre de una variable de entorno con una lista de URLs de proxy separadas por comas (p. ej. \"http://usuario:contraseña@host:puerto\"), no las direcciones en sí — con más de una, el script rota entre ellas en cada solicitud.",
+    "monitoringSectionToggle": "Monitorización",
     "hardeningNoResultToggle": "Comprobar resultado vacío",
     "hardeningSeverityWarning": "Advertencia",
     "hardeningSeverityWarningTitle": "El script imprime una advertencia, pero sigue terminando con código de salida 0.",

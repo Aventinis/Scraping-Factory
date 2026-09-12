@@ -94,6 +94,7 @@
     "proxyToggle": "Proxy verwenden",
     "proxyEnvVarLabel": "Proxy-Liste (Env-Var)",
     "proxyHint": "Der Name einer Umgebungsvariable mit einer durch Kommas getrennten Liste von Proxy-URLs (z. B. \"http://user:pass@host:port\"), nicht die Adressen selbst — bei mehreren Proxys wechselt das Skript bei jeder Anfrage reihum durch.",
+    "monitoringSectionToggle": "Überwachung",
     "hardeningNoResultToggle": "Auf leeres Ergebnis prüfen",
     "hardeningSeverityWarning": "Warnung",
     "hardeningSeverityWarningTitle": "Das Skript druckt eine Warnung, beendet sich aber weiterhin mit Exit-Code 0.",
