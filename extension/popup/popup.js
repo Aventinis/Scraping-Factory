@@ -254,6 +254,14 @@ let _state = {
   // computation, this behaves like a plain toggle for the rest of the
   // session.
   monitoringSectionOpen: false,
+  // Issue #184: collapsible "Settings" section (Json output toggle, trial-
+  // run data preview toggle, DOM-highlight "Vorschau" button) — unlike
+  // monitoringSectionOpen above, there's no auto-expand-on-load override in
+  // init(): all three toggles inside are non-persisted, per-generate
+  // opt-ins that reset to off on every popup open anyway, so there's no
+  // "returning user's existing settings" this would ever need to reveal.
+  // Always starts (and stays, until clicked) collapsed.
+  settingsSectionOpen: false,
   // Issue #53 Phase 4/5 — null while no "find in recording" selection round is
   // in progress; 'field' while searching for the primary field (from IDLE);
   // {parameter: name} while searching a Discovery source's example value for
@@ -1147,6 +1155,12 @@ function render() {
     // button-text-swap pattern.
     document.getElementById('monitoring-section-toggle')?.classList.toggle('collapsed', !_state.monitoringSectionOpen);
     document.getElementById('monitoring-section-content')?.classList.toggle('hidden', !_state.monitoringSectionOpen);
+
+    // Issue #184: collapsible "Settings" section (Json output, trial-run
+    // data preview, DOM-highlight "Vorschau") — same chevron+.collapsed
+    // mechanism as Monitoring above.
+    document.getElementById('settings-section-toggle')?.classList.toggle('collapsed', !_state.settingsSectionOpen);
+    document.getElementById('settings-section-content')?.classList.toggle('hidden', !_state.settingsSectionOpen);
 
     // Issue #129: opt-in script hardening.
     const hardeningNoResultToggle = document.getElementById('toggle-hardening-no-result');
@@ -2255,6 +2269,18 @@ function wireEvents() {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       setState(_state.current, { monitoringSectionOpen: !_state.monitoringSectionOpen });
+    }
+  });
+
+  // Issue #184: collapsible "Settings" section toggle — same click/Enter/
+  // Space pattern as Monitoring above.
+  document.getElementById('settings-section-toggle')?.addEventListener('click', () => {
+    setState(_state.current, { settingsSectionOpen: !_state.settingsSectionOpen });
+  });
+  document.getElementById('settings-section-toggle')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setState(_state.current, { settingsSectionOpen: !_state.settingsSectionOpen });
     }
   });
 

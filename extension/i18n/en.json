@@ -95,6 +95,7 @@
     "proxyEnvVarLabel": "Proxy list (env var)",
     "proxyHint": "The name of an environment variable holding a comma-separated list of proxy URLs (e.g. \"http://user:pass@host:port\"), not the addresses themselves — with more than one, the script rotates through them per request.",
     "monitoringSectionToggle": "Monitoring",
+    "settingsSectionToggle": "Settings",
     "hardeningNoResultToggle": "Check for empty result",
     "hardeningSeverityWarning": "Warning",
     "hardeningSeverityWarningTitle": "The script prints a warning but still exits with code 0.",
