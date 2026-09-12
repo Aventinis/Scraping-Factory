@@ -479,7 +479,7 @@
     .monitoring-section-chevron { width: 12px; flex: none; color: var(--color-text-faint); }
     .monitoring-section-chevron svg { width: 12px; height: 12px; display: block; transition: transform var(--transition-fast); }
     .monitoring-section-header.collapsed .monitoring-section-chevron svg { transform: rotate(-90deg); }
-    #monitoring-section-content { margin-top: 6px; }
+    #monitoring-section-content, #settings-section-content { margin-top: 6px; }
 
     .group-tree-row, .api-tree-row, .body-tree-row { transition: background-color var(--transition-fast); }
     .group-tree-row:hover, .api-tree-row:hover, .body-tree-row:hover {
@@ -860,30 +860,53 @@
       </div>
     </div>
 
-    <!-- Vorschau highlights matched DOM elements — meaningless for API-Mode,
-         which extracts from a JSON body instead, so it's hidden there. -->
-    <div id="preview-section">
-      <div class="actions" style="margin-top: 10px;">
-        <button id="btn-preview" class="btn-toggle" disabled data-i18n="idle.previewShowBtn" data-i18n-title="idle.previewTitle"></button>
-      </div>
-      <p id="preview-summary" class="preview-summary hidden"></p>
-    </div>
-
     <div class="output-settings">
-      <!-- Issue #86: opt-in Json output — mode-independent, like the data
-           preview toggle below; see buildScrapingConfig's own doc comment
-           for exactly which wire field this adds/replaces per mode. -->
-      <label class="output-settings-toggle">
-        <input type="checkbox" id="toggle-output-json" />
-        <span data-i18n="idle.outputJsonToggle"></span>
-      </label>
-      <!-- Issue #122: opt-in trial-run data preview — unrelated to the DOM-
-           highlight "Vorschau" above (preview-section); see popup.js's
-           renderDataPreview doc comment for the naming rationale. -->
-      <label class="output-settings-toggle">
-        <input type="checkbox" id="toggle-include-data-preview" />
-        <span data-i18n="idle.dataPreviewToggle"></span>
-      </label>
+      <!-- Issue #184: output-format/inspection toggles (Json output, Issue
+           #86; trial-run data preview, Issue #122; and the unrelated
+           DOM-highlight "Vorschau" feature, previewActive/#btn-preview —
+           see popup.js's renderDataPreview doc comment for why that one has
+           a deliberately different name) are comparatively infrequent
+           settings, not part of the field/container/API configuration flow
+           the user touches on every scraper build — grouped into their own
+           collapsible section for the same reason Issue #183 grouped
+           change-detection/hardening into "Monitoring" below, reusing the
+           exact same chevron+.collapsed convention (Issue #139). Unlike
+           Monitoring, there's no auto-expand-if-already-configured logic
+           here (_state.settingsSectionOpen has no
+           computeInitialMonitoringSectionOpen equivalent): all three
+           toggles inside are non-persisted, per-generate opt-ins that are
+           always off again on a fresh popup open, so there's no "returning
+           user's existing settings" to reveal — collapsed by default is
+           always the right starting state. -->
+      <div id="settings-section">
+        <div id="settings-section-toggle" class="monitoring-section-header" role="button" tabindex="0">
+          <span class="monitoring-section-chevron">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </span>
+          <span data-i18n="idle.settingsSectionToggle"></span>
+        </div>
+        <div id="settings-section-content" class="hidden">
+          <label class="output-settings-toggle">
+            <input type="checkbox" id="toggle-output-json" />
+            <span data-i18n="idle.outputJsonToggle"></span>
+          </label>
+          <label class="output-settings-toggle">
+            <input type="checkbox" id="toggle-include-data-preview" />
+            <span data-i18n="idle.dataPreviewToggle"></span>
+          </label>
+          <!-- Vorschau highlights matched DOM elements — meaningless for
+               API-Mode, which extracts from a JSON body instead, so it's
+               hidden there (unchanged id/logic, just relocated). -->
+          <div id="preview-section">
+            <div class="actions" style="margin-top: 10px;">
+              <button id="btn-preview" class="btn-toggle" disabled data-i18n="idle.previewShowBtn" data-i18n-title="idle.previewTitle"></button>
+            </div>
+            <p id="preview-summary" class="preview-summary hidden"></p>
+          </div>
+        </div>
+      </div>
       <!-- Issue #88: opt-in proxy support — like the change-detection
            fields below, this is the *name* of an environment variable
            holding a comma-separated proxy URL list, never a literal proxy
