@@ -678,15 +678,22 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.True(HttpStatusCode.OK == response.StatusCode, body);
     }
 
-    // Issue #133: proves the flat-shaped-output-only restriction is
-    // actually enforced through the real HTTP endpoint, not just the C#
-    // object model — container mode has no unambiguous "row" to drop.
+    // Issue #133 follow-up: unlike Api-mode's tree shape (still rejected,
+    // see the test below), container mode supports RequiredFieldsCheck —
+    // matched globally by tag name, dropping the nearest enclosing
+    // repeating instance (see RequiredFieldsCheck's own doc comment). A
+    // real /generate trial run (subprocess execution) is the only way to
+    // catch a Scriban syntax error inside extract_group()'s new
+    // conditional — see HardeningRequiredFieldsEndToEndTests for the full
+    // behavioral proof that dropping actually happens.
     [Fact]
-    public async Task Generate_RequiredFieldsHardeningWithContainerMode_Returns400()
+    public async Task Generate_ContainerModeWithRequiredFieldsHardening_Returns200()
     {
-        var payload = """
+        using var server = new LocalTestServer(
+            "<html><body><section><h2>Titel</h2></section></body></html>");
+        var payload = $$"""
             {
-              "url": "https://example.com",
+              "url": "{{server.BaseUrl}}",
               "groups": [
                 { "name": "Kategorie", "selector": "section", "repeating": true, "children": [ { "name": "Titel", "selector": "h2" } ] }
               ],
@@ -698,15 +705,42 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         var content = new StringContent(payload, Encoding.UTF8, "application/json");
 
         var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("RequiredFields", doc.RootElement.GetProperty("error").GetString());
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Contains("_passes_required_fields", body);
     }
 
-    // Same restriction, but for Api-mode's own tree shape specifically —
-    // Api's flat ItemsPath/Fields shape is allowed (see the Returns200 test
-    // above's flat-Fields-mode sibling), only Groups (tree) is rejected.
+    [Fact]
+    public async Task Generate_ContainerModeBrowserEngineWithRequiredFieldsHardening_Returns200()
+    {
+        using var server = new LocalTestServer(
+            "<html><body><section><h2>Titel</h2></section></body></html>");
+        var payload = $$"""
+            {
+              "url": "{{server.BaseUrl}}",
+              "engine": "Browser",
+              "groups": [
+                { "name": "Kategorie", "selector": "section", "repeating": true, "children": [ { "name": "Titel", "selector": "h2" } ] }
+              ],
+              "hardening": [
+                { "kind": "requiredFields", "severity": "Warning", "fieldNames": ["Titel"] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Contains("_passes_required_fields", body);
+    }
+
+    // Unlike container mode (supported, see the test above), Api-mode's
+    // tree shape still isn't — Api's flat ItemsPath/Fields shape is allowed
+    // (see the Returns200 test above's flat-Fields-mode sibling), only
+    // Groups (tree) is rejected.
     [Fact]
     public async Task Generate_RequiredFieldsHardeningWithApiTreeShape_Returns400()
     {

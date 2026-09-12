@@ -2214,10 +2214,12 @@ public class ScrapingPlanValidatorTests
         Assert.Contains("duplicate field name 'Titel'", result.Error);
     }
 
-    // Container mode has no unambiguous "row" to drop — see
-    // RequiredFieldsCheck's own doc comment.
+    // Follow-up: container mode supports RequiredFieldsCheck (matched
+    // globally by tag name, dropping the nearest enclosing repeating
+    // instance — see RequiredFieldsCheck's own doc comment). Only Api-mode's
+    // tree shape still rejects it (see the test below).
     [Fact]
-    public void Validate_RequiredFieldsCheckWithContainerMode_Fails()
+    public void Validate_RequiredFieldsCheckWithContainerMode_Succeeds()
     {
         var roots = new List<GroupNode>
         {
@@ -2229,9 +2231,7 @@ public class ScrapingPlanValidatorTests
             Hardening = [new RequiredFieldsCheck { Severity = HardeningSeverity.Warning, FieldNames = ["Titel"] }],
         };
         var result = ScrapingPlanValidator.Validate(plan);
-        Assert.False(result.Success);
-        Assert.Contains("RequiredFields", result.Error);
-        Assert.Contains("container-mode", result.Error);
+        Assert.True(result.Success, result.Error);
     }
 
     // Api-mode's flat shape has just as unambiguous a "row" as flat Fields

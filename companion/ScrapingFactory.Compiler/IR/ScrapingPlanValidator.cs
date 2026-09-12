@@ -127,12 +127,6 @@ public static class ScrapingPlanValidator
             if (extractGroupStep.Roots.Count == 0)
                 return Invalid("ExtractGroupStep must contain at least one group.");
 
-            // Issue #133: container mode has no unambiguous "row" to drop —
-            // RequiredFieldsCheck is flat-shaped-output only (see its own
-            // doc comment on HardeningCheck.cs).
-            if (plan.Hardening?.OfType<RequiredFieldsCheck>().Any() == true)
-                return Invalid("Hardening check 'RequiredFields' is not supported for container-mode (tree-shaped) output.");
-
             var groupError = ValidateContainerNodes(extractGroupStep.Roots, plan.Engine);
             return groupError is null ? new PlanValidationResult { Success = true } : Invalid(groupError);
         }
@@ -142,8 +136,12 @@ public static class ScrapingPlanValidator
         var apiCallStep = plan.Steps.OfType<ApiCallStep>().SingleOrDefault();
         if (apiCallStep is not null)
         {
-            // Issue #133: same restriction as container mode above, but
-            // only for Api's own tree shape (Groups) — Api's flat
+            // Issue #133: unlike container mode (which supports
+            // RequiredFieldsCheck — see its own doc comment on
+            // HardeningCheck.cs), Api-mode's tree shape (Groups) doesn't:
+            // out of scope for now, kept simple rather than porting the
+            // same "drop the nearest repeating instance" mechanism here
+            // too without it having been asked for. Api's flat
             // ItemsPath/Fields shape has just as unambiguous a "row" as
             // flat Fields mode, so it's allowed there.
             if (apiCallStep.Config.Groups is { Count: > 0 } && plan.Hardening?.OfType<RequiredFieldsCheck>().Any() == true)
@@ -692,10 +690,10 @@ public static class ScrapingPlanValidator
         // the one thing this check configures at all, so — unlike an
         // incomplete NullRateCheck row, which is simply skipped client-side
         // — an empty list is rejected here rather than silently doing
-        // nothing. The flat-shaped-output-only restriction itself is
-        // enforced at the ExtractGroupStep/ApiCallStep(tree) branches in
-        // Validate() above, not here, since shape isn't known yet at this
-        // point in validation.
+        // nothing. The Api-tree-shape restriction itself is enforced at the
+        // ApiCallStep branch in Validate() above, not here, since shape
+        // isn't known yet at this point in validation (container mode has
+        // no such restriction — see RequiredFieldsCheck's own doc comment).
         foreach (var check in hardening.OfType<RequiredFieldsCheck>())
         {
             if (check.FieldNames.Count == 0)
