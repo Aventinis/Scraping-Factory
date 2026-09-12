@@ -103,7 +103,12 @@
     "hardeningNullRateFieldPlaceholder": "-- choose field --",
     "hardeningNullRateAddBtn": "+ Add field",
     "hardeningBaselineToggle": "Check for a drop vs. the last run",
-    "hardeningBaselineThresholdLabel": "Threshold (drop)"
+    "hardeningBaselineThresholdLabel": "Threshold (drop)",
+    "hardeningBlockingToggle": "Check for blocking (redirect, short response, block phrases)",
+    "hardeningBlockingMinBodyLengthLabel": "Min. response length (bytes)",
+    "hardeningBlockingMinBodyLengthPlaceholder": "optional",
+    "hardeningBlockingPhrasesLabel": "Block phrases (one per line)",
+    "hardeningBlockingPhrasesPlaceholder": "e.g. \"Access Denied\", \"Please verify you are human\""
   },
   "robots": {
     "checkFailed": "robots.txt could not be checked ({error}).",

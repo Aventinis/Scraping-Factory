@@ -154,10 +154,18 @@ let _state = {
   // #131's `baseline` mirrors `noResult`'s single-object shape (only one
   // "the" result count makes sense to track) plus its own
   // `dropThresholdPercent`, converted the same way `nullRate.threshold` is.
+  // Issue #132's `blocking` mirrors `baseline`'s single-object shape (only
+  // one blocking check ever makes sense) plus its own `minBodyLengthText`
+  // (raw number-input text, '' = signal disabled — kept as text rather
+  // than a number so a cleared input round-trips to '' instead of NaN/0)
+  // and `phrasesText` (one block phrase per line, same raw-textarea-text
+  // convention as `_state.additionalStartUrls`/API mode's own value-list
+  // inputs — parsed into an array only in buildHardeningConfig).
   hardening: {
     noResult: { enabled: false, severity: 'Warning' },
     nullRate: [],
     baseline: { enabled: false, severity: 'Warning', dropThresholdPercent: 20 },
+    blocking: { enabled: false, severity: 'Warning', minBodyLengthText: '', phrasesText: '' },
   },
   // Issue #43: one-time Fill test values for the /generate verification
   // trial run only — keyed by FillAction.environmentVariableName. Deliberately
@@ -412,6 +420,24 @@ function buildHardeningConfig(hardening) {
     const percent = Number.isFinite(hardening.baseline.dropThresholdPercent) ? hardening.baseline.dropThresholdPercent : 20;
     const dropThreshold = Math.min(100, Math.max(0, percent)) / 100;
     checks.push({ kind: 'baseline', severity: hardening.baseline.severity, dropThreshold });
+  }
+  // Issue #132: unlike baseline's percent, minBodyLengthText has no
+  // meaningful default to fall back to (there's no "at least one signal
+  // configured" requirement — the cross-origin-redirect signal is always
+  // active) — a blank/invalid input simply omits minBodyLength (signal
+  // disabled) rather than substituting a guessed number. phrasesText is
+  // one phrase per line (not comma-split like API mode's value list — a
+  // block phrase such as "Please verify you are human" could plausibly
+  // contain a comma of its own); blank lines are dropped.
+  if (hardening?.blocking?.enabled) {
+    const minBodyLength = parseInt(hardening.blocking.minBodyLengthText, 10);
+    const blockPhrases = String(hardening.blocking.phrasesText || '').split('\n').map(s => s.trim()).filter(s => s.length > 0);
+    checks.push({
+      kind: 'blocking',
+      severity: hardening.blocking.severity,
+      minBodyLength: Number.isFinite(minBodyLength) && minBodyLength > 0 ? minBodyLength : null,
+      blockPhrases,
+    });
   }
   return checks.length > 0 ? checks : null;
 }
@@ -1080,6 +1106,23 @@ function render() {
     const hardeningBaselineThresholdInput = document.getElementById('input-hardening-baseline-threshold');
     if (hardeningBaselineThresholdInput && document.activeElement !== hardeningBaselineThresholdInput) {
       hardeningBaselineThresholdInput.value = _state.hardening.baseline.dropThresholdPercent;
+    }
+
+    // Issue #132: opt-in blocking-detection check — same single-row
+    // toggle+severity shape as baseline above, plus an optional
+    // min-body-length number input and a one-phrase-per-line textarea.
+    const hardeningBlockingToggle = document.getElementById('toggle-hardening-blocking');
+    if (hardeningBlockingToggle) hardeningBlockingToggle.checked = _state.hardening.blocking.enabled;
+    document.getElementById('hardening-blocking-config')?.classList.toggle('hidden', !_state.hardening.blocking.enabled);
+    document.getElementById('btn-hardening-blocking-warning')?.classList.toggle('active', _state.hardening.blocking.severity === 'Warning');
+    document.getElementById('btn-hardening-blocking-error')?.classList.toggle('active', _state.hardening.blocking.severity === 'Error');
+    const hardeningBlockingMinBodyLengthInput = document.getElementById('input-hardening-blocking-min-body-length');
+    if (hardeningBlockingMinBodyLengthInput && document.activeElement !== hardeningBlockingMinBodyLengthInput) {
+      hardeningBlockingMinBodyLengthInput.value = _state.hardening.blocking.minBodyLengthText;
+    }
+    const hardeningBlockingPhrasesInput = document.getElementById('input-hardening-blocking-phrases');
+    if (hardeningBlockingPhrasesInput && document.activeElement !== hardeningBlockingPhrasesInput) {
+      hardeningBlockingPhrasesInput.value = _state.hardening.blocking.phrasesText;
     }
 
     if (_state.containerModalOpen) {
@@ -2237,6 +2280,33 @@ function wireEvents() {
           dropThresholdPercent: Number.isFinite(percent) ? Math.min(100, Math.max(0, percent)) : 20,
         },
       },
+    });
+  });
+
+  // Issue #132: opt-in script hardening — the blocking-detection check.
+  document.getElementById('toggle-hardening-blocking')?.addEventListener('change', (e) => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, blocking: { ..._state.hardening.blocking, enabled: e.target.checked } },
+    });
+  });
+  document.getElementById('btn-hardening-blocking-warning')?.addEventListener('click', () => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, blocking: { ..._state.hardening.blocking, severity: 'Warning' } },
+    });
+  });
+  document.getElementById('btn-hardening-blocking-error')?.addEventListener('click', () => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, blocking: { ..._state.hardening.blocking, severity: 'Error' } },
+    });
+  });
+  document.getElementById('input-hardening-blocking-min-body-length')?.addEventListener('change', (e) => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, blocking: { ..._state.hardening.blocking, minBodyLengthText: e.target.value } },
+    });
+  });
+  document.getElementById('input-hardening-blocking-phrases')?.addEventListener('change', (e) => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, blocking: { ..._state.hardening.blocking, phrasesText: e.target.value } },
     });
   });
 
