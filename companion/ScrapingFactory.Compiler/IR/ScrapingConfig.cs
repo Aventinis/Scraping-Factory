@@ -96,7 +96,7 @@ public sealed class ScrapingField
 {
     public required string Name { get; init; }
     public required string Selector { get; init; }
-    // null = Textinhalt; "href", "src" usw. für Attribut-Extraktion
+    // null = text content; "href", "src" etc. for attribute extraction
     public string? Attribute { get; init; }
 
     // See ExtractStep.FramePath — same meaning, just the wire-format mirror.

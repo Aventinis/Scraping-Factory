@@ -41,7 +41,7 @@ internal static class RangeFormat
     {
         RangeType.IsoWeek => DefaultIsoWeekFormat,
         RangeType.Date => DefaultDateFormat,
-        _ => throw new ArgumentOutOfRangeException(nameof(type), type, "RangeType.Number hat kein Format."),
+        _ => throw new ArgumentOutOfRangeException(nameof(type), type, "RangeType.Number has no format."),
     };
 
     // Null = valid (including the "no Format set → default applies" case).
@@ -57,15 +57,15 @@ internal static class RangeFormat
 
         var unknown = used.Except(required).ToList();
         if (unknown.Count > 0)
-            return $"unbekannte(r) Platzhalter {string.Join(", ", unknown.Select(t => $"{{{t}}}"))} (erlaubt: {string.Join(", ", required.Select(t => $"{{{t}}}"))}).";
+            return $"unknown placeholder(s) {string.Join(", ", unknown.Select(t => $"{{{t}}}"))} (allowed: {string.Join(", ", required.Select(t => $"{{{t}}}"))}).";
 
         var missing = required.Except(used).ToList();
         if (missing.Count > 0)
-            return $"muss {string.Join(" und ", missing.Select(t => $"{{{t}}}"))} enthalten.";
+            return $"must contain {string.Join(" and ", missing.Select(t => $"{{{t}}}"))}.";
 
         var duplicate = used.GroupBy(t => t).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
         if (duplicate.Count > 0)
-            return $"{string.Join(", ", duplicate.Select(t => $"{{{t}}}"))} darf nur einmal vorkommen.";
+            return $"{string.Join(", ", duplicate.Select(t => $"{{{t}}}"))} must not occur more than once.";
 
         return null;
     }

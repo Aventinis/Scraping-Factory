@@ -179,7 +179,7 @@ public class ProxyEndToEndTests
             var (exit, stderr) = await RunScriptAsync(scriptPath, workDir, new Dictionary<string, string>());
             Assert.Equal(78, exit);
             Assert.Contains("SF_TEST_PROXIES_UNSET", stderr);
-            Assert.Contains("Warnung", stderr);
+            Assert.Contains("Warning", stderr);
 
             // Connected directly (no proxy configured) — the real page
             // server's own content reaches the output, unlike the

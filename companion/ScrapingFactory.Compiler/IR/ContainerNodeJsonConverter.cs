@@ -40,7 +40,7 @@ public sealed class ContainerNodeJsonConverter : JsonConverter<ContainerNode>
                 JsonSerializer.Serialize(writer, field, options);
                 break;
             default:
-                throw new NotSupportedException($"Unbekannter ContainerNode-Typ: {value.GetType()}");
+                throw new NotSupportedException($"Unknown ContainerNode type: {value.GetType()}");
         }
     }
 }

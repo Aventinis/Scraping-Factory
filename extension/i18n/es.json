@@ -101,7 +101,9 @@
     "hardeningSeverityErrorTitle": "El script imprime un error y termina con su propio código (2), distinguible de un fallo (1).",
     "hardeningNullRateSectionLabel": "Comprobar valores vacíos por campo",
     "hardeningNullRateFieldPlaceholder": "-- elegir campo --",
-    "hardeningNullRateAddBtn": "+ Añadir campo"
+    "hardeningNullRateAddBtn": "+ Añadir campo",
+    "hardeningBaselineToggle": "Comprobar descenso frente a la última ejecución",
+    "hardeningBaselineThresholdLabel": "Umbral (descenso)"
   },
   "robots": {
     "checkFailed": "No se pudo comprobar el robots.txt ({error}).",

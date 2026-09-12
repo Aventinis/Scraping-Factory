@@ -29,6 +29,6 @@ internal static class PythonFieldTransformLiteral
         ReplaceTransform replace =>
             $$"""{"kind": "replace", "find": {{PythonLiteral.Str(replace.Find)}}, "replacement": {{PythonLiteral.Str(replace.Replacement)}}}""",
         ToNumberTransform => """{"kind": "toNumber"}""",
-        _ => throw new InvalidOperationException($"Unbekannter FieldTransform-Typ: {transform.GetType()}"),
+        _ => throw new InvalidOperationException($"Unknown FieldTransform type: {transform.GetType()}"),
     };
 }

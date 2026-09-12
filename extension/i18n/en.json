@@ -101,7 +101,9 @@
     "hardeningSeverityErrorTitle": "The script prints an error and exits with its own code (2), distinguishable from a crash (1).",
     "hardeningNullRateSectionLabel": "Check for empty values per field",
     "hardeningNullRateFieldPlaceholder": "-- choose field --",
-    "hardeningNullRateAddBtn": "+ Add field"
+    "hardeningNullRateAddBtn": "+ Add field",
+    "hardeningBaselineToggle": "Check for a drop vs. the last run",
+    "hardeningBaselineThresholdLabel": "Threshold (drop)"
   },
   "robots": {
     "checkFailed": "robots.txt could not be checked ({error}).",

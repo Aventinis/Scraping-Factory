@@ -522,7 +522,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("Ungültige Start-URL", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("Invalid start URL", doc.RootElement.GetProperty("error").GetString());
     }
 
     [Fact]
@@ -543,7 +543,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("Doppelte Feldnamen", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("Duplicate field names", doc.RootElement.GetProperty("error").GetString());
     }
 
     // Reproduces the exact wire format sent by the browser extension
@@ -590,6 +590,32 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
               "fields": [ { "name": "Titel", "selector": "h1", "attribute": null } ],
               "hardening": [
                 { "kind": "nullRate", "severity": "Warning", "fieldName": "Titel", "threshold": 0.3 }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+    }
+
+    // Issue #131: same "post the extension's actual raw wire shape" style as
+    // the NullRate test above — written for the exact same reason (Issue
+    // #130's own wire-key mismatch bug), so any future property-name drift
+    // between the extension and BaselineCheck.DropThreshold is caught here
+    // too, not just via a same-process C#-object round trip.
+    [Fact]
+    public async Task Generate_ExtensionStyleBaselineHardeningPayload_Returns200()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var payload = $$"""
+            {
+              "version": "1",
+              "url": "{{server.BaseUrl}}",
+              "fields": [ { "name": "Titel", "selector": "h1", "attribute": null } ],
+              "hardening": [
+                { "kind": "baseline", "severity": "Warning", "dropThreshold": 0.2 }
               ]
             }
             """;
@@ -692,7 +718,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("mutually exclusive", doc.RootElement.GetProperty("error").GetString());
     }
 
     // API-Mode (Issue #53): a third alternative to Fields/Groups, exclusive
@@ -727,7 +753,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("mutually exclusive", doc.RootElement.GetProperty("error").GetString());
     }
 
     [Fact]
@@ -748,7 +774,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("mutually exclusive", doc.RootElement.GetProperty("error").GetString());
     }
 
     // Issue #83: Api builds its own request URL from urlTemplate/parameters
@@ -771,7 +797,7 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("schließen sich aus", doc.RootElement.GetProperty("error").GetString());
+        Assert.Contains("mutually exclusive", doc.RootElement.GetProperty("error").GetString());
     }
 
     // End-to-end through the real HTTP endpoint: engine selection resolves

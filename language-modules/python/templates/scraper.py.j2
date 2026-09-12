@@ -20,6 +20,9 @@ import itertools
 {{~ if config.proxy.enabled || config.hardening.enabled ~}}
 import sys
 {{~ end ~}}
+{{~ if config.hardening.has_baseline ~}}
+import json
+{{~ end ~}}
 {{~ if config.change_detection.enabled ~}}
 import difflib
 {{~ if config.change_detection.notify_method == "Email" ~}}
@@ -72,7 +75,7 @@ PROXY_ENV_VAR = {{ config.proxy.env_var_literal }}
 _PROXY_ENV_VALUE = os.environ.get(PROXY_ENV_VAR)
 _PROXY_ENV_MISSING = _PROXY_ENV_VALUE is None
 if _PROXY_ENV_MISSING:
-    print(f"Warnung: Umgebungsvariable '{PROXY_ENV_VAR}' ist nicht gesetzt — es wird ohne Proxy verbunden.", file=sys.stderr)
+    print(f"Warning: environment variable '{PROXY_ENV_VAR}' is not set — connecting without a proxy.", file=sys.stderr)
 _PROXY_LIST = [p.strip() for p in (_PROXY_ENV_VALUE or "").split(",") if p.strip()]
 _proxy_cycle = itertools.cycle(_PROXY_LIST) if _PROXY_LIST else None
 
@@ -97,6 +100,29 @@ EXIT_HARDENING_FAILED = 2
 
 HARDENING = {{ config.hardening.checks_literal }}
 
+{{~ if config.hardening.has_baseline ~}}
+# Issue #131 (baseline check): a small sidecar file next to the script's own
+# output records the result count from the last run that passed cleanly
+# (see main()'s own "only write when not hardening_failed" call site) — a
+# bad run must never become the new normal for the next comparison. Missing/
+# corrupt sidecar (first run ever, or the file was deleted) is treated the
+# same as "no baseline yet", not an error.
+BASELINE_PATH = OUTPUT_PATH + ".hardening-baseline.json"
+
+
+def _read_baseline():
+    try:
+        with open(BASELINE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f).get("count")
+    except (FileNotFoundError, ValueError, OSError):
+        return None
+
+
+def _write_baseline(count):
+    with open(BASELINE_PATH, "w", encoding="utf-8") as f:
+        json.dump({"count": count}, f)
+{{~ end ~}}
+
 
 def _run_hardening_checks(data):
     has_error = False
@@ -104,12 +130,12 @@ def _run_hardening_checks(data):
     for check in HARDENING:
         if check["kind"] == "noResult":
             if result_count == 0:
-                message = "Es wurden keine Daten extrahiert — mindestens ein Selektor hat wahrscheinlich nichts gefunden."
+                message = "No data was extracted — at least one selector likely matched nothing."
                 if check["severity"] == "Error":
-                    print(f"FEHLER: {message}", file=sys.stderr)
+                    print(f"ERROR: {message}", file=sys.stderr)
                     has_error = True
                 else:
-                    print(f"WARNUNG: {message}", file=sys.stderr)
+                    print(f"WARNING: {message}", file=sys.stderr)
         elif check["kind"] == "nullRate":
             # Issue #130: catches a field whose selector quietly starts
             # matching the wrong thing (still returns a value, always empty)
@@ -120,12 +146,29 @@ def _run_hardening_checks(data):
             empty = sum(1 for row in data if not str(row.get(field, "")).strip())
             rate = empty / result_count
             if rate > check["threshold"]:
-                message = f"Feld '{field}': {rate:.0%} der Zeilen sind leer (Schwelle: {check['threshold']:.0%})."
+                message = f"Field '{field}': {rate:.0%} of rows are empty (threshold: {check['threshold']:.0%})."
                 if check["severity"] == "Error":
-                    print(f"FEHLER: {message}", file=sys.stderr)
+                    print(f"ERROR: {message}", file=sys.stderr)
                     has_error = True
                 else:
-                    print(f"WARNUNG: {message}", file=sys.stderr)
+                    print(f"WARNING: {message}", file=sys.stderr)
+        elif check["kind"] == "baseline":
+            # Issue #131: catches a gradual drop in result volume that
+            # neither noResult (only fires at exactly zero) nor nullRate
+            # (only watches one field) would ever trip — e.g. a paginated
+            # list quietly losing entries. No baseline yet (first run, or
+            # the sidecar file was deleted) simply has nothing to compare
+            # against.
+            baseline = _read_baseline()
+            if baseline:
+                drop = (baseline - result_count) / baseline
+                if drop > check["dropThreshold"]:
+                    message = f"Result count dropped from {baseline} to {result_count} (more than the {check['dropThreshold']:.0%} threshold)."
+                    if check["severity"] == "Error":
+                        print(f"ERROR: {message}", file=sys.stderr)
+                        has_error = True
+                    else:
+                        print(f"WARNING: {message}", file=sys.stderr)
     return has_error
 {{~ end ~}}
 
@@ -319,7 +362,12 @@ def main():
         _notify_change(previous_content, new_content)
 {{~ end ~}}
 {{~ if config.hardening.enabled ~}}
-    if _run_hardening_checks(data):
+    hardening_failed = _run_hardening_checks(data)
+{{~ if config.hardening.has_baseline ~}}
+    if not hardening_failed:
+        _write_baseline(len(data))
+{{~ end ~}}
+    if hardening_failed:
         sys.exit(EXIT_HARDENING_FAILED)
 {{~ end ~}}
 {{~ if config.proxy.enabled ~}}

@@ -19,7 +19,7 @@ public sealed class ExtractStep : ScrapingStep
     public required string Name { get; init; }
     public required string Selector { get; init; }
 
-    // null = Textinhalt; "href", "src" usw. für Attribut-Extraktion
+    // null = text content; "href", "src" etc. for attribute extraction
     public string? Attribute { get; init; }
 
     // Browser-engine only (Issue #42): an ordered list of CSS selectors

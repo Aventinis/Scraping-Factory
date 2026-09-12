@@ -140,17 +140,25 @@ let _state = {
   // Issue #129: opt-in script hardening checks — mode-independent like
   // engine/changeDetection/proxy above, persisted the same way (real
   // scrape-target configuration, not a per-generate toggle). Nested one
-  // level per check (`noResult`, plus `nullRate` since Issue #130) so the
-  // three still-planned checks (see CLAUDE.md) can each add their own key
-  // without restructuring this or buildHardeningConfig. `severity` is
-  // 'Warning' or 'Error', matching the wire format's own PascalCase enum
-  // values exactly (see buildHardeningConfig) — no client-side translation
-  // needed. Issue #130's `nullRate` is an array, not a single object like
-  // `noResult` — unlike NoResultCheck, more than one is expected (one per
-  // monitored field); each row is `{ fieldName, threshold, severity }`,
+  // level per check (`noResult`, `nullRate` since Issue #130, `baseline`
+  // since Issue #131) so the two still-planned checks (see CLAUDE.md) can
+  // each add their own key without restructuring this or
+  // buildHardeningConfig. `severity` is 'Warning' or 'Error', matching the
+  // wire format's own PascalCase enum values exactly (see
+  // buildHardeningConfig) — no client-side translation needed. Issue #130's
+  // `nullRate` is an array, not a single object like `noResult`/`baseline`
+  // — unlike NoResultCheck/BaselineCheck, more than one is expected (one
+  // per monitored field); each row is `{ fieldName, threshold, severity }`,
   // `threshold` a whole percent (0-100) for the UI — buildHardeningConfig
-  // divides by 100 to reach the wire format's 0.0-1.0 fraction.
-  hardening: { noResult: { enabled: false, severity: 'Warning' }, nullRate: [] },
+  // divides by 100 to reach the wire format's 0.0-1.0 fraction. Issue
+  // #131's `baseline` mirrors `noResult`'s single-object shape (only one
+  // "the" result count makes sense to track) plus its own
+  // `dropThresholdPercent`, converted the same way `nullRate.threshold` is.
+  hardening: {
+    noResult: { enabled: false, severity: 'Warning' },
+    nullRate: [],
+    baseline: { enabled: false, severity: 'Warning', dropThresholdPercent: 20 },
+  },
   // Issue #43: one-time Fill test values for the /generate verification
   // trial run only — keyed by FillAction.environmentVariableName. Deliberately
   // absent from persistState()'s chrome.storage.session write and from
@@ -394,6 +402,16 @@ function buildHardeningConfig(hardening) {
     const percent = Number.isFinite(row.threshold) ? row.threshold : 50;
     const threshold = Math.min(100, Math.max(0, percent)) / 100;
     checks.push({ kind: 'nullRate', severity: row.severity, fieldName, threshold });
+  }
+  // Issue #131: same percent-to-fraction conversion as nullRate above.
+  // Unlike nullRate, there's only ever one baseline row (a single object,
+  // not an array) — an unfinished/invalid dropThresholdPercent is clamped/
+  // defaulted rather than skipping the check entirely, since there's no
+  // "which field" completeness gate the way nullRate has.
+  if (hardening?.baseline?.enabled) {
+    const percent = Number.isFinite(hardening.baseline.dropThresholdPercent) ? hardening.baseline.dropThresholdPercent : 20;
+    const dropThreshold = Math.min(100, Math.max(0, percent)) / 100;
+    checks.push({ kind: 'baseline', severity: hardening.baseline.severity, dropThreshold });
   }
   return checks.length > 0 ? checks : null;
 }
@@ -1051,6 +1069,18 @@ function render() {
     document.getElementById('btn-hardening-no-result-warning')?.classList.toggle('active', _state.hardening.noResult.severity === 'Warning');
     document.getElementById('btn-hardening-no-result-error')?.classList.toggle('active', _state.hardening.noResult.severity === 'Error');
     renderHardeningNullRateList();
+
+    // Issue #131: opt-in baseline check — single-row toggle+severity,
+    // same shape as noResult above (unlike nullRate's dynamic list).
+    const hardeningBaselineToggle = document.getElementById('toggle-hardening-baseline');
+    if (hardeningBaselineToggle) hardeningBaselineToggle.checked = _state.hardening.baseline.enabled;
+    document.getElementById('hardening-baseline-config')?.classList.toggle('hidden', !_state.hardening.baseline.enabled);
+    document.getElementById('btn-hardening-baseline-warning')?.classList.toggle('active', _state.hardening.baseline.severity === 'Warning');
+    document.getElementById('btn-hardening-baseline-error')?.classList.toggle('active', _state.hardening.baseline.severity === 'Error');
+    const hardeningBaselineThresholdInput = document.getElementById('input-hardening-baseline-threshold');
+    if (hardeningBaselineThresholdInput && document.activeElement !== hardeningBaselineThresholdInput) {
+      hardeningBaselineThresholdInput.value = _state.hardening.baseline.dropThresholdPercent;
+    }
 
     if (_state.containerModalOpen) {
       show('modal-container-new');
@@ -2179,6 +2209,35 @@ function wireEvents() {
         },
       });
     }
+  });
+
+  // Issue #131: opt-in script hardening — the baseline-drop check.
+  document.getElementById('toggle-hardening-baseline')?.addEventListener('change', (e) => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, baseline: { ..._state.hardening.baseline, enabled: e.target.checked } },
+    });
+  });
+  document.getElementById('btn-hardening-baseline-warning')?.addEventListener('click', () => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, baseline: { ..._state.hardening.baseline, severity: 'Warning' } },
+    });
+  });
+  document.getElementById('btn-hardening-baseline-error')?.addEventListener('click', () => {
+    setState(_state.current, {
+      hardening: { ..._state.hardening, baseline: { ..._state.hardening.baseline, severity: 'Error' } },
+    });
+  });
+  document.getElementById('input-hardening-baseline-threshold')?.addEventListener('change', (e) => {
+    const percent = parseInt(e.target.value, 10);
+    setState(_state.current, {
+      hardening: {
+        ..._state.hardening,
+        baseline: {
+          ..._state.hardening.baseline,
+          dropThresholdPercent: Number.isFinite(percent) ? Math.min(100, Math.max(0, percent)) : 20,
+        },
+      },
+    });
   });
 
   document.getElementById('toggle-include-data-preview')?.addEventListener('change', (e) => {

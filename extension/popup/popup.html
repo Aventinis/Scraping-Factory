@@ -960,6 +960,30 @@
         </div>
         <div id="hardening-null-rate-list"></div>
         <button type="button" id="btn-add-null-rate-check" class="btn-secondary btn-tiny" data-i18n="idle.hardeningNullRateAddBtn"></button>
+        <!-- Issue #131: baseline-drop check — catches a gradual volume
+             drop (e.g. a broken "load more"/pagination selector) that
+             neither #129's "no result" nor #130's per-field null-rate
+             would ever trip, by comparing this run's own result count
+             against the last run's (tracked by the generated script
+             itself in a small sidecar file next to its own output, not
+             sent to/known by the companion at all). Single toggle+
+             severity+percent row, same shape as the "no result" check
+             above (unlike #130's dynamic per-field list). -->
+        <label class="output-settings-toggle" style="margin-top: 10px;">
+          <input type="checkbox" id="toggle-hardening-baseline" />
+          <span data-i18n="idle.hardeningBaselineToggle"></span>
+        </label>
+        <div id="hardening-baseline-config" class="hidden">
+          <div id="hardening-baseline-severity" class="mode-toggle" style="margin: 6px 0 8px;">
+            <div class="mode-toggle-thumb"></div>
+            <button id="btn-hardening-baseline-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning" data-i18n-title="idle.hardeningSeverityWarningTitle"></button>
+            <button id="btn-hardening-baseline-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError" data-i18n-title="idle.hardeningSeverityErrorTitle"></button>
+          </div>
+          <label class="browser-action-field-row">
+            <span data-i18n="idle.hardeningBaselineThresholdLabel"></span>
+            <input type="number" min="0" max="100" id="input-hardening-baseline-threshold" />%
+          </label>
+        </div>
       </div>
       <!-- Filenames last: a final naming step right before Export/Generate,
            below every other output-settings toggle. -->
