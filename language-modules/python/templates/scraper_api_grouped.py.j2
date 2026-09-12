@@ -31,7 +31,7 @@ import urllib.request
 {{~ end ~}}
 import requests
 import xml.etree.ElementTree as ET
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 URL_TEMPLATE = {{ url_template_literal }}
 METHOD = {{ method_literal }}
@@ -96,6 +96,14 @@ def _proxies_for_requests():
 EXIT_HARDENING_FAILED = 2
 
 HARDENING = {{ hardening.checks_literal }}
+
+# Issue #132 (blocking-detection check): a snapshot of each request's raw
+# response (final URL, body length, body text) is captured in scrape()
+# below, independently of the already-extracted data — a blocked response
+# can still produce a non-empty (but garbage) result that passes
+# noResult/nullRate. Populated even when no "blocking" check is configured;
+# the runtime cost of appending an already-in-memory string is negligible.
+_BLOCKING_RESPONSES = []
 
 {{~ if hardening.has_baseline ~}}
 # Issue #131 (baseline check): a small sidecar file next to the script's own
@@ -166,6 +174,27 @@ def _run_hardening_checks(root):
                 drop = (baseline - result_count) / baseline
                 if drop > check["dropThreshold"]:
                     message = f"Result count dropped from {baseline} to {result_count} (more than the {check['dropThreshold']:.0%} threshold)."
+                    if check["severity"] == "Error":
+                        print(f"ERROR: {message}", file=sys.stderr)
+                        has_error = True
+                    else:
+                        print(f"WARNING: {message}", file=sys.stderr)
+        elif check["kind"] == "blocking":
+            # Issue #132: three signals, all evaluated per captured response
+            # — a redirect to a different host (always checked), a body
+            # shorter than minBodyLength (skipped when None), and a
+            # case-insensitive match against blockPhrases.
+            for entry in _BLOCKING_RESPONSES:
+                reasons = []
+                if urlsplit(entry["url"]).netloc != urlsplit(entry["final_url"]).netloc:
+                    reasons.append(f"redirected to a different host ({entry['final_url']})")
+                if check["minBodyLength"] is not None and entry["length"] < check["minBodyLength"]:
+                    reasons.append(f"response body is only {entry['length']} bytes (minimum: {check['minBodyLength']})")
+                matched_phrases = [p for p in check["blockPhrases"] if p.lower() in entry["text"].lower()]
+                if matched_phrases:
+                    reasons.append(f"matched block phrase(s): {', '.join(matched_phrases)}")
+                if reasons:
+                    message = f"Possible blocking detected for {entry['url']}: {'; '.join(reasons)}."
                     if check["severity"] == "Error":
                         print(f"ERROR: {message}", file=sys.stderr)
                         has_error = True
@@ -576,6 +605,9 @@ def scrape():
             print(f"Skipped (404 Not Found): {url}")
             continue
         response.raise_for_status()
+{{~ if hardening.enabled ~}}
+        _BLOCKING_RESPONSES.append({"url": url, "final_url": response.url, "length": len(response.content), "text": response.text})
+{{~ end ~}}
         data = response.json()
         for node in GROUPS:
             for el in _extract_api_group(data, node):
