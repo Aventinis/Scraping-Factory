@@ -108,7 +108,9 @@
     "hardeningBlockingMinBodyLengthLabel": "Longitud mín. de respuesta (bytes)",
     "hardeningBlockingMinBodyLengthPlaceholder": "opcional",
     "hardeningBlockingPhrasesLabel": "Frases de bloqueo (una por línea)",
-    "hardeningBlockingPhrasesPlaceholder": "p. ej. \"Access Denied\", \"Por favor verifica que eres humano\""
+    "hardeningBlockingPhrasesPlaceholder": "p. ej. \"Access Denied\", \"Por favor verifica que eres humano\"",
+    "hardeningRequiredFieldsToggle": "Exigir campos (descartar filas incompletas)",
+    "hardeningRequiredFieldsAddBtn": "+ Añadir campo"
   },
   "robots": {
     "checkFailed": "No se pudo comprobar el robots.txt ({error}).",

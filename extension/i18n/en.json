@@ -108,7 +108,9 @@
     "hardeningBlockingMinBodyLengthLabel": "Min. response length (bytes)",
     "hardeningBlockingMinBodyLengthPlaceholder": "optional",
     "hardeningBlockingPhrasesLabel": "Block phrases (one per line)",
-    "hardeningBlockingPhrasesPlaceholder": "e.g. \"Access Denied\", \"Please verify you are human\""
+    "hardeningBlockingPhrasesPlaceholder": "e.g. \"Access Denied\", \"Please verify you are human\"",
+    "hardeningRequiredFieldsToggle": "Require fields (drop incomplete rows)",
+    "hardeningRequiredFieldsAddBtn": "+ Add field"
   },
   "robots": {
     "checkFailed": "robots.txt could not be checked ({error}).",

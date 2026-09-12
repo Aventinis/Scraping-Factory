@@ -368,6 +368,12 @@
     .hardening-null-rate-row .hardening-null-rate-threshold { width: 44px; font-size: 11px; padding: 3px 4px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
     .hardening-null-rate-row .hardening-null-rate-severity { flex: none; margin: 0; }
 
+    /* Issue #133: one row per already-chosen required field, plus a
+       separate add row (select + button) below the list. */
+    .hardening-required-field-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px; font-size: 11px; }
+    .hardening-required-field-add-row { display: flex; align-items: center; gap: 6px; }
+    .hardening-required-field-add-row select { flex: 1; min-width: 0; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+
     /* Preview toggle */
     .btn-toggle           { background: var(--color-surface-muted); color: var(--color-text-secondary); width: 100%; }
     .btn-toggle:hover     { background: var(--color-border); }
@@ -1009,6 +1015,35 @@
           <div class="output-settings-row" style="align-items: flex-start; margin-top: 6px;">
             <label for="input-hardening-blocking-phrases" data-i18n="idle.hardeningBlockingPhrasesLabel"></label>
             <textarea id="input-hardening-blocking-phrases" rows="2" data-i18n-placeholder="idle.hardeningBlockingPhrasesPlaceholder"></textarea>
+          </div>
+        </div>
+        <!-- Issue #133: required-fields check — a row missing a value for
+             any of these fields is dropped from the output entirely
+             (rather than written with a blank cell), e.g. for a NOT NULL
+             database column. Flat-shaped output only (no unambiguous "row"
+             in container/API-tree mode, see ScrapingPlanValidator) — the
+             whole section is hidden for those, mirroring how
+             #additional-urls-row is already hidden for API mode. Unlike
+             the null-rate list above (each row its own draft object), a
+             required field is already a complete, chosen name the moment
+             it's in the list — picking a *new* one uses one shared
+             select/button pair instead of a per-row field picker. -->
+        <div id="hardening-required-fields-section">
+          <label class="output-settings-toggle" style="margin-top: 10px;">
+            <input type="checkbox" id="toggle-hardening-required-fields" />
+            <span data-i18n="idle.hardeningRequiredFieldsToggle"></span>
+          </label>
+          <div id="hardening-required-fields-config" class="hidden">
+            <div id="hardening-required-fields-severity" class="mode-toggle" style="margin: 6px 0 8px;">
+              <div class="mode-toggle-thumb"></div>
+              <button id="btn-hardening-required-fields-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning" data-i18n-title="idle.hardeningSeverityWarningTitle"></button>
+              <button id="btn-hardening-required-fields-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError" data-i18n-title="idle.hardeningSeverityErrorTitle"></button>
+            </div>
+            <div id="hardening-required-fields-list"></div>
+            <div class="hardening-required-field-add-row">
+              <select id="select-hardening-required-field"></select>
+              <button type="button" id="btn-add-required-field" class="btn-secondary btn-tiny" data-i18n="idle.hardeningRequiredFieldsAddBtn"></button>
+            </div>
           </div>
         </div>
       </div>
