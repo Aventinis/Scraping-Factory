@@ -75,7 +75,7 @@ PROXY_ENV_VAR = {{ config.proxy.env_var_literal }}
 _PROXY_ENV_VALUE = os.environ.get(PROXY_ENV_VAR)
 _PROXY_ENV_MISSING = _PROXY_ENV_VALUE is None
 if _PROXY_ENV_MISSING:
-    print(f"Warnung: Umgebungsvariable '{PROXY_ENV_VAR}' ist nicht gesetzt — es wird ohne Proxy verbunden.", file=sys.stderr)
+    print(f"Warning: environment variable '{PROXY_ENV_VAR}' is not set — connecting without a proxy.", file=sys.stderr)
 _PROXY_LIST = [p.strip() for p in (_PROXY_ENV_VALUE or "").split(",") if p.strip()]
 _proxy_cycle = itertools.cycle(_PROXY_LIST) if _PROXY_LIST else None
 
@@ -130,12 +130,12 @@ def _run_hardening_checks(data):
     for check in HARDENING:
         if check["kind"] == "noResult":
             if result_count == 0:
-                message = "Es wurden keine Daten extrahiert — mindestens ein Selektor hat wahrscheinlich nichts gefunden."
+                message = "No data was extracted — at least one selector likely matched nothing."
                 if check["severity"] == "Error":
-                    print(f"FEHLER: {message}", file=sys.stderr)
+                    print(f"ERROR: {message}", file=sys.stderr)
                     has_error = True
                 else:
-                    print(f"WARNUNG: {message}", file=sys.stderr)
+                    print(f"WARNING: {message}", file=sys.stderr)
         elif check["kind"] == "nullRate":
             # Issue #130: catches a field whose selector quietly starts
             # matching the wrong thing (still returns a value, always empty)
@@ -146,12 +146,12 @@ def _run_hardening_checks(data):
             empty = sum(1 for row in data if not str(row.get(field, "")).strip())
             rate = empty / result_count
             if rate > check["threshold"]:
-                message = f"Feld '{field}': {rate:.0%} der Zeilen sind leer (Schwelle: {check['threshold']:.0%})."
+                message = f"Field '{field}': {rate:.0%} of rows are empty (threshold: {check['threshold']:.0%})."
                 if check["severity"] == "Error":
-                    print(f"FEHLER: {message}", file=sys.stderr)
+                    print(f"ERROR: {message}", file=sys.stderr)
                     has_error = True
                 else:
-                    print(f"WARNUNG: {message}", file=sys.stderr)
+                    print(f"WARNING: {message}", file=sys.stderr)
         elif check["kind"] == "baseline":
             # Issue #131: catches a gradual drop in result volume that
             # neither noResult (only fires at exactly zero) nor nullRate
@@ -163,12 +163,12 @@ def _run_hardening_checks(data):
             if baseline:
                 drop = (baseline - result_count) / baseline
                 if drop > check["dropThreshold"]:
-                    message = f"Ergebnis-Anzahl von {baseline} auf {result_count} gesunken (mehr als {check['dropThreshold']:.0%} Schwelle)."
+                    message = f"Result count dropped from {baseline} to {result_count} (more than the {check['dropThreshold']:.0%} threshold)."
                     if check["severity"] == "Error":
-                        print(f"FEHLER: {message}", file=sys.stderr)
+                        print(f"ERROR: {message}", file=sys.stderr)
                         has_error = True
                     else:
-                        print(f"WARNUNG: {message}", file=sys.stderr)
+                        print(f"WARNING: {message}", file=sys.stderr)
     return has_error
 {{~ end ~}}
 

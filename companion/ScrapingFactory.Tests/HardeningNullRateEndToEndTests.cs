@@ -76,7 +76,7 @@ public class HardeningNullRateEndToEndTests
             var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
 
             Assert.Equal(2, exit);
-            Assert.Contains("FEHLER", stderr);
+            Assert.Contains("ERROR", stderr);
             Assert.Contains("Preis", stderr);
 
             // The run still completed and wrote its output — hardening
@@ -174,7 +174,7 @@ public class HardeningNullRateEndToEndTests
             var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
 
             Assert.Equal(2, exit);
-            Assert.Contains("FEHLER", stderr);
+            Assert.Contains("ERROR", stderr);
             Assert.Contains("Preis", stderr);
         }
         finally

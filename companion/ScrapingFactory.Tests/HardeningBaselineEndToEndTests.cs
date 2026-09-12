@@ -116,7 +116,7 @@ public class HardeningBaselineEndToEndTests
             var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
 
             Assert.Equal(2, exit);
-            Assert.Contains("FEHLER", stderr);
+            Assert.Contains("ERROR", stderr);
             Assert.Contains("10", stderr);
             Assert.Contains("5", stderr);
 
@@ -201,7 +201,7 @@ public class HardeningBaselineEndToEndTests
             var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
 
             Assert.Equal(0, exit);
-            Assert.Contains("WARNUNG", stderr);
+            Assert.Contains("WARNING", stderr);
             Assert.Equal(5, ReadBaselineCount(baselinePath));
         }
         finally
