@@ -2143,4 +2143,144 @@ public class ScrapingPlanValidatorTests
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.True(result.Success, result.Error);
     }
+
+    // Issue #133
+    [Fact]
+    public void Validate_ValidRequiredFieldsCheck_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new RequiredFieldsCheck { Severity = HardeningSeverity.Error, FieldNames = ["Titel"] }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_DuplicateRequiredFieldsCheck_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening =
+            [
+                new RequiredFieldsCheck { Severity = HardeningSeverity.Warning, FieldNames = ["Titel"] },
+                new RequiredFieldsCheck { Severity = HardeningSeverity.Error, FieldNames = ["Preis"] },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("RequiredFieldsCheck", result.Error);
+        Assert.Contains("configured more than once", result.Error);
+    }
+
+    [Fact]
+    public void Validate_RequiredFieldsCheckWithEmptyFieldNames_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new RequiredFieldsCheck { Severity = HardeningSeverity.Warning, FieldNames = [] }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("needs at least one field name", result.Error);
+    }
+
+    [Fact]
+    public void Validate_RequiredFieldsCheckWithBlankFieldName_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new RequiredFieldsCheck { Severity = HardeningSeverity.Warning, FieldNames = ["Titel", "  "] }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("field names must not be blank", result.Error);
+    }
+
+    [Fact]
+    public void Validate_RequiredFieldsCheckWithDuplicateFieldName_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening = [new RequiredFieldsCheck { Severity = HardeningSeverity.Warning, FieldNames = ["Titel", "Titel"] }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("duplicate field name 'Titel'", result.Error);
+    }
+
+    // Container mode has no unambiguous "row" to drop — see
+    // RequiredFieldsCheck's own doc comment.
+    [Fact]
+    public void Validate_RequiredFieldsCheckWithContainerMode_Fails()
+    {
+        var roots = new List<GroupNode>
+        {
+            new() { Name = "Kategorie", Selector = "section", Repeating = true, Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }] },
+        };
+        var plan = new ScrapingPlan
+        {
+            Steps = GroupPlan(roots).Steps,
+            Hardening = [new RequiredFieldsCheck { Severity = HardeningSeverity.Warning, FieldNames = ["Titel"] }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("RequiredFields", result.Error);
+        Assert.Contains("container-mode", result.Error);
+    }
+
+    // Api-mode's flat shape has just as unambiguous a "row" as flat Fields
+    // mode, so it's allowed there — only Api's own tree shape is rejected
+    // (see the test below).
+    [Fact]
+    public void Validate_RequiredFieldsCheckWithApiFlatShape_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ApiPlan(ValidApiConfig()).Steps,
+            Engine = ScrapingEngine.Api,
+            Hardening = [new RequiredFieldsCheck { Severity = HardeningSeverity.Warning, FieldNames = ["Titel"] }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_RequiredFieldsCheckWithApiTreeShape_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ApiPlan(ValidApiGroupsConfig()).Steps,
+            Engine = ScrapingEngine.Api,
+            Hardening = [new RequiredFieldsCheck { Severity = HardeningSeverity.Warning, FieldNames = ["Titel"] }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("RequiredFields", result.Error);
+        Assert.Contains("tree-shaped", result.Error);
+    }
+
+    [Fact]
+    public void Validate_AllFiveHardeningChecksTogether_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Hardening =
+            [
+                new NoResultCheck { Severity = HardeningSeverity.Error },
+                new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "Preis", Threshold = 0.3 },
+                new BaselineCheck { Severity = HardeningSeverity.Warning, DropThreshold = 0.2 },
+                new BlockingCheck { Severity = HardeningSeverity.Error, MinBodyLength = 200, BlockPhrases = ["Access Denied"] },
+                new RequiredFieldsCheck { Severity = HardeningSeverity.Error, FieldNames = ["Titel"] },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
 }
