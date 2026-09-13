@@ -370,15 +370,15 @@ public static class ScrapingPlanValidator
         // EmbeddedJsonSource (Issue #136) is orthogonal to the flat-vs-tree
         // response shape below — it only changes where the JSON to run
         // ItemsPath/Fields/Groups against comes from, not its shape — but a
-        // page load has no request body/method beyond a plain GET, so it's
-        // rejected together with Body/a non-GET Method rather than silently
-        // ignored.
+        // page load is always a plain GET with no request body. Requiring
+        // GET here is also what transitively rejects Body: the check above
+        // already requires Method == "POST" whenever Body is set, so a
+        // config with both Body and EmbeddedJsonSource always fails on this
+        // GET requirement first, with no separate check needed.
         if (api.EmbeddedJsonSource is { } embeddedJsonSource)
         {
             if (api.Method != "GET")
                 return "EmbeddedJsonSource requires method 'GET'.";
-            if (api.Body is not null)
-                return "EmbeddedJsonSource and Body are mutually exclusive.";
             if (string.IsNullOrWhiteSpace(embeddedJsonSource.ScriptSelector))
                 return "EmbeddedJsonSource needs a ScriptSelector.";
         }

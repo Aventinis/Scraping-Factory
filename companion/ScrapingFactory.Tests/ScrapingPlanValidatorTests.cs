@@ -1695,6 +1695,101 @@ public class ScrapingPlanValidatorTests
         Assert.True(result.Success, result.Error);
     }
 
+    // ── API-Mode: embedded JSON source (Issue #136) ─────────────────────
+
+    [Fact]
+    public void Validate_ValidEmbeddedJsonSource_Succeeds()
+    {
+        var api = ValidApiConfig();
+        var valid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/products",
+            ItemsPath = api.ItemsPath,
+            Fields = api.Fields,
+            EmbeddedJsonSource = new EmbeddedJsonSource { ScriptSelector = "#__NEXT_DATA__" },
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success, result.Error);
+    }
+
+    // Same "orthogonal to response shape" claim as Body/Groups above — an
+    // embedded-JSON source works with the tree shape too, since it only
+    // changes where the JSON to run Groups against comes from.
+    [Fact]
+    public void Validate_ValidEmbeddedJsonSourceWithGroupsTree_Succeeds()
+    {
+        var tree = ValidApiGroupsConfig();
+        var valid = new ApiConfig
+        {
+            UrlTemplate = tree.UrlTemplate,
+            Groups = tree.Groups,
+            Parameters = tree.Parameters,
+            EmbeddedJsonSource = new EmbeddedJsonSource { ScriptSelector = "script[type='application/json']" },
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_EmbeddedJsonSourceWithBlankScriptSelector_Fails()
+    {
+        var api = ValidApiConfig();
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = api.UrlTemplate,
+            ItemsPath = api.ItemsPath,
+            Fields = api.Fields,
+            EmbeddedJsonSource = new EmbeddedJsonSource { ScriptSelector = " " },
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("ScriptSelector", result.Error);
+    }
+
+    [Fact]
+    public void Validate_EmbeddedJsonSourceWithPostMethod_Fails()
+    {
+        var api = ValidApiConfig();
+        var invalid = new ApiConfig
+        {
+            Method = "POST",
+            UrlTemplate = api.UrlTemplate,
+            ItemsPath = api.ItemsPath,
+            Fields = api.Fields,
+            EmbeddedJsonSource = new EmbeddedJsonSource { ScriptSelector = "#__NEXT_DATA__" },
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("EmbeddedJsonSource", result.Error);
+        Assert.Contains("GET", result.Error);
+    }
+
+    // A page load has no request body — since Body already requires
+    // Method == "POST" (see the check above ValidateApiConfig's
+    // EmbeddedJsonSource block), and EmbeddedJsonSource requires GET, the
+    // two can never coexist: this combination is rejected via the same
+    // "requires GET" error as a plain POST + EmbeddedJsonSource, with no
+    // dedicated "Body" message needed.
+    [Fact]
+    public void Validate_EmbeddedJsonSourceWithBody_Fails()
+    {
+        var api = ValidApiConfigWithPostBody();
+        var invalid = new ApiConfig
+        {
+            Method = "POST",
+            UrlTemplate = api.UrlTemplate,
+            ItemsPath = api.ItemsPath,
+            Fields = api.Fields,
+            Parameters = api.Parameters,
+            Body = api.Body,
+            EmbeddedJsonSource = new EmbeddedJsonSource { ScriptSelector = "#__NEXT_DATA__" },
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("EmbeddedJsonSource", result.Error);
+        Assert.Contains("GET", result.Error);
+    }
+
     // Issue #87
     [Fact]
     public void Validate_ValidEmailChangeDetection_Succeeds()
