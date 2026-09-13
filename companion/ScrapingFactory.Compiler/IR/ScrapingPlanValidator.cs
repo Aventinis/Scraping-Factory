@@ -367,6 +367,22 @@ public static class ScrapingPlanValidator
         if (api.Body is not null && api.Method != "POST")
             return "Body requires method 'POST'.";
 
+        // EmbeddedJsonSource (Issue #136) is orthogonal to the flat-vs-tree
+        // response shape below — it only changes where the JSON to run
+        // ItemsPath/Fields/Groups against comes from, not its shape — but a
+        // page load has no request body/method beyond a plain GET, so it's
+        // rejected together with Body/a non-GET Method rather than silently
+        // ignored.
+        if (api.EmbeddedJsonSource is { } embeddedJsonSource)
+        {
+            if (api.Method != "GET")
+                return "EmbeddedJsonSource requires method 'GET'.";
+            if (api.Body is not null)
+                return "EmbeddedJsonSource and Body are mutually exclusive.";
+            if (string.IsNullOrWhiteSpace(embeddedJsonSource.ScriptSelector))
+                return "EmbeddedJsonSource needs a ScriptSelector.";
+        }
+
         // Two mutually exclusive response shapes (Issue #54): the original
         // flat ItemsPath+Fields (exactly one repetition level), or the
         // recursive Groups tree (arbitrarily deep). Exactly one of the two
