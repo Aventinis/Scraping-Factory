@@ -77,6 +77,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         var changeDetection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection);
         var proxy = PythonProxyLiteral.BuildContext(plan.Proxy);
         var hardening = PythonHardeningLiteral.BuildContext(plan.Hardening);
+        var pagination = PythonPaginationLiteral.BuildContext(plan.Pagination);
 
         // Container-Mode: login/wait steps (if any) still run first — only
         // the extraction phase after them differs (group tree → XML instead
@@ -102,6 +103,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
                 change_detection = changeDetection,
                 proxy,
                 hardening,
+                pagination,
             });
         }
 
@@ -122,6 +124,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
             change_detection = changeDetection,
             proxy,
             hardening,
+            pagination,
         });
     }
 }
