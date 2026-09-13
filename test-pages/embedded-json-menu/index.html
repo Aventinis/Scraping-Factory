@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zur Goldenen Gabel — Speisekarte (Next.js-Stil)</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Georgia, 'Times New Roman', serif;
+      background: #faf8f3;
+      color: #2c2416;
+      padding: 40px 20px;
+    }
+
+    .restaurant-header {
+      text-align: center;
+      margin-bottom: 48px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid #c8a96e;
+    }
+    .restaurant-name {
+      font-size: 2.4rem;
+      letter-spacing: .08em;
+      color: #7a4f1a;
+      margin-bottom: 6px;
+    }
+
+    .plugin-hint {
+      max-width: 860px;
+      margin: 0 auto 36px;
+      background: #eef4fb;
+      border: 1px solid #9bb8d4;
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-family: system-ui, sans-serif;
+      font-size: 0.85rem;
+      color: #1e4068;
+      line-height: 1.6;
+    }
+    .plugin-hint strong { display: block; margin-bottom: 4px; }
+
+    .menu { max-width: 860px; margin: 0 auto; }
+    .menu-category { margin-bottom: 44px; }
+    .category-title {
+      font-size: 1.3rem;
+      text-transform: uppercase;
+      letter-spacing: .15em;
+      color: #7a4f1a;
+      border-bottom: 1px solid #c8a96e;
+      padding-bottom: 8px;
+      margin-bottom: 20px;
+    }
+    .menu-list { list-style: none; display: flex; flex-direction: column; gap: 18px; }
+    .menu-item {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      grid-template-rows: auto auto;
+      column-gap: 16px;
+      row-gap: 4px;
+      padding: 14px 0;
+      border-bottom: 1px dotted #d4c5a5;
+    }
+    .menu-item:last-child { border-bottom: none; }
+    .item-name { font-size: 1.05rem; font-weight: bold; color: #2c2416; grid-column: 1; grid-row: 1; }
+    .item-price { font-size: 1.05rem; font-weight: bold; color: #7a4f1a; grid-column: 2; grid-row: 1; white-space: nowrap; }
+    .item-description { font-size: 0.88rem; color: #6b5a40; font-style: italic; grid-column: 1; grid-row: 2; line-height: 1.5; }
+  </style>
+</head>
+<body>
+
+  <header class="restaurant-header">
+    <h1 class="restaurant-name" id="restaurant-name">…</h1>
+  </header>
+
+  <div class="plugin-hint">
+    <strong>Scraping Factory — Test-Seite (Issue #136, embedded JSON source)</strong>
+    Diese Seite lädt keine einzelne Karte per fetch()/XHR nach — die komplette Speisekarte steckt
+    bereits fertig im <code>&lt;script id="__NEXT_DATA__" type="application/json"&gt;</code>-Tag im
+    Quelltext (wie bei einer echten Next.js-Seite) und wird per kleinem Inline-Skript direkt aus
+    diesem Blob ins DOM geschrieben. Netzwerk-Aufzeichnung findet hier absichtlich nichts — in der
+    Extension stattdessen "In eingebetteten JSON-Daten der Seite suchen" verwenden und z. B. auf
+    einen Gerichtnamen oder Preis klicken.
+  </div>
+
+  <main class="menu" id="menu"><!-- wird per JS aus __NEXT_DATA__ befüllt --></main>
+
+  <!-- The embedded state blob — mirrors Next.js's own __NEXT_DATA__ convention
+       (props.pageProps.*) closely enough to exercise the exact same
+       scriptTagSelector id-based lookup ("#__NEXT_DATA__") the extension
+       prioritizes. -->
+  <script id="__NEXT_DATA__" type="application/json">
+{
+  "props": {
+    "pageProps": {
+      "restaurant": "Zur Goldenen Gabel",
+      "categories": [
+        {
+          "name": "Vorspeisen",
+          "items": [
+            { "name": "Hausgemachte Leberknödelsuppe", "price": 6.90, "description": "Kräftige Rinderbouillon mit zwei hausgemachten Leberknödeln und Schnittlauch" },
+            { "name": "Burrata mit Tomaten", "price": 9.50, "description": "Cremige Burrata auf Heirloom-Tomaten, Basilikumöl, Fleur de Sel" },
+            { "name": "Gebeizter Lachs", "price": 11.80, "description": "48 Stunden in Dill und Zitronenschale gebeizt, mit Crème fraîche" }
+          ]
+        },
+        {
+          "name": "Hauptgerichte",
+          "items": [
+            { "name": "Wiener Schnitzel vom Kalb", "price": 26.90, "description": "Klassisch paniert, mit Petersilienkartoffeln und Preiselbeeren" },
+            { "name": "Zwiebelrostbraten", "price": 28.50, "description": "200 g Roastbeef auf Röstzwiebeln, mit Spätzle und grünem Salat" },
+            { "name": "Gemüse-Risotto", "price": 18.50, "description": "Arborio-Reis, Parmesan, Saison-Gemüse, Trüffelöl" }
+          ]
+        },
+        {
+          "name": "Desserts",
+          "items": [
+            { "name": "Kaiserschmarrn", "price": 9.80, "description": "Flaumig gerissen, mit Zwetschgenröster und Puderzucker" },
+            { "name": "Crème brûlée", "price": 7.90, "description": "Klassische Vanillecreme mit karamellisierter Zuckerkruste" }
+          ]
+        }
+      ]
+    }
+  }
+}
+  </script>
+
+  <script>
+    // "Hydration": renders the visible menu purely from the __NEXT_DATA__
+    // blob above, exactly like a real Next.js page would — no fetch()/XHR
+    // ever happens, so this is the concrete case Issue #136 targets.
+    (function () {
+      var data = JSON.parse(document.getElementById('__NEXT_DATA__').textContent);
+      var props = data.props.pageProps;
+      document.getElementById('restaurant-name').textContent = props.restaurant;
+
+      var menu = document.getElementById('menu');
+      props.categories.forEach(function (category) {
+        var section = document.createElement('section');
+        section.className = 'menu-category';
+
+        var title = document.createElement('h2');
+        title.className = 'category-title';
+        title.textContent = category.name;
+        section.appendChild(title);
+
+        var list = document.createElement('ul');
+        list.className = 'menu-list';
+        category.items.forEach(function (item) {
+          var li = document.createElement('li');
+          li.className = 'menu-item';
+          li.innerHTML =
+            '<h3 class="item-name">' + item.name + '</h3>' +
+            '<span class="item-price">' + item.price.toFixed(2).replace('.', ',') + ' €</span>' +
+            '<p class="item-description">' + item.description + '</p>';
+          list.appendChild(li);
+        });
+        section.appendChild(list);
+        menu.appendChild(section);
+      });
+    })();
+  </script>
+
+</body>
+</html>
