@@ -74,6 +74,15 @@ public static class ScrapingPlanValidator
                 return Invalid(paginationError);
         }
 
+        // Issue #175: session persistence only means anything for the
+        // Browser engine — a Static/Api-mode request has no browser session
+        // to keep alive between runs. Same placement as ChangeDetection/
+        // Proxy/Hardening/Pagination above, checked before the
+        // browserOnlySteps gate below since PersistentSession is a
+        // plan-level flag, not a step type.
+        if (plan.PersistentSession && plan.Engine != ScrapingEngine.Browser)
+            return Invalid("PersistentSession requires Engine 'Browser'.");
+
         // WaitFor/Fill/Click/Scroll all need a real browser to mean anything —
         // the Static engine's codegen simply doesn't look at them, so
         // silently generating a script that just drops them would be

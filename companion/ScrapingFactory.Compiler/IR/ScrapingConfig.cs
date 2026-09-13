@@ -101,6 +101,17 @@ public sealed class ScrapingConfig
     // independently. Null is today's exact behavior (a single fetch per
     // start URL, no further pages followed).
     public PaginationConfig? Pagination { get; init; }
+
+    // Issue #175: opt-in persistent session/cookie handling, Browser-engine
+    // only (rejected server-side otherwise, same as WaitFor/Fill/Click/
+    // Scroll — see ScrapingPlanValidator). When true, the generated script
+    // saves its Playwright context's storage_state (cookies/localStorage) to
+    // a sidecar file next to its own output after every run, and — once
+    // that file exists from a previous run — skips the configured login-flow
+    // browser actions (WaitFor/Fill/Click/Scroll) entirely on the next run,
+    // going straight from Navigate to extraction instead. Null/false is
+    // today's exact behavior (a fresh, empty browser context every run).
+    public bool? PersistentSession { get; init; }
 }
 
 public sealed class ScrapingField
