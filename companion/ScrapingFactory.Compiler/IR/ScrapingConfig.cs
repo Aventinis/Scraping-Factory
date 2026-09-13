@@ -90,6 +90,28 @@ public sealed class ScrapingConfig
     // today's exact behavior (the generated script never re-checks its own
     // result, byte-for-byte the same script as before this existed).
     public List<HardeningCheck>? Hardening { get; init; }
+
+    // Issue #174: opt-in classic multi-page pagination (page 1, 2, 3, … via
+    // a "next" link or a page-number URL template) — see IR/PaginationConfig.cs.
+    // Applies to Fields/Groups alike; mutually exclusive with Api (enforced
+    // in Program.cs's /generate handler, same reasoning as AdditionalUrls
+    // above — Api mode never reads the page-scraping start URL at all, so
+    // this would silently do nothing there). Composes with AdditionalUrls:
+    // each start URL (Url + every entry in AdditionalUrls) paginates onward
+    // independently. Null is today's exact behavior (a single fetch per
+    // start URL, no further pages followed).
+    public PaginationConfig? Pagination { get; init; }
+
+    // Issue #175: opt-in persistent session/cookie handling, Browser-engine
+    // only (rejected server-side otherwise, same as WaitFor/Fill/Click/
+    // Scroll — see ScrapingPlanValidator). When true, the generated script
+    // saves its Playwright context's storage_state (cookies/localStorage) to
+    // a sidecar file next to its own output after every run, and — once
+    // that file exists from a previous run — skips the configured login-flow
+    // browser actions (WaitFor/Fill/Click/Scroll) entirely on the next run,
+    // going straight from Navigate to extraction instead. Null/false is
+    // today's exact behavior (a fresh, empty browser context every run).
+    public bool? PersistentSession { get; init; }
 }
 
 public sealed class ScrapingField

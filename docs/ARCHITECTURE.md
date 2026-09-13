@@ -306,6 +306,35 @@ covers.
 - Templates: `scraper_api.py.j2` and `scraper_api_grouped.py.j2` (`METHOD`/`BODY`
   constants, `_render_body`/`_coerce_body_value`)
 
+### 2.5a API mode — embedded JSON source (Issue #136)
+
+Extends API mode (§2.3) to sites that render their complete data into the
+initial page HTML (Next.js `__NEXT_DATA__`, Nuxt `__NUXT__`, a generic
+`<script type="application/json">` state blob) and hydrate the DOM from it
+client-side, with no separate, capturable network request ever happening —
+`content/api-capture.js`'s recorder has nothing to correlate against in this
+case. A second, recording-free candidate source (`findEmbeddedJsonCandidates`)
+scans `document.scripts` directly at click time and reuses §2.3's own
+`findValueInJson`/`siblingFields`/`deriveApiTreeSkeleton` unchanged — they're
+pure functions over already-parsed JSON, agnostic to where it came from. The
+companion fetches the page via `requests` and extracts the identified
+`<script>` tag via BeautifulSoup instead of parsing a live JSON response body;
+`ItemsPath`/`Fields`/`Groups` extraction is otherwise identical to an ordinary
+API-mode request (fetch-mechanism-agnostic by design).
+
+- Extension: `content/content-script.js` (`findEmbeddedJsonCandidates`,
+  `scriptTagSelector`), `popup/api-config-ui.js`
+  (`startEmbeddedJsonFieldSearch`, `confirmEmbeddedJsonFieldCandidate`,
+  `renderApiCandidates`'s `candidate.scriptSelector` branch), `popup/api-config.js`
+  (`buildApiConfig`'s `embeddedJsonSource` param)
+- Companion: `IR/ApiConfig.cs` (`ApiConfig.EmbeddedJsonSource`,
+  `EmbeddedJsonSource`), `ScrapingPlanValidator.cs` (`ValidateApiConfig`'s
+  `EmbeddedJsonSource` block), `Backends/Python/PythonApiConfigLiteral.cs`
+  (`RenderEmbeddedJsonSource`), `PythonApiCodeGenerator.cs`
+  (`embedded_json_source`/`embedded_json_source_literal`)
+- Templates: `scraper_api.py.j2` and `scraper_api_grouped.py.j2`
+  (`EMBEDDED_JSON_SOURCE` constant, `_extract_embedded_json`)
+
 ### 2.6 Browser engine, browser actions & login flows (Issues #41/#42/#43)
 
 Adds an optional Playwright-based rendering engine (real Chromium, executes the
@@ -585,6 +614,47 @@ from `urlTemplate`/`Parameters` and rejects the combination outright.
   parameter — it now emits `page.goto(url, ...)`, which is what makes
   per-URL looping possible for the Browser engine at all.
 
+### 2.19a Pagination (Issue #174)
+
+Classic multi-page pagination (page 1, 2, 3, … via a "next" link or a
+page-number URL template) — distinct from infinite-scroll/"load more" on a
+single page, already covered by the Scroll browser action (§2.6). Applies to
+flat and container mode, both engines; not applicable to API mode, which
+already has its own page-parameter mechanism via a Number `RangeSource`
+(§2.3). Composes with §2.19's own Multiple start URLs: each start URL
+paginates onward independently, entirely inside the generated script's own
+`scrape()` function, so `main()`'s existing multi-URL loop needs no changes.
+
+- Extension: `popup/popup.js` (`_state.pagination`, `buildPaginationConfig`
+  — mirrors `buildProxyConfig`'s own "incomplete draft = toggle-off"
+  convention — threaded through `buildScrapingConfig`/`buildConfigExport`),
+  `popup/popup.html` (`#pagination-config` inside the collapsible Settings
+  section, hidden for API mode via `#pagination-toggle-row`)
+- Companion: `IR/PaginationConfig.cs` (`NextLinkPagination`/
+  `PageNumberPagination`, `[JsonPolymorphic]` "kind" tag, both with a
+  `MaxPages` safety cap), `IR/ScrapingConfig.cs`/`IR/ScrapingPlan.cs`
+  (`Pagination`, mode-independent, carried through unchanged by
+  `IR/ScrapingPlanBuilder.cs` for the Fields/Groups branches only),
+  `IR/ScrapingPlanValidator.cs` (`MaxPages > 0`, a non-blank
+  `NextLinkSelector`, or — reusing the same `UrlTemplatePlaceholderPattern`
+  API mode's own `UrlTemplate` validation already uses — that
+  `PageNumberPagination.UrlTemplate` references both `{url}` and `{page}`),
+  `Program.cs` (the `Api`+`Pagination` `400` guard, same style as
+  `Api`+`AdditionalUrls`)
+- `Backends/Python/PythonPaginationLiteral.cs` (`BuildContext`, mirrors
+  `PythonProxyLiteral`/`PythonChangeDetectionLiteral` exactly — always emits
+  every field regardless of kind), wired into all four non-API codegen call
+  sites in `PythonCodeGenerator.cs`/`PythonPlaywrightCodeGenerator.cs`
+- Templates: `scraper.py.j2`, `playwright_scraper.py.j2`,
+  `scraper_grouped.py.j2`, `playwright_scraper_grouped.py.j2` — `scrape(url)`
+  restructured into a loop (page 1 unchanged; further pages via
+  `NEXT_LINK_SELECTOR`'s `href` or `PAGINATION_URL_TEMPLATE.format(url=url,
+  page=page_number)`, stopping on an empty page, `PAGINATION_MAX_PAGES`, or a
+  vanished next-link selector). The two Playwright templates reuse the same
+  browser/page session across paginated pages (`page.goto` for page 2+)
+  rather than relaunching; the full action sequence (login flow etc.) still
+  runs only once, for page 1.
+
 ### 2.20 Change detection + notification (Issue #87)
 
 Lets the generated script compare each run's output against the previous
@@ -694,6 +764,58 @@ already keeps credentials env-var-name-only.
   that round-robin rotation picks a different proxy per request across
   multiple start URLs.
 
+### 2.22 Persistent session/cookie handling (Issue #175)
+
+Browser-engine only (rejected server-side for Static/Api, same as
+WaitFor/Fill/Click/Scroll steps) — lets the generated script save its
+Playwright browser context's `storage_state` (cookies/localStorage) to a
+sidecar file next to its own output after every run, and, once that file
+exists from a previous run, skip the configured login-flow browser actions
+(WaitFor/Fill/Click/Scroll) entirely on the next run — Navigate always still
+runs. Avoids repeating a login flow on every scheduled/recurring run of the
+same script.
+
+- Extension: `popup/popup.js` (`_state.persistentSession`, a plain boolean —
+  unlike Proxy/Pagination, there are no sub-fields to draft — threaded
+  through `buildScrapingConfig`/`buildConfigExport` as `persistentSession`,
+  only sent when `true`), `popup/popup.html`
+  (`#persistent-session-toggle-row` inside `#browser-actions-section`,
+  visible only for Engine=Browser, placed alongside the login actions it
+  reuses rather than in the general "Settings" section)
+- Companion: `IR/ScrapingConfig.cs`/`IR/ScrapingPlan.cs`
+  (`PersistentSession`, carried through unchanged by
+  `IR/ScrapingPlanBuilder.cs` in all three shape branches),
+  `IR/ScrapingPlanValidator.cs` (`PersistentSession` requires Engine
+  `Browser`, same placement/style as the `browserOnlySteps` gate)
+- `Backends/Python/PythonPlaywrightCodeGenerator.cs` splits the rendered
+  action sequence into an always-run `navigate_action` fragment and a
+  separately re-indented `login_actions` fragment (WaitFor/Fill/Click/
+  Scroll) — needed only when `PersistentSession` is enabled, to nest the
+  latter inside the generated `if not _session_exists:` guard; `actions`
+  itself (used when disabled) is computed exactly as before, so a disabled
+  config's output stays byte-for-byte unchanged. Static-engine codegen
+  (`PythonCodeGenerator.cs`) and API mode are untouched — this is
+  Browser-engine-only end to end.
+- Templates: `playwright_scraper.py.j2`, `playwright_scraper_grouped.py.j2`
+  (the only two Browser-engine shell templates) gain a
+  `SESSION_STATE_PATH = OUTPUT_PATH + ".session-state.json"` constant (with
+  a code comment warning it contains live session cookies) and, in
+  `scrape(url)`: `browser.new_context(storage_state=SESSION_STATE_PATH if
+  _session_exists else None)` + `context.new_page()` in place of
+  `browser.new_page()`, the login-only actions wrapped in `if not
+  _session_exists:`, and `context.storage_state(path=SESSION_STATE_PATH)`
+  saved right before `browser.close()`. `/generate`'s own trial run needs no
+  special handling: it always runs in a fresh temp directory with no
+  pre-existing session file, so it naturally always takes the "first run, do
+  the full login" path.
+- Tests: `PersistentSessionEndToEndTests.cs` runs the real generated script
+  as a subprocess twice against a shared work directory (mirrors
+  `HardeningBaselineEndToEndTests`' "real two-run" pattern) — a
+  `LocalTestServer` serves a login form until a session cookie is present,
+  then protected content; the second run deliberately omits the login
+  credential env vars, so a broken skip-login guard would fail fast via
+  `EXIT_MISSING_ENV_VAR` (78) instead of succeeding.
+
 ---
 
 ## 3. Class & Module Relationship Model
@@ -717,6 +839,8 @@ classDiagram
         +bool? IncludePreview
         +ChangeDetectionConfig? ChangeDetection
         +ProxyConfig? Proxy
+        +PaginationConfig? Pagination
+        +bool? PersistentSession
     }
     class ScrapingPlan {
         +List~ScrapingStep~ Steps
@@ -726,6 +850,7 @@ classDiagram
         +string OutputFileBaseName
         +ChangeDetectionConfig? ChangeDetection
         +ProxyConfig? Proxy
+        +bool PersistentSession
     }
     class ScrapingStep { <<abstract>> }
     class NavigateStep { +List~string~ Urls }
@@ -896,8 +1021,9 @@ compile time anywhere.
 |---|---|---|---|
 | Flat field | `popup.js`: `addField()`, `buildScrapingConfig()`'s `fields.map(...)` | `{name, selector, attribute?, framePath?}` | `IR/ScrapingConfig.cs`: `ScrapingField` |
 | Container tree node | `container-tree.js`: `buildGroupNode`/`buildFieldNode`, `serializeGroupTree` | `{name,selector,repeating,children:[...],framePath?}` or `{name,selector,mode,attribute?,framePath?}` | `IR/ContainerNode.cs`: `GroupNode`/`DataFieldNode` (via `ContainerNodeJsonConverter`) |
-| API config (top level) | `api-config.js`: `buildApiConfig()` | `{urlTemplate, method?, parameters:[...], headers?, itemsPath+fields \| groups, body?}` | `IR/ApiConfig.cs`: `ApiConfig` |
+| API config (top level) | `api-config.js`: `buildApiConfig()` | `{urlTemplate, method?, parameters:[...], headers?, itemsPath+fields \| groups, body?, embeddedJsonSource?}` | `IR/ApiConfig.cs`: `ApiConfig` |
 | API parameter source | `api-config.js`: `buildStaticListSource`/`buildDiscoverySource`/`buildRangeSource` | `{kind:"staticList"\|"discovery"\|"range", ...}` | `IR/ApiConfig.cs`: `ApiParameterSource` (`[JsonPolymorphic]`) |
+| API embedded JSON source (Issue #136) | `api-config-ui.js`: `confirmEmbeddedJsonFieldCandidate()` (`{scriptSelector}`, stamped from `content-script.js`'s `scriptTagSelector`) | `{scriptSelector}` | `IR/ApiConfig.cs`: `EmbeddedJsonSource` (plain optional object, no converter) |
 | API response tree node | `api-config.js`: `buildApiGroupDraft`/`buildApiFieldDraft`, `serializeApiTree` | `{name,path,children:[...]}` or `{name,path}` | `IR/ApiConfig.cs`: `ApiGroup`/`ApiField` (via `ApiNodeJsonConverter`) |
 | API request body node | `api-config.js`: `jsonValueToBodyDraft`/`serializeBodyTree` | `{properties:{...}}` / `{items:[...]}` / `{kind,stringValue\|numberValue\|boolValue}` / `{parameterName, coerceTo?}` | `IR/ApiBodyNode.cs`: `ApiBodyObject`/`Array`/`Literal`/`Variable` (via `ApiBodyNodeJsonConverter`) |
 | Browser action | `popup.js`: `addBrowserAction`/`serializeBrowserActions` | `{kind:"waitFor"\|"fill"\|"click"\|"scroll", selector, ...}` | `IR/BrowserAction.cs`: `WaitForAction`/`FillAction`/`ClickAction`/`ScrollAction` (`[JsonPolymorphic]`) |
@@ -907,6 +1033,8 @@ compile time anywhere.
 | Additional start URLs | `popup.js`: `parseAdditionalUrls()` (splits textarea on newlines, drops blank lines) → `buildScrapingConfig`'s `additionalUrls` key | `{additionalUrls?: ["https://..."]}` | `IR/ScrapingConfig.cs`: `AdditionalUrls`; combined with `Url` into `IR/ScrapingStep.cs`: `NavigateStep.Urls` |
 | Change detection + notification | `popup.js`: `buildChangeDetectionConfig()` (returns `null` when disabled or a required field is blank) → `buildScrapingConfig`'s `changeDetection` key | `{changeDetection?: {notify:"Email"\|"Webhook", email?:{...EnvVar fields}, webhook?:{urlEnvVar}}}` | `IR/ChangeDetectionConfig.cs`: `ChangeDetectionConfig`/`EmailNotificationConfig`/`WebhookNotificationConfig` |
 | Proxy support | `popup.js`: `buildProxyConfig()` (returns `null` when disabled or the env-var-name field is blank) → `buildScrapingConfig`'s `proxy` key | `{proxy?: {environmentVariableName}}` | `IR/ProxyConfig.cs`: `ProxyConfig` |
+| Pagination | `popup.js`: `buildPaginationConfig()` (returns `null` when disabled or the kind-specific required field is blank) → `buildScrapingConfig`'s `pagination` key | `{pagination?: {kind:"nextLink", nextLinkSelector, maxPages} \| {kind:"pageNumber", urlTemplate, maxPages}}` | `IR/PaginationConfig.cs`: `NextLinkPagination`/`PageNumberPagination` (via `[JsonPolymorphic]`) |
+| Persistent session | `popup.js`: `_state.persistentSession` (plain boolean) → `buildScrapingConfig`'s `persistentSession` key, sent only when `true` | `{persistentSession?: true}` | `IR/ScrapingConfig.cs`: `bool? PersistentSession` |
 | Range format mini-template | `api-config.js`: `RANGE_FORMAT_PRESETS`, `compileRangeFormatPattern()` (client-side mirror) | `{format?: "{yyyy}-W{ww}"}` inside a `RangeSource` | `Backends/Python/RangeFormat.cs` (server-side, authoritative) |
 
 Two rows above are explicitly **hand-kept mirrors**, not generated from a shared

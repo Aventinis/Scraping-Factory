@@ -41,7 +41,7 @@ const {
   findUrlTemplateMatches, mergeValueListValues,
   variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
   detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase, parseAdditionalUrls,
-  buildChangeDetectionConfig, buildProxyConfig, buildHardeningConfig,
+  buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildHardeningConfig,
   collectFieldNames, addNullRateCheck, removeNullRateCheck, updateNullRateCheck, renderHardeningNullRateList,
   addRequiredField, removeRequiredField, renderHardeningRequiredFieldsList, computeInitialMonitoringSectionOpen,
   addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
@@ -421,6 +421,107 @@ describe('buildScrapingConfig (proxy, Issue #88)', () => {
       'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], null, proxy,
     );
     expect(apiResult.proxy).toEqual({ environmentVariableName: 'SF_PROXIES' });
+  });
+});
+
+// Issue #174
+describe('buildPaginationConfig', () => {
+  test('returns null when disabled', () => {
+    expect(buildPaginationConfig({ enabled: false, kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 50 })).toBeNull();
+  });
+
+  test('returns null for null/undefined input', () => {
+    expect(buildPaginationConfig(null)).toBeNull();
+    expect(buildPaginationConfig(undefined)).toBeNull();
+  });
+
+  test('returns null for nextLink kind when the selector is blank', () => {
+    expect(buildPaginationConfig({ enabled: true, kind: 'nextLink', nextLinkSelector: '', maxPages: 50 })).toBeNull();
+    expect(buildPaginationConfig({ enabled: true, kind: 'nextLink', nextLinkSelector: '   ', maxPages: 50 })).toBeNull();
+  });
+
+  test('returns null for pageNumber kind when the template is blank', () => {
+    expect(buildPaginationConfig({ enabled: true, kind: 'pageNumber', urlTemplate: '', maxPages: 50 })).toBeNull();
+  });
+
+  test('builds the nextLink wire shape with a trimmed selector', () => {
+    expect(buildPaginationConfig({ enabled: true, kind: 'nextLink', nextLinkSelector: '  a.next  ', maxPages: 20 })).toEqual({
+      kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 20,
+    });
+  });
+
+  test('builds the pageNumber wire shape with a trimmed template', () => {
+    expect(buildPaginationConfig({ enabled: true, kind: 'pageNumber', urlTemplate: '  {url}?page={page}  ', maxPages: 20 })).toEqual({
+      kind: 'pageNumber', urlTemplate: '{url}?page={page}', maxPages: 20,
+    });
+  });
+
+  test('clamps/defaults an invalid maxPages to 50', () => {
+    for (const invalid of [0, NaN, -5]) {
+      expect(buildPaginationConfig({ enabled: true, kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: invalid })).toEqual({
+        kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 50,
+      });
+    }
+  });
+
+  test('floors a fractional maxPages', () => {
+    expect(buildPaginationConfig({ enabled: true, kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 12.7 })).toEqual({
+      kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 12,
+    });
+  });
+});
+
+describe('buildScrapingConfig (pagination, Issue #174)', () => {
+  test('omits pagination entirely when disabled (the default)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.pagination).toBeUndefined();
+  });
+
+  test('includes pagination when enabled and configured', () => {
+    const pagination = { enabled: true, kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 30 };
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, null, pagination,
+    );
+    expect(result.pagination).toEqual({ kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 30 });
+  });
+
+  test('works the same way for container mode', () => {
+    const pagination = { enabled: true, kind: 'pageNumber', urlTemplate: '{url}?page={page}', maxPages: 10 };
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null, null, pagination,
+    );
+    expect(containerResult.pagination).toEqual({ kind: 'pageNumber', urlTemplate: '{url}?page={page}', maxPages: 10 });
+  });
+});
+
+// Issue #175
+describe('buildScrapingConfig (persistentSession, Issue #175)', () => {
+  test('omits persistentSession entirely when false (the default)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.persistentSession).toBeUndefined();
+  });
+
+  test('includes persistentSession: true when enabled', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Browser', [], false,
+      false, [], null, null, null, null, true,
+    );
+    expect(result.persistentSession).toBe(true);
+  });
+
+  test('works the same way for container and api modes', () => {
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Browser', [], false, false, [], null, null, null, null, true,
+    );
+    expect(containerResult.persistentSession).toBe(true);
+
+    const apiResult = buildScrapingConfig(
+      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Browser', [], false, false, [], null, null, null, null, true,
+    );
+    expect(apiResult.persistentSession).toBe(true);
   });
 });
 
@@ -2808,6 +2909,29 @@ describe('buildApiConfig', () => {
     });
     expect(config.parameters).toContainEqual({ name: 'category', source: { kind: 'staticList', values: ['a'] } });
   });
+
+  // ── Embedded JSON source (Issue #136) ─────────────────────────────────
+
+  test('includes embeddedJsonSource as-is when set', () => {
+    const config = buildApiConfig({
+      urlParts: { origin: 'https://example.com', pathSegments: [{ value: 'products', variable: false, name: '' }], queryParams: [] },
+      itemsPath: 'items', fields: [{ name: 'Titel', path: 'title' }],
+      parameterSources: {}, capturedHeaders: [], headerDecisions: {},
+      embeddedJsonSource: { scriptSelector: '#__NEXT_DATA__' },
+    });
+
+    expect(config.embeddedJsonSource).toEqual({ scriptSelector: '#__NEXT_DATA__' });
+  });
+
+  test('omits embeddedJsonSource entirely when not given (matches the optional wire field)', () => {
+    const config = buildApiConfig({
+      urlParts: { origin: 'https://example.com', pathSegments: [{ value: 'products', variable: false, name: '' }], queryParams: [] },
+      itemsPath: 'items', fields: [{ name: 'Titel', path: 'title' }],
+      parameterSources: {}, capturedHeaders: [], headerDecisions: {},
+    });
+
+    expect(config).not.toHaveProperty('embeddedJsonSource');
+  });
 });
 
 // ── API-Mode request-body tree pure helpers (Issue #55, Phase B4) ──────────
@@ -3416,7 +3540,10 @@ describe('SELECTION_UNAVAILABLE handling', () => {
       <section id="screen-selecting" class="hidden">
         <button id="btn-add-field"></button>
       </section>
-      <div id="error-toast" class="hidden"></div>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
     `;
 
     global.chrome = {
@@ -3441,7 +3568,7 @@ describe('SELECTION_UNAVAILABLE handling', () => {
     document.getElementById('btn-add-field').click(); // → STATES.SELECTING
   });
 
-  test('falls back to IDLE and shows a toast', () => {
+  test('falls back to IDLE and shows a toast (no content script — hard error, offers to report)', () => {
     capturedListener({ type: 'SELECTION_UNAVAILABLE', reason: 'no content script' });
 
     expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(true);
@@ -3450,6 +3577,30 @@ describe('SELECTION_UNAVAILABLE handling', () => {
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
     expect(toast.textContent).toContain('nicht möglich');
+    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
+  });
+
+  // Issue #137 follow-up: a scope selector that's retried and still not
+  // found (content-script.js's retryScopeSelector, tagged unavailableKind)
+  // can have entirely page-specific causes outside the extension's control
+  // (confirmed via a real report: a class only present while the element is
+  // actually hovered) — shown as a warning, not a hard error, and without
+  // "Report bug" so a page-specific, expected situation doesn't get
+  // reported as a plugin bug.
+  test('falls back to IDLE and shows a warning, not an error, for a retried-and-still-missing scope selector', () => {
+    capturedListener({
+      type: 'SELECTION_UNAVAILABLE',
+      reason: "Container-Selektor '.foo' findet kein Element auf dieser Seite.",
+      unavailableKind: 'scopeSelectorNotFound',
+    });
+
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
+
+    const toast = document.getElementById('error-toast');
+    expect(toast.classList.contains('hidden')).toBe(false);
+    expect(toast.classList.contains('toast-warn')).toBe(true);
+    expect(toast.textContent).not.toContain('nicht möglich'); // the softer, distinct wording, not the hard-error one
+    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(true);
   });
 });
 
@@ -5189,6 +5340,106 @@ describe('Engine + browser actions integration', () => {
   });
 });
 
+// ── Pagination: pick the "next page" link by clicking it (Issue #174 follow-up) ──
+// Same click-based selection flow browser actions' own pick button already
+// uses (see the "Engine + browser actions integration" tests above), just
+// writing into a single fixed field (pagination.nextLinkSelector) instead of
+// a per-index browserActions entry.
+
+describe('Pagination: pick next-link selector', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <label>
+          <input type="checkbox" id="toggle-pagination" />
+        </label>
+        <div id="pagination-config" class="hidden">
+          <div class="mode-toggle">
+            <div class="mode-toggle-thumb"></div>
+            <button id="btn-pagination-next-link" class="mode-btn active" type="button"></button>
+            <button id="btn-pagination-page-number" class="mode-btn" type="button"></button>
+          </div>
+          <div id="pagination-next-link-fields">
+            <input type="text" id="input-pagination-next-link-selector" />
+            <button id="btn-pick-pagination-next-link" type="button"></button>
+          </div>
+          <div id="pagination-page-number-fields" class="hidden">
+            <input type="text" id="input-pagination-url-template" />
+          </div>
+          <input type="number" id="input-pagination-max-pages" />
+        </div>
+        <button id="btn-generate" disabled></button>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <input type="checkbox" id="toggle-dom-view" />
+        <div id="dom-tree-wrapper" class="hidden">
+          <p id="dom-tree-loading"></p>
+          <p id="dom-tree-error" class="hidden"></p>
+          <p id="dom-tree-truncated" class="hidden"></p>
+          <ul id="dom-tree-root"></ul>
+        </div>
+        <button id="btn-cancel-selection"></button>
+      </section>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({}),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+  });
+
+  test('clicking the pick button starts a plain (unscoped) selection round', () => {
+    document.getElementById('btn-pick-pagination-next-link').click();
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'START_SELECTION' });
+    expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(true);
+  });
+
+  test('the picked selector is written straight into pagination.nextLinkSelector — no modal', async () => {
+    document.getElementById('btn-pick-pagination-next-link').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'a.next' });
+    await flushMicrotasks();
+
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('input-pagination-next-link-selector').value).toBe('a.next');
+  });
+
+  test('picking again overwrites a previously picked selector', async () => {
+    document.getElementById('btn-pick-pagination-next-link').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'a.next' });
+    await flushMicrotasks();
+
+    document.getElementById('btn-pick-pagination-next-link').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.pagination__next' });
+    await flushMicrotasks();
+
+    expect(document.getElementById('input-pagination-next-link-selector').value).toBe('.pagination__next');
+  });
+});
+
 // ── Konfiguration exportieren (btn-export-config) ────────────────────────────
 
 describe('downloadConfigExport (btn-export-config)', () => {
@@ -5774,6 +6025,10 @@ describe('Preview toggle (btn-preview)', () => {
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
     expect(toast.textContent).toContain('nicht möglich');
+    // Regression coverage: setLastError() alone doesn't reveal the button —
+    // showToast() needs its own context argument too (see the analogous
+    // SELECTION_UNAVAILABLE regression test).
+    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
   });
 
   test('adding a new field while preview is active stops it first', async () => {
@@ -6220,6 +6475,10 @@ describe('Network recording toggle (btn-api-capture)', () => {
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
     expect(toast.textContent).toContain('nicht möglich');
+    // Regression coverage: setLastError() alone doesn't reveal the button —
+    // showToast() needs its own context argument too (see the analogous
+    // SELECTION_UNAVAILABLE regression test).
+    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
   });
 });
 

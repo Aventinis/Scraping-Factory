@@ -50,6 +50,8 @@
     "apiCaptureSummary": "{count} request(s) recorded",
     "apiSearchTitle": "Then click a data point on the page — it will be searched for in the recording",
     "apiSearchBtn": "Find data point in recording",
+    "apiEmbeddedJsonSearchTitle": "For sites with no separate network request: click a data point and it will be searched for in the page's own <script> tags (e.g. __NEXT_DATA__)",
+    "apiEmbeddedJsonSearchBtn": "Search page's own JSON data",
     "apiEntriesTitle": "Shows every network request recorded so far, with URL, method and status",
     "apiEntriesShowBtn": "Show recorded requests ({count})",
     "apiEntriesHideBtn": "Hide recorded requests",
@@ -94,6 +96,15 @@
     "proxyToggle": "Use a proxy",
     "proxyEnvVarLabel": "Proxy list (env var)",
     "proxyHint": "The name of an environment variable holding a comma-separated list of proxy URLs (e.g. \"http://user:pass@host:port\"), not the addresses themselves — with more than one, the script rotates through them per request.",
+    "paginationToggle": "Enable pagination",
+    "paginationKindNextLink": "\"Next\" link",
+    "paginationKindPageNumber": "Page-number URL",
+    "paginationNextLinkSelectorLabel": "\"Next page\" link selector",
+    "paginationNextLinkSelectorPlaceholder": "e.g. a.next, .pagination__next",
+    "paginationUrlTemplateLabel": "Page URL template",
+    "paginationUrlTemplatePlaceholder": "e.g. {url}?page={page}",
+    "paginationUrlTemplateHint": "Must contain both {url} (the start page, unchanged) and {page} (the page number, starting at 2 — page 1 is always the start page as-is).",
+    "paginationMaxPagesLabel": "Max. pages (safety limit)",
     "monitoringSectionToggle": "Monitoring",
     "settingsSectionToggle": "Settings",
     "hardeningNoResultToggle": "Check for empty result",
@@ -135,9 +146,11 @@
     "siblingChip": "+ {name}",
     "selectAllChips": "Select all",
     "deselectAllChips": "Deselect all",
-    "useFieldNamePlaceholder": "Field name"
+    "useFieldNamePlaceholder": "Field name",
+    "embeddedJsonSourceLabel": "Found in page script: {selector}"
   },
   "apiConfig": {
+    "embeddedJsonSourceNote": "Sourced from embedded JSON in the page's own <script> tag ({selector}) — the URL below is the page to fetch, not a JSON API endpoint.",
     "urlPathLabel": "URL — Path",
     "urlQueryLabel": "URL — Query parameters",
     "valueSourcesLabel": "Value sources",
@@ -265,6 +278,7 @@
     "configInvalid": "Invalid configuration: {message}",
     "generationError": "Error: {message}",
     "selectionUnavailable": "Element selection isn't possible on this page.",
+    "scopeSelectorNotFound": "The selected reference point could no longer be found — the page changed in the meantime (e.g. a hover or loading state). Please try again or pick a different starting point.",
     "clickOutsideScope": "Please select an element inside a container.",
     "previewUnavailable": "Preview isn't possible on this page.",
     "captureUnavailable": "Network recording isn't possible on this page.",
@@ -298,6 +312,8 @@
     "containerSelectorLabel": "Container (optional)",
     "loadMoreButtonSelectorLabel": "\"Load more\" button (optional)",
     "maxIterationsLabel": "Max. rounds",
-    "waitAfterMsLabel": "Wait time (ms)"
+    "waitAfterMsLabel": "Wait time (ms)",
+    "persistentSessionToggle": "Reuse session between runs",
+    "persistentSessionHint": "Saves cookies/login state after each run and skips the login actions above on the next run. Warning: the saved file contains live session cookies — treat it like a password and never share or commit it. If the session ever expires, the run simply fails; there is no automatic re-login."
   }
 }

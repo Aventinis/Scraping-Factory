@@ -50,6 +50,8 @@
     "apiCaptureSummary": "{count} Anfrage(n) aufgezeichnet",
     "apiSearchTitle": "Klicke danach einen Datenpunkt auf der Seite an — er wird in der Aufzeichnung gesucht",
     "apiSearchBtn": "Datenpunkt in Aufzeichnung suchen",
+    "apiEmbeddedJsonSearchTitle": "Für Seiten ohne eigene Netzwerk-Anfrage: Klicke einen Datenpunkt an — er wird in den <script>-Tags der Seite gesucht (z. B. __NEXT_DATA__)",
+    "apiEmbeddedJsonSearchBtn": "In eingebetteten JSON-Daten der Seite suchen",
     "apiEntriesTitle": "Zeigt alle bisher aufgezeichneten Netzwerkanfragen mit URL, Methode und Status",
     "apiEntriesShowBtn": "Aufgezeichnete Anfragen anzeigen ({count})",
     "apiEntriesHideBtn": "Aufgezeichnete Anfragen ausblenden",
@@ -94,6 +96,15 @@
     "proxyToggle": "Proxy verwenden",
     "proxyEnvVarLabel": "Proxy-Liste (Env-Var)",
     "proxyHint": "Der Name einer Umgebungsvariable mit einer durch Kommas getrennten Liste von Proxy-URLs (z. B. \"http://user:pass@host:port\"), nicht die Adressen selbst — bei mehreren Proxys wechselt das Skript bei jeder Anfrage reihum durch.",
+    "paginationToggle": "Pagination aktivieren",
+    "paginationKindNextLink": "\"Weiter\"-Link",
+    "paginationKindPageNumber": "Seiten-Nummer-URL",
+    "paginationNextLinkSelectorLabel": "Selektor für \"Nächste Seite\"-Link",
+    "paginationNextLinkSelectorPlaceholder": "z. B. a.next, .pagination__next",
+    "paginationUrlTemplateLabel": "Seiten-URL-Vorlage",
+    "paginationUrlTemplatePlaceholder": "z. B. {url}?page={page}",
+    "paginationUrlTemplateHint": "Muss sowohl {url} (die unveränderte Start-URL) als auch {page} (die Seitenzahl, beginnend bei 2 — Seite 1 ist immer die unveränderte Start-URL) enthalten.",
+    "paginationMaxPagesLabel": "Max. Seitenzahl (Sicherheitsgrenze)",
     "monitoringSectionToggle": "Überwachung",
     "settingsSectionToggle": "Einstellungen",
     "hardeningNoResultToggle": "Auf leeres Ergebnis prüfen",
@@ -135,9 +146,11 @@
     "siblingChip": "+ {name}",
     "selectAllChips": "Alle auswählen",
     "deselectAllChips": "Alle abwählen",
-    "useFieldNamePlaceholder": "Feldname"
+    "useFieldNamePlaceholder": "Feldname",
+    "embeddedJsonSourceLabel": "Gefunden in Seiten-Script: {selector}"
   },
   "apiConfig": {
+    "embeddedJsonSourceNote": "Stammt aus eingebettetem JSON im eigenen <script>-Tag der Seite ({selector}) — die URL unten ist die zu ladende Seite, kein JSON-API-Endpunkt.",
     "urlPathLabel": "URL — Pfad",
     "urlQueryLabel": "URL — Query-Parameter",
     "valueSourcesLabel": "Werte-Quellen",
@@ -265,6 +278,7 @@
     "configInvalid": "Konfiguration ungültig: {message}",
     "generationError": "Fehler: {message}",
     "selectionUnavailable": "Element-Auswahl auf dieser Seite nicht möglich.",
+    "scopeSelectorNotFound": "Der gewählte Bezugspunkt wurde nicht mehr gefunden — die Seite hat sich zwischenzeitlich verändert (z. B. Hover- oder Ladezustand). Bitte versuche es erneut oder wähle einen anderen Ausgangspunkt.",
     "clickOutsideScope": "Bitte ein Element innerhalb eines Containers auswählen.",
     "previewUnavailable": "Vorschau auf dieser Seite nicht möglich.",
     "captureUnavailable": "Netzwerk-Aufzeichnung auf dieser Seite nicht möglich.",
@@ -298,6 +312,8 @@
     "containerSelectorLabel": "Container (optional)",
     "loadMoreButtonSelectorLabel": "„Mehr laden“-Button (optional)",
     "maxIterationsLabel": "Max. Durchläufe",
-    "waitAfterMsLabel": "Wartezeit (ms)"
+    "waitAfterMsLabel": "Wartezeit (ms)",
+    "persistentSessionToggle": "Sitzung zwischen Läufen wiederverwenden",
+    "persistentSessionHint": "Speichert Cookies/Login-Status nach jedem Lauf und überspringt beim nächsten Mal die obigen Login-Aktionen. Achtung: Die gespeicherte Datei enthält echte Sitzungs-Cookies — wie ein Passwort behandeln, niemals teilen oder committen. Läuft die Sitzung ab, schlägt der Lauf einfach fehl; es gibt keinen automatischen erneuten Login."
   }
 }

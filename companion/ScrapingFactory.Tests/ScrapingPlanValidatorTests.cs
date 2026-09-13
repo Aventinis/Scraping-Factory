@@ -1695,6 +1695,101 @@ public class ScrapingPlanValidatorTests
         Assert.True(result.Success, result.Error);
     }
 
+    // ── API-Mode: embedded JSON source (Issue #136) ─────────────────────
+
+    [Fact]
+    public void Validate_ValidEmbeddedJsonSource_Succeeds()
+    {
+        var api = ValidApiConfig();
+        var valid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/products",
+            ItemsPath = api.ItemsPath,
+            Fields = api.Fields,
+            EmbeddedJsonSource = new EmbeddedJsonSource { ScriptSelector = "#__NEXT_DATA__" },
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success, result.Error);
+    }
+
+    // Same "orthogonal to response shape" claim as Body/Groups above — an
+    // embedded-JSON source works with the tree shape too, since it only
+    // changes where the JSON to run Groups against comes from.
+    [Fact]
+    public void Validate_ValidEmbeddedJsonSourceWithGroupsTree_Succeeds()
+    {
+        var tree = ValidApiGroupsConfig();
+        var valid = new ApiConfig
+        {
+            UrlTemplate = tree.UrlTemplate,
+            Groups = tree.Groups,
+            Parameters = tree.Parameters,
+            EmbeddedJsonSource = new EmbeddedJsonSource { ScriptSelector = "script[type='application/json']" },
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_EmbeddedJsonSourceWithBlankScriptSelector_Fails()
+    {
+        var api = ValidApiConfig();
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = api.UrlTemplate,
+            ItemsPath = api.ItemsPath,
+            Fields = api.Fields,
+            EmbeddedJsonSource = new EmbeddedJsonSource { ScriptSelector = " " },
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("ScriptSelector", result.Error);
+    }
+
+    [Fact]
+    public void Validate_EmbeddedJsonSourceWithPostMethod_Fails()
+    {
+        var api = ValidApiConfig();
+        var invalid = new ApiConfig
+        {
+            Method = "POST",
+            UrlTemplate = api.UrlTemplate,
+            ItemsPath = api.ItemsPath,
+            Fields = api.Fields,
+            EmbeddedJsonSource = new EmbeddedJsonSource { ScriptSelector = "#__NEXT_DATA__" },
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("EmbeddedJsonSource", result.Error);
+        Assert.Contains("GET", result.Error);
+    }
+
+    // A page load has no request body — since Body already requires
+    // Method == "POST" (see the check above ValidateApiConfig's
+    // EmbeddedJsonSource block), and EmbeddedJsonSource requires GET, the
+    // two can never coexist: this combination is rejected via the same
+    // "requires GET" error as a plain POST + EmbeddedJsonSource, with no
+    // dedicated "Body" message needed.
+    [Fact]
+    public void Validate_EmbeddedJsonSourceWithBody_Fails()
+    {
+        var api = ValidApiConfigWithPostBody();
+        var invalid = new ApiConfig
+        {
+            Method = "POST",
+            UrlTemplate = api.UrlTemplate,
+            ItemsPath = api.ItemsPath,
+            Fields = api.Fields,
+            Parameters = api.Parameters,
+            Body = api.Body,
+            EmbeddedJsonSource = new EmbeddedJsonSource { ScriptSelector = "#__NEXT_DATA__" },
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("EmbeddedJsonSource", result.Error);
+        Assert.Contains("GET", result.Error);
+    }
+
     // Issue #87
     [Fact]
     public void Validate_ValidEmailChangeDetection_Succeeds()
@@ -1865,6 +1960,123 @@ public class ScrapingPlanValidatorTests
     public void Validate_NoProxy_Succeeds()
     {
         var result = ScrapingPlanValidator.Validate(ValidPlan());
+        Assert.True(result.Success, result.Error);
+    }
+
+    // Issue #174
+    [Fact]
+    public void Validate_ValidNextLinkPagination_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Pagination = new NextLinkPagination { NextLinkSelector = "a.next" },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ValidPageNumberPagination_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Pagination = new PageNumberPagination { UrlTemplate = "{url}?page={page}" },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_NoPagination_Succeeds()
+    {
+        var result = ScrapingPlanValidator.Validate(ValidPlan());
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_PaginationWithZeroOrNegativeMaxPages_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Pagination = new NextLinkPagination { NextLinkSelector = "a.next", MaxPages = 0 },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("MaxPages", result.Error);
+    }
+
+    [Fact]
+    public void Validate_NextLinkPaginationWithBlankSelector_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Pagination = new NextLinkPagination { NextLinkSelector = " " },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("NextLinkSelector", result.Error);
+    }
+
+    [Fact]
+    public void Validate_PageNumberPaginationWithBlankUrlTemplate_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Pagination = new PageNumberPagination { UrlTemplate = " " },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("UrlTemplate", result.Error);
+    }
+
+    [Theory]
+    [InlineData("{url}")]
+    [InlineData("{page}")]
+    [InlineData("no placeholders at all")]
+    public void Validate_PageNumberPaginationMissingAPlaceholder_Fails(string urlTemplate)
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Pagination = new PageNumberPagination { UrlTemplate = urlTemplate },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("missing placeholder", result.Error);
+    }
+
+    // Issue #175
+    [Fact]
+    public void Validate_PersistentSessionWithBrowserEngine_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps, Engine = ScrapingEngine.Browser, PersistentSession = true,
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_PersistentSessionWithoutBrowserEngine_Fails()
+    {
+        var plan = new ScrapingPlan { Steps = ValidPlan().Steps, Engine = ScrapingEngine.Static, PersistentSession = true };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("PersistentSession", result.Error);
+        Assert.Contains("requires Engine 'Browser'", result.Error);
+    }
+
+    [Fact]
+    public void Validate_PersistentSessionDisabled_Succeeds()
+    {
+        var plan = new ScrapingPlan { Steps = ValidPlan().Steps, PersistentSession = false };
+        var result = ScrapingPlanValidator.Validate(plan);
         Assert.True(result.Success, result.Error);
     }
 

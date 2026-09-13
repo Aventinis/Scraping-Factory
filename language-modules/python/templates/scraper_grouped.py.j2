@@ -26,6 +26,11 @@ import json
 {{~ if hardening.enabled ~}}
 from urllib.parse import urlsplit
 {{~ end ~}}
+{{~ if pagination.enabled ~}}
+{{~ if pagination.kind == "nextLink" ~}}
+from urllib.parse import urljoin
+{{~ end ~}}
+{{~ end ~}}
 {{~ if change_detection.enabled ~}}
 import difflib
 {{~ if change_detection.notify_method == "Email" ~}}
@@ -47,6 +52,20 @@ URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"}
 
 OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else }}xml{{ end }}"
+
+{{~ if pagination.enabled ~}}
+# Issue #174 (pagination): follows either a "next page" link's href
+# (resolved against the current page's own URL) or a {page}-templated URL,
+# starting from a start URL as page 1, until a page yields no elements, this
+# safety cap is reached, or (next-link kind only) the selector no longer
+# matches on a page.
+PAGINATION_MAX_PAGES = {{ pagination.max_pages_literal }}
+{{~ if pagination.kind == "nextLink" ~}}
+PAGINATION_NEXT_LINK_SELECTOR = {{ pagination.next_link_selector_literal }}
+{{~ else ~}}
+PAGINATION_URL_TEMPLATE = {{ pagination.url_template_literal }}
+{{~ end ~}}
+{{~ end ~}}
 
 {{~ if change_detection.enabled ~}}
 # Issue #87 (change detection): every *_ENV_VAR below is an environment-
@@ -458,24 +477,48 @@ def _notify_change(old_content, new_content):
 
 
 def scrape(url):
-    response = requests.get(url, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
-    response.raise_for_status()
-{{~ if hardening.enabled ~}}
-    _BLOCKING_RESPONSES.append({"url": url, "final_url": response.url, "length": len(response.content), "text": response.text})
-{{~ end ~}}
-    # Use response.content (bytes) instead of response.text: requests guesses
-    # the encoding from the Content-Type header, defaulting to ISO-8859-1 when
-    # no charset is given — which mangles UTF-8 pages that only declare their
-    # charset via <meta charset>. BeautifulSoup detects that meta tag itself.
-    soup = BeautifulSoup(response.content, "html.parser")
-
     # Multiple top-level groups (e.g. "Vorspeisen" and "Suppen") are siblings
-    # in GROUPS, but XML needs exactly one root element — wrap them all in a
+    # in GROUPS, but XML needs exactly one root element — wrap them all
+    # (across every paginated page from this start URL, see below) in a
     # single <Ergebnis> element.
     root = ET.Element("Ergebnis")
-    for node in GROUPS:
-        for el in extract_group(soup, node):
+    page_number = 1
+    page_url = url
+    while page_url:
+        response = requests.get(page_url, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
+        response.raise_for_status()
+{{~ if hardening.enabled ~}}
+        _BLOCKING_RESPONSES.append({"url": page_url, "final_url": response.url, "length": len(response.content), "text": response.text})
+{{~ end ~}}
+        # Use response.content (bytes) instead of response.text: requests
+        # guesses the encoding from the Content-Type header, defaulting to
+        # ISO-8859-1 when no charset is given — which mangles UTF-8 pages
+        # that only declare their charset via <meta charset>. BeautifulSoup
+        # detects that meta tag itself.
+        soup = BeautifulSoup(response.content, "html.parser")
+
+        page_elements = []
+        for node in GROUPS:
+            page_elements.extend(extract_group(soup, node))
+        if not page_elements:
+            break
+        for el in page_elements:
             root.append(el)
+
+{{~ if pagination.enabled ~}}
+        if page_number >= PAGINATION_MAX_PAGES:
+            break
+        page_number += 1
+{{~ if pagination.kind == "nextLink" ~}}
+        next_tag = soup.select_one(PAGINATION_NEXT_LINK_SELECTOR)
+        next_href = next_tag.get("href") if next_tag else None
+        page_url = urljoin(page_url, next_href) if next_href else None
+{{~ else ~}}
+        page_url = PAGINATION_URL_TEMPLATE.format(url=url, page=page_number)
+{{~ end ~}}
+{{~ else ~}}
+        page_url = None
+{{~ end ~}}
     return root
 
 

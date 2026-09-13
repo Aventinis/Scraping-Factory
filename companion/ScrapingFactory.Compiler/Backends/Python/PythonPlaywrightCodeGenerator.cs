@@ -30,23 +30,25 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
 
         var navigate = plan.Steps.OfType<NavigateStep>().Single();
 
+        // Issue #83: the target URL is no longer baked in as a literal here
+        // — it comes from scrape()'s own `url` parameter at runtime, since
+        // the same action sequence now runs once per start URL. See
+        // playwright_navigate_step.py.j2.
+        var navigateFragment = navigateTemplate.Render(new { }).TrimEnd();
+
         var actionLines = plan.Steps
             .Select(step => step switch
             {
-                // Issue #83: the target URL is no longer baked in as a
-                // literal here — it comes from scrape()'s own `url`
-                // parameter at runtime, since the same action sequence now
-                // runs once per start URL. See playwright_navigate_step.py.j2.
-                NavigateStep => navigateTemplate.Render(new { }),
+                NavigateStep => navigateFragment,
                 WaitForStep s => waitTemplate.Render(new
                 {
                     step = new { selector = s.Selector, timeout_ms = s.TimeoutMs, frame_path = s.FramePath },
-                }),
+                }).TrimEnd(),
                 FillStep s => fillTemplate.Render(new
                 {
                     step = new { selector = s.Selector, env_var = s.EnvironmentVariableName, frame_path = s.FramePath },
-                }),
-                ClickStep s => clickTemplate.Render(new { step = new { selector = s.Selector, frame_path = s.FramePath } }),
+                }).TrimEnd(),
+                ClickStep s => clickTemplate.Render(new { step = new { selector = s.Selector, frame_path = s.FramePath } }).TrimEnd(),
                 ScrollStep s => scrollTemplate.Render(new
                 {
                     step = new
@@ -57,17 +59,31 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
                         wait_after_ms = s.WaitAfterMs,
                         frame_path = s.FramePath,
                     },
-                }),
+                }).TrimEnd(),
                 _ => null,
             })
             .Where(line => line is not null)
-            .Select(line => line!.TrimEnd());
+            .Select(line => line!)
+            .ToList();
 
         var actions = string.Join("\n", actionLines);
+
+        // Issue #175: the same fragments minus Navigate (always element 0 —
+        // ScrapingPlanBuilder always adds exactly one NavigateStep first),
+        // re-indented one level deeper — used only when PersistentSession is
+        // enabled, to nest inside the generated "if not _session_exists:"
+        // block that skips the login-only actions on a run reusing an
+        // already-saved session. `actions` itself is untouched, so a
+        // disabled config's output stays byte-for-byte what it was before
+        // this existed.
+        var loginActionsOnly = string.Join("\n", actionLines.Skip(1));
+        var loginActionsIndented = IndentLines(loginActionsOnly, "    ");
+
         // Issue #87/#88: change detection and proxy support also read env
         // vars at runtime (SMTP/webhook credentials, proxy URL list), same
-        // reason FillStep already needs `import os`.
-        var needsOsImport = plan.Steps.OfType<FillStep>().Any() || plan.ChangeDetection is not null || plan.Proxy is not null;
+        // reason FillStep already needs `import os`. Issue #175: persistent
+        // session checks os.path.exists(SESSION_STATE_PATH).
+        var needsOsImport = plan.Steps.OfType<FillStep>().Any() || plan.ChangeDetection is not null || plan.Proxy is not null || plan.PersistentSession;
         // A FillStep's credential or Proxy's URL list must come from an
         // environment variable that's actually set at runtime — both share
         // the `_require_env`/`EXIT_MISSING_ENV_VAR` helper (see the shell
@@ -77,6 +93,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         var changeDetection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection);
         var proxy = PythonProxyLiteral.BuildContext(plan.Proxy);
         var hardening = PythonHardeningLiteral.BuildContext(plan.Hardening);
+        var pagination = PythonPaginationLiteral.BuildContext(plan.Pagination);
 
         // Container-Mode: login/wait steps (if any) still run first — only
         // the extraction phase after them differs (group tree → XML instead
@@ -94,6 +111,10 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
                 groups_literal = groupsLiteral,
                 root_names = rootNames,
                 actions,
+                navigate_action = navigateFragment,
+                login_actions = loginActionsIndented,
+                has_login_actions = loginActionsOnly.Length > 0,
+                persistent_session_enabled = plan.PersistentSession,
                 needs_os_import = needsOsImport,
                 needs_exit_helper = needsExitHelper,
                 script_filename = plan.ScriptFileName,
@@ -102,6 +123,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
                 change_detection = changeDetection,
                 proxy,
                 hardening,
+                pagination,
             });
         }
 
@@ -115,13 +137,30 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
 
         return shellTemplate.Render(new
         {
-            urls = navigate.Urls, fields, actions, needs_os_import = needsOsImport,
+            urls = navigate.Urls, fields, actions,
+            navigate_action = navigateFragment,
+            login_actions = loginActionsIndented,
+            has_login_actions = loginActionsOnly.Length > 0,
+            persistent_session_enabled = plan.PersistentSession,
+            needs_os_import = needsOsImport,
             needs_exit_helper = needsExitHelper,
             script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
             output_is_json = plan.OutputFormat == OutputFormat.Json,
             change_detection = changeDetection,
             proxy,
             hardening,
+            pagination,
         });
     }
+
+    // Issue #175: re-indents every non-empty line of a rendered action
+    // block by `prefix` — needed because each playwright_*_step.py.j2
+    // fragment already hardcodes its own indentation for the "one level
+    // under sync_playwright()'s with-block" case; nesting the same fragment
+    // one level deeper inside "if not _session_exists:" requires shifting it
+    // over without re-rendering it differently.
+    private static string IndentLines(string block, string prefix) =>
+        block.Length == 0
+            ? block
+            : string.Join("\n", block.Split('\n').Select(line => line.Length == 0 ? line : prefix + line));
 }

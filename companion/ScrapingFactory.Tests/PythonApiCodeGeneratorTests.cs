@@ -634,4 +634,64 @@ public class PythonApiCodeGeneratorTests
         Assert.Contains("PROXY_ENV_VAR = 'SF_PROXIES'", script);
         Assert.Contains("requests.get(url, headers=headers, proxies=_proxies_for_requests(), timeout=10)", script);
     }
+
+    // ── Embedded JSON source (Issue #136) ────────────────────────────────
+
+    private static ApiConfig SampleApiWithEmbeddedJsonSource() => new()
+    {
+        UrlTemplate = "https://example.com/products",
+        ItemsPath = SampleApi().ItemsPath,
+        Fields = SampleApi().Fields,
+        EmbeddedJsonSource = new EmbeddedJsonSource { ScriptSelector = "#__NEXT_DATA__" },
+    };
+
+    [Fact]
+    public void Generate_EmbeddedJsonSource_ContainsBeautifulSoupImportAndSelector()
+    {
+        var script = _generator.Generate(PlanWith(SampleApiWithEmbeddedJsonSource()));
+
+        Assert.Contains("from bs4 import BeautifulSoup", script);
+        Assert.Contains("EMBEDDED_JSON_SOURCE = {\"scriptSelector\": '#__NEXT_DATA__'}", script);
+        Assert.Contains("def _extract_embedded_json(response):", script);
+        Assert.Contains("soup.select_one(EMBEDDED_JSON_SOURCE[\"scriptSelector\"])", script);
+    }
+
+    [Fact]
+    public void Generate_EmbeddedJsonSource_UsesExtractEmbeddedJsonInsteadOfResponseJson()
+    {
+        var script = _generator.Generate(PlanWith(SampleApiWithEmbeddedJsonSource()));
+
+        Assert.Contains("data = _extract_embedded_json(response)", script);
+        Assert.DoesNotContain("data = response.json()", script);
+    }
+
+    [Fact]
+    public void Generate_WithoutEmbeddedJsonSource_ConstantIsNone()
+    {
+        var script = _generator.Generate(PlanWith(SampleApi()));
+
+        Assert.Contains("EMBEDDED_JSON_SOURCE = None", script);
+        Assert.DoesNotContain("BeautifulSoup", script);
+        Assert.Contains("data = response.json()", script);
+    }
+
+    [Fact]
+    public void Generate_ApiConfigWithGroups_EmbeddedJsonSource_ContainsBeautifulSoupImportAndUsesHelper()
+    {
+        var grouped = SampleGroupedApi();
+        var withEmbeddedJsonSource = new ApiConfig
+        {
+            UrlTemplate = grouped.UrlTemplate,
+            Groups = grouped.Groups,
+            Parameters = grouped.Parameters,
+            EmbeddedJsonSource = new EmbeddedJsonSource { ScriptSelector = "script[type='application/json']" },
+        };
+
+        var script = _generator.Generate(PlanWith(withEmbeddedJsonSource));
+
+        Assert.Contains("from bs4 import BeautifulSoup", script);
+        Assert.Contains("def _extract_embedded_json(response):", script);
+        Assert.Contains("data = _extract_embedded_json(response)", script);
+        Assert.DoesNotContain("data = response.json()", script);
+    }
 }

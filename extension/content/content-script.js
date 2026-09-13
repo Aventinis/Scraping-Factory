@@ -382,6 +382,111 @@ function findApiCandidates(entries, targetText, scopePath = null) {
   return ranked.slice(0, MAX_API_CANDIDATES).map(({ isJsonContentType, matchCountInBody, ...candidate }) => candidate);
 }
 
+// Issue #136: identifies a <script> element with a CSS selector BeautifulSoup
+// can later re-resolve against the same page's raw HTML (select_one) — id
+// first (unique page-wide, and the actual convention state-blob frameworks
+// already use, e.g. "__NEXT_DATA__"), else a type attribute if it alone is
+// unique among every <script> tag on the page, else a full nth-child path
+// from the nearest unique ancestor down to this element. The nth-child
+// fallback works identically in soupsieve (BeautifulSoup's CSS engine) since
+// both implement the same CSS spec — not a browser-only trick.
+function scriptTagSelector(el) {
+  if (el.id) return `#${el.id}`;
+
+  const type = el.getAttribute('type');
+  if (type && document.querySelectorAll(`script[type="${type}"]`).length === 1) {
+    return `script[type="${type}"]`;
+  }
+
+  const segments = [];
+  let current = el;
+  while (current && current.parentElement) {
+    const parent = current.parentElement;
+    const index = Array.from(parent.children).indexOf(current) + 1;
+    segments.unshift(`${current.tagName.toLowerCase()}:nth-child(${index})`);
+    current = parent;
+  }
+  return segments.join(' > ');
+}
+
+// Issue #136: an alternative candidate source to findApiCandidates above,
+// for sites that render their complete data directly into the initial page
+// HTML (Next.js's __NEXT_DATA__, Nuxt's __NUXT__, a generic
+// <script type="application/json"> state blob, ...) and hydrate the DOM
+// from it client-side, with no separate, capturable network request ever
+// happening — the network recorder (api-capture.js) sees nothing to
+// correlate against. Scans document.scripts instead of capturedApiEntries
+// and reuses findValueInJson/siblingFields/deriveApiTreeSkeleton verbatim —
+// they're pure functions over already-parsed JSON, agnostic to where it
+// came from. Needs no recording toggle at all: it runs directly against the
+// live page at click time.
+//
+// scopePath/scriptSelector (optional, mirrors findApiCandidates' scopePath):
+// used when extending an already-confirmed embedded-JSON tree (adding a
+// nested group/field) — scriptSelector restricts the scan to the one
+// <script> tag the tree's own ApiConfig.EmbeddedJsonSource already commits
+// to (unlike a network entryId, there's no pool of interchangeable sources
+// here — every further match must come from that same tag), scopePath then
+// narrows further to the JSON path being extended, exactly like
+// findApiCandidates' own scopePath already does within one entry's body.
+function findEmbeddedJsonCandidates(targetText, scopePath = null, scriptSelector = null) {
+  const target = String(targetText ?? '').trim();
+  if (!target) return [];
+  const scopeTokens = scopePath ? pathTokens(scopePath) : [];
+
+  const scriptTags = scriptSelector
+    ? Array.from(document.querySelectorAll(scriptSelector))
+    : Array.from(document.querySelectorAll('script'));
+
+  const ranked = [];
+  scriptTags.forEach((tag) => {
+    const text = tag.textContent;
+    if (!text || !text.trim()) return;
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return; // an ordinary inline <script> with JS code, not a JSON blob
+    }
+    if (parsed === null || typeof parsed !== 'object') return; // a bare scalar has no repeating structure to extract
+
+    const matches = findValueInJson(parsed, target, []);
+    if (matches.length === 0) return;
+
+    const selector = scriptTagSelector(tag);
+    // Known state-blob conventions rank first — Next.js's __NEXT_DATA__,
+    // Nuxt's __NUXT_DATA__, or an explicit application/json type — over a
+    // generic "any <script> that happens to parse as JSON" fallback match.
+    const isKnownConvention = tag.id === '__NEXT_DATA__' || tag.id === '__NUXT_DATA__' ||
+      (tag.getAttribute('type') || '') === 'application/json';
+
+    matches.forEach(({ path, value }) => {
+      if (!pathStartsWithScope(path, scopeTokens)) return;
+
+      const derived = deriveItemsAndValuePath(path);
+      ranked.push({
+        scriptSelector: selector,
+        path,
+        value,
+        siblings: siblingFields(parsed, path),
+        itemsPath: derived ? derived.itemsPath : null,
+        valuePath: derived ? derived.valuePath : null,
+        treeSkeleton: deriveApiTreeSkeleton(path),
+        isKnownConvention,
+        matchCountInBody: matches.length,
+      });
+    });
+  });
+
+  ranked.sort((a, b) => {
+    if (a.isKnownConvention !== b.isKnownConvention) return a.isKnownConvention ? -1 : 1;
+    if (a.matchCountInBody !== b.matchCountInBody) return a.matchCountInBody - b.matchCountInBody;
+    return a.path.length - b.path.length;
+  });
+
+  return ranked.slice(0, MAX_API_CANDIDATES).map(({ isKnownConvention, matchCountInBody, ...candidate }) => candidate);
+}
+
 // Indices (into `tokens`) of every "[n]" array-index token, in order —
 // the shared boundary-finding step both deriveItemsAndValuePath (which
 // only ever needs the *last* one) and deriveApiTreeSkeleton (which needs
@@ -666,6 +771,7 @@ if (typeof module !== 'undefined') {
     matchFlatFields, matchGroupTree, computePreviewMatches,
     findValueInJson, siblingFields, siblingFieldsAt, findApiCandidates,
     deriveItemsAndValuePath, deriveApiTreeSkeleton,
+    scriptTagSelector, findEmbeddedJsonCandidates,
     parseRobotsTxt, evaluateRobotsTxt, checkRobotsTxt,
     findIframeSelectorForWindow, resolveFramePath, frameDepth,
   };
@@ -856,6 +962,18 @@ let pendingHoverTarget = null;
 // once-built selector behaves at scrape time.
 let scopeRootEls = null;
 
+// Issue #137: how long/often startSelection's scope-selector lookup retries
+// a miss before giving up — see retryScopeSelector's own doc comment.
+const SCOPE_SELECTOR_RETRY_INTERVAL_MS = 180;
+const SCOPE_SELECTOR_RETRY_TIMEOUT_MS = 1800;
+
+// Issue #137: incremented on every startSelection/stopSelection call —
+// retryScopeSelector captures the value current at the moment its retry
+// loop started and re-checks it on every tick, so a stray timer from an
+// already-superseded or explicitly cancelled (STOP_SELECTION) round can
+// never re-arm selection or send a stale SELECTION_UNAVAILABLE later.
+let selectionGeneration = 0;
+
 // Set for the duration of a selection round that must produce a selector
 // capable of matching more than once — see buildSelector's avoidId.
 let avoidIdInSelector = false;
@@ -873,6 +991,15 @@ let apiSearchActive = false;
 // today's whole-pool search — unrelated to scopeRootEls/isInScope above,
 // which scope *DOM* clickability, not the JSON search a click produces.
 let apiScopePathActive = null;
+
+// Issue #136: the embedded-JSON analogue of apiSearchActive/apiScopePathActive
+// above, set for the duration of a "search page's own JSON" selection round.
+// Orthogonal to apiSearchActive (never both at once, see startSelection): a
+// click still produces a CSS selector as usual, and additionally searches
+// document.scripts instead of capturedApiEntries.
+let embeddedJsonSearchActive = false;
+let embeddedJsonScopePathActive = null;
+let embeddedJsonScriptSelectorActive = null;
 
 function isInScope(element) {
   return !scopeRootEls || scopeRootEls.some(root => root.contains(element));
@@ -963,6 +1090,9 @@ function onClick(e) {
   const matchCount = countSelectorMatches(selector, clickScopeRoot);
   const wasApiSearch = apiSearchActive; // read before stopSelection() clears it
   const apiScopePathForSearch = apiScopePathActive; // read before stopSelection() clears it
+  const wasEmbeddedJsonSearch = embeddedJsonSearchActive; // read before stopSelection() clears it
+  const embeddedJsonScopePathForSearch = embeddedJsonScopePathActive; // read before stopSelection() clears it
+  const embeddedJsonScriptSelectorForSearch = embeddedJsonScriptSelectorActive; // read before stopSelection() clears it
   const clickedText = (target.textContent || '').trim();
   const clickedAttributes = collectElementAttributes(target);
   const clickedOwnText = collectOwnText(target);
@@ -1002,6 +1132,16 @@ function onClick(e) {
       log('MSG_OUT API_CANDIDATES', { target: clickedText, count: candidates.length });
       chrome.runtime.sendMessage({ type: 'API_CANDIDATES', target: clickedText, candidates });
     }
+
+    // Issue #136: embedded-JSON search — same idea as the API-mode search
+    // above, just against the page's own <script> tags instead of recorded
+    // network entries. Mutually exclusive with wasApiSearch in practice (see
+    // startSelection), but not asserted as such — no harm in both running.
+    if (wasEmbeddedJsonSearch) {
+      const candidates = findEmbeddedJsonCandidates(clickedText, embeddedJsonScopePathForSearch, embeddedJsonScriptSelectorForSearch);
+      log('MSG_OUT EMBEDDED_JSON_CANDIDATES', { target: clickedText, count: candidates.length });
+      chrome.runtime.sendMessage({ type: 'EMBEDDED_JSON_CANDIDATES', target: clickedText, candidates });
+    }
   });
 }
 
@@ -1016,27 +1156,105 @@ function onClick(e) {
 // scopeSelector — passed through to findApiCandidates so a click during
 // this round only searches within that scope. Only meaningful alongside
 // apiSearch; ignored otherwise.
-function startSelection(scopeSelector, avoidId, apiSearch, apiScopePath) {
-  log('SELECTION start', { scopeSelector, avoidId, apiSearch, apiScopePath });
+// embeddedJsonSearch/embeddedJsonScopePath/embeddedJsonScriptSelector
+// (optional, Issue #136): the same idea as apiSearch/apiScopePath above, for
+// a "search page's own JSON" round instead — embeddedJsonScriptSelector
+// additionally restricts findEmbeddedJsonCandidates to the one <script> tag
+// an already-confirmed tree's ApiConfig.EmbeddedJsonSource commits to (see
+// findEmbeddedJsonCandidates' own doc comment); absent for the initial,
+// whole-page search. Only meaningful alongside embeddedJsonSearch; ignored
+// otherwise. Mutually exclusive with apiSearch in practice (the popup only
+// ever starts one kind of search at a time), but nothing here enforces that.
+function startSelection(scopeSelector, avoidId, apiSearch, apiScopePath, embeddedJsonSearch, embeddedJsonScopePath, embeddedJsonScriptSelector) {
+  log('SELECTION start', { scopeSelector, avoidId, apiSearch, apiScopePath, embeddedJsonSearch, embeddedJsonScopePath, embeddedJsonScriptSelector });
+  const generation = ++selectionGeneration;
   avoidIdInSelector = !!avoidId;
   apiSearchActive = !!apiSearch;
   apiScopePathActive = apiSearch ? (apiScopePath || null) : null;
-  if (scopeSelector) {
-    // Issue #167: every matching instance, not just document.querySelector's
-    // implicit first one — see scopeRootEls' own doc comment for why.
+  embeddedJsonSearchActive = !!embeddedJsonSearch;
+  embeddedJsonScopePathActive = embeddedJsonSearch ? (embeddedJsonScopePath || null) : null;
+  embeddedJsonScriptSelectorActive = embeddedJsonSearch ? (embeddedJsonScriptSelector || null) : null;
+
+  if (!scopeSelector) {
+    scopeRootEls = null;
+    armSelection();
+    return;
+  }
+
+  // Issue #167: every matching instance, not just document.querySelector's
+  // implicit first one — see scopeRootEls' own doc comment for why.
+  const roots = Array.from(document.querySelectorAll(scopeSelector));
+  if (roots.length > 0) {
+    scopeRootEls = roots;
+    armSelection();
+    return;
+  }
+
+  // Issue #137: the very first lookup came back empty — instead of failing
+  // immediately, retry for a short window before giving up (see
+  // retryScopeSelector). The common case (element already present) never
+  // reaches this branch at all, so it stays perfectly synchronous/unchanged.
+  retryScopeSelector(scopeSelector, generation, Date.now() + SCOPE_SELECTOR_RETRY_TIMEOUT_MS);
+}
+
+// Issue #137: some pages server-render skeleton/placeholder markup first and
+// swap it for the real, differently-classed content once client-side JS
+// hydrates (confirmed on penny.de's offers page) — or use virtual-
+// scrolling/DOM-recycling that changes an element's classes/structure after
+// the fact. A scope selector that matched moments ago (when the parent
+// container was picked) can transiently stop matching an instant later,
+// purely because the page's own rendering caught up in between, not because
+// the selector is actually wrong. Polls every SCOPE_SELECTOR_RETRY_INTERVAL_MS
+// for up to SCOPE_SELECTOR_RETRY_TIMEOUT_MS total before finally giving up.
+//
+// Does not attempt to solve arbitrary virtual scrolling (an element that's
+// fundamentally never in the DOM unless scrolled into view stays out of
+// reach regardless of retry length) — this only closes the gap between "the
+// container was just confirmed" and "the very next click a moment later".
+//
+// generation guards against a stray, still-pending timer from an
+// already-superseded (a newer startSelection call) or cancelled
+// (stopSelection) round re-arming selection or sending a stale
+// SELECTION_UNAVAILABLE after the fact.
+function retryScopeSelector(scopeSelector, generation, deadline) {
+  setTimeout(() => {
+    if (generation !== selectionGeneration) return; // superseded or cancelled meanwhile
+
     const roots = Array.from(document.querySelectorAll(scopeSelector));
-    if (roots.length === 0) {
-      log('SELECTION scope not found', scopeSelector);
+    if (roots.length > 0) {
+      scopeRootEls = roots;
+      armSelection();
+      return;
+    }
+
+    if (Date.now() >= deadline) {
+      log('SELECTION scope not found (after retry)', scopeSelector);
       chrome.runtime.sendMessage({
         type: 'SELECTION_UNAVAILABLE',
         reason: `Container-Selektor '${scopeSelector}' findet kein Element auf dieser Seite.`,
+        // Issue #137 follow-up: distinguishes this specific "retried and
+        // still nothing" case from the other SELECTION_UNAVAILABLE sender
+        // (service-worker.js, when chrome.tabs.sendMessage itself fails —
+        // no content script running at all, e.g. a chrome:// page or a tab
+        // open since before the extension reloaded). Confirmed via a real
+        // report: a page can legitimately, repeatedly fail to resolve a
+        // scope selector for reasons entirely outside the extension's
+        // control — e.g. a class that's only present while the element is
+        // actually hovered, removed the instant the user's cursor leaves
+        // the page for the side panel to click "+ Datenfeld". That's not a
+        // plugin malfunction, so popup.js presents it as a softer warning
+        // (no "Report bug" button) instead of a hard error, unlike the
+        // "no content script at all" case, which stays a hard error.
+        unavailableKind: 'scopeSelectorNotFound',
       });
       return;
     }
-    scopeRootEls = roots;
-  } else {
-    scopeRootEls = null;
-  }
+
+    retryScopeSelector(scopeSelector, generation, deadline);
+  }, SCOPE_SELECTOR_RETRY_INTERVAL_MS);
+}
+
+function armSelection() {
   createOverlay();
   document.addEventListener('mouseover', onMouseOver);
   document.addEventListener('click', onClick, true);
@@ -1044,6 +1262,7 @@ function startSelection(scopeSelector, avoidId, apiSearch, apiScopePath) {
 
 function stopSelection() {
   log('SELECTION stop');
+  selectionGeneration++; // invalidate any in-flight retryScopeSelector timer
   document.removeEventListener('mouseover', onMouseOver);
   document.removeEventListener('click', onClick, true);
   removeOverlay();
@@ -1051,6 +1270,9 @@ function stopSelection() {
   avoidIdInSelector = false;
   apiSearchActive = false;
   apiScopePathActive = null;
+  embeddedJsonSearchActive = false;
+  embeddedJsonScopePathActive = null;
+  embeddedJsonScriptSelectorActive = null;
   if (hoverTimeoutId !== null) {
     clearTimeout(hoverTimeoutId);
     hoverTimeoutId = null;
@@ -1127,7 +1349,12 @@ function isTopFrame() {
 if (typeof chrome !== 'undefined' && chrome.runtime) {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     log('MSG_IN', message.type);
-    if (message.type === 'START_SELECTION') startSelection(message.scopeSelector, message.avoidId, message.apiSearch, message.apiScopePath);
+    if (message.type === 'START_SELECTION') {
+      startSelection(
+        message.scopeSelector, message.avoidId, message.apiSearch, message.apiScopePath,
+        message.embeddedJsonSearch, message.embeddedJsonScopePath, message.embeddedJsonScriptSelector,
+      );
+    }
     if (message.type === 'STOP_SELECTION')  stopSelection();
     if (message.type === 'ENABLE_DOM_VIEW' && isTopFrame()) enableDomView();
     if (message.type === 'DISABLE_DOM_VIEW' && isTopFrame()) disableDomView();

@@ -31,6 +31,10 @@ import json
 import urllib.request
 {{~ end ~}}
 {{~ end ~}}
+{{~ if embedded_json_source ~}}
+import json
+from bs4 import BeautifulSoup
+{{~ end ~}}
 import requests
 from urllib.parse import quote, urlsplit
 
@@ -41,6 +45,11 @@ ITEMS_PATH = {{ items_path_literal }}
 FIELDS = {{ fields_literal }}
 PARAMETERS = {{ parameters_literal }}
 HEADERS = {{ headers_literal }}
+# Issue #136 (embedded JSON source): None for an ordinary live API call. When
+# set, the "response body" to run ITEMS_PATH/FIELDS against comes from one
+# <script> tag's own text content within the fetched page's HTML instead of
+# the HTTP response body itself — see _extract_embedded_json below.
+EMBEDDED_JSON_SOURCE = {{ embedded_json_source_literal }}
 
 OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else }}csv{{ end }}"
 
@@ -478,6 +487,27 @@ def _render_body(node, combo):
     return None if kind == "Null" else node["value"]
 
 
+{{~ if embedded_json_source ~}}
+# Issue #136: for sites that render their complete data into the initial
+# page HTML and hydrate the DOM from it client-side (Next.js's
+# __NEXT_DATA__, Nuxt's __NUXT__, a generic <script type="application/json">
+# state blob, ...), no separate, capturable network request ever happens —
+# the JSON is parsed straight out of one <script> tag in the page itself
+# instead of out of response.json(). A missing tag or unparseable content is
+# a hard failure (unlike a 404 response combination, there's no "this
+# combination doesn't exist" fallback for a page that doesn't have the data
+# it was expected to).
+def _extract_embedded_json(response):
+    soup = BeautifulSoup(response.text, "html.parser")
+    script_tag = soup.select_one(EMBEDDED_JSON_SOURCE["scriptSelector"])
+    if script_tag is None or not script_tag.string:
+        raise RuntimeError(
+            f"No <script> tag matching selector '{EMBEDDED_JSON_SOURCE['scriptSelector']}' with JSON content was found on {response.url}."
+        )
+    return json.loads(script_tag.string)
+{{~ end ~}}
+
+
 def _extract_row(record, combo):
     row = dict(combo)
     for field in FIELDS:
@@ -586,7 +616,12 @@ def scrape():
 {{~ if hardening.enabled ~}}
         _BLOCKING_RESPONSES.append({"url": url, "final_url": response.url, "length": len(response.content), "text": response.text})
 {{~ end ~}}
-        for record in _resolve_items(response.json(), ITEMS_PATH):
+{{~ if embedded_json_source ~}}
+        data = _extract_embedded_json(response)
+{{~ else ~}}
+        data = response.json()
+{{~ end ~}}
+        for record in _resolve_items(data, ITEMS_PATH):
             rows.append(_extract_row(record, combo))
     return rows
 

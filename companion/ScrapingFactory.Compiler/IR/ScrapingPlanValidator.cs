@@ -64,6 +64,25 @@ public static class ScrapingPlanValidator
                 return Invalid(hardeningError);
         }
 
+        // Issue #174: mode-independent (Fields/Groups — ScrapingPlanBuilder
+        // never sets this for an Api-mode plan), same placement as
+        // ChangeDetection/Proxy/Hardening above.
+        if (plan.Pagination is { } pagination)
+        {
+            var paginationError = ValidatePagination(pagination);
+            if (paginationError is not null)
+                return Invalid(paginationError);
+        }
+
+        // Issue #175: session persistence only means anything for the
+        // Browser engine — a Static/Api-mode request has no browser session
+        // to keep alive between runs. Same placement as ChangeDetection/
+        // Proxy/Hardening/Pagination above, checked before the
+        // browserOnlySteps gate below since PersistentSession is a
+        // plan-level flag, not a step type.
+        if (plan.PersistentSession && plan.Engine != ScrapingEngine.Browser)
+            return Invalid("PersistentSession requires Engine 'Browser'.");
+
         // WaitFor/Fill/Click/Scroll all need a real browser to mean anything —
         // the Static engine's codegen simply doesn't look at them, so
         // silently generating a script that just drops them would be
@@ -367,6 +386,22 @@ public static class ScrapingPlanValidator
         if (api.Body is not null && api.Method != "POST")
             return "Body requires method 'POST'.";
 
+        // EmbeddedJsonSource (Issue #136) is orthogonal to the flat-vs-tree
+        // response shape below — it only changes where the JSON to run
+        // ItemsPath/Fields/Groups against comes from, not its shape — but a
+        // page load is always a plain GET with no request body. Requiring
+        // GET here is also what transitively rejects Body: the check above
+        // already requires Method == "POST" whenever Body is set, so a
+        // config with both Body and EmbeddedJsonSource always fails on this
+        // GET requirement first, with no separate check needed.
+        if (api.EmbeddedJsonSource is { } embeddedJsonSource)
+        {
+            if (api.Method != "GET")
+                return "EmbeddedJsonSource requires method 'GET'.";
+            if (string.IsNullOrWhiteSpace(embeddedJsonSource.ScriptSelector))
+                return "EmbeddedJsonSource needs a ScriptSelector.";
+        }
+
         // Two mutually exclusive response shapes (Issue #54): the original
         // flat ItemsPath+Fields (exactly one repetition level), or the
         // recursive Groups tree (arbitrarily deep). Exactly one of the two
@@ -624,6 +659,40 @@ public static class ScrapingPlanValidator
         EnvironmentVariableNamePattern.IsMatch(proxy.EnvironmentVariableName)
             ? null
             : $"Invalid environment variable name '{proxy.EnvironmentVariableName}' in Proxy.EnvironmentVariableName.";
+
+    // Issue #174: MaxPages is checked regardless of kind; the two kinds then
+    // each validate their own one required field. PageNumberPagination.
+    // UrlTemplate must reference both "{url}" and "{page}" — reused via the
+    // same UrlTemplatePlaceholderPattern API-mode's own UrlTemplate
+    // validation already uses above, just checked by presence rather than
+    // matched against a declared Parameters list (there's no equivalent
+    // concept here).
+    private static string? ValidatePagination(PaginationConfig pagination)
+    {
+        if (pagination.MaxPages <= 0)
+            return $"Pagination.MaxPages must be positive (was {pagination.MaxPages}).";
+
+        return pagination switch
+        {
+            NextLinkPagination nextLink => string.IsNullOrWhiteSpace(nextLink.NextLinkSelector)
+                ? "NextLinkPagination.NextLinkSelector must not be empty."
+                : null,
+            PageNumberPagination pageNumber => ValidatePageNumberUrlTemplate(pageNumber.UrlTemplate),
+            _ => throw new InvalidOperationException($"Unknown PaginationConfig type: {pagination.GetType()}"),
+        };
+    }
+
+    private static string? ValidatePageNumberUrlTemplate(string urlTemplate)
+    {
+        if (string.IsNullOrWhiteSpace(urlTemplate))
+            return "PageNumberPagination.UrlTemplate must not be empty.";
+
+        var placeholders = UrlTemplatePlaceholderPattern.Matches(urlTemplate).Select(match => match.Groups[1].Value).ToHashSet();
+        var missing = new[] { "url", "page" }.Where(token => !placeholders.Contains(token)).ToList();
+        return missing.Count > 0
+            ? $"PageNumberPagination.UrlTemplate is missing placeholder(s): {string.Join(", ", missing.Select(token => $"{{{token}}}"))}."
+            : null;
+    }
 
     // Issue #129/#130: every non-NullRate check kind (the concrete
     // HardeningCheck subtype, since there's no separate string "Kind"

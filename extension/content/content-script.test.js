@@ -3,6 +3,7 @@ const {
   matchFlatFields, matchGroupTree, computePreviewMatches,
   findValueInJson, siblingFields, siblingFieldsAt, findApiCandidates,
   deriveItemsAndValuePath, deriveApiTreeSkeleton,
+  scriptTagSelector, findEmbeddedJsonCandidates,
   findIframeSelectorForWindow, resolveFramePath, frameDepth,
 } = require('./content-script');
 
@@ -435,15 +436,92 @@ describe('scoped selection (START_SELECTION with scopeSelector)', () => {
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'ELEMENT_SELECTED' }));
   });
 
-  test('a scopeSelector matching nothing on the page sends SELECTION_UNAVAILABLE and does not arm selection', async () => {
-    capturedListener({ type: 'START_SELECTION', scopeSelector: '.does-not-exist' });
+  // Issue #137: a miss now retries for a short window (see
+  // retryScopeSelector) before finally giving up — advancing fake timers
+  // past the full retry window reproduces "never appears" and lets this
+  // test assert the eventual SELECTION_UNAVAILABLE without a real ~1.8s wait.
+  test('a scopeSelector matching nothing on the page sends SELECTION_UNAVAILABLE (after the retry window) and does not arm selection', () => {
+    jest.useFakeTimers();
+    try {
+      capturedListener({ type: 'START_SELECTION', scopeSelector: '.does-not-exist' });
 
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'SELECTION_UNAVAILABLE' }));
+      // Not sent immediately — a miss now retries first, see below.
+      expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'SELECTION_UNAVAILABLE' }));
 
-    chrome.runtime.sendMessage.mockClear();
-    document.querySelector('h3.item-name').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-    await null;
-    expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(2000); // past SCOPE_SELECTOR_RETRY_TIMEOUT_MS
+
+      // Issue #137 follow-up: tagged with unavailableKind so popup.js can
+      // tell this "retried and still nothing" case apart from the other
+      // SELECTION_UNAVAILABLE sender (service-worker.js, no content script
+      // at all) and present it as a softer warning instead of a hard error.
+      expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'SELECTION_UNAVAILABLE', unavailableKind: 'scopeSelectorNotFound',
+      }));
+
+      chrome.runtime.sendMessage.mockClear();
+      document.querySelector('h3.item-name').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  // Issue #137: the exact real-world scenario (penny.de's offers page —
+  // server-rendered skeleton tiles swapped for the real ones once
+  // client-side JS hydrates) — a selector missing on the very first lookup
+  // must not be a hard failure if the element shows up moments later.
+  describe('scope-selector retry (Issue #137)', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    test('retries a miss and arms selection once the element appears within the retry window', async () => {
+      document.body.innerHTML = '<div id="outside">Outside</div>'; // no .menu-category yet
+      capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
+
+      // Simulates the page hydrating/swapping in the real element mid-retry.
+      document.body.insertAdjacentHTML(
+        'beforeend',
+        '<section class="menu-category"><li class="menu-item"><h3 class="item-name">Suppe</h3></li></section>',
+      );
+      jest.advanceTimersByTime(300); // a couple of retry ticks — well within the window
+
+      expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'SELECTION_UNAVAILABLE' }));
+
+      document.querySelector('h3.item-name').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      await null;
+      expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'ELEMENT_SELECTED' }));
+    });
+
+    // A pending retry from a round the user already cancelled (or a newer
+    // START_SELECTION superseded) must never re-arm selection or send a
+    // stale SELECTION_UNAVAILABLE later — see selectionGeneration.
+    test('STOP_SELECTION cancels a pending retry — no stale SELECTION_UNAVAILABLE fires later', () => {
+      document.body.innerHTML = '<div id="outside">Outside</div>';
+      capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
+      capturedListener({ type: 'STOP_SELECTION' });
+
+      jest.advanceTimersByTime(2000); // past SCOPE_SELECTOR_RETRY_TIMEOUT_MS
+
+      expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'SELECTION_UNAVAILABLE' }));
+    });
+
+    // Same guard, exercised via a second START_SELECTION instead of an
+    // explicit STOP_SELECTION — the first round's own pending retry must
+    // not clobber the second, still-active round's state.
+    test('a second START_SELECTION supersedes a pending retry from the first', () => {
+      document.body.innerHTML = '<div id="outside">Outside</div>';
+      capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
+      capturedListener({ type: 'START_SELECTION' }); // unscoped — matches immediately, no retry
+
+      jest.advanceTimersByTime(2000);
+
+      expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'SELECTION_UNAVAILABLE' }));
+    });
   });
 
   test('no scopeSelector behaves like today — any element on the page is pickable', async () => {
@@ -1051,6 +1129,140 @@ describe('findApiCandidates', () => {
       const entries = [entry({ body: JSON.stringify(catalog) })];
       expect(findApiCandidates(entries, 'Smartphone X', null)).toHaveLength(2);
       expect(findApiCandidates(entries, 'Smartphone X')).toHaveLength(2);
+    });
+  });
+});
+
+describe('scriptTagSelector (Issue #136)', () => {
+  test('a script tag with an id returns #id', () => {
+    document.body.innerHTML = '<script id="__NEXT_DATA__" type="application/json">{}</script>';
+    const tag = document.getElementById('__NEXT_DATA__');
+    expect(scriptTagSelector(tag)).toBe('#__NEXT_DATA__');
+  });
+
+  test('a script tag with a type unique on the page returns script[type="..."]', () => {
+    document.body.innerHTML = '<script type="application/json">{}</script><script>var x = 1;</script>';
+    const tag = document.querySelector('script[type="application/json"]');
+    expect(scriptTagSelector(tag)).toBe('script[type="application/json"]');
+  });
+
+  test('falls back to a positional nth-child path when neither id nor a unique type is available', () => {
+    document.body.innerHTML = '<div><script type="application/json">{"a":1}</script><script type="application/json">{"b":2}</script></div>';
+    const [first, second] = document.querySelectorAll('script[type="application/json"]');
+    expect(scriptTagSelector(first)).not.toBe(scriptTagSelector(second));
+    // Resolvable back to the same element via querySelector.
+    expect(document.querySelector(scriptTagSelector(first))).toBe(first);
+    expect(document.querySelector(scriptTagSelector(second))).toBe(second);
+  });
+});
+
+describe('findEmbeddedJsonCandidates (Issue #136)', () => {
+  function setScripts(...blobs) {
+    document.body.innerHTML = blobs
+      .map(({ id, type, json } = {}) => {
+        const idAttr = id ? ` id="${id}"` : '';
+        const typeAttr = type ? ` type="${type}"` : '';
+        return `<script${idAttr}${typeAttr}>${json}</script>`;
+      })
+      .join('');
+  }
+
+  test('finds a candidate embedded in a __NEXT_DATA__-style script tag, including sibling suggestions', () => {
+    setScripts({ id: '__NEXT_DATA__', type: 'application/json', json: JSON.stringify({ props: { items: [{ name: 'Suppe', price: 3.5 }] } }) });
+    const candidates = findEmbeddedJsonCandidates('Suppe');
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({ scriptSelector: '#__NEXT_DATA__', path: 'props.items[0].name', value: 'Suppe' });
+    expect(candidates[0].siblings).toEqual([{ name: 'price', path: 'props.items[0].price', value: 3.5 }]);
+  });
+
+  test('attaches the derived itemsPath/valuePath and treeSkeleton, same as findApiCandidates', () => {
+    setScripts({ type: 'application/json', json: JSON.stringify({ categories: [{ subcategories: [{ products: [{ title: 'Suppe' }] }] }] }) });
+    const [candidate] = findEmbeddedJsonCandidates('Suppe');
+    expect(candidate.itemsPath).toBe('categories[0].subcategories[0].products');
+    expect(candidate.valuePath).toBe('title');
+    expect(candidate.treeSkeleton).toEqual([
+      { kind: 'group', path: 'categories' },
+      { kind: 'group', path: 'subcategories' },
+      { kind: 'group', path: 'products' },
+      { kind: 'field', path: 'title' },
+    ]);
+  });
+
+  test('skips a <script> tag whose content is not valid JSON (ordinary inline JS)', () => {
+    setScripts({ json: 'var x = "Suppe";' }, { type: 'application/json', json: JSON.stringify({ name: 'Suppe' }) });
+    const candidates = findEmbeddedJsonCandidates('Suppe');
+    expect(candidates).toHaveLength(1);
+  });
+
+  test('skips a <script> tag whose content is a bare JSON scalar (no repeating structure)', () => {
+    setScripts({ json: '"Suppe"' });
+    expect(findEmbeddedJsonCandidates('Suppe')).toEqual([]);
+  });
+
+  test('returns nothing when no script tag contains the target text', () => {
+    setScripts({ type: 'application/json', json: JSON.stringify({ name: 'Salat' }) });
+    expect(findEmbeddedJsonCandidates('Suppe')).toEqual([]);
+  });
+
+  test('returns nothing for an empty target', () => {
+    setScripts({ type: 'application/json', json: JSON.stringify({ name: 'Suppe' }) });
+    expect(findEmbeddedJsonCandidates('   ')).toEqual([]);
+  });
+
+  test('ranks a __NEXT_DATA__ id match above a same-value match in a script tag with no known convention', () => {
+    setScripts(
+      { json: JSON.stringify({ items: [{ x: 'Suppe' }] }) },
+      { id: '__NEXT_DATA__', json: JSON.stringify({ name: 'Suppe' }) },
+    );
+    const candidates = findEmbeddedJsonCandidates('Suppe');
+    expect(candidates[0].scriptSelector).toBe('#__NEXT_DATA__');
+  });
+
+  test('caps the number of returned candidates at MAX_API_CANDIDATES (20)', () => {
+    const items = Array.from({ length: 25 }, (_, i) => ({ name: 'Suppe', id: i }));
+    setScripts({ type: 'application/json', json: JSON.stringify({ items }) });
+    expect(findEmbeddedJsonCandidates('Suppe')).toHaveLength(20);
+  });
+
+  // scopePath (mirrors findApiCandidates' own Phase A3 scoping, used when
+  // extending an already-confirmed embedded-JSON tree with a nested group/
+  // field — see startEmbeddedJsonSearch/resolveApiGroupScopePath).
+  describe('scopePath', () => {
+    const catalog = {
+      categories: [
+        { name: 'Elektronik', subcategories: [{ name: 'Telefone', products: [{ title: 'Smartphone X' }] }] },
+        { name: 'Bücher', subcategories: [{ name: 'Romane', products: [{ title: 'Smartphone X' }] }] },
+      ],
+    };
+
+    test('excludes a match outside the given scope, keeping one inside it', () => {
+      setScripts({ type: 'application/json', json: JSON.stringify(catalog) });
+      const candidates = findEmbeddedJsonCandidates('Smartphone X', 'categories[0]');
+      expect(candidates).toHaveLength(1);
+      expect(candidates[0].path).toBe('categories[0].subcategories[0].products[0].title');
+    });
+
+    test('null/undefined scopePath reproduces the unscoped whole-page search', () => {
+      setScripts({ type: 'application/json', json: JSON.stringify(catalog) });
+      expect(findEmbeddedJsonCandidates('Smartphone X', null)).toHaveLength(2);
+      expect(findEmbeddedJsonCandidates('Smartphone X')).toHaveLength(2);
+    });
+  });
+
+  // scriptSelector (Issue #136): restricts the scan to the one <script> tag
+  // an already-confirmed tree's EmbeddedJsonSource commits to, instead of
+  // re-scanning every <script> tag on the page — unlike a network entryId
+  // (findApiCandidates has no equivalent restriction), there is exactly one
+  // valid source once EmbeddedJsonSource.ScriptSelector is fixed.
+  describe('scriptSelector', () => {
+    test('restricts the scan to the given script tag, ignoring a same-value match elsewhere', () => {
+      setScripts(
+        { id: 'other', type: 'application/json', json: JSON.stringify({ name: 'Suppe' }) },
+        { id: '__NEXT_DATA__', type: 'application/json', json: JSON.stringify({ name: 'Salat' }) },
+      );
+      expect(findEmbeddedJsonCandidates('Suppe', null, '#__NEXT_DATA__')).toEqual([]);
+      expect(findEmbeddedJsonCandidates('Salat', null, '#__NEXT_DATA__')).toHaveLength(1);
     });
   });
 });

@@ -42,6 +42,7 @@ const {
   renderApiConfigScreen, renderBodyTree,
   startApiCapture, stopApiCapture, toggleApiCapture,
   startApiFieldSearch, confirmApiFieldCandidate, loadInitialBodyTreeForCandidate, cancelApiConfig,
+  startEmbeddedJsonFieldSearch, confirmEmbeddedJsonFieldCandidate,
   startApiTreeFieldSearch, confirmApiTreeFieldCandidate,
   openApiGroupModal, confirmApiGroupModal, cancelApiGroupModal, setApiTreeNodeName,
   openApiFieldTransformsModal, confirmApiFieldTransformsModal, cancelApiFieldTransformsModal,
@@ -137,6 +138,22 @@ let _state = {
   // list, never a literal address — same environmentVariableName pattern as
   // FillAction/ChangeDetection (see buildProxyConfig).
   proxy: { enabled: false, envVar: '' },
+  // Issue #174: opt-in classic multi-page pagination — mode-independent
+  // like additionalStartUrls/changeDetection/proxy above (Fields/Groups
+  // only; hidden entirely for API mode, which already has its own page-
+  // parameter mechanism via a Number RangeSource), persisted the same way.
+  // kind is 'nextLink' (follow a "next page" link's href, extracted via
+  // nextLinkSelector) or 'pageNumber' (substitute {url}/{page} into
+  // urlTemplate) — see buildPaginationConfig. maxPages is a whole-number
+  // safety cap, always active regardless of kind.
+  pagination: { enabled: false, kind: 'nextLink', nextLinkSelector: '', urlTemplate: '', maxPages: 50 },
+  // Issue #175: opt-in persistent session/cookie handling — Browser-engine
+  // only, persisted the same way as proxy/pagination above (real
+  // scrape-target configuration, not a per-generate toggle). Unlike proxy/
+  // pagination, this has no sub-fields of its own (just an on/off switch —
+  // see buildScrapingConfig's "only send the key when true" handling), so
+  // it's a plain boolean rather than an { enabled, ... } object.
+  persistentSession: false,
   // Issue #129: opt-in script hardening checks — mode-independent like
   // engine/changeDetection/proxy above, persisted the same way (real
   // scrape-target configuration, not a per-generate toggle). Nested one
@@ -219,7 +236,7 @@ let _state = {
   // itself already gets). Written onto the resulting field/node once
   // confirmed (see confirmField/confirmExtendedField).
   pendingTransforms:   [],
-  selectionKind:       null,  // 'field' | 'container' | 'browserAction' | null — which kind the current SELECTING round is for
+  selectionKind:       null,  // 'field' | 'container' | 'browserAction' | 'pagination' | null — which kind the current SELECTING round is for
   pendingParentPath:   null,  // number[] | null — where the next inserted group-tree node goes; null = root level
   pendingNewContainer: null,  // {name, repeating} captured by modal-container-new before element-selection starts
   pendingBrowserActionIndex: null, // number | null — which browserActions entry the current SELECTING round's result is written into (selectionKind === 'browserAction')
@@ -410,6 +427,25 @@ function buildProxyConfig(proxy) {
   return environmentVariableName ? { environmentVariableName } : null;
 }
 
+// Issue #174: converts _state.pagination's editable draft shape into the
+// wire PaginationConfig, or null when disabled or the kind-specific
+// required field (nextLinkSelector / urlTemplate) is left blank — same
+// "incomplete draft treated as toggle-off" convention as
+// buildChangeDetectionConfig/buildProxyConfig. maxPages is clamped/
+// defaulted the same way hardening's own percent thresholds are, so a
+// cleared/invalid number input doesn't block generation.
+function buildPaginationConfig(pagination) {
+  if (!pagination?.enabled) return null;
+  const maxPagesRaw = Number(pagination.maxPages);
+  const maxPages = Number.isFinite(maxPagesRaw) && maxPagesRaw > 0 ? Math.floor(maxPagesRaw) : 50;
+  if (pagination.kind === 'pageNumber') {
+    const urlTemplate = (pagination.urlTemplate || '').trim();
+    return urlTemplate ? { kind: 'pageNumber', urlTemplate, maxPages } : null;
+  }
+  const nextLinkSelector = (pagination.nextLinkSelector || '').trim();
+  return nextLinkSelector ? { kind: 'nextLink', nextLinkSelector, maxPages } : null;
+}
+
 // Issue #129: builds the wire-format Hardening list (companion's
 // List<HardeningCheck>?) from every enabled check in _state.hardening — an
 // array even though only one check exists today, since the wire format is
@@ -558,10 +594,15 @@ function collectFieldNames(mode, fields, groups, apiConfig) {
 // non-empty for mode === 'api' (the input is hidden there), since API mode
 // builds its own request URL and the companion rejects the combination
 // outright rather than silently ignoring it.
+// `pagination` (Issue #174) follows the same "hidden and so always empty for
+// mode === 'api'" convention as additionalUrls, for the same reason (API
+// mode already has its own page-parameter mechanism via a Number
+// RangeSource, and the companion rejects the combination outright).
 function buildScrapingConfig(
   url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
-  additionalUrls = [], changeDetection = null, proxy = null, hardening = null,
+  additionalUrls = [], changeDetection = null, proxy = null, hardening = null, pagination = null,
+  persistentSession = false,
 ) {
   const engineFields = engine === 'Browser'
     ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
@@ -575,13 +616,21 @@ function buildScrapingConfig(
   const proxyFields = proxyConfig ? { proxy: proxyConfig } : {};
   const hardeningConfig = buildHardeningConfig(hardening);
   const hardeningFields = hardeningConfig ? { hardening: hardeningConfig } : {};
+  const paginationConfig = buildPaginationConfig(pagination);
+  const paginationFields = paginationConfig ? { pagination: paginationConfig } : {};
+  // Issue #175: Browser-engine only, but simply sent as-is (like
+  // browserActions) rather than gated on `engine === 'Browser'` here — the
+  // toggle itself is only reachable through the UI while the browser-actions
+  // section is visible (Engine=Browser), and the companion rejects the
+  // combination server-side regardless (see ScrapingPlanValidator).
+  const persistentSessionFields = persistentSession ? { persistentSession: true } : {};
 
   if (mode === 'container') {
     return {
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...hardeningFields,
+      ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields,
     };
   }
   if (mode === 'api') {
@@ -589,7 +638,7 @@ function buildScrapingConfig(
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...hardeningFields,
+      ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields,
     };
   }
   return {
@@ -604,7 +653,7 @@ function buildScrapingConfig(
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
     ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields,
-    ...hardeningFields,
+    ...hardeningFields, ...paginationFields, ...persistentSessionFields,
   };
 }
 
@@ -617,14 +666,14 @@ function buildScrapingConfig(
 function buildConfigExport(
   url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false, additionalUrls = [],
-  changeDetection = null, proxy = null, hardening = null,
+  changeDetection = null, proxy = null, hardening = null, pagination = null, persistentSession = false,
 ) {
   return {
     exportedAt: new Date().toISOString(),
     extensionVersion: manifest.version || '?',
     config: buildScrapingConfig(
       url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview,
-      useJsonOutput, additionalUrls, changeDetection, proxy, hardening,
+      useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession,
     ),
   };
 }
@@ -832,6 +881,8 @@ function persistState() {
       additionalStartUrls: _state.additionalStartUrls,
       changeDetection: _state.changeDetection,
       proxy: _state.proxy,
+      pagination: _state.pagination,
+      persistentSession: _state.persistentSession,
       hardening: _state.hardening,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
@@ -983,6 +1034,12 @@ function render() {
     document.getElementById('btn-engine-browser')?.classList.toggle('active', _state.engine === 'Browser');
     document.getElementById('browser-actions-section')?.classList.toggle('hidden', _state.engine !== 'Browser');
     if (_state.engine === 'Browser') renderBrowserActions();
+
+    // Issue #175: opt-in persistent session/cookie handling — needs no
+    // visibility gating of its own beyond browser-actions-section's own
+    // Engine=Browser check above, since it's nested inside that section.
+    const persistentSessionToggle = document.getElementById('toggle-persistent-session');
+    if (persistentSessionToggle) persistentSessionToggle.checked = _state.persistentSession;
 
     if (_state.mode === 'container') {
       renderGroupTree(_state.groups);
@@ -1147,6 +1204,30 @@ function render() {
     const proxyEnvVarInput = document.getElementById('input-proxy-env-var');
     if (proxyEnvVarInput && document.activeElement !== proxyEnvVarInput) {
       proxyEnvVarInput.value = _state.proxy.envVar;
+    }
+
+    // Issue #174: opt-in classic multi-page pagination — hidden entirely for
+    // API mode (which already has its own page-parameter mechanism via a
+    // Number RangeSource), same reasoning as #additional-urls-row.
+    document.getElementById('pagination-toggle-row')?.classList.toggle('hidden', _state.mode === 'api');
+    const paginationToggle = document.getElementById('toggle-pagination');
+    if (paginationToggle) paginationToggle.checked = _state.pagination.enabled;
+    document.getElementById('pagination-config')?.classList.toggle('hidden', !_state.pagination.enabled);
+    document.getElementById('btn-pagination-next-link')?.classList.toggle('active', _state.pagination.kind === 'nextLink');
+    document.getElementById('btn-pagination-page-number')?.classList.toggle('active', _state.pagination.kind === 'pageNumber');
+    document.getElementById('pagination-next-link-fields')?.classList.toggle('hidden', _state.pagination.kind !== 'nextLink');
+    document.getElementById('pagination-page-number-fields')?.classList.toggle('hidden', _state.pagination.kind !== 'pageNumber');
+    const paginationInputs = {
+      'input-pagination-next-link-selector': _state.pagination.nextLinkSelector,
+      'input-pagination-url-template': _state.pagination.urlTemplate,
+    };
+    for (const [id, value] of Object.entries(paginationInputs)) {
+      const input = document.getElementById(id);
+      if (input && document.activeElement !== input) input.value = value;
+    }
+    const paginationMaxPagesInput = document.getElementById('input-pagination-max-pages');
+    if (paginationMaxPagesInput && document.activeElement !== paginationMaxPagesInput) {
+      paginationMaxPagesInput.value = _state.pagination.maxPages;
     }
 
     // Issue #183: collapsible "Monitoring" section (change detection +
@@ -1783,6 +1864,7 @@ async function generate() {
     _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
     _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy, _state.hardening,
+    _state.pagination, _state.persistentSession,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
@@ -1867,6 +1949,7 @@ function downloadConfigExport() {
     _state.url, _state.mode, _state.fields, _state.groups, manifest, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
     _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy, _state.hardening,
+    _state.pagination, _state.persistentSession,
   );
   log('DOWNLOAD scraping-config.json', exportObj);
 
@@ -2315,12 +2398,52 @@ function wireEvents() {
     });
   });
 
+  // Issue #175: opt-in persistent session/cookie handling — a plain boolean
+  // (no sub-fields), unlike proxy/pagination's { enabled, ... } shape.
+  document.getElementById('toggle-persistent-session')?.addEventListener('change', (e) => {
+    setState(_state.current, { persistentSession: e.target.checked });
+  });
+
   // Issue #88: opt-in proxy support.
   document.getElementById('toggle-proxy')?.addEventListener('change', (e) => {
     setState(_state.current, { proxy: { ..._state.proxy, enabled: e.target.checked } });
   });
   document.getElementById('input-proxy-env-var')?.addEventListener('input', (e) => {
     setState(_state.current, { proxy: { ..._state.proxy, envVar: e.target.value } });
+  });
+
+  // Issue #174: opt-in classic multi-page pagination.
+  document.getElementById('toggle-pagination')?.addEventListener('change', (e) => {
+    setState(_state.current, { pagination: { ..._state.pagination, enabled: e.target.checked } });
+  });
+  document.getElementById('btn-pagination-next-link')?.addEventListener('click', () => {
+    setState(_state.current, { pagination: { ..._state.pagination, kind: 'nextLink' } });
+  });
+  document.getElementById('btn-pagination-page-number')?.addEventListener('click', () => {
+    setState(_state.current, { pagination: { ..._state.pagination, kind: 'pageNumber' } });
+  });
+  document.getElementById('input-pagination-next-link-selector')?.addEventListener('input', (e) => {
+    setState(_state.current, { pagination: { ..._state.pagination, nextLinkSelector: e.target.value } });
+  });
+  document.getElementById('input-pagination-url-template')?.addEventListener('input', (e) => {
+    setState(_state.current, { pagination: { ..._state.pagination, urlTemplate: e.target.value } });
+  });
+  document.getElementById('input-pagination-max-pages')?.addEventListener('input', (e) => {
+    setState(_state.current, { pagination: { ..._state.pagination, maxPages: parseInt(e.target.value, 10) } });
+  });
+  // Issue #174 follow-up: lets a non-developer pick the "next page" link by
+  // clicking it instead of having to know/type a CSS selector — same
+  // click-based selection flow browser actions' own pick button already
+  // uses (see btn-pick-action-selector below), just for a single fixed
+  // field instead of a per-index browserActions entry.
+  document.getElementById('btn-pick-pagination-next-link')?.addEventListener('click', () => {
+    log('BTN pick-pagination-next-link → START_SELECTION');
+    stopPreviewIfActive();
+    chrome.runtime.sendMessage({ type: 'START_SELECTION' });
+    setState(STATES.SELECTING, {
+      pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [], selectionKind: 'pagination',
+      domTree: null, domTreeTruncated: false, domTreeError: null,
+    });
   });
 
   // Issue #129: opt-in script hardening — the "no result" check.
@@ -2509,6 +2632,11 @@ function wireEvents() {
     startApiFieldSearch(bridge);
   });
 
+  document.getElementById('btn-embedded-json-search')?.addEventListener('click', () => {
+    log('BTN embedded-json-search');
+    startEmbeddedJsonFieldSearch(bridge);
+  });
+
   document.getElementById('btn-api-entries-toggle')?.addEventListener('click', () => {
     log('BTN api-entries-toggle');
     toggleApiEntriesPanel(bridge);
@@ -2562,9 +2690,16 @@ function wireEvents() {
     });
   }
 
+  // Issue #136: the same #api-candidates-list serves both a network search
+  // (startApiFieldSearch) and an embedded-JSON search (startEmbeddedJsonField
+  // Search) — dispatch to the matching confirm function purely by candidate
+  // shape (only an embedded-JSON candidate ever carries scriptSelector, see
+  // content-script.js's findEmbeddedJsonCandidates vs. findApiCandidates).
   wireApiCandidateListEvents(
     'api-candidates-list', () => _state.apiCandidates?.candidates,
-    (candidate, fieldName, siblingNames) => confirmApiFieldCandidate(bridge, candidate, fieldName, siblingNames),
+    (candidate, fieldName, siblingNames) => (candidate.scriptSelector
+      ? confirmEmbeddedJsonFieldCandidate(bridge, candidate, fieldName, siblingNames)
+      : confirmApiFieldCandidate(bridge, candidate, fieldName, siblingNames)),
   );
   wireApiCandidateListEvents(
     'api-tree-search-list', () => _state.apiTreeSearchResult?.candidates,
@@ -2996,7 +3131,23 @@ function wireEvents() {
         selectionKind: null, pendingParentPath: null, pendingNewContainer: null,
         pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', apiSearchTarget: null,
       });
-      showToast(t('toast.selectionUnavailable'));
+      // Issue #137 follow-up: content-script.js's retryScopeSelector tags
+      // its own "retried and still nothing" case with unavailableKind —
+      // distinct from the other SELECTION_UNAVAILABLE sender (service-
+      // worker.js, when chrome.tabs.sendMessage itself fails — no content
+      // script running at all). A scope selector legitimately, repeatedly
+      // failing to resolve can have entirely page-specific causes outside
+      // the extension's control (confirmed via a real report: a class only
+      // present while the element is actually hovered, gone the instant the
+      // cursor leaves the page for the side panel) — not a plugin
+      // malfunction, so it's shown as a softer warning with no "Report bug"
+      // button (no context passed to showToast) instead of the harder error
+      // styling the other, genuinely unexpected case still gets.
+      if (message.unavailableKind === 'scopeSelectorNotFound') {
+        showToast(t('toast.scopeSelectorNotFound'), null, 'warn');
+      } else {
+        showToast(t('toast.selectionUnavailable'), 'Element selection');
+      }
     }
     // Issue #167: a click that landed outside every instance of the
     // container being edited — selection stays active (unlike
@@ -3049,6 +3200,16 @@ function wireEvents() {
           }),
           selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
         });
+      } else if (_state.selectionKind === 'pagination') {
+        // Issue #174 follow-up: lets a non-developer pick the "next page"
+        // link by clicking it instead of having to know/type a CSS
+        // selector — same "write straight into the one field, no naming
+        // modal needed" shape as the browserAction branch above, just with
+        // no index (there's only ever one nextLinkSelector).
+        setState(STATES.IDLE, {
+          pagination: { ..._state.pagination, nextLinkSelector: message.selector },
+          selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
+        });
       } else {
         setState(STATES.SELECTING, {
           pendingSelector: message.selector, pendingFramePath: framePath, pendingMatchCount: matchCount,
@@ -3083,7 +3244,7 @@ function wireEvents() {
       log('PREVIEW_UNAVAILABLE', message.reason);
       setLastError(message.reason, 'Preview');
       patchState({ previewActive: false, previewSummary: null });
-      showToast(t('toast.previewUnavailable'));
+      showToast(t('toast.previewUnavailable'), 'Preview');
     }
     if (message.type === 'API_CAPTURE_ENTRY' && _state.apiCaptureActive) {
       log('API_CAPTURE_ENTRY received', message.entry?.url);
@@ -3093,10 +3254,16 @@ function wireEvents() {
       log('API_CAPTURE_UNAVAILABLE', message.reason);
       setLastError(message.reason, 'Network recording');
       patchState({ apiCaptureActive: false, apiCaptureCount: 0 });
-      showToast(t('toast.captureUnavailable'));
+      showToast(t('toast.captureUnavailable'), 'Network recording');
     }
-    if (message.type === 'API_CANDIDATES' && _state.apiSearchTarget) {
-      log('API_CANDIDATES received', { target: message.target, count: message.candidates?.length, for: _state.apiSearchTarget });
+    // Issue #136: EMBEDDED_JSON_CANDIDATES is content-script.js's
+    // findEmbeddedJsonCandidates counterpart to API_CANDIDATES — handled
+    // identically here, since dispatch is entirely keyed off the shape of
+    // _state.apiSearchTarget (set by either startApiFieldSearch/
+    // startEmbeddedJsonFieldSearch for 'field', or startApiTreeFieldSearch
+    // for the tree-extension case), not off which message type arrived.
+    if ((message.type === 'API_CANDIDATES' || message.type === 'EMBEDDED_JSON_CANDIDATES') && _state.apiSearchTarget) {
+      log(`${message.type} received`, { target: message.target, count: message.candidates?.length, for: _state.apiSearchTarget });
       chrome.storage.session.remove('pendingSelector');
       const result = { target: message.target, candidates: message.candidates || [] };
       if (_state.apiSearchTarget === 'field') {
@@ -3131,7 +3298,7 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pagination', 'persistentSession', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
     'scriptFileName', 'outputFileName',
@@ -3148,6 +3315,8 @@ async function init() {
   if (Array.isArray(stored.additionalStartUrls)) _state = { ..._state, additionalStartUrls: stored.additionalStartUrls };
   if (stored.changeDetection) _state = { ..._state, changeDetection: stored.changeDetection };
   if (stored.proxy)                 _state = { ..._state, proxy: stored.proxy };
+  if (stored.pagination)            _state = { ..._state, pagination: stored.pagination };
+  if (stored.persistentSession !== undefined) _state = { ..._state, persistentSession: stored.persistentSession };
   if (stored.hardening)             _state = { ..._state, hardening: stored.hardening };
   if (stored.scriptFileName)        _state = { ..._state, scriptFileName: stored.scriptFileName };
   if (stored.outputFileName)        _state = { ..._state, outputFileName: stored.outputFileName };
@@ -3213,6 +3382,18 @@ async function init() {
       return;
     }
 
+    if (stored.selectionKind === 'pagination' && stored.pendingSelector) {
+      // Same as the live ELEMENT_SELECTED path: write the picked selector
+      // straight into pagination.nextLinkSelector, no naming modal needed.
+      log('INIT pending pagination selector found → updating pagination', stored.pendingSelector);
+      const pagination = { ..._state.pagination, nextLinkSelector: stored.pendingSelector };
+      await chrome.storage.session.set({ pagination });
+      setState(STATES.IDLE, {
+        pagination, selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
+      });
+      return;
+    }
+
     // Flat field or container field — show the (extended, in container
     // mode) field-name modal without re-checking the companion. The
     // transform chain itself is never persisted (see pendingTransforms'
@@ -3260,6 +3441,7 @@ if (typeof module !== 'undefined') {
     variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
     detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
     applyStaticTranslations, sanitizeFileNameBase, parseAdditionalUrls, buildChangeDetectionConfig, buildProxyConfig,
+    buildPaginationConfig,
     buildHardeningConfig, collectFieldNames, addNullRateCheck, removeNullRateCheck, updateNullRateCheck,
     renderHardeningNullRateList, addRequiredField, removeRequiredField, renderHardeningRequiredFieldsList,
     computeInitialMonitoringSectionOpen,

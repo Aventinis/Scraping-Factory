@@ -535,6 +535,49 @@ public class ScrapingPlanBuilderTests
         Assert.Null(plan.Proxy);
     }
 
+    // Issue #175
+    [Fact]
+    public void Build_CarriesPersistentSessionThroughUnchanged_FlatMode()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+            Engine = ScrapingEngine.Browser,
+            PersistentSession = true,
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.True(plan.PersistentSession);
+    }
+
+    [Fact]
+    public void Build_CarriesPersistentSessionThroughUnchanged_ContainerMode()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Groups = [new GroupNode { Name = "Kategorie", Selector = "section", Repeating = true, Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }] }],
+            Engine = ScrapingEngine.Browser,
+            PersistentSession = true,
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.True(plan.PersistentSession);
+    }
+
+    [Fact]
+    public void Build_NoPersistentSession_PlanPersistentSessionIsFalse()
+    {
+        var config = new ScrapingConfig { Url = "https://example.com", Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }] };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        Assert.False(plan.PersistentSession);
+    }
+
     // Issue #129
     [Fact]
     public void Build_CarriesHardeningThroughUnchanged_FlatMode()

@@ -50,6 +50,8 @@
     "apiCaptureSummary": "{count} solicitud(es) grabada(s)",
     "apiSearchTitle": "Luego haz clic en un dato de la página — se buscará en la grabación",
     "apiSearchBtn": "Buscar dato en la grabación",
+    "apiEmbeddedJsonSearchTitle": "Para sitios sin solicitud de red independiente: haz clic en un dato y se buscará en las etiquetas <script> de la página (p. ej. __NEXT_DATA__)",
+    "apiEmbeddedJsonSearchBtn": "Buscar en los datos JSON incrustados de la página",
     "apiEntriesTitle": "Muestra todas las solicitudes de red grabadas hasta ahora, con URL, método y estado",
     "apiEntriesShowBtn": "Mostrar solicitudes grabadas ({count})",
     "apiEntriesHideBtn": "Ocultar solicitudes grabadas",
@@ -94,6 +96,15 @@
     "proxyToggle": "Usar un proxy",
     "proxyEnvVarLabel": "Lista de proxies (variable de entorno)",
     "proxyHint": "El nombre de una variable de entorno con una lista de URLs de proxy separadas por comas (p. ej. \"http://usuario:contraseña@host:puerto\"), no las direcciones en sí — con más de una, el script rota entre ellas en cada solicitud.",
+    "paginationToggle": "Activar paginación",
+    "paginationKindNextLink": "Enlace \"Siguiente\"",
+    "paginationKindPageNumber": "URL con número de página",
+    "paginationNextLinkSelectorLabel": "Selector del enlace \"Página siguiente\"",
+    "paginationNextLinkSelectorPlaceholder": "p. ej. a.next, .pagination__next",
+    "paginationUrlTemplateLabel": "Plantilla de URL de página",
+    "paginationUrlTemplatePlaceholder": "p. ej. {url}?page={page}",
+    "paginationUrlTemplateHint": "Debe contener tanto {url} (la página de inicio, sin cambios) como {page} (el número de página, empezando en 2 — la página 1 es siempre la página de inicio tal cual).",
+    "paginationMaxPagesLabel": "Máx. de páginas (límite de seguridad)",
     "monitoringSectionToggle": "Monitorización",
     "settingsSectionToggle": "Configuración",
     "hardeningNoResultToggle": "Comprobar resultado vacío",
@@ -135,9 +146,11 @@
     "siblingChip": "+ {name}",
     "selectAllChips": "Seleccionar todo",
     "deselectAllChips": "Deseleccionar todo",
-    "useFieldNamePlaceholder": "Nombre del campo"
+    "useFieldNamePlaceholder": "Nombre del campo",
+    "embeddedJsonSourceLabel": "Encontrado en script de la página: {selector}"
   },
   "apiConfig": {
+    "embeddedJsonSourceNote": "Obtenido de JSON incrustado en la propia etiqueta <script> de la página ({selector}) — la URL de abajo es la página a cargar, no un endpoint de API JSON.",
     "urlPathLabel": "URL — Ruta",
     "urlQueryLabel": "URL — Parámetros de consulta",
     "valueSourcesLabel": "Fuentes de valores",
@@ -265,6 +278,7 @@
     "configInvalid": "Configuración no válida: {message}",
     "generationError": "Error: {message}",
     "selectionUnavailable": "No es posible seleccionar elementos en esta página.",
+    "scopeSelectorNotFound": "Ya no se pudo encontrar el punto de referencia seleccionado — la página cambió mientras tanto (p. ej. un estado de hover o de carga). Inténtalo de nuevo o elige otro punto de partida.",
     "clickOutsideScope": "Selecciona un elemento dentro de un contenedor.",
     "previewUnavailable": "No es posible la vista previa en esta página.",
     "captureUnavailable": "No es posible grabar red en esta página.",
@@ -298,6 +312,8 @@
     "containerSelectorLabel": "Contenedor (opcional)",
     "loadMoreButtonSelectorLabel": "Botón \"Cargar más\" (opcional)",
     "maxIterationsLabel": "Rondas máx.",
-    "waitAfterMsLabel": "Tiempo de espera (ms)"
+    "waitAfterMsLabel": "Tiempo de espera (ms)",
+    "persistentSessionToggle": "Reutilizar sesión entre ejecuciones",
+    "persistentSessionHint": "Guarda las cookies/el estado de inicio de sesión después de cada ejecución y omite las acciones de inicio de sesión anteriores en la siguiente. Advertencia: el archivo guardado contiene cookies de sesión reales — trátalo como una contraseña y nunca lo compartas ni lo subas a un repositorio. Si la sesión llega a caducar, la ejecución simplemente falla; no hay reinicio de sesión automático."
   }
 }
