@@ -450,7 +450,13 @@ describe('scoped selection (START_SELECTION with scopeSelector)', () => {
 
       jest.advanceTimersByTime(2000); // past SCOPE_SELECTOR_RETRY_TIMEOUT_MS
 
-      expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'SELECTION_UNAVAILABLE' }));
+      // Issue #137 follow-up: tagged with unavailableKind so popup.js can
+      // tell this "retried and still nothing" case apart from the other
+      // SELECTION_UNAVAILABLE sender (service-worker.js, no content script
+      // at all) and present it as a softer warning instead of a hard error.
+      expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'SELECTION_UNAVAILABLE', unavailableKind: 'scopeSelectorNotFound',
+      }));
 
       chrome.runtime.sendMessage.mockClear();
       document.querySelector('h3.item-name').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));

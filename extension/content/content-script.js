@@ -1232,6 +1232,20 @@ function retryScopeSelector(scopeSelector, generation, deadline) {
       chrome.runtime.sendMessage({
         type: 'SELECTION_UNAVAILABLE',
         reason: `Container-Selektor '${scopeSelector}' findet kein Element auf dieser Seite.`,
+        // Issue #137 follow-up: distinguishes this specific "retried and
+        // still nothing" case from the other SELECTION_UNAVAILABLE sender
+        // (service-worker.js, when chrome.tabs.sendMessage itself fails —
+        // no content script running at all, e.g. a chrome:// page or a tab
+        // open since before the extension reloaded). Confirmed via a real
+        // report: a page can legitimately, repeatedly fail to resolve a
+        // scope selector for reasons entirely outside the extension's
+        // control — e.g. a class that's only present while the element is
+        // actually hovered, removed the instant the user's cursor leaves
+        // the page for the side panel to click "+ Datenfeld". That's not a
+        // plugin malfunction, so popup.js presents it as a softer warning
+        // (no "Report bug" button) instead of a hard error, unlike the
+        // "no content script at all" case, which stays a hard error.
+        unavailableKind: 'scopeSelectorNotFound',
       });
       return;
     }

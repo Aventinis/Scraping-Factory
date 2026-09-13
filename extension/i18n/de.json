@@ -269,6 +269,7 @@
     "configInvalid": "Konfiguration ungültig: {message}",
     "generationError": "Fehler: {message}",
     "selectionUnavailable": "Element-Auswahl auf dieser Seite nicht möglich.",
+    "scopeSelectorNotFound": "Der gewählte Bezugspunkt wurde nicht mehr gefunden — die Seite hat sich zwischenzeitlich verändert (z. B. Hover- oder Ladezustand). Bitte versuche es erneut oder wähle einen anderen Ausgangspunkt.",
     "clickOutsideScope": "Bitte ein Element innerhalb eines Containers auswählen.",
     "previewUnavailable": "Vorschau auf dieser Seite nicht möglich.",
     "captureUnavailable": "Netzwerk-Aufzeichnung auf dieser Seite nicht möglich.",
