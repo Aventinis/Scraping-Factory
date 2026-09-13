@@ -30,4 +30,10 @@ public sealed class ScrapingPlan
     // ScrapingConfig.Hardening by ScrapingPlanBuilder — see
     // IR/HardeningCheck.cs.
     public List<HardeningCheck>? Hardening { get; init; }
+
+    // Issue #174: mode-independent (Fields/Groups alike, not Api — see
+    // ScrapingConfig.Pagination), carried through unchanged from
+    // ScrapingConfig.Pagination by ScrapingPlanBuilder — see
+    // IR/PaginationConfig.cs.
+    public PaginationConfig? Pagination { get; init; }
 }
