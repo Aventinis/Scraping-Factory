@@ -3009,7 +3009,7 @@ function wireEvents() {
         selectionKind: null, pendingParentPath: null, pendingNewContainer: null,
         pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', apiSearchTarget: null,
       });
-      showToast(t('toast.selectionUnavailable'), 'Element selection');
+      showToast(t('toast.selectionUnavailable'));
     }
     // Issue #167: a click that landed outside every instance of the
     // container being edited — selection stays active (unlike

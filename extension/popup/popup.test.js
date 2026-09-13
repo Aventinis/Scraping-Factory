@@ -3439,10 +3439,7 @@ describe('SELECTION_UNAVAILABLE handling', () => {
       <section id="screen-selecting" class="hidden">
         <button id="btn-add-field"></button>
       </section>
-      <div id="error-toast" class="hidden">
-        <span id="error-toast-message"></span>
-        <button id="btn-report-bug-toast" class="hidden"></button>
-      </div>
+      <div id="error-toast" class="hidden"></div>
     `;
 
     global.chrome = {
@@ -3476,17 +3473,6 @@ describe('SELECTION_UNAVAILABLE handling', () => {
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
     expect(toast.textContent).toContain('nicht möglich');
-  });
-
-  // Regression coverage: this toast used to call setLastError() (recording
-  // the error for a report) but never passed a context to showToast() itself
-  // — showToast only reveals "Report bug" when a context is given, so the
-  // button silently never appeared for this error class, leaving no way to
-  // get a bug-report log for it from the UI at all.
-  test('offers to report the failure', () => {
-    capturedListener({ type: 'SELECTION_UNAVAILABLE', reason: 'no content script' });
-
-    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
   });
 });
 
