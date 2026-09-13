@@ -67,6 +67,12 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     if (hasApi && config.AdditionalUrls is { Count: > 0 })
         return Results.BadRequest(new { error = "AdditionalUrls and Api are mutually exclusive." });
 
+    // Issue #174: same reasoning as AdditionalUrls above — Api-Mode never
+    // reads the page-scraping start URL, so pagination would silently do
+    // nothing there.
+    if (hasApi && config.Pagination is not null)
+        return Results.BadRequest(new { error = "Pagination and Api are mutually exclusive." });
+
     // Wire format (Fields/Groups) is unchanged; internally it's compiled
     // into the canonical Steps-based ScrapingPlan that backends actually
     // consume.
