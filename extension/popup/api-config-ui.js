@@ -168,8 +168,15 @@ const SFApiConfigUI = (function () {
     candidates.forEach((candidate, i) => {
       const li = document.createElement('li');
       li.className = 'api-candidate';
+      // Issue #136: an embedded-JSON candidate (content-script.js's
+      // findEmbeddedJsonCandidates) has no request/method at all — only the
+      // <script> tag selector it was found in — unlike a network candidate
+      // (findApiCandidates), which always has both.
+      const sourceLine = candidate.scriptSelector
+        ? `<div class="api-candidate-url" title="${escapeHtml(candidate.scriptSelector)}">${escapeHtml(t('apiCandidates.embeddedJsonSourceLabel', { selector: candidate.scriptSelector }))}</div>`
+        : `<div class="api-candidate-url" title="${escapeHtml(candidate.url)}">${escapeHtml(candidate.method)} ${escapeHtml(candidate.url)}</div>`;
       li.innerHTML =
-        `<div class="api-candidate-url" title="${escapeHtml(candidate.url)}">${escapeHtml(candidate.method)} ${escapeHtml(candidate.url)}</div>` +
+        sourceLine +
         `<div class="api-candidate-path">${escapeHtml(candidate.path)}</div>` +
         `<div class="api-candidate-value">${escapeHtml(t('apiCandidates.matchLabel', { value: String(candidate.value) }))}</div>`;
 
@@ -299,6 +306,17 @@ const SFApiConfigUI = (function () {
     renderApiConfigParameters(draft, discoveryCandidates);
     renderApiConfigHeaders(draft.capturedHeaders, draft.headerDecisions);
     renderBodyTree(draft);
+
+    // Issue #136: clarifies why the URL segments above describe a plain page
+    // load (with no request/method shown, unlike a network-sourced config)
+    // when this ApiConfig was sourced from an embedded <script> tag instead.
+    const embeddedJsonNoteEl = document.getElementById('api-config-embedded-json-note');
+    if (embeddedJsonNoteEl) {
+      embeddedJsonNoteEl.classList.toggle('hidden', !draft.embeddedJsonSource);
+      if (draft.embeddedJsonSource) {
+        embeddedJsonNoteEl.textContent = t('apiConfig.embeddedJsonSourceNote', { selector: draft.embeddedJsonSource.scriptSelector });
+      }
+    }
 
     // The body section only exists for a POST candidate whose captured
     // request body could actually be turned into a draft (see
@@ -636,6 +654,28 @@ const SFApiConfigUI = (function () {
     if (state.domViewEnabled) bridge.requestDomTree();
   }
 
+  // Issue #136: the embedded-JSON analogue of startApiFieldSearch above —
+  // needs no recording toggle/apiCaptureCount gate at all, since
+  // findEmbeddedJsonCandidates scans document.scripts directly at click
+  // time rather than a pool that first has to be recorded into. Reuses the
+  // exact same apiSearchTarget/apiCandidates state (and so the exact same
+  // #api-candidates-panel/-list rendering and wireApiCandidateListEvents
+  // wiring, see popup.js) as the network search — the resulting
+  // EMBEDDED_JSON_CANDIDATES message is handled identically to
+  // API_CANDIDATES there, and confirmEmbeddedJsonFieldCandidate below is
+  // dispatched to purely by candidate shape (candidate.scriptSelector).
+  function startEmbeddedJsonFieldSearch(bridge) {
+    const state = bridge.getState();
+    log('EMBEDDED_JSON_SEARCH start → START_SELECTION(embeddedJsonSearch)');
+    bridge.stopPreviewIfActive();
+    chrome.runtime.sendMessage({ type: 'START_SELECTION', embeddedJsonSearch: true });
+    bridge.setState(STATES.SELECTING, {
+      apiSearchTarget: 'field', pendingSelector: null, apiCandidates: null,
+      domTree: null, domTreeTruncated: false, domTreeError: null,
+    });
+    if (state.domViewEnabled) bridge.requestDomTree();
+  }
+
   // ── API-Mode parameter configuration (Issue #53 Phase 5) ────────────────────
   // Turns a confirmed primary-field candidate into an in-progress ApiConfig
   // draft and enters STATES.API_CONFIG — see buildApiConfig (the pure wire-
@@ -676,9 +716,47 @@ const SFApiConfigUI = (function () {
         bodyTree: null,
         bodyParameters: [],
         nextBodyParameterSeq: 0,
+        embeddedJsonSource: null,
       },
     });
     loadInitialBodyTreeForCandidate(bridge, candidate);
+  }
+
+  // Issue #136: the embedded-JSON analogue of confirmApiFieldCandidate above.
+  // Unlike a network candidate, there's no captured request to derive
+  // sourceUrl/method/headers from — the request is just an ordinary GET of
+  // the current page (bridge.getState().url), optionally parameterized later
+  // on the API_CONFIG screen exactly like a network candidate's URL already
+  // is (see the "Architecture Decisions" note on UrlTemplate parameterization
+  // staying available for embedded-JSON mode). No request body is possible
+  // (a page load has no body — ScrapingPlanValidator rejects the
+  // combination), so bodyTree/loadInitialBodyTreeForCandidate don't apply
+  // here. embeddedJsonSource is stamped with the candidate's own
+  // scriptSelector, later read by startApiTreeFieldSearch (to scope any
+  // further tree-extension search to that same <script> tag) and by
+  // buildApiConfig (to include it in the wire object).
+  function confirmEmbeddedJsonFieldCandidate(bridge, candidate, fieldName, siblingNames) {
+    const groups = buildApiSubtreeFromCandidate(candidate, fieldName, siblingNames);
+    const url = bridge.getState().url;
+
+    log('EMBEDDED_JSON_FIELD_CONFIRM', { scriptSelector: candidate.scriptSelector, groups });
+    bridge.stopPreviewIfActive();
+    bridge.setState(STATES.API_CONFIG, {
+      apiCandidates: null,
+      apiConfigDraft: {
+        sourceUrl: url,
+        urlParts: parseUrlTemplateParts(url),
+        groups,
+        capturedHeaders: [],
+        parameterSources: {},
+        headerDecisions: {},
+        method: 'GET',
+        bodyTree: null,
+        bodyParameters: [],
+        nextBodyParameterSeq: 0,
+        embeddedJsonSource: { scriptSelector: candidate.scriptSelector },
+      },
+    });
   }
 
   // Fire-and-forget follow-up (Issue #55): a POST candidate's own captured
@@ -738,11 +816,27 @@ const SFApiConfigUI = (function () {
   // while side-stepping the "what would the click's own leaf field be called"
   // question entirely. See openApiGroupModal/confirmApiGroupModal below.
 
+  // Issue #136: when the tree being extended was originally sourced from an
+  // embedded <script> tag (draft.embeddedJsonSource set), the search must
+  // scan that exact same tag rather than the network-recorded pool — unlike
+  // a network entryId, there's no pool of interchangeable sources once
+  // EmbeddedJsonSource.ScriptSelector is fixed (see findEmbeddedJsonCandidates'
+  // own doc comment on scriptSelector). confirmApiTreeFieldCandidate below
+  // needs no change either way: it only reads candidate.treeSkeleton/
+  // .siblings, which both search kinds populate identically.
   function startApiTreeFieldSearch(bridge, parentPath) {
     const state = bridge.getState();
     const scopePath = parentPath ? resolveApiGroupScopePath(state.apiConfigDraft.groups, parentPath) : null;
-    log('API_TREE_FIELD_SEARCH start', { parentPath, scopePath });
-    chrome.runtime.sendMessage({ type: 'START_SELECTION', apiSearch: true, apiScopePath: scopePath });
+    const embeddedJsonSource = state.apiConfigDraft.embeddedJsonSource;
+    log('API_TREE_FIELD_SEARCH start', { parentPath, scopePath, embeddedJsonSource });
+    if (embeddedJsonSource) {
+      chrome.runtime.sendMessage({
+        type: 'START_SELECTION', embeddedJsonSearch: true,
+        embeddedJsonScopePath: scopePath, embeddedJsonScriptSelector: embeddedJsonSource.scriptSelector,
+      });
+    } else {
+      chrome.runtime.sendMessage({ type: 'START_SELECTION', apiSearch: true, apiScopePath: scopePath });
+    }
     bridge.setState(STATES.SELECTING, {
       apiSearchTarget: { treeParentPath: parentPath }, pendingSelector: null, apiTreeSearchResult: null,
       domTree: null, domTreeTruncated: false, domTreeError: null,
@@ -1056,6 +1150,7 @@ const SFApiConfigUI = (function () {
       bodyTree: draft.bodyTree,
       bodyParameterNames: (draft.bodyParameters || []).map(p => p.name),
       parameterIdToName: idToName,
+      embeddedJsonSource: draft.embeddedJsonSource,
     });
 
     log('API_CONFIG confirm', apiConfig);
@@ -1133,6 +1228,7 @@ const SFApiConfigUI = (function () {
     bodyNodeLabel, buildBodyTreeNodeEl, renderBodyTree,
     startApiCapture, stopApiCapture, toggleApiCapture,
     startApiFieldSearch, confirmApiFieldCandidate, loadInitialBodyTreeForCandidate, cancelApiConfig,
+    startEmbeddedJsonFieldSearch, confirmEmbeddedJsonFieldCandidate,
     startApiTreeFieldSearch, confirmApiTreeFieldCandidate,
     openApiGroupModal, confirmApiGroupModal, cancelApiGroupModal, setApiTreeNodeName,
     openApiFieldTransformsModal, confirmApiFieldTransformsModal, cancelApiFieldTransformsModal,

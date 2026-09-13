@@ -50,6 +50,8 @@
     "apiCaptureSummary": "{count} request(s) recorded",
     "apiSearchTitle": "Then click a data point on the page — it will be searched for in the recording",
     "apiSearchBtn": "Find data point in recording",
+    "apiEmbeddedJsonSearchTitle": "For sites with no separate network request: click a data point and it will be searched for in the page's own <script> tags (e.g. __NEXT_DATA__)",
+    "apiEmbeddedJsonSearchBtn": "Search page's own JSON data",
     "apiEntriesTitle": "Shows every network request recorded so far, with URL, method and status",
     "apiEntriesShowBtn": "Show recorded requests ({count})",
     "apiEntriesHideBtn": "Hide recorded requests",
@@ -135,9 +137,11 @@
     "siblingChip": "+ {name}",
     "selectAllChips": "Select all",
     "deselectAllChips": "Deselect all",
-    "useFieldNamePlaceholder": "Field name"
+    "useFieldNamePlaceholder": "Field name",
+    "embeddedJsonSourceLabel": "Found in page script: {selector}"
   },
   "apiConfig": {
+    "embeddedJsonSourceNote": "Sourced from embedded JSON in the page's own <script> tag ({selector}) — the URL below is the page to fetch, not a JSON API endpoint.",
     "urlPathLabel": "URL — Path",
     "urlQueryLabel": "URL — Query parameters",
     "valueSourcesLabel": "Value sources",

@@ -2808,6 +2808,29 @@ describe('buildApiConfig', () => {
     });
     expect(config.parameters).toContainEqual({ name: 'category', source: { kind: 'staticList', values: ['a'] } });
   });
+
+  // ── Embedded JSON source (Issue #136) ─────────────────────────────────
+
+  test('includes embeddedJsonSource as-is when set', () => {
+    const config = buildApiConfig({
+      urlParts: { origin: 'https://example.com', pathSegments: [{ value: 'products', variable: false, name: '' }], queryParams: [] },
+      itemsPath: 'items', fields: [{ name: 'Titel', path: 'title' }],
+      parameterSources: {}, capturedHeaders: [], headerDecisions: {},
+      embeddedJsonSource: { scriptSelector: '#__NEXT_DATA__' },
+    });
+
+    expect(config.embeddedJsonSource).toEqual({ scriptSelector: '#__NEXT_DATA__' });
+  });
+
+  test('omits embeddedJsonSource entirely when not given (matches the optional wire field)', () => {
+    const config = buildApiConfig({
+      urlParts: { origin: 'https://example.com', pathSegments: [{ value: 'products', variable: false, name: '' }], queryParams: [] },
+      itemsPath: 'items', fields: [{ name: 'Titel', path: 'title' }],
+      parameterSources: {}, capturedHeaders: [], headerDecisions: {},
+    });
+
+    expect(config).not.toHaveProperty('embeddedJsonSource');
+  });
 });
 
 // ── API-Mode request-body tree pure helpers (Issue #55, Phase B4) ──────────
