@@ -58,7 +58,7 @@ public class PythonGroupCodeGeneratorTests
     {
         var script = _generator.Generate(NestedGroupPlan());
         Assert.Contains("HEADERS = {\"User-Agent\":", script);
-        Assert.Contains("requests.get(url, headers=HEADERS, timeout=10)", script);
+        Assert.Contains("requests.get(page_url, headers=HEADERS, timeout=10)", script);
     }
 
     // Issue #169
@@ -486,6 +486,6 @@ public class PythonGroupCodeGeneratorTests
         Assert.Contains("import itertools", script);
         Assert.Contains("PROXY_ENV_VAR = 'SF_PROXIES'", script);
         Assert.Contains(
-            "requests.get(url, headers=HEADERS, proxies=_proxies_for_requests(), timeout=10)", script);
+            "requests.get(page_url, headers=HEADERS, proxies=_proxies_for_requests(), timeout=10)", script);
     }
 }
