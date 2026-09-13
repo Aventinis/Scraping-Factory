@@ -804,6 +804,18 @@
           <button id="btn-add-action-click" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.addClickBtn"></button>
           <button id="btn-add-action-scroll" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.addScrollBtn"></button>
         </div>
+
+        <!-- Issue #175: opt-in persistent session/cookie handling —
+             Browser-engine only (this whole section is already hidden for
+             Static), placed here rather than in the general output-settings
+             "Settings" section since it's specifically about reusing
+             whatever session a login flow (the Fill/Click actions above)
+             establishes, not an unrelated output/inspection format choice. -->
+        <label class="output-settings-toggle" id="persistent-session-toggle-row">
+          <input type="checkbox" id="toggle-persistent-session" />
+          <span data-i18n="browserActions.persistentSessionToggle"></span>
+        </label>
+        <p class="preview-summary" data-i18n="browserActions.persistentSessionHint"></p>
       </div>
     </div>
 

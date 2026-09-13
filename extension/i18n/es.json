@@ -312,6 +312,8 @@
     "containerSelectorLabel": "Contenedor (opcional)",
     "loadMoreButtonSelectorLabel": "Botón \"Cargar más\" (opcional)",
     "maxIterationsLabel": "Rondas máx.",
-    "waitAfterMsLabel": "Tiempo de espera (ms)"
+    "waitAfterMsLabel": "Tiempo de espera (ms)",
+    "persistentSessionToggle": "Reutilizar sesión entre ejecuciones",
+    "persistentSessionHint": "Guarda las cookies/el estado de inicio de sesión después de cada ejecución y omite las acciones de inicio de sesión anteriores en la siguiente. Advertencia: el archivo guardado contiene cookies de sesión reales — trátalo como una contraseña y nunca lo compartas ni lo subas a un repositorio. Si la sesión llega a caducar, la ejecución simplemente falla; no hay reinicio de sesión automático."
   }
 }

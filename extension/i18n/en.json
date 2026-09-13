@@ -312,6 +312,8 @@
     "containerSelectorLabel": "Container (optional)",
     "loadMoreButtonSelectorLabel": "\"Load more\" button (optional)",
     "maxIterationsLabel": "Max. rounds",
-    "waitAfterMsLabel": "Wait time (ms)"
+    "waitAfterMsLabel": "Wait time (ms)",
+    "persistentSessionToggle": "Reuse session between runs",
+    "persistentSessionHint": "Saves cookies/login state after each run and skips the login actions above on the next run. Warning: the saved file contains live session cookies — treat it like a password and never share or commit it. If the session ever expires, the run simply fails; there is no automatic re-login."
   }
 }
