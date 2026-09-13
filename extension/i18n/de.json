@@ -312,6 +312,8 @@
     "containerSelectorLabel": "Container (optional)",
     "loadMoreButtonSelectorLabel": "„Mehr laden“-Button (optional)",
     "maxIterationsLabel": "Max. Durchläufe",
-    "waitAfterMsLabel": "Wartezeit (ms)"
+    "waitAfterMsLabel": "Wartezeit (ms)",
+    "persistentSessionToggle": "Sitzung zwischen Läufen wiederverwenden",
+    "persistentSessionHint": "Speichert Cookies/Login-Status nach jedem Lauf und überspringt beim nächsten Mal die obigen Login-Aktionen. Achtung: Die gespeicherte Datei enthält echte Sitzungs-Cookies — wie ein Passwort behandeln, niemals teilen oder committen. Läuft die Sitzung ab, schlägt der Lauf einfach fehl; es gibt keinen automatischen erneuten Login."
   }
 }

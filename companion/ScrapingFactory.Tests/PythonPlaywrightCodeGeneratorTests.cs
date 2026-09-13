@@ -628,4 +628,80 @@ public class PythonPlaywrightCodeGeneratorTests
         Assert.DoesNotContain("PAGINATION_", script);
         Assert.Contains("def _extract_page_rows(page):", script);
     }
+
+    // Issue #175
+    [Fact]
+    public void Generate_WithoutPersistentSession_OmitsSessionStateCodeAndUsesPlainNewPage()
+    {
+        var script = _generator.Generate(PlanWithoutWait());
+
+        Assert.DoesNotContain("SESSION_STATE_PATH", script);
+        Assert.DoesNotContain("new_context", script);
+        Assert.Contains("page = browser.new_page()", script);
+    }
+
+    [Fact]
+    public void Generate_WithPersistentSession_UsesContextWithStorageStateAndSavesAfterwards()
+    {
+        var plan = LoginPlan();
+        plan = new ScrapingPlan
+        {
+            Engine = plan.Engine, Steps = plan.Steps, OutputFormat = plan.OutputFormat, PersistentSession = true,
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("import os", script);
+        Assert.Contains("SESSION_STATE_PATH = OUTPUT_PATH + \".session-state.json\"", script);
+        Assert.Contains("_session_exists = os.path.exists(SESSION_STATE_PATH)", script);
+        Assert.Contains("context = browser.new_context(storage_state=SESSION_STATE_PATH if _session_exists else None)", script);
+        Assert.Contains("page = context.new_page()", script);
+        Assert.Contains("context.storage_state(path=SESSION_STATE_PATH)", script);
+
+        // The login-only actions (Fill/Click) are nested inside the
+        // skip-on-reuse guard; Navigate itself runs unconditionally, outside
+        // of it.
+        Assert.Contains("if not _session_exists:", script);
+        var gotoIndex = script.IndexOf("page.goto(url,", StringComparison.Ordinal);
+        var guardIndex = script.IndexOf("if not _session_exists:", StringComparison.Ordinal);
+        var fillIndex = script.IndexOf(".fill(_require_env(\"SF_USERNAME\"))", StringComparison.Ordinal);
+        Assert.True(gotoIndex < guardIndex);
+        Assert.True(guardIndex < fillIndex);
+    }
+
+    [Fact]
+    public void Generate_WithPersistentSessionAndNoLoginActions_OmitsSkipGuardButStillPersistsSession()
+    {
+        var plan = PlanWithoutWait();
+        plan = new ScrapingPlan
+        {
+            Engine = plan.Engine, Steps = plan.Steps, OutputFormat = plan.OutputFormat, PersistentSession = true,
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("SESSION_STATE_PATH", script);
+        Assert.Contains("context.storage_state(path=SESSION_STATE_PATH)", script);
+        // Nothing to skip — a fresh context is still established every time,
+        // but there's no "if not _session_exists:" guard with an empty body,
+        // which would be a Python SyntaxError.
+        Assert.DoesNotContain("if not _session_exists:", script);
+    }
+
+    [Fact]
+    public void Generate_GroupPlanWithPersistentSession_UsesContextWithStorageState()
+    {
+        var plan = GroupPlanWithLogin();
+        plan = new ScrapingPlan
+        {
+            Engine = plan.Engine, Steps = plan.Steps, OutputFormat = plan.OutputFormat, PersistentSession = true,
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("SESSION_STATE_PATH = OUTPUT_PATH + \".session-state.json\"", script);
+        Assert.Contains("context = browser.new_context(storage_state=SESSION_STATE_PATH if _session_exists else None)", script);
+        Assert.Contains("if not _session_exists:", script);
+        Assert.Contains("context.storage_state(path=SESSION_STATE_PATH)", script);
+    }
 }

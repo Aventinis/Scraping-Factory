@@ -36,4 +36,9 @@ public sealed class ScrapingPlan
     // ScrapingConfig.Pagination by ScrapingPlanBuilder — see
     // IR/PaginationConfig.cs.
     public PaginationConfig? Pagination { get; init; }
+
+    // Issue #175: Browser-engine only (see ScrapingPlanValidator), carried
+    // through from ScrapingConfig.PersistentSession by ScrapingPlanBuilder
+    // (null defaults to false here, unlike the wire format's nullable bool).
+    public bool PersistentSession { get; init; }
 }

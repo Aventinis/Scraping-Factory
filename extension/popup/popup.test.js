@@ -496,6 +496,35 @@ describe('buildScrapingConfig (pagination, Issue #174)', () => {
   });
 });
 
+// Issue #175
+describe('buildScrapingConfig (persistentSession, Issue #175)', () => {
+  test('omits persistentSession entirely when false (the default)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.persistentSession).toBeUndefined();
+  });
+
+  test('includes persistentSession: true when enabled', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Browser', [], false,
+      false, [], null, null, null, null, true,
+    );
+    expect(result.persistentSession).toBe(true);
+  });
+
+  test('works the same way for container and api modes', () => {
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Browser', [], false, false, [], null, null, null, null, true,
+    );
+    expect(containerResult.persistentSession).toBe(true);
+
+    const apiResult = buildScrapingConfig(
+      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Browser', [], false, false, [], null, null, null, null, true,
+    );
+    expect(apiResult.persistentSession).toBe(true);
+  });
+});
+
 // Issue #129
 describe('buildHardeningConfig', () => {
   test('returns null when noResult is disabled', () => {

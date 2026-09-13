@@ -147,6 +147,13 @@ let _state = {
   // urlTemplate) — see buildPaginationConfig. maxPages is a whole-number
   // safety cap, always active regardless of kind.
   pagination: { enabled: false, kind: 'nextLink', nextLinkSelector: '', urlTemplate: '', maxPages: 50 },
+  // Issue #175: opt-in persistent session/cookie handling — Browser-engine
+  // only, persisted the same way as proxy/pagination above (real
+  // scrape-target configuration, not a per-generate toggle). Unlike proxy/
+  // pagination, this has no sub-fields of its own (just an on/off switch —
+  // see buildScrapingConfig's "only send the key when true" handling), so
+  // it's a plain boolean rather than an { enabled, ... } object.
+  persistentSession: false,
   // Issue #129: opt-in script hardening checks — mode-independent like
   // engine/changeDetection/proxy above, persisted the same way (real
   // scrape-target configuration, not a per-generate toggle). Nested one
@@ -595,6 +602,7 @@ function buildScrapingConfig(
   url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
   additionalUrls = [], changeDetection = null, proxy = null, hardening = null, pagination = null,
+  persistentSession = false,
 ) {
   const engineFields = engine === 'Browser'
     ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
@@ -610,13 +618,19 @@ function buildScrapingConfig(
   const hardeningFields = hardeningConfig ? { hardening: hardeningConfig } : {};
   const paginationConfig = buildPaginationConfig(pagination);
   const paginationFields = paginationConfig ? { pagination: paginationConfig } : {};
+  // Issue #175: Browser-engine only, but simply sent as-is (like
+  // browserActions) rather than gated on `engine === 'Browser'` here — the
+  // toggle itself is only reachable through the UI while the browser-actions
+  // section is visible (Engine=Browser), and the companion rejects the
+  // combination server-side regardless (see ScrapingPlanValidator).
+  const persistentSessionFields = persistentSession ? { persistentSession: true } : {};
 
   if (mode === 'container') {
     return {
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...hardeningFields, ...paginationFields,
+      ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields,
     };
   }
   if (mode === 'api') {
@@ -624,7 +638,7 @@ function buildScrapingConfig(
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...hardeningFields, ...paginationFields,
+      ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields,
     };
   }
   return {
@@ -639,7 +653,7 @@ function buildScrapingConfig(
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
     ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields,
-    ...hardeningFields, ...paginationFields,
+    ...hardeningFields, ...paginationFields, ...persistentSessionFields,
   };
 }
 
@@ -652,14 +666,14 @@ function buildScrapingConfig(
 function buildConfigExport(
   url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false, additionalUrls = [],
-  changeDetection = null, proxy = null, hardening = null, pagination = null,
+  changeDetection = null, proxy = null, hardening = null, pagination = null, persistentSession = false,
 ) {
   return {
     exportedAt: new Date().toISOString(),
     extensionVersion: manifest.version || '?',
     config: buildScrapingConfig(
       url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview,
-      useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination,
+      useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession,
     ),
   };
 }
@@ -868,6 +882,7 @@ function persistState() {
       changeDetection: _state.changeDetection,
       proxy: _state.proxy,
       pagination: _state.pagination,
+      persistentSession: _state.persistentSession,
       hardening: _state.hardening,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
@@ -1019,6 +1034,12 @@ function render() {
     document.getElementById('btn-engine-browser')?.classList.toggle('active', _state.engine === 'Browser');
     document.getElementById('browser-actions-section')?.classList.toggle('hidden', _state.engine !== 'Browser');
     if (_state.engine === 'Browser') renderBrowserActions();
+
+    // Issue #175: opt-in persistent session/cookie handling — needs no
+    // visibility gating of its own beyond browser-actions-section's own
+    // Engine=Browser check above, since it's nested inside that section.
+    const persistentSessionToggle = document.getElementById('toggle-persistent-session');
+    if (persistentSessionToggle) persistentSessionToggle.checked = _state.persistentSession;
 
     if (_state.mode === 'container') {
       renderGroupTree(_state.groups);
@@ -1843,7 +1864,7 @@ async function generate() {
     _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
     _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy, _state.hardening,
-    _state.pagination,
+    _state.pagination, _state.persistentSession,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
@@ -1928,7 +1949,7 @@ function downloadConfigExport() {
     _state.url, _state.mode, _state.fields, _state.groups, manifest, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
     _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy, _state.hardening,
-    _state.pagination,
+    _state.pagination, _state.persistentSession,
   );
   log('DOWNLOAD scraping-config.json', exportObj);
 
@@ -2375,6 +2396,12 @@ function wireEvents() {
     setState(_state.current, {
       changeDetection: { ..._state.changeDetection, webhook: { ..._state.changeDetection.webhook, urlEnvVar: e.target.value } },
     });
+  });
+
+  // Issue #175: opt-in persistent session/cookie handling — a plain boolean
+  // (no sub-fields), unlike proxy/pagination's { enabled, ... } shape.
+  document.getElementById('toggle-persistent-session')?.addEventListener('change', (e) => {
+    setState(_state.current, { persistentSession: e.target.checked });
   });
 
   // Issue #88: opt-in proxy support.
@@ -3271,7 +3298,7 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pagination', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pagination', 'persistentSession', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
     'scriptFileName', 'outputFileName',
@@ -3289,6 +3316,7 @@ async function init() {
   if (stored.changeDetection) _state = { ..._state, changeDetection: stored.changeDetection };
   if (stored.proxy)                 _state = { ..._state, proxy: stored.proxy };
   if (stored.pagination)            _state = { ..._state, pagination: stored.pagination };
+  if (stored.persistentSession !== undefined) _state = { ..._state, persistentSession: stored.persistentSession };
   if (stored.hardening)             _state = { ..._state, hardening: stored.hardening };
   if (stored.scriptFileName)        _state = { ..._state, scriptFileName: stored.scriptFileName };
   if (stored.outputFileName)        _state = { ..._state, outputFileName: stored.outputFileName };

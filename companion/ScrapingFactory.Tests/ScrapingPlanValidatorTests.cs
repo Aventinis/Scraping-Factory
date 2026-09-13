@@ -2050,6 +2050,36 @@ public class ScrapingPlanValidatorTests
         Assert.Contains("missing placeholder", result.Error);
     }
 
+    // Issue #175
+    [Fact]
+    public void Validate_PersistentSessionWithBrowserEngine_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps, Engine = ScrapingEngine.Browser, PersistentSession = true,
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_PersistentSessionWithoutBrowserEngine_Fails()
+    {
+        var plan = new ScrapingPlan { Steps = ValidPlan().Steps, Engine = ScrapingEngine.Static, PersistentSession = true };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("PersistentSession", result.Error);
+        Assert.Contains("requires Engine 'Browser'", result.Error);
+    }
+
+    [Fact]
+    public void Validate_PersistentSessionDisabled_Succeeds()
+    {
+        var plan = new ScrapingPlan { Steps = ValidPlan().Steps, PersistentSession = false };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
     // Issue #129
     [Fact]
     public void Validate_ValidHardening_Succeeds()

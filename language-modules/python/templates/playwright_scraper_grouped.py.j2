@@ -48,6 +48,23 @@ URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 
 OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else }}xml{{ end }}"
 
+{{~ if persistent_session_enabled ~}}
+# Issue #175 (persistent session): on the first run (no saved session file
+# yet), the full action sequence below — including any login Fill/Click
+# steps — runs as normal, then the resulting cookies/localStorage are saved
+# here. Every run after that skips straight past the login-only actions
+# (Navigate always still runs) and reuses the saved session instead. The
+# file is refreshed after every run, so a rotated/refreshed session token
+# is still picked up for next time. If the session ever actually expires,
+# there's no automatic fallback to a fresh login — delete this file to
+# force one.
+#
+# WARNING: this file contains live session cookies, effectively login
+# credentials for the site — treat it with the same care as a password,
+# and never share or commit it.
+SESSION_STATE_PATH = OUTPUT_PATH + ".session-state.json"
+{{~ end ~}}
+
 {{~ if pagination.enabled ~}}
 # Issue #174 (pagination): follows either a "next page" link's href
 # (resolved against the current page's own URL) or a {page}-templated URL,
@@ -541,8 +558,19 @@ def _notify_change(old_content, new_content):
 def scrape(url):
     with sync_playwright() as p:
         browser = p.chromium.launch({{ if proxy.enabled }}proxy=_next_playwright_proxy(){{ end }})
+{{~ if persistent_session_enabled ~}}
+        _session_exists = os.path.exists(SESSION_STATE_PATH)
+        context = browser.new_context(storage_state=SESSION_STATE_PATH if _session_exists else None)
+        page = context.new_page()
+{{ navigate_action }}
+{{~ if has_login_actions ~}}
+        if not _session_exists:
+{{ login_actions }}
+{{~ end ~}}
+{{~ else ~}}
         page = browser.new_page()
 {{ actions }}
+{{~ end ~}}
 
         # Multiple top-level groups are siblings in GROUPS, but XML needs
         # exactly one root element — wrap them all (across every paginated
@@ -584,6 +612,9 @@ def scrape(url):
             break
 {{~ end ~}}
 
+{{~ if persistent_session_enabled ~}}
+        context.storage_state(path=SESSION_STATE_PATH)
+{{~ end ~}}
         browser.close()
         return root
 
