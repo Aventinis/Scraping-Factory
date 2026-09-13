@@ -942,6 +942,28 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.Contains("mutually exclusive", doc.RootElement.GetProperty("error").GetString());
     }
 
+    // Issue #174: same reasoning as AdditionalUrls above — Api never reads
+    // the page-scraping start URL, so pagination would silently do nothing
+    // there.
+    [Fact]
+    public async Task Generate_PaginationAndApiBothSet_Returns400()
+    {
+        var payload = $$"""
+            {
+              "url": "https://example.com",
+              "pagination": { "kind": "nextLink", "nextLinkSelector": "a.next" },
+              "api": {{SampleApiPayload}}
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("mutually exclusive", doc.RootElement.GetProperty("error").GetString());
+    }
+
     // End-to-end through the real HTTP endpoint: engine selection resolves
     // PythonApiCodeGenerator, and the generated script is actually run
     // against a fake JSON API (real subprocess + real HTTP request, like

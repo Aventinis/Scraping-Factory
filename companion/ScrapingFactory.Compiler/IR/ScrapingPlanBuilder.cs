@@ -49,6 +49,7 @@ public static class ScrapingPlanBuilder
                 Steps = steps, OutputFormat = groupsOutputFormat, Engine = config.Engine,
                 ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
                 ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, Hardening = config.Hardening,
+                Pagination = config.Pagination,
             };
         }
 
@@ -89,6 +90,7 @@ public static class ScrapingPlanBuilder
             Steps = steps, OutputFormat = config.OutputFormat, Engine = config.Engine,
             ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
             ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, Hardening = config.Hardening,
+            Pagination = config.Pagination,
         };
     }
 

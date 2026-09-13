@@ -881,4 +881,73 @@ public class PythonPlaywrightScriptVerifierTests
         Assert.Contains("no data", result.Error);
         Assert.DoesNotContain("exited with an error", result.Error);
     }
+
+    // ── Pagination (Issue #174) ───────────────────────────────────────────
+    // Real proof that the Browser engine's own scrape() reuses the *same*
+    // browser/page session across paginated pages (page.goto for page 2+)
+    // instead of relaunching — same "prove the exact artifact works"
+    // philosophy as PaginationEndToEndTests' static-engine coverage.
+
+    [Fact]
+    public async Task Flat_NextLink_FollowsUntilLinkDisappears_Succeeds()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var page = request.QueryString["p"] ?? "1";
+            var next = page switch
+            {
+                "1" => """<a class="next" href="?p=2">Next</a>""",
+                "2" => """<a class="next" href="?p=3">Next</a>""",
+                _ => "",
+            };
+            var html = $"""<html><body><h1>Item {page}</h1>{next}</body></html>""";
+            return new LocalTestServerResponse(html, "text/html");
+        });
+
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps = [new NavigateStep { Urls = [server.BaseUrl] }, new ExtractStep { Name = "Titel", Selector = "h1" }],
+            Pagination = new NextLinkPagination { NextLinkSelector = "a.next", MaxPages = 10 },
+        };
+        var script = Generator.Generate(plan);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(3, result.RowCount);
+    }
+
+    [Fact]
+    public async Task Grouped_PageNumber_FollowsTemplateUntilEmptyPage_Succeeds()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var page = request.QueryString["page"] is { } raw ? int.Parse(raw) : 1;
+            var html = page > 2
+                ? "<html><body><ul></ul></body></html>"
+                : $"""<html><body><ul><li class="item"><span>Item {page}</span></li></ul></body></html>""";
+            return new LocalTestServerResponse(html, "text/html");
+        });
+
+        var root = new GroupNode
+        {
+            Name = "Item", Selector = "li.item", Repeating = true,
+            Children = [new DataFieldNode { Name = "Titel", Selector = "span" }],
+        };
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps = [new NavigateStep { Urls = [server.BaseUrl] }, new ExtractGroupStep { Roots = [root] }],
+            OutputFormat = OutputFormat.Xml,
+            Pagination = new PageNumberPagination { UrlTemplate = "{url}?page={page}", MaxPages = 10 },
+        };
+        var script = Generator.Generate(plan);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Xml);
+
+        Assert.True(result.Success, result.Error);
+        // 2 pages x (1 <Item> + 1 <Titel>) = 4
+        Assert.Equal(4, result.RowCount);
+    }
 }

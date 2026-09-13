@@ -940,6 +940,51 @@
             </div>
             <p class="preview-summary" data-i18n="idle.proxyHint"></p>
           </div>
+          <!-- Issue #174: opt-in classic multi-page pagination — follows
+               either a "next page" link (CSS selector, href resolved
+               relative to the current page) or a {page}-templated URL,
+               starting from each start URL as page 1, until a page yields
+               nothing, the safety cap is reached, or (next-link kind) the
+               selector stops matching. Hidden entirely for API mode (see
+               render()'s own #pagination-toggle-row toggle), same reasoning
+               as #additional-urls-row — API mode already has its own page-
+               parameter mechanism via a Number RangeSource. -->
+          <label class="output-settings-toggle" id="pagination-toggle-row">
+            <input type="checkbox" id="toggle-pagination" />
+            <span data-i18n="idle.paginationToggle"></span>
+          </label>
+          <div id="pagination-config" class="hidden">
+            <div class="mode-toggle" style="margin-bottom: 8px;">
+              <div class="mode-toggle-thumb"></div>
+              <button id="btn-pagination-next-link" class="mode-btn active" type="button" data-i18n="idle.paginationKindNextLink"></button>
+              <button id="btn-pagination-page-number" class="mode-btn" type="button" data-i18n="idle.paginationKindPageNumber"></button>
+            </div>
+            <div id="pagination-next-link-fields">
+              <div class="output-settings-row">
+                <label for="input-pagination-next-link-selector" data-i18n="idle.paginationNextLinkSelectorLabel"></label>
+                <input type="text" id="input-pagination-next-link-selector" data-i18n-placeholder="idle.paginationNextLinkSelectorPlaceholder" autocomplete="off" />
+              </div>
+              <!-- Issue #174 follow-up: lets a non-developer pick the "next
+                   page" link by clicking it on the page instead of having to
+                   know/type a CSS selector by hand — same click-based
+                   selection flow browser actions' own pick button already
+                   uses (see .btn-pick-action-selector). -->
+              <div class="actions">
+                <button id="btn-pick-pagination-next-link" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.pickSelectorBtn"></button>
+              </div>
+            </div>
+            <div id="pagination-page-number-fields" class="hidden">
+              <div class="output-settings-row">
+                <label for="input-pagination-url-template" data-i18n="idle.paginationUrlTemplateLabel"></label>
+                <input type="text" id="input-pagination-url-template" data-i18n-placeholder="idle.paginationUrlTemplatePlaceholder" autocomplete="off" />
+              </div>
+              <p class="preview-summary" data-i18n="idle.paginationUrlTemplateHint"></p>
+            </div>
+            <div class="output-settings-row">
+              <label for="input-pagination-max-pages" data-i18n="idle.paginationMaxPagesLabel"></label>
+              <input type="number" id="input-pagination-max-pages" min="1" step="1" />
+            </div>
+          </div>
         </div>
       </div>
       <!-- Issue #183: change detection (#87) and script hardening (#129-

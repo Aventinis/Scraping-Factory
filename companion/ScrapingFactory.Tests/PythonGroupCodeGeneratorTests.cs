@@ -58,7 +58,7 @@ public class PythonGroupCodeGeneratorTests
     {
         var script = _generator.Generate(NestedGroupPlan());
         Assert.Contains("HEADERS = {\"User-Agent\":", script);
-        Assert.Contains("requests.get(url, headers=HEADERS, timeout=10)", script);
+        Assert.Contains("requests.get(page_url, headers=HEADERS, timeout=10)", script);
     }
 
     // Issue #169
@@ -486,6 +486,26 @@ public class PythonGroupCodeGeneratorTests
         Assert.Contains("import itertools", script);
         Assert.Contains("PROXY_ENV_VAR = 'SF_PROXIES'", script);
         Assert.Contains(
-            "requests.get(url, headers=HEADERS, proxies=_proxies_for_requests(), timeout=10)", script);
+            "requests.get(page_url, headers=HEADERS, proxies=_proxies_for_requests(), timeout=10)", script);
+    }
+
+    // Issue #174
+    [Fact]
+    public void Generate_WithPageNumberPagination_EmitsTemplateConstantAndLoop()
+    {
+        var plan = NestedGroupPlan();
+        plan = new ScrapingPlan
+        {
+            Steps = plan.Steps, OutputFormat = plan.OutputFormat, Engine = plan.Engine,
+            ScriptFileName = plan.ScriptFileName, OutputFileBaseName = plan.OutputFileBaseName,
+            Pagination = new PageNumberPagination { UrlTemplate = "{url}?page={page}", MaxPages = 25 },
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("PAGINATION_MAX_PAGES = 25", script);
+        Assert.Contains("PAGINATION_URL_TEMPLATE = '{url}?page={page}'", script);
+        Assert.Contains("page_url = PAGINATION_URL_TEMPLATE.format(url=url, page=page_number)", script);
+        Assert.Contains("page_elements = []", script);
     }
 }

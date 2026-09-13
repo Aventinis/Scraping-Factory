@@ -64,6 +64,16 @@ public static class ScrapingPlanValidator
                 return Invalid(hardeningError);
         }
 
+        // Issue #174: mode-independent (Fields/Groups — ScrapingPlanBuilder
+        // never sets this for an Api-mode plan), same placement as
+        // ChangeDetection/Proxy/Hardening above.
+        if (plan.Pagination is { } pagination)
+        {
+            var paginationError = ValidatePagination(pagination);
+            if (paginationError is not null)
+                return Invalid(paginationError);
+        }
+
         // WaitFor/Fill/Click/Scroll all need a real browser to mean anything —
         // the Static engine's codegen simply doesn't look at them, so
         // silently generating a script that just drops them would be
@@ -640,6 +650,40 @@ public static class ScrapingPlanValidator
         EnvironmentVariableNamePattern.IsMatch(proxy.EnvironmentVariableName)
             ? null
             : $"Invalid environment variable name '{proxy.EnvironmentVariableName}' in Proxy.EnvironmentVariableName.";
+
+    // Issue #174: MaxPages is checked regardless of kind; the two kinds then
+    // each validate their own one required field. PageNumberPagination.
+    // UrlTemplate must reference both "{url}" and "{page}" — reused via the
+    // same UrlTemplatePlaceholderPattern API-mode's own UrlTemplate
+    // validation already uses above, just checked by presence rather than
+    // matched against a declared Parameters list (there's no equivalent
+    // concept here).
+    private static string? ValidatePagination(PaginationConfig pagination)
+    {
+        if (pagination.MaxPages <= 0)
+            return $"Pagination.MaxPages must be positive (was {pagination.MaxPages}).";
+
+        return pagination switch
+        {
+            NextLinkPagination nextLink => string.IsNullOrWhiteSpace(nextLink.NextLinkSelector)
+                ? "NextLinkPagination.NextLinkSelector must not be empty."
+                : null,
+            PageNumberPagination pageNumber => ValidatePageNumberUrlTemplate(pageNumber.UrlTemplate),
+            _ => throw new InvalidOperationException($"Unknown PaginationConfig type: {pagination.GetType()}"),
+        };
+    }
+
+    private static string? ValidatePageNumberUrlTemplate(string urlTemplate)
+    {
+        if (string.IsNullOrWhiteSpace(urlTemplate))
+            return "PageNumberPagination.UrlTemplate must not be empty.";
+
+        var placeholders = UrlTemplatePlaceholderPattern.Matches(urlTemplate).Select(match => match.Groups[1].Value).ToHashSet();
+        var missing = new[] { "url", "page" }.Where(token => !placeholders.Contains(token)).ToList();
+        return missing.Count > 0
+            ? $"PageNumberPagination.UrlTemplate is missing placeholder(s): {string.Join(", ", missing.Select(token => $"{{{token}}}"))}."
+            : null;
+    }
 
     // Issue #129/#130: every non-NullRate check kind (the concrete
     // HardeningCheck subtype, since there's no separate string "Kind"
