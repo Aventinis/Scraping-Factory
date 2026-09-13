@@ -50,6 +50,8 @@
     "apiCaptureSummary": "{count} Anfrage(n) aufgezeichnet",
     "apiSearchTitle": "Klicke danach einen Datenpunkt auf der Seite an — er wird in der Aufzeichnung gesucht",
     "apiSearchBtn": "Datenpunkt in Aufzeichnung suchen",
+    "apiEmbeddedJsonSearchTitle": "Für Seiten ohne eigene Netzwerk-Anfrage: Klicke einen Datenpunkt an — er wird in den <script>-Tags der Seite gesucht (z. B. __NEXT_DATA__)",
+    "apiEmbeddedJsonSearchBtn": "In eingebetteten JSON-Daten der Seite suchen",
     "apiEntriesTitle": "Zeigt alle bisher aufgezeichneten Netzwerkanfragen mit URL, Methode und Status",
     "apiEntriesShowBtn": "Aufgezeichnete Anfragen anzeigen ({count})",
     "apiEntriesHideBtn": "Aufgezeichnete Anfragen ausblenden",
@@ -135,9 +137,11 @@
     "siblingChip": "+ {name}",
     "selectAllChips": "Alle auswählen",
     "deselectAllChips": "Alle abwählen",
-    "useFieldNamePlaceholder": "Feldname"
+    "useFieldNamePlaceholder": "Feldname",
+    "embeddedJsonSourceLabel": "Gefunden in Seiten-Script: {selector}"
   },
   "apiConfig": {
+    "embeddedJsonSourceNote": "Stammt aus eingebettetem JSON im eigenen <script>-Tag der Seite ({selector}) — die URL unten ist die zu ladende Seite, kein JSON-API-Endpunkt.",
     "urlPathLabel": "URL — Pfad",
     "urlQueryLabel": "URL — Query-Parameter",
     "valueSourcesLabel": "Werte-Quellen",

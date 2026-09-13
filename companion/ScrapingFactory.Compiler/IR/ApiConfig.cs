@@ -54,6 +54,35 @@ public sealed class ApiConfig
     // fixed/variable-value machinery as any other POST body, see
     // ApiBodyNode.
     public ApiBodyNode? Body { get; init; }
+
+    // Embedded-JSON source (Issue #136): an alternative to a live JSON API
+    // call, for sites that render their complete data into the initial page
+    // HTML (Next.js's __NEXT_DATA__, Nuxt's __NUXT__, or a generic
+    // <script type="application/json"> state blob) and hydrate the DOM from
+    // it client-side, with no separate, capturable network request ever
+    // happening. When set, UrlTemplate/Parameters/Headers still describe an
+    // ordinary (optionally parameterized) GET request — but the "response
+    // body" to run ItemsPath/Fields/Groups against is the text content of
+    // one <script> tag within the fetched page's HTML, not the HTTP
+    // response body itself. Mutually exclusive with Body/Method=="POST" (a
+    // page load has no request body, enforced in ScrapingPlanValidator);
+    // orthogonal to the flat-vs-tree response shape, which still describes
+    // the shape of whatever JSON the script tag contains.
+    public EmbeddedJsonSource? EmbeddedJsonSource { get; init; }
+}
+
+// See ApiConfig.EmbeddedJsonSource. A plain optional object, not part of any
+// polymorphic list — unlike ApiParameterSource's three variants, there's
+// nothing to discriminate between, so no "kind" tag/converter is needed.
+public sealed class EmbeddedJsonSource
+{
+    // CSS selector identifying the <script> tag whose text content is the
+    // JSON to parse, e.g. "#__NEXT_DATA__" or
+    // "script[type='application/json']" — resolved via BeautifulSoup's
+    // select_one at runtime, so subject to the same CSS-selector
+    // compatibility caveat as any other selector in this project (see
+    // CLAUDE.md's "Selector compatibility" architecture note).
+    public required string ScriptSelector { get; init; }
 }
 
 // Exactly one of Value/EnvironmentVariableName is set — same "one of two

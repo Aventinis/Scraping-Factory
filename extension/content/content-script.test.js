@@ -3,6 +3,7 @@ const {
   matchFlatFields, matchGroupTree, computePreviewMatches,
   findValueInJson, siblingFields, siblingFieldsAt, findApiCandidates,
   deriveItemsAndValuePath, deriveApiTreeSkeleton,
+  scriptTagSelector, findEmbeddedJsonCandidates,
   findIframeSelectorForWindow, resolveFramePath, frameDepth,
 } = require('./content-script');
 
@@ -1051,6 +1052,140 @@ describe('findApiCandidates', () => {
       const entries = [entry({ body: JSON.stringify(catalog) })];
       expect(findApiCandidates(entries, 'Smartphone X', null)).toHaveLength(2);
       expect(findApiCandidates(entries, 'Smartphone X')).toHaveLength(2);
+    });
+  });
+});
+
+describe('scriptTagSelector (Issue #136)', () => {
+  test('a script tag with an id returns #id', () => {
+    document.body.innerHTML = '<script id="__NEXT_DATA__" type="application/json">{}</script>';
+    const tag = document.getElementById('__NEXT_DATA__');
+    expect(scriptTagSelector(tag)).toBe('#__NEXT_DATA__');
+  });
+
+  test('a script tag with a type unique on the page returns script[type="..."]', () => {
+    document.body.innerHTML = '<script type="application/json">{}</script><script>var x = 1;</script>';
+    const tag = document.querySelector('script[type="application/json"]');
+    expect(scriptTagSelector(tag)).toBe('script[type="application/json"]');
+  });
+
+  test('falls back to a positional nth-child path when neither id nor a unique type is available', () => {
+    document.body.innerHTML = '<div><script type="application/json">{"a":1}</script><script type="application/json">{"b":2}</script></div>';
+    const [first, second] = document.querySelectorAll('script[type="application/json"]');
+    expect(scriptTagSelector(first)).not.toBe(scriptTagSelector(second));
+    // Resolvable back to the same element via querySelector.
+    expect(document.querySelector(scriptTagSelector(first))).toBe(first);
+    expect(document.querySelector(scriptTagSelector(second))).toBe(second);
+  });
+});
+
+describe('findEmbeddedJsonCandidates (Issue #136)', () => {
+  function setScripts(...blobs) {
+    document.body.innerHTML = blobs
+      .map(({ id, type, json } = {}) => {
+        const idAttr = id ? ` id="${id}"` : '';
+        const typeAttr = type ? ` type="${type}"` : '';
+        return `<script${idAttr}${typeAttr}>${json}</script>`;
+      })
+      .join('');
+  }
+
+  test('finds a candidate embedded in a __NEXT_DATA__-style script tag, including sibling suggestions', () => {
+    setScripts({ id: '__NEXT_DATA__', type: 'application/json', json: JSON.stringify({ props: { items: [{ name: 'Suppe', price: 3.5 }] } }) });
+    const candidates = findEmbeddedJsonCandidates('Suppe');
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({ scriptSelector: '#__NEXT_DATA__', path: 'props.items[0].name', value: 'Suppe' });
+    expect(candidates[0].siblings).toEqual([{ name: 'price', path: 'props.items[0].price', value: 3.5 }]);
+  });
+
+  test('attaches the derived itemsPath/valuePath and treeSkeleton, same as findApiCandidates', () => {
+    setScripts({ type: 'application/json', json: JSON.stringify({ categories: [{ subcategories: [{ products: [{ title: 'Suppe' }] }] }] }) });
+    const [candidate] = findEmbeddedJsonCandidates('Suppe');
+    expect(candidate.itemsPath).toBe('categories[0].subcategories[0].products');
+    expect(candidate.valuePath).toBe('title');
+    expect(candidate.treeSkeleton).toEqual([
+      { kind: 'group', path: 'categories' },
+      { kind: 'group', path: 'subcategories' },
+      { kind: 'group', path: 'products' },
+      { kind: 'field', path: 'title' },
+    ]);
+  });
+
+  test('skips a <script> tag whose content is not valid JSON (ordinary inline JS)', () => {
+    setScripts({ json: 'var x = "Suppe";' }, { type: 'application/json', json: JSON.stringify({ name: 'Suppe' }) });
+    const candidates = findEmbeddedJsonCandidates('Suppe');
+    expect(candidates).toHaveLength(1);
+  });
+
+  test('skips a <script> tag whose content is a bare JSON scalar (no repeating structure)', () => {
+    setScripts({ json: '"Suppe"' });
+    expect(findEmbeddedJsonCandidates('Suppe')).toEqual([]);
+  });
+
+  test('returns nothing when no script tag contains the target text', () => {
+    setScripts({ type: 'application/json', json: JSON.stringify({ name: 'Salat' }) });
+    expect(findEmbeddedJsonCandidates('Suppe')).toEqual([]);
+  });
+
+  test('returns nothing for an empty target', () => {
+    setScripts({ type: 'application/json', json: JSON.stringify({ name: 'Suppe' }) });
+    expect(findEmbeddedJsonCandidates('   ')).toEqual([]);
+  });
+
+  test('ranks a __NEXT_DATA__ id match above a same-value match in a script tag with no known convention', () => {
+    setScripts(
+      { json: JSON.stringify({ items: [{ x: 'Suppe' }] }) },
+      { id: '__NEXT_DATA__', json: JSON.stringify({ name: 'Suppe' }) },
+    );
+    const candidates = findEmbeddedJsonCandidates('Suppe');
+    expect(candidates[0].scriptSelector).toBe('#__NEXT_DATA__');
+  });
+
+  test('caps the number of returned candidates at MAX_API_CANDIDATES (20)', () => {
+    const items = Array.from({ length: 25 }, (_, i) => ({ name: 'Suppe', id: i }));
+    setScripts({ type: 'application/json', json: JSON.stringify({ items }) });
+    expect(findEmbeddedJsonCandidates('Suppe')).toHaveLength(20);
+  });
+
+  // scopePath (mirrors findApiCandidates' own Phase A3 scoping, used when
+  // extending an already-confirmed embedded-JSON tree with a nested group/
+  // field — see startEmbeddedJsonSearch/resolveApiGroupScopePath).
+  describe('scopePath', () => {
+    const catalog = {
+      categories: [
+        { name: 'Elektronik', subcategories: [{ name: 'Telefone', products: [{ title: 'Smartphone X' }] }] },
+        { name: 'Bücher', subcategories: [{ name: 'Romane', products: [{ title: 'Smartphone X' }] }] },
+      ],
+    };
+
+    test('excludes a match outside the given scope, keeping one inside it', () => {
+      setScripts({ type: 'application/json', json: JSON.stringify(catalog) });
+      const candidates = findEmbeddedJsonCandidates('Smartphone X', 'categories[0]');
+      expect(candidates).toHaveLength(1);
+      expect(candidates[0].path).toBe('categories[0].subcategories[0].products[0].title');
+    });
+
+    test('null/undefined scopePath reproduces the unscoped whole-page search', () => {
+      setScripts({ type: 'application/json', json: JSON.stringify(catalog) });
+      expect(findEmbeddedJsonCandidates('Smartphone X', null)).toHaveLength(2);
+      expect(findEmbeddedJsonCandidates('Smartphone X')).toHaveLength(2);
+    });
+  });
+
+  // scriptSelector (Issue #136): restricts the scan to the one <script> tag
+  // an already-confirmed tree's EmbeddedJsonSource commits to, instead of
+  // re-scanning every <script> tag on the page — unlike a network entryId
+  // (findApiCandidates has no equivalent restriction), there is exactly one
+  // valid source once EmbeddedJsonSource.ScriptSelector is fixed.
+  describe('scriptSelector', () => {
+    test('restricts the scan to the given script tag, ignoring a same-value match elsewhere', () => {
+      setScripts(
+        { id: 'other', type: 'application/json', json: JSON.stringify({ name: 'Suppe' }) },
+        { id: '__NEXT_DATA__', type: 'application/json', json: JSON.stringify({ name: 'Salat' }) },
+      );
+      expect(findEmbeddedJsonCandidates('Suppe', null, '#__NEXT_DATA__')).toEqual([]);
+      expect(findEmbeddedJsonCandidates('Salat', null, '#__NEXT_DATA__')).toHaveLength(1);
     });
   });
 });

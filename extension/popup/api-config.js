@@ -298,9 +298,14 @@ const SFApiConfig = (function () {
   // `parameterIdToName` is only needed to serialize `bodyTree` (see
   // serializeBodyTree) — a variable leaf's draft-only `parameterId` doesn't
   // otherwise appear anywhere in this function.
+  // Issue #136: embeddedJsonSource ({scriptSelector}, or null/undefined for
+  // an ordinary live API request) is included as-is when set — mirrors
+  // IR/ApiConfig.cs's own EmbeddedJsonSource property, a plain optional
+  // object with no serialization of its own to do here (unlike groups/body,
+  // which are draft shapes needing conversion to the wire format).
   function buildApiConfig({
     urlParts, itemsPath, fields, groups, parameterSources, capturedHeaders, headerDecisions,
-    method, bodyTree, bodyParameterNames = [], parameterIdToName = {},
+    method, bodyTree, bodyParameterNames = [], parameterIdToName = {}, embeddedJsonSource = null,
   }) {
     const urlTemplate = buildUrlTemplate(urlParts);
     const variableParts = [...urlParts.pathSegments, ...urlParts.queryParams].filter(p => p.variable);
@@ -315,6 +320,7 @@ const SFApiConfig = (function () {
       parameters,
       ...(headers.length > 0 ? { headers } : {}),
       ...(bodyTree ? { body: serializeBodyTree(bodyTree, parameterIdToName) } : {}),
+      ...(embeddedJsonSource ? { embeddedJsonSource } : {}),
     };
   }
 

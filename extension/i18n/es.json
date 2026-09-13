@@ -50,6 +50,8 @@
     "apiCaptureSummary": "{count} solicitud(es) grabada(s)",
     "apiSearchTitle": "Luego haz clic en un dato de la página — se buscará en la grabación",
     "apiSearchBtn": "Buscar dato en la grabación",
+    "apiEmbeddedJsonSearchTitle": "Para sitios sin solicitud de red independiente: haz clic en un dato y se buscará en las etiquetas <script> de la página (p. ej. __NEXT_DATA__)",
+    "apiEmbeddedJsonSearchBtn": "Buscar en los datos JSON incrustados de la página",
     "apiEntriesTitle": "Muestra todas las solicitudes de red grabadas hasta ahora, con URL, método y estado",
     "apiEntriesShowBtn": "Mostrar solicitudes grabadas ({count})",
     "apiEntriesHideBtn": "Ocultar solicitudes grabadas",
@@ -135,9 +137,11 @@
     "siblingChip": "+ {name}",
     "selectAllChips": "Seleccionar todo",
     "deselectAllChips": "Deseleccionar todo",
-    "useFieldNamePlaceholder": "Nombre del campo"
+    "useFieldNamePlaceholder": "Nombre del campo",
+    "embeddedJsonSourceLabel": "Encontrado en script de la página: {selector}"
   },
   "apiConfig": {
+    "embeddedJsonSourceNote": "Obtenido de JSON incrustado en la propia etiqueta <script> de la página ({selector}) — la URL de abajo es la página a cargar, no un endpoint de API JSON.",
     "urlPathLabel": "URL — Ruta",
     "urlQueryLabel": "URL — Parámetros de consulta",
     "valueSourcesLabel": "Fuentes de valores",

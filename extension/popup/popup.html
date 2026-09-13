@@ -845,6 +845,16 @@
       <div class="actions" style="margin-top: 6px;">
         <button id="btn-api-search" class="btn-secondary" type="button" disabled data-i18n="idle.apiSearchBtn" data-i18n-title="idle.apiSearchTitle"></button>
       </div>
+
+      <!-- Issue #136: an alternative to recording+search above, for sites
+           that embed their complete data in the initial page HTML (no
+           separate, capturable network request ever happens) — needs no
+           recording toggle at all, so it's always available. Feeds the same
+           #api-candidates-panel/-list below; the resulting candidate is
+           dispatched by shape (candidate.scriptSelector) in popup.js. -->
+      <div class="actions" style="margin-top: 6px;">
+        <button id="btn-embedded-json-search" class="btn-secondary" type="button" data-i18n="idle.apiEmbeddedJsonSearchBtn" data-i18n-title="idle.apiEmbeddedJsonSearchTitle"></button>
+      </div>
       <div id="api-candidates-panel" class="api-candidates-panel hidden">
         <p id="api-candidates-target" class="api-candidates-target"></p>
         <ul id="api-candidates-list" class="api-candidates-list"></ul>
@@ -1173,6 +1183,12 @@
        into an ApiConfig. Reached from the api-mode-section's "Verwenden"
        flow (see screen-idle above), which only shows once mode === 'api'. -->
   <section id="screen-api-config" class="screen hidden">
+    <!-- Issue #136: shown only when this ApiConfig was sourced from an
+         embedded <script> tag instead of a live network request — clarifies
+         why the URL segments below describe a plain page load, not an API
+         call. -->
+    <p id="api-config-embedded-json-note" class="preview-summary hidden"></p>
+
     <!-- Nested JSON tree editor (Issue #54) — subsumes the old flat field
          list entirely (Phase A5): a single top-level match renders as a
          one-node-deep tree, visually almost identical to the old list but

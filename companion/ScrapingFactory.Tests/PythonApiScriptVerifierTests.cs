@@ -801,4 +801,119 @@ public class PythonApiScriptVerifierTests
         Assert.Equal("Json", result.Preview.OutputFormat);
         Assert.Contains("\"Titel\"", result.Preview.JsonSample);
     }
+
+    // ── Embedded JSON source (Issue #136) ─────────────────────────────────
+    // Same "prove the real artifact works" philosophy as the tests above,
+    // but LocalTestServer returns a server-rendered HTML page with the data
+    // embedded in a <script> tag (like Next.js's __NEXT_DATA__) instead of a
+    // JSON API response — no network-recordable JSON response body at all.
+
+    [Fact]
+    public async Task EmbeddedJsonSource_FlatShape_ExtractsFromScriptTag_Succeeds()
+    {
+        using var server = new LocalTestServer(_ => new LocalTestServerResponse(
+            """
+            <!DOCTYPE html>
+            <html><body>
+            <div id="app"></div>
+            <script id="__NEXT_DATA__" type="application/json">{"props": {"pageProps": {"items": [{"title": "Smartphone X"}, {"title": "Smartphone Y"}]}}}</script>
+            </body></html>
+            """, "text/html"));
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = server.BaseUrl,
+            ItemsPath = "props.pageProps.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            EmbeddedJsonSource = new EmbeddedJsonSource { ScriptSelector = "#__NEXT_DATA__" },
+        };
+
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateScript(api));
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(2, result.RowCount);
+    }
+
+    [Fact]
+    public async Task EmbeddedJsonSource_TreeShape_ExtractsFromScriptTag_Succeeds()
+    {
+        using var server = new LocalTestServer(_ => new LocalTestServerResponse(
+            """
+            <!DOCTYPE html>
+            <html><body>
+            <script type="application/json">{"categories": [{"name": "Elektronik", "products": [{"title": "A"}, {"title": "B"}]}]}</script>
+            </body></html>
+            """, "text/html"));
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = server.BaseUrl,
+            Groups =
+            [
+                new ApiGroup
+                {
+                    Name = "Kategorie",
+                    Path = "categories",
+                    Children =
+                    [
+                        new ApiField { Name = "Name", Path = "name" },
+                        new ApiGroup { Name = "Produkt", Path = "products", Children = [new ApiField { Name = "Titel", Path = "title" }] },
+                    ],
+                },
+            ],
+            EmbeddedJsonSource = new EmbeddedJsonSource { ScriptSelector = "script[type='application/json']" },
+        };
+
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateScript(api), OutputFormat.Xml);
+
+        Assert.True(result.Success, result.Error);
+        // 1 <Kategorie> + 1 <Name> + 2 <Produkt> + 2 <Titel> = 6
+        Assert.Equal(6, result.RowCount);
+    }
+
+    [Fact]
+    public async Task EmbeddedJsonSource_ParameterizedUrl_CombinesResultsAcrossPages_Succeeds()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var id = request.QueryString["id"];
+            var html = $$"""<html><body><script id="__NEXT_DATA__" type="application/json">{"items": [{"title": "Item-{{id}}"}]}</script></body></html>""";
+            return new LocalTestServerResponse(html, "text/html");
+        });
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = $"{server.BaseUrl}?id={{id}}",
+            ItemsPath = "items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters = [new ApiParameter { Name = "id", Source = new StaticListSource { Values = ["1", "2"] } }],
+            EmbeddedJsonSource = new EmbeddedJsonSource { ScriptSelector = "#__NEXT_DATA__" },
+        };
+
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateScript(api));
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(2, result.RowCount);
+    }
+
+    [Fact]
+    public async Task EmbeddedJsonSource_ScriptSelectorMatchesNothing_FailsWithClearError()
+    {
+        using var server = new LocalTestServer(_ =>
+            new LocalTestServerResponse("<html><body><p>No embedded data here</p></body></html>", "text/html"));
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = server.BaseUrl,
+            ItemsPath = "items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            EmbeddedJsonSource = new EmbeddedJsonSource { ScriptSelector = "#__NEXT_DATA__" },
+        };
+
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateScript(api));
+
+        Assert.False(result.Success);
+        Assert.NotNull(result.Error);
+        Assert.Contains("__NEXT_DATA__", result.Error);
+    }
 }

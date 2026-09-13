@@ -306,6 +306,35 @@ covers.
 - Templates: `scraper_api.py.j2` and `scraper_api_grouped.py.j2` (`METHOD`/`BODY`
   constants, `_render_body`/`_coerce_body_value`)
 
+### 2.5a API mode — embedded JSON source (Issue #136)
+
+Extends API mode (§2.3) to sites that render their complete data into the
+initial page HTML (Next.js `__NEXT_DATA__`, Nuxt `__NUXT__`, a generic
+`<script type="application/json">` state blob) and hydrate the DOM from it
+client-side, with no separate, capturable network request ever happening —
+`content/api-capture.js`'s recorder has nothing to correlate against in this
+case. A second, recording-free candidate source (`findEmbeddedJsonCandidates`)
+scans `document.scripts` directly at click time and reuses §2.3's own
+`findValueInJson`/`siblingFields`/`deriveApiTreeSkeleton` unchanged — they're
+pure functions over already-parsed JSON, agnostic to where it came from. The
+companion fetches the page via `requests` and extracts the identified
+`<script>` tag via BeautifulSoup instead of parsing a live JSON response body;
+`ItemsPath`/`Fields`/`Groups` extraction is otherwise identical to an ordinary
+API-mode request (fetch-mechanism-agnostic by design).
+
+- Extension: `content/content-script.js` (`findEmbeddedJsonCandidates`,
+  `scriptTagSelector`), `popup/api-config-ui.js`
+  (`startEmbeddedJsonFieldSearch`, `confirmEmbeddedJsonFieldCandidate`,
+  `renderApiCandidates`'s `candidate.scriptSelector` branch), `popup/api-config.js`
+  (`buildApiConfig`'s `embeddedJsonSource` param)
+- Companion: `IR/ApiConfig.cs` (`ApiConfig.EmbeddedJsonSource`,
+  `EmbeddedJsonSource`), `ScrapingPlanValidator.cs` (`ValidateApiConfig`'s
+  `EmbeddedJsonSource` block), `Backends/Python/PythonApiConfigLiteral.cs`
+  (`RenderEmbeddedJsonSource`), `PythonApiCodeGenerator.cs`
+  (`embedded_json_source`/`embedded_json_source_literal`)
+- Templates: `scraper_api.py.j2` and `scraper_api_grouped.py.j2`
+  (`EMBEDDED_JSON_SOURCE` constant, `_extract_embedded_json`)
+
 ### 2.6 Browser engine, browser actions & login flows (Issues #41/#42/#43)
 
 Adds an optional Playwright-based rendering engine (real Chromium, executes the
@@ -896,8 +925,9 @@ compile time anywhere.
 |---|---|---|---|
 | Flat field | `popup.js`: `addField()`, `buildScrapingConfig()`'s `fields.map(...)` | `{name, selector, attribute?, framePath?}` | `IR/ScrapingConfig.cs`: `ScrapingField` |
 | Container tree node | `container-tree.js`: `buildGroupNode`/`buildFieldNode`, `serializeGroupTree` | `{name,selector,repeating,children:[...],framePath?}` or `{name,selector,mode,attribute?,framePath?}` | `IR/ContainerNode.cs`: `GroupNode`/`DataFieldNode` (via `ContainerNodeJsonConverter`) |
-| API config (top level) | `api-config.js`: `buildApiConfig()` | `{urlTemplate, method?, parameters:[...], headers?, itemsPath+fields \| groups, body?}` | `IR/ApiConfig.cs`: `ApiConfig` |
+| API config (top level) | `api-config.js`: `buildApiConfig()` | `{urlTemplate, method?, parameters:[...], headers?, itemsPath+fields \| groups, body?, embeddedJsonSource?}` | `IR/ApiConfig.cs`: `ApiConfig` |
 | API parameter source | `api-config.js`: `buildStaticListSource`/`buildDiscoverySource`/`buildRangeSource` | `{kind:"staticList"\|"discovery"\|"range", ...}` | `IR/ApiConfig.cs`: `ApiParameterSource` (`[JsonPolymorphic]`) |
+| API embedded JSON source (Issue #136) | `api-config-ui.js`: `confirmEmbeddedJsonFieldCandidate()` (`{scriptSelector}`, stamped from `content-script.js`'s `scriptTagSelector`) | `{scriptSelector}` | `IR/ApiConfig.cs`: `EmbeddedJsonSource` (plain optional object, no converter) |
 | API response tree node | `api-config.js`: `buildApiGroupDraft`/`buildApiFieldDraft`, `serializeApiTree` | `{name,path,children:[...]}` or `{name,path}` | `IR/ApiConfig.cs`: `ApiGroup`/`ApiField` (via `ApiNodeJsonConverter`) |
 | API request body node | `api-config.js`: `jsonValueToBodyDraft`/`serializeBodyTree` | `{properties:{...}}` / `{items:[...]}` / `{kind,stringValue\|numberValue\|boolValue}` / `{parameterName, coerceTo?}` | `IR/ApiBodyNode.cs`: `ApiBodyObject`/`Array`/`Literal`/`Variable` (via `ApiBodyNodeJsonConverter`) |
 | Browser action | `popup.js`: `addBrowserAction`/`serializeBrowserActions` | `{kind:"waitFor"\|"fill"\|"click"\|"scroll", selector, ...}` | `IR/BrowserAction.cs`: `WaitForAction`/`FillAction`/`ClickAction`/`ScrollAction` (`[JsonPolymorphic]`) |

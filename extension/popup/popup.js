@@ -42,6 +42,7 @@ const {
   renderApiConfigScreen, renderBodyTree,
   startApiCapture, stopApiCapture, toggleApiCapture,
   startApiFieldSearch, confirmApiFieldCandidate, loadInitialBodyTreeForCandidate, cancelApiConfig,
+  startEmbeddedJsonFieldSearch, confirmEmbeddedJsonFieldCandidate,
   startApiTreeFieldSearch, confirmApiTreeFieldCandidate,
   openApiGroupModal, confirmApiGroupModal, cancelApiGroupModal, setApiTreeNodeName,
   openApiFieldTransformsModal, confirmApiFieldTransformsModal, cancelApiFieldTransformsModal,
@@ -2509,6 +2510,11 @@ function wireEvents() {
     startApiFieldSearch(bridge);
   });
 
+  document.getElementById('btn-embedded-json-search')?.addEventListener('click', () => {
+    log('BTN embedded-json-search');
+    startEmbeddedJsonFieldSearch(bridge);
+  });
+
   document.getElementById('btn-api-entries-toggle')?.addEventListener('click', () => {
     log('BTN api-entries-toggle');
     toggleApiEntriesPanel(bridge);
@@ -2562,9 +2568,16 @@ function wireEvents() {
     });
   }
 
+  // Issue #136: the same #api-candidates-list serves both a network search
+  // (startApiFieldSearch) and an embedded-JSON search (startEmbeddedJsonField
+  // Search) — dispatch to the matching confirm function purely by candidate
+  // shape (only an embedded-JSON candidate ever carries scriptSelector, see
+  // content-script.js's findEmbeddedJsonCandidates vs. findApiCandidates).
   wireApiCandidateListEvents(
     'api-candidates-list', () => _state.apiCandidates?.candidates,
-    (candidate, fieldName, siblingNames) => confirmApiFieldCandidate(bridge, candidate, fieldName, siblingNames),
+    (candidate, fieldName, siblingNames) => (candidate.scriptSelector
+      ? confirmEmbeddedJsonFieldCandidate(bridge, candidate, fieldName, siblingNames)
+      : confirmApiFieldCandidate(bridge, candidate, fieldName, siblingNames)),
   );
   wireApiCandidateListEvents(
     'api-tree-search-list', () => _state.apiTreeSearchResult?.candidates,
@@ -3095,8 +3108,14 @@ function wireEvents() {
       patchState({ apiCaptureActive: false, apiCaptureCount: 0 });
       showToast(t('toast.captureUnavailable'));
     }
-    if (message.type === 'API_CANDIDATES' && _state.apiSearchTarget) {
-      log('API_CANDIDATES received', { target: message.target, count: message.candidates?.length, for: _state.apiSearchTarget });
+    // Issue #136: EMBEDDED_JSON_CANDIDATES is content-script.js's
+    // findEmbeddedJsonCandidates counterpart to API_CANDIDATES — handled
+    // identically here, since dispatch is entirely keyed off the shape of
+    // _state.apiSearchTarget (set by either startApiFieldSearch/
+    // startEmbeddedJsonFieldSearch for 'field', or startApiTreeFieldSearch
+    // for the tree-extension case), not off which message type arrived.
+    if ((message.type === 'API_CANDIDATES' || message.type === 'EMBEDDED_JSON_CANDIDATES') && _state.apiSearchTarget) {
+      log(`${message.type} received`, { target: message.target, count: message.candidates?.length, for: _state.apiSearchTarget });
       chrome.storage.session.remove('pendingSelector');
       const result = { target: message.target, candidates: message.candidates || [] };
       if (_state.apiSearchTarget === 'field') {

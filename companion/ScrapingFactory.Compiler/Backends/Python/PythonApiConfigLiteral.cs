@@ -103,6 +103,14 @@ internal static class PythonApiConfigLiteral
         _ => throw new InvalidOperationException($"Unknown ApiBodyLiteralKind: {literal.Kind}"),
     };
 
+    // Issue #136: "None" (Python's null) when no EmbeddedJsonSource is set —
+    // the runtime's _extract_embedded_json helper is only called when this
+    // constant isn't None, mirroring RenderBody's own "None means absent"
+    // convention above.
+    public static string RenderEmbeddedJsonSource(EmbeddedJsonSource? source) => source is null
+        ? "None"
+        : $$"""{"scriptSelector": {{PythonLiteral.Str(source.ScriptSelector)}}}""";
+
     public static string RenderParameters(List<ApiParameter> parameters) =>
         RenderList(parameters, parameter =>
             $$"""{"name": {{PythonLiteral.Str(parameter.Name)}}, "source": {{RenderSource(parameter.Source)}}}""");
