@@ -3439,7 +3439,10 @@ describe('SELECTION_UNAVAILABLE handling', () => {
       <section id="screen-selecting" class="hidden">
         <button id="btn-add-field"></button>
       </section>
-      <div id="error-toast" class="hidden"></div>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
     `;
 
     global.chrome = {
@@ -3473,6 +3476,17 @@ describe('SELECTION_UNAVAILABLE handling', () => {
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
     expect(toast.textContent).toContain('nicht möglich');
+  });
+
+  // Regression coverage: this toast used to call setLastError() (recording
+  // the error for a report) but never passed a context to showToast() itself
+  // — showToast only reveals "Report bug" when a context is given, so the
+  // button silently never appeared for this error class, leaving no way to
+  // get a bug-report log for it from the UI at all.
+  test('offers to report the failure', () => {
+    capturedListener({ type: 'SELECTION_UNAVAILABLE', reason: 'no content script' });
+
+    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
   });
 });
 
@@ -5797,6 +5811,10 @@ describe('Preview toggle (btn-preview)', () => {
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
     expect(toast.textContent).toContain('nicht möglich');
+    // Regression coverage: setLastError() alone doesn't reveal the button —
+    // showToast() needs its own context argument too (see the analogous
+    // SELECTION_UNAVAILABLE regression test).
+    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
   });
 
   test('adding a new field while preview is active stops it first', async () => {
@@ -6243,6 +6261,10 @@ describe('Network recording toggle (btn-api-capture)', () => {
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
     expect(toast.textContent).toContain('nicht möglich');
+    // Regression coverage: setLastError() alone doesn't reveal the button —
+    // showToast() needs its own context argument too (see the analogous
+    // SELECTION_UNAVAILABLE regression test).
+    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
   });
 });
 
