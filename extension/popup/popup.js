@@ -229,7 +229,7 @@ let _state = {
   // itself already gets). Written onto the resulting field/node once
   // confirmed (see confirmField/confirmExtendedField).
   pendingTransforms:   [],
-  selectionKind:       null,  // 'field' | 'container' | 'browserAction' | null — which kind the current SELECTING round is for
+  selectionKind:       null,  // 'field' | 'container' | 'browserAction' | 'pagination' | null — which kind the current SELECTING round is for
   pendingParentPath:   null,  // number[] | null — where the next inserted group-tree node goes; null = root level
   pendingNewContainer: null,  // {name, repeating} captured by modal-container-new before element-selection starts
   pendingBrowserActionIndex: null, // number | null — which browserActions entry the current SELECTING round's result is written into (selectionKind === 'browserAction')
@@ -2404,6 +2404,20 @@ function wireEvents() {
   document.getElementById('input-pagination-max-pages')?.addEventListener('input', (e) => {
     setState(_state.current, { pagination: { ..._state.pagination, maxPages: parseInt(e.target.value, 10) } });
   });
+  // Issue #174 follow-up: lets a non-developer pick the "next page" link by
+  // clicking it instead of having to know/type a CSS selector — same
+  // click-based selection flow browser actions' own pick button already
+  // uses (see btn-pick-action-selector below), just for a single fixed
+  // field instead of a per-index browserActions entry.
+  document.getElementById('btn-pick-pagination-next-link')?.addEventListener('click', () => {
+    log('BTN pick-pagination-next-link → START_SELECTION');
+    stopPreviewIfActive();
+    chrome.runtime.sendMessage({ type: 'START_SELECTION' });
+    setState(STATES.SELECTING, {
+      pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [], selectionKind: 'pagination',
+      domTree: null, domTreeTruncated: false, domTreeError: null,
+    });
+  });
 
   // Issue #129: opt-in script hardening — the "no result" check.
   document.getElementById('toggle-hardening-no-result')?.addEventListener('change', (e) => {
@@ -3159,6 +3173,16 @@ function wireEvents() {
           }),
           selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
         });
+      } else if (_state.selectionKind === 'pagination') {
+        // Issue #174 follow-up: lets a non-developer pick the "next page"
+        // link by clicking it instead of having to know/type a CSS
+        // selector — same "write straight into the one field, no naming
+        // modal needed" shape as the browserAction branch above, just with
+        // no index (there's only ever one nextLinkSelector).
+        setState(STATES.IDLE, {
+          pagination: { ..._state.pagination, nextLinkSelector: message.selector },
+          selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
+        });
       } else {
         setState(STATES.SELECTING, {
           pendingSelector: message.selector, pendingFramePath: framePath, pendingMatchCount: matchCount,
@@ -3326,6 +3350,18 @@ async function init() {
       await chrome.storage.session.set({ browserActions });
       setState(STATES.IDLE, {
         browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
+      });
+      return;
+    }
+
+    if (stored.selectionKind === 'pagination' && stored.pendingSelector) {
+      // Same as the live ELEMENT_SELECTED path: write the picked selector
+      // straight into pagination.nextLinkSelector, no naming modal needed.
+      log('INIT pending pagination selector found → updating pagination', stored.pendingSelector);
+      const pagination = { ..._state.pagination, nextLinkSelector: stored.pendingSelector };
+      await chrome.storage.session.set({ pagination });
+      setState(STATES.IDLE, {
+        pagination, selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
       });
       return;
     }

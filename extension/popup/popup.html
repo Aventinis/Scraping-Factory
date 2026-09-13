@@ -964,6 +964,14 @@
                 <label for="input-pagination-next-link-selector" data-i18n="idle.paginationNextLinkSelectorLabel"></label>
                 <input type="text" id="input-pagination-next-link-selector" data-i18n-placeholder="idle.paginationNextLinkSelectorPlaceholder" autocomplete="off" />
               </div>
+              <!-- Issue #174 follow-up: lets a non-developer pick the "next
+                   page" link by clicking it on the page instead of having to
+                   know/type a CSS selector by hand — same click-based
+                   selection flow browser actions' own pick button already
+                   uses (see .btn-pick-action-selector). -->
+              <div class="actions">
+                <button id="btn-pick-pagination-next-link" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.pickSelectorBtn"></button>
+              </div>
             </div>
             <div id="pagination-page-number-fields" class="hidden">
               <div class="output-settings-row">
