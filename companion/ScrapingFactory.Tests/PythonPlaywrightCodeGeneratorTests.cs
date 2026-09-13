@@ -596,4 +596,36 @@ public class PythonPlaywrightCodeGeneratorTests
         var script = _generator.Generate(ScrollOnlyPlan());
         Assert.Contains("_scroll_frame_path = None", script);
     }
+
+    // Issue #174
+    [Fact]
+    public void Generate_WithNextLinkPagination_EmitsSelectorConstantAndSameSessionGoto()
+    {
+        var plan = PlanWithoutWait();
+        plan = new ScrapingPlan
+        {
+            Engine = plan.Engine, Steps = plan.Steps, OutputFormat = plan.OutputFormat,
+            ScriptFileName = plan.ScriptFileName, OutputFileBaseName = plan.OutputFileBaseName,
+            Pagination = new NextLinkPagination { NextLinkSelector = "a.next", MaxPages = 12 },
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("PAGINATION_MAX_PAGES = 12", script);
+        Assert.Contains("PAGINATION_NEXT_LINK_SELECTOR = 'a.next'", script);
+        Assert.Contains("def _extract_page_rows(page):", script);
+        Assert.Contains("next_el = page.query_selector(PAGINATION_NEXT_LINK_SELECTOR)", script);
+        // Reuses the same page/browser session (page.goto), never relaunches.
+        Assert.Contains("page.goto(urllib.parse.urljoin(page.url, next_href), wait_until=\"load\", timeout=30000)", script);
+        Assert.DoesNotContain("PAGINATION_URL_TEMPLATE", script);
+    }
+
+    [Fact]
+    public void Generate_NoPagination_OmitsPaginationCodeEntirely()
+    {
+        var script = _generator.Generate(PlanWithoutWait());
+
+        Assert.DoesNotContain("PAGINATION_", script);
+        Assert.Contains("def _extract_page_rows(page):", script);
+    }
 }

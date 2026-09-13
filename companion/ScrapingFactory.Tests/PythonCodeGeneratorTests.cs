@@ -249,4 +249,53 @@ public class PythonCodeGeneratorTests
         Assert.DoesNotContain("_filter_required_fields", script);
         Assert.DoesNotContain("required_fields_failed", script);
     }
+
+    // ── Pagination (Issue #174) ───────────────────────────────────────────
+
+    private static ScrapingPlan WithPagination(PaginationConfig pagination)
+    {
+        var plan = TwoFieldPlan();
+        return new ScrapingPlan
+        {
+            Steps = plan.Steps, OutputFormat = plan.OutputFormat, Engine = plan.Engine,
+            ScriptFileName = plan.ScriptFileName, OutputFileBaseName = plan.OutputFileBaseName,
+            Pagination = pagination,
+        };
+    }
+
+    [Fact]
+    public void Generate_NextLinkPagination_EmitsSelectorConstantAndLoop()
+    {
+        var script = _generator.Generate(WithPagination(new NextLinkPagination { NextLinkSelector = "a.next", MaxPages = 20 }));
+
+        Assert.Contains("PAGINATION_MAX_PAGES = 20", script);
+        Assert.Contains("PAGINATION_NEXT_LINK_SELECTOR = 'a.next'", script);
+        Assert.DoesNotContain("PAGINATION_URL_TEMPLATE", script);
+        Assert.Contains("def _extract_page_rows(soup):", script);
+        Assert.Contains("while page_url:", script);
+        Assert.Contains("next_tag = soup.select_one(PAGINATION_NEXT_LINK_SELECTOR)", script);
+        Assert.Contains("from urllib.parse import urljoin", script);
+    }
+
+    [Fact]
+    public void Generate_PageNumberPagination_EmitsUrlTemplateConstantAndFormatCall()
+    {
+        var script = _generator.Generate(WithPagination(new PageNumberPagination { UrlTemplate = "{url}?page={page}", MaxPages = 15 }));
+
+        Assert.Contains("PAGINATION_MAX_PAGES = 15", script);
+        Assert.Contains("PAGINATION_URL_TEMPLATE = '{url}?page={page}'", script);
+        Assert.DoesNotContain("PAGINATION_NEXT_LINK_SELECTOR", script);
+        Assert.Contains("page_url = PAGINATION_URL_TEMPLATE.format(url=url, page=page_number)", script);
+        Assert.DoesNotContain("from urllib.parse import urljoin", script);
+    }
+
+    [Fact]
+    public void Generate_NoPagination_OmitsPaginationCodeEntirely()
+    {
+        var script = _generator.Generate(TwoFieldPlan());
+
+        Assert.DoesNotContain("PAGINATION_", script);
+        Assert.DoesNotContain("urljoin", script);
+        Assert.Contains("page_url = None", script);
+    }
 }

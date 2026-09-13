@@ -1963,6 +1963,93 @@ public class ScrapingPlanValidatorTests
         Assert.True(result.Success, result.Error);
     }
 
+    // Issue #174
+    [Fact]
+    public void Validate_ValidNextLinkPagination_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Pagination = new NextLinkPagination { NextLinkSelector = "a.next" },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ValidPageNumberPagination_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Pagination = new PageNumberPagination { UrlTemplate = "{url}?page={page}" },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_NoPagination_Succeeds()
+    {
+        var result = ScrapingPlanValidator.Validate(ValidPlan());
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_PaginationWithZeroOrNegativeMaxPages_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Pagination = new NextLinkPagination { NextLinkSelector = "a.next", MaxPages = 0 },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("MaxPages", result.Error);
+    }
+
+    [Fact]
+    public void Validate_NextLinkPaginationWithBlankSelector_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Pagination = new NextLinkPagination { NextLinkSelector = " " },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("NextLinkSelector", result.Error);
+    }
+
+    [Fact]
+    public void Validate_PageNumberPaginationWithBlankUrlTemplate_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Pagination = new PageNumberPagination { UrlTemplate = " " },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("UrlTemplate", result.Error);
+    }
+
+    [Theory]
+    [InlineData("{url}")]
+    [InlineData("{page}")]
+    [InlineData("no placeholders at all")]
+    public void Validate_PageNumberPaginationMissingAPlaceholder_Fails(string urlTemplate)
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Pagination = new PageNumberPagination { UrlTemplate = urlTemplate },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("missing placeholder", result.Error);
+    }
+
     // Issue #129
     [Fact]
     public void Validate_ValidHardening_Succeeds()
