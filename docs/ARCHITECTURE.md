@@ -614,6 +614,47 @@ from `urlTemplate`/`Parameters` and rejects the combination outright.
   parameter — it now emits `page.goto(url, ...)`, which is what makes
   per-URL looping possible for the Browser engine at all.
 
+### 2.19a Pagination (Issue #174)
+
+Classic multi-page pagination (page 1, 2, 3, … via a "next" link or a
+page-number URL template) — distinct from infinite-scroll/"load more" on a
+single page, already covered by the Scroll browser action (§2.6). Applies to
+flat and container mode, both engines; not applicable to API mode, which
+already has its own page-parameter mechanism via a Number `RangeSource`
+(§2.3). Composes with §2.19's own Multiple start URLs: each start URL
+paginates onward independently, entirely inside the generated script's own
+`scrape()` function, so `main()`'s existing multi-URL loop needs no changes.
+
+- Extension: `popup/popup.js` (`_state.pagination`, `buildPaginationConfig`
+  — mirrors `buildProxyConfig`'s own "incomplete draft = toggle-off"
+  convention — threaded through `buildScrapingConfig`/`buildConfigExport`),
+  `popup/popup.html` (`#pagination-config` inside the collapsible Settings
+  section, hidden for API mode via `#pagination-toggle-row`)
+- Companion: `IR/PaginationConfig.cs` (`NextLinkPagination`/
+  `PageNumberPagination`, `[JsonPolymorphic]` "kind" tag, both with a
+  `MaxPages` safety cap), `IR/ScrapingConfig.cs`/`IR/ScrapingPlan.cs`
+  (`Pagination`, mode-independent, carried through unchanged by
+  `IR/ScrapingPlanBuilder.cs` for the Fields/Groups branches only),
+  `IR/ScrapingPlanValidator.cs` (`MaxPages > 0`, a non-blank
+  `NextLinkSelector`, or — reusing the same `UrlTemplatePlaceholderPattern`
+  API mode's own `UrlTemplate` validation already uses — that
+  `PageNumberPagination.UrlTemplate` references both `{url}` and `{page}`),
+  `Program.cs` (the `Api`+`Pagination` `400` guard, same style as
+  `Api`+`AdditionalUrls`)
+- `Backends/Python/PythonPaginationLiteral.cs` (`BuildContext`, mirrors
+  `PythonProxyLiteral`/`PythonChangeDetectionLiteral` exactly — always emits
+  every field regardless of kind), wired into all four non-API codegen call
+  sites in `PythonCodeGenerator.cs`/`PythonPlaywrightCodeGenerator.cs`
+- Templates: `scraper.py.j2`, `playwright_scraper.py.j2`,
+  `scraper_grouped.py.j2`, `playwright_scraper_grouped.py.j2` — `scrape(url)`
+  restructured into a loop (page 1 unchanged; further pages via
+  `NEXT_LINK_SELECTOR`'s `href` or `PAGINATION_URL_TEMPLATE.format(url=url,
+  page=page_number)`, stopping on an empty page, `PAGINATION_MAX_PAGES`, or a
+  vanished next-link selector). The two Playwright templates reuse the same
+  browser/page session across paginated pages (`page.goto` for page 2+)
+  rather than relaunching; the full action sequence (login flow etc.) still
+  runs only once, for page 1.
+
 ### 2.20 Change detection + notification (Issue #87)
 
 Lets the generated script compare each run's output against the previous
@@ -746,6 +787,7 @@ classDiagram
         +bool? IncludePreview
         +ChangeDetectionConfig? ChangeDetection
         +ProxyConfig? Proxy
+        +PaginationConfig? Pagination
     }
     class ScrapingPlan {
         +List~ScrapingStep~ Steps
@@ -937,6 +979,7 @@ compile time anywhere.
 | Additional start URLs | `popup.js`: `parseAdditionalUrls()` (splits textarea on newlines, drops blank lines) → `buildScrapingConfig`'s `additionalUrls` key | `{additionalUrls?: ["https://..."]}` | `IR/ScrapingConfig.cs`: `AdditionalUrls`; combined with `Url` into `IR/ScrapingStep.cs`: `NavigateStep.Urls` |
 | Change detection + notification | `popup.js`: `buildChangeDetectionConfig()` (returns `null` when disabled or a required field is blank) → `buildScrapingConfig`'s `changeDetection` key | `{changeDetection?: {notify:"Email"\|"Webhook", email?:{...EnvVar fields}, webhook?:{urlEnvVar}}}` | `IR/ChangeDetectionConfig.cs`: `ChangeDetectionConfig`/`EmailNotificationConfig`/`WebhookNotificationConfig` |
 | Proxy support | `popup.js`: `buildProxyConfig()` (returns `null` when disabled or the env-var-name field is blank) → `buildScrapingConfig`'s `proxy` key | `{proxy?: {environmentVariableName}}` | `IR/ProxyConfig.cs`: `ProxyConfig` |
+| Pagination | `popup.js`: `buildPaginationConfig()` (returns `null` when disabled or the kind-specific required field is blank) → `buildScrapingConfig`'s `pagination` key | `{pagination?: {kind:"nextLink", nextLinkSelector, maxPages} \| {kind:"pageNumber", urlTemplate, maxPages}}` | `IR/PaginationConfig.cs`: `NextLinkPagination`/`PageNumberPagination` (via `[JsonPolymorphic]`) |
 | Range format mini-template | `api-config.js`: `RANGE_FORMAT_PRESETS`, `compileRangeFormatPattern()` (client-side mirror) | `{format?: "{yyyy}-W{ww}"}` inside a `RangeSource` | `Backends/Python/RangeFormat.cs` (server-side, authoritative) |
 
 Two rows above are explicitly **hand-kept mirrors**, not generated from a shared
