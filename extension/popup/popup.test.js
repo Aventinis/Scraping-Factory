@@ -41,7 +41,7 @@ const {
   findUrlTemplateMatches, mergeValueListValues,
   variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
   detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase, parseAdditionalUrls,
-  buildChangeDetectionConfig, buildProxyConfig, buildHardeningConfig,
+  buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildHardeningConfig,
   collectFieldNames, addNullRateCheck, removeNullRateCheck, updateNullRateCheck, renderHardeningNullRateList,
   addRequiredField, removeRequiredField, renderHardeningRequiredFieldsList, computeInitialMonitoringSectionOpen,
   addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
@@ -421,6 +421,78 @@ describe('buildScrapingConfig (proxy, Issue #88)', () => {
       'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], null, proxy,
     );
     expect(apiResult.proxy).toEqual({ environmentVariableName: 'SF_PROXIES' });
+  });
+});
+
+// Issue #174
+describe('buildPaginationConfig', () => {
+  test('returns null when disabled', () => {
+    expect(buildPaginationConfig({ enabled: false, kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 50 })).toBeNull();
+  });
+
+  test('returns null for null/undefined input', () => {
+    expect(buildPaginationConfig(null)).toBeNull();
+    expect(buildPaginationConfig(undefined)).toBeNull();
+  });
+
+  test('returns null for nextLink kind when the selector is blank', () => {
+    expect(buildPaginationConfig({ enabled: true, kind: 'nextLink', nextLinkSelector: '', maxPages: 50 })).toBeNull();
+    expect(buildPaginationConfig({ enabled: true, kind: 'nextLink', nextLinkSelector: '   ', maxPages: 50 })).toBeNull();
+  });
+
+  test('returns null for pageNumber kind when the template is blank', () => {
+    expect(buildPaginationConfig({ enabled: true, kind: 'pageNumber', urlTemplate: '', maxPages: 50 })).toBeNull();
+  });
+
+  test('builds the nextLink wire shape with a trimmed selector', () => {
+    expect(buildPaginationConfig({ enabled: true, kind: 'nextLink', nextLinkSelector: '  a.next  ', maxPages: 20 })).toEqual({
+      kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 20,
+    });
+  });
+
+  test('builds the pageNumber wire shape with a trimmed template', () => {
+    expect(buildPaginationConfig({ enabled: true, kind: 'pageNumber', urlTemplate: '  {url}?page={page}  ', maxPages: 20 })).toEqual({
+      kind: 'pageNumber', urlTemplate: '{url}?page={page}', maxPages: 20,
+    });
+  });
+
+  test('clamps/defaults an invalid maxPages to 50', () => {
+    for (const invalid of [0, NaN, -5]) {
+      expect(buildPaginationConfig({ enabled: true, kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: invalid })).toEqual({
+        kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 50,
+      });
+    }
+  });
+
+  test('floors a fractional maxPages', () => {
+    expect(buildPaginationConfig({ enabled: true, kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 12.7 })).toEqual({
+      kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 12,
+    });
+  });
+});
+
+describe('buildScrapingConfig (pagination, Issue #174)', () => {
+  test('omits pagination entirely when disabled (the default)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.pagination).toBeUndefined();
+  });
+
+  test('includes pagination when enabled and configured', () => {
+    const pagination = { enabled: true, kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 30 };
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, null, pagination,
+    );
+    expect(result.pagination).toEqual({ kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 30 });
+  });
+
+  test('works the same way for container mode', () => {
+    const pagination = { enabled: true, kind: 'pageNumber', urlTemplate: '{url}?page={page}', maxPages: 10 };
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null, null, pagination,
+    );
+    expect(containerResult.pagination).toEqual({ kind: 'pageNumber', urlTemplate: '{url}?page={page}', maxPages: 10 });
   });
 });
 

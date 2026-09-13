@@ -138,6 +138,15 @@ let _state = {
   // list, never a literal address — same environmentVariableName pattern as
   // FillAction/ChangeDetection (see buildProxyConfig).
   proxy: { enabled: false, envVar: '' },
+  // Issue #174: opt-in classic multi-page pagination — mode-independent
+  // like additionalStartUrls/changeDetection/proxy above (Fields/Groups
+  // only; hidden entirely for API mode, which already has its own page-
+  // parameter mechanism via a Number RangeSource), persisted the same way.
+  // kind is 'nextLink' (follow a "next page" link's href, extracted via
+  // nextLinkSelector) or 'pageNumber' (substitute {url}/{page} into
+  // urlTemplate) — see buildPaginationConfig. maxPages is a whole-number
+  // safety cap, always active regardless of kind.
+  pagination: { enabled: false, kind: 'nextLink', nextLinkSelector: '', urlTemplate: '', maxPages: 50 },
   // Issue #129: opt-in script hardening checks — mode-independent like
   // engine/changeDetection/proxy above, persisted the same way (real
   // scrape-target configuration, not a per-generate toggle). Nested one
@@ -411,6 +420,25 @@ function buildProxyConfig(proxy) {
   return environmentVariableName ? { environmentVariableName } : null;
 }
 
+// Issue #174: converts _state.pagination's editable draft shape into the
+// wire PaginationConfig, or null when disabled or the kind-specific
+// required field (nextLinkSelector / urlTemplate) is left blank — same
+// "incomplete draft treated as toggle-off" convention as
+// buildChangeDetectionConfig/buildProxyConfig. maxPages is clamped/
+// defaulted the same way hardening's own percent thresholds are, so a
+// cleared/invalid number input doesn't block generation.
+function buildPaginationConfig(pagination) {
+  if (!pagination?.enabled) return null;
+  const maxPagesRaw = Number(pagination.maxPages);
+  const maxPages = Number.isFinite(maxPagesRaw) && maxPagesRaw > 0 ? Math.floor(maxPagesRaw) : 50;
+  if (pagination.kind === 'pageNumber') {
+    const urlTemplate = (pagination.urlTemplate || '').trim();
+    return urlTemplate ? { kind: 'pageNumber', urlTemplate, maxPages } : null;
+  }
+  const nextLinkSelector = (pagination.nextLinkSelector || '').trim();
+  return nextLinkSelector ? { kind: 'nextLink', nextLinkSelector, maxPages } : null;
+}
+
 // Issue #129: builds the wire-format Hardening list (companion's
 // List<HardeningCheck>?) from every enabled check in _state.hardening — an
 // array even though only one check exists today, since the wire format is
@@ -559,10 +587,14 @@ function collectFieldNames(mode, fields, groups, apiConfig) {
 // non-empty for mode === 'api' (the input is hidden there), since API mode
 // builds its own request URL and the companion rejects the combination
 // outright rather than silently ignoring it.
+// `pagination` (Issue #174) follows the same "hidden and so always empty for
+// mode === 'api'" convention as additionalUrls, for the same reason (API
+// mode already has its own page-parameter mechanism via a Number
+// RangeSource, and the companion rejects the combination outright).
 function buildScrapingConfig(
   url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
-  additionalUrls = [], changeDetection = null, proxy = null, hardening = null,
+  additionalUrls = [], changeDetection = null, proxy = null, hardening = null, pagination = null,
 ) {
   const engineFields = engine === 'Browser'
     ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
@@ -576,13 +608,15 @@ function buildScrapingConfig(
   const proxyFields = proxyConfig ? { proxy: proxyConfig } : {};
   const hardeningConfig = buildHardeningConfig(hardening);
   const hardeningFields = hardeningConfig ? { hardening: hardeningConfig } : {};
+  const paginationConfig = buildPaginationConfig(pagination);
+  const paginationFields = paginationConfig ? { pagination: paginationConfig } : {};
 
   if (mode === 'container') {
     return {
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...hardeningFields,
+      ...proxyFields, ...hardeningFields, ...paginationFields,
     };
   }
   if (mode === 'api') {
@@ -590,7 +624,7 @@ function buildScrapingConfig(
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...hardeningFields,
+      ...proxyFields, ...hardeningFields, ...paginationFields,
     };
   }
   return {
@@ -605,7 +639,7 @@ function buildScrapingConfig(
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
     ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields,
-    ...hardeningFields,
+    ...hardeningFields, ...paginationFields,
   };
 }
 
@@ -618,14 +652,14 @@ function buildScrapingConfig(
 function buildConfigExport(
   url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false, additionalUrls = [],
-  changeDetection = null, proxy = null, hardening = null,
+  changeDetection = null, proxy = null, hardening = null, pagination = null,
 ) {
   return {
     exportedAt: new Date().toISOString(),
     extensionVersion: manifest.version || '?',
     config: buildScrapingConfig(
       url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview,
-      useJsonOutput, additionalUrls, changeDetection, proxy, hardening,
+      useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination,
     ),
   };
 }
@@ -833,6 +867,7 @@ function persistState() {
       additionalStartUrls: _state.additionalStartUrls,
       changeDetection: _state.changeDetection,
       proxy: _state.proxy,
+      pagination: _state.pagination,
       hardening: _state.hardening,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
@@ -1148,6 +1183,30 @@ function render() {
     const proxyEnvVarInput = document.getElementById('input-proxy-env-var');
     if (proxyEnvVarInput && document.activeElement !== proxyEnvVarInput) {
       proxyEnvVarInput.value = _state.proxy.envVar;
+    }
+
+    // Issue #174: opt-in classic multi-page pagination — hidden entirely for
+    // API mode (which already has its own page-parameter mechanism via a
+    // Number RangeSource), same reasoning as #additional-urls-row.
+    document.getElementById('pagination-toggle-row')?.classList.toggle('hidden', _state.mode === 'api');
+    const paginationToggle = document.getElementById('toggle-pagination');
+    if (paginationToggle) paginationToggle.checked = _state.pagination.enabled;
+    document.getElementById('pagination-config')?.classList.toggle('hidden', !_state.pagination.enabled);
+    document.getElementById('btn-pagination-next-link')?.classList.toggle('active', _state.pagination.kind === 'nextLink');
+    document.getElementById('btn-pagination-page-number')?.classList.toggle('active', _state.pagination.kind === 'pageNumber');
+    document.getElementById('pagination-next-link-fields')?.classList.toggle('hidden', _state.pagination.kind !== 'nextLink');
+    document.getElementById('pagination-page-number-fields')?.classList.toggle('hidden', _state.pagination.kind !== 'pageNumber');
+    const paginationInputs = {
+      'input-pagination-next-link-selector': _state.pagination.nextLinkSelector,
+      'input-pagination-url-template': _state.pagination.urlTemplate,
+    };
+    for (const [id, value] of Object.entries(paginationInputs)) {
+      const input = document.getElementById(id);
+      if (input && document.activeElement !== input) input.value = value;
+    }
+    const paginationMaxPagesInput = document.getElementById('input-pagination-max-pages');
+    if (paginationMaxPagesInput && document.activeElement !== paginationMaxPagesInput) {
+      paginationMaxPagesInput.value = _state.pagination.maxPages;
     }
 
     // Issue #183: collapsible "Monitoring" section (change detection +
@@ -1784,6 +1843,7 @@ async function generate() {
     _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
     _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy, _state.hardening,
+    _state.pagination,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
@@ -1868,6 +1928,7 @@ function downloadConfigExport() {
     _state.url, _state.mode, _state.fields, _state.groups, manifest, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
     _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy, _state.hardening,
+    _state.pagination,
   );
   log('DOWNLOAD scraping-config.json', exportObj);
 
@@ -2322,6 +2383,26 @@ function wireEvents() {
   });
   document.getElementById('input-proxy-env-var')?.addEventListener('input', (e) => {
     setState(_state.current, { proxy: { ..._state.proxy, envVar: e.target.value } });
+  });
+
+  // Issue #174: opt-in classic multi-page pagination.
+  document.getElementById('toggle-pagination')?.addEventListener('change', (e) => {
+    setState(_state.current, { pagination: { ..._state.pagination, enabled: e.target.checked } });
+  });
+  document.getElementById('btn-pagination-next-link')?.addEventListener('click', () => {
+    setState(_state.current, { pagination: { ..._state.pagination, kind: 'nextLink' } });
+  });
+  document.getElementById('btn-pagination-page-number')?.addEventListener('click', () => {
+    setState(_state.current, { pagination: { ..._state.pagination, kind: 'pageNumber' } });
+  });
+  document.getElementById('input-pagination-next-link-selector')?.addEventListener('input', (e) => {
+    setState(_state.current, { pagination: { ..._state.pagination, nextLinkSelector: e.target.value } });
+  });
+  document.getElementById('input-pagination-url-template')?.addEventListener('input', (e) => {
+    setState(_state.current, { pagination: { ..._state.pagination, urlTemplate: e.target.value } });
+  });
+  document.getElementById('input-pagination-max-pages')?.addEventListener('input', (e) => {
+    setState(_state.current, { pagination: { ..._state.pagination, maxPages: parseInt(e.target.value, 10) } });
   });
 
   // Issue #129: opt-in script hardening — the "no result" check.
@@ -3166,7 +3247,7 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pagination', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
     'scriptFileName', 'outputFileName',
@@ -3183,6 +3264,7 @@ async function init() {
   if (Array.isArray(stored.additionalStartUrls)) _state = { ..._state, additionalStartUrls: stored.additionalStartUrls };
   if (stored.changeDetection) _state = { ..._state, changeDetection: stored.changeDetection };
   if (stored.proxy)                 _state = { ..._state, proxy: stored.proxy };
+  if (stored.pagination)            _state = { ..._state, pagination: stored.pagination };
   if (stored.hardening)             _state = { ..._state, hardening: stored.hardening };
   if (stored.scriptFileName)        _state = { ..._state, scriptFileName: stored.scriptFileName };
   if (stored.outputFileName)        _state = { ..._state, outputFileName: stored.outputFileName };
@@ -3295,6 +3377,7 @@ if (typeof module !== 'undefined') {
     variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
     detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
     applyStaticTranslations, sanitizeFileNameBase, parseAdditionalUrls, buildChangeDetectionConfig, buildProxyConfig,
+    buildPaginationConfig,
     buildHardeningConfig, collectFieldNames, addNullRateCheck, removeNullRateCheck, updateNullRateCheck,
     renderHardeningNullRateList, addRequiredField, removeRequiredField, renderHardeningRequiredFieldsList,
     computeInitialMonitoringSectionOpen,
