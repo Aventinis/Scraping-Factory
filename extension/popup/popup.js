@@ -3009,7 +3009,23 @@ function wireEvents() {
         selectionKind: null, pendingParentPath: null, pendingNewContainer: null,
         pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', apiSearchTarget: null,
       });
-      showToast(t('toast.selectionUnavailable'));
+      // Issue #137 follow-up: content-script.js's retryScopeSelector tags
+      // its own "retried and still nothing" case with unavailableKind —
+      // distinct from the other SELECTION_UNAVAILABLE sender (service-
+      // worker.js, when chrome.tabs.sendMessage itself fails — no content
+      // script running at all). A scope selector legitimately, repeatedly
+      // failing to resolve can have entirely page-specific causes outside
+      // the extension's control (confirmed via a real report: a class only
+      // present while the element is actually hovered, gone the instant the
+      // cursor leaves the page for the side panel) — not a plugin
+      // malfunction, so it's shown as a softer warning with no "Report bug"
+      // button (no context passed to showToast) instead of the harder error
+      // styling the other, genuinely unexpected case still gets.
+      if (message.unavailableKind === 'scopeSelectorNotFound') {
+        showToast(t('toast.scopeSelectorNotFound'), null, 'warn');
+      } else {
+        showToast(t('toast.selectionUnavailable'), 'Element selection');
+      }
     }
     // Issue #167: a click that landed outside every instance of the
     // container being edited — selection stays active (unlike
@@ -3096,7 +3112,7 @@ function wireEvents() {
       log('PREVIEW_UNAVAILABLE', message.reason);
       setLastError(message.reason, 'Preview');
       patchState({ previewActive: false, previewSummary: null });
-      showToast(t('toast.previewUnavailable'));
+      showToast(t('toast.previewUnavailable'), 'Preview');
     }
     if (message.type === 'API_CAPTURE_ENTRY' && _state.apiCaptureActive) {
       log('API_CAPTURE_ENTRY received', message.entry?.url);
@@ -3106,7 +3122,7 @@ function wireEvents() {
       log('API_CAPTURE_UNAVAILABLE', message.reason);
       setLastError(message.reason, 'Network recording');
       patchState({ apiCaptureActive: false, apiCaptureCount: 0 });
-      showToast(t('toast.captureUnavailable'));
+      showToast(t('toast.captureUnavailable'), 'Network recording');
     }
     // Issue #136: EMBEDDED_JSON_CANDIDATES is content-script.js's
     // findEmbeddedJsonCandidates counterpart to API_CANDIDATES — handled

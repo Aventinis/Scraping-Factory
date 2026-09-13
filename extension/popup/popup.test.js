@@ -3439,7 +3439,10 @@ describe('SELECTION_UNAVAILABLE handling', () => {
       <section id="screen-selecting" class="hidden">
         <button id="btn-add-field"></button>
       </section>
-      <div id="error-toast" class="hidden"></div>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
     `;
 
     global.chrome = {
@@ -3464,7 +3467,7 @@ describe('SELECTION_UNAVAILABLE handling', () => {
     document.getElementById('btn-add-field').click(); // → STATES.SELECTING
   });
 
-  test('falls back to IDLE and shows a toast', () => {
+  test('falls back to IDLE and shows a toast (no content script — hard error, offers to report)', () => {
     capturedListener({ type: 'SELECTION_UNAVAILABLE', reason: 'no content script' });
 
     expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(true);
@@ -3473,6 +3476,30 @@ describe('SELECTION_UNAVAILABLE handling', () => {
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
     expect(toast.textContent).toContain('nicht möglich');
+    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
+  });
+
+  // Issue #137 follow-up: a scope selector that's retried and still not
+  // found (content-script.js's retryScopeSelector, tagged unavailableKind)
+  // can have entirely page-specific causes outside the extension's control
+  // (confirmed via a real report: a class only present while the element is
+  // actually hovered) — shown as a warning, not a hard error, and without
+  // "Report bug" so a page-specific, expected situation doesn't get
+  // reported as a plugin bug.
+  test('falls back to IDLE and shows a warning, not an error, for a retried-and-still-missing scope selector', () => {
+    capturedListener({
+      type: 'SELECTION_UNAVAILABLE',
+      reason: "Container-Selektor '.foo' findet kein Element auf dieser Seite.",
+      unavailableKind: 'scopeSelectorNotFound',
+    });
+
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
+
+    const toast = document.getElementById('error-toast');
+    expect(toast.classList.contains('hidden')).toBe(false);
+    expect(toast.classList.contains('toast-warn')).toBe(true);
+    expect(toast.textContent).not.toContain('nicht möglich'); // the softer, distinct wording, not the hard-error one
+    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(true);
   });
 });
 
@@ -5797,6 +5824,10 @@ describe('Preview toggle (btn-preview)', () => {
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
     expect(toast.textContent).toContain('nicht möglich');
+    // Regression coverage: setLastError() alone doesn't reveal the button —
+    // showToast() needs its own context argument too (see the analogous
+    // SELECTION_UNAVAILABLE regression test).
+    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
   });
 
   test('adding a new field while preview is active stops it first', async () => {
@@ -6243,6 +6274,10 @@ describe('Network recording toggle (btn-api-capture)', () => {
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
     expect(toast.textContent).toContain('nicht möglich');
+    // Regression coverage: setLastError() alone doesn't reveal the button —
+    // showToast() needs its own context argument too (see the analogous
+    // SELECTION_UNAVAILABLE regression test).
+    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
   });
 });
 
