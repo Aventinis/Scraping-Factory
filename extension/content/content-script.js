@@ -962,6 +962,18 @@ let pendingHoverTarget = null;
 // once-built selector behaves at scrape time.
 let scopeRootEls = null;
 
+// Issue #137: how long/often startSelection's scope-selector lookup retries
+// a miss before giving up — see retryScopeSelector's own doc comment.
+const SCOPE_SELECTOR_RETRY_INTERVAL_MS = 180;
+const SCOPE_SELECTOR_RETRY_TIMEOUT_MS = 1800;
+
+// Issue #137: incremented on every startSelection/stopSelection call —
+// retryScopeSelector captures the value current at the moment its retry
+// loop started and re-checks it on every tick, so a stray timer from an
+// already-superseded or explicitly cancelled (STOP_SELECTION) round can
+// never re-arm selection or send a stale SELECTION_UNAVAILABLE later.
+let selectionGeneration = 0;
+
 // Set for the duration of a selection round that must produce a selector
 // capable of matching more than once — see buildSelector's avoidId.
 let avoidIdInSelector = false;
@@ -1155,28 +1167,80 @@ function onClick(e) {
 // ever starts one kind of search at a time), but nothing here enforces that.
 function startSelection(scopeSelector, avoidId, apiSearch, apiScopePath, embeddedJsonSearch, embeddedJsonScopePath, embeddedJsonScriptSelector) {
   log('SELECTION start', { scopeSelector, avoidId, apiSearch, apiScopePath, embeddedJsonSearch, embeddedJsonScopePath, embeddedJsonScriptSelector });
+  const generation = ++selectionGeneration;
   avoidIdInSelector = !!avoidId;
   apiSearchActive = !!apiSearch;
   apiScopePathActive = apiSearch ? (apiScopePath || null) : null;
   embeddedJsonSearchActive = !!embeddedJsonSearch;
   embeddedJsonScopePathActive = embeddedJsonSearch ? (embeddedJsonScopePath || null) : null;
   embeddedJsonScriptSelectorActive = embeddedJsonSearch ? (embeddedJsonScriptSelector || null) : null;
-  if (scopeSelector) {
-    // Issue #167: every matching instance, not just document.querySelector's
-    // implicit first one — see scopeRootEls' own doc comment for why.
+
+  if (!scopeSelector) {
+    scopeRootEls = null;
+    armSelection();
+    return;
+  }
+
+  // Issue #167: every matching instance, not just document.querySelector's
+  // implicit first one — see scopeRootEls' own doc comment for why.
+  const roots = Array.from(document.querySelectorAll(scopeSelector));
+  if (roots.length > 0) {
+    scopeRootEls = roots;
+    armSelection();
+    return;
+  }
+
+  // Issue #137: the very first lookup came back empty — instead of failing
+  // immediately, retry for a short window before giving up (see
+  // retryScopeSelector). The common case (element already present) never
+  // reaches this branch at all, so it stays perfectly synchronous/unchanged.
+  retryScopeSelector(scopeSelector, generation, Date.now() + SCOPE_SELECTOR_RETRY_TIMEOUT_MS);
+}
+
+// Issue #137: some pages server-render skeleton/placeholder markup first and
+// swap it for the real, differently-classed content once client-side JS
+// hydrates (confirmed on penny.de's offers page) — or use virtual-
+// scrolling/DOM-recycling that changes an element's classes/structure after
+// the fact. A scope selector that matched moments ago (when the parent
+// container was picked) can transiently stop matching an instant later,
+// purely because the page's own rendering caught up in between, not because
+// the selector is actually wrong. Polls every SCOPE_SELECTOR_RETRY_INTERVAL_MS
+// for up to SCOPE_SELECTOR_RETRY_TIMEOUT_MS total before finally giving up.
+//
+// Does not attempt to solve arbitrary virtual scrolling (an element that's
+// fundamentally never in the DOM unless scrolled into view stays out of
+// reach regardless of retry length) — this only closes the gap between "the
+// container was just confirmed" and "the very next click a moment later".
+//
+// generation guards against a stray, still-pending timer from an
+// already-superseded (a newer startSelection call) or cancelled
+// (stopSelection) round re-arming selection or sending a stale
+// SELECTION_UNAVAILABLE after the fact.
+function retryScopeSelector(scopeSelector, generation, deadline) {
+  setTimeout(() => {
+    if (generation !== selectionGeneration) return; // superseded or cancelled meanwhile
+
     const roots = Array.from(document.querySelectorAll(scopeSelector));
-    if (roots.length === 0) {
-      log('SELECTION scope not found', scopeSelector);
+    if (roots.length > 0) {
+      scopeRootEls = roots;
+      armSelection();
+      return;
+    }
+
+    if (Date.now() >= deadline) {
+      log('SELECTION scope not found (after retry)', scopeSelector);
       chrome.runtime.sendMessage({
         type: 'SELECTION_UNAVAILABLE',
         reason: `Container-Selektor '${scopeSelector}' findet kein Element auf dieser Seite.`,
       });
       return;
     }
-    scopeRootEls = roots;
-  } else {
-    scopeRootEls = null;
-  }
+
+    retryScopeSelector(scopeSelector, generation, deadline);
+  }, SCOPE_SELECTOR_RETRY_INTERVAL_MS);
+}
+
+function armSelection() {
   createOverlay();
   document.addEventListener('mouseover', onMouseOver);
   document.addEventListener('click', onClick, true);
@@ -1184,6 +1248,7 @@ function startSelection(scopeSelector, avoidId, apiSearch, apiScopePath, embedde
 
 function stopSelection() {
   log('SELECTION stop');
+  selectionGeneration++; // invalidate any in-flight retryScopeSelector timer
   document.removeEventListener('mouseover', onMouseOver);
   document.removeEventListener('click', onClick, true);
   removeOverlay();

@@ -436,15 +436,86 @@ describe('scoped selection (START_SELECTION with scopeSelector)', () => {
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'ELEMENT_SELECTED' }));
   });
 
-  test('a scopeSelector matching nothing on the page sends SELECTION_UNAVAILABLE and does not arm selection', async () => {
-    capturedListener({ type: 'START_SELECTION', scopeSelector: '.does-not-exist' });
+  // Issue #137: a miss now retries for a short window (see
+  // retryScopeSelector) before finally giving up — advancing fake timers
+  // past the full retry window reproduces "never appears" and lets this
+  // test assert the eventual SELECTION_UNAVAILABLE without a real ~1.8s wait.
+  test('a scopeSelector matching nothing on the page sends SELECTION_UNAVAILABLE (after the retry window) and does not arm selection', () => {
+    jest.useFakeTimers();
+    try {
+      capturedListener({ type: 'START_SELECTION', scopeSelector: '.does-not-exist' });
 
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'SELECTION_UNAVAILABLE' }));
+      // Not sent immediately — a miss now retries first, see below.
+      expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'SELECTION_UNAVAILABLE' }));
 
-    chrome.runtime.sendMessage.mockClear();
-    document.querySelector('h3.item-name').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-    await null;
-    expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(2000); // past SCOPE_SELECTOR_RETRY_TIMEOUT_MS
+
+      expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'SELECTION_UNAVAILABLE' }));
+
+      chrome.runtime.sendMessage.mockClear();
+      document.querySelector('h3.item-name').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  // Issue #137: the exact real-world scenario (penny.de's offers page —
+  // server-rendered skeleton tiles swapped for the real ones once
+  // client-side JS hydrates) — a selector missing on the very first lookup
+  // must not be a hard failure if the element shows up moments later.
+  describe('scope-selector retry (Issue #137)', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    test('retries a miss and arms selection once the element appears within the retry window', async () => {
+      document.body.innerHTML = '<div id="outside">Outside</div>'; // no .menu-category yet
+      capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
+
+      // Simulates the page hydrating/swapping in the real element mid-retry.
+      document.body.insertAdjacentHTML(
+        'beforeend',
+        '<section class="menu-category"><li class="menu-item"><h3 class="item-name">Suppe</h3></li></section>',
+      );
+      jest.advanceTimersByTime(300); // a couple of retry ticks — well within the window
+
+      expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'SELECTION_UNAVAILABLE' }));
+
+      document.querySelector('h3.item-name').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      await null;
+      expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'ELEMENT_SELECTED' }));
+    });
+
+    // A pending retry from a round the user already cancelled (or a newer
+    // START_SELECTION superseded) must never re-arm selection or send a
+    // stale SELECTION_UNAVAILABLE later — see selectionGeneration.
+    test('STOP_SELECTION cancels a pending retry — no stale SELECTION_UNAVAILABLE fires later', () => {
+      document.body.innerHTML = '<div id="outside">Outside</div>';
+      capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
+      capturedListener({ type: 'STOP_SELECTION' });
+
+      jest.advanceTimersByTime(2000); // past SCOPE_SELECTOR_RETRY_TIMEOUT_MS
+
+      expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'SELECTION_UNAVAILABLE' }));
+    });
+
+    // Same guard, exercised via a second START_SELECTION instead of an
+    // explicit STOP_SELECTION — the first round's own pending retry must
+    // not clobber the second, still-active round's state.
+    test('a second START_SELECTION supersedes a pending retry from the first', () => {
+      document.body.innerHTML = '<div id="outside">Outside</div>';
+      capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
+      capturedListener({ type: 'START_SELECTION' }); // unscoped — matches immediately, no retry
+
+      jest.advanceTimersByTime(2000);
+
+      expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'SELECTION_UNAVAILABLE' }));
+    });
   });
 
   test('no scopeSelector behaves like today — any element on the page is pickable', async () => {
