@@ -25,6 +25,11 @@ import itertools
 {{~ if proxy.enabled || hardening.enabled ~}}
 import urllib.parse
 {{~ end ~}}
+{{~ if pagination.enabled ~}}
+{{~ if pagination.kind == "nextLink" ~}}
+import urllib.parse
+{{~ end ~}}
+{{~ end ~}}
 {{~ if change_detection.enabled ~}}
 import difflib
 {{~ if change_detection.notify_method == "Email" ~}}
@@ -42,6 +47,20 @@ from playwright.sync_api import sync_playwright
 URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 
 OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else }}csv{{ end }}"
+
+{{~ if pagination.enabled ~}}
+# Issue #174 (pagination): follows either a "next page" link's href
+# (resolved against the current page's own URL) or a {page}-templated URL,
+# starting from a start URL as page 1, until a page yields no rows, this
+# safety cap is reached, or (next-link kind only) the selector no longer
+# matches on a page.
+PAGINATION_MAX_PAGES = {{ pagination.max_pages_literal }}
+{{~ if pagination.kind == "nextLink" ~}}
+PAGINATION_NEXT_LINK_SELECTOR = {{ pagination.next_link_selector_literal }}
+{{~ else ~}}
+PAGINATION_URL_TEMPLATE = {{ pagination.url_template_literal }}
+{{~ end ~}}
+{{~ end ~}}
 
 {{~ if change_detection.enabled ~}}
 # Issue #87 (change detection): every *_ENV_VAR below is an environment-
@@ -425,35 +444,63 @@ def _notify_change(old_content, new_content):
 {{~ end ~}}
 
 
+def _extract_page_rows(page):
+    columns = {name: _resolve_elements(page, sel, FRAME_PATHS.get(name)) for name, sel in SELECTORS.items()}
+    n = max((len(v) for v in columns.values()), default=0)
+
+    rows = []
+    for i in range(n):
+        row = {}
+        for name, elements in columns.items():
+            if i < len(elements):
+                attr = ATTRIBUTES.get(name)
+                raw_value = (elements[i].get_attribute(attr) or "") if attr else (elements[i].text_content() or "").strip()
+                row[name] = _apply_transforms(raw_value, TRANSFORMS.get(name, []))
+            else:
+                row[name] = ""
+        rows.append(row)
+    return rows
+
+
 def scrape(url):
     with sync_playwright() as p:
         browser = p.chromium.launch({{ if proxy.enabled }}proxy=_next_playwright_proxy(){{ end }})
         page = browser.new_page()
 {{ actions }}
-{{~ if hardening.enabled ~}}
-        # Playwright has no single raw response body to measure after JS
-        # execution — "length" approximates it as the rendered page's own
-        # UTF-8-encoded size instead of a true network byte count.
-        _page_content = page.content()
-        _BLOCKING_RESPONSES.append(
-            {"url": url, "final_url": page.url, "length": len(_page_content.encode("utf-8")), "text": _page_content}
-        )
-{{~ end ~}}
-
-        columns = {name: _resolve_elements(page, sel, FRAME_PATHS.get(name)) for name, sel in SELECTORS.items()}
-        n = max((len(v) for v in columns.values()), default=0)
 
         rows = []
-        for i in range(n):
-            row = {}
-            for name, elements in columns.items():
-                if i < len(elements):
-                    attr = ATTRIBUTES.get(name)
-                    raw_value = (elements[i].get_attribute(attr) or "") if attr else (elements[i].text_content() or "").strip()
-                    row[name] = _apply_transforms(raw_value, TRANSFORMS.get(name, []))
-                else:
-                    row[name] = ""
-            rows.append(row)
+        page_number = 1
+        while True:
+{{~ if hardening.enabled ~}}
+            # Playwright has no single raw response body to measure after JS
+            # execution — "length" approximates it as the rendered page's own
+            # UTF-8-encoded size instead of a true network byte count.
+            _page_content = page.content()
+            _BLOCKING_RESPONSES.append(
+                {"url": page.url, "final_url": page.url, "length": len(_page_content.encode("utf-8")), "text": _page_content}
+            )
+{{~ end ~}}
+            page_rows = _extract_page_rows(page)
+            if not page_rows:
+                break
+            rows.extend(page_rows)
+
+{{~ if pagination.enabled ~}}
+            if page_number >= PAGINATION_MAX_PAGES:
+                break
+            page_number += 1
+{{~ if pagination.kind == "nextLink" ~}}
+            next_el = page.query_selector(PAGINATION_NEXT_LINK_SELECTOR)
+            next_href = next_el.get_attribute("href") if next_el else None
+            if not next_href:
+                break
+            page.goto(urllib.parse.urljoin(page.url, next_href), wait_until="load", timeout=30000)
+{{~ else ~}}
+            page.goto(PAGINATION_URL_TEMPLATE.format(url=url, page=page_number), wait_until="load", timeout=30000)
+{{~ end ~}}
+{{~ else ~}}
+            break
+{{~ end ~}}
 
         browser.close()
         return rows
