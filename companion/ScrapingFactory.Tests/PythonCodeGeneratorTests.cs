@@ -33,7 +33,7 @@ public class PythonCodeGeneratorTests
     {
         var script = _generator.Generate(TwoFieldPlan());
         Assert.Contains("HEADERS = {\"User-Agent\":", script);
-        Assert.Contains("requests.get(url, headers=HEADERS, timeout=10)", script);
+        Assert.Contains("requests.get(page_url, headers=HEADERS, timeout=10)", script);
     }
 
     // Issue #83
@@ -186,7 +186,7 @@ public class PythonCodeGeneratorTests
         Assert.DoesNotContain("import os", script);
         Assert.DoesNotContain("import itertools", script);
         Assert.DoesNotContain("PROXY_ENV_VAR", script);
-        Assert.Contains("requests.get(url, headers=HEADERS, timeout=10)", script);
+        Assert.Contains("requests.get(page_url, headers=HEADERS, timeout=10)", script);
     }
 
     [Fact]
@@ -209,7 +209,7 @@ public class PythonCodeGeneratorTests
         Assert.Contains("_PROXY_ENV_VALUE = os.environ.get(PROXY_ENV_VAR)", script);
         Assert.Contains("itertools.cycle(_PROXY_LIST)", script);
         Assert.Contains(
-            "requests.get(url, headers=HEADERS, proxies=_proxies_for_requests(), timeout=10)", script);
+            "requests.get(page_url, headers=HEADERS, proxies=_proxies_for_requests(), timeout=10)", script);
         // Issue #88 follow-up: a missing (not just empty) env var no longer
         // crashes the run with a raw KeyError — it warns and continues, only
         // flagged via a dedicated exit code once the run otherwise succeeds.
