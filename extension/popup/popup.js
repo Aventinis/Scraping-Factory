@@ -3112,7 +3112,7 @@ function wireEvents() {
       log('PREVIEW_UNAVAILABLE', message.reason);
       setLastError(message.reason, 'Preview');
       patchState({ previewActive: false, previewSummary: null });
-      showToast(t('toast.previewUnavailable'));
+      showToast(t('toast.previewUnavailable'), 'Preview');
     }
     if (message.type === 'API_CAPTURE_ENTRY' && _state.apiCaptureActive) {
       log('API_CAPTURE_ENTRY received', message.entry?.url);
@@ -3122,7 +3122,7 @@ function wireEvents() {
       log('API_CAPTURE_UNAVAILABLE', message.reason);
       setLastError(message.reason, 'Network recording');
       patchState({ apiCaptureActive: false, apiCaptureCount: 0 });
-      showToast(t('toast.captureUnavailable'));
+      showToast(t('toast.captureUnavailable'), 'Network recording');
     }
     // Issue #136: EMBEDDED_JSON_CANDIDATES is content-script.js's
     // findEmbeddedJsonCandidates counterpart to API_CANDIDATES — handled

@@ -5824,6 +5824,10 @@ describe('Preview toggle (btn-preview)', () => {
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
     expect(toast.textContent).toContain('nicht möglich');
+    // Regression coverage: setLastError() alone doesn't reveal the button —
+    // showToast() needs its own context argument too (see the analogous
+    // SELECTION_UNAVAILABLE regression test).
+    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
   });
 
   test('adding a new field while preview is active stops it first', async () => {
@@ -6270,6 +6274,10 @@ describe('Network recording toggle (btn-api-capture)', () => {
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
     expect(toast.textContent).toContain('nicht möglich');
+    // Regression coverage: setLastError() alone doesn't reveal the button —
+    // showToast() needs its own context argument too (see the analogous
+    // SELECTION_UNAVAILABLE regression test).
+    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
   });
 });
 
