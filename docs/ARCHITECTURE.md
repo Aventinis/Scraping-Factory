@@ -44,14 +44,16 @@ flowchart LR
         CS <-- chrome.runtime messages --> SW
         SW <-- chrome.runtime messages --> SP
     end
-    SP -- "HTTP: GET /health, POST /generate" --> Companion
+    SP -- "HTTP: GET /health, POST /generate,\nPOST/GET/DELETE /configs" --> Companion
     subgraph Companion["Companion app (.NET 10 process)"]
         direction TB
         Program["Program.cs\n(minimal API)"]
         Plan["ScrapingPlanBuilder /\nScrapingPlanValidator"]
         Gen["ICodeGenerator\n(Python* code generators)"]
         Ver["IScriptVerifier\n(PythonScriptVerifier)"]
+        Store["SavedConfigStore\n(SQLite, Issue #141)"]
         Program --> Plan --> Gen --> Ver
+        Program --> Store
     end
     Ver -- "spawns" --> PySub["python3 subprocess\n(the actual generated script,\nrun once as a trial)"]
 ```
@@ -459,6 +461,35 @@ report instead of describing it by hand.
 
 - Extension: `popup/popup.js` (`buildConfigExport`, `downloadConfigExport`) — reuses
   `buildScrapingConfig` verbatim, no companion involvement
+
+### 2.14a Local saved-configuration history (Issue #141)
+
+The opt-in counterpart to the export above, for a site scraped repeatedly:
+"Speichern" persists the current Fields/Groups/Api configuration into a small
+local SQLite database on the companion side (one row per save, scoped by the
+saved URL's hostname), and the idle screen's "Gespeicherte Konfigurationen"
+panel lists/loads/deletes past saves for whichever site the popup is currently
+looking at. "Laden" restores everything `buildScrapingConfig` captures
+(fields/groups/apiConfig/engine/browserActions/changeDetection/proxy/
+pagination/hardening/persistentSession/output settings) except the `url`
+itself — the live browser tab's URL always stays authoritative, so loading an
+old config never navigates the popup away from the page it's actually
+inspecting. Deleting a saved entry is the one destructive action in this popup
+that needs an inline confirm (a second click), since it's the one action that's
+persisted outside the current session. Purely local/additive — no data ever
+leaves the user's machine, same trust boundary as `/generate` itself; an older
+companion without `/configs` (or a network hiccup) just leaves the panel
+empty, no error shown.
+
+- Extension: `popup/popup.js` (`fetchSavedConfigs`, `saveCurrentConfig`,
+  `loadSavedConfig`, `deleteSavedConfig`, `renderSavedConfigsList`,
+  `requestDeleteSavedConfig`/`cancelDeleteSavedConfig`), `popup/
+  config-import.js` (`applyConfigToState` — the reverse of
+  `buildScrapingConfig`/`buildConfigExport`)
+- Companion: `SavedConfigStore.cs` (SQLite-backed, `Host`-scoped lookup —
+  the config JSON itself is stored and returned opaquely, never deserialized
+  into `ScrapingConfig`), `Program.cs` (`POST /configs`, `GET
+  /configs?url=...`, `GET /configs/{id}`, `DELETE /configs/{id}`)
 
 ### 2.15 Configurable script/output filenames
 
