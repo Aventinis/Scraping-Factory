@@ -1962,7 +1962,7 @@ async function saveCurrentConfig(name) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     log('SAVE_CONFIG OK');
     patchState({ saveConfigModalOpen: false });
-    showToast(t('toast.configSaved'));
+    showToast(t('toast.configSaved'), null, 'info');
     await fetchSavedConfigs(_state.url);
   } catch (err) {
     log('SAVE_CONFIG FAIL', err.message);
@@ -1982,7 +1982,7 @@ async function loadSavedConfig(id) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const record = await res.json();
     setState(STATES.IDLE, applyConfigToState(record.config));
-    showToast(t('toast.configLoaded', { name: record.name }));
+    showToast(t('toast.configLoaded', { name: record.name }), null, 'info');
   } catch (err) {
     log('LOAD_SAVED_CONFIG FAIL', err.message);
     showToast(t('toast.configLoadFailed', { message: err.message }), 'Load configuration');
@@ -2004,7 +2004,7 @@ async function deleteSavedConfig(id) {
     if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
     log('DELETE_SAVED_CONFIG OK');
     patchState({ savedConfigsPendingDeleteId: null });
-    showToast(t('toast.configDeleted'));
+    showToast(t('toast.configDeleted'), null, 'info');
     await fetchSavedConfigs(_state.url);
   } catch (err) {
     log('DELETE_SAVED_CONFIG FAIL', err.message);
