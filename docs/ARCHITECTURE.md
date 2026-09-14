@@ -389,6 +389,24 @@ before ever downloading or running the script themselves.
   (`BuildCsvPreview`/`BuildXmlPreview`/`ParseCsvLine`), `Program.cs` (the
   `IncludePreview == true` response branch)
 
+### 2.8a Download the full trial-run output (Issue #161)
+
+A second, independent opt-in checkbox — the complete, uncapped counterpart to
+§2.8's capped preview — lets the user download the trial run's actual
+`output.csv`/`.xml`/`.json` directly from the `DONE` screen, with no local
+Python/Playwright install needed to run the generated script themselves.
+`PythonScriptVerifier` reads the raw file text at each of its three success
+paths rather than re-deriving it from the already-parsed/capped preview data,
+so the download is byte-identical to what the script wrote.
+
+- Extension: `popup/popup.js` (`_state.includeOutputFile`, `_state.outputFile`,
+  `triggerOutputFileDownload`, the `btn-download-output` visibility toggle)
+- Companion: `IR/ScrapingConfig.cs` (`IncludeOutputFile`),
+  `Backends/ScriptVerificationResult.cs` (`OutputFileContent`/`OutputFileName`),
+  `Backends/IScriptVerifier.cs`/`Backends/Python/PythonScriptVerifier.cs` (the
+  `includeOutputFile` parameter), `Program.cs` (the widened JSON-envelope
+  condition, `outputFile` response key)
+
 ### 2.9 robots.txt check
 
 A one-click check of whether the currently inspected page is allowed or
