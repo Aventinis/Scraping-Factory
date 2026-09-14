@@ -54,6 +54,7 @@ const {
   moveTransform, transformsAreValid, renderTransformList,
   applyTransformsPreview, toNumberPreview, renderTransformPreview,
   syncModeToggleThumbs,
+  applyConfigToState, renderSavedConfigsList, requestDeleteSavedConfig, cancelDeleteSavedConfig,
 } = require('./popup');
 
 // jsdom's Blob doesn't implement .text() — read via FileReader instead.
@@ -1062,6 +1063,190 @@ describe('buildConfigExport', () => {
     const result = buildConfigExport('https://example.com', 'flat', [], [], { version: '1.2.3' }, null, 'myscraper', 'result');
     expect(result.config.scriptFileName).toBe('myscraper');
     expect(result.config.outputFileName).toBe('result');
+  });
+});
+
+// ── applyConfigToState (Issue #141) ─────────────────────────────────────────
+// The reverse of buildScrapingConfig/buildConfigExport — round-tripping a
+// built wire config through applyConfigToState should reproduce every part
+// of _state buildScrapingConfig itself reads, for every mode/shape.
+
+describe('applyConfigToState', () => {
+  test('never includes `url` — the live browser tab stays authoritative', () => {
+    const config = buildScrapingConfig('https://example.com/products', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(applyConfigToState(config)).not.toHaveProperty('url');
+  });
+
+  test('flat mode: round-trips fields (with attribute/framePath/transforms), scriptFileName/outputFileName, useJsonOutput, additionalStartUrls', () => {
+    const fields = [
+      { name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null },
+      { name: 'Bild', selector: 'img', attribute: 'src', framePath: ['#widget'], transforms: [{ kind: 'trim' }] },
+    ];
+    const config = buildScrapingConfig(
+      'https://example.com', 'flat', fields, [], null, 'myscraper', 'result', 'Static', [], false, true,
+      ['https://example.com/page2'],
+    );
+
+    const result = applyConfigToState(config);
+
+    expect(result.mode).toBe('flat');
+    expect(result.fields).toEqual(fields);
+    expect(result.groups).toEqual([]);
+    expect(result.apiConfig).toBeNull();
+    expect(result.scriptFileName).toBe('myscraper');
+    expect(result.outputFileName).toBe('result');
+    expect(result.useJsonOutput).toBe(true);
+    expect(result.additionalStartUrls).toEqual(['https://example.com/page2']);
+  });
+
+  test('container mode: round-trips a nested group tree through serialize/deserialize', () => {
+    const inner = buildFieldNode('Preis', '.price', 'attribute', 'data-price');
+    const group = { ...buildGroupNode('Kategorie', 'section.menu-category', true), children: [inner] };
+    const config = buildScrapingConfig('https://example.com', 'container', [], [group]);
+
+    const result = applyConfigToState(config);
+
+    expect(result.mode).toBe('container');
+    expect(result.fields).toEqual([]);
+    expect(result.groups).toEqual([group]);
+  });
+
+  test('container mode: round-trips every field extraction mode (text/attribute/exists/ownText)', () => {
+    const groups = [
+      buildFieldNode('Titel', 'h3', 'text'),
+      buildFieldNode('Link', 'a', 'attribute', 'href'),
+      buildFieldNode('Vorhanden', '.badge', 'exists'),
+      buildFieldNode('Name', 'h2', 'ownText'),
+    ];
+    const config = buildScrapingConfig('https://example.com', 'container', [], groups);
+
+    expect(applyConfigToState(config).groups).toEqual(groups);
+  });
+
+  test('api mode: passes apiConfig through unchanged', () => {
+    const apiConfig = { urlTemplate: 'https://example.com/api/{id}', itemsPath: 'data', fields: [{ name: 'Titel', path: 'title' }], parameters: [] };
+    const config = buildScrapingConfig('https://example.com', 'api', [], [], apiConfig);
+
+    const result = applyConfigToState(config);
+
+    expect(result.mode).toBe('api');
+    expect(result.apiConfig).toEqual(apiConfig);
+    expect(result.fields).toEqual([]);
+    expect(result.groups).toEqual([]);
+  });
+
+  test('round-trips engine + browserActions (all four kinds, including framePath)', () => {
+    const browserActions = [
+      { kind: 'waitFor', selector: '.ready', timeoutMs: 3000, framePath: ['#frame1'] },
+      { kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER', framePath: null },
+      { kind: 'click', selector: '#submit', framePath: null },
+      { kind: 'scroll', containerSelector: '.list', loadMoreButtonSelector: '.more', maxIterations: 5, waitAfterMs: 500, framePath: null },
+    ];
+    const config = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Browser', browserActions,
+    );
+
+    const result = applyConfigToState(config);
+
+    expect(result.engine).toBe('Browser');
+    expect(result.browserActions).toEqual(browserActions);
+  });
+
+  test('defaults engine to Static and browserActions to [] when omitted (Static-engine wire config)', () => {
+    const config = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const result = applyConfigToState(config);
+    expect(result.engine).toBe('Static');
+    expect(result.browserActions).toEqual([]);
+  });
+
+  test('round-trips changeDetection (webhook) and proxy', () => {
+    const changeDetection = {
+      enabled: true, notify: 'Webhook',
+      email: { smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: '', toEnvVar: '' },
+      webhook: { urlEnvVar: 'SF_WEBHOOK_URL' },
+    };
+    const proxy = { enabled: true, envVar: 'SF_PROXIES' };
+    const config = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], changeDetection, proxy,
+    );
+
+    const result = applyConfigToState(config);
+
+    expect(result.changeDetection).toEqual(changeDetection);
+    expect(result.proxy).toEqual(proxy);
+  });
+
+  test('round-trips changeDetection (email, with only required fields set)', () => {
+    const changeDetection = {
+      enabled: true, notify: 'Email',
+      email: { smtpHostEnvVar: 'SF_HOST', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: 'SF_FROM', toEnvVar: 'SF_TO' },
+      webhook: { urlEnvVar: '' },
+    };
+    const config = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], changeDetection,
+    );
+
+    expect(applyConfigToState(config).changeDetection).toEqual(changeDetection);
+  });
+
+  test('defaults changeDetection/proxy to their disabled shape when omitted', () => {
+    const config = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const result = applyConfigToState(config);
+    expect(result.changeDetection).toEqual({
+      enabled: false, notify: 'Email',
+      email: { smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: '', toEnvVar: '' },
+      webhook: { urlEnvVar: '' },
+    });
+    expect(result.proxy).toEqual({ enabled: false, envVar: '' });
+  });
+
+  test('round-trips pagination (both kinds) and persistentSession', () => {
+    const pagination = { enabled: true, kind: 'pageNumber', nextLinkSelector: '', urlTemplate: '{url}?page={page}', maxPages: 10 };
+    const config = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Browser', [], false,
+      false, [], null, null, null, pagination, true,
+    );
+
+    const result = applyConfigToState(config);
+
+    expect(result.pagination).toEqual(pagination);
+    expect(result.persistentSession).toBe(true);
+  });
+
+  test('defaults pagination to disabled/nextLink and persistentSession to false when omitted', () => {
+    const config = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const result = applyConfigToState(config);
+    expect(result.pagination).toEqual({ enabled: false, kind: 'nextLink', nextLinkSelector: '', urlTemplate: '', maxPages: 50 });
+    expect(result.persistentSession).toBe(false);
+  });
+
+  test('round-trips every hardening check kind', () => {
+    const hardening = {
+      noResult: { enabled: true, severity: 'Error' },
+      nullRate: [{ fieldName: 'Preis', threshold: 30, severity: 'Error' }],
+      baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: 25 },
+      blocking: { enabled: true, severity: 'Warning', minBodyLengthText: '500', phrasesText: 'Access Denied\nCAPTCHA' },
+      requiredFields: { enabled: true, severity: 'Error', fields: ['Titel', 'Preis'] },
+    };
+    const config = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, hardening,
+    );
+
+    expect(applyConfigToState(config).hardening).toEqual(hardening);
+  });
+
+  test('defaults hardening to its fully-disabled shape when omitted', () => {
+    const config = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(applyConfigToState(config).hardening).toEqual({
+      noResult: { enabled: false, severity: 'Warning' },
+      nullRate: [],
+      baseline: { enabled: false, severity: 'Warning', dropThresholdPercent: 20 },
+      blocking: { enabled: false, severity: 'Warning', minBodyLengthText: '', phrasesText: '' },
+      requiredFields: { enabled: false, severity: 'Warning', fields: [] },
+    });
   });
 });
 
@@ -4015,6 +4200,197 @@ describe('generate() surfaces a 400 config rejection without inviting a bug repo
     expect(toast.classList.contains('hidden')).toBe(false);
     expect(document.getElementById('error-toast-message').textContent).toContain('FramePath is only allowed with Engine');
     expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(true);
+  });
+});
+
+// ── Saved configuration history (Issue #141) ────────────────────────────────
+// Full flows against the companion's /configs endpoints, same DOM-mocking
+// pattern as the generate() integration tests above.
+
+describe('saved configuration history (Issue #141)', () => {
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  let fetchMock;
+
+  const idleScreenHtml = `
+    <section id="screen-idle" class="hidden">
+      <div id="url-display"></div>
+      <div id="fields-list"></div>
+      <button id="btn-generate"></button>
+      <button id="btn-export-config"></button>
+      <button id="btn-save-config"></button>
+      <div id="saved-configs-list"></div>
+      <p id="saved-configs-empty" class="hidden"></p>
+    </section>
+    <div id="modal-save-config" class="modal hidden">
+      <input id="input-save-config-name" />
+      <button id="btn-save-config-cancel"></button>
+      <button id="btn-save-config-confirm"></button>
+    </div>
+    <section id="screen-generating" class="hidden"></section>
+    <div id="error-toast" class="hidden">
+      <span id="error-toast-message"></span>
+      <button id="btn-report-bug-toast" class="hidden"></button>
+    </div>
+  `;
+
+  beforeEach(async () => {
+    jest.resetModules();
+    document.body.innerHTML = idleScreenHtml;
+
+    global.chrome = {
+      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com/products' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({
+            fields: [{ name: 'Preis', selector: '.price', attribute: null }],
+            url: 'https://example.com/products',
+          }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+
+    fetchMock = jest.fn((url, init) => {
+      const method = init?.method || 'GET';
+      const urlStr = String(url);
+      if (urlStr.endsWith('/health')) return Promise.resolve({ ok: true });
+      if (urlStr.includes('/configs?url=')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([
+            { id: 1, url: 'https://example.com/products', name: 'My config', savedAt: '2026-01-01T00:00:00.000Z' },
+          ]),
+        });
+      }
+      if (urlStr.endsWith('/configs') && method === 'POST') {
+        return Promise.resolve({
+          ok: true, status: 201,
+          json: () => Promise.resolve({ id: 2, url: 'https://example.com/products', name: 'New config', savedAt: '2026-01-02T00:00:00.000Z' }),
+        });
+      }
+      if (/\/configs\/\d+$/.test(urlStr) && method === 'GET') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            id: 1, url: 'https://example.com/products', name: 'My config', savedAt: '2026-01-01T00:00:00.000Z',
+            config: {
+              version: '1', url: 'https://example.com/products',
+              fields: [{ name: 'Loaded', selector: '.loaded', attribute: null }],
+            },
+          }),
+        });
+      }
+      if (/\/configs\/\d+$/.test(urlStr) && method === 'DELETE') {
+        return Promise.resolve({ ok: true, status: 204 });
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${method} ${urlStr}`));
+    });
+    global.fetch = fetchMock;
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE, fields restored, saved-configs list fetched
+  });
+
+  test('fetches and renders saved configs scoped to the current page on IDLE entry', () => {
+    expect(fetchMock).toHaveBeenCalledWith(`http://localhost:5000/configs?url=${encodeURIComponent('https://example.com/products')}`);
+    const rows = document.querySelectorAll('.saved-config-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain('My config');
+  });
+
+  test('Save opens the modal prefilled with the current hostname, then POSTs the current config and refreshes the list', async () => {
+    document.getElementById('btn-save-config').click();
+    expect(document.getElementById('modal-save-config').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('input-save-config-name').value).toBe('example.com');
+
+    document.getElementById('input-save-config-name').value = 'New config';
+    document.getElementById('btn-save-config-confirm').click();
+    await flushMicrotasks();
+
+    const postCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/configs') && init?.method === 'POST');
+    expect(postCall).toBeDefined();
+    const body = JSON.parse(postCall[1].body);
+    expect(body.name).toBe('New config');
+    expect(body.url).toBe('https://example.com/products');
+    expect(body.config.fields).toEqual([{ name: 'Preis', selector: '.price', attribute: null }]);
+    // Save is followed by a re-fetch of the list (fetchSavedConfigs) and the
+    // modal closes.
+    expect(document.getElementById('modal-save-config').classList.contains('hidden')).toBe(true);
+  });
+
+  test('Load applies the saved config back into state without touching the live tab URL', async () => {
+    document.querySelector('.btn-saved-config-load').click();
+    await flushMicrotasks();
+
+    // _state.url stays whatever the tab reported at startup — see
+    // applyConfigToState's own doc comment.
+    expect(document.getElementById('url-display').textContent).toBe('https://example.com/products');
+    const fieldNames = [...document.querySelectorAll('#fields-list .field-name')].map(el => el.textContent);
+    expect(fieldNames).toEqual(['Loaded']);
+  });
+
+  test('Delete requires an inline confirm before the DELETE request is actually sent', async () => {
+    document.querySelector('.btn-saved-config-delete').click();
+
+    expect(document.querySelector('.btn-saved-config-delete-confirm')).not.toBeNull();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+
+    document.querySelector('.btn-saved-config-delete-confirm').click();
+    await flushMicrotasks();
+
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(true);
+  });
+
+  test('Delete confirm can be cancelled without sending the DELETE request', () => {
+    document.querySelector('.btn-saved-config-delete').click();
+    document.querySelector('.btn-saved-config-delete-cancel').click();
+
+    expect(document.querySelector('.btn-saved-config-load')).not.toBeNull();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+  });
+});
+
+describe('saved configuration history: an older/unreachable companion without /configs', () => {
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div id="fields-list"></div>
+        <div id="saved-configs-list"></div>
+        <p id="saved-configs-empty" class="hidden"></p>
+      </section>
+    `;
+
+    global.chrome = {
+      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: { session: { get: jest.fn().mockResolvedValue({}), set: jest.fn().mockResolvedValue(undefined), remove: jest.fn().mockResolvedValue(undefined) } },
+    };
+
+    global.fetch = jest.fn((url) => {
+      const urlStr = String(url);
+      if (urlStr.endsWith('/health')) return Promise.resolve({ ok: true });
+      if (urlStr.includes('/configs?url=')) return Promise.reject(new Error('404 Not Found'));
+      return Promise.reject(new Error(`unexpected fetch: ${urlStr}`));
+    });
+
+    require('./popup');
+    await flushMicrotasks();
+  });
+
+  test('the panel just stays empty instead of surfacing an error', () => {
+    expect(document.getElementById('error-toast')).toBeNull();
+    expect(document.querySelectorAll('.saved-config-row')).toHaveLength(0);
   });
 });
 
