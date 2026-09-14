@@ -67,6 +67,15 @@
     "previewSummaryTruncated": "display truncated (too many matches)",
     "exportConfigTitle": "Export the current fields/containers as JSON — e.g. for a bug report",
     "exportConfigBtn": "Export configuration",
+    "saveConfigTitle": "Save the current configuration locally, so it can be reloaded next time this site is scraped",
+    "saveConfigBtn": "Save configuration",
+    "savedConfigsTitle": "Saved configurations for this site",
+    "savedConfigsEmpty": "No saved configurations for this site yet.",
+    "savedConfigsLoadBtn": "Load",
+    "savedConfigsDeleteBtn": "Delete",
+    "savedConfigsDeleteConfirm": "Delete this saved configuration?",
+    "savedConfigsDeleteConfirmYes": "Yes",
+    "savedConfigsDeleteConfirmNo": "No",
     "scriptFilenameLabel": "Script name",
     "scriptFilenamePlaceholder": "scraper",
     "outputFilenameLabel": "Output file name",
@@ -269,6 +278,11 @@
       "nameLabel": "Parameter name (e.g. \"category\")",
       "namePlaceholder": "Name"
     },
+    "saveConfig": {
+      "label": "Configuration name (e.g. \"Product listing\")",
+      "namePlaceholder": "Name",
+      "save": "Save"
+    },
     "matchCount": {
       "found": "{count} element(s) found"
     }
@@ -283,7 +297,13 @@
     "previewUnavailable": "Preview isn't possible on this page.",
     "captureUnavailable": "Network recording isn't possible on this page.",
     "invalidCompanionUrl": "Invalid address — please include http:// or https://.",
-    "containerAdded": "Container \"{name}\" added — {count} element(s) found"
+    "containerAdded": "Container \"{name}\" added — {count} element(s) found",
+    "configSaved": "Configuration saved.",
+    "configSaveFailed": "Could not save configuration: {message}",
+    "configLoaded": "Configuration \"{name}\" loaded.",
+    "configLoadFailed": "Could not load configuration: {message}",
+    "configDeleted": "Configuration deleted.",
+    "configDeleteFailed": "Could not delete configuration: {message}"
   },
   "frame": {
     "badge": "iframe",

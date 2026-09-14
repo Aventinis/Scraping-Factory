@@ -67,6 +67,15 @@
     "previewSummaryTruncated": "Anzeige gekürzt (zu viele Treffer)",
     "exportConfigTitle": "Aktuelle Felder/Container als JSON exportieren — z. B. für einen Bug-Report",
     "exportConfigBtn": "Konfiguration exportieren",
+    "saveConfigTitle": "Aktuelle Konfiguration lokal speichern, um sie beim nächsten Scrapen dieser Seite wieder zu laden",
+    "saveConfigBtn": "Konfiguration speichern",
+    "savedConfigsTitle": "Gespeicherte Konfigurationen für diese Seite",
+    "savedConfigsEmpty": "Noch keine gespeicherten Konfigurationen für diese Seite.",
+    "savedConfigsLoadBtn": "Laden",
+    "savedConfigsDeleteBtn": "Löschen",
+    "savedConfigsDeleteConfirm": "Diese gespeicherte Konfiguration löschen?",
+    "savedConfigsDeleteConfirmYes": "Ja",
+    "savedConfigsDeleteConfirmNo": "Nein",
     "scriptFilenameLabel": "Skriptname",
     "scriptFilenamePlaceholder": "scraper",
     "outputFilenameLabel": "Name der Ausgabedatei",
@@ -269,6 +278,11 @@
       "nameLabel": "Name des Parameters (z. B. \"kategorie\")",
       "namePlaceholder": "Name"
     },
+    "saveConfig": {
+      "label": "Name der Konfiguration (z. B. \"Produktliste\")",
+      "namePlaceholder": "Name",
+      "save": "Speichern"
+    },
     "matchCount": {
       "found": "{count} Element(e) gefunden"
     }
@@ -283,7 +297,13 @@
     "previewUnavailable": "Vorschau auf dieser Seite nicht möglich.",
     "captureUnavailable": "Netzwerk-Aufzeichnung auf dieser Seite nicht möglich.",
     "invalidCompanionUrl": "Ungültige Adresse — bitte mit http:// oder https:// angeben.",
-    "containerAdded": "Container „{name}“ hinzugefügt — {count} Element(e) gefunden"
+    "containerAdded": "Container „{name}“ hinzugefügt — {count} Element(e) gefunden",
+    "configSaved": "Konfiguration gespeichert.",
+    "configSaveFailed": "Konfiguration konnte nicht gespeichert werden: {message}",
+    "configLoaded": "Konfiguration „{name}“ geladen.",
+    "configLoadFailed": "Konfiguration konnte nicht geladen werden: {message}",
+    "configDeleted": "Konfiguration gelöscht.",
+    "configDeleteFailed": "Konfiguration konnte nicht gelöscht werden: {message}"
   },
   "frame": {
     "badge": "iframe",

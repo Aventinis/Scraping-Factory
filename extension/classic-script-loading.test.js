@@ -58,6 +58,7 @@ test('shared/logger.js + i18n/i18n.js + popup/popup.js load together without a r
     'popup/api-config-ui.js',
     'popup/container-tree-ui.js',
     'popup/field-transforms-ui.js',
+    'popup/config-import.js',
     'popup/popup.js',
   ])).not.toThrow();
 });

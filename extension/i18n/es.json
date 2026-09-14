@@ -67,6 +67,15 @@
     "previewSummaryTruncated": "vista recortada (demasiadas coincidencias)",
     "exportConfigTitle": "Exportar los campos/contenedores actuales como JSON — p. ej. para un informe de error",
     "exportConfigBtn": "Exportar configuración",
+    "saveConfigTitle": "Guardar la configuración actual localmente, para volver a cargarla la próxima vez que se analice este sitio",
+    "saveConfigBtn": "Guardar configuración",
+    "savedConfigsTitle": "Configuraciones guardadas para este sitio",
+    "savedConfigsEmpty": "Aún no hay configuraciones guardadas para este sitio.",
+    "savedConfigsLoadBtn": "Cargar",
+    "savedConfigsDeleteBtn": "Eliminar",
+    "savedConfigsDeleteConfirm": "¿Eliminar esta configuración guardada?",
+    "savedConfigsDeleteConfirmYes": "Sí",
+    "savedConfigsDeleteConfirmNo": "No",
     "scriptFilenameLabel": "Nombre del script",
     "scriptFilenamePlaceholder": "scraper",
     "outputFilenameLabel": "Nombre del archivo de salida",
@@ -269,6 +278,11 @@
       "nameLabel": "Nombre del parámetro (p. ej. \"categoria\")",
       "namePlaceholder": "Nombre"
     },
+    "saveConfig": {
+      "label": "Nombre de la configuración (p. ej. \"Listado de productos\")",
+      "namePlaceholder": "Nombre",
+      "save": "Guardar"
+    },
     "matchCount": {
       "found": "{count} elemento(s) encontrado(s)"
     }
@@ -283,7 +297,13 @@
     "previewUnavailable": "No es posible la vista previa en esta página.",
     "captureUnavailable": "No es posible grabar red en esta página.",
     "invalidCompanionUrl": "Dirección no válida — incluye http:// o https://.",
-    "containerAdded": "Contenedor «{name}» añadido — {count} elemento(s) encontrado(s)"
+    "containerAdded": "Contenedor «{name}» añadido — {count} elemento(s) encontrado(s)",
+    "configSaved": "Configuración guardada.",
+    "configSaveFailed": "No se pudo guardar la configuración: {message}",
+    "configLoaded": "Configuración «{name}» cargada.",
+    "configLoadFailed": "No se pudo cargar la configuración: {message}",
+    "configDeleted": "Configuración eliminada.",
+    "configDeleteFailed": "No se pudo eliminar la configuración: {message}"
   },
   "frame": {
     "badge": "iframe",
