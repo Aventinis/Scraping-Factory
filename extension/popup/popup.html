@@ -374,6 +374,14 @@
     .hardening-required-field-add-row { display: flex; align-items: center; gap: 6px; }
     .hardening-required-field-add-row select { flex: 1; min-width: 0; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
 
+    /* Issue #141: one row per saved configuration (Load/Delete), plus an
+       inline Yes/No swap while savedConfigsPendingDeleteId matches. */
+    #saved-configs-section { margin-top: 10px; }
+    .saved-config-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 11px; }
+    .saved-config-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+    .saved-config-date { flex: none; color: var(--color-text-faint); }
+    .saved-config-confirm-text { flex: 1; min-width: 0; color: var(--color-text-muted); }
+
     /* Preview toggle */
     .btn-toggle           { background: var(--color-surface-muted); color: var(--color-text-secondary); width: 100%; }
     .btn-toggle:hover     { background: var(--color-border); }
@@ -1211,8 +1219,23 @@
     </div>
     </div>
 
+    <!-- Issue #141: local SQLite-backed configuration history — save the
+         current Fields/Groups/Api config to the companion's local SQLite
+         store and reload it later instead of rebuilding selectors from
+         scratch every time the same site is scraped. Scoped to the current
+         page's hostname (fetchSavedConfigs/SavedConfigStore.ListByUrl).
+         "Laden" restores everything buildScrapingConfig captures except
+         `url` itself, which always stays whatever the live browser tab
+         shows (see config-import.js's applyConfigToState doc comment). -->
+    <div id="saved-configs-section">
+      <p class="preview-summary" data-i18n="idle.savedConfigsTitle"></p>
+      <div id="saved-configs-list"></div>
+      <p id="saved-configs-empty" class="preview-summary hidden" data-i18n="idle.savedConfigsEmpty"></p>
+    </div>
+
     <div class="actions" style="margin-top: 10px;">
       <button id="btn-export-config" class="btn-secondary" disabled data-i18n="idle.exportConfigBtn" data-i18n-title="idle.exportConfigTitle"></button>
+      <button id="btn-save-config" class="btn-secondary" disabled data-i18n="idle.saveConfigBtn" data-i18n-title="idle.saveConfigTitle"></button>
       <button id="btn-generate" class="btn-primary" disabled data-i18n="idle.generateBtn"></button>
     </div>
   </section>
@@ -1353,6 +1376,19 @@
   </div>
 
   <!-- Modal: new container (name + type), shown before element selection starts -->
+  <!-- Modal: name a config being saved to the companion's local SQLite
+       store (Issue #141) -->
+  <div id="modal-save-config" class="modal hidden">
+    <div class="modal-inner">
+      <label for="input-save-config-name" data-i18n="modals.saveConfig.label"></label>
+      <input id="input-save-config-name" type="text" data-i18n-placeholder="modals.saveConfig.namePlaceholder" autocomplete="off" />
+      <div class="modal-actions">
+        <button id="btn-save-config-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-save-config-confirm" class="btn-primary" data-i18n="modals.saveConfig.save"></button>
+      </div>
+    </div>
+  </div>
+
   <div id="modal-container-new" class="modal hidden">
     <div class="modal-inner">
       <label for="input-container-name" data-i18n="modals.containerNew.label"></label>
@@ -1479,6 +1515,7 @@
   <script src="api-config-ui.js"></script>
   <script src="container-tree-ui.js"></script>
   <script src="field-transforms-ui.js"></script>
+  <script src="config-import.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

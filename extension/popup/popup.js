@@ -68,6 +68,9 @@ const {
 const { renderTransformList, wireTransformList, renderTransformPreview } =
   typeof require !== 'undefined' ? require('./field-transforms-ui') : self.SFFieldTransformsUI;
 
+const { applyConfigToState } =
+  typeof require !== 'undefined' ? require('./config-import') : self.SFConfigImport;
+
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (e) => log('UNCAUGHT_ERROR', e.message));
   window.addEventListener('unhandledrejection', (e) => log('UNHANDLED_REJECTION', String(e.reason)));
@@ -336,6 +339,27 @@ let _state = {
   // choice, not a sticky preference. See buildScrapingConfig for exactly
   // what this adds/replaces per mode.
   useJsonOutput:      false,
+  // Issue #141: local SQLite-backed configuration history. savedConfigs is
+  // null before the first GET /configs?url=... for the current tab
+  // completes (or if it fails — an older companion without this route, a
+  // network hiccup — the panel just stays empty, non-fatal, same
+  // "optional companion capability" treatment robots.txt checking gets),
+  // else the list of {id, url, name, savedAt} summaries scoped to the
+  // current page's hostname. Re-fetched fresh each time the IDLE screen's
+  // url becomes known (see checkCompanion) — pull-based, not persisted,
+  // same reasoning as apiEntries above (this list can change on the
+  // companion side, e.g. from a config saved in a previous popup session).
+  savedConfigs:              null,
+  savedConfigsLoading:       false,
+  // Set to a saved config's id right after its own "Delete" button is first
+  // clicked, turning that one row into an inline "Delete? Yes/No" — a
+  // second confirming click is required before DELETE /configs/{id} is
+  // actually sent, since this is the one destructive action in the popup
+  // that's persisted outside the current session (every other "Remove"/"−"
+  // button here acts on in-memory draft state only). Reset on confirm,
+  // cancel, or navigating away from IDLE.
+  savedConfigsPendingDeleteId: null,
+  saveConfigModalOpen:       false,
 };
 
 const DOM_TREE_TIMEOUT_MS = 5000;
@@ -967,6 +991,7 @@ function render() {
   hide('modal-api-group-new');
   hide('modal-api-body-parameter-new');
   hide('modal-api-field-transforms');
+  hide('modal-save-config');
 
   const screenKey = {
     [STATES.CHECKING_COMPANION]: 'checking',
@@ -1054,6 +1079,8 @@ function render() {
     if (genBtn) genBtn.disabled = !hasConfig;
     const exportBtn = document.getElementById('btn-export-config');
     if (exportBtn) exportBtn.disabled = !hasConfig;
+    const saveConfigBtn = document.getElementById('btn-save-config');
+    if (saveConfigBtn) saveConfigBtn.disabled = !hasConfig;
 
     const previewBtn = document.getElementById('btn-preview');
     if (previewBtn) {
@@ -1294,6 +1321,13 @@ function render() {
     document.getElementById('btn-hardening-required-fields-error')?.classList.toggle('active', _state.hardening.requiredFields.severity === 'Error');
     renderHardeningRequiredFieldsList();
 
+    // Issue #141: saved-configs-section is scoped to the current page's
+    // hostname (fetchSavedConfigs, kicked off from checkCompanion) —
+    // rendered every pass like the other IDLE-only lists above rather than
+    // only on state transitions, so an in-progress delete confirmation
+    // (savedConfigsPendingDeleteId) re-renders correctly too.
+    renderSavedConfigsList();
+
     if (_state.containerModalOpen) {
       show('modal-container-new');
       const nameInput = document.getElementById('input-container-name');
@@ -1301,6 +1335,8 @@ function render() {
       const singleRadio = document.getElementById('radio-container-single');
       if (singleRadio) singleRadio.checked = true;
     }
+
+    if (_state.saveConfigModalOpen) show('modal-save-config');
   }
 
   if (_state.current === STATES.API_CONFIG && _state.apiConfigDraft) {
@@ -1633,6 +1669,44 @@ function renderHardeningRequiredFieldsList(
   if (select) select.disabled = available.length === 0;
 }
 
+// Issue #141: renders _state.savedConfigs (scoped to the current page's
+// hostname, see fetchSavedConfigs) as a Load/Delete row per entry. A row
+// whose id matches savedConfigsPendingDeleteId swaps to an inline
+// "Delete? Yes/No" confirm instead — see requestDeleteSavedConfig/
+// deleteSavedConfig's own doc comments on why this one action gets a
+// confirm step when nothing else in this popup does.
+function renderSavedConfigsList() {
+  const listEl = document.getElementById('saved-configs-list');
+  const emptyEl = document.getElementById('saved-configs-empty');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+
+  const savedConfigs = _state.savedConfigs || [];
+  if (emptyEl) emptyEl.classList.toggle('hidden', savedConfigs.length > 0);
+
+  savedConfigs.forEach((entry) => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'saved-config-row';
+    const savedDate = new Date(entry.savedAt);
+    const savedAtText = Number.isNaN(savedDate.getTime()) ? entry.savedAt : savedDate.toLocaleString();
+
+    if (_state.savedConfigsPendingDeleteId === entry.id) {
+      rowEl.innerHTML =
+        `<span class="saved-config-name">${escapeHtml(entry.name)}</span>` +
+        `<span class="saved-config-confirm-text">${escapeHtml(t('idle.savedConfigsDeleteConfirm'))}</span>` +
+        `<button type="button" class="btn-danger btn-tiny btn-saved-config-delete-confirm" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteConfirmYes'))}</button>` +
+        `<button type="button" class="btn-secondary btn-tiny btn-saved-config-delete-cancel" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteConfirmNo'))}</button>`;
+    } else {
+      rowEl.innerHTML =
+        `<span class="saved-config-name" title="${escapeHtml(entry.url)}">${escapeHtml(entry.name)}</span>` +
+        `<span class="saved-config-date">${escapeHtml(savedAtText)}</span>` +
+        `<button type="button" class="btn-secondary btn-tiny btn-saved-config-load" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsLoadBtn'))}</button>` +
+        `<button type="button" class="btn-danger btn-tiny btn-saved-config-delete" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteBtn'))}</button>`;
+    }
+    listEl.appendChild(rowEl);
+  });
+}
+
 // ── DOM tree view ────────────────────────────────────────────────────────────
 // Rendered imperatively (not through render()) so a user's expand/collapse
 // clicks survive unrelated state updates (e.g. adding/removing a field).
@@ -1791,6 +1865,10 @@ async function checkCompanion() {
     const url = tabs[0]?.url ?? '';
     log('TAB_URL', url);
     setState(STATES.IDLE, { url });
+    // Issue #141: fire-and-forget — fetchSavedConfigs patches state itself
+    // once (or if) it resolves, no need to await/block the IDLE transition
+    // on it.
+    if (url) fetchSavedConfigs(url);
   } catch (err) {
     log('HEALTH_CHECK FAIL', err.message);
     setLastError(err.message, 'Companion connection');
@@ -1843,6 +1921,94 @@ async function checkRobotsTxt() {
   } catch (err) {
     log('ROBOTS_TXT_CHECK failed', err.message);
     patchState({ robotsTxtChecking: false, robotsTxtResult: { ok: false, error: err.message } });
+  }
+}
+
+// Issue #141: local SQLite-backed configuration history — plain fetch
+// wrappers against the companion's /configs endpoints, same style as
+// generate()/checkCompanion() above.
+
+async function fetchSavedConfigs(url) {
+  patchState({ savedConfigsLoading: true });
+  try {
+    const res = await fetch(`${companionUrl}/configs?url=${encodeURIComponent(url)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const savedConfigs = await res.json();
+    log('SAVED_CONFIGS_LIST', savedConfigs.length);
+    patchState({ savedConfigs, savedConfigsLoading: false });
+  } catch (err) {
+    // Non-fatal: an older companion without /configs, or a transient
+    // network hiccup — this is an optional, secondary capability, so the
+    // panel just stays empty instead of surfacing an error toast for it.
+    log('SAVED_CONFIGS_LIST FAIL', err.message);
+    patchState({ savedConfigs: [], savedConfigsLoading: false });
+  }
+}
+
+async function saveCurrentConfig(name) {
+  const config = buildScrapingConfig(
+    _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
+    _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
+    _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy, _state.hardening,
+    _state.pagination, _state.persistentSession,
+  );
+  log('SAVE_CONFIG', name);
+  try {
+    const res = await fetch(`${companionUrl}/configs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: _state.url, name, config }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    log('SAVE_CONFIG OK');
+    patchState({ saveConfigModalOpen: false });
+    showToast(t('toast.configSaved'));
+    await fetchSavedConfigs(_state.url);
+  } catch (err) {
+    log('SAVE_CONFIG FAIL', err.message);
+    showToast(t('toast.configSaveFailed', { message: err.message }), 'Save configuration');
+  }
+}
+
+// Issue #141: applies a saved config back into _state — the reverse of
+// buildConfigExport/buildScrapingConfig (see applyConfigToState). Reuses
+// setState (not patchState) so the applied config is persisted the same way
+// any other IDLE-screen edit already is, surviving a subsequent popup
+// close/reopen.
+async function loadSavedConfig(id) {
+  log('LOAD_SAVED_CONFIG', id);
+  try {
+    const res = await fetch(`${companionUrl}/configs/${id}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const record = await res.json();
+    setState(STATES.IDLE, applyConfigToState(record.config));
+    showToast(t('toast.configLoaded', { name: record.name }));
+  } catch (err) {
+    log('LOAD_SAVED_CONFIG FAIL', err.message);
+    showToast(t('toast.configLoadFailed', { message: err.message }), 'Load configuration');
+  }
+}
+
+function requestDeleteSavedConfig(id) {
+  patchState({ savedConfigsPendingDeleteId: id });
+}
+
+function cancelDeleteSavedConfig() {
+  patchState({ savedConfigsPendingDeleteId: null });
+}
+
+async function deleteSavedConfig(id) {
+  log('DELETE_SAVED_CONFIG', id);
+  try {
+    const res = await fetch(`${companionUrl}/configs/${id}`, { method: 'DELETE' });
+    if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
+    log('DELETE_SAVED_CONFIG OK');
+    patchState({ savedConfigsPendingDeleteId: null });
+    showToast(t('toast.configDeleted'));
+    await fetchSavedConfigs(_state.url);
+  } catch (err) {
+    log('DELETE_SAVED_CONFIG FAIL', err.message);
+    showToast(t('toast.configDeleteFailed', { message: err.message }), 'Delete configuration');
   }
 }
 
@@ -2997,6 +3163,63 @@ function wireEvents() {
   document.getElementById('btn-download')?.addEventListener('click', triggerDownload);
   document.getElementById('btn-export-config')?.addEventListener('click', downloadConfigExport);
 
+  // Issue #141: "Save configuration" opens modal-save-config (name input,
+  // prefilled with the current page's hostname); Load/Delete are wired via
+  // delegation on saved-configs-list below since rows are rebuilt on every
+  // render() (see renderSavedConfigsList).
+  document.getElementById('btn-save-config')?.addEventListener('click', () => {
+    log('BTN save-config → open modal');
+    let defaultName = '';
+    try {
+      defaultName = new URL(_state.url).hostname;
+    } catch {
+      // _state.url isn't a well-formed absolute URL — defaultName stays ''
+      // and the input is simply left blank, same as any other unreachable
+      // default elsewhere in this popup.
+    }
+    patchState({ saveConfigModalOpen: true });
+    const input = document.getElementById('input-save-config-name');
+    if (input) input.value = defaultName;
+  });
+  document.getElementById('btn-save-config-cancel')?.addEventListener('click', () => {
+    log('BTN save-config-cancel');
+    patchState({ saveConfigModalOpen: false });
+  });
+  document.getElementById('btn-save-config-confirm')?.addEventListener('click', () => {
+    const name = document.getElementById('input-save-config-name')?.value.trim();
+    if (!name) return;
+    log('BTN save-config-confirm', name);
+    saveCurrentConfig(name);
+  });
+  document.getElementById('input-save-config-name')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const name = e.target.value.trim();
+    if (!name) return;
+    saveCurrentConfig(name);
+  });
+
+  document.getElementById('saved-configs-list')?.addEventListener('click', (e) => {
+    const loadBtn = e.target.closest('.btn-saved-config-load');
+    if (loadBtn) {
+      const id = parseInt(loadBtn.dataset.id, 10);
+      log('BTN saved-config-load', id);
+      loadSavedConfig(id);
+      return;
+    }
+    const deleteBtn = e.target.closest('.btn-saved-config-delete');
+    if (deleteBtn) {
+      requestDeleteSavedConfig(parseInt(deleteBtn.dataset.id, 10));
+      return;
+    }
+    const confirmBtn = e.target.closest('.btn-saved-config-delete-confirm');
+    if (confirmBtn) {
+      deleteSavedConfig(parseInt(confirmBtn.dataset.id, 10));
+      return;
+    }
+    const cancelBtn = e.target.closest('.btn-saved-config-delete-cancel');
+    if (cancelBtn) cancelDeleteSavedConfig();
+  });
+
   document.getElementById('btn-new-scraper')?.addEventListener('click', () => {
     log('BTN new-scraper → reset state');
     stopPreviewIfActive();
@@ -3459,5 +3682,7 @@ if (typeof module !== 'undefined') {
     applyTransformsPreview, toNumberPreview, renderTransformPreview,
     refreshFlatTransformPreview, refreshExtendedTransformPreview,
     renderThemeToggle, syncModeToggleThumbs,
+    applyConfigToState, renderSavedConfigsList, fetchSavedConfigs, saveCurrentConfig, loadSavedConfig,
+    deleteSavedConfig, requestDeleteSavedConfig, cancelDeleteSavedConfig,
   };
 }

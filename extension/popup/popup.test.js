@@ -5875,7 +5875,10 @@ describe('COMPANION_ERROR screen: manual companion URL override', () => {
     await flushMicrotasks();
 
     expect(storageSet).toHaveBeenCalledWith({ companionUrlOverride: 'http://localhost:5050' });
-    expect(global.fetch).toHaveBeenLastCalledWith('http://localhost:5050/health');
+    // Issue #141: a successful health check now also kicks off a
+    // fire-and-forget GET /configs?url=... (fetchSavedConfigs) — so the
+    // health request is no longer necessarily the *last* fetch call.
+    expect(global.fetch).toHaveBeenCalledWith('http://localhost:5050/health');
     expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
   });
 
@@ -5886,7 +5889,7 @@ describe('COMPANION_ERROR screen: manual companion URL override', () => {
     document.getElementById('btn-retry').click();
     await flushMicrotasks();
 
-    expect(global.fetch).toHaveBeenLastCalledWith('http://localhost:5050/health');
+    expect(global.fetch).toHaveBeenCalledWith('http://localhost:5050/health');
   });
 
   test('resetting clears the stored override and retries against the default address', async () => {
