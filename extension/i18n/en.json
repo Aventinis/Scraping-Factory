@@ -87,6 +87,7 @@
     "engineBrowserTitle": "Renders JavaScript before extraction — for dynamically loaded pages or login flows. Slower than the static engine.",
     "outputJsonToggle": "Output as JSON (instead of CSV/XML)",
     "dataPreviewToggle": "Show trial-run data preview",
+    "outputFileToggle": "Download the full scraped data file",
     "additionalUrlsLabel": "Additional start URLs",
     "additionalUrlsPlaceholder": "One URL per line (in addition to the page above)",
     "changeDetectionToggle": "Enable change detection (notify on changes)",
@@ -239,6 +240,7 @@
     "backBtn": "Back",
     "newBtn": "New",
     "downloadBtn": "Download {filename}",
+    "downloadOutputBtn": "Download data ({filename})",
     "dataPreviewTitle": "Trial-run data preview",
     "dataPreviewTruncatedCsv": "Showing {shown} of {total} rows — truncated",
     "dataPreviewTruncatedXml": "Excerpt — not all data is shown"

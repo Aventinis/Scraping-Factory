@@ -26,8 +26,13 @@ public interface IScriptVerifier
     // ScriptVerificationResult.Preview instead of being discarded — see
     // ScriptPreviewData. Defaults to false (today's exact behavior:
     // read-and-discard, only the row/element count survives).
+    // includeOutputFile (Issue #161): when true and verification succeeds,
+    // the *complete*, uncapped output file content is kept and returned via
+    // ScriptVerificationResult.OutputFileContent/OutputFileName instead of
+    // being discarded — independent of includePreview (either, both, or
+    // neither may be requested). Defaults to false (today's exact behavior).
     Task<ScriptVerificationResult> VerifyAsync(
         string script, OutputFormat outputFormat = OutputFormat.Csv, string outputFileBaseName = "output",
         TimeSpan extraTimeout = default, IReadOnlyDictionary<string, string>? extraEnvironmentVariables = null,
-        bool includePreview = false, CancellationToken ct = default);
+        bool includePreview = false, bool includeOutputFile = false, CancellationToken ct = default);
 }

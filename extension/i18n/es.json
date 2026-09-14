@@ -87,6 +87,7 @@
     "engineBrowserTitle": "Renderiza JavaScript antes de la extracción — para páginas cargadas dinámicamente o flujos de inicio de sesión. Más lento que el motor estático.",
     "outputJsonToggle": "Salida como JSON (en lugar de CSV/XML)",
     "dataPreviewToggle": "Mostrar vista previa de los datos de la prueba",
+    "outputFileToggle": "Descargar el archivo de datos completo",
     "additionalUrlsLabel": "URLs de inicio adicionales",
     "additionalUrlsPlaceholder": "Una URL por línea (además de la página anterior)",
     "changeDetectionToggle": "Activar detección de cambios (notificar ante cambios)",
@@ -239,6 +240,7 @@
     "backBtn": "Atrás",
     "newBtn": "Nuevo",
     "downloadBtn": "Descargar {filename}",
+    "downloadOutputBtn": "Descargar datos ({filename})",
     "dataPreviewTitle": "Vista previa de los datos de la prueba",
     "dataPreviewTruncatedCsv": "Mostrando {shown} de {total} filas — truncado",
     "dataPreviewTruncatedXml": "Extracto — no se muestran todos los datos"

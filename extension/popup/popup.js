@@ -334,6 +334,12 @@ let _state = {
   // it's a per-generate opt-in, not a sticky preference).
   includeDataPreview: false,
   dataPreview:        null, // the companion's ScriptPreviewData from the last successful /generate with includeDataPreview on, or null
+  // Issue #161: opt-in full trial-run output download — the complete,
+  // uncapped counterpart to includeDataPreview/dataPreview above (they're
+  // independent, either/both/neither may be on). Not persisted, always off
+  // on popup reopen, same per-generate-opt-in treatment as includeDataPreview.
+  includeOutputFile:  false,
+  outputFile:         null, // {fileName, content} from the last successful /generate with includeOutputFile on, or null
   // Issue #86: opt-in Json output, mode-independent (like includeDataPreview
   // above) — not persisted, always off on popup reopen; a per-generate
   // choice, not a sticky preference. See buildScrapingConfig for exactly
@@ -626,7 +632,7 @@ function buildScrapingConfig(
   url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
   additionalUrls = [], changeDetection = null, proxy = null, hardening = null, pagination = null,
-  persistentSession = false,
+  persistentSession = false, includeOutputFile = false,
 ) {
   const engineFields = engine === 'Browser'
     ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
@@ -648,13 +654,17 @@ function buildScrapingConfig(
   // section is visible (Engine=Browser), and the companion rejects the
   // combination server-side regardless (see ScrapingPlanValidator).
   const persistentSessionFields = persistentSession ? { persistentSession: true } : {};
+  // Issue #161: mirrors previewFields exactly — only included when true, so
+  // the default (checkbox unchecked) request stays byte-for-byte identical
+  // to before this existed. See companion's ScrapingConfig.IncludeOutputFile.
+  const outputFileFields = includeOutputFile ? { includeOutputFile: true } : {};
 
   if (mode === 'container') {
     return {
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields,
+      ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
     };
   }
   if (mode === 'api') {
@@ -662,7 +672,7 @@ function buildScrapingConfig(
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields,
+      ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
     };
   }
   return {
@@ -677,7 +687,7 @@ function buildScrapingConfig(
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
     ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields,
-    ...hardeningFields, ...paginationFields, ...persistentSessionFields,
+    ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
   };
 }
 
@@ -691,13 +701,14 @@ function buildConfigExport(
   url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false, additionalUrls = [],
   changeDetection = null, proxy = null, hardening = null, pagination = null, persistentSession = false,
+  includeOutputFile = false,
 ) {
   return {
     exportedAt: new Date().toISOString(),
     extensionVersion: manifest.version || '?',
     config: buildScrapingConfig(
       url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview,
-      useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession,
+      useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession, includeOutputFile,
     ),
   };
 }
@@ -1193,6 +1204,9 @@ function render() {
     const dataPreviewToggle = document.getElementById('toggle-include-data-preview');
     if (dataPreviewToggle) dataPreviewToggle.checked = _state.includeDataPreview;
 
+    const outputFileToggle = document.getElementById('toggle-include-output-file');
+    if (outputFileToggle) outputFileToggle.checked = _state.includeOutputFile;
+
     // Issue #83: hidden for API mode — Api builds its own request URL from
     // apiConfig.urlTemplate and never reads this list at all (the companion
     // rejects the combination outright, see Program.cs).
@@ -1381,6 +1395,14 @@ function render() {
     if (downloadBtn) {
       const filename = `${sanitizeFileNameBase(_state.scriptFileName, 'scraper')}.py`;
       downloadBtn.textContent = t('done.downloadBtn', { filename });
+    }
+    // Issue #161: only shown at all when includeOutputFile actually
+    // produced a file — an older/incompatible companion, or the toggle
+    // simply being off, both look identical here (outputFile stays null).
+    const downloadOutputBtn = document.getElementById('btn-download-output');
+    if (downloadOutputBtn) {
+      downloadOutputBtn.classList.toggle('hidden', !_state.outputFile);
+      if (_state.outputFile) downloadOutputBtn.textContent = t('done.downloadOutputBtn', { filename: _state.outputFile.fileName });
     }
     renderDataPreview(_state.dataPreview);
   }
@@ -2030,7 +2052,7 @@ async function generate() {
     _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
     _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy, _state.hardening,
-    _state.pagination, _state.persistentSession,
+    _state.pagination, _state.persistentSession, _state.includeOutputFile,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
@@ -2070,21 +2092,26 @@ async function generate() {
     }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    // Issue #122: only when includeDataPreview asked for it does the
-    // companion respond with a JSON envelope ({ script, preview }) instead
-    // of the plain script text — the client already knows which one it
-    // requested, no need to sniff the response's Content-Type.
+    // Issue #122/#161: only when includeDataPreview or includeOutputFile
+    // asked for it does the companion respond with a JSON envelope
+    // ({ script, preview, outputFile }) instead of the plain script text —
+    // the client already knows which one(s) it requested, no need to sniff
+    // the response's Content-Type.
     let scriptText;
     let dataPreview = null;
-    if (_state.includeDataPreview) {
+    let outputFile = null;
+    if (_state.includeDataPreview || _state.includeOutputFile) {
       const data = await res.json();
       scriptText = data.script;
       dataPreview = data.preview ?? null;
+      outputFile = data.outputFile ?? null;
     } else {
       scriptText = await res.text();
     }
-    log('GENERATE OK', `${scriptText.length} chars` + (dataPreview ? `, preview: ${dataPreview.totalCount} rows/elements` : ''));
-    setState(STATES.DONE, { scriptText, dataPreview });
+    log('GENERATE OK', `${scriptText.length} chars` +
+      (dataPreview ? `, preview: ${dataPreview.totalCount} rows/elements` : '') +
+      (outputFile ? `, outputFile: ${outputFile.fileName} (${outputFile.content.length} chars)` : ''));
+    setState(STATES.DONE, { scriptText, dataPreview, outputFile });
   } catch (err) {
     log('GENERATE FAIL', err.message);
     setState(STATES.IDLE);
@@ -2096,6 +2123,29 @@ function triggerDownload() {
   const fileName = `${sanitizeFileNameBase(_state.scriptFileName, 'scraper')}.py`;
   log('DOWNLOAD', fileName);
   const blob = new Blob([_state.scriptText], { type: 'text/plain' });
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(objectUrl);
+}
+
+// Issue #161: downloads the companion's actual, complete trial-run output
+// (_state.outputFile, set by generate() when includeOutputFile was on) —
+// the full dataset, not the capped preview sample. MIME type is picked from
+// the file's own extension purely for a nicer browser "open with" hint;
+// the `download` attribute forces a save regardless.
+const OUTPUT_FILE_MIME_TYPES = { csv: 'text/csv', xml: 'application/xml', json: 'application/json' };
+
+function triggerOutputFileDownload() {
+  if (!_state.outputFile) return;
+  const { fileName, content } = _state.outputFile;
+  log('DOWNLOAD_OUTPUT', fileName);
+  const extension = fileName.split('.').pop()?.toLowerCase();
+  const blob = new Blob([content], { type: OUTPUT_FILE_MIME_TYPES[extension] || 'text/plain' });
   const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = objectUrl;
@@ -2788,6 +2838,11 @@ function wireEvents() {
     patchState({ includeDataPreview: e.target.checked });
   });
 
+  document.getElementById('toggle-include-output-file')?.addEventListener('change', (e) => {
+    log('BTN toggle-include-output-file', e.target.checked);
+    patchState({ includeOutputFile: e.target.checked });
+  });
+
   document.getElementById('toggle-output-json')?.addEventListener('change', (e) => {
     log('BTN toggle-output-json', e.target.checked);
     patchState({ useJsonOutput: e.target.checked });
@@ -3161,6 +3216,7 @@ function wireEvents() {
     generate();
   });
   document.getElementById('btn-download')?.addEventListener('click', triggerDownload);
+  document.getElementById('btn-download-output')?.addEventListener('click', triggerOutputFileDownload);
   document.getElementById('btn-export-config')?.addEventListener('click', downloadConfigExport);
 
   // Issue #141: "Save configuration" opens modal-save-config (name input,
@@ -3684,5 +3740,6 @@ if (typeof module !== 'undefined') {
     renderThemeToggle, syncModeToggleThumbs,
     applyConfigToState, renderSavedConfigsList, fetchSavedConfigs, saveCurrentConfig, loadSavedConfig,
     deleteSavedConfig, requestDeleteSavedConfig, cancelDeleteSavedConfig,
+    triggerOutputFileDownload,
   };
 }

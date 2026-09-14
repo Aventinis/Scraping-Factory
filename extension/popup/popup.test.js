@@ -203,6 +203,48 @@ describe('buildScrapingConfig (includePreview, Issue #122)', () => {
   });
 });
 
+// Issue #161: includeOutputFile is mode-independent too, same "only include
+// the key when non-default" pattern as includePreview above — independent
+// of it (either/both/neither may be requested).
+describe('buildScrapingConfig (includeOutputFile, Issue #161)', () => {
+  test('omits includeOutputFile entirely when false (the default)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.includeOutputFile).toBeUndefined();
+  });
+
+  test('includes includeOutputFile: true when requested', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, null, null, false, true,
+    );
+    expect(result.includeOutputFile).toBe(true);
+  });
+
+  test('works alongside includePreview — both may be requested at once', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], true,
+      false, [], null, null, null, null, false, true,
+    );
+    expect(result.includePreview).toBe(true);
+    expect(result.includeOutputFile).toBe(true);
+  });
+
+  test('works the same way for container and api modes', () => {
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null,
+      null, null, false, true,
+    );
+    expect(containerResult.includeOutputFile).toBe(true);
+
+    const apiResult = buildScrapingConfig(
+      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], null, null,
+      null, null, false, true,
+    );
+    expect(apiResult.includeOutputFile).toBe(true);
+  });
+});
+
 // Issue #86: useJsonOutput is mode-independent, like includePreview above,
 // but with a different "default" shape per mode — flat mode always sends an
 // explicit outputFormat (Csv by default), while container/api mode omit the
@@ -6111,6 +6153,116 @@ describe('output settings (script/output filename)', () => {
     expect(global.chrome.storage.session.set).not.toHaveBeenCalledWith(
       expect.objectContaining({ fields: [] }),
     );
+  });
+});
+
+// ── Download the full trial-run output (Issue #161) ─────────────────────────
+
+describe('download the full trial-run output (Issue #161)', () => {
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div id="fields-list"></div>
+        <input type="checkbox" id="toggle-include-output-file" />
+        <button id="btn-generate" disabled></button>
+      </section>
+      <section id="screen-generating" class="hidden"></section>
+      <section id="screen-done" class="hidden">
+        <button id="btn-back-to-config"></button>
+        <button id="btn-download"></button>
+        <button id="btn-download-output" class="hidden"></button>
+      </section>
+    `;
+
+    global.chrome = {
+      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({
+            fields: [{ name: 'Titel', selector: 'h1', attribute: null }],
+            url: 'https://example.com',
+          }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValueOnce({ ok: true }); // health check
+    global.URL.createObjectURL = jest.fn(() => 'blob:mock');
+    global.URL.revokeObjectURL = jest.fn();
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE, fields restored from storage
+  });
+
+  test('the checkbox threads includeOutputFile into the /generate request', async () => {
+    document.getElementById('toggle-include-output-file').checked = true;
+    document.getElementById('toggle-include-output-file').dispatchEvent(new Event('change'));
+
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ script: '# script', outputFile: { fileName: 'output.csv', content: 'Titel\nA\n' } }),
+    });
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const generateCall = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/generate'));
+    const body = JSON.parse(generateCall[1].body);
+    expect(body.includeOutputFile).toBe(true);
+  });
+
+  test('btn-download-output stays hidden when includeOutputFile was off', async () => {
+    global.fetch.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('# script') });
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    expect(document.getElementById('btn-download-output').classList.contains('hidden')).toBe(true);
+  });
+
+  test('btn-download-output becomes visible with the output filename once includeOutputFile produced a file', async () => {
+    document.getElementById('toggle-include-output-file').checked = true;
+    document.getElementById('toggle-include-output-file').dispatchEvent(new Event('change'));
+
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ script: '# script', outputFile: { fileName: 'output.csv', content: 'Titel\nA\n' } }),
+    });
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const btn = document.getElementById('btn-download-output');
+    expect(btn.classList.contains('hidden')).toBe(false);
+    expect(btn.textContent).toContain('output.csv');
+  });
+
+  test('clicking btn-download-output downloads a blob with the exact output-file content', async () => {
+    document.getElementById('toggle-include-output-file').checked = true;
+    document.getElementById('toggle-include-output-file').dispatchEvent(new Event('change'));
+
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ script: '# script', outputFile: { fileName: 'output.csv', content: 'Titel\nA\nB\n' } }),
+    });
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const appendSpy = jest.spyOn(document.body, 'appendChild');
+    document.getElementById('btn-download-output').click();
+
+    const anchor = appendSpy.mock.calls[0][0];
+    expect(anchor.download).toBe('output.csv');
+    const blobArg = global.URL.createObjectURL.mock.calls[0][0];
+    expect(blobArg.type).toBe('text/csv');
+    expect(await readBlobText(blobArg)).toBe('Titel\nA\nB\n');
+    appendSpy.mockRestore();
   });
 });
 

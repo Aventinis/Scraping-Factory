@@ -75,6 +75,17 @@ public sealed class ScrapingConfig
     // Additive, wire-compatible: null/false is today's exact behavior.
     public bool? IncludePreview { get; init; }
 
+    // Issue #161: opt-in full trial-run output download. When true,
+    // /generate's trial run keeps the *complete*, uncapped CSV/XML/Json file
+    // it already wrote to check "at least one data row" anyway (see
+    // PythonScriptVerifier) and the success response becomes a JSON envelope
+    // (script + outputFile) instead of the plain script text — same
+    // envelope-triggering mechanism as IncludePreview above, just carrying
+    // the full file instead of a capped sample. Additive, wire-compatible:
+    // null/false is today's exact behavior. Independent of IncludePreview —
+    // either, both, or neither may be requested in the same call.
+    public bool? IncludeOutputFile { get; init; }
+
     // Issue #87: opt-in change-detection + notification, mode-independent
     // (Fields/Groups/Api alike) — see IR/ChangeDetectionConfig.cs. Null is
     // today's exact behavior (no previous-run comparison, no notification).
