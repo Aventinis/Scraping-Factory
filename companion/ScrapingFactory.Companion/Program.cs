@@ -30,11 +30,64 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 builder.Services.AddSingleton(new LanguageModuleRegistry(CompanionBackendOverrides.Build(builder.Configuration)));
 
+// Issue #141: registered as a type (not a pre-built instance like
+// LanguageModuleRegistry above) so DI only constructs it — and only then
+// resolves/creates the SQLite file — on the first actual /configs request;
+// /health and /generate never touch it.
+builder.Services.AddSingleton<SavedConfigStore>();
+
 var app = builder.Build();
 
 app.UseCors();
 
 app.MapGet("/health", () => Results.Ok());
+
+// Issue #141: local SQLite-backed configuration history — save/list/load/
+// delete past per-site configs, so a repeatedly-scraped site's setup doesn't
+// have to be rebuilt (or manually managed as a downloaded JSON export, see
+// buildConfigExport on the extension side) every time. Purely local/
+// additive: no data ever leaves the user's machine, same trust boundary as
+// the rest of the companion<->extension communication.
+app.MapPost("/configs", (SaveConfigRequest? request, SavedConfigStore store) =>
+{
+    var url = request?.Url?.Trim();
+    var name = request?.Name?.Trim();
+    if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(name) ||
+        request!.Config.ValueKind != System.Text.Json.JsonValueKind.Object)
+    {
+        return Results.BadRequest(new { error = "Url, Name and a Config object are required." });
+    }
+
+    var saved = store.Save(url, name, request.Config.GetRawText());
+    return Results.Created($"/configs/{saved.Id}", saved);
+});
+
+app.MapGet("/configs", (string? url, SavedConfigStore store) =>
+{
+    if (string.IsNullOrWhiteSpace(url))
+        return Results.BadRequest(new { error = "The url query parameter is required." });
+
+    return Results.Ok(store.ListByUrl(url));
+});
+
+app.MapGet("/configs/{id:long}", (long id, SavedConfigStore store) =>
+{
+    var record = store.Get(id);
+    if (record is null)
+        return Results.NotFound(new { error = "Saved configuration not found." });
+
+    return Results.Ok(new
+    {
+        record.Id,
+        record.Url,
+        record.Name,
+        record.SavedAt,
+        config = System.Text.Json.JsonDocument.Parse(record.ConfigJson).RootElement,
+    });
+});
+
+app.MapDelete("/configs/{id:long}", (long id, SavedConfigStore store) =>
+    store.Delete(id) ? Results.NoContent() : Results.NotFound(new { error = "Saved configuration not found." }));
 
 app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModuleRegistry registry) =>
 {
@@ -146,3 +199,13 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
 app.Run();
 
 public partial class Program { }
+
+// Issue #141: POST /configs body — Config is bound as a raw JsonElement (not
+// deserialized into ScrapingConfig) since the store treats it as an opaque
+// blob, see SavedConfigStore's own doc comment.
+public sealed class SaveConfigRequest
+{
+    public string? Url { get; set; }
+    public string? Name { get; set; }
+    public System.Text.Json.JsonElement Config { get; set; }
+}
