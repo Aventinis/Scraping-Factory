@@ -13,4 +13,17 @@ public sealed class ScriptVerificationResult
     // Issue #122: only set when the caller opted in (VerifyAsync's
     // includePreview parameter) and Success is true — see ScriptPreviewData.
     public ScriptPreviewData? Preview { get; init; }
+
+    // Issue #161: only set when the caller opted in (VerifyAsync's
+    // includeOutputFile parameter) and Success is true — the complete,
+    // uncapped content of the trial run's own output.csv/.xml/.json,
+    // read raw (not re-derived from Preview's capped/re-serialized sample)
+    // so what the user downloads is byte-for-byte what the script wrote.
+    public string? OutputFileContent { get; init; }
+
+    // The output file's own name (e.g. "output.csv") — mirrors whichever
+    // ScrapingPlan.OutputFileBaseName/OutputFormat combination VerifyAsync
+    // was called with, so the extension can offer the same filename back to
+    // the user without re-deriving the extension itself.
+    public string? OutputFileName { get; init; }
 }
