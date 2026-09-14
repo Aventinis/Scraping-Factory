@@ -941,6 +941,15 @@
             <input type="checkbox" id="toggle-include-data-preview" />
             <span data-i18n="idle.dataPreviewToggle"></span>
           </label>
+          <!-- Issue #161: opt-in full trial-run output download — the
+               complete, uncapped counterpart to the data preview above
+               (independent of it; either/both/neither can be on). Lets a
+               non-technical user get the actual scraped data directly from
+               the popup without running the downloaded script themselves. -->
+          <label class="output-settings-toggle">
+            <input type="checkbox" id="toggle-include-output-file" />
+            <span data-i18n="idle.outputFileToggle"></span>
+          </label>
           <!-- Issue #88: opt-in proxy support — like the change-detection
                fields below, this is the *name* of an environment variable
                holding a comma-separated proxy URL list, never a literal
@@ -1338,6 +1347,11 @@
       <button id="btn-back-to-config" class="btn-secondary" data-i18n="done.backBtn"></button>
       <button id="btn-new-scraper" class="btn-secondary" data-i18n="done.newBtn"></button>
       <button id="btn-download" class="btn-primary" data-i18n="done.downloadBtn"></button>
+      <!-- Issue #161: only shown when includeOutputFile was checked before
+           Generate — the companion's actual, complete trial-run output,
+           downloadable directly without ever running the generated script
+           locally. -->
+      <button id="btn-download-output" class="btn-primary hidden" data-i18n="done.downloadOutputBtn"></button>
     </div>
 
     <!-- Issue #122: trial-run data preview — populated by renderDataPreview,
