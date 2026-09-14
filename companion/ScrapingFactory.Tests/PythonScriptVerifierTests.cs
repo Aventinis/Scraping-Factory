@@ -124,6 +124,70 @@ public class PythonScriptVerifierTests
         Assert.Equal("B", result.Preview.Rows[1]["Item"]);
     }
 
+    // Issue #161: the complete, uncapped counterpart to IncludePreview above
+    // — independent of it, so both are exercised together here to prove
+    // neither flag silently disables the other.
+    [Fact]
+    public async Task IncludeOutputFileFalse_LeavesOutputFileContentNull()
+    {
+        using var server = new LocalTestServer(
+            "<html><body><ul><li class='item'>A</li><li class='item'>B</li></ul></body></html>");
+        var script = GenerateScript(server.BaseUrl, ("Item", ".item"));
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script);
+
+        Assert.True(result.Success);
+        Assert.Null(result.OutputFileContent);
+        Assert.Null(result.OutputFileName);
+    }
+
+    [Fact]
+    public async Task IncludeOutputFileTrue_CsvOutput_ReturnsCompleteRawFile()
+    {
+        using var server = new LocalTestServer(
+            "<html><body><ul><li class='item'>A</li><li class='item'>B</li></ul></body></html>");
+        var script = GenerateScript(server.BaseUrl, ("Item", ".item"));
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, includeOutputFile: true);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("output.csv", result.OutputFileName);
+        Assert.NotNull(result.OutputFileContent);
+        Assert.Contains("Item", result.OutputFileContent);
+        Assert.Contains("A", result.OutputFileContent);
+        Assert.Contains("B", result.OutputFileContent);
+    }
+
+    [Fact]
+    public async Task IncludeOutputFileTrue_RespectsCustomOutputFileBaseName()
+    {
+        using var server = new LocalTestServer(
+            "<html><body><ul><li class='item'>A</li></ul></body></html>");
+        var script = GenerateScript(server.BaseUrl, ("Item", ".item"));
+
+        var result = await new PythonScriptVerifier().VerifyAsync(
+            script, outputFileBaseName: "output", includeOutputFile: true);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("output.csv", result.OutputFileName);
+    }
+
+    // Proves IncludePreview and IncludeOutputFile are independently
+    // switchable — both on at once populates both, neither shadows the other.
+    [Fact]
+    public async Task IncludePreviewAndIncludeOutputFile_BothTrue_PopulatesBoth()
+    {
+        using var server = new LocalTestServer(
+            "<html><body><ul><li class='item'>A</li><li class='item'>B</li></ul></body></html>");
+        var script = GenerateScript(server.BaseUrl, ("Item", ".item"));
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, includePreview: true, includeOutputFile: true);
+
+        Assert.True(result.Success, result.Error);
+        Assert.NotNull(result.Preview);
+        Assert.NotNull(result.OutputFileContent);
+    }
+
     // Issue #84: proves the transform chain actually runs correctly in the
     // real generated script, not just that the C#/template-level string
     // content looks right (see PythonCodeGeneratorTests for that) — the
@@ -277,6 +341,22 @@ public class PythonScriptVerifierTests
     }
 
     [Fact]
+    public async Task JsonOutput_IncludeOutputFileTrue_ReturnsCompleteRawFile()
+    {
+        using var server = new LocalTestServer(
+            "<html><body><ul><li class='item'>A</li><li class='item'>B</li></ul></body></html>");
+        var script = GenerateJsonScript(server.BaseUrl, ("Item", ".item"));
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Json, includeOutputFile: true);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("output.json", result.OutputFileName);
+        Assert.NotNull(result.OutputFileContent);
+        Assert.Contains("A", result.OutputFileContent);
+        Assert.Contains("B", result.OutputFileContent);
+    }
+
+    [Fact]
     public async Task JsonOutput_SelectorMatchingNothing_FailsWithZeroDataRows()
     {
         using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
@@ -420,6 +500,33 @@ public class PythonScriptVerifierTests
         Assert.Equal("Xml", result.Preview.OutputFormat);
         Assert.False(result.Preview.Truncated);
         Assert.Contains("Vorspeisen", result.Preview.XmlSample);
+    }
+
+    [Fact]
+    public async Task IncludeOutputFileTrue_XmlOutput_ReturnsCompleteRawFile()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+            <section class="menu-category"><h2>Vorspeisen</h2>
+              <li class="menu-item"><h3>Suppe</h3></li>
+            </section>
+            </body></html>
+            """);
+        var root = new GroupNode
+        {
+            Name = "Kategorie",
+            Selector = "section.menu-category",
+            Repeating = true,
+            Children = [new DataFieldNode { Name = "Titel", Selector = "h2" }],
+        };
+        var script = GenerateGroupedScript(server.BaseUrl, root);
+
+        var result = await new PythonScriptVerifier().VerifyAsync(script, OutputFormat.Xml, includeOutputFile: true);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("output.xml", result.OutputFileName);
+        Assert.NotNull(result.OutputFileContent);
+        Assert.Contains("Vorspeisen", result.OutputFileContent);
     }
 
     [Fact]
