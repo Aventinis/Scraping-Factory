@@ -366,6 +366,22 @@ let _state = {
   // cancel, or navigating away from IDLE.
   savedConfigsPendingDeleteId: null,
   saveConfigModalOpen:       false,
+  // Issue #202: a saved run's actual output data, linked to a saved config.
+  // saveOutputModalOpen opens modal-save-output from the DONE screen's
+  // "Save output" button (only shown alongside btn-download-output, i.e.
+  // only once _state.outputFile is actually set). savedConfigsExpandedId is
+  // the id of whichever saved-configs-list row currently has its own
+  // outputs sub-panel open (accordion-style, at most one at a time);
+  // savedOutputs holds that row's fetched {id, savedConfigId, name,
+  // fileName, savedAt} summaries (null while collapsed/not yet loaded, same
+  // "pull-based, not persisted" treatment savedConfigs itself already
+  // gets). savedOutputsPendingDeleteId mirrors savedConfigsPendingDeleteId's
+  // own inline-confirm pattern, scoped to a row inside that sub-panel.
+  saveOutputModalOpen:         false,
+  savedConfigsExpandedId:      null,
+  savedOutputs:                null,
+  savedOutputsLoading:         false,
+  savedOutputsPendingDeleteId: null,
 };
 
 const DOM_TREE_TIMEOUT_MS = 5000;
@@ -1404,7 +1420,16 @@ function render() {
       downloadOutputBtn.classList.toggle('hidden', !_state.outputFile);
       if (_state.outputFile) downloadOutputBtn.textContent = t('done.downloadOutputBtn', { filename: _state.outputFile.fileName });
     }
+    // Issue #202: same visibility gate as btn-download-output — saving a
+    // run's output only makes sense once one was actually produced.
+    const saveOutputBtn = document.getElementById('btn-save-output');
+    if (saveOutputBtn) saveOutputBtn.classList.toggle('hidden', !_state.outputFile);
     renderDataPreview(_state.dataPreview);
+
+    if (_state.saveOutputModalOpen) {
+      show('modal-save-output');
+      renderSaveOutputModal();
+    }
   }
 
   // Show modal when an element has been captured during selection. Editing
@@ -1719,14 +1744,65 @@ function renderSavedConfigsList() {
         `<button type="button" class="btn-danger btn-tiny btn-saved-config-delete-confirm" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteConfirmYes'))}</button>` +
         `<button type="button" class="btn-secondary btn-tiny btn-saved-config-delete-cancel" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteConfirmNo'))}</button>`;
     } else {
+      // Issue #202: "Outputs" toggles a sub-panel of this config's own
+      // saved run outputs, appended right after the row below.
+      const outputsExpanded = _state.savedConfigsExpandedId === entry.id;
       rowEl.innerHTML =
         `<span class="saved-config-name" title="${escapeHtml(entry.url)}">${escapeHtml(entry.name)}</span>` +
         `<span class="saved-config-date">${escapeHtml(savedAtText)}</span>` +
         `<button type="button" class="btn-secondary btn-tiny btn-saved-config-load" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsLoadBtn'))}</button>` +
+        `<button type="button" class="btn-secondary btn-tiny btn-saved-config-outputs-toggle" data-id="${entry.id}">${escapeHtml(t(outputsExpanded ? 'idle.savedConfigsOutputsHideBtn' : 'idle.savedConfigsOutputsBtn'))}</button>` +
         `<button type="button" class="btn-danger btn-tiny btn-saved-config-delete" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteBtn'))}</button>`;
     }
     listEl.appendChild(rowEl);
+
+    if (_state.savedConfigsExpandedId === entry.id) {
+      listEl.appendChild(buildSavedOutputsPanelEl(entry.id));
+    }
   });
+}
+
+// Issue #202: the sub-panel for one saved-config row's own saved outputs
+// (see toggleSavedConfigOutputs/fetchSavedOutputs) — a row per output with
+// Download/Delete, the same inline-confirm-before-delete pattern
+// renderSavedConfigsList's own rows already use.
+function buildSavedOutputsPanelEl(configId) {
+  const panelEl = document.createElement('div');
+  panelEl.className = 'saved-outputs-panel';
+
+  if (_state.savedOutputsLoading || _state.savedOutputs === null) {
+    panelEl.innerHTML = `<p class="saved-outputs-loading">${escapeHtml(t('idle.savedOutputsLoading'))}</p>`;
+    return panelEl;
+  }
+
+  if (_state.savedOutputs.length === 0) {
+    panelEl.innerHTML = `<p class="saved-outputs-empty">${escapeHtml(t('idle.savedOutputsEmpty'))}</p>`;
+    return panelEl;
+  }
+
+  _state.savedOutputs.forEach((entry) => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'saved-output-row';
+    const savedDate = new Date(entry.savedAt);
+    const savedAtText = Number.isNaN(savedDate.getTime()) ? entry.savedAt : savedDate.toLocaleString();
+
+    if (_state.savedOutputsPendingDeleteId === entry.id) {
+      rowEl.innerHTML =
+        `<span class="saved-output-name">${escapeHtml(entry.name)}</span>` +
+        `<span class="saved-config-confirm-text">${escapeHtml(t('idle.savedOutputsDeleteConfirm'))}</span>` +
+        `<button type="button" class="btn-danger btn-tiny btn-saved-output-delete-confirm" data-config-id="${configId}" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteConfirmYes'))}</button>` +
+        `<button type="button" class="btn-secondary btn-tiny btn-saved-output-delete-cancel" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteConfirmNo'))}</button>`;
+    } else {
+      rowEl.innerHTML =
+        `<span class="saved-output-name" title="${escapeHtml(entry.fileName)}">${escapeHtml(entry.name)}</span>` +
+        `<span class="saved-config-date">${escapeHtml(savedAtText)}</span>` +
+        `<button type="button" class="btn-secondary btn-tiny btn-saved-output-download" data-config-id="${configId}" data-id="${entry.id}">${escapeHtml(t('idle.savedOutputsDownloadBtn'))}</button>` +
+        `<button type="button" class="btn-danger btn-tiny btn-saved-output-delete" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteBtn'))}</button>`;
+    }
+    panelEl.appendChild(rowEl);
+  });
+
+  return panelEl;
 }
 
 // ── DOM tree view ────────────────────────────────────────────────────────────
@@ -2034,6 +2110,118 @@ async function deleteSavedConfig(id) {
   }
 }
 
+// Opens modal-save-config prefilled with the current page's hostname — the
+// exact same flow the idle screen's own "Save configuration" button
+// triggers, extracted so Issue #202's save-output modal can offer it as a
+// shortcut when there's no saved config yet to link an output to.
+function openSaveConfigModal() {
+  log('OPEN save-config modal');
+  let defaultName = '';
+  try {
+    defaultName = new URL(_state.url).hostname;
+  } catch {
+    // _state.url isn't a well-formed absolute URL — defaultName stays ''
+    // and the input is simply left blank, same as any other unreachable
+    // default elsewhere in this popup.
+  }
+  patchState({ saveOutputModalOpen: false, saveConfigModalOpen: true });
+  const input = document.getElementById('input-save-config-name');
+  if (input) input.value = defaultName;
+}
+
+// Issue #202: a run's actual output data (_state.outputFile), saved as an
+// explicit, opt-in action linked to an already-saved configuration — plain
+// fetch wrappers against the companion's /configs/{id}/outputs endpoints,
+// same style as fetchSavedConfigs/saveCurrentConfig above.
+
+async function saveCurrentOutput(configId, name) {
+  if (!_state.outputFile) return;
+  const { fileName, content } = _state.outputFile;
+  log('SAVE_OUTPUT', configId, name);
+  try {
+    const res = await fetch(`${companionUrl}/configs/${configId}/outputs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, fileName, content }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    log('SAVE_OUTPUT OK');
+    patchState({ saveOutputModalOpen: false });
+    showToast(t('toast.outputSaved'), null, 'info');
+    // If that config's own outputs sub-panel happens to be open right now,
+    // refresh it so the newly-saved output shows up without a manual
+    // collapse/re-expand.
+    if (_state.savedConfigsExpandedId === configId) await fetchSavedOutputs(configId);
+  } catch (err) {
+    log('SAVE_OUTPUT FAIL', err.message);
+    showToast(t('toast.outputSaveFailed', { message: err.message }), 'Save output');
+  }
+}
+
+async function fetchSavedOutputs(configId) {
+  patchState({ savedOutputsLoading: true });
+  try {
+    const res = await fetch(`${companionUrl}/configs/${configId}/outputs`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const savedOutputs = await res.json();
+    log('SAVED_OUTPUTS_LIST', configId, savedOutputs.length);
+    patchState({ savedOutputs, savedOutputsLoading: false });
+  } catch (err) {
+    log('SAVED_OUTPUTS_LIST FAIL', err.message);
+    patchState({ savedOutputs: [], savedOutputsLoading: false });
+  }
+}
+
+// Accordion-style: expanding one saved-config row's outputs panel collapses
+// whichever other row was previously expanded.
+function toggleSavedConfigOutputs(configId) {
+  if (_state.savedConfigsExpandedId === configId) {
+    patchState({ savedConfigsExpandedId: null, savedOutputs: null, savedOutputsPendingDeleteId: null });
+    return;
+  }
+  log('TOGGLE saved-config-outputs', configId);
+  patchState({
+    savedConfigsExpandedId: configId, savedOutputs: null, savedOutputsPendingDeleteId: null,
+  });
+  fetchSavedOutputs(configId);
+}
+
+async function downloadSavedOutput(configId, id) {
+  log('DOWNLOAD_SAVED_OUTPUT', configId, id);
+  try {
+    const res = await fetch(`${companionUrl}/configs/${configId}/outputs/${id}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const record = await res.json();
+    downloadFile(record.fileName, record.content);
+  } catch (err) {
+    log('DOWNLOAD_SAVED_OUTPUT FAIL', err.message);
+    showToast(t('toast.outputLoadFailed', { message: err.message }), 'Load output');
+  }
+}
+
+function requestDeleteSavedOutput(id) {
+  patchState({ savedOutputsPendingDeleteId: id });
+}
+
+function cancelDeleteSavedOutput() {
+  patchState({ savedOutputsPendingDeleteId: null });
+}
+
+async function deleteSavedOutput(configId, id) {
+  log('DELETE_SAVED_OUTPUT', configId, id);
+  try {
+    const res = await fetch(`${companionUrl}/configs/${configId}/outputs/${id}`, { method: 'DELETE' });
+    if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
+    log('DELETE_SAVED_OUTPUT OK');
+    patchState({ savedOutputsPendingDeleteId: null });
+    showToast(t('toast.outputDeleted'), null, 'info');
+    await fetchSavedOutputs(configId);
+  } catch (err) {
+    log('DELETE_SAVED_OUTPUT FAIL', err.message);
+    showToast(t('toast.outputDeleteFailed', { message: err.message }), 'Delete output');
+  }
+}
+
 // The companion actually generates and runs the script against the live
 // page before handing it out (same rendering stage, and now the exact
 // artifact the user would download) and responds 422 with a message when
@@ -2140,9 +2328,10 @@ function triggerDownload() {
 // the `download` attribute forces a save regardless.
 const OUTPUT_FILE_MIME_TYPES = { csv: 'text/csv', xml: 'application/xml', json: 'application/json' };
 
-function triggerOutputFileDownload() {
-  if (!_state.outputFile) return;
-  const { fileName, content } = _state.outputFile;
+// Extracted so Issue #202's "download a saved output" action (a fetched
+// SavedOutputRecord, not _state.outputFile) can reuse the exact same
+// MIME-guessing/anchor-click mechanics.
+function downloadFile(fileName, content) {
   log('DOWNLOAD_OUTPUT', fileName);
   const extension = fileName.split('.').pop()?.toLowerCase();
   const blob = new Blob([content], { type: OUTPUT_FILE_MIME_TYPES[extension] || 'text/plain' });
@@ -2154,6 +2343,11 @@ function triggerOutputFileDownload() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(objectUrl);
+}
+
+function triggerOutputFileDownload() {
+  if (!_state.outputFile) return;
+  downloadFile(_state.outputFile.fileName, _state.outputFile.content);
 }
 
 // Lets a user hand over the current Fields/Groups configuration when
@@ -2196,6 +2390,32 @@ function downloadConfigExport() {
 // actually populated (xmlSample/jsonSample vs. columns/rows) rather than by
 // outputFormat alone — outputFormat is still shown to the user via i18n
 // copy, but no longer drives the branch itself.
+// Issue #202: populates modal-save-output — a config picker + name input
+// when there's at least one saved config for the current hostname already
+// (_state.savedConfigs, fetched the same way the "Saved configurations"
+// panel's own list already is), or a hint + shortcut into modal-save-config
+// otherwise, since an output can't be linked to a config that doesn't
+// exist yet.
+function renderSaveOutputModal() {
+  const savedConfigs = _state.savedConfigs || [];
+  const hasConfigs = savedConfigs.length > 0;
+
+  document.getElementById('save-output-picker')?.classList.toggle('hidden', !hasConfigs);
+  document.getElementById('save-output-no-configs-hint')?.classList.toggle('hidden', hasConfigs);
+  document.getElementById('btn-save-output-go-to-save-config')?.classList.toggle('hidden', hasConfigs);
+  document.getElementById('btn-save-output-confirm')?.classList.toggle('hidden', !hasConfigs);
+  if (!hasConfigs) return;
+
+  const selectEl = document.getElementById('select-save-output-config');
+  if (selectEl) {
+    selectEl.innerHTML = savedConfigs.map((entry) => {
+      const savedDate = new Date(entry.savedAt);
+      const savedAtText = Number.isNaN(savedDate.getTime()) ? entry.savedAt : savedDate.toLocaleString();
+      return `<option value="${entry.id}">${escapeHtml(entry.name)} (${escapeHtml(savedAtText)})</option>`;
+    }).join('');
+  }
+}
+
 function renderDataPreview(preview) {
   const panel = document.getElementById('data-preview-panel');
   if (!panel) return;
@@ -3219,24 +3439,39 @@ function wireEvents() {
   document.getElementById('btn-download-output')?.addEventListener('click', triggerOutputFileDownload);
   document.getElementById('btn-export-config')?.addEventListener('click', downloadConfigExport);
 
+  // Issue #202: "Save output" (DONE screen) opens modal-save-output — a
+  // config picker + name input when there's at least one saved config for
+  // this hostname already, or a hint + shortcut into modal-save-config
+  // otherwise (see renderSaveOutputModal, called from render()).
+  document.getElementById('btn-save-output')?.addEventListener('click', () => {
+    log('BTN save-output → open modal');
+    patchState({ saveOutputModalOpen: true });
+  });
+  document.getElementById('btn-save-output-cancel')?.addEventListener('click', () => {
+    log('BTN save-output-cancel');
+    patchState({ saveOutputModalOpen: false });
+  });
+  document.getElementById('btn-save-output-confirm')?.addEventListener('click', () => {
+    const configId = parseInt(document.getElementById('select-save-output-config')?.value, 10);
+    const name = document.getElementById('input-save-output-name')?.value.trim();
+    if (!configId || !name) return;
+    log('BTN save-output-confirm', configId, name);
+    saveCurrentOutput(configId, name);
+  });
+  document.getElementById('input-save-output-name')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const configId = parseInt(document.getElementById('select-save-output-config')?.value, 10);
+    const name = e.target.value.trim();
+    if (!configId || !name) return;
+    saveCurrentOutput(configId, name);
+  });
+  document.getElementById('btn-save-output-go-to-save-config')?.addEventListener('click', openSaveConfigModal);
+
   // Issue #141: "Save configuration" opens modal-save-config (name input,
   // prefilled with the current page's hostname); Load/Delete are wired via
   // delegation on saved-configs-list below since rows are rebuilt on every
   // render() (see renderSavedConfigsList).
-  document.getElementById('btn-save-config')?.addEventListener('click', () => {
-    log('BTN save-config → open modal');
-    let defaultName = '';
-    try {
-      defaultName = new URL(_state.url).hostname;
-    } catch {
-      // _state.url isn't a well-formed absolute URL — defaultName stays ''
-      // and the input is simply left blank, same as any other unreachable
-      // default elsewhere in this popup.
-    }
-    patchState({ saveConfigModalOpen: true });
-    const input = document.getElementById('input-save-config-name');
-    if (input) input.value = defaultName;
-  });
+  document.getElementById('btn-save-config')?.addEventListener('click', openSaveConfigModal);
   document.getElementById('btn-save-config-cancel')?.addEventListener('click', () => {
     log('BTN save-config-cancel');
     patchState({ saveConfigModalOpen: false });
@@ -3273,7 +3508,39 @@ function wireEvents() {
       return;
     }
     const cancelBtn = e.target.closest('.btn-saved-config-delete-cancel');
-    if (cancelBtn) cancelDeleteSavedConfig();
+    if (cancelBtn) {
+      cancelDeleteSavedConfig();
+      return;
+    }
+
+    // Issue #202: a saved config row's own "Outputs" toggle and, once
+    // expanded, its Download/Delete actions — same delegated-listener
+    // treatment as the config-level buttons above, since these rows are
+    // also rebuilt on every render() (see renderSavedConfigsList).
+    const outputsToggleBtn = e.target.closest('.btn-saved-config-outputs-toggle');
+    if (outputsToggleBtn) {
+      toggleSavedConfigOutputs(parseInt(outputsToggleBtn.dataset.id, 10));
+      return;
+    }
+    const outputDownloadBtn = e.target.closest('.btn-saved-output-download');
+    if (outputDownloadBtn) {
+      downloadSavedOutput(
+        parseInt(outputDownloadBtn.dataset.configId, 10), parseInt(outputDownloadBtn.dataset.id, 10));
+      return;
+    }
+    const outputDeleteBtn = e.target.closest('.btn-saved-output-delete');
+    if (outputDeleteBtn) {
+      requestDeleteSavedOutput(parseInt(outputDeleteBtn.dataset.id, 10));
+      return;
+    }
+    const outputConfirmBtn = e.target.closest('.btn-saved-output-delete-confirm');
+    if (outputConfirmBtn) {
+      deleteSavedOutput(
+        parseInt(outputConfirmBtn.dataset.configId, 10), parseInt(outputConfirmBtn.dataset.id, 10));
+      return;
+    }
+    const outputCancelBtn = e.target.closest('.btn-saved-output-delete-cancel');
+    if (outputCancelBtn) cancelDeleteSavedOutput();
   });
 
   document.getElementById('btn-new-scraper')?.addEventListener('click', () => {
@@ -3739,7 +4006,9 @@ if (typeof module !== 'undefined') {
     refreshFlatTransformPreview, refreshExtendedTransformPreview,
     renderThemeToggle, syncModeToggleThumbs,
     applyConfigToState, renderSavedConfigsList, fetchSavedConfigs, saveCurrentConfig, loadSavedConfig,
-    deleteSavedConfig, requestDeleteSavedConfig, cancelDeleteSavedConfig,
-    triggerOutputFileDownload,
+    deleteSavedConfig, requestDeleteSavedConfig, cancelDeleteSavedConfig, openSaveConfigModal,
+    triggerOutputFileDownload, downloadFile,
+    saveCurrentOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
+    requestDeleteSavedOutput, cancelDeleteSavedOutput, deleteSavedOutput, renderSaveOutputModal,
   };
 }

@@ -76,6 +76,12 @@
     "savedConfigsDeleteConfirm": "¿Eliminar esta configuración guardada?",
     "savedConfigsDeleteConfirmYes": "Sí",
     "savedConfigsDeleteConfirmNo": "No",
+    "savedConfigsOutputsBtn": "Salidas",
+    "savedConfigsOutputsHideBtn": "Ocultar salidas",
+    "savedOutputsEmpty": "Todavía no hay salidas guardadas para esta configuración.",
+    "savedOutputsLoading": "Cargando…",
+    "savedOutputsDownloadBtn": "Descargar",
+    "savedOutputsDeleteConfirm": "¿Eliminar esta salida guardada?",
     "scriptFilenameLabel": "Nombre del script",
     "scriptFilenamePlaceholder": "scraper",
     "outputFilenameLabel": "Nombre del archivo de salida",
@@ -241,6 +247,7 @@
     "newBtn": "Nuevo",
     "downloadBtn": "Descargar {filename}",
     "downloadOutputBtn": "Descargar datos ({filename})",
+    "saveOutputBtn": "Guardar salida",
     "dataPreviewTitle": "Vista previa de los datos de la prueba",
     "dataPreviewTruncatedCsv": "Mostrando {shown} de {total} filas — truncado",
     "dataPreviewTruncatedXml": "Extracto — no se muestran todos los datos"
@@ -285,6 +292,14 @@
       "namePlaceholder": "Nombre",
       "save": "Guardar"
     },
+    "saveOutput": {
+      "configLabel": "Vincular con configuración guardada",
+      "nameLabel": "Nombre de la salida (p. ej. \"Ejecución antes del arreglo de proxy\")",
+      "namePlaceholder": "Nombre",
+      "save": "Guardar",
+      "noConfigsHint": "Todavía no hay una configuración guardada para este sitio — guarda primero la configuración actual para poder vincular esta salida con ella.",
+      "saveConfigShortcut": "Guardar configuración"
+    },
     "matchCount": {
       "found": "{count} elemento(s) encontrado(s)"
     }
@@ -305,7 +320,12 @@
     "configLoaded": "Configuración «{name}» cargada.",
     "configLoadFailed": "No se pudo cargar la configuración: {message}",
     "configDeleted": "Configuración eliminada.",
-    "configDeleteFailed": "No se pudo eliminar la configuración: {message}"
+    "configDeleteFailed": "No se pudo eliminar la configuración: {message}",
+    "outputSaved": "Salida guardada.",
+    "outputSaveFailed": "No se pudo guardar la salida: {message}",
+    "outputLoadFailed": "No se pudo cargar la salida: {message}",
+    "outputDeleted": "Salida eliminada.",
+    "outputDeleteFailed": "No se pudo eliminar la salida: {message}"
   },
   "frame": {
     "badge": "iframe",
