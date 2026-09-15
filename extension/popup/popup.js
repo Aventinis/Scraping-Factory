@@ -1019,6 +1019,7 @@ function render() {
   hide('modal-api-body-parameter-new');
   hide('modal-api-field-transforms');
   hide('modal-save-config');
+  hide('modal-save-output');
 
   const screenKey = {
     [STATES.CHECKING_COMPANION]: 'checking',
@@ -1031,6 +1032,12 @@ function render() {
   }[_state.current];
 
   if (screenKey) show(`screen-${screenKey}`);
+
+  // modal-save-config is a global overlay, not scoped to the IDLE screen's
+  // own render block below — Issue #202's "save configuration first"
+  // shortcut (openSaveConfigModal) can now also open it from the DONE
+  // screen, so this check must run regardless of which screen is current.
+  if (_state.saveConfigModalOpen) show('modal-save-config');
 
   if (_state.current === STATES.COMPANION_ERROR) {
     const currentUrlEl = document.getElementById('error-current-url');
@@ -1366,7 +1373,6 @@ function render() {
       if (singleRadio) singleRadio.checked = true;
     }
 
-    if (_state.saveConfigModalOpen) show('modal-save-config');
   }
 
   if (_state.current === STATES.API_CONFIG && _state.apiConfigDraft) {

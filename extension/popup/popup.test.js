@@ -6266,6 +6266,344 @@ describe('download the full trial-run output (Issue #161)', () => {
   });
 });
 
+// ── Persist and browse run outputs (Issue #202) ─────────────────────────────
+// Full flows against the companion's /configs/{id}/outputs endpoints,
+// combining the DONE screen's "Save output" action with the "Saved
+// configurations" panel's own outputs sub-panel — same DOM-mocking pattern
+// as the Issue #141/#161 suites above.
+
+describe('persist and browse run outputs (Issue #202)', () => {
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  let fetchMock;
+  let savedConfigs;
+  let savedOutputsByConfigId;
+
+  const html = `
+    <section id="screen-idle" class="hidden">
+      <div id="url-display"></div>
+      <div id="fields-list"></div>
+      <input type="checkbox" id="toggle-include-output-file" />
+      <button id="btn-generate" disabled></button>
+      <button id="btn-save-config"></button>
+      <div id="saved-configs-list"></div>
+      <p id="saved-configs-empty" class="hidden"></p>
+    </section>
+    <section id="screen-generating" class="hidden"></section>
+    <section id="screen-done" class="hidden">
+      <button id="btn-back-to-config"></button>
+      <button id="btn-download"></button>
+      <button id="btn-download-output" class="hidden"></button>
+      <button id="btn-save-output" class="hidden"></button>
+    </section>
+    <div id="modal-save-config" class="modal hidden">
+      <input id="input-save-config-name" />
+      <button id="btn-save-config-cancel"></button>
+      <button id="btn-save-config-confirm"></button>
+    </div>
+    <div id="modal-save-output" class="modal hidden">
+      <div id="save-output-picker">
+        <select id="select-save-output-config"></select>
+        <input id="input-save-output-name" />
+      </div>
+      <p id="save-output-no-configs-hint" class="hidden"></p>
+      <button id="btn-save-output-cancel"></button>
+      <button id="btn-save-output-go-to-save-config" class="hidden"></button>
+      <button id="btn-save-output-confirm"></button>
+    </div>
+    <div id="error-toast" class="hidden">
+      <span id="error-toast-message"></span>
+      <button id="btn-report-bug-toast" class="hidden"></button>
+    </div>
+  `;
+
+  beforeEach(async () => {
+    jest.resetModules();
+    document.body.innerHTML = html;
+
+    savedConfigs = [
+      { id: 1, url: 'https://example.com/products', name: 'My config', savedAt: '2026-01-01T00:00:00.000Z' },
+    ];
+    savedOutputsByConfigId = { 1: [] };
+
+    global.chrome = {
+      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com/products' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({
+            fields: [{ name: 'Titel', selector: 'h1', attribute: null }],
+            url: 'https://example.com/products',
+          }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+
+    fetchMock = jest.fn((url, init) => {
+      const method = init?.method || 'GET';
+      const urlStr = String(url);
+
+      if (urlStr.endsWith('/health')) return Promise.resolve({ ok: true });
+      if (urlStr.endsWith('/generate') && method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ script: '# script', outputFile: { fileName: 'output.csv', content: 'Titel\nA\n' } }),
+        });
+      }
+      if (urlStr.includes('/configs?url=')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(savedConfigs) });
+      }
+      if (urlStr.endsWith('/configs') && method === 'POST') {
+        const created = { id: 2, url: 'https://example.com/products', name: 'New config', savedAt: '2026-01-02T00:00:00.000Z' };
+        savedConfigs = [...savedConfigs, created];
+        return Promise.resolve({ ok: true, status: 201, json: () => Promise.resolve(created) });
+      }
+
+      const outputsListMatch = urlStr.match(/\/configs\/(\d+)\/outputs$/);
+      if (outputsListMatch && method === 'GET') {
+        const configId = Number(outputsListMatch[1]);
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(savedOutputsByConfigId[configId] || []) });
+      }
+      if (outputsListMatch && method === 'POST') {
+        const configId = Number(outputsListMatch[1]);
+        const body = JSON.parse(init.body);
+        const created = {
+          id: 100 + (savedOutputsByConfigId[configId]?.length || 0),
+          savedConfigId: configId, name: body.name, fileName: body.fileName, savedAt: '2026-01-03T00:00:00.000Z',
+        };
+        savedOutputsByConfigId[configId] = [...(savedOutputsByConfigId[configId] || []), created];
+        return Promise.resolve({ ok: true, status: 201, json: () => Promise.resolve(created) });
+      }
+
+      const outputByIdMatch = urlStr.match(/\/configs\/(\d+)\/outputs\/(\d+)$/);
+      if (outputByIdMatch && method === 'GET') {
+        const [, configId, id] = outputByIdMatch.map(Number);
+        const record = (savedOutputsByConfigId[configId] || []).find((o) => o.id === id);
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ...record, content: 'Titel\nA\n' }) });
+      }
+      if (outputByIdMatch && method === 'DELETE') {
+        const [, configId, id] = outputByIdMatch.map(Number);
+        savedOutputsByConfigId[configId] = (savedOutputsByConfigId[configId] || []).filter((o) => o.id !== id);
+        return Promise.resolve({ ok: true, status: 204 });
+      }
+
+      return Promise.reject(new Error(`unexpected fetch: ${method} ${urlStr}`));
+    });
+    global.fetch = fetchMock;
+    global.URL.createObjectURL = jest.fn(() => 'blob:mock');
+    global.URL.revokeObjectURL = jest.fn();
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE, fields restored, saved-configs list fetched
+  });
+
+  async function generateWithOutputFile() {
+    document.getElementById('toggle-include-output-file').checked = true;
+    document.getElementById('toggle-include-output-file').dispatchEvent(new Event('change'));
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+  }
+
+  test('btn-save-output stays hidden until includeOutputFile produced a file, same as btn-download-output', async () => {
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+    expect(document.getElementById('btn-save-output').classList.contains('hidden')).toBe(true);
+  });
+
+  test('btn-save-output becomes visible once includeOutputFile produced a file', async () => {
+    await generateWithOutputFile();
+    expect(document.getElementById('btn-save-output').classList.contains('hidden')).toBe(false);
+  });
+
+  test('Save output opens the modal with the saved-configs picker populated', async () => {
+    await generateWithOutputFile();
+
+    document.getElementById('btn-save-output').click();
+
+    expect(document.getElementById('modal-save-output').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('save-output-picker').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('select-save-output-config').textContent).toContain('My config');
+  });
+
+  test('confirming Save output POSTs name/fileName/content to /configs/{id}/outputs and closes the modal', async () => {
+    await generateWithOutputFile();
+    document.getElementById('btn-save-output').click();
+
+    document.getElementById('select-save-output-config').value = '1';
+    document.getElementById('input-save-output-name').value = 'First run';
+    document.getElementById('btn-save-output-confirm').click();
+    await flushMicrotasks();
+
+    const postCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/configs/1/outputs') && init?.method === 'POST');
+    expect(postCall).toBeDefined();
+    const body = JSON.parse(postCall[1].body);
+    expect(body).toEqual({ name: 'First run', fileName: 'output.csv', content: 'Titel\nA\n' });
+    expect(document.getElementById('modal-save-output').classList.contains('hidden')).toBe(true);
+  });
+
+  test('the saved-configs list renders an Outputs toggle, which fetches and shows that config\'s own saved outputs', async () => {
+    savedOutputsByConfigId[1] = [
+      { id: 101, savedConfigId: 1, name: 'First run', fileName: 'output.csv', savedAt: '2026-01-03T00:00:00.000Z' },
+    ];
+
+    document.querySelector('.btn-saved-config-outputs-toggle').click();
+    await flushMicrotasks();
+
+    expect(fetchMock).toHaveBeenCalledWith(`http://localhost:5000/configs/1/outputs`);
+    const rows = document.querySelectorAll('.saved-output-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain('First run');
+  });
+
+  test('the outputs sub-panel shows an empty hint when the config has no saved outputs', async () => {
+    document.querySelector('.btn-saved-config-outputs-toggle').click();
+    await flushMicrotasks();
+
+    expect(document.querySelector('.saved-outputs-empty')).not.toBeNull();
+    expect(document.querySelectorAll('.saved-output-row')).toHaveLength(0);
+  });
+
+  test('clicking the Outputs toggle again collapses the sub-panel', async () => {
+    document.querySelector('.btn-saved-config-outputs-toggle').click();
+    await flushMicrotasks();
+    document.querySelector('.btn-saved-config-outputs-toggle').click();
+
+    expect(document.querySelector('.saved-outputs-panel')).toBeNull();
+  });
+
+  test('Download on a saved output fetches its full content and downloads it as a blob', async () => {
+    savedOutputsByConfigId[1] = [
+      { id: 101, savedConfigId: 1, name: 'First run', fileName: 'output.csv', savedAt: '2026-01-03T00:00:00.000Z' },
+    ];
+    document.querySelector('.btn-saved-config-outputs-toggle').click();
+    await flushMicrotasks();
+
+    const appendSpy = jest.spyOn(document.body, 'appendChild');
+    document.querySelector('.btn-saved-output-download').click();
+    await flushMicrotasks();
+
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:5000/configs/1/outputs/101');
+    const anchor = appendSpy.mock.calls.find(([el]) => el.tagName === 'A')?.[0];
+    expect(anchor.download).toBe('output.csv');
+    appendSpy.mockRestore();
+  });
+
+  test('Delete on a saved output requires an inline confirm before the DELETE request is actually sent', async () => {
+    savedOutputsByConfigId[1] = [
+      { id: 101, savedConfigId: 1, name: 'First run', fileName: 'output.csv', savedAt: '2026-01-03T00:00:00.000Z' },
+    ];
+    document.querySelector('.btn-saved-config-outputs-toggle').click();
+    await flushMicrotasks();
+
+    document.querySelector('.btn-saved-output-delete').click();
+    expect(document.querySelector('.btn-saved-output-delete-confirm')).not.toBeNull();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+
+    document.querySelector('.btn-saved-output-delete-confirm').click();
+    await flushMicrotasks();
+
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:5000/configs/1/outputs/101', { method: 'DELETE' });
+    expect(document.querySelectorAll('.saved-output-row')).toHaveLength(0);
+  });
+});
+
+describe('persist and browse run outputs (Issue #202): no saved config yet', () => {
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div id="fields-list"></div>
+        <input type="checkbox" id="toggle-include-output-file" />
+        <button id="btn-generate" disabled></button>
+      </section>
+      <section id="screen-generating" class="hidden"></section>
+      <section id="screen-done" class="hidden">
+        <button id="btn-back-to-config"></button>
+        <button id="btn-download"></button>
+        <button id="btn-download-output" class="hidden"></button>
+        <button id="btn-save-output" class="hidden"></button>
+      </section>
+      <div id="modal-save-config" class="modal hidden">
+        <input id="input-save-config-name" />
+        <button id="btn-save-config-cancel"></button>
+        <button id="btn-save-config-confirm"></button>
+      </div>
+      <div id="modal-save-output" class="modal hidden">
+        <div id="save-output-picker">
+          <select id="select-save-output-config"></select>
+          <input id="input-save-output-name" />
+        </div>
+        <p id="save-output-no-configs-hint" class="hidden"></p>
+        <button id="btn-save-output-cancel"></button>
+        <button id="btn-save-output-go-to-save-config" class="hidden"></button>
+        <button id="btn-save-output-confirm"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com/products' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({
+            fields: [{ name: 'Titel', selector: 'h1', attribute: null }],
+            url: 'https://example.com/products',
+          }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+
+    global.fetch = jest.fn((url) => {
+      const urlStr = String(url);
+      if (urlStr.endsWith('/health')) return Promise.resolve({ ok: true });
+      if (urlStr.includes('/configs?url=')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      if (urlStr.endsWith('/generate')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ script: '# script', outputFile: { fileName: 'output.csv', content: 'a\n' } }),
+        });
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${urlStr}`));
+    });
+
+    require('./popup');
+    await flushMicrotasks();
+
+    document.getElementById('toggle-include-output-file').checked = true;
+    document.getElementById('toggle-include-output-file').dispatchEvent(new Event('change'));
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+  });
+
+  test('Save output shows a "save configuration first" hint instead of the picker', () => {
+    document.getElementById('btn-save-output').click();
+
+    expect(document.getElementById('save-output-picker').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('save-output-no-configs-hint').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('btn-save-output-confirm').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('btn-save-output-go-to-save-config').classList.contains('hidden')).toBe(false);
+  });
+
+  test('the hint\'s shortcut closes modal-save-output and opens modal-save-config instead', () => {
+    document.getElementById('btn-save-output').click();
+    document.getElementById('btn-save-output-go-to-save-config').click();
+
+    expect(document.getElementById('modal-save-output').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('modal-save-config').classList.contains('hidden')).toBe(false);
+  });
+});
+
 describe('reportBug end-to-end via the COMPANION_ERROR screen button', () => {
   let capturedListener;
 
