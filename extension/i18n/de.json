@@ -76,6 +76,12 @@
     "savedConfigsDeleteConfirm": "Diese gespeicherte Konfiguration löschen?",
     "savedConfigsDeleteConfirmYes": "Ja",
     "savedConfigsDeleteConfirmNo": "Nein",
+    "savedConfigsOutputsBtn": "Outputs",
+    "savedConfigsOutputsHideBtn": "Outputs ausblenden",
+    "savedOutputsEmpty": "Für diese Konfiguration wurden noch keine Outputs gespeichert.",
+    "savedOutputsLoading": "Lädt…",
+    "savedOutputsDownloadBtn": "Herunterladen",
+    "savedOutputsDeleteConfirm": "Diesen gespeicherten Output löschen?",
     "scriptFilenameLabel": "Skriptname",
     "scriptFilenamePlaceholder": "scraper",
     "outputFilenameLabel": "Name der Ausgabedatei",
@@ -241,6 +247,7 @@
     "newBtn": "Neu",
     "downloadBtn": "{filename} herunterladen",
     "downloadOutputBtn": "Daten herunterladen ({filename})",
+    "saveOutputBtn": "Output speichern",
     "dataPreviewTitle": "Testlauf-Datenvorschau",
     "dataPreviewTruncatedCsv": "Zeige {shown} von {total} Zeilen — gekürzt",
     "dataPreviewTruncatedXml": "Ausschnitt — nicht alle Daten werden angezeigt"
@@ -285,6 +292,14 @@
       "namePlaceholder": "Name",
       "save": "Speichern"
     },
+    "saveOutput": {
+      "configLabel": "Mit gespeicherter Konfiguration verknüpfen",
+      "nameLabel": "Name des Outputs (z. B. \"Lauf vor Proxy-Fix\")",
+      "namePlaceholder": "Name",
+      "save": "Speichern",
+      "noConfigsHint": "Für diese Seite gibt es noch keine gespeicherte Konfiguration — speichere zuerst die aktuelle Konfiguration, um diesen Output damit zu verknüpfen.",
+      "saveConfigShortcut": "Konfiguration speichern"
+    },
     "matchCount": {
       "found": "{count} Element(e) gefunden"
     }
@@ -305,7 +320,12 @@
     "configLoaded": "Konfiguration „{name}“ geladen.",
     "configLoadFailed": "Konfiguration konnte nicht geladen werden: {message}",
     "configDeleted": "Konfiguration gelöscht.",
-    "configDeleteFailed": "Konfiguration konnte nicht gelöscht werden: {message}"
+    "configDeleteFailed": "Konfiguration konnte nicht gelöscht werden: {message}",
+    "outputSaved": "Output gespeichert.",
+    "outputSaveFailed": "Output konnte nicht gespeichert werden: {message}",
+    "outputLoadFailed": "Output konnte nicht geladen werden: {message}",
+    "outputDeleted": "Output gelöscht.",
+    "outputDeleteFailed": "Output konnte nicht gelöscht werden: {message}"
   },
   "frame": {
     "badge": "iframe",

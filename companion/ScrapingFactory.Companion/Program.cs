@@ -89,6 +89,55 @@ app.MapGet("/configs/{id:long}", (long id, SavedConfigStore store) =>
 app.MapDelete("/configs/{id:long}", (long id, SavedConfigStore store) =>
     store.Delete(id) ? Results.NoContent() : Results.NotFound(new { error = "Saved configuration not found." }));
 
+// Issue #202: a saved run's actual output data, linked to an already-saved
+// configuration — the "what did a previous run actually return" counterpart
+// to /configs above. Explicit, opt-in "Save output" action mirroring "Save
+// configuration"'s own opt-in nature, not automatic/implicit saving of every
+// run. Same local/opt-in trust boundary as /configs — nothing here leaves
+// the user's machine. Deliberately does not evaluate hardening checks
+// against a saved output — that's its own issue (#207), since hardening
+// today only ever runs live, inside the generated script itself.
+app.MapPost("/configs/{configId:long}/outputs", (long configId, SaveOutputRequest? request, SavedConfigStore store) =>
+{
+    if (store.Get(configId) is null)
+        return Results.NotFound(new { error = "Saved configuration not found." });
+
+    var name = request?.Name?.Trim();
+    var fileName = request?.FileName?.Trim();
+    var content = request?.Content;
+    if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(fileName) || string.IsNullOrEmpty(content))
+        return Results.BadRequest(new { error = "Name, FileName and Content are required." });
+
+    var saved = store.SaveOutput(configId, name, fileName, content);
+    return Results.Created($"/configs/{configId}/outputs/{saved.Id}", saved);
+});
+
+app.MapGet("/configs/{configId:long}/outputs", (long configId, SavedConfigStore store) =>
+{
+    if (store.Get(configId) is null)
+        return Results.NotFound(new { error = "Saved configuration not found." });
+
+    return Results.Ok(store.ListOutputsByConfigId(configId));
+});
+
+app.MapGet("/configs/{configId:long}/outputs/{id:long}", (long configId, long id, SavedConfigStore store) =>
+{
+    var record = store.GetOutput(id);
+    if (record is null || record.SavedConfigId != configId)
+        return Results.NotFound(new { error = "Saved output not found." });
+
+    return Results.Ok(record);
+});
+
+app.MapDelete("/configs/{configId:long}/outputs/{id:long}", (long configId, long id, SavedConfigStore store) =>
+{
+    var record = store.GetOutput(id);
+    if (record is null || record.SavedConfigId != configId)
+        return Results.NotFound(new { error = "Saved output not found." });
+
+    return store.DeleteOutput(id) ? Results.NoContent() : Results.NotFound();
+});
+
 app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModuleRegistry registry) =>
 {
     var hasFields = config?.Fields.Count > 0;
@@ -217,4 +266,13 @@ public sealed class SaveConfigRequest
     public string? Url { get; set; }
     public string? Name { get; set; }
     public System.Text.Json.JsonElement Config { get; set; }
+}
+
+// Issue #202: POST /configs/{configId}/outputs body — Content is stored and
+// returned verbatim, the same opaque-blob treatment ConfigJson above gets.
+public sealed class SaveOutputRequest
+{
+    public string? Name { get; set; }
+    public string? FileName { get; set; }
+    public string? Content { get; set; }
 }

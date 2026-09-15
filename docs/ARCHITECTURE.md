@@ -44,14 +44,14 @@ flowchart LR
         CS <-- chrome.runtime messages --> SW
         SW <-- chrome.runtime messages --> SP
     end
-    SP -- "HTTP: GET /health, POST /generate,\nPOST/GET/DELETE /configs" --> Companion
+    SP -- "HTTP: GET /health, POST /generate,\nPOST/GET/DELETE /configs,\nPOST/GET/DELETE /configs/{id}/outputs" --> Companion
     subgraph Companion["Companion app (.NET 10 process)"]
         direction TB
         Program["Program.cs\n(minimal API)"]
         Plan["ScrapingPlanBuilder /\nScrapingPlanValidator"]
         Gen["ICodeGenerator\n(Python* code generators)"]
         Ver["IScriptVerifier\n(PythonScriptVerifier)"]
-        Store["SavedConfigStore\n(SQLite, Issue #141)"]
+        Store["SavedConfigStore\n(SQLite, Issue #141/#202)"]
         Program --> Plan --> Gen --> Ver
         Program --> Store
     end
@@ -508,6 +508,36 @@ empty, no error shown.
   the config JSON itself is stored and returned opaquely, never deserialized
   into `ScrapingConfig`), `Program.cs` (`POST /configs`, `GET
   /configs?url=...`, `GET /configs/{id}`, `DELETE /configs/{id}`)
+
+### 2.14b Persist and browse run outputs (Issue #202)
+
+Links Issue #161's own "download the full trial-run output" to Issue #141's
+saved-configuration history above: "Output speichern" on the `DONE` screen
+saves the current trial run's actual, complete output (the same content
+"Download data" already downloads) into a second SQLite table, linked by
+foreign key to an already-saved configuration — so a site scraped repeatedly
+can accumulate more than one past result to look back at, instead of only
+ever having its most recent download. Each row in the "Saved
+configurations" panel gains its own expandable "Outputs" sub-panel listing
+that config's own saved outputs (download/delete, same inline-confirm-delete
+pattern the config row itself uses). Deleting a saved configuration cascades
+to its own saved outputs on the database side (`ON DELETE CASCADE`) rather
+than needing the extension/companion application layer to clean them up
+first. Storage/browse/download only — evaluating hardening checks against a
+saved output is a separate, not-yet-implemented issue (#207).
+
+- Extension: `popup/popup.js` (`saveCurrentOutput`, `fetchSavedOutputs`,
+  `toggleSavedConfigOutputs`, `downloadSavedOutput`,
+  `requestDeleteSavedOutput`/`cancelDeleteSavedOutput`/`deleteSavedOutput`,
+  `renderSaveOutputModal`, `openSaveConfigModal`, `downloadFile` — the
+  latter two extracted out of Issue #141/#161's own `btn-save-config` click
+  handler and `triggerOutputFileDownload` respectively, for reuse from this
+  feature's own modal/download action)
+- Companion: `SavedConfigStore.cs` (`SavedOutputs` table, `SavedConfigId`
+  foreign key with `ON DELETE CASCADE`, `OpenConnection()` enabling `PRAGMA
+  foreign_keys` for every query so that cascade actually fires), `Program.cs`
+  (`POST/GET /configs/{configId}/outputs`, `GET/DELETE
+  /configs/{configId}/outputs/{id}`)
 
 ### 2.15 Configurable script/output filenames
 

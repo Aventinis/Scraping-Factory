@@ -76,6 +76,12 @@
     "savedConfigsDeleteConfirm": "Delete this saved configuration?",
     "savedConfigsDeleteConfirmYes": "Yes",
     "savedConfigsDeleteConfirmNo": "No",
+    "savedConfigsOutputsBtn": "Outputs",
+    "savedConfigsOutputsHideBtn": "Hide outputs",
+    "savedOutputsEmpty": "No saved outputs for this configuration yet.",
+    "savedOutputsLoading": "Loading…",
+    "savedOutputsDownloadBtn": "Download",
+    "savedOutputsDeleteConfirm": "Delete this saved output?",
     "scriptFilenameLabel": "Script name",
     "scriptFilenamePlaceholder": "scraper",
     "outputFilenameLabel": "Output file name",
@@ -241,6 +247,7 @@
     "newBtn": "New",
     "downloadBtn": "Download {filename}",
     "downloadOutputBtn": "Download data ({filename})",
+    "saveOutputBtn": "Save output",
     "dataPreviewTitle": "Trial-run data preview",
     "dataPreviewTruncatedCsv": "Showing {shown} of {total} rows — truncated",
     "dataPreviewTruncatedXml": "Excerpt — not all data is shown"
@@ -285,6 +292,14 @@
       "namePlaceholder": "Name",
       "save": "Save"
     },
+    "saveOutput": {
+      "configLabel": "Link to saved configuration",
+      "nameLabel": "Output name (e.g. \"Run before proxy fix\")",
+      "namePlaceholder": "Name",
+      "save": "Save",
+      "noConfigsHint": "No saved configuration for this site yet — save the current configuration first, then link this output to it.",
+      "saveConfigShortcut": "Save configuration"
+    },
     "matchCount": {
       "found": "{count} element(s) found"
     }
@@ -305,7 +320,12 @@
     "configLoaded": "Configuration \"{name}\" loaded.",
     "configLoadFailed": "Could not load configuration: {message}",
     "configDeleted": "Configuration deleted.",
-    "configDeleteFailed": "Could not delete configuration: {message}"
+    "configDeleteFailed": "Could not delete configuration: {message}",
+    "outputSaved": "Output saved.",
+    "outputSaveFailed": "Could not save output: {message}",
+    "outputLoadFailed": "Could not load output: {message}",
+    "outputDeleted": "Output deleted.",
+    "outputDeleteFailed": "Could not delete output: {message}"
   },
   "frame": {
     "badge": "iframe",

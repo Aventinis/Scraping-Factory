@@ -381,6 +381,12 @@
     .saved-config-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
     .saved-config-date { flex: none; color: var(--color-text-faint); }
     .saved-config-confirm-text { flex: 1; min-width: 0; color: var(--color-text-muted); }
+    /* Issue #202: a saved config row's own saved-outputs sub-panel, indented
+       to visually nest under the row it belongs to. */
+    .saved-outputs-panel { margin: 2px 0 6px 14px; padding-left: 6px; border-left: 2px solid var(--color-border); }
+    .saved-output-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 11px; }
+    .saved-output-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+    .saved-outputs-loading, .saved-outputs-empty { font-size: 11px; color: var(--color-text-faint); margin: 2px 0; }
 
     /* Preview toggle */
     .btn-toggle           { background: var(--color-surface-muted); color: var(--color-text-secondary); width: 100%; }
@@ -603,7 +609,13 @@
     /* Done screen */
     #screen-done    { text-align: center; padding: 24px 16px; }
     .success-icon   { color: var(--color-success); }
-    .done-actions   { display: flex; gap: 8px; margin-top: 16px; justify-content: center; }
+    /* flex-wrap: Issue #202 added a fourth/fifth button (Save output,
+       alongside Back/New/Download/Download data) — on a narrower side
+       panel that's more buttons than fit on one row; wrapping onto
+       additional centered rows instead of overflowing past the panel's
+       edge (the flex row's own default nowrap behavior) keeps every
+       button fully visible and clickable regardless of panel width. */
+    .done-actions   { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; justify-content: center; }
 
     /* Issue #122: trial-run data preview panel (Done screen) */
     .data-preview-panel     { text-align: left; margin-top: 20px; }
@@ -1352,6 +1364,11 @@
            downloadable directly without ever running the generated script
            locally. -->
       <button id="btn-download-output" class="btn-primary hidden" data-i18n="done.downloadOutputBtn"></button>
+      <!-- Issue #202: same visibility gate as btn-download-output — opens
+           modal-save-output to link this run's output to a saved
+           configuration in the companion's local SQLite store, instead of
+           only ever downloading it to disk. -->
+      <button id="btn-save-output" class="btn-secondary hidden" data-i18n="done.saveOutputBtn"></button>
     </div>
 
     <!-- Issue #122: trial-run data preview — populated by renderDataPreview,
@@ -1399,6 +1416,29 @@
       <div class="modal-actions">
         <button id="btn-save-config-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
         <button id="btn-save-config-confirm" class="btn-primary" data-i18n="modals.saveConfig.save"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: link the DONE screen's trial-run output to a saved
+       configuration and give it a name (Issue #202). Shown only once
+       includeOutputFile actually produced a file (see btn-save-output's own
+       visibility gate) — see renderSaveOutputModal for how it switches
+       between the config-picker form below and the "no saved config yet"
+       hint. -->
+  <div id="modal-save-output" class="modal hidden">
+    <div class="modal-inner">
+      <div id="save-output-picker">
+        <label for="select-save-output-config" data-i18n="modals.saveOutput.configLabel"></label>
+        <select id="select-save-output-config"></select>
+        <label for="input-save-output-name" data-i18n="modals.saveOutput.nameLabel"></label>
+        <input id="input-save-output-name" type="text" data-i18n-placeholder="modals.saveOutput.namePlaceholder" autocomplete="off" />
+      </div>
+      <p id="save-output-no-configs-hint" class="preview-summary hidden" data-i18n="modals.saveOutput.noConfigsHint"></p>
+      <div class="modal-actions">
+        <button id="btn-save-output-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-save-output-go-to-save-config" class="btn-primary hidden" data-i18n="modals.saveOutput.saveConfigShortcut"></button>
+        <button id="btn-save-output-confirm" class="btn-primary" data-i18n="modals.saveOutput.save"></button>
       </div>
     </div>
   </div>

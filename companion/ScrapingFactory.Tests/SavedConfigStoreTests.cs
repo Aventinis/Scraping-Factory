@@ -96,4 +96,95 @@ public class SavedConfigStoreTests : IDisposable
 
         Assert.Single(results);
     }
+
+    // Issue #202: SavedOutputs, linked to a SavedConfig.
+
+    [Fact]
+    public void SaveOutput_ThenListOutputsByConfigId_ReturnsIt()
+    {
+        var config = _store.Save("https://example.com/products", "My config", "{}");
+
+        _store.SaveOutput(config.Id, "First run", "output.csv", "Titel\nA\n");
+
+        var results = _store.ListOutputsByConfigId(config.Id);
+        Assert.Single(results);
+        Assert.Equal("First run", results[0].Name);
+        Assert.Equal("output.csv", results[0].FileName);
+        Assert.Equal(config.Id, results[0].SavedConfigId);
+    }
+
+    [Fact]
+    public void ListOutputsByConfigId_DifferentConfig_ReturnsEmpty()
+    {
+        var configA = _store.Save("https://example.com/a", "Config A", "{}");
+        var configB = _store.Save("https://example.com/b", "Config B", "{}");
+        _store.SaveOutput(configA.Id, "Run", "output.csv", "Titel\nA\n");
+
+        var results = _store.ListOutputsByConfigId(configB.Id);
+
+        Assert.Empty(results);
+    }
+
+    [Fact]
+    public void ListOutputsByConfigId_OrdersNewestFirst()
+    {
+        var config = _store.Save("https://example.com", "Config", "{}");
+        _store.SaveOutput(config.Id, "First", "output.csv", "a");
+        Thread.Sleep(5);
+        _store.SaveOutput(config.Id, "Second", "output.csv", "b");
+
+        var results = _store.ListOutputsByConfigId(config.Id);
+
+        Assert.Equal(["Second", "First"], results.Select(r => r.Name));
+    }
+
+    [Fact]
+    public void GetOutput_ReturnsFullRecordIncludingContent()
+    {
+        var config = _store.Save("https://example.com", "Config", "{}");
+        var saved = _store.SaveOutput(config.Id, "Run", "output.csv", "Titel\nA\nB\n");
+
+        var record = _store.GetOutput(saved.Id);
+
+        Assert.NotNull(record);
+        Assert.Equal("Run", record!.Name);
+        Assert.Equal("output.csv", record.FileName);
+        Assert.Equal("Titel\nA\nB\n", record.Content);
+        Assert.Equal(config.Id, record.SavedConfigId);
+    }
+
+    [Fact]
+    public void GetOutput_UnknownId_ReturnsNull()
+    {
+        Assert.Null(_store.GetOutput(999999));
+    }
+
+    [Fact]
+    public void DeleteOutput_ExistingId_RemovesItAndReturnsTrue()
+    {
+        var config = _store.Save("https://example.com", "Config", "{}");
+        var saved = _store.SaveOutput(config.Id, "Run", "output.csv", "a");
+
+        var deleted = _store.DeleteOutput(saved.Id);
+
+        Assert.True(deleted);
+        Assert.Null(_store.GetOutput(saved.Id));
+    }
+
+    [Fact]
+    public void DeleteOutput_UnknownId_ReturnsFalse()
+    {
+        Assert.False(_store.DeleteOutput(999999));
+    }
+
+    [Fact]
+    public void Delete_SavedConfig_CascadesToItsOwnSavedOutputs()
+    {
+        var config = _store.Save("https://example.com", "Config", "{}");
+        var saved = _store.SaveOutput(config.Id, "Run", "output.csv", "a");
+
+        _store.Delete(config.Id);
+
+        Assert.Null(_store.GetOutput(saved.Id));
+    }
 }
