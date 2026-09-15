@@ -609,7 +609,13 @@
     /* Done screen */
     #screen-done    { text-align: center; padding: 24px 16px; }
     .success-icon   { color: var(--color-success); }
-    .done-actions   { display: flex; gap: 8px; margin-top: 16px; justify-content: center; }
+    /* flex-wrap: Issue #202 added a fourth/fifth button (Save output,
+       alongside Back/New/Download/Download data) — on a narrower side
+       panel that's more buttons than fit on one row; wrapping onto
+       additional centered rows instead of overflowing past the panel's
+       edge (the flex row's own default nowrap behavior) keeps every
+       button fully visible and clickable regardless of panel width. */
+    .done-actions   { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; justify-content: center; }
 
     /* Issue #122: trial-run data preview panel (Done screen) */
     .data-preview-panel     { text-align: left; margin-top: 20px; }
