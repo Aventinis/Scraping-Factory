@@ -54,6 +54,7 @@ const {
   moveTransform, transformsAreValid, renderTransformList,
   applyTransformsPreview, toNumberPreview, renderTransformPreview,
   syncModeToggleThumbs,
+  applyConfigToState, renderSavedConfigsList, requestDeleteSavedConfig, cancelDeleteSavedConfig,
 } = require('./popup');
 
 // jsdom's Blob doesn't implement .text() — read via FileReader instead.
@@ -199,6 +200,48 @@ describe('buildScrapingConfig (includePreview, Issue #122)', () => {
 
     const apiResult = buildScrapingConfig('https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], true);
     expect(apiResult.includePreview).toBe(true);
+  });
+});
+
+// Issue #161: includeOutputFile is mode-independent too, same "only include
+// the key when non-default" pattern as includePreview above — independent
+// of it (either/both/neither may be requested).
+describe('buildScrapingConfig (includeOutputFile, Issue #161)', () => {
+  test('omits includeOutputFile entirely when false (the default)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.includeOutputFile).toBeUndefined();
+  });
+
+  test('includes includeOutputFile: true when requested', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, null, null, false, true,
+    );
+    expect(result.includeOutputFile).toBe(true);
+  });
+
+  test('works alongside includePreview — both may be requested at once', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], true,
+      false, [], null, null, null, null, false, true,
+    );
+    expect(result.includePreview).toBe(true);
+    expect(result.includeOutputFile).toBe(true);
+  });
+
+  test('works the same way for container and api modes', () => {
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null,
+      null, null, false, true,
+    );
+    expect(containerResult.includeOutputFile).toBe(true);
+
+    const apiResult = buildScrapingConfig(
+      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], null, null,
+      null, null, false, true,
+    );
+    expect(apiResult.includeOutputFile).toBe(true);
   });
 });
 
@@ -1062,6 +1105,190 @@ describe('buildConfigExport', () => {
     const result = buildConfigExport('https://example.com', 'flat', [], [], { version: '1.2.3' }, null, 'myscraper', 'result');
     expect(result.config.scriptFileName).toBe('myscraper');
     expect(result.config.outputFileName).toBe('result');
+  });
+});
+
+// ── applyConfigToState (Issue #141) ─────────────────────────────────────────
+// The reverse of buildScrapingConfig/buildConfigExport — round-tripping a
+// built wire config through applyConfigToState should reproduce every part
+// of _state buildScrapingConfig itself reads, for every mode/shape.
+
+describe('applyConfigToState', () => {
+  test('never includes `url` — the live browser tab stays authoritative', () => {
+    const config = buildScrapingConfig('https://example.com/products', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(applyConfigToState(config)).not.toHaveProperty('url');
+  });
+
+  test('flat mode: round-trips fields (with attribute/framePath/transforms), scriptFileName/outputFileName, useJsonOutput, additionalStartUrls', () => {
+    const fields = [
+      { name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null },
+      { name: 'Bild', selector: 'img', attribute: 'src', framePath: ['#widget'], transforms: [{ kind: 'trim' }] },
+    ];
+    const config = buildScrapingConfig(
+      'https://example.com', 'flat', fields, [], null, 'myscraper', 'result', 'Static', [], false, true,
+      ['https://example.com/page2'],
+    );
+
+    const result = applyConfigToState(config);
+
+    expect(result.mode).toBe('flat');
+    expect(result.fields).toEqual(fields);
+    expect(result.groups).toEqual([]);
+    expect(result.apiConfig).toBeNull();
+    expect(result.scriptFileName).toBe('myscraper');
+    expect(result.outputFileName).toBe('result');
+    expect(result.useJsonOutput).toBe(true);
+    expect(result.additionalStartUrls).toEqual(['https://example.com/page2']);
+  });
+
+  test('container mode: round-trips a nested group tree through serialize/deserialize', () => {
+    const inner = buildFieldNode('Preis', '.price', 'attribute', 'data-price');
+    const group = { ...buildGroupNode('Kategorie', 'section.menu-category', true), children: [inner] };
+    const config = buildScrapingConfig('https://example.com', 'container', [], [group]);
+
+    const result = applyConfigToState(config);
+
+    expect(result.mode).toBe('container');
+    expect(result.fields).toEqual([]);
+    expect(result.groups).toEqual([group]);
+  });
+
+  test('container mode: round-trips every field extraction mode (text/attribute/exists/ownText)', () => {
+    const groups = [
+      buildFieldNode('Titel', 'h3', 'text'),
+      buildFieldNode('Link', 'a', 'attribute', 'href'),
+      buildFieldNode('Vorhanden', '.badge', 'exists'),
+      buildFieldNode('Name', 'h2', 'ownText'),
+    ];
+    const config = buildScrapingConfig('https://example.com', 'container', [], groups);
+
+    expect(applyConfigToState(config).groups).toEqual(groups);
+  });
+
+  test('api mode: passes apiConfig through unchanged', () => {
+    const apiConfig = { urlTemplate: 'https://example.com/api/{id}', itemsPath: 'data', fields: [{ name: 'Titel', path: 'title' }], parameters: [] };
+    const config = buildScrapingConfig('https://example.com', 'api', [], [], apiConfig);
+
+    const result = applyConfigToState(config);
+
+    expect(result.mode).toBe('api');
+    expect(result.apiConfig).toEqual(apiConfig);
+    expect(result.fields).toEqual([]);
+    expect(result.groups).toEqual([]);
+  });
+
+  test('round-trips engine + browserActions (all four kinds, including framePath)', () => {
+    const browserActions = [
+      { kind: 'waitFor', selector: '.ready', timeoutMs: 3000, framePath: ['#frame1'] },
+      { kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER', framePath: null },
+      { kind: 'click', selector: '#submit', framePath: null },
+      { kind: 'scroll', containerSelector: '.list', loadMoreButtonSelector: '.more', maxIterations: 5, waitAfterMs: 500, framePath: null },
+    ];
+    const config = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Browser', browserActions,
+    );
+
+    const result = applyConfigToState(config);
+
+    expect(result.engine).toBe('Browser');
+    expect(result.browserActions).toEqual(browserActions);
+  });
+
+  test('defaults engine to Static and browserActions to [] when omitted (Static-engine wire config)', () => {
+    const config = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const result = applyConfigToState(config);
+    expect(result.engine).toBe('Static');
+    expect(result.browserActions).toEqual([]);
+  });
+
+  test('round-trips changeDetection (webhook) and proxy', () => {
+    const changeDetection = {
+      enabled: true, notify: 'Webhook',
+      email: { smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: '', toEnvVar: '' },
+      webhook: { urlEnvVar: 'SF_WEBHOOK_URL' },
+    };
+    const proxy = { enabled: true, envVar: 'SF_PROXIES' };
+    const config = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], changeDetection, proxy,
+    );
+
+    const result = applyConfigToState(config);
+
+    expect(result.changeDetection).toEqual(changeDetection);
+    expect(result.proxy).toEqual(proxy);
+  });
+
+  test('round-trips changeDetection (email, with only required fields set)', () => {
+    const changeDetection = {
+      enabled: true, notify: 'Email',
+      email: { smtpHostEnvVar: 'SF_HOST', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: 'SF_FROM', toEnvVar: 'SF_TO' },
+      webhook: { urlEnvVar: '' },
+    };
+    const config = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], changeDetection,
+    );
+
+    expect(applyConfigToState(config).changeDetection).toEqual(changeDetection);
+  });
+
+  test('defaults changeDetection/proxy to their disabled shape when omitted', () => {
+    const config = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const result = applyConfigToState(config);
+    expect(result.changeDetection).toEqual({
+      enabled: false, notify: 'Email',
+      email: { smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: '', toEnvVar: '' },
+      webhook: { urlEnvVar: '' },
+    });
+    expect(result.proxy).toEqual({ enabled: false, envVar: '' });
+  });
+
+  test('round-trips pagination (both kinds) and persistentSession', () => {
+    const pagination = { enabled: true, kind: 'pageNumber', nextLinkSelector: '', urlTemplate: '{url}?page={page}', maxPages: 10 };
+    const config = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Browser', [], false,
+      false, [], null, null, null, pagination, true,
+    );
+
+    const result = applyConfigToState(config);
+
+    expect(result.pagination).toEqual(pagination);
+    expect(result.persistentSession).toBe(true);
+  });
+
+  test('defaults pagination to disabled/nextLink and persistentSession to false when omitted', () => {
+    const config = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const result = applyConfigToState(config);
+    expect(result.pagination).toEqual({ enabled: false, kind: 'nextLink', nextLinkSelector: '', urlTemplate: '', maxPages: 50 });
+    expect(result.persistentSession).toBe(false);
+  });
+
+  test('round-trips every hardening check kind', () => {
+    const hardening = {
+      noResult: { enabled: true, severity: 'Error' },
+      nullRate: [{ fieldName: 'Preis', threshold: 30, severity: 'Error' }],
+      baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: 25 },
+      blocking: { enabled: true, severity: 'Warning', minBodyLengthText: '500', phrasesText: 'Access Denied\nCAPTCHA' },
+      requiredFields: { enabled: true, severity: 'Error', fields: ['Titel', 'Preis'] },
+    };
+    const config = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, hardening,
+    );
+
+    expect(applyConfigToState(config).hardening).toEqual(hardening);
+  });
+
+  test('defaults hardening to its fully-disabled shape when omitted', () => {
+    const config = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(applyConfigToState(config).hardening).toEqual({
+      noResult: { enabled: false, severity: 'Warning' },
+      nullRate: [],
+      baseline: { enabled: false, severity: 'Warning', dropThresholdPercent: 20 },
+      blocking: { enabled: false, severity: 'Warning', minBodyLengthText: '', phrasesText: '' },
+      requiredFields: { enabled: false, severity: 'Warning', fields: [] },
+    });
   });
 });
 
@@ -4018,6 +4245,197 @@ describe('generate() surfaces a 400 config rejection without inviting a bug repo
   });
 });
 
+// ── Saved configuration history (Issue #141) ────────────────────────────────
+// Full flows against the companion's /configs endpoints, same DOM-mocking
+// pattern as the generate() integration tests above.
+
+describe('saved configuration history (Issue #141)', () => {
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  let fetchMock;
+
+  const idleScreenHtml = `
+    <section id="screen-idle" class="hidden">
+      <div id="url-display"></div>
+      <div id="fields-list"></div>
+      <button id="btn-generate"></button>
+      <button id="btn-export-config"></button>
+      <button id="btn-save-config"></button>
+      <div id="saved-configs-list"></div>
+      <p id="saved-configs-empty" class="hidden"></p>
+    </section>
+    <div id="modal-save-config" class="modal hidden">
+      <input id="input-save-config-name" />
+      <button id="btn-save-config-cancel"></button>
+      <button id="btn-save-config-confirm"></button>
+    </div>
+    <section id="screen-generating" class="hidden"></section>
+    <div id="error-toast" class="hidden">
+      <span id="error-toast-message"></span>
+      <button id="btn-report-bug-toast" class="hidden"></button>
+    </div>
+  `;
+
+  beforeEach(async () => {
+    jest.resetModules();
+    document.body.innerHTML = idleScreenHtml;
+
+    global.chrome = {
+      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com/products' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({
+            fields: [{ name: 'Preis', selector: '.price', attribute: null }],
+            url: 'https://example.com/products',
+          }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+
+    fetchMock = jest.fn((url, init) => {
+      const method = init?.method || 'GET';
+      const urlStr = String(url);
+      if (urlStr.endsWith('/health')) return Promise.resolve({ ok: true });
+      if (urlStr.includes('/configs?url=')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([
+            { id: 1, url: 'https://example.com/products', name: 'My config', savedAt: '2026-01-01T00:00:00.000Z' },
+          ]),
+        });
+      }
+      if (urlStr.endsWith('/configs') && method === 'POST') {
+        return Promise.resolve({
+          ok: true, status: 201,
+          json: () => Promise.resolve({ id: 2, url: 'https://example.com/products', name: 'New config', savedAt: '2026-01-02T00:00:00.000Z' }),
+        });
+      }
+      if (/\/configs\/\d+$/.test(urlStr) && method === 'GET') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            id: 1, url: 'https://example.com/products', name: 'My config', savedAt: '2026-01-01T00:00:00.000Z',
+            config: {
+              version: '1', url: 'https://example.com/products',
+              fields: [{ name: 'Loaded', selector: '.loaded', attribute: null }],
+            },
+          }),
+        });
+      }
+      if (/\/configs\/\d+$/.test(urlStr) && method === 'DELETE') {
+        return Promise.resolve({ ok: true, status: 204 });
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${method} ${urlStr}`));
+    });
+    global.fetch = fetchMock;
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE, fields restored, saved-configs list fetched
+  });
+
+  test('fetches and renders saved configs scoped to the current page on IDLE entry', () => {
+    expect(fetchMock).toHaveBeenCalledWith(`http://localhost:5000/configs?url=${encodeURIComponent('https://example.com/products')}`);
+    const rows = document.querySelectorAll('.saved-config-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain('My config');
+  });
+
+  test('Save opens the modal prefilled with the current hostname, then POSTs the current config and refreshes the list', async () => {
+    document.getElementById('btn-save-config').click();
+    expect(document.getElementById('modal-save-config').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('input-save-config-name').value).toBe('example.com');
+
+    document.getElementById('input-save-config-name').value = 'New config';
+    document.getElementById('btn-save-config-confirm').click();
+    await flushMicrotasks();
+
+    const postCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/configs') && init?.method === 'POST');
+    expect(postCall).toBeDefined();
+    const body = JSON.parse(postCall[1].body);
+    expect(body.name).toBe('New config');
+    expect(body.url).toBe('https://example.com/products');
+    expect(body.config.fields).toEqual([{ name: 'Preis', selector: '.price', attribute: null }]);
+    // Save is followed by a re-fetch of the list (fetchSavedConfigs) and the
+    // modal closes.
+    expect(document.getElementById('modal-save-config').classList.contains('hidden')).toBe(true);
+  });
+
+  test('Load applies the saved config back into state without touching the live tab URL', async () => {
+    document.querySelector('.btn-saved-config-load').click();
+    await flushMicrotasks();
+
+    // _state.url stays whatever the tab reported at startup — see
+    // applyConfigToState's own doc comment.
+    expect(document.getElementById('url-display').textContent).toBe('https://example.com/products');
+    const fieldNames = [...document.querySelectorAll('#fields-list .field-name')].map(el => el.textContent);
+    expect(fieldNames).toEqual(['Loaded']);
+  });
+
+  test('Delete requires an inline confirm before the DELETE request is actually sent', async () => {
+    document.querySelector('.btn-saved-config-delete').click();
+
+    expect(document.querySelector('.btn-saved-config-delete-confirm')).not.toBeNull();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+
+    document.querySelector('.btn-saved-config-delete-confirm').click();
+    await flushMicrotasks();
+
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(true);
+  });
+
+  test('Delete confirm can be cancelled without sending the DELETE request', () => {
+    document.querySelector('.btn-saved-config-delete').click();
+    document.querySelector('.btn-saved-config-delete-cancel').click();
+
+    expect(document.querySelector('.btn-saved-config-load')).not.toBeNull();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+  });
+});
+
+describe('saved configuration history: an older/unreachable companion without /configs', () => {
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div id="fields-list"></div>
+        <div id="saved-configs-list"></div>
+        <p id="saved-configs-empty" class="hidden"></p>
+      </section>
+    `;
+
+    global.chrome = {
+      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: { session: { get: jest.fn().mockResolvedValue({}), set: jest.fn().mockResolvedValue(undefined), remove: jest.fn().mockResolvedValue(undefined) } },
+    };
+
+    global.fetch = jest.fn((url) => {
+      const urlStr = String(url);
+      if (urlStr.endsWith('/health')) return Promise.resolve({ ok: true });
+      if (urlStr.includes('/configs?url=')) return Promise.reject(new Error('404 Not Found'));
+      return Promise.reject(new Error(`unexpected fetch: ${urlStr}`));
+    });
+
+    require('./popup');
+    await flushMicrotasks();
+  });
+
+  test('the panel just stays empty instead of surfacing an error', () => {
+    expect(document.getElementById('error-toast')).toBeNull();
+    expect(document.querySelectorAll('.saved-config-row')).toHaveLength(0);
+  });
+});
+
 // ── Container-Mode integration ───────────────────────────────────────────────
 // Full flows through the real state machine (mode switch, modal → click-select
 // → tree update), mirroring the existing SELECTION_UNAVAILABLE/generate()
@@ -5738,6 +6156,454 @@ describe('output settings (script/output filename)', () => {
   });
 });
 
+// ── Download the full trial-run output (Issue #161) ─────────────────────────
+
+describe('download the full trial-run output (Issue #161)', () => {
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div id="fields-list"></div>
+        <input type="checkbox" id="toggle-include-output-file" />
+        <button id="btn-generate" disabled></button>
+      </section>
+      <section id="screen-generating" class="hidden"></section>
+      <section id="screen-done" class="hidden">
+        <button id="btn-back-to-config"></button>
+        <button id="btn-download"></button>
+        <button id="btn-download-output" class="hidden"></button>
+      </section>
+    `;
+
+    global.chrome = {
+      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({
+            fields: [{ name: 'Titel', selector: 'h1', attribute: null }],
+            url: 'https://example.com',
+          }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValueOnce({ ok: true }); // health check
+    global.URL.createObjectURL = jest.fn(() => 'blob:mock');
+    global.URL.revokeObjectURL = jest.fn();
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE, fields restored from storage
+  });
+
+  test('the checkbox threads includeOutputFile into the /generate request', async () => {
+    document.getElementById('toggle-include-output-file').checked = true;
+    document.getElementById('toggle-include-output-file').dispatchEvent(new Event('change'));
+
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ script: '# script', outputFile: { fileName: 'output.csv', content: 'Titel\nA\n' } }),
+    });
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const generateCall = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/generate'));
+    const body = JSON.parse(generateCall[1].body);
+    expect(body.includeOutputFile).toBe(true);
+  });
+
+  test('btn-download-output stays hidden when includeOutputFile was off', async () => {
+    global.fetch.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('# script') });
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    expect(document.getElementById('btn-download-output').classList.contains('hidden')).toBe(true);
+  });
+
+  test('btn-download-output becomes visible with the output filename once includeOutputFile produced a file', async () => {
+    document.getElementById('toggle-include-output-file').checked = true;
+    document.getElementById('toggle-include-output-file').dispatchEvent(new Event('change'));
+
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ script: '# script', outputFile: { fileName: 'output.csv', content: 'Titel\nA\n' } }),
+    });
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const btn = document.getElementById('btn-download-output');
+    expect(btn.classList.contains('hidden')).toBe(false);
+    expect(btn.textContent).toContain('output.csv');
+  });
+
+  test('clicking btn-download-output downloads a blob with the exact output-file content', async () => {
+    document.getElementById('toggle-include-output-file').checked = true;
+    document.getElementById('toggle-include-output-file').dispatchEvent(new Event('change'));
+
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ script: '# script', outputFile: { fileName: 'output.csv', content: 'Titel\nA\nB\n' } }),
+    });
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const appendSpy = jest.spyOn(document.body, 'appendChild');
+    document.getElementById('btn-download-output').click();
+
+    const anchor = appendSpy.mock.calls[0][0];
+    expect(anchor.download).toBe('output.csv');
+    const blobArg = global.URL.createObjectURL.mock.calls[0][0];
+    expect(blobArg.type).toBe('text/csv');
+    expect(await readBlobText(blobArg)).toBe('Titel\nA\nB\n');
+    appendSpy.mockRestore();
+  });
+});
+
+// ── Persist and browse run outputs (Issue #202) ─────────────────────────────
+// Full flows against the companion's /configs/{id}/outputs endpoints,
+// combining the DONE screen's "Save output" action with the "Saved
+// configurations" panel's own outputs sub-panel — same DOM-mocking pattern
+// as the Issue #141/#161 suites above.
+
+describe('persist and browse run outputs (Issue #202)', () => {
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  let fetchMock;
+  let savedConfigs;
+  let savedOutputsByConfigId;
+
+  const html = `
+    <section id="screen-idle" class="hidden">
+      <div id="url-display"></div>
+      <div id="fields-list"></div>
+      <input type="checkbox" id="toggle-include-output-file" />
+      <button id="btn-generate" disabled></button>
+      <button id="btn-save-config"></button>
+      <div id="saved-configs-list"></div>
+      <p id="saved-configs-empty" class="hidden"></p>
+    </section>
+    <section id="screen-generating" class="hidden"></section>
+    <section id="screen-done" class="hidden">
+      <button id="btn-back-to-config"></button>
+      <button id="btn-download"></button>
+      <button id="btn-download-output" class="hidden"></button>
+      <button id="btn-save-output" class="hidden"></button>
+    </section>
+    <div id="modal-save-config" class="modal hidden">
+      <input id="input-save-config-name" />
+      <button id="btn-save-config-cancel"></button>
+      <button id="btn-save-config-confirm"></button>
+    </div>
+    <div id="modal-save-output" class="modal hidden">
+      <div id="save-output-picker">
+        <select id="select-save-output-config"></select>
+        <input id="input-save-output-name" />
+      </div>
+      <p id="save-output-no-configs-hint" class="hidden"></p>
+      <button id="btn-save-output-cancel"></button>
+      <button id="btn-save-output-go-to-save-config" class="hidden"></button>
+      <button id="btn-save-output-confirm"></button>
+    </div>
+    <div id="error-toast" class="hidden">
+      <span id="error-toast-message"></span>
+      <button id="btn-report-bug-toast" class="hidden"></button>
+    </div>
+  `;
+
+  beforeEach(async () => {
+    jest.resetModules();
+    document.body.innerHTML = html;
+
+    savedConfigs = [
+      { id: 1, url: 'https://example.com/products', name: 'My config', savedAt: '2026-01-01T00:00:00.000Z' },
+    ];
+    savedOutputsByConfigId = { 1: [] };
+
+    global.chrome = {
+      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com/products' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({
+            fields: [{ name: 'Titel', selector: 'h1', attribute: null }],
+            url: 'https://example.com/products',
+          }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+
+    fetchMock = jest.fn((url, init) => {
+      const method = init?.method || 'GET';
+      const urlStr = String(url);
+
+      if (urlStr.endsWith('/health')) return Promise.resolve({ ok: true });
+      if (urlStr.endsWith('/generate') && method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ script: '# script', outputFile: { fileName: 'output.csv', content: 'Titel\nA\n' } }),
+        });
+      }
+      if (urlStr.includes('/configs?url=')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(savedConfigs) });
+      }
+      if (urlStr.endsWith('/configs') && method === 'POST') {
+        const created = { id: 2, url: 'https://example.com/products', name: 'New config', savedAt: '2026-01-02T00:00:00.000Z' };
+        savedConfigs = [...savedConfigs, created];
+        return Promise.resolve({ ok: true, status: 201, json: () => Promise.resolve(created) });
+      }
+
+      const outputsListMatch = urlStr.match(/\/configs\/(\d+)\/outputs$/);
+      if (outputsListMatch && method === 'GET') {
+        const configId = Number(outputsListMatch[1]);
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(savedOutputsByConfigId[configId] || []) });
+      }
+      if (outputsListMatch && method === 'POST') {
+        const configId = Number(outputsListMatch[1]);
+        const body = JSON.parse(init.body);
+        const created = {
+          id: 100 + (savedOutputsByConfigId[configId]?.length || 0),
+          savedConfigId: configId, name: body.name, fileName: body.fileName, savedAt: '2026-01-03T00:00:00.000Z',
+        };
+        savedOutputsByConfigId[configId] = [...(savedOutputsByConfigId[configId] || []), created];
+        return Promise.resolve({ ok: true, status: 201, json: () => Promise.resolve(created) });
+      }
+
+      const outputByIdMatch = urlStr.match(/\/configs\/(\d+)\/outputs\/(\d+)$/);
+      if (outputByIdMatch && method === 'GET') {
+        const [, configId, id] = outputByIdMatch.map(Number);
+        const record = (savedOutputsByConfigId[configId] || []).find((o) => o.id === id);
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ...record, content: 'Titel\nA\n' }) });
+      }
+      if (outputByIdMatch && method === 'DELETE') {
+        const [, configId, id] = outputByIdMatch.map(Number);
+        savedOutputsByConfigId[configId] = (savedOutputsByConfigId[configId] || []).filter((o) => o.id !== id);
+        return Promise.resolve({ ok: true, status: 204 });
+      }
+
+      return Promise.reject(new Error(`unexpected fetch: ${method} ${urlStr}`));
+    });
+    global.fetch = fetchMock;
+    global.URL.createObjectURL = jest.fn(() => 'blob:mock');
+    global.URL.revokeObjectURL = jest.fn();
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE, fields restored, saved-configs list fetched
+  });
+
+  async function generateWithOutputFile() {
+    document.getElementById('toggle-include-output-file').checked = true;
+    document.getElementById('toggle-include-output-file').dispatchEvent(new Event('change'));
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+  }
+
+  test('btn-save-output stays hidden until includeOutputFile produced a file, same as btn-download-output', async () => {
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+    expect(document.getElementById('btn-save-output').classList.contains('hidden')).toBe(true);
+  });
+
+  test('btn-save-output becomes visible once includeOutputFile produced a file', async () => {
+    await generateWithOutputFile();
+    expect(document.getElementById('btn-save-output').classList.contains('hidden')).toBe(false);
+  });
+
+  test('Save output opens the modal with the saved-configs picker populated', async () => {
+    await generateWithOutputFile();
+
+    document.getElementById('btn-save-output').click();
+
+    expect(document.getElementById('modal-save-output').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('save-output-picker').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('select-save-output-config').textContent).toContain('My config');
+  });
+
+  test('confirming Save output POSTs name/fileName/content to /configs/{id}/outputs and closes the modal', async () => {
+    await generateWithOutputFile();
+    document.getElementById('btn-save-output').click();
+
+    document.getElementById('select-save-output-config').value = '1';
+    document.getElementById('input-save-output-name').value = 'First run';
+    document.getElementById('btn-save-output-confirm').click();
+    await flushMicrotasks();
+
+    const postCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/configs/1/outputs') && init?.method === 'POST');
+    expect(postCall).toBeDefined();
+    const body = JSON.parse(postCall[1].body);
+    expect(body).toEqual({ name: 'First run', fileName: 'output.csv', content: 'Titel\nA\n' });
+    expect(document.getElementById('modal-save-output').classList.contains('hidden')).toBe(true);
+  });
+
+  test('the saved-configs list renders an Outputs toggle, which fetches and shows that config\'s own saved outputs', async () => {
+    savedOutputsByConfigId[1] = [
+      { id: 101, savedConfigId: 1, name: 'First run', fileName: 'output.csv', savedAt: '2026-01-03T00:00:00.000Z' },
+    ];
+
+    document.querySelector('.btn-saved-config-outputs-toggle').click();
+    await flushMicrotasks();
+
+    expect(fetchMock).toHaveBeenCalledWith(`http://localhost:5000/configs/1/outputs`);
+    const rows = document.querySelectorAll('.saved-output-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain('First run');
+  });
+
+  test('the outputs sub-panel shows an empty hint when the config has no saved outputs', async () => {
+    document.querySelector('.btn-saved-config-outputs-toggle').click();
+    await flushMicrotasks();
+
+    expect(document.querySelector('.saved-outputs-empty')).not.toBeNull();
+    expect(document.querySelectorAll('.saved-output-row')).toHaveLength(0);
+  });
+
+  test('clicking the Outputs toggle again collapses the sub-panel', async () => {
+    document.querySelector('.btn-saved-config-outputs-toggle').click();
+    await flushMicrotasks();
+    document.querySelector('.btn-saved-config-outputs-toggle').click();
+
+    expect(document.querySelector('.saved-outputs-panel')).toBeNull();
+  });
+
+  test('Download on a saved output fetches its full content and downloads it as a blob', async () => {
+    savedOutputsByConfigId[1] = [
+      { id: 101, savedConfigId: 1, name: 'First run', fileName: 'output.csv', savedAt: '2026-01-03T00:00:00.000Z' },
+    ];
+    document.querySelector('.btn-saved-config-outputs-toggle').click();
+    await flushMicrotasks();
+
+    const appendSpy = jest.spyOn(document.body, 'appendChild');
+    document.querySelector('.btn-saved-output-download').click();
+    await flushMicrotasks();
+
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:5000/configs/1/outputs/101');
+    const anchor = appendSpy.mock.calls.find(([el]) => el.tagName === 'A')?.[0];
+    expect(anchor.download).toBe('output.csv');
+    appendSpy.mockRestore();
+  });
+
+  test('Delete on a saved output requires an inline confirm before the DELETE request is actually sent', async () => {
+    savedOutputsByConfigId[1] = [
+      { id: 101, savedConfigId: 1, name: 'First run', fileName: 'output.csv', savedAt: '2026-01-03T00:00:00.000Z' },
+    ];
+    document.querySelector('.btn-saved-config-outputs-toggle').click();
+    await flushMicrotasks();
+
+    document.querySelector('.btn-saved-output-delete').click();
+    expect(document.querySelector('.btn-saved-output-delete-confirm')).not.toBeNull();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+
+    document.querySelector('.btn-saved-output-delete-confirm').click();
+    await flushMicrotasks();
+
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:5000/configs/1/outputs/101', { method: 'DELETE' });
+    expect(document.querySelectorAll('.saved-output-row')).toHaveLength(0);
+  });
+});
+
+describe('persist and browse run outputs (Issue #202): no saved config yet', () => {
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div id="fields-list"></div>
+        <input type="checkbox" id="toggle-include-output-file" />
+        <button id="btn-generate" disabled></button>
+      </section>
+      <section id="screen-generating" class="hidden"></section>
+      <section id="screen-done" class="hidden">
+        <button id="btn-back-to-config"></button>
+        <button id="btn-download"></button>
+        <button id="btn-download-output" class="hidden"></button>
+        <button id="btn-save-output" class="hidden"></button>
+      </section>
+      <div id="modal-save-config" class="modal hidden">
+        <input id="input-save-config-name" />
+        <button id="btn-save-config-cancel"></button>
+        <button id="btn-save-config-confirm"></button>
+      </div>
+      <div id="modal-save-output" class="modal hidden">
+        <div id="save-output-picker">
+          <select id="select-save-output-config"></select>
+          <input id="input-save-output-name" />
+        </div>
+        <p id="save-output-no-configs-hint" class="hidden"></p>
+        <button id="btn-save-output-cancel"></button>
+        <button id="btn-save-output-go-to-save-config" class="hidden"></button>
+        <button id="btn-save-output-confirm"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com/products' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({
+            fields: [{ name: 'Titel', selector: 'h1', attribute: null }],
+            url: 'https://example.com/products',
+          }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+
+    global.fetch = jest.fn((url) => {
+      const urlStr = String(url);
+      if (urlStr.endsWith('/health')) return Promise.resolve({ ok: true });
+      if (urlStr.includes('/configs?url=')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      if (urlStr.endsWith('/generate')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ script: '# script', outputFile: { fileName: 'output.csv', content: 'a\n' } }),
+        });
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${urlStr}`));
+    });
+
+    require('./popup');
+    await flushMicrotasks();
+
+    document.getElementById('toggle-include-output-file').checked = true;
+    document.getElementById('toggle-include-output-file').dispatchEvent(new Event('change'));
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+  });
+
+  test('Save output shows a "save configuration first" hint instead of the picker', () => {
+    document.getElementById('btn-save-output').click();
+
+    expect(document.getElementById('save-output-picker').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('save-output-no-configs-hint').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('btn-save-output-confirm').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('btn-save-output-go-to-save-config').classList.contains('hidden')).toBe(false);
+  });
+
+  test('the hint\'s shortcut closes modal-save-output and opens modal-save-config instead', () => {
+    document.getElementById('btn-save-output').click();
+    document.getElementById('btn-save-output-go-to-save-config').click();
+
+    expect(document.getElementById('modal-save-output').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('modal-save-config').classList.contains('hidden')).toBe(false);
+  });
+});
+
 describe('reportBug end-to-end via the COMPANION_ERROR screen button', () => {
   let capturedListener;
 
@@ -5875,7 +6741,10 @@ describe('COMPANION_ERROR screen: manual companion URL override', () => {
     await flushMicrotasks();
 
     expect(storageSet).toHaveBeenCalledWith({ companionUrlOverride: 'http://localhost:5050' });
-    expect(global.fetch).toHaveBeenLastCalledWith('http://localhost:5050/health');
+    // Issue #141: a successful health check now also kicks off a
+    // fire-and-forget GET /configs?url=... (fetchSavedConfigs) — so the
+    // health request is no longer necessarily the *last* fetch call.
+    expect(global.fetch).toHaveBeenCalledWith('http://localhost:5050/health');
     expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
   });
 
@@ -5886,7 +6755,7 @@ describe('COMPANION_ERROR screen: manual companion URL override', () => {
     document.getElementById('btn-retry').click();
     await flushMicrotasks();
 
-    expect(global.fetch).toHaveBeenLastCalledWith('http://localhost:5050/health');
+    expect(global.fetch).toHaveBeenCalledWith('http://localhost:5050/health');
   });
 
   test('resetting clears the stored override and retries against the default address', async () => {

@@ -44,14 +44,16 @@ flowchart LR
         CS <-- chrome.runtime messages --> SW
         SW <-- chrome.runtime messages --> SP
     end
-    SP -- "HTTP: GET /health, POST /generate" --> Companion
+    SP -- "HTTP: GET /health, POST /generate,\nPOST/GET/DELETE /configs,\nPOST/GET/DELETE /configs/{id}/outputs" --> Companion
     subgraph Companion["Companion app (.NET 10 process)"]
         direction TB
         Program["Program.cs\n(minimal API)"]
         Plan["ScrapingPlanBuilder /\nScrapingPlanValidator"]
         Gen["ICodeGenerator\n(Python* code generators)"]
         Ver["IScriptVerifier\n(PythonScriptVerifier)"]
+        Store["SavedConfigStore\n(SQLite, Issue #141/#202)"]
         Program --> Plan --> Gen --> Ver
+        Program --> Store
     end
     Ver -- "spawns" --> PySub["python3 subprocess\n(the actual generated script,\nrun once as a trial)"]
 ```
@@ -387,6 +389,24 @@ before ever downloading or running the script themselves.
   (`BuildCsvPreview`/`BuildXmlPreview`/`ParseCsvLine`), `Program.cs` (the
   `IncludePreview == true` response branch)
 
+### 2.8a Download the full trial-run output (Issue #161)
+
+A second, independent opt-in checkbox — the complete, uncapped counterpart to
+§2.8's capped preview — lets the user download the trial run's actual
+`output.csv`/`.xml`/`.json` directly from the `DONE` screen, with no local
+Python/Playwright install needed to run the generated script themselves.
+`PythonScriptVerifier` reads the raw file text at each of its three success
+paths rather than re-deriving it from the already-parsed/capped preview data,
+so the download is byte-identical to what the script wrote.
+
+- Extension: `popup/popup.js` (`_state.includeOutputFile`, `_state.outputFile`,
+  `triggerOutputFileDownload`, the `btn-download-output` visibility toggle)
+- Companion: `IR/ScrapingConfig.cs` (`IncludeOutputFile`),
+  `Backends/ScriptVerificationResult.cs` (`OutputFileContent`/`OutputFileName`),
+  `Backends/IScriptVerifier.cs`/`Backends/Python/PythonScriptVerifier.cs` (the
+  `includeOutputFile` parameter), `Program.cs` (the widened JSON-envelope
+  condition, `outputFile` response key)
+
 ### 2.9 robots.txt check
 
 A one-click check of whether the currently inspected page is allowed or
@@ -459,6 +479,65 @@ report instead of describing it by hand.
 
 - Extension: `popup/popup.js` (`buildConfigExport`, `downloadConfigExport`) — reuses
   `buildScrapingConfig` verbatim, no companion involvement
+
+### 2.14a Local saved-configuration history (Issue #141)
+
+The opt-in counterpart to the export above, for a site scraped repeatedly:
+"Speichern" persists the current Fields/Groups/Api configuration into a small
+local SQLite database on the companion side (one row per save, scoped by the
+saved URL's hostname), and the idle screen's "Gespeicherte Konfigurationen"
+panel lists/loads/deletes past saves for whichever site the popup is currently
+looking at. "Laden" restores everything `buildScrapingConfig` captures
+(fields/groups/apiConfig/engine/browserActions/changeDetection/proxy/
+pagination/hardening/persistentSession/output settings) except the `url`
+itself — the live browser tab's URL always stays authoritative, so loading an
+old config never navigates the popup away from the page it's actually
+inspecting. Deleting a saved entry is the one destructive action in this popup
+that needs an inline confirm (a second click), since it's the one action that's
+persisted outside the current session. Purely local/additive — no data ever
+leaves the user's machine, same trust boundary as `/generate` itself; an older
+companion without `/configs` (or a network hiccup) just leaves the panel
+empty, no error shown.
+
+- Extension: `popup/popup.js` (`fetchSavedConfigs`, `saveCurrentConfig`,
+  `loadSavedConfig`, `deleteSavedConfig`, `renderSavedConfigsList`,
+  `requestDeleteSavedConfig`/`cancelDeleteSavedConfig`), `popup/
+  config-import.js` (`applyConfigToState` — the reverse of
+  `buildScrapingConfig`/`buildConfigExport`)
+- Companion: `SavedConfigStore.cs` (SQLite-backed, `Host`-scoped lookup —
+  the config JSON itself is stored and returned opaquely, never deserialized
+  into `ScrapingConfig`), `Program.cs` (`POST /configs`, `GET
+  /configs?url=...`, `GET /configs/{id}`, `DELETE /configs/{id}`)
+
+### 2.14b Persist and browse run outputs (Issue #202)
+
+Links Issue #161's own "download the full trial-run output" to Issue #141's
+saved-configuration history above: "Output speichern" on the `DONE` screen
+saves the current trial run's actual, complete output (the same content
+"Download data" already downloads) into a second SQLite table, linked by
+foreign key to an already-saved configuration — so a site scraped repeatedly
+can accumulate more than one past result to look back at, instead of only
+ever having its most recent download. Each row in the "Saved
+configurations" panel gains its own expandable "Outputs" sub-panel listing
+that config's own saved outputs (download/delete, same inline-confirm-delete
+pattern the config row itself uses). Deleting a saved configuration cascades
+to its own saved outputs on the database side (`ON DELETE CASCADE`) rather
+than needing the extension/companion application layer to clean them up
+first. Storage/browse/download only — evaluating hardening checks against a
+saved output is a separate, not-yet-implemented issue (#207).
+
+- Extension: `popup/popup.js` (`saveCurrentOutput`, `fetchSavedOutputs`,
+  `toggleSavedConfigOutputs`, `downloadSavedOutput`,
+  `requestDeleteSavedOutput`/`cancelDeleteSavedOutput`/`deleteSavedOutput`,
+  `renderSaveOutputModal`, `openSaveConfigModal`, `downloadFile` — the
+  latter two extracted out of Issue #141/#161's own `btn-save-config` click
+  handler and `triggerOutputFileDownload` respectively, for reuse from this
+  feature's own modal/download action)
+- Companion: `SavedConfigStore.cs` (`SavedOutputs` table, `SavedConfigId`
+  foreign key with `ON DELETE CASCADE`, `OpenConnection()` enabling `PRAGMA
+  foreign_keys` for every query so that cascade actually fires), `Program.cs`
+  (`POST/GET /configs/{configId}/outputs`, `GET/DELETE
+  /configs/{configId}/outputs/{id}`)
 
 ### 2.15 Configurable script/output filenames
 

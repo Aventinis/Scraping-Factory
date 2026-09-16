@@ -68,6 +68,9 @@ const {
 const { renderTransformList, wireTransformList, renderTransformPreview } =
   typeof require !== 'undefined' ? require('./field-transforms-ui') : self.SFFieldTransformsUI;
 
+const { applyConfigToState } =
+  typeof require !== 'undefined' ? require('./config-import') : self.SFConfigImport;
+
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (e) => log('UNCAUGHT_ERROR', e.message));
   window.addEventListener('unhandledrejection', (e) => log('UNHANDLED_REJECTION', String(e.reason)));
@@ -331,11 +334,54 @@ let _state = {
   // it's a per-generate opt-in, not a sticky preference).
   includeDataPreview: false,
   dataPreview:        null, // the companion's ScriptPreviewData from the last successful /generate with includeDataPreview on, or null
+  // Issue #161: opt-in full trial-run output download — the complete,
+  // uncapped counterpart to includeDataPreview/dataPreview above (they're
+  // independent, either/both/neither may be on). Not persisted, always off
+  // on popup reopen, same per-generate-opt-in treatment as includeDataPreview.
+  includeOutputFile:  false,
+  outputFile:         null, // {fileName, content} from the last successful /generate with includeOutputFile on, or null
   // Issue #86: opt-in Json output, mode-independent (like includeDataPreview
   // above) — not persisted, always off on popup reopen; a per-generate
   // choice, not a sticky preference. See buildScrapingConfig for exactly
   // what this adds/replaces per mode.
   useJsonOutput:      false,
+  // Issue #141: local SQLite-backed configuration history. savedConfigs is
+  // null before the first GET /configs?url=... for the current tab
+  // completes (or if it fails — an older companion without this route, a
+  // network hiccup — the panel just stays empty, non-fatal, same
+  // "optional companion capability" treatment robots.txt checking gets),
+  // else the list of {id, url, name, savedAt} summaries scoped to the
+  // current page's hostname. Re-fetched fresh each time the IDLE screen's
+  // url becomes known (see checkCompanion) — pull-based, not persisted,
+  // same reasoning as apiEntries above (this list can change on the
+  // companion side, e.g. from a config saved in a previous popup session).
+  savedConfigs:              null,
+  savedConfigsLoading:       false,
+  // Set to a saved config's id right after its own "Delete" button is first
+  // clicked, turning that one row into an inline "Delete? Yes/No" — a
+  // second confirming click is required before DELETE /configs/{id} is
+  // actually sent, since this is the one destructive action in the popup
+  // that's persisted outside the current session (every other "Remove"/"−"
+  // button here acts on in-memory draft state only). Reset on confirm,
+  // cancel, or navigating away from IDLE.
+  savedConfigsPendingDeleteId: null,
+  saveConfigModalOpen:       false,
+  // Issue #202: a saved run's actual output data, linked to a saved config.
+  // saveOutputModalOpen opens modal-save-output from the DONE screen's
+  // "Save output" button (only shown alongside btn-download-output, i.e.
+  // only once _state.outputFile is actually set). savedConfigsExpandedId is
+  // the id of whichever saved-configs-list row currently has its own
+  // outputs sub-panel open (accordion-style, at most one at a time);
+  // savedOutputs holds that row's fetched {id, savedConfigId, name,
+  // fileName, savedAt} summaries (null while collapsed/not yet loaded, same
+  // "pull-based, not persisted" treatment savedConfigs itself already
+  // gets). savedOutputsPendingDeleteId mirrors savedConfigsPendingDeleteId's
+  // own inline-confirm pattern, scoped to a row inside that sub-panel.
+  saveOutputModalOpen:         false,
+  savedConfigsExpandedId:      null,
+  savedOutputs:                null,
+  savedOutputsLoading:         false,
+  savedOutputsPendingDeleteId: null,
 };
 
 const DOM_TREE_TIMEOUT_MS = 5000;
@@ -602,7 +648,7 @@ function buildScrapingConfig(
   url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
   additionalUrls = [], changeDetection = null, proxy = null, hardening = null, pagination = null,
-  persistentSession = false,
+  persistentSession = false, includeOutputFile = false,
 ) {
   const engineFields = engine === 'Browser'
     ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
@@ -624,13 +670,17 @@ function buildScrapingConfig(
   // section is visible (Engine=Browser), and the companion rejects the
   // combination server-side regardless (see ScrapingPlanValidator).
   const persistentSessionFields = persistentSession ? { persistentSession: true } : {};
+  // Issue #161: mirrors previewFields exactly — only included when true, so
+  // the default (checkbox unchecked) request stays byte-for-byte identical
+  // to before this existed. See companion's ScrapingConfig.IncludeOutputFile.
+  const outputFileFields = includeOutputFile ? { includeOutputFile: true } : {};
 
   if (mode === 'container') {
     return {
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields,
+      ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
     };
   }
   if (mode === 'api') {
@@ -638,7 +688,7 @@ function buildScrapingConfig(
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields,
+      ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
     };
   }
   return {
@@ -653,7 +703,7 @@ function buildScrapingConfig(
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
     ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields,
-    ...hardeningFields, ...paginationFields, ...persistentSessionFields,
+    ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
   };
 }
 
@@ -667,13 +717,14 @@ function buildConfigExport(
   url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false, additionalUrls = [],
   changeDetection = null, proxy = null, hardening = null, pagination = null, persistentSession = false,
+  includeOutputFile = false,
 ) {
   return {
     exportedAt: new Date().toISOString(),
     extensionVersion: manifest.version || '?',
     config: buildScrapingConfig(
       url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview,
-      useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession,
+      useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession, includeOutputFile,
     ),
   };
 }
@@ -967,6 +1018,8 @@ function render() {
   hide('modal-api-group-new');
   hide('modal-api-body-parameter-new');
   hide('modal-api-field-transforms');
+  hide('modal-save-config');
+  hide('modal-save-output');
 
   const screenKey = {
     [STATES.CHECKING_COMPANION]: 'checking',
@@ -979,6 +1032,12 @@ function render() {
   }[_state.current];
 
   if (screenKey) show(`screen-${screenKey}`);
+
+  // modal-save-config is a global overlay, not scoped to the IDLE screen's
+  // own render block below — Issue #202's "save configuration first"
+  // shortcut (openSaveConfigModal) can now also open it from the DONE
+  // screen, so this check must run regardless of which screen is current.
+  if (_state.saveConfigModalOpen) show('modal-save-config');
 
   if (_state.current === STATES.COMPANION_ERROR) {
     const currentUrlEl = document.getElementById('error-current-url');
@@ -1054,6 +1113,8 @@ function render() {
     if (genBtn) genBtn.disabled = !hasConfig;
     const exportBtn = document.getElementById('btn-export-config');
     if (exportBtn) exportBtn.disabled = !hasConfig;
+    const saveConfigBtn = document.getElementById('btn-save-config');
+    if (saveConfigBtn) saveConfigBtn.disabled = !hasConfig;
 
     const previewBtn = document.getElementById('btn-preview');
     if (previewBtn) {
@@ -1165,6 +1226,9 @@ function render() {
 
     const dataPreviewToggle = document.getElementById('toggle-include-data-preview');
     if (dataPreviewToggle) dataPreviewToggle.checked = _state.includeDataPreview;
+
+    const outputFileToggle = document.getElementById('toggle-include-output-file');
+    if (outputFileToggle) outputFileToggle.checked = _state.includeOutputFile;
 
     // Issue #83: hidden for API mode — Api builds its own request URL from
     // apiConfig.urlTemplate and never reads this list at all (the companion
@@ -1294,6 +1358,13 @@ function render() {
     document.getElementById('btn-hardening-required-fields-error')?.classList.toggle('active', _state.hardening.requiredFields.severity === 'Error');
     renderHardeningRequiredFieldsList();
 
+    // Issue #141: saved-configs-section is scoped to the current page's
+    // hostname (fetchSavedConfigs, kicked off from checkCompanion) —
+    // rendered every pass like the other IDLE-only lists above rather than
+    // only on state transitions, so an in-progress delete confirmation
+    // (savedConfigsPendingDeleteId) re-renders correctly too.
+    renderSavedConfigsList();
+
     if (_state.containerModalOpen) {
       show('modal-container-new');
       const nameInput = document.getElementById('input-container-name');
@@ -1301,6 +1372,7 @@ function render() {
       const singleRadio = document.getElementById('radio-container-single');
       if (singleRadio) singleRadio.checked = true;
     }
+
   }
 
   if (_state.current === STATES.API_CONFIG && _state.apiConfigDraft) {
@@ -1346,7 +1418,24 @@ function render() {
       const filename = `${sanitizeFileNameBase(_state.scriptFileName, 'scraper')}.py`;
       downloadBtn.textContent = t('done.downloadBtn', { filename });
     }
+    // Issue #161: only shown at all when includeOutputFile actually
+    // produced a file — an older/incompatible companion, or the toggle
+    // simply being off, both look identical here (outputFile stays null).
+    const downloadOutputBtn = document.getElementById('btn-download-output');
+    if (downloadOutputBtn) {
+      downloadOutputBtn.classList.toggle('hidden', !_state.outputFile);
+      if (_state.outputFile) downloadOutputBtn.textContent = t('done.downloadOutputBtn', { filename: _state.outputFile.fileName });
+    }
+    // Issue #202: same visibility gate as btn-download-output — saving a
+    // run's output only makes sense once one was actually produced.
+    const saveOutputBtn = document.getElementById('btn-save-output');
+    if (saveOutputBtn) saveOutputBtn.classList.toggle('hidden', !_state.outputFile);
     renderDataPreview(_state.dataPreview);
+
+    if (_state.saveOutputModalOpen) {
+      show('modal-save-output');
+      renderSaveOutputModal();
+    }
   }
 
   // Show modal when an element has been captured during selection. Editing
@@ -1633,6 +1722,95 @@ function renderHardeningRequiredFieldsList(
   if (select) select.disabled = available.length === 0;
 }
 
+// Issue #141: renders _state.savedConfigs (scoped to the current page's
+// hostname, see fetchSavedConfigs) as a Load/Delete row per entry. A row
+// whose id matches savedConfigsPendingDeleteId swaps to an inline
+// "Delete? Yes/No" confirm instead — see requestDeleteSavedConfig/
+// deleteSavedConfig's own doc comments on why this one action gets a
+// confirm step when nothing else in this popup does.
+function renderSavedConfigsList() {
+  const listEl = document.getElementById('saved-configs-list');
+  const emptyEl = document.getElementById('saved-configs-empty');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+
+  const savedConfigs = _state.savedConfigs || [];
+  if (emptyEl) emptyEl.classList.toggle('hidden', savedConfigs.length > 0);
+
+  savedConfigs.forEach((entry) => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'saved-config-row';
+    const savedDate = new Date(entry.savedAt);
+    const savedAtText = Number.isNaN(savedDate.getTime()) ? entry.savedAt : savedDate.toLocaleString();
+
+    if (_state.savedConfigsPendingDeleteId === entry.id) {
+      rowEl.innerHTML =
+        `<span class="saved-config-name">${escapeHtml(entry.name)}</span>` +
+        `<span class="saved-config-confirm-text">${escapeHtml(t('idle.savedConfigsDeleteConfirm'))}</span>` +
+        `<button type="button" class="btn-danger btn-tiny btn-saved-config-delete-confirm" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteConfirmYes'))}</button>` +
+        `<button type="button" class="btn-secondary btn-tiny btn-saved-config-delete-cancel" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteConfirmNo'))}</button>`;
+    } else {
+      // Issue #202: "Outputs" toggles a sub-panel of this config's own
+      // saved run outputs, appended right after the row below.
+      const outputsExpanded = _state.savedConfigsExpandedId === entry.id;
+      rowEl.innerHTML =
+        `<span class="saved-config-name" title="${escapeHtml(entry.url)}">${escapeHtml(entry.name)}</span>` +
+        `<span class="saved-config-date">${escapeHtml(savedAtText)}</span>` +
+        `<button type="button" class="btn-secondary btn-tiny btn-saved-config-load" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsLoadBtn'))}</button>` +
+        `<button type="button" class="btn-secondary btn-tiny btn-saved-config-outputs-toggle" data-id="${entry.id}">${escapeHtml(t(outputsExpanded ? 'idle.savedConfigsOutputsHideBtn' : 'idle.savedConfigsOutputsBtn'))}</button>` +
+        `<button type="button" class="btn-danger btn-tiny btn-saved-config-delete" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteBtn'))}</button>`;
+    }
+    listEl.appendChild(rowEl);
+
+    if (_state.savedConfigsExpandedId === entry.id) {
+      listEl.appendChild(buildSavedOutputsPanelEl(entry.id));
+    }
+  });
+}
+
+// Issue #202: the sub-panel for one saved-config row's own saved outputs
+// (see toggleSavedConfigOutputs/fetchSavedOutputs) — a row per output with
+// Download/Delete, the same inline-confirm-before-delete pattern
+// renderSavedConfigsList's own rows already use.
+function buildSavedOutputsPanelEl(configId) {
+  const panelEl = document.createElement('div');
+  panelEl.className = 'saved-outputs-panel';
+
+  if (_state.savedOutputsLoading || _state.savedOutputs === null) {
+    panelEl.innerHTML = `<p class="saved-outputs-loading">${escapeHtml(t('idle.savedOutputsLoading'))}</p>`;
+    return panelEl;
+  }
+
+  if (_state.savedOutputs.length === 0) {
+    panelEl.innerHTML = `<p class="saved-outputs-empty">${escapeHtml(t('idle.savedOutputsEmpty'))}</p>`;
+    return panelEl;
+  }
+
+  _state.savedOutputs.forEach((entry) => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'saved-output-row';
+    const savedDate = new Date(entry.savedAt);
+    const savedAtText = Number.isNaN(savedDate.getTime()) ? entry.savedAt : savedDate.toLocaleString();
+
+    if (_state.savedOutputsPendingDeleteId === entry.id) {
+      rowEl.innerHTML =
+        `<span class="saved-output-name">${escapeHtml(entry.name)}</span>` +
+        `<span class="saved-config-confirm-text">${escapeHtml(t('idle.savedOutputsDeleteConfirm'))}</span>` +
+        `<button type="button" class="btn-danger btn-tiny btn-saved-output-delete-confirm" data-config-id="${configId}" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteConfirmYes'))}</button>` +
+        `<button type="button" class="btn-secondary btn-tiny btn-saved-output-delete-cancel" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteConfirmNo'))}</button>`;
+    } else {
+      rowEl.innerHTML =
+        `<span class="saved-output-name" title="${escapeHtml(entry.fileName)}">${escapeHtml(entry.name)}</span>` +
+        `<span class="saved-config-date">${escapeHtml(savedAtText)}</span>` +
+        `<button type="button" class="btn-secondary btn-tiny btn-saved-output-download" data-config-id="${configId}" data-id="${entry.id}">${escapeHtml(t('idle.savedOutputsDownloadBtn'))}</button>` +
+        `<button type="button" class="btn-danger btn-tiny btn-saved-output-delete" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteBtn'))}</button>`;
+    }
+    panelEl.appendChild(rowEl);
+  });
+
+  return panelEl;
+}
+
 // ── DOM tree view ────────────────────────────────────────────────────────────
 // Rendered imperatively (not through render()) so a user's expand/collapse
 // clicks survive unrelated state updates (e.g. adding/removing a field).
@@ -1791,6 +1969,10 @@ async function checkCompanion() {
     const url = tabs[0]?.url ?? '';
     log('TAB_URL', url);
     setState(STATES.IDLE, { url });
+    // Issue #141: fire-and-forget — fetchSavedConfigs patches state itself
+    // once (or if) it resolves, no need to await/block the IDLE transition
+    // on it.
+    if (url) fetchSavedConfigs(url);
   } catch (err) {
     log('HEALTH_CHECK FAIL', err.message);
     setLastError(err.message, 'Companion connection');
@@ -1846,6 +2028,206 @@ async function checkRobotsTxt() {
   }
 }
 
+// Issue #141: local SQLite-backed configuration history — plain fetch
+// wrappers against the companion's /configs endpoints, same style as
+// generate()/checkCompanion() above.
+
+async function fetchSavedConfigs(url) {
+  patchState({ savedConfigsLoading: true });
+  try {
+    const res = await fetch(`${companionUrl}/configs?url=${encodeURIComponent(url)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const savedConfigs = await res.json();
+    log('SAVED_CONFIGS_LIST', savedConfigs.length);
+    patchState({ savedConfigs, savedConfigsLoading: false });
+  } catch (err) {
+    // Non-fatal: an older companion without /configs, or a transient
+    // network hiccup — this is an optional, secondary capability, so the
+    // panel just stays empty instead of surfacing an error toast for it.
+    log('SAVED_CONFIGS_LIST FAIL', err.message);
+    patchState({ savedConfigs: [], savedConfigsLoading: false });
+  }
+}
+
+async function saveCurrentConfig(name) {
+  const config = buildScrapingConfig(
+    _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
+    _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
+    _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy, _state.hardening,
+    _state.pagination, _state.persistentSession,
+  );
+  log('SAVE_CONFIG', name);
+  try {
+    const res = await fetch(`${companionUrl}/configs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: _state.url, name, config }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    log('SAVE_CONFIG OK');
+    patchState({ saveConfigModalOpen: false });
+    showToast(t('toast.configSaved'), null, 'info');
+    await fetchSavedConfigs(_state.url);
+  } catch (err) {
+    log('SAVE_CONFIG FAIL', err.message);
+    showToast(t('toast.configSaveFailed', { message: err.message }), 'Save configuration');
+  }
+}
+
+// Issue #141: applies a saved config back into _state — the reverse of
+// buildConfigExport/buildScrapingConfig (see applyConfigToState). Reuses
+// setState (not patchState) so the applied config is persisted the same way
+// any other IDLE-screen edit already is, surviving a subsequent popup
+// close/reopen.
+async function loadSavedConfig(id) {
+  log('LOAD_SAVED_CONFIG', id);
+  try {
+    const res = await fetch(`${companionUrl}/configs/${id}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const record = await res.json();
+    setState(STATES.IDLE, applyConfigToState(record.config));
+    showToast(t('toast.configLoaded', { name: record.name }), null, 'info');
+  } catch (err) {
+    log('LOAD_SAVED_CONFIG FAIL', err.message);
+    showToast(t('toast.configLoadFailed', { message: err.message }), 'Load configuration');
+  }
+}
+
+function requestDeleteSavedConfig(id) {
+  patchState({ savedConfigsPendingDeleteId: id });
+}
+
+function cancelDeleteSavedConfig() {
+  patchState({ savedConfigsPendingDeleteId: null });
+}
+
+async function deleteSavedConfig(id) {
+  log('DELETE_SAVED_CONFIG', id);
+  try {
+    const res = await fetch(`${companionUrl}/configs/${id}`, { method: 'DELETE' });
+    if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
+    log('DELETE_SAVED_CONFIG OK');
+    patchState({ savedConfigsPendingDeleteId: null });
+    showToast(t('toast.configDeleted'), null, 'info');
+    await fetchSavedConfigs(_state.url);
+  } catch (err) {
+    log('DELETE_SAVED_CONFIG FAIL', err.message);
+    showToast(t('toast.configDeleteFailed', { message: err.message }), 'Delete configuration');
+  }
+}
+
+// Opens modal-save-config prefilled with the current page's hostname — the
+// exact same flow the idle screen's own "Save configuration" button
+// triggers, extracted so Issue #202's save-output modal can offer it as a
+// shortcut when there's no saved config yet to link an output to.
+function openSaveConfigModal() {
+  log('OPEN save-config modal');
+  let defaultName = '';
+  try {
+    defaultName = new URL(_state.url).hostname;
+  } catch {
+    // _state.url isn't a well-formed absolute URL — defaultName stays ''
+    // and the input is simply left blank, same as any other unreachable
+    // default elsewhere in this popup.
+  }
+  patchState({ saveOutputModalOpen: false, saveConfigModalOpen: true });
+  const input = document.getElementById('input-save-config-name');
+  if (input) input.value = defaultName;
+}
+
+// Issue #202: a run's actual output data (_state.outputFile), saved as an
+// explicit, opt-in action linked to an already-saved configuration — plain
+// fetch wrappers against the companion's /configs/{id}/outputs endpoints,
+// same style as fetchSavedConfigs/saveCurrentConfig above.
+
+async function saveCurrentOutput(configId, name) {
+  if (!_state.outputFile) return;
+  const { fileName, content } = _state.outputFile;
+  log('SAVE_OUTPUT', configId, name);
+  try {
+    const res = await fetch(`${companionUrl}/configs/${configId}/outputs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, fileName, content }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    log('SAVE_OUTPUT OK');
+    patchState({ saveOutputModalOpen: false });
+    showToast(t('toast.outputSaved'), null, 'info');
+    // If that config's own outputs sub-panel happens to be open right now,
+    // refresh it so the newly-saved output shows up without a manual
+    // collapse/re-expand.
+    if (_state.savedConfigsExpandedId === configId) await fetchSavedOutputs(configId);
+  } catch (err) {
+    log('SAVE_OUTPUT FAIL', err.message);
+    showToast(t('toast.outputSaveFailed', { message: err.message }), 'Save output');
+  }
+}
+
+async function fetchSavedOutputs(configId) {
+  patchState({ savedOutputsLoading: true });
+  try {
+    const res = await fetch(`${companionUrl}/configs/${configId}/outputs`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const savedOutputs = await res.json();
+    log('SAVED_OUTPUTS_LIST', configId, savedOutputs.length);
+    patchState({ savedOutputs, savedOutputsLoading: false });
+  } catch (err) {
+    log('SAVED_OUTPUTS_LIST FAIL', err.message);
+    patchState({ savedOutputs: [], savedOutputsLoading: false });
+  }
+}
+
+// Accordion-style: expanding one saved-config row's outputs panel collapses
+// whichever other row was previously expanded.
+function toggleSavedConfigOutputs(configId) {
+  if (_state.savedConfigsExpandedId === configId) {
+    patchState({ savedConfigsExpandedId: null, savedOutputs: null, savedOutputsPendingDeleteId: null });
+    return;
+  }
+  log('TOGGLE saved-config-outputs', configId);
+  patchState({
+    savedConfigsExpandedId: configId, savedOutputs: null, savedOutputsPendingDeleteId: null,
+  });
+  fetchSavedOutputs(configId);
+}
+
+async function downloadSavedOutput(configId, id) {
+  log('DOWNLOAD_SAVED_OUTPUT', configId, id);
+  try {
+    const res = await fetch(`${companionUrl}/configs/${configId}/outputs/${id}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const record = await res.json();
+    downloadFile(record.fileName, record.content);
+  } catch (err) {
+    log('DOWNLOAD_SAVED_OUTPUT FAIL', err.message);
+    showToast(t('toast.outputLoadFailed', { message: err.message }), 'Load output');
+  }
+}
+
+function requestDeleteSavedOutput(id) {
+  patchState({ savedOutputsPendingDeleteId: id });
+}
+
+function cancelDeleteSavedOutput() {
+  patchState({ savedOutputsPendingDeleteId: null });
+}
+
+async function deleteSavedOutput(configId, id) {
+  log('DELETE_SAVED_OUTPUT', configId, id);
+  try {
+    const res = await fetch(`${companionUrl}/configs/${configId}/outputs/${id}`, { method: 'DELETE' });
+    if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
+    log('DELETE_SAVED_OUTPUT OK');
+    patchState({ savedOutputsPendingDeleteId: null });
+    showToast(t('toast.outputDeleted'), null, 'info');
+    await fetchSavedOutputs(configId);
+  } catch (err) {
+    log('DELETE_SAVED_OUTPUT FAIL', err.message);
+    showToast(t('toast.outputDeleteFailed', { message: err.message }), 'Delete output');
+  }
+}
+
 // The companion actually generates and runs the script against the live
 // page before handing it out (same rendering stage, and now the exact
 // artifact the user would download) and responds 422 with a message when
@@ -1864,7 +2246,7 @@ async function generate() {
     _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
     _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy, _state.hardening,
-    _state.pagination, _state.persistentSession,
+    _state.pagination, _state.persistentSession, _state.includeOutputFile,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
@@ -1904,21 +2286,26 @@ async function generate() {
     }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    // Issue #122: only when includeDataPreview asked for it does the
-    // companion respond with a JSON envelope ({ script, preview }) instead
-    // of the plain script text — the client already knows which one it
-    // requested, no need to sniff the response's Content-Type.
+    // Issue #122/#161: only when includeDataPreview or includeOutputFile
+    // asked for it does the companion respond with a JSON envelope
+    // ({ script, preview, outputFile }) instead of the plain script text —
+    // the client already knows which one(s) it requested, no need to sniff
+    // the response's Content-Type.
     let scriptText;
     let dataPreview = null;
-    if (_state.includeDataPreview) {
+    let outputFile = null;
+    if (_state.includeDataPreview || _state.includeOutputFile) {
       const data = await res.json();
       scriptText = data.script;
       dataPreview = data.preview ?? null;
+      outputFile = data.outputFile ?? null;
     } else {
       scriptText = await res.text();
     }
-    log('GENERATE OK', `${scriptText.length} chars` + (dataPreview ? `, preview: ${dataPreview.totalCount} rows/elements` : ''));
-    setState(STATES.DONE, { scriptText, dataPreview });
+    log('GENERATE OK', `${scriptText.length} chars` +
+      (dataPreview ? `, preview: ${dataPreview.totalCount} rows/elements` : '') +
+      (outputFile ? `, outputFile: ${outputFile.fileName} (${outputFile.content.length} chars)` : ''));
+    setState(STATES.DONE, { scriptText, dataPreview, outputFile });
   } catch (err) {
     log('GENERATE FAIL', err.message);
     setState(STATES.IDLE);
@@ -1938,6 +2325,35 @@ function triggerDownload() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(objectUrl);
+}
+
+// Issue #161: downloads the companion's actual, complete trial-run output
+// (_state.outputFile, set by generate() when includeOutputFile was on) —
+// the full dataset, not the capped preview sample. MIME type is picked from
+// the file's own extension purely for a nicer browser "open with" hint;
+// the `download` attribute forces a save regardless.
+const OUTPUT_FILE_MIME_TYPES = { csv: 'text/csv', xml: 'application/xml', json: 'application/json' };
+
+// Extracted so Issue #202's "download a saved output" action (a fetched
+// SavedOutputRecord, not _state.outputFile) can reuse the exact same
+// MIME-guessing/anchor-click mechanics.
+function downloadFile(fileName, content) {
+  log('DOWNLOAD_OUTPUT', fileName);
+  const extension = fileName.split('.').pop()?.toLowerCase();
+  const blob = new Blob([content], { type: OUTPUT_FILE_MIME_TYPES[extension] || 'text/plain' });
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(objectUrl);
+}
+
+function triggerOutputFileDownload() {
+  if (!_state.outputFile) return;
+  downloadFile(_state.outputFile.fileName, _state.outputFile.content);
 }
 
 // Lets a user hand over the current Fields/Groups configuration when
@@ -1980,6 +2396,32 @@ function downloadConfigExport() {
 // actually populated (xmlSample/jsonSample vs. columns/rows) rather than by
 // outputFormat alone — outputFormat is still shown to the user via i18n
 // copy, but no longer drives the branch itself.
+// Issue #202: populates modal-save-output — a config picker + name input
+// when there's at least one saved config for the current hostname already
+// (_state.savedConfigs, fetched the same way the "Saved configurations"
+// panel's own list already is), or a hint + shortcut into modal-save-config
+// otherwise, since an output can't be linked to a config that doesn't
+// exist yet.
+function renderSaveOutputModal() {
+  const savedConfigs = _state.savedConfigs || [];
+  const hasConfigs = savedConfigs.length > 0;
+
+  document.getElementById('save-output-picker')?.classList.toggle('hidden', !hasConfigs);
+  document.getElementById('save-output-no-configs-hint')?.classList.toggle('hidden', hasConfigs);
+  document.getElementById('btn-save-output-go-to-save-config')?.classList.toggle('hidden', hasConfigs);
+  document.getElementById('btn-save-output-confirm')?.classList.toggle('hidden', !hasConfigs);
+  if (!hasConfigs) return;
+
+  const selectEl = document.getElementById('select-save-output-config');
+  if (selectEl) {
+    selectEl.innerHTML = savedConfigs.map((entry) => {
+      const savedDate = new Date(entry.savedAt);
+      const savedAtText = Number.isNaN(savedDate.getTime()) ? entry.savedAt : savedDate.toLocaleString();
+      return `<option value="${entry.id}">${escapeHtml(entry.name)} (${escapeHtml(savedAtText)})</option>`;
+    }).join('');
+  }
+}
+
 function renderDataPreview(preview) {
   const panel = document.getElementById('data-preview-panel');
   if (!panel) return;
@@ -2622,6 +3064,11 @@ function wireEvents() {
     patchState({ includeDataPreview: e.target.checked });
   });
 
+  document.getElementById('toggle-include-output-file')?.addEventListener('change', (e) => {
+    log('BTN toggle-include-output-file', e.target.checked);
+    patchState({ includeOutputFile: e.target.checked });
+  });
+
   document.getElementById('toggle-output-json')?.addEventListener('change', (e) => {
     log('BTN toggle-output-json', e.target.checked);
     patchState({ useJsonOutput: e.target.checked });
@@ -2995,7 +3442,112 @@ function wireEvents() {
     generate();
   });
   document.getElementById('btn-download')?.addEventListener('click', triggerDownload);
+  document.getElementById('btn-download-output')?.addEventListener('click', triggerOutputFileDownload);
   document.getElementById('btn-export-config')?.addEventListener('click', downloadConfigExport);
+
+  // Issue #202: "Save output" (DONE screen) opens modal-save-output — a
+  // config picker + name input when there's at least one saved config for
+  // this hostname already, or a hint + shortcut into modal-save-config
+  // otherwise (see renderSaveOutputModal, called from render()).
+  document.getElementById('btn-save-output')?.addEventListener('click', () => {
+    log('BTN save-output → open modal');
+    patchState({ saveOutputModalOpen: true });
+  });
+  document.getElementById('btn-save-output-cancel')?.addEventListener('click', () => {
+    log('BTN save-output-cancel');
+    patchState({ saveOutputModalOpen: false });
+  });
+  document.getElementById('btn-save-output-confirm')?.addEventListener('click', () => {
+    const configId = parseInt(document.getElementById('select-save-output-config')?.value, 10);
+    const name = document.getElementById('input-save-output-name')?.value.trim();
+    if (!configId || !name) return;
+    log('BTN save-output-confirm', configId, name);
+    saveCurrentOutput(configId, name);
+  });
+  document.getElementById('input-save-output-name')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const configId = parseInt(document.getElementById('select-save-output-config')?.value, 10);
+    const name = e.target.value.trim();
+    if (!configId || !name) return;
+    saveCurrentOutput(configId, name);
+  });
+  document.getElementById('btn-save-output-go-to-save-config')?.addEventListener('click', openSaveConfigModal);
+
+  // Issue #141: "Save configuration" opens modal-save-config (name input,
+  // prefilled with the current page's hostname); Load/Delete are wired via
+  // delegation on saved-configs-list below since rows are rebuilt on every
+  // render() (see renderSavedConfigsList).
+  document.getElementById('btn-save-config')?.addEventListener('click', openSaveConfigModal);
+  document.getElementById('btn-save-config-cancel')?.addEventListener('click', () => {
+    log('BTN save-config-cancel');
+    patchState({ saveConfigModalOpen: false });
+  });
+  document.getElementById('btn-save-config-confirm')?.addEventListener('click', () => {
+    const name = document.getElementById('input-save-config-name')?.value.trim();
+    if (!name) return;
+    log('BTN save-config-confirm', name);
+    saveCurrentConfig(name);
+  });
+  document.getElementById('input-save-config-name')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const name = e.target.value.trim();
+    if (!name) return;
+    saveCurrentConfig(name);
+  });
+
+  document.getElementById('saved-configs-list')?.addEventListener('click', (e) => {
+    const loadBtn = e.target.closest('.btn-saved-config-load');
+    if (loadBtn) {
+      const id = parseInt(loadBtn.dataset.id, 10);
+      log('BTN saved-config-load', id);
+      loadSavedConfig(id);
+      return;
+    }
+    const deleteBtn = e.target.closest('.btn-saved-config-delete');
+    if (deleteBtn) {
+      requestDeleteSavedConfig(parseInt(deleteBtn.dataset.id, 10));
+      return;
+    }
+    const confirmBtn = e.target.closest('.btn-saved-config-delete-confirm');
+    if (confirmBtn) {
+      deleteSavedConfig(parseInt(confirmBtn.dataset.id, 10));
+      return;
+    }
+    const cancelBtn = e.target.closest('.btn-saved-config-delete-cancel');
+    if (cancelBtn) {
+      cancelDeleteSavedConfig();
+      return;
+    }
+
+    // Issue #202: a saved config row's own "Outputs" toggle and, once
+    // expanded, its Download/Delete actions — same delegated-listener
+    // treatment as the config-level buttons above, since these rows are
+    // also rebuilt on every render() (see renderSavedConfigsList).
+    const outputsToggleBtn = e.target.closest('.btn-saved-config-outputs-toggle');
+    if (outputsToggleBtn) {
+      toggleSavedConfigOutputs(parseInt(outputsToggleBtn.dataset.id, 10));
+      return;
+    }
+    const outputDownloadBtn = e.target.closest('.btn-saved-output-download');
+    if (outputDownloadBtn) {
+      downloadSavedOutput(
+        parseInt(outputDownloadBtn.dataset.configId, 10), parseInt(outputDownloadBtn.dataset.id, 10));
+      return;
+    }
+    const outputDeleteBtn = e.target.closest('.btn-saved-output-delete');
+    if (outputDeleteBtn) {
+      requestDeleteSavedOutput(parseInt(outputDeleteBtn.dataset.id, 10));
+      return;
+    }
+    const outputConfirmBtn = e.target.closest('.btn-saved-output-delete-confirm');
+    if (outputConfirmBtn) {
+      deleteSavedOutput(
+        parseInt(outputConfirmBtn.dataset.configId, 10), parseInt(outputConfirmBtn.dataset.id, 10));
+      return;
+    }
+    const outputCancelBtn = e.target.closest('.btn-saved-output-delete-cancel');
+    if (outputCancelBtn) cancelDeleteSavedOutput();
+  });
 
   document.getElementById('btn-new-scraper')?.addEventListener('click', () => {
     log('BTN new-scraper → reset state');
@@ -3459,5 +4011,10 @@ if (typeof module !== 'undefined') {
     applyTransformsPreview, toNumberPreview, renderTransformPreview,
     refreshFlatTransformPreview, refreshExtendedTransformPreview,
     renderThemeToggle, syncModeToggleThumbs,
+    applyConfigToState, renderSavedConfigsList, fetchSavedConfigs, saveCurrentConfig, loadSavedConfig,
+    deleteSavedConfig, requestDeleteSavedConfig, cancelDeleteSavedConfig, openSaveConfigModal,
+    triggerOutputFileDownload, downloadFile,
+    saveCurrentOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
+    requestDeleteSavedOutput, cancelDeleteSavedOutput, deleteSavedOutput, renderSaveOutputModal,
   };
 }

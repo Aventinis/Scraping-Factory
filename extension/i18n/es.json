@@ -67,6 +67,21 @@
     "previewSummaryTruncated": "vista recortada (demasiadas coincidencias)",
     "exportConfigTitle": "Exportar los campos/contenedores actuales como JSON — p. ej. para un informe de error",
     "exportConfigBtn": "Exportar configuración",
+    "saveConfigTitle": "Guardar la configuración actual localmente, para volver a cargarla la próxima vez que se analice este sitio",
+    "saveConfigBtn": "Guardar configuración",
+    "savedConfigsTitle": "Configuraciones guardadas para este sitio",
+    "savedConfigsEmpty": "Aún no hay configuraciones guardadas para este sitio.",
+    "savedConfigsLoadBtn": "Cargar",
+    "savedConfigsDeleteBtn": "Eliminar",
+    "savedConfigsDeleteConfirm": "¿Eliminar esta configuración guardada?",
+    "savedConfigsDeleteConfirmYes": "Sí",
+    "savedConfigsDeleteConfirmNo": "No",
+    "savedConfigsOutputsBtn": "Salidas",
+    "savedConfigsOutputsHideBtn": "Ocultar salidas",
+    "savedOutputsEmpty": "Todavía no hay salidas guardadas para esta configuración.",
+    "savedOutputsLoading": "Cargando…",
+    "savedOutputsDownloadBtn": "Descargar",
+    "savedOutputsDeleteConfirm": "¿Eliminar esta salida guardada?",
     "scriptFilenameLabel": "Nombre del script",
     "scriptFilenamePlaceholder": "scraper",
     "outputFilenameLabel": "Nombre del archivo de salida",
@@ -78,6 +93,7 @@
     "engineBrowserTitle": "Renderiza JavaScript antes de la extracción — para páginas cargadas dinámicamente o flujos de inicio de sesión. Más lento que el motor estático.",
     "outputJsonToggle": "Salida como JSON (en lugar de CSV/XML)",
     "dataPreviewToggle": "Mostrar vista previa de los datos de la prueba",
+    "outputFileToggle": "Descargar el archivo de datos completo",
     "additionalUrlsLabel": "URLs de inicio adicionales",
     "additionalUrlsPlaceholder": "Una URL por línea (además de la página anterior)",
     "changeDetectionToggle": "Activar detección de cambios (notificar ante cambios)",
@@ -230,6 +246,8 @@
     "backBtn": "Atrás",
     "newBtn": "Nuevo",
     "downloadBtn": "Descargar {filename}",
+    "downloadOutputBtn": "Descargar datos ({filename})",
+    "saveOutputBtn": "Guardar salida",
     "dataPreviewTitle": "Vista previa de los datos de la prueba",
     "dataPreviewTruncatedCsv": "Mostrando {shown} de {total} filas — truncado",
     "dataPreviewTruncatedXml": "Extracto — no se muestran todos los datos"
@@ -269,6 +287,19 @@
       "nameLabel": "Nombre del parámetro (p. ej. \"categoria\")",
       "namePlaceholder": "Nombre"
     },
+    "saveConfig": {
+      "label": "Nombre de la configuración (p. ej. \"Listado de productos\")",
+      "namePlaceholder": "Nombre",
+      "save": "Guardar"
+    },
+    "saveOutput": {
+      "configLabel": "Vincular con configuración guardada",
+      "nameLabel": "Nombre de la salida (p. ej. \"Ejecución antes del arreglo de proxy\")",
+      "namePlaceholder": "Nombre",
+      "save": "Guardar",
+      "noConfigsHint": "Todavía no hay una configuración guardada para este sitio — guarda primero la configuración actual para poder vincular esta salida con ella.",
+      "saveConfigShortcut": "Guardar configuración"
+    },
     "matchCount": {
       "found": "{count} elemento(s) encontrado(s)"
     }
@@ -283,7 +314,18 @@
     "previewUnavailable": "No es posible la vista previa en esta página.",
     "captureUnavailable": "No es posible grabar red en esta página.",
     "invalidCompanionUrl": "Dirección no válida — incluye http:// o https://.",
-    "containerAdded": "Contenedor «{name}» añadido — {count} elemento(s) encontrado(s)"
+    "containerAdded": "Contenedor «{name}» añadido — {count} elemento(s) encontrado(s)",
+    "configSaved": "Configuración guardada.",
+    "configSaveFailed": "No se pudo guardar la configuración: {message}",
+    "configLoaded": "Configuración «{name}» cargada.",
+    "configLoadFailed": "No se pudo cargar la configuración: {message}",
+    "configDeleted": "Configuración eliminada.",
+    "configDeleteFailed": "No se pudo eliminar la configuración: {message}",
+    "outputSaved": "Salida guardada.",
+    "outputSaveFailed": "No se pudo guardar la salida: {message}",
+    "outputLoadFailed": "No se pudo cargar la salida: {message}",
+    "outputDeleted": "Salida eliminada.",
+    "outputDeleteFailed": "No se pudo eliminar la salida: {message}"
   },
   "frame": {
     "badge": "iframe",

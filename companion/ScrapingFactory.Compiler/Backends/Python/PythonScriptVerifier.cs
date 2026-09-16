@@ -63,7 +63,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
     public async Task<ScriptVerificationResult> VerifyAsync(
         string script, OutputFormat outputFormat = OutputFormat.Csv, string outputFileBaseName = "output",
         TimeSpan extraTimeout = default, IReadOnlyDictionary<string, string>? extraEnvironmentVariables = null,
-        bool includePreview = false, CancellationToken ct = default)
+        bool includePreview = false, bool includeOutputFile = false, CancellationToken ct = default)
     {
         var effectiveTimeout = _timeout + extraTimeout;
         var workDir = Directory.CreateTempSubdirectory("scrapingfactory-verify-").FullName;
@@ -141,10 +141,10 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
             }
 
             if (outputFormat == OutputFormat.Xml)
-                return VerifyXmlOutput(workDir, outputFileBaseName, includePreview);
+                return VerifyXmlOutput(workDir, outputFileBaseName, includePreview, includeOutputFile);
 
             if (outputFormat == OutputFormat.Json)
-                return VerifyJsonOutput(workDir, outputFileBaseName, includePreview);
+                return VerifyJsonOutput(workDir, outputFileBaseName, includePreview, includeOutputFile);
 
             var csvFileName = $"{outputFileBaseName}.csv";
             var csvPath = Path.Combine(workDir, csvFileName);
@@ -175,6 +175,11 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
             {
                 Success = true, RowCount = rowCount,
                 Preview = includePreview ? BuildCsvPreview(lines, rowCount) : null,
+                // Issue #161: the raw file as written, not reconstructed from
+                // `lines` (join/line-ending differences would make the
+                // download not byte-identical to what the script produced).
+                OutputFileContent = includeOutputFile ? await File.ReadAllTextAsync(csvPath, ct) : null,
+                OutputFileName = includeOutputFile ? csvFileName : null,
             };
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -192,7 +197,8 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
     // descendant element. Parse failures (e.g. an invalid XML tag name from
     // a Container-Mode Name the user typed) bubble up to VerifyAsync's outer
     // catch, same as any other unexpected exception during verification.
-    private static ScriptVerificationResult VerifyXmlOutput(string workDir, string outputFileBaseName, bool includePreview)
+    private static ScriptVerificationResult VerifyXmlOutput(
+        string workDir, string outputFileBaseName, bool includePreview, bool includeOutputFile = false)
     {
         var xmlFileName = $"{outputFileBaseName}.xml";
         var xmlPath = Path.Combine(workDir, xmlFileName);
@@ -216,6 +222,11 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
         {
             Success = true, RowCount = elementCount,
             Preview = includePreview ? BuildXmlPreview(document, elementCount) : null,
+            // Issue #161: the raw file as written, not XDocument's own
+            // re-serialization — keeps the download byte-identical to what
+            // the script actually produced.
+            OutputFileContent = includeOutputFile ? File.ReadAllText(xmlPath) : null,
+            OutputFileName = includeOutputFile ? xmlFileName : null,
         };
     }
 
@@ -226,14 +237,16 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
     // group/API tree (Groups/API-tree, the Xml analog) — which of the two
     // it is self-describes via the root's JsonNode type, so (unlike Csv vs.
     // Xml) no separate code path needs to be selected by the caller.
-    private static ScriptVerificationResult VerifyJsonOutput(string workDir, string outputFileBaseName, bool includePreview)
+    private static ScriptVerificationResult VerifyJsonOutput(
+        string workDir, string outputFileBaseName, bool includePreview, bool includeOutputFile = false)
     {
         var jsonFileName = $"{outputFileBaseName}.json";
         var jsonPath = Path.Combine(workDir, jsonFileName);
         if (!File.Exists(jsonPath))
             return new ScriptVerificationResult { Success = false, Error = $"Script did not produce {jsonFileName}." };
 
-        var root = JsonNode.Parse(File.ReadAllText(jsonPath));
+        var rawContent = File.ReadAllText(jsonPath);
+        var root = JsonNode.Parse(rawContent);
 
         if (root is JsonArray array)
         {
@@ -251,6 +264,8 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
             {
                 Success = true, RowCount = array.Count,
                 Preview = includePreview ? BuildJsonFlatPreview(array) : null,
+                OutputFileContent = includeOutputFile ? rawContent : null,
+                OutputFileName = includeOutputFile ? jsonFileName : null,
             };
         }
 
@@ -276,6 +291,8 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
         {
             Success = true, RowCount = elementCount,
             Preview = includePreview ? BuildJsonTreePreview(root!, elementCount) : null,
+            OutputFileContent = includeOutputFile ? rawContent : null,
+            OutputFileName = includeOutputFile ? jsonFileName : null,
         };
     }
 

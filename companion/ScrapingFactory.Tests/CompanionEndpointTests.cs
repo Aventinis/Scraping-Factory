@@ -107,6 +107,67 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.Equal("Salat", rows[1].GetProperty("Gericht").GetString());
     }
 
+    // Issue #161: the complete, uncapped counterpart to IncludePreview —
+    // independent of it, so this proves the /generate handler wires the two
+    // flags through to separate response keys rather than one shadowing
+    // the other.
+    [Fact]
+    public async Task Generate_WithIncludeOutputFile_ReturnsJsonWithCompleteOutputFile()
+    {
+        using var server = new LocalTestServer("""
+            <html><body>
+              <li class="item"><h3>Suppe</h3></li>
+              <li class="item"><h3>Salat</h3></li>
+            </body></html>
+            """);
+        var config = new ScrapingConfig
+        {
+            Url = server.BaseUrl,
+            Fields = [new ScrapingField { Name = "Gericht", Selector = "li.item h3" }],
+            IncludeOutputFile = true,
+        };
+        var content = new StringContent(JsonSerializer.Serialize(config), Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+
+        using var doc = JsonDocument.Parse(body);
+        Assert.False(doc.RootElement.TryGetProperty("preview", out var preview) && preview.ValueKind != JsonValueKind.Null);
+        var outputFile = doc.RootElement.GetProperty("outputFile");
+        Assert.Equal("output.csv", outputFile.GetProperty("fileName").GetString());
+        var fileContent = outputFile.GetProperty("content").GetString();
+        Assert.Contains("Gericht", fileContent);
+        Assert.Contains("Suppe", fileContent);
+        Assert.Contains("Salat", fileContent);
+    }
+
+    // Proves IncludePreview and IncludeOutputFile can both be requested in
+    // the same call and populate their own, independent response keys.
+    [Fact]
+    public async Task Generate_WithBothIncludePreviewAndIncludeOutputFile_PopulatesBothResponseKeys()
+    {
+        using var server = new LocalTestServer("""<html><body><h3>Suppe</h3></body></html>""");
+        var config = new ScrapingConfig
+        {
+            Url = server.BaseUrl,
+            Fields = [new ScrapingField { Name = "Gericht", Selector = "h3" }],
+            IncludePreview = true,
+            IncludeOutputFile = true,
+        };
+        var content = new StringContent(JsonSerializer.Serialize(config), Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        using var doc = JsonDocument.Parse(body);
+        Assert.Equal("Csv", doc.RootElement.GetProperty("preview").GetProperty("outputFormat").GetString());
+        Assert.Contains("Suppe", doc.RootElement.GetProperty("outputFile").GetProperty("content").GetString());
+    }
+
     // A field value containing a comma must round-trip through the preview
     // unmangled — proves ParseCsvLine actually respects csv.DictWriter's own
     // quoting instead of naively splitting on every comma.

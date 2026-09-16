@@ -67,6 +67,21 @@
     "previewSummaryTruncated": "display truncated (too many matches)",
     "exportConfigTitle": "Export the current fields/containers as JSON — e.g. for a bug report",
     "exportConfigBtn": "Export configuration",
+    "saveConfigTitle": "Save the current configuration locally, so it can be reloaded next time this site is scraped",
+    "saveConfigBtn": "Save configuration",
+    "savedConfigsTitle": "Saved configurations for this site",
+    "savedConfigsEmpty": "No saved configurations for this site yet.",
+    "savedConfigsLoadBtn": "Load",
+    "savedConfigsDeleteBtn": "Delete",
+    "savedConfigsDeleteConfirm": "Delete this saved configuration?",
+    "savedConfigsDeleteConfirmYes": "Yes",
+    "savedConfigsDeleteConfirmNo": "No",
+    "savedConfigsOutputsBtn": "Outputs",
+    "savedConfigsOutputsHideBtn": "Hide outputs",
+    "savedOutputsEmpty": "No saved outputs for this configuration yet.",
+    "savedOutputsLoading": "Loading…",
+    "savedOutputsDownloadBtn": "Download",
+    "savedOutputsDeleteConfirm": "Delete this saved output?",
     "scriptFilenameLabel": "Script name",
     "scriptFilenamePlaceholder": "scraper",
     "outputFilenameLabel": "Output file name",
@@ -78,6 +93,7 @@
     "engineBrowserTitle": "Renders JavaScript before extraction — for dynamically loaded pages or login flows. Slower than the static engine.",
     "outputJsonToggle": "Output as JSON (instead of CSV/XML)",
     "dataPreviewToggle": "Show trial-run data preview",
+    "outputFileToggle": "Download the full scraped data file",
     "additionalUrlsLabel": "Additional start URLs",
     "additionalUrlsPlaceholder": "One URL per line (in addition to the page above)",
     "changeDetectionToggle": "Enable change detection (notify on changes)",
@@ -230,6 +246,8 @@
     "backBtn": "Back",
     "newBtn": "New",
     "downloadBtn": "Download {filename}",
+    "downloadOutputBtn": "Download data ({filename})",
+    "saveOutputBtn": "Save output",
     "dataPreviewTitle": "Trial-run data preview",
     "dataPreviewTruncatedCsv": "Showing {shown} of {total} rows — truncated",
     "dataPreviewTruncatedXml": "Excerpt — not all data is shown"
@@ -269,6 +287,19 @@
       "nameLabel": "Parameter name (e.g. \"category\")",
       "namePlaceholder": "Name"
     },
+    "saveConfig": {
+      "label": "Configuration name (e.g. \"Product listing\")",
+      "namePlaceholder": "Name",
+      "save": "Save"
+    },
+    "saveOutput": {
+      "configLabel": "Link to saved configuration",
+      "nameLabel": "Output name (e.g. \"Run before proxy fix\")",
+      "namePlaceholder": "Name",
+      "save": "Save",
+      "noConfigsHint": "No saved configuration for this site yet — save the current configuration first, then link this output to it.",
+      "saveConfigShortcut": "Save configuration"
+    },
     "matchCount": {
       "found": "{count} element(s) found"
     }
@@ -283,7 +314,18 @@
     "previewUnavailable": "Preview isn't possible on this page.",
     "captureUnavailable": "Network recording isn't possible on this page.",
     "invalidCompanionUrl": "Invalid address — please include http:// or https://.",
-    "containerAdded": "Container \"{name}\" added — {count} element(s) found"
+    "containerAdded": "Container \"{name}\" added — {count} element(s) found",
+    "configSaved": "Configuration saved.",
+    "configSaveFailed": "Could not save configuration: {message}",
+    "configLoaded": "Configuration \"{name}\" loaded.",
+    "configLoadFailed": "Could not load configuration: {message}",
+    "configDeleted": "Configuration deleted.",
+    "configDeleteFailed": "Could not delete configuration: {message}",
+    "outputSaved": "Output saved.",
+    "outputSaveFailed": "Could not save output: {message}",
+    "outputLoadFailed": "Could not load output: {message}",
+    "outputDeleted": "Output deleted.",
+    "outputDeleteFailed": "Could not delete output: {message}"
   },
   "frame": {
     "badge": "iframe",

@@ -67,6 +67,21 @@
     "previewSummaryTruncated": "Anzeige gekürzt (zu viele Treffer)",
     "exportConfigTitle": "Aktuelle Felder/Container als JSON exportieren — z. B. für einen Bug-Report",
     "exportConfigBtn": "Konfiguration exportieren",
+    "saveConfigTitle": "Aktuelle Konfiguration lokal speichern, um sie beim nächsten Scrapen dieser Seite wieder zu laden",
+    "saveConfigBtn": "Konfiguration speichern",
+    "savedConfigsTitle": "Gespeicherte Konfigurationen für diese Seite",
+    "savedConfigsEmpty": "Noch keine gespeicherten Konfigurationen für diese Seite.",
+    "savedConfigsLoadBtn": "Laden",
+    "savedConfigsDeleteBtn": "Löschen",
+    "savedConfigsDeleteConfirm": "Diese gespeicherte Konfiguration löschen?",
+    "savedConfigsDeleteConfirmYes": "Ja",
+    "savedConfigsDeleteConfirmNo": "Nein",
+    "savedConfigsOutputsBtn": "Outputs",
+    "savedConfigsOutputsHideBtn": "Outputs ausblenden",
+    "savedOutputsEmpty": "Für diese Konfiguration wurden noch keine Outputs gespeichert.",
+    "savedOutputsLoading": "Lädt…",
+    "savedOutputsDownloadBtn": "Herunterladen",
+    "savedOutputsDeleteConfirm": "Diesen gespeicherten Output löschen?",
     "scriptFilenameLabel": "Skriptname",
     "scriptFilenamePlaceholder": "scraper",
     "outputFilenameLabel": "Name der Ausgabedatei",
@@ -78,6 +93,7 @@
     "engineBrowserTitle": "Rendert JavaScript vor der Extraktion — für dynamisch geladene Seiten oder Login-Flows. Langsamer als die statische Engine.",
     "outputJsonToggle": "Ausgabe als JSON (statt CSV/XML)",
     "dataPreviewToggle": "Testlauf-Datenvorschau anzeigen",
+    "outputFileToggle": "Vollständige Scraping-Datei herunterladen",
     "additionalUrlsLabel": "Weitere Start-URLs",
     "additionalUrlsPlaceholder": "Eine URL pro Zeile (zusätzlich zur obigen Seite)",
     "changeDetectionToggle": "Änderungserkennung aktivieren (Benachrichtigung bei Änderungen)",
@@ -230,6 +246,8 @@
     "backBtn": "Zurück",
     "newBtn": "Neu",
     "downloadBtn": "{filename} herunterladen",
+    "downloadOutputBtn": "Daten herunterladen ({filename})",
+    "saveOutputBtn": "Output speichern",
     "dataPreviewTitle": "Testlauf-Datenvorschau",
     "dataPreviewTruncatedCsv": "Zeige {shown} von {total} Zeilen — gekürzt",
     "dataPreviewTruncatedXml": "Ausschnitt — nicht alle Daten werden angezeigt"
@@ -269,6 +287,19 @@
       "nameLabel": "Name des Parameters (z. B. \"kategorie\")",
       "namePlaceholder": "Name"
     },
+    "saveConfig": {
+      "label": "Name der Konfiguration (z. B. \"Produktliste\")",
+      "namePlaceholder": "Name",
+      "save": "Speichern"
+    },
+    "saveOutput": {
+      "configLabel": "Mit gespeicherter Konfiguration verknüpfen",
+      "nameLabel": "Name des Outputs (z. B. \"Lauf vor Proxy-Fix\")",
+      "namePlaceholder": "Name",
+      "save": "Speichern",
+      "noConfigsHint": "Für diese Seite gibt es noch keine gespeicherte Konfiguration — speichere zuerst die aktuelle Konfiguration, um diesen Output damit zu verknüpfen.",
+      "saveConfigShortcut": "Konfiguration speichern"
+    },
     "matchCount": {
       "found": "{count} Element(e) gefunden"
     }
@@ -283,7 +314,18 @@
     "previewUnavailable": "Vorschau auf dieser Seite nicht möglich.",
     "captureUnavailable": "Netzwerk-Aufzeichnung auf dieser Seite nicht möglich.",
     "invalidCompanionUrl": "Ungültige Adresse — bitte mit http:// oder https:// angeben.",
-    "containerAdded": "Container „{name}“ hinzugefügt — {count} Element(e) gefunden"
+    "containerAdded": "Container „{name}“ hinzugefügt — {count} Element(e) gefunden",
+    "configSaved": "Konfiguration gespeichert.",
+    "configSaveFailed": "Konfiguration konnte nicht gespeichert werden: {message}",
+    "configLoaded": "Konfiguration „{name}“ geladen.",
+    "configLoadFailed": "Konfiguration konnte nicht geladen werden: {message}",
+    "configDeleted": "Konfiguration gelöscht.",
+    "configDeleteFailed": "Konfiguration konnte nicht gelöscht werden: {message}",
+    "outputSaved": "Output gespeichert.",
+    "outputSaveFailed": "Output konnte nicht gespeichert werden: {message}",
+    "outputLoadFailed": "Output konnte nicht geladen werden: {message}",
+    "outputDeleted": "Output gelöscht.",
+    "outputDeleteFailed": "Output konnte nicht gelöscht werden: {message}"
   },
   "frame": {
     "badge": "iframe",
