@@ -155,17 +155,6 @@ public static class ScrapingPlanValidator
         var apiCallStep = plan.Steps.OfType<ApiCallStep>().SingleOrDefault();
         if (apiCallStep is not null)
         {
-            // Issue #133: unlike container mode (which supports
-            // RequiredFieldsCheck — see its own doc comment on
-            // HardeningCheck.cs), Api-mode's tree shape (Groups) doesn't:
-            // out of scope for now, kept simple rather than porting the
-            // same "drop the nearest repeating instance" mechanism here
-            // too without it having been asked for. Api's flat
-            // ItemsPath/Fields shape has just as unambiguous a "row" as
-            // flat Fields mode, so it's allowed there.
-            if (apiCallStep.Config.Groups is { Count: > 0 } && plan.Hardening?.OfType<RequiredFieldsCheck>().Any() == true)
-                return Invalid("Hardening check 'RequiredFields' is not supported for Api-mode's tree-shaped (Groups) output.");
-
             var apiError = ValidateApiConfig(apiCallStep.Config);
             return apiError is null ? new PlanValidationResult { Success = true } : Invalid(apiError);
         }
@@ -755,14 +744,13 @@ public static class ScrapingPlanValidator
                 return "Hardening check 'Blocking': block phrases must not be blank.";
         }
 
-        // Issue #133: unlike BlockingCheck's optional signals, FieldNames is
-        // the one thing this check configures at all, so — unlike an
-        // incomplete NullRateCheck row, which is simply skipped client-side
-        // — an empty list is rejected here rather than silently doing
-        // nothing. The Api-tree-shape restriction itself is enforced at the
-        // ApiCallStep branch in Validate() above, not here, since shape
-        // isn't known yet at this point in validation (container mode has
-        // no such restriction — see RequiredFieldsCheck's own doc comment).
+        // Issue #133 (+ #204 follow-up): unlike BlockingCheck's optional
+        // signals, FieldNames is the one thing this check configures at
+        // all, so — unlike an incomplete NullRateCheck row, which is simply
+        // skipped client-side — an empty list is rejected here rather than
+        // silently doing nothing. Supported for every shape (flat, Api-flat,
+        // container, and — since #204 — Api-tree), so there's no per-shape
+        // restriction to enforce anywhere else in this validator.
         foreach (var check in hardening.OfType<RequiredFieldsCheck>())
         {
             if (check.FieldNames.Count == 0)

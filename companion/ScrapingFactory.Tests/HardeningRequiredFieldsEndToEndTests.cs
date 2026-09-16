@@ -377,4 +377,203 @@ public class HardeningRequiredFieldsEndToEndTests
         Assert.Empty(stderr);
         Assert.Single(output.Root!.Elements("Gericht"));
     }
+
+    // ── Api-mode tree-shape follow-up (Issue #204) ──────────────────────
+
+    private static async Task<(int Exit, string Stderr, XDocument Output)> GenerateApiRunAndReadXmlOutputAsync(ScrapingPlan plan)
+    {
+        var script = new PythonApiCodeGenerator().Generate(plan);
+        var workDir = Directory.CreateTempSubdirectory("scrapingfactory-required-fields-api-tree-test-").FullName;
+        try
+        {
+            var scriptPath = Path.Combine(workDir, "scraper.py");
+            await File.WriteAllTextAsync(scriptPath, script);
+            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
+            var outputPath = Path.Combine(workDir, "output.xml");
+            var doc = File.Exists(outputPath) ? XDocument.Load(outputPath) : new XDocument(new XElement("Ergebnis"));
+            return (exit, stderr, doc);
+        }
+        finally
+        {
+            Directory.Delete(workDir, recursive: true);
+        }
+    }
+
+    private static ScrapingPlan ApiPlanWith(ApiConfig api, List<HardeningCheck> hardening) => new()
+    {
+        Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = api }],
+        OutputFormat = OutputFormat.Xml,
+        Engine = ScrapingEngine.Api,
+        Hardening = hardening,
+    };
+
+    // Single-level repeating group (an array root, ApiGroup's inferred
+    // "repeating" case) — the Api-mode analogue of the container-mode test
+    // above, proving the same "drop the incomplete instance, keep the rest"
+    // behavior for a JSON-path tree instead of a CSS-selector tree.
+    [Fact]
+    public async Task ApiTree_InstanceMissingRequiredField_IsDropped()
+    {
+        using var server = new LocalTestServer(_ => new LocalTestServerResponse(
+            """
+            { "items": [
+                { "name": "A", "price": 1 },
+                { "name": "B" },
+                { "name": "C", "price": 3 }
+            ] }
+            """, "application/json"));
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = server.BaseUrl,
+            Groups = [new ApiGroup
+            {
+                Name = "Produkt", Path = "items",
+                Children = [new ApiField { Name = "Name", Path = "name" }, new ApiField { Name = "Preis", Path = "price" }],
+            }],
+        };
+        var plan = ApiPlanWith(api, [new RequiredFieldsCheck { Severity = HardeningSeverity.Error, FieldNames = ["Preis"] }]);
+
+        var (exit, stderr, output) = await GenerateApiRunAndReadXmlOutputAsync(plan);
+
+        Assert.Equal(2, exit);
+        Assert.Contains("ERROR", stderr);
+        Assert.Contains("Dropped 1 element(s) missing a required field.", stderr);
+        var produkte = output.Root!.Elements("Produkt").ToList();
+        Assert.Equal(2, produkte.Count);
+        Assert.DoesNotContain(produkte, p => p.Element("Name")!.Value == "B");
+    }
+
+    // Two levels of nested repeating groups: Kategorie (array) > Gericht
+    // (array) > Preis (required) — proves the check drops the *nearest
+    // enclosing* repeating instance (the specific Gericht missing Preis),
+    // not the outer Kategorie it lives in, and leaves an unrelated
+    // Kategorie's own Gerichte untouched — the same claim the container-mode
+    // nested test above makes, for a JSON-path tree instead.
+    [Fact]
+    public async Task ApiTree_NestedRepeatingGroups_DropsOnlyInnermostInstance()
+    {
+        using var server = new LocalTestServer(_ => new LocalTestServerResponse(
+            """
+            { "categories": [
+                { "name": "Kat1", "items": [ { "name": "A", "price": 1 }, { "name": "B" } ] },
+                { "name": "Kat2", "items": [ { "name": "C", "price": 3 } ] }
+            ] }
+            """, "application/json"));
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = server.BaseUrl,
+            Groups = [new ApiGroup
+            {
+                Name = "Kategorie", Path = "categories",
+                Children =
+                [
+                    new ApiField { Name = "KategorieName", Path = "name" },
+                    new ApiGroup
+                    {
+                        Name = "Gericht", Path = "items",
+                        Children = [new ApiField { Name = "Name", Path = "name" }, new ApiField { Name = "Preis", Path = "price" }],
+                    },
+                ],
+            }],
+        };
+        var plan = ApiPlanWith(api, [new RequiredFieldsCheck { Severity = HardeningSeverity.Error, FieldNames = ["Preis"] }]);
+
+        var (exit, stderr, output) = await GenerateApiRunAndReadXmlOutputAsync(plan);
+
+        Assert.Equal(2, exit);
+        Assert.Contains("Dropped 1 element(s) missing a required field.", stderr);
+        var kategorien = output.Root!.Elements("Kategorie").ToList();
+        Assert.Equal(2, kategorien.Count); // neither Kategorie itself is dropped
+
+        var kat1 = kategorien.Single(k => k.Element("KategorieName")!.Value == "Kat1");
+        var kat1Gerichte = kat1.Elements("Gericht").ToList();
+        Assert.Single(kat1Gerichte); // only A survives — B was dropped
+        Assert.Equal("A", kat1Gerichte[0].Element("Name")!.Value);
+
+        var kat2 = kategorien.Single(k => k.Element("KategorieName")!.Value == "Kat2");
+        Assert.Single(kat2.Elements("Gericht")); // untouched
+    }
+
+    [Fact]
+    public async Task ApiTree_WarningSeverity_StillDropsInstanceButExitsCleanly()
+    {
+        using var server = new LocalTestServer(_ => new LocalTestServerResponse(
+            """{ "items": [ { "name": "A", "price": 1 }, { "name": "B" } ] } """, "application/json"));
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = server.BaseUrl,
+            Groups = [new ApiGroup
+            {
+                Name = "Produkt", Path = "items",
+                Children = [new ApiField { Name = "Name", Path = "name" }, new ApiField { Name = "Preis", Path = "price" }],
+            }],
+        };
+        var plan = ApiPlanWith(api, [new RequiredFieldsCheck { Severity = HardeningSeverity.Warning, FieldNames = ["Preis"] }]);
+
+        var (exit, stderr, output) = await GenerateApiRunAndReadXmlOutputAsync(plan);
+
+        Assert.Equal(0, exit); // Warning never fails the run
+        Assert.Contains("WARNING", stderr);
+        Assert.Single(output.Root!.Elements("Produkt")); // still filtered
+    }
+
+    // A required field name matching nothing anywhere in the tree (typo/
+    // renamed field) is a silent no-op — same convention the container-mode
+    // and flat-mode cases above already establish.
+    [Fact]
+    public async Task ApiTree_RequiredFieldNameMatchesNothing_IsANoOp()
+    {
+        using var server = new LocalTestServer(_ =>
+            new LocalTestServerResponse("""{ "items": [ { "name": "A" } ] }""", "application/json"));
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = server.BaseUrl,
+            Groups = [new ApiGroup { Name = "Produkt", Path = "items", Children = [new ApiField { Name = "Name", Path = "name" }] }],
+        };
+        var plan = ApiPlanWith(api, [new RequiredFieldsCheck { Severity = HardeningSeverity.Error, FieldNames = ["DoesNotExist"] }]);
+
+        var (exit, stderr, output) = await GenerateApiRunAndReadXmlOutputAsync(plan);
+
+        Assert.Equal(0, exit);
+        Assert.Empty(stderr);
+        Assert.Single(output.Root!.Elements("Produkt"));
+    }
+
+    // ApiGroup has no explicit "repeating" flag (unlike GroupNode) — a
+    // group whose Path resolves to a single JSON object rather than an
+    // array is inferred as "at most one instance" (see ApiGroup's own doc
+    // comment), the same way container mode's own non-repeating groups have
+    // no droppable "row" to remove without deleting structurally-expected
+    // content. Proves that distinction still holds here: an object-rooted
+    // group's own instance is left in place (with an empty required field)
+    // instead of being dropped, unlike the array-rooted cases above.
+    [Fact]
+    public async Task ApiTree_NonRepeatingGroupInstance_IsNotDropped()
+    {
+        using var server = new LocalTestServer(_ =>
+            new LocalTestServerResponse("""{ "profile": { "name": "A" } }""", "application/json"));
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = server.BaseUrl,
+            Groups = [new ApiGroup
+            {
+                Name = "Profil", Path = "profile",
+                Children = [new ApiField { Name = "Name", Path = "name" }, new ApiField { Name = "Preis", Path = "price" }],
+            }],
+        };
+        var plan = ApiPlanWith(api, [new RequiredFieldsCheck { Severity = HardeningSeverity.Error, FieldNames = ["Preis"] }]);
+
+        var (exit, stderr, output) = await GenerateApiRunAndReadXmlOutputAsync(plan);
+
+        Assert.Equal(0, exit);
+        Assert.Empty(stderr);
+        var profil = Assert.Single(output.Root!.Elements("Profil"));
+        Assert.Equal("A", profil.Element("Name")!.Value);
+        Assert.Equal("", profil.Element("Preis")!.Value);
+    }
 }

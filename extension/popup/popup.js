@@ -185,11 +185,11 @@ let _state = {
   // `nullRate` — one shared severity, not per-field — but unlike
   // `blocking`'s free-text phrase list, `fields` holds field names picked
   // from a dropdown (collectFieldNames), the same source `nullRate`'s own
-  // per-row field picker already reads from. Supported for flat and
-  // container mode; hidden only for Api-mode's tree shape (see
-  // ScrapingPlanValidator and render()'s own requiredFieldsUnsupported
-  // check) — collectFieldNames already walks container mode's live
-  // GroupNode/DataFieldNode tree, so no extra plumbing was needed there.
+  // per-row field picker already reads from. Supported for every mode/shape
+  // (flat, container, and — since Issue #204 — Api-mode's tree shape too,
+  // on top of Api-mode's already-supported flat shape) — collectFieldNames
+  // already walks container mode's live GroupNode/DataFieldNode tree and
+  // Api mode's tree/flat `apiConfig`, so no extra plumbing was needed here.
   hardening: {
     noResult: { enabled: false, severity: 'Warning' },
     nullRate: [],
@@ -1344,13 +1344,10 @@ function render() {
       hardeningBlockingPhrasesInput.value = _state.hardening.blocking.phrasesText;
     }
 
-    // Issue #133 (+ container-mode follow-up): required-fields check —
-    // supported for flat mode and container mode, but not yet Api-mode's
-    // tree shape (see ScrapingPlanValidator) — the subsection is hidden
-    // only for that, same "hidden when not applicable" treatment
-    // #additional-urls-row already gets for API mode generally.
-    const requiredFieldsUnsupported = _state.mode === 'api' && !!_state.apiConfig?.groups;
-    document.getElementById('hardening-required-fields-section')?.classList.toggle('hidden', requiredFieldsUnsupported);
+    // Issue #133 (+ container-mode and, since #204, Api-mode-tree-shape
+    // follow-ups): required-fields check — supported for every mode/shape
+    // now (flat, container, Api-flat, Api-tree), so this subsection is no
+    // longer hidden for any of them.
     const hardeningRequiredFieldsToggle = document.getElementById('toggle-hardening-required-fields');
     if (hardeningRequiredFieldsToggle) hardeningRequiredFieldsToggle.checked = _state.hardening.requiredFields.enabled;
     document.getElementById('hardening-required-fields-config')?.classList.toggle('hidden', !_state.hardening.requiredFields.enabled);

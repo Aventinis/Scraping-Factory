@@ -2428,8 +2428,7 @@ public class ScrapingPlanValidatorTests
 
     // Follow-up: container mode supports RequiredFieldsCheck (matched
     // globally by tag name, dropping the nearest enclosing repeating
-    // instance — see RequiredFieldsCheck's own doc comment). Only Api-mode's
-    // tree shape still rejects it (see the test below).
+    // instance — see RequiredFieldsCheck's own doc comment).
     [Fact]
     public void Validate_RequiredFieldsCheckWithContainerMode_Succeeds()
     {
@@ -2447,8 +2446,7 @@ public class ScrapingPlanValidatorTests
     }
 
     // Api-mode's flat shape has just as unambiguous a "row" as flat Fields
-    // mode, so it's allowed there — only Api's own tree shape is rejected
-    // (see the test below).
+    // mode, so it's allowed there.
     [Fact]
     public void Validate_RequiredFieldsCheckWithApiFlatShape_Succeeds()
     {
@@ -2462,8 +2460,13 @@ public class ScrapingPlanValidatorTests
         Assert.True(result.Success, result.Error);
     }
 
+    // Issue #204: Api-mode's tree shape (Groups) is no longer rejected
+    // either — the same "nearest enclosing repeating group instance"
+    // mechanism container mode already established now applies to
+    // ApiGroup/ApiField too (see _extract_api_group's own doc comment in
+    // scraper_api_grouped.py.j2).
     [Fact]
-    public void Validate_RequiredFieldsCheckWithApiTreeShape_Fails()
+    public void Validate_RequiredFieldsCheckWithApiTreeShape_Succeeds()
     {
         var plan = new ScrapingPlan
         {
@@ -2472,9 +2475,7 @@ public class ScrapingPlanValidatorTests
             Hardening = [new RequiredFieldsCheck { Severity = HardeningSeverity.Warning, FieldNames = ["Titel"] }],
         };
         var result = ScrapingPlanValidator.Validate(plan);
-        Assert.False(result.Success);
-        Assert.Contains("RequiredFields", result.Error);
-        Assert.Contains("tree-shaped", result.Error);
+        Assert.True(result.Success, result.Error);
     }
 
     [Fact]
