@@ -182,6 +182,40 @@ public class PythonCodeGeneratorTests
         Assert.DoesNotContain("output.csv", script);
     }
 
+    // Issue #178
+    [Fact]
+    public void Generate_WithoutExternalConfig_OmitsExternalConfigMachinery()
+    {
+        var script = _generator.Generate(TwoFieldPlan());
+        Assert.DoesNotContain("EXTERNAL_CONFIG_PATH", script);
+        Assert.DoesNotContain("EXIT_EXTERNAL_CONFIG_INVALID", script);
+        Assert.Contains("FIELD_OUTPUT_NAMES = {}", script);
+    }
+
+    [Fact]
+    public void Generate_WithExternalConfig_EmitsSelfBootstrappingSidecarMachinery()
+    {
+        var plan = TwoFieldPlan();
+        plan = new ScrapingPlan
+        {
+            Steps = plan.Steps, OutputFormat = plan.OutputFormat, Engine = plan.Engine,
+            ScriptFileName = plan.ScriptFileName, OutputFileBaseName = plan.OutputFileBaseName,
+            ExternalConfig = true,
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("import xml.etree.ElementTree as ET", script);
+        Assert.Contains("EXIT_EXTERNAL_CONFIG_INVALID = 3", script);
+        Assert.Contains("EXTERNAL_CONFIG_PATH = os.path.splitext(os.path.abspath(__file__))[0] + \".config.xml\"", script);
+        Assert.Contains("_write_default_external_config()", script);
+        // Both configured field names must be offered up as known/renameable
+        // — this is what a stale <Field original="..."> reference is later
+        // validated against.
+        Assert.Contains("\"Titel\"", script);
+        Assert.Contains("\"Link\"", script);
+    }
+
     // Issue #88
     [Fact]
     public void Generate_WithoutProxy_DoesNotImportOsOrItertools()
