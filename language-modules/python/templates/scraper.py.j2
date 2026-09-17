@@ -71,11 +71,11 @@ OUTPUT_PATH = "{{ config.output_filename }}.{{ if config.output_is_json }}json{{
 # raw Python traceback.
 EXIT_EXTERNAL_CONFIG_INVALID = 3
 EXTERNAL_CONFIG_PATH = os.path.splitext(os.path.abspath(__file__))[0] + ".config.xml"
-_EXTERNAL_CONFIG_KNOWN_FIELDS = {
+_EXTERNAL_CONFIG_KNOWN_FIELDS = [
 {{- for field in config.fields }}
     "{{ field.name }}",
 {{- end }}
-}
+]
 
 
 def _external_config_error(message):
