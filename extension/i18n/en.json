@@ -112,6 +112,8 @@
     "proxyToggle": "Use a proxy",
     "proxyEnvVarLabel": "Proxy list (env var)",
     "proxyHint": "The name of an environment variable holding a comma-separated list of proxy URLs (e.g. \"http://user:pass@host:port\"), not the addresses themselves — with more than one, the script rotates through them per request.",
+    "externalConfigToggle": "Editable config file (XML)",
+    "externalConfigHint": "Lets you tweak the start URL(s), the output filename, a field's output name, or a fixed-value-list API parameter's values later, by editing a small XML file — without touching the .py file or reopening the extension. The file doesn't exist yet; the script creates it next to itself the first time it actually runs.",
     "paginationToggle": "Enable pagination",
     "paginationKindNextLink": "\"Next\" link",
     "paginationKindPageNumber": "Page-number URL",

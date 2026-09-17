@@ -156,6 +156,9 @@ const SFConfigImport = (function () {
       pagination: applyPaginationConfig(config.pagination),
       hardening: applyHardeningConfig(config.hardening),
       persistentSession: config.persistentSession === true,
+      // Issue #178: same plain-boolean passthrough as persistentSession
+      // above — nothing to default/reshape beyond the bool itself.
+      externalConfig: config.externalConfig === true,
     };
   }
 

@@ -157,6 +157,12 @@ let _state = {
   // see buildScrapingConfig's "only send the key when true" handling), so
   // it's a plain boolean rather than an { enabled, ... } object.
   persistentSession: false,
+  // Issue #178: opt-in external XML config file — mode-independent (Fields/
+  // Groups/Api alike), persisted the same way as persistentSession above
+  // (real scrape-target configuration, not a per-generate toggle). Also a
+  // plain boolean with no sub-fields: which values end up editable depends
+  // entirely on the current mode/shape, nothing the user chooses here.
+  externalConfig: false,
   // Issue #129: opt-in script hardening checks — mode-independent like
   // engine/changeDetection/proxy above, persisted the same way (real
   // scrape-target configuration, not a per-generate toggle). Nested one
@@ -648,7 +654,7 @@ function buildScrapingConfig(
   url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
   additionalUrls = [], changeDetection = null, proxy = null, hardening = null, pagination = null,
-  persistentSession = false, includeOutputFile = false,
+  persistentSession = false, includeOutputFile = false, externalConfig = false,
 ) {
   const engineFields = engine === 'Browser'
     ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
@@ -674,6 +680,10 @@ function buildScrapingConfig(
   // the default (checkbox unchecked) request stays byte-for-byte identical
   // to before this existed. See companion's ScrapingConfig.IncludeOutputFile.
   const outputFileFields = includeOutputFile ? { includeOutputFile: true } : {};
+  // Issue #178: mirrors previewFields/outputFileFields exactly — only
+  // included when true, so the default (checkbox unchecked) request stays
+  // byte-for-byte identical to before this existed.
+  const externalConfigFields = externalConfig ? { externalConfig: true } : {};
 
   if (mode === 'container') {
     return {
@@ -681,6 +691,7 @@ function buildScrapingConfig(
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
       ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
+      ...externalConfigFields,
     };
   }
   if (mode === 'api') {
@@ -689,6 +700,7 @@ function buildScrapingConfig(
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
       ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
+      ...externalConfigFields,
     };
   }
   return {
@@ -703,7 +715,7 @@ function buildScrapingConfig(
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
     ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields,
-    ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
+    ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields, ...externalConfigFields,
   };
 }
 
@@ -717,14 +729,15 @@ function buildConfigExport(
   url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false, additionalUrls = [],
   changeDetection = null, proxy = null, hardening = null, pagination = null, persistentSession = false,
-  includeOutputFile = false,
+  includeOutputFile = false, externalConfig = false,
 ) {
   return {
     exportedAt: new Date().toISOString(),
     extensionVersion: manifest.version || '?',
     config: buildScrapingConfig(
       url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview,
-      useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession, includeOutputFile,
+      useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession,
+      includeOutputFile, externalConfig,
     ),
   };
 }
@@ -934,6 +947,7 @@ function persistState() {
       proxy: _state.proxy,
       pagination: _state.pagination,
       persistentSession: _state.persistentSession,
+      externalConfig: _state.externalConfig,
       hardening: _state.hardening,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
@@ -1099,6 +1113,12 @@ function render() {
     // Engine=Browser check above, since it's nested inside that section.
     const persistentSessionToggle = document.getElementById('toggle-persistent-session');
     if (persistentSessionToggle) persistentSessionToggle.checked = _state.persistentSession;
+
+    // Issue #178: opt-in external XML config file — mode-independent, lives
+    // in the Settings section like Proxy/Json-output, needs no visibility
+    // gating of its own.
+    const externalConfigToggle = document.getElementById('toggle-external-config');
+    if (externalConfigToggle) externalConfigToggle.checked = _state.externalConfig;
 
     if (_state.mode === 'container') {
       renderGroupTree(_state.groups);
@@ -2051,7 +2071,7 @@ async function saveCurrentConfig(name) {
     _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
     _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy, _state.hardening,
-    _state.pagination, _state.persistentSession,
+    _state.pagination, _state.persistentSession, false, _state.externalConfig,
   );
   log('SAVE_CONFIG', name);
   try {
@@ -2243,7 +2263,7 @@ async function generate() {
     _state.url, _state.mode, _state.fields, _state.groups, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
     _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy, _state.hardening,
-    _state.pagination, _state.persistentSession, _state.includeOutputFile,
+    _state.pagination, _state.persistentSession, _state.includeOutputFile, _state.externalConfig,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
@@ -2362,7 +2382,7 @@ function downloadConfigExport() {
     _state.url, _state.mode, _state.fields, _state.groups, manifest, _state.apiConfig,
     _state.scriptFileName, _state.outputFileName, _state.engine, _state.browserActions, _state.includeDataPreview,
     _state.useJsonOutput, _state.additionalStartUrls, _state.changeDetection, _state.proxy, _state.hardening,
-    _state.pagination, _state.persistentSession,
+    _state.pagination, _state.persistentSession, false, _state.externalConfig,
   );
   log('DOWNLOAD scraping-config.json', exportObj);
 
@@ -2841,6 +2861,12 @@ function wireEvents() {
   // (no sub-fields), unlike proxy/pagination's { enabled, ... } shape.
   document.getElementById('toggle-persistent-session')?.addEventListener('change', (e) => {
     setState(_state.current, { persistentSession: e.target.checked });
+  });
+
+  // Issue #178: opt-in external XML config file — a plain boolean (no
+  // sub-fields), same shape as persistentSession above.
+  document.getElementById('toggle-external-config')?.addEventListener('change', (e) => {
+    setState(_state.current, { externalConfig: e.target.checked });
   });
 
   // Issue #88: opt-in proxy support.
@@ -3847,7 +3873,7 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pagination', 'persistentSession', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pagination', 'persistentSession', 'externalConfig', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
     'scriptFileName', 'outputFileName',
@@ -3866,6 +3892,7 @@ async function init() {
   if (stored.proxy)                 _state = { ..._state, proxy: stored.proxy };
   if (stored.pagination)            _state = { ..._state, pagination: stored.pagination };
   if (stored.persistentSession !== undefined) _state = { ..._state, persistentSession: stored.persistentSession };
+  if (stored.externalConfig !== undefined) _state = { ..._state, externalConfig: stored.externalConfig };
   if (stored.hardening)             _state = { ..._state, hardening: stored.hardening };
   if (stored.scriptFileName)        _state = { ..._state, scriptFileName: stored.scriptFileName };
   if (stored.outputFileName)        _state = { ..._state, outputFileName: stored.outputFileName };
