@@ -568,6 +568,35 @@ describe('buildScrapingConfig (persistentSession, Issue #175)', () => {
   });
 });
 
+// Issue #178
+describe('buildScrapingConfig (externalConfig)', () => {
+  test('omits externalConfig entirely when false (the default)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.externalConfig).toBeUndefined();
+  });
+
+  test('includes externalConfig: true when enabled', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, null, null, false, false, true,
+    );
+    expect(result.externalConfig).toBe(true);
+  });
+
+  test('works the same way for container and api modes', () => {
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null, null, null, false, false, true,
+    );
+    expect(containerResult.externalConfig).toBe(true);
+
+    const apiResult = buildScrapingConfig(
+      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], null, null, null, null, false, false, true,
+    );
+    expect(apiResult.externalConfig).toBe(true);
+  });
+});
+
 // Issue #129
 describe('buildHardeningConfig', () => {
   test('returns null when noResult is disabled', () => {
@@ -1262,6 +1291,20 @@ describe('applyConfigToState', () => {
     const result = applyConfigToState(config);
     expect(result.pagination).toEqual({ enabled: false, kind: 'nextLink', nextLinkSelector: '', urlTemplate: '', maxPages: 50 });
     expect(result.persistentSession).toBe(false);
+  });
+
+  // Issue #178
+  test('round-trips externalConfig', () => {
+    const config = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, null, null, false, false, true,
+    );
+    expect(applyConfigToState(config).externalConfig).toBe(true);
+  });
+
+  test('defaults externalConfig to false when omitted', () => {
+    const config = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(applyConfigToState(config).externalConfig).toBe(false);
   });
 
   test('round-trips every hardening check kind', () => {

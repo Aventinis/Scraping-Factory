@@ -157,7 +157,11 @@ public class PythonCodeGeneratorTests
         Assert.Contains("python scraper.py", script);
         Assert.Contains("OUTPUT_PATH = \"output.csv\"", script);
         Assert.Contains("open(OUTPUT_PATH,", script);
-        Assert.Contains("written to output.csv", script);
+        // The "Done" message reads OUTPUT_PATH at runtime rather than baking
+        // the filename in a second time (Issue #178) — it needs to reflect
+        // any external-config override, so it always resolves to "output.csv"
+        // here regardless.
+        Assert.Contains("written to {OUTPUT_PATH}", script);
     }
 
     [Fact]
@@ -174,8 +178,42 @@ public class PythonCodeGeneratorTests
 
         Assert.Contains("python mein_scraper.py", script);
         Assert.Contains("OUTPUT_PATH = \"ergebnisse.csv\"", script);
-        Assert.Contains("written to ergebnisse.csv", script);
+        Assert.Contains("written to {OUTPUT_PATH}", script);
         Assert.DoesNotContain("output.csv", script);
+    }
+
+    // Issue #178
+    [Fact]
+    public void Generate_WithoutExternalConfig_OmitsExternalConfigMachinery()
+    {
+        var script = _generator.Generate(TwoFieldPlan());
+        Assert.DoesNotContain("EXTERNAL_CONFIG_PATH", script);
+        Assert.DoesNotContain("EXIT_EXTERNAL_CONFIG_INVALID", script);
+        Assert.Contains("FIELD_OUTPUT_NAMES = {}", script);
+    }
+
+    [Fact]
+    public void Generate_WithExternalConfig_EmitsSelfBootstrappingSidecarMachinery()
+    {
+        var plan = TwoFieldPlan();
+        plan = new ScrapingPlan
+        {
+            Steps = plan.Steps, OutputFormat = plan.OutputFormat, Engine = plan.Engine,
+            ScriptFileName = plan.ScriptFileName, OutputFileBaseName = plan.OutputFileBaseName,
+            ExternalConfig = true,
+        };
+
+        var script = _generator.Generate(plan);
+
+        Assert.Contains("import xml.etree.ElementTree as ET", script);
+        Assert.Contains("EXIT_EXTERNAL_CONFIG_INVALID = 3", script);
+        Assert.Contains("EXTERNAL_CONFIG_PATH = os.path.splitext(os.path.abspath(__file__))[0] + \".config.xml\"", script);
+        Assert.Contains("_write_default_external_config()", script);
+        // Both configured field names must be offered up as known/renameable
+        // — this is what a stale <Field original="..."> reference is later
+        // validated against.
+        Assert.Contains("\"Titel\"", script);
+        Assert.Contains("\"Link\"", script);
     }
 
     // Issue #88

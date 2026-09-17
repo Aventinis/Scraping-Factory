@@ -123,6 +123,19 @@ public sealed class ScrapingConfig
     // going straight from Navigate to extraction instead. Null/false is
     // today's exact behavior (a fresh, empty browser context every run).
     public bool? PersistentSession { get; init; }
+
+    // Issue #178: opt-in external XML config file. When true, the generated
+    // script self-creates (on first run, if missing) a small sidecar XML file
+    // next to itself, and re-reads it on every subsequent run — letting a
+    // non-technical user tweak the start URL(s), the output filename, a flat
+    // field's output name, or a fixed-value-list API parameter's values,
+    // without touching the .py file or reopening the extension. A missing
+    // file is not an error (a fresh one is written); a malformed/stale one
+    // is a clean, English error naming exactly what's wrong plus a dedicated
+    // exit code, never a raw Python traceback — see the Python templates for
+    // the runtime side of this. Null/false is today's exact behavior (no
+    // extra file, nothing re-read at runtime).
+    public bool? ExternalConfig { get; init; }
 }
 
 public sealed class ScrapingField

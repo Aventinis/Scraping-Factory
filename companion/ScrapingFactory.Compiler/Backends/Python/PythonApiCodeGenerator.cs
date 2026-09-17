@@ -31,6 +31,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
         var changeDetection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection);
         var proxy = PythonProxyLiteral.BuildContext(plan.Proxy);
         var hardening = PythonHardeningLiteral.BuildContext(plan.Hardening);
+        var externalConfig = PythonExternalConfigLiteral.BuildContext(plan.ExternalConfig);
 
         if (api.Groups is { Count: > 0 })
         {
@@ -55,6 +56,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
                 change_detection = changeDetection,
                 proxy,
                 hardening,
+                external_config = externalConfig,
             });
         }
 
@@ -81,6 +83,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
             change_detection = changeDetection,
             proxy,
             hardening,
+            external_config = externalConfig,
         });
     }
 

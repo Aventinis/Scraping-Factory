@@ -981,6 +981,16 @@
             </div>
             <p class="preview-summary" data-i18n="idle.proxyHint"></p>
           </div>
+          <!-- Issue #178: opt-in external XML config file — a plain on/off
+               switch, no sub-fields (which values end up editable depends
+               entirely on the current mode/shape, not a user choice here).
+               The file itself doesn't exist until the generated script's
+               first real run, which self-creates it next to itself. -->
+          <label class="output-settings-toggle">
+            <input type="checkbox" id="toggle-external-config" />
+            <span data-i18n="idle.externalConfigToggle"></span>
+          </label>
+          <p class="preview-summary" data-i18n="idle.externalConfigHint"></p>
           <!-- Issue #174: opt-in classic multi-page pagination — follows
                either a "next page" link (CSS selector, href resolved
                relative to the current page) or a {page}-templated URL,
