@@ -10,10 +10,10 @@ import json
 import datetime
 import itertools
 import re
-{{~ if needs_os_import ~}}
+{{~ if needs_os_import || external_config.enabled ~}}
 import os
 {{~ end ~}}
-{{~ if proxy.enabled || hardening.enabled ~}}
+{{~ if proxy.enabled || hardening.enabled || external_config.enabled ~}}
 import sys
 {{~ end ~}}
 {{~ if hardening.has_baseline ~}}
@@ -50,6 +50,94 @@ HEADERS = {{ headers_literal }}
 EMBEDDED_JSON_SOURCE = {{ embedded_json_source_literal }}
 
 OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else }}xml{{ end }}"
+
+{{~ if external_config.enabled ~}}
+# Issue #178: see scraper.py.j2's own doc comment for the full rationale — an
+# opt-in sidecar XML file next to the *script* itself lets a non-technical
+# user tweak the output filename and any fixed-value-list API parameter's
+# values without touching this .py file or reopening the extension. The
+# request URL/path itself isn't editable this way (see URL_TEMPLATE) — only
+# a StaticListSource parameter's own value list is, referenced by name. The
+# response tree's own group/field names aren't editable this way either (see
+# the issue's own open question on mapping a nested tree onto a flat-ish XML
+# structure).
+EXIT_EXTERNAL_CONFIG_INVALID = 3
+EXTERNAL_CONFIG_PATH = os.path.splitext(os.path.abspath(__file__))[0] + ".config.xml"
+_EXTERNAL_CONFIG_STATIC_LIST_PARAMS = {p["name"] for p in PARAMETERS if p["source"]["kind"] == "staticList"}
+
+
+def _external_config_error(message):
+    print(f"ERROR: The external config file '{EXTERNAL_CONFIG_PATH}' {message}", file=sys.stderr)
+    sys.exit(EXIT_EXTERNAL_CONFIG_INVALID)
+
+
+def _write_default_external_config():
+    root = ET.Element("ScrapingFactoryConfig")
+    ET.SubElement(root, "OutputFileName").text = "{{ output_filename }}"
+    params_el = ET.SubElement(root, "ApiParameters")
+    for p in PARAMETERS:
+        if p["source"]["kind"] != "staticList":
+            continue
+        param_el = ET.SubElement(params_el, "Parameter")
+        param_el.set("name", p["name"])
+        for value in p["source"]["values"]:
+            ET.SubElement(param_el, "Value").text = value
+    try:
+        tree = ET.ElementTree(root)
+        ET.indent(tree)
+        tree.write(EXTERNAL_CONFIG_PATH, encoding="utf-8", xml_declaration=True)
+    except OSError as e:
+        print(f"Warning: could not create default external config file '{EXTERNAL_CONFIG_PATH}': {e}", file=sys.stderr)
+
+
+def _load_external_config():
+    if not os.path.exists(EXTERNAL_CONFIG_PATH):
+        _write_default_external_config()
+        return {}
+    try:
+        root = ET.parse(EXTERNAL_CONFIG_PATH).getroot()
+    except ET.ParseError as e:
+        _external_config_error(f"is not valid XML: {e}")
+    if root.tag != "ScrapingFactoryConfig":
+        _external_config_error(f"has an unexpected root element '<{root.tag}>' (expected '<ScrapingFactoryConfig>').")
+
+    result = {}
+
+    output_el = root.find("OutputFileName")
+    if output_el is not None:
+        name = (output_el.text or "").strip()
+        if not name:
+            _external_config_error("has an empty <OutputFileName> element.")
+        result["output_file_name"] = name
+
+    param_values = {}
+    for param_el in root.findall("./ApiParameters/Parameter"):
+        name = param_el.get("name")
+        if not name:
+            _external_config_error("has a <Parameter> element missing its required 'name' attribute.")
+        if name not in _EXTERNAL_CONFIG_STATIC_LIST_PARAMS:
+            _external_config_error(
+                f"has a <Parameter name=\"{name}\"> that doesn't match any known fixed-value-list "
+                "parameter — was the scraper regenerated since this file was created?"
+            )
+        values = [(v.text or "").strip() for v in param_el.findall("Value")]
+        values = [v for v in values if v]
+        if not values:
+            _external_config_error(f"has a <Parameter name=\"{name}\"> with no non-empty <Value> entries.")
+        param_values[name] = values
+    result["api_parameter_values"] = param_values
+
+    return result
+
+
+_EXTERNAL_CONFIG = _load_external_config()
+if _EXTERNAL_CONFIG.get("output_file_name"):
+    OUTPUT_PATH = _EXTERNAL_CONFIG["output_file_name"] + OUTPUT_PATH[OUTPUT_PATH.rindex("."):]
+for _param in PARAMETERS:
+    _override = _EXTERNAL_CONFIG.get("api_parameter_values", {}).get(_param["name"])
+    if _override:
+        _param["source"]["values"] = _override
+{{~ end ~}}
 
 {{~ if change_detection.enabled ~}}
 # Issue #87 (change detection): every *_ENV_VAR below is an environment-
@@ -719,14 +807,13 @@ def main():
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(_xml_to_dict(root), f, ensure_ascii=False, indent=2)
     count = len(root.findall(".//*"))
-    print(f"Done — {count} elements written to {{ output_filename }}.json")
 {{~ else ~}}
     tree = ET.ElementTree(root)
     ET.indent(tree)
     tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
     count = len(root.findall(".//*"))
-    print(f"Done — {count} elements written to {{ output_filename }}.xml")
 {{~ end ~}}
+    print(f"Done — {count} elements written to {OUTPUT_PATH}")
 {{~ if change_detection.enabled ~}}
     with open(OUTPUT_PATH, "r", encoding="utf-8") as f:
         new_content = f.read()

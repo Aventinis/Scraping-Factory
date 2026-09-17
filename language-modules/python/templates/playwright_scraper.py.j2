@@ -10,10 +10,10 @@ import json
 import csv
 {{~ end ~}}
 import re
-{{~ if needs_os_import ~}}
+{{~ if needs_os_import || external_config.enabled ~}}
 import os
 {{~ end ~}}
-{{~ if needs_exit_helper || hardening.enabled ~}}
+{{~ if needs_exit_helper || hardening.enabled || external_config.enabled ~}}
 import sys
 {{~ end ~}}
 {{~ if hardening.has_baseline ~}}
@@ -24,6 +24,9 @@ import itertools
 {{~ end ~}}
 {{~ if proxy.enabled || hardening.enabled ~}}
 import urllib.parse
+{{~ end ~}}
+{{~ if external_config.enabled ~}}
+import xml.etree.ElementTree as ET
 {{~ end ~}}
 {{~ if pagination.enabled ~}}
 {{~ if pagination.kind == "nextLink" ~}}
@@ -47,6 +50,105 @@ from playwright.sync_api import sync_playwright
 URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 
 OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else }}csv{{ end }}"
+
+{{~ if external_config.enabled ~}}
+# Issue #178: see scraper.py.j2's own doc comment for the full rationale — an
+# opt-in sidecar XML file next to the *script* itself lets a non-technical
+# user tweak the start URL(s), output filename, and field names without
+# touching this .py file or reopening the extension. A missing file is not
+# an error (a fresh one is written with this script's own current defaults);
+# a file that exists but is broken (bad XML, a missing required attribute,
+# or a stale reference to a field that no longer exists) is a hard,
+# clearly-named failure instead of a raw Python traceback.
+EXIT_EXTERNAL_CONFIG_INVALID = 3
+EXTERNAL_CONFIG_PATH = os.path.splitext(os.path.abspath(__file__))[0] + ".config.xml"
+_EXTERNAL_CONFIG_KNOWN_FIELDS = {
+{{- for field in fields }}
+    "{{ field.name }}",
+{{- end }}
+}
+
+
+def _external_config_error(message):
+    print(f"ERROR: The external config file '{EXTERNAL_CONFIG_PATH}' {message}", file=sys.stderr)
+    sys.exit(EXIT_EXTERNAL_CONFIG_INVALID)
+
+
+def _write_default_external_config():
+    root = ET.Element("ScrapingFactoryConfig")
+    ET.SubElement(root, "OutputFileName").text = "{{ output_filename }}"
+    urls_el = ET.SubElement(root, "Urls")
+    for u in URLS:
+        ET.SubElement(urls_el, "Url").text = u
+    fields_el = ET.SubElement(root, "Fields")
+    for name in _EXTERNAL_CONFIG_KNOWN_FIELDS:
+        field_el = ET.SubElement(fields_el, "Field")
+        field_el.set("original", name)
+        field_el.text = name
+    try:
+        tree = ET.ElementTree(root)
+        ET.indent(tree)
+        tree.write(EXTERNAL_CONFIG_PATH, encoding="utf-8", xml_declaration=True)
+    except OSError as e:
+        print(f"Warning: could not create default external config file '{EXTERNAL_CONFIG_PATH}': {e}", file=sys.stderr)
+
+
+def _load_external_config():
+    if not os.path.exists(EXTERNAL_CONFIG_PATH):
+        _write_default_external_config()
+        return {}
+    try:
+        root = ET.parse(EXTERNAL_CONFIG_PATH).getroot()
+    except ET.ParseError as e:
+        _external_config_error(f"is not valid XML: {e}")
+    if root.tag != "ScrapingFactoryConfig":
+        _external_config_error(f"has an unexpected root element '<{root.tag}>' (expected '<ScrapingFactoryConfig>').")
+
+    result = {}
+
+    output_el = root.find("OutputFileName")
+    if output_el is not None:
+        name = (output_el.text or "").strip()
+        if not name:
+            _external_config_error("has an empty <OutputFileName> element.")
+        result["output_file_name"] = name
+
+    urls_el = root.find("Urls")
+    if urls_el is not None:
+        urls = [(u.text or "").strip() for u in urls_el.findall("Url")]
+        urls = [u for u in urls if u]
+        if not urls:
+            _external_config_error("has a <Urls> element with no non-empty <Url> entries.")
+        result["urls"] = urls
+
+    renames = {}
+    for field_el in root.findall("./Fields/Field"):
+        original = field_el.get("original")
+        if not original:
+            _external_config_error("has a <Field> element missing its required 'original' attribute.")
+        if original not in _EXTERNAL_CONFIG_KNOWN_FIELDS:
+            _external_config_error(
+                f"has a <Field original=\"{original}\"> that doesn't match any known field — "
+                "was the scraper regenerated with different fields since this file was created?"
+            )
+        new_name = (field_el.text or "").strip()
+        if not new_name:
+            _external_config_error(f"has a <Field original=\"{original}\"> with an empty name.")
+        renames[original] = new_name
+    result["field_names"] = renames
+
+    return result
+
+
+_EXTERNAL_CONFIG = _load_external_config()
+if _EXTERNAL_CONFIG.get("output_file_name"):
+    OUTPUT_PATH = _EXTERNAL_CONFIG["output_file_name"] + OUTPUT_PATH[OUTPUT_PATH.rindex("."):]
+if _EXTERNAL_CONFIG.get("urls"):
+    URLS = _EXTERNAL_CONFIG["urls"]
+FIELD_OUTPUT_NAMES = _EXTERNAL_CONFIG.get("field_names", {})
+{{~ else ~}}
+FIELD_OUTPUT_NAMES = {}
+{{~ end ~}}
 
 {{~ if persistent_session_enabled ~}}
 # Issue #175 (persistent session): on the first run (no saved session file
@@ -547,17 +649,21 @@ def main():
 {{~ if hardening.enabled ~}}
     data, required_fields_failed = _filter_required_fields(data)
 {{~ end ~}}
+    # Issue #178: a no-op remap when no field was renamed via the external
+    # config (FIELD_OUTPUT_NAMES is then empty) — `data` itself stays keyed
+    # by the original field names throughout, since hardening/change
+    # detection below still need to look fields up by those original names.
+    output_rows = [{FIELD_OUTPUT_NAMES.get(k, k): v for k, v in row.items()} for row in data]
 {{~ if output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    print(f"Done — {len(data)} rows written to {{ output_filename }}.json")
+        json.dump(output_rows, f, ensure_ascii=False, indent=2)
 {{~ else ~}}
     with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=list(SELECTORS.keys()))
+        writer = csv.DictWriter(f, fieldnames=[FIELD_OUTPUT_NAMES.get(name, name) for name in SELECTORS.keys()])
         writer.writeheader()
-        writer.writerows(data)
-    print(f"Done — {len(data)} rows written to {{ output_filename }}.csv")
+        writer.writerows(output_rows)
 {{~ end ~}}
+    print(f"Done — {len(data)} rows written to {OUTPUT_PATH}")
 {{~ if change_detection.enabled ~}}
     with open(OUTPUT_PATH, "r", encoding="utf-8") as f:
         new_content = f.read()

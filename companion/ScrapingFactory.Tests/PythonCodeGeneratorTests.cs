@@ -157,7 +157,11 @@ public class PythonCodeGeneratorTests
         Assert.Contains("python scraper.py", script);
         Assert.Contains("OUTPUT_PATH = \"output.csv\"", script);
         Assert.Contains("open(OUTPUT_PATH,", script);
-        Assert.Contains("written to output.csv", script);
+        // The "Done" message reads OUTPUT_PATH at runtime rather than baking
+        // the filename in a second time (Issue #178) — it needs to reflect
+        // any external-config override, so it always resolves to "output.csv"
+        // here regardless.
+        Assert.Contains("written to {OUTPUT_PATH}", script);
     }
 
     [Fact]
@@ -174,7 +178,7 @@ public class PythonCodeGeneratorTests
 
         Assert.Contains("python mein_scraper.py", script);
         Assert.Contains("OUTPUT_PATH = \"ergebnisse.csv\"", script);
-        Assert.Contains("written to ergebnisse.csv", script);
+        Assert.Contains("written to {OUTPUT_PATH}", script);
         Assert.DoesNotContain("output.csv", script);
     }
 
