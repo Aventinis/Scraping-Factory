@@ -36,7 +36,8 @@ const SFApiConfigUI = (function () {
     jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
     buildApiSubtreeFromCandidate, resolveApiGroupScopePath, allParameterParts, apiConfigDraftHasAllSourcesChosen,
   } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
-  const { transformsAreValid } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
+  const { transformsAreValid, addTransform } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
+  const { wireTransformList } = typeof require !== 'undefined' ? require('./field-transforms-ui') : self.SFFieldTransformsUI;
 
   // Issue #139: one static inline chevron per row instead of swapping between
   // two different Unicode glyphs (▸/▾) on click — see container-tree-ui.js's
@@ -1220,6 +1221,246 @@ const SFApiConfigUI = (function () {
     }
   }
 
+function wireApiConfigEvents(bridge) {
+  document.getElementById('btn-api-search')?.addEventListener('click', () => {
+    log('BTN api-search');
+    startApiFieldSearch(bridge);
+  });
+
+  document.getElementById('btn-embedded-json-search')?.addEventListener('click', () => {
+    log('BTN embedded-json-search');
+    startEmbeddedJsonFieldSearch(bridge);
+  });
+
+  document.getElementById('btn-api-entries-toggle')?.addEventListener('click', () => {
+    log('BTN api-entries-toggle');
+    toggleApiEntriesPanel(bridge);
+  });
+
+  // Event delegation for the sibling-field suggestion chips and the "Use"
+  // row — shared by both candidate-search panels (the primary/root search's
+  // #api-candidates-list and Phase A5's "add root group"/"add sub-field"
+  // search's #api-tree-search-list, see renderApiCandidates' own `ids` doc
+  // comment): identical markup and interaction, only getCandidates/onConfirm
+  // differ per caller.
+  function wireApiCandidateListEvents(listElId, getCandidates, onConfirm) {
+    document.getElementById(listElId)?.addEventListener('click', (e) => {
+      const chip = e.target.closest('.api-sibling-chip');
+      if (chip) {
+        chip.classList.toggle('picked');
+        log('API_CANDIDATE sibling toggled', chip.dataset.siblingName);
+        return;
+      }
+
+      const selectAllBtn = e.target.closest('.api-sibling-select-all');
+      if (selectAllBtn) {
+        const chips = selectAllBtn.closest('.api-candidate-siblings').querySelectorAll('.api-sibling-chip');
+        const allPicked = Array.from(chips).every(c => c.classList.contains('picked'));
+        chips.forEach(c => c.classList.toggle('picked', !allPicked));
+        selectAllBtn.textContent = t(allPicked ? 'apiCandidates.selectAllChips' : 'apiCandidates.deselectAllChips');
+        log('API_CANDIDATE siblings select-all', { toggledTo: !allPicked });
+        return;
+      }
+
+      const confirmBtn = e.target.closest('.api-candidate-confirm');
+      if (confirmBtn) {
+        const index = parseInt(confirmBtn.dataset.candidateIndex, 10);
+        const candidate = getCandidates()?.[index];
+        if (!candidate) return;
+        const li = confirmBtn.closest('.api-candidate');
+        const fieldName = li.querySelector('.api-candidate-field-name')?.value.trim();
+        if (!fieldName) return;
+        const siblingNames = Array.from(li.querySelectorAll('.api-sibling-chip.picked')).map(c => c.dataset.siblingName);
+        onConfirm(candidate, fieldName, siblingNames);
+      }
+    });
+
+    // Enables "Use" once a field name has been typed for that row.
+    document.getElementById(listElId)?.addEventListener('input', (e) => {
+      const input = e.target.closest('.api-candidate-field-name');
+      if (!input) return;
+      const li = input.closest('.api-candidate');
+      const confirmBtn = li?.querySelector('.api-candidate-confirm');
+      if (confirmBtn) confirmBtn.disabled = input.value.trim() === '';
+    });
+  }
+
+  // Issue #136: the same #api-candidates-list serves both a network search
+  // (startApiFieldSearch) and an embedded-JSON search (startEmbeddedJsonField
+  // Search) — dispatch to the matching confirm function purely by candidate
+  // shape (only an embedded-JSON candidate ever carries scriptSelector, see
+  // content-script.js's findEmbeddedJsonCandidates vs. findApiCandidates).
+  wireApiCandidateListEvents(
+    'api-candidates-list', () => bridge.getState().apiCandidates?.candidates,
+    (candidate, fieldName, siblingNames) => (candidate.scriptSelector
+      ? confirmEmbeddedJsonFieldCandidate(bridge, candidate, fieldName, siblingNames)
+      : confirmApiFieldCandidate(bridge, candidate, fieldName, siblingNames)),
+  );
+  wireApiCandidateListEvents(
+    'api-tree-search-list', () => bridge.getState().apiTreeSearchResult?.candidates,
+    (candidate, fieldName, siblingNames) => confirmApiTreeFieldCandidate(bridge, candidate, fieldName, siblingNames),
+  );
+
+  document.getElementById('btn-api-tree-add-root')?.addEventListener('click', () => startApiTreeFieldSearch(bridge, null));
+
+  // Event delegation for the API-tree's per-row add/remove buttons and name
+  // input — mirrors the Container-tree's own delegation below.
+  document.getElementById('api-tree-root')?.addEventListener('click', (e) => {
+    const li = e.target.closest('.api-tree-node');
+    if (!li) return;
+    const path = JSON.parse(li.dataset.path);
+
+    if (e.target.closest('.btn-add-api-subgroup')) { openApiGroupModal(bridge, path); return; }
+    if (e.target.closest('.btn-add-api-subfield')) { startApiTreeFieldSearch(bridge, path); return; }
+    if (e.target.closest('.btn-api-field-transforms')) { openApiFieldTransformsModal(bridge, path); return; }
+    if (e.target.closest('.btn-remove-api-node')) {
+      log('API_TREE_NODE_REMOVE', { path });
+      bridge.setState(bridge.getState().current, { apiConfigDraft: { ...bridge.getState().apiConfigDraft, groups: removeApiTreeNode(bridge.getState().apiConfigDraft.groups, path) } });
+    }
+  });
+
+  document.getElementById('api-tree-root')?.addEventListener('change', (e) => {
+    const nameInput = e.target.closest('.api-tree-name');
+    if (nameInput) setApiTreeNodeName(bridge, JSON.parse(nameInput.dataset.path), nameInput.value.trim());
+  });
+
+  document.getElementById('btn-api-group-confirm')?.addEventListener('click', () => confirmApiGroupModal(bridge));
+  document.getElementById('input-api-group-path')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') confirmApiGroupModal(bridge);
+  });
+  document.getElementById('btn-api-group-cancel')?.addEventListener('click', () => cancelApiGroupModal(bridge));
+
+  // Issue #84 follow-up: API-mode field transforms modal — reuses the same
+  // transform-chain editor (field-transforms.js/field-transforms-ui.js) the
+  // flat/container field modals already wire up above.
+  document.getElementById('btn-api-field-transforms-add')?.addEventListener('click', () => {
+    bridge.patchState({ pendingTransforms: addTransform(bridge.getState().pendingTransforms) });
+  });
+  wireTransformList(
+    'api-field-transform-list',
+    () => bridge.getState().pendingTransforms,
+    (transforms) => bridge.patchState({ pendingTransforms: transforms }),
+  );
+  document.getElementById('btn-api-field-transforms-confirm')?.addEventListener('click', () => confirmApiFieldTransformsModal(bridge));
+  document.getElementById('btn-api-field-transforms-cancel')?.addEventListener('click', () => cancelApiFieldTransformsModal(bridge));
+
+  // ── API-Mode config screen (Issue #53 Phase 5) ─────────────────────────────
+  // Delegated `change` listeners (not `input`) so typing in a text field
+  // doesn't trigger a re-render — and thus lose focus — on every keystroke;
+  // see renderApiConfigScreen's doc comment for the trade-off this implies.
+
+  const handleUrlPartControlChange = (e) => {
+    const toggle = e.target.closest('.api-config-part-toggle');
+    if (toggle) { toggleApiConfigPartVariable(bridge, toggle.dataset.partId); return; }
+    const nameInput = e.target.closest('.api-config-part-name');
+    if (nameInput) setApiConfigPartName(bridge, nameInput.dataset.partId, nameInput.value.trim());
+  };
+  document.getElementById('api-config-segments')?.addEventListener('change', handleUrlPartControlChange);
+  document.getElementById('api-config-query-params')?.addEventListener('change', handleUrlPartControlChange);
+
+  document.getElementById('api-config-parameters')?.addEventListener('change', (e) => {
+    const kindRadio = e.target.closest('.api-config-source-kind-radio');
+    if (kindRadio) {
+      setApiConfigSourceKind(bridge, kindRadio.dataset.partId, kindRadio.value);
+      // Best-effort, automatic first pass — picking "Werteliste" is exactly
+      // the moment a user would otherwise go hunting through DevTools for
+      // sibling requests, so try the pool first and let them refine/refresh
+      // via the button rendered alongside the textarea (see
+      // fillStaticListFromPool's own doc comment).
+      if (kindRadio.value === 'staticList') fillStaticListFromPool(bridge, kindRadio.dataset.partId);
+      return;
+    }
+    const staticList = e.target.closest('.api-config-static-list');
+    if (staticList) { patchApiConfigSource(bridge, staticList.dataset.partId, { valuesText: staticList.value }); return; }
+    const rangeType = e.target.closest('.api-config-range-type');
+    if (rangeType) {
+      const partId = rangeType.dataset.partId;
+      // Re-detect on every Type change, not just the initial "Range" pick
+      // — switching e.g. IsoWeek → Date should re-match the same captured
+      // raw value against Date's own presets instead of keeping a format
+      // string that no longer means anything for the new Type.
+      const rawValue = findUrlPartValue(bridge.getState().apiConfigDraft.urlParts, partId);
+      patchApiConfigSource(bridge, partId, { type: rangeType.value, format: detectRangeFormat(rangeType.value, rawValue) });
+      return;
+    }
+    const rangeFrom = e.target.closest('.api-config-range-from');
+    if (rangeFrom) { patchApiConfigSource(bridge, rangeFrom.dataset.partId, { from: rangeFrom.value.trim() }); return; }
+    const rangeTo = e.target.closest('.api-config-range-to');
+    if (rangeTo) { patchApiConfigSource(bridge, rangeTo.dataset.partId, { to: rangeTo.value.trim() }); return; }
+    const formatPreset = e.target.closest('.api-config-range-format-preset');
+    if (formatPreset) { patchApiConfigSource(bridge, formatPreset.dataset.partId, { format: formatPreset.value === 'custom' ? '' : formatPreset.value }); return; }
+    const formatCustom = e.target.closest('.api-config-range-format-custom');
+    if (formatCustom) patchApiConfigSource(bridge, formatCustom.dataset.partId, { format: formatCustom.value.trim() });
+  });
+
+  document.getElementById('api-config-parameters')?.addEventListener('click', (e) => {
+    const searchBtn = e.target.closest('.api-config-discovery-search');
+    if (searchBtn) { startDiscoverySearch(bridge, searchBtn.dataset.partId); return; }
+    const confirmBtn = e.target.closest('.api-config-discovery-confirm');
+    if (confirmBtn) {
+      const index = parseInt(confirmBtn.dataset.candidateIndex, 10);
+      const candidate = bridge.getState().apiDiscoveryCandidates?.candidates?.[index];
+      if (candidate) confirmDiscoveryCandidate(bridge, confirmBtn.dataset.partId, candidate);
+      return;
+    }
+    const autofillBtn = e.target.closest('.api-config-autofill-pool');
+    if (autofillBtn) fillStaticListFromPool(bridge, autofillBtn.dataset.partId);
+  });
+
+  document.getElementById('api-config-headers')?.addEventListener('change', (e) => {
+    const include = e.target.closest('.api-config-header-include');
+    if (include) { setApiConfigHeaderDecision(bridge, include.dataset.headerName, { include: include.checked }); return; }
+    const modeRadio = e.target.closest('.api-config-header-mode-radio');
+    if (modeRadio) { setApiConfigHeaderDecision(bridge, modeRadio.dataset.headerName, { mode: modeRadio.value }); return; }
+    const envName = e.target.closest('.api-config-env-name');
+    if (envName) setApiConfigHeaderDecision(bridge, envName.dataset.headerName, { envName: envName.value.trim() });
+  });
+
+  // ── API-Mode request-body tree (Issue #55, Phase B4) ─────────────────────
+  document.getElementById('body-tree-root')?.addEventListener('click', (e) => {
+    const toVariableBtn = e.target.closest('.btn-body-to-variable');
+    if (toVariableBtn) {
+      toggleBodyLeafToVariable(bridge, JSON.parse(toVariableBtn.closest('.body-tree-node').dataset.path));
+      return;
+    }
+    const toFixedBtn = e.target.closest('.btn-body-to-fixed');
+    if (toFixedBtn) toggleBodyLeafToFixed(bridge, JSON.parse(toFixedBtn.closest('.body-tree-node').dataset.path));
+  });
+
+  document.getElementById('body-tree-root')?.addEventListener('change', (e) => {
+    const picker = e.target.closest('.body-tree-parameter-picker');
+    if (picker) {
+      const path = JSON.parse(picker.closest('.body-tree-node').dataset.path);
+      if (picker.value === '__new__') { openBodyParameterModal(bridge, path); return; }
+      setBodyLeafParameter(bridge, path, picker.value);
+      return;
+    }
+    const coerceTo = e.target.closest('.body-tree-coerce-to');
+    if (coerceTo) setBodyLeafCoerceTo(bridge, JSON.parse(coerceTo.closest('.body-tree-node').dataset.path), coerceTo.value);
+  });
+
+  document.getElementById('btn-api-body-parameter-confirm')?.addEventListener('click', () => confirmBodyParameterModal(bridge));
+  document.getElementById('input-api-body-parameter-name')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') confirmBodyParameterModal(bridge);
+  });
+  document.getElementById('btn-api-body-parameter-cancel')?.addEventListener('click', () => cancelBodyParameterModal(bridge));
+
+  document.getElementById('btn-api-config-cancel')?.addEventListener('click', () => {
+    log('BTN api-config-cancel');
+    cancelApiConfig(bridge);
+  });
+
+  document.getElementById('btn-api-config-confirm')?.addEventListener('click', () => {
+    log('BTN api-config-confirm');
+    confirmApiConfig(bridge);
+  });
+
+  document.getElementById('btn-api-config-discard')?.addEventListener('click', () => {
+    log('BTN api-config-discard');
+    bridge.setState(STATES.IDLE, { apiConfig: null });
+  });
+}
+
   return {
     buildApiTreeNodeEl, renderApiTree,
     renderApiCandidates, renderApiEntriesList,
@@ -1238,6 +1479,7 @@ const SFApiConfigUI = (function () {
     toggleBodyLeafToVariable, toggleBodyLeafToFixed, setBodyLeafParameter, setBodyLeafCoerceTo,
     openBodyParameterModal, confirmBodyParameterModal, cancelBodyParameterModal, confirmApiConfig,
     fetchApiCaptureEntries, toggleApiEntriesPanel, fillStaticListFromPool,
+    wireApiConfigEvents,
   };
 })();
 
