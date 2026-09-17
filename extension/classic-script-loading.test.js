@@ -59,6 +59,15 @@ test('shared/logger.js + i18n/i18n.js + popup/popup.js load together without a r
     'popup/container-tree-ui.js',
     'popup/field-transforms-ui.js',
     'popup/config-import.js',
+    'popup/toast.js',
+    'popup/bug-report.js',
+    'popup/scraping-config-builder.js',
+    'popup/dom-tree-ui.js',
+    'popup/preview.js',
+    'popup/companion-client.js',
+    'popup/download-helpers.js',
+    'popup/saved-configs-ui.js',
+    'popup/settings-panel-ui.js',
     'popup/popup.js',
   ])).not.toThrow();
 });
