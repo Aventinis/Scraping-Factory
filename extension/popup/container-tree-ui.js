@@ -20,11 +20,14 @@ const SFContainerTreeUI = (function () {
   const { createLogger } = typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
   const log = createLogger('SF:ContainerTreeUI');
   const { t } = typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
-  const { STATES } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
+  const { STATES, escapeHtml } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
   const {
     formatGroupNodeLabel, resolveGroupNode, hasRepeatingAncestor, buildFieldNode, insertContainerNode,
+    removeGroupTreeNode,
   } = typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
-  const { transformsAreValid } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
+  const { transformsAreValid, addTransform } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
+  const { renderTransformList, renderTransformPreview, wireTransformList } =
+    typeof require !== 'undefined' ? require('./field-transforms-ui') : self.SFFieldTransformsUI;
 
   // Issue #139: one static inline chevron per row instead of swapping between
   // two different Unicode glyphs (▸/▾) on click — collapsed/expanded is now a
@@ -209,10 +212,127 @@ const SFContainerTreeUI = (function () {
     });
   }
 
+  // Issue #85: existence/quantity feedback next to the name input — same
+  // function as flat-mode-ui.js's own copy (see that file's doc comment on
+  // why it's duplicated rather than shared).
+  function renderMatchCountHint(elId, count) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    if (count === null || count === undefined) {
+      el.textContent = '';
+      el.classList.add('hidden');
+      return;
+    }
+    el.textContent = t('modals.matchCount.found', { count });
+    el.classList.toggle('warn', count === 0);
+    el.classList.remove('hidden');
+  }
+
+  // Issue #143: container mode's raw value depends on the mode/attribute the
+  // user is currently typing into the modal — read directly from those DOM
+  // inputs (like the attribute-row visibility toggle already does), not from
+  // bridge.getState(), since neither is state-managed. "exists" mode always
+  // passes null (its own transforms section is hidden, see
+  // wireContainerModeEvents' select-field-mode change handler) and attribute
+  // mode passes null until an attribute name has actually been typed, so the
+  // hint doesn't show a misleading result before then. Issue #169: "ownText"
+  // mode reads pendingOwnText, computed at click time by content-script.js's
+  // collectOwnText — no DOM input to wait on, unlike attribute mode's
+  // attribute-name field.
+  function refreshExtendedTransformPreview(bridge) {
+    const state = bridge.getState();
+    const mode = document.getElementById('select-field-mode')?.value ?? 'text';
+    let rawValue = null;
+    if (mode === 'text') {
+      rawValue = state.pendingRawText;
+    } else if (mode === 'attribute') {
+      const attrName = document.getElementById('input-field-attribute')?.value.trim();
+      if (attrName) rawValue = (state.pendingElementAttributes?.[attrName] ?? '').trim();
+    } else if (mode === 'ownText') {
+      rawValue = state.pendingOwnText;
+    }
+    renderTransformPreview('field-extended-transform-preview', rawValue, state.pendingTransforms);
+  }
+
+  // Called from popup.js's render() once it's determined the confirmed-
+  // selection modal is container mode's own (STATES.SELECTING + a pending
+  // selector + mode === 'container'). `isNewPick` distinguishes an actual
+  // closed→open transition (reset name/mode/focus) from a re-render
+  // triggered by editing the transform chain (which must not wipe what's
+  // already typed/chosen).
+  function renderContainerFieldModal(bridge, isNewPick) {
+    const state = bridge.getState();
+    document.getElementById('modal-field-extended')?.classList.remove('hidden');
+    if (isNewPick) {
+      const nameInput = document.getElementById('input-field-extended-name');
+      if (nameInput) { nameInput.value = ''; nameInput.focus(); }
+      const modeSelect = document.getElementById('select-field-mode');
+      if (modeSelect) modeSelect.value = 'text';
+      document.getElementById('field-attribute-row')?.classList.add('hidden');
+      document.getElementById('field-extended-transforms-section')?.classList.remove('hidden');
+      const attrInput = document.getElementById('input-field-attribute');
+      if (attrInput) attrInput.value = '';
+    }
+    renderMatchCountHint('field-extended-match-count', state.pendingMatchCount);
+    renderTransformList('field-extended-transform-list', state.pendingTransforms);
+    refreshExtendedTransformPreview(bridge);
+  }
+
+  function wireContainerModeEvents(bridge) {
+  document.getElementById('btn-add-root-container')?.addEventListener('click', () => openContainerModal(bridge, null));
+
+  // Event delegation for the container tree's per-row add/remove buttons
+  document.getElementById('group-tree-root')?.addEventListener('click', (e) => {
+    const li = e.target.closest('.group-tree-node');
+    if (!li) return;
+    const path = JSON.parse(li.dataset.path);
+
+    if (e.target.closest('.btn-add-subcontainer')) { openContainerModal(bridge, path); return; }
+    if (e.target.closest('.btn-add-subfield')) { startFieldSelection(bridge, path); return; }
+    if (e.target.closest('.btn-remove-group-node')) {
+      log('GROUP_NODE_REMOVE', { path });
+      bridge.stopPreviewIfActive();
+      bridge.setState(bridge.getState().current, { groups: removeGroupTreeNode(bridge.getState().groups, path) });
+    }
+  });
+
+  document.getElementById('btn-container-confirm')?.addEventListener('click', () => confirmContainerModal(bridge));
+  document.getElementById('input-container-name')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') confirmContainerModal(bridge);
+  });
+  document.getElementById('btn-container-cancel')?.addEventListener('click', () => cancelContainerModal(bridge));
+  document.getElementById('btn-field-extended-confirm')?.addEventListener('click', () => confirmExtendedField(bridge));
+  document.getElementById('input-field-extended-name')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') confirmExtendedField(bridge);
+  });
+  document.getElementById('btn-field-extended-cancel')?.addEventListener('click', () => cancelExtendedField(bridge));
+  document.getElementById('select-field-mode')?.addEventListener('change', (e) => {
+    document.getElementById('field-attribute-row')?.classList.toggle('hidden', e.target.value !== 'attribute');
+    // Issue #84: transforms are a string post-processing pipeline — not
+    // meaningful for "Vorhanden?" (a boolean-ish presence check).
+    document.getElementById('field-extended-transforms-section')?.classList.toggle('hidden', e.target.value === 'exists');
+    // Issue #143: the raw value the preview runs against depends on the mode.
+    refreshExtendedTransformPreview(bridge);
+  });
+  // Issue #143: typing an attribute name updates the preview live, without
+  // requiring a transform edit first.
+  document.getElementById('input-field-attribute')?.addEventListener('input', () => refreshExtendedTransformPreview(bridge));
+  document.getElementById('btn-field-extended-transform-add')?.addEventListener('click', () => {
+    bridge.patchState({ pendingTransforms: addTransform(bridge.getState().pendingTransforms) });
+  });
+  wireTransformList(
+    'field-extended-transform-list',
+    () => bridge.getState().pendingTransforms,
+    (transforms) => bridge.patchState({ pendingTransforms: transforms }),
+  );
+  }
+
   return {
     buildGroupTreeNodeEl, renderGroupTree,
     openContainerModal, confirmContainerModal, cancelContainerModal,
     startFieldSelection, confirmExtendedField, cancelExtendedField,
+    renderMatchCountHint, refreshExtendedTransformPreview, renderContainerFieldModal,
+    wireContainerModeEvents,
   };
 })();
 

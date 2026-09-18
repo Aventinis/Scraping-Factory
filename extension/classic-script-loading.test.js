@@ -68,6 +68,7 @@ test('shared/logger.js + i18n/i18n.js + popup/popup.js load together without a r
     'popup/download-helpers.js',
     'popup/saved-configs-ui.js',
     'popup/settings-panel-ui.js',
+    'popup/flat-mode-ui.js',
     'popup/popup.js',
   ])).not.toThrow();
 });

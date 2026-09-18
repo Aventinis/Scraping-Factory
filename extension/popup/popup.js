@@ -45,16 +45,19 @@ const {
 
 const {
   renderGroupTree,
-  openContainerModal, confirmContainerModal, cancelContainerModal,
-  startFieldSelection, confirmExtendedField, cancelExtendedField,
+  renderContainerFieldModal, wireContainerModeEvents,
 } = typeof require !== 'undefined' ? require('./container-tree-ui') : self.SFContainerTreeUI;
+
+const {
+  renderFields, renderFlatFieldModal, wireFlatModeEvents,
+} = typeof require !== 'undefined' ? require('./flat-mode-ui') : self.SFFlatModeUI;
 
 const {
   createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
   moveTransform, transformsAreValid, applyTransformsPreview, toNumberPreview,
 } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
 
-const { renderTransformList, wireTransformList, renderTransformPreview } =
+const { renderTransformList, renderTransformPreview } =
   typeof require !== 'undefined' ? require('./field-transforms-ui') : self.SFFieldTransformsUI;
 
 const { applyConfigToState } =
@@ -429,58 +432,6 @@ let _state = {
   savedOutputsPendingDeleteId: null,
 };
 
-// Issue #85: existence/quantity feedback next to the name input in
-// modal-field-name/modal-field-extended, the instant a selector is picked —
-// mirrors previewSummary's own count/warn-styling pattern (idle.
-// previewSummaryMatched + .preview-summary.warn), just scoped to a single
-// in-flight pick instead of every configured field/group at once. count is
-// null before any pick, or if the content script couldn't compute it — the
-// hint simply stays hidden then, same as it would if this feature didn't exist.
-function renderMatchCountHint(elId, count) {
-  const el = document.getElementById(elId);
-  if (!el) return;
-  if (count === null || count === undefined) {
-    el.textContent = '';
-    el.classList.add('hidden');
-    return;
-  }
-  el.textContent = t('modals.matchCount.found', { count });
-  el.classList.toggle('warn', count === 0);
-  el.classList.remove('hidden');
-}
-
-// Issue #143: live preview of the transform chain's output — flat mode has
-// no attribute/exists mode, so the raw value is always the picked element's
-// trimmed text.
-function refreshFlatTransformPreview() {
-  renderTransformPreview('field-transform-preview', _state.pendingRawText, _state.pendingTransforms);
-}
-
-// Issue #143: container mode's raw value depends on the mode/attribute the
-// user is currently typing into the modal — read directly from those DOM
-// inputs (like the attribute-row visibility toggle already does), not from
-// _state, since neither is state-managed. "exists" mode always passes null
-// (its own transforms section is hidden, see the select-field-mode change
-// handler below) and attribute mode passes null until an attribute name has
-// actually been typed, so the hint doesn't show a misleading result before
-// then. Issue #169: "ownText" mode reads pendingOwnText, computed at click
-// time by content-script.js's collectOwnText — no DOM input to wait on,
-// unlike attribute mode's attribute-name field.
-function refreshExtendedTransformPreview() {
-  const mode = document.getElementById('select-field-mode')?.value ?? 'text';
-  let rawValue = null;
-  if (mode === 'text') {
-    rawValue = _state.pendingRawText;
-  } else if (mode === 'attribute') {
-    const attrName = document.getElementById('input-field-attribute')?.value.trim();
-    if (attrName) rawValue = (_state.pendingElementAttributes?.[attrName] ?? '').trim();
-  } else if (mode === 'ownText') {
-    // Issue #169
-    rawValue = _state.pendingOwnText;
-  }
-  renderTransformPreview('field-extended-transform-preview', rawValue, _state.pendingTransforms);
-}
-
 // ── State ────────────────────────────────────────────────────────────────────
 
 function setState(newState, patch = {}) {
@@ -684,7 +635,7 @@ function render() {
     if (_state.mode === 'container') {
       renderGroupTree(_state.groups);
     } else {
-      renderFields();
+      renderFields(_state.fields);
     }
 
     const hasConfig = _state.mode === 'container' ? _state.groups.length > 0
@@ -915,29 +866,9 @@ function render() {
     lastFieldModalSelector = _state.pendingSelector;
 
     if (_state.mode === 'container') {
-      show('modal-field-extended');
-      if (isNewPick) {
-        const nameInput = document.getElementById('input-field-extended-name');
-        if (nameInput) { nameInput.value = ''; nameInput.focus(); }
-        const modeSelect = document.getElementById('select-field-mode');
-        if (modeSelect) modeSelect.value = 'text';
-        document.getElementById('field-attribute-row')?.classList.add('hidden');
-        document.getElementById('field-extended-transforms-section')?.classList.remove('hidden');
-        const attrInput = document.getElementById('input-field-attribute');
-        if (attrInput) attrInput.value = '';
-      }
-      renderMatchCountHint('field-extended-match-count', _state.pendingMatchCount);
-      renderTransformList('field-extended-transform-list', _state.pendingTransforms);
-      refreshExtendedTransformPreview();
+      renderContainerFieldModal(bridge, isNewPick);
     } else {
-      show('modal-field-name');
-      if (isNewPick) {
-        const input = document.getElementById('input-field-name');
-        if (input) { input.value = ''; input.focus(); }
-      }
-      renderMatchCountHint('field-name-match-count', _state.pendingMatchCount);
-      renderTransformList('field-transform-list', _state.pendingTransforms);
-      refreshFlatTransformPreview();
+      renderFlatFieldModal(bridge, isNewPick);
     }
   } else {
     lastFieldModalSelector = null;
@@ -984,21 +915,6 @@ function syncModeToggleThumbs() {
   });
 }
 
-function renderFields(fields = _state.fields) {
-  const listEl = document.getElementById('fields-list');
-  if (!listEl) return;
-  listEl.innerHTML = '';
-  fields.forEach((field, i) => {
-    const row = document.createElement('div');
-    row.className = 'field-row';
-    row.innerHTML =
-      `<span class="field-name" title="${escapeHtml(field.name)}">${escapeHtml(field.name)}</span>` +
-      `<span class="field-selector" title="${escapeHtml(field.selector)}">${escapeHtml(field.selector)}</span>` +
-      frameBadgeHtml(field.framePath) +
-      `<button class="btn-danger btn-remove-field" data-index="${i}">${escapeHtml(t('common.remove'))}</button>`;
-    listEl.appendChild(row);
-  });
-}
 
 // Issue #41/#42, Phase 5/6. One card per action, kind fixed at creation time
 // (via btn-add-action-wait/-fill/-click/-scroll) — unlike the API-config
@@ -1193,25 +1109,6 @@ function renderDataPreview(preview) {
   }
 }
 
-// ── Field-name modal ──────────────────────────────────────────────────────────
-
-function confirmField() {
-  const name = document.getElementById('input-field-name')?.value.trim();
-  if (!name) return;
-  if (!transformsAreValid(_state.pendingTransforms)) return;
-  log('FIELD_ADD', { name, selector: _state.pendingSelector, framePath: _state.pendingFramePath, transforms: _state.pendingTransforms });
-  setState(STATES.IDLE, {
-    fields:           addField(_state.fields, name, _state.pendingSelector, _state.pendingFramePath, _state.pendingTransforms),
-    pendingSelector:  null,
-    pendingFramePath: null,
-    pendingMatchCount: null,
-    pendingRawText: null,
-    pendingElementAttributes: null,
-    pendingOwnText: null,
-    pendingTransforms: [],
-  });
-}
-
 // ── Container-Mode: mode switch, container/field add flows ─────────────────
 
 // Strictly separate — switching modes clears the *other* modes' configs
@@ -1366,82 +1263,13 @@ function wireEvents() {
 
   wireApiConfigEvents(bridge);
 
-  document.getElementById('btn-add-field')?.addEventListener('click', () => {
-    log('BTN add-field → START_SELECTION');
-    stopPreviewIfActive(bridge);
-    chrome.runtime.sendMessage({ type: 'START_SELECTION' });
-    setState(STATES.SELECTING, {
-      pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
-      domTree: null, domTreeTruncated: false, domTreeError: null,
-    });
-    if (_state.domViewEnabled) {
-      log('DOM view was enabled → re-requesting tree');
-      requestDomTree(bridge);
-    }
-  });
+  wireFlatModeEvents(bridge);
 
   document.getElementById('btn-mode-flat')?.addEventListener('click', () => switchMode('flat'));
   document.getElementById('btn-mode-container')?.addEventListener('click', () => switchMode('container'));
   document.getElementById('btn-mode-api')?.addEventListener('click', () => switchMode('api'));
 
-  document.getElementById('btn-add-root-container')?.addEventListener('click', () => openContainerModal(bridge, null));
-
-  // Event delegation for the container tree's per-row add/remove buttons
-  document.getElementById('group-tree-root')?.addEventListener('click', (e) => {
-    const li = e.target.closest('.group-tree-node');
-    if (!li) return;
-    const path = JSON.parse(li.dataset.path);
-
-    if (e.target.closest('.btn-add-subcontainer')) { openContainerModal(bridge, path); return; }
-    if (e.target.closest('.btn-add-subfield')) { startFieldSelection(bridge, path); return; }
-    if (e.target.closest('.btn-remove-group-node')) {
-      log('GROUP_NODE_REMOVE', { path });
-      stopPreviewIfActive(bridge);
-      setState(_state.current, { groups: removeGroupTreeNode(_state.groups, path) });
-    }
-  });
-
-  document.getElementById('btn-container-confirm')?.addEventListener('click', () => confirmContainerModal(bridge));
-  document.getElementById('input-container-name')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') confirmContainerModal(bridge);
-  });
-  document.getElementById('btn-container-cancel')?.addEventListener('click', () => cancelContainerModal(bridge));
-
-  document.getElementById('btn-field-extended-confirm')?.addEventListener('click', () => confirmExtendedField(bridge));
-  document.getElementById('input-field-extended-name')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') confirmExtendedField(bridge);
-  });
-  document.getElementById('btn-field-extended-cancel')?.addEventListener('click', () => cancelExtendedField(bridge));
-  document.getElementById('select-field-mode')?.addEventListener('change', (e) => {
-    document.getElementById('field-attribute-row')?.classList.toggle('hidden', e.target.value !== 'attribute');
-    // Issue #84: transforms are a string post-processing pipeline — not
-    // meaningful for "Vorhanden?" (a boolean-ish presence check).
-    document.getElementById('field-extended-transforms-section')?.classList.toggle('hidden', e.target.value === 'exists');
-    // Issue #143: the raw value the preview runs against depends on the mode.
-    refreshExtendedTransformPreview();
-  });
-  // Issue #143: typing an attribute name updates the preview live, without
-  // requiring a transform edit first.
-  document.getElementById('input-field-attribute')?.addEventListener('input', refreshExtendedTransformPreview);
-
-  // Issue #84: transform-chain editor, shared between the flat and
-  // container field modals — both read/write the same _state.pendingTransforms.
-  document.getElementById('btn-field-transform-add')?.addEventListener('click', () => {
-    patchState({ pendingTransforms: addTransform(_state.pendingTransforms) });
-  });
-  document.getElementById('btn-field-extended-transform-add')?.addEventListener('click', () => {
-    patchState({ pendingTransforms: addTransform(_state.pendingTransforms) });
-  });
-  wireTransformList(
-    'field-transform-list',
-    () => _state.pendingTransforms,
-    (transforms) => patchState({ pendingTransforms: transforms }),
-  );
-  wireTransformList(
-    'field-extended-transform-list',
-    () => _state.pendingTransforms,
-    (transforms) => patchState({ pendingTransforms: transforms }),
-  );
+  wireContainerModeEvents(bridge);
 
   document.getElementById('btn-cancel-selection')?.addEventListener('click', () => {
     log('BTN cancel-selection → STOP_SELECTION');
@@ -1468,27 +1296,6 @@ function wireEvents() {
       cancelPendingDomTreeRequest();
       patchState({ domViewEnabled: false });
     }
-  });
-
-  document.getElementById('btn-field-confirm')?.addEventListener('click', confirmField);
-
-  document.getElementById('input-field-name')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') confirmField();
-  });
-
-  document.getElementById('btn-field-cancel')?.addEventListener('click', () => {
-    log('BTN field-cancel');
-    setState(STATES.IDLE, { pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [] });
-  });
-
-  // Event delegation for "Remove" buttons in the field list
-  document.getElementById('fields-list')?.addEventListener('click', (e) => {
-    const btn = e.target.closest('.btn-remove-field');
-    if (!btn) return;
-    const index = parseInt(btn.dataset.index, 10);
-    log('FIELD_REMOVE', { index, name: _state.fields[index]?.name });
-    stopPreviewIfActive(bridge);
-    setState(_state.current, { fields: removeField(_state.fields, index) });
   });
 
   document.getElementById('btn-generate')?.addEventListener('click', () => {
@@ -2064,7 +1871,6 @@ if (typeof module !== 'undefined') {
     createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
     moveTransform, transformsAreValid, renderTransformList,
     applyTransformsPreview, toNumberPreview, renderTransformPreview,
-    refreshFlatTransformPreview, refreshExtendedTransformPreview,
     renderThemeToggle, syncModeToggleThumbs,
     applyConfigToState, renderSavedConfigsList, fetchSavedConfigs, saveCurrentConfig, loadSavedConfig,
     deleteSavedConfig, requestDeleteSavedConfig, cancelDeleteSavedConfig, openSaveConfigModal,
