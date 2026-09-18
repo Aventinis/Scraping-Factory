@@ -71,6 +71,7 @@ test('shared/logger.js + i18n/i18n.js + popup/popup.js load together without a r
     'popup/flat-mode-ui.js',
     'popup/browser-actions-ui.js',
     'popup/idle-screen-ui.js',
+    'popup/message-router.js',
     'popup/popup.js',
   ])).not.toThrow();
 });
