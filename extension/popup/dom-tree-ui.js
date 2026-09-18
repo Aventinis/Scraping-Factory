@@ -145,9 +145,47 @@ function highlightSelected(path) {
   }
 }
 
+// Called from popup.js's render() only while _state.current === STATES.SELECTING
+// — the toggle checkbox's own checked state, and the tree wrapper/loading/
+// error/truncated visibility, all driven by _state rather than DOM-local
+// bookkeeping.
+function renderDomTreeViewState(bridge) {
+  const state = bridge.getState();
+  const toggle = document.getElementById('toggle-dom-view');
+  if (toggle) toggle.checked = state.domViewEnabled;
+
+  const wrapper = document.getElementById('dom-tree-wrapper');
+  if (wrapper) wrapper.classList.toggle('hidden', !state.domViewEnabled);
+
+  const loading = document.getElementById('dom-tree-loading');
+  if (loading) loading.classList.toggle('hidden', state.domTree !== null || !!state.domTreeError);
+
+  const error = document.getElementById('dom-tree-error');
+  if (error) error.classList.toggle('hidden', !state.domTreeError);
+
+  const truncated = document.getElementById('dom-tree-truncated');
+  if (truncated) truncated.classList.toggle('hidden', !state.domTreeTruncated);
+}
+
+function wireDomTreeViewEvents(bridge) {
+  document.getElementById('toggle-dom-view')?.addEventListener('change', (e) => {
+    const enabled = e.target.checked;
+    log('BTN toggle-dom-view', enabled);
+    if (enabled) {
+      bridge.patchState({ domViewEnabled: true });
+      requestDomTree(bridge);
+    } else {
+      chrome.runtime.sendMessage({ type: 'DISABLE_DOM_VIEW' });
+      cancelPendingDomTreeRequest();
+      bridge.patchState({ domViewEnabled: false });
+    }
+  });
+}
+
   return {requestDomTree, cancelPendingDomTreeRequest,
     formatTreeLabel, buildTreeNodeEl, renderDomTree, findTreeNode, expandAncestors,
-    highlightHover, highlightSelected,};
+    highlightHover, highlightSelected,
+    renderDomTreeViewState, wireDomTreeViewEvents,};
 })();
 
 if (typeof module !== 'undefined') module.exports = SFDomTreeUI;

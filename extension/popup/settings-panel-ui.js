@@ -483,6 +483,49 @@ function wireSettingsPanelEvents(bridge) {
     }
   });
 
+  // Issue #183: collapsible "Monitoring" section toggle — a plain click
+  // (and Enter/Space, since the header is a div with role="button", not a
+  // real <button>) flips monitoringSectionOpen; nothing else about
+  // change-detection/hardening's own state is touched.
+  document.getElementById('monitoring-section-toggle')?.addEventListener('click', () => {
+    bridge.setState(bridge.getState().current, { monitoringSectionOpen: !bridge.getState().monitoringSectionOpen });
+  });
+  document.getElementById('monitoring-section-toggle')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      bridge.setState(bridge.getState().current, { monitoringSectionOpen: !bridge.getState().monitoringSectionOpen });
+    }
+  });
+
+  // Issue #184: collapsible "Settings" section toggle — same click/Enter/
+  // Space pattern as Monitoring above. The section's own three toggles
+  // (Json output, trial-run data preview, full output-file download) live
+  // here too, since they're exactly the "Settings" section's own content.
+  document.getElementById('settings-section-toggle')?.addEventListener('click', () => {
+    bridge.setState(bridge.getState().current, { settingsSectionOpen: !bridge.getState().settingsSectionOpen });
+  });
+  document.getElementById('settings-section-toggle')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      bridge.setState(bridge.getState().current, { settingsSectionOpen: !bridge.getState().settingsSectionOpen });
+    }
+  });
+
+  document.getElementById('toggle-include-data-preview')?.addEventListener('change', (e) => {
+    log('BTN toggle-include-data-preview', e.target.checked);
+    bridge.patchState({ includeDataPreview: e.target.checked });
+  });
+
+  document.getElementById('toggle-include-output-file')?.addEventListener('change', (e) => {
+    log('BTN toggle-include-output-file', e.target.checked);
+    bridge.patchState({ includeOutputFile: e.target.checked });
+  });
+
+  document.getElementById('toggle-output-json')?.addEventListener('change', (e) => {
+    log('BTN toggle-output-json', e.target.checked);
+    bridge.patchState({ useJsonOutput: e.target.checked });
+  });
+
 }
 
   return {renderSettingsPanel, renderHardeningNullRateList, renderHardeningRequiredFieldsList,

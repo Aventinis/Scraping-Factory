@@ -7,9 +7,6 @@ const log = createLogger('SF:Popup');
 const { initI18n, setLanguage, getLanguage, t } =
   typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
 
-const { DEFAULT_COMPANION_URL } =
-  typeof require !== 'undefined' ? require('../shared/companion-config') : self.SFCompanionConfig;
-
 const { initTheme, getTheme, cycleTheme } =
   typeof require !== 'undefined' ? require('../shared/theme') : self.SFTheme;
 
@@ -100,14 +97,15 @@ const {
   requestDomTree, cancelPendingDomTreeRequest,
   formatTreeLabel, renderDomTree,
   highlightHover, highlightSelected,
+  renderDomTreeViewState, wireDomTreeViewEvents,
 } = typeof require !== 'undefined' ? require('./dom-tree-ui') : self.SFDomTreeUI;
 
 const { stopPreviewIfActive } =
   typeof require !== 'undefined' ? require('./preview') : self.SFPreview;
 
 const {
-  getResolvedCompanionUrl, checkCompanion, useCustomCompanionUrl, resetCustomCompanionUrl,
-  buildVerificationErrorMessage, generate,
+  checkCompanion, buildVerificationErrorMessage, generate,
+  renderCompanionErrorScreen, wireCompanionErrorEvents,
 } = typeof require !== 'undefined' ? require('./companion-client') : self.SFCompanionClient;
 
 const { triggerDownload, downloadFile, triggerOutputFileDownload, downloadConfigExport } =
@@ -585,10 +583,7 @@ function render() {
   if (_state.saveConfigModalOpen) show('modal-save-config');
 
   if (_state.current === STATES.COMPANION_ERROR) {
-    const currentUrlEl = document.getElementById('error-current-url');
-    if (currentUrlEl) currentUrlEl.textContent = t('error.currentUrl', { url: getResolvedCompanionUrl() || DEFAULT_COMPANION_URL });
-    const urlInput = document.getElementById('input-companion-url');
-    if (urlInput && !urlInput.value) urlInput.value = getResolvedCompanionUrl() && getResolvedCompanionUrl() !== DEFAULT_COMPANION_URL ? getResolvedCompanionUrl() : '';
+    renderCompanionErrorScreen();
   }
 
   if (_state.current === STATES.IDLE) {
@@ -647,20 +642,7 @@ function render() {
   }
 
   if (_state.current === STATES.SELECTING) {
-    const toggle = document.getElementById('toggle-dom-view');
-    if (toggle) toggle.checked = _state.domViewEnabled;
-
-    const wrapper = document.getElementById('dom-tree-wrapper');
-    if (wrapper) wrapper.classList.toggle('hidden', !_state.domViewEnabled);
-
-    const loading = document.getElementById('dom-tree-loading');
-    if (loading) loading.classList.toggle('hidden', _state.domTree !== null || !!_state.domTreeError);
-
-    const error = document.getElementById('dom-tree-error');
-    if (error) error.classList.toggle('hidden', !_state.domTreeError);
-
-    const truncated = document.getElementById('dom-tree-truncated');
-    if (truncated) truncated.classList.toggle('hidden', !_state.domTreeTruncated);
+    renderDomTreeViewState(bridge);
   }
 
   syncModeToggleThumbs();
@@ -814,65 +796,9 @@ function wireEvents() {
   document.getElementById('btn-report-bug-toast')?.addEventListener('click', () => reportBug(_state.url));
   document.getElementById('btn-report-bug-domtree')?.addEventListener('click', () => reportBug(_state.url));
 
-  document.getElementById('btn-retry')?.addEventListener('click', () => {
-    log('BTN retry');
-    setState(STATES.CHECKING_COMPANION);
-    checkCompanion(bridge);
-  });
-
-  document.getElementById('btn-use-companion-url')?.addEventListener('click', () => {
-    log('BTN use-companion-url');
-    const input = document.getElementById('input-companion-url');
-    useCustomCompanionUrl(bridge, input?.value || '');
-  });
-
-  document.getElementById('btn-reset-companion-url')?.addEventListener('click', () => {
-    log('BTN reset-companion-url');
-    resetCustomCompanionUrl(bridge);
-  });
-
-  // Issue #183: collapsible "Monitoring" section toggle — a plain click
-  // (and Enter/Space, since the header is a div with role="button", not a
-  // real <button>) flips monitoringSectionOpen; nothing else about
-  // change-detection/hardening's own state is touched.
-  document.getElementById('monitoring-section-toggle')?.addEventListener('click', () => {
-    setState(_state.current, { monitoringSectionOpen: !_state.monitoringSectionOpen });
-  });
-  document.getElementById('monitoring-section-toggle')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      setState(_state.current, { monitoringSectionOpen: !_state.monitoringSectionOpen });
-    }
-  });
-
-  // Issue #184: collapsible "Settings" section toggle — same click/Enter/
-  // Space pattern as Monitoring above.
-  document.getElementById('settings-section-toggle')?.addEventListener('click', () => {
-    setState(_state.current, { settingsSectionOpen: !_state.settingsSectionOpen });
-  });
-  document.getElementById('settings-section-toggle')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      setState(_state.current, { settingsSectionOpen: !_state.settingsSectionOpen });
-    }
-  });
+  wireCompanionErrorEvents(bridge);
 
   wireSettingsPanelEvents(bridge);
-
-  document.getElementById('toggle-include-data-preview')?.addEventListener('change', (e) => {
-    log('BTN toggle-include-data-preview', e.target.checked);
-    patchState({ includeDataPreview: e.target.checked });
-  });
-
-  document.getElementById('toggle-include-output-file')?.addEventListener('change', (e) => {
-    log('BTN toggle-include-output-file', e.target.checked);
-    patchState({ includeOutputFile: e.target.checked });
-  });
-
-  document.getElementById('toggle-output-json')?.addEventListener('change', (e) => {
-    log('BTN toggle-output-json', e.target.checked);
-    patchState({ useJsonOutput: e.target.checked });
-  });
 
   wireApiConfigEvents(bridge);
 
@@ -896,18 +822,7 @@ function wireEvents() {
     });
   });
 
-  document.getElementById('toggle-dom-view')?.addEventListener('change', (e) => {
-    const enabled = e.target.checked;
-    log('BTN toggle-dom-view', enabled);
-    if (enabled) {
-      patchState({ domViewEnabled: true });
-      requestDomTree(bridge);
-    } else {
-      chrome.runtime.sendMessage({ type: 'DISABLE_DOM_VIEW' });
-      cancelPendingDomTreeRequest();
-      patchState({ domViewEnabled: false });
-    }
-  });
+  wireDomTreeViewEvents(bridge);
 
   document.getElementById('btn-generate')?.addEventListener('click', () => {
     log('BTN generate');

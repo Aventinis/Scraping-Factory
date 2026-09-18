@@ -13,7 +13,7 @@ const log = createLogger('SF:Popup');
 const { t } =
   typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
 
-const { getCompanionUrl, setCompanionUrlOverride, resetCompanionUrlOverride, normalizeUrl } =
+const { getCompanionUrl, setCompanionUrlOverride, resetCompanionUrlOverride, normalizeUrl, DEFAULT_COMPANION_URL } =
   typeof require !== 'undefined' ? require('../shared/companion-config') : self.SFCompanionConfig;
 
 const { STATES } =
@@ -195,8 +195,41 @@ async function generate(bridge) {
   }
 }
 
+// Called from popup.js's render() only while _state.current ===
+// STATES.COMPANION_ERROR — fills in the currently-resolved companion URL
+// (default or override) and, if the user hasn't typed anything yet, seeds
+// the override input with the current override (blank when it's still just
+// the default, so the placeholder shows through instead of a redundant
+// pre-filled default value).
+function renderCompanionErrorScreen() {
+  const currentUrlEl = document.getElementById('error-current-url');
+  if (currentUrlEl) currentUrlEl.textContent = t('error.currentUrl', { url: getResolvedCompanionUrl() || DEFAULT_COMPANION_URL });
+  const urlInput = document.getElementById('input-companion-url');
+  if (urlInput && !urlInput.value) urlInput.value = getResolvedCompanionUrl() && getResolvedCompanionUrl() !== DEFAULT_COMPANION_URL ? getResolvedCompanionUrl() : '';
+}
+
+function wireCompanionErrorEvents(bridge) {
+  document.getElementById('btn-retry')?.addEventListener('click', () => {
+    log('BTN retry');
+    bridge.setState(STATES.CHECKING_COMPANION);
+    checkCompanion(bridge);
+  });
+
+  document.getElementById('btn-use-companion-url')?.addEventListener('click', () => {
+    log('BTN use-companion-url');
+    const input = document.getElementById('input-companion-url');
+    useCustomCompanionUrl(bridge, input?.value || '');
+  });
+
+  document.getElementById('btn-reset-companion-url')?.addEventListener('click', () => {
+    log('BTN reset-companion-url');
+    resetCustomCompanionUrl(bridge);
+  });
+}
+
   return {getResolvedCompanionUrl, checkCompanion, useCustomCompanionUrl, resetCustomCompanionUrl,
-    checkRobotsTxt, buildVerificationErrorMessage, generate,};
+    checkRobotsTxt, buildVerificationErrorMessage, generate,
+    renderCompanionErrorScreen, wireCompanionErrorEvents,};
 })();
 
 if (typeof module !== 'undefined') module.exports = SFCompanionClient;
