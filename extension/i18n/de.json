@@ -299,8 +299,9 @@
       "nameLabel": "Name des Outputs (z. B. \"Lauf vor Proxy-Fix\")",
       "namePlaceholder": "Name",
       "save": "Speichern",
-      "noConfigsHint": "Für diese Seite gibt es noch keine gespeicherte Konfiguration — speichere zuerst die aktuelle Konfiguration, um diesen Output damit zu verknüpfen.",
-      "saveConfigShortcut": "Konfiguration speichern"
+      "noConfigsHint": "Für diese Seite gibt es noch keine gespeicherte Konfiguration — gib unten einen Namen an, sie wird dann erstellt und mit diesem Output verknüpft.",
+      "configNameLabel": "Name der Konfiguration (z. B. \"Produktliste\")",
+      "configNamePlaceholder": "Name"
     },
     "matchCount": {
       "found": "{count} Element(e) gefunden"

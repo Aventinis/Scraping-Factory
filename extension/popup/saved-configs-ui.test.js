@@ -226,11 +226,12 @@ describe('persist and browse run outputs (Issue #202)', () => {
     <div id="modal-save-output" class="modal hidden">
       <div id="save-output-picker">
         <select id="select-save-output-config"></select>
-        <input id="input-save-output-name" />
       </div>
-      <p id="save-output-no-configs-hint" class="hidden"></p>
+      <div id="save-output-create-config" class="hidden">
+        <input id="input-save-output-config-name" />
+      </div>
+      <input id="input-save-output-name" />
       <button id="btn-save-output-cancel"></button>
-      <button id="btn-save-output-go-to-save-config" class="hidden"></button>
       <button id="btn-save-output-confirm"></button>
     </div>
     <div id="error-toast" class="hidden">
@@ -436,6 +437,8 @@ describe('persist and browse run outputs (Issue #202): no saved config yet', () 
     await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
+  let fetchMock;
+
   beforeEach(async () => {
     jest.resetModules();
     document.body.innerHTML = `
@@ -460,11 +463,12 @@ describe('persist and browse run outputs (Issue #202): no saved config yet', () 
       <div id="modal-save-output" class="modal hidden">
         <div id="save-output-picker">
           <select id="select-save-output-config"></select>
-          <input id="input-save-output-name" />
         </div>
-        <p id="save-output-no-configs-hint" class="hidden"></p>
+        <div id="save-output-create-config" class="hidden">
+          <input id="input-save-output-config-name" />
+        </div>
+        <input id="input-save-output-name" />
         <button id="btn-save-output-cancel"></button>
-        <button id="btn-save-output-go-to-save-config" class="hidden"></button>
         <button id="btn-save-output-confirm"></button>
       </div>
     `;
@@ -484,7 +488,9 @@ describe('persist and browse run outputs (Issue #202): no saved config yet', () 
       },
     };
 
-    global.fetch = jest.fn((url) => {
+    let nextConfigId = 2;
+    fetchMock = jest.fn((url, init) => {
+      const method = init?.method || 'GET';
       const urlStr = String(url);
       if (urlStr.endsWith('/health')) return Promise.resolve({ ok: true });
       if (urlStr.includes('/configs?url=')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
@@ -494,8 +500,25 @@ describe('persist and browse run outputs (Issue #202): no saved config yet', () 
           json: () => Promise.resolve({ script: '# script', outputFile: { fileName: 'output.csv', content: 'a\n' } }),
         });
       }
-      return Promise.reject(new Error(`unexpected fetch: ${urlStr}`));
+      // Issue #209: "Save output" create-and-link — POST /configs first
+      // (createSavedConfig), then POST /configs/{id}/outputs with the
+      // newly-minted id (saveCurrentOutput).
+      if (urlStr.endsWith('/configs') && method === 'POST') {
+        const body = JSON.parse(init.body);
+        const created = { id: nextConfigId++, url: body.url, name: body.name, savedAt: '2026-01-02T00:00:00.000Z' };
+        return Promise.resolve({ ok: true, status: 201, json: () => Promise.resolve(created) });
+      }
+      const outputsListMatch = urlStr.match(/\/configs\/(\d+)\/outputs$/);
+      if (outputsListMatch && method === 'POST') {
+        const body = JSON.parse(init.body);
+        return Promise.resolve({
+          ok: true, status: 201,
+          json: () => Promise.resolve({ id: 100, savedConfigId: Number(outputsListMatch[1]), name: body.name, fileName: body.fileName, savedAt: '2026-01-03T00:00:00.000Z' }),
+        });
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${method} ${urlStr}`));
     });
+    global.fetch = fetchMock;
 
     require('./popup');
     await flushMicrotasks();
@@ -506,20 +529,30 @@ describe('persist and browse run outputs (Issue #202): no saved config yet', () 
     await flushMicrotasks();
   });
 
-  test('Save output shows a "save configuration first" hint instead of the picker', () => {
+  test('Save output shows an inline "create configuration" form, prefilled with the hostname, instead of the picker', () => {
     document.getElementById('btn-save-output').click();
 
     expect(document.getElementById('save-output-picker').classList.contains('hidden')).toBe(true);
-    expect(document.getElementById('save-output-no-configs-hint').classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('btn-save-output-confirm').classList.contains('hidden')).toBe(true);
-    expect(document.getElementById('btn-save-output-go-to-save-config').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('save-output-create-config').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('input-save-output-config-name').value).toBe('example.com');
   });
 
-  test('the hint\'s shortcut closes modal-save-output and opens modal-save-config instead', () => {
+  test('confirming Save output creates a new configuration and links this output to it in one action', async () => {
     document.getElementById('btn-save-output').click();
-    document.getElementById('btn-save-output-go-to-save-config').click();
+
+    document.getElementById('input-save-output-config-name').value = 'Product listing';
+    document.getElementById('input-save-output-name').value = 'First run';
+    document.getElementById('btn-save-output-confirm').click();
+    await flushMicrotasks();
+
+    const configPostCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/configs') && init?.method === 'POST');
+    expect(configPostCall).toBeDefined();
+    expect(JSON.parse(configPostCall[1].body)).toMatchObject({ url: 'https://example.com/products', name: 'Product listing' });
+
+    const outputPostCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/configs/2/outputs') && init?.method === 'POST');
+    expect(outputPostCall).toBeDefined();
+    expect(JSON.parse(outputPostCall[1].body)).toEqual({ name: 'First run', fileName: 'output.csv', content: 'a\n' });
 
     expect(document.getElementById('modal-save-output').classList.contains('hidden')).toBe(true);
-    expect(document.getElementById('modal-save-config').classList.contains('hidden')).toBe(false);
   });
 });

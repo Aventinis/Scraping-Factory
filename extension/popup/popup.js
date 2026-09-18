@@ -114,10 +114,10 @@ const { triggerDownload, downloadFile, triggerOutputFileDownload, downloadConfig
 
 const {
   renderSavedConfigsList,
-  fetchSavedConfigs, saveCurrentConfig, loadSavedConfig,
+  fetchSavedConfigs, createSavedConfig, saveCurrentConfig, loadSavedConfig,
   requestDeleteSavedConfig, cancelDeleteSavedConfig, deleteSavedConfig,
   openSaveConfigModal,
-  saveCurrentOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
+  saveCurrentOutput, createConfigAndSaveOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
   requestDeleteSavedOutput, cancelDeleteSavedOutput, deleteSavedOutput,
   renderSaveOutputModal, wireSavedConfigsEvents,
 } = typeof require !== 'undefined' ? require('./saved-configs-ui') : self.SFSavedConfigsUI;
@@ -978,10 +978,10 @@ if (typeof module !== 'undefined') {
     moveTransform, transformsAreValid, renderTransformList,
     applyTransformsPreview, toNumberPreview, renderTransformPreview,
     renderThemeToggle, syncModeToggleThumbs,
-    applyConfigToState, renderSavedConfigsList, fetchSavedConfigs, saveCurrentConfig, loadSavedConfig,
+    applyConfigToState, renderSavedConfigsList, fetchSavedConfigs, createSavedConfig, saveCurrentConfig, loadSavedConfig,
     deleteSavedConfig, requestDeleteSavedConfig, cancelDeleteSavedConfig, openSaveConfigModal,
     triggerOutputFileDownload, downloadFile,
-    saveCurrentOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
+    saveCurrentOutput, createConfigAndSaveOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
     requestDeleteSavedOutput, cancelDeleteSavedOutput, deleteSavedOutput, renderSaveOutputModal,
   };
 }
