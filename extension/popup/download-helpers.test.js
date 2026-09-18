@@ -14,7 +14,7 @@ describe('downloadConfigExport (btn-export-config)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -133,7 +133,7 @@ describe('downloadConfigExport (btn-export-config)', () => {
 
 describe('download the full trial-run output (Issue #161)', () => {
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {

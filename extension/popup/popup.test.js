@@ -2342,7 +2342,7 @@ describe('SELECTION_UNAVAILABLE handling', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -2426,7 +2426,7 @@ describe('SELECTION_CLICK_OUT_OF_SCOPE handling', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -2498,7 +2498,7 @@ describe('DOM tree loading timeout', () => {
   // resolved) before settling on COMPANION_ERROR — flush those microtasks
   // with real timers before switching to fake ones for the timeout itself.
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -2614,7 +2614,7 @@ describe('Container-Mode integration', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -2848,7 +2848,7 @@ describe('Live selector match-count preview (Issue #85)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -3035,7 +3035,7 @@ describe('Field transform-chain editor (Issue #84)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -3322,7 +3322,7 @@ describe('Transform-chain live preview (Issue #143)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -3576,7 +3576,7 @@ describe('Transform-chain live preview (Issue #143)', () => {
 
 describe('output settings (script/output filename)', () => {
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -3771,7 +3771,7 @@ describe('Language selector (lang-select)', () => {
   // usual 5 keeps this reliably past STATES.IDLE without depending on
   // exact tick counts.
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 15; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   function baseHtml() {
@@ -3927,7 +3927,7 @@ describe('Network recording toggle (btn-api-capture)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -4070,7 +4070,7 @@ describe('API-mode candidate search (btn-api-search, Issue #53 Phase 4)', () => 
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -4194,7 +4194,7 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -4582,7 +4582,7 @@ describe('API-tree wiring end-to-end (Issue #54, Phase A5)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -4864,7 +4864,7 @@ describe('API-mode field transforms (Issue #84 follow-up)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -5091,7 +5091,7 @@ describe('recorded-endpoints panel and pool-derived value-list autofill', () => 
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -5297,7 +5297,7 @@ describe('recorded-endpoints panel and pool-derived value-list autofill', () => 
 
 describe('API-Mode third mode integration (Issue #53 Phase 6)', () => {
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   const seededApiConfig = {
@@ -5439,7 +5439,7 @@ describe('API-Mode range format presets (bug/api-range-format follow-up)', () =>
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -5637,7 +5637,7 @@ describe('API-Mode request-body tree end-to-end (Issue #55, Phase B4)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   const GRAPHQL_ENTRY = {

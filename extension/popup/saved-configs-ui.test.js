@@ -7,7 +7,7 @@ Object.defineProperty(window.navigator, 'language', { value: 'de-DE', configurab
 
 describe('saved configuration history (Issue #141)', () => {
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   let fetchMock;
@@ -155,7 +155,7 @@ describe('saved configuration history (Issue #141)', () => {
 
 describe('saved configuration history: an older/unreachable companion without /configs', () => {
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -194,7 +194,7 @@ describe('saved configuration history: an older/unreachable companion without /c
 
 describe('persist and browse run outputs (Issue #202)', () => {
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   let fetchMock;
@@ -433,7 +433,7 @@ describe('persist and browse run outputs (Issue #202)', () => {
 
 describe('persist and browse run outputs (Issue #202): no saved config yet', () => {
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {

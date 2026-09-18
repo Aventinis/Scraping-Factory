@@ -76,7 +76,7 @@ describe('reportBug end-to-end via the COMPANION_ERROR screen button', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {

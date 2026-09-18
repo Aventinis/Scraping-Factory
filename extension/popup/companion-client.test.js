@@ -37,7 +37,7 @@ describe('buildVerificationErrorMessage', () => {
 
 describe('generate() surfaces companion verification failures', () => {
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -105,7 +105,7 @@ describe('generate() surfaces companion verification failures', () => {
 
 describe('generate() surfaces a 400 config rejection without inviting a bug report', () => {
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -173,7 +173,7 @@ describe('generate() surfaces a 400 config rejection without inviting a bug repo
 
 describe('COMPANION_ERROR screen: manual companion URL override', () => {
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   let storedOverride;
@@ -286,7 +286,7 @@ describe('COMPANION_ERROR screen: manual companion URL override', () => {
 
 describe('robots.txt check (btn-check-robots)', () => {
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
