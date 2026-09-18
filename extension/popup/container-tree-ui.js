@@ -22,8 +22,8 @@ const SFContainerTreeUI = (function () {
   const { t } = typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
   const { STATES, escapeHtml } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
   const {
-    formatGroupNodeLabel, resolveGroupNode, hasRepeatingAncestor, buildFieldNode, insertContainerNode,
-    removeGroupTreeNode,
+    groupNodeSuffix, resolveGroupNode, hasRepeatingAncestor, buildFieldNode, insertContainerNode,
+    removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode,
   } = typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
   const { transformsAreValid, addTransform } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
   const { renderTransformList, renderTransformPreview, wireTransformList } =
@@ -45,7 +45,7 @@ const SFContainerTreeUI = (function () {
   // add-container/add-field/remove buttons, and nodes start expanded since
   // this tree is user-authored and typically small, unlike a full page DOM.
 
-  function buildGroupTreeNodeEl(node, path, depth) {
+  function buildGroupTreeNodeEl(node, path, depth, siblingCount) {
     const li = document.createElement('li');
     li.className = 'group-tree-node';
     li.dataset.path = JSON.stringify(path);
@@ -60,11 +60,24 @@ const SFContainerTreeUI = (function () {
     if (hasChildren) toggle.innerHTML = TREE_TOGGLE_CHEVRON_SVG; // starts expanded, see below
     row.appendChild(toggle);
 
-    const label = document.createElement('span');
-    label.className = 'group-tree-label';
-    label.textContent = formatGroupNodeLabel(node);
-    label.title = node.selector;
-    row.appendChild(label);
+    // Issue #177: an editable name input (same shape as api-config-ui.js's
+    // own tree-row nameInput) instead of a plain label — formatGroupNodeLabel's
+    // own name+suffix text is now split across this and the read-only suffix
+    // span below it.
+    const index = path[path.length - 1];
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'group-tree-name';
+    nameInput.dataset.path = JSON.stringify(path);
+    nameInput.value = node.name;
+    nameInput.title = node.selector;
+    row.appendChild(nameInput);
+
+    const suffix = document.createElement('span');
+    suffix.className = 'group-tree-label';
+    suffix.textContent = groupNodeSuffix(node);
+    suffix.title = node.selector;
+    row.appendChild(suffix);
 
     if (node.framePath) {
       const badge = document.createElement('span');
@@ -73,6 +86,24 @@ const SFContainerTreeUI = (function () {
       badge.textContent = t('frame.badge');
       row.appendChild(badge);
     }
+
+    // Issue #177: reorder among direct siblings — mirrors field-transforms-ui.js's
+    // own move-up/move-down buttons (bare arrow glyphs, disabled at the
+    // boundary) rather than introducing a new UI convention for "move within
+    // a list".
+    const moveUpBtn = document.createElement('button');
+    moveUpBtn.type = 'button';
+    moveUpBtn.className = 'btn-secondary btn-tiny btn-group-move-up';
+    moveUpBtn.textContent = '↑';
+    moveUpBtn.disabled = index === 0;
+    row.appendChild(moveUpBtn);
+
+    const moveDownBtn = document.createElement('button');
+    moveDownBtn.type = 'button';
+    moveDownBtn.className = 'btn-secondary btn-tiny btn-group-move-down';
+    moveDownBtn.textContent = '↓';
+    moveDownBtn.disabled = index === siblingCount - 1;
+    row.appendChild(moveDownBtn);
 
     if (node.kind === 'group') {
       const addContainerBtn = document.createElement('button');
@@ -96,7 +127,7 @@ const SFContainerTreeUI = (function () {
     if (node.kind === 'group') {
       const childUl = document.createElement('ul');
       childUl.className = 'group-tree-children';
-      node.children.forEach((child, i) => childUl.appendChild(buildGroupTreeNodeEl(child, [...path, i], depth + 1)));
+      node.children.forEach((child, i) => childUl.appendChild(buildGroupTreeNodeEl(child, [...path, i], depth + 1, node.children.length)));
       li.appendChild(childUl);
 
       if (hasChildren) {
@@ -114,7 +145,7 @@ const SFContainerTreeUI = (function () {
     const root = document.getElementById('group-tree-root');
     if (!root) return;
     root.innerHTML = '';
-    groups.forEach((node, i) => root.appendChild(buildGroupTreeNodeEl(node, [i], 0)));
+    groups.forEach((node, i) => root.appendChild(buildGroupTreeNodeEl(node, [i], 0, groups.length)));
   }
   function openContainerModal(bridge, parentPath) {
     log('CONTAINER_MODAL open', { parentPath });
@@ -281,7 +312,7 @@ const SFContainerTreeUI = (function () {
   function wireContainerModeEvents(bridge) {
   document.getElementById('btn-add-root-container')?.addEventListener('click', () => openContainerModal(bridge, null));
 
-  // Event delegation for the container tree's per-row add/remove buttons
+  // Event delegation for the container tree's per-row add/remove/move buttons
   document.getElementById('group-tree-root')?.addEventListener('click', (e) => {
     const li = e.target.closest('.group-tree-node');
     if (!li) return;
@@ -293,7 +324,39 @@ const SFContainerTreeUI = (function () {
       log('GROUP_NODE_REMOVE', { path });
       bridge.stopPreviewIfActive();
       bridge.setState(bridge.getState().current, { groups: removeGroupTreeNode(bridge.getState().groups, path) });
+      return;
     }
+    // Issue #177: reorder among direct siblings — no-ops past either
+    // boundary (moveGroupTreeNode's own guard), so the disabled attribute on
+    // the boundary buttons is purely a visual affordance, not load-bearing.
+    if (e.target.closest('.btn-group-move-up')) {
+      log('GROUP_NODE_MOVE', { path, direction: -1 });
+      bridge.setState(bridge.getState().current, { groups: moveGroupTreeNode(bridge.getState().groups, path, -1) });
+      return;
+    }
+    if (e.target.closest('.btn-group-move-down')) {
+      log('GROUP_NODE_MOVE', { path, direction: 1 });
+      bridge.setState(bridge.getState().current, { groups: moveGroupTreeNode(bridge.getState().groups, path, 1) });
+    }
+  });
+
+  // Issue #177: rename a tree node in place, committed on change (like the
+  // API tree's own nameInput) — a blank value reverts the input to the
+  // node's current name instead of saving an empty one, since Container
+  // mode's own field-name inputs elsewhere never allow blank either.
+  document.getElementById('group-tree-root')?.addEventListener('change', (e) => {
+    const nameInput = e.target.closest('.group-tree-name');
+    if (!nameInput) return;
+    const path = JSON.parse(nameInput.dataset.path);
+    const name = nameInput.value.trim();
+    if (!name) {
+      nameInput.value = resolveGroupNode(bridge.getState().groups, path)?.name ?? '';
+      return;
+    }
+    log('GROUP_NODE_RENAME', { path, name });
+    bridge.setState(bridge.getState().current, {
+      groups: updateGroupTreeNode(bridge.getState().groups, path, (node) => ({ ...node, name })),
+    });
   });
 
   document.getElementById('btn-container-confirm')?.addEventListener('click', () => confirmContainerModal(bridge));
