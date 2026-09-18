@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using ScrapingFactory.Companion;
 using ScrapingFactory.Compiler.Backends;
+using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -62,13 +63,13 @@ app.MapPost("/configs", (SaveConfigRequest? request, SavedConfigStore store) =>
     return Results.Created($"/configs/{saved.Id}", saved);
 });
 
+// Issue #239: the url query parameter is now optional — omitting it lists
+// saved configurations across every host, needed by Combined mode's
+// component picker (a component can come from any previously-scraped site,
+// not just the current tab's hostname). Passing url keeps today's exact
+// hostname-scoped behavior, fully backward compatible.
 app.MapGet("/configs", (string? url, SavedConfigStore store) =>
-{
-    if (string.IsNullOrWhiteSpace(url))
-        return Results.BadRequest(new { error = "The url query parameter is required." });
-
-    return Results.Ok(store.ListByUrl(url));
-});
+    Results.Ok(string.IsNullOrWhiteSpace(url) ? store.ListAll() : store.ListByUrl(url)));
 
 app.MapGet("/configs/{id:long}", (long id, SavedConfigStore store) =>
 {
@@ -138,46 +139,51 @@ app.MapDelete("/configs/{configId:long}/outputs/{id:long}", (long configId, long
     return store.DeleteOutput(id) ? Results.NoContent() : Results.NotFound();
 });
 
-app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModuleRegistry registry) =>
+// Flat-Mode (Fields → Csv), Container-Mode (Groups → Xml) and API-Mode
+// (Api → Csv) are strictly separate — mixing any two in one request would
+// leave it ambiguous which extraction phase (and OutputFormat) the caller
+// wants. Extracted so both a normal single-mode request and, per component,
+// a Combined-mode request (Issue #239) run the exact same checks — returns
+// null when config is structurally fine to proceed with.
+static string? ValidateModeExclusivity(ScrapingConfig config)
 {
-    var hasFields = config?.Fields.Count > 0;
-    var hasGroups = config?.Groups?.Count > 0;
-    var hasApi = config?.Api is not null;
-    if (config is null || string.IsNullOrWhiteSpace(config.Url) || (!hasFields && !hasGroups && !hasApi))
-    {
-        return Results.BadRequest(new
-        {
-            error = "Invalid ScrapingConfig: Url and at least one Field, Group or Api are required.",
-        });
-    }
+    var hasFields = config.Fields.Count > 0;
+    var hasGroups = config.Groups is { Count: > 0 };
+    var hasApi = config.Api is not null;
+    if (string.IsNullOrWhiteSpace(config.Url) || (!hasFields && !hasGroups && !hasApi))
+        return "Url and at least one Field, Group or Api are required.";
 
-    // Flat-Mode (Fields → Csv), Container-Mode (Groups → Xml) and API-Mode
-    // (Api → Csv) are strictly separate — mixing any two in one request
-    // would leave it ambiguous which extraction phase (and OutputFormat)
-    // the caller wants.
-    if (hasFields && hasGroups)
-        return Results.BadRequest(new { error = "Fields and Groups are mutually exclusive." });
-    if (hasFields && hasApi)
-        return Results.BadRequest(new { error = "Fields and Api are mutually exclusive." });
-    if (hasGroups && hasApi)
-        return Results.BadRequest(new { error = "Groups and Api are mutually exclusive." });
+    if (hasFields && hasGroups) return "Fields and Groups are mutually exclusive.";
+    if (hasFields && hasApi) return "Fields and Api are mutually exclusive.";
+    if (hasGroups && hasApi) return "Groups and Api are mutually exclusive.";
 
     // Issue #83: Api-Mode builds its own request URL from UrlTemplate/
     // Parameters and never reads the page-scraping start URL at all — an
     // AdditionalUrls list here would silently do nothing, so it's rejected
     // outright instead, same as the other three mode combinations above.
     if (hasApi && config.AdditionalUrls is { Count: > 0 })
-        return Results.BadRequest(new { error = "AdditionalUrls and Api are mutually exclusive." });
+        return "AdditionalUrls and Api are mutually exclusive.";
 
     // Issue #174: same reasoning as AdditionalUrls above — Api-Mode never
     // reads the page-scraping start URL, so pagination would silently do
     // nothing there.
     if (hasApi && config.Pagination is not null)
-        return Results.BadRequest(new { error = "Pagination and Api are mutually exclusive." });
+        return "Pagination and Api are mutually exclusive.";
 
-    // Wire format (Fields/Groups) is unchanged; internally it's compiled
-    // into the canonical Steps-based ScrapingPlan that backends actually
-    // consume.
+    return null;
+}
+
+// Wire format (Fields/Groups) is unchanged; internally it's compiled into
+// the canonical Steps-based ScrapingPlan that backends actually consume.
+// Extracted (Issue #239) so both a normal single-mode request and, per
+// component, a Combined-mode request share the exact same
+// build→validate→resolve-generator→render sequence instead of duplicating
+// it. transformPlan (used only by Combined mode, to force a component's
+// plan to Json/a fixed output name after its own real shape/engine has
+// already been validated) runs between validation and generation.
+static (ScrapingPlan? Plan, string? Script, string? ValidationError, string? GeneratorError) GenerateScript(
+    ScrapingConfig config, LanguageModuleRegistry registry, Func<ScrapingPlan, ScrapingPlan>? transformPlan = null)
+{
     var plan = ScrapingPlanBuilder.Build(config);
 
     // Fast structural checks (malformed URL, duplicate/empty field names)
@@ -186,7 +192,10 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     // proven by actually running the script below.
     var planValidation = ScrapingPlanValidator.Validate(plan);
     if (!planValidation.Success)
-        return Results.BadRequest(new { error = planValidation.Error });
+        return (null, null, planValidation.Error, null);
+
+    if (transformPlan is not null)
+        plan = transformPlan(plan);
 
     // v1 only ships Python backends, so the language id is fixed here;
     // a later phase will let ScrapingConfig pick the target language. The
@@ -202,9 +211,141 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     }
     catch (InvalidOperationException ex)
     {
-        return Results.UnprocessableEntity(new { error = ex.Message });
+        return (null, null, null, ex.Message);
     }
-    var script = generator.Generate(plan);
+
+    return (plan, generator.Generate(plan), null, null);
+}
+
+app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModuleRegistry registry) =>
+{
+    if (config is null)
+    {
+        return Results.BadRequest(new
+        {
+            error = "Invalid ScrapingConfig: Url and at least one Field, Group or Api are required.",
+        });
+    }
+
+    // Combined mode (Issue #239): a list of fully independent component
+    // configs to run and merge — mutually exclusive with Fields/Groups/Api
+    // and with every other cross-cutting field on THIS (outer) config, all
+    // of which are component-level concerns only for v1 (each component's
+    // own Config carries its own AdditionalUrls/Pagination/BrowserActions/
+    // ChangeDetection/Proxy/Hardening/PersistentSession/ExternalConfig).
+    // Handled as its own branch rather than through
+    // ValidateModeExclusivity/GenerateScript for the outer request itself,
+    // since there's no single outer ScrapingPlan/OutputFormat/Engine to
+    // build for "run N independent scrapes and merge them" — see
+    // PythonCombinedScriptGenerator.
+    if (config.Combined is { Count: > 0 } combined)
+    {
+        if (config.Fields.Count > 0 || config.Groups is { Count: > 0 } || config.Api is not null)
+            return Results.BadRequest(new { error = "Combined is mutually exclusive with Fields, Groups and Api." });
+        if (config.AdditionalUrls is { Count: > 0 })
+            return Results.BadRequest(new { error = "AdditionalUrls is not supported on a Combined request — set it on each component's own config instead." });
+        if (config.Pagination is not null)
+            return Results.BadRequest(new { error = "Pagination is not supported on a Combined request — set it on each component's own config instead." });
+        if (config.BrowserActions is { Count: > 0 })
+            return Results.BadRequest(new { error = "BrowserActions is not supported on a Combined request — set it on each component's own config instead." });
+        if (config.ChangeDetection is not null)
+            return Results.BadRequest(new { error = "ChangeDetection is not supported on a Combined request — set it on each component's own config instead." });
+        if (config.Proxy is not null)
+            return Results.BadRequest(new { error = "Proxy is not supported on a Combined request — set it on each component's own config instead." });
+        if (config.Hardening is { Count: > 0 })
+            return Results.BadRequest(new { error = "Hardening is not supported on a Combined request — set it on each component's own config instead." });
+        if (config.PersistentSession == true)
+            return Results.BadRequest(new { error = "PersistentSession is not supported on a Combined request — set it on each component's own config instead." });
+        if (config.ExternalConfig == true)
+            return Results.BadRequest(new { error = "ExternalConfig is not supported on a Combined request — set it on each component's own config instead." });
+
+        if (combined.Count < 2)
+            return Results.BadRequest(new { error = "Combined requires at least 2 components." });
+        if (combined.Any(c => c.Config.Combined is { Count: > 0 }))
+            return Results.BadRequest(new { error = "Nested Combined configurations are not supported." });
+
+        var componentNames = combined
+            .Select((c, i) => string.IsNullOrWhiteSpace(c.Name) ? $"component_{i + 1}" : c.Name.Trim())
+            .ToList();
+        var duplicateComponentNames = componentNames.GroupBy(n => n).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+        if (duplicateComponentNames.Count > 0)
+            return Results.BadRequest(new { error = $"Duplicate component names: {string.Join(", ", duplicateComponentNames)}." });
+
+        var componentScripts = new List<(string Name, string Script)>();
+        var mergedVerificationValues = new Dictionary<string, string>();
+        var componentExtraTimeoutMs = 0L;
+
+        for (var i = 0; i < combined.Count; i++)
+        {
+            var component = combined[i];
+            var componentName = componentNames[i];
+
+            var componentExclusivityError = ValidateModeExclusivity(component.Config);
+            if (componentExclusivityError is not null)
+                return Results.BadRequest(new { error = $"Component '{componentName}': {componentExclusivityError}" });
+
+            var (componentPlan, componentScript, componentValidationError, componentGeneratorError) =
+                GenerateScript(component.Config, registry, plan => plan.With(OutputFormat.Json, "output"));
+            if (componentValidationError is not null)
+                return Results.BadRequest(new { error = $"Component '{componentName}': {componentValidationError}" });
+            if (componentGeneratorError is not null)
+                return Results.UnprocessableEntity(new { error = $"Component '{componentName}': {componentGeneratorError}" });
+
+            componentScripts.Add((componentName, componentScript!));
+            componentExtraTimeoutMs += componentPlan!.Steps.OfType<ScrollStep>().Sum(step => (long)step.MaxIterations * step.WaitAfterMs);
+
+            // See CombinedComponentConfig.VerificationValues's own doc
+            // comment — merged flat across every component (a name
+            // collision silently lets the later component's value win,
+            // acceptable for one-time trial-run-only test values), since
+            // the verifier below only ever spawns ONE outer subprocess (the
+            // combined script itself); each inner per-component subprocess
+            // it spawns in turn inherits that one process's environment
+            // automatically, with no extra plumbing needed.
+            foreach (var (name, value) in FillVerificationValues.Filter(component.Config.BrowserActions, component.VerificationValues))
+                mergedVerificationValues[name] = value;
+        }
+
+        var combinedScriptFileName = FileNameSanitizer.SanitizeBaseName(config.ScriptFileName, "scraper");
+        var combinedOutputFileBaseName = FileNameSanitizer.SanitizeBaseName(config.OutputFileName, "output");
+        var combinedScript = PythonCombinedScriptGenerator.Generate(componentScripts, combinedScriptFileName, combinedOutputFileBaseName);
+
+        // The verifier's own baseline timeout covers running every
+        // component sequentially inside the combined script, not just one
+        // script — extraTimeout only ever accounts for each component's own
+        // ScrollStep cost the same way a single-mode request's own does; a
+        // combined request with many slow components may need
+        // VerifierTimeoutSeconds raised (see CompanionBackendOverrides).
+        var combinedVerifier = registry.ResolveScriptVerifier("python");
+        var combinedVerification = await combinedVerifier.VerifyAsync(
+            combinedScript, OutputFormat.Json, combinedOutputFileBaseName, TimeSpan.FromMilliseconds(componentExtraTimeoutMs),
+            mergedVerificationValues.Count > 0 ? mergedVerificationValues : null,
+            config.IncludePreview == true, config.IncludeOutputFile == true);
+        if (!combinedVerification.Success)
+            return Results.UnprocessableEntity(new { error = combinedVerification.Error ?? "Script verification failed." });
+
+        if (config.IncludePreview != true && config.IncludeOutputFile != true)
+            return Results.Text(combinedScript, "text/plain");
+
+        return Results.Json(new
+        {
+            script = combinedScript,
+            preview = combinedVerification.Preview,
+            outputFile = combinedVerification.OutputFileContent is not null
+                ? new { fileName = combinedVerification.OutputFileName, content = combinedVerification.OutputFileContent }
+                : null,
+        });
+    }
+
+    var exclusivityError = ValidateModeExclusivity(config);
+    if (exclusivityError is not null)
+        return Results.BadRequest(new { error = exclusivityError });
+
+    var (plan, script, validationError, generatorError) = GenerateScript(config, registry);
+    if (validationError is not null)
+        return Results.BadRequest(new { error = validationError });
+    if (generatorError is not null)
+        return Results.UnprocessableEntity(new { error = generatorError });
 
     // Actually run the generated script against the live page before handing
     // it out — this proves the exact artifact the user is about to download
@@ -217,7 +358,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     // keep the tight default instead of everyone paying for the slowest
     // possible configuration.
     var extraTimeout = TimeSpan.FromMilliseconds(
-        plan.Steps.OfType<ScrollStep>().Sum(step => (long)step.MaxIterations * step.WaitAfterMs));
+        plan!.Steps.OfType<ScrollStep>().Sum(step => (long)step.MaxIterations * step.WaitAfterMs));
 
     // One-time login/test values (Issue #43) for FillAction steps, matched
     // against BrowserActions.FillAction.EnvironmentVariableName and applied
@@ -227,7 +368,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
 
     var verifier = registry.ResolveScriptVerifier("python");
     var verification = await verifier.VerifyAsync(
-        script, plan.OutputFormat, plan.OutputFileBaseName, extraTimeout,
+        script!, plan.OutputFormat, plan.OutputFileBaseName, extraTimeout,
         verificationEnv.Count > 0 ? verificationEnv : null, config.IncludePreview == true, config.IncludeOutputFile == true);
     if (!verification.Success)
     {
@@ -242,7 +383,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     // every existing test) keeps getting the exact same plain-text script
     // response as before either existed.
     if (config.IncludePreview != true && config.IncludeOutputFile != true)
-        return Results.Text(script, "text/plain");
+        return Results.Text(script!, "text/plain");
 
     return Results.Json(new
     {
