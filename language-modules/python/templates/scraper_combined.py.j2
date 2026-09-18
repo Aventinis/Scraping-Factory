@@ -81,7 +81,20 @@ def _run_component(component):
     if not os.path.exists(output_path):
         raise RuntimeError(f"Component '{component['name']}' produced no output.json.")
     with open(output_path, encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+
+    # A component's own trial run only ever checks "did this exact script
+    # crash" (a real component-level "no data" check would need to run
+    # PythonScriptVerifier's own logic once per component, which is the
+    # companion's job, not this generated script's) — but an empty result
+    # here would otherwise merge in silently as an empty array/object under
+    # this component's own name, hiding exactly the kind of broken selector
+    # this whole mechanism exists to catch. An empty component fails the
+    # whole combined run instead, the same "no result" outcome a standalone
+    # script would already report via /generate's own trial-run check.
+    if not data:
+        raise RuntimeError(f"Component '{component['name']}' returned no data.")
+    return data
 
 
 def main():
