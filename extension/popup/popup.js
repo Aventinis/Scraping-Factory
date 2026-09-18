@@ -34,7 +34,6 @@ const {
 const {
   renderApiTree, renderApiCandidates, renderApiEntriesList,
   renderApiConfigScreen, renderBodyTree,
-  toggleApiCapture,
   startApiFieldSearch, confirmApiFieldCandidate, loadInitialBodyTreeForCandidate,
   startEmbeddedJsonFieldSearch,
   startApiTreeFieldSearch,
@@ -53,8 +52,12 @@ const {
 } = typeof require !== 'undefined' ? require('./flat-mode-ui') : self.SFFlatModeUI;
 
 const {
-  renderBrowserActions, renderBrowserActionsSection, wireBrowserActionsEvents,
+  renderBrowserActions, wireBrowserActionsEvents,
 } = typeof require !== 'undefined' ? require('./browser-actions-ui') : self.SFBrowserActionsUI;
+
+const {
+  renderIdleScreen, wireIdleScreenEvents,
+} = typeof require !== 'undefined' ? require('./idle-screen-ui') : self.SFIdleScreenUI;
 
 const {
   createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
@@ -93,12 +96,12 @@ const {
   highlightHover, highlightSelected,
 } = typeof require !== 'undefined' ? require('./dom-tree-ui') : self.SFDomTreeUI;
 
-const { togglePreview, stopPreviewIfActive } =
+const { stopPreviewIfActive } =
   typeof require !== 'undefined' ? require('./preview') : self.SFPreview;
 
 const {
   getResolvedCompanionUrl, checkCompanion, useCustomCompanionUrl, resetCustomCompanionUrl,
-  checkRobotsTxt, buildVerificationErrorMessage, generate,
+  buildVerificationErrorMessage, generate,
 } = typeof require !== 'undefined' ? require('./companion-client') : self.SFCompanionClient;
 
 const { triggerDownload, downloadFile, triggerOutputFileDownload, downloadConfigExport } =
@@ -114,7 +117,7 @@ const {
   renderSaveOutputModal,
 } = typeof require !== 'undefined' ? require('./saved-configs-ui') : self.SFSavedConfigsUI;
 
-const { renderSettingsPanel, wireSettingsPanelEvents } =
+const { wireSettingsPanelEvents } =
   typeof require !== 'undefined' ? require('./settings-panel-ui') : self.SFSettingsPanelUI;
 
 if (typeof window !== 'undefined') {
@@ -583,206 +586,7 @@ function render() {
   }
 
   if (_state.current === STATES.IDLE) {
-    const urlEl = document.getElementById('url-display');
-    if (urlEl) urlEl.textContent = _state.url || '—';
-
-    const robotsBtn = document.getElementById('btn-check-robots');
-    if (robotsBtn) {
-      robotsBtn.disabled = _state.robotsTxtChecking;
-      robotsBtn.textContent = t(_state.robotsTxtChecking ? 'idle.robotsCheckBtnChecking' : 'idle.robotsCheckBtn');
-    }
-    const robotsResultEl = document.getElementById('robots-txt-result');
-    if (robotsResultEl) {
-      const r = _state.robotsTxtResult;
-      if (!r) {
-        robotsResultEl.className = 'robots-txt-result hidden';
-      } else if (!r.ok) {
-        robotsResultEl.textContent = t('robots.checkFailed', { error: r.error });
-        robotsResultEl.className = 'robots-txt-result robots-txt-unknown';
-      } else if (r.notFound) {
-        robotsResultEl.textContent = t('robots.notFound');
-        robotsResultEl.className = 'robots-txt-result robots-txt-allowed';
-      } else if (r.allowed) {
-        robotsResultEl.textContent = r.matchedRule
-          ? t('robots.allowedWithRule', { path: r.path, pattern: r.matchedRule.pattern })
-          : t('robots.allowed', { path: r.path });
-        robotsResultEl.className = 'robots-txt-result robots-txt-allowed';
-      } else {
-        robotsResultEl.textContent = t('robots.disallowed', { path: r.path, pattern: r.matchedRule.pattern });
-        robotsResultEl.className = 'robots-txt-result robots-txt-disallowed';
-      }
-    }
-
-    document.getElementById('btn-mode-flat')?.classList.toggle('active', _state.mode === 'flat');
-    document.getElementById('btn-mode-container')?.classList.toggle('active', _state.mode === 'container');
-    document.getElementById('btn-mode-api')?.classList.toggle('active', _state.mode === 'api');
-    document.getElementById('flat-mode-section')?.classList.toggle('hidden', _state.mode !== 'flat');
-    document.getElementById('container-mode-section')?.classList.toggle('hidden', _state.mode !== 'container');
-    document.getElementById('api-mode-section')?.classList.toggle('hidden', _state.mode !== 'api');
-    // Vorschau highlights matched DOM elements — meaningless for API-Mode.
-    document.getElementById('preview-section')?.classList.toggle('hidden', _state.mode === 'api');
-
-    // Engine + browser actions (Issue #41/#42, Phase 5) — mode-independent,
-    // so this sits alongside the mode toggle above rather than inside any
-    // of the three mode-specific blocks.
-    renderBrowserActionsSection(bridge);
-
-    if (_state.mode === 'container') {
-      renderGroupTree(_state.groups);
-    } else {
-      renderFields(_state.fields);
-    }
-
-    const hasConfig = _state.mode === 'container' ? _state.groups.length > 0
-      : _state.mode === 'api' ? !!_state.apiConfig
-      : _state.fields.length > 0;
-    const genBtn = document.getElementById('btn-generate');
-    if (genBtn) genBtn.disabled = !hasConfig;
-    const exportBtn = document.getElementById('btn-export-config');
-    if (exportBtn) exportBtn.disabled = !hasConfig;
-    const saveConfigBtn = document.getElementById('btn-save-config');
-    if (saveConfigBtn) saveConfigBtn.disabled = !hasConfig;
-
-    const previewBtn = document.getElementById('btn-preview');
-    if (previewBtn) {
-      previewBtn.disabled = !hasConfig;
-      previewBtn.classList.toggle('active', _state.previewActive);
-      previewBtn.textContent = t(_state.previewActive ? 'idle.previewHideBtn' : 'idle.previewShowBtn');
-    }
-    const previewSummaryEl = document.getElementById('preview-summary');
-    if (previewSummaryEl) {
-      if (_state.previewActive && _state.previewSummary) {
-        const { total, empty, truncated } = _state.previewSummary;
-        const parts = [t('idle.previewSummaryMatched', { count: total })];
-        if (empty.length > 0) parts.push(t('idle.previewSummaryEmpty', { names: empty.join(', ') }));
-        if (truncated) parts.push(t('idle.previewSummaryTruncated'));
-        previewSummaryEl.textContent = parts.join(' — ');
-        previewSummaryEl.classList.toggle('warn', empty.length > 0);
-        previewSummaryEl.classList.remove('hidden');
-      } else {
-        previewSummaryEl.classList.add('hidden');
-      }
-    }
-
-    const apiCaptureBtn = document.getElementById('btn-api-capture');
-    if (apiCaptureBtn) {
-      apiCaptureBtn.classList.toggle('active', _state.apiCaptureActive);
-      apiCaptureBtn.textContent = t(_state.apiCaptureActive ? 'idle.apiCaptureStopBtn' : 'idle.apiCaptureStartBtn');
-    }
-    const apiCaptureSummaryEl = document.getElementById('api-capture-summary');
-    if (apiCaptureSummaryEl) {
-      // Shown whenever there's something recorded, not just while active —
-      // Phase 4's search below runs *after* the user stops recording, so
-      // this is the user's only confirmation that there's something to search.
-      if (_state.apiCaptureCount > 0) {
-        apiCaptureSummaryEl.textContent = t('idle.apiCaptureSummary', { count: _state.apiCaptureCount });
-        apiCaptureSummaryEl.classList.remove('hidden');
-      } else {
-        apiCaptureSummaryEl.classList.add('hidden');
-      }
-    }
-
-    const apiSearchBtn = document.getElementById('btn-api-search');
-    if (apiSearchBtn) apiSearchBtn.disabled = _state.apiCaptureCount === 0;
-
-    const apiEntriesToggleBtn = document.getElementById('btn-api-entries-toggle');
-    if (apiEntriesToggleBtn) {
-      apiEntriesToggleBtn.disabled = _state.apiCaptureCount === 0;
-      apiEntriesToggleBtn.textContent = _state.apiEntriesPanelOpen
-        ? t('idle.apiEntriesHideBtn')
-        : t('idle.apiEntriesShowBtn', { count: _state.apiCaptureCount });
-    }
-    const apiEntriesPanel = document.getElementById('api-entries-panel');
-    if (apiEntriesPanel) {
-      if (_state.apiEntriesPanelOpen) {
-        renderApiEntriesList(_state.apiEntries);
-        apiEntriesPanel.classList.remove('hidden');
-      } else {
-        apiEntriesPanel.classList.add('hidden');
-      }
-    }
-
-    const apiCandidatesPanel = document.getElementById('api-candidates-panel');
-    if (apiCandidatesPanel) {
-      if (_state.apiCandidates) {
-        renderApiCandidates(_state.apiCandidates);
-        apiCandidatesPanel.classList.remove('hidden');
-      } else {
-        apiCandidatesPanel.classList.add('hidden');
-      }
-    }
-
-    const apiConfigPanel = document.getElementById('api-config-panel');
-    if (apiConfigPanel) {
-      if (_state.apiConfig) {
-        const summaryEl = document.getElementById('api-config-summary');
-        if (summaryEl) {
-          const { parameters, headers } = _state.apiConfig;
-          summaryEl.textContent = t('idle.apiConfigSummary', {
-            fields: countApiConfigFields(_state.apiConfig),
-            parameters: parameters.length,
-            headers: headers ? t('idle.apiConfigSummaryHeaders', { count: headers.length }) : '',
-          });
-        }
-        apiConfigPanel.classList.remove('hidden');
-      } else {
-        apiConfigPanel.classList.add('hidden');
-      }
-    }
-
-    // Only overwrite an input's value while it isn't the one the user is
-    // currently typing in — otherwise every keystroke's setState()/render()
-    // round-trip would reset the cursor to the end of the field.
-    const scriptNameInput = document.getElementById('input-script-filename');
-    if (scriptNameInput && document.activeElement !== scriptNameInput) scriptNameInput.value = _state.scriptFileName;
-    const outputNameInput = document.getElementById('input-output-filename');
-    if (outputNameInput && document.activeElement !== outputNameInput) outputNameInput.value = _state.outputFileName;
-    // Container mode always forces Xml server-side (absent Json); API mode
-    // forces Xml too, but only for its tree shape (Groups) — its flat shape
-    // forces Csv, same as flat mode itself. Issue #86's useJsonOutput
-    // toggle overrides whichever of those would otherwise apply.
-    const isTreeShapedMode = _state.mode === 'container'
-      || (_state.mode === 'api' && !!_state.apiConfig?.groups?.length);
-    const outputExtEl = document.getElementById('output-filename-ext');
-    if (outputExtEl) {
-      outputExtEl.textContent = _state.useJsonOutput ? '.json' : (isTreeShapedMode ? '.xml' : '.csv');
-    }
-
-    const outputJsonToggle = document.getElementById('toggle-output-json');
-    if (outputJsonToggle) outputJsonToggle.checked = _state.useJsonOutput;
-
-    const dataPreviewToggle = document.getElementById('toggle-include-data-preview');
-    if (dataPreviewToggle) dataPreviewToggle.checked = _state.includeDataPreview;
-
-    const outputFileToggle = document.getElementById('toggle-include-output-file');
-    if (outputFileToggle) outputFileToggle.checked = _state.includeOutputFile;
-
-    // Issue #83: hidden for API mode — Api builds its own request URL from
-    // apiConfig.urlTemplate and never reads this list at all (the companion
-    // rejects the combination outright, see Program.cs).
-    document.getElementById('additional-urls-row')?.classList.toggle('hidden', _state.mode === 'api');
-    const additionalUrlsInput = document.getElementById('input-additional-urls');
-    if (additionalUrlsInput && document.activeElement !== additionalUrlsInput) {
-      additionalUrlsInput.value = _state.additionalStartUrls.join('\n');
-    }
-
-    renderSettingsPanel(bridge);
-
-    // Issue #141: saved-configs-section is scoped to the current page's
-    // hostname (fetchSavedConfigs, kicked off from checkCompanion) —
-    // rendered every pass like the other IDLE-only lists above rather than
-    // only on state transitions, so an in-progress delete confirmation
-    // (savedConfigsPendingDeleteId) re-renders correctly too.
-    renderSavedConfigsList(bridge);
-
-    if (_state.containerModalOpen) {
-      show('modal-container-new');
-      const nameInput = document.getElementById('input-container-name');
-      if (nameInput) { nameInput.value = ''; nameInput.focus(); }
-      const singleRadio = document.getElementById('radio-container-single');
-      if (singleRadio) singleRadio.checked = true;
-    }
-
+    renderIdleScreen(bridge);
   }
 
   if (_state.current === STATES.API_CONFIG && _state.apiConfigDraft) {
@@ -993,35 +797,12 @@ function renderDataPreview(preview) {
   }
 }
 
-// ── Container-Mode: mode switch, container/field add flows ─────────────────
-
-// Strictly separate — switching modes clears the *other* modes' configs
-// rather than keeping all three around.
-// apiConfigDraft is cleared defensively alongside apiConfig when switching
-// *away* from api mode — unreachable in practice today (the mode buttons
-// only live on screen-idle, and a non-null apiConfigDraft means
-// screen-api-config is showing instead), but keeps this table's own
-// "switching modes clears the other modes' configuration" contract honest
-// regardless of that.
-const MODE_SWITCH_CLEARS = {
-  flat:      { groups: [], apiConfig: null, apiConfigDraft: null },
-  container: { fields: [], apiConfig: null, apiConfigDraft: null },
-  api:       { fields: [], groups: [] },
-};
-
-function switchMode(mode) {
-  if (mode === _state.mode) return;
-  log('MODE_SWITCH', mode);
-  stopPreviewIfActive(bridge);
-  setState(_state.current, { mode, ...MODE_SWITCH_CLEARS[mode] });
-}
-
 // Passed to every api-config-ui.js/container-tree-ui.js/dom-tree-ui.js/
 // preview.js/companion-client.js/saved-configs-ui.js handler, instead of
 // those functions closing over this file's own module-level state — see
 // api-config-ui.js's own doc comment for why. Declared at module scope
 // (not just inside wireEvents()) so popup.js's own top-level functions
-// (confirmField, generate, switchMode, ...) can use it too; safe to
+// (generate, ...) can use it too; safe to
 // reference functions defined further down in this file because they're
 // only ever called through the arrow functions below, never at bridge-
 // construction time itself.
@@ -1077,31 +858,6 @@ function wireEvents() {
     resetCustomCompanionUrl(bridge);
   });
 
-  document.getElementById('btn-preview')?.addEventListener('click', () => {
-    log('BTN preview');
-    togglePreview(bridge);
-  });
-
-  document.getElementById('btn-check-robots')?.addEventListener('click', () => {
-    log('BTN check-robots');
-    checkRobotsTxt(bridge);
-  });
-
-  document.getElementById('btn-api-capture')?.addEventListener('click', () => {
-    log('BTN api-capture');
-    toggleApiCapture(bridge);
-  });
-
-  document.getElementById('input-script-filename')?.addEventListener('input', (e) => {
-    setState(_state.current, { scriptFileName: e.target.value });
-  });
-  document.getElementById('input-output-filename')?.addEventListener('input', (e) => {
-    setState(_state.current, { outputFileName: e.target.value });
-  });
-  document.getElementById('input-additional-urls')?.addEventListener('input', (e) => {
-    setState(_state.current, { additionalStartUrls: parseAdditionalUrls(e.target.value) });
-  });
-
   // Issue #183: collapsible "Monitoring" section toggle — a plain click
   // (and Enter/Space, since the header is a div with role="button", not a
   // real <button>) flips monitoringSectionOpen; nothing else about
@@ -1149,9 +905,7 @@ function wireEvents() {
 
   wireFlatModeEvents(bridge);
 
-  document.getElementById('btn-mode-flat')?.addEventListener('click', () => switchMode('flat'));
-  document.getElementById('btn-mode-container')?.addEventListener('click', () => switchMode('container'));
-  document.getElementById('btn-mode-api')?.addEventListener('click', () => switchMode('api'));
+  wireIdleScreenEvents(bridge);
 
   wireContainerModeEvents(bridge);
 
