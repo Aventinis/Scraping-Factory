@@ -58,6 +58,9 @@ const {
 const { wireMessageListener } =
   typeof require !== 'undefined' ? require('./message-router') : self.SFMessageRouter;
 
+const { applyStoredSessionState, restorePendingSelection } =
+  typeof require !== 'undefined' ? require('./session-restore') : self.SFSessionRestore;
+
 const {
   renderIdleScreen, wireIdleScreenEvents,
 } = typeof require !== 'undefined' ? require('./idle-screen-ui') : self.SFIdleScreenUI;
@@ -73,7 +76,7 @@ const { renderTransformList, renderTransformPreview } =
 const { applyConfigToState } =
   typeof require !== 'undefined' ? require('./config-import') : self.SFConfigImport;
 
-const { showToast, showMatchCountToast, setLastError } =
+const { showToast, setLastError } =
   typeof require !== 'undefined' ? require('./toast') : self.SFToast;
 
 const {
@@ -1041,112 +1044,8 @@ async function init() {
   ]);
   log('INIT restored', stored);
 
-  // Always restore persisted fields/groups and URL.
-  if (Array.isArray(stored.fields)) _state = { ..._state, fields: stored.fields };
-  if (Array.isArray(stored.groups)) _state = { ..._state, groups: stored.groups };
-  if (stored.url)                   _state = { ..._state, url: stored.url };
-  if (stored.mode)                  _state = { ..._state, mode: stored.mode };
-  if (stored.engine)                _state = { ..._state, engine: stored.engine };
-  if (Array.isArray(stored.browserActions)) _state = { ..._state, browserActions: stored.browserActions };
-  if (Array.isArray(stored.additionalStartUrls)) _state = { ..._state, additionalStartUrls: stored.additionalStartUrls };
-  if (stored.changeDetection) _state = { ..._state, changeDetection: stored.changeDetection };
-  if (stored.proxy)                 _state = { ..._state, proxy: stored.proxy };
-  if (stored.pagination)            _state = { ..._state, pagination: stored.pagination };
-  if (stored.persistentSession !== undefined) _state = { ..._state, persistentSession: stored.persistentSession };
-  if (stored.externalConfig !== undefined) _state = { ..._state, externalConfig: stored.externalConfig };
-  if (stored.hardening)             _state = { ..._state, hardening: stored.hardening };
-  if (stored.scriptFileName)        _state = { ..._state, scriptFileName: stored.scriptFileName };
-  if (stored.outputFileName)        _state = { ..._state, outputFileName: stored.outputFileName };
-  if (stored.selectionKind)         _state = { ..._state, selectionKind: stored.selectionKind };
-  if (stored.pendingParentPath !== undefined) _state = { ..._state, pendingParentPath: stored.pendingParentPath };
-  if (stored.pendingNewContainer)   _state = { ..._state, pendingNewContainer: stored.pendingNewContainer };
-  if (stored.pendingBrowserActionIndex !== undefined) _state = { ..._state, pendingBrowserActionIndex: stored.pendingBrowserActionIndex };
-  if (stored.pendingBrowserActionField)   _state = { ..._state, pendingBrowserActionField: stored.pendingBrowserActionField };
-  if (stored.apiConfigDraft)        _state = { ..._state, apiConfigDraft: stored.apiConfigDraft };
-  if (stored.apiConfig)             _state = { ..._state, apiConfig: stored.apiConfig };
-
-  // Issue #183: one-time default-open computation, now that changeDetection/
-  // hardening have been restored from storage above — a returning user with
-  // something already configured in the "Monitoring" section shouldn't have
-  // to re-expand it just to see it.
-  if (computeInitialMonitoringSectionOpen(_state.changeDetection, _state.hardening)) {
-    _state = { ..._state, monitoringSectionOpen: true };
-  }
-
-  if (stored.pendingSelector) {
-    // The user clicked an element while the side panel was closed (e.g. it
-    // hadn't finished loading yet, or was closed manually).
-    await chrome.storage.session.remove('pendingSelector');
-
-    if (stored.apiSearchTarget) {
-      // Unlike the other pending-selector cases below, there's nothing to
-      // recover here: the actual search result (API_CANDIDATES) is a
-      // transient message content-script.js never persists anywhere, so a
-      // leftover selector alone can't be turned into a candidate list —
-      // discard it rather than misinterpret it as a flat-field pick.
-      log('INIT pending API-search selector found, but candidates were never persisted — discarding');
-      setState(_state.apiConfigDraft ? STATES.API_CONFIG : STATES.IDLE, {});
-      return;
-    }
-
-    if (stored.mode === 'container' && stored.selectionKind === 'container' && stored.pendingNewContainer) {
-      // Same as the live ELEMENT_SELECTED path: name/type were already
-      // collected before selection started, so insert straight away.
-      log('INIT pending container selector found → inserting node', stored.pendingSelector);
-      const node = buildGroupNode(stored.pendingNewContainer.name, stored.pendingSelector, stored.pendingNewContainer.repeating, stored.pendingFramePath);
-      const groups = insertContainerNode(_state.groups, stored.pendingParentPath, node);
-      await chrome.storage.session.set({ groups });
-      setState(STATES.IDLE, {
-        groups, selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
-      });
-      showMatchCountToast(stored.pendingNewContainer.name, typeof stored.pendingMatchCount === 'number' ? stored.pendingMatchCount : null);
-      return;
-    }
-
-    if (stored.selectionKind === 'browserAction' && stored.pendingBrowserActionIndex !== null && stored.pendingBrowserActionIndex !== undefined) {
-      // Same as the live ELEMENT_SELECTED path: the action card already
-      // exists (kind chosen when it was added) — write the selector
-      // straight into it, no naming modal needed.
-      const field = stored.pendingBrowserActionField || 'selector';
-      log('INIT pending browser-action selector found → updating action', { field, selector: stored.pendingSelector });
-      const browserActions = updateBrowserAction(_state.browserActions, stored.pendingBrowserActionIndex, {
-        [field]: stored.pendingSelector, framePath: stored.pendingFramePath || null,
-      });
-      await chrome.storage.session.set({ browserActions });
-      setState(STATES.IDLE, {
-        browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
-      });
-      return;
-    }
-
-    if (stored.selectionKind === 'pagination' && stored.pendingSelector) {
-      // Same as the live ELEMENT_SELECTED path: write the picked selector
-      // straight into pagination.nextLinkSelector, no naming modal needed.
-      log('INIT pending pagination selector found → updating pagination', stored.pendingSelector);
-      const pagination = { ..._state.pagination, nextLinkSelector: stored.pendingSelector };
-      await chrome.storage.session.set({ pagination });
-      setState(STATES.IDLE, {
-        pagination, selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
-      });
-      return;
-    }
-
-    // Flat field or container field — show the (extended, in container
-    // mode) field-name modal without re-checking the companion. The
-    // transform chain itself is never persisted (see pendingTransforms'
-    // own doc comment) — a reopened popup shows the modal with an empty
-    // chain, same as the name input itself starting blank again.
-    log('INIT pending selector found → show modal', stored.pendingSelector);
-    setState(STATES.SELECTING, {
-      pendingSelector: stored.pendingSelector, pendingFramePath: stored.pendingFramePath || null,
-      pendingMatchCount: typeof stored.pendingMatchCount === 'number' ? stored.pendingMatchCount : null,
-      pendingRawText: typeof stored.pendingRawText === 'string' ? stored.pendingRawText : null,
-      pendingElementAttributes: stored.pendingElementAttributes ?? null,
-      pendingOwnText: typeof stored.pendingOwnText === 'string' ? stored.pendingOwnText : null,
-      pendingTransforms: [],
-    });
-    return;
-  }
+  _state = applyStoredSessionState(_state, stored);
+  if (await restorePendingSelection(bridge, stored)) return;
 
   setState(STATES.CHECKING_COMPANION);
   await checkCompanion(bridge);
