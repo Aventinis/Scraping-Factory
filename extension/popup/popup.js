@@ -1477,7 +1477,51 @@ function wireEvents() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
+// popup.html's #screen-idle/#screen-api-config/#modals-mount ship empty —
+// their markup lives in screens/*.html instead, fetched here at startup
+// rather than inlined into popup.html's own ~875 (now ~170) lines, via
+// chrome.runtime.getURL — the extension's own page fetching its own bundled
+// resource, needing neither a real network request nor a
+// web_accessible_resources manifest entry (that only gates access from
+// content scripts/web pages reaching in). Same dual-environment convention
+// i18n.js's own fetchDictionary/loadDictionary already established for
+// exactly this "real chrome.runtime.getURL+fetch in the browser, skip
+// entirely under Jest" split (see that file's own doc comment): under Jest,
+// `require` is defined and this is a deliberate, untested no-op — every
+// existing test builds its own minimal document.body.innerHTML fixture for
+// whichever ids it needs (no test ever loads the real popup.html), and
+// actually injecting the real production markup here would silently
+// overwrite that fixture instead of leaving it alone. It would also consume
+// fetch-mock call slots (mockResolvedValueOnce chains keyed to call order)
+// that plenty of existing tests already reserve for the real /health and
+// /generate calls checkCompanion()/generate() make later in the same
+// startup sequence.
+async function loadScreenPartial(elementId, path) {
+  if (typeof require !== 'undefined') return;
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  try {
+    const response = await fetch(chrome.runtime.getURL(path));
+    if (!response.ok) return;
+    el.innerHTML = await response.text();
+  } catch (err) {
+    log('SCREEN_PARTIAL_LOAD_FAIL', { elementId, path, error: String(err) });
+  }
+}
+
+async function loadScreenPartials() {
+  await Promise.all([
+    loadScreenPartial('screen-idle', 'popup/screens/idle.html'),
+    loadScreenPartial('screen-api-config', 'popup/screens/api-config.html'),
+    loadScreenPartial('modals-mount', 'popup/screens/modals.html'),
+  ]);
+}
+
 async function init() {
+  // Must happen before applyStaticTranslations()/wireEvents()/the first
+  // render() — all three depend on this markup already being in the DOM.
+  await loadScreenPartials();
+
   const language = await initI18n(typeof navigator !== 'undefined' ? navigator.language : '');
   log('INIT language', language);
 
