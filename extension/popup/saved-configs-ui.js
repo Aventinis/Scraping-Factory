@@ -144,7 +144,14 @@ async function fetchSavedConfigs(bridge, url) {
   }
 }
 
-async function saveCurrentConfig(bridge, name) {
+// POSTs the current configuration and returns the created record
+// ({id, url, name, savedAt}) — factored out of saveCurrentConfig so Issue
+// #209's "Save output" create-and-link flow (createConfigAndSaveOutput
+// below) can reuse the exact same POST without also driving
+// modal-save-config's own UI side effects (closing that modal, toasting,
+// refreshing the list — the create-and-link flow has its own equivalents
+// for those, tied to modal-save-output instead).
+async function createSavedConfig(bridge, name) {
   const state = bridge.getState();
   const config = buildScrapingConfig(
     state.url, state.mode, state.fields, state.groups, state.apiConfig,
@@ -152,18 +159,23 @@ async function saveCurrentConfig(bridge, name) {
     state.useJsonOutput, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
     state.pagination, state.persistentSession, false, state.externalConfig,
   );
+  const res = await fetch(`${getResolvedCompanionUrl()}/configs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: state.url, name, config }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function saveCurrentConfig(bridge, name) {
   log('SAVE_CONFIG', name);
   try {
-    const res = await fetch(`${getResolvedCompanionUrl()}/configs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: state.url, name, config }),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    await createSavedConfig(bridge, name);
     log('SAVE_CONFIG OK');
     bridge.patchState({ saveConfigModalOpen: false });
     showToast(t('toast.configSaved'), null, 'info');
-    await fetchSavedConfigs(bridge, state.url);
+    await fetchSavedConfigs(bridge, bridge.getState().url);
   } catch (err) {
     log('SAVE_CONFIG FAIL', err.message);
     showToast(t('toast.configSaveFailed', { message: err.message }), 'Save configuration');
@@ -262,6 +274,33 @@ async function saveCurrentOutput(bridge, configId, name) {
   }
 }
 
+// Issue #209: when there's no saved configuration for the current site yet,
+// "Save output" creates one inline instead of only ever redirecting into
+// modal-save-config first — the modal collects both a configuration name and
+// an output name in one go (see renderSaveOutputModal/confirmSaveOutput),
+// and confirming saves the config first (the same POST /configs
+// createSavedConfig already makes for the regular "Save configuration"
+// button), then immediately links this run's output to the newly-created
+// id via the existing saveCurrentOutput. If the config save succeeds but
+// the output save then fails, the configuration is deliberately left in
+// place rather than rolled back — saveCurrentOutput already reports that
+// failure via its own toast, and "Save output" can simply be retried
+// against the now-existing configuration through the normal picker.
+async function createConfigAndSaveOutput(bridge, configName, outputName) {
+  log('CREATE_CONFIG_AND_SAVE_OUTPUT', configName, outputName);
+  let created;
+  try {
+    created = await createSavedConfig(bridge, configName);
+    log('CREATE_CONFIG_AND_SAVE_OUTPUT config OK', created.id);
+  } catch (err) {
+    log('CREATE_CONFIG_AND_SAVE_OUTPUT config FAIL', err.message);
+    showToast(t('toast.configSaveFailed', { message: err.message }), 'Save configuration');
+    return;
+  }
+  await fetchSavedConfigs(bridge, bridge.getState().url);
+  await saveCurrentOutput(bridge, created.id, outputName);
+}
+
 async function fetchSavedOutputs(bridge, configId) {
   bridge.patchState({ savedOutputsLoading: true });
   try {
@@ -326,29 +365,46 @@ async function deleteSavedOutput(bridge, configId, id) {
   }
 }
 
-// Issue #202: populates modal-save-output — a config picker + name input
-// when there's at least one saved config for the current hostname already
-// (_state.savedConfigs, fetched the same way the "Saved configurations"
-// panel's own list already is), or a hint + shortcut into modal-save-config
-// otherwise, since an output can't be linked to a config that doesn't
-// exist yet.
+// Issue #202/#209: populates modal-save-output — a config picker + name
+// input when there's at least one saved config for the current hostname
+// already (_state.savedConfigs, fetched the same way the "Saved
+// configurations" panel's own list already is), or an inline
+// create-a-new-configuration form otherwise, since an output can't be
+// linked to a config that doesn't exist yet — see confirmSaveOutput for how
+// btn-save-output-confirm branches between the two on submit.
 function renderSaveOutputModal(bridge) {
-  const savedConfigs = bridge.getState().savedConfigs || [];
+  const state = bridge.getState();
+  const savedConfigs = state.savedConfigs || [];
   const hasConfigs = savedConfigs.length > 0;
 
   document.getElementById('save-output-picker')?.classList.toggle('hidden', !hasConfigs);
-  document.getElementById('save-output-no-configs-hint')?.classList.toggle('hidden', hasConfigs);
-  document.getElementById('btn-save-output-go-to-save-config')?.classList.toggle('hidden', hasConfigs);
-  document.getElementById('btn-save-output-confirm')?.classList.toggle('hidden', !hasConfigs);
-  if (!hasConfigs) return;
+  document.getElementById('save-output-create-config')?.classList.toggle('hidden', hasConfigs);
 
-  const selectEl = document.getElementById('select-save-output-config');
-  if (selectEl) {
-    selectEl.innerHTML = savedConfigs.map((entry) => {
-      const savedDate = new Date(entry.savedAt);
-      const savedAtText = Number.isNaN(savedDate.getTime()) ? entry.savedAt : savedDate.toLocaleString();
-      return `<option value="${entry.id}">${escapeHtml(entry.name)} (${escapeHtml(savedAtText)})</option>`;
-    }).join('');
+  if (hasConfigs) {
+    const selectEl = document.getElementById('select-save-output-config');
+    if (selectEl) {
+      selectEl.innerHTML = savedConfigs.map((entry) => {
+        const savedDate = new Date(entry.savedAt);
+        const savedAtText = Number.isNaN(savedDate.getTime()) ? entry.savedAt : savedDate.toLocaleString();
+        return `<option value="${entry.id}">${escapeHtml(entry.name)} (${escapeHtml(savedAtText)})</option>`;
+      }).join('');
+    }
+    return;
+  }
+
+  // Issue #209: prefill the inline config-name input with the current
+  // page's hostname — the same default openSaveConfigModal's own separate
+  // flow already uses.
+  const configNameInput = document.getElementById('input-save-output-config-name');
+  if (configNameInput) {
+    let defaultName = '';
+    try {
+      defaultName = new URL(state.url).hostname;
+    } catch {
+      // state.url isn't a well-formed absolute URL — defaultName stays ''
+      // and the input is simply left blank, same as openSaveConfigModal.
+    }
+    configNameInput.value = defaultName;
   }
 }
 
@@ -359,10 +415,14 @@ function renderSaveOutputModal(bridge) {
 // renderSavedConfigsList, so delegation on the list container itself is the
 // only way to keep listeners attached across re-renders).
 function wireSavedConfigsEvents(bridge) {
-  // Issue #202: "Save output" (DONE screen) opens modal-save-output — a
-  // config picker + name input when there's at least one saved config for
-  // this hostname already, or a hint + shortcut into modal-save-config
+  // Issue #202/#209: "Save output" (DONE screen) opens modal-save-output —
+  // a config picker + name input when there's at least one saved config for
+  // this hostname already, or an inline create-a-new-configuration form
   // otherwise (see renderSaveOutputModal, called from render()).
+  // confirmSaveOutput branches on the same condition to either link to the
+  // picked config or create-and-link a new one; wired to both the confirm
+  // button and Enter on either text input, since either form field could be
+  // the one focused when the user presses Enter.
   document.getElementById('btn-save-output')?.addEventListener('click', () => {
     log('BTN save-output → open modal');
     bridge.patchState({ saveOutputModalOpen: true });
@@ -371,21 +431,29 @@ function wireSavedConfigsEvents(bridge) {
     log('BTN save-output-cancel');
     bridge.patchState({ saveOutputModalOpen: false });
   });
-  document.getElementById('btn-save-output-confirm')?.addEventListener('click', () => {
-    const configId = parseInt(document.getElementById('select-save-output-config')?.value, 10);
-    const name = document.getElementById('input-save-output-name')?.value.trim();
-    if (!configId || !name) return;
-    log('BTN save-output-confirm', configId, name);
-    saveCurrentOutput(bridge, configId, name);
-  });
+  function confirmSaveOutput() {
+    const outputName = document.getElementById('input-save-output-name')?.value.trim();
+    if (!outputName) return;
+    const hasConfigs = (bridge.getState().savedConfigs || []).length > 0;
+    if (hasConfigs) {
+      const configId = parseInt(document.getElementById('select-save-output-config')?.value, 10);
+      if (!configId) return;
+      log('BTN save-output-confirm', configId, outputName);
+      saveCurrentOutput(bridge, configId, outputName);
+      return;
+    }
+    const configName = document.getElementById('input-save-output-config-name')?.value.trim();
+    if (!configName) return;
+    log('BTN save-output-confirm (create config)', configName, outputName);
+    createConfigAndSaveOutput(bridge, configName, outputName);
+  }
+  document.getElementById('btn-save-output-confirm')?.addEventListener('click', confirmSaveOutput);
   document.getElementById('input-save-output-name')?.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter') return;
-    const configId = parseInt(document.getElementById('select-save-output-config')?.value, 10);
-    const name = e.target.value.trim();
-    if (!configId || !name) return;
-    saveCurrentOutput(bridge, configId, name);
+    if (e.key === 'Enter') confirmSaveOutput();
   });
-  document.getElementById('btn-save-output-go-to-save-config')?.addEventListener('click', () => openSaveConfigModal(bridge));
+  document.getElementById('input-save-output-config-name')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') confirmSaveOutput();
+  });
 
   // Issue #141: "Save configuration" opens modal-save-config (name input,
   // prefilled with the current page's hostname); Load/Delete are wired via
@@ -466,10 +534,10 @@ function wireSavedConfigsEvents(bridge) {
 
   return {renderSavedConfigsList, buildSavedOutputsPanelEl,
     wireSavedConfigsEvents,
-    fetchSavedConfigs, saveCurrentConfig, loadSavedConfig,
+    fetchSavedConfigs, createSavedConfig, saveCurrentConfig, loadSavedConfig,
     requestDeleteSavedConfig, cancelDeleteSavedConfig, deleteSavedConfig,
     openSaveConfigModal,
-    saveCurrentOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
+    saveCurrentOutput, createConfigAndSaveOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
     requestDeleteSavedOutput, cancelDeleteSavedOutput, deleteSavedOutput,
     renderSaveOutputModal,};
 })();
