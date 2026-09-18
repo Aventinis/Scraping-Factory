@@ -352,7 +352,120 @@ function renderSaveOutputModal(bridge) {
   }
 }
 
+// Wires every button/input this module's own render functions above put on
+// the page — "Save configuration"/"Save output" modal open+confirm+cancel,
+// and the saved-configs-list's own delegated Load/Delete/Outputs-toggle/
+// download row actions (rows are rebuilt on every render(), see
+// renderSavedConfigsList, so delegation on the list container itself is the
+// only way to keep listeners attached across re-renders).
+function wireSavedConfigsEvents(bridge) {
+  // Issue #202: "Save output" (DONE screen) opens modal-save-output — a
+  // config picker + name input when there's at least one saved config for
+  // this hostname already, or a hint + shortcut into modal-save-config
+  // otherwise (see renderSaveOutputModal, called from render()).
+  document.getElementById('btn-save-output')?.addEventListener('click', () => {
+    log('BTN save-output → open modal');
+    bridge.patchState({ saveOutputModalOpen: true });
+  });
+  document.getElementById('btn-save-output-cancel')?.addEventListener('click', () => {
+    log('BTN save-output-cancel');
+    bridge.patchState({ saveOutputModalOpen: false });
+  });
+  document.getElementById('btn-save-output-confirm')?.addEventListener('click', () => {
+    const configId = parseInt(document.getElementById('select-save-output-config')?.value, 10);
+    const name = document.getElementById('input-save-output-name')?.value.trim();
+    if (!configId || !name) return;
+    log('BTN save-output-confirm', configId, name);
+    saveCurrentOutput(bridge, configId, name);
+  });
+  document.getElementById('input-save-output-name')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const configId = parseInt(document.getElementById('select-save-output-config')?.value, 10);
+    const name = e.target.value.trim();
+    if (!configId || !name) return;
+    saveCurrentOutput(bridge, configId, name);
+  });
+  document.getElementById('btn-save-output-go-to-save-config')?.addEventListener('click', () => openSaveConfigModal(bridge));
+
+  // Issue #141: "Save configuration" opens modal-save-config (name input,
+  // prefilled with the current page's hostname); Load/Delete are wired via
+  // delegation on saved-configs-list below since rows are rebuilt on every
+  // render() (see renderSavedConfigsList).
+  document.getElementById('btn-save-config')?.addEventListener('click', () => openSaveConfigModal(bridge));
+  document.getElementById('btn-save-config-cancel')?.addEventListener('click', () => {
+    log('BTN save-config-cancel');
+    bridge.patchState({ saveConfigModalOpen: false });
+  });
+  document.getElementById('btn-save-config-confirm')?.addEventListener('click', () => {
+    const name = document.getElementById('input-save-config-name')?.value.trim();
+    if (!name) return;
+    log('BTN save-config-confirm', name);
+    saveCurrentConfig(bridge, name);
+  });
+  document.getElementById('input-save-config-name')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const name = e.target.value.trim();
+    if (!name) return;
+    saveCurrentConfig(bridge, name);
+  });
+
+  document.getElementById('saved-configs-list')?.addEventListener('click', (e) => {
+    const loadBtn = e.target.closest('.btn-saved-config-load');
+    if (loadBtn) {
+      const id = parseInt(loadBtn.dataset.id, 10);
+      log('BTN saved-config-load', id);
+      loadSavedConfig(bridge, id);
+      return;
+    }
+    const deleteBtn = e.target.closest('.btn-saved-config-delete');
+    if (deleteBtn) {
+      requestDeleteSavedConfig(bridge, parseInt(deleteBtn.dataset.id, 10));
+      return;
+    }
+    const confirmBtn = e.target.closest('.btn-saved-config-delete-confirm');
+    if (confirmBtn) {
+      deleteSavedConfig(bridge, parseInt(confirmBtn.dataset.id, 10));
+      return;
+    }
+    const cancelBtn = e.target.closest('.btn-saved-config-delete-cancel');
+    if (cancelBtn) {
+      cancelDeleteSavedConfig(bridge);
+      return;
+    }
+
+    // Issue #202: a saved config row's own "Outputs" toggle and, once
+    // expanded, its Download/Delete actions — same delegated-listener
+    // treatment as the config-level buttons above, since these rows are
+    // also rebuilt on every render() (see renderSavedConfigsList).
+    const outputsToggleBtn = e.target.closest('.btn-saved-config-outputs-toggle');
+    if (outputsToggleBtn) {
+      toggleSavedConfigOutputs(bridge, parseInt(outputsToggleBtn.dataset.id, 10));
+      return;
+    }
+    const outputDownloadBtn = e.target.closest('.btn-saved-output-download');
+    if (outputDownloadBtn) {
+      downloadSavedOutput(
+        parseInt(outputDownloadBtn.dataset.configId, 10), parseInt(outputDownloadBtn.dataset.id, 10));
+      return;
+    }
+    const outputDeleteBtn = e.target.closest('.btn-saved-output-delete');
+    if (outputDeleteBtn) {
+      requestDeleteSavedOutput(bridge, parseInt(outputDeleteBtn.dataset.id, 10));
+      return;
+    }
+    const outputConfirmBtn = e.target.closest('.btn-saved-output-delete-confirm');
+    if (outputConfirmBtn) {
+      deleteSavedOutput(
+        bridge, parseInt(outputConfirmBtn.dataset.configId, 10), parseInt(outputConfirmBtn.dataset.id, 10));
+      return;
+    }
+    const outputCancelBtn = e.target.closest('.btn-saved-output-delete-cancel');
+    if (outputCancelBtn) cancelDeleteSavedOutput(bridge);
+  });
+}
+
   return {renderSavedConfigsList, buildSavedOutputsPanelEl,
+    wireSavedConfigsEvents,
     fetchSavedConfigs, saveCurrentConfig, loadSavedConfig,
     requestDeleteSavedConfig, cancelDeleteSavedConfig, deleteSavedConfig,
     openSaveConfigModal,
