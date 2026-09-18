@@ -29,6 +29,7 @@ global.fetch = jest.fn().mockResolvedValue({ ok: false });
 const {
   buildScrapingConfig, addField, removeField, escapeHtml, renderFields, STATES,
   buildGroupNode, buildFieldNode, resolveGroupNode, insertContainerNode, removeGroupTreeNode,
+  updateGroupTreeNode, moveGroupTreeNode,
   formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport, hasRepeatingAncestor,
   buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
   serializeApiTree, renderApiTree, updateApiTreeNode, apiTreeNodesHaveNonBlankNames,
@@ -353,6 +354,90 @@ describe('resolveGroupNode / insertContainerNode / removeGroupTreeNode', () => {
   });
 });
 
+// Issue #177
+describe('updateGroupTreeNode', () => {
+  const tree = () => [
+    {
+      kind: 'group', name: 'Kategorie', selector: 'section.menu-category', repeating: true,
+      children: [
+        { kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null },
+      ],
+    },
+    { kind: 'field', name: 'Preis', selector: '.price', mode: 'text', attribute: null },
+  ];
+
+  test('renames a root node without touching its siblings', () => {
+    const result = updateGroupTreeNode(tree(), [1], (node) => ({ ...node, name: 'Kosten' }));
+    expect(result[1].name).toBe('Kosten');
+    expect(result[0].name).toBe('Kategorie'); // untouched
+  });
+
+  test('renames a nested node without touching its parent or siblings', () => {
+    const result = updateGroupTreeNode(tree(), [0, 0], (node) => ({ ...node, name: 'Name' }));
+    expect(result[0].children[0].name).toBe('Name');
+    expect(result[0].name).toBe('Kategorie');
+    expect(result[0].selector).toBe('section.menu-category');
+  });
+
+  test('does not mutate the original tree', () => {
+    const original = tree();
+    updateGroupTreeNode(original, [1], (node) => ({ ...node, name: 'Kosten' }));
+    expect(original[1].name).toBe('Preis');
+  });
+});
+
+// Issue #177
+describe('moveGroupTreeNode', () => {
+  const tree = () => [
+    { kind: 'field', name: 'A', selector: '.a', mode: 'text', attribute: null },
+    { kind: 'field', name: 'B', selector: '.b', mode: 'text', attribute: null },
+    {
+      kind: 'group', name: 'Kategorie', selector: 'section', repeating: true,
+      children: [
+        { kind: 'field', name: 'X', selector: '.x', mode: 'text', attribute: null },
+        { kind: 'field', name: 'Y', selector: '.y', mode: 'text', attribute: null },
+      ],
+    },
+  ];
+
+  test('swaps two root-level siblings moving down', () => {
+    const result = moveGroupTreeNode(tree(), [0], 1);
+    expect(result.map(n => n.name)).toEqual(['B', 'A', 'Kategorie']);
+  });
+
+  test('swaps two root-level siblings moving up', () => {
+    const result = moveGroupTreeNode(tree(), [1], -1);
+    expect(result.map(n => n.name)).toEqual(['B', 'A', 'Kategorie']);
+  });
+
+  test('swaps two nested siblings under the same parent', () => {
+    const result = moveGroupTreeNode(tree(), [2, 0], 1);
+    expect(result[2].children.map(n => n.name)).toEqual(['Y', 'X']);
+  });
+
+  test('no-ops past the top boundary', () => {
+    const result = moveGroupTreeNode(tree(), [0], -1);
+    expect(result).toEqual(tree());
+  });
+
+  test('no-ops past the bottom boundary', () => {
+    const result = moveGroupTreeNode(tree(), [2], 1);
+    expect(result).toEqual(tree());
+  });
+
+  test('no-ops for a single-child list', () => {
+    const single = [{ kind: 'field', name: 'Solo', selector: '.solo', mode: 'text', attribute: null }];
+    expect(moveGroupTreeNode(single, [0], 1)).toEqual(single);
+    expect(moveGroupTreeNode(single, [0], -1)).toEqual(single);
+  });
+
+  test('does not mutate the original tree', () => {
+    const original = tree();
+    moveGroupTreeNode(original, [0], 1);
+    expect(original.map(n => n.name)).toEqual(['A', 'B', 'Kategorie']);
+  });
+});
+
 // ── hasRepeatingAncestor ─────────────────────────────────────────────────────
 // Determines whether a new node's selector will be re-evaluated once per
 // repeating instance — see content-script.js's avoidId (an id-based
@@ -622,13 +707,15 @@ describe('renderGroupTree', () => {
     expect(nodes).toHaveLength(2);
 
     const groupRow = document.querySelector('[data-path="[0]"] > .group-tree-row');
-    expect(groupRow.textContent).toContain('Kategorie (wiederholend)');
+    expect(groupRow.querySelector('.group-tree-name').value).toBe('Kategorie');
+    expect(groupRow.querySelector('.group-tree-label').textContent).toBe('(wiederholend)');
     expect(groupRow.querySelector('.btn-add-subcontainer')).not.toBeNull();
     expect(groupRow.querySelector('.btn-add-subfield')).not.toBeNull();
     expect(groupRow.querySelector('.btn-remove-group-node')).not.toBeNull();
 
     const fieldRow = document.querySelector('[data-path="[0,0]"] > .group-tree-row');
-    expect(fieldRow.textContent).toContain('Titel — Text');
+    expect(fieldRow.querySelector('.group-tree-name').value).toBe('Titel');
+    expect(fieldRow.querySelector('.group-tree-label').textContent).toBe('— Text');
     expect(fieldRow.querySelector('.btn-add-subcontainer')).toBeNull(); // fields can't have children
     expect(fieldRow.querySelector('.btn-remove-group-node')).not.toBeNull();
   });
@@ -2722,7 +2809,8 @@ describe('Container-Mode integration', () => {
     expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
     expect(document.getElementById('modal-field-extended').classList.contains('hidden')).toBe(true);
     const row = document.querySelector('#group-tree-root .group-tree-row');
-    expect(row.textContent).toContain('Vorspeisen (wiederholend)');
+    expect(row.querySelector('.group-tree-name').value).toBe('Vorspeisen');
+    expect(row.textContent).toContain('(wiederholend)');
   });
 
   test('field add within a container: click-select first, then the extended modal, scoped to the parent selector', async () => {
@@ -2752,7 +2840,8 @@ describe('Container-Mode integration', () => {
     document.getElementById('btn-field-extended-confirm').click();
 
     const rows = document.querySelectorAll('#group-tree-root .group-tree-row');
-    expect(rows[1].textContent).toContain('Titel — Text');
+    expect(rows[1].querySelector('.group-tree-name').value).toBe('Titel');
+    expect(rows[1].textContent).toContain('— Text');
   });
 
   test('choosing "Attribut" reveals the attribute-name input, and it is required to confirm', async () => {
@@ -2780,7 +2869,8 @@ describe('Container-Mode integration', () => {
     document.getElementById('input-field-attribute').value = 'href';
     document.getElementById('btn-field-extended-confirm').click();
     const rows = document.querySelectorAll('#group-tree-root .group-tree-row');
-    expect(rows[1].textContent).toContain('Link — Attribut: href');
+    expect(rows[1].querySelector('.group-tree-name').value).toBe('Link');
+    expect(rows[1].textContent).toContain('— Attribut: href');
   });
 
   // Regression: an id-bearing element used to always short-circuit to an id
@@ -2836,6 +2926,68 @@ describe('Container-Mode integration', () => {
     await flushMicrotasks();
 
     expect(document.querySelector('#group-tree-root .frame-badge')).toBeNull();
+  });
+
+  // Issue #177: rename/reorder a node's own tree row after it's already
+  // been created, instead of only ever being nameable/orderable at add time.
+  async function addRootContainer(name, selector) {
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = name;
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector });
+    await flushMicrotasks();
+  }
+
+  test('renaming a tree node via its own row input persists into state', async () => {
+    document.getElementById('btn-mode-container').click();
+    await addRootContainer('Vorspeisen', 'section.starters');
+
+    const nameInput = document.querySelector('#group-tree-root .group-tree-name');
+    nameInput.value = 'Hauptgerichte';
+    nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    // Re-render (triggered by the change handler's setState) rebuilds the
+    // row from scratch — re-querying it proves the new name came from
+    // _state.groups, not just the input's own unmanaged DOM value.
+    expect(document.querySelector('#group-tree-root .group-tree-name').value).toBe('Hauptgerichte');
+  });
+
+  test('blanking a tree node\'s name input reverts it instead of saving an empty name', async () => {
+    document.getElementById('btn-mode-container').click();
+    await addRootContainer('Vorspeisen', 'section.starters');
+
+    const nameInput = document.querySelector('#group-tree-root .group-tree-name');
+    nameInput.value = '   ';
+    nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(nameInput.value).toBe('Vorspeisen');
+  });
+
+  test('move buttons reorder two sibling nodes', async () => {
+    document.getElementById('btn-mode-container').click();
+    await addRootContainer('Vorspeisen', 'section.starters');
+    await addRootContainer('Hauptgerichte', 'section.mains');
+
+    let names = () => [...document.querySelectorAll('#group-tree-root .group-tree-name')].map(el => el.value);
+    expect(names()).toEqual(['Vorspeisen', 'Hauptgerichte']);
+
+    document.querySelectorAll('.btn-group-move-down')[0].click();
+    expect(names()).toEqual(['Hauptgerichte', 'Vorspeisen']);
+
+    document.querySelectorAll('.btn-group-move-up')[1].click();
+    expect(names()).toEqual(['Vorspeisen', 'Hauptgerichte']);
+  });
+
+  test('the top row\'s move-up and the bottom row\'s move-down are disabled', async () => {
+    document.getElementById('btn-mode-container').click();
+    await addRootContainer('Vorspeisen', 'section.starters');
+    await addRootContainer('Hauptgerichte', 'section.mains');
+
+    const rows = document.querySelectorAll('#group-tree-root .group-tree-row');
+    expect(rows[0].querySelector('.btn-group-move-up').disabled).toBe(true);
+    expect(rows[0].querySelector('.btn-group-move-down').disabled).toBe(false);
+    expect(rows[1].querySelector('.btn-group-move-up').disabled).toBe(false);
+    expect(rows[1].querySelector('.btn-group-move-down').disabled).toBe(true);
   });
 });
 
@@ -2995,7 +3147,7 @@ describe('Live selector match-count preview (Issue #85)', () => {
     expect(document.getElementById('error-toast-message').textContent)
       .toBe('Container „Vorspeisen“ hinzugefügt — 7 Element(e) gefunden');
     // Insertion itself is unaffected by the toast — same "no extra modal" flow as before.
-    expect(document.querySelector('#group-tree-root .group-tree-row').textContent).toContain('Vorspeisen');
+    expect(document.querySelector('#group-tree-root .group-tree-row .group-tree-name').value).toBe('Vorspeisen');
   });
 
   test('creating a root container whose selector matches nothing shows the toast in its warn variant', async () => {
@@ -3310,7 +3462,7 @@ describe('Field transform-chain editor (Issue #84)', () => {
     document.getElementById('btn-field-extended-confirm').click();
 
     const rows = document.querySelectorAll('#group-tree-root .group-tree-row');
-    expect(rows[1].textContent).toContain('Preis');
+    expect(rows[1].querySelector('.group-tree-name').value).toBe('Preis');
   });
 });
 
