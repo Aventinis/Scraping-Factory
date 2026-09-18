@@ -1,0 +1,49 @@
+    <!-- Issue #136: shown only when this ApiConfig was sourced from an
+         embedded <script> tag instead of a live network request — clarifies
+         why the URL segments below describe a plain page load, not an API
+         call. -->
+    <p id="api-config-embedded-json-note" class="preview-summary hidden"></p>
+
+    <!-- Nested JSON tree editor (Issue #54) — subsumes the old flat field
+         list entirely (Phase A5): a single top-level match renders as a
+         one-node-deep tree, visually almost identical to the old list but
+         wrapped in the same tree-editor chrome every deeper level reuses. -->
+    <div class="row-label" data-i18n="common.fields"></div>
+    <ul id="api-tree-root" class="api-tree"></ul>
+    <div class="actions">
+      <button id="btn-api-tree-add-root" class="btn-secondary btn-tiny" type="button" data-i18n="apiTree.addRootGroupBtn"></button>
+    </div>
+    <!-- Results of an "add root group"/"add sub-field" search started from
+         this screen (see btn-api-tree-add-root and the tree's own per-row
+         add buttons) — same markup/behavior as the primary search's
+         api-candidates-panel on screen-idle, see renderApiCandidates. -->
+    <div id="api-tree-search-panel" class="api-candidates-panel hidden">
+      <p id="api-tree-search-target" class="api-candidates-target"></p>
+      <ul id="api-tree-search-list" class="api-candidates-list"></ul>
+    </div>
+
+    <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.urlPathLabel"></div>
+    <ul id="api-config-segments" class="api-config-parts"></ul>
+
+    <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.urlQueryLabel"></div>
+    <ul id="api-config-query-params" class="api-config-parts"></ul>
+
+    <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.valueSourcesLabel"></div>
+    <div id="api-config-parameters"></div>
+
+    <!-- Request-body tree (Issue #55, Phase B4) — only shown for a POST
+         candidate whose captured request body could be turned into a draft
+         (see loadInitialBodyTreeForCandidate); hidden entirely for a GET
+         config or an unparsable/bodyless POST. -->
+    <div id="api-config-body-section" class="hidden">
+      <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.bodyLabel"></div>
+      <ul id="body-tree-root" class="body-tree"></ul>
+    </div>
+
+    <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.headersLabel"></div>
+    <ul id="api-config-headers" class="api-config-headers"></ul>
+
+    <div class="actions" style="margin-top: 12px;">
+      <button id="btn-api-config-cancel" class="btn-secondary" type="button" data-i18n="common.cancel"></button>
+      <button id="btn-api-config-confirm" class="btn-primary" type="button" disabled data-i18n="common.apply"></button>
+    </div>

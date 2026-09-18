@@ -1,0 +1,169 @@
+  <!-- Modal: field-name input -->
+  <div id="modal-field-name" class="modal hidden">
+    <div class="modal-inner">
+      <label for="input-field-name" data-i18n="modals.fieldName.label"></label>
+      <input id="input-field-name" type="text" data-i18n-placeholder="modals.fieldName.placeholder" autocomplete="off" />
+      <!-- Issue #85: live match count for the just-picked selector -->
+      <p id="field-name-match-count" class="match-count-hint hidden"></p>
+      <!-- Issue #84: optional per-field transform chain -->
+      <div class="field-transforms-section">
+        <label data-i18n="transforms.sectionLabel"></label>
+        <ul id="field-transform-list" class="field-transform-list"></ul>
+        <button type="button" id="btn-field-transform-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
+        <!-- Issue #143: live preview of the chain's output against the picked element's raw value -->
+        <p id="field-transform-preview" class="transform-preview hidden"></p>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-field-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-field-confirm" class="btn-primary" data-i18n="common.add"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: new container (name + type), shown before element selection starts -->
+  <!-- Modal: name a config being saved to the companion's local SQLite
+       store (Issue #141) -->
+  <div id="modal-save-config" class="modal hidden">
+    <div class="modal-inner">
+      <label for="input-save-config-name" data-i18n="modals.saveConfig.label"></label>
+      <input id="input-save-config-name" type="text" data-i18n-placeholder="modals.saveConfig.namePlaceholder" autocomplete="off" />
+      <div class="modal-actions">
+        <button id="btn-save-config-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-save-config-confirm" class="btn-primary" data-i18n="modals.saveConfig.save"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: link the DONE screen's trial-run output to a saved
+       configuration and give it a name (Issue #202). Shown only once
+       includeOutputFile actually produced a file (see btn-save-output's own
+       visibility gate) — see renderSaveOutputModal for how it switches
+       between the config-picker form below and the "no saved config yet"
+       hint. -->
+  <div id="modal-save-output" class="modal hidden">
+    <div class="modal-inner">
+      <div id="save-output-picker">
+        <label for="select-save-output-config" data-i18n="modals.saveOutput.configLabel"></label>
+        <select id="select-save-output-config"></select>
+        <label for="input-save-output-name" data-i18n="modals.saveOutput.nameLabel"></label>
+        <input id="input-save-output-name" type="text" data-i18n-placeholder="modals.saveOutput.namePlaceholder" autocomplete="off" />
+      </div>
+      <p id="save-output-no-configs-hint" class="preview-summary hidden" data-i18n="modals.saveOutput.noConfigsHint"></p>
+      <div class="modal-actions">
+        <button id="btn-save-output-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-save-output-go-to-save-config" class="btn-primary hidden" data-i18n="modals.saveOutput.saveConfigShortcut"></button>
+        <button id="btn-save-output-confirm" class="btn-primary" data-i18n="modals.saveOutput.save"></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-container-new" class="modal hidden">
+    <div class="modal-inner">
+      <label for="input-container-name" data-i18n="modals.containerNew.label"></label>
+      <input id="input-container-name" type="text" data-i18n-placeholder="modals.containerNew.namePlaceholder" autocomplete="off" />
+      <label data-i18n="modals.containerNew.typeLabel"></label>
+      <div class="radio-row">
+        <label><input type="radio" name="container-type" id="radio-container-single" checked /> <span data-i18n="modals.containerNew.single"></span></label>
+        <label><input type="radio" name="container-type" id="radio-container-repeating" /> <span data-i18n="modals.containerNew.repeating"></span></label>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-container-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-container-confirm" class="btn-primary" data-i18n="modals.containerNew.next"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: extended field input (Container-Mode) — name, type, optional attribute -->
+  <div id="modal-field-extended" class="modal hidden">
+    <div class="modal-inner">
+      <label for="input-field-extended-name" data-i18n="modals.fieldExtended.label"></label>
+      <input id="input-field-extended-name" type="text" data-i18n-placeholder="modals.fieldExtended.placeholder" autocomplete="off" />
+      <label for="select-field-mode" data-i18n="modals.fieldExtended.typeLabel"></label>
+      <select id="select-field-mode">
+        <option value="text" data-i18n="modals.fieldExtended.textOption"></option>
+        <option value="attribute" data-i18n="modals.fieldExtended.attributeOption"></option>
+        <option value="exists" data-i18n="modals.fieldExtended.existsOption"></option>
+        <!-- Issue #169: extracts only an element's direct text-node
+             children, excluding text contributed by any nested element
+             (e.g. a badge <span> inside a name heading) — see
+             ExtractMode.OwnText's own doc comment on the companion side. -->
+        <option value="ownText" data-i18n="modals.fieldExtended.ownTextOption"></option>
+      </select>
+      <div id="field-attribute-row" class="hidden">
+        <label for="input-field-attribute" data-i18n="modals.fieldExtended.attributeLabel"></label>
+        <input id="input-field-attribute" type="text" data-i18n-placeholder="modals.fieldExtended.attributePlaceholder" autocomplete="off" />
+      </div>
+      <!-- Issue #85: live match count for the just-picked selector -->
+      <p id="field-extended-match-count" class="match-count-hint hidden"></p>
+      <!-- Issue #84: optional per-field transform chain — hidden for
+           "Vorhanden?" (mode === 'exists'), a boolean-ish presence check
+           rather than a string pipeline. -->
+      <div id="field-extended-transforms-section" class="field-transforms-section">
+        <label data-i18n="transforms.sectionLabel"></label>
+        <ul id="field-extended-transform-list" class="field-transform-list"></ul>
+        <button type="button" id="btn-field-extended-transform-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
+        <!-- Issue #143: live preview of the chain's output against the picked element's raw value -->
+        <p id="field-extended-transform-preview" class="transform-preview hidden"></p>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-field-extended-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-field-extended-confirm" class="btn-primary" data-i18n="common.add"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: new API-tree sub-group (Issue #54, Phase A5) — name and JSON
+       path both typed directly, no click-based search: unlike a field/root
+       search there's no single clicked value to derive an empty group from
+       without also implying a leaf field nobody asked for (see
+       confirmApiGroupModal's own doc comment). -->
+  <div id="modal-api-group-new" class="modal hidden">
+    <div class="modal-inner">
+      <label for="input-api-group-name" data-i18n="modals.apiGroupNew.nameLabel"></label>
+      <input id="input-api-group-name" type="text" data-i18n-placeholder="modals.apiGroupNew.namePlaceholder" autocomplete="off" />
+      <label for="input-api-group-path" data-i18n="modals.apiGroupNew.pathLabel"></label>
+      <input id="input-api-group-path" type="text" data-i18n-placeholder="modals.apiGroupNew.pathPlaceholder" autocomplete="off" />
+      <div class="modal-actions">
+        <button id="btn-api-group-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-api-group-confirm" class="btn-primary" data-i18n="modals.apiGroupNew.confirm"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: new body-only parameter name (Issue #55, Phase B4) — a body
+       variable can bind to an already-declared URL parameter, or create a
+       new one that exists purely to be referenced from the body; its value
+       source is then configured via the exact same parameter-source card a
+       URL variable part already uses (see allParameterParts/
+       renderApiConfigParameters), not a second body-specific source picker. -->
+  <div id="modal-api-body-parameter-new" class="modal hidden">
+    <div class="modal-inner">
+      <label for="input-api-body-parameter-name" data-i18n="modals.apiBodyParameterNew.nameLabel"></label>
+      <input id="input-api-body-parameter-name" type="text" data-i18n-placeholder="modals.apiBodyParameterNew.namePlaceholder" autocomplete="off" />
+      <div class="modal-actions">
+        <button id="btn-api-body-parameter-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-api-body-parameter-confirm" class="btn-primary" data-i18n="common.add"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: API-mode field transforms (Issue #84 follow-up) — reuses the
+       exact same transform-chain editor as modal-field-name/-extended
+       (field-transforms.js/field-transforms-ui.js), opened via the
+       "Transformieren" button next to each field in the API_CONFIG tree. -->
+  <div id="modal-api-field-transforms" class="modal hidden">
+    <div class="modal-inner">
+      <div class="field-transforms-section">
+        <label data-i18n="transforms.sectionLabel"></label>
+        <ul id="api-field-transform-list" class="field-transform-list"></ul>
+        <button type="button" id="btn-api-field-transforms-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
+        <!-- Issue #147: live preview against the field's captured sample value -->
+        <p id="api-field-transform-preview" class="transform-preview hidden"></p>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-api-field-transforms-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-api-field-transforms-confirm" class="btn-primary" data-i18n="common.apply"></button>
+      </div>
+    </div>
+  </div>
+
