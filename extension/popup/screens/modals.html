@@ -38,20 +38,30 @@
        configuration and give it a name (Issue #202). Shown only once
        includeOutputFile actually produced a file (see btn-save-output's own
        visibility gate) — see renderSaveOutputModal for how it switches
-       between the config-picker form below and the "no saved config yet"
-       hint. -->
+       between the config-picker form and the inline "create a new
+       configuration" form below (Issue #209) depending on whether any
+       saved configuration exists yet for the current site. -->
   <div id="modal-save-output" class="modal hidden">
     <div class="modal-inner">
       <div id="save-output-picker">
         <label for="select-save-output-config" data-i18n="modals.saveOutput.configLabel"></label>
         <select id="select-save-output-config"></select>
-        <label for="input-save-output-name" data-i18n="modals.saveOutput.nameLabel"></label>
-        <input id="input-save-output-name" type="text" data-i18n-placeholder="modals.saveOutput.namePlaceholder" autocomplete="off" />
       </div>
-      <p id="save-output-no-configs-hint" class="preview-summary hidden" data-i18n="modals.saveOutput.noConfigsHint"></p>
+      <!-- Issue #209: shown instead of the picker above when there's no
+           saved configuration yet for the current site — collects a
+           configuration name alongside the output name below so
+           btn-save-output-confirm can create-and-link in one action
+           (see createConfigAndSaveOutput) instead of redirecting into
+           modal-save-config. -->
+      <div id="save-output-create-config" class="hidden">
+        <p class="preview-summary" data-i18n="modals.saveOutput.noConfigsHint"></p>
+        <label for="input-save-output-config-name" data-i18n="modals.saveOutput.configNameLabel"></label>
+        <input id="input-save-output-config-name" type="text" data-i18n-placeholder="modals.saveOutput.configNamePlaceholder" autocomplete="off" />
+      </div>
+      <label for="input-save-output-name" data-i18n="modals.saveOutput.nameLabel"></label>
+      <input id="input-save-output-name" type="text" data-i18n-placeholder="modals.saveOutput.namePlaceholder" autocomplete="off" />
       <div class="modal-actions">
         <button id="btn-save-output-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
-        <button id="btn-save-output-go-to-save-config" class="btn-primary hidden" data-i18n="modals.saveOutput.saveConfigShortcut"></button>
         <button id="btn-save-output-confirm" class="btn-primary" data-i18n="modals.saveOutput.save"></button>
       </div>
     </div>
