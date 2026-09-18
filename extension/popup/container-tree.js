@@ -75,9 +75,43 @@ const SFContainerTree = (function () {
     return groups.map((n, i) => (i === head ? { ...n, children: removeGroupTreeNode(n.children, rest) } : n));
   }
 
-  function formatGroupNodeLabel(node) {
+  // Issue #177: replaces the node at `path` with `updater(node)` — same
+  // recursive path-walk shape as api-config.js's own updateApiTreeNode, used
+  // there for the API tree's own rename-in-place input.
+  function updateGroupTreeNode(groups, path, updater) {
+    const [head, ...rest] = path;
+    return groups.map((n, i) => {
+      if (i !== head) return n;
+      return rest.length === 0 ? updater(n) : { ...n, children: updateGroupTreeNode(n.children, rest, updater) };
+    });
+  }
+
+  // Issue #177: swaps the node at `path` with its adjacent sibling —
+  // direction is -1 (up) or 1 (down), same convention as field-transforms.js's
+  // moveTransform. No-ops (returns `groups` unchanged) past either end of the
+  // sibling list, so callers can wire this straight to an unconditional
+  // button click without checking the boundary themselves first.
+  function moveGroupTreeNode(groups, path, direction) {
+    const parentPath = path.slice(0, -1);
+    const index = path[path.length - 1];
+    const siblings = parentPath.length === 0 ? groups : resolveGroupNode(groups, parentPath).children;
+    const target = index + direction;
+    if (target < 0 || target >= siblings.length) return groups;
+
+    const swapped = [...siblings];
+    [swapped[index], swapped[target]] = [swapped[target], swapped[index]];
+
+    return parentPath.length === 0
+      ? swapped
+      : updateGroupTreeNode(groups, parentPath, (n) => ({ ...n, children: swapped }));
+  }
+
+  // Issue #177: the part of formatGroupNodeLabel below that isn't the name
+  // itself — split out so the tree-row editor can render the name as an
+  // editable input and this suffix as a separate, read-only label next to it.
+  function groupNodeSuffix(node) {
     if (node.kind === 'group') {
-      return `${node.name} (${t(node.repeating ? 'group.repeating' : 'group.single')})`;
+      return `(${t(node.repeating ? 'group.repeating' : 'group.single')})`;
     }
     const modeLabel = {
       text: t('group.textMode'),
@@ -85,7 +119,11 @@ const SFContainerTree = (function () {
       exists: t('group.existsMode'),
       ownText: t('group.ownTextMode'),
     }[node.mode];
-    return `${node.name} — ${modeLabel}`;
+    return `— ${modeLabel}`;
+  }
+
+  function formatGroupNodeLabel(node) {
+    return `${node.name} ${groupNodeSuffix(node)}`;
   }
 
   const FIELD_MODE_WIRE_NAMES = { text: 'Text', attribute: 'Attribute', exists: 'Exists', ownText: 'OwnText' };
@@ -112,7 +150,8 @@ const SFContainerTree = (function () {
 
   return {
     buildGroupNode, buildFieldNode, resolveGroupNode, hasRepeatingAncestor,
-    insertContainerNode, removeGroupTreeNode, formatGroupNodeLabel, serializeGroupTree,
+    insertContainerNode, removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode,
+    groupNodeSuffix, formatGroupNodeLabel, serializeGroupTree,
   };
 })();
 

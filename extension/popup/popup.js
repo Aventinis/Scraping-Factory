@@ -25,7 +25,8 @@ const {
 
 const {
   buildGroupNode, buildFieldNode, resolveGroupNode, hasRepeatingAncestor,
-  insertContainerNode, removeGroupTreeNode, formatGroupNodeLabel, serializeGroupTree,
+  insertContainerNode, removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode,
+  formatGroupNodeLabel, serializeGroupTree,
 } = typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
 
 const {
@@ -947,6 +948,7 @@ if (typeof module !== 'undefined') {
     formatTreeLabel, renderDomTree, highlightHover, highlightSelected,
     formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,
     buildGroupNode, buildFieldNode, resolveGroupNode, insertContainerNode, removeGroupTreeNode,
+    updateGroupTreeNode, moveGroupTreeNode,
     formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport, hasRepeatingAncestor,
     buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
     updateApiTreeNode, apiTreeNodesHaveNonBlankNames, lastPathSegmentName, buildApiSubtreeFromCandidate,
