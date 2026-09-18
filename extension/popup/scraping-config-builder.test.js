@@ -77,6 +77,61 @@ describe('buildScrapingConfig (flat mode)', () => {
   });
 });
 
+describe('buildScrapingConfig (combined mode, Issue #239)', () => {
+  const combinedComponents = [
+    { name: 'products', config: { version: '1', url: 'https://a.example.com', fields: [] }, savedConfigId: 1 },
+    { name: 'reviews', config: { version: '1', url: 'https://b.example.com', fields: [] } },
+  ];
+
+  test('sends each already-resolved component verbatim, with savedConfigId only when present', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'combined', [], [], null, null, null,
+      'Static', [], false, false, [], null, null, null, null, false, false, false, combinedComponents,
+    );
+    expect(result).toEqual({
+      version: '1',
+      url: 'https://example.com',
+      combined: [
+        { name: 'products', config: combinedComponents[0].config, savedConfigId: 1 },
+        { name: 'reviews', config: combinedComponents[1].config },
+      ],
+      scriptFileName: null,
+      outputFileName: null,
+    });
+  });
+
+  test('ignores engine/browserActions/additionalUrls/changeDetection/proxy/hardening/pagination — none of them apply at the outer Combined level', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'combined', [], [], null, null, null,
+      'Browser', [{ kind: 'click', selector: '#x' }], false, true, ['https://extra.example.com'],
+      { enabled: true }, { enabled: true }, [{ kind: 'noResult', severity: 'Error' }],
+      { enabled: true }, true, false, true, combinedComponents,
+    );
+    expect(result).not.toHaveProperty('engine');
+    expect(result).not.toHaveProperty('browserActions');
+    expect(result).not.toHaveProperty('additionalUrls');
+    expect(result).not.toHaveProperty('changeDetection');
+    expect(result).not.toHaveProperty('proxy');
+    expect(result).not.toHaveProperty('hardening');
+    expect(result).not.toHaveProperty('pagination');
+    expect(result).not.toHaveProperty('outputFormat');
+  });
+
+  test('includePreview/includeOutputFile still apply — the final merged output is what they preview/download', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'combined', [], [], null, null, null,
+      'Static', [], true, false, [], null, null, null, null, false, true, false, combinedComponents,
+    );
+    expect(result.includePreview).toBe(true);
+    expect(result.includeOutputFile).toBe(true);
+  });
+
+  test('an empty/missing component list sends an empty combined array rather than throwing', () => {
+    const result = buildScrapingConfig('https://example.com', 'combined', [], []);
+    expect(result.combined).toEqual([]);
+  });
+});
+
 // Issue #41/#42, Phase 5: engine/browserActions are mode-independent, so
 // these are tested once rather than per mode (flat mode used as the
 // representative case) — buildScrapingConfig's own doc comment explains why
