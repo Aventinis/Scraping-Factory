@@ -39,7 +39,7 @@ const {
   startApiTreeFieldSearch,
   toggleBodyLeafToVariable, toggleBodyLeafToFixed, setBodyLeafParameter, setBodyLeafCoerceTo,
   openBodyParameterModal, confirmBodyParameterModal, confirmApiConfig,
-  wireApiConfigEvents,
+  renderApiConfigModals, wireApiConfigEvents,
 } = typeof require !== 'undefined' ? require('./api-config-ui') : self.SFApiConfigUI;
 
 const {
@@ -596,40 +596,7 @@ function render() {
   }
 
   if (_state.current === STATES.API_CONFIG && _state.apiConfigDraft) {
-    renderApiConfigScreen(_state.apiConfigDraft, _state.apiDiscoveryCandidates);
-
-    const apiTreeSearchPanel = document.getElementById('api-tree-search-panel');
-    if (apiTreeSearchPanel) {
-      if (_state.apiTreeSearchResult) {
-        renderApiCandidates(_state.apiTreeSearchResult, { targetEl: 'api-tree-search-target', listEl: 'api-tree-search-list' });
-        apiTreeSearchPanel.classList.remove('hidden');
-      } else {
-        apiTreeSearchPanel.classList.add('hidden');
-      }
-    }
-
-    if (_state.apiGroupModalOpen) {
-      show('modal-api-group-new');
-      const nameInput = document.getElementById('input-api-group-name');
-      if (nameInput) { nameInput.value = ''; nameInput.focus(); }
-      const pathInput = document.getElementById('input-api-group-path');
-      if (pathInput) pathInput.value = '';
-    }
-
-    if (_state.bodyParameterModalOpen) {
-      show('modal-api-body-parameter-new');
-      const nameInput = document.getElementById('input-api-body-parameter-name');
-      if (nameInput) { nameInput.value = ''; nameInput.focus(); }
-    }
-
-    if (_state.apiFieldTransformModalOpen) {
-      show('modal-api-field-transforms');
-      renderTransformList('api-field-transform-list', _state.pendingTransforms);
-      // Issue #147: live preview against the node's own sampleValue, threaded
-      // through as pendingRawText by openApiFieldTransformsModal — reuses the
-      // same renderTransformPreview flat mode's own preview already calls.
-      renderTransformPreview('api-field-transform-preview', _state.pendingRawText, _state.pendingTransforms);
-    }
+    renderApiConfigModals(bridge);
   }
 
   if (_state.current === STATES.DONE) {

@@ -37,7 +37,8 @@ const SFApiConfigUI = (function () {
     buildApiSubtreeFromCandidate, resolveApiGroupScopePath, allParameterParts, apiConfigDraftHasAllSourcesChosen,
   } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
   const { transformsAreValid, addTransform } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
-  const { wireTransformList } = typeof require !== 'undefined' ? require('./field-transforms-ui') : self.SFFieldTransformsUI;
+  const { wireTransformList, renderTransformList, renderTransformPreview } =
+    typeof require !== 'undefined' ? require('./field-transforms-ui') : self.SFFieldTransformsUI;
 
   // Issue #139: one static inline chevron per row instead of swapping between
   // two different Unicode glyphs (▸/▾) on click — see container-tree-ui.js's
@@ -1221,6 +1222,48 @@ const SFApiConfigUI = (function () {
     }
   }
 
+// Called from popup.js's render() only while _state.current === STATES.API_CONFIG
+// and an apiConfigDraft is in progress — the screen's own tree-search panel
+// and its three small modals (add group, add body parameter, edit a leaf
+// field's transform chain).
+function renderApiConfigModals(bridge) {
+  const state = bridge.getState();
+  renderApiConfigScreen(state.apiConfigDraft, state.apiDiscoveryCandidates);
+
+  const apiTreeSearchPanel = document.getElementById('api-tree-search-panel');
+  if (apiTreeSearchPanel) {
+    if (state.apiTreeSearchResult) {
+      renderApiCandidates(state.apiTreeSearchResult, { targetEl: 'api-tree-search-target', listEl: 'api-tree-search-list' });
+      apiTreeSearchPanel.classList.remove('hidden');
+    } else {
+      apiTreeSearchPanel.classList.add('hidden');
+    }
+  }
+
+  if (state.apiGroupModalOpen) {
+    document.getElementById('modal-api-group-new')?.classList.remove('hidden');
+    const nameInput = document.getElementById('input-api-group-name');
+    if (nameInput) { nameInput.value = ''; nameInput.focus(); }
+    const pathInput = document.getElementById('input-api-group-path');
+    if (pathInput) pathInput.value = '';
+  }
+
+  if (state.bodyParameterModalOpen) {
+    document.getElementById('modal-api-body-parameter-new')?.classList.remove('hidden');
+    const nameInput = document.getElementById('input-api-body-parameter-name');
+    if (nameInput) { nameInput.value = ''; nameInput.focus(); }
+  }
+
+  if (state.apiFieldTransformModalOpen) {
+    document.getElementById('modal-api-field-transforms')?.classList.remove('hidden');
+    renderTransformList('api-field-transform-list', state.pendingTransforms);
+    // Issue #147: live preview against the node's own sampleValue, threaded
+    // through as pendingRawText by openApiFieldTransformsModal — reuses the
+    // same renderTransformPreview flat mode's own preview already calls.
+    renderTransformPreview('api-field-transform-preview', state.pendingRawText, state.pendingTransforms);
+  }
+}
+
 function wireApiConfigEvents(bridge) {
   document.getElementById('btn-api-search')?.addEventListener('click', () => {
     log('BTN api-search');
@@ -1479,7 +1522,7 @@ function wireApiConfigEvents(bridge) {
     toggleBodyLeafToVariable, toggleBodyLeafToFixed, setBodyLeafParameter, setBodyLeafCoerceTo,
     openBodyParameterModal, confirmBodyParameterModal, cancelBodyParameterModal, confirmApiConfig,
     fetchApiCaptureEntries, toggleApiEntriesPanel, fillStaticListFromPool,
-    wireApiConfigEvents,
+    renderApiConfigModals, wireApiConfigEvents,
   };
 })();
 
