@@ -19,9 +19,11 @@ const SFIdleScreenUI = (function () {
   const { renderBrowserActionsSection } = typeof require !== 'undefined' ? require('./browser-actions-ui') : self.SFBrowserActionsUI;
   const { parseAdditionalUrls } = typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
   const { renderSettingsPanel } = typeof require !== 'undefined' ? require('./settings-panel-ui') : self.SFSettingsPanelUI;
-  const { renderSavedConfigsList } = typeof require !== 'undefined' ? require('./saved-configs-ui') : self.SFSavedConfigsUI;
+  const { renderSavedConfigsList, fetchAllSavedConfigs } =
+    typeof require !== 'undefined' ? require('./saved-configs-ui') : self.SFSavedConfigsUI;
   const { checkRobotsTxt } = typeof require !== 'undefined' ? require('./companion-client') : self.SFCompanionClient;
   const { togglePreview } = typeof require !== 'undefined' ? require('./preview') : self.SFPreview;
+  const { renderCombinedSection } = typeof require !== 'undefined' ? require('./combined-config-ui') : self.SFCombinedConfigUI;
 
   // Duplicated verbatim from popup.js's own tiny show(id) helper — same "no
   // cross-module includes for small DOM helpers" convention already used
@@ -37,9 +39,10 @@ const SFIdleScreenUI = (function () {
   // "switching modes clears the other modes' configuration" contract honest
   // regardless of that.
   const MODE_SWITCH_CLEARS = {
-    flat:      { groups: [], apiConfig: null, apiConfigDraft: null },
-    container: { fields: [], apiConfig: null, apiConfigDraft: null },
-    api:       { fields: [], groups: [] },
+    flat:      { groups: [], apiConfig: null, apiConfigDraft: null, combinedComponents: [] },
+    container: { fields: [], apiConfig: null, apiConfigDraft: null, combinedComponents: [] },
+    api:       { fields: [], groups: [], combinedComponents: [] },
+    combined:  { fields: [], groups: [], apiConfig: null, apiConfigDraft: null },
   };
 
   function switchMode(bridge, mode) {
@@ -48,6 +51,12 @@ const SFIdleScreenUI = (function () {
     log('MODE_SWITCH', mode);
     bridge.stopPreviewIfActive();
     bridge.setState(state.current, { mode, ...MODE_SWITCH_CLEARS[mode] });
+    // Issue #239: fetched once on entering Combined mode rather than kept
+    // continuously in sync — the picker's own "add" list is naturally a
+    // little stale if a config is saved/deleted elsewhere while this popup
+    // stays open, the same tradeoff fetchSavedConfigs' own hostname-scoped
+    // list already accepts.
+    if (mode === 'combined') fetchAllSavedConfigs(bridge);
   }
 
   // Called from popup.js's render() only while _state.current === STATES.IDLE.
@@ -87,11 +96,18 @@ const SFIdleScreenUI = (function () {
     document.getElementById('btn-mode-flat')?.classList.toggle('active', state.mode === 'flat');
     document.getElementById('btn-mode-container')?.classList.toggle('active', state.mode === 'container');
     document.getElementById('btn-mode-api')?.classList.toggle('active', state.mode === 'api');
+    document.getElementById('btn-mode-combined')?.classList.toggle('active', state.mode === 'combined');
     document.getElementById('flat-mode-section')?.classList.toggle('hidden', state.mode !== 'flat');
     document.getElementById('container-mode-section')?.classList.toggle('hidden', state.mode !== 'container');
     document.getElementById('api-mode-section')?.classList.toggle('hidden', state.mode !== 'api');
-    // Vorschau highlights matched DOM elements — meaningless for API-Mode.
-    document.getElementById('preview-section')?.classList.toggle('hidden', state.mode === 'api');
+    document.getElementById('combined-mode-section')?.classList.toggle('hidden', state.mode !== 'combined');
+    // Vorschau highlights matched DOM elements — meaningless for API-Mode
+    // and for Combined mode (no selectors/DOM of its own to highlight).
+    document.getElementById('preview-section')?.classList.toggle('hidden', state.mode === 'api' || state.mode === 'combined');
+    // Issue #239: engine/browser-actions are entirely component-level for
+    // Combined mode — the companion rejects BrowserActions on the outer
+    // request outright (each component's own config carries its own).
+    document.getElementById('engine-section')?.classList.toggle('hidden', state.mode === 'combined');
 
     // Engine + browser actions (Issue #41/#42, Phase 5) — mode-independent,
     // so this sits alongside the mode toggle above rather than inside any
@@ -100,12 +116,15 @@ const SFIdleScreenUI = (function () {
 
     if (state.mode === 'container') {
       renderGroupTree(state.groups);
+    } else if (state.mode === 'combined') {
+      renderCombinedSection(bridge);
     } else {
       renderFields(state.fields);
     }
 
     const hasConfig = state.mode === 'container' ? state.groups.length > 0
       : state.mode === 'api' ? !!state.apiConfig
+      : state.mode === 'combined' ? (state.combinedComponents || []).length >= 2
       : state.fields.length > 0;
     const genBtn = document.getElementById('btn-generate');
     if (genBtn) genBtn.disabled = !hasConfig;
@@ -231,7 +250,7 @@ const SFIdleScreenUI = (function () {
     // Issue #83: hidden for API mode — Api builds its own request URL from
     // apiConfig.urlTemplate and never reads this list at all (the companion
     // rejects the combination outright, see Program.cs).
-    document.getElementById('additional-urls-row')?.classList.toggle('hidden', state.mode === 'api');
+    document.getElementById('additional-urls-row')?.classList.toggle('hidden', state.mode === 'api' || state.mode === 'combined');
     const additionalUrlsInput = document.getElementById('input-additional-urls');
     if (additionalUrlsInput && document.activeElement !== additionalUrlsInput) {
       additionalUrlsInput.value = state.additionalStartUrls.join('\n');
@@ -259,6 +278,7 @@ const SFIdleScreenUI = (function () {
     document.getElementById('btn-mode-flat')?.addEventListener('click', () => switchMode(bridge, 'flat'));
     document.getElementById('btn-mode-container')?.addEventListener('click', () => switchMode(bridge, 'container'));
     document.getElementById('btn-mode-api')?.addEventListener('click', () => switchMode(bridge, 'api'));
+    document.getElementById('btn-mode-combined')?.addEventListener('click', () => switchMode(bridge, 'combined'));
 
     document.getElementById('btn-preview')?.addEventListener('click', () => {
       log('BTN preview');

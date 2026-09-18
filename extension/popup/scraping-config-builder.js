@@ -261,8 +261,31 @@ function buildScrapingConfig(
   url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
   additionalUrls = [], changeDetection = null, proxy = null, hardening = null, pagination = null,
-  persistentSession = false, includeOutputFile = false, externalConfig = false,
+  persistentSession = false, includeOutputFile = false, externalConfig = false, combinedComponents = null,
 ) {
+  // Combined mode (Issue #239): no ad-hoc fields/groups/apiConfig of its own
+  // — each component is a fully independent, already-resolved
+  // {name, config, savedConfigId} (see companion-client.js's
+  // resolveCombinedComponents), sent verbatim. None of engine/
+  // browserActions/additionalUrls/changeDetection/proxy/hardening/
+  // pagination/persistentSession/externalConfig/useJsonOutput apply at this
+  // outer level — the companion rejects all of them here outright (each
+  // component's own config carries its own instead) — so this branch
+  // deliberately ignores every one of those parameters.
+  if (mode === 'combined') {
+    const previewFields = includePreview ? { includePreview: true } : {};
+    const outputFileFields = includeOutputFile ? { includeOutputFile: true } : {};
+    return {
+      version: '1', url,
+      combined: (combinedComponents || []).map(c => ({
+        name: c.name, config: c.config,
+        ...(c.savedConfigId ? { savedConfigId: c.savedConfigId } : {}),
+      })),
+      scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
+      ...previewFields, ...outputFileFields,
+    };
+  }
+
   const engineFields = engine === 'Browser'
     ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
     : {};
@@ -336,7 +359,7 @@ function buildConfigExport(
   url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false, additionalUrls = [],
   changeDetection = null, proxy = null, hardening = null, pagination = null, persistentSession = false,
-  includeOutputFile = false, externalConfig = false,
+  includeOutputFile = false, externalConfig = false, combinedComponents = null,
 ) {
   return {
     exportedAt: new Date().toISOString(),
@@ -344,7 +367,7 @@ function buildConfigExport(
     config: buildScrapingConfig(
       url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview,
       useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession,
-      includeOutputFile, externalConfig,
+      includeOutputFile, externalConfig, combinedComponents,
     ),
   };
 }

@@ -63,6 +63,9 @@ const {
   renderIdleScreen, wireIdleScreenEvents,
 } = typeof require !== 'undefined' ? require('./idle-screen-ui') : self.SFIdleScreenUI;
 
+const { wireCombinedConfigEvents } =
+  typeof require !== 'undefined' ? require('./combined-config-ui') : self.SFCombinedConfigUI;
+
 const {
   createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
   moveTransform, transformsAreValid, applyTransformsPreview, toNumberPreview,
@@ -114,7 +117,7 @@ const { triggerDownload, downloadFile, triggerOutputFileDownload, downloadConfig
 
 const {
   renderSavedConfigsList,
-  fetchSavedConfigs, createSavedConfig, saveCurrentConfig, loadSavedConfig,
+  fetchSavedConfigs, fetchAllSavedConfigs, createSavedConfig, saveCurrentConfig, loadSavedConfig,
   requestDeleteSavedConfig, cancelDeleteSavedConfig, deleteSavedConfig,
   openSaveConfigModal,
   saveCurrentOutput, createConfigAndSaveOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
@@ -417,6 +420,21 @@ let _state = {
   // companion side, e.g. from a config saved in a previous popup session).
   savedConfigs:              null,
   savedConfigsLoading:       false,
+  // Issue #239: Combined mode's ordered component list — each entry only
+  // ever {savedConfigId, name}, never a cached copy of that component's own
+  // full config (always resolved live at generate/save/export time, see
+  // companion-client.js's resolveCombinedComponents). Cleared by
+  // MODE_SWITCH_CLEARS when leaving 'combined', unlike fields/groups/
+  // apiConfig it isn't persisted across a popup close/reopen for v1.
+  combinedComponents:        [],
+  // Every saved configuration regardless of host (GET /configs with no url
+  // query param) — the source list Combined mode's "add component" picker
+  // draws from, since a component doesn't have to match the page currently
+  // open. Fetched once on switching into Combined mode (see switchMode),
+  // not kept continuously in sync — same pull-based tradeoff savedConfigs
+  // above already accepts.
+  allSavedConfigs:           null,
+  allSavedConfigsLoading:    false,
   // Set to a saved config's id right after its own "Delete" button is first
   // clicked, turning that one row into an inline "Delete? Yes/No" — a
   // second confirming click is required before DELETE /configs/{id} is
@@ -489,6 +507,7 @@ function persistState() {
       apiSearchTarget: _state.apiSearchTarget,
       apiConfigDraft: _state.apiConfigDraft,
       apiConfig: _state.apiConfig,
+      combinedComponents: _state.combinedComponents,
     })
     .catch(err => log('STORAGE_ERR', err.message));
 }
@@ -770,6 +789,7 @@ const bridge = {
   requestDomTree: () => requestDomTree(bridge),
   showToast,
   fetchSavedConfigs: (url) => fetchSavedConfigs(bridge, url),
+  fetchAllSavedConfigs: () => fetchAllSavedConfigs(bridge),
 };
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
@@ -806,6 +826,8 @@ function wireEvents() {
   wireFlatModeEvents(bridge);
 
   wireIdleScreenEvents(bridge);
+
+  wireCombinedConfigEvents(bridge);
 
   wireContainerModeEvents(bridge);
 
@@ -978,7 +1000,7 @@ if (typeof module !== 'undefined') {
     moveTransform, transformsAreValid, renderTransformList,
     applyTransformsPreview, toNumberPreview, renderTransformPreview,
     renderThemeToggle, syncModeToggleThumbs,
-    applyConfigToState, renderSavedConfigsList, fetchSavedConfigs, createSavedConfig, saveCurrentConfig, loadSavedConfig,
+    applyConfigToState, renderSavedConfigsList, fetchSavedConfigs, fetchAllSavedConfigs, createSavedConfig, saveCurrentConfig, loadSavedConfig,
     deleteSavedConfig, requestDeleteSavedConfig, cancelDeleteSavedConfig, openSaveConfigModal,
     triggerOutputFileDownload, downloadFile,
     saveCurrentOutput, createConfigAndSaveOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
