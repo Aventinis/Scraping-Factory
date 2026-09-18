@@ -41,4 +41,9 @@ public sealed class ScrapingPlan
     // through from ScrapingConfig.PersistentSession by ScrapingPlanBuilder
     // (null defaults to false here, unlike the wire format's nullable bool).
     public bool PersistentSession { get; init; }
+
+    // Issue #178: mode-independent, carried through unchanged from
+    // ScrapingConfig.ExternalConfig by ScrapingPlanBuilder (null defaults to
+    // false here, same as PersistentSession above).
+    public bool ExternalConfig { get; init; }
 }

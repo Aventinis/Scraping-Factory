@@ -50,6 +50,7 @@ public static class ScrapingPlanBuilder
                 ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
                 ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, Hardening = config.Hardening,
                 Pagination = config.Pagination, PersistentSession = config.PersistentSession ?? false,
+                ExternalConfig = config.ExternalConfig ?? false,
             };
         }
 
@@ -76,6 +77,7 @@ public static class ScrapingPlanBuilder
                 ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
                 ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, Hardening = config.Hardening,
                 PersistentSession = config.PersistentSession ?? false,
+                ExternalConfig = config.ExternalConfig ?? false,
             };
         }
 
@@ -92,6 +94,7 @@ public static class ScrapingPlanBuilder
             ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
             ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, Hardening = config.Hardening,
             Pagination = config.Pagination, PersistentSession = config.PersistentSession ?? false,
+            ExternalConfig = config.ExternalConfig ?? false,
         };
     }
 

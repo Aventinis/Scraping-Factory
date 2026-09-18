@@ -33,6 +33,7 @@ public sealed class PythonCodeGenerator : ICodeGenerator
                 proxy = PythonProxyLiteral.BuildContext(plan.Proxy),
                 hardening = PythonHardeningLiteral.BuildContext(plan.Hardening),
                 pagination = PythonPaginationLiteral.BuildContext(plan.Pagination),
+                external_config = PythonExternalConfigLiteral.BuildContext(plan.ExternalConfig),
             });
         }
 
@@ -60,6 +61,7 @@ public sealed class PythonCodeGenerator : ICodeGenerator
                 proxy = PythonProxyLiteral.BuildContext(plan.Proxy),
                 hardening = PythonHardeningLiteral.BuildContext(plan.Hardening),
                 pagination = PythonPaginationLiteral.BuildContext(plan.Pagination),
+                external_config = PythonExternalConfigLiteral.BuildContext(plan.ExternalConfig),
             },
         });
     }

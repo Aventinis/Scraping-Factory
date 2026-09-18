@@ -28,9 +28,8 @@ global.fetch = jest.fn().mockResolvedValue({ ok: false });
 
 const {
   buildScrapingConfig, addField, removeField, escapeHtml, renderFields, STATES,
-  formatTreeLabel, renderDomTree, highlightHover, highlightSelected,
-  formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,
   buildGroupNode, buildFieldNode, resolveGroupNode, insertContainerNode, removeGroupTreeNode,
+  updateGroupTreeNode, moveGroupTreeNode,
   formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport, hasRepeatingAncestor,
   buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
   serializeApiTree, renderApiTree, updateApiTreeNode, apiTreeNodesHaveNonBlankNames,
@@ -42,11 +41,9 @@ const {
   variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
   detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase, parseAdditionalUrls,
   buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildHardeningConfig,
-  collectFieldNames, addNullRateCheck, removeNullRateCheck, updateNullRateCheck, renderHardeningNullRateList,
-  addRequiredField, removeRequiredField, renderHardeningRequiredFieldsList, computeInitialMonitoringSectionOpen,
-  addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
+  collectFieldNames, addNullRateCheck, removeNullRateCheck, updateNullRateCheck,
+  addRequiredField, removeRequiredField, computeInitialMonitoringSectionOpen,
   buildVerificationValues,
-  frameBadgeHtml,
   jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
   bodyTreeLeavesAreBound, serializeBodyTree, allParameterParts, renderBodyTree,
   renderDataPreview,
@@ -54,7 +51,7 @@ const {
   moveTransform, transformsAreValid, renderTransformList,
   applyTransformsPreview, toNumberPreview, renderTransformPreview,
   syncModeToggleThumbs,
-  applyConfigToState, renderSavedConfigsList, requestDeleteSavedConfig, cancelDeleteSavedConfig,
+  applyConfigToState,
 } = require('./popup');
 
 // jsdom's Blob doesn't implement .text() — read via FileReader instead.
@@ -69,1044 +66,6 @@ function readBlobText(blob) {
 
 // ── buildScrapingConfig ───────────────────────────────────────────────────────
 
-describe('buildScrapingConfig (flat mode)', () => {
-  test('produces correct structure with multiple fields', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [
-      { name: 'Titel', selector: 'h1' },
-      { name: 'Preis', selector: '.price' },
-    ]);
-    expect(result).toEqual({
-      version: '1',
-      url: 'https://example.com',
-      fields: [
-        { name: 'Titel', selector: 'h1',     attribute: null },
-        { name: 'Preis', selector: '.price', attribute: null },
-      ],
-      outputFormat: 'Csv',
-      scriptFileName: null,
-      outputFileName: null,
-    });
-  });
-
-  test('handles empty fields array', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', []);
-    expect(result.fields).toEqual([]);
-    expect(result.url).toBe('https://example.com');
-    expect(result.outputFormat).toBe('Csv');
-  });
-
-  test('preserves explicit attribute value', () => {
-    const result = buildScrapingConfig('https://x.com', 'flat', [
-      { name: 'Link', selector: 'a', attribute: 'href' },
-    ]);
-    expect(result.fields[0].attribute).toBe('href');
-  });
-
-  test('passes through scriptFileName/outputFileName as-is (companion sanitizes/defaults)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [], [], null, 'my scraper!', 'result data');
-    expect(result.scriptFileName).toBe('my scraper!');
-    expect(result.outputFileName).toBe('result data');
-  });
-
-  test('defaults scriptFileName/outputFileName to null when not given', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', []);
-    expect(result.scriptFileName).toBeNull();
-    expect(result.outputFileName).toBeNull();
-  });
-
-  // Issue #42, Phase 7
-  test('includes framePath on a field when set, omits it when not', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [
-      { name: 'Preis', selector: '.price', framePath: ['#price-widget'] },
-      { name: 'Titel', selector: 'h1' },
-    ]);
-    expect(result.fields[0].framePath).toEqual(['#price-widget']);
-    expect(result.fields[1]).not.toHaveProperty('framePath');
-  });
-});
-
-// Issue #41/#42, Phase 5: engine/browserActions are mode-independent, so
-// these are tested once rather than per mode (flat mode used as the
-// representative case) — buildScrapingConfig's own doc comment explains why
-// the omit/include behavior is important for existing-call backward-compat.
-describe('buildScrapingConfig (engine / browserActions, Issue #41/#42 Phase 5)', () => {
-  test('omits engine entirely when Static (the default) — byte-for-byte the same as before this existed', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
-    expect(result.engine).toBeUndefined();
-    expect(result.browserActions).toBeUndefined();
-  });
-
-  test('includes engine when Browser, even with no browserActions', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Browser',
-    );
-    expect(result.engine).toBe('Browser');
-    expect(result.browserActions).toBeUndefined();
-  });
-
-  test('includes serialized browserActions alongside engine when Browser and non-empty', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Browser',
-      [{ kind: 'click', selector: '#submit' }],
-    );
-    expect(result.engine).toBe('Browser');
-    expect(result.browserActions).toEqual([{ kind: 'click', selector: '#submit' }]);
-  });
-
-  test('omits browserActions (and engine) when Static, even if actions were configured', () => {
-    // Matches the popup's own UI behavior: switching back to Static hides
-    // the browser-actions section without clearing it, so a user flipping
-    // the toggle back and forth doesn't lose their work — but nothing
-    // meaningless for the Static engine should ever reach the wire.
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static',
-      [{ kind: 'click', selector: '#submit' }],
-    );
-    expect(result.engine).toBeUndefined();
-    expect(result.browserActions).toBeUndefined();
-  });
-
-  test('works the same way for container and api modes', () => {
-    const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig('https://example.com', 'container', [], groups, null, null, null, 'Browser');
-    expect(containerResult.engine).toBe('Browser');
-
-    const apiResult = buildScrapingConfig('https://example.com', 'api', [], [], { fields: [] }, null, null, 'Browser');
-    expect(apiResult.engine).toBe('Browser');
-  });
-});
-
-// Issue #122: includePreview is mode-independent (same "only include the
-// key when non-default" pattern as engine/browserActions above) — a
-// checkbox left unchecked must round-trip to byte-for-byte the same
-// request body as before this existed.
-describe('buildScrapingConfig (includePreview, Issue #122)', () => {
-  test('omits includePreview entirely when false (the default)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
-    expect(result.includePreview).toBeUndefined();
-  });
-
-  test('includes includePreview: true when requested', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], true,
-    );
-    expect(result.includePreview).toBe(true);
-  });
-
-  test('works the same way for container and api modes', () => {
-    const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig('https://example.com', 'container', [], groups, null, null, null, 'Static', [], true);
-    expect(containerResult.includePreview).toBe(true);
-
-    const apiResult = buildScrapingConfig('https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], true);
-    expect(apiResult.includePreview).toBe(true);
-  });
-});
-
-// Issue #161: includeOutputFile is mode-independent too, same "only include
-// the key when non-default" pattern as includePreview above — independent
-// of it (either/both/neither may be requested).
-describe('buildScrapingConfig (includeOutputFile, Issue #161)', () => {
-  test('omits includeOutputFile entirely when false (the default)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
-    expect(result.includeOutputFile).toBeUndefined();
-  });
-
-  test('includes includeOutputFile: true when requested', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], null, null, null, null, false, true,
-    );
-    expect(result.includeOutputFile).toBe(true);
-  });
-
-  test('works alongside includePreview — both may be requested at once', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], true,
-      false, [], null, null, null, null, false, true,
-    );
-    expect(result.includePreview).toBe(true);
-    expect(result.includeOutputFile).toBe(true);
-  });
-
-  test('works the same way for container and api modes', () => {
-    const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null,
-      null, null, false, true,
-    );
-    expect(containerResult.includeOutputFile).toBe(true);
-
-    const apiResult = buildScrapingConfig(
-      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], null, null,
-      null, null, false, true,
-    );
-    expect(apiResult.includeOutputFile).toBe(true);
-  });
-});
-
-// Issue #86: useJsonOutput is mode-independent, like includePreview above,
-// but with a different "default" shape per mode — flat mode always sends an
-// explicit outputFormat (Csv by default), while container/api mode omit the
-// key entirely by default and only add it when Json is requested.
-describe('buildScrapingConfig (useJsonOutput, Issue #86)', () => {
-  test('flat mode sends outputFormat: "Csv" by default, "Json" when requested', () => {
-    const defaultResult = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
-    expect(defaultResult.outputFormat).toBe('Csv');
-
-    const jsonResult = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false, true,
-    );
-    expect(jsonResult.outputFormat).toBe('Json');
-  });
-
-  test('container mode omits outputFormat by default, sends "Json" when requested', () => {
-    const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const defaultResult = buildScrapingConfig('https://example.com', 'container', [], groups);
-    expect(defaultResult.outputFormat).toBeUndefined();
-
-    const jsonResult = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, true,
-    );
-    expect(jsonResult.outputFormat).toBe('Json');
-  });
-
-  test('api mode omits outputFormat by default, sends "Json" when requested', () => {
-    const defaultResult = buildScrapingConfig('https://example.com', 'api', [], [], { fields: [] });
-    expect(defaultResult.outputFormat).toBeUndefined();
-
-    const jsonResult = buildScrapingConfig(
-      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, true,
-    );
-    expect(jsonResult.outputFormat).toBe('Json');
-  });
-});
-
-// Issue #83: additionalUrls is mode-independent too, like includePreview/
-// useJsonOutput above — only included when non-empty, so the default
-// (empty textarea) request stays byte-for-byte identical to before this
-// existed.
-describe('buildScrapingConfig (additionalUrls, Issue #83)', () => {
-  test('omits additionalUrls entirely when empty (the default)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
-    expect(result.additionalUrls).toBeUndefined();
-  });
-
-  test('includes additionalUrls when non-empty', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, ['https://example.com/2', 'https://example.com/3'],
-    );
-    expect(result.additionalUrls).toEqual(['https://example.com/2', 'https://example.com/3']);
-  });
-
-  test('works the same way for container and api modes', () => {
-    const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, ['https://example.com/2'],
-    );
-    expect(containerResult.additionalUrls).toEqual(['https://example.com/2']);
-
-    const apiResult = buildScrapingConfig(
-      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, ['https://example.com/2'],
-    );
-    expect(apiResult.additionalUrls).toEqual(['https://example.com/2']);
-  });
-});
-
-// Issue #87: every field is an environment-variable *name*, never a value.
-describe('buildChangeDetectionConfig', () => {
-  const draft = (overrides = {}) => ({
-    enabled: true,
-    notify: 'Email',
-    email: { smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: '', toEnvVar: '' },
-    webhook: { urlEnvVar: '' },
-    ...overrides,
-  });
-
-  test('returns null when disabled', () => {
-    expect(buildChangeDetectionConfig(draft({ enabled: false }))).toBeNull();
-  });
-
-  test('returns null for null/undefined input', () => {
-    expect(buildChangeDetectionConfig(null)).toBeNull();
-    expect(buildChangeDetectionConfig(undefined)).toBeNull();
-  });
-
-  test('email: returns null when a required field is blank', () => {
-    expect(buildChangeDetectionConfig(draft({
-      email: { smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: 'SF_FROM', toEnvVar: 'SF_TO' },
-    }))).toBeNull();
-  });
-
-  test('email: builds the wire shape with only required fields set', () => {
-    const result = buildChangeDetectionConfig(draft({
-      email: { smtpHostEnvVar: 'SF_SMTP_HOST', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: 'SF_FROM', toEnvVar: 'SF_TO' },
-    }));
-    expect(result).toEqual({
-      notify: 'Email',
-      email: { smtpHostEnvVar: 'SF_SMTP_HOST', fromEnvVar: 'SF_FROM', toEnvVar: 'SF_TO' },
-    });
-  });
-
-  test('email: includes optional fields when set', () => {
-    const result = buildChangeDetectionConfig(draft({
-      email: {
-        smtpHostEnvVar: 'SF_SMTP_HOST', smtpPortEnvVar: 'SF_SMTP_PORT', smtpUsernameEnvVar: 'SF_SMTP_USER',
-        smtpPasswordEnvVar: 'SF_SMTP_PASS', fromEnvVar: 'SF_FROM', toEnvVar: 'SF_TO',
-      },
-    }));
-    expect(result).toEqual({
-      notify: 'Email',
-      email: {
-        smtpHostEnvVar: 'SF_SMTP_HOST', fromEnvVar: 'SF_FROM', toEnvVar: 'SF_TO',
-        smtpPortEnvVar: 'SF_SMTP_PORT', smtpUsernameEnvVar: 'SF_SMTP_USER', smtpPasswordEnvVar: 'SF_SMTP_PASS',
-      },
-    });
-  });
-
-  test('webhook: returns null when urlEnvVar is blank', () => {
-    expect(buildChangeDetectionConfig(draft({ notify: 'Webhook', webhook: { urlEnvVar: '' } }))).toBeNull();
-  });
-
-  test('webhook: builds the wire shape', () => {
-    const result = buildChangeDetectionConfig(draft({ notify: 'Webhook', webhook: { urlEnvVar: 'SF_WEBHOOK_URL' } }));
-    expect(result).toEqual({ notify: 'Webhook', webhook: { urlEnvVar: 'SF_WEBHOOK_URL' } });
-  });
-});
-
-describe('buildScrapingConfig (changeDetection, Issue #87)', () => {
-  test('omits changeDetection entirely when disabled (the default)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
-    expect(result.changeDetection).toBeUndefined();
-  });
-
-  test('includes changeDetection when enabled and fully configured', () => {
-    const changeDetection = {
-      enabled: true, notify: 'Webhook',
-      email: { smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: '', toEnvVar: '' },
-      webhook: { urlEnvVar: 'SF_WEBHOOK_URL' },
-    };
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], changeDetection,
-    );
-    expect(result.changeDetection).toEqual({ notify: 'Webhook', webhook: { urlEnvVar: 'SF_WEBHOOK_URL' } });
-  });
-
-  test('works the same way for container and api modes', () => {
-    const changeDetection = {
-      enabled: true, notify: 'Webhook',
-      email: { smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: '', toEnvVar: '' },
-      webhook: { urlEnvVar: 'SF_WEBHOOK_URL' },
-    };
-    const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], changeDetection,
-    );
-    expect(containerResult.changeDetection).toEqual({ notify: 'Webhook', webhook: { urlEnvVar: 'SF_WEBHOOK_URL' } });
-
-    const apiResult = buildScrapingConfig(
-      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], changeDetection,
-    );
-    expect(apiResult.changeDetection).toEqual({ notify: 'Webhook', webhook: { urlEnvVar: 'SF_WEBHOOK_URL' } });
-  });
-});
-
-// Issue #88: the env var holds a comma-separated proxy URL list, never a
-// literal proxy address.
-describe('buildProxyConfig', () => {
-  test('returns null when disabled', () => {
-    expect(buildProxyConfig({ enabled: false, envVar: 'SF_PROXIES' })).toBeNull();
-  });
-
-  test('returns null for null/undefined input', () => {
-    expect(buildProxyConfig(null)).toBeNull();
-    expect(buildProxyConfig(undefined)).toBeNull();
-  });
-
-  test('returns null when enabled but envVar is blank', () => {
-    expect(buildProxyConfig({ enabled: true, envVar: '' })).toBeNull();
-    expect(buildProxyConfig({ enabled: true, envVar: '   ' })).toBeNull();
-  });
-
-  test('builds the wire shape with a trimmed env var name', () => {
-    expect(buildProxyConfig({ enabled: true, envVar: '  SF_PROXIES  ' })).toEqual({
-      environmentVariableName: 'SF_PROXIES',
-    });
-  });
-});
-
-describe('buildScrapingConfig (proxy, Issue #88)', () => {
-  test('omits proxy entirely when disabled (the default)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
-    expect(result.proxy).toBeUndefined();
-  });
-
-  test('includes proxy when enabled and configured', () => {
-    const proxy = { enabled: true, envVar: 'SF_PROXIES' };
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], null, proxy,
-    );
-    expect(result.proxy).toEqual({ environmentVariableName: 'SF_PROXIES' });
-  });
-
-  test('works the same way for container and api modes', () => {
-    const proxy = { enabled: true, envVar: 'SF_PROXIES' };
-    const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, proxy,
-    );
-    expect(containerResult.proxy).toEqual({ environmentVariableName: 'SF_PROXIES' });
-
-    const apiResult = buildScrapingConfig(
-      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], null, proxy,
-    );
-    expect(apiResult.proxy).toEqual({ environmentVariableName: 'SF_PROXIES' });
-  });
-});
-
-// Issue #174
-describe('buildPaginationConfig', () => {
-  test('returns null when disabled', () => {
-    expect(buildPaginationConfig({ enabled: false, kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 50 })).toBeNull();
-  });
-
-  test('returns null for null/undefined input', () => {
-    expect(buildPaginationConfig(null)).toBeNull();
-    expect(buildPaginationConfig(undefined)).toBeNull();
-  });
-
-  test('returns null for nextLink kind when the selector is blank', () => {
-    expect(buildPaginationConfig({ enabled: true, kind: 'nextLink', nextLinkSelector: '', maxPages: 50 })).toBeNull();
-    expect(buildPaginationConfig({ enabled: true, kind: 'nextLink', nextLinkSelector: '   ', maxPages: 50 })).toBeNull();
-  });
-
-  test('returns null for pageNumber kind when the template is blank', () => {
-    expect(buildPaginationConfig({ enabled: true, kind: 'pageNumber', urlTemplate: '', maxPages: 50 })).toBeNull();
-  });
-
-  test('builds the nextLink wire shape with a trimmed selector', () => {
-    expect(buildPaginationConfig({ enabled: true, kind: 'nextLink', nextLinkSelector: '  a.next  ', maxPages: 20 })).toEqual({
-      kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 20,
-    });
-  });
-
-  test('builds the pageNumber wire shape with a trimmed template', () => {
-    expect(buildPaginationConfig({ enabled: true, kind: 'pageNumber', urlTemplate: '  {url}?page={page}  ', maxPages: 20 })).toEqual({
-      kind: 'pageNumber', urlTemplate: '{url}?page={page}', maxPages: 20,
-    });
-  });
-
-  test('clamps/defaults an invalid maxPages to 50', () => {
-    for (const invalid of [0, NaN, -5]) {
-      expect(buildPaginationConfig({ enabled: true, kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: invalid })).toEqual({
-        kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 50,
-      });
-    }
-  });
-
-  test('floors a fractional maxPages', () => {
-    expect(buildPaginationConfig({ enabled: true, kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 12.7 })).toEqual({
-      kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 12,
-    });
-  });
-});
-
-describe('buildScrapingConfig (pagination, Issue #174)', () => {
-  test('omits pagination entirely when disabled (the default)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
-    expect(result.pagination).toBeUndefined();
-  });
-
-  test('includes pagination when enabled and configured', () => {
-    const pagination = { enabled: true, kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 30 };
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], null, null, null, pagination,
-    );
-    expect(result.pagination).toEqual({ kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 30 });
-  });
-
-  test('works the same way for container mode', () => {
-    const pagination = { enabled: true, kind: 'pageNumber', urlTemplate: '{url}?page={page}', maxPages: 10 };
-    const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null, null, pagination,
-    );
-    expect(containerResult.pagination).toEqual({ kind: 'pageNumber', urlTemplate: '{url}?page={page}', maxPages: 10 });
-  });
-});
-
-// Issue #175
-describe('buildScrapingConfig (persistentSession, Issue #175)', () => {
-  test('omits persistentSession entirely when false (the default)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
-    expect(result.persistentSession).toBeUndefined();
-  });
-
-  test('includes persistentSession: true when enabled', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Browser', [], false,
-      false, [], null, null, null, null, true,
-    );
-    expect(result.persistentSession).toBe(true);
-  });
-
-  test('works the same way for container and api modes', () => {
-    const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null, 'Browser', [], false, false, [], null, null, null, null, true,
-    );
-    expect(containerResult.persistentSession).toBe(true);
-
-    const apiResult = buildScrapingConfig(
-      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Browser', [], false, false, [], null, null, null, null, true,
-    );
-    expect(apiResult.persistentSession).toBe(true);
-  });
-});
-
-// Issue #129
-describe('buildHardeningConfig', () => {
-  test('returns null when noResult is disabled', () => {
-    expect(buildHardeningConfig({ noResult: { enabled: false, severity: 'Warning' } })).toBeNull();
-  });
-
-  test('returns null for null/undefined input', () => {
-    expect(buildHardeningConfig(null)).toBeNull();
-    expect(buildHardeningConfig(undefined)).toBeNull();
-  });
-
-  test('builds a one-item array with the camelCase kind and the severity as-is', () => {
-    expect(buildHardeningConfig({ noResult: { enabled: true, severity: 'Error' } })).toEqual([
-      { kind: 'noResult', severity: 'Error' },
-    ]);
-    expect(buildHardeningConfig({ noResult: { enabled: true, severity: 'Warning' } })).toEqual([
-      { kind: 'noResult', severity: 'Warning' },
-    ]);
-  });
-});
-
-describe('buildScrapingConfig (hardening, Issue #129)', () => {
-  test('omits hardening entirely when disabled (the default)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
-    expect(result.hardening).toBeUndefined();
-  });
-
-  test('includes hardening when enabled and configured', () => {
-    const hardening = { noResult: { enabled: true, severity: 'Error' } };
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], null, null, hardening,
-    );
-    expect(result.hardening).toEqual([{ kind: 'noResult', severity: 'Error' }]);
-  });
-
-  test('works the same way for container and api modes', () => {
-    const hardening = { noResult: { enabled: true, severity: 'Warning' } };
-    const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null,
-      hardening,
-    );
-    expect(containerResult.hardening).toEqual([{ kind: 'noResult', severity: 'Warning' }]);
-
-    const apiResult = buildScrapingConfig(
-      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], null, null,
-      hardening,
-    );
-    expect(apiResult.hardening).toEqual([{ kind: 'noResult', severity: 'Warning' }]);
-  });
-});
-
-// Issue #130
-describe('buildHardeningConfig (nullRate)', () => {
-  test('omits an incomplete row (no field chosen)', () => {
-    expect(buildHardeningConfig({ nullRate: [{ fieldName: '', threshold: 30, severity: 'Warning' }] })).toBeNull();
-  });
-
-  test('converts the percent threshold into a 0.0-1.0 fraction', () => {
-    expect(buildHardeningConfig({ nullRate: [{ fieldName: 'Preis', threshold: 30, severity: 'Error' }] })).toEqual([
-      { kind: 'nullRate', severity: 'Error', fieldName: 'Preis', threshold: 0.3 },
-    ]);
-  });
-
-  test('clamps an out-of-range or non-numeric threshold, defaulting to 50%', () => {
-    expect(buildHardeningConfig({ nullRate: [{ fieldName: 'A', threshold: 150, severity: 'Warning' }] })).toEqual([
-      { kind: 'nullRate', severity: 'Warning', fieldName: 'A', threshold: 1 },
-    ]);
-    expect(buildHardeningConfig({ nullRate: [{ fieldName: 'A', threshold: -20, severity: 'Warning' }] })).toEqual([
-      { kind: 'nullRate', severity: 'Warning', fieldName: 'A', threshold: 0 },
-    ]);
-    expect(buildHardeningConfig({ nullRate: [{ fieldName: 'A', threshold: NaN, severity: 'Warning' }] })).toEqual([
-      { kind: 'nullRate', severity: 'Warning', fieldName: 'A', threshold: 0.5 },
-    ]);
-  });
-
-  test('combines multiple complete rows with noResult', () => {
-    const hardening = {
-      noResult: { enabled: true, severity: 'Error' },
-      nullRate: [
-        { fieldName: 'Preis', threshold: 30, severity: 'Error' },
-        { fieldName: '', threshold: 10, severity: 'Warning' }, // incomplete, skipped
-        { fieldName: 'Titel', threshold: 10, severity: 'Warning' },
-      ],
-    };
-    expect(buildHardeningConfig(hardening)).toEqual([
-      { kind: 'noResult', severity: 'Error' },
-      { kind: 'nullRate', severity: 'Error', fieldName: 'Preis', threshold: 0.3 },
-      { kind: 'nullRate', severity: 'Warning', fieldName: 'Titel', threshold: 0.1 },
-    ]);
-  });
-
-  test('returns null when everything is empty/disabled', () => {
-    expect(buildHardeningConfig({ noResult: { enabled: false, severity: 'Warning' }, nullRate: [] })).toBeNull();
-  });
-});
-
-// Issue #131
-describe('buildHardeningConfig (baseline)', () => {
-  test('returns null when baseline is disabled', () => {
-    expect(buildHardeningConfig({ baseline: { enabled: false, severity: 'Warning', dropThresholdPercent: 20 } })).toBeNull();
-  });
-
-  test('converts dropThresholdPercent into a 0.0-1.0 fraction', () => {
-    expect(buildHardeningConfig({ baseline: { enabled: true, severity: 'Error', dropThresholdPercent: 20 } })).toEqual([
-      { kind: 'baseline', severity: 'Error', dropThreshold: 0.2 },
-    ]);
-  });
-
-  test('clamps an out-of-range or non-numeric percent, defaulting to 20%', () => {
-    expect(buildHardeningConfig({ baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: 150 } })).toEqual([
-      { kind: 'baseline', severity: 'Warning', dropThreshold: 1 },
-    ]);
-    expect(buildHardeningConfig({ baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: -10 } })).toEqual([
-      { kind: 'baseline', severity: 'Warning', dropThreshold: 0 },
-    ]);
-    expect(buildHardeningConfig({ baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: NaN } })).toEqual([
-      { kind: 'baseline', severity: 'Warning', dropThreshold: 0.2 },
-    ]);
-  });
-
-  test('combines with noResult and nullRate', () => {
-    const hardening = {
-      noResult: { enabled: true, severity: 'Error' },
-      nullRate: [{ fieldName: 'Preis', threshold: 30, severity: 'Error' }],
-      baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: 20 },
-    };
-    expect(buildHardeningConfig(hardening)).toEqual([
-      { kind: 'noResult', severity: 'Error' },
-      { kind: 'nullRate', severity: 'Error', fieldName: 'Preis', threshold: 0.3 },
-      { kind: 'baseline', severity: 'Warning', dropThreshold: 0.2 },
-    ]);
-  });
-});
-
-describe('buildScrapingConfig (baseline hardening, Issue #131)', () => {
-  test('threads a baseline check through the wire config', () => {
-    const hardening = { baseline: { enabled: true, severity: 'Error', dropThresholdPercent: 25 } };
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], null, null, hardening,
-    );
-    expect(result.hardening).toEqual([{ kind: 'baseline', severity: 'Error', dropThreshold: 0.25 }]);
-  });
-});
-
-// Issue #132
-describe('buildHardeningConfig (blocking)', () => {
-  test('returns null when blocking is disabled', () => {
-    expect(buildHardeningConfig({ blocking: { enabled: false, severity: 'Warning', minBodyLengthText: '', phrasesText: '' } })).toBeNull();
-  });
-
-  test('includes minBodyLength and blockPhrases when both are set', () => {
-    const hardening = { blocking: { enabled: true, severity: 'Error', minBodyLengthText: '200', phrasesText: 'Access Denied\nPlease verify you are human' } };
-    expect(buildHardeningConfig(hardening)).toEqual([
-      { kind: 'blocking', severity: 'Error', minBodyLength: 200, blockPhrases: ['Access Denied', 'Please verify you are human'] },
-    ]);
-  });
-
-  // Unlike nullRate, there's no "at least one signal configured"
-  // requirement — the cross-origin-redirect signal is always active, so an
-  // enabled BlockingCheck with neither field filled in is still valid.
-  test('omits minBodyLength (null) and blockPhrases (empty array) when both are blank', () => {
-    const hardening = { blocking: { enabled: true, severity: 'Warning', minBodyLengthText: '', phrasesText: '' } };
-    expect(buildHardeningConfig(hardening)).toEqual([
-      { kind: 'blocking', severity: 'Warning', minBodyLength: null, blockPhrases: [] },
-    ]);
-  });
-
-  test('treats a non-positive or non-numeric minBodyLengthText as unset', () => {
-    expect(buildHardeningConfig({ blocking: { enabled: true, severity: 'Warning', minBodyLengthText: '0', phrasesText: '' } })).toEqual([
-      { kind: 'blocking', severity: 'Warning', minBodyLength: null, blockPhrases: [] },
-    ]);
-    expect(buildHardeningConfig({ blocking: { enabled: true, severity: 'Warning', minBodyLengthText: 'not a number', phrasesText: '' } })).toEqual([
-      { kind: 'blocking', severity: 'Warning', minBodyLength: null, blockPhrases: [] },
-    ]);
-  });
-
-  // One phrase per line (not comma-split like API mode's value list) —
-  // blank lines are dropped, a comma inside a phrase is preserved verbatim.
-  test('splits phrasesText on newlines only, dropping blank lines', () => {
-    const hardening = { blocking: { enabled: true, severity: 'Warning', minBodyLengthText: '', phrasesText: 'Access Denied\n\n  \nRate limit, try again later' } };
-    expect(buildHardeningConfig(hardening)).toEqual([
-      { kind: 'blocking', severity: 'Warning', minBodyLength: null, blockPhrases: ['Access Denied', 'Rate limit, try again later'] },
-    ]);
-  });
-
-  test('combines with noResult, nullRate, and baseline', () => {
-    const hardening = {
-      noResult: { enabled: true, severity: 'Error' },
-      nullRate: [{ fieldName: 'Preis', threshold: 30, severity: 'Error' }],
-      baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: 20 },
-      blocking: { enabled: true, severity: 'Error', minBodyLengthText: '200', phrasesText: 'Access Denied' },
-    };
-    expect(buildHardeningConfig(hardening)).toEqual([
-      { kind: 'noResult', severity: 'Error' },
-      { kind: 'nullRate', severity: 'Error', fieldName: 'Preis', threshold: 0.3 },
-      { kind: 'baseline', severity: 'Warning', dropThreshold: 0.2 },
-      { kind: 'blocking', severity: 'Error', minBodyLength: 200, blockPhrases: ['Access Denied'] },
-    ]);
-  });
-});
-
-describe('buildScrapingConfig (blocking hardening, Issue #132)', () => {
-  test('threads a blocking check through the wire config', () => {
-    const hardening = { blocking: { enabled: true, severity: 'Error', minBodyLengthText: '200', phrasesText: 'Access Denied' } };
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], null, null, hardening,
-    );
-    expect(result.hardening).toEqual([{ kind: 'blocking', severity: 'Error', minBodyLength: 200, blockPhrases: ['Access Denied'] }]);
-  });
-});
-
-// Issue #133
-describe('addRequiredField / removeRequiredField', () => {
-  test('adds a field name', () => {
-    expect(addRequiredField(['Titel'], 'Preis')).toEqual(['Titel', 'Preis']);
-  });
-
-  test('adding an already-present field name is a no-op', () => {
-    expect(addRequiredField(['Titel', 'Preis'], 'Preis')).toEqual(['Titel', 'Preis']);
-  });
-
-  test('adding a blank/undefined field name is a no-op', () => {
-    expect(addRequiredField(['Titel'], '')).toEqual(['Titel']);
-    expect(addRequiredField(['Titel'], undefined)).toEqual(['Titel']);
-  });
-
-  test('removes a field name by index', () => {
-    expect(removeRequiredField(['Titel', 'Preis', 'Menge'], 1)).toEqual(['Titel', 'Menge']);
-  });
-});
-
-describe('buildHardeningConfig (requiredFields)', () => {
-  test('returns null when disabled', () => {
-    expect(buildHardeningConfig({ requiredFields: { enabled: false, severity: 'Warning', fields: ['Titel'] } })).toBeNull();
-  });
-
-  // Unlike blocking (still meaningful with nothing configured, thanks to
-  // its always-on redirect signal), an enabled requiredFields check with no
-  // fields chosen yet has nothing to do at all — same "incomplete draft,
-  // not sent" convention as an unfinished nullRate row.
-  test('returns null when enabled but no fields chosen yet', () => {
-    expect(buildHardeningConfig({ requiredFields: { enabled: true, severity: 'Warning', fields: [] } })).toBeNull();
-  });
-
-  test('includes the configured field names and shared severity', () => {
-    const hardening = { requiredFields: { enabled: true, severity: 'Error', fields: ['Titel', 'Preis'] } };
-    expect(buildHardeningConfig(hardening)).toEqual([
-      { kind: 'requiredFields', severity: 'Error', fieldNames: ['Titel', 'Preis'] },
-    ]);
-  });
-
-  test('combines with the other four checks', () => {
-    const hardening = {
-      noResult: { enabled: true, severity: 'Error' },
-      nullRate: [{ fieldName: 'Preis', threshold: 30, severity: 'Error' }],
-      baseline: { enabled: true, severity: 'Warning', dropThresholdPercent: 20 },
-      blocking: { enabled: true, severity: 'Error', minBodyLengthText: '200', phrasesText: 'Access Denied' },
-      requiredFields: { enabled: true, severity: 'Error', fields: ['Titel'] },
-    };
-    expect(buildHardeningConfig(hardening)).toEqual([
-      { kind: 'noResult', severity: 'Error' },
-      { kind: 'nullRate', severity: 'Error', fieldName: 'Preis', threshold: 0.3 },
-      { kind: 'baseline', severity: 'Warning', dropThreshold: 0.2 },
-      { kind: 'blocking', severity: 'Error', minBodyLength: 200, blockPhrases: ['Access Denied'] },
-      { kind: 'requiredFields', severity: 'Error', fieldNames: ['Titel'] },
-    ]);
-  });
-});
-
-describe('buildScrapingConfig (requiredFields hardening, Issue #133)', () => {
-  test('threads a requiredFields check through the wire config', () => {
-    const hardening = { requiredFields: { enabled: true, severity: 'Error', fields: ['Titel'] } };
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], null, null, hardening,
-    );
-    expect(result.hardening).toEqual([{ kind: 'requiredFields', severity: 'Error', fieldNames: ['Titel'] }]);
-  });
-});
-
-// Issue #183
-describe('computeInitialMonitoringSectionOpen', () => {
-  const allDisabledHardening = {
-    noResult: { enabled: false, severity: 'Warning' },
-    nullRate: [],
-    baseline: { enabled: false, severity: 'Warning', dropThresholdPercent: 20 },
-    blocking: { enabled: false, severity: 'Warning', minBodyLengthText: '', phrasesText: '' },
-    requiredFields: { enabled: false, severity: 'Warning', fields: [] },
-  };
-
-  test('returns false when neither change detection nor any hardening check is configured', () => {
-    expect(computeInitialMonitoringSectionOpen(null, allDisabledHardening)).toBe(false);
-  });
-
-  test('returns true when change detection is configured', () => {
-    const changeDetection = {
-      enabled: true, notify: 'Webhook', email: null, webhook: { urlEnvVar: 'SF_WEBHOOK' },
-    };
-    expect(computeInitialMonitoringSectionOpen(changeDetection, allDisabledHardening)).toBe(true);
-  });
-
-  test('returns true when a hardening check is configured', () => {
-    const hardening = { ...allDisabledHardening, noResult: { enabled: true, severity: 'Error' } };
-    expect(computeInitialMonitoringSectionOpen(null, hardening)).toBe(true);
-  });
-
-  // An enabled-but-incomplete draft (e.g. change detection toggled on but
-  // its required fields still blank) is exactly what
-  // buildChangeDetectionConfig/buildHardeningConfig already treat as "not
-  // actually configured" — reusing that logic means this stays consistent
-  // automatically, with no separate "is it complete" check duplicated here.
-  test('returns false for an enabled-but-incomplete change-detection draft', () => {
-    const changeDetection = {
-      enabled: true, notify: 'Webhook', email: null, webhook: { urlEnvVar: '' },
-    };
-    expect(computeInitialMonitoringSectionOpen(changeDetection, allDisabledHardening)).toBe(false);
-  });
-
-  test('returns false for an enabled-but-empty requiredFields draft', () => {
-    const hardening = { ...allDisabledHardening, requiredFields: { enabled: true, severity: 'Warning', fields: [] } };
-    expect(computeInitialMonitoringSectionOpen(null, hardening)).toBe(false);
-  });
-});
-
-describe('collectFieldNames (Issue #130)', () => {
-  test('flat mode: reads field names straight off the fields array', () => {
-    const fields = [{ name: 'Titel', selector: 'h1' }, { name: 'Preis', selector: '.price' }];
-    expect(collectFieldNames('flat', fields, [], null)).toEqual(['Titel', 'Preis']);
-  });
-
-  test('container mode: walks the live draft tree, deduplicating repeated leaf names', () => {
-    const groups = [
-      {
-        kind: 'group', name: 'Kategorie', children: [
-          { kind: 'field', name: 'Titel' },
-          { kind: 'field', name: 'Preis' },
-          {
-            kind: 'group', name: 'Unterkategorie', children: [
-              { kind: 'field', name: 'Preis' }, // same leaf name, nested deeper
-            ],
-          },
-        ],
-      },
-    ];
-    expect(collectFieldNames('container', [], groups, null)).toEqual(['Titel', 'Preis']);
-  });
-
-  test('api mode, flat shape: reads apiConfig.fields', () => {
-    const apiConfig = { fields: [{ name: 'Titel' }, { name: 'Preis' }] };
-    expect(collectFieldNames('api', [], [], apiConfig)).toEqual(['Titel', 'Preis']);
-  });
-
-  test('api mode, tree shape: walks the serialized apiConfig.groups (structural children discriminator)', () => {
-    const apiConfig = {
-      groups: [
-        {
-          name: 'Kategorie', path: 'categories[*]', children: [
-            { name: 'Titel', path: 'name' },
-            { name: 'Unterkategorie', path: 'items[*]', children: [{ name: 'Preis', path: 'price' }] },
-          ],
-        },
-      ],
-    };
-    expect(collectFieldNames('api', [], [], apiConfig)).toEqual(['Titel', 'Preis']);
-  });
-
-  test('returns an empty array when there is nothing configured yet', () => {
-    expect(collectFieldNames('flat', [], [], null)).toEqual([]);
-    expect(collectFieldNames('container', [], [], null)).toEqual([]);
-    expect(collectFieldNames('api', [], [], null)).toEqual([]);
-  });
-});
-
-describe('addNullRateCheck / removeNullRateCheck / updateNullRateCheck (Issue #130)', () => {
-  test('addNullRateCheck appends a row with a default 50% threshold and Warning severity', () => {
-    expect(addNullRateCheck([], 'Preis')).toEqual([{ fieldName: 'Preis', threshold: 50, severity: 'Warning' }]);
-  });
-
-  test('addNullRateCheck tolerates no field chosen yet', () => {
-    expect(addNullRateCheck([], undefined)).toEqual([{ fieldName: '', threshold: 50, severity: 'Warning' }]);
-  });
-
-  test('removeNullRateCheck drops the row at the given index only', () => {
-    const rows = [
-      { fieldName: 'A', threshold: 10, severity: 'Warning' },
-      { fieldName: 'B', threshold: 20, severity: 'Error' },
-    ];
-    expect(removeNullRateCheck(rows, 0)).toEqual([{ fieldName: 'B', threshold: 20, severity: 'Error' }]);
-  });
-
-  test('updateNullRateCheck patches only the targeted row, leaving others untouched', () => {
-    const rows = [
-      { fieldName: 'A', threshold: 10, severity: 'Warning' },
-      { fieldName: 'B', threshold: 20, severity: 'Error' },
-    ];
-    expect(updateNullRateCheck(rows, 1, { severity: 'Warning' })).toEqual([
-      { fieldName: 'A', threshold: 10, severity: 'Warning' },
-      { fieldName: 'B', threshold: 20, severity: 'Warning' },
-    ]);
-  });
-});
-
-describe('buildScrapingConfig (container mode)', () => {
-  test('sends groups instead of fields, no outputFormat', () => {
-    const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
-    const result = buildScrapingConfig('https://example.com', 'container', [], groups);
-
-    expect(result).toEqual({
-      version: '1',
-      url: 'https://example.com',
-      groups: [{ name: 'Kategorie', selector: 'section.menu-category', repeating: true, children: [] }],
-      scriptFileName: null,
-      outputFileName: null,
-    });
-    expect(result.outputFormat).toBeUndefined();
-    expect(result.fields).toBeUndefined();
-  });
-});
-
-describe('buildScrapingConfig (api mode, Issue #53 Phase 6)', () => {
-  test('sends the confirmed apiConfig as-is instead of fields/groups, no outputFormat', () => {
-    const apiConfig = {
-      urlTemplate: 'https://example.com/api/items?category={category}',
-      itemsPath: 'data.items',
-      fields: [{ name: 'Titel', path: 'name' }],
-      parameters: [{ name: 'category', source: { kind: 'staticList', values: ['Elektronik'] } }],
-    };
-    const result = buildScrapingConfig('https://example.com', 'api', [], [], apiConfig);
-
-    expect(result).toEqual({
-      version: '1', url: 'https://example.com', api: apiConfig,
-      scriptFileName: null, outputFileName: null,
-    });
-    expect(result.fields).toBeUndefined();
-    expect(result.groups).toBeUndefined();
-    expect(result.outputFormat).toBeUndefined();
-  });
-});
-
-// ── sanitizeFileNameBase ─────────────────────────────────────────────────────
-// Mirrors the companion's FileNameSanitizer (see popup.js) so the actual
-// downloaded filename always matches what the generated script's own
-// "# Run: python X.py" comment says, for the same raw input.
-
-describe('sanitizeFileNameBase', () => {
-  test('falls back for empty/whitespace-only input', () => {
-    expect(sanitizeFileNameBase('', 'scraper')).toBe('scraper');
-    expect(sanitizeFileNameBase('   ', 'scraper')).toBe('scraper');
-    expect(sanitizeFileNameBase(null, 'scraper')).toBe('scraper');
-    expect(sanitizeFileNameBase(undefined, 'scraper')).toBe('scraper');
-  });
-
-  test('replaces path separators, spaces and other unsafe characters', () => {
-    expect(sanitizeFileNameBase('../../etc/passwd', 'output')).toBe('etc_passwd');
-    expect(sanitizeFileNameBase('my scraper!', 'scraper')).toBe('my_scraper');
-    expect(sanitizeFileNameBase('a"b\'c', 'output')).toBe('a_b_c');
-  });
-
-  test('keeps letters, digits, underscore and hyphen as-is', () => {
-    expect(sanitizeFileNameBase('my-scraper_v2', 'scraper')).toBe('my-scraper_v2');
-  });
-
-  test('falls back when every character is invalid', () => {
-    expect(sanitizeFileNameBase('///', 'output')).toBe('output');
-  });
-});
-
-// ── parseAdditionalUrls ──────────────────────────────────────────────────────
-// Issue #83: one URL per line, pasted/typed into the additional-start-urls
-// textarea.
-
-describe('parseAdditionalUrls', () => {
-  test('splits on newlines and trims each entry', () => {
-    expect(parseAdditionalUrls('https://example.com/a\n  https://example.com/b  '))
-      .toEqual(['https://example.com/a', 'https://example.com/b']);
-  });
-
-  test('drops blank lines', () => {
-    expect(parseAdditionalUrls('https://example.com/a\n\n   \nhttps://example.com/b\n'))
-      .toEqual(['https://example.com/a', 'https://example.com/b']);
-  });
-
-  test('returns an empty array for empty/null/undefined input', () => {
-    expect(parseAdditionalUrls('')).toEqual([]);
-    expect(parseAdditionalUrls(null)).toEqual([]);
-    expect(parseAdditionalUrls(undefined)).toEqual([]);
-  });
-
-  test('leaves a malformed non-blank entry as-is (the companion validates it)', () => {
-    expect(parseAdditionalUrls('not-a-url')).toEqual(['not-a-url']);
-  });
-});
-
-// ── buildConfigExport ────────────────────────────────────────────────────────
-// Lets a user attach their current Fields/Groups to a bug report — wraps the
-// exact wire-format config (buildScrapingConfig) with export metadata.
-
-describe('buildConfigExport', () => {
-  test('wraps the flat-mode config with exportedAt and the extension version', () => {
-    const fields = [{ name: 'Titel', selector: 'h1', attribute: null }];
-    const result = buildConfigExport('https://example.com', 'flat', fields, [], { version: '1.2.3' });
-
-    expect(result.extensionVersion).toBe('1.2.3');
-    expect(() => new Date(result.exportedAt).toISOString()).not.toThrow();
-    expect(result.config).toEqual(buildScrapingConfig('https://example.com', 'flat', fields, []));
-  });
-
-  test('wraps the container-mode config (groups) the same way', () => {
-    const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
-    const result = buildConfigExport('https://example.com', 'container', [], groups, { version: '1.2.3' });
-
-    expect(result.config).toEqual(buildScrapingConfig('https://example.com', 'container', [], groups));
-    expect(result.config.groups).toBeDefined();
-    expect(result.config.fields).toBeUndefined();
-  });
-
-  test('falls back to "?" when no manifest/version is available', () => {
-    const result = buildConfigExport('https://example.com', 'flat', [], []);
-    expect(result.extensionVersion).toBe('?');
-  });
-
-  test('wraps the api-mode config (api) the same way (Issue #53 Phase 6)', () => {
-    const apiConfig = { urlTemplate: 'https://example.com/api/{id}', itemsPath: 'data', fields: [], parameters: [] };
-    const result = buildConfigExport('https://example.com', 'api', [], [], { version: '1.2.3' }, apiConfig);
-
-    expect(result.config).toEqual(buildScrapingConfig('https://example.com', 'api', [], [], apiConfig));
-    expect(result.config.api).toEqual(apiConfig);
-  });
-
-  test('carries scriptFileName/outputFileName through into the wrapped config', () => {
-    const result = buildConfigExport('https://example.com', 'flat', [], [], { version: '1.2.3' }, null, 'myscraper', 'result');
-    expect(result.config.scriptFileName).toBe('myscraper');
-    expect(result.config.outputFileName).toBe('result');
-  });
-});
 
 // ── applyConfigToState (Issue #141) ─────────────────────────────────────────
 // The reverse of buildScrapingConfig/buildConfigExport — round-tripping a
@@ -1264,6 +223,20 @@ describe('applyConfigToState', () => {
     expect(result.persistentSession).toBe(false);
   });
 
+  // Issue #178
+  test('round-trips externalConfig', () => {
+    const config = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, null, null, false, false, true,
+    );
+    expect(applyConfigToState(config).externalConfig).toBe(true);
+  });
+
+  test('defaults externalConfig to false when omitted', () => {
+    const config = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(applyConfigToState(config).externalConfig).toBe(false);
+  });
+
   test('round-trips every hardening check kind', () => {
     const hardening = {
       noResult: { enabled: true, severity: 'Error' },
@@ -1292,211 +265,6 @@ describe('applyConfigToState', () => {
   });
 });
 
-// ── addField ─────────────────────────────────────────────────────────────────
-
-describe('addField', () => {
-  test('appends field with null attribute', () => {
-    const result = addField([], 'Titel', 'h1');
-    expect(result).toEqual([{ name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null }]);
-  });
-
-  // Issue #42, Phase 7
-  test('appends field with framePath when given', () => {
-    const result = addField([], 'Preis', 'h2', ['#price-widget']);
-    expect(result).toEqual([{ name: 'Preis', selector: 'h2', attribute: null, framePath: ['#price-widget'], transforms: null }]);
-  });
-
-  // Issue #84
-  test('appends field with transforms when given', () => {
-    const transforms = [{ kind: 'trim' }, { kind: 'toNumber' }];
-    const result = addField([], 'Preis', '.price', null, transforms);
-    expect(result).toEqual([{ name: 'Preis', selector: '.price', attribute: null, framePath: null, transforms }]);
-  });
-
-  test('does not mutate original array', () => {
-    const fields = [{ name: 'A', selector: '.a', attribute: null }];
-    addField(fields, 'B', '.b');
-    expect(fields).toHaveLength(1);
-  });
-
-  test('appends to existing fields', () => {
-    const fields = [{ name: 'A', selector: '.a', attribute: null }];
-    const result = addField(fields, 'B', '.b');
-    expect(result).toHaveLength(2);
-    expect(result[1].name).toBe('B');
-  });
-});
-
-// ── removeField ───────────────────────────────────────────────────────────────
-
-describe('removeField', () => {
-  const base = [
-    { name: 'A', selector: '.a' },
-    { name: 'B', selector: '.b' },
-    { name: 'C', selector: '.c' },
-  ];
-
-  test('removes field at given index', () => {
-    const result = removeField(base, 1);
-    expect(result).toHaveLength(2);
-    expect(result.map(f => f.name)).toEqual(['A', 'C']);
-  });
-
-  test('removes first field', () => {
-    const result = removeField(base, 0);
-    expect(result[0].name).toBe('B');
-  });
-
-  test('removes last field', () => {
-    const result = removeField(base, 2);
-    expect(result[result.length - 1].name).toBe('B');
-  });
-
-  test('does not mutate original array', () => {
-    removeField(base, 0);
-    expect(base).toHaveLength(3);
-  });
-});
-
-// ── Browser actions (Issue #41/#42, Phase 5) ─────────────────────────────────
-
-describe('addBrowserAction', () => {
-  test('appends a waitFor action with defaults', () => {
-    expect(addBrowserAction([], 'waitFor')).toEqual([{ kind: 'waitFor', selector: '', timeoutMs: 5000 }]);
-  });
-
-  test('appends a fill action with defaults', () => {
-    expect(addBrowserAction([], 'fill')).toEqual([{ kind: 'fill', selector: '', environmentVariableName: '' }]);
-  });
-
-  test('appends a click action with defaults', () => {
-    expect(addBrowserAction([], 'click')).toEqual([{ kind: 'click', selector: '' }]);
-  });
-
-  test('appends a scroll action with defaults (Issue #41, Phase 6)', () => {
-    expect(addBrowserAction([], 'scroll')).toEqual([
-      { kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000 },
-    ]);
-  });
-
-  test('does not mutate original array', () => {
-    const actions = [{ kind: 'click', selector: '#a' }];
-    addBrowserAction(actions, 'waitFor');
-    expect(actions).toHaveLength(1);
-  });
-});
-
-describe('removeBrowserAction', () => {
-  const base = [
-    { kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER' },
-    { kind: 'click', selector: '#submit' },
-  ];
-
-  test('removes the action at the given index', () => {
-    const result = removeBrowserAction(base, 0);
-    expect(result).toEqual([{ kind: 'click', selector: '#submit' }]);
-  });
-
-  test('does not mutate original array', () => {
-    removeBrowserAction(base, 0);
-    expect(base).toHaveLength(2);
-  });
-});
-
-describe('updateBrowserAction', () => {
-  test('patches only the action at the given index', () => {
-    const actions = [{ kind: 'click', selector: '' }, { kind: 'waitFor', selector: '', timeoutMs: 5000 }];
-    const result = updateBrowserAction(actions, 0, { selector: '#submit' });
-    expect(result[0]).toEqual({ kind: 'click', selector: '#submit' });
-    expect(result[1]).toEqual(actions[1]);
-  });
-
-  test('does not mutate original array', () => {
-    const actions = [{ kind: 'click', selector: '' }];
-    updateBrowserAction(actions, 0, { selector: '#submit' });
-    expect(actions[0].selector).toBe('');
-  });
-});
-
-describe('serializeBrowserActions', () => {
-  test('picks only the wire-relevant fields per kind', () => {
-    const actions = [
-      { kind: 'waitFor', selector: '.welcome', timeoutMs: 3000 },
-      { kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER' },
-      { kind: 'click', selector: '#submit' },
-    ];
-    expect(serializeBrowserActions(actions)).toEqual([
-      { kind: 'waitFor', selector: '.welcome', timeoutMs: 3000 },
-      { kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER' },
-      { kind: 'click', selector: '#submit' },
-    ]);
-  });
-
-  test('drops UI-only extra fields not part of the wire shape', () => {
-    const actions = [{ kind: 'click', selector: '#submit', someUiOnlyFlag: true }];
-    expect(serializeBrowserActions(actions)).toEqual([{ kind: 'click', selector: '#submit' }]);
-  });
-
-  test('serializes a scroll action with both selectors set (Issue #41, Phase 6)', () => {
-    const actions = [{ kind: 'scroll', containerSelector: '#list', loadMoreButtonSelector: '#more', maxIterations: 5, waitAfterMs: 500 }];
-    expect(serializeBrowserActions(actions)).toEqual([
-      { kind: 'scroll', containerSelector: '#list', loadMoreButtonSelector: '#more', maxIterations: 5, waitAfterMs: 500 },
-    ]);
-  });
-
-  test('serializes an unpicked scroll selector as null, never empty string', () => {
-    // ScrapingPlanValidator rejects a "set but blank" ContainerSelector/
-    // LoadMoreButtonSelector — '' must never reach the wire.
-    const actions = [{ kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000 }];
-    const result = serializeBrowserActions(actions);
-    expect(result[0].containerSelector).toBeNull();
-    expect(result[0].loadMoreButtonSelector).toBeNull();
-  });
-
-  // Issue #42, Phase 7
-  test('includes framePath on every kind when set, omits it entirely when null', () => {
-    const framed = [
-      { kind: 'waitFor', selector: '.welcome', timeoutMs: 3000, framePath: ['#login-widget'] },
-      { kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER', framePath: null },
-      { kind: 'click', selector: '#submit', framePath: ['#login-widget'] },
-      { kind: 'scroll', containerSelector: '#list', loadMoreButtonSelector: null, maxIterations: 5, waitAfterMs: 500, framePath: ['#feed-widget'] },
-    ];
-    const result = serializeBrowserActions(framed);
-    expect(result[0].framePath).toEqual(['#login-widget']);
-    expect(result[1]).not.toHaveProperty('framePath');
-    expect(result[2].framePath).toEqual(['#login-widget']);
-    expect(result[3].framePath).toEqual(['#feed-widget']);
-  });
-});
-
-// Issue #43 — one-time Fill test values for the /generate verification trial
-// run only, never persisted/logged/written into the generated script.
-describe('buildVerificationValues', () => {
-  test('collects a value for each fill action with a matching env-var-keyed test value', () => {
-    const actions = [
-      { kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER' },
-      { kind: 'fill', selector: '#pass', environmentVariableName: 'SF_PASS' },
-    ];
-    const result = buildVerificationValues(actions, { SF_USER: 'alice', SF_PASS: 's3cret' });
-    expect(result).toEqual({ SF_USER: 'alice', SF_PASS: 's3cret' });
-  });
-
-  test('ignores non-fill actions', () => {
-    const actions = [{ kind: 'click', selector: '#submit' }, { kind: 'waitFor', selector: '.welcome', timeoutMs: 5000 }];
-    expect(buildVerificationValues(actions, { SF_USER: 'alice' })).toEqual({});
-  });
-
-  test('ignores a fill action with a blank env-var name', () => {
-    const actions = [{ kind: 'fill', selector: '#user', environmentVariableName: '' }];
-    expect(buildVerificationValues(actions, { '': 'alice' })).toEqual({});
-  });
-
-  test('ignores a blank/missing test value for an otherwise-matching env-var name', () => {
-    const actions = [{ kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER' }];
-    expect(buildVerificationValues(actions, { SF_USER: '' })).toEqual({});
-    expect(buildVerificationValues(actions, {})).toEqual({});
-  });
-});
 
 // ── Container-Mode tree helpers ──────────────────────────────────────────────
 
@@ -1583,6 +351,90 @@ describe('resolveGroupNode / insertContainerNode / removeGroupTreeNode', () => {
   test('removeGroupTreeNode removes a nested node', () => {
     const result = removeGroupTreeNode(tree(), [0, 0]);
     expect(result[0].children).toEqual([]);
+  });
+});
+
+// Issue #177
+describe('updateGroupTreeNode', () => {
+  const tree = () => [
+    {
+      kind: 'group', name: 'Kategorie', selector: 'section.menu-category', repeating: true,
+      children: [
+        { kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null },
+      ],
+    },
+    { kind: 'field', name: 'Preis', selector: '.price', mode: 'text', attribute: null },
+  ];
+
+  test('renames a root node without touching its siblings', () => {
+    const result = updateGroupTreeNode(tree(), [1], (node) => ({ ...node, name: 'Kosten' }));
+    expect(result[1].name).toBe('Kosten');
+    expect(result[0].name).toBe('Kategorie'); // untouched
+  });
+
+  test('renames a nested node without touching its parent or siblings', () => {
+    const result = updateGroupTreeNode(tree(), [0, 0], (node) => ({ ...node, name: 'Name' }));
+    expect(result[0].children[0].name).toBe('Name');
+    expect(result[0].name).toBe('Kategorie');
+    expect(result[0].selector).toBe('section.menu-category');
+  });
+
+  test('does not mutate the original tree', () => {
+    const original = tree();
+    updateGroupTreeNode(original, [1], (node) => ({ ...node, name: 'Kosten' }));
+    expect(original[1].name).toBe('Preis');
+  });
+});
+
+// Issue #177
+describe('moveGroupTreeNode', () => {
+  const tree = () => [
+    { kind: 'field', name: 'A', selector: '.a', mode: 'text', attribute: null },
+    { kind: 'field', name: 'B', selector: '.b', mode: 'text', attribute: null },
+    {
+      kind: 'group', name: 'Kategorie', selector: 'section', repeating: true,
+      children: [
+        { kind: 'field', name: 'X', selector: '.x', mode: 'text', attribute: null },
+        { kind: 'field', name: 'Y', selector: '.y', mode: 'text', attribute: null },
+      ],
+    },
+  ];
+
+  test('swaps two root-level siblings moving down', () => {
+    const result = moveGroupTreeNode(tree(), [0], 1);
+    expect(result.map(n => n.name)).toEqual(['B', 'A', 'Kategorie']);
+  });
+
+  test('swaps two root-level siblings moving up', () => {
+    const result = moveGroupTreeNode(tree(), [1], -1);
+    expect(result.map(n => n.name)).toEqual(['B', 'A', 'Kategorie']);
+  });
+
+  test('swaps two nested siblings under the same parent', () => {
+    const result = moveGroupTreeNode(tree(), [2, 0], 1);
+    expect(result[2].children.map(n => n.name)).toEqual(['Y', 'X']);
+  });
+
+  test('no-ops past the top boundary', () => {
+    const result = moveGroupTreeNode(tree(), [0], -1);
+    expect(result).toEqual(tree());
+  });
+
+  test('no-ops past the bottom boundary', () => {
+    const result = moveGroupTreeNode(tree(), [2], 1);
+    expect(result).toEqual(tree());
+  });
+
+  test('no-ops for a single-child list', () => {
+    const single = [{ kind: 'field', name: 'Solo', selector: '.solo', mode: 'text', attribute: null }];
+    expect(moveGroupTreeNode(single, [0], 1)).toEqual(single);
+    expect(moveGroupTreeNode(single, [0], -1)).toEqual(single);
+  });
+
+  test('does not mutate the original tree', () => {
+    const original = tree();
+    moveGroupTreeNode(original, [0], 1);
+    expect(original.map(n => n.name)).toEqual(['A', 'B', 'Kategorie']);
   });
 });
 
@@ -1855,13 +707,15 @@ describe('renderGroupTree', () => {
     expect(nodes).toHaveLength(2);
 
     const groupRow = document.querySelector('[data-path="[0]"] > .group-tree-row');
-    expect(groupRow.textContent).toContain('Kategorie (wiederholend)');
+    expect(groupRow.querySelector('.group-tree-name').value).toBe('Kategorie');
+    expect(groupRow.querySelector('.group-tree-label').textContent).toBe('(wiederholend)');
     expect(groupRow.querySelector('.btn-add-subcontainer')).not.toBeNull();
     expect(groupRow.querySelector('.btn-add-subfield')).not.toBeNull();
     expect(groupRow.querySelector('.btn-remove-group-node')).not.toBeNull();
 
     const fieldRow = document.querySelector('[data-path="[0,0]"] > .group-tree-row');
-    expect(fieldRow.textContent).toContain('Titel — Text');
+    expect(fieldRow.querySelector('.group-tree-name').value).toBe('Titel');
+    expect(fieldRow.querySelector('.group-tree-label').textContent).toBe('— Text');
     expect(fieldRow.querySelector('.btn-add-subcontainer')).toBeNull(); // fields can't have children
     expect(fieldRow.querySelector('.btn-remove-group-node')).not.toBeNull();
   });
@@ -2347,21 +1201,6 @@ describe('renderApiTree', () => {
 });
 
 // ── escapeHtml ────────────────────────────────────────────────────────────────
-
-// Issue #42, Phase 7
-describe('frameBadgeHtml', () => {
-  test('returns empty string for null/empty framePath', () => {
-    expect(frameBadgeHtml(null)).toBe('');
-    expect(frameBadgeHtml([])).toBe('');
-  });
-
-  test('renders a badge with the joined path in the title', () => {
-    const html = frameBadgeHtml(['#price-widget', '#reviews-widget']);
-    expect(html).toContain('frame-badge');
-    expect(html).toContain('#price-widget &gt; #reviews-widget');
-  });
-});
-
 describe('escapeHtml', () => {
   test('escapes <, >, &, and "', () => {
     expect(escapeHtml('<b class="x">a & b</b>')).toBe(
@@ -2519,74 +1358,6 @@ describe('renderDataPreview', () => {
     const textEl = document.getElementById('data-preview-text');
     expect(textEl.classList.contains('hidden')).toBe(false);
     expect(textEl.textContent).toBe('{"Kategorie": []}');
-  });
-});
-
-// Issue #43 — the test-value input only appears once a fill action's
-// env-var name is actually set (that's the join key sent to /generate).
-describe('renderBrowserActions — Fill test-value row', () => {
-  beforeEach(() => {
-    document.body.innerHTML = '<div id="browser-actions-list"></div>';
-  });
-
-  test('renders a test-value input for a fill action with a non-blank env-var name', () => {
-    renderBrowserActions([{ kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER' }], { SF_USER: 'alice' });
-
-    const input = document.querySelector('.browser-action-test-value');
-    expect(input).not.toBeNull();
-    expect(input.dataset.envName).toBe('SF_USER');
-    expect(input.value).toBe('alice');
-    expect(input.type).toBe('password');
-  });
-
-  test('does not render a test-value input for a fill action with a blank env-var name', () => {
-    renderBrowserActions([{ kind: 'fill', selector: '#user', environmentVariableName: '' }], {});
-    expect(document.querySelector('.browser-action-test-value')).toBeNull();
-  });
-
-  test('does not render a test-value input for non-fill actions', () => {
-    renderBrowserActions([{ kind: 'click', selector: '#submit' }], {});
-    expect(document.querySelector('.browser-action-test-value')).toBeNull();
-  });
-});
-
-describe('renderHardeningNullRateList (Issue #130)', () => {
-  beforeEach(() => {
-    document.body.innerHTML = '<div id="hardening-null-rate-list"></div>';
-  });
-
-  test('renders one row per entry, with the field select populated from fieldNames', () => {
-    renderHardeningNullRateList(
-      [{ fieldName: 'Preis', threshold: 30, severity: 'Warning' }],
-      ['Titel', 'Preis'],
-    );
-
-    const rows = document.querySelectorAll('.hardening-null-rate-row');
-    expect(rows).toHaveLength(1);
-    const select = rows[0].querySelector('.hardening-null-rate-field');
-    const optionValues = [...select.options].map(o => o.value);
-    expect(optionValues).toEqual(['', 'Titel', 'Preis']);
-    expect(select.value).toBe('Preis');
-    expect(rows[0].querySelector('.hardening-null-rate-threshold').value).toBe('30');
-    expect(rows[0].querySelector('.btn-null-rate-warning').classList.contains('active')).toBe(true);
-    expect(rows[0].querySelector('.btn-null-rate-error').classList.contains('active')).toBe(false);
-  });
-
-  test('keeps a stale field name (renamed/removed since the row was added) selectable instead of silently switching it', () => {
-    renderHardeningNullRateList(
-      [{ fieldName: 'AlterName', threshold: 50, severity: 'Error' }],
-      ['Titel', 'Preis'],
-    );
-
-    const select = document.querySelector('.hardening-null-rate-field');
-    const optionValues = [...select.options].map(o => o.value);
-    expect(optionValues).toContain('AlterName');
-    expect(select.value).toBe('AlterName');
-  });
-
-  test('renders nothing for an empty list', () => {
-    renderHardeningNullRateList([], ['Titel']);
-    expect(document.querySelectorAll('.hardening-null-rate-row')).toHaveLength(0);
   });
 });
 
@@ -3646,104 +2417,6 @@ test('STATES contains expected keys', () => {
 
 // ── formatTreeLabel ───────────────────────────────────────────────────────────
 
-describe('formatTreeLabel', () => {
-  test('tag only when no id or classes', () => {
-    expect(formatTreeLabel({ tag: 'p', id: null, classes: [] })).toBe('p');
-  });
-
-  test('appends #id', () => {
-    expect(formatTreeLabel({ tag: 'section', id: 'main', classes: [] })).toBe('section#main');
-  });
-
-  test('appends .class.class for multiple classes', () => {
-    expect(formatTreeLabel({ tag: 'li', id: null, classes: ['card', 'active'] })).toBe('li.card.active');
-  });
-
-  test('combines id and classes', () => {
-    expect(formatTreeLabel({ tag: 'div', id: 'wrap', classes: ['a'] })).toBe('div#wrap.a');
-  });
-});
-
-// ── DOM tree rendering & highlighting ────────────────────────────────────────
-
-describe('renderDomTree / highlightHover / highlightSelected', () => {
-  const sampleTree = {
-    tag: 'body', id: null, classes: [], path: [],
-    children: [
-      {
-        tag: 'section', id: 'main', classes: [], path: [0],
-        children: [
-          { tag: 'p', id: null, classes: ['a'], path: [0, 0], children: [] },
-        ],
-      },
-    ],
-  };
-
-  beforeEach(() => {
-    document.body.innerHTML = '<ul id="dom-tree-root"></ul>';
-    renderDomTree(sampleTree);
-  });
-
-  test('renders one <li> per tree node with the node label', () => {
-    const nodes = document.querySelectorAll('.dom-tree-node');
-    expect(nodes).toHaveLength(3);
-    expect(document.querySelector('[data-path="[0]"]').textContent).toContain('section#main');
-  });
-
-  test('nested nodes start collapsed', () => {
-    const childUl = document.querySelector('[data-path="[0]"] > .dom-tree-children');
-    expect(childUl.classList.contains('hidden')).toBe(true);
-  });
-
-  // Issue #139: same chevron-SVG-plus-.collapsed-class refactor as the
-  // Container/API-Mode trees, except this toggle starts *collapsed* (unlike
-  // those two, which start expanded) — so .collapsed is applied at build
-  // time here, matching the pre-existing "nested nodes start collapsed" test
-  // above for the .hidden class on the children themselves.
-  test('the toggle renders a chevron icon and starts with the .collapsed class', () => {
-    const toggle = document.querySelector('[data-path="[0]"] > .dom-tree-row .dom-tree-toggle');
-    expect(toggle.querySelector('svg')).not.toBeNull();
-    expect(toggle.classList.contains('collapsed')).toBe(true);
-
-    const childUl = document.querySelector('[data-path="[0]"] > .dom-tree-children');
-    toggle.click();
-    expect(childUl.classList.contains('hidden')).toBe(false);
-    expect(toggle.classList.contains('collapsed')).toBe(false);
-  });
-
-  test('highlightHover marks the matching row and expands its ancestors', () => {
-    highlightHover([0, 0]);
-    const row = document.querySelector('[data-path="[0,0]"] > .dom-tree-row');
-    expect(row.classList.contains('hover')).toBe(true);
-
-    const ancestorUl = document.querySelector('[data-path="[0]"] > .dom-tree-children');
-    expect(ancestorUl.classList.contains('hidden')).toBe(false);
-
-    // Issue #139: expandAncestors also un-rotates the ancestor's own chevron.
-    const ancestorToggle = document.querySelector('[data-path="[0]"] > .dom-tree-row .dom-tree-toggle');
-    expect(ancestorToggle.classList.contains('collapsed')).toBe(false);
-  });
-
-  test('highlightHover clears the previous hover highlight', () => {
-    highlightHover([0]);
-    highlightHover([0, 0]);
-    const previousRow = document.querySelector('[data-path="[0]"] > .dom-tree-row');
-    expect(previousRow.classList.contains('hover')).toBe(false);
-  });
-
-  test('highlightSelected marks the row as selected', () => {
-    highlightSelected([0, 0]);
-    const row = document.querySelector('[data-path="[0,0]"] > .dom-tree-row');
-    expect(row.classList.contains('selected')).toBe(true);
-  });
-
-  test('highlightSelected replaces a previous selection', () => {
-    highlightSelected([0]);
-    highlightSelected([0, 0]);
-    const previousRow = document.querySelector('[data-path="[0]"] > .dom-tree-row');
-    expect(previousRow.classList.contains('selected')).toBe(false);
-  });
-});
 
 // ── SELECTION_UNAVAILABLE ────────────────────────────────────────────────────
 // Regression coverage: chrome.tabs.sendMessage(START_SELECTION) rejects when
@@ -3756,7 +2429,7 @@ describe('SELECTION_UNAVAILABLE handling', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -3840,7 +2513,7 @@ describe('SELECTION_CLICK_OUT_OF_SCOPE handling', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -3912,7 +2585,7 @@ describe('DOM tree loading timeout', () => {
   // resolved) before settling on COMPANION_ERROR — flush those microtasks
   // with real timers before switching to fake ones for the timeout itself.
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -4000,80 +2673,11 @@ describe('DOM tree loading timeout', () => {
 
 // ── Bug reporting ─────────────────────────────────────────────────────────────
 
-describe('formatLogSection', () => {
-  test('lists entries with timestamp, event and JSON data', () => {
-    const entries = [{ ts: '2024-01-01T00:00:00.000Z', event: 'FOO', data: { a: 1 } }];
-    const section = formatLogSection('Side Panel', entries);
-    expect(section).toContain('## Side Panel');
-    expect(section).toContain('2024-01-01T00:00:00.000Z FOO {"a":1}');
-  });
-
-  test('omits the data suffix when data is null', () => {
-    const entries = [{ ts: 't', event: 'FOO', data: null }];
-    expect(formatLogSection('X', entries)).toBe('## X\nt FOO\n');
-  });
-
-  test('shows a placeholder for an empty or missing list', () => {
-    expect(formatLogSection('Empty', [])).toBe('## Empty\n(no entries)\n');
-    expect(formatLogSection('Missing', null)).toBe('## Missing\n(no entries)\n');
-  });
-});
 
 // buildGithubIssueUrl's fixed strings (title/body copy) are always English,
 // independent of the popup's selected UI language — see CLAUDE.md's
 // Language policy: bug reports are a maintainer-facing GitHub artifact, not
 // conversational UI a multilingual end user reads.
-describe('buildGithubIssueUrl', () => {
-  test("points at the repo's new-issue page", () => {
-    const url = buildGithubIssueUrl('some report text');
-    expect(url.startsWith('https://github.com/Aventinis/Scraping-Factory/issues/new?')).toBe(true);
-  });
-
-  test('uses the last reported error as the title when set', () => {
-    setLastError('HTTP 500', 'Script generation');
-    const url = buildGithubIssueUrl('report');
-    expect(url).toContain(`title=${encodeURIComponent('Error: HTTP 500')}`);
-  });
-
-  test('embeds the full report body when short', () => {
-    const url = buildGithubIssueUrl('a short report');
-    const body = decodeURIComponent(url.split('body=')[1]);
-    expect(body).toContain('a short report');
-    expect(body).not.toContain('truncated');
-  });
-
-  test('truncates and adds a note when the report is very long', () => {
-    const longReport = 'x'.repeat(10000);
-    const url = buildGithubIssueUrl(longReport);
-    const body = decodeURIComponent(url.split('body=')[1]);
-    expect(body).toContain('truncated');
-    expect(body.length).toBeLessThan(longReport.length);
-  });
-
-  test('never exceeds GitHub\'s practical URL length limit, even for excerpt-hostile content', () => {
-    // Lots of characters that balloon under percent-encoding (quotes/braces/
-    // newlines, as real JSON log data would contain) — the raw-character
-    // excerpt limit alone doesn't bound the *encoded* URL length.
-    const hostileReport = '{"a":"\n"}'.repeat(2000);
-    const url = buildGithubIssueUrl(hostileReport);
-    expect(url.length).toBeLessThanOrEqual(8000);
-    expect(url.startsWith('https://github.com/Aventinis/Scraping-Factory/issues/new')).toBe(true);
-  });
-
-  test('drops the log excerpt and points at the manual attachment when still too long', () => {
-    const hostileReport = '{"a":"\n"}'.repeat(2000);
-    const url = buildGithubIssueUrl(hostileReport);
-    const body = decodeURIComponent(url.split('body=')[1]);
-    expect(body).toContain('too long to prefill');
-    expect(body).not.toContain('<details>');
-  });
-
-  test('falls back to a fully blank issue when even the title alone is too long', () => {
-    setLastError('E'.repeat(9000), 'Script generation');
-    const url = buildGithubIssueUrl('short report');
-    expect(url).toBe('https://github.com/Aventinis/Scraping-Factory/issues/new');
-  });
-});
 
 // ── buildVerificationErrorMessage ────────────────────────────────────────────
 // The companion generates and actually runs the script against the live
@@ -4081,360 +2685,12 @@ describe('buildGithubIssueUrl', () => {
 // describing why that run failed (page unreachable, script raised an
 // exception, or it ran cleanly but produced no data at all).
 
-describe('buildVerificationErrorMessage', () => {
-  test('uses the error message from the response', () => {
-    const msg = buildVerificationErrorMessage({
-      error: 'Script ran without errors but returned no data (output.csv only contains the header row).',
-    });
-    expect(msg).toBe('Script ran without errors but returned no data (output.csv only contains the header row).');
-  });
-
-  test('passes through a script-crash error message', () => {
-    const msg = buildVerificationErrorMessage({ error: 'Skript (python3) wurde mit Fehler beendet (Exit-Code 1): Traceback...' });
-    expect(msg).toBe('Skript (python3) wurde mit Fehler beendet (Exit-Code 1): Traceback...');
-  });
-
-  test('handles a missing/empty response gracefully', () => {
-    expect(buildVerificationErrorMessage(null)).toBe('Verifikation der Konfiguration fehlgeschlagen.');
-    expect(buildVerificationErrorMessage(undefined)).toBe('Verifikation der Konfiguration fehlgeschlagen.');
-    expect(buildVerificationErrorMessage({})).toBe('Verifikation der Konfiguration fehlgeschlagen.');
-  });
-});
-
-describe('generate() surfaces companion verification failures', () => {
-  const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-  };
-
-  beforeEach(async () => {
-    jest.resetModules();
-
-    document.body.innerHTML = `
-      <section id="screen-idle" class="hidden">
-        <div id="url-display"></div>
-        <div id="fields-list"></div>
-        <button id="btn-generate"></button>
-      </section>
-      <section id="screen-generating" class="hidden"></section>
-      <div id="error-toast" class="hidden">
-        <span id="error-toast-message"></span>
-        <button id="btn-report-bug-toast" class="hidden"></button>
-      </div>
-    `;
-
-    global.chrome = {
-      runtime: {
-        onMessage: { addListener: jest.fn() },
-        sendMessage: jest.fn(),
-      },
-      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
-      storage: {
-        session: {
-          get: jest.fn().mockResolvedValue({
-            fields: [{ name: 'Preis', selector: '.price', attribute: null }],
-            url: 'https://example.com',
-          }),
-          set:    jest.fn().mockResolvedValue(undefined),
-          remove: jest.fn().mockResolvedValue(undefined),
-        },
-      },
-    };
-
-    global.fetch = jest.fn((url) => {
-      if (String(url).endsWith('/health')) return Promise.resolve({ ok: true });
-      if (String(url).endsWith('/generate')) {
-        return Promise.resolve({
-          ok: false,
-          status: 422,
-          json: () => Promise.resolve({
-            error: 'Script ran without errors but returned no data (output.csv only contains the header row).',
-          }),
-        });
-      }
-      return Promise.reject(new Error(`unexpected fetch: ${url}`));
-    });
-
-    require('./popup');
-    await flushMicrotasks(); // → STATES.IDLE, fields restored from storage
-  });
-
-  test('shows a toast with the verification error and offers to report it', async () => {
-    document.getElementById('btn-generate').click();
-    await flushMicrotasks();
-
-    const toast = document.getElementById('error-toast');
-    expect(toast.classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('error-toast-message').textContent).toContain('returned no data');
-    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
-  });
-});
-
-// A 400 is ScrapingPlanValidator/the /generate endpoint itself rejecting a
-// structurally invalid config (bad URL, mutually exclusive Fields/Groups/
-// Api, a FramePath without Engine=Browser, ...) — a deterministic,
-// pre-execution rejection of the current configuration, never a companion
-// or generated-script malfunction. Unlike the 422 case above, this must
-// NOT invite a bug report — that would just fill GitHub issues with
-// non-bugs (see the "Static engine + a framed field/action" case that
-// prompted this).
-describe('generate() surfaces a 400 config rejection without inviting a bug report', () => {
-  const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-  };
-
-  beforeEach(async () => {
-    jest.resetModules();
-
-    document.body.innerHTML = `
-      <section id="screen-idle" class="hidden">
-        <div id="url-display"></div>
-        <div id="fields-list"></div>
-        <button id="btn-generate"></button>
-      </section>
-      <section id="screen-generating" class="hidden"></section>
-      <div id="error-toast" class="hidden">
-        <span id="error-toast-message"></span>
-        <button id="btn-report-bug-toast" class="hidden"></button>
-      </div>
-    `;
-
-    global.chrome = {
-      runtime: {
-        onMessage: { addListener: jest.fn() },
-        sendMessage: jest.fn(),
-      },
-      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
-      storage: {
-        session: {
-          get: jest.fn().mockResolvedValue({
-            fields: [{ name: 'Preis', selector: '.price', attribute: null, framePath: ['#widget'] }],
-            url: 'https://example.com',
-          }),
-          set:    jest.fn().mockResolvedValue(undefined),
-          remove: jest.fn().mockResolvedValue(undefined),
-        },
-      },
-    };
-
-    global.fetch = jest.fn((url) => {
-      if (String(url).endsWith('/health')) return Promise.resolve({ ok: true });
-      if (String(url).endsWith('/generate')) {
-        return Promise.resolve({
-          ok: false,
-          status: 400,
-          json: () => Promise.resolve({
-            error: "FramePath is only allowed with Engine 'Browser'.",
-          }),
-        });
-      }
-      return Promise.reject(new Error(`unexpected fetch: ${url}`));
-    });
-
-    require('./popup');
-    await flushMicrotasks(); // → STATES.IDLE, fields restored from storage
-  });
-
-  test('shows a toast with the rejection reason but keeps the "Report bug" button hidden', async () => {
-    document.getElementById('btn-generate').click();
-    await flushMicrotasks();
-
-    const toast = document.getElementById('error-toast');
-    expect(toast.classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('error-toast-message').textContent).toContain('FramePath is only allowed with Engine');
-    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(true);
-  });
-});
 
 // ── Saved configuration history (Issue #141) ────────────────────────────────
 // Full flows against the companion's /configs endpoints, same DOM-mocking
 // pattern as the generate() integration tests above.
 
-describe('saved configuration history (Issue #141)', () => {
-  const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-  };
 
-  let fetchMock;
-
-  const idleScreenHtml = `
-    <section id="screen-idle" class="hidden">
-      <div id="url-display"></div>
-      <div id="fields-list"></div>
-      <button id="btn-generate"></button>
-      <button id="btn-export-config"></button>
-      <button id="btn-save-config"></button>
-      <div id="saved-configs-list"></div>
-      <p id="saved-configs-empty" class="hidden"></p>
-    </section>
-    <div id="modal-save-config" class="modal hidden">
-      <input id="input-save-config-name" />
-      <button id="btn-save-config-cancel"></button>
-      <button id="btn-save-config-confirm"></button>
-    </div>
-    <section id="screen-generating" class="hidden"></section>
-    <div id="error-toast" class="hidden">
-      <span id="error-toast-message"></span>
-      <button id="btn-report-bug-toast" class="hidden"></button>
-    </div>
-  `;
-
-  beforeEach(async () => {
-    jest.resetModules();
-    document.body.innerHTML = idleScreenHtml;
-
-    global.chrome = {
-      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
-      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com/products' }])) },
-      storage: {
-        session: {
-          get: jest.fn().mockResolvedValue({
-            fields: [{ name: 'Preis', selector: '.price', attribute: null }],
-            url: 'https://example.com/products',
-          }),
-          set:    jest.fn().mockResolvedValue(undefined),
-          remove: jest.fn().mockResolvedValue(undefined),
-        },
-      },
-    };
-
-    fetchMock = jest.fn((url, init) => {
-      const method = init?.method || 'GET';
-      const urlStr = String(url);
-      if (urlStr.endsWith('/health')) return Promise.resolve({ ok: true });
-      if (urlStr.includes('/configs?url=')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve([
-            { id: 1, url: 'https://example.com/products', name: 'My config', savedAt: '2026-01-01T00:00:00.000Z' },
-          ]),
-        });
-      }
-      if (urlStr.endsWith('/configs') && method === 'POST') {
-        return Promise.resolve({
-          ok: true, status: 201,
-          json: () => Promise.resolve({ id: 2, url: 'https://example.com/products', name: 'New config', savedAt: '2026-01-02T00:00:00.000Z' }),
-        });
-      }
-      if (/\/configs\/\d+$/.test(urlStr) && method === 'GET') {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({
-            id: 1, url: 'https://example.com/products', name: 'My config', savedAt: '2026-01-01T00:00:00.000Z',
-            config: {
-              version: '1', url: 'https://example.com/products',
-              fields: [{ name: 'Loaded', selector: '.loaded', attribute: null }],
-            },
-          }),
-        });
-      }
-      if (/\/configs\/\d+$/.test(urlStr) && method === 'DELETE') {
-        return Promise.resolve({ ok: true, status: 204 });
-      }
-      return Promise.reject(new Error(`unexpected fetch: ${method} ${urlStr}`));
-    });
-    global.fetch = fetchMock;
-
-    require('./popup');
-    await flushMicrotasks(); // → STATES.IDLE, fields restored, saved-configs list fetched
-  });
-
-  test('fetches and renders saved configs scoped to the current page on IDLE entry', () => {
-    expect(fetchMock).toHaveBeenCalledWith(`http://localhost:5000/configs?url=${encodeURIComponent('https://example.com/products')}`);
-    const rows = document.querySelectorAll('.saved-config-row');
-    expect(rows).toHaveLength(1);
-    expect(rows[0].textContent).toContain('My config');
-  });
-
-  test('Save opens the modal prefilled with the current hostname, then POSTs the current config and refreshes the list', async () => {
-    document.getElementById('btn-save-config').click();
-    expect(document.getElementById('modal-save-config').classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('input-save-config-name').value).toBe('example.com');
-
-    document.getElementById('input-save-config-name').value = 'New config';
-    document.getElementById('btn-save-config-confirm').click();
-    await flushMicrotasks();
-
-    const postCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/configs') && init?.method === 'POST');
-    expect(postCall).toBeDefined();
-    const body = JSON.parse(postCall[1].body);
-    expect(body.name).toBe('New config');
-    expect(body.url).toBe('https://example.com/products');
-    expect(body.config.fields).toEqual([{ name: 'Preis', selector: '.price', attribute: null }]);
-    // Save is followed by a re-fetch of the list (fetchSavedConfigs) and the
-    // modal closes.
-    expect(document.getElementById('modal-save-config').classList.contains('hidden')).toBe(true);
-  });
-
-  test('Load applies the saved config back into state without touching the live tab URL', async () => {
-    document.querySelector('.btn-saved-config-load').click();
-    await flushMicrotasks();
-
-    // _state.url stays whatever the tab reported at startup — see
-    // applyConfigToState's own doc comment.
-    expect(document.getElementById('url-display').textContent).toBe('https://example.com/products');
-    const fieldNames = [...document.querySelectorAll('#fields-list .field-name')].map(el => el.textContent);
-    expect(fieldNames).toEqual(['Loaded']);
-  });
-
-  test('Delete requires an inline confirm before the DELETE request is actually sent', async () => {
-    document.querySelector('.btn-saved-config-delete').click();
-
-    expect(document.querySelector('.btn-saved-config-delete-confirm')).not.toBeNull();
-    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
-
-    document.querySelector('.btn-saved-config-delete-confirm').click();
-    await flushMicrotasks();
-
-    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(true);
-  });
-
-  test('Delete confirm can be cancelled without sending the DELETE request', () => {
-    document.querySelector('.btn-saved-config-delete').click();
-    document.querySelector('.btn-saved-config-delete-cancel').click();
-
-    expect(document.querySelector('.btn-saved-config-load')).not.toBeNull();
-    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
-  });
-});
-
-describe('saved configuration history: an older/unreachable companion without /configs', () => {
-  const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-  };
-
-  beforeEach(async () => {
-    jest.resetModules();
-    document.body.innerHTML = `
-      <section id="screen-idle" class="hidden">
-        <div id="url-display"></div>
-        <div id="fields-list"></div>
-        <div id="saved-configs-list"></div>
-        <p id="saved-configs-empty" class="hidden"></p>
-      </section>
-    `;
-
-    global.chrome = {
-      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
-      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
-      storage: { session: { get: jest.fn().mockResolvedValue({}), set: jest.fn().mockResolvedValue(undefined), remove: jest.fn().mockResolvedValue(undefined) } },
-    };
-
-    global.fetch = jest.fn((url) => {
-      const urlStr = String(url);
-      if (urlStr.endsWith('/health')) return Promise.resolve({ ok: true });
-      if (urlStr.includes('/configs?url=')) return Promise.reject(new Error('404 Not Found'));
-      return Promise.reject(new Error(`unexpected fetch: ${urlStr}`));
-    });
-
-    require('./popup');
-    await flushMicrotasks();
-  });
-
-  test('the panel just stays empty instead of surfacing an error', () => {
-    expect(document.getElementById('error-toast')).toBeNull();
-    expect(document.querySelectorAll('.saved-config-row')).toHaveLength(0);
-  });
-});
 
 // ── Container-Mode integration ───────────────────────────────────────────────
 // Full flows through the real state machine (mode switch, modal → click-select
@@ -4445,7 +2701,7 @@ describe('Container-Mode integration', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -4553,7 +2809,8 @@ describe('Container-Mode integration', () => {
     expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
     expect(document.getElementById('modal-field-extended').classList.contains('hidden')).toBe(true);
     const row = document.querySelector('#group-tree-root .group-tree-row');
-    expect(row.textContent).toContain('Vorspeisen (wiederholend)');
+    expect(row.querySelector('.group-tree-name').value).toBe('Vorspeisen');
+    expect(row.textContent).toContain('(wiederholend)');
   });
 
   test('field add within a container: click-select first, then the extended modal, scoped to the parent selector', async () => {
@@ -4583,7 +2840,8 @@ describe('Container-Mode integration', () => {
     document.getElementById('btn-field-extended-confirm').click();
 
     const rows = document.querySelectorAll('#group-tree-root .group-tree-row');
-    expect(rows[1].textContent).toContain('Titel — Text');
+    expect(rows[1].querySelector('.group-tree-name').value).toBe('Titel');
+    expect(rows[1].textContent).toContain('— Text');
   });
 
   test('choosing "Attribut" reveals the attribute-name input, and it is required to confirm', async () => {
@@ -4611,7 +2869,8 @@ describe('Container-Mode integration', () => {
     document.getElementById('input-field-attribute').value = 'href';
     document.getElementById('btn-field-extended-confirm').click();
     const rows = document.querySelectorAll('#group-tree-root .group-tree-row');
-    expect(rows[1].textContent).toContain('Link — Attribut: href');
+    expect(rows[1].querySelector('.group-tree-name').value).toBe('Link');
+    expect(rows[1].textContent).toContain('— Attribut: href');
   });
 
   // Regression: an id-bearing element used to always short-circuit to an id
@@ -4668,6 +2927,68 @@ describe('Container-Mode integration', () => {
 
     expect(document.querySelector('#group-tree-root .frame-badge')).toBeNull();
   });
+
+  // Issue #177: rename/reorder a node's own tree row after it's already
+  // been created, instead of only ever being nameable/orderable at add time.
+  async function addRootContainer(name, selector) {
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = name;
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector });
+    await flushMicrotasks();
+  }
+
+  test('renaming a tree node via its own row input persists into state', async () => {
+    document.getElementById('btn-mode-container').click();
+    await addRootContainer('Vorspeisen', 'section.starters');
+
+    const nameInput = document.querySelector('#group-tree-root .group-tree-name');
+    nameInput.value = 'Hauptgerichte';
+    nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    // Re-render (triggered by the change handler's setState) rebuilds the
+    // row from scratch — re-querying it proves the new name came from
+    // _state.groups, not just the input's own unmanaged DOM value.
+    expect(document.querySelector('#group-tree-root .group-tree-name').value).toBe('Hauptgerichte');
+  });
+
+  test('blanking a tree node\'s name input reverts it instead of saving an empty name', async () => {
+    document.getElementById('btn-mode-container').click();
+    await addRootContainer('Vorspeisen', 'section.starters');
+
+    const nameInput = document.querySelector('#group-tree-root .group-tree-name');
+    nameInput.value = '   ';
+    nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(nameInput.value).toBe('Vorspeisen');
+  });
+
+  test('move buttons reorder two sibling nodes', async () => {
+    document.getElementById('btn-mode-container').click();
+    await addRootContainer('Vorspeisen', 'section.starters');
+    await addRootContainer('Hauptgerichte', 'section.mains');
+
+    let names = () => [...document.querySelectorAll('#group-tree-root .group-tree-name')].map(el => el.value);
+    expect(names()).toEqual(['Vorspeisen', 'Hauptgerichte']);
+
+    document.querySelectorAll('.btn-group-move-down')[0].click();
+    expect(names()).toEqual(['Hauptgerichte', 'Vorspeisen']);
+
+    document.querySelectorAll('.btn-group-move-up')[1].click();
+    expect(names()).toEqual(['Vorspeisen', 'Hauptgerichte']);
+  });
+
+  test('the top row\'s move-up and the bottom row\'s move-down are disabled', async () => {
+    document.getElementById('btn-mode-container').click();
+    await addRootContainer('Vorspeisen', 'section.starters');
+    await addRootContainer('Hauptgerichte', 'section.mains');
+
+    const rows = document.querySelectorAll('#group-tree-root .group-tree-row');
+    expect(rows[0].querySelector('.btn-group-move-up').disabled).toBe(true);
+    expect(rows[0].querySelector('.btn-group-move-down').disabled).toBe(false);
+    expect(rows[1].querySelector('.btn-group-move-up').disabled).toBe(false);
+    expect(rows[1].querySelector('.btn-group-move-down').disabled).toBe(true);
+  });
 });
 
 // ── Live selector match-count preview (Issue #85) ───────────────────────────
@@ -4679,7 +3000,7 @@ describe('Live selector match-count preview (Issue #85)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -4826,7 +3147,7 @@ describe('Live selector match-count preview (Issue #85)', () => {
     expect(document.getElementById('error-toast-message').textContent)
       .toBe('Container „Vorspeisen“ hinzugefügt — 7 Element(e) gefunden');
     // Insertion itself is unaffected by the toast — same "no extra modal" flow as before.
-    expect(document.querySelector('#group-tree-root .group-tree-row').textContent).toContain('Vorspeisen');
+    expect(document.querySelector('#group-tree-root .group-tree-row .group-tree-name').value).toBe('Vorspeisen');
   });
 
   test('creating a root container whose selector matches nothing shows the toast in its warn variant', async () => {
@@ -4866,7 +3187,7 @@ describe('Field transform-chain editor (Issue #84)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -5141,7 +3462,7 @@ describe('Field transform-chain editor (Issue #84)', () => {
     document.getElementById('btn-field-extended-confirm').click();
 
     const rows = document.querySelectorAll('#group-tree-root .group-tree-row');
-    expect(rows[1].textContent).toContain('Preis');
+    expect(rows[1].querySelector('.group-tree-name').value).toBe('Preis');
   });
 });
 
@@ -5153,7 +3474,7 @@ describe('Transform-chain live preview (Issue #143)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -5402,588 +3723,12 @@ describe('Transform-chain live preview (Issue #143)', () => {
   });
 });
 
-// ── Engine + browser actions integration (Issue #41/#42, Phase 5) ───────────
-// Mode-independent (see buildScrapingConfig's doc comment) — mirrors the
-// Container-Mode integration block's DOM-mocking pattern above, but the
-// engine toggle/browser-actions list is never gated behind a mode switch.
-
-describe('Engine + browser actions integration', () => {
-  let capturedListener;
-
-  const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-  };
-
-  beforeEach(async () => {
-    jest.resetModules();
-
-    document.body.innerHTML = `
-      <section id="screen-idle" class="hidden">
-        <div id="url-display"></div>
-        <div class="mode-toggle">
-          <button id="btn-mode-flat" class="mode-btn active"></button>
-          <button id="btn-mode-container" class="mode-btn"></button>
-        </div>
-        <div id="flat-mode-section">
-          <div id="fields-list"></div>
-          <button id="btn-add-field"></button>
-        </div>
-        <div id="container-mode-section" class="hidden">
-          <ul id="group-tree-root"></ul>
-        </div>
-        <div>
-          <button id="btn-engine-static" class="mode-btn active"></button>
-          <button id="btn-engine-browser" class="mode-btn"></button>
-          <div id="browser-actions-section" class="hidden">
-            <div id="browser-actions-list"></div>
-            <button id="btn-add-action-wait"></button>
-            <button id="btn-add-action-fill"></button>
-            <button id="btn-add-action-click"></button>
-            <button id="btn-add-action-scroll"></button>
-          </div>
-        </div>
-        <button id="btn-generate" disabled></button>
-      </section>
-      <section id="screen-selecting" class="hidden">
-        <input type="checkbox" id="toggle-dom-view" />
-        <div id="dom-tree-wrapper" class="hidden">
-          <p id="dom-tree-loading"></p>
-          <p id="dom-tree-error" class="hidden"></p>
-          <p id="dom-tree-truncated" class="hidden"></p>
-          <ul id="dom-tree-root"></ul>
-        </div>
-        <button id="btn-cancel-selection"></button>
-      </section>
-    `;
-
-    global.chrome = {
-      runtime: {
-        onMessage: { addListener: (fn) => { capturedListener = fn; } },
-        sendMessage: jest.fn(),
-      },
-      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
-      storage: {
-        session: {
-          get:    jest.fn().mockResolvedValue({}),
-          set:    jest.fn().mockResolvedValue(undefined),
-          remove: jest.fn().mockResolvedValue(undefined),
-        },
-      },
-    };
-    global.fetch = jest.fn().mockResolvedValue({ ok: true });
-
-    require('./popup');
-    await flushMicrotasks(); // → STATES.IDLE
-  });
-
-  test('Browser engine reveals the browser-actions section; Static hides it again', () => {
-    expect(document.getElementById('browser-actions-section').classList.contains('hidden')).toBe(true);
-
-    document.getElementById('btn-engine-browser').click();
-    expect(document.getElementById('browser-actions-section').classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('btn-engine-browser').classList.contains('active')).toBe(true);
-    expect(document.getElementById('btn-engine-static').classList.contains('active')).toBe(false);
-
-    document.getElementById('btn-engine-static').click();
-    expect(document.getElementById('browser-actions-section').classList.contains('hidden')).toBe(true);
-  });
-
-  test('adding each action kind renders the right card, in order', () => {
-    document.getElementById('btn-engine-browser').click();
-    document.getElementById('btn-add-action-wait').click();
-    document.getElementById('btn-add-action-fill').click();
-    document.getElementById('btn-add-action-click').click();
-    document.getElementById('btn-add-action-scroll').click();
-
-    const cards = document.querySelectorAll('.browser-action-card');
-    expect(cards).toHaveLength(4);
-    expect(cards[0].querySelector('.browser-action-timeout')).not.toBeNull();
-    expect(cards[1].querySelector('.browser-action-env-name')).not.toBeNull();
-    expect(cards[2].querySelector('.browser-action-timeout')).toBeNull();
-    expect(cards[2].querySelector('.browser-action-env-name')).toBeNull();
-    expect(cards[3].querySelectorAll('.btn-pick-action-selector')).toHaveLength(2);
-    expect(cards[3].querySelector('.browser-action-max-iterations')).not.toBeNull();
-    expect(cards[3].querySelector('.browser-action-wait-after-ms')).not.toBeNull();
-  });
-
-  test('a scroll card\'s two pick buttons target containerSelector/loadMoreButtonSelector independently', async () => {
-    document.getElementById('btn-engine-browser').click();
-    document.getElementById('btn-add-action-scroll').click();
-
-    // Re-query after every pick — each ELEMENT_SELECTED round re-renders
-    // #browser-actions-list from scratch, so a NodeList captured before a
-    // prior round is a snapshot of now-detached nodes (the exact "stale
-    // element handle" pitfall documented in the Phase 5 manual verification
-    // notes, here as a real jsdom analogue).
-    let pickButtons = document.querySelectorAll('.btn-pick-action-selector');
-    expect(pickButtons[0].dataset.field).toBe('containerSelector');
-    expect(pickButtons[1].dataset.field).toBe('loadMoreButtonSelector');
-
-    pickButtons[1].click(); // pick the load-more button first, on purpose
-    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#load-more' });
-    await flushMicrotasks();
-
-    pickButtons = document.querySelectorAll('.btn-pick-action-selector');
-    pickButtons[0].click(); // then the container — must not overwrite the first pick
-    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#list' });
-    await flushMicrotasks();
-
-    const selectorTexts = [...document.querySelectorAll('.browser-action-selector-row .field-selector')].map(el => el.textContent);
-    expect(selectorTexts).toEqual(['#list', '#load-more']);
-  });
-
-  test('editing a scroll action\'s maxIterations/waitAfterMs persists them into state', () => {
-    document.getElementById('btn-engine-browser').click();
-    document.getElementById('btn-add-action-scroll').click();
-
-    const maxIterationsInput = document.querySelector('.browser-action-max-iterations');
-    maxIterationsInput.value = '20';
-    maxIterationsInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-    const waitAfterMsInput = document.querySelector('.browser-action-wait-after-ms');
-    waitAfterMsInput.value = '2500';
-    waitAfterMsInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-    expect(document.querySelector('.browser-action-max-iterations').value).toBe('20');
-    expect(document.querySelector('.browser-action-wait-after-ms').value).toBe('2500');
-  });
-
-  test('removing an action drops only that card', () => {
-    document.getElementById('btn-engine-browser').click();
-    document.getElementById('btn-add-action-wait').click();
-    document.getElementById('btn-add-action-click').click();
-
-    document.querySelectorAll('.btn-remove-action')[0].click();
-
-    const cards = document.querySelectorAll('.browser-action-card');
-    expect(cards).toHaveLength(1);
-    expect(cards[0].querySelector('.browser-action-timeout')).toBeNull(); // the click action remains
-  });
-
-  test('editing a Fill action\'s environment variable name persists it into state', () => {
-    document.getElementById('btn-engine-browser').click();
-    document.getElementById('btn-add-action-fill').click();
-
-    const envInput = document.querySelector('.browser-action-env-name');
-    envInput.value = 'SF_USERNAME';
-    envInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-    // Re-render (triggered by the change handler's setState) must not lose it.
-    expect(document.querySelector('.browser-action-env-name').value).toBe('SF_USERNAME');
-  });
-
-  // Issue #43
-  test('setting a Fill action\'s env-var name reveals its test-value input', () => {
-    document.getElementById('btn-engine-browser').click();
-    document.getElementById('btn-add-action-fill').click();
-
-    expect(document.querySelector('.browser-action-test-value')).toBeNull();
-
-    const envInput = document.querySelector('.browser-action-env-name');
-    envInput.value = 'SF_USERNAME';
-    envInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-    expect(document.querySelector('.browser-action-test-value')).not.toBeNull();
-  });
-
-  // Issue #43: fillTestValues must never survive a popup close/reopen — the
-  // change handler uses patchState (which never calls persistState), unlike
-  // every other browser-action field here, which uses setState.
-  test('typing a Fill test value updates the input but is never written to session storage', () => {
-    document.getElementById('btn-engine-browser').click();
-    document.getElementById('btn-add-action-fill').click();
-    const envInput = document.querySelector('.browser-action-env-name');
-    envInput.value = 'SF_USERNAME';
-    envInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-    chrome.storage.session.set.mockClear();
-    const testValueInput = document.querySelector('.browser-action-test-value');
-    testValueInput.value = 'alice';
-    testValueInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-    expect(document.querySelector('.browser-action-test-value').value).toBe('alice');
-    expect(chrome.storage.session.set).not.toHaveBeenCalled();
-  });
-
-  test('picking an element for an action selector: START_SELECTION, then the result is written straight into that action — no modal', async () => {
-    document.getElementById('btn-engine-browser').click();
-    document.getElementById('btn-add-action-click').click();
-
-    document.querySelector('.btn-pick-action-selector').click();
-
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'START_SELECTION' });
-    expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(false);
-
-    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#submit' });
-    await flushMicrotasks();
-
-    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
-    const selectorText = document.querySelector('.browser-action-selector-row .field-selector');
-    expect(selectorText.textContent).toBe('#submit');
-  });
-
-  // Issue #42, Phase 7: a click landing inside an iframe reports a framePath
-  // alongside the selector — it's written straight into the action (like the
-  // selector itself) and surfaced as a badge on the action card.
-  test('a framed action selector shows the iframe badge and carries framePath onto the action', async () => {
-    document.getElementById('btn-engine-browser').click();
-    document.getElementById('btn-add-action-click').click();
-
-    document.querySelector('.btn-pick-action-selector').click();
-    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#submit', framePath: ['#login-widget'] });
-    await flushMicrotasks();
-
-    const badge = document.querySelector('.browser-action-card .frame-badge');
-    expect(badge).not.toBeNull();
-    expect(badge.title).toContain('#login-widget');
-
-    expect(serializeBrowserActions([{ kind: 'click', selector: '#submit', framePath: ['#login-widget'] }]))
-      .toEqual([{ kind: 'click', selector: '#submit', framePath: ['#login-widget'] }]);
-  });
-
-  test('a top-level (unframed) action selector shows no iframe badge', async () => {
-    document.getElementById('btn-engine-browser').click();
-    document.getElementById('btn-add-action-click').click();
-
-    document.querySelector('.btn-pick-action-selector').click();
-    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#submit' });
-    await flushMicrotasks();
-
-    expect(document.querySelector('.browser-action-card .frame-badge')).toBeNull();
-  });
-
-  test('a full login flow (fill, fill, click, wait) is sent to /generate with engine and browserActions', async () => {
-    document.getElementById('btn-engine-browser').click();
-    document.getElementById('btn-add-action-fill').click();
-    document.getElementById('btn-add-action-fill').click();
-    document.getElementById('btn-add-action-click').click();
-    document.getElementById('btn-add-action-wait').click();
-
-    const pickButtons = () => document.querySelectorAll('.btn-pick-action-selector');
-    const envInputs = () => document.querySelectorAll('.browser-action-env-name');
-
-    pickButtons()[0].click();
-    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#username' });
-    await flushMicrotasks();
-    envInputs()[0].value = 'SF_USERNAME';
-    envInputs()[0].dispatchEvent(new Event('change', { bubbles: true }));
-
-    pickButtons()[1].click();
-    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#password' });
-    await flushMicrotasks();
-    envInputs()[1].value = 'SF_PASSWORD';
-    envInputs()[1].dispatchEvent(new Event('change', { bubbles: true }));
-
-    pickButtons()[2].click();
-    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#submit' });
-    await flushMicrotasks();
-
-    pickButtons()[3].click();
-    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.welcome' });
-    await flushMicrotasks();
-
-    // hasConfig (gating btn-generate) only looks at fields/groups/apiConfig,
-    // none of which this test cares about — only the request body's
-    // engine/browserActions shape — so the disabled gate is bypassed
-    // directly rather than adding an unrelated flat field just to satisfy it.
-    document.getElementById('btn-generate').disabled = false;
-    document.getElementById('btn-generate').click();
-    await flushMicrotasks();
-
-    const [, options] = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/generate'));
-    const body = JSON.parse(options.body);
-    expect(body.engine).toBe('Browser');
-    expect(body.browserActions).toEqual([
-      { kind: 'fill', selector: '#username', environmentVariableName: 'SF_USERNAME' },
-      { kind: 'fill', selector: '#password', environmentVariableName: 'SF_PASSWORD' },
-      { kind: 'click', selector: '#submit' },
-      { kind: 'waitFor', selector: '.welcome', timeoutMs: 5000 },
-    ]);
-    // Issue #43: no test values were typed in this test, so nothing is sent —
-    // matches the gap the feature closes without ever forcing an empty key.
-    expect(body.verificationValues).toBeUndefined();
-  });
-
-  // Issue #43
-  test('typed Fill test values are sent to /generate as verificationValues, keyed by env-var name', async () => {
-    document.getElementById('btn-engine-browser').click();
-    document.getElementById('btn-add-action-fill').click();
-    document.getElementById('btn-add-action-fill').click();
-
-    const envInputs = () => document.querySelectorAll('.browser-action-env-name');
-    envInputs()[0].value = 'SF_USERNAME';
-    envInputs()[0].dispatchEvent(new Event('change', { bubbles: true }));
-    envInputs()[1].value = 'SF_PASSWORD';
-    envInputs()[1].dispatchEvent(new Event('change', { bubbles: true }));
-
-    const testValueInputs = () => document.querySelectorAll('.browser-action-test-value');
-    testValueInputs()[0].value = 'alice';
-    testValueInputs()[0].dispatchEvent(new Event('change', { bubbles: true }));
-    testValueInputs()[1].value = 's3cret';
-    testValueInputs()[1].dispatchEvent(new Event('change', { bubbles: true }));
-
-    document.getElementById('btn-generate').disabled = false;
-    document.getElementById('btn-generate').click();
-    await flushMicrotasks();
-
-    const [, options] = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/generate'));
-    const body = JSON.parse(options.body);
-    expect(body.verificationValues).toEqual({ SF_USERNAME: 'alice', SF_PASSWORD: 's3cret' });
-    // The logged request body must stay clean — never carries the test values.
-    expect(body.engine).toBe('Browser');
-  });
-
-  test('a scroll action with only the load-more button picked is sent with containerSelector: null', async () => {
-    document.getElementById('btn-engine-browser').click();
-    document.getElementById('btn-add-action-scroll').click();
-
-    const pickButtons = document.querySelectorAll('.btn-pick-action-selector');
-    pickButtons[1].click(); // loadMoreButtonSelector only — containerSelector stays unset
-    capturedListener({ type: 'ELEMENT_SELECTED', selector: '#load-more' });
-    await flushMicrotasks();
-
-    const maxIterationsInput = document.querySelector('.browser-action-max-iterations');
-    maxIterationsInput.value = '6';
-    maxIterationsInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-    document.getElementById('btn-generate').disabled = false;
-    document.getElementById('btn-generate').click();
-    await flushMicrotasks();
-
-    const [, options] = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/generate'));
-    const body = JSON.parse(options.body);
-    expect(body.browserActions).toEqual([
-      { kind: 'scroll', containerSelector: null, loadMoreButtonSelector: '#load-more', maxIterations: 6, waitAfterMs: 1000 },
-    ]);
-  });
-});
-
-// ── Pagination: pick the "next page" link by clicking it (Issue #174 follow-up) ──
-// Same click-based selection flow browser actions' own pick button already
-// uses (see the "Engine + browser actions integration" tests above), just
-// writing into a single fixed field (pagination.nextLinkSelector) instead of
-// a per-index browserActions entry.
-
-describe('Pagination: pick next-link selector', () => {
-  let capturedListener;
-
-  const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-  };
-
-  beforeEach(async () => {
-    jest.resetModules();
-
-    document.body.innerHTML = `
-      <section id="screen-idle" class="hidden">
-        <label>
-          <input type="checkbox" id="toggle-pagination" />
-        </label>
-        <div id="pagination-config" class="hidden">
-          <div class="mode-toggle">
-            <div class="mode-toggle-thumb"></div>
-            <button id="btn-pagination-next-link" class="mode-btn active" type="button"></button>
-            <button id="btn-pagination-page-number" class="mode-btn" type="button"></button>
-          </div>
-          <div id="pagination-next-link-fields">
-            <input type="text" id="input-pagination-next-link-selector" />
-            <button id="btn-pick-pagination-next-link" type="button"></button>
-          </div>
-          <div id="pagination-page-number-fields" class="hidden">
-            <input type="text" id="input-pagination-url-template" />
-          </div>
-          <input type="number" id="input-pagination-max-pages" />
-        </div>
-        <button id="btn-generate" disabled></button>
-      </section>
-      <section id="screen-selecting" class="hidden">
-        <input type="checkbox" id="toggle-dom-view" />
-        <div id="dom-tree-wrapper" class="hidden">
-          <p id="dom-tree-loading"></p>
-          <p id="dom-tree-error" class="hidden"></p>
-          <p id="dom-tree-truncated" class="hidden"></p>
-          <ul id="dom-tree-root"></ul>
-        </div>
-        <button id="btn-cancel-selection"></button>
-      </section>
-    `;
-
-    global.chrome = {
-      runtime: {
-        onMessage: { addListener: (fn) => { capturedListener = fn; } },
-        sendMessage: jest.fn(),
-      },
-      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
-      storage: {
-        session: {
-          get:    jest.fn().mockResolvedValue({}),
-          set:    jest.fn().mockResolvedValue(undefined),
-          remove: jest.fn().mockResolvedValue(undefined),
-        },
-      },
-    };
-    global.fetch = jest.fn().mockResolvedValue({ ok: true });
-
-    require('./popup');
-    await flushMicrotasks(); // → STATES.IDLE
-  });
-
-  test('clicking the pick button starts a plain (unscoped) selection round', () => {
-    document.getElementById('btn-pick-pagination-next-link').click();
-
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'START_SELECTION' });
-    expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(true);
-  });
-
-  test('the picked selector is written straight into pagination.nextLinkSelector — no modal', async () => {
-    document.getElementById('btn-pick-pagination-next-link').click();
-    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'a.next' });
-    await flushMicrotasks();
-
-    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('input-pagination-next-link-selector').value).toBe('a.next');
-  });
-
-  test('picking again overwrites a previously picked selector', async () => {
-    document.getElementById('btn-pick-pagination-next-link').click();
-    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'a.next' });
-    await flushMicrotasks();
-
-    document.getElementById('btn-pick-pagination-next-link').click();
-    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.pagination__next' });
-    await flushMicrotasks();
-
-    expect(document.getElementById('input-pagination-next-link-selector').value).toBe('.pagination__next');
-  });
-});
-
 // ── Konfiguration exportieren (btn-export-config) ────────────────────────────
 
-describe('downloadConfigExport (btn-export-config)', () => {
-  let capturedListener;
-
-  const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-  };
-
-  beforeEach(async () => {
-    jest.resetModules();
-
-    document.body.innerHTML = `
-      <section id="screen-idle" class="hidden">
-        <div id="url-display"></div>
-        <div class="mode-toggle">
-          <button id="btn-mode-flat" class="mode-btn active"></button>
-          <button id="btn-mode-container" class="mode-btn"></button>
-        </div>
-        <div id="flat-mode-section">
-          <div id="fields-list"></div>
-          <button id="btn-add-field"></button>
-        </div>
-        <div id="container-mode-section" class="hidden">
-          <ul id="group-tree-root"></ul>
-          <button id="btn-add-root-container"></button>
-        </div>
-        <button id="btn-generate" disabled></button>
-        <button id="btn-export-config" disabled></button>
-      </section>
-      <section id="screen-selecting" class="hidden">
-        <input type="checkbox" id="toggle-dom-view" />
-        <div id="dom-tree-wrapper" class="hidden">
-          <p id="dom-tree-loading"></p>
-          <p id="dom-tree-error" class="hidden"></p>
-          <p id="dom-tree-truncated" class="hidden"></p>
-          <ul id="dom-tree-root"></ul>
-        </div>
-      </section>
-      <div id="modal-container-new" class="hidden">
-        <input id="input-container-name" />
-        <input type="radio" name="container-type" id="radio-container-single" checked />
-        <input type="radio" name="container-type" id="radio-container-repeating" />
-        <button id="btn-container-confirm"></button>
-      </div>
-    `;
-
-    global.chrome = {
-      runtime: {
-        onMessage: { addListener: (fn) => { capturedListener = fn; } },
-        sendMessage: jest.fn(),
-        getManifest: jest.fn().mockReturnValue({ version: '9.9.9-test' }),
-      },
-      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com/speisekarte' }])) },
-      storage: {
-        session: {
-          get: jest.fn().mockResolvedValue({
-            fields: [{ name: 'Titel', selector: 'h1', attribute: null }],
-            url: 'https://example.com/speisekarte',
-          }),
-          set:    jest.fn().mockResolvedValue(undefined),
-          remove: jest.fn().mockResolvedValue(undefined),
-        },
-      },
-    };
-    global.fetch = jest.fn().mockResolvedValue({ ok: true });
-    global.URL.createObjectURL = jest.fn(() => 'blob:mock');
-    global.URL.revokeObjectURL = jest.fn();
-
-    require('./popup');
-    await flushMicrotasks(); // → STATES.IDLE, fields restored from storage
-  });
-
-  test('is disabled with no fields, enabled once a field exists (flat mode)', () => {
-    expect(document.getElementById('btn-export-config').disabled).toBe(false); // seeded with one field above
-  });
-
-  test('downloads a JSON file containing the exact /generate config plus export metadata', async () => {
-    document.getElementById('btn-export-config').click();
-
-    expect(global.URL.createObjectURL).toHaveBeenCalledTimes(1);
-    const blobArg = global.URL.createObjectURL.mock.calls[0][0];
-    expect(blobArg.type).toBe('application/json');
-
-    const text = await readBlobText(blobArg);
-    const parsed = JSON.parse(text);
-
-    expect(parsed.extensionVersion).toBe('9.9.9-test');
-    expect(parsed.config).toEqual({
-      version: '1',
-      url: 'https://example.com/speisekarte',
-      fields: [{ name: 'Titel', selector: 'h1', attribute: null }],
-      outputFormat: 'Csv',
-      scriptFileName: null,
-      outputFileName: null,
-    });
-  });
-
-  test('exports groups instead of fields once a container has been added', async () => {
-    document.getElementById('btn-mode-container').click();
-    document.getElementById('btn-add-root-container').click();
-    document.getElementById('input-container-name').value = 'Vorspeisen';
-    document.getElementById('radio-container-repeating').checked = true;
-    document.getElementById('btn-container-confirm').click();
-    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
-    await flushMicrotasks();
-
-    expect(document.getElementById('btn-export-config').disabled).toBe(false);
-
-    document.getElementById('btn-export-config').click();
-    const blobArg = global.URL.createObjectURL.mock.calls[0][0];
-    const parsed = JSON.parse(await readBlobText(blobArg));
-
-    expect(parsed.config).toEqual({
-      version: '1',
-      url: 'https://example.com/speisekarte',
-      groups: [{ name: 'Vorspeisen', selector: 'section.menu-category', repeating: true, children: [] }],
-      scriptFileName: null,
-      outputFileName: null,
-    });
-  });
-});
 
 describe('output settings (script/output filename)', () => {
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -6158,113 +3903,6 @@ describe('output settings (script/output filename)', () => {
 
 // ── Download the full trial-run output (Issue #161) ─────────────────────────
 
-describe('download the full trial-run output (Issue #161)', () => {
-  const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-  };
-
-  beforeEach(async () => {
-    jest.resetModules();
-
-    document.body.innerHTML = `
-      <section id="screen-idle" class="hidden">
-        <div id="url-display"></div>
-        <div id="fields-list"></div>
-        <input type="checkbox" id="toggle-include-output-file" />
-        <button id="btn-generate" disabled></button>
-      </section>
-      <section id="screen-generating" class="hidden"></section>
-      <section id="screen-done" class="hidden">
-        <button id="btn-back-to-config"></button>
-        <button id="btn-download"></button>
-        <button id="btn-download-output" class="hidden"></button>
-      </section>
-    `;
-
-    global.chrome = {
-      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
-      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
-      storage: {
-        session: {
-          get: jest.fn().mockResolvedValue({
-            fields: [{ name: 'Titel', selector: 'h1', attribute: null }],
-            url: 'https://example.com',
-          }),
-          set:    jest.fn().mockResolvedValue(undefined),
-          remove: jest.fn().mockResolvedValue(undefined),
-        },
-      },
-    };
-    global.fetch = jest.fn().mockResolvedValueOnce({ ok: true }); // health check
-    global.URL.createObjectURL = jest.fn(() => 'blob:mock');
-    global.URL.revokeObjectURL = jest.fn();
-
-    require('./popup');
-    await flushMicrotasks(); // → STATES.IDLE, fields restored from storage
-  });
-
-  test('the checkbox threads includeOutputFile into the /generate request', async () => {
-    document.getElementById('toggle-include-output-file').checked = true;
-    document.getElementById('toggle-include-output-file').dispatchEvent(new Event('change'));
-
-    global.fetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ script: '# script', outputFile: { fileName: 'output.csv', content: 'Titel\nA\n' } }),
-    });
-    document.getElementById('btn-generate').click();
-    await flushMicrotasks();
-
-    const generateCall = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/generate'));
-    const body = JSON.parse(generateCall[1].body);
-    expect(body.includeOutputFile).toBe(true);
-  });
-
-  test('btn-download-output stays hidden when includeOutputFile was off', async () => {
-    global.fetch.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('# script') });
-    document.getElementById('btn-generate').click();
-    await flushMicrotasks();
-
-    expect(document.getElementById('btn-download-output').classList.contains('hidden')).toBe(true);
-  });
-
-  test('btn-download-output becomes visible with the output filename once includeOutputFile produced a file', async () => {
-    document.getElementById('toggle-include-output-file').checked = true;
-    document.getElementById('toggle-include-output-file').dispatchEvent(new Event('change'));
-
-    global.fetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ script: '# script', outputFile: { fileName: 'output.csv', content: 'Titel\nA\n' } }),
-    });
-    document.getElementById('btn-generate').click();
-    await flushMicrotasks();
-
-    const btn = document.getElementById('btn-download-output');
-    expect(btn.classList.contains('hidden')).toBe(false);
-    expect(btn.textContent).toContain('output.csv');
-  });
-
-  test('clicking btn-download-output downloads a blob with the exact output-file content', async () => {
-    document.getElementById('toggle-include-output-file').checked = true;
-    document.getElementById('toggle-include-output-file').dispatchEvent(new Event('change'));
-
-    global.fetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ script: '# script', outputFile: { fileName: 'output.csv', content: 'Titel\nA\nB\n' } }),
-    });
-    document.getElementById('btn-generate').click();
-    await flushMicrotasks();
-
-    const appendSpy = jest.spyOn(document.body, 'appendChild');
-    document.getElementById('btn-download-output').click();
-
-    const anchor = appendSpy.mock.calls[0][0];
-    expect(anchor.download).toBe('output.csv');
-    const blobArg = global.URL.createObjectURL.mock.calls[0][0];
-    expect(blobArg.type).toBe('text/csv');
-    expect(await readBlobText(blobArg)).toBe('Titel\nA\nB\n');
-    appendSpy.mockRestore();
-  });
-});
 
 // ── Persist and browse run outputs (Issue #202) ─────────────────────────────
 // Full flows against the companion's /configs/{id}/outputs endpoints,
@@ -6272,782 +3910,11 @@ describe('download the full trial-run output (Issue #161)', () => {
 // configurations" panel's own outputs sub-panel — same DOM-mocking pattern
 // as the Issue #141/#161 suites above.
 
-describe('persist and browse run outputs (Issue #202)', () => {
-  const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-  };
 
-  let fetchMock;
-  let savedConfigs;
-  let savedOutputsByConfigId;
 
-  const html = `
-    <section id="screen-idle" class="hidden">
-      <div id="url-display"></div>
-      <div id="fields-list"></div>
-      <input type="checkbox" id="toggle-include-output-file" />
-      <button id="btn-generate" disabled></button>
-      <button id="btn-save-config"></button>
-      <div id="saved-configs-list"></div>
-      <p id="saved-configs-empty" class="hidden"></p>
-    </section>
-    <section id="screen-generating" class="hidden"></section>
-    <section id="screen-done" class="hidden">
-      <button id="btn-back-to-config"></button>
-      <button id="btn-download"></button>
-      <button id="btn-download-output" class="hidden"></button>
-      <button id="btn-save-output" class="hidden"></button>
-    </section>
-    <div id="modal-save-config" class="modal hidden">
-      <input id="input-save-config-name" />
-      <button id="btn-save-config-cancel"></button>
-      <button id="btn-save-config-confirm"></button>
-    </div>
-    <div id="modal-save-output" class="modal hidden">
-      <div id="save-output-picker">
-        <select id="select-save-output-config"></select>
-        <input id="input-save-output-name" />
-      </div>
-      <p id="save-output-no-configs-hint" class="hidden"></p>
-      <button id="btn-save-output-cancel"></button>
-      <button id="btn-save-output-go-to-save-config" class="hidden"></button>
-      <button id="btn-save-output-confirm"></button>
-    </div>
-    <div id="error-toast" class="hidden">
-      <span id="error-toast-message"></span>
-      <button id="btn-report-bug-toast" class="hidden"></button>
-    </div>
-  `;
 
-  beforeEach(async () => {
-    jest.resetModules();
-    document.body.innerHTML = html;
 
-    savedConfigs = [
-      { id: 1, url: 'https://example.com/products', name: 'My config', savedAt: '2026-01-01T00:00:00.000Z' },
-    ];
-    savedOutputsByConfigId = { 1: [] };
 
-    global.chrome = {
-      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
-      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com/products' }])) },
-      storage: {
-        session: {
-          get: jest.fn().mockResolvedValue({
-            fields: [{ name: 'Titel', selector: 'h1', attribute: null }],
-            url: 'https://example.com/products',
-          }),
-          set:    jest.fn().mockResolvedValue(undefined),
-          remove: jest.fn().mockResolvedValue(undefined),
-        },
-      },
-    };
-
-    fetchMock = jest.fn((url, init) => {
-      const method = init?.method || 'GET';
-      const urlStr = String(url);
-
-      if (urlStr.endsWith('/health')) return Promise.resolve({ ok: true });
-      if (urlStr.endsWith('/generate') && method === 'POST') {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ script: '# script', outputFile: { fileName: 'output.csv', content: 'Titel\nA\n' } }),
-        });
-      }
-      if (urlStr.includes('/configs?url=')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(savedConfigs) });
-      }
-      if (urlStr.endsWith('/configs') && method === 'POST') {
-        const created = { id: 2, url: 'https://example.com/products', name: 'New config', savedAt: '2026-01-02T00:00:00.000Z' };
-        savedConfigs = [...savedConfigs, created];
-        return Promise.resolve({ ok: true, status: 201, json: () => Promise.resolve(created) });
-      }
-
-      const outputsListMatch = urlStr.match(/\/configs\/(\d+)\/outputs$/);
-      if (outputsListMatch && method === 'GET') {
-        const configId = Number(outputsListMatch[1]);
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(savedOutputsByConfigId[configId] || []) });
-      }
-      if (outputsListMatch && method === 'POST') {
-        const configId = Number(outputsListMatch[1]);
-        const body = JSON.parse(init.body);
-        const created = {
-          id: 100 + (savedOutputsByConfigId[configId]?.length || 0),
-          savedConfigId: configId, name: body.name, fileName: body.fileName, savedAt: '2026-01-03T00:00:00.000Z',
-        };
-        savedOutputsByConfigId[configId] = [...(savedOutputsByConfigId[configId] || []), created];
-        return Promise.resolve({ ok: true, status: 201, json: () => Promise.resolve(created) });
-      }
-
-      const outputByIdMatch = urlStr.match(/\/configs\/(\d+)\/outputs\/(\d+)$/);
-      if (outputByIdMatch && method === 'GET') {
-        const [, configId, id] = outputByIdMatch.map(Number);
-        const record = (savedOutputsByConfigId[configId] || []).find((o) => o.id === id);
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ...record, content: 'Titel\nA\n' }) });
-      }
-      if (outputByIdMatch && method === 'DELETE') {
-        const [, configId, id] = outputByIdMatch.map(Number);
-        savedOutputsByConfigId[configId] = (savedOutputsByConfigId[configId] || []).filter((o) => o.id !== id);
-        return Promise.resolve({ ok: true, status: 204 });
-      }
-
-      return Promise.reject(new Error(`unexpected fetch: ${method} ${urlStr}`));
-    });
-    global.fetch = fetchMock;
-    global.URL.createObjectURL = jest.fn(() => 'blob:mock');
-    global.URL.revokeObjectURL = jest.fn();
-
-    require('./popup');
-    await flushMicrotasks(); // → STATES.IDLE, fields restored, saved-configs list fetched
-  });
-
-  async function generateWithOutputFile() {
-    document.getElementById('toggle-include-output-file').checked = true;
-    document.getElementById('toggle-include-output-file').dispatchEvent(new Event('change'));
-    document.getElementById('btn-generate').click();
-    await flushMicrotasks();
-  }
-
-  test('btn-save-output stays hidden until includeOutputFile produced a file, same as btn-download-output', async () => {
-    document.getElementById('btn-generate').click();
-    await flushMicrotasks();
-    expect(document.getElementById('btn-save-output').classList.contains('hidden')).toBe(true);
-  });
-
-  test('btn-save-output becomes visible once includeOutputFile produced a file', async () => {
-    await generateWithOutputFile();
-    expect(document.getElementById('btn-save-output').classList.contains('hidden')).toBe(false);
-  });
-
-  test('Save output opens the modal with the saved-configs picker populated', async () => {
-    await generateWithOutputFile();
-
-    document.getElementById('btn-save-output').click();
-
-    expect(document.getElementById('modal-save-output').classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('save-output-picker').classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('select-save-output-config').textContent).toContain('My config');
-  });
-
-  test('confirming Save output POSTs name/fileName/content to /configs/{id}/outputs and closes the modal', async () => {
-    await generateWithOutputFile();
-    document.getElementById('btn-save-output').click();
-
-    document.getElementById('select-save-output-config').value = '1';
-    document.getElementById('input-save-output-name').value = 'First run';
-    document.getElementById('btn-save-output-confirm').click();
-    await flushMicrotasks();
-
-    const postCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/configs/1/outputs') && init?.method === 'POST');
-    expect(postCall).toBeDefined();
-    const body = JSON.parse(postCall[1].body);
-    expect(body).toEqual({ name: 'First run', fileName: 'output.csv', content: 'Titel\nA\n' });
-    expect(document.getElementById('modal-save-output').classList.contains('hidden')).toBe(true);
-  });
-
-  test('the saved-configs list renders an Outputs toggle, which fetches and shows that config\'s own saved outputs', async () => {
-    savedOutputsByConfigId[1] = [
-      { id: 101, savedConfigId: 1, name: 'First run', fileName: 'output.csv', savedAt: '2026-01-03T00:00:00.000Z' },
-    ];
-
-    document.querySelector('.btn-saved-config-outputs-toggle').click();
-    await flushMicrotasks();
-
-    expect(fetchMock).toHaveBeenCalledWith(`http://localhost:5000/configs/1/outputs`);
-    const rows = document.querySelectorAll('.saved-output-row');
-    expect(rows).toHaveLength(1);
-    expect(rows[0].textContent).toContain('First run');
-  });
-
-  test('the outputs sub-panel shows an empty hint when the config has no saved outputs', async () => {
-    document.querySelector('.btn-saved-config-outputs-toggle').click();
-    await flushMicrotasks();
-
-    expect(document.querySelector('.saved-outputs-empty')).not.toBeNull();
-    expect(document.querySelectorAll('.saved-output-row')).toHaveLength(0);
-  });
-
-  test('clicking the Outputs toggle again collapses the sub-panel', async () => {
-    document.querySelector('.btn-saved-config-outputs-toggle').click();
-    await flushMicrotasks();
-    document.querySelector('.btn-saved-config-outputs-toggle').click();
-
-    expect(document.querySelector('.saved-outputs-panel')).toBeNull();
-  });
-
-  test('Download on a saved output fetches its full content and downloads it as a blob', async () => {
-    savedOutputsByConfigId[1] = [
-      { id: 101, savedConfigId: 1, name: 'First run', fileName: 'output.csv', savedAt: '2026-01-03T00:00:00.000Z' },
-    ];
-    document.querySelector('.btn-saved-config-outputs-toggle').click();
-    await flushMicrotasks();
-
-    const appendSpy = jest.spyOn(document.body, 'appendChild');
-    document.querySelector('.btn-saved-output-download').click();
-    await flushMicrotasks();
-
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:5000/configs/1/outputs/101');
-    const anchor = appendSpy.mock.calls.find(([el]) => el.tagName === 'A')?.[0];
-    expect(anchor.download).toBe('output.csv');
-    appendSpy.mockRestore();
-  });
-
-  test('Delete on a saved output requires an inline confirm before the DELETE request is actually sent', async () => {
-    savedOutputsByConfigId[1] = [
-      { id: 101, savedConfigId: 1, name: 'First run', fileName: 'output.csv', savedAt: '2026-01-03T00:00:00.000Z' },
-    ];
-    document.querySelector('.btn-saved-config-outputs-toggle').click();
-    await flushMicrotasks();
-
-    document.querySelector('.btn-saved-output-delete').click();
-    expect(document.querySelector('.btn-saved-output-delete-confirm')).not.toBeNull();
-    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
-
-    document.querySelector('.btn-saved-output-delete-confirm').click();
-    await flushMicrotasks();
-
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:5000/configs/1/outputs/101', { method: 'DELETE' });
-    expect(document.querySelectorAll('.saved-output-row')).toHaveLength(0);
-  });
-});
-
-describe('persist and browse run outputs (Issue #202): no saved config yet', () => {
-  const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-  };
-
-  beforeEach(async () => {
-    jest.resetModules();
-    document.body.innerHTML = `
-      <section id="screen-idle" class="hidden">
-        <div id="url-display"></div>
-        <div id="fields-list"></div>
-        <input type="checkbox" id="toggle-include-output-file" />
-        <button id="btn-generate" disabled></button>
-      </section>
-      <section id="screen-generating" class="hidden"></section>
-      <section id="screen-done" class="hidden">
-        <button id="btn-back-to-config"></button>
-        <button id="btn-download"></button>
-        <button id="btn-download-output" class="hidden"></button>
-        <button id="btn-save-output" class="hidden"></button>
-      </section>
-      <div id="modal-save-config" class="modal hidden">
-        <input id="input-save-config-name" />
-        <button id="btn-save-config-cancel"></button>
-        <button id="btn-save-config-confirm"></button>
-      </div>
-      <div id="modal-save-output" class="modal hidden">
-        <div id="save-output-picker">
-          <select id="select-save-output-config"></select>
-          <input id="input-save-output-name" />
-        </div>
-        <p id="save-output-no-configs-hint" class="hidden"></p>
-        <button id="btn-save-output-cancel"></button>
-        <button id="btn-save-output-go-to-save-config" class="hidden"></button>
-        <button id="btn-save-output-confirm"></button>
-      </div>
-    `;
-
-    global.chrome = {
-      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
-      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com/products' }])) },
-      storage: {
-        session: {
-          get: jest.fn().mockResolvedValue({
-            fields: [{ name: 'Titel', selector: 'h1', attribute: null }],
-            url: 'https://example.com/products',
-          }),
-          set:    jest.fn().mockResolvedValue(undefined),
-          remove: jest.fn().mockResolvedValue(undefined),
-        },
-      },
-    };
-
-    global.fetch = jest.fn((url) => {
-      const urlStr = String(url);
-      if (urlStr.endsWith('/health')) return Promise.resolve({ ok: true });
-      if (urlStr.includes('/configs?url=')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
-      if (urlStr.endsWith('/generate')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ script: '# script', outputFile: { fileName: 'output.csv', content: 'a\n' } }),
-        });
-      }
-      return Promise.reject(new Error(`unexpected fetch: ${urlStr}`));
-    });
-
-    require('./popup');
-    await flushMicrotasks();
-
-    document.getElementById('toggle-include-output-file').checked = true;
-    document.getElementById('toggle-include-output-file').dispatchEvent(new Event('change'));
-    document.getElementById('btn-generate').click();
-    await flushMicrotasks();
-  });
-
-  test('Save output shows a "save configuration first" hint instead of the picker', () => {
-    document.getElementById('btn-save-output').click();
-
-    expect(document.getElementById('save-output-picker').classList.contains('hidden')).toBe(true);
-    expect(document.getElementById('save-output-no-configs-hint').classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('btn-save-output-confirm').classList.contains('hidden')).toBe(true);
-    expect(document.getElementById('btn-save-output-go-to-save-config').classList.contains('hidden')).toBe(false);
-  });
-
-  test('the hint\'s shortcut closes modal-save-output and opens modal-save-config instead', () => {
-    document.getElementById('btn-save-output').click();
-    document.getElementById('btn-save-output-go-to-save-config').click();
-
-    expect(document.getElementById('modal-save-output').classList.contains('hidden')).toBe(true);
-    expect(document.getElementById('modal-save-config').classList.contains('hidden')).toBe(false);
-  });
-});
-
-describe('reportBug end-to-end via the COMPANION_ERROR screen button', () => {
-  let capturedListener;
-
-  const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-  };
-
-  beforeEach(async () => {
-    jest.resetModules();
-
-    document.body.innerHTML = `
-      <section id="screen-error" class="hidden">
-        <button id="btn-report-bug-error"></button>
-      </section>
-    `;
-
-    global.chrome = {
-      runtime: {
-        onMessage: { addListener: (fn) => { capturedListener = fn; } },
-        sendMessage: jest.fn().mockResolvedValue({ background: [{ ts: 't', event: 'SW_EVENT', data: null }], content: [], contentError: null }),
-        getManifest: jest.fn().mockReturnValue({ version: '0.1.0-test' }),
-      },
-      tabs: { query: jest.fn(), create: jest.fn() },
-      storage: {
-        session: {
-          get:    jest.fn().mockResolvedValue({}),
-          set:    jest.fn().mockResolvedValue(undefined),
-          remove: jest.fn().mockResolvedValue(undefined),
-        },
-      },
-    };
-    global.fetch = jest.fn().mockRejectedValue(new Error('Companion nicht erreichbar'));
-    global.URL.createObjectURL = jest.fn(() => 'blob:mock');
-    global.URL.revokeObjectURL = jest.fn();
-
-    require('./popup');
-    await flushMicrotasks(); // → STATES.COMPANION_ERROR, lastReportedError set
-  });
-
-  test('downloads a bug-report.log and opens a prefilled GitHub issue tab', async () => {
-    document.getElementById('btn-report-bug-error').click();
-    await flushMicrotasks();
-
-    expect(global.URL.createObjectURL).toHaveBeenCalled();
-    expect(chrome.tabs.create).toHaveBeenCalledTimes(1);
-
-    const { url } = chrome.tabs.create.mock.calls[0][0];
-    expect(url).toContain('https://github.com/Aventinis/Scraping-Factory/issues/new');
-    expect(decodeURIComponent(url)).toContain('Companion nicht erreichbar');
-    expect(decodeURIComponent(url)).toContain('SW_EVENT');
-  });
-});
-
-describe('COMPANION_ERROR screen: manual companion URL override', () => {
-  const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-  };
-
-  let storedOverride;
-  let storageSet;
-  let storageRemove;
-
-  beforeEach(async () => {
-    jest.resetModules();
-    storedOverride = {};
-
-    document.body.innerHTML = `
-      <section id="screen-error" class="hidden">
-        <p id="error-current-url"></p>
-        <button id="btn-retry"></button>
-        <div class="companion-url-override">
-          <input type="text" id="input-companion-url" />
-          <button id="btn-use-companion-url"></button>
-          <button id="btn-reset-companion-url"></button>
-        </div>
-      </section>
-      <section id="screen-idle" class="hidden">
-        <div id="url-display"></div>
-      </section>
-      <div id="error-toast" class="hidden">
-        <span id="error-toast-message"></span>
-      </div>
-    `;
-
-    storageSet = jest.fn(async (values) => { storedOverride = { ...storedOverride, ...values }; });
-    storageRemove = jest.fn(async () => { storedOverride = {}; });
-
-    global.chrome = {
-      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
-      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
-      storage: {
-        session: {
-          get:    jest.fn().mockResolvedValue({}),
-          set:    jest.fn().mockResolvedValue(undefined),
-          remove: jest.fn().mockResolvedValue(undefined),
-        },
-        local: {
-          get: jest.fn(async () => storedOverride),
-          set: storageSet,
-          remove: storageRemove,
-        },
-      },
-    };
-    // First call (init()'s own health check) always fails, landing on
-    // COMPANION_ERROR regardless of any stored override — the flow under
-    // test starts from there.
-    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 0 });
-
-    require('./popup');
-    await flushMicrotasks(); // → STATES.COMPANION_ERROR
-  });
-
-  afterEach(() => {
-    delete global.chrome;
-    delete global.fetch;
-  });
-
-  test('shows the address the health check just tried', () => {
-    expect(document.getElementById('error-current-url').textContent).toContain('http://localhost:5000');
-  });
-
-  test('an invalid address is rejected with a toast and does not retry', () => {
-    document.getElementById('input-companion-url').value = 'not-a-url';
-    document.getElementById('btn-use-companion-url').click();
-
-    expect(document.getElementById('error-toast').classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('error-toast-message').textContent).toContain('Ungültige Adresse');
-    expect(storageSet).not.toHaveBeenCalled();
-  });
-
-  test('a valid custom address is persisted and used for the retry health check', async () => {
-    global.fetch.mockResolvedValueOnce({ ok: true }); // the retry against the new address succeeds
-    document.getElementById('input-companion-url').value = 'http://localhost:5050/';
-    document.getElementById('btn-use-companion-url').click();
-    await flushMicrotasks();
-
-    expect(storageSet).toHaveBeenCalledWith({ companionUrlOverride: 'http://localhost:5050' });
-    // Issue #141: a successful health check now also kicks off a
-    // fire-and-forget GET /configs?url=... (fetchSavedConfigs) — so the
-    // health request is no longer necessarily the *last* fetch call.
-    expect(global.fetch).toHaveBeenCalledWith('http://localhost:5050/health');
-    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
-  });
-
-  test('a persisted override is reused on the next health check without re-entering it', async () => {
-    storedOverride = { companionUrlOverride: 'http://localhost:5050' };
-    global.fetch.mockResolvedValueOnce({ ok: true });
-
-    document.getElementById('btn-retry').click();
-    await flushMicrotasks();
-
-    expect(global.fetch).toHaveBeenCalledWith('http://localhost:5050/health');
-  });
-
-  test('resetting clears the stored override and retries against the default address', async () => {
-    storedOverride = { companionUrlOverride: 'http://localhost:5050' };
-    global.fetch.mockResolvedValueOnce({ ok: false, status: 0 });
-
-    document.getElementById('btn-reset-companion-url').click();
-    await flushMicrotasks();
-
-    expect(storageRemove).toHaveBeenCalledWith('companionUrlOverride');
-    expect(global.fetch).toHaveBeenLastCalledWith('http://localhost:5000/health');
-  });
-});
-
-describe('Preview toggle (btn-preview)', () => {
-  let capturedListener;
-
-  const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-  };
-
-  beforeEach(async () => {
-    jest.resetModules();
-
-    document.body.innerHTML = `
-      <section id="screen-idle" class="hidden">
-        <div id="url-display"></div>
-        <div class="mode-toggle">
-          <button id="btn-mode-flat" class="mode-btn active"></button>
-          <button id="btn-mode-container" class="mode-btn"></button>
-        </div>
-        <div id="flat-mode-section">
-          <div id="fields-list"></div>
-          <button id="btn-add-field"></button>
-        </div>
-        <div id="container-mode-section" class="hidden">
-          <ul id="group-tree-root"></ul>
-          <button id="btn-add-root-container"></button>
-        </div>
-        <button id="btn-preview" disabled></button>
-        <p id="preview-summary" class="hidden"></p>
-        <button id="btn-generate" disabled></button>
-      </section>
-      <section id="screen-selecting" class="hidden">
-        <input type="checkbox" id="toggle-dom-view" />
-        <div id="dom-tree-wrapper" class="hidden">
-          <p id="dom-tree-loading"></p>
-          <p id="dom-tree-error" class="hidden"></p>
-          <p id="dom-tree-truncated" class="hidden"></p>
-          <ul id="dom-tree-root"></ul>
-        </div>
-      </section>
-      <div id="modal-field-name" class="hidden">
-        <input id="input-field-name" />
-        <button id="btn-field-confirm"></button>
-        <button id="btn-field-cancel"></button>
-      </div>
-      <div id="error-toast" class="hidden">
-        <span id="error-toast-message"></span>
-        <button id="btn-report-bug-toast" class="hidden"></button>
-      </div>
-    `;
-
-    global.chrome = {
-      runtime: {
-        onMessage: { addListener: (fn) => { capturedListener = fn; } },
-        sendMessage: jest.fn(),
-      },
-      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
-      storage: {
-        session: {
-          get: jest.fn().mockResolvedValue({
-            fields: [{ name: 'Titel', selector: 'h1', attribute: null }],
-            url: 'https://example.com',
-          }),
-          set:    jest.fn().mockResolvedValue(undefined),
-          remove: jest.fn().mockResolvedValue(undefined),
-        },
-      },
-    };
-    global.fetch = jest.fn().mockResolvedValue({ ok: true });
-
-    require('./popup');
-    await flushMicrotasks(); // → STATES.IDLE, one field restored from storage
-  });
-
-  test('disabled with no config, enabled once a field exists (seeded above)', () => {
-    expect(document.getElementById('btn-preview').disabled).toBe(false);
-  });
-
-  test('clicking sends PREVIEW_START with the current mode/fields and turns the button active', () => {
-    document.getElementById('btn-preview').click();
-
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
-      type: 'PREVIEW_START',
-      mode: 'flat',
-      fields: [{ name: 'Titel', selector: 'h1' }],
-    });
-    expect(document.getElementById('btn-preview').classList.contains('active')).toBe(true);
-  });
-
-  test('clicking again sends PREVIEW_STOP and turns the button back off', () => {
-    document.getElementById('btn-preview').click();
-    chrome.runtime.sendMessage.mockClear();
-
-    document.getElementById('btn-preview').click();
-
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'PREVIEW_STOP' });
-    expect(document.getElementById('btn-preview').classList.contains('active')).toBe(false);
-  });
-
-  test('a PREVIEW_RESULT while active fills in the summary line', () => {
-    document.getElementById('btn-preview').click();
-    capturedListener({ type: 'PREVIEW_RESULT', total: 4, empty: [], truncated: false });
-
-    const summary = document.getElementById('preview-summary');
-    expect(summary.classList.contains('hidden')).toBe(false);
-    expect(summary.textContent).toContain('4 Element(e) markiert');
-    expect(summary.classList.contains('warn')).toBe(false);
-  });
-
-  test('a PREVIEW_RESULT with empty fields lists them and adds the warn style', () => {
-    document.getElementById('btn-preview').click();
-    capturedListener({ type: 'PREVIEW_RESULT', total: 1, empty: ['Preis'], truncated: false });
-
-    const summary = document.getElementById('preview-summary');
-    expect(summary.textContent).toContain('ohne Treffer: Preis');
-    expect(summary.classList.contains('warn')).toBe(true);
-  });
-
-  test('PREVIEW_UNAVAILABLE turns preview off and shows a toast', () => {
-    document.getElementById('btn-preview').click();
-    capturedListener({ type: 'PREVIEW_UNAVAILABLE', reason: 'no content script' });
-
-    expect(document.getElementById('btn-preview').classList.contains('active')).toBe(false);
-    const toast = document.getElementById('error-toast');
-    expect(toast.classList.contains('hidden')).toBe(false);
-    expect(toast.textContent).toContain('nicht möglich');
-    // Regression coverage: setLastError() alone doesn't reveal the button —
-    // showToast() needs its own context argument too (see the analogous
-    // SELECTION_UNAVAILABLE regression test).
-    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
-  });
-
-  test('adding a new field while preview is active stops it first', async () => {
-    document.getElementById('btn-preview').click();
-    expect(document.getElementById('btn-preview').classList.contains('active')).toBe(true);
-    chrome.runtime.sendMessage.mockClear();
-
-    document.getElementById('btn-add-field').click(); // → STATES.SELECTING
-
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'PREVIEW_STOP' });
-    expect(document.getElementById('btn-preview').classList.contains('active')).toBe(false);
-  });
-
-  test('switching mode while preview is active stops it first', () => {
-    document.getElementById('btn-preview').click();
-    chrome.runtime.sendMessage.mockClear();
-
-    document.getElementById('btn-mode-container').click();
-
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'PREVIEW_STOP' });
-  });
-
-  test('removing a field while preview is active stops it first', () => {
-    document.getElementById('btn-preview').click();
-    chrome.runtime.sendMessage.mockClear();
-
-    document.querySelector('.btn-remove-field').click();
-
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'PREVIEW_STOP' });
-  });
-});
-
-describe('robots.txt check (btn-check-robots)', () => {
-  const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-  };
-
-  beforeEach(async () => {
-    jest.resetModules();
-
-    document.body.innerHTML = `
-      <section id="screen-idle" class="hidden">
-        <div id="url-display"></div>
-        <button id="btn-check-robots"></button>
-        <p id="robots-txt-result" class="hidden"></p>
-      </section>
-      <div id="error-toast" class="hidden">
-        <span id="error-toast-message"></span>
-        <button id="btn-report-bug-toast" class="hidden"></button>
-      </div>
-    `;
-
-    global.chrome = {
-      runtime: {
-        onMessage: { addListener: () => {} },
-        sendMessage: jest.fn(),
-      },
-      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com/produkte' }])) },
-      storage: {
-        session: {
-          get:    jest.fn().mockResolvedValue({}),
-          set:    jest.fn().mockResolvedValue(undefined),
-          remove: jest.fn().mockResolvedValue(undefined),
-        },
-      },
-    };
-    global.fetch = jest.fn().mockResolvedValue({ ok: true });
-
-    require('./popup');
-    await flushMicrotasks(); // → STATES.IDLE
-  });
-
-  test('starts out hidden with the default label', () => {
-    const result = document.getElementById('robots-txt-result');
-    expect(result.classList.contains('hidden')).toBe(true);
-    expect(document.getElementById('btn-check-robots').textContent).toBe('robots.txt prüfen');
-  });
-
-  test('clicking sends CHECK_ROBOTS_TXT and shows a disallowed result in red', async () => {
-    chrome.runtime.sendMessage.mockResolvedValue({
-      ok: true, robotsUrl: 'https://example.com/robots.txt', path: '/produkte',
-      notFound: false, allowed: false, matchedRule: { type: 'disallow', pattern: '/produkte' },
-    });
-
-    document.getElementById('btn-check-robots').click();
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'CHECK_ROBOTS_TXT' });
-    expect(document.getElementById('btn-check-robots').textContent).toBe('Prüfe robots.txt…');
-    expect(document.getElementById('btn-check-robots').disabled).toBe(true);
-
-    await flushMicrotasks();
-
-    const result = document.getElementById('robots-txt-result');
-    expect(result.classList.contains('hidden')).toBe(false);
-    expect(result.classList.contains('robots-txt-disallowed')).toBe(true);
-    expect(result.textContent).toContain('Verboten');
-    expect(result.textContent).toContain('/produkte');
-    expect(document.getElementById('btn-check-robots').disabled).toBe(false);
-  });
-
-  test('an allowed result is shown in green', async () => {
-    chrome.runtime.sendMessage.mockResolvedValue({
-      ok: true, robotsUrl: 'https://example.com/robots.txt', path: '/produkte',
-      notFound: false, allowed: true, matchedRule: null,
-    });
-
-    document.getElementById('btn-check-robots').click();
-    await flushMicrotasks();
-
-    const result = document.getElementById('robots-txt-result');
-    expect(result.classList.contains('robots-txt-allowed')).toBe(true);
-    expect(result.textContent).toContain('Erlaubt');
-  });
-
-  test('no robots.txt found (404) is shown as allowed', async () => {
-    chrome.runtime.sendMessage.mockResolvedValue({
-      ok: true, robotsUrl: 'https://example.com/robots.txt', path: '/produkte',
-      notFound: true, allowed: true, matchedRule: null,
-    });
-
-    document.getElementById('btn-check-robots').click();
-    await flushMicrotasks();
-
-    const result = document.getElementById('robots-txt-result');
-    expect(result.classList.contains('robots-txt-allowed')).toBe(true);
-    expect(result.textContent).toContain('Keine robots.txt gefunden');
-  });
-
-  test('a failed check is shown in gray with the error message', async () => {
-    chrome.runtime.sendMessage.mockResolvedValue({ ok: false, error: 'Keine aktive Seite gefunden.' });
-
-    document.getElementById('btn-check-robots').click();
-    await flushMicrotasks();
-
-    const result = document.getElementById('robots-txt-result');
-    expect(result.classList.contains('robots-txt-unknown')).toBe(true);
-    expect(result.textContent).toContain('Keine aktive Seite gefunden.');
-  });
-
-  test('a rejected sendMessage is handled the same way as an {ok:false} result', async () => {
-    chrome.runtime.sendMessage.mockRejectedValue(new Error('No content script'));
-
-    document.getElementById('btn-check-robots').click();
-    await flushMicrotasks();
-
-    const result = document.getElementById('robots-txt-result');
-    expect(result.classList.contains('robots-txt-unknown')).toBe(true);
-    expect(result.textContent).toContain('No content script');
-    expect(document.getElementById('btn-check-robots').disabled).toBe(false);
-  });
-});
 
 describe('Language selector (lang-select)', () => {
   // initI18n() adds a few extra microtask hops in front of the rest of
@@ -7056,7 +3923,7 @@ describe('Language selector (lang-select)', () => {
   // usual 5 keeps this reliably past STATES.IDLE without depending on
   // exact tick counts.
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 15; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   function baseHtml() {
@@ -7212,7 +4079,7 @@ describe('Network recording toggle (btn-api-capture)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -7355,7 +4222,7 @@ describe('API-mode candidate search (btn-api-search, Issue #53 Phase 4)', () => 
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -7479,7 +4346,7 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -7867,7 +4734,7 @@ describe('API-tree wiring end-to-end (Issue #54, Phase A5)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -8149,7 +5016,7 @@ describe('API-mode field transforms (Issue #84 follow-up)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -8376,7 +5243,7 @@ describe('recorded-endpoints panel and pool-derived value-list autofill', () => 
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -8582,7 +5449,7 @@ describe('recorded-endpoints panel and pool-derived value-list autofill', () => 
 
 describe('API-Mode third mode integration (Issue #53 Phase 6)', () => {
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   const seededApiConfig = {
@@ -8724,7 +5591,7 @@ describe('API-Mode range format presets (bug/api-range-format follow-up)', () =>
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   beforeEach(async () => {
@@ -8922,7 +5789,7 @@ describe('API-Mode request-body tree end-to-end (Issue #55, Phase B4)', () => {
   let capturedListener;
 
   const flushMicrotasks = async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   const GRAPHQL_ENTRY = {

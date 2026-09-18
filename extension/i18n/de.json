@@ -112,6 +112,8 @@
     "proxyToggle": "Proxy verwenden",
     "proxyEnvVarLabel": "Proxy-Liste (Env-Var)",
     "proxyHint": "Der Name einer Umgebungsvariable mit einer durch Kommas getrennten Liste von Proxy-URLs (z. B. \"http://user:pass@host:port\"), nicht die Adressen selbst — bei mehreren Proxys wechselt das Skript bei jeder Anfrage reihum durch.",
+    "externalConfigToggle": "Bearbeitbare Konfigurationsdatei (XML)",
+    "externalConfigHint": "Ermöglicht es, die Start-URL(s), den Namen der Ausgabedatei, den Ausgabenamen eines Feldes oder die Werteliste eines API-Parameters später über eine kleine XML-Datei anzupassen — ohne die .py-Datei zu bearbeiten oder die Erweiterung erneut zu öffnen. Die Datei existiert noch nicht; das Skript legt sie beim ersten echten Lauf neben sich selbst an.",
     "paginationToggle": "Pagination aktivieren",
     "paginationKindNextLink": "\"Weiter\"-Link",
     "paginationKindPageNumber": "Seiten-Nummer-URL",
@@ -297,8 +299,9 @@
       "nameLabel": "Name des Outputs (z. B. \"Lauf vor Proxy-Fix\")",
       "namePlaceholder": "Name",
       "save": "Speichern",
-      "noConfigsHint": "Für diese Seite gibt es noch keine gespeicherte Konfiguration — speichere zuerst die aktuelle Konfiguration, um diesen Output damit zu verknüpfen.",
-      "saveConfigShortcut": "Konfiguration speichern"
+      "noConfigsHint": "Für diese Seite gibt es noch keine gespeicherte Konfiguration — gib unten einen Namen an, sie wird dann erstellt und mit diesem Output verknüpft.",
+      "configNameLabel": "Name der Konfiguration (z. B. \"Produktliste\")",
+      "configNamePlaceholder": "Name"
     },
     "matchCount": {
       "found": "{count} Element(e) gefunden"

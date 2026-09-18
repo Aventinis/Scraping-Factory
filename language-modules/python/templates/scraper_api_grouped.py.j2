@@ -10,10 +10,10 @@ import json
 import datetime
 import itertools
 import re
-{{~ if needs_os_import ~}}
+{{~ if needs_os_import || external_config.enabled ~}}
 import os
 {{~ end ~}}
-{{~ if proxy.enabled || hardening.enabled ~}}
+{{~ if proxy.enabled || hardening.enabled || external_config.enabled ~}}
 import sys
 {{~ end ~}}
 {{~ if hardening.has_baseline ~}}
@@ -50,6 +50,94 @@ HEADERS = {{ headers_literal }}
 EMBEDDED_JSON_SOURCE = {{ embedded_json_source_literal }}
 
 OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else }}xml{{ end }}"
+
+{{~ if external_config.enabled ~}}
+# Issue #178: see scraper.py.j2's own doc comment for the full rationale — an
+# opt-in sidecar XML file next to the *script* itself lets a non-technical
+# user tweak the output filename and any fixed-value-list API parameter's
+# values without touching this .py file or reopening the extension. The
+# request URL/path itself isn't editable this way (see URL_TEMPLATE) — only
+# a StaticListSource parameter's own value list is, referenced by name. The
+# response tree's own group/field names aren't editable this way either (see
+# the issue's own open question on mapping a nested tree onto a flat-ish XML
+# structure).
+EXIT_EXTERNAL_CONFIG_INVALID = 3
+EXTERNAL_CONFIG_PATH = os.path.splitext(os.path.abspath(__file__))[0] + ".config.xml"
+_EXTERNAL_CONFIG_STATIC_LIST_PARAMS = {p["name"] for p in PARAMETERS if p["source"]["kind"] == "staticList"}
+
+
+def _external_config_error(message):
+    print(f"ERROR: The external config file '{EXTERNAL_CONFIG_PATH}' {message}", file=sys.stderr)
+    sys.exit(EXIT_EXTERNAL_CONFIG_INVALID)
+
+
+def _write_default_external_config():
+    root = ET.Element("ScrapingFactoryConfig")
+    ET.SubElement(root, "OutputFileName").text = "{{ output_filename }}"
+    params_el = ET.SubElement(root, "ApiParameters")
+    for p in PARAMETERS:
+        if p["source"]["kind"] != "staticList":
+            continue
+        param_el = ET.SubElement(params_el, "Parameter")
+        param_el.set("name", p["name"])
+        for value in p["source"]["values"]:
+            ET.SubElement(param_el, "Value").text = value
+    try:
+        tree = ET.ElementTree(root)
+        ET.indent(tree)
+        tree.write(EXTERNAL_CONFIG_PATH, encoding="utf-8", xml_declaration=True)
+    except OSError as e:
+        print(f"Warning: could not create default external config file '{EXTERNAL_CONFIG_PATH}': {e}", file=sys.stderr)
+
+
+def _load_external_config():
+    if not os.path.exists(EXTERNAL_CONFIG_PATH):
+        _write_default_external_config()
+        return {}
+    try:
+        root = ET.parse(EXTERNAL_CONFIG_PATH).getroot()
+    except ET.ParseError as e:
+        _external_config_error(f"is not valid XML: {e}")
+    if root.tag != "ScrapingFactoryConfig":
+        _external_config_error(f"has an unexpected root element '<{root.tag}>' (expected '<ScrapingFactoryConfig>').")
+
+    result = {}
+
+    output_el = root.find("OutputFileName")
+    if output_el is not None:
+        name = (output_el.text or "").strip()
+        if not name:
+            _external_config_error("has an empty <OutputFileName> element.")
+        result["output_file_name"] = name
+
+    param_values = {}
+    for param_el in root.findall("./ApiParameters/Parameter"):
+        name = param_el.get("name")
+        if not name:
+            _external_config_error("has a <Parameter> element missing its required 'name' attribute.")
+        if name not in _EXTERNAL_CONFIG_STATIC_LIST_PARAMS:
+            _external_config_error(
+                f"has a <Parameter name=\"{name}\"> that doesn't match any known fixed-value-list "
+                "parameter — was the scraper regenerated since this file was created?"
+            )
+        values = [(v.text or "").strip() for v in param_el.findall("Value")]
+        values = [v for v in values if v]
+        if not values:
+            _external_config_error(f"has a <Parameter name=\"{name}\"> with no non-empty <Value> entries.")
+        param_values[name] = values
+    result["api_parameter_values"] = param_values
+
+    return result
+
+
+_EXTERNAL_CONFIG = _load_external_config()
+if _EXTERNAL_CONFIG.get("output_file_name"):
+    OUTPUT_PATH = _EXTERNAL_CONFIG["output_file_name"] + OUTPUT_PATH[OUTPUT_PATH.rindex("."):]
+for _param in PARAMETERS:
+    _override = _EXTERNAL_CONFIG.get("api_parameter_values", {}).get(_param["name"])
+    if _override:
+        _param["source"]["values"] = _override
+{{~ end ~}}
 
 {{~ if change_detection.enabled ~}}
 # Issue #87 (change detection): every *_ENV_VAR below is an environment-
@@ -113,6 +201,50 @@ HARDENING = {{ hardening.checks_literal }}
 # noResult/nullRate. Populated even when no "blocking" check is configured;
 # the runtime cost of appending an already-in-memory string is negligible.
 _BLOCKING_RESPONSES = []
+
+# Issue #133 (required-fields check) + #204 (Api-mode tree-shape follow-up):
+# matched globally by tag name anywhere in the built tree (same convention
+# the nullRate check and container mode's own required-fields follow-up
+# already established for this exact ambiguity) — REQUIRED_FIELD_NAMES is
+# the plain list of names to check, empty when no "requiredFields" check is
+# configured, in which case _extract_api_group()'s own call site below is a
+# guaranteed no-op.
+_REQUIRED_FIELDS_CHECK = next((c for c in HARDENING if c["kind"] == "requiredFields"), None)
+REQUIRED_FIELD_NAMES = _REQUIRED_FIELDS_CHECK["fieldNames"] if _REQUIRED_FIELDS_CHECK else []
+_required_fields_dropped_count = 0
+
+
+# Called from _extract_api_group() right after one instance is fully built
+# — checks whether any required field anywhere in this instance's own
+# subtree is empty, dropping the whole instance if so. _extract_api_group()
+# already recurses bottom-up, so this naturally drops the nearest enclosing
+# repeating instance, whichever nesting level actually contains the
+# problem — an inner group's own bad instance is dropped without disturbing
+# its outer group. A required field name matching nothing in this subtree
+# is a silent no-op (typo/renamed field), the same "skip rather than error"
+# convention the nullRate check's own zero-match case already uses.
+def _passes_required_fields(el):
+    global _required_fields_dropped_count
+    for name in REQUIRED_FIELD_NAMES:
+        for match in el.iter(name):
+            if not (match.text or "").strip():
+                _required_fields_dropped_count += 1
+                return False
+    return True
+
+
+# Unlike flat mode's "N of M rows" message, dropping can happen at more
+# than one nesting level in one run, so there's no single well-defined "of
+# M" denominator here — a plain count is reported instead.
+def _report_required_fields_drops():
+    if _REQUIRED_FIELDS_CHECK is None or _required_fields_dropped_count == 0:
+        return False
+    message = f"Dropped {_required_fields_dropped_count} element(s) missing a required field."
+    if _REQUIRED_FIELDS_CHECK["severity"] == "Error":
+        print(f"ERROR: {message}", file=sys.stderr)
+        return True
+    print(f"WARNING: {message}", file=sys.stderr)
+    return False
 
 {{~ if hardening.has_baseline ~}}
 # Issue #131 (baseline check): a small sidecar file next to the script's own
@@ -502,6 +634,19 @@ def _extract_embedded_json(response):
 def _extract_api_group(scope, node):
     if "children" in node:
         instances = _resolve_items(scope, node["path"])
+{{~ if hardening.enabled ~}}
+        # Issue #204: ApiGroup has no explicit "repeating" flag (see its own
+        # doc comment) — whether this node's Path resolved to a JSON array
+        # (N droppable, row-like instances) or an object/scalar (at most
+        # one, structurally-expected instance) is re-derived here the same
+        # way _resolve_items itself infers it, so required-fields dropping
+        # below only ever applies to a genuinely repeating group's own bad
+        # instance — mirroring container mode's own "if node['repeating']"
+        # gate on _passes_required_fields (a non-repeating instance has no
+        # "row" to drop without removing structurally-expected content).
+        _raw_matches = _resolve_json_path(scope, node["path"])
+        _is_repeating_instance = bool(_raw_matches) and all(isinstance(v, list) for v in _raw_matches)
+{{~ end ~}}
         elements = []
         for instance in instances:
             el = ET.Element(node["name"])
@@ -511,6 +656,10 @@ def _extract_api_group(scope, node):
                     el.extend(result)
                 else:
                     el.append(result)
+{{~ if hardening.enabled ~}}
+            if _is_repeating_instance and not _passes_required_fields(el):
+                continue
+{{~ end ~}}
             elements.append(el)
         return elements
 
@@ -658,14 +807,13 @@ def main():
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(_xml_to_dict(root), f, ensure_ascii=False, indent=2)
     count = len(root.findall(".//*"))
-    print(f"Done — {count} elements written to {{ output_filename }}.json")
 {{~ else ~}}
     tree = ET.ElementTree(root)
     ET.indent(tree)
     tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
     count = len(root.findall(".//*"))
-    print(f"Done — {count} elements written to {{ output_filename }}.xml")
 {{~ end ~}}
+    print(f"Done — {count} elements written to {OUTPUT_PATH}")
 {{~ if change_detection.enabled ~}}
     with open(OUTPUT_PATH, "r", encoding="utf-8") as f:
         new_content = f.read()
@@ -673,7 +821,7 @@ def main():
         _notify_change(previous_content, new_content)
 {{~ end ~}}
 {{~ if hardening.enabled ~}}
-    hardening_failed = _run_hardening_checks(root)
+    hardening_failed = _run_hardening_checks(root) or _report_required_fields_drops()
 {{~ if hardening.has_baseline ~}}
     if not hardening_failed:
         _write_baseline(count)

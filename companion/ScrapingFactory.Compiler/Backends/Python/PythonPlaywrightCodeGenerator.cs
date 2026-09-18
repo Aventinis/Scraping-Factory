@@ -94,6 +94,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         var proxy = PythonProxyLiteral.BuildContext(plan.Proxy);
         var hardening = PythonHardeningLiteral.BuildContext(plan.Hardening);
         var pagination = PythonPaginationLiteral.BuildContext(plan.Pagination);
+        var externalConfig = PythonExternalConfigLiteral.BuildContext(plan.ExternalConfig);
 
         // Container-Mode: login/wait steps (if any) still run first — only
         // the extraction phase after them differs (group tree → XML instead
@@ -124,6 +125,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
                 proxy,
                 hardening,
                 pagination,
+                external_config = externalConfig,
             });
         }
 
@@ -150,6 +152,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
             proxy,
             hardening,
             pagination,
+            external_config = externalConfig,
         });
     }
 
