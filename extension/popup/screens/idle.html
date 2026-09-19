@@ -21,6 +21,7 @@
       <button id="btn-mode-flat" class="mode-btn active" type="button" data-i18n="idle.modeFlat"></button>
       <button id="btn-mode-container" class="mode-btn" type="button" data-i18n="idle.modeContainer"></button>
       <button id="btn-mode-api" class="mode-btn" type="button" data-i18n="idle.modeApi"></button>
+      <button id="btn-mode-combined" class="mode-btn" type="button" data-i18n="idle.modeCombined"></button>
     </div>
 
     <!-- Engine + browser actions (Issue #41/#42, Phase 5): applies across
@@ -28,7 +29,7 @@
          sections — same "global setting" treatment as output-settings
          below. Browser-actions run before extraction regardless of mode
          (see companion ScrapingPlanBuilder). -->
-    <div class="engine-section">
+    <div id="engine-section" class="engine-section">
       <div class="row-label" data-i18n="idle.engineLabel"></div>
       <div class="mode-toggle" style="margin-bottom: 8px;">
         <div class="mode-toggle-thumb"></div>
@@ -122,6 +123,22 @@
           <button id="btn-api-config-discard" class="btn-secondary btn-tiny" type="button" data-i18n="common.discard"></button>
         </div>
       </div>
+    </div>
+
+    <!-- Combined mode (Issue #239): merges several of the user's own already-
+         saved configurations (Issue #141) — which may target entirely
+         different sites/modes/engines — into one generated script. Sourced
+         from every saved configuration regardless of host
+         (fetchAllSavedConfigs), not just the current page's, since a
+         component doesn't have to match the page currently open. -->
+    <div id="combined-mode-section" class="hidden">
+      <p class="preview-summary" data-i18n="idle.combinedHint"></p>
+      <ul id="combined-components-list" class="group-tree"></ul>
+      <div class="actions">
+        <select id="select-combined-add-component"></select>
+        <button id="btn-combined-add-component" class="btn-secondary btn-tiny" type="button" data-i18n="idle.combinedAddBtn"></button>
+      </div>
+      <p id="combined-no-saved-configs-hint" class="preview-summary hidden" data-i18n="idle.combinedNoSavedConfigsHint"></p>
     </div>
 
     <div class="output-settings">

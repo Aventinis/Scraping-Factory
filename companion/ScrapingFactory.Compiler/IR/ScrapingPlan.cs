@@ -46,4 +46,27 @@ public sealed class ScrapingPlan
     // ScrapingConfig.ExternalConfig by ScrapingPlanBuilder (null defaults to
     // false here, same as PersistentSession above).
     public bool ExternalConfig { get; init; }
+
+    // Combined mode (Issue #239): forces a component's already-built,
+    // already-validated plan to a fixed OutputFormat/OutputFileBaseName —
+    // used by Program.cs's /generate handler to make every component write
+    // a predictably-named output.json, mergeable into one combined result,
+    // without re-running ScrapingPlanBuilder/ScrapingPlanValidator against a
+    // second, forced ScrapingConfig. A plain object-initializer copy rather
+    // than a C# `with` expression, since ScrapingPlan (like ScrapingConfig)
+    // is a sealed class, not a record.
+    public ScrapingPlan With(OutputFormat outputFormat, string outputFileBaseName) => new()
+    {
+        Steps = Steps,
+        OutputFormat = outputFormat,
+        Engine = Engine,
+        ScriptFileName = ScriptFileName,
+        OutputFileBaseName = outputFileBaseName,
+        ChangeDetection = ChangeDetection,
+        Proxy = Proxy,
+        Hardening = Hardening,
+        Pagination = Pagination,
+        PersistentSession = PersistentSession,
+        ExternalConfig = ExternalConfig,
+    };
 }

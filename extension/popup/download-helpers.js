@@ -10,8 +10,17 @@ const { createLogger } =
   typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
 const log = createLogger('SF:Popup');
 
+const { t } =
+  typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
+
 const { sanitizeFileNameBase, buildConfigExport } =
   typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
+
+const { resolveCombinedComponents } =
+  typeof require !== 'undefined' ? require('./companion-client') : self.SFCompanionClient;
+
+const { showToast } =
+  typeof require !== 'undefined' ? require('./toast') : self.SFToast;
 
 function triggerDownload(bridge) {
   const state = bridge.getState();
@@ -61,14 +70,29 @@ function triggerOutputFileDownload(bridge) {
 // Lets a user hand over the current Fields/Groups configuration when
 // reporting a selector problem, without having to describe their setup by
 // hand — e.g. attached to a "Report bug" GitHub issue or shared directly.
-function downloadConfigExport(bridge) {
+// Async since Combined mode (Issue #239) needs to resolve each component's
+// full config live (GET /configs/{id}) before it can be exported — every
+// other mode resolves synchronously and awaits nothing extra.
+async function downloadConfigExport(bridge) {
   const state = bridge.getState();
   const manifest = typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest() : {};
+
+  let combinedComponents = null;
+  if (state.mode === 'combined') {
+    try {
+      combinedComponents = await resolveCombinedComponents(state.combinedComponents || []);
+    } catch (err) {
+      log('DOWNLOAD scraping-config.json COMBINED RESOLVE FAIL', err.message);
+      showToast(t('toast.generationError', { message: err.message }), 'Export configuration');
+      return;
+    }
+  }
+
   const exportObj = buildConfigExport(
     state.url, state.mode, state.fields, state.groups, manifest, state.apiConfig,
     state.scriptFileName, state.outputFileName, state.engine, state.browserActions, state.includeDataPreview,
     state.useJsonOutput, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
-    state.pagination, state.persistentSession, false, state.externalConfig,
+    state.pagination, state.persistentSession, false, state.externalConfig, combinedComponents,
   );
   log('DOWNLOAD scraping-config.json', exportObj);
 

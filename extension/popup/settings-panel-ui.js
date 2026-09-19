@@ -65,7 +65,7 @@ function renderSettingsPanel(bridge) {
     // Issue #174: opt-in classic multi-page pagination — hidden entirely for
     // API mode (which already has its own page-parameter mechanism via a
     // Number RangeSource), same reasoning as #additional-urls-row.
-    document.getElementById('pagination-toggle-row')?.classList.toggle('hidden', state.mode === 'api');
+    document.getElementById('pagination-toggle-row')?.classList.toggle('hidden', state.mode === 'api' || state.mode === 'combined');
     const paginationToggle = document.getElementById('toggle-pagination');
     if (paginationToggle) paginationToggle.checked = state.pagination.enabled;
     document.getElementById('pagination-config')?.classList.toggle('hidden', !state.pagination.enabled);

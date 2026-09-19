@@ -136,6 +136,19 @@ public sealed class ScrapingConfig
     // the runtime side of this. Null/false is today's exact behavior (no
     // extra file, nothing re-read at runtime).
     public bool? ExternalConfig { get; init; }
+
+    // Combined mode (Issue #239): mutually exclusive with Fields/Groups/Api
+    // AND with AdditionalUrls/Pagination/BrowserActions/ChangeDetection/
+    // Proxy/Hardening/PersistentSession/ExternalConfig on THIS (outer)
+    // config — all of those are component-level concerns only (each
+    // CombinedComponentConfig.Config carries its own). At least two
+    // components required; a component whose own Config.Combined is set is
+    // rejected (no nesting) — see Program.cs's /generate handler for all of
+    // the above. Each component is generated through the exact same
+    // pipeline a standalone request would use, then forced to
+    // OutputFormat.Json (see ScrapingPlan.With) so every component's output
+    // can be merged into one combined JSON object, keyed by component name.
+    public List<CombinedComponentConfig>? Combined { get; init; }
 }
 
 public sealed class ScrapingField

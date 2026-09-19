@@ -54,6 +54,13 @@ async function checkCompanion(bridge) {
     // once (or if) it resolves, no need to await/block the IDLE transition
     // on it.
     if (url) bridge.fetchSavedConfigs(url);
+    // Issue #239: fetched unconditionally alongside the hostname-scoped list
+    // above (not gated on the restored mode actually being 'combined') —
+    // simpler than chasing the exact ordering between this health check and
+    // session-restore's own mode restoration, and just as cheap/harmless as
+    // fetchSavedConfigs itself when Combined mode never ends up being used
+    // this session.
+    bridge.fetchAllSavedConfigs();
   } catch (err) {
     log('HEALTH_CHECK FAIL', err.message);
     setLastError(err.message, 'Companion connection');
@@ -120,15 +127,46 @@ function buildVerificationErrorMessage(data) {
   return data?.error || t('toast.verificationFailed');
 }
 
+// Issue #239: a component in _state.combinedComponents only ever stores
+// {savedConfigId, name} — its full underlying ScrapingConfig is resolved
+// live here (GET /configs/{id}) at generate/save/export time, never cached
+// from whenever it was picked, so editing/re-saving the source config
+// elsewhere is picked up automatically. Throws (naming the offending
+// component) if a referenced saved configuration no longer exists — callers
+// surface that the same way any other generation failure already is.
+async function resolveCombinedComponents(components) {
+  const resolved = [];
+  for (const component of components) {
+    const res = await fetch(`${getResolvedCompanionUrl()}/configs/${component.savedConfigId}`);
+    if (!res.ok) throw new Error(t('toast.combinedComponentUnresolvable', { name: component.name }));
+    const record = await res.json();
+    resolved.push({ name: component.name, config: record.config, savedConfigId: component.savedConfigId });
+  }
+  return resolved;
+}
+
 async function generate(bridge) {
   bridge.stopPreviewIfActive();
   bridge.setState(STATES.GENERATING);
   const state = bridge.getState();
+
+  let combinedComponents = null;
+  if (state.mode === 'combined') {
+    try {
+      combinedComponents = await resolveCombinedComponents(state.combinedComponents || []);
+    } catch (err) {
+      log('GENERATE COMBINED RESOLVE FAIL', err.message);
+      bridge.setState(STATES.IDLE);
+      showToast(t('toast.generationError', { message: err.message }), 'Script generation');
+      return;
+    }
+  }
+
   const config = buildScrapingConfig(
     state.url, state.mode, state.fields, state.groups, state.apiConfig,
     state.scriptFileName, state.outputFileName, state.engine, state.browserActions, state.includeDataPreview,
     state.useJsonOutput, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
-    state.pagination, state.persistentSession, state.includeOutputFile, state.externalConfig,
+    state.pagination, state.persistentSession, state.includeOutputFile, state.externalConfig, combinedComponents,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
@@ -228,7 +266,7 @@ function wireCompanionErrorEvents(bridge) {
 }
 
   return {getResolvedCompanionUrl, checkCompanion, useCustomCompanionUrl, resetCustomCompanionUrl,
-    checkRobotsTxt, buildVerificationErrorMessage, generate,
+    checkRobotsTxt, buildVerificationErrorMessage, generate, resolveCombinedComponents,
     renderCompanionErrorScreen, wireCompanionErrorEvents,};
 })();
 

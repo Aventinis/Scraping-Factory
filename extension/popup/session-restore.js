@@ -48,6 +48,7 @@ const SFSessionRestore = (function () {
     if (stored.pendingBrowserActionField)   next = { ...next, pendingBrowserActionField: stored.pendingBrowserActionField };
     if (stored.apiConfigDraft)        next = { ...next, apiConfigDraft: stored.apiConfigDraft };
     if (stored.apiConfig)             next = { ...next, apiConfig: stored.apiConfig };
+    if (Array.isArray(stored.combinedComponents)) next = { ...next, combinedComponents: stored.combinedComponents };
 
     // Issue #183: a returning user with something already configured in the
     // "Monitoring" section shouldn't have to re-expand it just to see it.

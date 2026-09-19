@@ -94,11 +94,28 @@ public class SavedConfigsEndpointTests : IDisposable
         Assert.Equal("Config A", list[0].GetProperty("name").GetString());
     }
 
+    // Issue #239: url is now optional — omitting it lists every saved
+    // config regardless of host, needed by Combined mode's component picker
+    // (a component can come from any previously-scraped site). Passing url
+    // keeps the exact hostname-scoped behavior Get_ByUrl_ReturnsSavedConfigsForSameHost
+    // above already covers.
     [Fact]
-    public async Task Get_WithoutUrlQueryParam_Returns400()
+    public async Task Get_WithoutUrlQueryParam_ReturnsAllSavedConfigsAcrossHosts()
     {
+        await _client.PostAsync("/configs", JsonBody(new
+        {
+            url = "https://shop.example.com/a", name = "Config A", config = new { a = 1 },
+        }));
+        await _client.PostAsync("/configs", JsonBody(new
+        {
+            url = "https://other.example.com/b", name = "Config B", config = new { b = 2 },
+        }));
+
         var response = await _client.GetAsync("/configs");
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var list = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(2, list.GetArrayLength());
     }
 
     [Fact]

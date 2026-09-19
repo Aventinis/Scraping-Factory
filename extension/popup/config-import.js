@@ -134,6 +134,33 @@ const SFConfigImport = (function () {
   // setup/settings, never navigates the popup away from the page it's
   // actually looking at.
   function applyConfigToState(config) {
+    // Issue #239: Combined mode has none of Fields/Groups/Api/engine/
+    // browserActions/changeDetection/proxy/pagination/hardening/
+    // persistentSession/externalConfig of its own (the companion rejects
+    // all of those at this outer level) — reloading one only ever restores
+    // combinedComponents (each entry's own full config lives in its own,
+    // separately-saved configuration, resolved live at generate/save/export
+    // time, never re-imported into ad-hoc fields/groups/apiConfig here).
+    if (config.combined) {
+      return {
+        mode: 'combined',
+        fields: [], groups: [], apiConfig: null,
+        combinedComponents: config.combined.map(c => ({ savedConfigId: c.savedConfigId ?? null, name: c.name })),
+        engine: 'Static',
+        browserActions: [],
+        scriptFileName: config.scriptFileName || '',
+        outputFileName: config.outputFileName || '',
+        useJsonOutput: false,
+        additionalStartUrls: [],
+        changeDetection: applyChangeDetectionConfig(null),
+        proxy: applyProxyConfig(null),
+        pagination: applyPaginationConfig(null),
+        hardening: applyHardeningConfig(null),
+        persistentSession: false,
+        externalConfig: false,
+      };
+    }
+
     const mode = config.groups ? 'container' : config.api ? 'api' : 'flat';
     return {
       mode,
@@ -145,6 +172,7 @@ const SFConfigImport = (function () {
         : [],
       groups: mode === 'container' ? deserializeGroupTree(config.groups) : [],
       apiConfig: mode === 'api' ? config.api : null,
+      combinedComponents: [],
       engine: config.engine || 'Static',
       browserActions: deserializeBrowserActions(config.browserActions),
       scriptFileName: config.scriptFileName || '',
