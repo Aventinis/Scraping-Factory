@@ -54,6 +54,55 @@ public static class ScrapingPlanBuilder
             };
         }
 
+        // Issue #182: Blocks replaces Fields/Groups/Api wholesale with N
+        // independent extraction phases sharing this one NavigateStep/set of
+        // browser actions — each block resolves its own shape/output
+        // filename/format exactly like the single-shape branches below do
+        // for the whole plan, just once per block instead of once overall.
+        // ChangeDetection/Hardening are intentionally NOT carried onto the
+        // returned ScrapingPlan here (unlike every other branch) — they live
+        // per-block on PlanExtractionBlock instead, since Program.cs's
+        // /generate handler already rejects them being set on the outer
+        // config when Blocks is set. ExternalConfig is rejected outright
+        // together with Blocks (see ScrapingConfig.Blocks), so it's likewise
+        // left at its default (false) here rather than carried through.
+        if (config.Blocks is { Count: > 0 } blocksConfig)
+        {
+            var planBlocks = blocksConfig.Select((block, i) =>
+            {
+                var resolvedName = string.IsNullOrWhiteSpace(block.Name) ? $"block_{i + 1}" : block.Name.Trim();
+                var outputFileBaseName = FileNameSanitizer.SanitizeBaseName(
+                    string.IsNullOrWhiteSpace(block.OutputFileName) ? resolvedName : block.OutputFileName,
+                    $"output_{i + 1}");
+                var hasGroups = block.Groups is { Count: > 0 };
+                var outputFormat = block.OutputFormat ?? (hasGroups ? OutputFormat.Xml : OutputFormat.Csv);
+
+                return new PlanExtractionBlock
+                {
+                    Name = resolvedName,
+                    Fields = hasGroups ? null : block.Fields?.Select(field => new ExtractStep
+                    {
+                        Name = field.Name, Selector = field.Selector, Attribute = field.Attribute,
+                        FramePath = field.FramePath, Transforms = field.Transforms,
+                    }).ToList(),
+                    Groups = hasGroups ? block.Groups : null,
+                    OutputFormat = outputFormat,
+                    OutputFileBaseName = outputFileBaseName,
+                    ChangeDetection = block.ChangeDetection,
+                    Hardening = block.Hardening,
+                };
+            }).ToList();
+
+            steps.Add(new ExtractionBlockStep { Blocks = planBlocks });
+            return new ScrapingPlan
+            {
+                Steps = steps, Engine = config.Engine,
+                ScriptFileName = scriptFileName,
+                Proxy = config.Proxy, Pagination = config.Pagination,
+                PersistentSession = config.PersistentSession ?? false,
+            };
+        }
+
         // API-Mode: Api replaces Fields/Groups wholesale, and forces
         // Engine.Api regardless of what the wire payload set — same
         // "the extension doesn't need to set this itself" pattern as
