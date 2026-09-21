@@ -167,6 +167,7 @@ async function generate(bridge) {
     state.scriptFileName, state.outputFileName, state.engine, state.browserActions, state.includeDataPreview,
     state.useJsonOutput, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
     state.pagination, state.persistentSession, state.includeOutputFile, state.externalConfig, combinedComponents,
+    state.blocks,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
@@ -214,18 +215,29 @@ async function generate(bridge) {
     let scriptText;
     let dataPreview = null;
     let outputFile = null;
+    let blocksOutput = null;
     if (state.includeDataPreview || state.includeOutputFile) {
       const data = await res.json();
       scriptText = data.script;
-      dataPreview = data.preview ?? null;
-      outputFile = data.outputFile ?? null;
+      // Issue #182: Blocks mode's own envelope is { script, blocks: [...] }
+      // instead of { script, preview, outputFile } — self-describes via the
+      // presence of `blocks` rather than branching on state.mode, so this
+      // stays correct even if a Blocks response somehow arrives outside the
+      // Blocks-mode code path.
+      if (Array.isArray(data.blocks)) {
+        blocksOutput = data.blocks;
+      } else {
+        dataPreview = data.preview ?? null;
+        outputFile = data.outputFile ?? null;
+      }
     } else {
       scriptText = await res.text();
     }
     log('GENERATE OK', `${scriptText.length} chars` +
       (dataPreview ? `, preview: ${dataPreview.totalCount} rows/elements` : '') +
-      (outputFile ? `, outputFile: ${outputFile.fileName} (${outputFile.content.length} chars)` : ''));
-    bridge.setState(STATES.DONE, { scriptText, dataPreview, outputFile });
+      (outputFile ? `, outputFile: ${outputFile.fileName} (${outputFile.content.length} chars)` : '') +
+      (blocksOutput ? `, blocks: ${blocksOutput.length}` : ''));
+    bridge.setState(STATES.DONE, { scriptText, dataPreview, outputFile, blocksOutput });
   } catch (err) {
     log('GENERATE FAIL', err.message);
     bridge.setState(STATES.IDLE);

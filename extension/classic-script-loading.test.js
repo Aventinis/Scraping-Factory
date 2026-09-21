@@ -72,6 +72,8 @@ test('shared/logger.js + i18n/i18n.js + popup/popup.js load together without a r
     'popup/browser-actions-ui.js',
     'popup/combined-config.js',
     'popup/combined-config-ui.js',
+    'popup/blocks-config.js',
+    'popup/blocks-config-ui.js',
     'popup/idle-screen-ui.js',
     'popup/message-router.js',
     'popup/session-restore.js',

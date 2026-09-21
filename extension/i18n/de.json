@@ -14,7 +14,8 @@
     "fieldNamePlaceholder": "Feldname",
     "attributePlaceholder": "Attribut",
     "noMatches": "Keine Treffer in der Aufzeichnung.",
-    "noRecordArray": "Kein Datensatz-Array gefunden — als Quelle nicht verwendbar."
+    "noRecordArray": "Kein Datensatz-Array gefunden — als Quelle nicht verwendbar.",
+    "edit": "Bearbeiten"
   },
   "language": {
     "label": "Sprache"
@@ -148,7 +149,20 @@
     "hardeningBlockingPhrasesLabel": "Sperr-Phrasen (eine pro Zeile)",
     "hardeningBlockingPhrasesPlaceholder": "z. B. \"Access Denied\", \"Bitte bestätigen Sie, dass Sie ein Mensch sind\"",
     "hardeningRequiredFieldsToggle": "Felder verpflichtend machen (unvollständige Zeilen verwerfen)",
-    "hardeningRequiredFieldsAddBtn": "+ Feld hinzufügen"
+    "hardeningRequiredFieldsAddBtn": "+ Feld hinzufügen",
+    "modeBlocks": "Blöcke",
+    "blocksHint": "Erstellt mehrere unabhängige Extraktionsblöcke (flach oder verschachtelt, beliebig gemischt), die sich die Navigation dieser Seite teilen — jeder schreibt in einem Skriptlauf seine eigene Ausgabedatei.",
+    "blocksNameLabel": "Blockname",
+    "blocksNamePlaceholder": "z. B. Angebote",
+    "blocksOutputFileNameLabel": "Ausgabedateiname",
+    "blocksOutputFileNamePlaceholder": "Standard: Blockname",
+    "blocksAddBtn": "+ Block hinzufügen",
+    "blocksUpdateBtn": "Block aktualisieren",
+    "blocksListLabel": "Blöcke",
+    "blocksMinCountHint": "Es werden mindestens 2 Blöcke benötigt, um ein Skript zu generieren.",
+    "blocksSummaryFlat": "{count} Feld(er)",
+    "blocksSummaryGroup": "{count} Gruppe(n)",
+    "blocksUnnamed": "(unbenannt)"
   },
   "robots": {
     "checkFailed": "robots.txt konnte nicht geprüft werden ({error}).",
@@ -259,7 +273,9 @@
     "saveOutputBtn": "Output speichern",
     "dataPreviewTitle": "Testlauf-Datenvorschau",
     "dataPreviewTruncatedCsv": "Zeige {shown} von {total} Zeilen — gekürzt",
-    "dataPreviewTruncatedXml": "Ausschnitt — nicht alle Daten werden angezeigt"
+    "dataPreviewTruncatedXml": "Ausschnitt — nicht alle Daten werden angezeigt",
+    "blocksOutputTitle": "Block-Ausgaben",
+    "blocksOutputDownloadBtn": "Herunterladen"
   },
   "modals": {
     "fieldName": {

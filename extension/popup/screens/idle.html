@@ -22,6 +22,7 @@
       <button id="btn-mode-container" class="mode-btn" type="button" data-i18n="idle.modeContainer"></button>
       <button id="btn-mode-api" class="mode-btn" type="button" data-i18n="idle.modeApi"></button>
       <button id="btn-mode-combined" class="mode-btn" type="button" data-i18n="idle.modeCombined"></button>
+      <button id="btn-mode-blocks" class="mode-btn" type="button" data-i18n="idle.modeBlocks"></button>
     </div>
 
     <!-- Engine + browser actions (Issue #41/#42, Phase 5): applies across
@@ -139,6 +140,45 @@
         <button id="btn-combined-add-component" class="btn-secondary btn-tiny" type="button" data-i18n="idle.combinedAddBtn"></button>
       </div>
       <p id="combined-no-saved-configs-hint" class="preview-summary hidden" data-i18n="idle.combinedNoSavedConfigsHint"></p>
+    </div>
+
+    <!-- Blocks mode (Issue #182): several independent extraction blocks
+         (flat or container/group, freely mixed) sharing this one page's
+         navigation/browser actions, each writing its own output file. A
+         block is built one at a time using the exact same #fields-list/
+         #group-tree-root editors flat/container mode already have (see
+         blocks-config-ui.js) — _state.fields/_state.groups double as "the
+         block currently being edited" while mode is 'blocks' — then
+         snapshotted into the list below via "+ Add block", starting the
+         next block fresh. -->
+    <div id="blocks-mode-section" class="hidden">
+      <p class="preview-summary" data-i18n="idle.blocksHint"></p>
+
+      <div id="blocks-draft-editor">
+        <div class="mode-toggle" style="margin-bottom: 8px;">
+          <div class="mode-toggle-thumb"></div>
+          <button id="btn-blocks-draft-flat" class="mode-btn active" type="button" data-i18n="idle.modeFlat"></button>
+          <button id="btn-blocks-draft-group" class="mode-btn" type="button" data-i18n="idle.modeContainer"></button>
+        </div>
+
+        <div class="output-settings-row">
+          <label for="input-blocks-draft-name" data-i18n="idle.blocksNameLabel"></label>
+          <input type="text" id="input-blocks-draft-name" data-i18n-placeholder="idle.blocksNamePlaceholder" />
+        </div>
+        <div class="output-settings-row">
+          <label for="input-blocks-draft-output-filename" data-i18n="idle.blocksOutputFileNameLabel"></label>
+          <input type="text" id="input-blocks-draft-output-filename" data-i18n-placeholder="idle.blocksOutputFileNamePlaceholder" />
+        </div>
+
+        <div class="actions">
+          <button id="btn-blocks-add-update" class="btn-secondary btn-tiny" type="button" disabled></button>
+          <button id="btn-blocks-cancel-edit" class="btn-secondary btn-tiny hidden" type="button" data-i18n="common.cancel"></button>
+        </div>
+      </div>
+
+      <div class="row-label" style="margin-top: 14px; margin-bottom: 6px;" data-i18n="idle.blocksListLabel"></div>
+      <ul id="blocks-list" class="group-tree"></ul>
+      <p id="blocks-min-count-hint" class="preview-summary warn hidden" data-i18n="idle.blocksMinCountHint"></p>
     </div>
 
     <div class="output-settings">
@@ -480,7 +520,11 @@
         <input type="text" id="input-script-filename" data-i18n-placeholder="idle.scriptFilenamePlaceholder" autocomplete="off" />
         <span class="output-settings-ext">.py</span>
       </div>
-      <div class="output-settings-row">
+      <!-- Issue #182: hidden for Blocks mode — there's no single output
+           file to name, each block names its own (see #blocks-mode-section's
+           own "Output file name" input for the block currently being
+           edited). -->
+      <div id="output-filename-row" class="output-settings-row">
         <label for="input-output-filename" data-i18n="idle.outputFilenameLabel"></label>
         <input type="text" id="input-output-filename" data-i18n-placeholder="idle.outputFilenamePlaceholder" autocomplete="off" />
         <span id="output-filename-ext" class="output-settings-ext">.csv</span>

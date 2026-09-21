@@ -14,7 +14,8 @@
     "fieldNamePlaceholder": "Nombre del campo",
     "attributePlaceholder": "Atributo",
     "noMatches": "Sin coincidencias en la grabación.",
-    "noRecordArray": "No se encontró ningún array de registros — no se puede usar como fuente."
+    "noRecordArray": "No se encontró ningún array de registros — no se puede usar como fuente.",
+    "edit": "Editar"
   },
   "language": {
     "label": "Idioma"
@@ -148,7 +149,20 @@
     "hardeningBlockingPhrasesLabel": "Frases de bloqueo (una por línea)",
     "hardeningBlockingPhrasesPlaceholder": "p. ej. \"Access Denied\", \"Por favor verifica que eres humano\"",
     "hardeningRequiredFieldsToggle": "Exigir campos (descartar filas incompletas)",
-    "hardeningRequiredFieldsAddBtn": "+ Añadir campo"
+    "hardeningRequiredFieldsAddBtn": "+ Añadir campo",
+    "modeBlocks": "Bloques",
+    "blocksHint": "Crea varios bloques de extracción independientes (planos o de contenedor, combinados libremente) que comparten la navegación de esta página; cada uno escribe su propio archivo de salida en una sola ejecución del script.",
+    "blocksNameLabel": "Nombre del bloque",
+    "blocksNamePlaceholder": "p. ej. Ofertas",
+    "blocksOutputFileNameLabel": "Nombre del archivo de salida",
+    "blocksOutputFileNamePlaceholder": "por defecto, el nombre del bloque",
+    "blocksAddBtn": "+ Añadir bloque",
+    "blocksUpdateBtn": "Actualizar bloque",
+    "blocksListLabel": "Bloques",
+    "blocksMinCountHint": "Se necesitan al menos 2 bloques para generar un script.",
+    "blocksSummaryFlat": "{count} campo(s)",
+    "blocksSummaryGroup": "{count} grupo(s)",
+    "blocksUnnamed": "(sin nombre)"
   },
   "robots": {
     "checkFailed": "No se pudo comprobar el robots.txt ({error}).",
@@ -259,7 +273,9 @@
     "saveOutputBtn": "Guardar salida",
     "dataPreviewTitle": "Vista previa de los datos de la prueba",
     "dataPreviewTruncatedCsv": "Mostrando {shown} de {total} filas — truncado",
-    "dataPreviewTruncatedXml": "Extracto — no se muestran todos los datos"
+    "dataPreviewTruncatedXml": "Extracto — no se muestran todos los datos",
+    "blocksOutputTitle": "Salidas de los bloques",
+    "blocksOutputDownloadBtn": "Descargar"
   },
   "modals": {
     "fieldName": {

@@ -24,6 +24,7 @@ const SFIdleScreenUI = (function () {
   const { checkRobotsTxt } = typeof require !== 'undefined' ? require('./companion-client') : self.SFCompanionClient;
   const { togglePreview } = typeof require !== 'undefined' ? require('./preview') : self.SFPreview;
   const { renderCombinedSection } = typeof require !== 'undefined' ? require('./combined-config-ui') : self.SFCombinedConfigUI;
+  const { renderBlocksSection } = typeof require !== 'undefined' ? require('./blocks-config-ui') : self.SFBlocksConfigUI;
 
   // Duplicated verbatim from popup.js's own tiny show(id) helper — same "no
   // cross-module includes for small DOM helpers" convention already used
@@ -38,11 +39,22 @@ const SFIdleScreenUI = (function () {
   // screen-api-config is showing instead), but keeps this table's own
   // "switching modes clears the other modes' configuration" contract honest
   // regardless of that.
+  // Issue #182: switching to/from 'blocks' also resets its own draft
+  // (blocksDraftShape/Name/OutputFileName/EditingIndex) and its confirmed
+  // list (blocks) — a half-built block or a list of blocks built against
+  // *this* page has no meaning once the mode switches away to something
+  // else entirely, the same "switching clears what doesn't belong to the
+  // new mode" reasoning every other entry here already follows.
+  const BLOCKS_DRAFT_RESET = {
+    blocks: [], blocksDraftShape: 'flat', blocksDraftName: '', blocksDraftOutputFileName: '', blocksEditingIndex: null,
+  };
+
   const MODE_SWITCH_CLEARS = {
-    flat:      { groups: [], apiConfig: null, apiConfigDraft: null, combinedComponents: [] },
-    container: { fields: [], apiConfig: null, apiConfigDraft: null, combinedComponents: [] },
-    api:       { fields: [], groups: [], combinedComponents: [] },
-    combined:  { fields: [], groups: [], apiConfig: null, apiConfigDraft: null },
+    flat:      { groups: [], apiConfig: null, apiConfigDraft: null, combinedComponents: [], ...BLOCKS_DRAFT_RESET },
+    container: { fields: [], apiConfig: null, apiConfigDraft: null, combinedComponents: [], ...BLOCKS_DRAFT_RESET },
+    api:       { fields: [], groups: [], combinedComponents: [], ...BLOCKS_DRAFT_RESET },
+    combined:  { fields: [], groups: [], apiConfig: null, apiConfigDraft: null, ...BLOCKS_DRAFT_RESET },
+    blocks:    { fields: [], groups: [], apiConfig: null, apiConfigDraft: null, combinedComponents: [], ...BLOCKS_DRAFT_RESET },
   };
 
   function switchMode(bridge, mode) {
@@ -97,16 +109,31 @@ const SFIdleScreenUI = (function () {
     document.getElementById('btn-mode-container')?.classList.toggle('active', state.mode === 'container');
     document.getElementById('btn-mode-api')?.classList.toggle('active', state.mode === 'api');
     document.getElementById('btn-mode-combined')?.classList.toggle('active', state.mode === 'combined');
-    document.getElementById('flat-mode-section')?.classList.toggle('hidden', state.mode !== 'flat');
-    document.getElementById('container-mode-section')?.classList.toggle('hidden', state.mode !== 'container');
+    document.getElementById('btn-mode-blocks')?.classList.toggle('active', state.mode === 'blocks');
+    // Issue #182: Blocks mode reuses the flat/container sections themselves
+    // as its own "block currently being edited" draft editor — shown
+    // whenever either the matching top-level mode is active, or Blocks mode
+    // is active and its own draft shape toggle currently picks that shape
+    // (see blocks-config-ui.js's switchBlocksDraftShape).
+    const isBlocksFlatDraft = state.mode === 'blocks' && state.blocksDraftShape === 'flat';
+    const isBlocksGroupDraft = state.mode === 'blocks' && state.blocksDraftShape === 'group';
+    document.getElementById('flat-mode-section')?.classList.toggle('hidden', !(state.mode === 'flat' || isBlocksFlatDraft));
+    document.getElementById('container-mode-section')?.classList.toggle('hidden', !(state.mode === 'container' || isBlocksGroupDraft));
     document.getElementById('api-mode-section')?.classList.toggle('hidden', state.mode !== 'api');
     document.getElementById('combined-mode-section')?.classList.toggle('hidden', state.mode !== 'combined');
+    document.getElementById('blocks-mode-section')?.classList.toggle('hidden', state.mode !== 'blocks');
     // Vorschau highlights matched DOM elements — meaningless for API-Mode
     // and for Combined mode (no selectors/DOM of its own to highlight).
+    // Blocks mode keeps it available, highlighting whichever shape the
+    // current draft is (same fields/groups the flat/container sections
+    // above are already reused for).
     document.getElementById('preview-section')?.classList.toggle('hidden', state.mode === 'api' || state.mode === 'combined');
     // Issue #239: engine/browser-actions are entirely component-level for
     // Combined mode — the companion rejects BrowserActions on the outer
     // request outright (each component's own config carries its own).
+    // Blocks mode keeps this section, unlike Combined — Engine/
+    // BrowserActions are shared/outer-level for Blocks (see
+    // ScrapingConfig.Blocks on the companion side).
     document.getElementById('engine-section')?.classList.toggle('hidden', state.mode === 'combined');
 
     // Engine + browser actions (Issue #41/#42, Phase 5) — mode-independent,
@@ -114,7 +141,7 @@ const SFIdleScreenUI = (function () {
     // of the three mode-specific blocks.
     renderBrowserActionsSection(bridge);
 
-    if (state.mode === 'container') {
+    if (state.mode === 'container' || isBlocksGroupDraft) {
       renderGroupTree(state.groups);
     } else if (state.mode === 'combined') {
       renderCombinedSection(bridge);
@@ -122,9 +149,12 @@ const SFIdleScreenUI = (function () {
       renderFields(state.fields);
     }
 
+    if (state.mode === 'blocks') renderBlocksSection(bridge);
+
     const hasConfig = state.mode === 'container' ? state.groups.length > 0
       : state.mode === 'api' ? !!state.apiConfig
       : state.mode === 'combined' ? (state.combinedComponents || []).length >= 2
+      : state.mode === 'blocks' ? (state.blocks || []).length >= 2
       : state.fields.length > 0;
     const genBtn = document.getElementById('btn-generate');
     if (genBtn) genBtn.disabled = !hasConfig;
@@ -227,6 +257,9 @@ const SFIdleScreenUI = (function () {
     if (scriptNameInput && document.activeElement !== scriptNameInput) scriptNameInput.value = state.scriptFileName;
     const outputNameInput = document.getElementById('input-output-filename');
     if (outputNameInput && document.activeElement !== outputNameInput) outputNameInput.value = state.outputFileName;
+    // Issue #182: no single output file to name for Blocks mode — each
+    // block names its own (see #blocks-mode-section's own input).
+    document.getElementById('output-filename-row')?.classList.toggle('hidden', state.mode === 'blocks');
     // Container mode always forces Xml server-side (absent Json); API mode
     // forces Xml too, but only for its tree shape (Groups) — its flat shape
     // forces Csv, same as flat mode itself. Issue #86's useJsonOutput
@@ -279,6 +312,7 @@ const SFIdleScreenUI = (function () {
     document.getElementById('btn-mode-container')?.addEventListener('click', () => switchMode(bridge, 'container'));
     document.getElementById('btn-mode-api')?.addEventListener('click', () => switchMode(bridge, 'api'));
     document.getElementById('btn-mode-combined')?.addEventListener('click', () => switchMode(bridge, 'combined'));
+    document.getElementById('btn-mode-blocks')?.addEventListener('click', () => switchMode(bridge, 'blocks'));
 
     document.getElementById('btn-preview')?.addEventListener('click', () => {
       log('BTN preview');

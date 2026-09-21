@@ -14,7 +14,8 @@
     "fieldNamePlaceholder": "Field name",
     "attributePlaceholder": "Attribute",
     "noMatches": "No matches in the recording.",
-    "noRecordArray": "No record array found — can't be used as a source."
+    "noRecordArray": "No record array found — can't be used as a source.",
+    "edit": "Edit"
   },
   "language": {
     "label": "Language"
@@ -148,7 +149,20 @@
     "hardeningBlockingPhrasesLabel": "Block phrases (one per line)",
     "hardeningBlockingPhrasesPlaceholder": "e.g. \"Access Denied\", \"Please verify you are human\"",
     "hardeningRequiredFieldsToggle": "Require fields (drop incomplete rows)",
-    "hardeningRequiredFieldsAddBtn": "+ Add field"
+    "hardeningRequiredFieldsAddBtn": "+ Add field",
+    "modeBlocks": "Blocks",
+    "blocksHint": "Builds several independent extraction blocks (flat or container, freely mixed) sharing this page’s navigation — each writes its own output file in one script run.",
+    "blocksNameLabel": "Block name",
+    "blocksNamePlaceholder": "e.g. Offers",
+    "blocksOutputFileNameLabel": "Output file name",
+    "blocksOutputFileNamePlaceholder": "defaults to the block name",
+    "blocksAddBtn": "+ Add block",
+    "blocksUpdateBtn": "Update block",
+    "blocksListLabel": "Blocks",
+    "blocksMinCountHint": "At least 2 blocks are required to generate a script.",
+    "blocksSummaryFlat": "{count} field(s)",
+    "blocksSummaryGroup": "{count} group(s)",
+    "blocksUnnamed": "(unnamed)"
   },
   "robots": {
     "checkFailed": "robots.txt could not be checked ({error}).",
@@ -259,7 +273,9 @@
     "saveOutputBtn": "Save output",
     "dataPreviewTitle": "Trial-run data preview",
     "dataPreviewTruncatedCsv": "Showing {shown} of {total} rows — truncated",
-    "dataPreviewTruncatedXml": "Excerpt — not all data is shown"
+    "dataPreviewTruncatedXml": "Excerpt — not all data is shown",
+    "blocksOutputTitle": "Block outputs",
+    "blocksOutputDownloadBtn": "Download"
   },
   "modals": {
     "fieldName": {
