@@ -25,6 +25,12 @@ public class LanguageModuleRegistryTests
             TimeSpan extraTimeout = default, IReadOnlyDictionary<string, string>? extraEnvironmentVariables = null,
             bool includePreview = false, bool includeOutputFile = false, CancellationToken ct = default) =>
             throw new NotImplementedException();
+
+        public Task<ScriptVerificationResult> VerifyBlocksAsync(
+            string script, IReadOnlyList<BlockOutputSpec> blocks,
+            TimeSpan extraTimeout = default, IReadOnlyDictionary<string, string>? extraEnvironmentVariables = null,
+            bool includePreview = false, bool includeOutputFile = false, CancellationToken ct = default) =>
+            throw new NotImplementedException();
     }
 
     [Fact]

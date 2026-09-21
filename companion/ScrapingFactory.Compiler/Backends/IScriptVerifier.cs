@@ -35,4 +35,19 @@ public interface IScriptVerifier
         string script, OutputFormat outputFormat = OutputFormat.Csv, string outputFileBaseName = "output",
         TimeSpan extraTimeout = default, IReadOnlyDictionary<string, string>? extraEnvironmentVariables = null,
         bool includePreview = false, bool includeOutputFile = false, CancellationToken ct = default);
+
+    // Issue #182: the Blocks-mode counterpart to VerifyAsync — runs the
+    // script exactly once (one subprocess, same as VerifyAsync), but then
+    // checks `blocks.Count` output files instead of one, each with its own
+    // OutputFormat/OutputFileBaseName. Success requires the process to exit
+    // compatibly AND every block to have produced at least one row/element —
+    // a single empty/failing block fails the whole call (see
+    // ScriptVerificationResult.Error), the same "did it actually work"
+    // standard VerifyAsync already holds a single-shape script to, applied
+    // per block instead of once. On success, ScriptVerificationResult.Blocks
+    // carries one BlockVerificationResult per block, in the same order.
+    Task<ScriptVerificationResult> VerifyBlocksAsync(
+        string script, IReadOnlyList<BlockOutputSpec> blocks,
+        TimeSpan extraTimeout = default, IReadOnlyDictionary<string, string>? extraEnvironmentVariables = null,
+        bool includePreview = false, bool includeOutputFile = false, CancellationToken ct = default);
 }

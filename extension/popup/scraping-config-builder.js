@@ -262,7 +262,49 @@ function buildScrapingConfig(
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
   additionalUrls = [], changeDetection = null, proxy = null, hardening = null, pagination = null,
   persistentSession = false, includeOutputFile = false, externalConfig = false, combinedComponents = null,
+  blocks = null,
 ) {
+  // Issue #182: Blocks mode has no ad-hoc fields/groups/apiConfig of its own
+  // either — each block is a fully independent {name, outputFileName,
+  // fields|groups} sent verbatim, sharing this one request's Url/engine/
+  // browserActions/additionalUrls/proxy/pagination/persistentSession
+  // (unlike Combined mode above, these DO apply — see ScrapingConfig.Blocks
+  // on the companion side for why). changeDetection/hardening/
+  // useJsonOutput/externalConfig are deliberately NOT included at all —
+  // the companion rejects the first two outright on this outer level (each
+  // block would need its own, not yet reachable from this UI — see
+  // CLAUDE.md), and the latter two have no meaning without a single shape/
+  // output file to apply to.
+  if (mode === 'blocks') {
+    const engineFields = engine === 'Browser'
+      ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
+      : {};
+    const previewFields = includePreview ? { includePreview: true } : {};
+    const additionalUrlsFields = additionalUrls.length > 0 ? { additionalUrls } : {};
+    const proxyConfig = buildProxyConfig(proxy);
+    const proxyFields = proxyConfig ? { proxy: proxyConfig } : {};
+    const paginationConfig = buildPaginationConfig(pagination);
+    const paginationFields = paginationConfig ? { pagination: paginationConfig } : {};
+    const persistentSessionFields = persistentSession ? { persistentSession: true } : {};
+    const outputFileFields = includeOutputFile ? { includeOutputFile: true } : {};
+    return {
+      version: '1', url,
+      blocks: (blocks || []).map(b => ({
+        name: b.name || null,
+        outputFileName: b.outputFileName || null,
+        ...(b.shape === 'group'
+          ? { groups: serializeGroupTree(b.groups) }
+          : { fields: (b.fields || []).map(f => ({
+              name: f.name, selector: f.selector, attribute: f.attribute ?? null,
+              ...(f.framePath ? { framePath: f.framePath } : {}),
+              ...(f.transforms && f.transforms.length > 0 ? { transforms: f.transforms } : {}),
+            })) }),
+      })),
+      scriptFileName: scriptFileName || null,
+      ...engineFields, ...previewFields, ...additionalUrlsFields,
+      ...proxyFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
+    };
+  }
   // Combined mode (Issue #239): no ad-hoc fields/groups/apiConfig of its own
   // — each component is a fully independent, already-resolved
   // {name, config, savedConfigId} (see companion-client.js's
@@ -359,7 +401,7 @@ function buildConfigExport(
   url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false, additionalUrls = [],
   changeDetection = null, proxy = null, hardening = null, pagination = null, persistentSession = false,
-  includeOutputFile = false, externalConfig = false, combinedComponents = null,
+  includeOutputFile = false, externalConfig = false, combinedComponents = null, blocks = null,
 ) {
   return {
     exportedAt: new Date().toISOString(),
@@ -367,7 +409,7 @@ function buildConfigExport(
     config: buildScrapingConfig(
       url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview,
       useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession,
-      includeOutputFile, externalConfig, combinedComponents,
+      includeOutputFile, externalConfig, combinedComponents, blocks,
     ),
   };
 }

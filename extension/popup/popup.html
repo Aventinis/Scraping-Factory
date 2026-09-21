@@ -131,6 +131,17 @@
       <pre id="data-preview-text" class="data-preview-text hidden"></pre>
       <p id="data-preview-truncated" class="data-preview-truncated hidden"></p>
     </div>
+
+    <!-- Issue #182: Blocks mode's own /generate response is a per-block
+         list ({ script, blocks: [{name, preview, outputFile}] }), not the
+         single preview/outputFile every other mode returns — shown here
+         instead of the data-preview-panel/btn-download-output above.
+         Per-block preview tables are a deliberately deferred follow-up (see
+         CLAUDE.md); this only ever offers the download. -->
+    <div id="blocks-output-panel" class="data-preview-panel hidden">
+      <p class="data-preview-title" data-i18n="done.blocksOutputTitle"></p>
+      <ul id="blocks-output-list"></ul>
+    </div>
   </section>
 
   <div id="modals-mount"></div>
@@ -164,6 +175,8 @@
   <script src="browser-actions-ui.js"></script>
   <script src="combined-config.js"></script>
   <script src="combined-config-ui.js"></script>
+  <script src="blocks-config.js"></script>
+  <script src="blocks-config-ui.js"></script>
   <script src="idle-screen-ui.js"></script>
   <script src="message-router.js"></script>
   <script src="session-restore.js"></script>

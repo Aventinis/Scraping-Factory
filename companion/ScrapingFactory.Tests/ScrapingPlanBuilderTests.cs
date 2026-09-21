@@ -5,6 +5,109 @@ namespace ScrapingFactory.Tests;
 
 public class ScrapingPlanBuilderTests
 {
+    // Issue #182: one ExtractionBlockStep replaces the flat Fields/Groups
+    // branches wholesale — each ExtractionBlockConfig resolves its own
+    // name/output filename/format the same way the whole plan does for the
+    // single-shape case, just once per block.
+    [Fact]
+    public void Build_Blocks_ResolvesShapeNameAndOutputFormatPerBlock()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Blocks =
+            [
+                new ExtractionBlockConfig
+                {
+                    Name = "Flat Block", OutputFileName = "flat-out",
+                    Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+                },
+                new ExtractionBlockConfig
+                {
+                    Name = "Group Block", OutputFileName = "group-out",
+                    Groups = [new GroupNode { Name = "Item", Selector = ".item", Repeating = true, Children = [] }],
+                },
+            ],
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        var blockStep = Assert.Single(plan.Steps.OfType<ExtractionBlockStep>());
+        Assert.Equal(2, blockStep.Blocks.Count);
+
+        var flat = blockStep.Blocks[0];
+        Assert.Equal("Flat Block", flat.Name);
+        Assert.Equal("flat-out", flat.OutputFileBaseName);
+        Assert.Equal(OutputFormat.Csv, flat.OutputFormat);
+        Assert.NotNull(flat.Fields);
+        Assert.Null(flat.Groups);
+
+        var group = blockStep.Blocks[1];
+        Assert.Equal("Group Block", group.Name);
+        Assert.Equal("group-out", group.OutputFileBaseName);
+        Assert.Equal(OutputFormat.Xml, group.OutputFormat);
+        Assert.NotNull(group.Groups);
+        Assert.Null(group.Fields);
+    }
+
+    [Fact]
+    public void Build_Blocks_BlankNameAndOutputFileNameFallBackToIndexAndSanitizedName()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Blocks =
+            [
+                new ExtractionBlockConfig { Fields = [new ScrapingField { Name = "A", Selector = "a" }] },
+                new ExtractionBlockConfig { Name = "Käse & Co", Fields = [new ScrapingField { Name = "B", Selector = "b" }] },
+            ],
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        var blockStep = Assert.Single(plan.Steps.OfType<ExtractionBlockStep>());
+        Assert.Equal("block_1", blockStep.Blocks[0].Name);
+        // A blank OutputFileName falls back to the resolved block Name
+        // itself (sanitized) rather than straight to "output_N" — here
+        // that's the already-defaulted "block_1", which is already a valid
+        // filename base, so SanitizeBaseName returns it unchanged.
+        Assert.Equal("block_1", blockStep.Blocks[0].OutputFileBaseName);
+        Assert.Equal("Käse & Co", blockStep.Blocks[1].Name);
+        // Sanitized the same way FileNameSanitizer sanitizes any other
+        // user-typed base name — each run of one-or-more non-[A-Za-z0-9_-]
+        // characters collapses to a single '_' ("ä" and " & " each become
+        // one underscore, not one per character).
+        Assert.Equal("K_se_Co", blockStep.Blocks[1].OutputFileBaseName);
+    }
+
+    [Fact]
+    public void Build_Blocks_ExplicitOutputFormatOverridesShapeDefault()
+    {
+        var config = new ScrapingConfig
+        {
+            Url = "https://example.com",
+            Blocks =
+            [
+                new ExtractionBlockConfig
+                {
+                    Name = "a", OutputFormat = OutputFormat.Json,
+                    Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+                },
+                new ExtractionBlockConfig
+                {
+                    Name = "b",
+                    Fields = [new ScrapingField { Name = "Titel", Selector = "h1" }],
+                },
+            ],
+        };
+
+        var plan = ScrapingPlanBuilder.Build(config);
+
+        var blockStep = Assert.Single(plan.Steps.OfType<ExtractionBlockStep>());
+        Assert.Equal(OutputFormat.Json, blockStep.Blocks[0].OutputFormat);
+        Assert.Equal(OutputFormat.Csv, blockStep.Blocks[1].OutputFormat);
+    }
+
     [Fact]
     public void Build_ProducesNavigateStepFollowedByOneExtractStepPerField()
     {

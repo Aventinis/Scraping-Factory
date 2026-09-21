@@ -161,6 +161,46 @@ const SFConfigImport = (function () {
       };
     }
 
+    // Issue #182: Blocks mode has no ad-hoc fields/groups/apiConfig of its
+    // own either — each block's own Fields-or-Groups content is restored
+    // into _state.blocks directly (never into the shared draft slots, which
+    // only ever hold whichever block is currently being *edited* — see
+    // blocks-config-ui.js). Per-block ChangeDetection/Hardening/
+    // OutputFormat aren't tracked in _state.blocks yet (no UI to edit them
+    // — see CLAUDE.md), so a re-loaded block that had one of those loses it,
+    // the same kind of documented v1 gap Combined mode's own
+    // VerificationValues round-trip already has.
+    if (config.blocks) {
+      return {
+        mode: 'blocks',
+        fields: [], groups: [], apiConfig: null,
+        combinedComponents: [],
+        blocks: config.blocks.map(b => ({
+          name: b.name || '',
+          outputFileName: b.outputFileName || '',
+          shape: b.groups ? 'group' : 'flat',
+          fields: b.groups ? [] : (b.fields || []).map(f => ({
+            name: f.name, selector: f.selector, attribute: f.attribute ?? null,
+            framePath: f.framePath || null, transforms: f.transforms && f.transforms.length > 0 ? f.transforms : null,
+          })),
+          groups: b.groups ? deserializeGroupTree(b.groups) : [],
+        })),
+        blocksDraftShape: 'flat', blocksDraftName: '', blocksDraftOutputFileName: '', blocksEditingIndex: null,
+        engine: config.engine || 'Static',
+        browserActions: deserializeBrowserActions(config.browserActions),
+        scriptFileName: config.scriptFileName || '',
+        outputFileName: '',
+        useJsonOutput: false,
+        additionalStartUrls: config.additionalUrls || [],
+        changeDetection: applyChangeDetectionConfig(null),
+        proxy: applyProxyConfig(config.proxy),
+        pagination: applyPaginationConfig(config.pagination),
+        hardening: applyHardeningConfig(null),
+        persistentSession: config.persistentSession === true,
+        externalConfig: false,
+      };
+    }
+
     const mode = config.groups ? 'container' : config.api ? 'api' : 'flat';
     return {
       mode,

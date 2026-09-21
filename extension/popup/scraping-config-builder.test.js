@@ -132,6 +132,73 @@ describe('buildScrapingConfig (combined mode, Issue #239)', () => {
   });
 });
 
+describe('buildScrapingConfig (blocks mode, Issue #182)', () => {
+  const blocks = [
+    { name: 'Deals', outputFileName: 'deals', shape: 'flat', fields: [{ name: 'Preis', selector: '.deal', attribute: null }] },
+    {
+      name: 'Menu', outputFileName: 'menu', shape: 'group',
+      groups: [{ kind: 'group', name: 'Item', selector: '.item', repeating: true, children: [
+        { kind: 'field', name: 'Titel', selector: '.title', mode: 'text', attribute: null },
+      ] }],
+    },
+  ];
+
+  test('serializes each block by its own shape — fields for flat, a serialized group tree for group', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'blocks', [], [], null, null, null,
+      'Static', [], false, false, [], null, null, null, null, false, false, false, null, blocks,
+    );
+    expect(result).toEqual({
+      version: '1',
+      url: 'https://example.com',
+      blocks: [
+        { name: 'Deals', outputFileName: 'deals', fields: [{ name: 'Preis', selector: '.deal', attribute: null }] },
+        { name: 'Menu', outputFileName: 'menu', groups: [
+          { name: 'Item', selector: '.item', repeating: true, children: [
+            { name: 'Titel', selector: '.title', mode: 'Text' },
+          ] },
+        ] },
+      ],
+      scriptFileName: null,
+    });
+  });
+
+  test('shares engine/browserActions/additionalUrls/proxy/pagination/persistentSession with the outer request', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'blocks', [], [], null, null, null,
+      'Browser', [{ kind: 'click', selector: '#x' }], false, false, ['https://extra.example.com'],
+      null, { enabled: true, envVar: 'PROXY_LIST' }, null,
+      { enabled: true, kind: 'nextLink', nextLinkSelector: '.next', maxPages: 10 }, true, false, false, null, blocks,
+    );
+    expect(result.engine).toBe('Browser');
+    expect(result.browserActions).toBeDefined();
+    expect(result.additionalUrls).toEqual(['https://extra.example.com']);
+    expect(result.proxy).toEqual({ environmentVariableName: 'PROXY_LIST' });
+    expect(result.pagination).toBeDefined();
+    expect(result.persistentSession).toBe(true);
+  });
+
+  test('never includes changeDetection/hardening/outputFormat/externalConfig at the outer level', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'blocks', [], [], null, null, null,
+      'Static', [], false, true, [], { enabled: true }, null, [{ kind: 'noResult', severity: 'Error' }],
+      null, false, false, true, null, blocks,
+    );
+    expect(result).not.toHaveProperty('changeDetection');
+    expect(result).not.toHaveProperty('hardening');
+    expect(result).not.toHaveProperty('outputFormat');
+    expect(result).not.toHaveProperty('externalConfig');
+    expect(result).not.toHaveProperty('groups');
+    expect(result).not.toHaveProperty('apiConfig');
+    expect(result).not.toHaveProperty('combined');
+  });
+
+  test('an empty/missing block list sends an empty blocks array rather than throwing', () => {
+    const result = buildScrapingConfig('https://example.com', 'blocks', [], []);
+    expect(result.blocks).toEqual([]);
+  });
+});
+
 // Issue #41/#42, Phase 5: engine/browserActions are mode-independent, so
 // these are tested once rather than per mode (flat mode used as the
 // representative case) — buildScrapingConfig's own doc comment explains why

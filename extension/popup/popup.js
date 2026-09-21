@@ -66,6 +66,9 @@ const {
 const { wireCombinedConfigEvents } =
   typeof require !== 'undefined' ? require('./combined-config-ui') : self.SFCombinedConfigUI;
 
+const { wireBlocksConfigEvents } =
+  typeof require !== 'undefined' ? require('./blocks-config-ui') : self.SFBlocksConfigUI;
+
 const {
   createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
   moveTransform, transformsAreValid, applyTransformsPreview, toNumberPreview,
@@ -435,6 +438,24 @@ let _state = {
   // above already accepts.
   allSavedConfigs:           null,
   allSavedConfigsLoading:    false,
+  // Issue #182: Blocks mode's confirmed list of independent extraction
+  // blocks — each {name, outputFileName, shape: 'flat'|'group', fields,
+  // groups}, cleared by MODE_SWITCH_CLEARS like combinedComponents. The
+  // block currently being *built* reuses fields/groups above directly
+  // (see blocks-config-ui.js) rather than its own separate draft-content
+  // slot — only the draft's own metadata needs dedicated state here.
+  blocks:                     [],
+  blocksDraftShape:            'flat', // 'flat' | 'group' — which of fields/groups the draft editor currently shows
+  blocksDraftName:             '',
+  blocksDraftOutputFileName:   '',
+  blocksEditingIndex:          null, // set while editing an already-added block (see blocks-config-ui.js's editBlock)
+  // Issue #182: Blocks mode's /generate response ({ script, blocks: [{name,
+  // preview, outputFile}] }) differs in shape from every other mode's own
+  // singular { script, preview, outputFile } — dataPreview/outputFile above
+  // stay null for a Blocks generate, this carries the per-block results
+  // instead. null for every other mode/whenever neither includeDataPreview
+  // nor includeOutputFile was requested.
+  blocksOutput:                null,
   // Set to a saved config's id right after its own "Delete" button is first
   // clicked, turning that one row into an inline "Delete? Yes/No" — a
   // second confirming click is required before DELETE /configs/{id} is
@@ -508,6 +529,11 @@ function persistState() {
       apiConfigDraft: _state.apiConfigDraft,
       apiConfig: _state.apiConfig,
       combinedComponents: _state.combinedComponents,
+      blocks: _state.blocks,
+      blocksDraftShape: _state.blocksDraftShape,
+      blocksDraftName: _state.blocksDraftName,
+      blocksDraftOutputFileName: _state.blocksDraftOutputFileName,
+      blocksEditingIndex: _state.blocksEditingIndex,
     })
     .catch(err => log('STORAGE_ERR', err.message));
 }
@@ -633,6 +659,7 @@ function render() {
     const saveOutputBtn = document.getElementById('btn-save-output');
     if (saveOutputBtn) saveOutputBtn.classList.toggle('hidden', !_state.outputFile);
     renderDataPreview(_state.dataPreview);
+    renderBlocksOutput(_state.blocksOutput);
 
     if (_state.saveOutputModalOpen) {
       show('modal-save-output');
@@ -652,7 +679,9 @@ function render() {
     const isNewPick = _state.pendingSelector !== lastFieldModalSelector;
     lastFieldModalSelector = _state.pendingSelector;
 
-    if (_state.mode === 'container') {
+    // Issue #182: Blocks mode's group-shaped draft reuses the container
+    // field modal exactly like container mode itself does.
+    if (_state.mode === 'container' || (_state.mode === 'blocks' && _state.blocksDraftShape === 'group')) {
       renderContainerFieldModal(bridge, isNewPick);
     } else {
       renderFlatFieldModal(bridge, isNewPick);
@@ -772,6 +801,37 @@ function renderDataPreview(preview) {
   }
 }
 
+// Issue #182: Blocks mode's own DONE-screen panel — one row per block with
+// a Download button (downloadFile), no per-block preview table (see
+// blocks-output-panel's own doc comment in popup.html for why that's out
+// of scope here). blocksOutput is null for every other mode/whenever
+// neither includeDataPreview nor includeOutputFile was requested.
+function renderBlocksOutput(blocksOutput) {
+  const panel = document.getElementById('blocks-output-panel');
+  if (!panel) return;
+  if (!blocksOutput) { panel.classList.add('hidden'); return; }
+  panel.classList.remove('hidden');
+
+  const listEl = document.getElementById('blocks-output-list');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  blocksOutput.forEach((block) => {
+    const li = document.createElement('li');
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = block.outputFile ? `${block.name}: ${block.outputFile.fileName}` : block.name;
+    li.appendChild(nameSpan);
+    if (block.outputFile) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn-secondary btn-tiny';
+      btn.textContent = t('done.blocksOutputDownloadBtn');
+      btn.addEventListener('click', () => downloadFile(block.outputFile.fileName, block.outputFile.content));
+      li.appendChild(btn);
+    }
+    listEl.appendChild(li);
+  });
+}
+
 // Passed to every api-config-ui.js/container-tree-ui.js/dom-tree-ui.js/
 // preview.js/companion-client.js/saved-configs-ui.js handler, instead of
 // those functions closing over this file's own module-level state — see
@@ -828,6 +888,8 @@ function wireEvents() {
   wireIdleScreenEvents(bridge);
 
   wireCombinedConfigEvents(bridge);
+
+  wireBlocksConfigEvents(bridge);
 
   wireContainerModeEvents(bridge);
 

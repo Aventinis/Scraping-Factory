@@ -337,6 +337,78 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
         });
     }
 
+    // Issue #182: a list of independent extraction blocks, each with its own
+    // Fields-or-Groups shape and its own output file, sharing this one
+    // request's navigation/browser actions/proxy/persistent session/
+    // pagination. Unlike Combined mode above, this is still exactly ONE
+    // ScrapingPlan/ONE script/ONE verification subprocess — it goes through
+    // the ordinary GenerateScript pipeline (ScrapingPlanBuilder already
+    // knows how to build an ExtractionBlockStep, ScrapingPlanValidator
+    // already knows how to validate one), just with per-block output
+    // verification at the end instead of a single file.
+    if (config.Blocks is { Count: > 0 } blocks)
+    {
+        if (config.Fields.Count > 0 || config.Groups is { Count: > 0 } || config.Api is not null || config.Combined is { Count: > 0 })
+            return Results.BadRequest(new { error = "Blocks is mutually exclusive with Fields, Groups, Api and Combined." });
+        // ChangeDetection/Hardening are per-block concerns for Blocks (each
+        // block has its own independent result set to watch) — see
+        // ScrapingConfig.Blocks. ExternalConfig's mapping onto more than one
+        // block's own output isn't designed yet (see the same doc comment),
+        // so it's rejected outright rather than guessed at.
+        if (config.ChangeDetection is not null)
+            return Results.BadRequest(new { error = "ChangeDetection is not supported on a Blocks request — set it on each block's own config instead." });
+        if (config.Hardening is { Count: > 0 })
+            return Results.BadRequest(new { error = "Hardening is not supported on a Blocks request — set it on each block's own config instead." });
+        if (config.ExternalConfig == true)
+            return Results.BadRequest(new { error = "ExternalConfig is not supported together with Blocks." });
+
+        for (var i = 0; i < blocks.Count; i++)
+        {
+            var hasBlockFields = blocks[i].Fields is { Count: > 0 };
+            var hasBlockGroups = blocks[i].Groups is { Count: > 0 };
+            if (hasBlockFields == hasBlockGroups)
+                return Results.BadRequest(new { error = $"Block #{i + 1} needs exactly one of Fields or Groups." });
+        }
+
+        var (blockPlan, blockScript, blockValidationError, blockGeneratorError) = GenerateScript(config, registry);
+        if (blockValidationError is not null)
+            return Results.BadRequest(new { error = blockValidationError });
+        if (blockGeneratorError is not null)
+            return Results.UnprocessableEntity(new { error = blockGeneratorError });
+
+        var blockExtractionStep = blockPlan!.Steps.OfType<ExtractionBlockStep>().Single();
+        var blockOutputSpecs = blockExtractionStep.Blocks
+            .Select(b => new BlockOutputSpec(b.Name, b.OutputFormat, b.OutputFileBaseName))
+            .ToList();
+        var blockExtraTimeout = TimeSpan.FromMilliseconds(
+            blockPlan.Steps.OfType<ScrollStep>().Sum(step => (long)step.MaxIterations * step.WaitAfterMs));
+        var blockVerificationEnv = FillVerificationValues.Filter(config.BrowserActions, config.VerificationValues);
+
+        var blockVerifier = registry.ResolveScriptVerifier("python");
+        var blockVerification = await blockVerifier.VerifyBlocksAsync(
+            blockScript!, blockOutputSpecs, blockExtraTimeout,
+            blockVerificationEnv.Count > 0 ? blockVerificationEnv : null,
+            config.IncludePreview == true, config.IncludeOutputFile == true);
+        if (!blockVerification.Success)
+            return Results.UnprocessableEntity(new { error = blockVerification.Error ?? "Script verification failed." });
+
+        if (config.IncludePreview != true && config.IncludeOutputFile != true)
+            return Results.Text(blockScript!, "text/plain");
+
+        return Results.Json(new
+        {
+            script = blockScript,
+            blocks = blockVerification.Blocks!.Select(b => new
+            {
+                name = b.Name,
+                preview = b.Preview,
+                outputFile = b.OutputFileContent is not null
+                    ? new { fileName = b.OutputFileName, content = b.OutputFileContent }
+                    : null,
+            }),
+        });
+    }
+
     var exclusivityError = ValidateModeExclusivity(config);
     if (exclusivityError is not null)
         return Results.BadRequest(new { error = exclusivityError });

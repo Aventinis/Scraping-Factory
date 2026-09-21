@@ -49,6 +49,11 @@ const SFSessionRestore = (function () {
     if (stored.apiConfigDraft)        next = { ...next, apiConfigDraft: stored.apiConfigDraft };
     if (stored.apiConfig)             next = { ...next, apiConfig: stored.apiConfig };
     if (Array.isArray(stored.combinedComponents)) next = { ...next, combinedComponents: stored.combinedComponents };
+    if (Array.isArray(stored.blocks))          next = { ...next, blocks: stored.blocks };
+    if (stored.blocksDraftShape)               next = { ...next, blocksDraftShape: stored.blocksDraftShape };
+    if (stored.blocksDraftName)                next = { ...next, blocksDraftName: stored.blocksDraftName };
+    if (stored.blocksDraftOutputFileName)      next = { ...next, blocksDraftOutputFileName: stored.blocksDraftOutputFileName };
+    if (stored.blocksEditingIndex !== undefined) next = { ...next, blocksEditingIndex: stored.blocksEditingIndex };
 
     // Issue #183: a returning user with something already configured in the
     // "Monitoring" section shouldn't have to re-expand it just to see it.
@@ -81,7 +86,12 @@ const SFSessionRestore = (function () {
       return true;
     }
 
-    if (stored.mode === 'container' && stored.selectionKind === 'container' && stored.pendingNewContainer) {
+    // Issue #182: same relaxation as message-router.js's own live-path
+    // check — Blocks mode's own group-shaped draft reuses this identical
+    // recovery branch.
+    const isContainerOrBlocksGroupDraft = stored.mode === 'container' ||
+      (stored.mode === 'blocks' && stored.blocksDraftShape === 'group');
+    if (isContainerOrBlocksGroupDraft && stored.selectionKind === 'container' && stored.pendingNewContainer) {
       // Same as the live ELEMENT_SELECTED path: name/type were already
       // collected before selection started, so insert straight away.
       log('INIT pending container selector found → inserting node', stored.pendingSelector);
