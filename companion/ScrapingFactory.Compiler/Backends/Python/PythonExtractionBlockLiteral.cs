@@ -49,8 +49,14 @@ internal static class PythonExtractionBlockLiteral
         var attributes = "{" + string.Join(", ", fields.Where(f => f.Attribute is not null)
             .Select(f => $"{PythonLiteral.Str(f.Name)}: {PythonLiteral.Str(f.Attribute!)}")) + "}";
         var transforms = "{" + string.Join(", ", fields.Select(f => $"{PythonLiteral.Str(f.Name)}: {PythonFieldTransformLiteral.Render(f.Transforms)}")) + "}";
+        // Browser engine only (playwright_scraper_blocks.py.j2) — the Static
+        // engine's own blocks template never reads "frame_paths" at all,
+        // same as SELECTORS/ATTRIBUTES/FRAME_PATHS' single-shape counterparts
+        // in scraper.py.j2 vs. playwright_scraper.py.j2.
+        var framePaths = "{" + string.Join(", ", fields.Where(f => f.FramePath is { Count: > 0 })
+            .Select(f => $"{PythonLiteral.Str(f.Name)}: {PythonLiteral.StrList(f.FramePath!)}")) + "}";
         var fieldOrder = PythonLiteral.StrList(fields.Select(f => f.Name));
-        return $"\"shape\": {PythonLiteral.Str("flat")}, \"field_order\": {fieldOrder}, \"selectors\": {selectors}, \"attributes\": {attributes}, \"transforms\": {transforms}";
+        return $"\"shape\": {PythonLiteral.Str("flat")}, \"field_order\": {fieldOrder}, \"selectors\": {selectors}, \"attributes\": {attributes}, \"transforms\": {transforms}, \"frame_paths\": {framePaths}";
     }
 
     // BuildContext returns an anonymous type (internal to this assembly by

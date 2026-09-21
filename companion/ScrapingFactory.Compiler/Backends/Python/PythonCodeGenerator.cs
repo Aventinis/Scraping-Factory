@@ -14,6 +14,33 @@ public sealed class PythonCodeGenerator : ICodeGenerator
         var navigate = plan.Steps.OfType<NavigateStep>().Single();
         var assembly = Assembly.GetExecutingAssembly();
 
+        // Issue #182: Blocks replaces every other extraction shape wholesale
+        // — see ExtractionBlockStep. Its own template, same reasoning as
+        // Container-Mode's own scraper_grouped.py.j2 (Scriban can't recurse
+        // over an unknown number of independently-shaped blocks the way a
+        // flat Fields loop can iterate one list), just generalized to N
+        // shapes at once instead of exactly one tree.
+        var blockStep = plan.Steps.OfType<ExtractionBlockStep>().SingleOrDefault();
+        if (blockStep is not null)
+        {
+            var blocksTemplate = EmbeddedScribanTemplate.Load(assembly, "scraper_blocks.py.j2");
+            return blocksTemplate.Render(new
+            {
+                urls = navigate.Urls, script_filename = plan.ScriptFileName,
+                blocks_literal = PythonExtractionBlockLiteral.Render(blockStep.Blocks),
+                blocks_meta = blockStep.Blocks.Select(b => new { name = b.Name, shape = b.Groups is not null ? "group" : "flat" }).ToList(),
+                any_flat = blockStep.Blocks.Any(b => b.Groups is null),
+                any_group = blockStep.Blocks.Any(b => b.Groups is not null),
+                any_csv = blockStep.Blocks.Any(b => b.Groups is null && b.OutputFormat != OutputFormat.Json),
+                any_json_output = blockStep.Blocks.Any(b => b.OutputFormat == OutputFormat.Json),
+                hardening_any = blockStep.Blocks.Any(b => b.Hardening is { Count: > 0 }),
+                hardening_has_baseline_any = blockStep.Blocks.Any(b => b.Hardening?.Any(check => check is BaselineCheck) == true),
+                change_detection_any = blockStep.Blocks.Any(b => b.ChangeDetection is not null),
+                proxy = PythonProxyLiteral.BuildContext(plan.Proxy),
+                pagination = PythonPaginationLiteral.BuildContext(plan.Pagination),
+            });
+        }
+
         // Container-Mode replaces the flat fields shape wholesale — see
         // ExtractGroupStep. Its own template because Scriban can't recurse
         // over a tree of unknown depth the way the flat template's Fields
