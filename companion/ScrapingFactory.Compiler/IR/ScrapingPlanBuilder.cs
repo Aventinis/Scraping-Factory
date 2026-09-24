@@ -116,7 +116,8 @@ public static class ScrapingPlanBuilder
         if (config.Api is { } api)
         {
             var isJson = config.OutputFormat == OutputFormat.Json;
-            var apiOutputFormat = api.Groups is { Count: > 0 }
+            var apiHasGroups = api.Groups is { Count: > 0 };
+            var apiOutputFormat = apiHasGroups
                 ? (isJson ? OutputFormat.Json : OutputFormat.Xml)
                 : (isJson ? OutputFormat.Json : OutputFormat.Csv);
             steps.Add(new ApiCallStep { Config = api });
@@ -127,6 +128,15 @@ public static class ScrapingPlanBuilder
                 ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, Hardening = config.Hardening,
                 PersistentSession = config.PersistentSession ?? false,
                 ExternalConfig = config.ExternalConfig ?? false,
+                // Issue #191: only meaningful for the flat ItemsPath/Fields
+                // shape — Program.cs's /generate handler already rejects
+                // OutputBlueprint set together with Api's tree shape
+                // (Groups) before a plan is ever built, so this is never
+                // actually non-null here when apiHasGroups is true, but the
+                // guard keeps this branch correct even if that upstream
+                // check were ever bypassed (e.g. a future direct caller of
+                // ScrapingPlanBuilder that skips Program.cs entirely).
+                OutputBlueprint = apiHasGroups ? null : config.OutputBlueprint,
             };
         }
 
@@ -144,6 +154,7 @@ public static class ScrapingPlanBuilder
             ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, Hardening = config.Hardening,
             Pagination = config.Pagination, PersistentSession = config.PersistentSession ?? false,
             ExternalConfig = config.ExternalConfig ?? false,
+            OutputBlueprint = config.OutputBlueprint,
         };
     }
 

@@ -47,6 +47,13 @@ public sealed class ScrapingPlan
     // false here, same as PersistentSession above).
     public bool ExternalConfig { get; init; }
 
+    // Issue #191: only carried through by ScrapingPlanBuilder in the flat-
+    // Fields and Api-flat-shape branches — left null (the default) for
+    // Groups/Api-tree/Combined/Blocks, all of which are rejected outright
+    // together with ScrapingConfig.OutputBlueprint before a plan for them is
+    // even built (see Program.cs's /generate handler).
+    public OutputBlueprintMapping? OutputBlueprint { get; init; }
+
     // Combined mode (Issue #239): forces a component's already-built,
     // already-validated plan to a fixed OutputFormat/OutputFileBaseName —
     // used by Program.cs's /generate handler to make every component write
@@ -68,5 +75,12 @@ public sealed class ScrapingPlan
         Pagination = Pagination,
         PersistentSession = PersistentSession,
         ExternalConfig = ExternalConfig,
+        // Issue #191: preserved even though Combined mode itself rejects
+        // OutputBlueprint on the *outer* request — a component's own nested
+        // config may still carry one, already resolved/validated by the time
+        // With() runs (see GenerateScript's build->validate->transformPlan
+        // sequence), and it should keep applying to that component's own
+        // output rather than being silently dropped by this copy.
+        OutputBlueprint = OutputBlueprint,
     };
 }

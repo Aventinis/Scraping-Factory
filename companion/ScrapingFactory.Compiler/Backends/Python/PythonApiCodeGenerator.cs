@@ -84,6 +84,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
             proxy,
             hardening,
             external_config = externalConfig,
+            blueprint_mapping_literal = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),
         });
     }
 

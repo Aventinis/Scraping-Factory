@@ -167,7 +167,21 @@ public static class ScrapingPlanValidator
         if (apiCallStep is not null)
         {
             var apiError = ValidateApiConfig(apiCallStep.Config);
-            return apiError is null ? new PlanValidationResult { Success = true } : Invalid(apiError);
+            if (apiError is not null)
+                return Invalid(apiError);
+
+            // Issue #191: only reachable for the flat ItemsPath/Fields shape
+            // — ScrapingPlanBuilder never carries OutputBlueprint through
+            // for the tree shape (Groups), see its own doc comment.
+            if (plan.OutputBlueprint is { } apiBlueprint)
+            {
+                var apiAvailableFields = (apiCallStep.Config.Fields ?? []).Select(field => field.Name).ToList();
+                var apiBlueprintError = ValidateOutputBlueprint(apiBlueprint, apiAvailableFields);
+                if (apiBlueprintError is not null)
+                    return Invalid(apiBlueprintError);
+            }
+
+            return new PlanValidationResult { Success = true };
         }
 
         var extractSteps = plan.Steps.OfType<ExtractStep>().ToList();
@@ -197,7 +211,46 @@ public static class ScrapingPlanValidator
         if (duplicateNames.Count > 0)
             return Invalid($"Duplicate field names: {string.Join(", ", duplicateNames)}.");
 
+        if (plan.OutputBlueprint is { } blueprint)
+        {
+            var blueprintError = ValidateOutputBlueprint(blueprint, extractSteps.Select(step => step.Name).ToList());
+            if (blueprintError is not null)
+                return Invalid(blueprintError);
+        }
+
         return new PlanValidationResult { Success = true };
+    }
+
+    // Issue #191: availableSourceFields is the mode's own already-resolved
+    // field-name list (flat ExtractStep.Name, or Api-flat ApiField.Name —
+    // API parameters are deliberately not mappable, the same simplification
+    // NullRateCheck/RequiredFieldsCheck's own field pickers already made for
+    // API mode). Mirrors FieldTransformValidator's "static helper returning
+    // string? (null = valid)" pattern.
+    private static string? ValidateOutputBlueprint(OutputBlueprintMapping mapping, IReadOnlyCollection<string> availableSourceFields)
+    {
+        if (mapping.Fields.Count == 0)
+            return "OutputBlueprint needs at least one field mapping.";
+
+        foreach (var entry in mapping.Fields)
+        {
+            if (string.IsNullOrWhiteSpace(entry.TargetField))
+                return "OutputBlueprint: target field name must not be empty.";
+            if (string.IsNullOrWhiteSpace(entry.SourceField))
+                return $"OutputBlueprint: target field '{entry.TargetField}' needs a mapped source field.";
+            if (!availableSourceFields.Contains(entry.SourceField))
+                return $"OutputBlueprint: unknown source field '{entry.SourceField}' for target field '{entry.TargetField}'.";
+        }
+
+        var duplicateTargets = FindDuplicates(mapping.Fields, entry => entry.TargetField);
+        if (duplicateTargets.Count > 0)
+            return $"OutputBlueprint: duplicate target field(s): {string.Join(", ", duplicateTargets)}.";
+
+        var duplicateSources = FindDuplicates(mapping.Fields, entry => entry.SourceField);
+        if (duplicateSources.Count > 0)
+            return $"OutputBlueprint: source field(s) mapped more than once: {string.Join(", ", duplicateSources)}.";
+
+        return null;
     }
 
     private static readonly Regex EnvironmentVariableNamePattern = new("^[A-Za-z_][A-Za-z0-9_]*$");

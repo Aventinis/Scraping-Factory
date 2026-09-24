@@ -89,6 +89,7 @@ public sealed class PythonCodeGenerator : ICodeGenerator
                 hardening = PythonHardeningLiteral.BuildContext(plan.Hardening),
                 pagination = PythonPaginationLiteral.BuildContext(plan.Pagination),
                 external_config = PythonExternalConfigLiteral.BuildContext(plan.ExternalConfig),
+                blueprint_mapping_literal = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),
             },
         });
     }
