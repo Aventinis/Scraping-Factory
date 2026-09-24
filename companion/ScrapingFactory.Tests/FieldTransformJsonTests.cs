@@ -79,7 +79,7 @@ public class FieldTransformJsonTests
     }
 
     [Fact]
-    public void SerializeThenDeserialize_RoundTripsAllFourVariants()
+    public void SerializeThenDeserialize_RoundTripsAllSevenVariants()
     {
         FieldTransform[] transforms =
         [
@@ -87,6 +87,9 @@ public class FieldTransformJsonTests
             new RegexExtractTransform { Pattern = @"\d+", Group = 1 },
             new ReplaceTransform { Find = "€", Replacement = "" },
             new ToNumberTransform(),
+            new ToIntegerTransform { OnError = TransformErrorMode.UseDefault, DefaultValue = "0" },
+            new ToBooleanTransform(),
+            new ToDateTransform { SourceFormat = "{dd}.{mm}.{yyyy}" },
         ];
 
         foreach (var transform in transforms)
@@ -96,6 +99,62 @@ public class FieldTransformJsonTests
 
             Assert.Equal(transform.GetType(), roundTripped!.GetType());
         }
+    }
+
+    // Issue #205
+    [Fact]
+    public void Deserialize_ToIntegerByKind_ProducesToIntegerTransform()
+    {
+        const string json = """{ "kind": "toInteger", "onError": "UseDefault", "defaultValue": "0" }""";
+
+        var transform = JsonSerializer.Deserialize<FieldTransform>(json, Options);
+
+        var toInteger = Assert.IsType<ToIntegerTransform>(transform);
+        Assert.Equal(TransformErrorMode.UseDefault, toInteger.OnError);
+        Assert.Equal("0", toInteger.DefaultValue);
+    }
+
+    [Fact]
+    public void Deserialize_ToIntegerWithoutOnError_DefaultsToKeepOriginal()
+    {
+        const string json = """{ "kind": "toInteger" }""";
+
+        var transform = JsonSerializer.Deserialize<FieldTransform>(json, Options);
+
+        var toInteger = Assert.IsType<ToIntegerTransform>(transform);
+        Assert.Equal(TransformErrorMode.KeepOriginal, toInteger.OnError);
+        Assert.Null(toInteger.DefaultValue);
+    }
+
+    [Fact]
+    public void Deserialize_ToBooleanByKind_ProducesToBooleanTransform()
+    {
+        const string json = """{ "kind": "toBoolean" }""";
+
+        var transform = JsonSerializer.Deserialize<FieldTransform>(json, Options);
+
+        Assert.IsType<ToBooleanTransform>(transform);
+    }
+
+    [Fact]
+    public void Deserialize_ToDateByKind_ProducesToDateTransform()
+    {
+        const string json = """{ "kind": "toDate", "sourceFormat": "{yyyy}/{mm}/{dd}", "onError": "KeepOriginal" }""";
+
+        var transform = JsonSerializer.Deserialize<FieldTransform>(json, Options);
+
+        var toDate = Assert.IsType<ToDateTransform>(transform);
+        Assert.Equal("{yyyy}/{mm}/{dd}", toDate.SourceFormat);
+    }
+
+    [Fact]
+    public void Deserialize_ToDateWithoutSourceFormat_LeavesItNull()
+    {
+        const string json = """{ "kind": "toDate" }""";
+
+        var transform = JsonSerializer.Deserialize<FieldTransform>(json, Options);
+
+        Assert.Null(Assert.IsType<ToDateTransform>(transform).SourceFormat);
     }
 
     // Proves the discriminator survives being nested inside a full

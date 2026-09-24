@@ -10,6 +10,7 @@ import json
 import csv
 {{~ end ~}}
 import re
+from datetime import date
 import requests
 {{~ if any_group ~}}
 import xml.etree.ElementTree as ET
@@ -260,6 +261,55 @@ def _to_number(value):
     return str(int(numeric)) if numeric.is_integer() else str(numeric)
 
 
+# Issue #205: safe, explicit type-conversion transforms -- unlike toNumber's
+# best-effort heuristic extraction, these either produce a well-formed value
+# or fall back to their own clearly defined "onError" behavior
+# ("KeepOriginal" leaves the pre-conversion value untouched, "UseDefault"
+# substitutes the transform's own configured "defaultValue") rather than
+# silently guessing.
+_DATE_FORMAT_TOKEN_PATTERNS = {"yyyy": r"(?P<yyyy>\d{4})", "mm": r"(?P<mm>\d{1,2})", "dd": r"(?P<dd>\d{1,2})"}
+
+
+def _type_conversion_fallback(value, on_error, default_value):
+    return default_value if on_error == "UseDefault" else value
+
+
+def _to_integer(value, on_error, default_value):
+    stripped = value.strip()
+    if re.fullmatch(r"[+-]?\d+", stripped):
+        return str(int(stripped))
+    return _type_conversion_fallback(value, on_error, default_value)
+
+
+def _to_boolean(value, on_error, default_value):
+    normalized = value.strip().lower()
+    if normalized in ("true", "1", "yes", "y"):
+        return "True"
+    if normalized in ("false", "0", "no", "n"):
+        return "False"
+    return _type_conversion_fallback(value, on_error, default_value)
+
+
+# source_format is the same "{yyyy}"/"{mm}"/"{dd}" mini-template
+# RangeSource.Format (RangeFormat.cs) already uses for ISO week/date
+# parameters, compiled into a regex the same way (escape the literal
+# template, then substitute each placeholder for its own capture group) so a
+# format string valid on the companion side parses identically here. Also
+# rejects a structurally-matching but non-existent calendar date (e.g.
+# "2026-02-30") via date()'s own ValueError, not just a pattern match.
+def _to_date(value, source_format, on_error, default_value):
+    pattern = re.escape(source_format)
+    for token, token_pattern in _DATE_FORMAT_TOKEN_PATTERNS.items():
+        pattern = pattern.replace(re.escape("{" + token + "}"), token_pattern)
+    match = re.fullmatch(pattern, value.strip())
+    if match:
+        try:
+            return date(int(match.group("yyyy")), int(match.group("mm")), int(match.group("dd"))).isoformat()
+        except ValueError:
+            pass
+    return _type_conversion_fallback(value, on_error, default_value)
+
+
 # Applies a field's ordered transform chain — each step's output feeds the
 # next step's input, in the order the user configured them in.
 def _apply_transforms(value, transforms):
@@ -280,6 +330,12 @@ def _apply_transforms(value, transforms):
             value = value.replace(t["find"], t["replacement"])
         elif kind == "toNumber":
             value = _to_number(value)
+        elif kind == "toInteger":
+            value = _to_integer(value, t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
+        elif kind == "toBoolean":
+            value = _to_boolean(value, t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
+        elif kind == "toDate":
+            value = _to_date(value, t.get("sourceFormat", "{yyyy}-{mm}-{dd}"), t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
     return value
 
 

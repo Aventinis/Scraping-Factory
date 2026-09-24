@@ -541,7 +541,8 @@ body {
   border: 1px solid var(--color-border); border-radius: var(--radius-sm); width: auto;
 }
 .transform-row .transform-pattern-input, .transform-row .transform-find-input,
-.transform-row .transform-replacement-input { flex: 1; min-width: 70px; }
+.transform-row .transform-replacement-input, .transform-row .transform-source-format-input,
+.transform-row .transform-default-value-input { flex: 1; min-width: 70px; }
 .transform-row .transform-group-input { width: 56px; }
 .transform-row button { flex: none; padding: 3px 6px; font-size: 11px; }
 

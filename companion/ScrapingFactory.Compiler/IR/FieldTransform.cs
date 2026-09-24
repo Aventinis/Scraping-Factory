@@ -27,9 +27,27 @@ namespace ScrapingFactory.Compiler.IR;
 [JsonDerivedType(typeof(RegexExtractTransform), "regexExtract")]
 [JsonDerivedType(typeof(ReplaceTransform), "replace")]
 [JsonDerivedType(typeof(ToNumberTransform), "toNumber")]
+[JsonDerivedType(typeof(ToIntegerTransform), "toInteger")]
+[JsonDerivedType(typeof(ToBooleanTransform), "toBoolean")]
+[JsonDerivedType(typeof(ToDateTransform), "toDate")]
 public abstract class FieldTransform
 {
 }
+
+// Shared by every explicit type-conversion transform below (Issue #205) —
+// what happens when a value turns out not to actually be well-formed for
+// the target type. Deliberately just two modes, not the full three the
+// issue's own prose floated ("skip the step and keep the raw value / fail
+// the field / a configurable default value"): "fail the field" would need
+// the same kind of row/element-dropping machinery RequiredFieldsCheck
+// (Issue #133) only built at real cost, for a hardening check that runs
+// once at the very end — wiring an equivalent per-transform, per-value
+// failure signal back out through flat/container/API-tree extraction was
+// judged not worth it for what's fundamentally the same "safe default"
+// need UseDefault already covers. KeepOriginal is the default so an
+// unconfigured conversion never silently discards data the way "fail"
+// would.
+public enum TransformErrorMode { KeepOriginal, UseDefault }
 
 // Strips leading/trailing whitespace — the single most common "the site put
 // extra spaces/newlines around this" case, kept as its own step rather than
@@ -75,4 +93,49 @@ public sealed class ReplaceTransform : FieldTransform
 // number" can chain a RegexExtractTransform before this one.
 public sealed class ToNumberTransform : FieldTransform
 {
+}
+
+// Issue #205: strict integer conversion — unlike ToNumberTransform's
+// heuristic decimal-separator/thousands-separator handling, this only ever
+// accepts a value that, once trimmed, is nothing but an optional sign and
+// digits (e.g. "42"/"-7"); "12.5"/"1,234" are conversion failures, not
+// approximated. Chain a RegexExtractTransform/ToNumberTransform first to
+// pull a clean integer-looking substring out of noisier text.
+public sealed class ToIntegerTransform : FieldTransform
+{
+    public TransformErrorMode OnError { get; init; } = TransformErrorMode.KeepOriginal;
+
+    // Only meaningful (and only applied) when OnError is UseDefault — see
+    // FieldTransformValidator. Null there is a validation error, not an
+    // implicit "" fallback, so a caller can't silently end up with an empty
+    // string that just happens to also be a valid ToInteger output.
+    public string? DefaultValue { get; init; }
+}
+
+// Issue #205: strict boolean conversion against a small, fixed,
+// case-insensitive vocabulary (true/1/yes/y -> "True", false/0/no/n ->
+// "False") — deliberately not configurable (same "keep the transform set
+// small and well-defined" reasoning ToNumberTransform's own doc comment
+// already gives), since the scrape-and-report data this project targets
+// realistically only ever encodes booleans one of these few ways.
+public sealed class ToBooleanTransform : FieldTransform
+{
+    public TransformErrorMode OnError { get; init; } = TransformErrorMode.KeepOriginal;
+    public string? DefaultValue { get; init; }
+}
+
+// Issue #205: strict date conversion to canonical ISO 8601 ("yyyy-mm-dd").
+// SourceFormat is the same "{yyyy}"/"{mm}"/"{dd}" mini-template
+// RangeSource.Format (RangeFormat.cs) already establishes for ISO
+// week/date API parameters — reusing RangeFormat.ValidateFormat(Date, ...)
+// for structural validation and RangeFormat.DefaultDateFormat ("{yyyy}-
+// {mm}-{dd}", i.e. already ISO) as the default when unset, rather than
+// inventing a second mini-template syntax. Conversion also checks the
+// value is a real calendar date (e.g. "2026-02-30" fails), not just that
+// it structurally matches the format.
+public sealed class ToDateTransform : FieldTransform
+{
+    public string? SourceFormat { get; init; }
+    public TransformErrorMode OnError { get; init; } = TransformErrorMode.KeepOriginal;
+    public string? DefaultValue { get; init; }
 }

@@ -31,7 +31,39 @@ const SFFieldTransformsUI = (function () {
     ['regexExtract', 'transforms.regexExtractOption'],
     ['replace', 'transforms.replaceOption'],
     ['toNumber', 'transforms.toNumberOption'],
+    ['toInteger', 'transforms.toIntegerOption'],
+    ['toBoolean', 'transforms.toBooleanOption'],
+    ['toDate', 'transforms.toDateOption'],
   ];
+
+  // Issue #205: shared by all three type-conversion kinds — an onError
+  // select plus, only when "useDefault" is actually picked, a default-value
+  // text input. Appended after whichever kind-specific inputs (if any) a
+  // given row already has.
+  function appendTypeConversionInputs(li, transform) {
+    const onErrorSelect = document.createElement('select');
+    onErrorSelect.className = 'transform-onerror-select';
+    [
+      ['KeepOriginal', 'transforms.onErrorKeepOriginalOption'],
+      ['UseDefault', 'transforms.onErrorUseDefaultOption'],
+    ].forEach(([value, labelKey]) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = t(labelKey);
+      if (value === transform.onError) option.selected = true;
+      onErrorSelect.appendChild(option);
+    });
+    li.appendChild(onErrorSelect);
+
+    if (transform.onError === 'UseDefault') {
+      const defaultValueInput = document.createElement('input');
+      defaultValueInput.type = 'text';
+      defaultValueInput.className = 'transform-default-value-input';
+      defaultValueInput.placeholder = t('transforms.defaultValuePlaceholder');
+      defaultValueInput.value = transform.defaultValue ?? '';
+      li.appendChild(defaultValueInput);
+    }
+  }
 
   function buildTransformRowEl(transform, index, total) {
     const li = document.createElement('li');
@@ -78,6 +110,16 @@ const SFFieldTransformsUI = (function () {
       replacementInput.placeholder = t('transforms.replacementPlaceholder');
       replacementInput.value = transform.replacement;
       li.appendChild(replacementInput);
+    } else if (transform.kind === 'toDate') {
+      const sourceFormatInput = document.createElement('input');
+      sourceFormatInput.type = 'text';
+      sourceFormatInput.className = 'transform-source-format-input';
+      sourceFormatInput.placeholder = t('transforms.sourceFormatPlaceholder');
+      sourceFormatInput.value = transform.sourceFormat;
+      li.appendChild(sourceFormatInput);
+      appendTypeConversionInputs(li, transform);
+    } else if (transform.kind === 'toInteger' || transform.kind === 'toBoolean') {
+      appendTypeConversionInputs(li, transform);
     }
 
     const moveUpBtn = document.createElement('button');
@@ -162,6 +204,12 @@ const SFFieldTransformsUI = (function () {
         setTransforms(updateTransform(transforms, index, { find: e.target.value }));
       } else if (e.target.classList.contains('transform-replacement-input')) {
         setTransforms(updateTransform(transforms, index, { replacement: e.target.value }));
+      } else if (e.target.classList.contains('transform-source-format-input')) {
+        setTransforms(updateTransform(transforms, index, { sourceFormat: e.target.value }));
+      } else if (e.target.classList.contains('transform-onerror-select')) {
+        setTransforms(updateTransform(transforms, index, { onError: e.target.value }));
+      } else if (e.target.classList.contains('transform-default-value-input')) {
+        setTransforms(updateTransform(transforms, index, { defaultValue: e.target.value }));
       }
     });
 

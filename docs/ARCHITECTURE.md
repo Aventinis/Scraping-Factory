@@ -656,6 +656,59 @@ shapes (flat/container/API) since none of them share a common leaf type.
   preview stays hidden) and reuses the exact same `renderTransformPreview`
   call flat mode's own modal already makes.
 
+### 2.18a Safe type-conversion transforms (Issue #205)
+
+Three more `FieldTransform` kinds — `ToIntegerTransform`/`ToBooleanTransform`/
+`ToDateTransform` — alongside §2.18's original four, added for the same
+"guarantee a mapped value is actually a well-formed type" need Output
+Blueprints' design surfaced but deliberately left for the transform pipeline
+to solve rather than inventing a second, Blueprint-local type system. Unlike
+`ToNumberTransform`'s best-effort heuristic coercion, all three are strict —
+a value that isn't already well-formed for the target type is a conversion
+failure, not an approximation — and share one `OnError`/`DefaultValue`
+contract (`TransformErrorMode.KeepOriginal`/`UseDefault`) instead of the
+"fail the row" option floated in the issue itself (judged not worth the
+row/element-dropping machinery `RequiredFieldsCheck` only built at real cost
+for a hardening check that runs once at the very end, not per-transform).
+
+- IR: `IR/FieldTransform.cs` (`ToIntegerTransform`/`ToBooleanTransform`/
+  `ToDateTransform`, `enum TransformErrorMode`). `ToDateTransform.SourceFormat`
+  reuses `RangeSource.Format`'s own `"{yyyy}"`/`"{mm}"`/`"{dd}"` mini-template
+  (`Backends/Python/RangeFormat`) rather than inventing a second syntax —
+  `FieldTransformValidator` delegates straight to
+  `RangeFormat.ValidateFormat(RangeType.Date, ...)`, and
+  `PythonFieldTransformLiteral` resolves an unset format via
+  `RangeFormat.Resolve(RangeType.Date, ...)`.
+- `Backends/Python/FieldTransformValidator` (same single call site every
+  field shape — including the "blocks" feature's own extraction blocks —
+  already shares): rejects `OnError == UseDefault` with no `DefaultValue`
+  set, and an invalid `SourceFormat`.
+- `Backends/Python/PythonFieldTransformLiteral`: `OnError` renders via
+  `.ToString()` (`"KeepOriginal"`/`"UseDefault"`), the same PascalCase
+  convention `HardeningCheck.Severity` already uses in
+  `PythonHardeningLiteral`, so both sides compare the same vocabulary.
+- Every template that already carries `_apply_transforms`/`_to_number` (the
+  six from §2.6/§2.3/§2.4 plus two more added since by an unrelated feature)
+  gains `_to_integer`/`_to_boolean`/`_to_date` runtime helpers and their own
+  `_apply_transforms` branches, following the same hand-duplicated-per-
+  template convention `_to_number` already established.
+  `_to_date` compiles `SourceFormat` the same escape-then-substitute way
+  `RangeFormat.CompilePattern` does in C#, and rejects a structurally-
+  matching but non-existent calendar date (e.g. `"2026-02-30"`) via
+  `datetime.date`'s own `ValueError`.
+- Extension: the shared `field-transforms.js`/`field-transforms-ui.js`
+  editor (§2.18) gains the three kinds directly — no new module, since every
+  mode's transform modal already routes through this one editor.
+  `toIntegerPreview`/`toBooleanPreview`/`toDatePreview` are hand-kept JS
+  mirrors of the three new Python helpers, feeding the existing live preview
+  (Issue #143) the same way `toNumberPreview` already does.
+- Tests: `FieldTransformJsonTests` (polymorphic (de)serialization),
+  `ScrapingPlanValidatorTests` (`OnError`/`SourceFormat` validation),
+  `TypeConversionTransformEndToEndTests` (real generated-script runs proving
+  each kind's success/failure/onError behavior — the same "black-box
+  `PythonScriptVerifier` can't see per-cell values" reasoning
+  `HardeningNullRateEndToEndTests` already documents).
+
 ### 2.19 Multiple start URLs (Issue #83)
 
 Lets the same Fields/Groups extraction config run against a static,
