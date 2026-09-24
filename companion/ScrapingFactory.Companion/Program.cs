@@ -37,6 +37,11 @@ builder.Services.AddSingleton(new LanguageModuleRegistry(CompanionBackendOverrid
 // /health and /generate never touch it.
 builder.Services.AddSingleton<SavedConfigStore>();
 
+// Issue #191: same lazy-construction reasoning as SavedConfigStore above,
+// its own independent store/SQLite file — see OutputBlueprintStore's own
+// doc comment for why this isn't just a third table there.
+builder.Services.AddSingleton<OutputBlueprintStore>();
+
 var app = builder.Build();
 
 app.UseCors();
@@ -139,6 +144,57 @@ app.MapDelete("/configs/{configId:long}/outputs/{id:long}", (long configId, long
     return store.DeleteOutput(id) ? Results.NoContent() : Results.NotFound();
 });
 
+// Issue #191: Output Blueprints — a small local CRUD store of named,
+// reusable target field-name lists, entirely independent of any one saved
+// configuration/site (unlike /configs above, there's no url-scoping here).
+// A configuration's own OutputBlueprint mapping (IR/OutputBlueprintMapping.cs)
+// never round-trips through these endpoints at generate time — the
+// extension resolves a blueprint's field list from here once, when the user
+// actually builds the mapping, and sends the resolved mapping verbatim with
+// the /generate request itself (see ScrapingPlanBuilder's own doc comment).
+static List<string>? NormalizeBlueprintFieldNames(List<string>? fieldNames) =>
+    fieldNames?.Select(name => name.Trim()).Where(name => name.Length > 0).ToList();
+
+app.MapPost("/blueprints", (SaveBlueprintRequest? request, OutputBlueprintStore store) =>
+{
+    var name = request?.Name?.Trim();
+    var fieldNames = NormalizeBlueprintFieldNames(request?.FieldNames);
+    if (string.IsNullOrWhiteSpace(name) || fieldNames is not { Count: > 0 })
+        return Results.BadRequest(new { error = "Name and at least one field name are required." });
+    if (fieldNames.Distinct().Count() != fieldNames.Count)
+        return Results.BadRequest(new { error = "Field names must be unique." });
+
+    var saved = store.Save(name, fieldNames);
+    return Results.Created($"/blueprints/{saved.Id}", saved);
+});
+
+app.MapGet("/blueprints", (OutputBlueprintStore store) => Results.Ok(store.ListAll()));
+
+app.MapGet("/blueprints/{id:long}", (long id, OutputBlueprintStore store) =>
+{
+    var record = store.Get(id);
+    return record is null ? Results.NotFound(new { error = "Output blueprint not found." }) : Results.Ok(record);
+});
+
+app.MapPut("/blueprints/{id:long}", (long id, SaveBlueprintRequest? request, OutputBlueprintStore store) =>
+{
+    if (store.Get(id) is null)
+        return Results.NotFound(new { error = "Output blueprint not found." });
+
+    var name = request?.Name?.Trim();
+    var fieldNames = NormalizeBlueprintFieldNames(request?.FieldNames);
+    if (string.IsNullOrWhiteSpace(name) || fieldNames is not { Count: > 0 })
+        return Results.BadRequest(new { error = "Name and at least one field name are required." });
+    if (fieldNames.Distinct().Count() != fieldNames.Count)
+        return Results.BadRequest(new { error = "Field names must be unique." });
+
+    store.Update(id, name, fieldNames);
+    return Results.Ok(new { id, name, fieldNames });
+});
+
+app.MapDelete("/blueprints/{id:long}", (long id, OutputBlueprintStore store) =>
+    store.Delete(id) ? Results.NoContent() : Results.NotFound(new { error = "Output blueprint not found." }));
+
 // Flat-Mode (Fields → Csv), Container-Mode (Groups → Xml) and API-Mode
 // (Api → Csv) are strictly separate — mixing any two in one request would
 // leave it ambiguous which extraction phase (and OutputFormat) the caller
@@ -163,6 +219,18 @@ static string? ValidateModeExclusivity(ScrapingConfig config)
     // outright instead, same as the other three mode combinations above.
     if (hasApi && config.AdditionalUrls is { Count: > 0 })
         return "AdditionalUrls and Api are mutually exclusive.";
+
+    // Issue #191: OutputBlueprint only makes sense for flat-shaped output —
+    // a tree (Container-Mode, or Api's own Groups shape) doesn't have a flat
+    // row of named columns to remap. Rejected outright rather than silently
+    // ignored, same reasoning as AdditionalUrls-vs-Api above.
+    if (config.OutputBlueprint is not null)
+    {
+        if (hasGroups)
+            return "OutputBlueprint and Groups are mutually exclusive — output blueprints are only supported for flat-shaped output.";
+        if (hasApi && config.Api!.Groups is { Count: > 0 })
+            return "OutputBlueprint is not supported for Api mode's tree response shape (Groups) — only the flat ItemsPath/Fields shape.";
+    }
 
     // Issue #174: same reasoning as AdditionalUrls above — Api-Mode never
     // reads the page-scraping start URL, so pagination would silently do
@@ -258,6 +326,8 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
             return Results.BadRequest(new { error = "PersistentSession is not supported on a Combined request — set it on each component's own config instead." });
         if (config.ExternalConfig == true)
             return Results.BadRequest(new { error = "ExternalConfig is not supported on a Combined request — set it on each component's own config instead." });
+        if (config.OutputBlueprint is not null)
+            return Results.BadRequest(new { error = "OutputBlueprint is not supported on a Combined request — set it on each component's own config instead." });
 
         if (combined.Count < 2)
             return Results.BadRequest(new { error = "Combined requires at least 2 components." });
@@ -361,6 +431,11 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
             return Results.BadRequest(new { error = "Hardening is not supported on a Blocks request — set it on each block's own config instead." });
         if (config.ExternalConfig == true)
             return Results.BadRequest(new { error = "ExternalConfig is not supported together with Blocks." });
+        // Issue #191: same "not designed for more than one block's own
+        // output yet" reasoning as ExternalConfig above — each block would
+        // need its own mapping, not yet reachable from this UI.
+        if (config.OutputBlueprint is not null)
+            return Results.BadRequest(new { error = "OutputBlueprint is not supported together with Blocks." });
 
         for (var i = 0; i < blocks.Count; i++)
         {
@@ -488,4 +563,11 @@ public sealed class SaveOutputRequest
     public string? Name { get; set; }
     public string? FileName { get; set; }
     public string? Content { get; set; }
+}
+
+// Issue #191: POST/PUT /blueprints body.
+public sealed class SaveBlueprintRequest
+{
+    public string? Name { get; set; }
+    public List<string>? FieldNames { get; set; }
 }
