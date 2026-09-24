@@ -318,6 +318,64 @@ public class ScrapingPlanValidatorTests
         Assert.False(result.Success);
     }
 
+    // ── Issue #205: type-conversion transforms ───────────────────────────
+
+    [Fact]
+    public void Validate_ExtractStepWithValidTypeConversionTransforms_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ExtractStep
+                {
+                    Name = "Preis", Selector = ".price",
+                    Transforms =
+                    [
+                        new ToIntegerTransform(),
+                        new ToBooleanTransform { OnError = TransformErrorMode.UseDefault, DefaultValue = "False" },
+                        new ToDateTransform { SourceFormat = "{dd}.{mm}.{yyyy}" },
+                    ],
+                },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ExtractStepWithUseDefaultButNoDefaultValue_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ExtractStep { Name = "Preis", Selector = ".price", Transforms = [new ToIntegerTransform { OnError = TransformErrorMode.UseDefault }] },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Preis", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ExtractStepWithInvalidDateSourceFormat_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ExtractStep { Name = "Datum", Selector = ".date", Transforms = [new ToDateTransform { SourceFormat = "{yyyy}-{mm}" }] }, // missing {dd}
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Datum", result.Error);
+    }
+
     [Fact]
     public void Validate_ValidWaitForStep_Succeeds()
     {
