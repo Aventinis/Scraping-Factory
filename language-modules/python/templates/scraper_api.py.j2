@@ -49,6 +49,14 @@ ITEMS_PATH = {{ items_path_literal }}
 FIELDS = {{ fields_literal }}
 PARAMETERS = {{ parameters_literal }}
 HEADERS = {{ headers_literal }}
+# Issue #191: optional Output Blueprint field mapping — see
+# scraper.py.j2's own identical BLUEPRINT_MAPPING doc comment. Only ever
+# references FIELDS' own names, never a PARAMETERS name — a row's
+# parameter-value columns are always dropped when this is set, the same
+# "only extracted fields are mappable" simplification the hardening
+# null-rate/required-fields checks' own field pickers already make for
+# Api mode.
+BLUEPRINT_MAPPING = {{ blueprint_mapping_literal }}
 # Issue #136 (embedded JSON source): None for an ordinary live API call. When
 # set, the "response body" to run ITEMS_PATH/FIELDS against comes from one
 # <script> tag's own text content within the fetched page's HTML instead of
@@ -778,15 +786,27 @@ def main():
 {{~ if hardening.enabled ~}}
     data, required_fields_failed = _filter_required_fields(data)
 {{~ end ~}}
+    # Issue #191: a no-op remap (output_rows is just `data`, fieldnames are
+    # the usual parameter+field columns) when no Output Blueprint is set —
+    # `data` itself stays keyed by the original field/parameter names
+    # throughout either way, since hardening below still needs to look
+    # fields up by those original names.
+    if BLUEPRINT_MAPPING:
+        output_rows = [{m["target"]: row.get(m["source"], "") for m in BLUEPRINT_MAPPING} for row in data]
+    else:
+        output_rows = data
 {{~ if output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        json.dump(output_rows, f, ensure_ascii=False, indent=2)
 {{~ else ~}}
-    fieldnames = [parameter["name"] for parameter in PARAMETERS] + [field["name"] for field in FIELDS]
+    if BLUEPRINT_MAPPING:
+        fieldnames = [m["target"] for m in BLUEPRINT_MAPPING]
+    else:
+        fieldnames = [parameter["name"] for parameter in PARAMETERS] + [field["name"] for field in FIELDS]
     with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
-        writer.writerows(data)
+        writer.writerows(output_rows)
 {{~ end ~}}
     print(f"Done — {len(data)} rows written to {OUTPUT_PATH}")
 {{~ if change_detection.enabled ~}}

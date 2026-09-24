@@ -408,6 +408,10 @@ TRANSFORMS = {
 {{- end }}
 }
 
+# Issue #191: optional Output Blueprint field mapping — see scraper.py.j2's
+# own identical BLUEPRINT_MAPPING doc comment.
+BLUEPRINT_MAPPING = {{ blueprint_mapping_literal }}
+
 # A field's own selector is evaluated against the top-level page unless it
 # has a FRAME_PATH entry — an ordered list of CSS selectors identifying each
 # iframe from the top document down to the frame the field actually lives
@@ -705,17 +709,25 @@ def main():
 {{~ if hardening.enabled ~}}
     data, required_fields_failed = _filter_required_fields(data)
 {{~ end ~}}
-    # Issue #178: a no-op remap when no field was renamed via the external
-    # config (FIELD_OUTPUT_NAMES is then empty) — `data` itself stays keyed
-    # by the original field names throughout, since hardening/change
-    # detection below still need to look fields up by those original names.
-    output_rows = [{FIELD_OUTPUT_NAMES.get(k, k): v for k, v in row.items()} for row in data]
+    # Issue #191: BLUEPRINT_MAPPING, when set, takes over the write-time
+    # remap entirely instead of FIELD_OUTPUT_NAMES — see scraper.py.j2's
+    # own identical comment. Issue #178: otherwise, a no-op remap when no
+    # field was renamed via the external config (FIELD_OUTPUT_NAMES is then
+    # empty) — `data` itself stays keyed by the original field names
+    # throughout either way, since hardening/change detection below still
+    # need to look fields up by those original names.
+    if BLUEPRINT_MAPPING:
+        output_rows = [{m["target"]: row.get(m["source"], "") for m in BLUEPRINT_MAPPING} for row in data]
+        output_fieldnames = [m["target"] for m in BLUEPRINT_MAPPING]
+    else:
+        output_rows = [{FIELD_OUTPUT_NAMES.get(k, k): v for k, v in row.items()} for row in data]
+        output_fieldnames = [FIELD_OUTPUT_NAMES.get(name, name) for name in SELECTORS.keys()]
 {{~ if output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(output_rows, f, ensure_ascii=False, indent=2)
 {{~ else ~}}
     with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=[FIELD_OUTPUT_NAMES.get(name, name) for name in SELECTORS.keys()])
+        writer = csv.DictWriter(f, fieldnames=output_fieldnames)
         writer.writeheader()
         writer.writerows(output_rows)
 {{~ end ~}}
