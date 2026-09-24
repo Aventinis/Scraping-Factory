@@ -72,6 +72,7 @@ const { wireBlocksConfigEvents } =
 const {
   createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
   moveTransform, transformsAreValid, applyTransformsPreview, toNumberPreview,
+  toIntegerPreview, toBooleanPreview, toDatePreview,
 } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
 
 const { renderTransformList, renderTransformPreview } =
@@ -1060,7 +1061,7 @@ if (typeof module !== 'undefined') {
     renderDataPreview,
     createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
     moveTransform, transformsAreValid, renderTransformList,
-    applyTransformsPreview, toNumberPreview, renderTransformPreview,
+    applyTransformsPreview, toNumberPreview, toIntegerPreview, toBooleanPreview, toDatePreview, renderTransformPreview,
     renderThemeToggle, syncModeToggleThumbs,
     applyConfigToState, renderSavedConfigsList, fetchSavedConfigs, fetchAllSavedConfigs, createSavedConfig, saveCurrentConfig, loadSavedConfig,
     deleteSavedConfig, requestDeleteSavedConfig, cancelDeleteSavedConfig, openSaveConfigModal,
