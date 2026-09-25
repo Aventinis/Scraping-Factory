@@ -143,6 +143,11 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         {
             var groupsLiteral = PythonGroupTreeLiteral.Render(groupStep.Roots, indent: 0);
             var rootNames = groupStep.Roots.Select(root => root.Name).ToList();
+            // Issue #192: see PythonCodeGenerator's identical branch for why
+            // this is recomputed here rather than threaded through ScrapingPlan.
+            var blueprintRowScope = plan.OutputBlueprint is { } blueprint
+                ? OutputBlueprintFlattening.ResolveContainerRowScope(groupStep.Roots, blueprint.Fields.Select(f => f.SourceField).ToHashSet())
+                : null;
             var groupedShellTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_scraper_grouped.py.j2");
             return groupedShellTemplate.Render(new
             {
@@ -164,6 +169,9 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
                 hardening,
                 pagination,
                 external_config = externalConfig,
+                blueprint_mapping_enabled = plan.OutputBlueprint is not null,
+                blueprint_mapping_literal = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),
+                blueprint_row_group_literal = blueprintRowScope?.RowGroupName is { } rowGroup ? PythonLiteral.Str(rowGroup) : "None",
             });
         }
 

@@ -158,7 +158,30 @@ public static class ScrapingPlanValidator
                 return Invalid("ExtractGroupStep must contain at least one group.");
 
             var groupError = ValidateContainerNodes(extractGroupStep.Roots, plan.Engine);
-            return groupError is null ? new PlanValidationResult { Success = true } : Invalid(groupError);
+            if (groupError is not null)
+                return Invalid(groupError);
+
+            // Issue #192: container mode's own leaf field names (DataFieldNode
+            // only — GroupNode names aren't mappable, the same leaf-only scope
+            // the extension's own field picker already offers for this mode).
+            if (plan.OutputBlueprint is { } containerBlueprint)
+            {
+                var containerBlueprintError = ValidateOutputBlueprint(containerBlueprint, CollectContainerFieldNames(extractGroupStep.Roots));
+                if (containerBlueprintError is not null)
+                    return Invalid(containerBlueprintError);
+
+                // Unlike flat mode, a tree-shaped mapping doesn't just
+                // remap columns — it flattens the tree into denormalized
+                // rows (see OutputBlueprintFlattening), which only has one
+                // unambiguous row layout when every mapped field sits on a
+                // single root-to-row repeating-group chain.
+                var mappedSourceFields = containerBlueprint.Fields.Select(field => field.SourceField).ToHashSet();
+                var rowScope = OutputBlueprintFlattening.ResolveContainerRowScope(extractGroupStep.Roots, mappedSourceFields);
+                if (rowScope.Error is not null)
+                    return Invalid(rowScope.Error);
+            }
+
+            return new PlanValidationResult { Success = true };
         }
 
         // API-Mode replaces the flat ExtractStep list wholesale, just like
@@ -170,12 +193,26 @@ public static class ScrapingPlanValidator
             if (apiError is not null)
                 return Invalid(apiError);
 
-            // Issue #191: only reachable for the flat ItemsPath/Fields shape
-            // — ScrapingPlanBuilder never carries OutputBlueprint through
-            // for the tree shape (Groups), see its own doc comment.
+            // Issue #191/#192: available field names depend on which of
+            // Api's two response shapes is set — the flat ItemsPath/Fields
+            // list, or (since #192) the tree shape's own leaf ApiField
+            // names (ApiGroup names aren't mappable, same leaf-only scope
+            // Container-Mode's own check just above applies).
+            //
+            // Unlike Container-Mode, there's no equivalent generate-time
+            // row-scope/ambiguity check for the tree shape here: ApiGroup
+            // has no explicit Repeating flag (Architecture Decision #6) —
+            // whether a node actually repeats is only known once the real
+            // JSON response is resolved at script run time. The same
+            // ambiguity check this validator runs statically for Container-
+            // Mode (OutputBlueprintFlattening) instead has a runtime mirror
+            // in scraper_api_grouped.py.j2 itself, surfacing as a normal
+            // 422 trial-run verification failure rather than a 400 here.
             if (plan.OutputBlueprint is { } apiBlueprint)
             {
-                var apiAvailableFields = (apiCallStep.Config.Fields ?? []).Select(field => field.Name).ToList();
+                var apiAvailableFields = apiCallStep.Config.Groups is { Count: > 0 } apiGroups
+                    ? CollectApiFieldNames(apiGroups)
+                    : (apiCallStep.Config.Fields ?? []).Select(field => field.Name).ToList();
                 var apiBlueprintError = ValidateOutputBlueprint(apiBlueprint, apiAvailableFields);
                 if (apiBlueprintError is not null)
                     return Invalid(apiBlueprintError);
@@ -251,6 +288,42 @@ public static class ScrapingPlanValidator
             return $"OutputBlueprint: source field(s) mapped more than once: {string.Join(", ", duplicateSources)}.";
 
         return null;
+    }
+
+    // Issue #192: leaf field names only (DataFieldNode, not GroupNode) —
+    // mirrors ValidateContainerNodes' own recursive walk, and the
+    // extension's own collectFieldNames() for this mode, which likewise
+    // never offers a group's own name as a mappable source field.
+    private static List<string> CollectContainerFieldNames(IEnumerable<ContainerNode> nodes)
+    {
+        var names = new List<string>();
+        void Walk(IEnumerable<ContainerNode> ns)
+        {
+            foreach (var node in ns)
+            {
+                if (node is DataFieldNode field) names.Add(field.Name);
+                else if (node is GroupNode group) Walk(group.Children);
+            }
+        }
+        Walk(nodes);
+        return names;
+    }
+
+    // Mirrors CollectContainerFieldNames for API-Mode's tree shape (Issue
+    // #54) — leaf ApiField names only, not ApiGroup names.
+    private static List<string> CollectApiFieldNames(IEnumerable<ApiNode> nodes)
+    {
+        var names = new List<string>();
+        void Walk(IEnumerable<ApiNode> ns)
+        {
+            foreach (var node in ns)
+            {
+                if (node is ApiField field) names.Add(field.Name);
+                else if (node is ApiGroup group) Walk(group.Children);
+            }
+        }
+        Walk(nodes);
+        return names;
     }
 
     private static readonly Regex EnvironmentVariableNamePattern = new("^[A-Za-z_][A-Za-z0-9_]*$");

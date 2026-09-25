@@ -50,6 +50,14 @@ public sealed class PythonCodeGenerator : ICodeGenerator
         {
             var groupsLiteral = PythonGroupTreeLiteral.Render(groupStep.Roots, indent: 0);
             var rootNames = groupStep.Roots.Select(root => root.Name).ToList();
+            // Issue #192: the row-scope group (if any) is re-resolved here
+            // rather than threaded through ScrapingPlan — ScrapingPlanValidator
+            // already proved this same call succeeds (no Error) before codegen
+            // ever runs, so recomputing it is cheap and keeps ScrapingPlan
+            // itself free of a codegen-only concern.
+            var blueprintRowScope = plan.OutputBlueprint is { } blueprint
+                ? OutputBlueprintFlattening.ResolveContainerRowScope(groupStep.Roots, blueprint.Fields.Select(f => f.SourceField).ToHashSet())
+                : null;
             var groupedTemplate = EmbeddedScribanTemplate.Load(assembly, "scraper_grouped.py.j2");
             return groupedTemplate.Render(new
             {
@@ -61,6 +69,9 @@ public sealed class PythonCodeGenerator : ICodeGenerator
                 hardening = PythonHardeningLiteral.BuildContext(plan.Hardening),
                 pagination = PythonPaginationLiteral.BuildContext(plan.Pagination),
                 external_config = PythonExternalConfigLiteral.BuildContext(plan.ExternalConfig),
+                blueprint_mapping_enabled = plan.OutputBlueprint is not null,
+                blueprint_mapping_literal = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),
+                blueprint_row_group_literal = blueprintRowScope?.RowGroupName is { } rowGroup ? PythonLiteral.Str(rowGroup) : "None",
             });
         }
 
