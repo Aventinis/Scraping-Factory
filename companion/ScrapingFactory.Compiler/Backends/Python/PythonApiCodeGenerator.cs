@@ -63,8 +63,15 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
                 // resolution scraper_api_grouped.py.j2's own runtime mirror
                 // of OutputBlueprintFlattening does happens at script run
                 // time instead, once the real response shape is known.
-                blueprint_mapping_enabled = plan.OutputBlueprint is not null,
+                blueprint_mapping_enabled = plan.OutputBlueprint?.SchemaKind == OutputBlueprintSchemaKind.Flat,
                 blueprint_mapping_literal = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),
+                // Issue #244: same "resolved dynamically at run time" story
+                // as the flat mapping's own row-scope note just above —
+                // scraper_api_grouped.py.j2's own runtime mirror of
+                // ResolveContainerTreeRowScopes resolves each target group's
+                // scope once the real response is known, not here.
+                blueprint_tree_mapping_enabled = plan.OutputBlueprint?.SchemaKind == OutputBlueprintSchemaKind.Tree,
+                blueprint_tree_mapping_literal = PythonOutputBlueprintLiteral.RenderTree(plan.OutputBlueprint),
             });
         }
 

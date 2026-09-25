@@ -127,11 +127,48 @@ const SFConfigImport = (function () {
 
   // Reverse of buildOutputBlueprintMapping — wire is null (or absent) when
   // no blueprint was mapped. Unlike the fetch-based selectOutputBlueprint
-  // (output-blueprints-ui.js), the target field names don't need a round
-  // trip back to the companion here: the wire mapping's own `fields` array
-  // already carries every targetField in blueprint order.
+  // (output-blueprints-ui.js), neither shape needs a round trip back to the
+  // companion here: the wire mapping's own `fields` (Flat) or `tree` (Tree)
+  // already carries everything needed to reproduce the picker's own state
+  // — Issue #244's tree shape reuses createTreeMappingDraft/
+  // updateTreeMappingSource's own path-keyed draft convention, walking the
+  // wire tree and the (structurally identical, since it was built FROM that
+  // tree) draft in lockstep.
+  const EMPTY_OUTPUT_BLUEPRINT_STATE = {
+    selectedOutputBlueprintId: '', selectedOutputBlueprintFieldNames: [], outputBlueprintMapping: {},
+    selectedOutputBlueprintSchemaKind: 'Flat', selectedOutputBlueprintTree: [], outputBlueprintTreeMapping: {},
+  };
+
+  function applyOutputBlueprintTreeMapping(wireNodes, prefix, tree, draft) {
+    wireNodes.forEach((wireNode, i) => {
+      const path = prefix ? `${prefix}.${i}` : `${i}`;
+      if (Array.isArray(wireNode.children)) {
+        tree.push({ name: wireNode.name, children: [] });
+        applyOutputBlueprintTreeMapping(wireNode.children, path, tree[tree.length - 1].children, draft);
+      } else {
+        tree.push({ name: wireNode.name });
+        draft[path] = wireNode.sourceField;
+      }
+    });
+  }
+
   function applyOutputBlueprintConfig(wire) {
-    if (!wire) return { selectedOutputBlueprintId: '', selectedOutputBlueprintFieldNames: [], outputBlueprintMapping: {} };
+    if (!wire) return { ...EMPTY_OUTPUT_BLUEPRINT_STATE };
+
+    if (wire.schemaKind === 'Tree') {
+      const tree = [];
+      const mapping = {};
+      applyOutputBlueprintTreeMapping(wire.tree || [], '', tree, mapping);
+      return {
+        selectedOutputBlueprintId: wire.blueprintId != null ? String(wire.blueprintId) : '',
+        selectedOutputBlueprintFieldNames: [],
+        outputBlueprintMapping: {},
+        selectedOutputBlueprintSchemaKind: 'Tree',
+        selectedOutputBlueprintTree: tree,
+        outputBlueprintTreeMapping: mapping,
+      };
+    }
+
     const fieldNames = wire.fields.map(f => f.targetField);
     const mapping = {};
     for (const f of wire.fields) mapping[f.targetField] = f.sourceField;
@@ -139,6 +176,9 @@ const SFConfigImport = (function () {
       selectedOutputBlueprintId: wire.blueprintId != null ? String(wire.blueprintId) : '',
       selectedOutputBlueprintFieldNames: fieldNames,
       outputBlueprintMapping: mapping,
+      selectedOutputBlueprintSchemaKind: 'Flat',
+      selectedOutputBlueprintTree: [],
+      outputBlueprintTreeMapping: {},
     };
   }
 

@@ -206,6 +206,7 @@ describe('Output Blueprints (Issue #191)', () => {
     const body = JSON.parse(generateCall[1].body);
     expect(body.outputBlueprint).toEqual({
       blueprintId: 1,
+      schemaKind: 'Flat',
       fields: [
         { targetField: 'Title', sourceField: 'Title' },
         { targetField: 'Price', sourceField: 'Price' },
@@ -264,7 +265,7 @@ describe('Output Blueprints (Issue #191)', () => {
 
     const postCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/blueprints') && init?.method === 'POST');
     expect(postCall).toBeDefined();
-    expect(JSON.parse(postCall[1].body)).toEqual({ name: 'New blueprint', fieldNames: ['Title'] });
+    expect(JSON.parse(postCall[1].body)).toEqual({ name: 'New blueprint', schemaKind: 'Flat', fieldNames: ['Title'] });
     expect(document.getElementById('modal-blueprint-edit').classList.contains('hidden')).toBe(true);
 
     const options = [...document.querySelectorAll('#select-output-blueprint option')];
@@ -288,7 +289,7 @@ describe('Output Blueprints (Issue #191)', () => {
 
     const putCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/blueprints/1') && init?.method === 'PUT');
     expect(putCall).toBeDefined();
-    expect(JSON.parse(putCall[1].body)).toEqual({ name: 'Standard export', fieldNames: ['Price', 'Title'] });
+    expect(JSON.parse(putCall[1].body)).toEqual({ name: 'Standard export', schemaKind: 'Flat', fieldNames: ['Price', 'Title'] });
   });
 
   test('deleting a blueprint asks for confirmation before sending DELETE', async () => {

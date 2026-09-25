@@ -68,8 +68,15 @@ public sealed class PythonCodeGenerator : ICodeGenerator
                 // ScrapingPlanValidator's own OutputBlueprintFlattening call already
                 // guarantees, before codegen ever runs, that this mapping resolves
                 // to exactly one unambiguous row layout.
-                blueprint_mapping_enabled = plan.OutputBlueprint is not null,
+                blueprint_mapping_enabled = plan.OutputBlueprint?.SchemaKind == OutputBlueprintSchemaKind.Flat,
                 blueprint_mapping_literal = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),
+                // Issue #244: the tree-shaped counterpart — see
+                // PythonOutputBlueprintLiteral.RenderTree's own doc comment
+                // on why both this and blueprint_mapping_literal above are
+                // always rendered, even though only one is ever non-empty
+                // for a given plan.
+                blueprint_tree_mapping_enabled = plan.OutputBlueprint?.SchemaKind == OutputBlueprintSchemaKind.Tree,
+                blueprint_tree_mapping_literal = PythonOutputBlueprintLiteral.RenderTree(plan.OutputBlueprint),
             });
         }
 

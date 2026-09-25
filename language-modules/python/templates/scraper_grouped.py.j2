@@ -55,11 +55,14 @@ URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 # spoofed browser) is enough to pass that check on most sites.
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"}
 
-# Issue #192: an active Output Blueprint mapping flattens this mode's
-# normally-nested output into denormalized rows (see BLUEPRINT_MAPPING
-# below), so it needs the flat-mode extensions (csv/json) instead of the
-# tree ones (xml/json) — output_is_json still only ever picks between the
-# two formats within whichever shape is actually active.
+# Issue #192: an active FLAT-schema Output Blueprint mapping flattens this
+# mode's normally-nested output into denormalized rows (see BLUEPRINT_MAPPING
+# below), so it needs the flat-mode extensions (csv/json) instead of the tree
+# ones (xml/json) — output_is_json still only ever picks between the two
+# formats within whichever shape is actually active. Issue #244's TREE-schema
+# mapping (BLUEPRINT_TREE_MAPPING) produces a real nested structure of its
+# own instead, so it keeps the ordinary tree extensions like an unmapped tree
+# output would.
 OUTPUT_PATH = "{{ output_filename }}.{{ if blueprint_mapping_enabled }}{{ if output_is_json }}json{{ else }}csv{{ end }}{{ else }}{{ if output_is_json }}json{{ else }}xml{{ end }}{{ end }}"
 
 {{~ if external_config.enabled ~}}
@@ -445,6 +448,159 @@ def _flatten_group_tree_for_blueprint(scope, node, context):
     return [context]
 
 
+# Issue #244: a second, tree-shaped Output Blueprint target schema —
+# BLUEPRINT_TREE_MAPPING mirrors the persisted blueprint's own target tree
+# node-for-node (group: name+children, leaf: name+source), letting a mapping
+# place two independent/sibling source repeating groups under two different
+# target branches instead of the flat mapping's single shared row scope
+# above. Mutually exclusive with BLUEPRINT_MAPPING for any one plan (see
+# PythonOutputBlueprintLiteral's own doc comment) — at most one of them ever
+# actually builds anything, but both constants are always emitted so the
+# rest of this file doesn't need to branch on SchemaKind directly.
+BLUEPRINT_TREE_MAPPING = {{ blueprint_tree_mapping_literal }}
+
+# One-time, purely structural index of GROUPS, independent of any scraped
+# data — built once at import time since the tree shape itself never
+# changes across pages/paginated results within a single run.
+# _BLUEPRINT_PATH_BY_NAME[name] is the ordered list of ancestor group dicts
+# (both repeating and non-repeating) from the document root down to (not
+# including) the node with that name; _BLUEPRINT_GROUP_BY_NAME/
+# _BLUEPRINT_LEAF_BY_NAME let a resolved name be turned back into its own
+# node dict. First occurrence wins for a duplicate name, the same "global by
+# name" simplification NullRateCheck/RequiredFieldsCheck/BLUEPRINT_MAPPING
+# above already established for this tree shape.
+_BLUEPRINT_GROUP_BY_NAME = {}
+_BLUEPRINT_LEAF_BY_NAME = {}
+_BLUEPRINT_PATH_BY_NAME = {}
+
+
+def _blueprint_index_source_tree(nodes, ancestors):
+    for node in nodes:
+        if "children" in node:
+            _BLUEPRINT_GROUP_BY_NAME.setdefault(node["name"], node)
+            _BLUEPRINT_PATH_BY_NAME.setdefault(node["name"], ancestors)
+            _blueprint_index_source_tree(node["children"], ancestors + [node])
+        else:
+            _BLUEPRINT_PATH_BY_NAME.setdefault(node["name"], ancestors)
+            _BLUEPRINT_LEAF_BY_NAME.setdefault(node["name"], node)
+
+
+_blueprint_index_source_tree(GROUPS, [])
+
+
+# The chain of REPEATING ancestor names only (mirrors the companion's own
+# OutputBlueprintFlattening chain exactly) — used to find which source group
+# a target group's own mapped fields agree on repeating within, and to tell
+# a "broadcast" field (no repeating ancestor at all) apart from one that
+# needs walking down into a specific repeating instance.
+def _blueprint_repeating_chain(name):
+    return [g["name"] for g in _BLUEPRINT_PATH_BY_NAME.get(name, []) if g["repeating"]]
+
+
+# The FULL ancestor path (repeating and non-repeating alike) plus, when
+# `name` itself names a group, that group's own node appended last — the
+# actual sequence of selectors that must be walked, in order, to reach an
+# instance of `name` from the document root.
+def _blueprint_full_path(name):
+    ancestors = _BLUEPRINT_PATH_BY_NAME.get(name, [])
+    group = _BLUEPRINT_GROUP_BY_NAME.get(name)
+    return ancestors + [group] if group is not None else ancestors
+
+
+# Walks `scopes` through `suffix` (a list of ancestor group dicts, as
+# returned by _blueprint_full_path) one group at a time, fanning out at
+# every repeating step — the runtime counterpart of resolving a whole chain
+# of GroupNode selectors at once instead of one at a time like
+# extract_group() does through ordinary recursion.
+def _blueprint_walk_suffix(scopes, suffix):
+    for group in suffix:
+        next_scopes = []
+        for scope in scopes:
+            if group["repeating"]:
+                next_scopes.extend(scope.select(group["selector"]))
+            else:
+                found = scope.select_one(group["selector"])
+                if found is not None:
+                    next_scopes.append(found)
+        scopes = next_scopes
+    return scopes
+
+
+# Resolves this target group's own row scope (the deepest repeating source
+# ancestor its direct leaf fields — not counting any nested target group's
+# own leaves, which resolve independently — agree on), falling back to
+# ancestor_chain unchanged when none of them add any further nesting.
+# Container-Mode's GroupNode.Repeating is a static, config-time flag, so
+# ScrapingPlanValidator's own OutputBlueprintFlattening.
+# ResolveContainerTreeRowScopes already guarantees, before this script was
+# ever generated, that this always resolves unambiguously — this simply
+# re-derives that same winner rather than re-validating it (contrast with
+# scraper_api_grouped.py.j2's own version of this function, which has no
+# such static guarantee available and validates it here instead).
+def _blueprint_resolve_group_chain(target_children, ancestor_chain):
+    chains = [_blueprint_repeating_chain(c["source"]) for c in target_children if "source" in c]
+    non_empty = [c for c in chains if c]
+    return max(non_empty, key=len) if non_empty else ancestor_chain
+
+
+# Builds one target node's own output — a list of ET.Element for a target
+# group (one per resolved row-scope instance, possibly just one when the
+# group adds no further nesting) or a single ET.Element for a target leaf,
+# mirroring extract_group()'s own "list for a group, single Element for a
+# leaf" convention so a caller can use the same isinstance(result, list)
+# dispatch. `top_scope` is the whole page's own top-level scope (needed to
+# resolve a "broadcast" leaf — one with no repeating source ancestor at all
+# — independently of how deep the current recursion already is, exactly
+# like a page-level field in the flat mapping above is simply visited once
+# via its own natural, shallow position in the tree); `scope`/
+# `ancestor_full_path` track where the recursion has already navigated to
+# relative to that root.
+def _build_blueprint_node(top_scope, scope, ancestor_chain, ancestor_full_path, target_node):
+    if "children" in target_node:
+        row_chain = _blueprint_resolve_group_chain(target_node["children"], ancestor_chain)
+        full_path = _blueprint_full_path(row_chain[-1]) if row_chain else ancestor_full_path
+        instances = _blueprint_walk_suffix([scope], full_path[len(ancestor_full_path):])
+
+        elements = []
+        for instance in instances:
+            el = ET.Element(target_node["name"])
+            for child in target_node["children"]:
+                result = _build_blueprint_node(top_scope, instance, row_chain, full_path, child)
+                if isinstance(result, list):
+                    el.extend(result)
+                else:
+                    el.append(result)
+            elements.append(el)
+        return elements
+
+    source_name = target_node["source"]
+    leaf_node = _BLUEPRINT_LEAF_BY_NAME[source_name]
+    chain = _blueprint_repeating_chain(source_name)
+    if chain:
+        scopes = _blueprint_walk_suffix([scope], _blueprint_full_path(source_name)[len(ancestor_full_path):])
+    else:
+        # Broadcast: this field has no repeating source ancestor at all, so
+        # it's resolved relative to the whole page, not wherever the current
+        # target group instance happens to be.
+        scopes = _blueprint_walk_suffix([top_scope], _blueprint_full_path(source_name))
+
+    resolved = scopes[0] if scopes else None
+    el = ET.Element(target_node["name"])
+    el.text = ("false" if leaf_node["mode"] == "exists" else "") if resolved is None else _resolve_flatten_leaf_value(resolved, leaf_node)
+    return el
+
+
+def _build_blueprint_tree(top_scope, target_roots):
+    elements = []
+    for target_node in target_roots:
+        result = _build_blueprint_node(top_scope, top_scope, [], [], target_node)
+        if isinstance(result, list):
+            elements.extend(result)
+        else:
+            elements.append(result)
+    return elements
+
+
 # Issue #84: best-effort numeric normalization for a "toNumber" transform —
 # finds the first numeric-looking substring and normalizes its decimal
 # separator to '.', stripping thousands separators/currency symbols. When
@@ -707,6 +863,7 @@ def scrape(url):
     # single <Ergebnis> element.
     root = ET.Element("Ergebnis")
     blueprint_rows = []
+    blueprint_tree_elements = []
     page_number = 1
     page_url = url
     while page_url:
@@ -733,6 +890,9 @@ def scrape(url):
         for node in GROUPS:
             blueprint_rows.extend(_flatten_group_tree_for_blueprint(soup, node, {}))
 {{~ end ~}}
+{{~ if blueprint_tree_mapping_enabled ~}}
+        blueprint_tree_elements.extend(_build_blueprint_tree(soup, BLUEPRINT_TREE_MAPPING))
+{{~ end ~}}
 
 {{~ if pagination.enabled ~}}
         if page_number >= PAGINATION_MAX_PAGES:
@@ -748,7 +908,7 @@ def scrape(url):
 {{~ else ~}}
         page_url = None
 {{~ end ~}}
-    return root, blueprint_rows
+    return root, blueprint_rows, blueprint_tree_elements
 
 
 def main():
@@ -761,11 +921,13 @@ def main():
     # multiple root groups from a single URL.
     root = ET.Element("Ergebnis")
     blueprint_rows = []
+    blueprint_tree_elements = []
     for url in URLS:
-        page_root, page_blueprint_rows = scrape(url)
+        page_root, page_blueprint_rows, page_blueprint_tree_elements = scrape(url)
         for el in page_root:
             root.append(el)
         blueprint_rows.extend(page_blueprint_rows)
+        blueprint_tree_elements.extend(page_blueprint_tree_elements)
 {{~ if blueprint_mapping_enabled ~}}
     # Issue #192: BLUEPRINT_MAPPING flattens the tree into rows instead of
     # writing it out nested — `root` itself (used for hardening/change-
@@ -782,6 +944,23 @@ def main():
         writer.writerows(output_rows)
 {{~ end ~}}
     count = len(output_rows)
+{{~ else if blueprint_tree_mapping_enabled ~}}
+    # Issue #244: BLUEPRINT_TREE_MAPPING builds a real nested output tree of
+    # its own instead of denormalizing into rows — `root` itself (used for
+    # hardening/change-detection below) is unaffected, still the full,
+    # unmapped source tree.
+    blueprint_tree_root = ET.Element("Ergebnis")
+    for el in blueprint_tree_elements:
+        blueprint_tree_root.append(el)
+{{~ if output_is_json ~}}
+    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
+        json.dump(_xml_to_dict(blueprint_tree_root), f, ensure_ascii=False, indent=2)
+{{~ else ~}}
+    tree = ET.ElementTree(blueprint_tree_root)
+    ET.indent(tree)
+    tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
+{{~ end ~}}
+    count = len(blueprint_tree_root.findall(".//*"))
 {{~ else ~}}
 {{~ if output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:

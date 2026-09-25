@@ -1125,6 +1125,7 @@ describe('buildScrapingConfig (output blueprint, container/api-tree mode, Issue 
 
     expect(result.outputBlueprint).toEqual({
       blueprintId: 3,
+      schemaKind: 'Flat',
       fields: [{ targetField: 'name', sourceField: 'Kategorie' }],
     });
   });
@@ -1153,8 +1154,38 @@ describe('buildScrapingConfig (output blueprint, container/api-tree mode, Issue 
 
     expect(result.outputBlueprint).toEqual({
       blueprintId: 5,
+      schemaKind: 'Flat',
       fields: [{ targetField: 'title', sourceField: 'Titel' }],
     });
+  });
+
+  // Issue #244: the tree-shaped mapping's own trailing parameters.
+  test('container mode includes a Tree-schema outputBlueprint once the tree mapping is complete', () => {
+    const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
+    const treeSchema = [{ name: 'Name' }];
+    const result = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null,
+      'Static', [], false, false, [], null, null, null, null, false, false, false, null, null,
+      '4', [], {}, 'Tree', treeSchema, { 0: 'Kategorie' },
+    );
+
+    expect(result.outputBlueprint).toEqual({
+      blueprintId: 4,
+      schemaKind: 'Tree',
+      tree: [{ name: 'Name', sourceField: 'Kategorie' }],
+    });
+  });
+
+  test('container mode omits a Tree-schema outputBlueprint while the tree mapping is incomplete', () => {
+    const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
+    const treeSchema = [{ name: 'Name' }];
+    const result = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null,
+      'Static', [], false, false, [], null, null, null, null, false, false, false, null, null,
+      '4', [], {}, 'Tree', treeSchema, { 0: null },
+    );
+
+    expect(result.outputBlueprint).toBeUndefined();
   });
 });
 

@@ -25,7 +25,8 @@ const SFIdleScreenUI = (function () {
   const { togglePreview } = typeof require !== 'undefined' ? require('./preview') : self.SFPreview;
   const { renderCombinedSection } = typeof require !== 'undefined' ? require('./combined-config-ui') : self.SFCombinedConfigUI;
   const { renderBlocksSection } = typeof require !== 'undefined' ? require('./blocks-config-ui') : self.SFBlocksConfigUI;
-  const { mappingIsComplete } = typeof require !== 'undefined' ? require('./output-blueprints') : self.SFOutputBlueprints;
+  const { mappingIsComplete, treeMappingIsComplete } =
+    typeof require !== 'undefined' ? require('./output-blueprints') : self.SFOutputBlueprints;
   const { renderOutputBlueprintMappingSection } =
     typeof require !== 'undefined' ? require('./output-blueprints-ui') : self.SFOutputBlueprintsUI;
 
@@ -60,6 +61,9 @@ const SFIdleScreenUI = (function () {
   // pointing at field names the new mode doesn't have.
   const OUTPUT_BLUEPRINT_RESET = {
     selectedOutputBlueprintId: '', selectedOutputBlueprintFieldNames: [], outputBlueprintMapping: {},
+    // Issue #244: the tree-shaped mapping's own equivalent state, cleared
+    // alongside the flat one for the exact same reason.
+    selectedOutputBlueprintSchemaKind: 'Flat', selectedOutputBlueprintTree: [], outputBlueprintTreeMapping: {},
   };
 
   const MODE_SWITCH_CLEARS = {
@@ -182,8 +186,12 @@ const SFIdleScreenUI = (function () {
     // it does NOT block Export/Save/Preview, which don't depend on the
     // mapping being complete.
     const outputBlueprintEligibleMode = state.mode === 'flat' || state.mode === 'container' || state.mode === 'api';
+    // Issue #244: a Tree-schema mapping additionally needs the "completeness"
+    // check to walk the fetched target tree instead of the flat field list.
     const blueprintMappingIncomplete = outputBlueprintEligibleMode && !!state.selectedOutputBlueprintId
-      && !mappingIsComplete(state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping);
+      && (state.selectedOutputBlueprintSchemaKind === 'Tree'
+        ? !treeMappingIsComplete(state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping)
+        : !mappingIsComplete(state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping));
     document.getElementById('output-blueprint-toggle-row')?.classList.toggle('hidden', !outputBlueprintEligibleMode);
     if (outputBlueprintEligibleMode) renderOutputBlueprintMappingSection(bridge);
     else document.getElementById('output-blueprint-mapping')?.classList.add('hidden');

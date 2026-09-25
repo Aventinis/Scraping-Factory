@@ -1,7 +1,11 @@
 const {
   addBlueprintFieldName, removeBlueprintFieldName, updateBlueprintFieldName, moveBlueprintFieldName,
   blueprintDraftIsValid,
-  createMappingDraft, updateMappingSource, mappingIsComplete, buildOutputBlueprintMapping,
+  buildBlueprintSchemaGroup, buildBlueprintSchemaField, parseBlueprintSchemaTree, serializeBlueprintSchemaTree,
+  blueprintTreeSchemaIsValid,
+  createMappingDraft, updateMappingSource, mappingIsComplete,
+  createTreeMappingDraft, updateTreeMappingSource, treeMappingIsComplete,
+  buildOutputBlueprintMapping,
 } = require('./output-blueprints');
 
 describe('output-blueprints (Issue #191): editing a blueprint\'s own field-name list', () => {
@@ -50,6 +54,58 @@ describe('output-blueprints (Issue #191): editing a blueprint\'s own field-name 
   });
 });
 
+// Issue #244: the tree-shaped counterpart to the flat field-name list above —
+// editing a blueprint's own target schema tree (create/edit modal).
+describe('output-blueprints (Issue #244): editing a blueprint\'s own target tree', () => {
+  test('buildBlueprintSchemaGroup/buildBlueprintSchemaField build the internal {kind,...} node shape', () => {
+    expect(buildBlueprintSchemaGroup('Kategorien')).toEqual({ kind: 'group', name: 'Kategorien', children: [] });
+    expect(buildBlueprintSchemaField('Preis')).toEqual({ kind: 'field', name: 'Preis' });
+  });
+
+  test('parseBlueprintSchemaTree converts the wire shape (no kind tag) into the internal editor shape', () => {
+    const wire = [
+      { name: 'Kategorien', children: [{ name: 'Name' }, { name: 'Gerichte', children: [{ name: 'Preis' }] }] },
+    ];
+    expect(parseBlueprintSchemaTree(wire)).toEqual([
+      {
+        kind: 'group', name: 'Kategorien',
+        children: [
+          { kind: 'field', name: 'Name' },
+          { kind: 'group', name: 'Gerichte', children: [{ kind: 'field', name: 'Preis' }] },
+        ],
+      },
+    ]);
+  });
+
+  test('serializeBlueprintSchemaTree is the exact reverse of parseBlueprintSchemaTree', () => {
+    const wire = [
+      { name: 'Kategorien', children: [{ name: 'Name' }, { name: 'Gerichte', children: [{ name: 'Preis' }] }] },
+    ];
+    expect(serializeBlueprintSchemaTree(parseBlueprintSchemaTree(wire))).toEqual(wire);
+  });
+
+  test('blueprintTreeSchemaIsValid requires a non-blank blueprint name and at least one node', () => {
+    expect(blueprintTreeSchemaIsValid('', [buildBlueprintSchemaField('A')])).toBe(false);
+    expect(blueprintTreeSchemaIsValid('My blueprint', [])).toBe(false);
+  });
+
+  test('blueprintTreeSchemaIsValid rejects a blank node name at any depth', () => {
+    const group = buildBlueprintSchemaGroup('Kategorien');
+    group.children = [buildBlueprintSchemaField('  ')];
+    expect(blueprintTreeSchemaIsValid('My blueprint', [group])).toBe(false);
+  });
+
+  test('blueprintTreeSchemaIsValid rejects a group with no children', () => {
+    expect(blueprintTreeSchemaIsValid('My blueprint', [buildBlueprintSchemaGroup('Empty')])).toBe(false);
+  });
+
+  test('blueprintTreeSchemaIsValid accepts a well-formed nested tree', () => {
+    const group = buildBlueprintSchemaGroup('Kategorien');
+    group.children = [buildBlueprintSchemaField('Name')];
+    expect(blueprintTreeSchemaIsValid('My blueprint', [group])).toBe(true);
+  });
+});
+
 describe('output-blueprints (Issue #191): per-scrape mapping draft', () => {
   test('createMappingDraft seeds every target field unset', () => {
     expect(createMappingDraft(['Title', 'Price'])).toEqual({ Title: null, Price: null });
@@ -84,20 +140,97 @@ describe('output-blueprints (Issue #191): per-scrape mapping draft', () => {
   });
 
   test('buildOutputBlueprintMapping returns null when no blueprint is picked', () => {
-    expect(buildOutputBlueprintMapping('', ['Title'], { Title: 'h1' })).toBeNull();
+    expect(buildOutputBlueprintMapping('', 'Flat', ['Title'], { Title: 'h1' })).toBeNull();
   });
 
   test('buildOutputBlueprintMapping returns null while the mapping is incomplete', () => {
-    expect(buildOutputBlueprintMapping('3', ['Title', 'Price'], { Title: 'h1', Price: null })).toBeNull();
+    expect(buildOutputBlueprintMapping('3', 'Flat', ['Title', 'Price'], { Title: 'h1', Price: null })).toBeNull();
   });
 
   test('buildOutputBlueprintMapping builds the wire shape, parsing the id and preserving target order', () => {
     const draft = { Price: '.price', Title: 'h1' };
-    expect(buildOutputBlueprintMapping('3', ['Title', 'Price'], draft)).toEqual({
+    expect(buildOutputBlueprintMapping('3', 'Flat', ['Title', 'Price'], draft)).toEqual({
       blueprintId: 3,
+      schemaKind: 'Flat',
       fields: [
         { targetField: 'Title', sourceField: 'h1' },
         { targetField: 'Price', sourceField: '.price' },
+      ],
+    });
+  });
+});
+
+// Issue #244: the tree-shaped counterpart to the flat mapping draft above.
+describe('output-blueprints (Issue #244): per-scrape tree mapping draft', () => {
+  const tree = [
+    {
+      name: 'Kategorien',
+      children: [
+        { name: 'Name' },
+        { name: 'Gerichte', children: [{ name: 'Preis' }] },
+      ],
+    },
+    { name: 'Zutaten', children: [{ name: 'Name' }] },
+  ];
+
+  test('createTreeMappingDraft seeds every leaf path unset, keyed by dot-joined index path', () => {
+    expect(createTreeMappingDraft(tree)).toEqual({
+      '0.0': null, '0.1.0': null, '1.0': null,
+    });
+  });
+
+  test('updateTreeMappingSource sets one leaf path\'s source without touching others', () => {
+    const draft = createTreeMappingDraft(tree);
+    const result = updateTreeMappingSource(draft, '0.0', 'KategorieName');
+    expect(result['0.0']).toBe('KategorieName');
+    expect(result['1.0']).toBeNull();
+    expect(draft['0.0']).toBeNull(); // original untouched
+  });
+
+  test('updateTreeMappingSource clears a source back to null when given an empty string', () => {
+    let draft = createTreeMappingDraft(tree);
+    draft = updateTreeMappingSource(draft, '0.0', 'KategorieName');
+    expect(updateTreeMappingSource(draft, '0.0', '')['0.0']).toBeNull();
+  });
+
+  test('treeMappingIsComplete is false while any leaf is unmapped, and for an empty tree', () => {
+    let draft = createTreeMappingDraft(tree);
+    draft = updateTreeMappingSource(draft, '0.0', 'KategorieName');
+    expect(treeMappingIsComplete(tree, draft)).toBe(false);
+    expect(treeMappingIsComplete([], {})).toBe(false);
+  });
+
+  test('treeMappingIsComplete is true once every leaf has a source', () => {
+    let draft = createTreeMappingDraft(tree);
+    draft = updateTreeMappingSource(draft, '0.0', 'KategorieName');
+    draft = updateTreeMappingSource(draft, '0.1.0', 'Preis');
+    draft = updateTreeMappingSource(draft, '1.0', 'ZutatName');
+    expect(treeMappingIsComplete(tree, draft)).toBe(true);
+  });
+
+  test('buildOutputBlueprintMapping (Tree) returns null while the tree mapping is incomplete', () => {
+    const draft = createTreeMappingDraft(tree);
+    expect(buildOutputBlueprintMapping('3', 'Tree', [], {}, tree, draft)).toBeNull();
+  });
+
+  test('buildOutputBlueprintMapping (Tree) builds the nested wire shape, one node at a time', () => {
+    let draft = createTreeMappingDraft(tree);
+    draft = updateTreeMappingSource(draft, '0.0', 'KategorieName');
+    draft = updateTreeMappingSource(draft, '0.1.0', 'Preis');
+    draft = updateTreeMappingSource(draft, '1.0', 'ZutatName');
+
+    expect(buildOutputBlueprintMapping('3', 'Tree', [], {}, tree, draft)).toEqual({
+      blueprintId: 3,
+      schemaKind: 'Tree',
+      tree: [
+        {
+          name: 'Kategorien',
+          children: [
+            { name: 'Name', sourceField: 'KategorieName' },
+            { name: 'Gerichte', children: [{ name: 'Preis', sourceField: 'Preis' }] },
+          ],
+        },
+        { name: 'Zutaten', children: [{ name: 'Name', sourceField: 'ZutatName' }] },
       ],
     });
   });

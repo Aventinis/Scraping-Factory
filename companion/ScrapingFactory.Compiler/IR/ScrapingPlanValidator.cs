@@ -166,19 +166,41 @@ public static class ScrapingPlanValidator
             // the extension's own field picker already offers for this mode).
             if (plan.OutputBlueprint is { } containerBlueprint)
             {
-                var containerBlueprintError = ValidateOutputBlueprint(containerBlueprint, CollectContainerFieldNames(extractGroupStep.Roots));
-                if (containerBlueprintError is not null)
-                    return Invalid(containerBlueprintError);
+                var containerFieldNames = CollectContainerFieldNames(extractGroupStep.Roots);
 
-                // Unlike flat mode, a tree-shaped mapping doesn't just
-                // remap columns — it flattens the tree into denormalized
-                // rows (see OutputBlueprintFlattening), which only has one
-                // unambiguous row layout when every mapped field sits on a
-                // single root-to-row repeating-group chain.
-                var mappedSourceFields = containerBlueprint.Fields.Select(field => field.SourceField).ToHashSet();
-                var rowScope = OutputBlueprintFlattening.ResolveContainerRowScope(extractGroupStep.Roots, mappedSourceFields);
-                if (rowScope.Error is not null)
-                    return Invalid(rowScope.Error);
+                if (containerBlueprint.SchemaKind == OutputBlueprintSchemaKind.Tree)
+                {
+                    // Issue #244: a tree-shaped mapping resolves one row
+                    // scope PER TARGET GROUP NODE instead of one for the
+                    // whole mapping — see
+                    // OutputBlueprintFlattening.ResolveContainerTreeRowScopes
+                    // for why this no longer needs the flat case's single
+                    // "every mapped field on one ancestor chain" rule.
+                    var treeError = ValidateOutputBlueprintTree(containerBlueprint.Tree, containerFieldNames);
+                    if (treeError is not null)
+                        return Invalid(treeError);
+
+                    var treeScope = OutputBlueprintFlattening.ResolveContainerTreeRowScopes(extractGroupStep.Roots, containerBlueprint.Tree!);
+                    if (treeScope.Error is not null)
+                        return Invalid(treeScope.Error);
+                }
+                else
+                {
+                    var containerBlueprintError = ValidateOutputBlueprint(containerBlueprint, containerFieldNames);
+                    if (containerBlueprintError is not null)
+                        return Invalid(containerBlueprintError);
+
+                    // Unlike a tree-shaped mapping, the flat mapping doesn't
+                    // just remap columns — it flattens the tree into
+                    // denormalized rows (see OutputBlueprintFlattening),
+                    // which only has one unambiguous row layout when every
+                    // mapped field sits on a single root-to-row repeating-
+                    // group chain.
+                    var mappedSourceFields = containerBlueprint.Fields!.Select(field => field.SourceField).ToHashSet();
+                    var rowScope = OutputBlueprintFlattening.ResolveContainerRowScope(extractGroupStep.Roots, mappedSourceFields);
+                    if (rowScope.Error is not null)
+                        return Invalid(rowScope.Error);
+                }
             }
 
             return new PlanValidationResult { Success = true };
@@ -210,12 +232,38 @@ public static class ScrapingPlanValidator
             // 422 trial-run verification failure rather than a 400 here.
             if (plan.OutputBlueprint is { } apiBlueprint)
             {
-                var apiAvailableFields = apiCallStep.Config.Groups is { Count: > 0 } apiGroups
-                    ? CollectApiFieldNames(apiGroups)
+                var apiHasGroupsForBlueprint = apiCallStep.Config.Groups is { Count: > 0 };
+                var apiAvailableFields = apiHasGroupsForBlueprint
+                    ? CollectApiFieldNames(apiCallStep.Config.Groups!)
                     : (apiCallStep.Config.Fields ?? []).Select(field => field.Name).ToList();
-                var apiBlueprintError = ValidateOutputBlueprint(apiBlueprint, apiAvailableFields);
-                if (apiBlueprintError is not null)
-                    return Invalid(apiBlueprintError);
+
+                if (apiBlueprint.SchemaKind == OutputBlueprintSchemaKind.Tree)
+                {
+                    // Issue #244: only meaningful against Api's own tree
+                    // shape — a tree target has nothing to nest against a
+                    // flat response.
+                    if (!apiHasGroupsForBlueprint)
+                        return Invalid("OutputBlueprint: a tree-shaped target schema requires Api's tree response shape (Groups) — use a flat target schema for Api's flat ItemsPath/Fields shape.");
+
+                    var apiTreeError = ValidateOutputBlueprintTree(apiBlueprint.Tree, apiAvailableFields);
+                    if (apiTreeError is not null)
+                        return Invalid(apiTreeError);
+
+                    // No static row-scope check here, same reasoning as the
+                    // flat mapping's own asymmetry with Container-Mode just
+                    // above: ApiGroup has no explicit Repeating flag
+                    // (Architecture Decision #6), so the per-target-group
+                    // scope resolution can only happen once the real JSON
+                    // response is resolved at script run time — see
+                    // scraper_api_grouped.py.j2's own runtime mirror of
+                    // ResolveContainerTreeRowScopes.
+                }
+                else
+                {
+                    var apiBlueprintError = ValidateOutputBlueprint(apiBlueprint, apiAvailableFields);
+                    if (apiBlueprintError is not null)
+                        return Invalid(apiBlueprintError);
+                }
             }
 
             return new PlanValidationResult { Success = true };
@@ -250,6 +298,12 @@ public static class ScrapingPlanValidator
 
         if (plan.OutputBlueprint is { } blueprint)
         {
+            // Issue #244: a tree target schema has nothing to nest against
+            // flat Fields — the same exclusion applies to Api's own flat
+            // shape just above.
+            if (blueprint.SchemaKind == OutputBlueprintSchemaKind.Tree)
+                return Invalid("OutputBlueprint: a tree-shaped target schema requires Groups or Api.Groups (tree-shaped source data) — use a flat target schema for flat fields.");
+
             var blueprintError = ValidateOutputBlueprint(blueprint, extractSteps.Select(step => step.Name).ToList());
             if (blueprintError is not null)
                 return Invalid(blueprintError);
@@ -266,7 +320,7 @@ public static class ScrapingPlanValidator
     // string? (null = valid)" pattern.
     private static string? ValidateOutputBlueprint(OutputBlueprintMapping mapping, IReadOnlyCollection<string> availableSourceFields)
     {
-        if (mapping.Fields.Count == 0)
+        if (mapping.Fields is not { Count: > 0 })
             return "OutputBlueprint needs at least one field mapping.";
 
         foreach (var entry in mapping.Fields)
@@ -284,6 +338,63 @@ public static class ScrapingPlanValidator
             return $"OutputBlueprint: duplicate target field(s): {string.Join(", ", duplicateTargets)}.";
 
         var duplicateSources = FindDuplicates(mapping.Fields, entry => entry.SourceField);
+        if (duplicateSources.Count > 0)
+            return $"OutputBlueprint: source field(s) mapped more than once: {string.Join(", ", duplicateSources)}.";
+
+        return null;
+    }
+
+    // Issue #244: the tree-shaped counterpart to ValidateOutputBlueprint
+    // above — availableSourceFields is still the mode's own already-resolved
+    // LEAF field-name list (container mode's DataFieldNode names, or Api-
+    // tree's ApiField names), exactly as ValidateOutputBlueprint already
+    // uses for the flat case. Unlike the flat mapping, duplicate TARGET node
+    // names are deliberately not rejected here — they're just output tag/key
+    // names, and container mode's own tree already allows duplicate sibling
+    // names by design (see Issue #177) — only duplicate SOURCE fields are
+    // still rejected, preserving the "still 1:1 per field" scope boundary
+    // #191/#192 already established.
+    private static string? ValidateOutputBlueprintTree(List<OutputBlueprintTreeMappingNode>? tree, IReadOnlyCollection<string> availableSourceFields)
+    {
+        if (tree is not { Count: > 0 })
+            return "OutputBlueprint: a tree-shaped mapping needs at least one target node.";
+
+        var sourceFields = new List<string>();
+
+        string? Walk(IEnumerable<OutputBlueprintTreeMappingNode> nodes)
+        {
+            foreach (var node in nodes)
+            {
+                if (string.IsNullOrWhiteSpace(node.Name))
+                    return "OutputBlueprint: target node name must not be empty.";
+
+                switch (node)
+                {
+                    case OutputBlueprintTreeMappingGroup group:
+                        var childError = Walk(group.Children);
+                        if (childError is not null)
+                            return childError;
+                        break;
+                    case OutputBlueprintTreeMappingField field:
+                        if (string.IsNullOrWhiteSpace(field.SourceField))
+                            return $"OutputBlueprint: target field '{field.Name}' needs a mapped source field.";
+                        if (!availableSourceFields.Contains(field.SourceField))
+                            return $"OutputBlueprint: unknown source field '{field.SourceField}' for target field '{field.Name}'.";
+                        sourceFields.Add(field.SourceField);
+                        break;
+                }
+            }
+            return null;
+        }
+
+        var error = Walk(tree);
+        if (error is not null)
+            return error;
+
+        if (sourceFields.Count == 0)
+            return "OutputBlueprint needs at least one field mapping.";
+
+        var duplicateSources = FindDuplicates(sourceFields, name => name);
         if (duplicateSources.Count > 0)
             return $"OutputBlueprint: source field(s) mapped more than once: {string.Join(", ", duplicateSources)}.";
 
