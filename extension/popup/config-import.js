@@ -125,6 +125,23 @@ const SFConfigImport = (function () {
     return result;
   }
 
+  // Reverse of buildOutputBlueprintMapping — wire is null (or absent) when
+  // no blueprint was mapped. Unlike the fetch-based selectOutputBlueprint
+  // (output-blueprints-ui.js), the target field names don't need a round
+  // trip back to the companion here: the wire mapping's own `fields` array
+  // already carries every targetField in blueprint order.
+  function applyOutputBlueprintConfig(wire) {
+    if (!wire) return { selectedOutputBlueprintId: '', selectedOutputBlueprintFieldNames: [], outputBlueprintMapping: {} };
+    const fieldNames = wire.fields.map(f => f.targetField);
+    const mapping = {};
+    for (const f of wire.fields) mapping[f.targetField] = f.sourceField;
+    return {
+      selectedOutputBlueprintId: wire.blueprintId != null ? String(wire.blueprintId) : '',
+      selectedOutputBlueprintFieldNames: fieldNames,
+      outputBlueprintMapping: mapping,
+    };
+  }
+
   // The one entry point: takes a wire-format ScrapingConfig (the exact
   // shape buildScrapingConfig produces, and /generate's request body itself
   // — see buildConfigExport's own `config` field) and returns a full
@@ -158,6 +175,7 @@ const SFConfigImport = (function () {
         hardening: applyHardeningConfig(null),
         persistentSession: false,
         externalConfig: false,
+        ...applyOutputBlueprintConfig(null),
       };
     }
 
@@ -198,6 +216,7 @@ const SFConfigImport = (function () {
         hardening: applyHardeningConfig(null),
         persistentSession: config.persistentSession === true,
         externalConfig: false,
+        ...applyOutputBlueprintConfig(null),
       };
     }
 
@@ -227,12 +246,17 @@ const SFConfigImport = (function () {
       // Issue #178: same plain-boolean passthrough as persistentSession
       // above — nothing to default/reshape beyond the bool itself.
       externalConfig: config.externalConfig === true,
+      // Issue #191: only ever present on the wire for flat mode/Api's flat
+      // shape — applyOutputBlueprintConfig(undefined) already resets to
+      // "none" for every other mode, so no per-mode branching is needed here.
+      ...applyOutputBlueprintConfig(config.outputBlueprint),
     };
   }
 
   return {
     deserializeGroupTree, deserializeBrowserActions,
     applyChangeDetectionConfig, applyProxyConfig, applyPaginationConfig, applyHardeningConfig,
+    applyOutputBlueprintConfig,
     applyConfigToState,
   };
 })();

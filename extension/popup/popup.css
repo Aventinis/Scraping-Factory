@@ -382,6 +382,28 @@ body {
 .saved-output-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .saved-outputs-loading, .saved-outputs-empty { font-size: 11px; color: var(--color-text-faint); margin: 2px 0; }
 
+/* Issue #191: Output Blueprints — the management list (modal-manage-
+   blueprints, mirrors .saved-config-row) and the create/edit modal's own
+   ordered field-name rows (mirrors .transform-row), plus the per-scrape
+   mapping list (a target-field label + a source-field select per row). */
+.blueprint-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 11px; }
+.blueprint-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.blueprint-row-count { flex: none; color: var(--color-text-faint); }
+.blueprint-field-list { list-style: none; margin: 0 0 6px; padding: 0; }
+.blueprint-field-row {
+  display: flex; align-items: center; gap: 4px; padding: 4px 2px; margin-bottom: 4px;
+  background: var(--color-surface-subtle); border-radius: var(--radius-md);
+}
+.blueprint-field-row input[type="text"] {
+  flex: 1; min-width: 0; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+.blueprint-field-row button { flex: none; padding: 3px 6px; font-size: 11px; }
+.output-blueprint-mapping-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 11px; }
+.output-blueprint-mapping-row .output-blueprint-target-name { flex: none; width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.output-blueprint-mapping-row select { flex: 1; min-width: 0; font-size: 11px; padding: 3px 6px; }
+#output-blueprint-toggle-row select { flex: 1; min-width: 0; }
+
 /* Preview toggle */
 .btn-toggle           { background: var(--color-surface-muted); color: var(--color-text-secondary); width: 100%; }
 .btn-toggle:hover     { background: var(--color-border); }
