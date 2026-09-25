@@ -315,14 +315,15 @@
               <input type="number" id="input-pagination-max-pages" min="1" step="1" />
             </div>
           </div>
-          <!-- Issue #191: opt-in output blueprint field mapping — only
-               reachable for flat-shaped output (flat mode's own Fields, or
-               API mode's flat ItemsPath/Fields shape), hidden entirely
-               otherwise (see render()'s own #output-blueprint-toggle-row
-               toggle), the same "ship the simpler shape first" reasoning
-               #additional-urls-row/#pagination-toggle-row already establish
-               for their own tree-mode exclusions. The blueprint list itself
-               is unscoped (reusable across any site/configuration), fetched
+          <!-- Issue #191/#192: opt-in output blueprint field mapping —
+               reachable for flat mode, container mode, and both of API
+               mode's shapes (hidden only for Combined/Blocks, which have no
+               single field/tree config of their own at the outer level; see
+               render()'s own #output-blueprint-toggle-row toggle). Container
+               mode/API's tree shape flatten into denormalized rows rather
+               than being renamed in place — see the companion's own
+               OutputBlueprintFlattening. The blueprint list itself is
+               unscoped (reusable across any site/configuration), fetched
                once on companion connect like the saved-configs list. -->
           <div class="output-settings-row" id="output-blueprint-toggle-row">
             <label for="select-output-blueprint" data-i18n="idle.outputBlueprintLabel"></label>

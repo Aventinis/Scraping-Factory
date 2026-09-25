@@ -8,6 +8,9 @@
 {{~ if output_is_json ~}}
 import json
 {{~ end ~}}
+{{~ if blueprint_mapping_enabled && !output_is_json ~}}
+import csv
+{{~ end ~}}
 import re
 from datetime import date
 {{~ if needs_os_import || external_config.enabled ~}}
@@ -47,7 +50,9 @@ from playwright.sync_api import sync_playwright
 # and results are combined into a single output file.
 URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 
-OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else }}xml{{ end }}"
+# Issue #192: see scraper_grouped.py.j2's own identical doc comment on this
+# same line — an active blueprint mapping flattens this mode's output.
+OUTPUT_PATH = "{{ output_filename }}.{{ if blueprint_mapping_enabled }}{{ if output_is_json }}json{{ else }}csv{{ end }}{{ else }}{{ if output_is_json }}json{{ else }}xml{{ end }}{{ end }}"
 
 {{~ if external_config.enabled ~}}
 # Issue #178: see scraper.py.j2's own doc comment for the full rationale — an
@@ -382,6 +387,73 @@ def _run_hardening_checks(root):
 
 GROUPS = {{ groups_literal }}
 
+# Issue #192: optional Output Blueprint field mapping — see
+# scraper_grouped.py.j2's own identical BLUEPRINT_MAPPING doc comment
+# (same reasoning, unconditional placement, and _flatten_group_tree_for_blueprint
+# design — this is the Browser-engine mirror, only the two DOM-access calls
+# differ, via _resolve_group_matches/_resolve_field_match below).
+BLUEPRINT_MAPPING = {{ blueprint_mapping_literal }}
+BLUEPRINT_MAPPING_BY_SOURCE = {m["source"]: m["target"] for m in BLUEPRINT_MAPPING}
+
+
+def _blueprint_subtree_has_mapped_field(node):
+    if "children" in node:
+        return any(_blueprint_subtree_has_mapped_field(child) for child in node["children"])
+    return node["name"] in BLUEPRINT_MAPPING_BY_SOURCE
+
+
+# Resolves one leaf field's raw value exactly like extract_group()'s own
+# leaf branch — see scraper_grouped.py.j2's identical-in-spirit
+# _resolve_flatten_leaf_value for the full "why a separate function"
+# reasoning. Uses _resolve_field_match (defined further below, resolved
+# lazily at call time — Python doesn't require def order to match call
+# order) so FramePath-scoped fields work here exactly like they do for
+# extract_group() itself.
+def _resolve_flatten_leaf_value(page, scope, node):
+    found = _resolve_field_match(page, scope, node)
+    if node["mode"] == "exists":
+        return "true" if found else "false"
+    if found is None:
+        return ""
+    if node["mode"] == "attribute":
+        return _apply_transforms(found.get_attribute(node["attribute"]) or "", node["transform"])
+    if node["mode"] == "ownText":
+        own_text = found.evaluate(
+            "el => Array.from(el.childNodes).filter(n => n.nodeType === 3).map(n => n.textContent).join('')"
+        ).strip()
+        return _apply_transforms(own_text, node["transform"])
+    return _apply_transforms((found.text_content() or "").strip(), node["transform"])
+
+
+# Flattens the group tree into denormalized rows for BLUEPRINT_MAPPING —
+# see scraper_grouped.py.j2's identical _flatten_group_tree_for_blueprint
+# for the full design reasoning (always returns a list of context dicts;
+# only a relevant repeating group's own instance boundary ever multiplies
+# it). `page` is threaded through purely for _resolve_group_matches/
+# _resolve_field_match's own FramePath resolution, same as extract_group().
+def _flatten_group_tree_for_blueprint(page, scope, node, context):
+    if "children" in node:
+        if not _blueprint_subtree_has_mapped_field(node):
+            return [context]
+
+        matches = _resolve_group_matches(page, scope, node)
+
+        all_contexts = []
+        for match in matches:
+            instance_contexts = [context]
+            for child in node["children"]:
+                next_contexts = []
+                for ctx in instance_contexts:
+                    next_contexts.extend(_flatten_group_tree_for_blueprint(page, match, child, ctx))
+                instance_contexts = next_contexts
+            all_contexts.extend(instance_contexts)
+        return all_contexts
+
+    value = _resolve_flatten_leaf_value(page, scope, node)
+    if node["name"] in BLUEPRINT_MAPPING_BY_SOURCE:
+        return [{**context, node["name"]: value}]
+    return [context]
+
 
 # Issue #84: best-effort numeric normalization for a "toNumber" transform —
 # finds the first numeric-looking substring and normalizes its decimal
@@ -701,6 +773,7 @@ def scrape(url):
         # exactly one root element — wrap them all (across every paginated
         # page from this start URL, see below) in a single <Ergebnis>.
         root = ET.Element("Ergebnis")
+        blueprint_rows = []
         page_number = 1
         while True:
 {{~ if hardening.enabled ~}}
@@ -719,6 +792,10 @@ def scrape(url):
                 break
             for el in page_elements:
                 root.append(el)
+{{~ if blueprint_mapping_enabled ~}}
+            for node in GROUPS:
+                blueprint_rows.extend(_flatten_group_tree_for_blueprint(page, page, node, {}))
+{{~ end ~}}
 
 {{~ if pagination.enabled ~}}
             if page_number >= PAGINATION_MAX_PAGES:
@@ -741,7 +818,7 @@ def scrape(url):
         context.storage_state(path=SESSION_STATE_PATH)
 {{~ end ~}}
         browser.close()
-        return root
+        return root, blueprint_rows
 
 
 def main():
@@ -753,9 +830,29 @@ def main():
     # final <Ergebnis>, the same sibling-merging pattern already used for
     # multiple root groups from a single URL.
     root = ET.Element("Ergebnis")
+    blueprint_rows = []
     for url in URLS:
-        for el in scrape(url):
+        page_root, page_blueprint_rows = scrape(url)
+        for el in page_root:
             root.append(el)
+        blueprint_rows.extend(page_blueprint_rows)
+{{~ if blueprint_mapping_enabled ~}}
+    # Issue #192: BLUEPRINT_MAPPING flattens the tree into rows instead of
+    # writing it out nested — `root` itself (used for hardening/change-
+    # detection below) is unaffected, still the full, unflattened tree.
+    output_fieldnames = [m["target"] for m in BLUEPRINT_MAPPING]
+    output_rows = [{m["target"]: row.get(m["source"], "") for m in BLUEPRINT_MAPPING} for row in blueprint_rows]
+{{~ if output_is_json ~}}
+    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
+        json.dump(output_rows, f, ensure_ascii=False, indent=2)
+{{~ else ~}}
+    with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=output_fieldnames)
+        writer.writeheader()
+        writer.writerows(output_rows)
+{{~ end ~}}
+    count = len(output_rows)
+{{~ else ~}}
 {{~ if output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(_xml_to_dict(root), f, ensure_ascii=False, indent=2)
@@ -766,7 +863,8 @@ def main():
     tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
     count = len(root.findall(".//*"))
 {{~ end ~}}
-    print(f"Done — {count} elements written to {OUTPUT_PATH}")
+{{~ end ~}}
+    print(f"Done — {count} {{ if blueprint_mapping_enabled }}row(s){{ else }}elements{{ end }} written to {OUTPUT_PATH}")
 {{~ if change_detection.enabled ~}}
     with open(OUTPUT_PATH, "r", encoding="utf-8") as f:
         new_content = f.read()

@@ -359,13 +359,15 @@ function buildScrapingConfig(
   // included when true, so the default (checkbox unchecked) request stays
   // byte-for-byte identical to before this existed.
   const externalConfigFields = externalConfig ? { externalConfig: true } : {};
-  // Issue #191: only meaningful for flat-shaped output (flat mode below, or
-  // API mode's flat ItemsPath/Fields shape) — buildOutputBlueprintMapping
-  // itself returns null (omitted, same "incomplete draft" convention as
+  // Issue #191/#192: reachable for flat mode, container mode, and both of
+  // Api mode's shapes (container/Api-tree flatten into denormalized rows
+  // instead of being renamed in place — see the companion's
+  // OutputBlueprintFlattening) — buildOutputBlueprintMapping itself returns
+  // null (omitted, same "incomplete draft" convention as
   // buildProxyConfig/buildChangeDetectionConfig) whenever no blueprint is
-  // picked or the mapping isn't complete yet, so this is a genuine no-op for
-  // container mode/API's tree shape too even though it's computed here
-  // unconditionally for all modes.
+  // picked or the mapping isn't complete yet, so this is a genuine no-op
+  // for Combined/Blocks too even though it's computed here unconditionally
+  // for every mode.
   const outputBlueprintConfig = buildOutputBlueprintMapping(outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping);
   const outputBlueprintFields = outputBlueprintConfig ? { outputBlueprint: outputBlueprintConfig } : {};
 
@@ -375,7 +377,7 @@ function buildScrapingConfig(
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
       ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
-      ...externalConfigFields,
+      ...externalConfigFields, ...outputBlueprintFields,
     };
   }
   if (mode === 'api') {
@@ -384,7 +386,7 @@ function buildScrapingConfig(
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
       ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
-      ...externalConfigFields, ...(apiConfig?.groups ? {} : outputBlueprintFields),
+      ...externalConfigFields, ...outputBlueprintFields,
     };
   }
   return {

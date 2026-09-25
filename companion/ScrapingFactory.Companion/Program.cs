@@ -220,18 +220,6 @@ static string? ValidateModeExclusivity(ScrapingConfig config)
     if (hasApi && config.AdditionalUrls is { Count: > 0 })
         return "AdditionalUrls and Api are mutually exclusive.";
 
-    // Issue #191: OutputBlueprint only makes sense for flat-shaped output —
-    // a tree (Container-Mode, or Api's own Groups shape) doesn't have a flat
-    // row of named columns to remap. Rejected outright rather than silently
-    // ignored, same reasoning as AdditionalUrls-vs-Api above.
-    if (config.OutputBlueprint is not null)
-    {
-        if (hasGroups)
-            return "OutputBlueprint and Groups are mutually exclusive — output blueprints are only supported for flat-shaped output.";
-        if (hasApi && config.Api!.Groups is { Count: > 0 })
-            return "OutputBlueprint is not supported for Api mode's tree response shape (Groups) — only the flat ItemsPath/Fields shape.";
-    }
-
     // Issue #174: same reasoning as AdditionalUrls above — Api-Mode never
     // reads the page-scraping start URL, so pagination would silently do
     // nothing there.

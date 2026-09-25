@@ -61,6 +61,15 @@ public sealed class PythonCodeGenerator : ICodeGenerator
                 hardening = PythonHardeningLiteral.BuildContext(plan.Hardening),
                 pagination = PythonPaginationLiteral.BuildContext(plan.Pagination),
                 external_config = PythonExternalConfigLiteral.BuildContext(plan.ExternalConfig),
+                // Issue #192: the runtime walker (_flatten_group_tree_for_blueprint)
+                // determines everything it needs purely from BLUEPRINT_MAPPING plus
+                // a structural "does this subtree contain a mapped field" check —
+                // no row-scope group name needs to reach the template at all.
+                // ScrapingPlanValidator's own OutputBlueprintFlattening call already
+                // guarantees, before codegen ever runs, that this mapping resolves
+                // to exactly one unambiguous row layout.
+                blueprint_mapping_enabled = plan.OutputBlueprint is not null,
+                blueprint_mapping_literal = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),
             });
         }
 

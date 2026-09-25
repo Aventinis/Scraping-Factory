@@ -42,7 +42,17 @@ public static class ScrapingPlanBuilder
         // fits a tree just as well as Xml does and is honored instead.
         if (config.Groups is { Count: > 0 } groups)
         {
-            var groupsOutputFormat = config.OutputFormat == OutputFormat.Json ? OutputFormat.Json : OutputFormat.Xml;
+            // Issue #192: an active OutputBlueprint mapping flattens the
+            // tree into denormalized rows instead of preserving its nested
+            // shape (see OutputBlueprintFlattening), so it needs the
+            // flat-mode output formats (Csv, or Json's flat array) instead
+            // of Xml/tree-Json — the same "explicit override wins" pattern
+            // Issue #86's own Json request already established over this
+            // same forced default.
+            var isJson = config.OutputFormat == OutputFormat.Json;
+            var groupsOutputFormat = config.OutputBlueprint is not null
+                ? (isJson ? OutputFormat.Json : OutputFormat.Csv)
+                : (isJson ? OutputFormat.Json : OutputFormat.Xml);
             steps.Add(new ExtractGroupStep { Roots = groups });
             return new ScrapingPlan
             {
@@ -51,6 +61,7 @@ public static class ScrapingPlanBuilder
                 ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, Hardening = config.Hardening,
                 Pagination = config.Pagination, PersistentSession = config.PersistentSession ?? false,
                 ExternalConfig = config.ExternalConfig ?? false,
+                OutputBlueprint = config.OutputBlueprint,
             };
         }
 
@@ -117,7 +128,12 @@ public static class ScrapingPlanBuilder
         {
             var isJson = config.OutputFormat == OutputFormat.Json;
             var apiHasGroups = api.Groups is { Count: > 0 };
-            var apiOutputFormat = apiHasGroups
+            // Issue #192: same override as Container-Mode above — an
+            // active OutputBlueprint on the tree shape (Groups) flattens it
+            // into rows at runtime (see scraper_api_grouped.py.j2's own
+            // flatten walker), so it needs the flat formats regardless of
+            // apiHasGroups.
+            var apiOutputFormat = (apiHasGroups && config.OutputBlueprint is null)
                 ? (isJson ? OutputFormat.Json : OutputFormat.Xml)
                 : (isJson ? OutputFormat.Json : OutputFormat.Csv);
             steps.Add(new ApiCallStep { Config = api });
@@ -128,15 +144,7 @@ public static class ScrapingPlanBuilder
                 ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, Hardening = config.Hardening,
                 PersistentSession = config.PersistentSession ?? false,
                 ExternalConfig = config.ExternalConfig ?? false,
-                // Issue #191: only meaningful for the flat ItemsPath/Fields
-                // shape — Program.cs's /generate handler already rejects
-                // OutputBlueprint set together with Api's tree shape
-                // (Groups) before a plan is ever built, so this is never
-                // actually non-null here when apiHasGroups is true, but the
-                // guard keeps this branch correct even if that upstream
-                // check were ever bypassed (e.g. a future direct caller of
-                // ScrapingPlanBuilder that skips Program.cs entirely).
-                OutputBlueprint = apiHasGroups ? null : config.OutputBlueprint,
+                OutputBlueprint = config.OutputBlueprint,
             };
         }
 

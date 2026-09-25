@@ -57,6 +57,14 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
                 proxy,
                 hardening,
                 external_config = externalConfig,
+                // Issue #192: unlike Container-Mode, the row-scope group
+                // can't be resolved here — ApiGroup has no explicit
+                // Repeating flag (Architecture Decision #6), so the same
+                // resolution scraper_api_grouped.py.j2's own runtime mirror
+                // of OutputBlueprintFlattening does happens at script run
+                // time instead, once the real response shape is known.
+                blueprint_mapping_enabled = plan.OutputBlueprint is not null,
+                blueprint_mapping_literal = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),
             });
         }
 

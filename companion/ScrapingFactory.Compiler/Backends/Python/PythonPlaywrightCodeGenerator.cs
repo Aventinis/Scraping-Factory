@@ -164,6 +164,8 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
                 hardening,
                 pagination,
                 external_config = externalConfig,
+                blueprint_mapping_enabled = plan.OutputBlueprint is not null,
+                blueprint_mapping_literal = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),
             });
         }
 
