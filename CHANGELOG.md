@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.1](https://github.com/Aventinis/Scraping-Factory/compare/v1.15.0...v1.15.1) (2026-09-25)
+
+
+### Bug Fixes
+
+* **ci:** release-please quoting fix + patch-only versioning for dev prereleases ([#249](https://github.com/Aventinis/Scraping-Factory/issues/249)) ([953d24b](https://github.com/Aventinis/Scraping-Factory/commit/953d24bb6e28e24982626d68aa5fc5f54481527d))
+
 ## [1.15.0](https://github.com/Aventinis/Scraping-Factory/compare/v1.14.0...v1.15.0) (2026-09-25)
 
 
