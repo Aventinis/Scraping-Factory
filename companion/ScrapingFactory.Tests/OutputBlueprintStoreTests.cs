@@ -25,10 +25,10 @@ public class OutputBlueprintStoreTests : IDisposable
     // two helpers just thread the new required parameters through so none
     // of that byte-for-byte existing coverage needed to change.
     private OutputBlueprintSummary SaveFlat(string name, List<string> fieldNames) =>
-        _store.Save(name, "flat", fieldNames, null);
+        _store.Save(name, "Flat", fieldNames, null);
 
     private bool UpdateFlat(long id, string name, List<string> fieldNames) =>
-        _store.Update(id, name, "flat", fieldNames, null);
+        _store.Update(id, name, "Flat", fieldNames, null);
 
     [Fact]
     public void Save_ThenGet_ReturnsFullRecordIncludingFieldNames()
@@ -40,7 +40,7 @@ public class OutputBlueprintStoreTests : IDisposable
         Assert.NotNull(record);
         Assert.Equal("Product schema", record!.Name);
         Assert.Equal(["Title", "Price", "Sku"], record.FieldNames);
-        Assert.Equal("flat", record.SchemaKind);
+        Assert.Equal("Flat", record.SchemaKind);
         Assert.Null(record.Tree);
     }
 
@@ -129,12 +129,12 @@ public class OutputBlueprintStoreTests : IDisposable
             },
         };
 
-        var saved = _store.Save("Menu schema", "tree", null, tree);
+        var saved = _store.Save("Menu schema", "Tree", null, tree);
 
         var record = _store.Get(saved.Id);
 
         Assert.NotNull(record);
-        Assert.Equal("tree", record!.SchemaKind);
+        Assert.Equal("Tree", record!.SchemaKind);
         Assert.NotNull(record.Tree);
         var root = Assert.IsType<OutputBlueprintTreeSchemaGroup>(Assert.Single(record.Tree!));
         Assert.Equal("Kategorien", root.Name);
@@ -166,11 +166,11 @@ public class OutputBlueprintStoreTests : IDisposable
                 ],
             },
         };
-        _store.Save("Menu schema", "tree", null, tree);
+        _store.Save("Menu schema", "Tree", null, tree);
 
         var results = _store.ListAll();
 
-        Assert.Equal("tree", results[0].SchemaKind);
+        Assert.Equal("Tree", results[0].SchemaKind);
         Assert.Equal(2, results[0].FieldCount);
     }
 
@@ -180,11 +180,11 @@ public class OutputBlueprintStoreTests : IDisposable
         var saved = SaveFlat("Schema", ["A"]);
         var tree = new List<OutputBlueprintTreeSchemaNode> { new OutputBlueprintTreeSchemaField { Name = "A" } };
 
-        var updated = _store.Update(saved.Id, "Schema", "tree", null, tree);
+        var updated = _store.Update(saved.Id, "Schema", "Tree", null, tree);
 
         Assert.True(updated);
         var record = _store.Get(saved.Id);
-        Assert.Equal("tree", record!.SchemaKind);
+        Assert.Equal("Tree", record!.SchemaKind);
         Assert.NotNull(record.Tree);
     }
 }

@@ -162,12 +162,19 @@ static List<string>? NormalizeBlueprintFieldNames(List<string>? fieldNames) =>
     fieldNames?.Select(name => name.Trim()).Where(name => name.Length > 0).ToList();
 
 // Issue #244: shared POST/PUT validation, now branching on SchemaKind — a
-// missing/blank value defaults to "flat" (byte-for-byte today's only
-// schema kind, so an older extension build's request without this field at
-// all keeps working unchanged). A "tree" request's own structural checks
-// are delegated to OutputBlueprintTreeSchemaValidator (the same validator
-// ScrapingPlanValidator itself has no reason to duplicate); its FieldNames
-// is ignored either way, mirroring how a "flat" request's Tree is ignored.
+// missing/blank value defaults to "Flat" (byte-for-byte today's only schema
+// kind, so an older extension build's request without this field at all
+// keeps working unchanged). PascalCase ("Flat"/"Tree", matched case-
+// insensitively on input) matches the same convention every other wire
+// enum in this codebase already serializes as via the global
+// JsonStringEnumConverter (OutputFormat, HardeningCheck.Severity, ...) —
+// including OutputBlueprintMapping.SchemaKind itself, the /generate-time
+// counterpart of this /blueprints-time value — so the extension never needs
+// to translate between two different casings for the "same" concept. A
+// "Tree" request's own structural checks are delegated to
+// OutputBlueprintTreeSchemaValidator (the same validator ScrapingPlanValidator
+// itself has no reason to duplicate); its FieldNames is ignored either way,
+// mirroring how a "Flat" request's Tree is ignored.
 static (string? Name, string SchemaKind, List<string>? FieldNames, List<OutputBlueprintTreeSchemaNode>? Tree, string? Error)
     ValidateBlueprintRequest(SaveBlueprintRequest? request)
 {
@@ -175,11 +182,15 @@ static (string? Name, string SchemaKind, List<string>? FieldNames, List<OutputBl
     if (string.IsNullOrWhiteSpace(name))
         return (null, "", null, null, "Name is required.");
 
-    var schemaKind = string.IsNullOrWhiteSpace(request?.SchemaKind) ? "flat" : request!.SchemaKind!.Trim().ToLowerInvariant();
-    if (schemaKind != "flat" && schemaKind != "tree")
-        return (null, "", null, null, "SchemaKind must be 'flat' or 'tree'.");
+    var requestedKind = request?.SchemaKind?.Trim();
+    var schemaKind = string.IsNullOrWhiteSpace(requestedKind) ? "Flat"
+        : string.Equals(requestedKind, "Flat", StringComparison.OrdinalIgnoreCase) ? "Flat"
+        : string.Equals(requestedKind, "Tree", StringComparison.OrdinalIgnoreCase) ? "Tree"
+        : null;
+    if (schemaKind is null)
+        return (null, "", null, null, "SchemaKind must be 'Flat' or 'Tree'.");
 
-    if (schemaKind == "tree")
+    if (schemaKind == "Tree")
     {
         var treeError = OutputBlueprintTreeSchemaValidator.Validate(request?.Tree ?? []);
         return treeError is not null
@@ -594,8 +605,8 @@ public sealed class SaveBlueprintRequest
     public string? Name { get; set; }
     public List<string>? FieldNames { get; set; }
 
-    // Issue #244: "flat" (default when absent/blank, for backward
-    // compatibility with a pre-#244 extension build) or "tree" — see
+    // Issue #244: "Flat" (default when absent/blank, for backward
+    // compatibility with a pre-#244 extension build) or "Tree" — see
     // ValidateBlueprintRequest.
     public string? SchemaKind { get; set; }
     public List<OutputBlueprintTreeSchemaNode>? Tree { get; set; }

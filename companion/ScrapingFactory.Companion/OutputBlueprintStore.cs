@@ -19,16 +19,20 @@ namespace ScrapingFactory.Companion;
 // no less "opaque storage" in spirit than SavedConfigStore.ConfigJson's own
 // verbatim-text treatment.
 //
-// Issue #244: SchemaKind ("flat"/"tree", a plain string here — deliberately
-// not the Compiler project's OutputBlueprintSchemaKind enum, to keep this
-// store's own persistence format independent of the generate-time wire
-// format) picks which of FieldNamesJson/TreeJson is meaningful for a given
-// row: a flat blueprint still only ever populates FieldNamesJson (TreeJson
-// stays NULL); a tree blueprint populates TreeJson with its own
-// List<OutputBlueprintTreeSchemaNode> instead (FieldNamesJson stays "[]").
-// FieldCount reports the target LEAF count either way — the whole tree for
-// a tree-kind blueprint, recursively — so the extension's own blueprint
-// picker can show one consistent "N fields" hint regardless of schema kind.
+// Issue #244: SchemaKind ("Flat"/"Tree", a plain string here — deliberately
+// not the Compiler project's OutputBlueprintSchemaKind enum type, to keep
+// this store's own persistence format independent of the generate-time IR
+// type; PascalCase matches its wire serialization anyway, the same
+// JsonStringEnumConverter convention every other enum in this codebase
+// already uses, so the extension never needs to translate between two
+// different casings for the "same" concept) picks which of FieldNamesJson/
+// TreeJson is meaningful for a given row: a flat blueprint still only ever
+// populates FieldNamesJson (TreeJson stays NULL); a tree blueprint
+// populates TreeJson with its own List<OutputBlueprintTreeSchemaNode>
+// instead (FieldNamesJson stays "[]"). FieldCount reports the target LEAF
+// count either way — the whole tree for a tree-kind blueprint, recursively
+// — so the extension's own blueprint picker can show one consistent
+// "N fields" hint regardless of schema kind.
 public sealed record OutputBlueprintSummary(long Id, string Name, string SavedAt, int FieldCount, string SchemaKind);
 
 public sealed record OutputBlueprintRecord(
@@ -96,11 +100,11 @@ public sealed class OutputBlueprintStore
         // added via an idempotent ALTER TABLE rather than baked into the
         // CREATE TABLE above, so an existing output-blueprints.db (created
         // before this feature) keeps working without the user needing to
-        // delete/recreate it. SchemaKind defaults to 'flat' for every
+        // delete/recreate it. SchemaKind defaults to 'Flat' for every
         // already-existing row — byte-for-byte the only schema kind that
         // existed before this feature; TreeJson stays NULL for a flat
         // blueprint either way.
-        AddColumnIfMissing(connection, "SchemaKind", "TEXT NOT NULL DEFAULT 'flat'");
+        AddColumnIfMissing(connection, "SchemaKind", "TEXT NOT NULL DEFAULT 'Flat'");
         AddColumnIfMissing(connection, "TreeJson", "TEXT NULL");
     }
 

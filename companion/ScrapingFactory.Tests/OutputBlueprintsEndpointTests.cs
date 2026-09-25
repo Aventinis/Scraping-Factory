@@ -183,12 +183,12 @@ public class OutputBlueprintsEndpointTests : IDisposable
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    // Issue #244: schemaKind: "tree" — the endpoint's own request-shape
+    // Issue #244: schemaKind: "Tree" — the endpoint's own request-shape
     // switch, mirroring the flat "fieldNames" tests above one-for-one.
     private static object TreeSchema() => new
     {
         name = "Menu schema",
-        schemaKind = "tree",
+        schemaKind = "Tree",
         tree = new object[]
         {
             new
@@ -210,14 +210,14 @@ public class OutputBlueprintsEndpointTests : IDisposable
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("tree", body.GetProperty("schemaKind").GetString());
+        Assert.Equal("Tree", body.GetProperty("schemaKind").GetString());
         Assert.Equal(2, body.GetProperty("fieldCount").GetInt32()); // "Name" + "Preis"
     }
 
     [Fact]
     public async Task Post_TreeSchema_EmptyTree_Returns400()
     {
-        var response = await _client.PostAsync("/blueprints", JsonBody(new { name = "Schema", schemaKind = "tree", tree = Array.Empty<object>() }));
+        var response = await _client.PostAsync("/blueprints", JsonBody(new { name = "Schema", schemaKind = "Tree", tree = Array.Empty<object>() }));
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -226,7 +226,7 @@ public class OutputBlueprintsEndpointTests : IDisposable
     {
         var response = await _client.PostAsync("/blueprints", JsonBody(new
         {
-            name = "Schema", schemaKind = "tree", tree = new object[] { new { name = "" } },
+            name = "Schema", schemaKind = "Tree", tree = new object[] { new { name = "" } },
         }));
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -248,7 +248,7 @@ public class OutputBlueprintsEndpointTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("tree", body.GetProperty("schemaKind").GetString());
+        Assert.Equal("Tree", body.GetProperty("schemaKind").GetString());
         var root = body.GetProperty("tree")[0];
         Assert.Equal("Kategorien", root.GetProperty("name").GetString());
         Assert.Equal(2, root.GetProperty("children").GetArrayLength());
@@ -268,7 +268,7 @@ public class OutputBlueprintsEndpointTests : IDisposable
 
         var getResponse = await _client.GetAsync($"/blueprints/{id}");
         var body = await getResponse.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("tree", body.GetProperty("schemaKind").GetString());
+        Assert.Equal("Tree", body.GetProperty("schemaKind").GetString());
         Assert.Equal(2, body.GetProperty("tree")[0].GetProperty("children").GetArrayLength());
     }
 }
