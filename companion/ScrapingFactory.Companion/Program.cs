@@ -27,6 +27,12 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     // ApiBodyObject.Properties/ApiBodyArray.Items: .../ApiBodyNode) — see
     // ApiBodyNodeJsonConverter.
     options.SerializerOptions.Converters.Add(new ApiBodyNodeJsonConverter());
+    // Issue #244: Output Blueprints' tree-shaped target schema (persisted,
+    // site-independent — OutputBlueprintTreeSchemaGroup/...Field) and its
+    // per-scrape mapping counterpart (OutputBlueprintTreeMappingGroup/
+    // ...Field) each need the same polymorphic-list treatment.
+    options.SerializerOptions.Converters.Add(new OutputBlueprintTreeSchemaNodeJsonConverter());
+    options.SerializerOptions.Converters.Add(new OutputBlueprintTreeMappingNodeJsonConverter());
 });
 
 builder.Services.AddSingleton(new LanguageModuleRegistry(CompanionBackendOverrides.Build(builder.Configuration)));
