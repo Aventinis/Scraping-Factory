@@ -40,13 +40,6 @@ jobs:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           target-branch: dev
 
-      # One-time visibility into the action's real output shape, in Actions
-      # -> this run -> this step's log — handy to sanity-check field names
-      # (e.g. that `pr` really carries a `.number`) the first time this runs.
-      # Safe to delete once confirmed.
-      - name: Debug outputs
-        run: echo '${{ toJSON(steps.release.outputs) }}'
-
   auto-merge-release-pr:
     needs: release-please
     if: needs.release-please.outputs.pr != ''
@@ -68,4 +61,5 @@ jobs:
       - name: Flag the release-please-created GitHub Release as a prerelease
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
-        run: gh release edit "${{ needs.release-please.outputs.tag_name }}" --prerelease --repo "${{ github.repository }}"
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+        run: gh release edit "$TAG_NAME" --prerelease --repo "${{ github.repository }}"
