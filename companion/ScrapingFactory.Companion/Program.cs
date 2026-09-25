@@ -161,16 +161,48 @@ app.MapDelete("/configs/{configId:long}/outputs/{id:long}", (long configId, long
 static List<string>? NormalizeBlueprintFieldNames(List<string>? fieldNames) =>
     fieldNames?.Select(name => name.Trim()).Where(name => name.Length > 0).ToList();
 
-app.MapPost("/blueprints", (SaveBlueprintRequest? request, OutputBlueprintStore store) =>
+// Issue #244: shared POST/PUT validation, now branching on SchemaKind — a
+// missing/blank value defaults to "flat" (byte-for-byte today's only
+// schema kind, so an older extension build's request without this field at
+// all keeps working unchanged). A "tree" request's own structural checks
+// are delegated to OutputBlueprintTreeSchemaValidator (the same validator
+// ScrapingPlanValidator itself has no reason to duplicate); its FieldNames
+// is ignored either way, mirroring how a "flat" request's Tree is ignored.
+static (string? Name, string SchemaKind, List<string>? FieldNames, List<OutputBlueprintTreeSchemaNode>? Tree, string? Error)
+    ValidateBlueprintRequest(SaveBlueprintRequest? request)
 {
     var name = request?.Name?.Trim();
-    var fieldNames = NormalizeBlueprintFieldNames(request?.FieldNames);
-    if (string.IsNullOrWhiteSpace(name) || fieldNames is not { Count: > 0 })
-        return Results.BadRequest(new { error = "Name and at least one field name are required." });
-    if (fieldNames.Distinct().Count() != fieldNames.Count)
-        return Results.BadRequest(new { error = "Field names must be unique." });
+    if (string.IsNullOrWhiteSpace(name))
+        return (null, "", null, null, "Name is required.");
 
-    var saved = store.Save(name, fieldNames);
+    var schemaKind = string.IsNullOrWhiteSpace(request?.SchemaKind) ? "flat" : request!.SchemaKind!.Trim().ToLowerInvariant();
+    if (schemaKind != "flat" && schemaKind != "tree")
+        return (null, "", null, null, "SchemaKind must be 'flat' or 'tree'.");
+
+    if (schemaKind == "tree")
+    {
+        var treeError = OutputBlueprintTreeSchemaValidator.Validate(request?.Tree ?? []);
+        return treeError is not null
+            ? (null, "", null, null, treeError)
+            : (name, schemaKind, null, request!.Tree, null);
+    }
+
+    var fieldNames = NormalizeBlueprintFieldNames(request?.FieldNames);
+    if (fieldNames is not { Count: > 0 })
+        return (null, "", null, null, "At least one field name is required.");
+    if (fieldNames.Distinct().Count() != fieldNames.Count)
+        return (null, "", null, null, "Field names must be unique.");
+
+    return (name, schemaKind, fieldNames, null, null);
+}
+
+app.MapPost("/blueprints", (SaveBlueprintRequest? request, OutputBlueprintStore store) =>
+{
+    var (name, schemaKind, fieldNames, tree, error) = ValidateBlueprintRequest(request);
+    if (error is not null)
+        return Results.BadRequest(new { error });
+
+    var saved = store.Save(name!, schemaKind, fieldNames, tree);
     return Results.Created($"/blueprints/{saved.Id}", saved);
 });
 
@@ -187,15 +219,12 @@ app.MapPut("/blueprints/{id:long}", (long id, SaveBlueprintRequest? request, Out
     if (store.Get(id) is null)
         return Results.NotFound(new { error = "Output blueprint not found." });
 
-    var name = request?.Name?.Trim();
-    var fieldNames = NormalizeBlueprintFieldNames(request?.FieldNames);
-    if (string.IsNullOrWhiteSpace(name) || fieldNames is not { Count: > 0 })
-        return Results.BadRequest(new { error = "Name and at least one field name are required." });
-    if (fieldNames.Distinct().Count() != fieldNames.Count)
-        return Results.BadRequest(new { error = "Field names must be unique." });
+    var (name, schemaKind, fieldNames, tree, error) = ValidateBlueprintRequest(request);
+    if (error is not null)
+        return Results.BadRequest(new { error });
 
-    store.Update(id, name, fieldNames);
-    return Results.Ok(new { id, name, fieldNames });
+    store.Update(id, name!, schemaKind, fieldNames, tree);
+    return Results.Ok(new { id, name, schemaKind, fieldNames, tree });
 });
 
 app.MapDelete("/blueprints/{id:long}", (long id, OutputBlueprintStore store) =>
@@ -564,4 +593,10 @@ public sealed class SaveBlueprintRequest
 {
     public string? Name { get; set; }
     public List<string>? FieldNames { get; set; }
+
+    // Issue #244: "flat" (default when absent/blank, for backward
+    // compatibility with a pre-#244 extension build) or "tree" — see
+    // ValidateBlueprintRequest.
+    public string? SchemaKind { get; set; }
+    public List<OutputBlueprintTreeSchemaNode>? Tree { get; set; }
 }

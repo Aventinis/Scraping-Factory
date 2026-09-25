@@ -182,4 +182,93 @@ public class OutputBlueprintsEndpointTests : IDisposable
         var response = await _client.DeleteAsync("/blueprints/999999");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
+
+    // Issue #244: schemaKind: "tree" — the endpoint's own request-shape
+    // switch, mirroring the flat "fieldNames" tests above one-for-one.
+    private static object TreeSchema() => new
+    {
+        name = "Menu schema",
+        schemaKind = "tree",
+        tree = new object[]
+        {
+            new
+            {
+                name = "Kategorien",
+                children = new object[]
+                {
+                    new { name = "Name" },
+                    new { name = "Gerichte", children = new object[] { new { name = "Preis" } } },
+                },
+            },
+        },
+    };
+
+    [Fact]
+    public async Task Post_TreeSchema_Returns201WithLeafFieldCount()
+    {
+        var response = await _client.PostAsync("/blueprints", JsonBody(TreeSchema()));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("tree", body.GetProperty("schemaKind").GetString());
+        Assert.Equal(2, body.GetProperty("fieldCount").GetInt32()); // "Name" + "Preis"
+    }
+
+    [Fact]
+    public async Task Post_TreeSchema_EmptyTree_Returns400()
+    {
+        var response = await _client.PostAsync("/blueprints", JsonBody(new { name = "Schema", schemaKind = "tree", tree = Array.Empty<object>() }));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Post_TreeSchema_BlankNodeName_Returns400()
+    {
+        var response = await _client.PostAsync("/blueprints", JsonBody(new
+        {
+            name = "Schema", schemaKind = "tree", tree = new object[] { new { name = "" } },
+        }));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Post_UnknownSchemaKind_Returns400()
+    {
+        var response = await _client.PostAsync("/blueprints", JsonBody(new { name = "Schema", schemaKind = "nested", fieldNames = new[] { "A" } }));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetById_TreeSchema_ReturnsNestedTree()
+    {
+        var created = await (await _client.PostAsync("/blueprints", JsonBody(TreeSchema()))).Content.ReadFromJsonAsync<JsonElement>();
+        var id = created.GetProperty("id").GetInt64();
+
+        var response = await _client.GetAsync($"/blueprints/{id}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("tree", body.GetProperty("schemaKind").GetString());
+        var root = body.GetProperty("tree")[0];
+        Assert.Equal("Kategorien", root.GetProperty("name").GetString());
+        Assert.Equal(2, root.GetProperty("children").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Put_FlatToTreeSchema_SwitchesSchemaKind()
+    {
+        var created = await (await _client.PostAsync("/blueprints", JsonBody(new
+        {
+            name = "Schema", fieldNames = new[] { "A" },
+        }))).Content.ReadFromJsonAsync<JsonElement>();
+        var id = created.GetProperty("id").GetInt64();
+
+        var putResponse = await _client.PutAsync($"/blueprints/{id}", JsonBody(TreeSchema()));
+        Assert.Equal(HttpStatusCode.OK, putResponse.StatusCode);
+
+        var getResponse = await _client.GetAsync($"/blueprints/{id}");
+        var body = await getResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("tree", body.GetProperty("schemaKind").GetString());
+        Assert.Equal(2, body.GetProperty("tree")[0].GetProperty("children").GetArrayLength());
+    }
 }

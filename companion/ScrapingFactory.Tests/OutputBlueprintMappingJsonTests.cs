@@ -33,7 +33,8 @@ public class OutputBlueprintMappingJsonTests
 
         Assert.NotNull(config!.OutputBlueprint);
         Assert.Equal(42, config.OutputBlueprint!.BlueprintId);
-        var mapping = Assert.Single(config.OutputBlueprint.Fields);
+        Assert.Equal(OutputBlueprintSchemaKind.Flat, config.OutputBlueprint.SchemaKind);
+        var mapping = Assert.Single(config.OutputBlueprint.Fields!);
         Assert.Equal("name", mapping.TargetField);
         Assert.Equal("Titel", mapping.SourceField);
     }
@@ -83,8 +84,73 @@ public class OutputBlueprintMappingJsonTests
         var roundTripped = JsonSerializer.Deserialize<OutputBlueprintMapping>(json, Options);
 
         Assert.Equal(original.BlueprintId, roundTripped!.BlueprintId);
-        Assert.Equal(2, roundTripped.Fields.Count);
+        Assert.Equal(2, roundTripped.Fields!.Count);
         Assert.Equal("name", roundTripped.Fields[0].TargetField);
         Assert.Equal("Preis", roundTripped.Fields[1].SourceField);
+    }
+
+    // Issue #244: the tree-shaped mapping payload round-trips through the
+    // same plain (non-polymorphic at this outer level) OutputBlueprintMapping
+    // wrapper — only Tree's own elements need the structural
+    // OutputBlueprintTreeMappingNodeJsonConverter (registered explicitly
+    // here, mirroring how Program.cs registers it for the real HTTP pipeline).
+    private static readonly JsonSerializerOptions TreeOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter(), new OutputBlueprintTreeMappingNodeJsonConverter() },
+    };
+
+    [Fact]
+    public void Deserialize_TreeSchemaKind_ResolvesNestedMappingTree()
+    {
+        const string json = """
+            {
+              "schemaKind": "Tree",
+              "tree": [
+                {
+                  "name": "Kategorien",
+                  "children": [
+                    { "name": "Name", "sourceField": "KategorieName" },
+                    { "name": "Gerichte", "children": [{ "name": "Preis", "sourceField": "Preis" }] }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        var mapping = JsonSerializer.Deserialize<OutputBlueprintMapping>(json, TreeOptions);
+
+        Assert.Equal(OutputBlueprintSchemaKind.Tree, mapping!.SchemaKind);
+        Assert.Null(mapping.Fields);
+        var root = Assert.IsType<OutputBlueprintTreeMappingGroup>(Assert.Single(mapping.Tree!));
+        Assert.Equal("Kategorien", root.Name);
+        var nameLeaf = Assert.IsType<OutputBlueprintTreeMappingField>(root.Children[0]);
+        Assert.Equal("KategorieName", nameLeaf.SourceField);
+        var nestedGroup = Assert.IsType<OutputBlueprintTreeMappingGroup>(root.Children[1]);
+        Assert.Equal("Gerichte", nestedGroup.Name);
+    }
+
+    [Fact]
+    public void SerializeThenDeserialize_TreeSchemaKind_RoundTrips()
+    {
+        var original = new OutputBlueprintMapping
+        {
+            SchemaKind = OutputBlueprintSchemaKind.Tree,
+            Tree =
+            [
+                new OutputBlueprintTreeMappingGroup
+                {
+                    Name = "Kategorien",
+                    Children = [new OutputBlueprintTreeMappingField { Name = "Name", SourceField = "KategorieName" }],
+                },
+            ],
+        };
+
+        var json = JsonSerializer.Serialize(original, TreeOptions);
+        var roundTripped = JsonSerializer.Deserialize<OutputBlueprintMapping>(json, TreeOptions);
+
+        Assert.Equal(OutputBlueprintSchemaKind.Tree, roundTripped!.SchemaKind);
+        var root = Assert.IsType<OutputBlueprintTreeMappingGroup>(Assert.Single(roundTripped.Tree!));
+        Assert.Equal("Kategorien", root.Name);
+        Assert.Equal("KategorieName", Assert.IsType<OutputBlueprintTreeMappingField>(root.Children[0]).SourceField);
     }
 }
