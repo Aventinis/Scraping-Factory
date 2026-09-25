@@ -950,15 +950,19 @@ same script.
   credential env vars, so a broken skip-login guard would fail fast via
   `EXIT_MISSING_ENV_VAR` (78) instead of succeeding.
 
-### 2.23 Output Blueprints: reusable output field-name/order mapping (Issue #191)
+### 2.23 Output Blueprints: reusable output field-name/order mapping (Issues #191, #192)
 
 A small, persisted, site-independent "blueprint" — just a name plus an
 ordered list of target field names — lets a recurring scrape (of the same or
 different configurations) always write the same fixed column set/order/
 naming, e.g. for a downstream import pipeline that expects a stable schema.
-Reachable only for flat-shaped output (flat mode, or API mode's own flat
-`ItemsPath`/`Fields` shape); rejected outright (not silently ignored) for
-container mode, API's tree shape, Combined mode, and Blocks mode.
+Reachable for flat mode, API mode's flat `ItemsPath`/`Fields` shape,
+container mode, and API mode's tree shape (Issue #192 extended the original
+flat-only scope to the latter two); rejected outright (not silently
+ignored) for Combined mode and Blocks mode, neither having a single
+field/tree config of its own at the outer level. Applied to a tree shape,
+the mapping *flattens* it into denormalized rows instead of renaming tags
+in place — see the Issue #192 bullets below.
 
 - Extension: `popup/output-blueprints.js` (pure — editing a blueprint's own
   ordered field-name list in the create/edit modal;
@@ -980,19 +984,35 @@ container mode, API's tree shape, Combined mode, and Blocks mode.
 - Companion: `OutputBlueprintStore.cs` (own SQLite file/db, no FK/cascade —
   a blueprint isn't tied to any saved configuration), five endpoints under
   `/blueprints` (list/get/create/update/delete) registered in `Program.cs`,
-  which also rejects `OutputBlueprint` combined with `Groups`/`Api.Groups`/
-  `Combined`/`Blocks` with a `400`.
+  which also rejects `OutputBlueprint` combined with `Combined`/`Blocks`
+  with a `400` (the same rejection originally also covered `Groups`/
+  `Api.Groups` — see Issue #192 below for why that's gone).
 - Compiler: `IR/OutputBlueprintMapping.cs` (`OutputBlueprintMapping` —
   `BlueprintId` kept only for the extension's own round-tripping, plus a
   `List<OutputBlueprintFieldMapping>` of `TargetField`/`SourceField` pairs),
   added to `ScrapingConfig`/`ScrapingPlan` and carried through by
-  `IR/ScrapingPlanBuilder.cs` only in the flat-`Fields`/Api-flat branches.
+  `IR/ScrapingPlanBuilder.cs` in every branch except Combined/Blocks.
   `IR/ScrapingPlanValidator.cs`'s `ValidateOutputBlueprint` checks
   non-empty/non-duplicate target and source names and that every
-  `SourceField` references a real available field.
+  `SourceField` references a real available field (leaf names only for a
+  tree shape — see `CollectContainerFieldNames`/`CollectApiFieldNames`
+  below).
   `Backends/Python/PythonOutputBlueprintLiteral.cs` renders it into a
   `[{"target": ..., "source": ...}, ...]` literal, mirroring
   `PythonFieldTransformLiteral`.
+- Compiler (Issue #192): `IR/OutputBlueprintFlattening.cs`
+  (`ResolveContainerRowScope`) resolves — or rejects — the single repeating
+  group every mapped field's own ancestor chain must share for container
+  mode, since `GroupNode.Repeating` is known statically there;
+  `ScrapingPlanValidator`'s `ExtractGroupStep` branch calls it and rejects
+  an ambiguous mapping with a `400` before any script is generated. No
+  static equivalent exists for Api mode's tree shape (`ApiGroup` has no
+  `Repeating` flag, Architecture Decision #6) — the identical check is
+  re-derived dynamically instead, inside the generated script itself (see
+  the templates bullet below), surfacing as a `422` trial-run failure
+  instead. `ScrapingPlanBuilder` forces the flat output formats (`Csv`/flat
+  `Json`) instead of `Xml`/tree-`Json` whenever a blueprint mapping is
+  active for either tree shape.
 - Templates: `scraper.py.j2`, `playwright_scraper.py.j2`, `scraper_api.py.j2`
   (the three flat-shape shells only) gain a `BLUEPRINT_MAPPING` constant
   that, when non-empty, takes over building `output_rows`/the CSV fieldnames
@@ -1000,6 +1020,25 @@ container mode, API's tree shape, Combined mode, and Blocks mode.
   precedence over Issue #178's `FIELD_OUTPUT_NAMES` at that same step.
   `data` itself stays untouched, so hardening/change-detection keep
   operating on the original field names either way.
+- Templates (Issue #192): `scraper_grouped.py.j2`, `playwright_scraper_grouped.py.j2`,
+  `scraper_api_grouped.py.j2` gain the same `BLUEPRINT_MAPPING` constant
+  plus a new runtime walker (`_flatten_group_tree_for_blueprint`/
+  `_flatten_api_group_for_blueprint`) that denormalizes the already-built
+  tree into rows instead of `extract_group()`'s/`_extract_api_group()`'s
+  own nested `ET.Element` tree — always returns a list of context dicts,
+  growing only at a *relevant* repeating group's own instance boundary
+  (`_blueprint_subtree_has_mapped_field` skips an irrelevant branch with no
+  mapped field inside it, so it never needlessly fans out the row count).
+  `scrape()`/`scrape(url)` now return `(root, blueprint_rows)` instead of
+  just `root`; `main()` writes either the flattened csv/json or the
+  original nested xml/json, while hardening/change-detection keep
+  operating on the original, unflattened `root` either way. The Api-tree
+  template's own walker additionally resolves "is this node repeating"
+  dynamically (mirroring `_extract_api_group`'s own
+  `_is_repeating_instance`) and tracks the winning ancestor chain across
+  the whole run via a module-level `_blueprint_resolved_chain`, raising a
+  `RuntimeError` on a conflicting chain instead of `OutputBlueprintFlattening`'s
+  `400`.
 - Tests: `OutputBlueprintStoreTests.cs`, `OutputBlueprintsEndpointTests.cs`,
   `OutputBlueprintMappingJsonTests.cs` (wire round-trip),
   `OutputBlueprintEndToEndTests.cs` (real generated-script output actually
