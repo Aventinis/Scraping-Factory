@@ -172,6 +172,7 @@ async function generate(bridge) {
     state.useJsonOutput, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
     state.pagination, state.persistentSession, state.includeOutputFile, state.externalConfig, combinedComponents,
     state.blocks, state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
+    state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line

@@ -336,6 +336,16 @@
             <p class="preview-summary" data-i18n="idle.outputBlueprintMappingHint"></p>
             <ul id="output-blueprint-mapping-list"></ul>
           </div>
+          <!-- Issue #244: a Tree-schema blueprint's own mapping view — shown
+               instead of #output-blueprint-mapping above once the picked
+               blueprint's schemaKind is Tree. Mirrors the container/API tree
+               editors' own read-only structural rendering (indented rows),
+               each leaf row getting a source-field <select> exactly like the
+               flat mapping's own per-row <select>. -->
+          <div id="output-blueprint-tree-mapping" class="hidden">
+            <p class="preview-summary" data-i18n="idle.outputBlueprintTreeMappingHint"></p>
+            <ul id="output-blueprint-tree-mapping-list" class="group-tree-root"></ul>
+          </div>
         </div>
       </div>
       <!-- Issue #183: change detection (#87) and script hardening (#129-

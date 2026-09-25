@@ -266,6 +266,10 @@ function buildScrapingConfig(
   additionalUrls = [], changeDetection = null, proxy = null, hardening = null, pagination = null,
   persistentSession = false, includeOutputFile = false, externalConfig = false, combinedComponents = null,
   blocks = null, outputBlueprintId = null, outputBlueprintFieldNames = [], outputBlueprintMapping = {},
+  // Issue #244: the tree-shaped counterpart of the three params just above
+  // — outputBlueprintSchemaKind picks which pair buildOutputBlueprintMapping
+  // actually reads, the other pair is simply ignored.
+  outputBlueprintSchemaKind = 'Flat', outputBlueprintTree = [], outputBlueprintTreeMapping = {},
 ) {
   // Issue #182: Blocks mode has no ad-hoc fields/groups/apiConfig of its own
   // either — each block is a fully independent {name, outputFileName,
@@ -368,7 +372,10 @@ function buildScrapingConfig(
   // picked or the mapping isn't complete yet, so this is a genuine no-op
   // for Combined/Blocks too even though it's computed here unconditionally
   // for every mode.
-  const outputBlueprintConfig = buildOutputBlueprintMapping(outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping);
+  const outputBlueprintConfig = buildOutputBlueprintMapping(
+    outputBlueprintId, outputBlueprintSchemaKind, outputBlueprintFieldNames, outputBlueprintMapping,
+    outputBlueprintTree, outputBlueprintTreeMapping,
+  );
   const outputBlueprintFields = outputBlueprintConfig ? { outputBlueprint: outputBlueprintConfig } : {};
 
   if (mode === 'container') {
@@ -418,6 +425,7 @@ function buildConfigExport(
   changeDetection = null, proxy = null, hardening = null, pagination = null, persistentSession = false,
   includeOutputFile = false, externalConfig = false, combinedComponents = null, blocks = null,
   outputBlueprintId = null, outputBlueprintFieldNames = [], outputBlueprintMapping = {},
+  outputBlueprintSchemaKind = 'Flat', outputBlueprintTree = [], outputBlueprintTreeMapping = {},
 ) {
   return {
     exportedAt: new Date().toISOString(),
@@ -427,6 +435,7 @@ function buildConfigExport(
       useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession,
       includeOutputFile, externalConfig, combinedComponents, blocks,
       outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping,
+      outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping,
     ),
   };
 }

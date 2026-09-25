@@ -3,8 +3,21 @@
 // building/validating the per-scrape source-field mapping draft (once a
 // blueprint is picked on the idle screen). Split the same way
 // combined-config.js/field-transforms.js are: no fetch, no DOM, just data.
+//
+// Issue #244: a second, tree-shaped target schema alongside the original
+// flat field-name list — both the blueprint's own target-schema editing
+// (create/edit modal) and the per-scrape tree mapping draft below. The
+// schema's own tree STRUCTURE (add/remove/rename/reorder/nest a group or
+// field node) reuses container-tree.js's generic path-based helpers
+// directly (insertContainerNode/removeGroupTreeNode/updateGroupTreeNode/
+// moveGroupTreeNode/resolveGroupNode) rather than reimplementing them —
+// none of those functions read anything group/field-specific (selector,
+// repeating, mode), only `.children`/array shape, so they work unchanged
+// against a blueprint schema node's much smaller {kind, name, children}
+// shape too, per Architecture Decision #12's "or an existing one it clearly
+// extends" rule.
 const SFOutputBlueprints = (function () {
-  // ── Editing a blueprint's own field-name list (create/edit modal) ──────
+  // ── Editing a blueprint's own field-name list (create/edit modal, Flat) ─
 
   function addBlueprintFieldName(fieldNames) {
     return [...fieldNames, ''];
@@ -41,7 +54,50 @@ const SFOutputBlueprints = (function () {
     return new Set(trimmed).size === trimmed.length;
   }
 
-  // ── Per-scrape source-field mapping draft ───────────────────────────────
+  // ── Editing a blueprint's own target tree (create/edit modal, Tree) ─────
+  // Node shape: { kind: 'group', name, children } | { kind: 'field', name }
+  // — deliberately no selector/mode/repeating (see this file's own doc
+  // comment on why container-tree.js's structural helpers apply unchanged).
+
+  function buildBlueprintSchemaGroup(name) {
+    return { kind: 'group', name, children: [] };
+  }
+
+  function buildBlueprintSchemaField(name) {
+    return { kind: 'field', name };
+  }
+
+  // Converts a fetched blueprint's wire-format tree (OutputBlueprintTreeSchemaNode:
+  // {name, children} for a group, {name} for a leaf — no `kind` tag, same
+  // structural-only shape ContainerNodeJsonConverter's own wire format uses)
+  // into the internal {kind, ...} shape the editor's tree helpers expect.
+  function parseBlueprintSchemaTree(wireNodes) {
+    return (wireNodes || []).map(node => (Array.isArray(node.children)
+      ? { kind: 'group', name: node.name, children: parseBlueprintSchemaTree(node.children) }
+      : { kind: 'field', name: node.name }));
+  }
+
+  // Reverse of parseBlueprintSchemaTree — strips the popup's internal `kind`
+  // tag, mirrors container-tree.js's own serializeGroupTree in spirit.
+  function serializeBlueprintSchemaTree(nodes) {
+    return nodes.map(node => (node.kind === 'group'
+      ? { name: node.name, children: serializeBlueprintSchemaTree(node.children) }
+      : { name: node.name }));
+  }
+
+  // Every node needs a non-blank name, and a group needs at least one child
+  // (an empty group carries no field to ever map anything onto) — mirrors
+  // OutputBlueprintTreeSchemaValidator's own companion-side structural check.
+  function blueprintTreeSchemaIsValid(name, tree) {
+    if (!name.trim() || !tree || tree.length === 0) return false;
+    const walk = nodes => nodes.every(node => {
+      if (!node.name || !node.name.trim()) return false;
+      return node.kind === 'group' ? node.children.length > 0 && walk(node.children) : true;
+    });
+    return walk(tree);
+  }
+
+  // ── Per-scrape source-field mapping draft (Flat) ────────────────────────
 
   // One entry per target field, source starting unset — targetFieldNames is
   // the picked blueprint's own ordered field list (see fetchOutputBlueprint
@@ -63,6 +119,52 @@ const SFOutputBlueprints = (function () {
     return targetFieldNames.length > 0 && targetFieldNames.every(name => !!draft[name]);
   }
 
+  // ── Per-scrape source-field mapping draft (Tree) ────────────────────────
+  // The draft is keyed by each leaf's own path within the fetched target
+  // tree (dot-joined child indices, e.g. "0.1" — same addressing scheme
+  // the container/DOM tree views already use, just stringified since it's
+  // a plain object key here rather than an array threaded through
+  // recursive calls) rather than by name, since two leaves may share a name
+  // in different branches (mirrors container mode's own tree allowing
+  // duplicate sibling names).
+
+  function walkTreeLeafPaths(nodes, prefix, visit) {
+    nodes.forEach((node, i) => {
+      const path = prefix ? `${prefix}.${i}` : `${i}`;
+      if (Array.isArray(node.children)) walkTreeLeafPaths(node.children, path, visit);
+      else visit(path, node);
+    });
+  }
+
+  function createTreeMappingDraft(tree) {
+    const draft = {};
+    walkTreeLeafPaths(tree || [], '', (path) => { draft[path] = null; });
+    return draft;
+  }
+
+  function updateTreeMappingSource(draft, leafPath, sourceField) {
+    return { ...draft, [leafPath]: sourceField || null };
+  }
+
+  function treeMappingIsComplete(tree, draft) {
+    if (!tree || tree.length === 0) return false;
+    let complete = true;
+    walkTreeLeafPaths(tree, '', (path) => { if (!draft[path]) complete = false; });
+    return complete;
+  }
+
+  // Builds the wire-shaped OutputBlueprintTreeMappingNode[] — mirrors the
+  // fetched target tree node-for-node, attaching each leaf's picked source
+  // field from `draft`.
+  function buildOutputBlueprintTreeMappingNodes(nodes, draft, prefix) {
+    return nodes.map((node, i) => {
+      const path = prefix ? `${prefix}.${i}` : `${i}`;
+      return Array.isArray(node.children)
+        ? { name: node.name, children: buildOutputBlueprintTreeMappingNodes(node.children, draft, path) }
+        : { name: node.name, sourceField: draft[path] };
+    });
+  }
+
   // Returns the wire-shaped OutputBlueprintMapping, or null when there's no
   // blueprint picked or the mapping isn't complete yet — same "incomplete
   // draft = null, toggle-off-equivalent" convention buildProxyConfig/
@@ -70,10 +172,20 @@ const SFOutputBlueprints = (function () {
   // own "only include the key when truthy" spread pattern works unchanged.
   // blueprintId is the <select>'s own string value (e.g. "3") — parsed to a
   // number here since that's what the wire format's BlueprintId expects.
-  function buildOutputBlueprintMapping(blueprintId, targetFieldNames, draft) {
-    if (!blueprintId || !mappingIsComplete(targetFieldNames, draft)) return null;
+  // Issue #244: schemaKind picks which of (targetFieldNames, draft) / (tree,
+  // treeDraft) is meaningful — the other pair is simply ignored, the same
+  // way the companion's own OutputBlueprintMapping carries both Fields/Tree
+  // but only ever populates the one matching SchemaKind.
+  function buildOutputBlueprintMapping(blueprintId, schemaKind, targetFieldNames, draft, tree, treeDraft) {
+    if (!blueprintId) return null;
+    if (schemaKind === 'Tree') {
+      if (!treeMappingIsComplete(tree, treeDraft)) return null;
+      return { blueprintId: parseInt(blueprintId, 10), schemaKind: 'Tree', tree: buildOutputBlueprintTreeMappingNodes(tree, treeDraft, '') };
+    }
+    if (!mappingIsComplete(targetFieldNames, draft)) return null;
     return {
       blueprintId: parseInt(blueprintId, 10),
+      schemaKind: 'Flat',
       fields: targetFieldNames.map(target => ({ targetField: target, sourceField: draft[target] })),
     };
   }
@@ -81,7 +193,11 @@ const SFOutputBlueprints = (function () {
   return {
     addBlueprintFieldName, removeBlueprintFieldName, updateBlueprintFieldName, moveBlueprintFieldName,
     blueprintDraftIsValid,
-    createMappingDraft, updateMappingSource, mappingIsComplete, buildOutputBlueprintMapping,
+    buildBlueprintSchemaGroup, buildBlueprintSchemaField, parseBlueprintSchemaTree, serializeBlueprintSchemaTree,
+    blueprintTreeSchemaIsValid,
+    createMappingDraft, updateMappingSource, mappingIsComplete,
+    createTreeMappingDraft, updateTreeMappingSource, treeMappingIsComplete,
+    buildOutputBlueprintMapping,
   };
 })();
 
