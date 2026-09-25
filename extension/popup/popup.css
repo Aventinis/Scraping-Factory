@@ -474,7 +474,12 @@ body {
 .api-config-env-name { width: 90px; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
 
 /* Container tree editor */
-#group-tree-root { list-style: none; margin: 0 0 10px; padding: 0; }
+/* Issue #244: Output Blueprints' own tree schema editor/mapping picker
+   reuse this same reset via the .group-tree-root class (the original
+   #group-tree-root only ever needed an id selector, since it's the one
+   container-mode tree on the page) rather than duplicating these three
+   declarations for a second time. */
+#group-tree-root, .group-tree-root { list-style: none; margin: 0 0 10px; padding: 0; }
 .group-tree-children { list-style: none; margin: 0; padding: 0; }
 .group-tree-children.hidden { display: none; }
 .group-tree-row {
