@@ -3,6 +3,7 @@
   "release-type": "simple",
   "packages": {
     ".": {
+      "versioning": "always-bump-patch",
       "extra-files": [
         { "type": "json", "path": "extension/manifest.json", "jsonpath": "$.version" },
         { "type": "json", "path": "extension/package.json", "jsonpath": "$.version" }
