@@ -239,4 +239,59 @@ public class OutputBlueprintEndToEndTests
         Assert.False(result.Success);
         Assert.Contains("independent repeating group", result.Error);
     }
+
+    // Same broadcast case as the static-engine test above, proving
+    // playwright_scraper_grouped.py.j2's own mirror of
+    // _flatten_group_tree_for_blueprint (using _resolve_group_matches/
+    // _resolve_field_match instead of BeautifulSoup's select/select_one)
+    // behaves identically.
+    [Fact]
+    public async Task BrowserEngine_ContainerMode_BlueprintMapping_BroadcastsHigherLevelFieldIntoEveryRow()
+    {
+        using var server = new LocalTestServer(
+            "<html><body><div class='group'>"
+            + "<h2>Desserts</h2>"
+            + "<div class='item'><h3>Kaiserschmarrn</h3><span class='price'>9.80</span></div>"
+            + "<div class='item'><h3>Creme brulee</h3><span class='price'>7.90</span></div>"
+            + "</div></body></html>");
+
+        var root = new GroupNode
+        {
+            Name = "Gruppe", Selector = ".group", Repeating = true,
+            Children =
+            [
+                new DataFieldNode { Name = "SpeiseArt", Selector = "h2" },
+                new GroupNode
+                {
+                    Name = "Speise", Selector = ".item", Repeating = true,
+                    Children =
+                    [
+                        new DataFieldNode { Name = "Name", Selector = "h3" },
+                        new DataFieldNode { Name = "Preis", Selector = ".price" },
+                    ],
+                },
+            ],
+        };
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps = [new NavigateStep { Urls = [server.BaseUrl] }, new ExtractGroupStep { Roots = [root] }],
+            OutputBlueprint = new OutputBlueprintMapping
+            {
+                Fields =
+                [
+                    new OutputBlueprintFieldMapping { TargetField = "category", SourceField = "SpeiseArt" },
+                    new OutputBlueprintFieldMapping { TargetField = "name", SourceField = "Name" },
+                    new OutputBlueprintFieldMapping { TargetField = "price", SourceField = "Preis" },
+                ],
+            },
+        };
+
+        var lines = await RunAndReadOutputCsvAsync(plan, new PythonPlaywrightCodeGenerator());
+
+        Assert.Equal("category,name,price", lines[0]);
+        Assert.Equal("Desserts,Kaiserschmarrn,9.80", lines[1]);
+        Assert.Equal("Desserts,Creme brulee,7.90", lines[2]);
+        Assert.Equal(3, lines.Length);
+    }
 }
