@@ -19,10 +19,17 @@ describe('Output Blueprints (Issue #191)', () => {
         <button id="btn-mode-flat" class="mode-btn active"></button>
         <button id="btn-mode-container" class="mode-btn"></button>
         <button id="btn-mode-api" class="mode-btn"></button>
+        <button id="btn-mode-combined" class="mode-btn"></button>
       </div>
       <div id="flat-mode-section"></div>
       <div id="container-mode-section" class="hidden"></div>
       <div id="api-mode-section" class="hidden"></div>
+      <div id="combined-mode-section" class="hidden">
+        <ul id="combined-components-list"></ul>
+        <select id="select-combined-add-component"></select>
+        <button id="btn-combined-add-component"></button>
+        <p id="combined-no-saved-configs-hint" class="hidden"></p>
+      </div>
       <div id="settings-section">
         <div id="output-blueprint-toggle-row">
           <select id="select-output-blueprint"></select>
@@ -141,8 +148,14 @@ describe('Output Blueprints (Issue #191)', () => {
     expect(options[1].textContent).toContain('Standard export');
   });
 
-  test('the mapping picker is hidden for container mode and shown again for flat mode', () => {
+  test('the mapping picker stays visible for container/api mode (Issue #192) but is hidden for combined mode', () => {
     document.getElementById('btn-mode-container').click();
+    expect(document.getElementById('output-blueprint-toggle-row').classList.contains('hidden')).toBe(false);
+
+    document.getElementById('btn-mode-api').click();
+    expect(document.getElementById('output-blueprint-toggle-row').classList.contains('hidden')).toBe(false);
+
+    document.getElementById('btn-mode-combined').click();
     expect(document.getElementById('output-blueprint-toggle-row').classList.contains('hidden')).toBe(true);
 
     document.getElementById('btn-mode-flat').click();

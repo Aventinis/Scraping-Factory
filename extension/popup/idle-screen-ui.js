@@ -169,19 +169,23 @@ const SFIdleScreenUI = (function () {
       : state.mode === 'combined' ? (state.combinedComponents || []).length >= 2
       : state.mode === 'blocks' ? (state.blocks || []).length >= 2
       : state.fields.length > 0;
-    // Issue #191: output blueprint mapping only reaches flat-shaped output
-    // (flat mode, or Api mode's own flat ItemsPath/Fields shape) — hidden
-    // entirely otherwise (see #output-blueprint-toggle-row's own toggle
-    // below). A blueprint picked but not fully mapped blocks "Generate"
-    // specifically (the same "incomplete draft blocks the action it feeds"
-    // convention the per-field null-rate hardening check's own rows
-    // already establish) — it does NOT block Export/Save/Preview, which
-    // don't depend on the mapping being complete.
-    const isFlatShapedMode = state.mode === 'flat' || (state.mode === 'api' && !(state.apiConfig?.groups?.length));
-    const blueprintMappingIncomplete = isFlatShapedMode && !!state.selectedOutputBlueprintId
+    // Issue #191/#192: reachable for flat mode, container mode, and both of
+    // Api mode's shapes — hidden only for Combined/Blocks, which have no
+    // single field/tree config of their own to map at the outer level (see
+    // #output-blueprint-toggle-row's own toggle below). Container mode/
+    // Api's tree shape flatten into denormalized rows (Issue #192) rather
+    // than being renamed in place, so they're just as eligible as flat
+    // mode/Api's flat shape were already under Issue #191. A blueprint
+    // picked but not fully mapped blocks "Generate" specifically (the same
+    // "incomplete draft blocks the action it feeds" convention the
+    // per-field null-rate hardening check's own rows already establish) —
+    // it does NOT block Export/Save/Preview, which don't depend on the
+    // mapping being complete.
+    const outputBlueprintEligibleMode = state.mode === 'flat' || state.mode === 'container' || state.mode === 'api';
+    const blueprintMappingIncomplete = outputBlueprintEligibleMode && !!state.selectedOutputBlueprintId
       && !mappingIsComplete(state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping);
-    document.getElementById('output-blueprint-toggle-row')?.classList.toggle('hidden', !isFlatShapedMode);
-    if (isFlatShapedMode) renderOutputBlueprintMappingSection(bridge);
+    document.getElementById('output-blueprint-toggle-row')?.classList.toggle('hidden', !outputBlueprintEligibleMode);
+    if (outputBlueprintEligibleMode) renderOutputBlueprintMappingSection(bridge);
     else document.getElementById('output-blueprint-mapping')?.classList.add('hidden');
     const genBtn = document.getElementById('btn-generate');
     if (genBtn) genBtn.disabled = !hasConfig || blueprintMappingIncomplete;

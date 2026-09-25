@@ -1114,6 +1114,50 @@ describe('buildScrapingConfig (api mode, Issue #53 Phase 6)', () => {
   });
 });
 
+describe('buildScrapingConfig (output blueprint, container/api-tree mode, Issue #192)', () => {
+  test('container mode includes outputBlueprint once the mapping is complete', () => {
+    const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
+    const result = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null,
+      'Static', [], false, false, [], null, null, null, null, false, false, false, null, null,
+      '3', ['name'], { name: 'Kategorie' },
+    );
+
+    expect(result.outputBlueprint).toEqual({
+      blueprintId: 3,
+      fields: [{ targetField: 'name', sourceField: 'Kategorie' }],
+    });
+  });
+
+  test('container mode omits outputBlueprint while the mapping is incomplete', () => {
+    const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
+    const result = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null,
+      'Static', [], false, false, [], null, null, null, null, false, false, false, null, null,
+      '3', ['name', 'price'], { name: 'Kategorie', price: null },
+    );
+
+    expect(result.outputBlueprint).toBeUndefined();
+  });
+
+  test('api mode includes outputBlueprint for the tree shape too (unlike Issue #191, no longer flat-only)', () => {
+    const apiConfig = {
+      urlTemplate: 'https://example.com/api',
+      groups: [{ name: 'Kategorie', path: 'categories', children: [{ name: 'Titel', path: 'name' }] }],
+    };
+    const result = buildScrapingConfig(
+      'https://example.com', 'api', [], [], apiConfig, null, null,
+      'Static', [], false, false, [], null, null, null, null, false, false, false, null, null,
+      '5', ['title'], { title: 'Titel' },
+    );
+
+    expect(result.outputBlueprint).toEqual({
+      blueprintId: 5,
+      fields: [{ targetField: 'title', sourceField: 'Titel' }],
+    });
+  });
+});
+
 // ── sanitizeFileNameBase ─────────────────────────────────────────────────────
 // Mirrors the companion's FileNameSanitizer (see popup.js) so the actual
 // downloaded filename always matches what the generated script's own
