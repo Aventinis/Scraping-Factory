@@ -315,6 +315,26 @@
               <input type="number" id="input-pagination-max-pages" min="1" step="1" />
             </div>
           </div>
+          <!-- Issue #191: opt-in output blueprint field mapping — only
+               reachable for flat-shaped output (flat mode's own Fields, or
+               API mode's flat ItemsPath/Fields shape), hidden entirely
+               otherwise (see render()'s own #output-blueprint-toggle-row
+               toggle), the same "ship the simpler shape first" reasoning
+               #additional-urls-row/#pagination-toggle-row already establish
+               for their own tree-mode exclusions. The blueprint list itself
+               is unscoped (reusable across any site/configuration), fetched
+               once on companion connect like the saved-configs list. -->
+          <div class="output-settings-row" id="output-blueprint-toggle-row">
+            <label for="select-output-blueprint" data-i18n="idle.outputBlueprintLabel"></label>
+            <select id="select-output-blueprint">
+              <option value="" data-i18n="idle.outputBlueprintNoneOption"></option>
+            </select>
+            <button type="button" id="btn-manage-blueprints" class="btn-secondary btn-tiny" data-i18n="idle.manageBlueprintsBtn"></button>
+          </div>
+          <div id="output-blueprint-mapping" class="hidden">
+            <p class="preview-summary" data-i18n="idle.outputBlueprintMappingHint"></p>
+            <ul id="output-blueprint-mapping-list"></ul>
+          </div>
         </div>
       </div>
       <!-- Issue #183: change detection (#87) and script hardening (#129-

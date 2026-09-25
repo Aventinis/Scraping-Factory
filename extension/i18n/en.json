@@ -162,7 +162,11 @@
     "blocksMinCountHint": "At least 2 blocks are required to generate a script.",
     "blocksSummaryFlat": "{count} field(s)",
     "blocksSummaryGroup": "{count} group(s)",
-    "blocksUnnamed": "(unnamed)"
+    "blocksUnnamed": "(unnamed)",
+    "outputBlueprintLabel": "Output blueprint",
+    "outputBlueprintNoneOption": "None",
+    "manageBlueprintsBtn": "Manage",
+    "outputBlueprintMappingHint": "Map each target field to one of this configuration's own source fields — every target field needs a source before the script can be generated."
   },
   "robots": {
     "checkFailed": "robots.txt could not be checked ({error}).",
@@ -335,6 +339,20 @@
     },
     "matchCount": {
       "found": "{count} element(s) found"
+    },
+    "manageBlueprints": {
+      "title": "Output blueprints",
+      "empty": "No output blueprints saved yet.",
+      "newBtn": "+ New blueprint"
+    },
+    "blueprintEdit": {
+      "nameLabel": "Blueprint name (e.g. \"Standard product export\")",
+      "namePlaceholder": "Name",
+      "fieldsLabel": "Target fields (in output order)",
+      "fieldNamePlaceholder": "Field name",
+      "addFieldBtn": "+ Add field",
+      "save": "Save",
+      "editBtn": "Edit"
     }
   },
   "toast": {
@@ -359,7 +377,12 @@
     "outputSaveFailed": "Could not save output: {message}",
     "outputLoadFailed": "Could not load output: {message}",
     "outputDeleted": "Output deleted.",
-    "outputDeleteFailed": "Could not delete output: {message}"
+    "outputDeleteFailed": "Could not delete output: {message}",
+    "blueprintLoadFailed": "Could not load output blueprint: {message}",
+    "blueprintDeleted": "Output blueprint deleted.",
+    "blueprintDeleteFailed": "Could not delete output blueprint: {message}",
+    "blueprintSaved": "Output blueprint saved.",
+    "blueprintSaveFailed": "Could not save output blueprint: {message}"
   },
   "frame": {
     "badge": "iframe",

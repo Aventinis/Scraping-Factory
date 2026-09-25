@@ -54,6 +54,9 @@ const SFSessionRestore = (function () {
     if (stored.blocksDraftName)                next = { ...next, blocksDraftName: stored.blocksDraftName };
     if (stored.blocksDraftOutputFileName)      next = { ...next, blocksDraftOutputFileName: stored.blocksDraftOutputFileName };
     if (stored.blocksEditingIndex !== undefined) next = { ...next, blocksEditingIndex: stored.blocksEditingIndex };
+    if (stored.selectedOutputBlueprintId) next = { ...next, selectedOutputBlueprintId: stored.selectedOutputBlueprintId };
+    if (Array.isArray(stored.selectedOutputBlueprintFieldNames)) next = { ...next, selectedOutputBlueprintFieldNames: stored.selectedOutputBlueprintFieldNames };
+    if (stored.outputBlueprintMapping) next = { ...next, outputBlueprintMapping: stored.outputBlueprintMapping };
 
     // Issue #183: a returning user with something already configured in the
     // "Monitoring" section shouldn't have to re-expand it just to see it.

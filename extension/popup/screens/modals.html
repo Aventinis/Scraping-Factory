@@ -177,3 +177,42 @@
     </div>
   </div>
 
+  <!-- Modal: Output Blueprints management (Issue #191) — lists every
+       persisted blueprint (unscoped, reusable across any site), reached via
+       "Manage" next to the per-scrape mapping picker in the Settings
+       section. Same row-list pattern as #saved-configs-section, just without
+       a hostname scope. -->
+  <div id="modal-manage-blueprints" class="modal hidden">
+    <div class="modal-inner">
+      <p class="preview-summary" data-i18n="modals.manageBlueprints.title"></p>
+      <div id="manage-blueprints-list"></div>
+      <p id="manage-blueprints-empty" class="preview-summary hidden" data-i18n="modals.manageBlueprints.empty"></p>
+      <div class="actions">
+        <button type="button" id="btn-blueprint-new" class="btn-secondary btn-tiny" data-i18n="modals.manageBlueprints.newBtn"></button>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-manage-blueprints-close" class="btn-secondary" data-i18n="common.cancel"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: create/edit one Output Blueprint's own name + ordered target
+       field-name list — opened from modal-manage-blueprints' own "+ New"
+       button or a row's "Edit" button (blueprintEditingId distinguishes the
+       two, see output-blueprints-ui.js). Field-name rows reuse the same
+       add/remove/move-with-adjacent-sibling shape field-transforms-ui.js's
+       transform rows already established. -->
+  <div id="modal-blueprint-edit" class="modal hidden">
+    <div class="modal-inner">
+      <label for="input-blueprint-name" data-i18n="modals.blueprintEdit.nameLabel"></label>
+      <input id="input-blueprint-name" type="text" data-i18n-placeholder="modals.blueprintEdit.namePlaceholder" autocomplete="off" />
+      <label data-i18n="modals.blueprintEdit.fieldsLabel"></label>
+      <ul id="blueprint-field-list" class="blueprint-field-list"></ul>
+      <button type="button" id="btn-blueprint-field-add" class="btn-secondary btn-tiny" data-i18n="modals.blueprintEdit.addFieldBtn"></button>
+      <div class="modal-actions">
+        <button id="btn-blueprint-edit-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-blueprint-edit-save" class="btn-primary" data-i18n="modals.blueprintEdit.save"></button>
+      </div>
+    </div>
+  </div>
+

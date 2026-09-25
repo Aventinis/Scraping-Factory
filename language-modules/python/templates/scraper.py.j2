@@ -375,6 +375,15 @@ TRANSFORMS = {
 {{- end }}
 }
 
+# Issue #191: optional Output Blueprint field mapping — ordered
+# target-field -> source-field pairs. When set, this replaces
+# FIELD_OUTPUT_NAMES for the write-time remap below entirely: the output's
+# column names *and order* become this list's own target fields, and any
+# source field with no entry here is simply omitted rather than written
+# under its own original name. Empty list = today's behavior (columns
+# keyed/ordered by SELECTORS.keys(), FIELD_OUTPUT_NAMES applied if set).
+BLUEPRINT_MAPPING = {{ config.blueprint_mapping_literal }}
+
 
 # Issue #84: best-effort numeric normalization for a "toNumber" transform —
 # finds the first numeric-looking substring and normalizes its decimal
@@ -614,17 +623,27 @@ def main():
 {{~ if config.hardening.enabled ~}}
     data, required_fields_failed = _filter_required_fields(data)
 {{~ end ~}}
-    # Issue #178: a no-op remap when no field was renamed via the external
-    # config (FIELD_OUTPUT_NAMES is then empty) — `data` itself stays keyed
-    # by the original field names throughout, since hardening/change
-    # detection below still need to look fields up by those original names.
-    output_rows = [{FIELD_OUTPUT_NAMES.get(k, k): v for k, v in row.items()} for row in data]
+    # Issue #191: BLUEPRINT_MAPPING, when set, takes over the write-time
+    # remap entirely instead of FIELD_OUTPUT_NAMES — it already fully
+    # determines the output's column names *and* order, and any source
+    # field with no entry in it is dropped rather than written under its
+    # own name. Issue #178: otherwise, a no-op remap when no field was
+    # renamed via the external config (FIELD_OUTPUT_NAMES is then empty) —
+    # `data` itself stays keyed by the original field names throughout
+    # either way, since hardening/change detection below still need to look
+    # fields up by those original names.
+    if BLUEPRINT_MAPPING:
+        output_rows = [{m["target"]: row.get(m["source"], "") for m in BLUEPRINT_MAPPING} for row in data]
+        output_fieldnames = [m["target"] for m in BLUEPRINT_MAPPING]
+    else:
+        output_rows = [{FIELD_OUTPUT_NAMES.get(k, k): v for k, v in row.items()} for row in data]
+        output_fieldnames = [FIELD_OUTPUT_NAMES.get(name, name) for name in SELECTORS.keys()]
 {{~ if config.output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(output_rows, f, ensure_ascii=False, indent=2)
 {{~ else ~}}
     with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=[FIELD_OUTPUT_NAMES.get(name, name) for name in SELECTORS.keys()])
+        writer = csv.DictWriter(f, fieldnames=output_fieldnames)
         writer.writeheader()
         writer.writerows(output_rows)
 {{~ end ~}}

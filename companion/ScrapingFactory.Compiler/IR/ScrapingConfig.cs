@@ -172,6 +172,17 @@ public sealed class ScrapingConfig
     // Api are both out of scope for Blocks in this first version — rejected
     // alongside Fields/Groups/Api/Combined in Program.cs.
     public List<ExtractionBlockConfig>? Blocks { get; init; }
+
+    // Issue #191: opt-in output blueprint field mapping — see
+    // IR/OutputBlueprintMapping.cs. Only valid for flat-shaped output (this
+    // config's own Fields, or Api's flat ItemsPath/Fields shape) — rejected
+    // alongside Groups/Api.Groups/Combined/Blocks in Program.cs's /generate
+    // handler, the same "ship the simpler shape first" precedent
+    // RequiredFieldsCheck (Issue #133) and ExternalConfig's own field-
+    // renaming (Issue #178) already set for this exact flat-vs-tree scope
+    // boundary. Null is today's exact behavior (output keyed/ordered by the
+    // source fields' own names, unchanged).
+    public OutputBlueprintMapping? OutputBlueprint { get; init; }
 }
 
 public sealed class ScrapingField

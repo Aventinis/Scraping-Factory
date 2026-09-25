@@ -14,6 +14,9 @@ const { t } =
 const { serializeGroupTree } =
   typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
 
+const { buildOutputBlueprintMapping } =
+  typeof require !== 'undefined' ? require('./output-blueprints') : self.SFOutputBlueprints;
+
 // ── Pure functions (exported for testing) ────────────────────────────────────
 
 // Mirrors the companion's FileNameSanitizer (ScrapingFactory.Compiler/IR/
@@ -262,7 +265,7 @@ function buildScrapingConfig(
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
   additionalUrls = [], changeDetection = null, proxy = null, hardening = null, pagination = null,
   persistentSession = false, includeOutputFile = false, externalConfig = false, combinedComponents = null,
-  blocks = null,
+  blocks = null, outputBlueprintId = null, outputBlueprintFieldNames = [], outputBlueprintMapping = {},
 ) {
   // Issue #182: Blocks mode has no ad-hoc fields/groups/apiConfig of its own
   // either — each block is a fully independent {name, outputFileName,
@@ -356,6 +359,15 @@ function buildScrapingConfig(
   // included when true, so the default (checkbox unchecked) request stays
   // byte-for-byte identical to before this existed.
   const externalConfigFields = externalConfig ? { externalConfig: true } : {};
+  // Issue #191: only meaningful for flat-shaped output (flat mode below, or
+  // API mode's flat ItemsPath/Fields shape) — buildOutputBlueprintMapping
+  // itself returns null (omitted, same "incomplete draft" convention as
+  // buildProxyConfig/buildChangeDetectionConfig) whenever no blueprint is
+  // picked or the mapping isn't complete yet, so this is a genuine no-op for
+  // container mode/API's tree shape too even though it's computed here
+  // unconditionally for all modes.
+  const outputBlueprintConfig = buildOutputBlueprintMapping(outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping);
+  const outputBlueprintFields = outputBlueprintConfig ? { outputBlueprint: outputBlueprintConfig } : {};
 
   if (mode === 'container') {
     return {
@@ -372,7 +384,7 @@ function buildScrapingConfig(
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
       ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
-      ...externalConfigFields,
+      ...externalConfigFields, ...(apiConfig?.groups ? {} : outputBlueprintFields),
     };
   }
   return {
@@ -388,6 +400,7 @@ function buildScrapingConfig(
     outputFileName: outputFileName || null,
     ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields,
     ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields, ...externalConfigFields,
+    ...outputBlueprintFields,
   };
 }
 
@@ -402,6 +415,7 @@ function buildConfigExport(
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false, additionalUrls = [],
   changeDetection = null, proxy = null, hardening = null, pagination = null, persistentSession = false,
   includeOutputFile = false, externalConfig = false, combinedComponents = null, blocks = null,
+  outputBlueprintId = null, outputBlueprintFieldNames = [], outputBlueprintMapping = {},
 ) {
   return {
     exportedAt: new Date().toISOString(),
@@ -410,6 +424,7 @@ function buildConfigExport(
       url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview,
       useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession,
       includeOutputFile, externalConfig, combinedComponents, blocks,
+      outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping,
     ),
   };
 }

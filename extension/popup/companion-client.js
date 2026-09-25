@@ -61,6 +61,10 @@ async function checkCompanion(bridge) {
     // fetchSavedConfigs itself when Combined mode never ends up being used
     // this session.
     bridge.fetchAllSavedConfigs();
+    // Issue #191: fetched unconditionally like fetchAllSavedConfigs above —
+    // a blueprint is reusable across any site/mode, so there's no "current
+    // mode" gate to wait for either.
+    bridge.fetchOutputBlueprints();
   } catch (err) {
     log('HEALTH_CHECK FAIL', err.message);
     setLastError(err.message, 'Companion connection');
@@ -167,7 +171,7 @@ async function generate(bridge) {
     state.scriptFileName, state.outputFileName, state.engine, state.browserActions, state.includeDataPreview,
     state.useJsonOutput, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
     state.pagination, state.persistentSession, state.includeOutputFile, state.externalConfig, combinedComponents,
-    state.blocks,
+    state.blocks, state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line

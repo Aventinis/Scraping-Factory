@@ -162,7 +162,11 @@
     "blocksMinCountHint": "Se necesitan al menos 2 bloques para generar un script.",
     "blocksSummaryFlat": "{count} campo(s)",
     "blocksSummaryGroup": "{count} grupo(s)",
-    "blocksUnnamed": "(sin nombre)"
+    "blocksUnnamed": "(sin nombre)",
+    "outputBlueprintLabel": "Plantilla de salida",
+    "outputBlueprintNoneOption": "Ninguna",
+    "manageBlueprintsBtn": "Gestionar",
+    "outputBlueprintMappingHint": "Asigna a cada campo de destino uno de los campos de origen propios de esta configuración — cada campo de destino necesita un origen antes de poder generar el script."
   },
   "robots": {
     "checkFailed": "No se pudo comprobar el robots.txt ({error}).",
@@ -335,6 +339,20 @@
     },
     "matchCount": {
       "found": "{count} elemento(s) encontrado(s)"
+    },
+    "manageBlueprints": {
+      "title": "Plantillas de salida",
+      "empty": "Todavía no hay plantillas de salida guardadas.",
+      "newBtn": "+ Nueva plantilla"
+    },
+    "blueprintEdit": {
+      "nameLabel": "Nombre de la plantilla (p. ej. \"Exportación estándar de productos\")",
+      "namePlaceholder": "Nombre",
+      "fieldsLabel": "Campos de destino (en el orden de salida)",
+      "fieldNamePlaceholder": "Nombre del campo",
+      "addFieldBtn": "+ Añadir campo",
+      "save": "Guardar",
+      "editBtn": "Editar"
     }
   },
   "toast": {
@@ -359,7 +377,12 @@
     "outputSaveFailed": "No se pudo guardar la salida: {message}",
     "outputLoadFailed": "No se pudo cargar la salida: {message}",
     "outputDeleted": "Salida eliminada.",
-    "outputDeleteFailed": "No se pudo eliminar la salida: {message}"
+    "outputDeleteFailed": "No se pudo eliminar la salida: {message}",
+    "blueprintLoadFailed": "No se pudo cargar la plantilla de salida: {message}",
+    "blueprintDeleted": "Plantilla de salida eliminada.",
+    "blueprintDeleteFailed": "No se pudo eliminar la plantilla de salida: {message}",
+    "blueprintSaved": "Plantilla de salida guardada.",
+    "blueprintSaveFailed": "No se pudo guardar la plantilla de salida: {message}"
   },
   "frame": {
     "badge": "iframe",

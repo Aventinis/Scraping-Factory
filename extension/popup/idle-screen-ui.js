@@ -25,6 +25,9 @@ const SFIdleScreenUI = (function () {
   const { togglePreview } = typeof require !== 'undefined' ? require('./preview') : self.SFPreview;
   const { renderCombinedSection } = typeof require !== 'undefined' ? require('./combined-config-ui') : self.SFCombinedConfigUI;
   const { renderBlocksSection } = typeof require !== 'undefined' ? require('./blocks-config-ui') : self.SFBlocksConfigUI;
+  const { mappingIsComplete } = typeof require !== 'undefined' ? require('./output-blueprints') : self.SFOutputBlueprints;
+  const { renderOutputBlueprintMappingSection } =
+    typeof require !== 'undefined' ? require('./output-blueprints-ui') : self.SFOutputBlueprintsUI;
 
   // Duplicated verbatim from popup.js's own tiny show(id) helper — same "no
   // cross-module includes for small DOM helpers" convention already used
@@ -49,11 +52,21 @@ const SFIdleScreenUI = (function () {
     blocks: [], blocksDraftShape: 'flat', blocksDraftName: '', blocksDraftOutputFileName: '', blocksEditingIndex: null,
   };
 
+  // Issue #191: a blueprint mapping's own source-field names only ever mean
+  // something relative to the mode that built it — switching to ANY other
+  // mode (even flat<->api, both of which could otherwise carry a mapping)
+  // clears it the same "switching clears what doesn't belong to the new
+  // mode" way BLOCKS_DRAFT_RESET does, so a mapping never silently survives
+  // pointing at field names the new mode doesn't have.
+  const OUTPUT_BLUEPRINT_RESET = {
+    selectedOutputBlueprintId: '', selectedOutputBlueprintFieldNames: [], outputBlueprintMapping: {},
+  };
+
   const MODE_SWITCH_CLEARS = {
-    flat:      { groups: [], apiConfig: null, apiConfigDraft: null, combinedComponents: [], ...BLOCKS_DRAFT_RESET },
-    container: { fields: [], apiConfig: null, apiConfigDraft: null, combinedComponents: [], ...BLOCKS_DRAFT_RESET },
-    api:       { fields: [], groups: [], combinedComponents: [], ...BLOCKS_DRAFT_RESET },
-    combined:  { fields: [], groups: [], apiConfig: null, apiConfigDraft: null, ...BLOCKS_DRAFT_RESET },
+    flat:      { groups: [], apiConfig: null, apiConfigDraft: null, combinedComponents: [], ...BLOCKS_DRAFT_RESET, ...OUTPUT_BLUEPRINT_RESET },
+    container: { fields: [], apiConfig: null, apiConfigDraft: null, combinedComponents: [], ...BLOCKS_DRAFT_RESET, ...OUTPUT_BLUEPRINT_RESET },
+    api:       { fields: [], groups: [], combinedComponents: [], ...BLOCKS_DRAFT_RESET, ...OUTPUT_BLUEPRINT_RESET },
+    combined:  { fields: [], groups: [], apiConfig: null, apiConfigDraft: null, ...BLOCKS_DRAFT_RESET, ...OUTPUT_BLUEPRINT_RESET },
     blocks:    { fields: [], groups: [], apiConfig: null, apiConfigDraft: null, combinedComponents: [], ...BLOCKS_DRAFT_RESET },
   };
 
@@ -156,8 +169,22 @@ const SFIdleScreenUI = (function () {
       : state.mode === 'combined' ? (state.combinedComponents || []).length >= 2
       : state.mode === 'blocks' ? (state.blocks || []).length >= 2
       : state.fields.length > 0;
+    // Issue #191: output blueprint mapping only reaches flat-shaped output
+    // (flat mode, or Api mode's own flat ItemsPath/Fields shape) — hidden
+    // entirely otherwise (see #output-blueprint-toggle-row's own toggle
+    // below). A blueprint picked but not fully mapped blocks "Generate"
+    // specifically (the same "incomplete draft blocks the action it feeds"
+    // convention the per-field null-rate hardening check's own rows
+    // already establish) — it does NOT block Export/Save/Preview, which
+    // don't depend on the mapping being complete.
+    const isFlatShapedMode = state.mode === 'flat' || (state.mode === 'api' && !(state.apiConfig?.groups?.length));
+    const blueprintMappingIncomplete = isFlatShapedMode && !!state.selectedOutputBlueprintId
+      && !mappingIsComplete(state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping);
+    document.getElementById('output-blueprint-toggle-row')?.classList.toggle('hidden', !isFlatShapedMode);
+    if (isFlatShapedMode) renderOutputBlueprintMappingSection(bridge);
+    else document.getElementById('output-blueprint-mapping')?.classList.add('hidden');
     const genBtn = document.getElementById('btn-generate');
-    if (genBtn) genBtn.disabled = !hasConfig;
+    if (genBtn) genBtn.disabled = !hasConfig || blueprintMappingIncomplete;
     const exportBtn = document.getElementById('btn-export-config');
     if (exportBtn) exportBtn.disabled = !hasConfig;
     const saveConfigBtn = document.getElementById('btn-save-config');
