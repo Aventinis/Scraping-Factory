@@ -162,7 +162,11 @@
     "blocksMinCountHint": "Es werden mindestens 2 Blöcke benötigt, um ein Skript zu generieren.",
     "blocksSummaryFlat": "{count} Feld(er)",
     "blocksSummaryGroup": "{count} Gruppe(n)",
-    "blocksUnnamed": "(unbenannt)"
+    "blocksUnnamed": "(unbenannt)",
+    "outputBlueprintLabel": "Output-Blueprint",
+    "outputBlueprintNoneOption": "Keiner",
+    "manageBlueprintsBtn": "Verwalten",
+    "outputBlueprintMappingHint": "Ordne jedem Zielfeld eines der eigenen Quellfelder dieser Konfiguration zu — jedes Zielfeld braucht eine Quelle, bevor das Skript erzeugt werden kann."
   },
   "robots": {
     "checkFailed": "robots.txt konnte nicht geprüft werden ({error}).",
@@ -335,6 +339,20 @@
     },
     "matchCount": {
       "found": "{count} Element(e) gefunden"
+    },
+    "manageBlueprints": {
+      "title": "Output-Blueprints",
+      "empty": "Noch keine Output-Blueprints gespeichert.",
+      "newBtn": "+ Neuer Blueprint"
+    },
+    "blueprintEdit": {
+      "nameLabel": "Name des Blueprints (z. B. \"Standard-Produktexport\")",
+      "namePlaceholder": "Name",
+      "fieldsLabel": "Zielfelder (in Ausgabereihenfolge)",
+      "fieldNamePlaceholder": "Feldname",
+      "addFieldBtn": "+ Feld hinzufügen",
+      "save": "Speichern",
+      "editBtn": "Bearbeiten"
     }
   },
   "toast": {
@@ -359,7 +377,12 @@
     "outputSaveFailed": "Output konnte nicht gespeichert werden: {message}",
     "outputLoadFailed": "Output konnte nicht geladen werden: {message}",
     "outputDeleted": "Output gelöscht.",
-    "outputDeleteFailed": "Output konnte nicht gelöscht werden: {message}"
+    "outputDeleteFailed": "Output konnte nicht gelöscht werden: {message}",
+    "blueprintLoadFailed": "Output-Blueprint konnte nicht geladen werden: {message}",
+    "blueprintDeleted": "Output-Blueprint gelöscht.",
+    "blueprintDeleteFailed": "Output-Blueprint konnte nicht gelöscht werden: {message}",
+    "blueprintSaved": "Output-Blueprint gespeichert.",
+    "blueprintSaveFailed": "Output-Blueprint konnte nicht gespeichert werden: {message}"
   },
   "frame": {
     "badge": "iframe",
