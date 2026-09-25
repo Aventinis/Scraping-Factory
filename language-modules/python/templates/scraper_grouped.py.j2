@@ -7,6 +7,9 @@
 {{~ if output_is_json ~}}
 import json
 {{~ end ~}}
+{{~ if blueprint_mapping_enabled && !output_is_json ~}}
+import csv
+{{~ end ~}}
 import re
 from datetime import date
 import requests
@@ -52,7 +55,12 @@ URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 # spoofed browser) is enough to pass that check on most sites.
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"}
 
-OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else }}xml{{ end }}"
+# Issue #192: an active Output Blueprint mapping flattens this mode's
+# normally-nested output into denormalized rows (see BLUEPRINT_MAPPING
+# below), so it needs the flat-mode extensions (csv/json) instead of the
+# tree ones (xml/json) — output_is_json still only ever picks between the
+# two formats within whichever shape is actually active.
+OUTPUT_PATH = "{{ output_filename }}.{{ if blueprint_mapping_enabled }}{{ if output_is_json }}json{{ else }}csv{{ end }}{{ else }}{{ if output_is_json }}json{{ else }}xml{{ end }}{{ end }}"
 
 {{~ if external_config.enabled ~}}
 # Issue #178: see scraper.py.j2's own doc comment for the full rationale — an
@@ -210,7 +218,6 @@ _REQUIRED_FIELDS_CHECK = next((c for c in HARDENING if c["kind"] == "requiredFie
 REQUIRED_FIELD_NAMES = _REQUIRED_FIELDS_CHECK["fieldNames"] if _REQUIRED_FIELDS_CHECK else []
 _required_fields_dropped_count = 0
 
-
 # Called from extract_group() right after a *repeating* group's one
 # instance is fully built (never for a non-repeating group, which has no
 # "instance" to drop) — checks whether any required field anywhere in this
@@ -344,6 +351,98 @@ def _run_hardening_checks(root):
 {{~ end ~}}
 
 GROUPS = {{ groups_literal }}
+
+# Issue #192: optional Output Blueprint field mapping (see scraper.py.j2's
+# own identical BLUEPRINT_MAPPING doc comment for the flat-mode case this
+# extends) — for this tree-shaped mode, an active mapping doesn't just
+# rename output columns, it *flattens* the tree into denormalized rows (see
+# _flatten_group_tree_for_blueprint below): one row per instance of the
+# single repeating group every mapped field's own ancestor chain shares,
+# with any higher-level mapped field copied into every row generated
+# beneath it. ScrapingPlanValidator's own OutputBlueprintFlattening check
+# already guarantees, before this script was ever generated, that the
+# mapping resolves to exactly one unambiguous row layout for Container-Mode
+# (GroupNode.Repeating is known statically there) — empty list = tree mode's
+# normal, unflattened xml/json output. Deliberately placed here,
+# unconditionally (not nested inside hardening's own conditional block
+# above, unlike REQUIRED_FIELD_NAMES/HARDENING itself) — a blueprint
+# mapping is independent of whether hardening is configured at all.
+BLUEPRINT_MAPPING = {{ blueprint_mapping_literal }}
+BLUEPRINT_MAPPING_BY_SOURCE = {m["source"]: m["target"] for m in BLUEPRINT_MAPPING}
+
+
+# True if `node`'s own subtree (recursively) contains at least one leaf
+# field referenced by BLUEPRINT_MAPPING — used by
+# _flatten_group_tree_for_blueprint to skip an entirely irrelevant branch
+# (e.g. a repeating group with no mapped field anywhere inside it) without
+# needlessly multiplying rows for data nothing in the mapping ever reads.
+def _blueprint_subtree_has_mapped_field(node):
+    if "children" in node:
+        return any(_blueprint_subtree_has_mapped_field(child) for child in node["children"])
+    return node["name"] in BLUEPRINT_MAPPING_BY_SOURCE
+
+
+# Resolves one leaf field's raw value exactly like extract_group()'s own
+# leaf branch — a small, deliberate duplication (same "no cross-function
+# code sharing beyond a plain Python def" reasoning extract_group() and
+# _apply_transforms already accept throughout this template) rather than
+# reusing extract_group() itself, which returns an ET.Element, not a value.
+def _resolve_flatten_leaf_value(scope, node):
+    if node["mode"] == "exists":
+        return "true" if scope.select_one(node["selector"]) else "false"
+    found = scope.select_one(node["selector"])
+    if found is None:
+        return ""
+    if node["mode"] == "attribute":
+        return _apply_transforms(found.get(node["attribute"], "") or "", node["transform"])
+    if node["mode"] == "ownText":
+        own_text = "".join(c for c in found.contents if isinstance(c, str)).strip()
+        return _apply_transforms(own_text, node["transform"])
+    return _apply_transforms(found.get_text(strip=True), node["transform"])
+
+
+# Flattens the group tree into denormalized rows for BLUEPRINT_MAPPING,
+# instead of extract_group()'s nested ET.Element tree — always returns a
+# list of context dicts (never a single dict), uniformly, whether or not a
+# repeating boundary has been reached in this subtree yet: before one, the
+# list always has exactly one entry (the single context accumulated so
+# far); at and after one, one entry per row. A *non-repeating* group (or a
+# repeating one holding no mapped field at all, see
+# _blueprint_subtree_has_mapped_field) never multiplies the list — it
+# simply threads `context` through, which is what lets a higher-level
+# mapped field (e.g. a category name next to a repeating list of items)
+# reach every row generated by a *deeper* repeating group without being
+# written under its own name only once. Two independent repeating groups
+# both holding a mapped field (mapped fields spanning more than one branch)
+# is already rejected before this script was ever generated
+# (OutputBlueprintFlattening) — this walker relies on that guarantee and
+# does not re-check it itself.
+def _flatten_group_tree_for_blueprint(scope, node, context):
+    if "children" in node:
+        if not _blueprint_subtree_has_mapped_field(node):
+            return [context]
+
+        if node["repeating"]:
+            matches = scope.select(node["selector"])
+        else:
+            found = scope.select_one(node["selector"])
+            matches = [found] if found else []
+
+        all_contexts = []
+        for match in matches:
+            instance_contexts = [context]
+            for child in node["children"]:
+                next_contexts = []
+                for ctx in instance_contexts:
+                    next_contexts.extend(_flatten_group_tree_for_blueprint(match, child, ctx))
+                instance_contexts = next_contexts
+            all_contexts.extend(instance_contexts)
+        return all_contexts
+
+    value = _resolve_flatten_leaf_value(scope, node)
+    if node["name"] in BLUEPRINT_MAPPING_BY_SOURCE:
+        return [{**context, node["name"]: value}]
+    return [context]
 
 
 # Issue #84: best-effort numeric normalization for a "toNumber" transform —
@@ -607,6 +706,7 @@ def scrape(url):
     # (across every paginated page from this start URL, see below) in a
     # single <Ergebnis> element.
     root = ET.Element("Ergebnis")
+    blueprint_rows = []
     page_number = 1
     page_url = url
     while page_url:
@@ -629,6 +729,10 @@ def scrape(url):
             break
         for el in page_elements:
             root.append(el)
+{{~ if blueprint_mapping_enabled ~}}
+        for node in GROUPS:
+            blueprint_rows.extend(_flatten_group_tree_for_blueprint(soup, node, {}))
+{{~ end ~}}
 
 {{~ if pagination.enabled ~}}
         if page_number >= PAGINATION_MAX_PAGES:
@@ -644,7 +748,7 @@ def scrape(url):
 {{~ else ~}}
         page_url = None
 {{~ end ~}}
-    return root
+    return root, blueprint_rows
 
 
 def main():
@@ -656,9 +760,29 @@ def main():
     # final <Ergebnis>, the same sibling-merging pattern already used for
     # multiple root groups from a single URL.
     root = ET.Element("Ergebnis")
+    blueprint_rows = []
     for url in URLS:
-        for el in scrape(url):
+        page_root, page_blueprint_rows = scrape(url)
+        for el in page_root:
             root.append(el)
+        blueprint_rows.extend(page_blueprint_rows)
+{{~ if blueprint_mapping_enabled ~}}
+    # Issue #192: BLUEPRINT_MAPPING flattens the tree into rows instead of
+    # writing it out nested — `root` itself (used for hardening/change-
+    # detection below) is unaffected, still the full, unflattened tree.
+    output_fieldnames = [m["target"] for m in BLUEPRINT_MAPPING]
+    output_rows = [{m["target"]: row.get(m["source"], "") for m in BLUEPRINT_MAPPING} for row in blueprint_rows]
+{{~ if output_is_json ~}}
+    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
+        json.dump(output_rows, f, ensure_ascii=False, indent=2)
+{{~ else ~}}
+    with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=output_fieldnames)
+        writer.writeheader()
+        writer.writerows(output_rows)
+{{~ end ~}}
+    count = len(output_rows)
+{{~ else ~}}
 {{~ if output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(_xml_to_dict(root), f, ensure_ascii=False, indent=2)
@@ -669,7 +793,8 @@ def main():
     tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
     count = len(root.findall(".//*"))
 {{~ end ~}}
-    print(f"Done — {count} elements written to {OUTPUT_PATH}")
+{{~ end ~}}
+    print(f"Done — {count} {{ if blueprint_mapping_enabled }}row(s){{ else }}elements{{ end }} written to {OUTPUT_PATH}")
 {{~ if change_detection.enabled ~}}
     with open(OUTPUT_PATH, "r", encoding="utf-8") as f:
         new_content = f.read()

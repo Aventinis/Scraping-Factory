@@ -139,4 +139,104 @@ public class OutputBlueprintEndToEndTests
         Assert.Equal("cost,name", lines[0]);
         Assert.Equal("4.50,Suppe", lines[1]);
     }
+
+    // Issue #192: container mode's own worked example (the "Speise-Art"
+    // case from the issue discussion) — Gruppe > Speise-Art (single) +
+    // Speise (repeating) > Name/Preis. One row per Speise, with the
+    // Gruppe-level Speise-Art copied into every one of them, not written
+    // once.
+    [Fact]
+    public async Task ContainerMode_BlueprintMapping_BroadcastsHigherLevelFieldIntoEveryRow()
+    {
+        using var server = new LocalTestServer(
+            "<html><body><div class='group'>"
+            + "<h2>Desserts</h2>"
+            + "<div class='item'><h3>Kaiserschmarrn</h3><span class='price'>9,80 €</span></div>"
+            + "<div class='item'><h3>Crème brûlée</h3><span class='price'>7,90 €</span></div>"
+            + "</div></body></html>");
+
+        var root = new GroupNode
+        {
+            Name = "Gruppe", Selector = ".group", Repeating = true,
+            Children =
+            [
+                new DataFieldNode { Name = "SpeiseArt", Selector = "h2" },
+                new GroupNode
+                {
+                    Name = "Speise", Selector = ".item", Repeating = true,
+                    Children =
+                    [
+                        new DataFieldNode { Name = "Name", Selector = "h3" },
+                        new DataFieldNode { Name = "Preis", Selector = ".price" },
+                    ],
+                },
+            ],
+        };
+        var plan = new ScrapingPlan
+        {
+            Steps = [new NavigateStep { Urls = [server.BaseUrl] }, new ExtractGroupStep { Roots = [root] }],
+            OutputBlueprint = new OutputBlueprintMapping
+            {
+                Fields =
+                [
+                    new OutputBlueprintFieldMapping { TargetField = "category", SourceField = "SpeiseArt" },
+                    new OutputBlueprintFieldMapping { TargetField = "name", SourceField = "Name" },
+                    new OutputBlueprintFieldMapping { TargetField = "price", SourceField = "Preis" },
+                ],
+            },
+        };
+
+        var lines = await RunAndReadOutputCsvAsync(plan, new PythonCodeGenerator());
+
+        // The price values contain a comma (German decimal format) — CSV
+        // quotes any field containing the delimiter, per csv.DictWriter's
+        // own default dialect.
+        Assert.Equal("category,name,price", lines[0]);
+        Assert.Equal("Desserts,Kaiserschmarrn,\"9,80 €\"", lines[1]);
+        Assert.Equal("Desserts,Crème brûlée,\"7,90 €\"", lines[2]);
+        Assert.Equal(3, lines.Length); // header + exactly 2 rows, one per Speise
+    }
+
+    // Two independent repeating groups (Zutat/Beilage), both siblings under
+    // one Gericht, each holding a mapped field — there is no single row
+    // layout that includes both without a cross-product or dropping data,
+    // so this is rejected at generate time (before any script even runs).
+    [Fact]
+    public void ContainerMode_BlueprintMapping_AmbiguousSiblingRepeatingGroups_FailsValidation()
+    {
+        var root = new GroupNode
+        {
+            Name = "Gericht", Selector = ".dish", Repeating = false,
+            Children =
+            [
+                new GroupNode
+                {
+                    Name = "Zutat", Selector = ".ingredient", Repeating = true,
+                    Children = [new DataFieldNode { Name = "ZutatName", Selector = ".name" }],
+                },
+                new GroupNode
+                {
+                    Name = "Beilage", Selector = ".side", Repeating = true,
+                    Children = [new DataFieldNode { Name = "BeilageName", Selector = ".name" }],
+                },
+            ],
+        };
+        var plan = new ScrapingPlan
+        {
+            Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ExtractGroupStep { Roots = [root] }],
+            OutputBlueprint = new OutputBlueprintMapping
+            {
+                Fields =
+                [
+                    new OutputBlueprintFieldMapping { TargetField = "ingredient", SourceField = "ZutatName" },
+                    new OutputBlueprintFieldMapping { TargetField = "side", SourceField = "BeilageName" },
+                ],
+            },
+        };
+
+        var result = ScrapingPlanValidator.Validate(plan);
+
+        Assert.False(result.Success);
+        Assert.Contains("independent repeating group", result.Error);
+    }
 }
