@@ -294,4 +294,126 @@ public class OutputBlueprintEndToEndTests
         Assert.Equal("Desserts,Creme brulee,7.90", lines[2]);
         Assert.Equal(3, lines.Length);
     }
+
+    // Same broadcast case again, this time for Api mode's own tree shape —
+    // proving scraper_api_grouped.py.j2's runtime mirror of the companion's
+    // row-scope resolution (necessarily dynamic here, see
+    // _flatten_api_group_for_blueprint's own doc comment) produces the
+    // identical result once ApiGroup's own repeating-ness is resolved from
+    // the real response.
+    [Fact]
+    public async Task ApiTree_BlueprintMapping_BroadcastsHigherLevelFieldIntoEveryRow()
+    {
+        using var server = new LocalTestServer(_ => new LocalTestServerResponse(
+            """
+            { "groups": [
+                { "category": "Desserts", "items": [
+                    { "name": "Kaiserschmarrn", "price": "9.80" },
+                    { "name": "Creme brulee", "price": "7.90" }
+                ] }
+            ] }
+            """, "application/json"));
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = server.BaseUrl,
+            Groups =
+            [
+                new ApiGroup
+                {
+                    Name = "Gruppe", Path = "groups",
+                    Children =
+                    [
+                        new ApiField { Name = "SpeiseArt", Path = "category" },
+                        new ApiGroup
+                        {
+                            Name = "Speise", Path = "items",
+                            Children = [new ApiField { Name = "Name", Path = "name" }, new ApiField { Name = "Preis", Path = "price" }],
+                        },
+                    ],
+                },
+            ],
+        };
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Api,
+            Steps = [new NavigateStep { Urls = [server.BaseUrl] }, new ApiCallStep { Config = api }],
+            OutputBlueprint = new OutputBlueprintMapping
+            {
+                Fields =
+                [
+                    new OutputBlueprintFieldMapping { TargetField = "category", SourceField = "SpeiseArt" },
+                    new OutputBlueprintFieldMapping { TargetField = "name", SourceField = "Name" },
+                    new OutputBlueprintFieldMapping { TargetField = "price", SourceField = "Preis" },
+                ],
+            },
+        };
+
+        var lines = await RunAndReadOutputCsvAsync(plan, new PythonApiCodeGenerator());
+
+        Assert.Equal("category,name,price", lines[0]);
+        Assert.Equal("Desserts,Kaiserschmarrn,9.80", lines[1]);
+        Assert.Equal("Desserts,Creme brulee,7.90", lines[2]);
+        Assert.Equal(3, lines.Length);
+    }
+
+    // Api mode's own equivalent of the container-mode ambiguity test above
+    // — since ApiGroup's repeating-ness can't be checked statically (see
+    // OutputBlueprintFlattening's own doc comment), this is only ever
+    // caught at real script run time instead of generate-time validation,
+    // via _flatten_api_group_for_blueprint's own RuntimeError.
+    [Fact]
+    public async Task ApiTree_BlueprintMapping_AmbiguousSiblingRepeatingGroups_FailsAtRuntime()
+    {
+        using var server = new LocalTestServer(_ => new LocalTestServerResponse(
+            """{ "ingredients": [{"name": "Salz"}], "sides": [{"name": "Reis"}] }""", "application/json"));
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = server.BaseUrl,
+            Groups =
+            [
+                new ApiGroup
+                {
+                    Name = "Zutat", Path = "ingredients",
+                    Children = [new ApiField { Name = "ZutatName", Path = "name" }],
+                },
+                new ApiGroup
+                {
+                    Name = "Beilage", Path = "sides",
+                    Children = [new ApiField { Name = "BeilageName", Path = "name" }],
+                },
+            ],
+        };
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Api,
+            Steps = [new NavigateStep { Urls = [server.BaseUrl] }, new ApiCallStep { Config = api }],
+            OutputBlueprint = new OutputBlueprintMapping
+            {
+                Fields =
+                [
+                    new OutputBlueprintFieldMapping { TargetField = "ingredient", SourceField = "ZutatName" },
+                    new OutputBlueprintFieldMapping { TargetField = "side", SourceField = "BeilageName" },
+                ],
+            },
+        };
+
+        var script = new PythonApiCodeGenerator().Generate(plan);
+        var workDir = Directory.CreateTempSubdirectory("scrapingfactory-blueprint-test-").FullName;
+        try
+        {
+            var scriptPath = Path.Combine(workDir, "scraper.py");
+            await File.WriteAllTextAsync(scriptPath, script);
+
+            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
+
+            Assert.NotEqual(0, exit);
+            Assert.Contains("independent repeating group", stderr);
+        }
+        finally
+        {
+            Directory.Delete(workDir, recursive: true);
+        }
+    }
 }
