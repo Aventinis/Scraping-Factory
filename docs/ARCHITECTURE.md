@@ -44,7 +44,7 @@ flowchart LR
         CS <-- chrome.runtime messages --> SW
         SW <-- chrome.runtime messages --> SP
     end
-    SP -- "HTTP: GET /health, POST /generate,\nPOST/GET/DELETE /configs,\nPOST/GET/DELETE /configs/{id}/outputs" --> Companion
+    SP -- "HTTP: GET /health, POST /generate,\nPOST/GET/DELETE /configs,\nPOST/GET/DELETE /configs/{id}/outputs,\nPOST/GET/PUT/DELETE /blueprints" --> Companion
     subgraph Companion["Companion app (.NET 10 process)"]
         direction TB
         Program["Program.cs\n(minimal API)"]
@@ -52,8 +52,10 @@ flowchart LR
         Gen["ICodeGenerator\n(Python* code generators)"]
         Ver["IScriptVerifier\n(PythonScriptVerifier)"]
         Store["SavedConfigStore\n(SQLite, Issue #141/#202)"]
+        BpStore["OutputBlueprintStore\n(SQLite, Issue #191)"]
         Program --> Plan --> Gen --> Ver
         Program --> Store
+        Program --> BpStore
     end
     Ver -- "spawns" --> PySub["python3 subprocess\n(the actual generated script,\nrun once as a trial)"]
 ```
@@ -948,6 +950,63 @@ same script.
   credential env vars, so a broken skip-login guard would fail fast via
   `EXIT_MISSING_ENV_VAR` (78) instead of succeeding.
 
+### 2.23 Output Blueprints: reusable output field-name/order mapping (Issue #191)
+
+A small, persisted, site-independent "blueprint" — just a name plus an
+ordered list of target field names — lets a recurring scrape (of the same or
+different configurations) always write the same fixed column set/order/
+naming, e.g. for a downstream import pipeline that expects a stable schema.
+Reachable only for flat-shaped output (flat mode, or API mode's own flat
+`ItemsPath`/`Fields` shape); rejected outright (not silently ignored) for
+container mode, API's tree shape, Combined mode, and Blocks mode.
+
+- Extension: `popup/output-blueprints.js` (pure — editing a blueprint's own
+  ordered field-name list in the create/edit modal;
+  building/validating the per-scrape source-field mapping draft) and
+  `popup/output-blueprints-ui.js` (CRUD against `/blueprints`, the
+  management modal, the create/edit modal, and the mapping picker itself —
+  one `<select>` row per target field, sourced via the same
+  `collectFieldNames` the hardening null-rate/required-fields pickers
+  already use). `popup/popup.js` (`_state.selectedOutputBlueprintId`/
+  `selectedOutputBlueprintFieldNames`/`outputBlueprintMapping`, persisted
+  like Proxy/Hardening), `popup/idle-screen-ui.js`
+  (`#output-blueprint-toggle-row`'s mode-gated visibility,
+  `OUTPUT_BLUEPRINT_RESET` on any mode switch, blocking "Generate" while a
+  picked mapping is incomplete). `scraping-config-builder.js`
+  (`buildOutputBlueprintMapping` → `outputBlueprint`, omitted whenever no
+  blueprint is picked or the mapping isn't complete, the same convention
+  `buildProxyConfig`/`buildChangeDetectionConfig` already use),
+  `config-import.js` (`applyOutputBlueprintConfig`, the reverse).
+- Companion: `OutputBlueprintStore.cs` (own SQLite file/db, no FK/cascade —
+  a blueprint isn't tied to any saved configuration), five endpoints under
+  `/blueprints` (list/get/create/update/delete) registered in `Program.cs`,
+  which also rejects `OutputBlueprint` combined with `Groups`/`Api.Groups`/
+  `Combined`/`Blocks` with a `400`.
+- Compiler: `IR/OutputBlueprintMapping.cs` (`OutputBlueprintMapping` —
+  `BlueprintId` kept only for the extension's own round-tripping, plus a
+  `List<OutputBlueprintFieldMapping>` of `TargetField`/`SourceField` pairs),
+  added to `ScrapingConfig`/`ScrapingPlan` and carried through by
+  `IR/ScrapingPlanBuilder.cs` only in the flat-`Fields`/Api-flat branches.
+  `IR/ScrapingPlanValidator.cs`'s `ValidateOutputBlueprint` checks
+  non-empty/non-duplicate target and source names and that every
+  `SourceField` references a real available field.
+  `Backends/Python/PythonOutputBlueprintLiteral.cs` renders it into a
+  `[{"target": ..., "source": ...}, ...]` literal, mirroring
+  `PythonFieldTransformLiteral`.
+- Templates: `scraper.py.j2`, `playwright_scraper.py.j2`, `scraper_api.py.j2`
+  (the three flat-shape shells only) gain a `BLUEPRINT_MAPPING` constant
+  that, when non-empty, takes over building `output_rows`/the CSV fieldnames
+  at write time (rename, reorder, drop unmapped source fields) — taking
+  precedence over Issue #178's `FIELD_OUTPUT_NAMES` at that same step.
+  `data` itself stays untouched, so hardening/change-detection keep
+  operating on the original field names either way.
+- Tests: `OutputBlueprintStoreTests.cs`, `OutputBlueprintsEndpointTests.cs`,
+  `OutputBlueprintMappingJsonTests.cs` (wire round-trip),
+  `OutputBlueprintEndToEndTests.cs` (real generated-script output actually
+  has the blueprint's own column names/order); Jest
+  `output-blueprints.test.js` (pure helpers) and
+  `output-blueprints-ui.test.js` (DOM/wiring via `require('./popup')`).
+
 ---
 
 ## 3. Class & Module Relationship Model
@@ -1168,6 +1227,7 @@ compile time anywhere.
 | Pagination | `popup.js`: `buildPaginationConfig()` (returns `null` when disabled or the kind-specific required field is blank) → `buildScrapingConfig`'s `pagination` key | `{pagination?: {kind:"nextLink", nextLinkSelector, maxPages} \| {kind:"pageNumber", urlTemplate, maxPages}}` | `IR/PaginationConfig.cs`: `NextLinkPagination`/`PageNumberPagination` (via `[JsonPolymorphic]`) |
 | Persistent session | `popup.js`: `_state.persistentSession` (plain boolean) → `buildScrapingConfig`'s `persistentSession` key, sent only when `true` | `{persistentSession?: true}` | `IR/ScrapingConfig.cs`: `bool? PersistentSession` |
 | Range format mini-template | `api-config.js`: `RANGE_FORMAT_PRESETS`, `compileRangeFormatPattern()` (client-side mirror) | `{format?: "{yyyy}-W{ww}"}` inside a `RangeSource` | `Backends/Python/RangeFormat.cs` (server-side, authoritative) |
+| Output Blueprint mapping | `output-blueprints.js`: `buildOutputBlueprintMapping()` (returns `null` when no blueprint is picked or the mapping isn't complete) → `buildScrapingConfig`'s `outputBlueprint` key | `{outputBlueprint?: {blueprintId, fields: [{targetField, sourceField}]}}` | `IR/OutputBlueprintMapping.cs`: `OutputBlueprintMapping`/`OutputBlueprintFieldMapping` |
 
 Two rows above are explicitly **hand-kept mirrors**, not generated from a shared
 schema: `sanitizeFileNameBase` (popup.js) vs. `FileNameSanitizer` (C#), and the
