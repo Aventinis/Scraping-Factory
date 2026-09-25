@@ -166,7 +166,8 @@
     "outputBlueprintLabel": "Plantilla de salida",
     "outputBlueprintNoneOption": "Ninguna",
     "manageBlueprintsBtn": "Gestionar",
-    "outputBlueprintMappingHint": "Asigna a cada campo de destino uno de los campos de origen propios de esta configuración — cada campo de destino necesita un origen antes de poder generar el script."
+    "outputBlueprintMappingHint": "Asigna a cada campo de destino uno de los campos de origen propios de esta configuración — cada campo de destino necesita un origen antes de poder generar el script.",
+    "outputBlueprintTreeMappingHint": "Asigna a cada campo de destino uno de los campos de origen propios de esta configuración — la posición de un grupo de destino en la salida se infiere automáticamente a partir de sus campos asignados. Cada campo de destino necesita un origen antes de poder generar el script."
   },
   "robots": {
     "checkFailed": "No se pudo comprobar el robots.txt ({error}).",
@@ -348,9 +349,13 @@
     "blueprintEdit": {
       "nameLabel": "Nombre de la plantilla (p. ej. \"Exportación estándar de productos\")",
       "namePlaceholder": "Nombre",
+      "flatSchemaBtn": "Plano",
+      "treeSchemaBtn": "Árbol",
       "fieldsLabel": "Campos de destino (en el orden de salida)",
+      "treeLabel": "Estructura del árbol de destino",
       "fieldNamePlaceholder": "Nombre del campo",
       "addFieldBtn": "+ Añadir campo",
+      "addGroupBtn": "+ Añadir grupo",
       "save": "Guardar",
       "editBtn": "Editar"
     }

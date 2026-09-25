@@ -166,7 +166,8 @@
     "outputBlueprintLabel": "Output blueprint",
     "outputBlueprintNoneOption": "None",
     "manageBlueprintsBtn": "Manage",
-    "outputBlueprintMappingHint": "Map each target field to one of this configuration's own source fields — every target field needs a source before the script can be generated."
+    "outputBlueprintMappingHint": "Map each target field to one of this configuration's own source fields — every target field needs a source before the script can be generated.",
+    "outputBlueprintTreeMappingHint": "Map each target field to one of this configuration's own source fields — a target group's own position in the output is inferred automatically from its mapped fields. Every target field needs a source before the script can be generated."
   },
   "robots": {
     "checkFailed": "robots.txt could not be checked ({error}).",
@@ -348,9 +349,13 @@
     "blueprintEdit": {
       "nameLabel": "Blueprint name (e.g. \"Standard product export\")",
       "namePlaceholder": "Name",
+      "flatSchemaBtn": "Flat",
+      "treeSchemaBtn": "Tree",
       "fieldsLabel": "Target fields (in output order)",
+      "treeLabel": "Target tree structure",
       "fieldNamePlaceholder": "Field name",
       "addFieldBtn": "+ Add field",
+      "addGroupBtn": "+ Add group",
       "save": "Save",
       "editBtn": "Edit"
     }
