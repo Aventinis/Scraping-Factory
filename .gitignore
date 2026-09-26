@@ -25,6 +25,11 @@ Thumbs.db
 
 # Node
 extension/node_modules/
+e2e/node_modules/
+
+# Issue #180: screenshots/scratch output the e2e harness produces when run
+# (e.g. e2e/examples/*.png) — debugging artifacts, not source.
+e2e/**/*.png
 
 # Generated scripts (user output — not source)
 output/
