@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.15.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.15.1...v1.15.2) (2026-09-26)
+
+
+### Features
+
+* **output-blueprints:** add sample parser for field-name import ([8aee4a5](https://github.com/Aventinis/Scraping-Factory/commit/8aee4a50bf714f133c8336159e3ad2977d622048))
+* **output-blueprints:** import target field list from a pasted sample ([aa442b3](https://github.com/Aventinis/Scraping-Factory/commit/aa442b3f7aa5ae75265d8e06da108dab666bac19))
+* **output-blueprints:** import target field list from a sample ([e1e1bee](https://github.com/Aventinis/Scraping-Factory/commit/e1e1beec47a0daffd29de866879c412ba463cc63))
+
+
+### Bug Fixes
+
+* **output-blueprints:** drill into nested samples, tolerate broken JSON, cap modal height ([fe054e9](https://github.com/Aventinis/Scraping-Factory/commit/fe054e94b6f61f1aabc141cf09f931af1b430096))
+
 ## [1.15.1](https://github.com/Aventinis/Scraping-Factory/compare/v1.15.0...v1.15.1) (2026-09-25)
 
 
