@@ -1,6 +1,6 @@
 const {
   addBlueprintFieldName, removeBlueprintFieldName, updateBlueprintFieldName, moveBlueprintFieldName,
-  blueprintDraftIsValid,
+  blueprintDraftIsValid, parseFieldNamesFromSample,
   buildBlueprintSchemaGroup, buildBlueprintSchemaField, parseBlueprintSchemaTree, serializeBlueprintSchemaTree,
   blueprintTreeSchemaIsValid,
   createMappingDraft, updateMappingSource, mappingIsComplete,
@@ -51,6 +51,63 @@ describe('output-blueprints (Issue #191): editing a blueprint\'s own field-name 
 
   test('blueprintDraftIsValid accepts a well-formed draft', () => {
     expect(blueprintDraftIsValid('My blueprint', ['Title', 'Price'])).toBe(true);
+  });
+});
+
+// Issue #193: importing a blueprint's own field list from a pasted/uploaded
+// sample instead of typing every field name by hand.
+describe('output-blueprints (Issue #193): parseFieldNamesFromSample', () => {
+  test('returns [] for blank/whitespace-only input', () => {
+    expect(parseFieldNamesFromSample('')).toEqual([]);
+    expect(parseFieldNamesFromSample('   \n  ')).toEqual([]);
+  });
+
+  test('parses a plain newline-separated list of field names', () => {
+    expect(parseFieldNamesFromSample('Title\nPrice\nSku')).toEqual(['Title', 'Price', 'Sku']);
+  });
+
+  test('parses a single comma-separated line (plain list or CSV header row alike)', () => {
+    expect(parseFieldNamesFromSample('Title,Price,Sku')).toEqual(['Title', 'Price', 'Sku']);
+  });
+
+  test('parses a CSV header row, ignoring the data rows below it', () => {
+    const csv = 'Title,Price,Sku\nWidget,9.99,W-1\nGadget,19.99,G-2';
+    expect(parseFieldNamesFromSample(csv)).toEqual(['Title', 'Price', 'Sku']);
+  });
+
+  test('strips surrounding quotes from a quoted CSV header field', () => {
+    expect(parseFieldNamesFromSample('"Title","Price"')).toEqual(['Title', 'Price']);
+  });
+
+  test('trims whitespace around each parsed name', () => {
+    expect(parseFieldNamesFromSample('Title, Price , Sku')).toEqual(['Title', 'Price', 'Sku']);
+    expect(parseFieldNamesFromSample('  Title  \n  Price  ')).toEqual(['Title', 'Price']);
+  });
+
+  test('drops blank lines and deduplicates repeated names', () => {
+    expect(parseFieldNamesFromSample('Title\n\nPrice\nTitle')).toEqual(['Title', 'Price']);
+  });
+
+  test('parses field names from a single JSON object sample', () => {
+    expect(parseFieldNamesFromSample('{"Title": "Widget", "Price": 9.99}')).toEqual(['Title', 'Price']);
+  });
+
+  test('parses field names from the first element of a JSON array of objects', () => {
+    const json = '[{"Title": "Widget", "Price": 9.99}, {"Title": "Gadget", "Sku": "G-2"}]';
+    expect(parseFieldNamesFromSample(json)).toEqual(['Title', 'Price']);
+  });
+
+  test('uses a JSON array of strings as the field-name list directly', () => {
+    expect(parseFieldNamesFromSample('["Title", "Price", "Sku"]')).toEqual(['Title', 'Price', 'Sku']);
+  });
+
+  test('returns [] for an empty JSON object/array', () => {
+    expect(parseFieldNamesFromSample('{}')).toEqual([]);
+    expect(parseFieldNamesFromSample('[]')).toEqual([]);
+  });
+
+  test('returns [] for a JSON array of non-string, non-object primitives', () => {
+    expect(parseFieldNamesFromSample('[1, 2, 3]')).toEqual([]);
   });
 });
 
