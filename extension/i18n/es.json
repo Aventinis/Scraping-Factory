@@ -356,6 +356,9 @@
       "fieldNamePlaceholder": "Nombre del campo",
       "addFieldBtn": "+ Añadir campo",
       "addGroupBtn": "+ Añadir grupo",
+      "importLabel": "Importar desde una muestra (JSON, fila de encabezado CSV o una lista simple de nombres de campo)",
+      "importPlaceholder": "Pega una muestra JSON, una fila de encabezado CSV o un nombre de campo por línea…",
+      "importBtn": "Analizar y rellenar campos",
       "save": "Guardar",
       "editBtn": "Editar"
     }
@@ -387,7 +390,9 @@
     "blueprintDeleted": "Plantilla de salida eliminada.",
     "blueprintDeleteFailed": "No se pudo eliminar la plantilla de salida: {message}",
     "blueprintSaved": "Plantilla de salida guardada.",
-    "blueprintSaveFailed": "No se pudo guardar la plantilla de salida: {message}"
+    "blueprintSaveFailed": "No se pudo guardar la plantilla de salida: {message}",
+    "blueprintImportEmpty": "No se encontraron nombres de campo en la muestra pegada.",
+    "blueprintImportParsed": "Se importaron {count} campo(s) de la muestra."
   },
   "frame": {
     "badge": "iframe",
