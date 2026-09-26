@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.15.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.15.2...v1.15.3) (2026-09-26)
+
+
+### Features
+
+* **download-resource:** add container-mode extension UI ([5a33085](https://github.com/Aventinis/Scraping-Factory/commit/5a33085203c72ede84c99bc1c22905e9e7f00ef8))
+* **download-resource:** add Download flag to DataFieldNode ([74b1ec4](https://github.com/Aventinis/Scraping-Factory/commit/74b1ec455b26269c730739d195d0e5384bb33ae0))
+* **download-resource:** download embedded resources referenced by Attribute-mode fields (Issue [#213](https://github.com/Aventinis/Scraping-Factory/issues/213)) ([b02c89e](https://github.com/Aventinis/Scraping-Factory/commit/b02c89e3310a1ea8bfe41444c0099f63d1ed99d7))
+* **download-resource:** implement download for the Browser engine ([f28c9c7](https://github.com/Aventinis/Scraping-Factory/commit/f28c9c77058433297f4e8e68f3b52d20274fa308))
+* **download-resource:** implement download for the static engine ([6b65a7f](https://github.com/Aventinis/Scraping-Factory/commit/6b65a7f68c7132870c4149e5f7687f73d325612d))
+* **download-resource:** replace the attribute free-text field with a picker ([beb55cd](https://github.com/Aventinis/Scraping-Factory/commit/beb55cd7bf47d98493fdda553be083cde5de3949))
+* **download-resource:** serialize Download into the GROUPS literal ([23cf604](https://github.com/Aventinis/Scraping-Factory/commit/23cf6040bafc58a9e848264f4524c2c8b97ebb5a))
+
+
+### Bug Fixes
+
+* **download-resource:** fix checkbox layout inside a modal ([da1b0f5](https://github.com/Aventinis/Scraping-Factory/commit/da1b0f51f21a760f6c1983f75ea6d6440a48c762))
+
 ## [1.15.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.15.1...v1.15.2) (2026-09-26)
 
 
