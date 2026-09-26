@@ -53,13 +53,22 @@ describe('Output Blueprints (Issue #191)', () => {
     </div>
     <div id="modal-blueprint-edit" class="modal hidden">
       <input id="input-blueprint-name" type="text" />
+      <div class="mode-toggle" id="blueprint-schema-kind-toggle">
+        <button type="button" id="btn-blueprint-schema-kind-flat" class="mode-btn"></button>
+        <button type="button" id="btn-blueprint-schema-kind-tree" class="mode-btn"></button>
+      </div>
+      <div id="blueprint-import-section" class="hidden">
+        <textarea id="input-blueprint-import-sample"></textarea>
+        <button type="button" id="btn-blueprint-import-parse"></button>
+      </div>
       <div id="blueprint-flat-schema-section">
-        <div id="blueprint-import-section" class="hidden">
-          <textarea id="input-blueprint-import-sample"></textarea>
-          <button type="button" id="btn-blueprint-import-parse"></button>
-        </div>
         <ul id="blueprint-field-list"></ul>
         <button type="button" id="btn-blueprint-field-add"></button>
+      </div>
+      <div id="blueprint-tree-schema-section" class="hidden">
+        <ul id="blueprint-schema-tree-root"></ul>
+        <button type="button" id="btn-blueprint-schema-add-root-group"></button>
+        <button type="button" id="btn-blueprint-schema-add-root-field"></button>
       </div>
       <button id="btn-blueprint-edit-cancel"></button>
       <button id="btn-blueprint-edit-save"></button>
@@ -324,6 +333,68 @@ describe('Output Blueprints (Issue #191)', () => {
 
     const inputs = document.querySelectorAll('.blueprint-field-name-input');
     expect([...inputs].map((i) => i.value)).toEqual(['']); // still the single blank row openBlueprintCreateModal seeded
+  });
+
+  // Issue #253: importing a Tree-schema blueprint's own target tree from a
+  // pasted sample — the same textarea/button #193 already wired for Flat,
+  // now dispatching on the draft's own schemaKind.
+  test('the import section stays visible after switching the schema-kind toggle to Tree', () => {
+    document.getElementById('btn-manage-blueprints').click();
+    document.getElementById('btn-blueprint-new').click();
+    document.getElementById('btn-blueprint-schema-kind-tree').click();
+
+    expect(document.getElementById('blueprint-import-section').classList.contains('hidden')).toBe(false);
+  });
+
+  test('parsing a nested JSON sample while Tree is selected builds a nested tree instead of a flat field list', () => {
+    document.getElementById('btn-manage-blueprints').click();
+    document.getElementById('btn-blueprint-new').click();
+    document.getElementById('btn-blueprint-schema-kind-tree').click();
+
+    document.getElementById('input-blueprint-import-sample').value = JSON.stringify({
+      offerTiles: [{ title: '', type: '' }],
+    });
+    document.getElementById('btn-blueprint-import-parse').click();
+
+    const names = [...document.querySelectorAll('.blueprint-schema-name')].map((i) => i.value);
+    expect(names).toEqual(['offerTiles', 'title', 'type']);
+    // The Flat field-list editor (hidden, but still in the DOM) must stay
+    // untouched by a Tree import — still just its single default blank row.
+    expect([...document.querySelectorAll('.blueprint-field-name-input')].map((i) => i.value)).toEqual(['']);
+  });
+
+  test('a Tree sample with nothing importable leaves the draft tree untouched (still empty)', () => {
+    document.getElementById('btn-manage-blueprints').click();
+    document.getElementById('btn-blueprint-new').click();
+    document.getElementById('btn-blueprint-schema-kind-tree').click();
+
+    document.getElementById('input-blueprint-import-sample').value = '   ';
+    document.getElementById('btn-blueprint-import-parse').click();
+
+    expect(document.querySelectorAll('.blueprint-schema-name')).toHaveLength(0);
+  });
+
+  test('an imported Tree sample can be saved once a name is set', async () => {
+    document.getElementById('btn-manage-blueprints').click();
+    document.getElementById('btn-blueprint-new').click();
+    document.getElementById('btn-blueprint-schema-kind-tree').click();
+
+    document.getElementById('input-blueprint-import-sample').value = JSON.stringify({ Title: '', Price: '' });
+    document.getElementById('btn-blueprint-import-parse').click();
+
+    document.getElementById('input-blueprint-name').value = 'Imported tree blueprint';
+    document.getElementById('input-blueprint-name').dispatchEvent(new Event('change'));
+    expect(document.getElementById('btn-blueprint-edit-save').disabled).toBe(false);
+
+    document.getElementById('btn-blueprint-edit-save').click();
+    await flushMicrotasks();
+
+    const postCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/blueprints') && init?.method === 'POST');
+    expect(JSON.parse(postCall[1].body)).toEqual({
+      name: 'Imported tree blueprint',
+      schemaKind: 'Tree',
+      tree: [{ name: 'Title' }, { name: 'Price' }],
+    });
   });
 
   test('editing an existing blueprint loads its fields, reorders one, and saves via PUT', async () => {
