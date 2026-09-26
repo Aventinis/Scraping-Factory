@@ -54,6 +54,61 @@ const SFOutputBlueprints = (function () {
     return new Set(trimmed).size === trimmed.length;
   }
 
+  // Recursively looks for the "record" shape a sample's field names should
+  // actually come from, instead of only ever reading the JSON root's own
+  // top-level keys — a real-world JSON sample (e.g. an embedded state blob,
+  // the exact kind of nested payload API mode's own EmbeddedJsonSource
+  // feature already extracts field names from structurally) is very
+  // commonly wrapped in one or more outer keys, e.g.
+  // `{"offerTiles": [{"title": "", ...}]}`, where the wrapper key
+  // ("offerTiles") is not itself a useful field name. A plain object whose
+  // own values are all scalars is treated as the record itself (the
+  // original, still-supported "single object sample" case); otherwise this
+  // walks into the first array-of-objects or nested object it finds,
+  // depth-first, and uses THAT as the record. Ambiguous/mixed shapes (e.g.
+  // one scalar property alongside one nested one) prefer the nested match
+  // over the outer scalar — a documented heuristic limitation, not a
+  // guarantee of the "correct" shape for every possible sample, same as
+  // `_to_number`'s own decimal-separator heuristic on the companion side.
+  function findSampleRecord(value, depth) {
+    if (depth > 10 || value === null || typeof value !== 'object') return null;
+    if (Array.isArray(value)) {
+      const first = value[0];
+      if (!first || typeof first !== 'object') return null;
+      return Array.isArray(first) ? findSampleRecord(first, depth + 1) : first;
+    }
+    const values = Object.values(value);
+    const isFlatRecord = Object.keys(value).length > 0 && values.every(v => v === null || typeof v !== 'object');
+    if (isFlatRecord) return value;
+    for (const v of values) {
+      const found = findSampleRecord(v, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  // A line consisting only of JSON structural punctuation (`{`, `}`, `[`,
+  // `]`, `,`) — never a field name, whether the sample is valid JSON or a
+  // hand-edited/truncated fragment of one (e.g. the outer `{`/`}` left
+  // behind after deleting a wrapper key's own value).
+  function isStructuralOnlyLine(line) {
+    return /^[{}[\],]*$/.test(line);
+  }
+
+  // Extracts just the key from a JSON/JS-object-literal-style property line
+  // (`"key": value` or `key: value`, optionally with a trailing comma) —
+  // used by the line-based fallback below to recover a clean field-name
+  // list from a pasted object literal that fails strict `JSON.parse` (a
+  // trailing comma, or the outer braces trimmed away by hand) but still has
+  // one property per line. Returns null when the line doesn't look like a
+  // property at all.
+  function extractLeadingKey(line) {
+    const quoted = line.match(/^"([^"]*)"\s*:/);
+    if (quoted) return quoted[1];
+    const bare = line.match(/^([A-Za-z_$][\w$-]*)\s*:/);
+    return bare ? bare[1] : null;
+  }
+
   // Issue #193: parses an arbitrary pasted/uploaded sample — a JSON object/
   // array, a CSV header row, or a plain newline/comma-separated list of
   // names — into an ordered, deduplicated field-name list: the same shape
@@ -61,15 +116,19 @@ const SFOutputBlueprints = (function () {
   // replace it directly (see importBlueprintFieldNamesFromSample in
   // output-blueprints-ui.js). Format is auto-detected from the content
   // itself rather than a separate format picker, per the issue's own
-  // "simplest first version" direction: JSON is tried first (an object's own
-  // keys; an array of objects uses the first element's keys; an array of
-  // strings is used as-is), then a comma in the first non-blank line decides
-  // CSV-header-row vs. one-name-per-line — the same operation either way
-  // (split the first line on commas), which is why a lone comma-separated
-  // line (no header semantics at all) is handled identically to a real CSV
-  // header. Returns [] when nothing name-like could be found (blank input,
-  // an empty JSON array/object, a JSON array of non-string primitives) —
-  // the caller treats an empty result as "couldn't parse this", not a crash.
+  // "simplest first version" direction: JSON is tried first (see
+  // findSampleRecord's own doc comment for how a nested/wrapped sample is
+  // handled; an array of strings is used as the field-name list directly),
+  // then — if that fails outright — a per-line pass first tries to recognize
+  // a pasted-but-not-strictly-valid JSON object literal (see
+  // extractLeadingKey), and only once that finds nothing either does a comma
+  // in the first remaining line decide CSV-header-row vs. one-name-per-line
+  // — the same operation either way (split the first line on commas), which
+  // is why a lone comma-separated line (no header semantics at all) is
+  // handled identically to a real CSV header. Returns [] when nothing
+  // name-like could be found at all (blank input, an empty JSON array/
+  // object, a JSON array of non-string primitives) — the caller treats an
+  // empty result as "couldn't parse this", not a crash.
   function parseFieldNamesFromSample(text) {
     const dedupeTrimmed = (names) => {
       const seen = new Set();
@@ -88,26 +147,28 @@ const SFOutputBlueprints = (function () {
 
     try {
       const parsed = JSON.parse(trimmedInput);
-      const sample = Array.isArray(parsed) ? parsed[0] : parsed;
-      if (sample && typeof sample === 'object' && !Array.isArray(sample)) {
-        return dedupeTrimmed(Object.keys(sample));
-      }
       if (Array.isArray(parsed) && parsed.every(v => typeof v === 'string')) {
         return dedupeTrimmed(parsed);
       }
-      return [];
+      const sample = findSampleRecord(parsed, 0);
+      return sample ? dedupeTrimmed(Object.keys(sample)) : [];
     } catch {
-      // Not JSON — fall through to CSV-header/plain-list parsing below.
+      // Not valid JSON — fall through to the line-based parsing below.
     }
 
     const lines = trimmedInput.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    if (lines.length === 0) return [];
+    const meaningfulLines = lines.filter(line => !isStructuralOnlyLine(line));
+    if (meaningfulLines.length === 0) return [];
+
+    if (meaningfulLines.some(line => extractLeadingKey(line))) {
+      return dedupeTrimmed(meaningfulLines.map(line => extractLeadingKey(line) || line));
+    }
 
     const stripQuotes = s => s.replace(/^"(.*)"$/, '$1');
-    if (lines[0].includes(',')) {
-      return dedupeTrimmed(lines[0].split(',').map(stripQuotes));
+    if (meaningfulLines[0].includes(',')) {
+      return dedupeTrimmed(meaningfulLines[0].split(',').map(stripQuotes));
     }
-    return dedupeTrimmed(lines);
+    return dedupeTrimmed(meaningfulLines);
   }
 
   // ── Editing a blueprint's own target tree (create/edit modal, Tree) ─────

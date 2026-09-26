@@ -109,6 +109,59 @@ describe('output-blueprints (Issue #193): parseFieldNamesFromSample', () => {
   test('returns [] for a JSON array of non-string, non-object primitives', () => {
     expect(parseFieldNamesFromSample('[1, 2, 3]')).toEqual([]);
   });
+
+  // Bug reports against the first version of this parser (real-world sample
+  // pasted from a site's own embedded JSON data), covering: (1) a wrapper
+  // object around the actual array of records, (2) a hand-edited/broken
+  // JSON fragment (trailing comma, outer braces left over from deleting a
+  // wrapper key) producing "key": value lines rather than valid JSON, and
+  // (3) bare brace/bracket lines being imported as their own bogus field.
+  test('drills through a wrapper object into a nested array-of-objects sample instead of using the wrapper key itself', () => {
+    const json = JSON.stringify({
+      offerTiles: [
+        { title: '', type: '', price: '', linkHref: '/x', uuid: 'abc', primaryType: 'contentTeaser' },
+      ],
+    });
+    expect(parseFieldNamesFromSample(json)).toEqual(
+      ['title', 'type', 'price', 'linkHref', 'uuid', 'primaryType'],
+    );
+  });
+
+  test('drills through more than one level of object wrapping', () => {
+    const json = JSON.stringify({ data: { items: [{ a: 1, b: 2 }] } });
+    expect(parseFieldNamesFromSample(json)).toEqual(['a', 'b']);
+  });
+
+  test('extracts just the key from "key": value property lines when the pasted snippet is not valid JSON', () => {
+    const broken = [
+      '{',
+      '"title": "",',
+      '"type": "",',
+      '"linkHref": "/clever-kochen/rezepte-und-ernaehrung/erdbeerlimes",',
+      '"primaryType": "contentTeaser"',
+      '}',
+    ].join('\n');
+    expect(parseFieldNamesFromSample(broken)).toEqual(['title', 'type', 'linkHref', 'primaryType']);
+  });
+
+  test('extracts keys from bare property lines with no surrounding braces at all', () => {
+    const broken = [
+      '"title": "",',
+      '"type": "",',
+      '"primaryType": "contentTeaser",',
+    ].join('\n');
+    expect(parseFieldNamesFromSample(broken)).toEqual(['title', 'type', 'primaryType']);
+  });
+
+  test('drops bare structural brace/bracket lines instead of importing them as their own field', () => {
+    const broken = ['[', '{', '"a": 1,', '"b": 2', '},', ']'].join('\n');
+    expect(parseFieldNamesFromSample(broken)).toEqual(['a', 'b']);
+  });
+
+  test('supports unquoted (JS object literal style) property lines too', () => {
+    const broken = ['{', 'title: "",', 'type: "",', '}'].join('\n');
+    expect(parseFieldNamesFromSample(broken)).toEqual(['title', 'type']);
+  });
 });
 
 // Issue #244: the tree-shaped counterpart to the flat field-name list above —
