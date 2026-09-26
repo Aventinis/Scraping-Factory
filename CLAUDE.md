@@ -38,6 +38,9 @@ companion/                  .NET 10 solution
 
 language-modules/
   python/templates/          Scriban templates for generated Python scripts
+
+test-pages/                  Fixture pages for manually exercising extension features (no server.py = plain static HTML)
+e2e/                         Playwright harness for driving the real extension in a real browser (Issue #180, manual/on-demand — see e2e/README.md)
 ```
 
 ## Components
@@ -215,6 +218,11 @@ dotnet build companion/ScrapingFactory.sln
 
 # Load the extension (Chrome/Edge/Opera)
 # Extension management → "Load unpacked" → extension/
+
+# Real-browser end-to-end check (Issue #180) — drives the actual unpacked
+# extension in a real Chromium against test-pages/, not just Jest's jsdom.
+# Manual/on-demand, not part of this or any CI step — see e2e/README.md.
+cd e2e && npm install && node examples/speisekarte-smoke.js
 ```
 
 `extension/manifest.json` declares both Chrome/Edge's `side_panel`/`sidePanel` API and the older `sidebar_action`/`sidebarAction` manifest key that Opera (and Firefox) use instead — Opera has no `chrome.sidePanel` API at all, and without `sidebar_action` the toolbar icon did nothing there (see git history, `fix(opera): add sidebar_action ...`). `chrome.sidePanel?.setPanelBehavior(...)` in `service-worker.js` is guarded with optional chaining and is a no-op under Opera; Opera's sidebar opens automatically off the manifest key instead, no JS call needed. Firefox was evaluated as a further target (see closed PR #120) but abandoned — its content-script injection and `"world": "MAIN"` network recorder (API mode) didn't work as expected there, unlike Opera, which is a genuine Chromium fork and needed only the manifest key above.
