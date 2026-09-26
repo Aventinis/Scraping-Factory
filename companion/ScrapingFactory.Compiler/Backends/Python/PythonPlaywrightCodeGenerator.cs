@@ -28,8 +28,6 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         var scrollTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_scroll_step.py.j2");
         var shellTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_scraper.py.j2");
 
-        var navigate = plan.Steps.OfType<NavigateStep>().Single();
-
         // Issue #83: the target URL is no longer baked in as a literal here
         // — it comes from scrape()'s own `url` parameter at runtime, since
         // the same action sequence now runs once per start URL. See
@@ -90,11 +88,28 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         // templates) instead of a raw, unhandled KeyError. Change detection
         // isn't included: its own env-var reads are unaffected by this.
         var needsExitHelper = plan.Steps.OfType<FillStep>().Any() || plan.Proxy is not null;
-        var changeDetection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection);
-        var proxy = PythonProxyLiteral.BuildContext(plan.Proxy);
-        var hardening = PythonHardeningLiteral.BuildContext(plan.Hardening);
-        var pagination = PythonPaginationLiteral.BuildContext(plan.Pagination);
-        var externalConfig = PythonExternalConfigLiteral.BuildContext(plan.ExternalConfig);
+        // change_detection/proxy/hardening/pagination/external_config are no
+        // longer computed here — PythonScrapingContextBuilder's own methods
+        // below each derive them straight from `plan` internally, exactly
+        // like PythonCodeGenerator's (Static engine) equivalent branches do.
+
+        // The one piece every shape branch below adds on top of whichever
+        // PythonScrapingContextBuilder context it starts from — the Browser
+        // engine's own login/browser-action sequence, which the Static
+        // engine has no equivalent of at all. `needsOsImportOverride` lets
+        // the Blocks branch fold in its own per-block ChangeDetection check
+        // (see its own call site) without this helper needing to know why.
+        Dictionary<string, object?> WithBrowserActionKeys(Dictionary<string, object?> context, bool needsOsImportOverride)
+        {
+            context["actions"] = actions;
+            context["navigate_action"] = navigateFragment;
+            context["login_actions"] = loginActionsIndented;
+            context["has_login_actions"] = loginActionsOnly.Length > 0;
+            context["persistent_session_enabled"] = plan.PersistentSession;
+            context["needs_os_import"] = needsOsImportOverride;
+            context["needs_exit_helper"] = needsExitHelper;
+            return context;
+        }
 
         // Issue #182: Blocks replaces every other extraction shape wholesale
         // — see PythonCodeGenerator's equivalent branch for the reasoning.
@@ -103,35 +118,15 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         var blockStep = plan.Steps.OfType<ExtractionBlockStep>().SingleOrDefault();
         if (blockStep is not null)
         {
+            // Blocks-specific: needsOsImport was computed from
+            // plan.ChangeDetection (always null for a Blocks plan — see
+            // ScrapingPlanBuilder), so a per-block ChangeDetection needs
+            // folding in here instead.
             var blockChangeDetectionAny = blockStep.Blocks.Any(b => b.ChangeDetection is not null);
+            var blocksContext = WithBrowserActionKeys(
+                PythonScrapingContextBuilder.BuildBlocksContext(plan, blockStep), needsOsImport || blockChangeDetectionAny);
             var blocksShellTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_scraper_blocks.py.j2");
-            return blocksShellTemplate.Render(new
-            {
-                urls = navigate.Urls,
-                blocks_literal = PythonExtractionBlockLiteral.Render(blockStep.Blocks),
-                blocks_meta = blockStep.Blocks.Select(b => new { name = b.Name, shape = b.Groups is not null ? "group" : "flat" }).ToList(),
-                any_flat = blockStep.Blocks.Any(b => b.Groups is null),
-                any_group = blockStep.Blocks.Any(b => b.Groups is not null),
-                any_csv = blockStep.Blocks.Any(b => b.Groups is null && b.OutputFormat != OutputFormat.Json),
-                any_json_output = blockStep.Blocks.Any(b => b.OutputFormat == OutputFormat.Json),
-                hardening_any = blockStep.Blocks.Any(b => b.Hardening is { Count: > 0 }),
-                hardening_has_baseline_any = blockStep.Blocks.Any(b => b.Hardening?.Any(check => check is BaselineCheck) == true),
-                change_detection_any = blockChangeDetectionAny,
-                actions,
-                navigate_action = navigateFragment,
-                login_actions = loginActionsIndented,
-                has_login_actions = loginActionsOnly.Length > 0,
-                persistent_session_enabled = plan.PersistentSession,
-                // Blocks-specific: needsOsImport was computed from
-                // plan.ChangeDetection (always null for a Blocks plan — see
-                // ScrapingPlanBuilder), so a per-block ChangeDetection needs
-                // folding in here instead.
-                needs_os_import = needsOsImport || blockChangeDetectionAny,
-                needs_exit_helper = needsExitHelper,
-                script_filename = plan.ScriptFileName,
-                proxy,
-                pagination,
-            });
+            return blocksShellTemplate.Render(blocksContext);
         }
 
         // Container-Mode: login/wait steps (if any) still run first — only
@@ -141,66 +136,14 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         var groupStep = plan.Steps.OfType<ExtractGroupStep>().SingleOrDefault();
         if (groupStep is not null)
         {
-            var groupsLiteral = PythonGroupTreeLiteral.Render(groupStep.Roots, indent: 0);
-            var rootNames = groupStep.Roots.Select(root => root.Name).ToList();
+            var groupContext = WithBrowserActionKeys(
+                PythonScrapingContextBuilder.BuildGroupModeContext(plan, groupStep), needsOsImport);
             var groupedShellTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_scraper_grouped.py.j2");
-            return groupedShellTemplate.Render(new
-            {
-                urls = navigate.Urls,
-                groups_literal = groupsLiteral,
-                root_names = rootNames,
-                actions,
-                navigate_action = navigateFragment,
-                login_actions = loginActionsIndented,
-                has_login_actions = loginActionsOnly.Length > 0,
-                persistent_session_enabled = plan.PersistentSession,
-                needs_os_import = needsOsImport,
-                needs_exit_helper = needsExitHelper,
-                script_filename = plan.ScriptFileName,
-                output_filename = plan.OutputFileBaseName,
-                output_is_json = plan.OutputFormat == OutputFormat.Json,
-                // Issue #213: see PythonCodeGenerator's identical use of
-                // AnyDownloadEnabled — gates the download helper's own
-                // conditional imports (os/sys/hashlib/urllib.parse).
-                download_enabled = PythonGroupTreeLiteral.AnyDownloadEnabled(groupStep.Roots),
-                change_detection = changeDetection,
-                proxy,
-                hardening,
-                pagination,
-                external_config = externalConfig,
-                blueprint_mapping_enabled = plan.OutputBlueprint?.SchemaKind == OutputBlueprintSchemaKind.Flat,
-                blueprint_mapping_literal = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),
-                blueprint_tree_mapping_enabled = plan.OutputBlueprint?.SchemaKind == OutputBlueprintSchemaKind.Tree,
-                blueprint_tree_mapping_literal = PythonOutputBlueprintLiteral.RenderTree(plan.OutputBlueprint),
-            });
+            return groupedShellTemplate.Render(groupContext);
         }
 
-        var fields = plan.Steps.OfType<ExtractStep>()
-            .Select(step => new
-            {
-                name = step.Name, selector = step.Selector, attribute = step.Attribute, frame_path = step.FramePath,
-                transforms_literal = PythonFieldTransformLiteral.Render(step.Transforms),
-            })
-            .ToList();
-
-        return shellTemplate.Render(new
-        {
-            urls = navigate.Urls, fields, actions,
-            navigate_action = navigateFragment,
-            login_actions = loginActionsIndented,
-            has_login_actions = loginActionsOnly.Length > 0,
-            persistent_session_enabled = plan.PersistentSession,
-            needs_os_import = needsOsImport,
-            needs_exit_helper = needsExitHelper,
-            script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
-            output_is_json = plan.OutputFormat == OutputFormat.Json,
-            change_detection = changeDetection,
-            proxy,
-            hardening,
-            pagination,
-            external_config = externalConfig,
-            blueprint_mapping_literal = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),
-        });
+        var flatContext = WithBrowserActionKeys(PythonScrapingContextBuilder.BuildFlatModeContext(plan), needsOsImport);
+        return shellTemplate.Render(flatContext);
     }
 
     // Issue #175: re-indents every non-empty line of a rendered action
