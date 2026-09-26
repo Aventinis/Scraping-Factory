@@ -39,6 +39,7 @@ const SFOutputBlueprintsUI = (function () {
     blueprintDraftIsValid, createMappingDraft, updateMappingSource, parseFieldNamesFromSample,
     buildBlueprintSchemaGroup, buildBlueprintSchemaField, parseBlueprintSchemaTree, serializeBlueprintSchemaTree,
     blueprintTreeSchemaIsValid, createTreeMappingDraft, updateTreeMappingSource,
+    buildBlueprintTreeFromSample, countBlueprintTreeLeaves,
   } = typeof require !== 'undefined' ? require('./output-blueprints') : self.SFOutputBlueprints;
 
   // Issue #244: the tree schema editor's own structural editing (add/remove/
@@ -349,20 +350,36 @@ const SFOutputBlueprintsUI = (function () {
     bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, schemaKind } });
   }
 
-  // Issue #193: replaces the draft's own fieldNames with whatever
-  // parseFieldNamesFromSample could pull out of the pasted/uploaded sample —
-  // a full replace, not a merge (see this file's own doc comment and
-  // CLAUDE.md for why "merge into an existing blueprint" is deliberately
-  // out of scope for this first version). Only reachable while creating a
-  // new blueprint (see renderBlueprintEditModal's own visibility gate), so
-  // there's no already-saved field list this could ever clobber.
+  // Issue #193 (Flat schema), extended to Tree by Issue #253: replaces the
+  // draft's own fieldNames (Flat) or tree (Tree) with whatever
+  // parseFieldNamesFromSample/buildBlueprintTreeFromSample could pull out of
+  // the pasted/uploaded sample — a full replace, not a merge (see this
+  // file's own doc comment and CLAUDE.md for why "merge into an existing
+  // blueprint" is deliberately out of scope for this first version). Only
+  // reachable while creating a new blueprint (see renderBlueprintEditModal's
+  // own visibility gate), so there's no already-saved field list/tree this
+  // could ever clobber. Dispatches purely on the draft's own current
+  // schemaKind — the same textarea/button serves either schema kind.
   function importBlueprintFieldNamesFromSample(bridge, sampleText) {
+    const state = bridge.getState();
+    const isTree = state.blueprintEditDraft.schemaKind === 'Tree';
+
+    if (isTree) {
+      const tree = buildBlueprintTreeFromSample(sampleText);
+      if (tree.length === 0) {
+        showToast(t('toast.blueprintImportEmpty'), null, 'warn');
+        return;
+      }
+      bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, tree } });
+      showToast(t('toast.blueprintImportParsed', { count: countBlueprintTreeLeaves(tree) }), null, 'info');
+      return;
+    }
+
     const parsed = parseFieldNamesFromSample(sampleText);
     if (parsed.length === 0) {
       showToast(t('toast.blueprintImportEmpty'), null, 'warn');
       return;
     }
-    const state = bridge.getState();
     bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, fieldNames: parsed } });
     showToast(t('toast.blueprintImportParsed', { count: parsed.length }), null, 'info');
   }
@@ -415,12 +432,13 @@ const SFOutputBlueprintsUI = (function () {
     document.getElementById('btn-blueprint-schema-kind-tree')?.classList.toggle('active', isTree);
     document.getElementById('blueprint-flat-schema-section')?.classList.toggle('hidden', isTree);
     document.getElementById('blueprint-tree-schema-section')?.classList.toggle('hidden', !isTree);
-    // Issue #193: import only ever targets a brand-new Flat-schema blueprint
-    // (see importBlueprintFieldNamesFromSample's own doc comment) — hidden
-    // once editing an already-existing one, and irrelevant for the Tree
-    // schema kind (no natural "import a sample" equivalent for a nested
-    // target shape, not mentioned in the issue).
-    document.getElementById('blueprint-import-section')?.classList.toggle('hidden', isTree || !!state.blueprintEditingId);
+    // Issue #193 (Flat), extended to Tree by Issue #253: import only ever
+    // targets a brand-new blueprint (see importBlueprintFieldNamesFromSample's
+    // own doc comment) — hidden once editing an already-existing one,
+    // regardless of schema kind. No longer schema-kind-gated: Tree-schema
+    // import is fully supported now, dispatched purely by schemaKind inside
+    // importBlueprintFieldNamesFromSample itself.
+    document.getElementById('blueprint-import-section')?.classList.toggle('hidden', !!state.blueprintEditingId);
 
     const listEl = document.getElementById('blueprint-field-list');
     if (listEl) {
