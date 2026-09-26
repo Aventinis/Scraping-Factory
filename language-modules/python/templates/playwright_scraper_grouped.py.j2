@@ -13,10 +13,10 @@ import csv
 {{~ end ~}}
 import re
 from datetime import date
-{{~ if needs_os_import || external_config.enabled ~}}
+{{~ if needs_os_import || external_config.enabled || download_enabled ~}}
 import os
 {{~ end ~}}
-{{~ if needs_exit_helper || hardening.enabled || external_config.enabled ~}}
+{{~ if needs_exit_helper || hardening.enabled || external_config.enabled || download_enabled ~}}
 import sys
 {{~ end ~}}
 {{~ if hardening.has_baseline ~}}
@@ -25,13 +25,16 @@ import json
 {{~ if proxy.enabled ~}}
 import itertools
 {{~ end ~}}
-{{~ if proxy.enabled || hardening.enabled ~}}
+{{~ if proxy.enabled || hardening.enabled || download_enabled ~}}
 import urllib.parse
 {{~ end ~}}
 {{~ if pagination.enabled ~}}
 {{~ if pagination.kind == "nextLink" ~}}
 import urllib.parse
 {{~ end ~}}
+{{~ end ~}}
+{{~ if download_enabled ~}}
+import hashlib
 {{~ end ~}}
 {{~ if change_detection.enabled ~}}
 import difflib
@@ -53,6 +56,40 @@ URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 # Issue #192: see scraper_grouped.py.j2's own identical doc comment on this
 # same line — an active blueprint mapping flattens this mode's output.
 OUTPUT_PATH = "{{ output_filename }}.{{ if blueprint_mapping_enabled }}{{ if output_is_json }}json{{ else }}csv{{ end }}{{ else }}{{ if output_is_json }}json{{ else }}xml{{ end }}{{ end }}"
+
+{{~ if download_enabled ~}}
+# Issue #213: see scraper_grouped.py.j2's own identical doc comment on
+# DOWNLOADS_DIR/_download_resource for the full rationale (hash-named,
+# idempotent, non-fatal on failure). The one real difference here: this
+# engine uses page.context.request instead of a bare `requests` import —
+# Playwright's own APIRequestContext shares cookies/auth with the browser
+# session that already navigated the page, which a fresh unauthenticated
+# requests.get() call would not (e.g. a resource behind a login the
+# browser's own session already passed).
+DOWNLOADS_DIR = OUTPUT_PATH + ".downloads"
+
+
+def _download_resource(page, url):
+    absolute_url = urllib.parse.urljoin(page.url, url)
+    os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+    digest = hashlib.sha1(absolute_url.encode("utf-8")).hexdigest()[:16]
+    path_only = absolute_url.split("?", 1)[0].split("#", 1)[0]
+    ext = os.path.splitext(path_only)[1]
+    if not re.fullmatch(r"\.[A-Za-z0-9]{1,8}", ext):
+        ext = ""
+    local_path = os.path.join(DOWNLOADS_DIR, digest + ext)
+    if not os.path.exists(local_path):
+        try:
+            response = page.context.request.get(absolute_url)
+            if not response.ok:
+                raise RuntimeError(f"HTTP {response.status}")
+            with open(local_path, "wb") as f:
+                f.write(response.body())
+        except Exception as exc:
+            print(f"WARNING: failed to download resource '{absolute_url}': {exc}", file=sys.stderr)
+            return ""
+    return local_path
+{{~ end ~}}
 
 {{~ if external_config.enabled ~}}
 # Issue #178: see scraper.py.j2's own doc comment for the full rationale — an
@@ -405,9 +442,11 @@ def _blueprint_subtree_has_mapped_field(node):
 # Resolves one leaf field's raw value exactly like extract_group()'s own
 # leaf branch — see scraper_grouped.py.j2's identical-in-spirit
 # _resolve_flatten_leaf_value for the full "why a separate function"
-# reasoning. Uses _resolve_field_match (defined further below, resolved
-# lazily at call time — Python doesn't require def order to match call
-# order) so FramePath-scoped fields work here exactly like they do for
+# reasoning, including the Issue #213 note that Download is deliberately
+# not applied here (a flattened Output Blueprint row keeps the raw URL).
+# Uses _resolve_field_match (defined further below, resolved lazily at
+# call time — Python doesn't require def order to match call order) so
+# FramePath-scoped fields work here exactly like they do for
 # extract_group() itself.
 def _resolve_flatten_leaf_value(page, scope, node):
     found = _resolve_field_match(page, scope, node)
@@ -752,7 +791,11 @@ def extract_group(page, scope, node):
     elif found is None:
         el.text = ""
     elif node["mode"] == "attribute":
-        el.text = _apply_transforms(found.get_attribute(node["attribute"]) or "", node["transform"])
+        value = _apply_transforms(found.get_attribute(node["attribute"]) or "", node["transform"])
+        # Issue #213: see scraper_grouped.py.j2's own identical doc comment —
+        # applied after transforms, replaces the raw URL with its own
+        # downloaded local file path.
+        el.text = _download_resource(page, value) if node.get("download") and value else value
     elif node["mode"] == "ownText":
         # Direct text-node children only, excluding any nested element's own
         # text — see scraper_grouped.py.j2's own doc comment on this same
