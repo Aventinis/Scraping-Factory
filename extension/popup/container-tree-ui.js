@@ -23,7 +23,7 @@ const SFContainerTreeUI = (function () {
   const { STATES, escapeHtml } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
   const {
     groupNodeSuffix, resolveGroupNode, hasRepeatingAncestor, buildFieldNode, insertContainerNode,
-    removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode,
+    removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode, guessUrlAttribute,
   } = typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
   const { transformsAreValid, addTransform } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
   const { renderTransformList, renderTransformPreview, wireTransformList } =
@@ -214,7 +214,7 @@ const SFContainerTreeUI = (function () {
     const name = document.getElementById('input-field-extended-name')?.value.trim();
     if (!name) return;
     const mode = document.getElementById('select-field-mode')?.value ?? 'text';
-    const attribute = document.getElementById('input-field-attribute')?.value.trim();
+    const attribute = document.getElementById('select-field-attribute')?.value.trim();
     if (mode === 'attribute' && !attribute) return;
     const download = document.getElementById('toggle-field-download')?.checked ?? false;
 
@@ -278,7 +278,7 @@ const SFContainerTreeUI = (function () {
     if (mode === 'text') {
       rawValue = state.pendingRawText;
     } else if (mode === 'attribute') {
-      const attrName = document.getElementById('input-field-attribute')?.value.trim();
+      const attrName = document.getElementById('select-field-attribute')?.value.trim();
       if (attrName) rawValue = (state.pendingElementAttributes?.[attrName] ?? '').trim();
     } else if (mode === 'ownText') {
       rawValue = state.pendingOwnText;
@@ -292,6 +292,31 @@ const SFContainerTreeUI = (function () {
   // closed→open transition (reset name/mode/focus) from a re-render
   // triggered by editing the transform chain (which must not wipe what's
   // already typed/chosen).
+  // Issue #213 follow-up: populates the attribute picker with the actually-
+  // clicked element's own attributes ("name: value preview" options)
+  // instead of a free text field the user would otherwise need to
+  // guess/inspect DevTools for — per CLAUDE.md's own "no programming
+  // knowledge" target audience, typing a raw HTML attribute name blind
+  // defeats the point of a visual tool. guessUrlAttribute (container-tree.js)
+  // preselects whichever attribute looks most like a downloadable resource
+  // URL, but every other attribute the element actually has is still listed
+  // and pickable — the heuristic is a convenience default, not a hard gate.
+  function populateAttributeSelect(attributes) {
+    const select = document.getElementById('select-field-attribute');
+    if (!select) return;
+    const entries = Object.entries(attributes || {});
+    if (entries.length === 0) {
+      select.innerHTML = `<option value="">${escapeHtml(t('modals.fieldExtended.noAttributesFound'))}</option>`;
+      return;
+    }
+    const guess = guessUrlAttribute(attributes);
+    select.innerHTML = entries.map(([name, value]) => {
+      const preview = value.length > 40 ? `${value.slice(0, 40)}…` : value;
+      const label = preview ? `${name}: ${preview}` : name;
+      return `<option value="${escapeHtml(name)}"${name === guess ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+    }).join('');
+  }
+
   function renderContainerFieldModal(bridge, isNewPick) {
     const state = bridge.getState();
     document.getElementById('modal-field-extended')?.classList.remove('hidden');
@@ -302,8 +327,7 @@ const SFContainerTreeUI = (function () {
       if (modeSelect) modeSelect.value = 'text';
       document.getElementById('field-attribute-row')?.classList.add('hidden');
       document.getElementById('field-extended-transforms-section')?.classList.remove('hidden');
-      const attrInput = document.getElementById('input-field-attribute');
-      if (attrInput) attrInput.value = '';
+      populateAttributeSelect(state.pendingElementAttributes);
       const downloadToggle = document.getElementById('toggle-field-download');
       if (downloadToggle) downloadToggle.checked = false;
     }
@@ -382,7 +406,10 @@ const SFContainerTreeUI = (function () {
   });
   // Issue #143: typing an attribute name updates the preview live, without
   // requiring a transform edit first.
-  document.getElementById('input-field-attribute')?.addEventListener('input', () => refreshExtendedTransformPreview(bridge));
+  // Issue #213 follow-up: now a <select> (was a free-text <input>) — 'change'
+  // matches select-field-mode's own listener convention, fired once a pick
+  // is actually made rather than per-keystroke.
+  document.getElementById('select-field-attribute')?.addEventListener('change', () => refreshExtendedTransformPreview(bridge));
   document.getElementById('btn-field-extended-transform-add')?.addEventListener('click', () => {
     bridge.patchState({ pendingTransforms: addTransform(bridge.getState().pendingTransforms) });
   });

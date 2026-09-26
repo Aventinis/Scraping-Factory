@@ -100,8 +100,16 @@
         <option value="ownText" data-i18n="modals.fieldExtended.ownTextOption"></option>
       </select>
       <div id="field-attribute-row" class="hidden">
-        <label for="input-field-attribute" data-i18n="modals.fieldExtended.attributeLabel"></label>
-        <input id="input-field-attribute" type="text" data-i18n-placeholder="modals.fieldExtended.attributePlaceholder" autocomplete="off" />
+        <label for="select-field-attribute" data-i18n="modals.fieldExtended.attributeLabel"></label>
+        <!-- Issue #213 follow-up: a picker of the clicked element's own
+             actual attributes (populateAttributeSelect in
+             container-tree-ui.js, "name: value preview" options), not a
+             free-text field — per CLAUDE.md's "no programming knowledge"
+             target audience, typing a raw HTML attribute name blind
+             defeats the point of a visual tool. Pre-selected via
+             guessUrlAttribute's own heuristic when one option looks like a
+             resource URL; every attribute stays pickable regardless. -->
+        <select id="select-field-attribute"></select>
         <!-- Issue #213: only meaningful when the raw extracted value is a
              URL, i.e. Attribute mode — sits inside the same row so it's
              hidden/shown by the exact same mode check as the attribute
