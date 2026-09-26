@@ -3,7 +3,7 @@
 // dedicated test file before this (only indirect coverage via popup.test.js's
 // own integration-style tests) — this file stays scoped to what this issue
 // actually touched rather than retroactively covering the whole module.
-const { buildFieldNode, serializeGroupTree } = require('./container-tree');
+const { buildFieldNode, serializeGroupTree, guessUrlAttribute } = require('./container-tree');
 
 describe('container-tree (Issue #213): buildFieldNode download handling', () => {
   test('carries download through for Attribute mode', () => {
@@ -63,5 +63,47 @@ describe('container-tree (Issue #213): serializeGroupTree download handling', ()
     expect(serializeGroupTree(groups)[0].children[0]).toEqual(
       { name: 'Bild', selector: 'img.photo', mode: 'Attribute', attribute: 'src', download: true },
     );
+  });
+});
+
+// Issue #213 follow-up: guesses which of a clicked element's own attributes
+// most likely holds a downloadable resource URL, so the extension can
+// pre-select it in the picker instead of the user needing to know HTML
+// attribute names at all (per CLAUDE.md's "no programming knowledge" target
+// audience). A convenience default only — every attribute stays listed and
+// pickable regardless of what this guesses.
+describe('container-tree (Issue #213): guessUrlAttribute', () => {
+  test('picks "src" over an unrelated attribute', () => {
+    expect(guessUrlAttribute({ class: 'photo', src: '/images/dish1.jpg' })).toBe('src');
+  });
+
+  test('picks a lazy-load data-* attribute when src looks like a placeholder', () => {
+    expect(guessUrlAttribute({ src: 'data:image/gif;base64,R0lGOD', 'data-src': '/images/real.jpg' })).toBe('data-src');
+  });
+
+  test('falls back to href when nothing else is present', () => {
+    expect(guessUrlAttribute({ class: 'link', href: '/produkt/42' })).toBe('href');
+  });
+
+  test('prefers src over href when both are present', () => {
+    expect(guessUrlAttribute({ href: '/fallback', src: '/images/dish1.jpg' })).toBe('src');
+  });
+
+  test('returns null when nothing looks like a resource URL at all', () => {
+    expect(guessUrlAttribute({ class: 'menu-item', id: 'item-1' })).toBeNull();
+  });
+
+  test('returns null for an empty or missing attribute map', () => {
+    expect(guessUrlAttribute({})).toBeNull();
+    expect(guessUrlAttribute(null)).toBeNull();
+    expect(guessUrlAttribute(undefined)).toBeNull();
+  });
+
+  test('recognizes a resource-like extension even on an unusual attribute name', () => {
+    expect(guessUrlAttribute({ 'data-background': '/images/hero.webp' })).toBe('data-background');
+  });
+
+  test('never picks a data: URI, even with no better alternative', () => {
+    expect(guessUrlAttribute({ src: 'data:image/png;base64,abcd' })).toBeNull();
   });
 });

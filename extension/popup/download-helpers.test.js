@@ -61,7 +61,7 @@ describe('downloadConfigExport (btn-export-config)', () => {
           <option value="exists">Exists</option>
         </select>
         <div id="field-attribute-row" class="hidden">
-          <input id="input-field-attribute" />
+          <select id="select-field-attribute"></select>
           <input type="checkbox" id="toggle-field-download" />
         </div>
         <button id="btn-field-extended-confirm"></button>
@@ -158,13 +158,15 @@ describe('downloadConfigExport (btn-export-config)', () => {
     await flushMicrotasks();
 
     document.querySelector('.btn-add-subfield').click();
-    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'img.photo' });
+    // src is auto-guessed (see guessUrlAttribute) since its value looks like
+    // an image resource URL — no manual pick needed in the picker itself.
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'img.photo', attributes: { src: '/images/dish1.jpg' } });
     await flushMicrotasks();
 
     const modeSelect = document.getElementById('select-field-mode');
     modeSelect.value = 'attribute';
     modeSelect.dispatchEvent(new Event('change'));
-    document.getElementById('input-field-attribute').value = 'src';
+    expect(document.getElementById('select-field-attribute').value).toBe('src');
     document.getElementById('toggle-field-download').checked = true;
     document.getElementById('input-field-extended-name').value = 'Bild';
     document.getElementById('btn-field-extended-confirm').click();

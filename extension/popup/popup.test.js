@@ -2821,7 +2821,7 @@ describe('Container-Mode integration', () => {
           <option value="exists">Exists</option>
         </select>
         <div id="field-attribute-row" class="hidden">
-          <input id="input-field-attribute" />
+          <select id="select-field-attribute"></select>
         </div>
         <button id="btn-field-extended-confirm"></button>
         <button id="btn-field-extended-cancel"></button>
@@ -2916,7 +2916,7 @@ describe('Container-Mode integration', () => {
     expect(rows[1].textContent).toContain('— Text');
   });
 
-  test('choosing "Attribut" reveals the attribute-name input, and it is required to confirm', async () => {
+  test('choosing "Attribut" reveals the attribute picker, and an actual attribute is required to confirm', async () => {
     document.getElementById('btn-mode-container').click();
     document.getElementById('btn-add-root-container').click();
     document.getElementById('input-container-name').value = 'Vorspeisen';
@@ -2925,6 +2925,10 @@ describe('Container-Mode integration', () => {
     await flushMicrotasks();
 
     document.querySelector('.btn-add-subfield').click();
+    // No attributes at all on this pick — the picker has nothing to offer
+    // (see the "no attributes found" placeholder option), matching the "must
+    // actively have something to pick" requirement the old free-text input's
+    // own "required" check already enforced.
     capturedListener({ type: 'ELEMENT_SELECTED', selector: 'a.link' });
     await flushMicrotasks();
 
@@ -2935,10 +2939,31 @@ describe('Container-Mode integration', () => {
 
     document.getElementById('input-field-extended-name').value = 'Link';
     document.getElementById('btn-field-extended-confirm').click();
-    // No attribute entered — should not have been added.
+    // No attribute available to pick — should not have been added.
     expect(document.querySelectorAll('#group-tree-root .group-tree-row')).toHaveLength(1);
+  });
 
-    document.getElementById('input-field-attribute').value = 'href';
+  // Issue #213 follow-up: the attribute value comes from picking one of the
+  // element's own real attributes (populateAttributeSelect), not typing one.
+  test('picking an attribute from the picker adds the field with that attribute', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+
+    document.querySelector('.btn-add-subfield').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'a.link', attributes: { href: '/produkt/42' } });
+    await flushMicrotasks();
+
+    document.getElementById('select-field-mode').value = 'attribute';
+    document.getElementById('select-field-mode').dispatchEvent(new Event('change'));
+    // href is the only attribute present, so the picker already has it
+    // selected (see guessUrlAttribute) — no further pick needed here.
+    expect(document.getElementById('select-field-attribute').value).toBe('href');
+
+    document.getElementById('input-field-extended-name').value = 'Link';
     document.getElementById('btn-field-extended-confirm').click();
     const rows = document.querySelectorAll('#group-tree-root .group-tree-row');
     expect(rows[1].querySelector('.group-tree-name').value).toBe('Link');
@@ -3126,7 +3151,7 @@ describe('Live selector match-count preview (Issue #85)', () => {
           <option value="exists">Exists</option>
         </select>
         <div id="field-attribute-row" class="hidden">
-          <input id="input-field-attribute" />
+          <select id="select-field-attribute"></select>
         </div>
         <p id="field-extended-match-count" class="match-count-hint hidden"></p>
         <button id="btn-field-extended-confirm"></button>
@@ -3319,7 +3344,7 @@ describe('Field transform-chain editor (Issue #84)', () => {
           <option value="ownText">Own text</option>
         </select>
         <div id="field-attribute-row" class="hidden">
-          <input id="input-field-attribute" />
+          <select id="select-field-attribute"></select>
         </div>
         <p id="field-extended-match-count" class="match-count-hint hidden"></p>
         <div id="field-extended-transforms-section" class="field-transforms-section">
@@ -3694,7 +3719,7 @@ describe('Transform-chain live preview (Issue #143)', () => {
           <option value="ownText">Own text</option>
         </select>
         <div id="field-attribute-row" class="hidden">
-          <input id="input-field-attribute" />
+          <select id="select-field-attribute"></select>
         </div>
         <p id="field-extended-match-count" class="match-count-hint hidden"></p>
         <div id="field-extended-transforms-section" class="field-transforms-section">
@@ -3806,7 +3831,41 @@ describe('Transform-chain live preview (Issue #143)', () => {
     expect(document.getElementById('field-extended-transform-preview').textContent).toContain('Preis: 12,99 €');
   });
 
-  test('container mode: attribute-mode preview is hidden until an attribute name is typed', async () => {
+  // Issue #213 follow-up: the attribute field is now a picker of the
+  // element's own real attributes (guessUrlAttribute pre-selects whichever
+  // one looks like a resource URL), not a free-text field the user types
+  // into — so unlike before, the preview can already show the instant the
+  // mode switches to "attribute", with no separate typing step at all.
+  test('container mode: attribute-mode preview auto-shows via the guessed attribute, with no typing needed', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+    chrome.runtime.sendMessage.mockClear();
+
+    document.querySelector('.btn-add-subfield').click();
+    // `class` isn't URL-like and comes first in the map — `href` is the one
+    // guessUrlAttribute should still pick, proving it's a real guess and not
+    // just "whichever attribute happens to be first".
+    capturedListener({
+      type: 'ELEMENT_SELECTED', selector: 'a.link', rawText: 'Zum Produkt',
+      attributes: { class: 'link', href: '/produkt/42' },
+    });
+    await flushMicrotasks();
+
+    const modeSelect = document.getElementById('select-field-mode');
+    modeSelect.value = 'attribute';
+    modeSelect.dispatchEvent(new Event('change'));
+
+    expect(document.getElementById('select-field-attribute').value).toBe('href');
+    const preview = document.getElementById('field-extended-transform-preview');
+    expect(preview.classList.contains('hidden')).toBe(false);
+    expect(preview.textContent).toContain('/produkt/42');
+  });
+
+  test('container mode: picking a different attribute from the dropdown updates the preview', async () => {
     document.getElementById('btn-mode-container').click();
     document.getElementById('btn-add-root-container').click();
     document.getElementById('input-container-name').value = 'Vorspeisen';
@@ -3817,7 +3876,8 @@ describe('Transform-chain live preview (Issue #143)', () => {
 
     document.querySelector('.btn-add-subfield').click();
     capturedListener({
-      type: 'ELEMENT_SELECTED', selector: 'a.link', rawText: 'Zum Produkt', attributes: { href: '/produkt/42' },
+      type: 'ELEMENT_SELECTED', selector: 'a.link', rawText: 'Zum Produkt',
+      attributes: { class: 'link', href: '/produkt/42' },
     });
     await flushMicrotasks();
 
@@ -3825,14 +3885,11 @@ describe('Transform-chain live preview (Issue #143)', () => {
     modeSelect.value = 'attribute';
     modeSelect.dispatchEvent(new Event('change'));
 
-    expect(document.getElementById('field-extended-transform-preview').classList.contains('hidden')).toBe(true);
+    const attrSelect = document.getElementById('select-field-attribute');
+    attrSelect.value = 'class';
+    attrSelect.dispatchEvent(new Event('change'));
 
-    document.getElementById('input-field-attribute').value = 'href';
-    document.getElementById('input-field-attribute').dispatchEvent(new Event('input', { bubbles: true }));
-
-    const preview = document.getElementById('field-extended-transform-preview');
-    expect(preview.classList.contains('hidden')).toBe(false);
-    expect(preview.textContent).toContain('/produkt/42');
+    expect(document.getElementById('field-extended-transform-preview').textContent).toContain('link');
   });
 
   // Issue #169
