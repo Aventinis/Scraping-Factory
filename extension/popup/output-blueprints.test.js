@@ -2,7 +2,7 @@ const {
   addBlueprintFieldName, removeBlueprintFieldName, updateBlueprintFieldName, moveBlueprintFieldName,
   blueprintDraftIsValid, parseFieldNamesFromSample,
   buildBlueprintSchemaGroup, buildBlueprintSchemaField, parseBlueprintSchemaTree, serializeBlueprintSchemaTree,
-  blueprintTreeSchemaIsValid,
+  blueprintTreeSchemaIsValid, buildBlueprintTreeFromSample, countBlueprintTreeLeaves,
   createMappingDraft, updateMappingSource, mappingIsComplete,
   createTreeMappingDraft, updateTreeMappingSource, treeMappingIsComplete,
   buildOutputBlueprintMapping,
@@ -213,6 +213,116 @@ describe('output-blueprints (Issue #244): editing a blueprint\'s own target tree
     const group = buildBlueprintSchemaGroup('Kategorien');
     group.children = [buildBlueprintSchemaField('Name')];
     expect(blueprintTreeSchemaIsValid('My blueprint', [group])).toBe(true);
+  });
+});
+
+// Issue #253: importing a Tree-schema blueprint's own target tree from a
+// pasted/uploaded JSON sample — the nested counterpart to #193's flat
+// parseFieldNamesFromSample.
+describe('output-blueprints (Issue #253): buildBlueprintTreeFromSample', () => {
+  test('returns [] for blank input or invalid JSON', () => {
+    expect(buildBlueprintTreeFromSample('')).toEqual([]);
+    expect(buildBlueprintTreeFromSample('   ')).toEqual([]);
+    expect(buildBlueprintTreeFromSample('not json at all')).toEqual([]);
+  });
+
+  test('turns a flat object\'s own scalar keys into top-level field nodes', () => {
+    expect(buildBlueprintTreeFromSample(JSON.stringify({ Title: 'Widget', Price: 9.99 }))).toEqual([
+      { kind: 'field', name: 'Title' },
+      { kind: 'field', name: 'Price' },
+    ]);
+  });
+
+  test('does NOT drill through a wrapper object — the wrapper key becomes a real group node', () => {
+    const json = JSON.stringify({
+      offerTiles: [
+        { title: '', type: '', linkHref: '/x', primaryType: 'contentTeaser' },
+      ],
+    });
+    expect(buildBlueprintTreeFromSample(json)).toEqual([
+      {
+        kind: 'group',
+        name: 'offerTiles',
+        children: [
+          { kind: 'field', name: 'title' },
+          { kind: 'field', name: 'type' },
+          { kind: 'field', name: 'linkHref' },
+          { kind: 'field', name: 'primaryType' },
+        ],
+      },
+    ]);
+  });
+
+  test('builds a nested group from a plain nested object (not just an array of objects)', () => {
+    const json = JSON.stringify({ name: 'Widget', meta: { sku: 'W-1', weight: 2 } });
+    expect(buildBlueprintTreeFromSample(json)).toEqual([
+      { kind: 'field', name: 'name' },
+      { kind: 'group', name: 'meta', children: [{ kind: 'field', name: 'sku' }, { kind: 'field', name: 'weight' }] },
+    ]);
+  });
+
+  test('builds more than one level of nesting', () => {
+    const json = JSON.stringify({ categories: [{ name: '', items: [{ title: '' }] }] });
+    expect(buildBlueprintTreeFromSample(json)).toEqual([
+      {
+        kind: 'group', name: 'categories',
+        children: [
+          { kind: 'field', name: 'name' },
+          { kind: 'group', name: 'items', children: [{ kind: 'field', name: 'title' }] },
+        ],
+      },
+    ]);
+  });
+
+  test('a top-level array of objects has no wrapper key — uses the first element\'s own keys directly', () => {
+    expect(buildBlueprintTreeFromSample(JSON.stringify([{ a: 1, b: 2 }, { a: 3, b: 4 }]))).toEqual([
+      { kind: 'field', name: 'a' },
+      { kind: 'field', name: 'b' },
+    ]);
+  });
+
+  test('a top-level array of strings becomes flat top-level field nodes, mirroring the Flat importer', () => {
+    expect(buildBlueprintTreeFromSample(JSON.stringify(['Title', 'Price']))).toEqual([
+      { kind: 'field', name: 'Title' },
+      { kind: 'field', name: 'Price' },
+    ]);
+  });
+
+  test('returns [] for a top-level array of scalars/arrays with no importable object', () => {
+    expect(buildBlueprintTreeFromSample(JSON.stringify([1, 2, 3]))).toEqual([]);
+    expect(buildBlueprintTreeFromSample(JSON.stringify([[1, 2], [3, 4]]))).toEqual([]);
+  });
+
+  test('skips a key whose value is an array of plain scalars — no natural group/field split', () => {
+    const json = JSON.stringify({ name: 'Widget', tags: ['a', 'b'] });
+    expect(buildBlueprintTreeFromSample(json)).toEqual([{ kind: 'field', name: 'name' }]);
+  });
+
+  test('skips a nested object/group that ends up with zero importable children', () => {
+    const json = JSON.stringify({ name: 'Widget', meta: {} });
+    expect(buildBlueprintTreeFromSample(json)).toEqual([{ kind: 'field', name: 'name' }]);
+  });
+
+  test('requires valid JSON — does not fall back to the line-based "key": value parsing #193 uses for the Flat case', () => {
+    const broken = ['{', '"title": "",', '"type": ""', '},'].join('\n'); // trailing comma makes this invalid JSON
+    expect(buildBlueprintTreeFromSample(broken)).toEqual([]);
+  });
+});
+
+describe('output-blueprints (Issue #253): countBlueprintTreeLeaves', () => {
+  test('counts leaf field nodes only, recursively, ignoring group nodes themselves', () => {
+    const tree = [
+      { kind: 'field', name: 'a' },
+      {
+        kind: 'group', name: 'g',
+        children: [{ kind: 'field', name: 'b' }, { kind: 'field', name: 'c' }],
+      },
+    ];
+    expect(countBlueprintTreeLeaves(tree)).toBe(3);
+  });
+
+  test('returns 0 for an empty tree', () => {
+    expect(countBlueprintTreeLeaves([])).toBe(0);
   });
 });
 

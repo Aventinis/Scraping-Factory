@@ -218,21 +218,26 @@
         <button type="button" id="btn-blueprint-schema-kind-flat" class="mode-btn" data-i18n="modals.blueprintEdit.flatSchemaBtn"></button>
         <button type="button" id="btn-blueprint-schema-kind-tree" class="mode-btn" data-i18n="modals.blueprintEdit.treeSchemaBtn"></button>
       </div>
+      <!-- Issue #193 (Flat schema), extended to Tree by Issue #253: import
+           the target field list/tree from a pasted/uploaded sample instead
+           of building it by hand. Format (JSON object/array, or — Flat
+           schema only, see parseFieldNamesFromSample's own doc comment — a
+           CSV header row/plain newline/comma-separated list) is
+           auto-detected from the pasted content, no format picker. Shared
+           between both schema kinds (importBlueprintFieldNamesFromSample in
+           output-blueprints-ui.js dispatches on blueprintEditDraft.schemaKind
+           to replace either fieldNames or tree), so it sits above both
+           schema-specific sections below rather than inside either one. Only
+           shown while CREATING a new blueprint (blueprintEditingId is null)
+           — a deliberate first-version scope decision, not yet wired for
+           merging newly-seen fields into an already-existing blueprint (see
+           CLAUDE.md's Output Blueprints section). -->
+      <div id="blueprint-import-section" class="hidden">
+        <label for="input-blueprint-import-sample" data-i18n="modals.blueprintEdit.importLabel"></label>
+        <textarea id="input-blueprint-import-sample" rows="3" data-i18n-placeholder="modals.blueprintEdit.importPlaceholder"></textarea>
+        <button type="button" id="btn-blueprint-import-parse" class="btn-secondary btn-tiny" data-i18n="modals.blueprintEdit.importBtn"></button>
+      </div>
       <div id="blueprint-flat-schema-section">
-        <!-- Issue #193: import the target field list from a pasted/uploaded
-             sample instead of typing every field name by hand. Format (JSON
-             object/array, CSV header row, or a plain newline/comma-separated
-             list) is auto-detected from the pasted content — no format
-             picker (see parseFieldNamesFromSample in output-blueprints.js).
-             Only shown while CREATING a new blueprint (blueprintEditingId is
-             null) — a deliberate first-version scope decision, not yet
-             wired for merging newly-seen fields into an already-existing
-             blueprint (see CLAUDE.md's Output Blueprints section). -->
-        <div id="blueprint-import-section" class="hidden">
-          <label for="input-blueprint-import-sample" data-i18n="modals.blueprintEdit.importLabel"></label>
-          <textarea id="input-blueprint-import-sample" rows="3" data-i18n-placeholder="modals.blueprintEdit.importPlaceholder"></textarea>
-          <button type="button" id="btn-blueprint-import-parse" class="btn-secondary btn-tiny" data-i18n="modals.blueprintEdit.importBtn"></button>
-        </div>
         <label data-i18n="modals.blueprintEdit.fieldsLabel"></label>
         <ul id="blueprint-field-list" class="blueprint-field-list"></ul>
         <button type="button" id="btn-blueprint-field-add" class="btn-secondary btn-tiny" data-i18n="modals.blueprintEdit.addFieldBtn"></button>

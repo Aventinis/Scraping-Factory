@@ -184,6 +184,98 @@ const SFOutputBlueprints = (function () {
     return { kind: 'field', name };
   }
 
+  // Builds tree nodes from a plain JSON object's own keys — the Tree-schema
+  // counterpart to parseFieldNamesFromSample's findSampleRecord, but
+  // deliberately does NOT drill through a wrapper object the way that one
+  // does (Issue #253): a Tree-schema import is supposed to reproduce real
+  // nesting, so a wrapper key like "offerTiles" around an array of records
+  // becomes a genuine group node of its own instead of being collapsed away
+  // — collapsing it would defeat the entire point of importing a tree
+  // rather than a flat list. A scalar key becomes a field leaf; an object or
+  // array-of-objects key becomes a group whose children are built the same
+  // way, recursively, from that object (or the array's first element, the
+  // same "does this resolve to an array" inference Architecture Decision #6
+  // already establishes for ApiGroup — no explicit repeating flag here
+  // either). A key whose value is an array of scalars/arrays, or an object
+  // that ends up with no importable children at all, is skipped entirely
+  // rather than guessed at — an empty group would fail
+  // blueprintTreeSchemaIsValid's own "needs at least one child" rule anyway,
+  // and there's no natural field/group split for a list with no keys.
+  function buildTreeNodesFromRecord(record, depth) {
+    if (depth > 10) return [];
+    const nodes = [];
+    for (const [rawKey, value] of Object.entries(record)) {
+      const name = String(rawKey).trim();
+      if (!name) continue;
+      if (value === null || typeof value !== 'object') {
+        nodes.push(buildBlueprintSchemaField(name));
+        continue;
+      }
+      let childRecord = null;
+      if (Array.isArray(value)) {
+        const first = value[0];
+        if (first && typeof first === 'object' && !Array.isArray(first)) childRecord = first;
+      } else {
+        childRecord = value;
+      }
+      if (!childRecord) continue;
+      const children = buildTreeNodesFromRecord(childRecord, depth + 1);
+      if (children.length === 0) continue;
+      nodes.push({ kind: 'group', name, children });
+    }
+    return nodes;
+  }
+
+  // Issue #253: the Tree-schema counterpart to parseFieldNamesFromSample —
+  // builds a nested target tree (the same {kind, name, children?} shape
+  // blueprintEditDraft.tree already expects) from a pasted/uploaded JSON
+  // sample, instead of a flat field-name list. Requires valid JSON — unlike
+  // the Flat case, there's no line-based fallback for a broken/non-strict
+  // JSON paste: recovering nesting from indentation in arbitrary pasted
+  // text would be far more ambiguous than recovering a flat list, so this
+  // is a deliberate, documented first-version restriction (an unparseable
+  // sample simply returns [], same "couldn't parse this" contract). A
+  // top-level array of strings has no nesting concept, so — for parity with
+  // the Flat importer's own handling of this one shape — each string
+  // becomes a flat top-level field node. A top-level array of objects (no
+  // wrapper key to name a node after) uses the first element's own keys as
+  // the top-level nodes directly; any other top-level array (of scalars, or
+  // of arrays) has nothing importable and returns []. A top-level object
+  // walks straight into buildTreeNodesFromRecord — see its own doc comment
+  // for why a wrapper key is preserved as a real group node here, unlike
+  // the Flat importer's findSampleRecord.
+  function buildBlueprintTreeFromSample(text) {
+    const trimmedInput = (text || '').trim();
+    if (!trimmedInput) return [];
+
+    let parsed;
+    try {
+      parsed = JSON.parse(trimmedInput);
+    } catch {
+      return [];
+    }
+
+    if (Array.isArray(parsed)) {
+      if (parsed.every(v => typeof v === 'string')) {
+        return parsed.map(v => v.trim()).filter(Boolean).map(buildBlueprintSchemaField);
+      }
+      const first = parsed[0];
+      if (!first || typeof first !== 'object' || Array.isArray(first)) return [];
+      return buildTreeNodesFromRecord(first, 0);
+    }
+
+    if (parsed === null || typeof parsed !== 'object') return [];
+    return buildTreeNodesFromRecord(parsed, 0);
+  }
+
+  // Recursively counts leaf `field` nodes in a tree — used to report "N
+  // field(s) imported" after a successful Tree-schema import the same way
+  // the Flat case already reports its own array length, since a top-level
+  // node count would undercount whenever any group node is present.
+  function countBlueprintTreeLeaves(nodes) {
+    return nodes.reduce((sum, node) => sum + (node.kind === 'group' ? countBlueprintTreeLeaves(node.children) : 1), 0);
+  }
+
   // Converts a fetched blueprint's wire-format tree (OutputBlueprintTreeSchemaNode:
   // {name, children} for a group, {name} for a leaf — no `kind` tag, same
   // structural-only shape ContainerNodeJsonConverter's own wire format uses)
@@ -311,7 +403,7 @@ const SFOutputBlueprints = (function () {
     addBlueprintFieldName, removeBlueprintFieldName, updateBlueprintFieldName, moveBlueprintFieldName,
     blueprintDraftIsValid, parseFieldNamesFromSample,
     buildBlueprintSchemaGroup, buildBlueprintSchemaField, parseBlueprintSchemaTree, serializeBlueprintSchemaTree,
-    blueprintTreeSchemaIsValid,
+    blueprintTreeSchemaIsValid, buildBlueprintTreeFromSample, countBlueprintTreeLeaves,
     createMappingDraft, updateMappingSource, mappingIsComplete,
     createTreeMappingDraft, updateTreeMappingSource, treeMappingIsComplete,
     buildOutputBlueprintMapping,
