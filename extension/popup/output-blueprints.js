@@ -54,6 +54,62 @@ const SFOutputBlueprints = (function () {
     return new Set(trimmed).size === trimmed.length;
   }
 
+  // Issue #193: parses an arbitrary pasted/uploaded sample — a JSON object/
+  // array, a CSV header row, or a plain newline/comma-separated list of
+  // names — into an ordered, deduplicated field-name list: the same shape
+  // blueprintEditDraft.fieldNames already expects, so a successful parse can
+  // replace it directly (see importBlueprintFieldNamesFromSample in
+  // output-blueprints-ui.js). Format is auto-detected from the content
+  // itself rather than a separate format picker, per the issue's own
+  // "simplest first version" direction: JSON is tried first (an object's own
+  // keys; an array of objects uses the first element's keys; an array of
+  // strings is used as-is), then a comma in the first non-blank line decides
+  // CSV-header-row vs. one-name-per-line — the same operation either way
+  // (split the first line on commas), which is why a lone comma-separated
+  // line (no header semantics at all) is handled identically to a real CSV
+  // header. Returns [] when nothing name-like could be found (blank input,
+  // an empty JSON array/object, a JSON array of non-string primitives) —
+  // the caller treats an empty result as "couldn't parse this", not a crash.
+  function parseFieldNamesFromSample(text) {
+    const dedupeTrimmed = (names) => {
+      const seen = new Set();
+      const result = [];
+      for (const raw of names) {
+        const name = String(raw).trim();
+        if (!name || seen.has(name)) continue;
+        seen.add(name);
+        result.push(name);
+      }
+      return result;
+    };
+
+    const trimmedInput = (text || '').trim();
+    if (!trimmedInput) return [];
+
+    try {
+      const parsed = JSON.parse(trimmedInput);
+      const sample = Array.isArray(parsed) ? parsed[0] : parsed;
+      if (sample && typeof sample === 'object' && !Array.isArray(sample)) {
+        return dedupeTrimmed(Object.keys(sample));
+      }
+      if (Array.isArray(parsed) && parsed.every(v => typeof v === 'string')) {
+        return dedupeTrimmed(parsed);
+      }
+      return [];
+    } catch {
+      // Not JSON — fall through to CSV-header/plain-list parsing below.
+    }
+
+    const lines = trimmedInput.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length === 0) return [];
+
+    const stripQuotes = s => s.replace(/^"(.*)"$/, '$1');
+    if (lines[0].includes(',')) {
+      return dedupeTrimmed(lines[0].split(',').map(stripQuotes));
+    }
+    return dedupeTrimmed(lines);
+  }
+
   // ── Editing a blueprint's own target tree (create/edit modal, Tree) ─────
   // Node shape: { kind: 'group', name, children } | { kind: 'field', name }
   // — deliberately no selector/mode/repeating (see this file's own doc
@@ -192,7 +248,7 @@ const SFOutputBlueprints = (function () {
 
   return {
     addBlueprintFieldName, removeBlueprintFieldName, updateBlueprintFieldName, moveBlueprintFieldName,
-    blueprintDraftIsValid,
+    blueprintDraftIsValid, parseFieldNamesFromSample,
     buildBlueprintSchemaGroup, buildBlueprintSchemaField, parseBlueprintSchemaTree, serializeBlueprintSchemaTree,
     blueprintTreeSchemaIsValid,
     createMappingDraft, updateMappingSource, mappingIsComplete,
