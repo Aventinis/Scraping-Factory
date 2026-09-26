@@ -56,6 +56,10 @@ public sealed class PythonCodeGenerator : ICodeGenerator
                 urls = navigate.Urls, groups_literal = groupsLiteral, root_names = rootNames,
                 script_filename = plan.ScriptFileName, output_filename = plan.OutputFileBaseName,
                 output_is_json = plan.OutputFormat == OutputFormat.Json,
+                // Issue #213: gates the download helper's own conditional
+                // imports (os/sys/hashlib/urljoin) — see
+                // PythonGroupTreeLiteral.AnyDownloadEnabled's own doc comment.
+                download_enabled = PythonGroupTreeLiteral.AnyDownloadEnabled(groupStep.Roots),
                 change_detection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection),
                 proxy = PythonProxyLiteral.BuildContext(plan.Proxy),
                 hardening = PythonHardeningLiteral.BuildContext(plan.Hardening),

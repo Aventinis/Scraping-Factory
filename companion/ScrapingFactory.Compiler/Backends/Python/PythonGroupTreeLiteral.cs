@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using ScrapingFactory.Compiler.IR;
 
@@ -12,6 +13,16 @@ namespace ScrapingFactory.Compiler.Backends.Python;
 // consumed at runtime is identical either way.
 internal static class PythonGroupTreeLiteral
 {
+    // Issue #213: whether the generated script needs the download helper
+    // (and its own conditional imports — os/sys/hashlib/urljoin) at all —
+    // true iff at least one field anywhere in the tree has Download enabled.
+    public static bool AnyDownloadEnabled(IReadOnlyList<ContainerNode> nodes) => nodes.Any(node => node switch
+    {
+        DataFieldNode field => field.Download,
+        GroupNode group => AnyDownloadEnabled(group.Children),
+        _ => false,
+    });
+
     public static string Render(IReadOnlyList<ContainerNode> nodes, int indent = 0)
     {
         if (nodes.Count == 0)
