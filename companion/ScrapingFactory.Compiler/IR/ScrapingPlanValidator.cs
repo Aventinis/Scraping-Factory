@@ -474,6 +474,8 @@ public static class ScrapingPlanValidator
                         return $"Selector of data field '{field.Name}' must not be empty.";
                     if (field.Mode == ExtractMode.Attribute && string.IsNullOrWhiteSpace(field.Attribute))
                         return $"Data field '{field.Name}' with mode 'Attribute' needs an attribute.";
+                    if (field.Download && field.Mode != ExtractMode.Attribute)
+                        return $"Data field '{field.Name}' has Download enabled but is not in 'Attribute' mode — there is no URL value to download.";
                     var fieldFrameError = ValidateFramePath(field.FramePath, $"data field '{field.Name}'", engine);
                     if (fieldFrameError is not null)
                         return fieldFrameError;

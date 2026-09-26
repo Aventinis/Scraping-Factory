@@ -50,6 +50,24 @@ public sealed class DataFieldNode : ContainerNode
     // when Mode == Exists (a boolean-ish presence check, not a string
     // pipeline); the extension UI hides the transform section for that mode.
     public List<FieldTransform>? Transforms { get; init; }
+
+    // Issue #213: only meaningful (and only valid, see
+    // ScrapingPlanValidator) when Mode == Attribute — the attribute's raw
+    // extracted value is treated as a URL to an embedded resource (e.g. an
+    // <img>'s src), downloaded by the generated script and replaced with
+    // the resource's own local file path instead of the bare URL. A plain
+    // non-nullable bool defaulting to false, like GroupNode.Repeating and
+    // Mode itself, since this is a per-field toggle rather than a plan-level
+    // opt-in (contrast ScrapingConfig's own nullable bool? flags, where
+    // null/false both mean "today's exact behavior" at the wire level).
+    // Container mode only for this first version — flat mode has no
+    // attribute-picking UI at all yet (ScrapingField.Attribute is wire-only,
+    // never set by any extension flow) and API mode has no Mode/Attribute
+    // concept, so extending Download to either would need that UI built
+    // first; left for a follow-up issue, the same "ship the simpler shape
+    // first" precedent OutputBlueprintTreeSchema/RequiredFieldsCheck etc.
+    // already established elsewhere in this codebase.
+    public bool Download { get; init; }
 }
 
 // Issue #169: OwnText extracts only the direct text-node children of the
