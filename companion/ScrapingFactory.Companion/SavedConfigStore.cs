@@ -147,6 +147,25 @@ public sealed class SavedConfigStore
         return results;
     }
 
+    // Issue #239: unscoped counterpart to ListByUrl — every saved config
+    // regardless of host, needed by Combined mode's component picker (a
+    // component can come from any previously-scraped site).
+    public IReadOnlyList<SavedConfigSummary> ListAll()
+    {
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT Id, Url, Name, SavedAt FROM SavedConfigs ORDER BY SavedAt DESC;";
+
+        var results = new List<SavedConfigSummary>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            results.Add(new SavedConfigSummary(
+                reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3)));
+        }
+        return results;
+    }
+
     public SavedConfigRecord? Get(long id)
     {
         using var connection = OpenConnection();

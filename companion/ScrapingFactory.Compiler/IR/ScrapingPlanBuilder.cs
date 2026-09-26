@@ -42,7 +42,21 @@ public static class ScrapingPlanBuilder
         // fits a tree just as well as Xml does and is honored instead.
         if (config.Groups is { Count: > 0 } groups)
         {
-            var groupsOutputFormat = config.OutputFormat == OutputFormat.Json ? OutputFormat.Json : OutputFormat.Xml;
+            // Issue #192: an active FLAT-schema OutputBlueprint mapping
+            // flattens the tree into denormalized rows instead of preserving
+            // its nested shape (see OutputBlueprintFlattening), so it needs
+            // the flat-mode output formats (Csv, or Json's flat array)
+            // instead of Xml/tree-Json — the same "explicit override wins"
+            // pattern Issue #86's own Json request already established over
+            // this same forced default. Issue #244's TREE-schema mapping is
+            // the opposite: it produces a real nested structure of its own,
+            // so it keeps the ordinary tree-shape formats (Xml, or tree-
+            // Json) exactly as if no mapping were active at all.
+            var isJson = config.OutputFormat == OutputFormat.Json;
+            var flattensToRows = config.OutputBlueprint is { SchemaKind: OutputBlueprintSchemaKind.Flat };
+            var groupsOutputFormat = flattensToRows
+                ? (isJson ? OutputFormat.Json : OutputFormat.Csv)
+                : (isJson ? OutputFormat.Json : OutputFormat.Xml);
             steps.Add(new ExtractGroupStep { Roots = groups });
             return new ScrapingPlan
             {
@@ -51,6 +65,56 @@ public static class ScrapingPlanBuilder
                 ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, Hardening = config.Hardening,
                 Pagination = config.Pagination, PersistentSession = config.PersistentSession ?? false,
                 ExternalConfig = config.ExternalConfig ?? false,
+                OutputBlueprint = config.OutputBlueprint,
+            };
+        }
+
+        // Issue #182: Blocks replaces Fields/Groups/Api wholesale with N
+        // independent extraction phases sharing this one NavigateStep/set of
+        // browser actions — each block resolves its own shape/output
+        // filename/format exactly like the single-shape branches below do
+        // for the whole plan, just once per block instead of once overall.
+        // ChangeDetection/Hardening are intentionally NOT carried onto the
+        // returned ScrapingPlan here (unlike every other branch) — they live
+        // per-block on PlanExtractionBlock instead, since Program.cs's
+        // /generate handler already rejects them being set on the outer
+        // config when Blocks is set. ExternalConfig is rejected outright
+        // together with Blocks (see ScrapingConfig.Blocks), so it's likewise
+        // left at its default (false) here rather than carried through.
+        if (config.Blocks is { Count: > 0 } blocksConfig)
+        {
+            var planBlocks = blocksConfig.Select((block, i) =>
+            {
+                var resolvedName = string.IsNullOrWhiteSpace(block.Name) ? $"block_{i + 1}" : block.Name.Trim();
+                var outputFileBaseName = FileNameSanitizer.SanitizeBaseName(
+                    string.IsNullOrWhiteSpace(block.OutputFileName) ? resolvedName : block.OutputFileName,
+                    $"output_{i + 1}");
+                var hasGroups = block.Groups is { Count: > 0 };
+                var outputFormat = block.OutputFormat ?? (hasGroups ? OutputFormat.Xml : OutputFormat.Csv);
+
+                return new PlanExtractionBlock
+                {
+                    Name = resolvedName,
+                    Fields = hasGroups ? null : block.Fields?.Select(field => new ExtractStep
+                    {
+                        Name = field.Name, Selector = field.Selector, Attribute = field.Attribute,
+                        FramePath = field.FramePath, Transforms = field.Transforms,
+                    }).ToList(),
+                    Groups = hasGroups ? block.Groups : null,
+                    OutputFormat = outputFormat,
+                    OutputFileBaseName = outputFileBaseName,
+                    ChangeDetection = block.ChangeDetection,
+                    Hardening = block.Hardening,
+                };
+            }).ToList();
+
+            steps.Add(new ExtractionBlockStep { Blocks = planBlocks });
+            return new ScrapingPlan
+            {
+                Steps = steps, Engine = config.Engine,
+                ScriptFileName = scriptFileName,
+                Proxy = config.Proxy, Pagination = config.Pagination,
+                PersistentSession = config.PersistentSession ?? false,
             };
         }
 
@@ -67,7 +131,16 @@ public static class ScrapingPlanBuilder
         if (config.Api is { } api)
         {
             var isJson = config.OutputFormat == OutputFormat.Json;
-            var apiOutputFormat = api.Groups is { Count: > 0 }
+            var apiHasGroups = api.Groups is { Count: > 0 };
+            // Issue #192/#244: same override as Container-Mode above — an
+            // active FLAT-schema OutputBlueprint on the tree shape (Groups)
+            // flattens it into rows at runtime (see scraper_api_grouped.
+            // py.j2's own flatten walker), so it needs the flat formats
+            // regardless of apiHasGroups; a TREE-schema mapping produces a
+            // real nested structure instead, so it keeps the ordinary
+            // tree-shape formats like an unmapped tree response would.
+            var apiFlattensToRows = apiHasGroups && config.OutputBlueprint is { SchemaKind: OutputBlueprintSchemaKind.Flat };
+            var apiOutputFormat = (apiHasGroups && !apiFlattensToRows)
                 ? (isJson ? OutputFormat.Json : OutputFormat.Xml)
                 : (isJson ? OutputFormat.Json : OutputFormat.Csv);
             steps.Add(new ApiCallStep { Config = api });
@@ -78,6 +151,7 @@ public static class ScrapingPlanBuilder
                 ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, Hardening = config.Hardening,
                 PersistentSession = config.PersistentSession ?? false,
                 ExternalConfig = config.ExternalConfig ?? false,
+                OutputBlueprint = config.OutputBlueprint,
             };
         }
 
@@ -95,6 +169,7 @@ public static class ScrapingPlanBuilder
             ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, Hardening = config.Hardening,
             Pagination = config.Pagination, PersistentSession = config.PersistentSession ?? false,
             ExternalConfig = config.ExternalConfig ?? false,
+            OutputBlueprint = config.OutputBlueprint,
         };
     }
 

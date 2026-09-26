@@ -14,7 +14,8 @@
     "fieldNamePlaceholder": "Nombre del campo",
     "attributePlaceholder": "Atributo",
     "noMatches": "Sin coincidencias en la grabación.",
-    "noRecordArray": "No se encontró ningún array de registros — no se puede usar como fuente."
+    "noRecordArray": "No se encontró ningún array de registros — no se puede usar como fuente.",
+    "edit": "Editar"
   },
   "language": {
     "label": "Idioma"
@@ -42,6 +43,13 @@
     "modeFlat": "Campos (plano)",
     "modeContainer": "Contenedores (anidado)",
     "modeApi": "API",
+    "modeCombined": "Combinado",
+    "combinedHint": "Combina varias de tus configuraciones ya guardadas — incluso de sitios distintos — en un solo script cuyos resultados se combinan en un único resultado.",
+    "combinedAddBtn": "+ Añadir componente",
+    "combinedNoSavedConfigsHint": "Todavía no hay configuraciones guardadas — guarda al menos dos configuraciones primero (en otro modo) y combínalas aquí.",
+    "combinedNamePlaceholder": "Nombre",
+    "combinedComponentMissing": "ya no disponible",
+    "combinedPickerOption": "{name} ({host})",
     "addFieldBtn": "+ Añadir campo",
     "addContainerBtn": "+ Añadir contenedor",
     "apiCaptureTitle": "Registra las solicitudes de red fetch/XHR de esta página",
@@ -141,7 +149,25 @@
     "hardeningBlockingPhrasesLabel": "Frases de bloqueo (una por línea)",
     "hardeningBlockingPhrasesPlaceholder": "p. ej. \"Access Denied\", \"Por favor verifica que eres humano\"",
     "hardeningRequiredFieldsToggle": "Exigir campos (descartar filas incompletas)",
-    "hardeningRequiredFieldsAddBtn": "+ Añadir campo"
+    "hardeningRequiredFieldsAddBtn": "+ Añadir campo",
+    "modeBlocks": "Bloques",
+    "blocksHint": "Crea varios bloques de extracción independientes (planos o de contenedor, combinados libremente) que comparten la navegación de esta página; cada uno escribe su propio archivo de salida en una sola ejecución del script.",
+    "blocksNameLabel": "Nombre del bloque",
+    "blocksNamePlaceholder": "p. ej. Ofertas",
+    "blocksOutputFileNameLabel": "Nombre del archivo de salida",
+    "blocksOutputFileNamePlaceholder": "por defecto, el nombre del bloque",
+    "blocksAddBtn": "+ Añadir bloque",
+    "blocksUpdateBtn": "Actualizar bloque",
+    "blocksListLabel": "Bloques",
+    "blocksMinCountHint": "Se necesitan al menos 2 bloques para generar un script.",
+    "blocksSummaryFlat": "{count} campo(s)",
+    "blocksSummaryGroup": "{count} grupo(s)",
+    "blocksUnnamed": "(sin nombre)",
+    "outputBlueprintLabel": "Plantilla de salida",
+    "outputBlueprintNoneOption": "Ninguna",
+    "manageBlueprintsBtn": "Gestionar",
+    "outputBlueprintMappingHint": "Asigna a cada campo de destino uno de los campos de origen propios de esta configuración — cada campo de destino necesita un origen antes de poder generar el script.",
+    "outputBlueprintTreeMappingHint": "Asigna a cada campo de destino uno de los campos de origen propios de esta configuración — la posición de un grupo de destino en la salida se infiere automáticamente a partir de sus campos asignados. Cada campo de destino necesita un origen antes de poder generar el script."
   },
   "robots": {
     "checkFailed": "No se pudo comprobar el robots.txt ({error}).",
@@ -232,10 +258,17 @@
     "regexExtractOption": "Extracción con regex",
     "replaceOption": "Buscar/reemplazar",
     "toNumberOption": "Convertir a número",
+    "toIntegerOption": "Convertir a entero",
+    "toBooleanOption": "Convertir a booleano",
+    "toDateOption": "Convertir a fecha",
     "patternPlaceholder": "Patrón regex (p. ej. \"\\d+\")",
     "groupPlaceholder": "Grupo (0 = coincidencia completa)",
     "findPlaceholder": "Buscar",
     "replacementPlaceholder": "Reemplazar con",
+    "sourceFormatPlaceholder": "Formato de origen (p. ej. \"{dd}.{mm}.{yyyy}\")",
+    "onErrorKeepOriginalOption": "En caso de error: mantener valor original",
+    "onErrorUseDefaultOption": "En caso de error: usar valor predeterminado",
+    "defaultValuePlaceholder": "Valor predeterminado",
     "previewLabel": "Vista previa: {value}",
     "previewEmptyValue": "(vacío)",
     "previewUnavailable": "Vista previa no disponible (patrón no válido)"
@@ -252,7 +285,9 @@
     "saveOutputBtn": "Guardar salida",
     "dataPreviewTitle": "Vista previa de los datos de la prueba",
     "dataPreviewTruncatedCsv": "Mostrando {shown} de {total} filas — truncado",
-    "dataPreviewTruncatedXml": "Extracto — no se muestran todos los datos"
+    "dataPreviewTruncatedXml": "Extracto — no se muestran todos los datos",
+    "blocksOutputTitle": "Salidas de los bloques",
+    "blocksOutputDownloadBtn": "Descargar"
   },
   "modals": {
     "fieldName": {
@@ -305,12 +340,34 @@
     },
     "matchCount": {
       "found": "{count} elemento(s) encontrado(s)"
+    },
+    "manageBlueprints": {
+      "title": "Plantillas de salida",
+      "empty": "Todavía no hay plantillas de salida guardadas.",
+      "newBtn": "+ Nueva plantilla"
+    },
+    "blueprintEdit": {
+      "nameLabel": "Nombre de la plantilla (p. ej. \"Exportación estándar de productos\")",
+      "namePlaceholder": "Nombre",
+      "flatSchemaBtn": "Plano",
+      "treeSchemaBtn": "Árbol",
+      "fieldsLabel": "Campos de destino (en el orden de salida)",
+      "treeLabel": "Estructura del árbol de destino",
+      "fieldNamePlaceholder": "Nombre del campo",
+      "addFieldBtn": "+ Añadir campo",
+      "addGroupBtn": "+ Añadir grupo",
+      "importLabel": "Importar desde una muestra (JSON, fila de encabezado CSV o una lista simple de nombres de campo)",
+      "importPlaceholder": "Pega una muestra JSON, una fila de encabezado CSV o un nombre de campo por línea…",
+      "importBtn": "Analizar y rellenar campos",
+      "save": "Guardar",
+      "editBtn": "Editar"
     }
   },
   "toast": {
     "verificationFailed": "Error al verificar la configuración.",
     "configInvalid": "Configuración no válida: {message}",
     "generationError": "Error: {message}",
+    "combinedComponentUnresolvable": "No se pudo cargar el componente \"{name}\" — es posible que su configuración guardada haya sido eliminada.",
     "selectionUnavailable": "No es posible seleccionar elementos en esta página.",
     "scopeSelectorNotFound": "Ya no se pudo encontrar el punto de referencia seleccionado — la página cambió mientras tanto (p. ej. un estado de hover o de carga). Inténtalo de nuevo o elige otro punto de partida.",
     "clickOutsideScope": "Selecciona un elemento dentro de un contenedor.",
@@ -328,7 +385,14 @@
     "outputSaveFailed": "No se pudo guardar la salida: {message}",
     "outputLoadFailed": "No se pudo cargar la salida: {message}",
     "outputDeleted": "Salida eliminada.",
-    "outputDeleteFailed": "No se pudo eliminar la salida: {message}"
+    "outputDeleteFailed": "No se pudo eliminar la salida: {message}",
+    "blueprintLoadFailed": "No se pudo cargar la plantilla de salida: {message}",
+    "blueprintDeleted": "Plantilla de salida eliminada.",
+    "blueprintDeleteFailed": "No se pudo eliminar la plantilla de salida: {message}",
+    "blueprintSaved": "Plantilla de salida guardada.",
+    "blueprintSaveFailed": "No se pudo guardar la plantilla de salida: {message}",
+    "blueprintImportEmpty": "No se encontraron nombres de campo en la muestra pegada.",
+    "blueprintImportParsed": "Se importaron {count} campo(s) de la muestra."
   },
   "frame": {
     "badge": "iframe",

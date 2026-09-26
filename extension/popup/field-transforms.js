@@ -15,6 +15,9 @@ const SFFieldTransforms = (function () {
       case 'regexExtract': return { kind: 'regexExtract', pattern: '', group: 0 };
       case 'replace': return { kind: 'replace', find: '', replacement: '' };
       case 'toNumber': return { kind: 'toNumber' };
+      case 'toInteger': return { kind: 'toInteger', onError: 'KeepOriginal', defaultValue: '' };
+      case 'toBoolean': return { kind: 'toBoolean', onError: 'KeepOriginal', defaultValue: '' };
+      case 'toDate': return { kind: 'toDate', sourceFormat: '{yyyy}-{mm}-{dd}', onError: 'KeepOriginal', defaultValue: '' };
       case 'trim':
       default: return { kind: 'trim' };
     }
@@ -54,9 +57,17 @@ const SFFieldTransforms = (function () {
   // for Attribute mode (see confirmExtendedField) — an empty regex pattern
   // can never usefully match anything, so failing fast here avoids a round
   // trip to the companion's own FieldTransformValidator just to learn the
-  // same thing.
+  // same thing. Issue #205: a blank toDate sourceFormat is the same kind of
+  // "can never usefully match anything" case; toInteger/toBoolean's
+  // onError/defaultValue never reach an invalid state through this UI (the
+  // default value input always starts at '', never null), so they need no
+  // check here.
   function transformsAreValid(transforms) {
-    return transforms.every(t => t.kind !== 'regexExtract' || t.pattern.trim() !== '');
+    return transforms.every(t => {
+      if (t.kind === 'regexExtract') return t.pattern.trim() !== '';
+      if (t.kind === 'toDate') return t.sourceFormat.trim() !== '';
+      return true;
+    });
   }
 
   // Issue #143: hand-kept JS mirror of the Python runtime's own _to_number
@@ -80,6 +91,76 @@ const SFFieldTransforms = (function () {
       return raw.replace(/[.,]/g, '');
     }
     return raw.replace(',', '.');
+  }
+
+  // Issue #205: hand-kept JS mirrors of the Python runtime's own
+  // _to_integer/_to_boolean/_to_date (see any of the eight .py.j2
+  // templates) — same "both sides must independently reach the same
+  // result" pattern toNumberPreview already has to _to_number. Each
+  // returns null on conversion failure (distinct from a valid, possibly
+  // empty, converted string) so applyTransformsPreview below can apply the
+  // transform's own onError/defaultValue the same way _apply_transforms
+  // does, rather than the generic "preview unavailable" regexExtract uses
+  // for an outright invalid pattern.
+  function toIntegerPreview(value) {
+    const trimmed = value.trim();
+    return /^[+-]?\d+$/.test(trimmed) ? String(parseInt(trimmed, 10)) : null;
+  }
+
+  function toBooleanPreview(value) {
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'y'].includes(normalized)) return 'True';
+    if (['false', '0', 'no', 'n'].includes(normalized)) return 'False';
+    return null;
+  }
+
+  function escapeRegExpLiteral(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  const DATE_FORMAT_TOKEN_PATTERNS = { yyyy: '(?<yyyy>\\d{4})', mm: '(?<mm>\\d{1,2})', dd: '(?<dd>\\d{1,2})' };
+
+  // Mirrors RangeFormat.cs's CompilePattern (escape the literal template,
+  // then substitute each "{token}" placeholder for its own named capture
+  // group) — the same mini-template syntax RangeSource.Format already uses
+  // for ISO week/date API parameters. Unlike RegexExtractTransform.Pattern,
+  // sourceFormat is never itself treated as regex syntax (every character
+  // that isn't one of the three known tokens is escaped first), so — unlike
+  // regexExtract's "invalid pattern" case — there's no "the format itself
+  // is broken" outcome to report separately; any mismatch (wrong shape,
+  // wrong token, or a structurally-valid but non-existent calendar date)
+  // is just a conversion failure, handled by the caller's onError contract.
+  function toDatePreview(value, sourceFormat) {
+    let pattern = escapeRegExpLiteral(sourceFormat);
+    for (const [token, tokenPattern] of Object.entries(DATE_FORMAT_TOKEN_PATTERNS)) {
+      pattern = pattern.replaceAll(escapeRegExpLiteral(`{${token}}`), tokenPattern);
+    }
+    const match = new RegExp(`^${pattern}$`).exec(value.trim());
+    if (!match || !match.groups) return null;
+    const yyyy = parseInt(match.groups.yyyy, 10);
+    const mm = parseInt(match.groups.mm, 10);
+    const dd = parseInt(match.groups.dd, 10);
+    const d = new Date(Date.UTC(yyyy, mm - 1, dd));
+    // A structural match doesn't guarantee a real calendar date (e.g.
+    // "2026-02-30") — JS's own Date rolls invalid day-of-month values over
+    // into the next month instead of raising, so the roll-over is detected
+    // by checking the constructed date's own fields didn't move, the same
+    // check Python's date() raising ValueError gives us for free server-side.
+    if (d.getUTCFullYear() !== yyyy || d.getUTCMonth() !== mm - 1 || d.getUTCDate() !== dd) return null;
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${yyyy}-${pad(mm)}-${pad(dd)}`;
+  }
+
+  // converted is the conversion's own result: a converted string on
+  // success, or null on failure (see toIntegerPreview/toBooleanPreview/
+  // toDatePreview above). On failure this applies the transform's own
+  // onError contract exactly like the Python runtime's
+  // _type_conversion_fallback: "KeepOriginal" passes currentValue through
+  // unchanged (the chain keeps going, it does NOT mean "preview
+  // unavailable"), "UseDefault" substitutes defaultValue.
+  function typeConversionFallback(currentValue, t, converted) {
+    if (converted !== null) return converted;
+    return t.onError === 'UseDefault' ? (t.defaultValue ?? '') : currentValue;
   }
 
   // Issue #143: applies the chain against a raw picked value the same way
@@ -117,6 +198,15 @@ const SFFieldTransforms = (function () {
         case 'toNumber':
           value = toNumberPreview(value);
           break;
+        case 'toInteger':
+          value = typeConversionFallback(value, t, toIntegerPreview(value));
+          break;
+        case 'toBoolean':
+          value = typeConversionFallback(value, t, toBooleanPreview(value));
+          break;
+        case 'toDate':
+          value = typeConversionFallback(value, t, toDatePreview(value, t.sourceFormat || ''));
+          break;
       }
     }
     return value;
@@ -125,7 +215,8 @@ const SFFieldTransforms = (function () {
   return {
     createDefaultTransform, addTransform, removeTransform, updateTransform,
     changeTransformKind, moveTransform, transformsAreValid,
-    toNumberPreview, applyTransformsPreview,
+    toNumberPreview, toIntegerPreview, toBooleanPreview, toDatePreview,
+    applyTransformsPreview,
   };
 })();
 

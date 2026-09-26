@@ -14,7 +14,8 @@
     "fieldNamePlaceholder": "Field name",
     "attributePlaceholder": "Attribute",
     "noMatches": "No matches in the recording.",
-    "noRecordArray": "No record array found — can't be used as a source."
+    "noRecordArray": "No record array found — can't be used as a source.",
+    "edit": "Edit"
   },
   "language": {
     "label": "Language"
@@ -42,6 +43,13 @@
     "modeFlat": "Fields (flat)",
     "modeContainer": "Containers (nested)",
     "modeApi": "API",
+    "modeCombined": "Combined",
+    "combinedHint": "Merges several of your own already-saved configurations — even from different sites — into one script whose outputs are combined into a single result.",
+    "combinedAddBtn": "+ Add component",
+    "combinedNoSavedConfigsHint": "No saved configurations yet — save at least two configurations first (in another mode), then combine them here.",
+    "combinedNamePlaceholder": "Name",
+    "combinedComponentMissing": "no longer available",
+    "combinedPickerOption": "{name} ({host})",
     "addFieldBtn": "+ Add field",
     "addContainerBtn": "+ Add container",
     "apiCaptureTitle": "Records this page's fetch/XHR network requests",
@@ -141,7 +149,25 @@
     "hardeningBlockingPhrasesLabel": "Block phrases (one per line)",
     "hardeningBlockingPhrasesPlaceholder": "e.g. \"Access Denied\", \"Please verify you are human\"",
     "hardeningRequiredFieldsToggle": "Require fields (drop incomplete rows)",
-    "hardeningRequiredFieldsAddBtn": "+ Add field"
+    "hardeningRequiredFieldsAddBtn": "+ Add field",
+    "modeBlocks": "Blocks",
+    "blocksHint": "Builds several independent extraction blocks (flat or container, freely mixed) sharing this page’s navigation — each writes its own output file in one script run.",
+    "blocksNameLabel": "Block name",
+    "blocksNamePlaceholder": "e.g. Offers",
+    "blocksOutputFileNameLabel": "Output file name",
+    "blocksOutputFileNamePlaceholder": "defaults to the block name",
+    "blocksAddBtn": "+ Add block",
+    "blocksUpdateBtn": "Update block",
+    "blocksListLabel": "Blocks",
+    "blocksMinCountHint": "At least 2 blocks are required to generate a script.",
+    "blocksSummaryFlat": "{count} field(s)",
+    "blocksSummaryGroup": "{count} group(s)",
+    "blocksUnnamed": "(unnamed)",
+    "outputBlueprintLabel": "Output blueprint",
+    "outputBlueprintNoneOption": "None",
+    "manageBlueprintsBtn": "Manage",
+    "outputBlueprintMappingHint": "Map each target field to one of this configuration's own source fields — every target field needs a source before the script can be generated.",
+    "outputBlueprintTreeMappingHint": "Map each target field to one of this configuration's own source fields — a target group's own position in the output is inferred automatically from its mapped fields. Every target field needs a source before the script can be generated."
   },
   "robots": {
     "checkFailed": "robots.txt could not be checked ({error}).",
@@ -232,10 +258,17 @@
     "regexExtractOption": "Regex extract",
     "replaceOption": "Find/replace",
     "toNumberOption": "Convert to number",
+    "toIntegerOption": "Convert to integer",
+    "toBooleanOption": "Convert to boolean",
+    "toDateOption": "Convert to date",
     "patternPlaceholder": "Regex pattern (e.g. \"\\d+\")",
     "groupPlaceholder": "Group (0 = whole match)",
     "findPlaceholder": "Find",
     "replacementPlaceholder": "Replace with",
+    "sourceFormatPlaceholder": "Source format (e.g. \"{dd}.{mm}.{yyyy}\")",
+    "onErrorKeepOriginalOption": "On failure: keep original value",
+    "onErrorUseDefaultOption": "On failure: use default value",
+    "defaultValuePlaceholder": "Default value",
     "previewLabel": "Preview: {value}",
     "previewEmptyValue": "(empty)",
     "previewUnavailable": "Preview unavailable (invalid pattern)"
@@ -252,7 +285,9 @@
     "saveOutputBtn": "Save output",
     "dataPreviewTitle": "Trial-run data preview",
     "dataPreviewTruncatedCsv": "Showing {shown} of {total} rows — truncated",
-    "dataPreviewTruncatedXml": "Excerpt — not all data is shown"
+    "dataPreviewTruncatedXml": "Excerpt — not all data is shown",
+    "blocksOutputTitle": "Block outputs",
+    "blocksOutputDownloadBtn": "Download"
   },
   "modals": {
     "fieldName": {
@@ -305,12 +340,34 @@
     },
     "matchCount": {
       "found": "{count} element(s) found"
+    },
+    "manageBlueprints": {
+      "title": "Output blueprints",
+      "empty": "No output blueprints saved yet.",
+      "newBtn": "+ New blueprint"
+    },
+    "blueprintEdit": {
+      "nameLabel": "Blueprint name (e.g. \"Standard product export\")",
+      "namePlaceholder": "Name",
+      "flatSchemaBtn": "Flat",
+      "treeSchemaBtn": "Tree",
+      "fieldsLabel": "Target fields (in output order)",
+      "treeLabel": "Target tree structure",
+      "fieldNamePlaceholder": "Field name",
+      "addFieldBtn": "+ Add field",
+      "addGroupBtn": "+ Add group",
+      "importLabel": "Import from a sample (JSON, CSV header row, or a plain field-name list)",
+      "importPlaceholder": "Paste a JSON sample, a CSV header row, or one field name per line…",
+      "importBtn": "Parse & fill fields",
+      "save": "Save",
+      "editBtn": "Edit"
     }
   },
   "toast": {
     "verificationFailed": "Configuration verification failed.",
     "configInvalid": "Invalid configuration: {message}",
     "generationError": "Error: {message}",
+    "combinedComponentUnresolvable": "Component \"{name}\" could not be loaded — its saved configuration may have been deleted.",
     "selectionUnavailable": "Element selection isn't possible on this page.",
     "scopeSelectorNotFound": "The selected reference point could no longer be found — the page changed in the meantime (e.g. a hover or loading state). Please try again or pick a different starting point.",
     "clickOutsideScope": "Please select an element inside a container.",
@@ -328,7 +385,14 @@
     "outputSaveFailed": "Could not save output: {message}",
     "outputLoadFailed": "Could not load output: {message}",
     "outputDeleted": "Output deleted.",
-    "outputDeleteFailed": "Could not delete output: {message}"
+    "outputDeleteFailed": "Could not delete output: {message}",
+    "blueprintLoadFailed": "Could not load output blueprint: {message}",
+    "blueprintDeleted": "Output blueprint deleted.",
+    "blueprintDeleteFailed": "Could not delete output blueprint: {message}",
+    "blueprintSaved": "Output blueprint saved.",
+    "blueprintSaveFailed": "Could not save output blueprint: {message}",
+    "blueprintImportEmpty": "Could not find any field names in the pasted sample.",
+    "blueprintImportParsed": "Imported {count} field(s) from the sample."
   },
   "frame": {
     "badge": "iframe",

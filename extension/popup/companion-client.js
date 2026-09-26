@@ -54,6 +54,17 @@ async function checkCompanion(bridge) {
     // once (or if) it resolves, no need to await/block the IDLE transition
     // on it.
     if (url) bridge.fetchSavedConfigs(url);
+    // Issue #239: fetched unconditionally alongside the hostname-scoped list
+    // above (not gated on the restored mode actually being 'combined') —
+    // simpler than chasing the exact ordering between this health check and
+    // session-restore's own mode restoration, and just as cheap/harmless as
+    // fetchSavedConfigs itself when Combined mode never ends up being used
+    // this session.
+    bridge.fetchAllSavedConfigs();
+    // Issue #191: fetched unconditionally like fetchAllSavedConfigs above —
+    // a blueprint is reusable across any site/mode, so there's no "current
+    // mode" gate to wait for either.
+    bridge.fetchOutputBlueprints();
   } catch (err) {
     log('HEALTH_CHECK FAIL', err.message);
     setLastError(err.message, 'Companion connection');
@@ -120,15 +131,48 @@ function buildVerificationErrorMessage(data) {
   return data?.error || t('toast.verificationFailed');
 }
 
+// Issue #239: a component in _state.combinedComponents only ever stores
+// {savedConfigId, name} — its full underlying ScrapingConfig is resolved
+// live here (GET /configs/{id}) at generate/save/export time, never cached
+// from whenever it was picked, so editing/re-saving the source config
+// elsewhere is picked up automatically. Throws (naming the offending
+// component) if a referenced saved configuration no longer exists — callers
+// surface that the same way any other generation failure already is.
+async function resolveCombinedComponents(components) {
+  const resolved = [];
+  for (const component of components) {
+    const res = await fetch(`${getResolvedCompanionUrl()}/configs/${component.savedConfigId}`);
+    if (!res.ok) throw new Error(t('toast.combinedComponentUnresolvable', { name: component.name }));
+    const record = await res.json();
+    resolved.push({ name: component.name, config: record.config, savedConfigId: component.savedConfigId });
+  }
+  return resolved;
+}
+
 async function generate(bridge) {
   bridge.stopPreviewIfActive();
   bridge.setState(STATES.GENERATING);
   const state = bridge.getState();
+
+  let combinedComponents = null;
+  if (state.mode === 'combined') {
+    try {
+      combinedComponents = await resolveCombinedComponents(state.combinedComponents || []);
+    } catch (err) {
+      log('GENERATE COMBINED RESOLVE FAIL', err.message);
+      bridge.setState(STATES.IDLE);
+      showToast(t('toast.generationError', { message: err.message }), 'Script generation');
+      return;
+    }
+  }
+
   const config = buildScrapingConfig(
     state.url, state.mode, state.fields, state.groups, state.apiConfig,
     state.scriptFileName, state.outputFileName, state.engine, state.browserActions, state.includeDataPreview,
     state.useJsonOutput, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
-    state.pagination, state.persistentSession, state.includeOutputFile, state.externalConfig,
+    state.pagination, state.persistentSession, state.includeOutputFile, state.externalConfig, combinedComponents,
+    state.blocks, state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
+    state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
@@ -176,18 +220,29 @@ async function generate(bridge) {
     let scriptText;
     let dataPreview = null;
     let outputFile = null;
+    let blocksOutput = null;
     if (state.includeDataPreview || state.includeOutputFile) {
       const data = await res.json();
       scriptText = data.script;
-      dataPreview = data.preview ?? null;
-      outputFile = data.outputFile ?? null;
+      // Issue #182: Blocks mode's own envelope is { script, blocks: [...] }
+      // instead of { script, preview, outputFile } — self-describes via the
+      // presence of `blocks` rather than branching on state.mode, so this
+      // stays correct even if a Blocks response somehow arrives outside the
+      // Blocks-mode code path.
+      if (Array.isArray(data.blocks)) {
+        blocksOutput = data.blocks;
+      } else {
+        dataPreview = data.preview ?? null;
+        outputFile = data.outputFile ?? null;
+      }
     } else {
       scriptText = await res.text();
     }
     log('GENERATE OK', `${scriptText.length} chars` +
       (dataPreview ? `, preview: ${dataPreview.totalCount} rows/elements` : '') +
-      (outputFile ? `, outputFile: ${outputFile.fileName} (${outputFile.content.length} chars)` : ''));
-    bridge.setState(STATES.DONE, { scriptText, dataPreview, outputFile });
+      (outputFile ? `, outputFile: ${outputFile.fileName} (${outputFile.content.length} chars)` : '') +
+      (blocksOutput ? `, blocks: ${blocksOutput.length}` : ''));
+    bridge.setState(STATES.DONE, { scriptText, dataPreview, outputFile, blocksOutput });
   } catch (err) {
     log('GENERATE FAIL', err.message);
     bridge.setState(STATES.IDLE);
@@ -228,7 +283,7 @@ function wireCompanionErrorEvents(bridge) {
 }
 
   return {getResolvedCompanionUrl, checkCompanion, useCustomCompanionUrl, resetCustomCompanionUrl,
-    checkRobotsTxt, buildVerificationErrorMessage, generate,
+    checkRobotsTxt, buildVerificationErrorMessage, generate, resolveCombinedComponents,
     renderCompanionErrorScreen, wireCompanionErrorEvents,};
 })();
 

@@ -65,121 +65,31 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
         TimeSpan extraTimeout = default, IReadOnlyDictionary<string, string>? extraEnvironmentVariables = null,
         bool includePreview = false, bool includeOutputFile = false, CancellationToken ct = default)
     {
-        var effectiveTimeout = _timeout + extraTimeout;
         var workDir = Directory.CreateTempSubdirectory("scrapingfactory-verify-").FullName;
         try
         {
-            var scriptPath = Path.Combine(workDir, "scraper.py");
-            await File.WriteAllTextAsync(scriptPath, script, ct);
+            var run = await RunScriptAsync(script, workDir, extraTimeout, extraEnvironmentVariables, ct);
+            if (!run.RanCleanly)
+                return new ScriptVerificationResult { Success = false, Error = run.Error };
 
-            var (process, executableUsed) = StartProcess(scriptPath, workDir, extraEnvironmentVariables);
-            if (process is null)
+            // A FillStep with a missing credential exits before writing any
+            // output at all (it can't meaningfully continue) — in that case,
+            // surface its own clean stderr message instead of falling
+            // through to the generic "did not produce X" below. Proxy's own
+            // missing-var case still writes real output (see the doc comment
+            // on MissingEnvVarExitCode above), so this only short-circuits
+            // when there's genuinely nothing to verify.
+            if (run.ExitCode == MissingEnvVarExitCode &&
+                !File.Exists(Path.Combine(workDir, ExpectedFileName(outputFormat, outputFileBaseName))))
             {
-                return new ScriptVerificationResult
-                {
-                    Success = false,
-                    Error = $"No Python interpreter found (tried: {string.Join(", ", _candidates)}). " +
-                            "Is Python installed and available on the companion app's PATH?",
-                };
+                return new ScriptVerificationResult { Success = false, Error = Truncate(run.Stderr) };
             }
 
-            using (process)
+            return outputFormat switch
             {
-                var stderrBuilder = new StringBuilder();
-                process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderrBuilder.AppendLine(e.Data); };
-                process.BeginErrorReadLine();
-                var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
-
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                timeoutCts.CancelAfter(effectiveTimeout);
-                try
-                {
-                    await process.WaitForExitAsync(timeoutCts.Token);
-                }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-                {
-                    TryKill(process);
-                    return new ScriptVerificationResult
-                    {
-                        Success = false,
-                        Error = $"Script execution exceeded the {effectiveTimeout.TotalSeconds:0}s timeout.",
-                    };
-                }
-                await stdoutTask;
-
-                if (process.ExitCode != 0 && process.ExitCode != MissingEnvVarExitCode && process.ExitCode != HardeningFailedExitCode)
-                {
-                    return new ScriptVerificationResult
-                    {
-                        Success = false,
-                        Error = $"Script ({executableUsed}) exited with an error (exit code {process.ExitCode}): " +
-                                Truncate(stderrBuilder.ToString()),
-                    };
-                }
-
-                // A FillStep with a missing credential exits before writing
-                // any output at all (it can't meaningfully continue) — in
-                // that case, surface its own clean stderr message instead of
-                // falling through to the generic "did not produce X" below.
-                // Proxy's own missing-var case still writes real output
-                // (see the doc comment on MissingEnvVarExitCode above), so
-                // this only short-circuits when there's genuinely nothing to
-                // verify.
-                if (process.ExitCode == MissingEnvVarExitCode)
-                {
-                    var expectedFileName = outputFormat switch
-                    {
-                        OutputFormat.Xml => $"{outputFileBaseName}.xml",
-                        OutputFormat.Json => $"{outputFileBaseName}.json",
-                        _ => $"{outputFileBaseName}.csv",
-                    };
-                    if (!File.Exists(Path.Combine(workDir, expectedFileName)))
-                    {
-                        return new ScriptVerificationResult { Success = false, Error = Truncate(stderrBuilder.ToString()) };
-                    }
-                }
-            }
-
-            if (outputFormat == OutputFormat.Xml)
-                return VerifyXmlOutput(workDir, outputFileBaseName, includePreview, includeOutputFile);
-
-            if (outputFormat == OutputFormat.Json)
-                return VerifyJsonOutput(workDir, outputFileBaseName, includePreview, includeOutputFile);
-
-            var csvFileName = $"{outputFileBaseName}.csv";
-            var csvPath = Path.Combine(workDir, csvFileName);
-            if (!File.Exists(csvPath))
-            {
-                return new ScriptVerificationResult { Success = false, Error = $"Script did not produce {csvFileName}." };
-            }
-
-            var lines = await File.ReadAllLinesAsync(csvPath, ct);
-            var rowCount = Math.Max(0, lines.Length - 1); // minus header row
-
-            // Also covers API-Mode's 0-combinations edge case (a
-            // DiscoverySource resolving to no values at runtime, despite
-            // ScrapingPlanValidator requiring at least one parameter with a
-            // non-empty static list/range at config time) — treated
-            // identically to any other 0-row result, not a special case.
-            if (rowCount == 0)
-            {
-                return new ScriptVerificationResult
-                {
-                    Success = false,
-                    Error = "Script ran without errors but returned no data " +
-                            $"({csvFileName} contains only the header row) — at least one selector or request likely found nothing.",
-                };
-            }
-
-            return new ScriptVerificationResult
-            {
-                Success = true, RowCount = rowCount,
-                Preview = includePreview ? BuildCsvPreview(lines, rowCount) : null,
-                // Issue #161: the raw file as written, not reconstructed from
-                // `lines` (join/line-ending differences would make the
-                // download not byte-identical to what the script produced).
-                OutputFileContent = includeOutputFile ? await File.ReadAllTextAsync(csvPath, ct) : null,
-                OutputFileName = includeOutputFile ? csvFileName : null,
+                OutputFormat.Xml => VerifyXmlOutput(workDir, outputFileBaseName, includePreview, includeOutputFile),
+                OutputFormat.Json => VerifyJsonOutput(workDir, outputFileBaseName, includePreview, includeOutputFile),
+                _ => await VerifyCsvOutput(workDir, outputFileBaseName, includePreview, includeOutputFile, ct),
             };
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -190,6 +100,167 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
         {
             try { Directory.Delete(workDir, recursive: true); } catch { /* best-effort cleanup */ }
         }
+    }
+
+    // Issue #182: runs the script exactly once (same subprocess as
+    // VerifyAsync), then checks every block's own output file instead of
+    // one — a single block failing (no data, missing file, parse error)
+    // fails the whole call, prefixed with which block it was, since a
+    // partially-successful multi-output run isn't a state the caller (or
+    // the /generate response envelope) has any use for.
+    public async Task<ScriptVerificationResult> VerifyBlocksAsync(
+        string script, IReadOnlyList<BlockOutputSpec> blocks,
+        TimeSpan extraTimeout = default, IReadOnlyDictionary<string, string>? extraEnvironmentVariables = null,
+        bool includePreview = false, bool includeOutputFile = false, CancellationToken ct = default)
+    {
+        var workDir = Directory.CreateTempSubdirectory("scrapingfactory-verify-").FullName;
+        try
+        {
+            var run = await RunScriptAsync(script, workDir, extraTimeout, extraEnvironmentVariables, ct);
+            if (!run.RanCleanly)
+                return new ScriptVerificationResult { Success = false, Error = run.Error };
+
+            // Same reasoning as VerifyAsync's own MissingEnvVarExitCode
+            // short-circuit, generalized to "not even one block produced a
+            // file" — a FillStep failing before extraction ever starts
+            // means every block is equally affected, not just one.
+            if (run.ExitCode == MissingEnvVarExitCode &&
+                !blocks.Any(block => File.Exists(Path.Combine(workDir, ExpectedFileName(block.OutputFormat, block.OutputFileBaseName)))))
+            {
+                return new ScriptVerificationResult { Success = false, Error = Truncate(run.Stderr) };
+            }
+
+            var blockResults = new List<BlockVerificationResult>();
+            foreach (var block in blocks)
+            {
+                var single = block.OutputFormat switch
+                {
+                    OutputFormat.Xml => VerifyXmlOutput(workDir, block.OutputFileBaseName, includePreview, includeOutputFile),
+                    OutputFormat.Json => VerifyJsonOutput(workDir, block.OutputFileBaseName, includePreview, includeOutputFile),
+                    _ => await VerifyCsvOutput(workDir, block.OutputFileBaseName, includePreview, includeOutputFile, ct),
+                };
+                if (!single.Success)
+                    return new ScriptVerificationResult { Success = false, Error = $"Block '{block.Name}': {single.Error}" };
+
+                blockResults.Add(new BlockVerificationResult
+                {
+                    Name = block.Name, RowCount = single.RowCount, Preview = single.Preview,
+                    OutputFileContent = single.OutputFileContent, OutputFileName = single.OutputFileName,
+                });
+            }
+
+            return new ScriptVerificationResult { Success = true, Blocks = blockResults };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return new ScriptVerificationResult { Success = false, Error = $"Verification failed: {ex.Message}" };
+        }
+        finally
+        {
+            try { Directory.Delete(workDir, recursive: true); } catch { /* best-effort cleanup */ }
+        }
+    }
+
+    private static string ExpectedFileName(OutputFormat format, string baseName) => format switch
+    {
+        OutputFormat.Xml => $"{baseName}.xml",
+        OutputFormat.Json => $"{baseName}.json",
+        _ => $"{baseName}.csv",
+    };
+
+    // Shared by VerifyAsync/VerifyBlocksAsync: writes the script, spawns it,
+    // and waits — everything before "now check the output file(s)", which is
+    // the one part that genuinely differs between the two callers (one file
+    // vs. N). RanCleanly false means Error is already the full, final
+    // ScriptVerificationResult.Error the caller should return as-is;
+    // RanCleanly true hands back the raw ExitCode/Stderr so each caller can
+    // still apply its own MissingEnvVarExitCode short-circuit before
+    // deciding the run is genuinely usable.
+    private async Task<(bool RanCleanly, string? Error, int ExitCode, string Stderr)> RunScriptAsync(
+        string script, string workDir, TimeSpan extraTimeout,
+        IReadOnlyDictionary<string, string>? extraEnvironmentVariables, CancellationToken ct)
+    {
+        var effectiveTimeout = _timeout + extraTimeout;
+        var scriptPath = Path.Combine(workDir, "scraper.py");
+        await File.WriteAllTextAsync(scriptPath, script, ct);
+
+        var (process, executableUsed) = StartProcess(scriptPath, workDir, extraEnvironmentVariables);
+        if (process is null)
+        {
+            return (false,
+                $"No Python interpreter found (tried: {string.Join(", ", _candidates)}). " +
+                "Is Python installed and available on the companion app's PATH?", -1, "");
+        }
+
+        using (process)
+        {
+            var stderrBuilder = new StringBuilder();
+            process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderrBuilder.AppendLine(e.Data); };
+            process.BeginErrorReadLine();
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
+
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(effectiveTimeout);
+            try
+            {
+                await process.WaitForExitAsync(timeoutCts.Token);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                TryKill(process);
+                return (false, $"Script execution exceeded the {effectiveTimeout.TotalSeconds:0}s timeout.", -1, "");
+            }
+            await stdoutTask;
+
+            var stderr = stderrBuilder.ToString();
+            if (process.ExitCode != 0 && process.ExitCode != MissingEnvVarExitCode && process.ExitCode != HardeningFailedExitCode)
+            {
+                return (false,
+                    $"Script ({executableUsed}) exited with an error (exit code {process.ExitCode}): {Truncate(stderr)}",
+                    process.ExitCode, stderr);
+            }
+
+            return (true, null, process.ExitCode, stderr);
+        }
+    }
+
+    // CSV output check, factored out of VerifyAsync so VerifyBlocksAsync can
+    // call it once per block — "at least one data row" (Also covers
+    // API-Mode's 0-combinations edge case: a DiscoverySource resolving to no
+    // values at runtime, despite ScrapingPlanValidator requiring at least
+    // one parameter with a non-empty static list/range at config time —
+    // treated identically to any other 0-row result, not a special case).
+    private static async Task<ScriptVerificationResult> VerifyCsvOutput(
+        string workDir, string outputFileBaseName, bool includePreview, bool includeOutputFile, CancellationToken ct)
+    {
+        var csvFileName = $"{outputFileBaseName}.csv";
+        var csvPath = Path.Combine(workDir, csvFileName);
+        if (!File.Exists(csvPath))
+            return new ScriptVerificationResult { Success = false, Error = $"Script did not produce {csvFileName}." };
+
+        var lines = await File.ReadAllLinesAsync(csvPath, ct);
+        var rowCount = Math.Max(0, lines.Length - 1); // minus header row
+
+        if (rowCount == 0)
+        {
+            return new ScriptVerificationResult
+            {
+                Success = false,
+                Error = "Script ran without errors but returned no data " +
+                        $"({csvFileName} contains only the header row) — at least one selector or request likely found nothing.",
+            };
+        }
+
+        return new ScriptVerificationResult
+        {
+            Success = true, RowCount = rowCount,
+            Preview = includePreview ? BuildCsvPreview(lines, rowCount) : null,
+            // Issue #161: the raw file as written, not reconstructed from
+            // `lines` (join/line-ending differences would make the download
+            // not byte-identical to what the script produced).
+            OutputFileContent = includeOutputFile ? await File.ReadAllTextAsync(csvPath, ct) : null,
+            OutputFileName = includeOutputFile ? csvFileName : null,
+        };
     }
 
     // XML analog of the CSV "at least one data row" check above: output.xml

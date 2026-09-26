@@ -8,7 +8,11 @@
 {{~ if output_is_json ~}}
 import json
 {{~ end ~}}
+{{~ if blueprint_mapping_enabled && !output_is_json ~}}
+import csv
+{{~ end ~}}
 import re
+from datetime import date
 {{~ if needs_os_import || external_config.enabled ~}}
 import os
 {{~ end ~}}
@@ -46,7 +50,9 @@ from playwright.sync_api import sync_playwright
 # and results are combined into a single output file.
 URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 
-OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else }}xml{{ end }}"
+# Issue #192: see scraper_grouped.py.j2's own identical doc comment on this
+# same line — an active blueprint mapping flattens this mode's output.
+OUTPUT_PATH = "{{ output_filename }}.{{ if blueprint_mapping_enabled }}{{ if output_is_json }}json{{ else }}csv{{ end }}{{ else }}{{ if output_is_json }}json{{ else }}xml{{ end }}{{ end }}"
 
 {{~ if external_config.enabled ~}}
 # Issue #178: see scraper.py.j2's own doc comment for the full rationale — an
@@ -381,6 +387,174 @@ def _run_hardening_checks(root):
 
 GROUPS = {{ groups_literal }}
 
+# Issue #192: optional Output Blueprint field mapping — see
+# scraper_grouped.py.j2's own identical BLUEPRINT_MAPPING doc comment
+# (same reasoning, unconditional placement, and _flatten_group_tree_for_blueprint
+# design — this is the Browser-engine mirror, only the two DOM-access calls
+# differ, via _resolve_group_matches/_resolve_field_match below).
+BLUEPRINT_MAPPING = {{ blueprint_mapping_literal }}
+BLUEPRINT_MAPPING_BY_SOURCE = {m["source"]: m["target"] for m in BLUEPRINT_MAPPING}
+
+
+def _blueprint_subtree_has_mapped_field(node):
+    if "children" in node:
+        return any(_blueprint_subtree_has_mapped_field(child) for child in node["children"])
+    return node["name"] in BLUEPRINT_MAPPING_BY_SOURCE
+
+
+# Resolves one leaf field's raw value exactly like extract_group()'s own
+# leaf branch — see scraper_grouped.py.j2's identical-in-spirit
+# _resolve_flatten_leaf_value for the full "why a separate function"
+# reasoning. Uses _resolve_field_match (defined further below, resolved
+# lazily at call time — Python doesn't require def order to match call
+# order) so FramePath-scoped fields work here exactly like they do for
+# extract_group() itself.
+def _resolve_flatten_leaf_value(page, scope, node):
+    found = _resolve_field_match(page, scope, node)
+    if node["mode"] == "exists":
+        return "true" if found else "false"
+    if found is None:
+        return ""
+    if node["mode"] == "attribute":
+        return _apply_transforms(found.get_attribute(node["attribute"]) or "", node["transform"])
+    if node["mode"] == "ownText":
+        own_text = found.evaluate(
+            "el => Array.from(el.childNodes).filter(n => n.nodeType === 3).map(n => n.textContent).join('')"
+        ).strip()
+        return _apply_transforms(own_text, node["transform"])
+    return _apply_transforms((found.text_content() or "").strip(), node["transform"])
+
+
+# Flattens the group tree into denormalized rows for BLUEPRINT_MAPPING —
+# see scraper_grouped.py.j2's identical _flatten_group_tree_for_blueprint
+# for the full design reasoning (always returns a list of context dicts;
+# only a relevant repeating group's own instance boundary ever multiplies
+# it). `page` is threaded through purely for _resolve_group_matches/
+# _resolve_field_match's own FramePath resolution, same as extract_group().
+def _flatten_group_tree_for_blueprint(page, scope, node, context):
+    if "children" in node:
+        if not _blueprint_subtree_has_mapped_field(node):
+            return [context]
+
+        matches = _resolve_group_matches(page, scope, node)
+
+        all_contexts = []
+        for match in matches:
+            instance_contexts = [context]
+            for child in node["children"]:
+                next_contexts = []
+                for ctx in instance_contexts:
+                    next_contexts.extend(_flatten_group_tree_for_blueprint(page, match, child, ctx))
+                instance_contexts = next_contexts
+            all_contexts.extend(instance_contexts)
+        return all_contexts
+
+    value = _resolve_flatten_leaf_value(page, scope, node)
+    if node["name"] in BLUEPRINT_MAPPING_BY_SOURCE:
+        return [{**context, node["name"]: value}]
+    return [context]
+
+
+# Issue #244: a second, tree-shaped Output Blueprint target schema — see
+# scraper_grouped.py.j2's own identical-in-spirit BLUEPRINT_TREE_MAPPING/
+# _build_blueprint_node doc comments for the full design reasoning. This is
+# the Browser-engine mirror: the only real difference is that
+# _blueprint_walk_suffix below delegates every step straight to
+# _resolve_group_matches (already handling repeating/non-repeating AND
+# FramePath uniformly, unlike the Static engine's own plain select/
+# select_one pair), and every function threads `page` through for the same
+# reason extract_group()/_flatten_group_tree_for_blueprint already do.
+BLUEPRINT_TREE_MAPPING = {{ blueprint_tree_mapping_literal }}
+
+_BLUEPRINT_GROUP_BY_NAME = {}
+_BLUEPRINT_LEAF_BY_NAME = {}
+_BLUEPRINT_PATH_BY_NAME = {}
+
+
+def _blueprint_index_source_tree(nodes, ancestors):
+    for node in nodes:
+        if "children" in node:
+            _BLUEPRINT_GROUP_BY_NAME.setdefault(node["name"], node)
+            _BLUEPRINT_PATH_BY_NAME.setdefault(node["name"], ancestors)
+            _blueprint_index_source_tree(node["children"], ancestors + [node])
+        else:
+            _BLUEPRINT_PATH_BY_NAME.setdefault(node["name"], ancestors)
+            _BLUEPRINT_LEAF_BY_NAME.setdefault(node["name"], node)
+
+
+_blueprint_index_source_tree(GROUPS, [])
+
+
+def _blueprint_repeating_chain(name):
+    return [g["name"] for g in _BLUEPRINT_PATH_BY_NAME.get(name, []) if g["repeating"]]
+
+
+def _blueprint_full_path(name):
+    ancestors = _BLUEPRINT_PATH_BY_NAME.get(name, [])
+    group = _BLUEPRINT_GROUP_BY_NAME.get(name)
+    return ancestors + [group] if group is not None else ancestors
+
+
+def _blueprint_walk_suffix(page, scopes, suffix):
+    for group in suffix:
+        next_scopes = []
+        for scope in scopes:
+            next_scopes.extend(_resolve_group_matches(page, scope, group))
+        scopes = next_scopes
+    return scopes
+
+
+# See scraper_grouped.py.j2's identical function for the full "trusts
+# ScrapingPlanValidator's own generate-time guarantee, doesn't re-validate"
+# reasoning.
+def _blueprint_resolve_group_chain(target_children, ancestor_chain):
+    chains = [_blueprint_repeating_chain(c["source"]) for c in target_children if "source" in c]
+    non_empty = [c for c in chains if c]
+    return max(non_empty, key=len) if non_empty else ancestor_chain
+
+
+def _build_blueprint_node(page, top_scope, scope, ancestor_chain, ancestor_full_path, target_node):
+    if "children" in target_node:
+        row_chain = _blueprint_resolve_group_chain(target_node["children"], ancestor_chain)
+        full_path = _blueprint_full_path(row_chain[-1]) if row_chain else ancestor_full_path
+        instances = _blueprint_walk_suffix(page, [scope], full_path[len(ancestor_full_path):])
+
+        elements = []
+        for instance in instances:
+            el = ET.Element(target_node["name"])
+            for child in target_node["children"]:
+                result = _build_blueprint_node(page, top_scope, instance, row_chain, full_path, child)
+                if isinstance(result, list):
+                    el.extend(result)
+                else:
+                    el.append(result)
+            elements.append(el)
+        return elements
+
+    source_name = target_node["source"]
+    leaf_node = _BLUEPRINT_LEAF_BY_NAME[source_name]
+    chain = _blueprint_repeating_chain(source_name)
+    if chain:
+        scopes = _blueprint_walk_suffix(page, [scope], _blueprint_full_path(source_name)[len(ancestor_full_path):])
+    else:
+        scopes = _blueprint_walk_suffix(page, [top_scope], _blueprint_full_path(source_name))
+
+    resolved = scopes[0] if scopes else None
+    el = ET.Element(target_node["name"])
+    el.text = ("false" if leaf_node["mode"] == "exists" else "") if resolved is None else _resolve_flatten_leaf_value(page, resolved, leaf_node)
+    return el
+
+
+def _build_blueprint_tree(page, target_roots):
+    elements = []
+    for target_node in target_roots:
+        result = _build_blueprint_node(page, page, page, [], [], target_node)
+        if isinstance(result, list):
+            elements.extend(result)
+        else:
+            elements.append(result)
+    return elements
+
 
 # Issue #84: best-effort numeric normalization for a "toNumber" transform —
 # finds the first numeric-looking substring and normalizes its decimal
@@ -416,6 +590,55 @@ def _to_number(value):
     return str(int(numeric)) if numeric.is_integer() else str(numeric)
 
 
+# Issue #205: safe, explicit type-conversion transforms -- unlike toNumber's
+# best-effort heuristic extraction, these either produce a well-formed value
+# or fall back to their own clearly defined "onError" behavior
+# ("KeepOriginal" leaves the pre-conversion value untouched, "UseDefault"
+# substitutes the transform's own configured "defaultValue") rather than
+# silently guessing.
+_DATE_FORMAT_TOKEN_PATTERNS = {"yyyy": r"(?P<yyyy>\d{4})", "mm": r"(?P<mm>\d{1,2})", "dd": r"(?P<dd>\d{1,2})"}
+
+
+def _type_conversion_fallback(value, on_error, default_value):
+    return default_value if on_error == "UseDefault" else value
+
+
+def _to_integer(value, on_error, default_value):
+    stripped = value.strip()
+    if re.fullmatch(r"[+-]?\d+", stripped):
+        return str(int(stripped))
+    return _type_conversion_fallback(value, on_error, default_value)
+
+
+def _to_boolean(value, on_error, default_value):
+    normalized = value.strip().lower()
+    if normalized in ("true", "1", "yes", "y"):
+        return "True"
+    if normalized in ("false", "0", "no", "n"):
+        return "False"
+    return _type_conversion_fallback(value, on_error, default_value)
+
+
+# source_format is the same "{yyyy}"/"{mm}"/"{dd}" mini-template
+# RangeSource.Format (RangeFormat.cs) already uses for ISO week/date
+# parameters, compiled into a regex the same way (escape the literal
+# template, then substitute each placeholder for its own capture group) so a
+# format string valid on the companion side parses identically here. Also
+# rejects a structurally-matching but non-existent calendar date (e.g.
+# "2026-02-30") via date()'s own ValueError, not just a pattern match.
+def _to_date(value, source_format, on_error, default_value):
+    pattern = re.escape(source_format)
+    for token, token_pattern in _DATE_FORMAT_TOKEN_PATTERNS.items():
+        pattern = pattern.replace(re.escape("{" + token + "}"), token_pattern)
+    match = re.fullmatch(pattern, value.strip())
+    if match:
+        try:
+            return date(int(match.group("yyyy")), int(match.group("mm")), int(match.group("dd"))).isoformat()
+        except ValueError:
+            pass
+    return _type_conversion_fallback(value, on_error, default_value)
+
+
 # Applies a field's ordered transform chain (node["transform"], built by
 # PythonFieldTransformLiteral) — each step's output feeds the next step's
 # input, in the order the user configured them in. Not called for
@@ -438,6 +661,12 @@ def _apply_transforms(value, transforms):
             value = value.replace(t["find"], t["replacement"])
         elif kind == "toNumber":
             value = _to_number(value)
+        elif kind == "toInteger":
+            value = _to_integer(value, t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
+        elif kind == "toBoolean":
+            value = _to_boolean(value, t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
+        elif kind == "toDate":
+            value = _to_date(value, t.get("sourceFormat", "{yyyy}-{mm}-{dd}"), t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
     return value
 
 
@@ -645,6 +874,8 @@ def scrape(url):
         # exactly one root element — wrap them all (across every paginated
         # page from this start URL, see below) in a single <Ergebnis>.
         root = ET.Element("Ergebnis")
+        blueprint_rows = []
+        blueprint_tree_elements = []
         page_number = 1
         while True:
 {{~ if hardening.enabled ~}}
@@ -663,6 +894,13 @@ def scrape(url):
                 break
             for el in page_elements:
                 root.append(el)
+{{~ if blueprint_mapping_enabled ~}}
+            for node in GROUPS:
+                blueprint_rows.extend(_flatten_group_tree_for_blueprint(page, page, node, {}))
+{{~ end ~}}
+{{~ if blueprint_tree_mapping_enabled ~}}
+            blueprint_tree_elements.extend(_build_blueprint_tree(page, BLUEPRINT_TREE_MAPPING))
+{{~ end ~}}
 
 {{~ if pagination.enabled ~}}
             if page_number >= PAGINATION_MAX_PAGES:
@@ -685,7 +923,7 @@ def scrape(url):
         context.storage_state(path=SESSION_STATE_PATH)
 {{~ end ~}}
         browser.close()
-        return root
+        return root, blueprint_rows, blueprint_tree_elements
 
 
 def main():
@@ -697,9 +935,48 @@ def main():
     # final <Ergebnis>, the same sibling-merging pattern already used for
     # multiple root groups from a single URL.
     root = ET.Element("Ergebnis")
+    blueprint_rows = []
+    blueprint_tree_elements = []
     for url in URLS:
-        for el in scrape(url):
+        page_root, page_blueprint_rows, page_blueprint_tree_elements = scrape(url)
+        for el in page_root:
             root.append(el)
+        blueprint_rows.extend(page_blueprint_rows)
+        blueprint_tree_elements.extend(page_blueprint_tree_elements)
+{{~ if blueprint_mapping_enabled ~}}
+    # Issue #192: BLUEPRINT_MAPPING flattens the tree into rows instead of
+    # writing it out nested — `root` itself (used for hardening/change-
+    # detection below) is unaffected, still the full, unflattened tree.
+    output_fieldnames = [m["target"] for m in BLUEPRINT_MAPPING]
+    output_rows = [{m["target"]: row.get(m["source"], "") for m in BLUEPRINT_MAPPING} for row in blueprint_rows]
+{{~ if output_is_json ~}}
+    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
+        json.dump(output_rows, f, ensure_ascii=False, indent=2)
+{{~ else ~}}
+    with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=output_fieldnames)
+        writer.writeheader()
+        writer.writerows(output_rows)
+{{~ end ~}}
+    count = len(output_rows)
+{{~ else if blueprint_tree_mapping_enabled ~}}
+    # Issue #244: BLUEPRINT_TREE_MAPPING builds a real nested output tree of
+    # its own instead of denormalizing into rows — `root` itself (used for
+    # hardening/change-detection below) is unaffected, still the full,
+    # unmapped source tree.
+    blueprint_tree_root = ET.Element("Ergebnis")
+    for el in blueprint_tree_elements:
+        blueprint_tree_root.append(el)
+{{~ if output_is_json ~}}
+    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
+        json.dump(_xml_to_dict(blueprint_tree_root), f, ensure_ascii=False, indent=2)
+{{~ else ~}}
+    tree = ET.ElementTree(blueprint_tree_root)
+    ET.indent(tree)
+    tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
+{{~ end ~}}
+    count = len(blueprint_tree_root.findall(".//*"))
+{{~ else ~}}
 {{~ if output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(_xml_to_dict(root), f, ensure_ascii=False, indent=2)
@@ -710,7 +987,8 @@ def main():
     tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
     count = len(root.findall(".//*"))
 {{~ end ~}}
-    print(f"Done — {count} elements written to {OUTPUT_PATH}")
+{{~ end ~}}
+    print(f"Done — {count} {{ if blueprint_mapping_enabled }}row(s){{ else }}elements{{ end }} written to {OUTPUT_PATH}")
 {{~ if change_detection.enabled ~}}
     with open(OUTPUT_PATH, "r", encoding="utf-8") as f:
         new_content = f.read()

@@ -125,6 +125,63 @@ const SFConfigImport = (function () {
     return result;
   }
 
+  // Reverse of buildOutputBlueprintMapping — wire is null (or absent) when
+  // no blueprint was mapped. Unlike the fetch-based selectOutputBlueprint
+  // (output-blueprints-ui.js), neither shape needs a round trip back to the
+  // companion here: the wire mapping's own `fields` (Flat) or `tree` (Tree)
+  // already carries everything needed to reproduce the picker's own state
+  // — Issue #244's tree shape reuses createTreeMappingDraft/
+  // updateTreeMappingSource's own path-keyed draft convention, walking the
+  // wire tree and the (structurally identical, since it was built FROM that
+  // tree) draft in lockstep.
+  const EMPTY_OUTPUT_BLUEPRINT_STATE = {
+    selectedOutputBlueprintId: '', selectedOutputBlueprintFieldNames: [], outputBlueprintMapping: {},
+    selectedOutputBlueprintSchemaKind: 'Flat', selectedOutputBlueprintTree: [], outputBlueprintTreeMapping: {},
+  };
+
+  function applyOutputBlueprintTreeMapping(wireNodes, prefix, tree, draft) {
+    wireNodes.forEach((wireNode, i) => {
+      const path = prefix ? `${prefix}.${i}` : `${i}`;
+      if (Array.isArray(wireNode.children)) {
+        tree.push({ name: wireNode.name, children: [] });
+        applyOutputBlueprintTreeMapping(wireNode.children, path, tree[tree.length - 1].children, draft);
+      } else {
+        tree.push({ name: wireNode.name });
+        draft[path] = wireNode.sourceField;
+      }
+    });
+  }
+
+  function applyOutputBlueprintConfig(wire) {
+    if (!wire) return { ...EMPTY_OUTPUT_BLUEPRINT_STATE };
+
+    if (wire.schemaKind === 'Tree') {
+      const tree = [];
+      const mapping = {};
+      applyOutputBlueprintTreeMapping(wire.tree || [], '', tree, mapping);
+      return {
+        selectedOutputBlueprintId: wire.blueprintId != null ? String(wire.blueprintId) : '',
+        selectedOutputBlueprintFieldNames: [],
+        outputBlueprintMapping: {},
+        selectedOutputBlueprintSchemaKind: 'Tree',
+        selectedOutputBlueprintTree: tree,
+        outputBlueprintTreeMapping: mapping,
+      };
+    }
+
+    const fieldNames = wire.fields.map(f => f.targetField);
+    const mapping = {};
+    for (const f of wire.fields) mapping[f.targetField] = f.sourceField;
+    return {
+      selectedOutputBlueprintId: wire.blueprintId != null ? String(wire.blueprintId) : '',
+      selectedOutputBlueprintFieldNames: fieldNames,
+      outputBlueprintMapping: mapping,
+      selectedOutputBlueprintSchemaKind: 'Flat',
+      selectedOutputBlueprintTree: [],
+      outputBlueprintTreeMapping: {},
+    };
+  }
+
   // The one entry point: takes a wire-format ScrapingConfig (the exact
   // shape buildScrapingConfig produces, and /generate's request body itself
   // — see buildConfigExport's own `config` field) and returns a full
@@ -134,6 +191,75 @@ const SFConfigImport = (function () {
   // setup/settings, never navigates the popup away from the page it's
   // actually looking at.
   function applyConfigToState(config) {
+    // Issue #239: Combined mode has none of Fields/Groups/Api/engine/
+    // browserActions/changeDetection/proxy/pagination/hardening/
+    // persistentSession/externalConfig of its own (the companion rejects
+    // all of those at this outer level) — reloading one only ever restores
+    // combinedComponents (each entry's own full config lives in its own,
+    // separately-saved configuration, resolved live at generate/save/export
+    // time, never re-imported into ad-hoc fields/groups/apiConfig here).
+    if (config.combined) {
+      return {
+        mode: 'combined',
+        fields: [], groups: [], apiConfig: null,
+        combinedComponents: config.combined.map(c => ({ savedConfigId: c.savedConfigId ?? null, name: c.name })),
+        engine: 'Static',
+        browserActions: [],
+        scriptFileName: config.scriptFileName || '',
+        outputFileName: config.outputFileName || '',
+        useJsonOutput: false,
+        additionalStartUrls: [],
+        changeDetection: applyChangeDetectionConfig(null),
+        proxy: applyProxyConfig(null),
+        pagination: applyPaginationConfig(null),
+        hardening: applyHardeningConfig(null),
+        persistentSession: false,
+        externalConfig: false,
+        ...applyOutputBlueprintConfig(null),
+      };
+    }
+
+    // Issue #182: Blocks mode has no ad-hoc fields/groups/apiConfig of its
+    // own either — each block's own Fields-or-Groups content is restored
+    // into _state.blocks directly (never into the shared draft slots, which
+    // only ever hold whichever block is currently being *edited* — see
+    // blocks-config-ui.js). Per-block ChangeDetection/Hardening/
+    // OutputFormat aren't tracked in _state.blocks yet (no UI to edit them
+    // — see CLAUDE.md), so a re-loaded block that had one of those loses it,
+    // the same kind of documented v1 gap Combined mode's own
+    // VerificationValues round-trip already has.
+    if (config.blocks) {
+      return {
+        mode: 'blocks',
+        fields: [], groups: [], apiConfig: null,
+        combinedComponents: [],
+        blocks: config.blocks.map(b => ({
+          name: b.name || '',
+          outputFileName: b.outputFileName || '',
+          shape: b.groups ? 'group' : 'flat',
+          fields: b.groups ? [] : (b.fields || []).map(f => ({
+            name: f.name, selector: f.selector, attribute: f.attribute ?? null,
+            framePath: f.framePath || null, transforms: f.transforms && f.transforms.length > 0 ? f.transforms : null,
+          })),
+          groups: b.groups ? deserializeGroupTree(b.groups) : [],
+        })),
+        blocksDraftShape: 'flat', blocksDraftName: '', blocksDraftOutputFileName: '', blocksEditingIndex: null,
+        engine: config.engine || 'Static',
+        browserActions: deserializeBrowserActions(config.browserActions),
+        scriptFileName: config.scriptFileName || '',
+        outputFileName: '',
+        useJsonOutput: false,
+        additionalStartUrls: config.additionalUrls || [],
+        changeDetection: applyChangeDetectionConfig(null),
+        proxy: applyProxyConfig(config.proxy),
+        pagination: applyPaginationConfig(config.pagination),
+        hardening: applyHardeningConfig(null),
+        persistentSession: config.persistentSession === true,
+        externalConfig: false,
+        ...applyOutputBlueprintConfig(null),
+      };
+    }
+
     const mode = config.groups ? 'container' : config.api ? 'api' : 'flat';
     return {
       mode,
@@ -145,6 +271,7 @@ const SFConfigImport = (function () {
         : [],
       groups: mode === 'container' ? deserializeGroupTree(config.groups) : [],
       apiConfig: mode === 'api' ? config.api : null,
+      combinedComponents: [],
       engine: config.engine || 'Static',
       browserActions: deserializeBrowserActions(config.browserActions),
       scriptFileName: config.scriptFileName || '',
@@ -159,12 +286,17 @@ const SFConfigImport = (function () {
       // Issue #178: same plain-boolean passthrough as persistentSession
       // above — nothing to default/reshape beyond the bool itself.
       externalConfig: config.externalConfig === true,
+      // Issue #191: only ever present on the wire for flat mode/Api's flat
+      // shape — applyOutputBlueprintConfig(undefined) already resets to
+      // "none" for every other mode, so no per-mode branching is needed here.
+      ...applyOutputBlueprintConfig(config.outputBlueprint),
     };
   }
 
   return {
     deserializeGroupTree, deserializeBrowserActions,
     applyChangeDetectionConfig, applyProxyConfig, applyPaginationConfig, applyHardeningConfig,
+    applyOutputBlueprintConfig,
     applyConfigToState,
   };
 })();

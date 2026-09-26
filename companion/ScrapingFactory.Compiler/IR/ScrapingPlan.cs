@@ -46,4 +46,41 @@ public sealed class ScrapingPlan
     // ScrapingConfig.ExternalConfig by ScrapingPlanBuilder (null defaults to
     // false here, same as PersistentSession above).
     public bool ExternalConfig { get; init; }
+
+    // Issue #191: only carried through by ScrapingPlanBuilder in the flat-
+    // Fields and Api-flat-shape branches — left null (the default) for
+    // Groups/Api-tree/Combined/Blocks, all of which are rejected outright
+    // together with ScrapingConfig.OutputBlueprint before a plan for them is
+    // even built (see Program.cs's /generate handler).
+    public OutputBlueprintMapping? OutputBlueprint { get; init; }
+
+    // Combined mode (Issue #239): forces a component's already-built,
+    // already-validated plan to a fixed OutputFormat/OutputFileBaseName —
+    // used by Program.cs's /generate handler to make every component write
+    // a predictably-named output.json, mergeable into one combined result,
+    // without re-running ScrapingPlanBuilder/ScrapingPlanValidator against a
+    // second, forced ScrapingConfig. A plain object-initializer copy rather
+    // than a C# `with` expression, since ScrapingPlan (like ScrapingConfig)
+    // is a sealed class, not a record.
+    public ScrapingPlan With(OutputFormat outputFormat, string outputFileBaseName) => new()
+    {
+        Steps = Steps,
+        OutputFormat = outputFormat,
+        Engine = Engine,
+        ScriptFileName = ScriptFileName,
+        OutputFileBaseName = outputFileBaseName,
+        ChangeDetection = ChangeDetection,
+        Proxy = Proxy,
+        Hardening = Hardening,
+        Pagination = Pagination,
+        PersistentSession = PersistentSession,
+        ExternalConfig = ExternalConfig,
+        // Issue #191: preserved even though Combined mode itself rejects
+        // OutputBlueprint on the *outer* request — a component's own nested
+        // config may still carry one, already resolved/validated by the time
+        // With() runs (see GenerateScript's build->validate->transformPlan
+        // sequence), and it should keep applying to that component's own
+        // output rather than being silently dropped by this copy.
+        OutputBlueprint = OutputBlueprint,
+    };
 }

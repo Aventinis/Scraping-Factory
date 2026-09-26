@@ -22,6 +22,123 @@ public class ScrapingPlanValidatorTests
         Assert.Null(result.Error);
     }
 
+    private static ScrapingPlan BlocksPlan(params PlanExtractionBlock[] blocks) => new()
+    {
+        Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ExtractionBlockStep { Blocks = [.. blocks] }],
+    };
+
+    private static PlanExtractionBlock FlatBlock(string name, string outputFileBaseName = "output") => new()
+    {
+        Name = name, OutputFileBaseName = outputFileBaseName, OutputFormat = OutputFormat.Csv,
+        Fields = [new ExtractStep { Name = "Titel", Selector = "h1" }],
+    };
+
+    [Fact]
+    public void Validate_BlocksWithTwoValidBlocks_Succeeds()
+    {
+        var plan = BlocksPlan(FlatBlock("a", "a"), FlatBlock("b", "b"));
+
+        var result = ScrapingPlanValidator.Validate(plan);
+
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_BlocksWithFewerThanTwoBlocks_Fails()
+    {
+        var plan = BlocksPlan(FlatBlock("a", "a"));
+
+        var result = ScrapingPlanValidator.Validate(plan);
+
+        Assert.False(result.Success);
+        Assert.Contains("at least 2", result.Error);
+    }
+
+    [Fact]
+    public void Validate_BlocksWithDuplicateNames_Fails()
+    {
+        var plan = BlocksPlan(FlatBlock("dup", "a"), FlatBlock("dup", "b"));
+
+        var result = ScrapingPlanValidator.Validate(plan);
+
+        Assert.False(result.Success);
+        Assert.Contains("Duplicate block names", result.Error);
+    }
+
+    [Fact]
+    public void Validate_BlocksWithDuplicateOutputFileBaseNames_Fails()
+    {
+        var plan = BlocksPlan(FlatBlock("a", "same"), FlatBlock("b", "same"));
+
+        var result = ScrapingPlanValidator.Validate(plan);
+
+        Assert.False(result.Success);
+        Assert.Contains("duplicate output file names", result.Error);
+    }
+
+    [Fact]
+    public void Validate_BlockWithNeitherFieldsNorGroups_Fails()
+    {
+        var emptyBlock = new PlanExtractionBlock { Name = "empty", OutputFileBaseName = "empty", OutputFormat = OutputFormat.Csv };
+        var plan = BlocksPlan(emptyBlock, FlatBlock("b", "b"));
+
+        var result = ScrapingPlanValidator.Validate(plan);
+
+        Assert.False(result.Success);
+        Assert.Contains("at least one field or group", result.Error);
+    }
+
+    [Fact]
+    public void Validate_BlockWithGroupsReusesContainerNodeValidation()
+    {
+        var groupBlock = new PlanExtractionBlock
+        {
+            Name = "grp", OutputFileBaseName = "grp", OutputFormat = OutputFormat.Xml,
+            Groups = [new GroupNode { Name = "Item", Selector = "", Repeating = true, Children = [] }],
+        };
+        var plan = BlocksPlan(groupBlock, FlatBlock("b", "b"));
+
+        var result = ScrapingPlanValidator.Validate(plan);
+
+        Assert.False(result.Success);
+        Assert.Contains("Selector of group", result.Error);
+    }
+
+    [Fact]
+    public void Validate_BlockWithInvalidPerBlockHardening_Fails()
+    {
+        var block = new PlanExtractionBlock
+        {
+            Name = "a", OutputFileBaseName = "a", OutputFormat = OutputFormat.Csv,
+            Fields = [new ExtractStep { Name = "Titel", Selector = "h1" }],
+            Hardening = [new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "Titel", Threshold = 1.5 }],
+        };
+        var plan = BlocksPlan(block, FlatBlock("b", "b"));
+
+        var result = ScrapingPlanValidator.Validate(plan);
+
+        Assert.False(result.Success);
+        Assert.Contains("'a'", result.Error);
+        Assert.Contains("threshold must be between 0 and 1", result.Error);
+    }
+
+    [Fact]
+    public void Validate_BlockWithInvalidPerBlockChangeDetection_Fails()
+    {
+        var block = new PlanExtractionBlock
+        {
+            Name = "a", OutputFileBaseName = "a", OutputFormat = OutputFormat.Csv,
+            Fields = [new ExtractStep { Name = "Titel", Selector = "h1" }],
+            ChangeDetection = new ChangeDetectionConfig { Notify = "Webhook", Webhook = new WebhookNotificationConfig { UrlEnvVar = "not valid" } },
+        };
+        var plan = BlocksPlan(block, FlatBlock("b", "b"));
+
+        var result = ScrapingPlanValidator.Validate(plan);
+
+        Assert.False(result.Success);
+        Assert.Contains("'a'", result.Error);
+    }
+
     [Fact]
     public void Validate_NoSteps_Fails()
     {
@@ -201,6 +318,64 @@ public class ScrapingPlanValidatorTests
         Assert.False(result.Success);
     }
 
+    // ── Issue #205: type-conversion transforms ───────────────────────────
+
+    [Fact]
+    public void Validate_ExtractStepWithValidTypeConversionTransforms_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ExtractStep
+                {
+                    Name = "Preis", Selector = ".price",
+                    Transforms =
+                    [
+                        new ToIntegerTransform(),
+                        new ToBooleanTransform { OnError = TransformErrorMode.UseDefault, DefaultValue = "False" },
+                        new ToDateTransform { SourceFormat = "{dd}.{mm}.{yyyy}" },
+                    ],
+                },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ExtractStepWithUseDefaultButNoDefaultValue_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ExtractStep { Name = "Preis", Selector = ".price", Transforms = [new ToIntegerTransform { OnError = TransformErrorMode.UseDefault }] },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Preis", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ExtractStepWithInvalidDateSourceFormat_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ExtractStep { Name = "Datum", Selector = ".date", Transforms = [new ToDateTransform { SourceFormat = "{yyyy}-{mm}" }] }, // missing {dd}
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Datum", result.Error);
+    }
+
     [Fact]
     public void Validate_ValidWaitForStep_Succeeds()
     {
@@ -346,6 +521,152 @@ public class ScrapingPlanValidatorTests
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
         Assert.Contains("ClickStep", result.Error);
+    }
+
+    // ── Issue #191: Output Blueprint field mapping ───────────────────────
+
+    private static ScrapingPlan FlatPlanWithBlueprint(OutputBlueprintMapping? blueprint) => new()
+    {
+        Steps =
+        [
+            new NavigateStep { Urls = ["https://example.com"] },
+            new ExtractStep { Name = "Titel", Selector = "h1" },
+            new ExtractStep { Name = "Preis", Selector = ".price" },
+        ],
+        OutputBlueprint = blueprint,
+    };
+
+    [Fact]
+    public void Validate_FlatPlanWithValidBlueprintMapping_Succeeds()
+    {
+        var blueprint = new OutputBlueprintMapping
+        {
+            Fields =
+            [
+                new OutputBlueprintFieldMapping { TargetField = "name", SourceField = "Titel" },
+                new OutputBlueprintFieldMapping { TargetField = "cost", SourceField = "Preis" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(FlatPlanWithBlueprint(blueprint));
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_BlueprintMapping_UnmappedSourceFieldIsAllowed()
+    {
+        // Only "Titel" is mapped — "Preis" is simply omitted from the
+        // output, not an error (see OutputBlueprintMapping's own doc
+        // comment).
+        var blueprint = new OutputBlueprintMapping
+        {
+            Fields = [new OutputBlueprintFieldMapping { TargetField = "name", SourceField = "Titel" }],
+        };
+        var result = ScrapingPlanValidator.Validate(FlatPlanWithBlueprint(blueprint));
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_BlueprintMapping_EmptyFieldList_Fails()
+    {
+        var blueprint = new OutputBlueprintMapping { Fields = [] };
+        var result = ScrapingPlanValidator.Validate(FlatPlanWithBlueprint(blueprint));
+        Assert.False(result.Success);
+        Assert.Contains("OutputBlueprint", result.Error);
+    }
+
+    [Fact]
+    public void Validate_BlueprintMapping_UnknownSourceField_Fails()
+    {
+        var blueprint = new OutputBlueprintMapping
+        {
+            Fields = [new OutputBlueprintFieldMapping { TargetField = "name", SourceField = "DoesNotExist" }],
+        };
+        var result = ScrapingPlanValidator.Validate(FlatPlanWithBlueprint(blueprint));
+        Assert.False(result.Success);
+        Assert.Contains("DoesNotExist", result.Error);
+    }
+
+    [Fact]
+    public void Validate_BlueprintMapping_DuplicateTargetField_Fails()
+    {
+        var blueprint = new OutputBlueprintMapping
+        {
+            Fields =
+            [
+                new OutputBlueprintFieldMapping { TargetField = "name", SourceField = "Titel" },
+                new OutputBlueprintFieldMapping { TargetField = "name", SourceField = "Preis" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(FlatPlanWithBlueprint(blueprint));
+        Assert.False(result.Success);
+        Assert.Contains("target field", result.Error);
+    }
+
+    [Fact]
+    public void Validate_BlueprintMapping_DuplicateSourceField_Fails()
+    {
+        var blueprint = new OutputBlueprintMapping
+        {
+            Fields =
+            [
+                new OutputBlueprintFieldMapping { TargetField = "name", SourceField = "Titel" },
+                new OutputBlueprintFieldMapping { TargetField = "title2", SourceField = "Titel" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(FlatPlanWithBlueprint(blueprint));
+        Assert.False(result.Success);
+        Assert.Contains("source field", result.Error);
+    }
+
+    [Fact]
+    public void Validate_BlueprintMapping_BlankTargetField_Fails()
+    {
+        var blueprint = new OutputBlueprintMapping
+        {
+            Fields = [new OutputBlueprintFieldMapping { TargetField = " ", SourceField = "Titel" }],
+        };
+        var result = ScrapingPlanValidator.Validate(FlatPlanWithBlueprint(blueprint));
+        Assert.False(result.Success);
+    }
+
+    [Fact]
+    public void Validate_ApiFlatPlanWithValidBlueprintMapping_Succeeds()
+    {
+        var api = ValidApiConfig();
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Api,
+            Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = api }],
+            OutputBlueprint = new OutputBlueprintMapping
+            {
+                Fields = [new OutputBlueprintFieldMapping { TargetField = "name", SourceField = "Titel" }],
+            },
+        };
+
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiFlatPlanWithBlueprintMappingReferencingParameter_Fails()
+    {
+        // Api parameters aren't mappable as blueprint source fields — the
+        // same simplification NullRateCheck/RequiredFieldsCheck's own field
+        // pickers already make for Api mode.
+        var api = ValidApiConfig();
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Api,
+            Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = api }],
+            OutputBlueprint = new OutputBlueprintMapping
+            {
+                Fields = [new OutputBlueprintFieldMapping { TargetField = "cat", SourceField = "category" }],
+            },
+        };
+
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("category", result.Error);
     }
 
     // ── ScrollStep ───────────────────────────────────────────────────────

@@ -52,6 +52,21 @@ public class SavedConfigStoreTests : IDisposable
         Assert.Equal(["Second", "First"], results.Select(r => r.Name));
     }
 
+    // Issue #239: ListAll is the unscoped counterpart to ListByUrl — every
+    // saved config regardless of host, needed by Combined mode's component
+    // picker (a component can come from any previously-scraped site).
+    [Fact]
+    public void ListAll_ReturnsSavedConfigsAcrossDifferentHosts()
+    {
+        _store.Save("https://example.com/a", "First", "{}");
+        Thread.Sleep(5);
+        _store.Save("https://other-site.com/b", "Second", "{}");
+
+        var results = _store.ListAll();
+
+        Assert.Equal(["Second", "First"], results.Select(r => r.Name));
+    }
+
     [Fact]
     public void Get_ReturnsFullRecordIncludingConfigJson()
     {

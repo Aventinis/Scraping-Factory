@@ -63,9 +63,16 @@ const {
   renderIdleScreen, wireIdleScreenEvents,
 } = typeof require !== 'undefined' ? require('./idle-screen-ui') : self.SFIdleScreenUI;
 
+const { wireCombinedConfigEvents } =
+  typeof require !== 'undefined' ? require('./combined-config-ui') : self.SFCombinedConfigUI;
+
+const { wireBlocksConfigEvents } =
+  typeof require !== 'undefined' ? require('./blocks-config-ui') : self.SFBlocksConfigUI;
+
 const {
   createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
   moveTransform, transformsAreValid, applyTransformsPreview, toNumberPreview,
+  toIntegerPreview, toBooleanPreview, toDatePreview,
 } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
 
 const { renderTransformList, renderTransformPreview } =
@@ -114,7 +121,7 @@ const { triggerDownload, downloadFile, triggerOutputFileDownload, downloadConfig
 
 const {
   renderSavedConfigsList,
-  fetchSavedConfigs, createSavedConfig, saveCurrentConfig, loadSavedConfig,
+  fetchSavedConfigs, fetchAllSavedConfigs, createSavedConfig, saveCurrentConfig, loadSavedConfig,
   requestDeleteSavedConfig, cancelDeleteSavedConfig, deleteSavedConfig,
   openSaveConfigModal,
   saveCurrentOutput, createConfigAndSaveOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
@@ -124,6 +131,15 @@ const {
 
 const { wireSettingsPanelEvents } =
   typeof require !== 'undefined' ? require('./settings-panel-ui') : self.SFSettingsPanelUI;
+
+const {
+  fetchOutputBlueprints, selectOutputBlueprint,
+  renderOutputBlueprintMappingSection,
+  renderManageBlueprintsModal, openManageBlueprintsModal, closeManageBlueprintsModal,
+  requestDeleteBlueprint, cancelDeleteBlueprint, deleteBlueprint,
+  openBlueprintCreateModal, openBlueprintEditModal, closeBlueprintEditModal, saveBlueprintEdit,
+  renderBlueprintEditModal, wireOutputBlueprintsEvents,
+} = typeof require !== 'undefined' ? require('./output-blueprints-ui') : self.SFOutputBlueprintsUI;
 
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (e) => log('UNCAUGHT_ERROR', e.message));
@@ -417,6 +433,39 @@ let _state = {
   // companion side, e.g. from a config saved in a previous popup session).
   savedConfigs:              null,
   savedConfigsLoading:       false,
+  // Issue #239: Combined mode's ordered component list — each entry only
+  // ever {savedConfigId, name}, never a cached copy of that component's own
+  // full config (always resolved live at generate/save/export time, see
+  // companion-client.js's resolveCombinedComponents). Cleared by
+  // MODE_SWITCH_CLEARS when leaving 'combined', unlike fields/groups/
+  // apiConfig it isn't persisted across a popup close/reopen for v1.
+  combinedComponents:        [],
+  // Every saved configuration regardless of host (GET /configs with no url
+  // query param) — the source list Combined mode's "add component" picker
+  // draws from, since a component doesn't have to match the page currently
+  // open. Fetched once on switching into Combined mode (see switchMode),
+  // not kept continuously in sync — same pull-based tradeoff savedConfigs
+  // above already accepts.
+  allSavedConfigs:           null,
+  allSavedConfigsLoading:    false,
+  // Issue #182: Blocks mode's confirmed list of independent extraction
+  // blocks — each {name, outputFileName, shape: 'flat'|'group', fields,
+  // groups}, cleared by MODE_SWITCH_CLEARS like combinedComponents. The
+  // block currently being *built* reuses fields/groups above directly
+  // (see blocks-config-ui.js) rather than its own separate draft-content
+  // slot — only the draft's own metadata needs dedicated state here.
+  blocks:                     [],
+  blocksDraftShape:            'flat', // 'flat' | 'group' — which of fields/groups the draft editor currently shows
+  blocksDraftName:             '',
+  blocksDraftOutputFileName:   '',
+  blocksEditingIndex:          null, // set while editing an already-added block (see blocks-config-ui.js's editBlock)
+  // Issue #182: Blocks mode's /generate response ({ script, blocks: [{name,
+  // preview, outputFile}] }) differs in shape from every other mode's own
+  // singular { script, preview, outputFile } — dataPreview/outputFile above
+  // stay null for a Blocks generate, this carries the per-block results
+  // instead. null for every other mode/whenever neither includeDataPreview
+  // nor includeOutputFile was requested.
+  blocksOutput:                null,
   // Set to a saved config's id right after its own "Delete" button is first
   // clicked, turning that one row into an inline "Delete? Yes/No" — a
   // second confirming click is required before DELETE /configs/{id} is
@@ -442,6 +491,35 @@ let _state = {
   savedOutputs:                null,
   savedOutputsLoading:         false,
   savedOutputsPendingDeleteId: null,
+  // Issue #191: opt-in output blueprint field mapping — only reachable in
+  // the UI for flat mode/Api mode's flat shape, persisted like proxy/
+  // hardening above (real scrape-target configuration, not a per-generate
+  // toggle). selectedOutputBlueprintId is the picked blueprint's id as a
+  // string (matching the <select>'s own value, '' = "None"). selectedOutput
+  // BlueprintFieldNames is that blueprint's own ordered target-field list,
+  // resolved once via GET /blueprints/{id} when picked (see
+  // selectOutputBlueprint in output-blueprints-ui.js) — persisted alongside
+  // the id so the mapping table renders immediately on popup reopen with no
+  // extra round trip; if the blueprint is since edited server-side, this can
+  // go stale until re-picked, the same "resolved once, not continuously kept
+  // in sync" tradeoff combinedComponents already accepts for its own saved-
+  // configuration references. outputBlueprintMapping is { targetFieldName:
+  // sourceFieldNameOrNull }.
+  selectedOutputBlueprintId:         '',
+  selectedOutputBlueprintFieldNames: [],
+  outputBlueprintMapping:            {},
+  // Every persisted Output Blueprint, unscoped like allSavedConfigs (a
+  // blueprint is meant to be reusable across any site/configuration) —
+  // fetched once on companion connect (see checkCompanion) and refreshed
+  // after any create/edit/delete in modal-manage-blueprints. Not persisted,
+  // same pull-based tradeoff savedConfigs/allSavedConfigs already accept.
+  outputBlueprints:            null,
+  outputBlueprintsLoading:     false,
+  manageBlueprintsModalOpen:   false,
+  blueprintEditModalOpen:      false,
+  blueprintEditingId:          null, // null = creating a new blueprint, else editing this id
+  blueprintEditDraft:          { name: '', fieldNames: [] },
+  blueprintDeletePendingId:    null,
 };
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -489,6 +567,15 @@ function persistState() {
       apiSearchTarget: _state.apiSearchTarget,
       apiConfigDraft: _state.apiConfigDraft,
       apiConfig: _state.apiConfig,
+      combinedComponents: _state.combinedComponents,
+      blocks: _state.blocks,
+      blocksDraftShape: _state.blocksDraftShape,
+      blocksDraftName: _state.blocksDraftName,
+      blocksDraftOutputFileName: _state.blocksDraftOutputFileName,
+      blocksEditingIndex: _state.blocksEditingIndex,
+      selectedOutputBlueprintId: _state.selectedOutputBlueprintId,
+      selectedOutputBlueprintFieldNames: _state.selectedOutputBlueprintFieldNames,
+      outputBlueprintMapping: _state.outputBlueprintMapping,
     })
     .catch(err => log('STORAGE_ERR', err.message));
 }
@@ -564,6 +651,8 @@ function render() {
   hide('modal-api-field-transforms');
   hide('modal-save-config');
   hide('modal-save-output');
+  hide('modal-manage-blueprints');
+  hide('modal-blueprint-edit');
 
   const screenKey = {
     [STATES.CHECKING_COMPANION]: 'checking',
@@ -582,6 +671,18 @@ function render() {
   // shortcut (openSaveConfigModal) can now also open it from the DONE
   // screen, so this check must run regardless of which screen is current.
   if (_state.saveConfigModalOpen) show('modal-save-config');
+
+  // Issue #191: same "global overlay" treatment as modal-save-config above
+  // — reachable from the IDLE screen's Settings section, but not scoped to
+  // it, since a blueprint could plausibly be managed independently later.
+  if (_state.manageBlueprintsModalOpen) {
+    show('modal-manage-blueprints');
+    renderManageBlueprintsModal(bridge);
+  }
+  if (_state.blueprintEditModalOpen) {
+    show('modal-blueprint-edit');
+    renderBlueprintEditModal(bridge);
+  }
 
   if (_state.current === STATES.COMPANION_ERROR) {
     renderCompanionErrorScreen();
@@ -614,6 +715,7 @@ function render() {
     const saveOutputBtn = document.getElementById('btn-save-output');
     if (saveOutputBtn) saveOutputBtn.classList.toggle('hidden', !_state.outputFile);
     renderDataPreview(_state.dataPreview);
+    renderBlocksOutput(_state.blocksOutput);
 
     if (_state.saveOutputModalOpen) {
       show('modal-save-output');
@@ -633,7 +735,9 @@ function render() {
     const isNewPick = _state.pendingSelector !== lastFieldModalSelector;
     lastFieldModalSelector = _state.pendingSelector;
 
-    if (_state.mode === 'container') {
+    // Issue #182: Blocks mode's group-shaped draft reuses the container
+    // field modal exactly like container mode itself does.
+    if (_state.mode === 'container' || (_state.mode === 'blocks' && _state.blocksDraftShape === 'group')) {
       renderContainerFieldModal(bridge, isNewPick);
     } else {
       renderFlatFieldModal(bridge, isNewPick);
@@ -753,6 +857,37 @@ function renderDataPreview(preview) {
   }
 }
 
+// Issue #182: Blocks mode's own DONE-screen panel — one row per block with
+// a Download button (downloadFile), no per-block preview table (see
+// blocks-output-panel's own doc comment in popup.html for why that's out
+// of scope here). blocksOutput is null for every other mode/whenever
+// neither includeDataPreview nor includeOutputFile was requested.
+function renderBlocksOutput(blocksOutput) {
+  const panel = document.getElementById('blocks-output-panel');
+  if (!panel) return;
+  if (!blocksOutput) { panel.classList.add('hidden'); return; }
+  panel.classList.remove('hidden');
+
+  const listEl = document.getElementById('blocks-output-list');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  blocksOutput.forEach((block) => {
+    const li = document.createElement('li');
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = block.outputFile ? `${block.name}: ${block.outputFile.fileName}` : block.name;
+    li.appendChild(nameSpan);
+    if (block.outputFile) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn-secondary btn-tiny';
+      btn.textContent = t('done.blocksOutputDownloadBtn');
+      btn.addEventListener('click', () => downloadFile(block.outputFile.fileName, block.outputFile.content));
+      li.appendChild(btn);
+    }
+    listEl.appendChild(li);
+  });
+}
+
 // Passed to every api-config-ui.js/container-tree-ui.js/dom-tree-ui.js/
 // preview.js/companion-client.js/saved-configs-ui.js handler, instead of
 // those functions closing over this file's own module-level state — see
@@ -770,6 +905,8 @@ const bridge = {
   requestDomTree: () => requestDomTree(bridge),
   showToast,
   fetchSavedConfigs: (url) => fetchSavedConfigs(bridge, url),
+  fetchAllSavedConfigs: () => fetchAllSavedConfigs(bridge),
+  fetchOutputBlueprints: () => fetchOutputBlueprints(bridge),
 };
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
@@ -807,6 +944,10 @@ function wireEvents() {
 
   wireIdleScreenEvents(bridge);
 
+  wireCombinedConfigEvents(bridge);
+
+  wireBlocksConfigEvents(bridge);
+
   wireContainerModeEvents(bridge);
 
   document.getElementById('btn-cancel-selection')?.addEventListener('click', () => {
@@ -834,6 +975,8 @@ function wireEvents() {
   document.getElementById('btn-export-config')?.addEventListener('click', () => downloadConfigExport(bridge));
 
   wireSavedConfigsEvents(bridge);
+
+  wireOutputBlueprintsEvents(bridge);
 
   document.getElementById('btn-new-scraper')?.addEventListener('click', () => {
     log('BTN new-scraper → reset state');
@@ -976,12 +1119,18 @@ if (typeof module !== 'undefined') {
     renderDataPreview,
     createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
     moveTransform, transformsAreValid, renderTransformList,
-    applyTransformsPreview, toNumberPreview, renderTransformPreview,
+    applyTransformsPreview, toNumberPreview, toIntegerPreview, toBooleanPreview, toDatePreview, renderTransformPreview,
     renderThemeToggle, syncModeToggleThumbs,
-    applyConfigToState, renderSavedConfigsList, fetchSavedConfigs, createSavedConfig, saveCurrentConfig, loadSavedConfig,
+    applyConfigToState, renderSavedConfigsList, fetchSavedConfigs, fetchAllSavedConfigs, createSavedConfig, saveCurrentConfig, loadSavedConfig,
     deleteSavedConfig, requestDeleteSavedConfig, cancelDeleteSavedConfig, openSaveConfigModal,
     triggerOutputFileDownload, downloadFile,
     saveCurrentOutput, createConfigAndSaveOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
     requestDeleteSavedOutput, cancelDeleteSavedOutput, deleteSavedOutput, renderSaveOutputModal,
+    fetchOutputBlueprints, selectOutputBlueprint,
+    renderOutputBlueprintMappingSection,
+    renderManageBlueprintsModal, openManageBlueprintsModal, closeManageBlueprintsModal,
+    requestDeleteBlueprint, cancelDeleteBlueprint, deleteBlueprint,
+    openBlueprintCreateModal, openBlueprintEditModal, closeBlueprintEditModal, saveBlueprintEdit,
+    renderBlueprintEditModal,
   };
 }

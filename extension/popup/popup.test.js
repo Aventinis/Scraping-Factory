@@ -49,7 +49,7 @@ const {
   renderDataPreview,
   createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
   moveTransform, transformsAreValid, renderTransformList,
-  applyTransformsPreview, toNumberPreview, renderTransformPreview,
+  applyTransformsPreview, toNumberPreview, toIntegerPreview, toBooleanPreview, toDatePreview, renderTransformPreview,
   syncModeToggleThumbs,
   applyConfigToState,
 } = require('./popup');
@@ -618,6 +618,18 @@ describe('field-transforms.js (createDefaultTransform / add / remove / update / 
   test('transformsAreValid accepts an empty chain', () => {
     expect(transformsAreValid([])).toBe(true);
   });
+
+  // Issue #205
+  test('createDefaultTransform returns the right shape for the type-conversion kinds', () => {
+    expect(createDefaultTransform('toInteger')).toEqual({ kind: 'toInteger', onError: 'KeepOriginal', defaultValue: '' });
+    expect(createDefaultTransform('toBoolean')).toEqual({ kind: 'toBoolean', onError: 'KeepOriginal', defaultValue: '' });
+    expect(createDefaultTransform('toDate')).toEqual({ kind: 'toDate', sourceFormat: '{yyyy}-{mm}-{dd}', onError: 'KeepOriginal', defaultValue: '' });
+  });
+
+  test('transformsAreValid rejects a toDate step with a blank sourceFormat', () => {
+    expect(transformsAreValid([{ kind: 'toDate', sourceFormat: '  ', onError: 'KeepOriginal', defaultValue: '' }])).toBe(false);
+    expect(transformsAreValid([{ kind: 'toDate', sourceFormat: '{yyyy}-{mm}-{dd}', onError: 'KeepOriginal', defaultValue: '' }])).toBe(true);
+  });
 });
 
 // Issue #143: JS mirror of the Python runtime's _apply_transforms/_to_number
@@ -672,6 +684,66 @@ describe('applyTransformsPreview / toNumberPreview', () => {
       { kind: 'toNumber' },
     ];
     expect(applyTransformsPreview('  Preis: 12,99 €  ', transforms)).toBe('12.99');
+  });
+
+  // Issue #205: mirrors the Python runtime's _to_integer/_to_boolean/_to_date
+  // and their shared _type_conversion_fallback onError contract.
+  test('toInteger accepts a plain signed integer', () => {
+    expect(toIntegerPreview(' -42 ')).toBe('-42');
+    expect(toIntegerPreview('7')).toBe('7');
+  });
+
+  test('toInteger rejects a decimal or non-numeric value', () => {
+    expect(toIntegerPreview('12.5')).toBeNull();
+    expect(toIntegerPreview('not a number')).toBeNull();
+  });
+
+  test('toInteger with onError KeepOriginal passes the raw value through on failure', () => {
+    const transforms = [{ kind: 'toInteger', onError: 'KeepOriginal', defaultValue: '0' }];
+    expect(applyTransformsPreview('12.5', transforms)).toBe('12.5');
+  });
+
+  test('toInteger with onError UseDefault substitutes the default value on failure', () => {
+    const transforms = [{ kind: 'toInteger', onError: 'UseDefault', defaultValue: '0' }];
+    expect(applyTransformsPreview('not a number', transforms)).toBe('0');
+    expect(applyTransformsPreview('42', transforms)).toBe('42');
+  });
+
+  test('toBoolean recognizes the fixed true/false vocabulary case-insensitively', () => {
+    expect(toBooleanPreview('Yes')).toBe('True');
+    expect(toBooleanPreview('1')).toBe('True');
+    expect(toBooleanPreview('NO')).toBe('False');
+    expect(toBooleanPreview('0')).toBe('False');
+    expect(toBooleanPreview('maybe')).toBeNull();
+  });
+
+  test('toDate parses against a custom sourceFormat and normalizes to ISO', () => {
+    expect(toDatePreview('24.09.2026', '{dd}.{mm}.{yyyy}')).toBe('2026-09-24');
+    expect(toDatePreview('2026-09-24', '{yyyy}-{mm}-{dd}')).toBe('2026-09-24');
+  });
+
+  test('toDate rejects a value that does not match the format', () => {
+    expect(toDatePreview('2026/09/24', '{dd}.{mm}.{yyyy}')).toBeNull();
+  });
+
+  test('toDate rejects a structurally-matching but non-existent calendar date', () => {
+    expect(toDatePreview('2026-02-30', '{yyyy}-{mm}-{dd}')).toBeNull();
+  });
+
+  test('toDate treats sourceFormat as a literal mini-template, not regex syntax', () => {
+    // "(unclosed" would be invalid regex syntax if treated literally as one
+    // — since sourceFormat is fully escaped first, it's just a (non-
+    // matching) literal string instead of a compile error.
+    expect(toDatePreview('2026-09-24', '(unclosed')).toBeNull();
+  });
+
+  test('a chained trim -> toDate pipeline with UseDefault on failure', () => {
+    const transforms = [
+      { kind: 'trim' },
+      { kind: 'toDate', sourceFormat: '{dd}.{mm}.{yyyy}', onError: 'UseDefault', defaultValue: 'unknown' },
+    ];
+    expect(applyTransformsPreview('  24.09.2026  ', transforms)).toBe('2026-09-24');
+    expect(applyTransformsPreview('  not a date  ', transforms)).toBe('unknown');
   });
 });
 
@@ -3316,6 +3388,94 @@ describe('Field transform-chain editor (Issue #84)', () => {
     const row = document.querySelector('#field-transform-list .transform-row');
     expect(row.querySelector('.transform-pattern-input')).not.toBeNull();
     expect(row.querySelector('.transform-group-input').value).toBe('0');
+  });
+
+  // Issue #205
+  test('changing kind to toDate reveals sourceFormat and onError inputs', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+    document.getElementById('btn-field-transform-add').click();
+
+    const select = document.querySelector('#field-transform-list .transform-kind-select');
+    select.value = 'toDate';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const row = document.querySelector('#field-transform-list .transform-row');
+    expect(row.querySelector('.transform-source-format-input').value).toBe('{yyyy}-{mm}-{dd}');
+    expect(row.querySelector('.transform-onerror-select').value).toBe('KeepOriginal');
+    // UseDefault not picked yet — no default-value input rendered.
+    expect(row.querySelector('.transform-default-value-input')).toBeNull();
+  });
+
+  test('changing kind to toInteger/toBoolean reveals only the onError input (no kind-specific params)', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+    document.getElementById('btn-field-transform-add').click();
+    const select = document.querySelector('#field-transform-list .transform-kind-select');
+
+    select.value = 'toInteger';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    let row = document.querySelector('#field-transform-list .transform-row');
+    expect(row.querySelector('.transform-onerror-select')).not.toBeNull();
+    expect(row.querySelector('.transform-source-format-input')).toBeNull();
+
+    select.value = 'toBoolean';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    row = document.querySelector('#field-transform-list .transform-row');
+    expect(row.querySelector('.transform-onerror-select')).not.toBeNull();
+  });
+
+  test('picking onError UseDefault reveals the default-value input', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+    document.getElementById('btn-field-transform-add').click();
+    const kindSelect = document.querySelector('#field-transform-list .transform-kind-select');
+    kindSelect.value = 'toInteger';
+    kindSelect.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const onErrorSelect = document.querySelector('#field-transform-list .transform-onerror-select');
+    onErrorSelect.value = 'UseDefault';
+    onErrorSelect.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const defaultValueInput = document.querySelector('#field-transform-list .transform-default-value-input');
+    expect(defaultValueInput).not.toBeNull();
+    expect(defaultValueInput.value).toBe('');
+
+    defaultValueInput.value = '0';
+    defaultValueInput.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(document.querySelector('#field-transform-list .transform-default-value-input').value).toBe('0');
+  });
+
+  test('editing the sourceFormat input updates state and survives a re-render', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+    document.getElementById('btn-field-transform-add').click();
+    const select = document.querySelector('#field-transform-list .transform-kind-select');
+    select.value = 'toDate';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const sourceFormatInput = document.querySelector('#field-transform-list .transform-source-format-input');
+    sourceFormatInput.value = '{dd}.{mm}.{yyyy}';
+    sourceFormatInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(document.querySelector('#field-transform-list .transform-source-format-input').value).toBe('{dd}.{mm}.{yyyy}');
+  });
+
+  test('confirming is blocked when a toDate step has a blank sourceFormat', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price' });
+    document.getElementById('input-field-name').value = 'Datum';
+    document.getElementById('btn-field-transform-add').click();
+    const select = document.querySelector('#field-transform-list .transform-kind-select');
+    select.value = 'toDate';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    const sourceFormatInput = document.querySelector('#field-transform-list .transform-source-format-input');
+    sourceFormatInput.value = '  ';
+    sourceFormatInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    document.getElementById('btn-field-confirm').click();
+
+    expect(document.querySelectorAll('#fields-list .field-row')).toHaveLength(0);
   });
 
   test('editing the pattern input updates state and survives a re-render', () => {

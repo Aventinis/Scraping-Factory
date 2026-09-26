@@ -177,3 +177,89 @@
     </div>
   </div>
 
+  <!-- Modal: Output Blueprints management (Issue #191) — lists every
+       persisted blueprint (unscoped, reusable across any site), reached via
+       "Manage" next to the per-scrape mapping picker in the Settings
+       section. Same row-list pattern as #saved-configs-section, just without
+       a hostname scope. -->
+  <div id="modal-manage-blueprints" class="modal hidden">
+    <div class="modal-inner">
+      <p class="preview-summary" data-i18n="modals.manageBlueprints.title"></p>
+      <div id="manage-blueprints-list"></div>
+      <p id="manage-blueprints-empty" class="preview-summary hidden" data-i18n="modals.manageBlueprints.empty"></p>
+      <div class="actions">
+        <button type="button" id="btn-blueprint-new" class="btn-secondary btn-tiny" data-i18n="modals.manageBlueprints.newBtn"></button>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-manage-blueprints-close" class="btn-secondary" data-i18n="common.cancel"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: create/edit one Output Blueprint's own name + ordered target
+       field-name list — opened from modal-manage-blueprints' own "+ New"
+       button or a row's "Edit" button (blueprintEditingId distinguishes the
+       two, see output-blueprints-ui.js). Field-name rows reuse the same
+       add/remove/move-with-adjacent-sibling shape field-transforms-ui.js's
+       transform rows already established. -->
+  <div id="modal-blueprint-edit" class="modal hidden">
+    <div class="modal-inner">
+      <label for="input-blueprint-name" data-i18n="modals.blueprintEdit.nameLabel"></label>
+      <input id="input-blueprint-name" type="text" data-i18n-placeholder="modals.blueprintEdit.namePlaceholder" autocomplete="off" />
+      <!-- Issue #244: a Flat/Tree schema-kind toggle — same .mode-toggle
+           segmented-control pattern the mode/engine/notify-method toggles
+           already use elsewhere, so the sliding thumb (syncModeToggleThumbs)
+           applies here for free. Switching kind swaps which of the two
+           sections below is shown; the OTHER kind's own draft (fieldNames or
+           tree) is preserved in state rather than discarded, so toggling back
+           and forth while editing doesn't lose work. -->
+      <div class="mode-toggle" id="blueprint-schema-kind-toggle">
+        <div class="mode-toggle-thumb"></div>
+        <button type="button" id="btn-blueprint-schema-kind-flat" class="mode-btn" data-i18n="modals.blueprintEdit.flatSchemaBtn"></button>
+        <button type="button" id="btn-blueprint-schema-kind-tree" class="mode-btn" data-i18n="modals.blueprintEdit.treeSchemaBtn"></button>
+      </div>
+      <!-- Issue #193 (Flat schema), extended to Tree by Issue #253: import
+           the target field list/tree from a pasted/uploaded sample instead
+           of building it by hand. Format (JSON object/array, or — Flat
+           schema only, see parseFieldNamesFromSample's own doc comment — a
+           CSV header row/plain newline/comma-separated list) is
+           auto-detected from the pasted content, no format picker. Shared
+           between both schema kinds (importBlueprintFieldNamesFromSample in
+           output-blueprints-ui.js dispatches on blueprintEditDraft.schemaKind
+           to replace either fieldNames or tree), so it sits above both
+           schema-specific sections below rather than inside either one. Only
+           shown while CREATING a new blueprint (blueprintEditingId is null)
+           — a deliberate first-version scope decision, not yet wired for
+           merging newly-seen fields into an already-existing blueprint (see
+           CLAUDE.md's Output Blueprints section). -->
+      <div id="blueprint-import-section" class="hidden">
+        <label for="input-blueprint-import-sample" data-i18n="modals.blueprintEdit.importLabel"></label>
+        <textarea id="input-blueprint-import-sample" rows="3" data-i18n-placeholder="modals.blueprintEdit.importPlaceholder"></textarea>
+        <button type="button" id="btn-blueprint-import-parse" class="btn-secondary btn-tiny" data-i18n="modals.blueprintEdit.importBtn"></button>
+      </div>
+      <div id="blueprint-flat-schema-section">
+        <label data-i18n="modals.blueprintEdit.fieldsLabel"></label>
+        <ul id="blueprint-field-list" class="blueprint-field-list"></ul>
+        <button type="button" id="btn-blueprint-field-add" class="btn-secondary btn-tiny" data-i18n="modals.blueprintEdit.addFieldBtn"></button>
+      </div>
+      <!-- Issue #244: the tree schema editor — mirrors container mode's own
+           group-tree editor visually (indentation, name input, move/remove
+           buttons) but simpler: no selector/mode/repeating, since a
+           blueprint's target schema is site-independent (see
+           OutputBlueprintTreeSchema.cs). A node is added directly with a
+           blank, immediately-editable name (no click-based selection step
+           exists here to name it after, unlike container mode's own
+           add-container flow). -->
+      <div id="blueprint-tree-schema-section" class="hidden">
+        <label data-i18n="modals.blueprintEdit.treeLabel"></label>
+        <ul id="blueprint-schema-tree-root" class="group-tree-root"></ul>
+        <button type="button" id="btn-blueprint-schema-add-root-group" class="btn-secondary btn-tiny" data-i18n="modals.blueprintEdit.addGroupBtn"></button>
+        <button type="button" id="btn-blueprint-schema-add-root-field" class="btn-secondary btn-tiny" data-i18n="modals.blueprintEdit.addFieldBtn"></button>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-blueprint-edit-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-blueprint-edit-save" class="btn-primary" data-i18n="modals.blueprintEdit.save"></button>
+      </div>
+    </div>
+  </div>
+

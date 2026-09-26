@@ -294,7 +294,7 @@ public class PythonGroupCodeGeneratorTests
 
         Assert.Contains("""URLS = ["https://example.com/a", "https://example.com/b"]""", script);
         Assert.Contains("for url in URLS:", script);
-        Assert.Contains("for el in scrape(url):", script);
+        Assert.Contains("page_root, page_blueprint_rows, page_blueprint_tree_elements = scrape(url)", script);
         Assert.Contains("root.append(el)", script);
     }
 

@@ -1,0 +1,65 @@
+name: release-please
+
+# Watches dev: release-please opens/updates a "chore: release X.Y.Z" PR that
+# bumps extension/manifest.json + extension/package.json (see
+# release-please-config.json) based on Conventional Commits merged since the
+# last release. That PR is auto-merged once it passes the same required CI
+# checks (ci.yml) dev's branch protection already demands from every other
+# PR — nothing here bypasses that. Once merged, release-please's own
+# subsequent run on that merge commit creates the GitHub Release (and its
+# tag); the last job flips that Release to `prerelease: true` (Chrome's
+# manifest.json version field can't carry a semver "-beta"-style suffix, so
+# the version *string* stays plain X.Y.Z — only the GitHub Release object
+# itself is marked prerelease).
+on:
+  push:
+    branches: [dev]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      pr: ${{ steps.release.outputs.pr }}
+    steps:
+      # Deliberately NOT the default GITHUB_TOKEN: Actions suppresses
+      # further workflow runs (including this repo's own required
+      # `pull_request`-triggered CI checks) for anything done with the
+      # default token, which would leave the release PR permanently
+      # unable to satisfy dev's required-status-checks rule. A PAT/App
+      # token sidesteps that restriction — see the setup notes handed to
+      # you separately for how RELEASE_PLEASE_TOKEN is scoped.
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          target-branch: dev
+
+  auto-merge-release-pr:
+    needs: release-please
+    if: needs.release-please.outputs.pr != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable auto-merge on the release-please PR
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          PR_JSON: ${{ needs.release-please.outputs.pr }}
+        run: |
+          pr_number=$(echo "$PR_JSON" | jq -r '.number')
+          gh pr merge --auto --squash "$pr_number" --repo "${{ github.repository }}"
+
+  mark-release-as-prerelease:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Flag the release-please-created GitHub Release as a prerelease
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+        run: gh release edit "$TAG_NAME" --prerelease --repo "${{ github.repository }}"

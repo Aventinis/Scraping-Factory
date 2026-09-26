@@ -1,0 +1,457 @@
+const {
+  addBlueprintFieldName, removeBlueprintFieldName, updateBlueprintFieldName, moveBlueprintFieldName,
+  blueprintDraftIsValid, parseFieldNamesFromSample,
+  buildBlueprintSchemaGroup, buildBlueprintSchemaField, parseBlueprintSchemaTree, serializeBlueprintSchemaTree,
+  blueprintTreeSchemaIsValid, buildBlueprintTreeFromSample, countBlueprintTreeLeaves,
+  createMappingDraft, updateMappingSource, mappingIsComplete,
+  createTreeMappingDraft, updateTreeMappingSource, treeMappingIsComplete,
+  buildOutputBlueprintMapping,
+} = require('./output-blueprints');
+
+describe('output-blueprints (Issue #191): editing a blueprint\'s own field-name list', () => {
+  test('addBlueprintFieldName appends one blank entry without mutating the original', () => {
+    const original = ['Title'];
+    const result = addBlueprintFieldName(original);
+    expect(result).toEqual(['Title', '']);
+    expect(original).toEqual(['Title']);
+  });
+
+  test('removeBlueprintFieldName drops the entry at the given index', () => {
+    expect(removeBlueprintFieldName(['A', 'B', 'C'], 1)).toEqual(['A', 'C']);
+  });
+
+  test('updateBlueprintFieldName replaces only the targeted entry', () => {
+    expect(updateBlueprintFieldName(['A', 'B'], 1, 'Renamed')).toEqual(['A', 'Renamed']);
+  });
+
+  test('moveBlueprintFieldName swaps with the adjacent sibling', () => {
+    expect(moveBlueprintFieldName(['A', 'B', 'C'], 0, 1)).toEqual(['B', 'A', 'C']);
+    expect(moveBlueprintFieldName(['A', 'B', 'C'], 2, -1)).toEqual(['A', 'C', 'B']);
+  });
+
+  test('moveBlueprintFieldName is a no-op past either boundary', () => {
+    const fieldNames = ['A', 'B'];
+    expect(moveBlueprintFieldName(fieldNames, 0, -1)).toBe(fieldNames);
+    expect(moveBlueprintFieldName(fieldNames, 1, 1)).toBe(fieldNames);
+  });
+
+  test('blueprintDraftIsValid requires a non-blank name and at least one field', () => {
+    expect(blueprintDraftIsValid('', ['Title'])).toBe(false);
+    expect(blueprintDraftIsValid('  ', ['Title'])).toBe(false);
+    expect(blueprintDraftIsValid('My blueprint', [])).toBe(false);
+  });
+
+  test('blueprintDraftIsValid rejects a blank field name', () => {
+    expect(blueprintDraftIsValid('My blueprint', ['Title', '  '])).toBe(false);
+  });
+
+  test('blueprintDraftIsValid rejects duplicate field names after trimming', () => {
+    expect(blueprintDraftIsValid('My blueprint', ['Title', ' Title '])).toBe(false);
+  });
+
+  test('blueprintDraftIsValid accepts a well-formed draft', () => {
+    expect(blueprintDraftIsValid('My blueprint', ['Title', 'Price'])).toBe(true);
+  });
+});
+
+// Issue #193: importing a blueprint's own field list from a pasted/uploaded
+// sample instead of typing every field name by hand.
+describe('output-blueprints (Issue #193): parseFieldNamesFromSample', () => {
+  test('returns [] for blank/whitespace-only input', () => {
+    expect(parseFieldNamesFromSample('')).toEqual([]);
+    expect(parseFieldNamesFromSample('   \n  ')).toEqual([]);
+  });
+
+  test('parses a plain newline-separated list of field names', () => {
+    expect(parseFieldNamesFromSample('Title\nPrice\nSku')).toEqual(['Title', 'Price', 'Sku']);
+  });
+
+  test('parses a single comma-separated line (plain list or CSV header row alike)', () => {
+    expect(parseFieldNamesFromSample('Title,Price,Sku')).toEqual(['Title', 'Price', 'Sku']);
+  });
+
+  test('parses a CSV header row, ignoring the data rows below it', () => {
+    const csv = 'Title,Price,Sku\nWidget,9.99,W-1\nGadget,19.99,G-2';
+    expect(parseFieldNamesFromSample(csv)).toEqual(['Title', 'Price', 'Sku']);
+  });
+
+  test('strips surrounding quotes from a quoted CSV header field', () => {
+    expect(parseFieldNamesFromSample('"Title","Price"')).toEqual(['Title', 'Price']);
+  });
+
+  test('trims whitespace around each parsed name', () => {
+    expect(parseFieldNamesFromSample('Title, Price , Sku')).toEqual(['Title', 'Price', 'Sku']);
+    expect(parseFieldNamesFromSample('  Title  \n  Price  ')).toEqual(['Title', 'Price']);
+  });
+
+  test('drops blank lines and deduplicates repeated names', () => {
+    expect(parseFieldNamesFromSample('Title\n\nPrice\nTitle')).toEqual(['Title', 'Price']);
+  });
+
+  test('parses field names from a single JSON object sample', () => {
+    expect(parseFieldNamesFromSample('{"Title": "Widget", "Price": 9.99}')).toEqual(['Title', 'Price']);
+  });
+
+  test('parses field names from the first element of a JSON array of objects', () => {
+    const json = '[{"Title": "Widget", "Price": 9.99}, {"Title": "Gadget", "Sku": "G-2"}]';
+    expect(parseFieldNamesFromSample(json)).toEqual(['Title', 'Price']);
+  });
+
+  test('uses a JSON array of strings as the field-name list directly', () => {
+    expect(parseFieldNamesFromSample('["Title", "Price", "Sku"]')).toEqual(['Title', 'Price', 'Sku']);
+  });
+
+  test('returns [] for an empty JSON object/array', () => {
+    expect(parseFieldNamesFromSample('{}')).toEqual([]);
+    expect(parseFieldNamesFromSample('[]')).toEqual([]);
+  });
+
+  test('returns [] for a JSON array of non-string, non-object primitives', () => {
+    expect(parseFieldNamesFromSample('[1, 2, 3]')).toEqual([]);
+  });
+
+  // Bug reports against the first version of this parser (real-world sample
+  // pasted from a site's own embedded JSON data), covering: (1) a wrapper
+  // object around the actual array of records, (2) a hand-edited/broken
+  // JSON fragment (trailing comma, outer braces left over from deleting a
+  // wrapper key) producing "key": value lines rather than valid JSON, and
+  // (3) bare brace/bracket lines being imported as their own bogus field.
+  test('drills through a wrapper object into a nested array-of-objects sample instead of using the wrapper key itself', () => {
+    const json = JSON.stringify({
+      offerTiles: [
+        { title: '', type: '', price: '', linkHref: '/x', uuid: 'abc', primaryType: 'contentTeaser' },
+      ],
+    });
+    expect(parseFieldNamesFromSample(json)).toEqual(
+      ['title', 'type', 'price', 'linkHref', 'uuid', 'primaryType'],
+    );
+  });
+
+  test('drills through more than one level of object wrapping', () => {
+    const json = JSON.stringify({ data: { items: [{ a: 1, b: 2 }] } });
+    expect(parseFieldNamesFromSample(json)).toEqual(['a', 'b']);
+  });
+
+  test('extracts just the key from "key": value property lines when the pasted snippet is not valid JSON', () => {
+    const broken = [
+      '{',
+      '"title": "",',
+      '"type": "",',
+      '"linkHref": "/clever-kochen/rezepte-und-ernaehrung/erdbeerlimes",',
+      '"primaryType": "contentTeaser"',
+      '}',
+    ].join('\n');
+    expect(parseFieldNamesFromSample(broken)).toEqual(['title', 'type', 'linkHref', 'primaryType']);
+  });
+
+  test('extracts keys from bare property lines with no surrounding braces at all', () => {
+    const broken = [
+      '"title": "",',
+      '"type": "",',
+      '"primaryType": "contentTeaser",',
+    ].join('\n');
+    expect(parseFieldNamesFromSample(broken)).toEqual(['title', 'type', 'primaryType']);
+  });
+
+  test('drops bare structural brace/bracket lines instead of importing them as their own field', () => {
+    const broken = ['[', '{', '"a": 1,', '"b": 2', '},', ']'].join('\n');
+    expect(parseFieldNamesFromSample(broken)).toEqual(['a', 'b']);
+  });
+
+  test('supports unquoted (JS object literal style) property lines too', () => {
+    const broken = ['{', 'title: "",', 'type: "",', '}'].join('\n');
+    expect(parseFieldNamesFromSample(broken)).toEqual(['title', 'type']);
+  });
+});
+
+// Issue #244: the tree-shaped counterpart to the flat field-name list above —
+// editing a blueprint's own target schema tree (create/edit modal).
+describe('output-blueprints (Issue #244): editing a blueprint\'s own target tree', () => {
+  test('buildBlueprintSchemaGroup/buildBlueprintSchemaField build the internal {kind,...} node shape', () => {
+    expect(buildBlueprintSchemaGroup('Kategorien')).toEqual({ kind: 'group', name: 'Kategorien', children: [] });
+    expect(buildBlueprintSchemaField('Preis')).toEqual({ kind: 'field', name: 'Preis' });
+  });
+
+  test('parseBlueprintSchemaTree converts the wire shape (no kind tag) into the internal editor shape', () => {
+    const wire = [
+      { name: 'Kategorien', children: [{ name: 'Name' }, { name: 'Gerichte', children: [{ name: 'Preis' }] }] },
+    ];
+    expect(parseBlueprintSchemaTree(wire)).toEqual([
+      {
+        kind: 'group', name: 'Kategorien',
+        children: [
+          { kind: 'field', name: 'Name' },
+          { kind: 'group', name: 'Gerichte', children: [{ kind: 'field', name: 'Preis' }] },
+        ],
+      },
+    ]);
+  });
+
+  test('serializeBlueprintSchemaTree is the exact reverse of parseBlueprintSchemaTree', () => {
+    const wire = [
+      { name: 'Kategorien', children: [{ name: 'Name' }, { name: 'Gerichte', children: [{ name: 'Preis' }] }] },
+    ];
+    expect(serializeBlueprintSchemaTree(parseBlueprintSchemaTree(wire))).toEqual(wire);
+  });
+
+  test('blueprintTreeSchemaIsValid requires a non-blank blueprint name and at least one node', () => {
+    expect(blueprintTreeSchemaIsValid('', [buildBlueprintSchemaField('A')])).toBe(false);
+    expect(blueprintTreeSchemaIsValid('My blueprint', [])).toBe(false);
+  });
+
+  test('blueprintTreeSchemaIsValid rejects a blank node name at any depth', () => {
+    const group = buildBlueprintSchemaGroup('Kategorien');
+    group.children = [buildBlueprintSchemaField('  ')];
+    expect(blueprintTreeSchemaIsValid('My blueprint', [group])).toBe(false);
+  });
+
+  test('blueprintTreeSchemaIsValid rejects a group with no children', () => {
+    expect(blueprintTreeSchemaIsValid('My blueprint', [buildBlueprintSchemaGroup('Empty')])).toBe(false);
+  });
+
+  test('blueprintTreeSchemaIsValid accepts a well-formed nested tree', () => {
+    const group = buildBlueprintSchemaGroup('Kategorien');
+    group.children = [buildBlueprintSchemaField('Name')];
+    expect(blueprintTreeSchemaIsValid('My blueprint', [group])).toBe(true);
+  });
+});
+
+// Issue #253: importing a Tree-schema blueprint's own target tree from a
+// pasted/uploaded JSON sample — the nested counterpart to #193's flat
+// parseFieldNamesFromSample.
+describe('output-blueprints (Issue #253): buildBlueprintTreeFromSample', () => {
+  test('returns [] for blank input or invalid JSON', () => {
+    expect(buildBlueprintTreeFromSample('')).toEqual([]);
+    expect(buildBlueprintTreeFromSample('   ')).toEqual([]);
+    expect(buildBlueprintTreeFromSample('not json at all')).toEqual([]);
+  });
+
+  test('turns a flat object\'s own scalar keys into top-level field nodes', () => {
+    expect(buildBlueprintTreeFromSample(JSON.stringify({ Title: 'Widget', Price: 9.99 }))).toEqual([
+      { kind: 'field', name: 'Title' },
+      { kind: 'field', name: 'Price' },
+    ]);
+  });
+
+  test('does NOT drill through a wrapper object — the wrapper key becomes a real group node', () => {
+    const json = JSON.stringify({
+      offerTiles: [
+        { title: '', type: '', linkHref: '/x', primaryType: 'contentTeaser' },
+      ],
+    });
+    expect(buildBlueprintTreeFromSample(json)).toEqual([
+      {
+        kind: 'group',
+        name: 'offerTiles',
+        children: [
+          { kind: 'field', name: 'title' },
+          { kind: 'field', name: 'type' },
+          { kind: 'field', name: 'linkHref' },
+          { kind: 'field', name: 'primaryType' },
+        ],
+      },
+    ]);
+  });
+
+  test('builds a nested group from a plain nested object (not just an array of objects)', () => {
+    const json = JSON.stringify({ name: 'Widget', meta: { sku: 'W-1', weight: 2 } });
+    expect(buildBlueprintTreeFromSample(json)).toEqual([
+      { kind: 'field', name: 'name' },
+      { kind: 'group', name: 'meta', children: [{ kind: 'field', name: 'sku' }, { kind: 'field', name: 'weight' }] },
+    ]);
+  });
+
+  test('builds more than one level of nesting', () => {
+    const json = JSON.stringify({ categories: [{ name: '', items: [{ title: '' }] }] });
+    expect(buildBlueprintTreeFromSample(json)).toEqual([
+      {
+        kind: 'group', name: 'categories',
+        children: [
+          { kind: 'field', name: 'name' },
+          { kind: 'group', name: 'items', children: [{ kind: 'field', name: 'title' }] },
+        ],
+      },
+    ]);
+  });
+
+  test('a top-level array of objects has no wrapper key — uses the first element\'s own keys directly', () => {
+    expect(buildBlueprintTreeFromSample(JSON.stringify([{ a: 1, b: 2 }, { a: 3, b: 4 }]))).toEqual([
+      { kind: 'field', name: 'a' },
+      { kind: 'field', name: 'b' },
+    ]);
+  });
+
+  test('a top-level array of strings becomes flat top-level field nodes, mirroring the Flat importer', () => {
+    expect(buildBlueprintTreeFromSample(JSON.stringify(['Title', 'Price']))).toEqual([
+      { kind: 'field', name: 'Title' },
+      { kind: 'field', name: 'Price' },
+    ]);
+  });
+
+  test('returns [] for a top-level array of scalars/arrays with no importable object', () => {
+    expect(buildBlueprintTreeFromSample(JSON.stringify([1, 2, 3]))).toEqual([]);
+    expect(buildBlueprintTreeFromSample(JSON.stringify([[1, 2], [3, 4]]))).toEqual([]);
+  });
+
+  test('skips a key whose value is an array of plain scalars — no natural group/field split', () => {
+    const json = JSON.stringify({ name: 'Widget', tags: ['a', 'b'] });
+    expect(buildBlueprintTreeFromSample(json)).toEqual([{ kind: 'field', name: 'name' }]);
+  });
+
+  test('skips a nested object/group that ends up with zero importable children', () => {
+    const json = JSON.stringify({ name: 'Widget', meta: {} });
+    expect(buildBlueprintTreeFromSample(json)).toEqual([{ kind: 'field', name: 'name' }]);
+  });
+
+  test('requires valid JSON — does not fall back to the line-based "key": value parsing #193 uses for the Flat case', () => {
+    const broken = ['{', '"title": "",', '"type": ""', '},'].join('\n'); // trailing comma makes this invalid JSON
+    expect(buildBlueprintTreeFromSample(broken)).toEqual([]);
+  });
+});
+
+describe('output-blueprints (Issue #253): countBlueprintTreeLeaves', () => {
+  test('counts leaf field nodes only, recursively, ignoring group nodes themselves', () => {
+    const tree = [
+      { kind: 'field', name: 'a' },
+      {
+        kind: 'group', name: 'g',
+        children: [{ kind: 'field', name: 'b' }, { kind: 'field', name: 'c' }],
+      },
+    ];
+    expect(countBlueprintTreeLeaves(tree)).toBe(3);
+  });
+
+  test('returns 0 for an empty tree', () => {
+    expect(countBlueprintTreeLeaves([])).toBe(0);
+  });
+});
+
+describe('output-blueprints (Issue #191): per-scrape mapping draft', () => {
+  test('createMappingDraft seeds every target field unset', () => {
+    expect(createMappingDraft(['Title', 'Price'])).toEqual({ Title: null, Price: null });
+  });
+
+  test('updateMappingSource sets a target field\'s source without touching others', () => {
+    const draft = createMappingDraft(['Title', 'Price']);
+    const result = updateMappingSource(draft, 'Title', 'h1');
+    expect(result).toEqual({ Title: 'h1', Price: null });
+    expect(draft.Title).toBeNull(); // original untouched
+  });
+
+  test('updateMappingSource clears a source back to null when given an empty string', () => {
+    const draft = updateMappingSource(createMappingDraft(['Title']), 'Title', 'h1');
+    expect(updateMappingSource(draft, 'Title', '')).toEqual({ Title: null });
+  });
+
+  test('mappingIsComplete is false while any target field is unmapped', () => {
+    const draft = updateMappingSource(createMappingDraft(['Title', 'Price']), 'Title', 'h1');
+    expect(mappingIsComplete(['Title', 'Price'], draft)).toBe(false);
+  });
+
+  test('mappingIsComplete is false for an empty target field list', () => {
+    expect(mappingIsComplete([], {})).toBe(false);
+  });
+
+  test('mappingIsComplete is true once every target field has a source', () => {
+    let draft = createMappingDraft(['Title', 'Price']);
+    draft = updateMappingSource(draft, 'Title', 'h1');
+    draft = updateMappingSource(draft, 'Price', '.price');
+    expect(mappingIsComplete(['Title', 'Price'], draft)).toBe(true);
+  });
+
+  test('buildOutputBlueprintMapping returns null when no blueprint is picked', () => {
+    expect(buildOutputBlueprintMapping('', 'Flat', ['Title'], { Title: 'h1' })).toBeNull();
+  });
+
+  test('buildOutputBlueprintMapping returns null while the mapping is incomplete', () => {
+    expect(buildOutputBlueprintMapping('3', 'Flat', ['Title', 'Price'], { Title: 'h1', Price: null })).toBeNull();
+  });
+
+  test('buildOutputBlueprintMapping builds the wire shape, parsing the id and preserving target order', () => {
+    const draft = { Price: '.price', Title: 'h1' };
+    expect(buildOutputBlueprintMapping('3', 'Flat', ['Title', 'Price'], draft)).toEqual({
+      blueprintId: 3,
+      schemaKind: 'Flat',
+      fields: [
+        { targetField: 'Title', sourceField: 'h1' },
+        { targetField: 'Price', sourceField: '.price' },
+      ],
+    });
+  });
+});
+
+// Issue #244: the tree-shaped counterpart to the flat mapping draft above.
+describe('output-blueprints (Issue #244): per-scrape tree mapping draft', () => {
+  const tree = [
+    {
+      name: 'Kategorien',
+      children: [
+        { name: 'Name' },
+        { name: 'Gerichte', children: [{ name: 'Preis' }] },
+      ],
+    },
+    { name: 'Zutaten', children: [{ name: 'Name' }] },
+  ];
+
+  test('createTreeMappingDraft seeds every leaf path unset, keyed by dot-joined index path', () => {
+    expect(createTreeMappingDraft(tree)).toEqual({
+      '0.0': null, '0.1.0': null, '1.0': null,
+    });
+  });
+
+  test('updateTreeMappingSource sets one leaf path\'s source without touching others', () => {
+    const draft = createTreeMappingDraft(tree);
+    const result = updateTreeMappingSource(draft, '0.0', 'KategorieName');
+    expect(result['0.0']).toBe('KategorieName');
+    expect(result['1.0']).toBeNull();
+    expect(draft['0.0']).toBeNull(); // original untouched
+  });
+
+  test('updateTreeMappingSource clears a source back to null when given an empty string', () => {
+    let draft = createTreeMappingDraft(tree);
+    draft = updateTreeMappingSource(draft, '0.0', 'KategorieName');
+    expect(updateTreeMappingSource(draft, '0.0', '')['0.0']).toBeNull();
+  });
+
+  test('treeMappingIsComplete is false while any leaf is unmapped, and for an empty tree', () => {
+    let draft = createTreeMappingDraft(tree);
+    draft = updateTreeMappingSource(draft, '0.0', 'KategorieName');
+    expect(treeMappingIsComplete(tree, draft)).toBe(false);
+    expect(treeMappingIsComplete([], {})).toBe(false);
+  });
+
+  test('treeMappingIsComplete is true once every leaf has a source', () => {
+    let draft = createTreeMappingDraft(tree);
+    draft = updateTreeMappingSource(draft, '0.0', 'KategorieName');
+    draft = updateTreeMappingSource(draft, '0.1.0', 'Preis');
+    draft = updateTreeMappingSource(draft, '1.0', 'ZutatName');
+    expect(treeMappingIsComplete(tree, draft)).toBe(true);
+  });
+
+  test('buildOutputBlueprintMapping (Tree) returns null while the tree mapping is incomplete', () => {
+    const draft = createTreeMappingDraft(tree);
+    expect(buildOutputBlueprintMapping('3', 'Tree', [], {}, tree, draft)).toBeNull();
+  });
+
+  test('buildOutputBlueprintMapping (Tree) builds the nested wire shape, one node at a time', () => {
+    let draft = createTreeMappingDraft(tree);
+    draft = updateTreeMappingSource(draft, '0.0', 'KategorieName');
+    draft = updateTreeMappingSource(draft, '0.1.0', 'Preis');
+    draft = updateTreeMappingSource(draft, '1.0', 'ZutatName');
+
+    expect(buildOutputBlueprintMapping('3', 'Tree', [], {}, tree, draft)).toEqual({
+      blueprintId: 3,
+      schemaKind: 'Tree',
+      tree: [
+        {
+          name: 'Kategorien',
+          children: [
+            { name: 'Name', sourceField: 'KategorieName' },
+            { name: 'Gerichte', children: [{ name: 'Preis', sourceField: 'Preis' }] },
+          ],
+        },
+        { name: 'Zutaten', children: [{ name: 'Name', sourceField: 'ZutatName' }] },
+      ],
+    });
+  });
+});

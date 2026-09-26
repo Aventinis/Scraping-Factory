@@ -121,3 +121,32 @@ public sealed class ApiCallStep : ScrapingStep
 {
     public required ApiConfig Config { get; init; }
 }
+
+// Issue #182: replaces the flat ExtractStep list / single ExtractGroupStep
+// entirely when the wire-format config carries Blocks instead of
+// Fields/Groups/Api — a single step (like ExtractGroupStep/ApiCallStep)
+// carrying every independent extraction block instead of exactly one shape,
+// so one script run can write more than one, independently-shaped, output
+// file while still sharing one NavigateStep/one set of browser actions.
+public sealed class ExtractionBlockStep : ScrapingStep
+{
+    public required List<PlanExtractionBlock> Blocks { get; init; }
+}
+
+// The plan-level (resolved) counterpart to ExtractionBlockConfig — by the
+// time ScrapingPlanBuilder produces one of these, exactly one of
+// Fields/Groups is populated (never both, never neither; the wire-format's
+// own per-block Fields-xor-Groups check already ran in Program.cs) and
+// OutputFormat/OutputFileBaseName have already been resolved from the
+// block's own optional overrides the same way ScrapingPlan's top-level
+// fields are for the single-shape case.
+public sealed class PlanExtractionBlock
+{
+    public required string Name { get; init; }
+    public List<ExtractStep>? Fields { get; init; }
+    public List<GroupNode>? Groups { get; init; }
+    public required OutputFormat OutputFormat { get; init; }
+    public required string OutputFileBaseName { get; init; }
+    public ChangeDetectionConfig? ChangeDetection { get; init; }
+    public List<HardeningCheck>? Hardening { get; init; }
+}

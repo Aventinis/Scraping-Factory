@@ -14,7 +14,8 @@
     "fieldNamePlaceholder": "Feldname",
     "attributePlaceholder": "Attribut",
     "noMatches": "Keine Treffer in der Aufzeichnung.",
-    "noRecordArray": "Kein Datensatz-Array gefunden — als Quelle nicht verwendbar."
+    "noRecordArray": "Kein Datensatz-Array gefunden — als Quelle nicht verwendbar.",
+    "edit": "Bearbeiten"
   },
   "language": {
     "label": "Sprache"
@@ -42,6 +43,13 @@
     "modeFlat": "Felder (flach)",
     "modeContainer": "Container (verschachtelt)",
     "modeApi": "API",
+    "modeCombined": "Kombiniert",
+    "combinedHint": "Kombiniert mehrere deiner bereits gespeicherten Konfigurationen — auch von verschiedenen Seiten — zu einem Skript, dessen Ergebnisse zu einem einzigen Ergebnis zusammengeführt werden.",
+    "combinedAddBtn": "+ Komponente hinzufügen",
+    "combinedNoSavedConfigsHint": "Noch keine gespeicherten Konfigurationen — speichere zuerst mindestens zwei Konfigurationen (in einem anderen Modus) und kombiniere sie dann hier.",
+    "combinedNamePlaceholder": "Name",
+    "combinedComponentMissing": "nicht mehr verfügbar",
+    "combinedPickerOption": "{name} ({host})",
     "addFieldBtn": "+ Feld hinzufügen",
     "addContainerBtn": "+ Container hinzufügen",
     "apiCaptureTitle": "Zeichnet fetch/XHR-Netzwerkanfragen dieser Seite auf",
@@ -141,7 +149,25 @@
     "hardeningBlockingPhrasesLabel": "Sperr-Phrasen (eine pro Zeile)",
     "hardeningBlockingPhrasesPlaceholder": "z. B. \"Access Denied\", \"Bitte bestätigen Sie, dass Sie ein Mensch sind\"",
     "hardeningRequiredFieldsToggle": "Felder verpflichtend machen (unvollständige Zeilen verwerfen)",
-    "hardeningRequiredFieldsAddBtn": "+ Feld hinzufügen"
+    "hardeningRequiredFieldsAddBtn": "+ Feld hinzufügen",
+    "modeBlocks": "Blöcke",
+    "blocksHint": "Erstellt mehrere unabhängige Extraktionsblöcke (flach oder verschachtelt, beliebig gemischt), die sich die Navigation dieser Seite teilen — jeder schreibt in einem Skriptlauf seine eigene Ausgabedatei.",
+    "blocksNameLabel": "Blockname",
+    "blocksNamePlaceholder": "z. B. Angebote",
+    "blocksOutputFileNameLabel": "Ausgabedateiname",
+    "blocksOutputFileNamePlaceholder": "Standard: Blockname",
+    "blocksAddBtn": "+ Block hinzufügen",
+    "blocksUpdateBtn": "Block aktualisieren",
+    "blocksListLabel": "Blöcke",
+    "blocksMinCountHint": "Es werden mindestens 2 Blöcke benötigt, um ein Skript zu generieren.",
+    "blocksSummaryFlat": "{count} Feld(er)",
+    "blocksSummaryGroup": "{count} Gruppe(n)",
+    "blocksUnnamed": "(unbenannt)",
+    "outputBlueprintLabel": "Output-Blueprint",
+    "outputBlueprintNoneOption": "Keiner",
+    "manageBlueprintsBtn": "Verwalten",
+    "outputBlueprintMappingHint": "Ordne jedem Zielfeld eines der eigenen Quellfelder dieser Konfiguration zu — jedes Zielfeld braucht eine Quelle, bevor das Skript erzeugt werden kann.",
+    "outputBlueprintTreeMappingHint": "Ordne jedem Zielfeld eines der eigenen Quellfelder dieser Konfiguration zu — die Position einer Zielgruppe in der Ausgabe wird automatisch aus ihren zugeordneten Feldern abgeleitet. Jedes Zielfeld braucht eine Quelle, bevor das Skript erzeugt werden kann."
   },
   "robots": {
     "checkFailed": "robots.txt konnte nicht geprüft werden ({error}).",
@@ -232,10 +258,17 @@
     "regexExtractOption": "Regex-Extraktion",
     "replaceOption": "Suchen/Ersetzen",
     "toNumberOption": "In Zahl umwandeln",
+    "toIntegerOption": "In Ganzzahl umwandeln",
+    "toBooleanOption": "In Wahrheitswert umwandeln",
+    "toDateOption": "In Datum umwandeln",
     "patternPlaceholder": "Regex-Muster (z. B. \"\\d+\")",
     "groupPlaceholder": "Gruppe (0 = ganzer Treffer)",
     "findPlaceholder": "Suchen",
     "replacementPlaceholder": "Ersetzen durch",
+    "sourceFormatPlaceholder": "Quellformat (z. B. \"{dd}.{mm}.{yyyy}\")",
+    "onErrorKeepOriginalOption": "Bei Fehler: Originalwert behalten",
+    "onErrorUseDefaultOption": "Bei Fehler: Standardwert verwenden",
+    "defaultValuePlaceholder": "Standardwert",
     "previewLabel": "Vorschau: {value}",
     "previewEmptyValue": "(leer)",
     "previewUnavailable": "Vorschau nicht möglich (ungültiges Muster)"
@@ -252,7 +285,9 @@
     "saveOutputBtn": "Output speichern",
     "dataPreviewTitle": "Testlauf-Datenvorschau",
     "dataPreviewTruncatedCsv": "Zeige {shown} von {total} Zeilen — gekürzt",
-    "dataPreviewTruncatedXml": "Ausschnitt — nicht alle Daten werden angezeigt"
+    "dataPreviewTruncatedXml": "Ausschnitt — nicht alle Daten werden angezeigt",
+    "blocksOutputTitle": "Block-Ausgaben",
+    "blocksOutputDownloadBtn": "Herunterladen"
   },
   "modals": {
     "fieldName": {
@@ -305,12 +340,34 @@
     },
     "matchCount": {
       "found": "{count} Element(e) gefunden"
+    },
+    "manageBlueprints": {
+      "title": "Output-Blueprints",
+      "empty": "Noch keine Output-Blueprints gespeichert.",
+      "newBtn": "+ Neuer Blueprint"
+    },
+    "blueprintEdit": {
+      "nameLabel": "Name des Blueprints (z. B. \"Standard-Produktexport\")",
+      "namePlaceholder": "Name",
+      "flatSchemaBtn": "Flach",
+      "treeSchemaBtn": "Baum",
+      "fieldsLabel": "Zielfelder (in Ausgabereihenfolge)",
+      "treeLabel": "Zielbaumstruktur",
+      "fieldNamePlaceholder": "Feldname",
+      "addFieldBtn": "+ Feld hinzufügen",
+      "addGroupBtn": "+ Gruppe hinzufügen",
+      "importLabel": "Aus einer Beispieldatei importieren (JSON, CSV-Kopfzeile oder eine einfache Feldnamenliste)",
+      "importPlaceholder": "JSON-Beispiel, CSV-Kopfzeile oder einen Feldnamen pro Zeile einfügen…",
+      "importBtn": "Analysieren & Felder befüllen",
+      "save": "Speichern",
+      "editBtn": "Bearbeiten"
     }
   },
   "toast": {
     "verificationFailed": "Verifikation der Konfiguration fehlgeschlagen.",
     "configInvalid": "Konfiguration ungültig: {message}",
     "generationError": "Fehler: {message}",
+    "combinedComponentUnresolvable": "Komponente \"{name}\" konnte nicht geladen werden — ihre gespeicherte Konfiguration wurde möglicherweise gelöscht.",
     "selectionUnavailable": "Element-Auswahl auf dieser Seite nicht möglich.",
     "scopeSelectorNotFound": "Der gewählte Bezugspunkt wurde nicht mehr gefunden — die Seite hat sich zwischenzeitlich verändert (z. B. Hover- oder Ladezustand). Bitte versuche es erneut oder wähle einen anderen Ausgangspunkt.",
     "clickOutsideScope": "Bitte ein Element innerhalb eines Containers auswählen.",
@@ -328,7 +385,14 @@
     "outputSaveFailed": "Output konnte nicht gespeichert werden: {message}",
     "outputLoadFailed": "Output konnte nicht geladen werden: {message}",
     "outputDeleted": "Output gelöscht.",
-    "outputDeleteFailed": "Output konnte nicht gelöscht werden: {message}"
+    "outputDeleteFailed": "Output konnte nicht gelöscht werden: {message}",
+    "blueprintLoadFailed": "Output-Blueprint konnte nicht geladen werden: {message}",
+    "blueprintDeleted": "Output-Blueprint gelöscht.",
+    "blueprintDeleteFailed": "Output-Blueprint konnte nicht gelöscht werden: {message}",
+    "blueprintSaved": "Output-Blueprint gespeichert.",
+    "blueprintSaveFailed": "Output-Blueprint konnte nicht gespeichert werden: {message}",
+    "blueprintImportEmpty": "In der eingefügten Beispieldatei wurden keine Feldnamen gefunden.",
+    "blueprintImportParsed": "{count} Feld(er) aus der Beispieldatei importiert."
   },
   "frame": {
     "badge": "iframe",

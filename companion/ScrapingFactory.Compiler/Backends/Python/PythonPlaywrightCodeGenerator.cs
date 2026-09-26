@@ -96,6 +96,44 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         var pagination = PythonPaginationLiteral.BuildContext(plan.Pagination);
         var externalConfig = PythonExternalConfigLiteral.BuildContext(plan.ExternalConfig);
 
+        // Issue #182: Blocks replaces every other extraction shape wholesale
+        // — see PythonCodeGenerator's equivalent branch for the reasoning.
+        // Login/wait steps (if any) still run first, shared across every
+        // block, exactly like Container-Mode's own case below.
+        var blockStep = plan.Steps.OfType<ExtractionBlockStep>().SingleOrDefault();
+        if (blockStep is not null)
+        {
+            var blockChangeDetectionAny = blockStep.Blocks.Any(b => b.ChangeDetection is not null);
+            var blocksShellTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_scraper_blocks.py.j2");
+            return blocksShellTemplate.Render(new
+            {
+                urls = navigate.Urls,
+                blocks_literal = PythonExtractionBlockLiteral.Render(blockStep.Blocks),
+                blocks_meta = blockStep.Blocks.Select(b => new { name = b.Name, shape = b.Groups is not null ? "group" : "flat" }).ToList(),
+                any_flat = blockStep.Blocks.Any(b => b.Groups is null),
+                any_group = blockStep.Blocks.Any(b => b.Groups is not null),
+                any_csv = blockStep.Blocks.Any(b => b.Groups is null && b.OutputFormat != OutputFormat.Json),
+                any_json_output = blockStep.Blocks.Any(b => b.OutputFormat == OutputFormat.Json),
+                hardening_any = blockStep.Blocks.Any(b => b.Hardening is { Count: > 0 }),
+                hardening_has_baseline_any = blockStep.Blocks.Any(b => b.Hardening?.Any(check => check is BaselineCheck) == true),
+                change_detection_any = blockChangeDetectionAny,
+                actions,
+                navigate_action = navigateFragment,
+                login_actions = loginActionsIndented,
+                has_login_actions = loginActionsOnly.Length > 0,
+                persistent_session_enabled = plan.PersistentSession,
+                // Blocks-specific: needsOsImport was computed from
+                // plan.ChangeDetection (always null for a Blocks plan — see
+                // ScrapingPlanBuilder), so a per-block ChangeDetection needs
+                // folding in here instead.
+                needs_os_import = needsOsImport || blockChangeDetectionAny,
+                needs_exit_helper = needsExitHelper,
+                script_filename = plan.ScriptFileName,
+                proxy,
+                pagination,
+            });
+        }
+
         // Container-Mode: login/wait steps (if any) still run first — only
         // the extraction phase after them differs (group tree → XML instead
         // of flat fields → CSV). See ExtractGroupStep and
@@ -126,6 +164,10 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
                 hardening,
                 pagination,
                 external_config = externalConfig,
+                blueprint_mapping_enabled = plan.OutputBlueprint?.SchemaKind == OutputBlueprintSchemaKind.Flat,
+                blueprint_mapping_literal = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),
+                blueprint_tree_mapping_enabled = plan.OutputBlueprint?.SchemaKind == OutputBlueprintSchemaKind.Tree,
+                blueprint_tree_mapping_literal = PythonOutputBlueprintLiteral.RenderTree(plan.OutputBlueprint),
             });
         }
 
@@ -153,6 +195,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
             hardening,
             pagination,
             external_config = externalConfig,
+            blueprint_mapping_literal = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),
         });
     }
 

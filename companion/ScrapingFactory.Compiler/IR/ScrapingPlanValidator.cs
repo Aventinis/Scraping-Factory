@@ -137,6 +137,17 @@ public static class ScrapingPlanValidator
                 return Invalid(scrollFrameError);
         }
 
+        // Issue #182: Blocks replaces every other extraction shape wholesale
+        // — see ScrapingPlanBuilder. Checked first among the four mutually
+        // exclusive shapes purely for readability; construction already
+        // guarantees at most one of these OfType<T>() lookups ever matches.
+        var extractionBlockStep = plan.Steps.OfType<ExtractionBlockStep>().SingleOrDefault();
+        if (extractionBlockStep is not null)
+        {
+            var blocksError = ValidateExtractionBlocks(extractionBlockStep.Blocks, plan.Engine);
+            return blocksError is null ? new PlanValidationResult { Success = true } : Invalid(blocksError);
+        }
+
         // Container-Mode replaces the flat ExtractStep list wholesale — see
         // ScrapingPlanBuilder. Engine-independent, so deliberately not part
         // of browserOnlySteps above.
@@ -147,7 +158,52 @@ public static class ScrapingPlanValidator
                 return Invalid("ExtractGroupStep must contain at least one group.");
 
             var groupError = ValidateContainerNodes(extractGroupStep.Roots, plan.Engine);
-            return groupError is null ? new PlanValidationResult { Success = true } : Invalid(groupError);
+            if (groupError is not null)
+                return Invalid(groupError);
+
+            // Issue #192: container mode's own leaf field names (DataFieldNode
+            // only — GroupNode names aren't mappable, the same leaf-only scope
+            // the extension's own field picker already offers for this mode).
+            if (plan.OutputBlueprint is { } containerBlueprint)
+            {
+                var containerFieldNames = CollectContainerFieldNames(extractGroupStep.Roots);
+
+                if (containerBlueprint.SchemaKind == OutputBlueprintSchemaKind.Tree)
+                {
+                    // Issue #244: a tree-shaped mapping resolves one row
+                    // scope PER TARGET GROUP NODE instead of one for the
+                    // whole mapping — see
+                    // OutputBlueprintFlattening.ResolveContainerTreeRowScopes
+                    // for why this no longer needs the flat case's single
+                    // "every mapped field on one ancestor chain" rule.
+                    var treeError = ValidateOutputBlueprintTree(containerBlueprint.Tree, containerFieldNames);
+                    if (treeError is not null)
+                        return Invalid(treeError);
+
+                    var treeScope = OutputBlueprintFlattening.ResolveContainerTreeRowScopes(extractGroupStep.Roots, containerBlueprint.Tree!);
+                    if (treeScope.Error is not null)
+                        return Invalid(treeScope.Error);
+                }
+                else
+                {
+                    var containerBlueprintError = ValidateOutputBlueprint(containerBlueprint, containerFieldNames);
+                    if (containerBlueprintError is not null)
+                        return Invalid(containerBlueprintError);
+
+                    // Unlike a tree-shaped mapping, the flat mapping doesn't
+                    // just remap columns — it flattens the tree into
+                    // denormalized rows (see OutputBlueprintFlattening),
+                    // which only has one unambiguous row layout when every
+                    // mapped field sits on a single root-to-row repeating-
+                    // group chain.
+                    var mappedSourceFields = containerBlueprint.Fields!.Select(field => field.SourceField).ToHashSet();
+                    var rowScope = OutputBlueprintFlattening.ResolveContainerRowScope(extractGroupStep.Roots, mappedSourceFields);
+                    if (rowScope.Error is not null)
+                        return Invalid(rowScope.Error);
+                }
+            }
+
+            return new PlanValidationResult { Success = true };
         }
 
         // API-Mode replaces the flat ExtractStep list wholesale, just like
@@ -156,7 +212,61 @@ public static class ScrapingPlanValidator
         if (apiCallStep is not null)
         {
             var apiError = ValidateApiConfig(apiCallStep.Config);
-            return apiError is null ? new PlanValidationResult { Success = true } : Invalid(apiError);
+            if (apiError is not null)
+                return Invalid(apiError);
+
+            // Issue #191/#192: available field names depend on which of
+            // Api's two response shapes is set — the flat ItemsPath/Fields
+            // list, or (since #192) the tree shape's own leaf ApiField
+            // names (ApiGroup names aren't mappable, same leaf-only scope
+            // Container-Mode's own check just above applies).
+            //
+            // Unlike Container-Mode, there's no equivalent generate-time
+            // row-scope/ambiguity check for the tree shape here: ApiGroup
+            // has no explicit Repeating flag (Architecture Decision #6) —
+            // whether a node actually repeats is only known once the real
+            // JSON response is resolved at script run time. The same
+            // ambiguity check this validator runs statically for Container-
+            // Mode (OutputBlueprintFlattening) instead has a runtime mirror
+            // in scraper_api_grouped.py.j2 itself, surfacing as a normal
+            // 422 trial-run verification failure rather than a 400 here.
+            if (plan.OutputBlueprint is { } apiBlueprint)
+            {
+                var apiHasGroupsForBlueprint = apiCallStep.Config.Groups is { Count: > 0 };
+                var apiAvailableFields = apiHasGroupsForBlueprint
+                    ? CollectApiFieldNames(apiCallStep.Config.Groups!)
+                    : (apiCallStep.Config.Fields ?? []).Select(field => field.Name).ToList();
+
+                if (apiBlueprint.SchemaKind == OutputBlueprintSchemaKind.Tree)
+                {
+                    // Issue #244: only meaningful against Api's own tree
+                    // shape — a tree target has nothing to nest against a
+                    // flat response.
+                    if (!apiHasGroupsForBlueprint)
+                        return Invalid("OutputBlueprint: a tree-shaped target schema requires Api's tree response shape (Groups) — use a flat target schema for Api's flat ItemsPath/Fields shape.");
+
+                    var apiTreeError = ValidateOutputBlueprintTree(apiBlueprint.Tree, apiAvailableFields);
+                    if (apiTreeError is not null)
+                        return Invalid(apiTreeError);
+
+                    // No static row-scope check here, same reasoning as the
+                    // flat mapping's own asymmetry with Container-Mode just
+                    // above: ApiGroup has no explicit Repeating flag
+                    // (Architecture Decision #6), so the per-target-group
+                    // scope resolution can only happen once the real JSON
+                    // response is resolved at script run time — see
+                    // scraper_api_grouped.py.j2's own runtime mirror of
+                    // ResolveContainerTreeRowScopes.
+                }
+                else
+                {
+                    var apiBlueprintError = ValidateOutputBlueprint(apiBlueprint, apiAvailableFields);
+                    if (apiBlueprintError is not null)
+                        return Invalid(apiBlueprintError);
+                }
+            }
+
+            return new PlanValidationResult { Success = true };
         }
 
         var extractSteps = plan.Steps.OfType<ExtractStep>().ToList();
@@ -186,7 +296,145 @@ public static class ScrapingPlanValidator
         if (duplicateNames.Count > 0)
             return Invalid($"Duplicate field names: {string.Join(", ", duplicateNames)}.");
 
+        if (plan.OutputBlueprint is { } blueprint)
+        {
+            // Issue #244: a tree target schema has nothing to nest against
+            // flat Fields — the same exclusion applies to Api's own flat
+            // shape just above.
+            if (blueprint.SchemaKind == OutputBlueprintSchemaKind.Tree)
+                return Invalid("OutputBlueprint: a tree-shaped target schema requires Groups or Api.Groups (tree-shaped source data) — use a flat target schema for flat fields.");
+
+            var blueprintError = ValidateOutputBlueprint(blueprint, extractSteps.Select(step => step.Name).ToList());
+            if (blueprintError is not null)
+                return Invalid(blueprintError);
+        }
+
         return new PlanValidationResult { Success = true };
+    }
+
+    // Issue #191: availableSourceFields is the mode's own already-resolved
+    // field-name list (flat ExtractStep.Name, or Api-flat ApiField.Name —
+    // API parameters are deliberately not mappable, the same simplification
+    // NullRateCheck/RequiredFieldsCheck's own field pickers already made for
+    // API mode). Mirrors FieldTransformValidator's "static helper returning
+    // string? (null = valid)" pattern.
+    private static string? ValidateOutputBlueprint(OutputBlueprintMapping mapping, IReadOnlyCollection<string> availableSourceFields)
+    {
+        if (mapping.Fields is not { Count: > 0 })
+            return "OutputBlueprint needs at least one field mapping.";
+
+        foreach (var entry in mapping.Fields)
+        {
+            if (string.IsNullOrWhiteSpace(entry.TargetField))
+                return "OutputBlueprint: target field name must not be empty.";
+            if (string.IsNullOrWhiteSpace(entry.SourceField))
+                return $"OutputBlueprint: target field '{entry.TargetField}' needs a mapped source field.";
+            if (!availableSourceFields.Contains(entry.SourceField))
+                return $"OutputBlueprint: unknown source field '{entry.SourceField}' for target field '{entry.TargetField}'.";
+        }
+
+        var duplicateTargets = FindDuplicates(mapping.Fields, entry => entry.TargetField);
+        if (duplicateTargets.Count > 0)
+            return $"OutputBlueprint: duplicate target field(s): {string.Join(", ", duplicateTargets)}.";
+
+        var duplicateSources = FindDuplicates(mapping.Fields, entry => entry.SourceField);
+        if (duplicateSources.Count > 0)
+            return $"OutputBlueprint: source field(s) mapped more than once: {string.Join(", ", duplicateSources)}.";
+
+        return null;
+    }
+
+    // Issue #244: the tree-shaped counterpart to ValidateOutputBlueprint
+    // above — availableSourceFields is still the mode's own already-resolved
+    // LEAF field-name list (container mode's DataFieldNode names, or Api-
+    // tree's ApiField names), exactly as ValidateOutputBlueprint already
+    // uses for the flat case. Unlike the flat mapping, duplicate TARGET node
+    // names are deliberately not rejected here — they're just output tag/key
+    // names, and container mode's own tree already allows duplicate sibling
+    // names by design (see Issue #177) — only duplicate SOURCE fields are
+    // still rejected, preserving the "still 1:1 per field" scope boundary
+    // #191/#192 already established.
+    private static string? ValidateOutputBlueprintTree(List<OutputBlueprintTreeMappingNode>? tree, IReadOnlyCollection<string> availableSourceFields)
+    {
+        if (tree is not { Count: > 0 })
+            return "OutputBlueprint: a tree-shaped mapping needs at least one target node.";
+
+        var sourceFields = new List<string>();
+
+        string? Walk(IEnumerable<OutputBlueprintTreeMappingNode> nodes)
+        {
+            foreach (var node in nodes)
+            {
+                if (string.IsNullOrWhiteSpace(node.Name))
+                    return "OutputBlueprint: target node name must not be empty.";
+
+                switch (node)
+                {
+                    case OutputBlueprintTreeMappingGroup group:
+                        var childError = Walk(group.Children);
+                        if (childError is not null)
+                            return childError;
+                        break;
+                    case OutputBlueprintTreeMappingField field:
+                        if (string.IsNullOrWhiteSpace(field.SourceField))
+                            return $"OutputBlueprint: target field '{field.Name}' needs a mapped source field.";
+                        if (!availableSourceFields.Contains(field.SourceField))
+                            return $"OutputBlueprint: unknown source field '{field.SourceField}' for target field '{field.Name}'.";
+                        sourceFields.Add(field.SourceField);
+                        break;
+                }
+            }
+            return null;
+        }
+
+        var error = Walk(tree);
+        if (error is not null)
+            return error;
+
+        if (sourceFields.Count == 0)
+            return "OutputBlueprint needs at least one field mapping.";
+
+        var duplicateSources = FindDuplicates(sourceFields, name => name);
+        if (duplicateSources.Count > 0)
+            return $"OutputBlueprint: source field(s) mapped more than once: {string.Join(", ", duplicateSources)}.";
+
+        return null;
+    }
+
+    // Issue #192: leaf field names only (DataFieldNode, not GroupNode) —
+    // mirrors ValidateContainerNodes' own recursive walk, and the
+    // extension's own collectFieldNames() for this mode, which likewise
+    // never offers a group's own name as a mappable source field.
+    private static List<string> CollectContainerFieldNames(IEnumerable<ContainerNode> nodes)
+    {
+        var names = new List<string>();
+        void Walk(IEnumerable<ContainerNode> ns)
+        {
+            foreach (var node in ns)
+            {
+                if (node is DataFieldNode field) names.Add(field.Name);
+                else if (node is GroupNode group) Walk(group.Children);
+            }
+        }
+        Walk(nodes);
+        return names;
+    }
+
+    // Mirrors CollectContainerFieldNames for API-Mode's tree shape (Issue
+    // #54) — leaf ApiField names only, not ApiGroup names.
+    private static List<string> CollectApiFieldNames(IEnumerable<ApiNode> nodes)
+    {
+        var names = new List<string>();
+        void Walk(IEnumerable<ApiNode> ns)
+        {
+            foreach (var node in ns)
+            {
+                if (node is ApiField field) names.Add(field.Name);
+                else if (node is ApiGroup group) Walk(group.Children);
+            }
+        }
+        Walk(nodes);
+        return names;
     }
 
     private static readonly Regex EnvironmentVariableNamePattern = new("^[A-Za-z_][A-Za-z0-9_]*$");
@@ -681,6 +929,77 @@ public static class ScrapingPlanValidator
         return missing.Count > 0
             ? $"PageNumberPagination.UrlTemplate is missing placeholder(s): {string.Join(", ", missing.Select(token => $"{{{token}}}"))}."
             : null;
+    }
+
+    // Issue #182: at least 2 blocks (a single block is just Fields/Groups —
+    // see ScrapingConfig.Blocks), unique Name/OutputFileBaseName across the
+    // whole list (both already resolved by ScrapingPlanBuilder — a blank
+    // Name/OutputFileName can never reach here as a blank string, only as
+    // the resolved default), then each block's own content validated by
+    // reusing the exact same per-shape/per-cross-cutting-config validators
+    // the single-shape branches above already call.
+    private static string? ValidateExtractionBlocks(List<PlanExtractionBlock> blocks, ScrapingEngine engine)
+    {
+        if (blocks.Count < 2)
+            return $"Blocks requires at least 2 blocks (was {blocks.Count}).";
+
+        var duplicateNames = FindDuplicates(blocks, block => block.Name);
+        if (duplicateNames.Count > 0)
+            return $"Duplicate block names: {string.Join(", ", duplicateNames)}.";
+
+        var duplicateOutputFileNames = FindDuplicates(blocks, block => block.OutputFileBaseName);
+        if (duplicateOutputFileNames.Count > 0)
+            return $"Blocks resolve to duplicate output file names: {string.Join(", ", duplicateOutputFileNames)}.";
+
+        foreach (var block in blocks)
+        {
+            if (block.Groups is { Count: > 0 } groups)
+            {
+                var groupError = ValidateContainerNodes(groups, engine);
+                if (groupError is not null)
+                    return $"Block '{block.Name}': {groupError}";
+            }
+            else if (block.Fields is { Count: > 0 } fields)
+            {
+                foreach (var step in fields)
+                {
+                    if (string.IsNullOrWhiteSpace(step.Name))
+                        return $"Block '{block.Name}': field name must not be empty.";
+                    if (string.IsNullOrWhiteSpace(step.Selector))
+                        return $"Block '{block.Name}': selector for field '{step.Name}' must not be empty.";
+                    var frameError = ValidateFramePath(step.FramePath, $"field '{step.Name}' in block '{block.Name}'", engine);
+                    if (frameError is not null)
+                        return frameError;
+                    var transformError = FieldTransformValidator.Validate(step.Transforms, $"field '{step.Name}' in block '{block.Name}'");
+                    if (transformError is not null)
+                        return transformError;
+                }
+
+                var duplicateFieldNames = FindDuplicates(fields, step => step.Name);
+                if (duplicateFieldNames.Count > 0)
+                    return $"Block '{block.Name}': duplicate field names: {string.Join(", ", duplicateFieldNames)}.";
+            }
+            else
+            {
+                return $"Block '{block.Name}' must contain at least one field or group.";
+            }
+
+            if (block.ChangeDetection is { } changeDetection)
+            {
+                var changeDetectionError = ValidateChangeDetection(changeDetection);
+                if (changeDetectionError is not null)
+                    return $"Block '{block.Name}': {changeDetectionError}";
+            }
+
+            if (block.Hardening is { Count: > 0 } hardening)
+            {
+                var hardeningError = ValidateHardening(hardening);
+                if (hardeningError is not null)
+                    return $"Block '{block.Name}': {hardeningError}";
+            }
+        }
+
+        return null;
     }
 
     // Issue #129/#130: every non-NullRate check kind (the concrete

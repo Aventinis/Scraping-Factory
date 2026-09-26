@@ -74,7 +74,12 @@ const SFMessageRouter = (function () {
         chrome.storage.session.remove('pendingSelector');
         const framePath = message.framePath || null;
         const matchCount = typeof message.matchCount === 'number' ? message.matchCount : null;
-        if (state.mode === 'container' && state.selectionKind === 'container') {
+        // Issue #182: Blocks mode reuses this exact same "new top-level
+        // group" flow for its own draft whenever the draft's own shape is
+        // 'group' (see blocks-config-ui.js's switchBlocksDraftShape) —
+        // state.groups is the draft's own content in that case, same as
+        // state.mode === 'container' already is for container mode itself.
+        if ((state.mode === 'container' || (state.mode === 'blocks' && state.blocksDraftShape === 'group')) && state.selectionKind === 'container') {
           // Name/type were already collected by modal-container-new — insert
           // the new group node straight away, no further modal needed. There's
           // no modal left open at this point to show the match count in (Issue

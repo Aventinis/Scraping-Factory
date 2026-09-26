@@ -44,7 +44,7 @@ flowchart LR
         CS <-- chrome.runtime messages --> SW
         SW <-- chrome.runtime messages --> SP
     end
-    SP -- "HTTP: GET /health, POST /generate,\nPOST/GET/DELETE /configs,\nPOST/GET/DELETE /configs/{id}/outputs" --> Companion
+    SP -- "HTTP: GET /health, POST /generate,\nPOST/GET/DELETE /configs,\nPOST/GET/DELETE /configs/{id}/outputs,\nPOST/GET/PUT/DELETE /blueprints" --> Companion
     subgraph Companion["Companion app (.NET 10 process)"]
         direction TB
         Program["Program.cs\n(minimal API)"]
@@ -52,8 +52,10 @@ flowchart LR
         Gen["ICodeGenerator\n(Python* code generators)"]
         Ver["IScriptVerifier\n(PythonScriptVerifier)"]
         Store["SavedConfigStore\n(SQLite, Issue #141/#202)"]
+        BpStore["OutputBlueprintStore\n(SQLite, Issue #191)"]
         Program --> Plan --> Gen --> Ver
         Program --> Store
+        Program --> BpStore
     end
     Ver -- "spawns" --> PySub["python3 subprocess\n(the actual generated script,\nrun once as a trial)"]
 ```
@@ -656,6 +658,59 @@ shapes (flat/container/API) since none of them share a common leaf type.
   preview stays hidden) and reuses the exact same `renderTransformPreview`
   call flat mode's own modal already makes.
 
+### 2.18a Safe type-conversion transforms (Issue #205)
+
+Three more `FieldTransform` kinds — `ToIntegerTransform`/`ToBooleanTransform`/
+`ToDateTransform` — alongside §2.18's original four, added for the same
+"guarantee a mapped value is actually a well-formed type" need Output
+Blueprints' design surfaced but deliberately left for the transform pipeline
+to solve rather than inventing a second, Blueprint-local type system. Unlike
+`ToNumberTransform`'s best-effort heuristic coercion, all three are strict —
+a value that isn't already well-formed for the target type is a conversion
+failure, not an approximation — and share one `OnError`/`DefaultValue`
+contract (`TransformErrorMode.KeepOriginal`/`UseDefault`) instead of the
+"fail the row" option floated in the issue itself (judged not worth the
+row/element-dropping machinery `RequiredFieldsCheck` only built at real cost
+for a hardening check that runs once at the very end, not per-transform).
+
+- IR: `IR/FieldTransform.cs` (`ToIntegerTransform`/`ToBooleanTransform`/
+  `ToDateTransform`, `enum TransformErrorMode`). `ToDateTransform.SourceFormat`
+  reuses `RangeSource.Format`'s own `"{yyyy}"`/`"{mm}"`/`"{dd}"` mini-template
+  (`Backends/Python/RangeFormat`) rather than inventing a second syntax —
+  `FieldTransformValidator` delegates straight to
+  `RangeFormat.ValidateFormat(RangeType.Date, ...)`, and
+  `PythonFieldTransformLiteral` resolves an unset format via
+  `RangeFormat.Resolve(RangeType.Date, ...)`.
+- `Backends/Python/FieldTransformValidator` (same single call site every
+  field shape — including the "blocks" feature's own extraction blocks —
+  already shares): rejects `OnError == UseDefault` with no `DefaultValue`
+  set, and an invalid `SourceFormat`.
+- `Backends/Python/PythonFieldTransformLiteral`: `OnError` renders via
+  `.ToString()` (`"KeepOriginal"`/`"UseDefault"`), the same PascalCase
+  convention `HardeningCheck.Severity` already uses in
+  `PythonHardeningLiteral`, so both sides compare the same vocabulary.
+- Every template that already carries `_apply_transforms`/`_to_number` (the
+  six from §2.6/§2.3/§2.4 plus two more added since by an unrelated feature)
+  gains `_to_integer`/`_to_boolean`/`_to_date` runtime helpers and their own
+  `_apply_transforms` branches, following the same hand-duplicated-per-
+  template convention `_to_number` already established.
+  `_to_date` compiles `SourceFormat` the same escape-then-substitute way
+  `RangeFormat.CompilePattern` does in C#, and rejects a structurally-
+  matching but non-existent calendar date (e.g. `"2026-02-30"`) via
+  `datetime.date`'s own `ValueError`.
+- Extension: the shared `field-transforms.js`/`field-transforms-ui.js`
+  editor (§2.18) gains the three kinds directly — no new module, since every
+  mode's transform modal already routes through this one editor.
+  `toIntegerPreview`/`toBooleanPreview`/`toDatePreview` are hand-kept JS
+  mirrors of the three new Python helpers, feeding the existing live preview
+  (Issue #143) the same way `toNumberPreview` already does.
+- Tests: `FieldTransformJsonTests` (polymorphic (de)serialization),
+  `ScrapingPlanValidatorTests` (`OnError`/`SourceFormat` validation),
+  `TypeConversionTransformEndToEndTests` (real generated-script runs proving
+  each kind's success/failure/onError behavior — the same "black-box
+  `PythonScriptVerifier` can't see per-cell values" reasoning
+  `HardeningNullRateEndToEndTests` already documents).
+
 ### 2.19 Multiple start URLs (Issue #83)
 
 Lets the same Fields/Groups extraction config run against a static,
@@ -895,6 +950,199 @@ same script.
   credential env vars, so a broken skip-login guard would fail fast via
   `EXIT_MISSING_ENV_VAR` (78) instead of succeeding.
 
+### 2.23 Output Blueprints: reusable output field-name/order mapping (Issues #191, #192, #244)
+
+A small, persisted, site-independent "blueprint" — a `schemaKind` of `Flat`
+(just a name plus an ordered list of target field names) or, since Issue
+#244, `Tree` (a name plus a nested target-schema tree of its own, mirroring
+the container/API tree editors) — lets a recurring scrape (of the same or
+different configurations) always write the same fixed shape, e.g. for a
+downstream import pipeline that expects a stable schema. Reachable for flat
+mode, API mode's flat `ItemsPath`/`Fields` shape, container mode, and API
+mode's tree shape (Issue #192 extended the original flat-only scope to the
+latter two; a `Tree`-schema mapping is additionally only ever offered for
+container mode/API's tree shape, since a flat source has no nesting for a
+tree target to resolve against); rejected outright (not silently ignored)
+for Combined mode and Blocks mode, neither having a single field/tree
+config of its own at the outer level. Applied to a tree source, a `Flat`
+mapping *flattens* it into denormalized rows instead of renaming tags in
+place (Issue #192, see below) — a `Tree` mapping instead builds a real
+nested output of its own, resolving each *target group's* own row scope
+independently (Issue #244, see below), which is what lets two independent/
+sibling source repeating groups (which a `Flat` mapping must reject) each
+map into a different target branch.
+
+- Extension: `popup/output-blueprints.js` (pure — editing a blueprint's own
+  ordered field-name list in the create/edit modal;
+  building/validating the per-scrape source-field mapping draft) and
+  `popup/output-blueprints-ui.js` (CRUD against `/blueprints`, the
+  management modal, the create/edit modal, and the mapping picker itself —
+  one `<select>` row per target field, sourced via the same
+  `collectFieldNames` the hardening null-rate/required-fields pickers
+  already use). `popup/popup.js` (`_state.selectedOutputBlueprintId`/
+  `selectedOutputBlueprintFieldNames`/`outputBlueprintMapping`, persisted
+  like Proxy/Hardening), `popup/idle-screen-ui.js`
+  (`#output-blueprint-toggle-row`'s mode-gated visibility,
+  `OUTPUT_BLUEPRINT_RESET` on any mode switch, blocking "Generate" while a
+  picked mapping is incomplete). `scraping-config-builder.js`
+  (`buildOutputBlueprintMapping` → `outputBlueprint`, omitted whenever no
+  blueprint is picked or the mapping isn't complete, the same convention
+  `buildProxyConfig`/`buildChangeDetectionConfig` already use),
+  `config-import.js` (`applyOutputBlueprintConfig`, the reverse).
+- Extension (Issue #244): `output-blueprints.js` gains tree-schema editing
+  helpers for the create/edit modal (`buildBlueprintSchemaGroup`/
+  `buildBlueprintSchemaField`/`parseBlueprintSchemaTree`/
+  `serializeBlueprintSchemaTree`/`blueprintTreeSchemaIsValid`) — the tree's
+  own structural editing reuses `container-tree.js`'s generic path-based
+  helpers directly (`insertContainerNode`/`removeGroupTreeNode`/
+  `updateGroupTreeNode`/`moveGroupTreeNode`) rather than reimplementing
+  them — and the per-scrape tree mapping draft (`createTreeMappingDraft`/
+  `updateTreeMappingSource`/`treeMappingIsComplete`), keyed by each leaf's
+  own dot-joined child-index path rather than by name. `output-blueprints-
+  ui.js`'s create/edit modal gains a Flat/Tree toggle
+  (`blueprintEditDraft.schemaKind`) and a tree editor
+  (`renderBlueprintSchemaTree`/`buildBlueprintSchemaNodeEl`); the mapping
+  picker filters Tree-schema blueprints out of the `<select>`
+  (`currentShapeSupportsTreeBlueprint`) unless the current mode/shape has a
+  tree source, and renders a read-only target-tree view
+  (`renderOutputBlueprintTreeMapping`) with a source-field `<select>` per
+  leaf once one is picked. `buildScrapingConfig`/`buildConfigExport` thread
+  `outputBlueprintSchemaKind`/`outputBlueprintTree`/
+  `outputBlueprintTreeMapping` through to `buildOutputBlueprintMapping`.
+- Companion: `OutputBlueprintStore.cs` (own SQLite file/db, no FK/cascade —
+  a blueprint isn't tied to any saved configuration), five endpoints under
+  `/blueprints` (list/get/create/update/delete) registered in `Program.cs`,
+  which also rejects `OutputBlueprint` combined with `Combined`/`Blocks`
+  with a `400` (the same rejection originally also covered `Groups`/
+  `Api.Groups` — see Issue #192 below for why that's gone).
+- Companion (Issue #244): `OutputBlueprintStore`'s table gains `SchemaKind`
+  (`TEXT NOT NULL DEFAULT 'Flat'`) and `TreeJson` (`TEXT NULL`) columns via
+  an idempotent `ALTER TABLE` migration (checked via `pragma_table_info`),
+  so a pre-#244 `output-blueprints.db` keeps working unchanged.
+  `SchemaKind` is a plain string, not the Compiler project's
+  `OutputBlueprintSchemaKind` enum type, but still PascalCase
+  (`"Flat"`/`"Tree"`) to match that enum's own wire serialization exactly.
+  `Save`/`Update` take an additional `schemaKind`/`tree` pair;
+  `FieldCount` reports the total leaf count, recursively, for a tree.
+  `Program.cs`'s shared `ValidateBlueprintRequest` local function defaults
+  a missing `schemaKind` to `"Flat"` and validates a `"Tree"` request's own
+  `tree` via `OutputBlueprintTreeSchemaValidator.Validate`.
+- Compiler: `IR/OutputBlueprintMapping.cs` (`OutputBlueprintMapping` —
+  `BlueprintId` kept only for the extension's own round-tripping, plus a
+  `List<OutputBlueprintFieldMapping>` of `TargetField`/`SourceField` pairs),
+  added to `ScrapingConfig`/`ScrapingPlan` and carried through by
+  `IR/ScrapingPlanBuilder.cs` in every branch except Combined/Blocks.
+  `IR/ScrapingPlanValidator.cs`'s `ValidateOutputBlueprint` checks
+  non-empty/non-duplicate target and source names and that every
+  `SourceField` references a real available field (leaf names only for a
+  tree shape — see `CollectContainerFieldNames`/`CollectApiFieldNames`
+  below).
+  `Backends/Python/PythonOutputBlueprintLiteral.cs` renders it into a
+  `[{"target": ..., "source": ...}, ...]` literal, mirroring
+  `PythonFieldTransformLiteral`.
+- Compiler (Issue #192): `IR/OutputBlueprintFlattening.cs`
+  (`ResolveContainerRowScope`) resolves — or rejects — the single repeating
+  group every mapped field's own ancestor chain must share for container
+  mode, since `GroupNode.Repeating` is known statically there;
+  `ScrapingPlanValidator`'s `ExtractGroupStep` branch calls it and rejects
+  an ambiguous mapping with a `400` before any script is generated. No
+  static equivalent exists for Api mode's tree shape (`ApiGroup` has no
+  `Repeating` flag, Architecture Decision #6) — the identical check is
+  re-derived dynamically instead, inside the generated script itself (see
+  the templates bullet below), surfacing as a `422` trial-run failure
+  instead. `ScrapingPlanBuilder` forces the flat output formats (`Csv`/flat
+  `Json`) instead of `Xml`/tree-`Json` whenever a blueprint mapping is
+  active for either tree shape.
+- Compiler (Issue #244): `IR/OutputBlueprintTreeSchema.cs`
+  (`OutputBlueprintTreeSchemaGroup`/`...Field`, a structural-discriminator
+  converter mirroring `ContainerNodeJsonConverter`, `OutputBlueprintTreeSchemaValidator`)
+  is the persisted, site-independent target shape — deliberately not a
+  reuse of `ContainerNode`/`ApiNode`, since it carries no selector/path/
+  engine concept, and deliberately no `Repeating` flag either (Architecture
+  Decision #6's "inferred, not chosen" reasoning applies here too, since a
+  reusable target schema has no source tree yet to decide repeating-ness
+  against). `OutputBlueprintMapping` (the per-scrape wire type) gains
+  `SchemaKind` and a `Tree` payload (`OutputBlueprintTreeMappingGroup`/
+  `...Field`, mirroring the schema node-for-node with each leaf additionally
+  carrying its resolved `SourceField`) alongside the original `Fields`
+  (relaxed to nullable). `OutputBlueprintFlattening.ResolveContainerTreeRowScopes`
+  generalizes `ResolveContainerRowScope` to resolve one row scope **per
+  target group node**, recursively — reusing the same `ResolveChain` helper
+  per target-group-subtree instead of once for the whole mapping, and
+  requiring each nested target group's own resolved chain to extend its
+  parent's — which is what lets two independent/sibling source repeating
+  groups map into two different target branches instead of hitting the
+  Flat mapping's ambiguity rejection. `ScrapingPlanBuilder`'s flat-format
+  override (from Issue #192) now only fires for a `Flat`-schema mapping — a
+  `Tree`-schema mapping keeps the ordinary tree-shape formats.
+  `Backends/Python/PythonOutputBlueprintLiteral.RenderTree` mirrors
+  `PythonGroupTreeLiteral`'s own nested list-of-dicts layout for the
+  mapping's target tree.
+- Templates: `scraper.py.j2`, `playwright_scraper.py.j2`, `scraper_api.py.j2`
+  (the three flat-shape shells only) gain a `BLUEPRINT_MAPPING` constant
+  that, when non-empty, takes over building `output_rows`/the CSV fieldnames
+  at write time (rename, reorder, drop unmapped source fields) — taking
+  precedence over Issue #178's `FIELD_OUTPUT_NAMES` at that same step.
+  `data` itself stays untouched, so hardening/change-detection keep
+  operating on the original field names either way.
+- Templates (Issue #192): `scraper_grouped.py.j2`, `playwright_scraper_grouped.py.j2`,
+  `scraper_api_grouped.py.j2` gain the same `BLUEPRINT_MAPPING` constant
+  plus a new runtime walker (`_flatten_group_tree_for_blueprint`/
+  `_flatten_api_group_for_blueprint`) that denormalizes the already-built
+  tree into rows instead of `extract_group()`'s/`_extract_api_group()`'s
+  own nested `ET.Element` tree — always returns a list of context dicts,
+  growing only at a *relevant* repeating group's own instance boundary
+  (`_blueprint_subtree_has_mapped_field` skips an irrelevant branch with no
+  mapped field inside it, so it never needlessly fans out the row count).
+  `scrape()`/`scrape(url)` now return `(root, blueprint_rows)` instead of
+  just `root`; `main()` writes either the flattened csv/json or the
+  original nested xml/json, while hardening/change-detection keep
+  operating on the original, unflattened `root` either way. The Api-tree
+  template's own walker additionally resolves "is this node repeating"
+  dynamically (mirroring `_extract_api_group`'s own
+  `_is_repeating_instance`) and tracks the winning ancestor chain across
+  the whole run via a module-level `_blueprint_resolved_chain`, raising a
+  `RuntimeError` on a conflicting chain instead of `OutputBlueprintFlattening`'s
+  `400`.
+- Templates (Issue #244): the same three tree-shape templates gain a second
+  constant, `BLUEPRINT_TREE_MAPPING` (empty unless the active mapping is
+  Tree-schema), and a runtime tree-to-tree walker
+  (`_build_blueprint_node`/`_build_blueprint_tree`) building a real nested
+  output by walking the *target* tree instead of flattening the source
+  tree into rows. A one-time structural index of the source `GROUPS` tree
+  (`_blueprint_index_source_tree`, built once at import time, independent
+  of any scraped data) gives every named source node its own ordered
+  ancestor path; for a target group, `_blueprint_resolve_group_chain`
+  resolves its own row scope from its direct leaves' chains (container
+  templates **trust**, rather than re-validate, the generate-time
+  guarantee `ResolveContainerTreeRowScopes` already established — the same
+  asymmetry the Flat mapping's own two template families already have),
+  then `_blueprint_walk_suffix` walks exactly the remaining source path
+  from wherever the recursion already is; a "broadcast" leaf (no repeating
+  source ancestor anywhere) resolves once relative to the whole page
+  instead. `scraper_api_grouped.py.j2`'s own version resolves "is this
+  ancestor repeating" dynamically per call and **does** validate the
+  per-target-group chain itself (raising `RuntimeError`, surfacing as a
+  `422`), the same static-vs-runtime split the Flat mapping's own two
+  template families already have. All three templates' `scrape()`/
+  `scrape(url)` now thread a third `blueprint_tree_elements` value through
+  their existing return tuple; `main()` writes it instead of the original
+  tree only when `BLUEPRINT_TREE_MAPPING` is non-empty — `root` itself
+  (hardening/change-detection) is unaffected either way.
+- Tests: `OutputBlueprintStoreTests.cs`, `OutputBlueprintsEndpointTests.cs`,
+  `OutputBlueprintMappingJsonTests.cs` (wire round-trip),
+  `OutputBlueprintEndToEndTests.cs` (real generated-script output actually
+  has the blueprint's own column names/order),
+  `OutputBlueprintTreeSchemaEndToEndTests.cs` (Issue #244 — proves a Tree
+  mapping succeeds, across all three engines/shapes, for exactly the
+  independent-sibling-repeating-groups case the Flat mapping rejects, and
+  that an ambiguity *within* one target group's own direct fields still
+  fails, at generate-time for container mode and at runtime for Api-tree);
+  Jest `output-blueprints.test.js` (pure helpers, both schema kinds),
+  `output-blueprints-ui.test.js` (DOM/wiring via `require('./popup')`), and
+  `config-import.test.js` (`applyOutputBlueprintConfig` for both schema
+  kinds).
+
 ---
 
 ## 3. Class & Module Relationship Model
@@ -1115,6 +1363,7 @@ compile time anywhere.
 | Pagination | `popup.js`: `buildPaginationConfig()` (returns `null` when disabled or the kind-specific required field is blank) → `buildScrapingConfig`'s `pagination` key | `{pagination?: {kind:"nextLink", nextLinkSelector, maxPages} \| {kind:"pageNumber", urlTemplate, maxPages}}` | `IR/PaginationConfig.cs`: `NextLinkPagination`/`PageNumberPagination` (via `[JsonPolymorphic]`) |
 | Persistent session | `popup.js`: `_state.persistentSession` (plain boolean) → `buildScrapingConfig`'s `persistentSession` key, sent only when `true` | `{persistentSession?: true}` | `IR/ScrapingConfig.cs`: `bool? PersistentSession` |
 | Range format mini-template | `api-config.js`: `RANGE_FORMAT_PRESETS`, `compileRangeFormatPattern()` (client-side mirror) | `{format?: "{yyyy}-W{ww}"}` inside a `RangeSource` | `Backends/Python/RangeFormat.cs` (server-side, authoritative) |
+| Output Blueprint mapping | `output-blueprints.js`: `buildOutputBlueprintMapping()` (returns `null` when no blueprint is picked or the mapping isn't complete) → `buildScrapingConfig`'s `outputBlueprint` key | `{outputBlueprint?: {blueprintId, schemaKind: 'Flat', fields: [{targetField, sourceField}]} \| {blueprintId, schemaKind: 'Tree', tree: [{name, children: [...]} \| {name, sourceField}]}}` | `IR/OutputBlueprintMapping.cs`: `OutputBlueprintMapping`/`OutputBlueprintFieldMapping`/`OutputBlueprintSchemaKind`/`OutputBlueprintTreeMappingGroup`/`OutputBlueprintTreeMappingField` (Issue #244) |
 
 Two rows above are explicitly **hand-kept mirrors**, not generated from a shared
 schema: `sanitizeFileNameBase` (popup.js) vs. `FileNameSanitizer` (C#), and the

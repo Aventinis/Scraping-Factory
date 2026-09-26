@@ -26,7 +26,7 @@ const { buildScrapingConfig } =
 const { downloadFile } =
   typeof require !== 'undefined' ? require('./download-helpers') : self.SFDownloadHelpers;
 
-const { getResolvedCompanionUrl } =
+const { getResolvedCompanionUrl, resolveCombinedComponents } =
   typeof require !== 'undefined' ? require('./companion-client') : self.SFCompanionClient;
 
 const { applyConfigToState } =
@@ -144,6 +144,26 @@ async function fetchSavedConfigs(bridge, url) {
   }
 }
 
+// Issue #239: the unscoped counterpart to fetchSavedConfigs above — every
+// saved configuration regardless of host, needed by Combined mode's
+// component picker (a component doesn't have to match the page currently
+// open). Fetched once on switching into Combined mode (see switchMode in
+// idle-screen-ui.js), same "non-fatal, panel just stays empty" treatment as
+// fetchSavedConfigs for an older/unreachable companion.
+async function fetchAllSavedConfigs(bridge) {
+  bridge.patchState({ allSavedConfigsLoading: true });
+  try {
+    const res = await fetch(`${getResolvedCompanionUrl()}/configs`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const allSavedConfigs = await res.json();
+    log('ALL_SAVED_CONFIGS_LIST', allSavedConfigs.length);
+    bridge.patchState({ allSavedConfigs, allSavedConfigsLoading: false });
+  } catch (err) {
+    log('ALL_SAVED_CONFIGS_LIST FAIL', err.message);
+    bridge.patchState({ allSavedConfigs: [], allSavedConfigsLoading: false });
+  }
+}
+
 // POSTs the current configuration and returns the created record
 // ({id, url, name, savedAt}) — factored out of saveCurrentConfig so Issue
 // #209's "Save output" create-and-link flow (createConfigAndSaveOutput
@@ -153,11 +173,21 @@ async function fetchSavedConfigs(bridge, url) {
 // for those, tied to modal-save-output instead).
 async function createSavedConfig(bridge, name) {
   const state = bridge.getState();
+  // Issue #239: a Combined-mode config has no ad-hoc fields/groups/apiConfig
+  // of its own to serialize — each component's full config is resolved live
+  // from its own saved configuration instead (see resolveCombinedComponents),
+  // so a saved Combined config always reflects each component's current
+  // state at save time, not a stale snapshot from whenever it was picked.
+  const combinedComponents = state.mode === 'combined'
+    ? await resolveCombinedComponents(state.combinedComponents || [])
+    : null;
   const config = buildScrapingConfig(
     state.url, state.mode, state.fields, state.groups, state.apiConfig,
     state.scriptFileName, state.outputFileName, state.engine, state.browserActions, state.includeDataPreview,
     state.useJsonOutput, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
-    state.pagination, state.persistentSession, false, state.externalConfig,
+    state.pagination, state.persistentSession, false, state.externalConfig, combinedComponents, state.blocks,
+    state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
+    state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
   );
   const res = await fetch(`${getResolvedCompanionUrl()}/configs`, {
     method: 'POST',
@@ -534,7 +564,7 @@ function wireSavedConfigsEvents(bridge) {
 
   return {renderSavedConfigsList, buildSavedOutputsPanelEl,
     wireSavedConfigsEvents,
-    fetchSavedConfigs, createSavedConfig, saveCurrentConfig, loadSavedConfig,
+    fetchSavedConfigs, fetchAllSavedConfigs, createSavedConfig, saveCurrentConfig, loadSavedConfig,
     requestDeleteSavedConfig, cancelDeleteSavedConfig, deleteSavedConfig,
     openSaveConfigModal,
     saveCurrentOutput, createConfigAndSaveOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,

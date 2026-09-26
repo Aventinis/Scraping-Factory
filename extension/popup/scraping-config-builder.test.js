@@ -77,6 +77,128 @@ describe('buildScrapingConfig (flat mode)', () => {
   });
 });
 
+describe('buildScrapingConfig (combined mode, Issue #239)', () => {
+  const combinedComponents = [
+    { name: 'products', config: { version: '1', url: 'https://a.example.com', fields: [] }, savedConfigId: 1 },
+    { name: 'reviews', config: { version: '1', url: 'https://b.example.com', fields: [] } },
+  ];
+
+  test('sends each already-resolved component verbatim, with savedConfigId only when present', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'combined', [], [], null, null, null,
+      'Static', [], false, false, [], null, null, null, null, false, false, false, combinedComponents,
+    );
+    expect(result).toEqual({
+      version: '1',
+      url: 'https://example.com',
+      combined: [
+        { name: 'products', config: combinedComponents[0].config, savedConfigId: 1 },
+        { name: 'reviews', config: combinedComponents[1].config },
+      ],
+      scriptFileName: null,
+      outputFileName: null,
+    });
+  });
+
+  test('ignores engine/browserActions/additionalUrls/changeDetection/proxy/hardening/pagination — none of them apply at the outer Combined level', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'combined', [], [], null, null, null,
+      'Browser', [{ kind: 'click', selector: '#x' }], false, true, ['https://extra.example.com'],
+      { enabled: true }, { enabled: true }, [{ kind: 'noResult', severity: 'Error' }],
+      { enabled: true }, true, false, true, combinedComponents,
+    );
+    expect(result).not.toHaveProperty('engine');
+    expect(result).not.toHaveProperty('browserActions');
+    expect(result).not.toHaveProperty('additionalUrls');
+    expect(result).not.toHaveProperty('changeDetection');
+    expect(result).not.toHaveProperty('proxy');
+    expect(result).not.toHaveProperty('hardening');
+    expect(result).not.toHaveProperty('pagination');
+    expect(result).not.toHaveProperty('outputFormat');
+  });
+
+  test('includePreview/includeOutputFile still apply — the final merged output is what they preview/download', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'combined', [], [], null, null, null,
+      'Static', [], true, false, [], null, null, null, null, false, true, false, combinedComponents,
+    );
+    expect(result.includePreview).toBe(true);
+    expect(result.includeOutputFile).toBe(true);
+  });
+
+  test('an empty/missing component list sends an empty combined array rather than throwing', () => {
+    const result = buildScrapingConfig('https://example.com', 'combined', [], []);
+    expect(result.combined).toEqual([]);
+  });
+});
+
+describe('buildScrapingConfig (blocks mode, Issue #182)', () => {
+  const blocks = [
+    { name: 'Deals', outputFileName: 'deals', shape: 'flat', fields: [{ name: 'Preis', selector: '.deal', attribute: null }] },
+    {
+      name: 'Menu', outputFileName: 'menu', shape: 'group',
+      groups: [{ kind: 'group', name: 'Item', selector: '.item', repeating: true, children: [
+        { kind: 'field', name: 'Titel', selector: '.title', mode: 'text', attribute: null },
+      ] }],
+    },
+  ];
+
+  test('serializes each block by its own shape — fields for flat, a serialized group tree for group', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'blocks', [], [], null, null, null,
+      'Static', [], false, false, [], null, null, null, null, false, false, false, null, blocks,
+    );
+    expect(result).toEqual({
+      version: '1',
+      url: 'https://example.com',
+      blocks: [
+        { name: 'Deals', outputFileName: 'deals', fields: [{ name: 'Preis', selector: '.deal', attribute: null }] },
+        { name: 'Menu', outputFileName: 'menu', groups: [
+          { name: 'Item', selector: '.item', repeating: true, children: [
+            { name: 'Titel', selector: '.title', mode: 'Text' },
+          ] },
+        ] },
+      ],
+      scriptFileName: null,
+    });
+  });
+
+  test('shares engine/browserActions/additionalUrls/proxy/pagination/persistentSession with the outer request', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'blocks', [], [], null, null, null,
+      'Browser', [{ kind: 'click', selector: '#x' }], false, false, ['https://extra.example.com'],
+      null, { enabled: true, envVar: 'PROXY_LIST' }, null,
+      { enabled: true, kind: 'nextLink', nextLinkSelector: '.next', maxPages: 10 }, true, false, false, null, blocks,
+    );
+    expect(result.engine).toBe('Browser');
+    expect(result.browserActions).toBeDefined();
+    expect(result.additionalUrls).toEqual(['https://extra.example.com']);
+    expect(result.proxy).toEqual({ environmentVariableName: 'PROXY_LIST' });
+    expect(result.pagination).toBeDefined();
+    expect(result.persistentSession).toBe(true);
+  });
+
+  test('never includes changeDetection/hardening/outputFormat/externalConfig at the outer level', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'blocks', [], [], null, null, null,
+      'Static', [], false, true, [], { enabled: true }, null, [{ kind: 'noResult', severity: 'Error' }],
+      null, false, false, true, null, blocks,
+    );
+    expect(result).not.toHaveProperty('changeDetection');
+    expect(result).not.toHaveProperty('hardening');
+    expect(result).not.toHaveProperty('outputFormat');
+    expect(result).not.toHaveProperty('externalConfig');
+    expect(result).not.toHaveProperty('groups');
+    expect(result).not.toHaveProperty('apiConfig');
+    expect(result).not.toHaveProperty('combined');
+  });
+
+  test('an empty/missing block list sends an empty blocks array rather than throwing', () => {
+    const result = buildScrapingConfig('https://example.com', 'blocks', [], []);
+    expect(result.blocks).toEqual([]);
+  });
+});
+
 // Issue #41/#42, Phase 5: engine/browserActions are mode-independent, so
 // these are tested once rather than per mode (flat mode used as the
 // representative case) — buildScrapingConfig's own doc comment explains why
@@ -989,6 +1111,81 @@ describe('buildScrapingConfig (api mode, Issue #53 Phase 6)', () => {
     expect(result.fields).toBeUndefined();
     expect(result.groups).toBeUndefined();
     expect(result.outputFormat).toBeUndefined();
+  });
+});
+
+describe('buildScrapingConfig (output blueprint, container/api-tree mode, Issue #192)', () => {
+  test('container mode includes outputBlueprint once the mapping is complete', () => {
+    const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
+    const result = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null,
+      'Static', [], false, false, [], null, null, null, null, false, false, false, null, null,
+      '3', ['name'], { name: 'Kategorie' },
+    );
+
+    expect(result.outputBlueprint).toEqual({
+      blueprintId: 3,
+      schemaKind: 'Flat',
+      fields: [{ targetField: 'name', sourceField: 'Kategorie' }],
+    });
+  });
+
+  test('container mode omits outputBlueprint while the mapping is incomplete', () => {
+    const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
+    const result = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null,
+      'Static', [], false, false, [], null, null, null, null, false, false, false, null, null,
+      '3', ['name', 'price'], { name: 'Kategorie', price: null },
+    );
+
+    expect(result.outputBlueprint).toBeUndefined();
+  });
+
+  test('api mode includes outputBlueprint for the tree shape too (unlike Issue #191, no longer flat-only)', () => {
+    const apiConfig = {
+      urlTemplate: 'https://example.com/api',
+      groups: [{ name: 'Kategorie', path: 'categories', children: [{ name: 'Titel', path: 'name' }] }],
+    };
+    const result = buildScrapingConfig(
+      'https://example.com', 'api', [], [], apiConfig, null, null,
+      'Static', [], false, false, [], null, null, null, null, false, false, false, null, null,
+      '5', ['title'], { title: 'Titel' },
+    );
+
+    expect(result.outputBlueprint).toEqual({
+      blueprintId: 5,
+      schemaKind: 'Flat',
+      fields: [{ targetField: 'title', sourceField: 'Titel' }],
+    });
+  });
+
+  // Issue #244: the tree-shaped mapping's own trailing parameters.
+  test('container mode includes a Tree-schema outputBlueprint once the tree mapping is complete', () => {
+    const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
+    const treeSchema = [{ name: 'Name' }];
+    const result = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null,
+      'Static', [], false, false, [], null, null, null, null, false, false, false, null, null,
+      '4', [], {}, 'Tree', treeSchema, { 0: 'Kategorie' },
+    );
+
+    expect(result.outputBlueprint).toEqual({
+      blueprintId: 4,
+      schemaKind: 'Tree',
+      tree: [{ name: 'Name', sourceField: 'Kategorie' }],
+    });
+  });
+
+  test('container mode omits a Tree-schema outputBlueprint while the tree mapping is incomplete', () => {
+    const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
+    const treeSchema = [{ name: 'Name' }];
+    const result = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null,
+      'Static', [], false, false, [], null, null, null, null, false, false, false, null, null,
+      '4', [], {}, 'Tree', treeSchema, { 0: null },
+    );
+
+    expect(result.outputBlueprint).toBeUndefined();
   });
 });
 

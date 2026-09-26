@@ -136,6 +136,53 @@ public sealed class ScrapingConfig
     // the runtime side of this. Null/false is today's exact behavior (no
     // extra file, nothing re-read at runtime).
     public bool? ExternalConfig { get; init; }
+
+    // Combined mode (Issue #239): mutually exclusive with Fields/Groups/Api
+    // AND with AdditionalUrls/Pagination/BrowserActions/ChangeDetection/
+    // Proxy/Hardening/PersistentSession/ExternalConfig on THIS (outer)
+    // config — all of those are component-level concerns only (each
+    // CombinedComponentConfig.Config carries its own). At least two
+    // components required; a component whose own Config.Combined is set is
+    // rejected (no nesting) — see Program.cs's /generate handler for all of
+    // the above. Each component is generated through the exact same
+    // pipeline a standalone request would use, then forced to
+    // OutputFormat.Json (see ScrapingPlan.With) so every component's output
+    // can be merged into one combined JSON object, keyed by component name.
+    public List<CombinedComponentConfig>? Combined { get; init; }
+
+    // Issue #182: mutually exclusive with Fields/Groups/Api/Combined
+    // (enforced in the /generate endpoint) — an alternative for a single
+    // page presenting more than one distinct item shape side by side (e.g.
+    // different offer types with different fields/structure), where each
+    // shape should be scraped into its own separate output file in one run
+    // rather than forced into one lowest-common-denominator schema, or run
+    // as entirely separate scripts. Unlike Combined mode, every block here
+    // shares this same, single request's Url/AdditionalUrls/Engine/
+    // BrowserActions/Proxy/PersistentSession/Pagination/VerificationValues —
+    // one navigation, one browser session, N extraction+write phases against
+    // it — which is also why ChangeDetection/Hardening are rejected on THIS
+    // (outer) config when Blocks is set: each block produces its own
+    // independent result set, so those two specifically only make sense
+    // per-block (see ExtractionBlockConfig). Pagination stays outer-level
+    // rather than per-block because it governs the shared page-fetching
+    // loop itself (how many pages are fetched, and from where) — every
+    // block extracts from every fetched page, so per-block pagination
+    // cadence would contradict "one shared navigation". At least two blocks
+    // required (a single block is just Fields/Groups). ExternalConfig and
+    // Api are both out of scope for Blocks in this first version — rejected
+    // alongside Fields/Groups/Api/Combined in Program.cs.
+    public List<ExtractionBlockConfig>? Blocks { get; init; }
+
+    // Issue #191: opt-in output blueprint field mapping — see
+    // IR/OutputBlueprintMapping.cs. Only valid for flat-shaped output (this
+    // config's own Fields, or Api's flat ItemsPath/Fields shape) — rejected
+    // alongside Groups/Api.Groups/Combined/Blocks in Program.cs's /generate
+    // handler, the same "ship the simpler shape first" precedent
+    // RequiredFieldsCheck (Issue #133) and ExternalConfig's own field-
+    // renaming (Issue #178) already set for this exact flat-vs-tree scope
+    // boundary. Null is today's exact behavior (output keyed/ordered by the
+    // source fields' own names, unchanged).
+    public OutputBlueprintMapping? OutputBlueprint { get; init; }
 }
 
 public sealed class ScrapingField
