@@ -712,6 +712,15 @@ button:active:not(:disabled) { transform: translateY(1px); }
   padding: 7px 10px; font-size: 14px; margin-bottom: 12px; font-family: inherit; outline: none;
 }
 .modal-inner input:focus { border-color: var(--color-primary); box-shadow: var(--focus-ring); }
+/* Issue #213: a checkbox toggle (e.g. #toggle-field-download) reuses the
+   same .output-settings-toggle flex-row pattern idle.html's own toggles
+   already use outside any modal — without this override, the two generic
+   rules above (higher specificity than .output-settings-toggle alone, and
+   width:100%/padding meant for text inputs) stretched the checkbox into a
+   full-width bar and forced its label onto its own block-level line instead
+   of sitting inline next to it. */
+.modal-inner label.output-settings-toggle { display: flex; }
+.modal-inner input[type="checkbox"] { width: auto; padding: 0; margin: 0; }
 .modal-inner select {
   width: 100%; border: 1px solid var(--color-border-input); border-radius: var(--radius-md);
   padding: 7px 10px; font-size: 14px; margin-bottom: 12px; font-family: inherit; outline: none;
