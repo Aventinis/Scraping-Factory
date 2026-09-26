@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.15.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.15.1...v1.15.2) (2026-09-26)
+
+
+### Features
+
+* **e2e:** add Playwright browser-automation harness ([6076635](https://github.com/Aventinis/Scraping-Factory/commit/60766354cdf2797832d8970e650e6f27ee8e4ad7))
+* **e2e:** add Playwright browser-automation test environment (Issue [#180](https://github.com/Aventinis/Scraping-Factory/issues/180)) ([3668b32](https://github.com/Aventinis/Scraping-Factory/commit/3668b3260d75d58c538a1dd94c122245a301c249))
+
 ## [1.15.1](https://github.com/Aventinis/Scraping-Factory/compare/v1.15.0...v1.15.1) (2026-09-26)
 
 
