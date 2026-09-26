@@ -312,8 +312,9 @@ public class PythonGroupCodeGeneratorTests
     public void Generate_TextFieldHasTextModeAndNoAttributeKey()
     {
         var script = _generator.Generate(NestedGroupPlan());
-        // "transform" (Issue #84) is always present, even when empty.
-        Assert.Contains("{\"name\": 'Titel', \"selector\": 'h2', \"mode\": 'text', \"transform\": []}", script);
+        // "transform" (Issue #84) and "download" (Issue #213) are always
+        // present, even when empty/false.
+        Assert.Contains("{\"name\": 'Titel', \"selector\": 'h2', \"mode\": 'text', \"transform\": [], \"download\": False}", script);
     }
 
     [Fact]
@@ -399,7 +400,7 @@ public class PythonGroupCodeGeneratorTests
     public void Generate_ContainsRecursiveExtractGroupFunction()
     {
         var script = _generator.Generate(NestedGroupPlan());
-        Assert.Contains("def extract_group(scope, node):", script);
+        Assert.Contains("def extract_group(scope, node, base_url):", script);
         Assert.Contains("scope.select(node[\"selector\"])", script);
         Assert.Contains("scope.select_one(node[\"selector\"])", script);
     }

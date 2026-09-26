@@ -1,4 +1,27 @@
-const { applyOutputBlueprintConfig } = require('./config-import');
+const { applyOutputBlueprintConfig, deserializeGroupTree } = require('./config-import');
+
+// Issue #213: deserializeGroupTree is the reverse of container-tree.js's
+// serializeGroupTree — a loaded/exported config's Attribute-mode field with
+// "download": true on the wire should come back as download: true in the
+// internal draft shape, and any other mode should always come back false
+// regardless of what the wire happened to carry (defensive, mirrors
+// serializeGroupTree's own equally defensive gate).
+describe('config-import (Issue #213): deserializeGroupTree download handling', () => {
+  test('restores download:true for an Attribute-mode field that has it', () => {
+    const wire = [{ name: 'Bild', selector: 'img.photo', mode: 'Attribute', attribute: 'src', download: true }];
+    expect(deserializeGroupTree(wire)[0].download).toBe(true);
+  });
+
+  test('defaults to false when the wire omits download entirely', () => {
+    const wire = [{ name: 'Bild', selector: 'img.photo', mode: 'Attribute', attribute: 'src' }];
+    expect(deserializeGroupTree(wire)[0].download).toBe(false);
+  });
+
+  test('forces false for a non-Attribute-mode field even if the wire somehow carries download:true', () => {
+    const wire = [{ name: 'Titel', selector: 'h2', mode: 'Text', download: true }];
+    expect(deserializeGroupTree(wire)[0].download).toBe(false);
+  });
+});
 
 // Issue #191/#244: applyOutputBlueprintConfig is the reverse of
 // buildOutputBlueprintMapping — reproducing the mapping picker's own state

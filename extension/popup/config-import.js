@@ -29,6 +29,9 @@ const SFConfigImport = (function () {
             attribute: node.mode === 'Attribute' ? (node.attribute ?? null) : null,
             framePath: node.framePath || null,
             transforms: node.transforms && node.transforms.length > 0 ? node.transforms : null,
+            // Issue #213: same "only meaningful under Attribute mode" gate
+            // attribute itself already uses; absent on the wire = false.
+            download: node.mode === 'Attribute' && !!node.download,
           }
     ));
   }

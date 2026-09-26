@@ -310,8 +310,9 @@
       "attributeOption": "Attribute",
       "existsOption": "Exists?",
       "ownTextOption": "Own text only (excludes nested elements)",
-      "attributeLabel": "Attribute name (e.g. \"href\")",
-      "attributePlaceholder": "Attribute"
+      "attributeLabel": "Which attribute holds the value?",
+      "noAttributesFound": "This element has no attributes.",
+      "downloadToggle": "Download this resource (e.g. an image) and save it locally"
     },
     "apiGroupNew": {
       "nameLabel": "Group name (e.g. \"Subcategory\")",

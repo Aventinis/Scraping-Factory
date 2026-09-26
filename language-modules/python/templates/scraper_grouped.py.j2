@@ -15,13 +15,13 @@ from datetime import date
 import requests
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
-{{~ if change_detection.enabled || proxy.enabled || external_config.enabled ~}}
+{{~ if change_detection.enabled || proxy.enabled || external_config.enabled || download_enabled ~}}
 import os
 {{~ end ~}}
 {{~ if proxy.enabled ~}}
 import itertools
 {{~ end ~}}
-{{~ if proxy.enabled || hardening.enabled || external_config.enabled ~}}
+{{~ if proxy.enabled || hardening.enabled || external_config.enabled || download_enabled ~}}
 import sys
 {{~ end ~}}
 {{~ if hardening.has_baseline ~}}
@@ -30,10 +30,11 @@ import json
 {{~ if hardening.enabled ~}}
 from urllib.parse import urlsplit
 {{~ end ~}}
-{{~ if pagination.enabled ~}}
-{{~ if pagination.kind == "nextLink" ~}}
+{{~ if (pagination.enabled && pagination.kind == "nextLink") || download_enabled ~}}
 from urllib.parse import urljoin
 {{~ end ~}}
+{{~ if download_enabled ~}}
+import hashlib
 {{~ end ~}}
 {{~ if change_detection.enabled ~}}
 import difflib
@@ -64,6 +65,49 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https:/
 # own instead, so it keeps the ordinary tree extensions like an unmapped tree
 # output would.
 OUTPUT_PATH = "{{ output_filename }}.{{ if blueprint_mapping_enabled }}{{ if output_is_json }}json{{ else }}csv{{ end }}{{ else }}{{ if output_is_json }}json{{ else }}xml{{ end }}{{ end }}"
+
+{{~ if download_enabled ~}}
+# Issue #213: sibling directory next to OUTPUT_PATH, same "append a suffix to
+# the full OUTPUT_PATH string, extension included" convention BASELINE_PATH
+# already establishes for its own sidecar file below.
+DOWNLOADS_DIR = OUTPUT_PATH + ".downloads"
+
+
+# Downloads one embedded resource (e.g. an <img>'s src) referenced by an
+# Attribute-mode field with Download enabled, and returns its own local file
+# path — never the bare URL — for the caller to use as that field's value.
+# The local filename is a SHA-1 hash of the (already-resolved-to-absolute)
+# URL, not the URL's own basename: two different pages could otherwise
+# reference two entirely different images both named e.g. "thumb.jpg",
+# silently overwriting one with the other. The hash also makes downloads
+# idempotent across repeated runs of the same script — a file that already
+# exists on disk is trusted as-is and never re-fetched, so scraping the same
+# page again doesn't grow DOWNLOADS_DIR without bound. A failed download
+# (network error, non-2xx status, ...) is never fatal to the row/run — it's
+# printed as a warning and the caller gets "" back, exactly like any other
+# field whose selector simply found nothing.
+def _download_resource(url, base_url):
+    absolute_url = urljoin(base_url, url)
+    os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+    digest = hashlib.sha1(absolute_url.encode("utf-8")).hexdigest()[:16]
+    # A query string/fragment on the URL shouldn't leak into the local
+    # filename's own extension — split them off before inspecting the path.
+    path_only = absolute_url.split("?", 1)[0].split("#", 1)[0]
+    ext = os.path.splitext(path_only)[1]
+    if not re.fullmatch(r"\.[A-Za-z0-9]{1,8}", ext):
+        ext = ""
+    local_path = os.path.join(DOWNLOADS_DIR, digest + ext)
+    if not os.path.exists(local_path):
+        try:
+            response = requests.get(absolute_url, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
+            response.raise_for_status()
+            with open(local_path, "wb") as f:
+                f.write(response.content)
+        except Exception as exc:
+            print(f"WARNING: failed to download resource '{absolute_url}': {exc}", file=sys.stderr)
+            return ""
+    return local_path
+{{~ end ~}}
 
 {{~ if external_config.enabled ~}}
 # Issue #178: see scraper.py.j2's own doc comment for the full rationale — an
@@ -390,6 +434,11 @@ def _blueprint_subtree_has_mapped_field(node):
 # code sharing beyond a plain Python def" reasoning extract_group() and
 # _apply_transforms already accept throughout this template) rather than
 # reusing extract_group() itself, which returns an ET.Element, not a value.
+# Issue #213 note: deliberately does NOT apply Download here — a flattened
+# Output Blueprint row for an Attribute-mode field with Download enabled
+# still gets the raw URL, not a local file path. Combining these two
+# features is out of scope for this first version (undocumented anywhere
+# else — the two simply haven't been wired together yet).
 def _resolve_flatten_leaf_value(scope, node):
     if node["mode"] == "exists":
         return "true" if scope.select_one(node["selector"]) else "false"
@@ -721,7 +770,7 @@ def _apply_transforms(value, transforms):
 # node["repeating"]) and recurses into each match; a data-field leaf reads
 # text/attribute/existence from `scope` directly. One function handles any
 # nesting depth without the template needing to mirror the tree structure.
-def extract_group(scope, node):
+def extract_group(scope, node, base_url):
     if "children" in node:
         if node["repeating"]:
             matches = scope.select(node["selector"])
@@ -736,7 +785,7 @@ def extract_group(scope, node):
         for match in matches:
             el = ET.Element(node["name"])
             for child in node["children"]:
-                result = extract_group(match, child)
+                result = extract_group(match, child, base_url)
                 if isinstance(result, list):
                     el.extend(result)
                 else:
@@ -756,7 +805,12 @@ def extract_group(scope, node):
         if found is None:
             el.text = ""
         elif node["mode"] == "attribute":
-            el.text = _apply_transforms(found.get(node["attribute"], "") or "", node["transform"])
+            value = _apply_transforms(found.get(node["attribute"], "") or "", node["transform"])
+            # Issue #213: replaces the raw URL with its own downloaded local
+            # file path — applied AFTER transforms, so e.g. a `replace`
+            # transform fixing up a protocol-relative "//host/x.jpg" URL is
+            # already in effect by the time it's resolved/downloaded.
+            el.text = _download_resource(value, base_url) if node.get("download") and value else value
         elif node["mode"] == "ownText":
             # Direct text-node children only, excluding any nested element's
             # own text — e.g. a badge <span> inside a name <h3> no longer
@@ -881,7 +935,7 @@ def scrape(url):
 
         page_elements = []
         for node in GROUPS:
-            page_elements.extend(extract_group(soup, node))
+            page_elements.extend(extract_group(soup, node, response.url))
         if not page_elements:
             break
         for el in page_elements:

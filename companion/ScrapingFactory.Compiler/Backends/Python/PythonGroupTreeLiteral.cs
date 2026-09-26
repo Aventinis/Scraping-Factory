@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using ScrapingFactory.Compiler.IR;
 
@@ -12,6 +13,16 @@ namespace ScrapingFactory.Compiler.Backends.Python;
 // consumed at runtime is identical either way.
 internal static class PythonGroupTreeLiteral
 {
+    // Issue #213: whether the generated script needs the download helper
+    // (and its own conditional imports — os/sys/hashlib/urljoin) at all —
+    // true iff at least one field anywhere in the tree has Download enabled.
+    public static bool AnyDownloadEnabled(IReadOnlyList<ContainerNode> nodes) => nodes.Any(node => node switch
+    {
+        DataFieldNode field => field.Download,
+        GroupNode group => AnyDownloadEnabled(group.Children),
+        _ => false,
+    });
+
     public static string Render(IReadOnlyList<ContainerNode> nodes, int indent = 0)
     {
         if (nodes.Count == 0)
@@ -62,7 +73,12 @@ internal static class PythonGroupTreeLiteral
         // Issue #84's transform chain isn't tied to a specific Mode branch,
         // so extract_group() can just do node.get("transform", []) uniformly.
         var transformPart = $$""", "transform": {{PythonFieldTransformLiteral.Render(field.Transforms)}}""";
-        return $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "selector": {{PythonLiteral.Str(field.Selector)}}, "mode": {{PythonLiteral.Str(mode)}}{{attributePart}}{{framePathPart}}{{transformPart}}}""";
+        // Issue #213: same "always present" convention as transform above —
+        // Download is only ever true under Mode == Attribute (validated
+        // upstream), but extract_group() can still just do
+        // node.get("download", False) uniformly regardless of mode.
+        var downloadPart = $$""", "download": {{(field.Download ? "True" : "False")}}""";
+        return $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "selector": {{PythonLiteral.Str(field.Selector)}}, "mode": {{PythonLiteral.Str(mode)}}{{attributePart}}{{framePathPart}}{{transformPart}}{{downloadPart}}}""";
     }
 
     private static string FramePathPart(List<string>? framePath) =>

@@ -159,6 +159,10 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
                 script_filename = plan.ScriptFileName,
                 output_filename = plan.OutputFileBaseName,
                 output_is_json = plan.OutputFormat == OutputFormat.Json,
+                // Issue #213: see PythonCodeGenerator's identical use of
+                // AnyDownloadEnabled — gates the download helper's own
+                // conditional imports (os/sys/hashlib/urllib.parse).
+                download_enabled = PythonGroupTreeLiteral.AnyDownloadEnabled(groupStep.Roots),
                 change_detection = changeDetection,
                 proxy,
                 hardening,

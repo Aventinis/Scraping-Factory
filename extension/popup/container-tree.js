@@ -22,7 +22,7 @@ const SFContainerTree = (function () {
     return { kind: 'group', name, selector, repeating, children: [], framePath: framePath || null };
   }
 
-  function buildFieldNode(name, selector, mode, attribute, framePath = null, transforms = []) {
+  function buildFieldNode(name, selector, mode, attribute, framePath = null, transforms = [], download = false) {
     return {
       kind: 'field', name, selector, mode, attribute: mode === 'attribute' ? attribute : null,
       framePath: framePath || null,
@@ -30,7 +30,59 @@ const SFContainerTree = (function () {
       // doc comment) — dropped here rather than trusting every call site to
       // pass [] for that mode itself.
       transforms: mode !== 'exists' && transforms.length > 0 ? transforms : null,
+      // Issue #213: only meaningful for Attribute mode (the raw value is a
+      // URL only then) — same "gate on mode, don't trust the caller" pattern
+      // attribute/transforms above already use.
+      download: mode === 'attribute' && !!download,
     };
+  }
+
+  // Issue #213 follow-up: guesses which of a clicked element's own
+  // attributes most likely holds a downloadable resource URL, so the
+  // extension can pre-select it in the attribute picker instead of leaving
+  // a non-technical user to guess/inspect DevTools for an HTML attribute
+  // name blind (per CLAUDE.md's "no programming knowledge" target audience
+  // — the whole reason `select-field-attribute` lists the element's actual
+  // attributes rather than being a free-text field at all). A convenience
+  // default only — every attribute is still listed and pickable regardless
+  // of what this guesses, so a wrong guess costs one click to correct, not
+  // a dead end.
+  const RESOURCE_LIKE_EXTENSION_RE = /\.(jpe?g|png|gif|webp|avif|svg|bmp|ico|pdf|mp4|webm|mp3)(\?|#|$)/i;
+
+  // A "data:" URI is inline base64 content, not a fetchable resource — the
+  // classic case being a 1x1 tracking-pixel placeholder sitting in `src`
+  // while the real image URL waits in a lazy-load `data-*` attribute.
+  function looksLikeResourceUrl(value) {
+    if (!value) return false;
+    if (value.startsWith('data:')) return false;
+    return value.includes('/') || RESOURCE_LIKE_EXTENSION_RE.test(value);
+  }
+
+  function scoreAttributeForDownload(name, value) {
+    if (!looksLikeResourceUrl(value)) return -1;
+    const lower = name.toLowerCase();
+    if (lower === 'src') return 100;
+    // Common lazy-loading conventions: the real URL sits in a data-*
+    // attribute until the element actually scrolls into view.
+    if (lower === 'data-src' || lower === 'data-original' || lower.includes('lazy')) return 90;
+    if (lower === 'href') return 70;
+    if (lower.startsWith('data-') && RESOURCE_LIKE_EXTENSION_RE.test(value)) return 60;
+    if (RESOURCE_LIKE_EXTENSION_RE.test(value)) return 50;
+    return 10; // contains a slash but nothing else recognizable
+  }
+
+  // Returns the best-guess attribute name, or null when nothing on the
+  // element looks like a resource URL at all (the picker then simply lists
+  // every attribute with no preselection).
+  function guessUrlAttribute(attributes) {
+    if (!attributes) return null;
+    let best = null;
+    let bestScore = 0;
+    for (const [name, value] of Object.entries(attributes)) {
+      const score = scoreAttributeForDownload(name, value);
+      if (score > bestScore) { best = name; bestScore = score; }
+    }
+    return best;
   }
 
   function resolveGroupNode(groups, path) {
@@ -145,6 +197,11 @@ const SFContainerTree = (function () {
           ...(node.mode === 'attribute' ? { attribute: node.attribute } : {}),
           ...(node.framePath ? { framePath: node.framePath } : {}),
           ...(node.transforms && node.transforms.length > 0 ? { transforms: node.transforms } : {}),
+          // Issue #213: same "only meaningful under Attribute mode" gate as
+          // attribute itself — omitted (not sent as false) when off, the
+          // same "incomplete/off = key omitted" convention transforms/
+          // framePath above already use.
+          ...(node.mode === 'attribute' && node.download ? { download: true } : {}),
         });
   }
 
@@ -152,6 +209,7 @@ const SFContainerTree = (function () {
     buildGroupNode, buildFieldNode, resolveGroupNode, hasRepeatingAncestor,
     insertContainerNode, removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode,
     groupNodeSuffix, formatGroupNodeLabel, serializeGroupTree,
+    guessUrlAttribute,
   };
 })();
 

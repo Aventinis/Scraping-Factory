@@ -310,8 +310,9 @@
       "attributeOption": "Atributo",
       "existsOption": "¿Existe?",
       "ownTextOption": "Solo texto propio (sin elementos anidados)",
-      "attributeLabel": "Nombre del atributo (p. ej. \"href\")",
-      "attributePlaceholder": "Atributo"
+      "attributeLabel": "¿Qué atributo contiene el valor?",
+      "noAttributesFound": "Este elemento no tiene atributos.",
+      "downloadToggle": "Descargar este recurso (p. ej. una imagen) y guardarlo localmente"
     },
     "apiGroupNew": {
       "nameLabel": "Nombre del grupo (p. ej. \"Subcategoría\")",
