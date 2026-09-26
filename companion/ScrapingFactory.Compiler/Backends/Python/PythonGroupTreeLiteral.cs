@@ -62,7 +62,12 @@ internal static class PythonGroupTreeLiteral
         // Issue #84's transform chain isn't tied to a specific Mode branch,
         // so extract_group() can just do node.get("transform", []) uniformly.
         var transformPart = $$""", "transform": {{PythonFieldTransformLiteral.Render(field.Transforms)}}""";
-        return $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "selector": {{PythonLiteral.Str(field.Selector)}}, "mode": {{PythonLiteral.Str(mode)}}{{attributePart}}{{framePathPart}}{{transformPart}}}""";
+        // Issue #213: same "always present" convention as transform above —
+        // Download is only ever true under Mode == Attribute (validated
+        // upstream), but extract_group() can still just do
+        // node.get("download", False) uniformly regardless of mode.
+        var downloadPart = $$""", "download": {{(field.Download ? "True" : "False")}}""";
+        return $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "selector": {{PythonLiteral.Str(field.Selector)}}, "mode": {{PythonLiteral.Str(mode)}}{{attributePart}}{{framePathPart}}{{transformPart}}{{downloadPart}}}""";
     }
 
     private static string FramePathPart(List<string>? framePath) =>
