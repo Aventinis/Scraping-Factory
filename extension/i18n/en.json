@@ -356,6 +356,9 @@
       "fieldNamePlaceholder": "Field name",
       "addFieldBtn": "+ Add field",
       "addGroupBtn": "+ Add group",
+      "importLabel": "Import from a sample (JSON, CSV header row, or a plain field-name list)",
+      "importPlaceholder": "Paste a JSON sample, a CSV header row, or one field name per line…",
+      "importBtn": "Parse & fill fields",
       "save": "Save",
       "editBtn": "Edit"
     }
@@ -387,7 +390,9 @@
     "blueprintDeleted": "Output blueprint deleted.",
     "blueprintDeleteFailed": "Could not delete output blueprint: {message}",
     "blueprintSaved": "Output blueprint saved.",
-    "blueprintSaveFailed": "Could not save output blueprint: {message}"
+    "blueprintSaveFailed": "Could not save output blueprint: {message}",
+    "blueprintImportEmpty": "Could not find any field names in the pasted sample.",
+    "blueprintImportParsed": "Imported {count} field(s) from the sample."
   },
   "frame": {
     "badge": "iframe",

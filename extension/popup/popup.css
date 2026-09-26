@@ -698,6 +698,13 @@ button:active:not(:disabled) { transform: translateY(1px); }
 .modal-inner {
   background: var(--color-surface); border-radius: var(--radius-xl); padding: 18px;
   width: 320px; box-shadow: var(--elevation-3);
+  /* A modal with a lot of dynamic row content (e.g. many imported Output
+     Blueprint fields, Issue #193's own bug report) used to have no height
+     cap at all — it simply overflowed past the viewport with no way to
+     reach its own Save/Cancel buttons other than deleting rows first. Every
+     modal in the extension shares this one class, so capping/scrolling it
+     here fixes all of them at once rather than per-modal. */
+  max-height: calc(100vh - 32px); overflow-y: auto;
 }
 .modal-inner label { display: block; font-size: 12px; color: var(--color-text-muted); margin-bottom: 6px; }
 .modal-inner input {
@@ -710,6 +717,12 @@ button:active:not(:disabled) { transform: translateY(1px); }
   padding: 7px 10px; font-size: 14px; margin-bottom: 12px; font-family: inherit; outline: none;
   background: var(--color-surface);
 }
+.modal-inner textarea {
+  width: 100%; border: 1px solid var(--color-border-input); border-radius: var(--radius-md);
+  padding: 7px 10px; font-size: 14px; margin-bottom: 12px; font-family: inherit; outline: none;
+  resize: vertical;
+}
+.modal-inner textarea:focus { border-color: var(--color-primary); box-shadow: var(--focus-ring); }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
 /* Toast */

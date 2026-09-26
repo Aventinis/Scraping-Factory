@@ -53,8 +53,14 @@ describe('Output Blueprints (Issue #191)', () => {
     </div>
     <div id="modal-blueprint-edit" class="modal hidden">
       <input id="input-blueprint-name" type="text" />
-      <ul id="blueprint-field-list"></ul>
-      <button type="button" id="btn-blueprint-field-add"></button>
+      <div id="blueprint-flat-schema-section">
+        <div id="blueprint-import-section" class="hidden">
+          <textarea id="input-blueprint-import-sample"></textarea>
+          <button type="button" id="btn-blueprint-import-parse"></button>
+        </div>
+        <ul id="blueprint-field-list"></ul>
+        <button type="button" id="btn-blueprint-field-add"></button>
+      </div>
       <button id="btn-blueprint-edit-cancel"></button>
       <button id="btn-blueprint-edit-save"></button>
     </div>
@@ -270,6 +276,54 @@ describe('Output Blueprints (Issue #191)', () => {
 
     const options = [...document.querySelectorAll('#select-output-blueprint option')];
     expect(options.map((o) => o.value)).toEqual(['', '1', '2']);
+  });
+
+  // Issue #193: importing the field list from a pasted sample instead of
+  // typing every field name by hand — only reachable while creating a new
+  // blueprint (see importBlueprintFieldNamesFromSample's own doc comment).
+  test('the import section is shown while creating a new blueprint but hidden while editing an existing one', async () => {
+    document.getElementById('btn-manage-blueprints').click();
+    document.getElementById('btn-blueprint-new').click();
+    expect(document.getElementById('blueprint-import-section').classList.contains('hidden')).toBe(false);
+
+    document.getElementById('btn-blueprint-edit-cancel').click();
+    document.querySelector('.btn-blueprint-edit').click();
+    await flushMicrotasks();
+    expect(document.getElementById('blueprint-import-section').classList.contains('hidden')).toBe(true);
+  });
+
+  test('parsing a pasted sample replaces the draft field list and enables Save once a name is set', async () => {
+    document.getElementById('btn-manage-blueprints').click();
+    document.getElementById('btn-blueprint-new').click();
+
+    document.getElementById('input-blueprint-import-sample').value = 'Title,Price,Sku';
+    document.getElementById('btn-blueprint-import-parse').click();
+
+    const inputs = document.querySelectorAll('.blueprint-field-name-input');
+    expect([...inputs].map((i) => i.value)).toEqual(['Title', 'Price', 'Sku']);
+
+    document.getElementById('input-blueprint-name').value = 'Imported blueprint';
+    document.getElementById('input-blueprint-name').dispatchEvent(new Event('change'));
+    expect(document.getElementById('btn-blueprint-edit-save').disabled).toBe(false);
+
+    document.getElementById('btn-blueprint-edit-save').click();
+    await flushMicrotasks();
+
+    const postCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/blueprints') && init?.method === 'POST');
+    expect(JSON.parse(postCall[1].body)).toEqual({
+      name: 'Imported blueprint', schemaKind: 'Flat', fieldNames: ['Title', 'Price', 'Sku'],
+    });
+  });
+
+  test('a sample with no parseable field names leaves the draft field list untouched', () => {
+    document.getElementById('btn-manage-blueprints').click();
+    document.getElementById('btn-blueprint-new').click();
+
+    document.getElementById('input-blueprint-import-sample').value = '   ';
+    document.getElementById('btn-blueprint-import-parse').click();
+
+    const inputs = document.querySelectorAll('.blueprint-field-name-input');
+    expect([...inputs].map((i) => i.value)).toEqual(['']); // still the single blank row openBlueprintCreateModal seeded
   });
 
   test('editing an existing blueprint loads its fields, reorders one, and saves via PUT', async () => {

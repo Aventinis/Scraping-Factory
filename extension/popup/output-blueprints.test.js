@@ -1,6 +1,6 @@
 const {
   addBlueprintFieldName, removeBlueprintFieldName, updateBlueprintFieldName, moveBlueprintFieldName,
-  blueprintDraftIsValid,
+  blueprintDraftIsValid, parseFieldNamesFromSample,
   buildBlueprintSchemaGroup, buildBlueprintSchemaField, parseBlueprintSchemaTree, serializeBlueprintSchemaTree,
   blueprintTreeSchemaIsValid,
   createMappingDraft, updateMappingSource, mappingIsComplete,
@@ -51,6 +51,116 @@ describe('output-blueprints (Issue #191): editing a blueprint\'s own field-name 
 
   test('blueprintDraftIsValid accepts a well-formed draft', () => {
     expect(blueprintDraftIsValid('My blueprint', ['Title', 'Price'])).toBe(true);
+  });
+});
+
+// Issue #193: importing a blueprint's own field list from a pasted/uploaded
+// sample instead of typing every field name by hand.
+describe('output-blueprints (Issue #193): parseFieldNamesFromSample', () => {
+  test('returns [] for blank/whitespace-only input', () => {
+    expect(parseFieldNamesFromSample('')).toEqual([]);
+    expect(parseFieldNamesFromSample('   \n  ')).toEqual([]);
+  });
+
+  test('parses a plain newline-separated list of field names', () => {
+    expect(parseFieldNamesFromSample('Title\nPrice\nSku')).toEqual(['Title', 'Price', 'Sku']);
+  });
+
+  test('parses a single comma-separated line (plain list or CSV header row alike)', () => {
+    expect(parseFieldNamesFromSample('Title,Price,Sku')).toEqual(['Title', 'Price', 'Sku']);
+  });
+
+  test('parses a CSV header row, ignoring the data rows below it', () => {
+    const csv = 'Title,Price,Sku\nWidget,9.99,W-1\nGadget,19.99,G-2';
+    expect(parseFieldNamesFromSample(csv)).toEqual(['Title', 'Price', 'Sku']);
+  });
+
+  test('strips surrounding quotes from a quoted CSV header field', () => {
+    expect(parseFieldNamesFromSample('"Title","Price"')).toEqual(['Title', 'Price']);
+  });
+
+  test('trims whitespace around each parsed name', () => {
+    expect(parseFieldNamesFromSample('Title, Price , Sku')).toEqual(['Title', 'Price', 'Sku']);
+    expect(parseFieldNamesFromSample('  Title  \n  Price  ')).toEqual(['Title', 'Price']);
+  });
+
+  test('drops blank lines and deduplicates repeated names', () => {
+    expect(parseFieldNamesFromSample('Title\n\nPrice\nTitle')).toEqual(['Title', 'Price']);
+  });
+
+  test('parses field names from a single JSON object sample', () => {
+    expect(parseFieldNamesFromSample('{"Title": "Widget", "Price": 9.99}')).toEqual(['Title', 'Price']);
+  });
+
+  test('parses field names from the first element of a JSON array of objects', () => {
+    const json = '[{"Title": "Widget", "Price": 9.99}, {"Title": "Gadget", "Sku": "G-2"}]';
+    expect(parseFieldNamesFromSample(json)).toEqual(['Title', 'Price']);
+  });
+
+  test('uses a JSON array of strings as the field-name list directly', () => {
+    expect(parseFieldNamesFromSample('["Title", "Price", "Sku"]')).toEqual(['Title', 'Price', 'Sku']);
+  });
+
+  test('returns [] for an empty JSON object/array', () => {
+    expect(parseFieldNamesFromSample('{}')).toEqual([]);
+    expect(parseFieldNamesFromSample('[]')).toEqual([]);
+  });
+
+  test('returns [] for a JSON array of non-string, non-object primitives', () => {
+    expect(parseFieldNamesFromSample('[1, 2, 3]')).toEqual([]);
+  });
+
+  // Bug reports against the first version of this parser (real-world sample
+  // pasted from a site's own embedded JSON data), covering: (1) a wrapper
+  // object around the actual array of records, (2) a hand-edited/broken
+  // JSON fragment (trailing comma, outer braces left over from deleting a
+  // wrapper key) producing "key": value lines rather than valid JSON, and
+  // (3) bare brace/bracket lines being imported as their own bogus field.
+  test('drills through a wrapper object into a nested array-of-objects sample instead of using the wrapper key itself', () => {
+    const json = JSON.stringify({
+      offerTiles: [
+        { title: '', type: '', price: '', linkHref: '/x', uuid: 'abc', primaryType: 'contentTeaser' },
+      ],
+    });
+    expect(parseFieldNamesFromSample(json)).toEqual(
+      ['title', 'type', 'price', 'linkHref', 'uuid', 'primaryType'],
+    );
+  });
+
+  test('drills through more than one level of object wrapping', () => {
+    const json = JSON.stringify({ data: { items: [{ a: 1, b: 2 }] } });
+    expect(parseFieldNamesFromSample(json)).toEqual(['a', 'b']);
+  });
+
+  test('extracts just the key from "key": value property lines when the pasted snippet is not valid JSON', () => {
+    const broken = [
+      '{',
+      '"title": "",',
+      '"type": "",',
+      '"linkHref": "/clever-kochen/rezepte-und-ernaehrung/erdbeerlimes",',
+      '"primaryType": "contentTeaser"',
+      '}',
+    ].join('\n');
+    expect(parseFieldNamesFromSample(broken)).toEqual(['title', 'type', 'linkHref', 'primaryType']);
+  });
+
+  test('extracts keys from bare property lines with no surrounding braces at all', () => {
+    const broken = [
+      '"title": "",',
+      '"type": "",',
+      '"primaryType": "contentTeaser",',
+    ].join('\n');
+    expect(parseFieldNamesFromSample(broken)).toEqual(['title', 'type', 'primaryType']);
+  });
+
+  test('drops bare structural brace/bracket lines instead of importing them as their own field', () => {
+    const broken = ['[', '{', '"a": 1,', '"b": 2', '},', ']'].join('\n');
+    expect(parseFieldNamesFromSample(broken)).toEqual(['a', 'b']);
+  });
+
+  test('supports unquoted (JS object literal style) property lines too', () => {
+    const broken = ['{', 'title: "",', 'type: "",', '}'].join('\n');
+    expect(parseFieldNamesFromSample(broken)).toEqual(['title', 'type']);
   });
 });
 

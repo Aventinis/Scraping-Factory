@@ -36,7 +36,7 @@ const SFOutputBlueprintsUI = (function () {
 
   const {
     addBlueprintFieldName, removeBlueprintFieldName, updateBlueprintFieldName, moveBlueprintFieldName,
-    blueprintDraftIsValid, createMappingDraft, updateMappingSource,
+    blueprintDraftIsValid, createMappingDraft, updateMappingSource, parseFieldNamesFromSample,
     buildBlueprintSchemaGroup, buildBlueprintSchemaField, parseBlueprintSchemaTree, serializeBlueprintSchemaTree,
     blueprintTreeSchemaIsValid, createTreeMappingDraft, updateTreeMappingSource,
   } = typeof require !== 'undefined' ? require('./output-blueprints') : self.SFOutputBlueprints;
@@ -349,6 +349,24 @@ const SFOutputBlueprintsUI = (function () {
     bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, schemaKind } });
   }
 
+  // Issue #193: replaces the draft's own fieldNames with whatever
+  // parseFieldNamesFromSample could pull out of the pasted/uploaded sample —
+  // a full replace, not a merge (see this file's own doc comment and
+  // CLAUDE.md for why "merge into an existing blueprint" is deliberately
+  // out of scope for this first version). Only reachable while creating a
+  // new blueprint (see renderBlueprintEditModal's own visibility gate), so
+  // there's no already-saved field list this could ever clobber.
+  function importBlueprintFieldNamesFromSample(bridge, sampleText) {
+    const parsed = parseFieldNamesFromSample(sampleText);
+    if (parsed.length === 0) {
+      showToast(t('toast.blueprintImportEmpty'), null, 'warn');
+      return;
+    }
+    const state = bridge.getState();
+    bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, fieldNames: parsed } });
+    showToast(t('toast.blueprintImportParsed', { count: parsed.length }), null, 'info');
+  }
+
   async function saveBlueprintEdit(bridge) {
     const state = bridge.getState();
     const { name, schemaKind, fieldNames, tree } = state.blueprintEditDraft;
@@ -397,6 +415,12 @@ const SFOutputBlueprintsUI = (function () {
     document.getElementById('btn-blueprint-schema-kind-tree')?.classList.toggle('active', isTree);
     document.getElementById('blueprint-flat-schema-section')?.classList.toggle('hidden', isTree);
     document.getElementById('blueprint-tree-schema-section')?.classList.toggle('hidden', !isTree);
+    // Issue #193: import only ever targets a brand-new Flat-schema blueprint
+    // (see importBlueprintFieldNamesFromSample's own doc comment) — hidden
+    // once editing an already-existing one, and irrelevant for the Tree
+    // schema kind (no natural "import a sample" equivalent for a nested
+    // target shape, not mentioned in the issue).
+    document.getElementById('blueprint-import-section')?.classList.toggle('hidden', isTree || !!state.blueprintEditingId);
 
     const listEl = document.getElementById('blueprint-field-list');
     if (listEl) {
@@ -532,6 +556,11 @@ const SFOutputBlueprintsUI = (function () {
     document.getElementById('btn-blueprint-schema-kind-flat')?.addEventListener('click', () => setBlueprintSchemaKind(bridge, 'Flat'));
     document.getElementById('btn-blueprint-schema-kind-tree')?.addEventListener('click', () => setBlueprintSchemaKind(bridge, 'Tree'));
 
+    document.getElementById('btn-blueprint-import-parse')?.addEventListener('click', () => {
+      const textarea = document.getElementById('input-blueprint-import-sample');
+      importBlueprintFieldNamesFromSample(bridge, textarea ? textarea.value : '');
+    });
+
     document.getElementById('input-blueprint-name')?.addEventListener('change', (e) => {
       const state = bridge.getState();
       bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, name: e.target.value } });
@@ -623,7 +652,7 @@ const SFOutputBlueprintsUI = (function () {
     renderManageBlueprintsModal, openManageBlueprintsModal, closeManageBlueprintsModal,
     requestDeleteBlueprint, cancelDeleteBlueprint, deleteBlueprint,
     openBlueprintCreateModal, openBlueprintEditModal, closeBlueprintEditModal, saveBlueprintEdit,
-    setBlueprintSchemaKind, renderBlueprintEditModal, renderBlueprintSchemaTree,
+    setBlueprintSchemaKind, importBlueprintFieldNamesFromSample, renderBlueprintEditModal, renderBlueprintSchemaTree,
     wireOutputBlueprintsEvents,
   };
 })();

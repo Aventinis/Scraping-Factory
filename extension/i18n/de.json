@@ -356,6 +356,9 @@
       "fieldNamePlaceholder": "Feldname",
       "addFieldBtn": "+ Feld hinzufügen",
       "addGroupBtn": "+ Gruppe hinzufügen",
+      "importLabel": "Aus einer Beispieldatei importieren (JSON, CSV-Kopfzeile oder eine einfache Feldnamenliste)",
+      "importPlaceholder": "JSON-Beispiel, CSV-Kopfzeile oder einen Feldnamen pro Zeile einfügen…",
+      "importBtn": "Analysieren & Felder befüllen",
       "save": "Speichern",
       "editBtn": "Bearbeiten"
     }
@@ -387,7 +390,9 @@
     "blueprintDeleted": "Output-Blueprint gelöscht.",
     "blueprintDeleteFailed": "Output-Blueprint konnte nicht gelöscht werden: {message}",
     "blueprintSaved": "Output-Blueprint gespeichert.",
-    "blueprintSaveFailed": "Output-Blueprint konnte nicht gespeichert werden: {message}"
+    "blueprintSaveFailed": "Output-Blueprint konnte nicht gespeichert werden: {message}",
+    "blueprintImportEmpty": "In der eingefügten Beispieldatei wurden keine Feldnamen gefunden.",
+    "blueprintImportParsed": "{count} Feld(er) aus der Beispieldatei importiert."
   },
   "frame": {
     "badge": "iframe",
