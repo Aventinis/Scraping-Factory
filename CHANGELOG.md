@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.15.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.15.2...v1.15.3) (2026-09-26)
+
+
+### Features
+
+* **output-blueprints:** build a Tree-schema target from a JSON sample ([7f9344e](https://github.com/Aventinis/Scraping-Factory/commit/7f9344ef4137870fae2010610d2f4cb99d378981))
+* **output-blueprints:** import a Tree-schema target from a nested sample ([75fbb6d](https://github.com/Aventinis/Scraping-Factory/commit/75fbb6db3288394073d8e91a05d079d5c2ed331e))
+* **output-blueprints:** wire sample import for the Tree schema kind ([f7b6ffa](https://github.com/Aventinis/Scraping-Factory/commit/f7b6ffad1d9778c12b3f62527540b5e3f46f4826))
+
 ## [1.15.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.15.1...v1.15.2) (2026-09-26)
 
 
