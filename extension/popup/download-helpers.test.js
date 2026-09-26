@@ -53,6 +53,20 @@ describe('downloadConfigExport (btn-export-config)', () => {
         <input type="radio" name="container-type" id="radio-container-repeating" />
         <button id="btn-container-confirm"></button>
       </div>
+      <div id="modal-field-extended" class="hidden">
+        <input id="input-field-extended-name" />
+        <select id="select-field-mode">
+          <option value="text">Text</option>
+          <option value="attribute">Attribute</option>
+          <option value="exists">Exists</option>
+        </select>
+        <div id="field-attribute-row" class="hidden">
+          <input id="input-field-attribute" />
+          <input type="checkbox" id="toggle-field-download" />
+        </div>
+        <button id="btn-field-extended-confirm"></button>
+        <button id="btn-field-extended-cancel"></button>
+      </div>
     `;
 
     global.chrome = {
@@ -127,6 +141,40 @@ describe('downloadConfigExport (btn-export-config)', () => {
       groups: [{ name: 'Vorspeisen', selector: 'section.menu-category', repeating: true, children: [] }],
       scriptFileName: null,
       outputFileName: null,
+    });
+  });
+
+  // Issue #213: proves the full wiring — the modal's own checkbox, read by
+  // confirmExtendedField, through buildFieldNode, through serializeGroupTree
+  // — ends up in the exact JSON /generate would receive, the same "exported
+  // config is byte-for-byte the /generate body" guarantee this describe
+  // block's own first test already established for the simpler fields.
+  test('an Attribute-mode field with the download checkbox checked is exported with download: true', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+
+    document.querySelector('.btn-add-subfield').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'img.photo' });
+    await flushMicrotasks();
+
+    const modeSelect = document.getElementById('select-field-mode');
+    modeSelect.value = 'attribute';
+    modeSelect.dispatchEvent(new Event('change'));
+    document.getElementById('input-field-attribute').value = 'src';
+    document.getElementById('toggle-field-download').checked = true;
+    document.getElementById('input-field-extended-name').value = 'Bild';
+    document.getElementById('btn-field-extended-confirm').click();
+
+    document.getElementById('btn-export-config').click();
+    const blobArg = global.URL.createObjectURL.mock.calls[0][0];
+    const parsed = JSON.parse(await readBlobText(blobArg));
+
+    expect(parsed.config.groups[0].children[0]).toEqual({
+      name: 'Bild', selector: 'img.photo', mode: 'Attribute', attribute: 'src', download: true,
     });
   });
 });
