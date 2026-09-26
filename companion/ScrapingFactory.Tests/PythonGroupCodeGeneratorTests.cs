@@ -400,7 +400,7 @@ public class PythonGroupCodeGeneratorTests
     public void Generate_ContainsRecursiveExtractGroupFunction()
     {
         var script = _generator.Generate(NestedGroupPlan());
-        Assert.Contains("def extract_group(scope, node):", script);
+        Assert.Contains("def extract_group(scope, node, base_url):", script);
         Assert.Contains("scope.select(node[\"selector\"])", script);
         Assert.Contains("scope.select_one(node[\"selector\"])", script);
     }
