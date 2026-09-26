@@ -311,7 +311,8 @@
       "existsOption": "Vorhanden?",
       "ownTextOption": "Nur eigener Text (ohne verschachtelte Elemente)",
       "attributeLabel": "Attribut-Name (z. B. \"href\")",
-      "attributePlaceholder": "Attribut"
+      "attributePlaceholder": "Attribut",
+      "downloadToggle": "Diese Ressource (z. B. ein Bild) herunterladen und lokal speichern"
     },
     "apiGroupNew": {
       "nameLabel": "Name der Gruppe (z. B. \"Subkategorie\")",

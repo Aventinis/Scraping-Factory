@@ -216,10 +216,11 @@ const SFContainerTreeUI = (function () {
     const mode = document.getElementById('select-field-mode')?.value ?? 'text';
     const attribute = document.getElementById('input-field-attribute')?.value.trim();
     if (mode === 'attribute' && !attribute) return;
+    const download = document.getElementById('toggle-field-download')?.checked ?? false;
 
     const state = bridge.getState();
     if (!transformsAreValid(state.pendingTransforms)) return;
-    const node = buildFieldNode(name, state.pendingSelector, mode, attribute, state.pendingFramePath, state.pendingTransforms);
+    const node = buildFieldNode(name, state.pendingSelector, mode, attribute, state.pendingFramePath, state.pendingTransforms, download);
     log('FIELD_ADD(container) confirm', node);
     bridge.setState(STATES.IDLE, {
       groups:            insertContainerNode(state.groups, state.pendingParentPath, node),
@@ -303,6 +304,8 @@ const SFContainerTreeUI = (function () {
       document.getElementById('field-extended-transforms-section')?.classList.remove('hidden');
       const attrInput = document.getElementById('input-field-attribute');
       if (attrInput) attrInput.value = '';
+      const downloadToggle = document.getElementById('toggle-field-download');
+      if (downloadToggle) downloadToggle.checked = false;
     }
     renderMatchCountHint('field-extended-match-count', state.pendingMatchCount);
     renderTransformList('field-extended-transform-list', state.pendingTransforms);

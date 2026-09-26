@@ -22,7 +22,7 @@ const SFContainerTree = (function () {
     return { kind: 'group', name, selector, repeating, children: [], framePath: framePath || null };
   }
 
-  function buildFieldNode(name, selector, mode, attribute, framePath = null, transforms = []) {
+  function buildFieldNode(name, selector, mode, attribute, framePath = null, transforms = [], download = false) {
     return {
       kind: 'field', name, selector, mode, attribute: mode === 'attribute' ? attribute : null,
       framePath: framePath || null,
@@ -30,6 +30,10 @@ const SFContainerTree = (function () {
       // doc comment) — dropped here rather than trusting every call site to
       // pass [] for that mode itself.
       transforms: mode !== 'exists' && transforms.length > 0 ? transforms : null,
+      // Issue #213: only meaningful for Attribute mode (the raw value is a
+      // URL only then) — same "gate on mode, don't trust the caller" pattern
+      // attribute/transforms above already use.
+      download: mode === 'attribute' && !!download,
     };
   }
 
@@ -145,6 +149,11 @@ const SFContainerTree = (function () {
           ...(node.mode === 'attribute' ? { attribute: node.attribute } : {}),
           ...(node.framePath ? { framePath: node.framePath } : {}),
           ...(node.transforms && node.transforms.length > 0 ? { transforms: node.transforms } : {}),
+          // Issue #213: same "only meaningful under Attribute mode" gate as
+          // attribute itself — omitted (not sent as false) when off, the
+          // same "incomplete/off = key omitted" convention transforms/
+          // framePath above already use.
+          ...(node.mode === 'attribute' && node.download ? { download: true } : {}),
         });
   }
 

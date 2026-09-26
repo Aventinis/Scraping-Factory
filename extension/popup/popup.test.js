@@ -277,10 +277,10 @@ describe('buildGroupNode / buildFieldNode', () => {
 
   test('buildFieldNode nulls attribute unless mode is attribute', () => {
     expect(buildFieldNode('Titel', 'h2', 'text', 'href')).toEqual({
-      kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null, framePath: null, transforms: null,
+      kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null, framePath: null, transforms: null, download: false,
     });
     expect(buildFieldNode('Link', 'a', 'attribute', 'href')).toEqual({
-      kind: 'field', name: 'Link', selector: 'a', mode: 'attribute', attribute: 'href', framePath: null, transforms: null,
+      kind: 'field', name: 'Link', selector: 'a', mode: 'attribute', attribute: 'href', framePath: null, transforms: null, download: false,
     });
   });
 
@@ -288,10 +288,10 @@ describe('buildGroupNode / buildFieldNode', () => {
   test('buildFieldNode carries transforms except for Exists mode', () => {
     const transforms = [{ kind: 'regexExtract', pattern: '\\d+', group: 0 }];
     expect(buildFieldNode('Preis', '.price', 'text', null, null, transforms)).toEqual({
-      kind: 'field', name: 'Preis', selector: '.price', mode: 'text', attribute: null, framePath: null, transforms,
+      kind: 'field', name: 'Preis', selector: '.price', mode: 'text', attribute: null, framePath: null, transforms, download: false,
     });
     expect(buildFieldNode('Vegan', '.vegan', 'exists', null, null, transforms)).toEqual({
-      kind: 'field', name: 'Vegan', selector: '.vegan', mode: 'exists', attribute: null, framePath: null, transforms: null,
+      kind: 'field', name: 'Vegan', selector: '.vegan', mode: 'exists', attribute: null, framePath: null, transforms: null, download: false,
     });
   });
 

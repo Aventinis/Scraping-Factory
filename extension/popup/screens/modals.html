@@ -102,6 +102,14 @@
       <div id="field-attribute-row" class="hidden">
         <label for="input-field-attribute" data-i18n="modals.fieldExtended.attributeLabel"></label>
         <input id="input-field-attribute" type="text" data-i18n-placeholder="modals.fieldExtended.attributePlaceholder" autocomplete="off" />
+        <!-- Issue #213: only meaningful when the raw extracted value is a
+             URL, i.e. Attribute mode — sits inside the same row so it's
+             hidden/shown by the exact same mode check as the attribute
+             input itself, no separate visibility wiring needed. -->
+        <label class="output-settings-toggle" id="field-download-toggle-row">
+          <input type="checkbox" id="toggle-field-download" />
+          <span data-i18n="modals.fieldExtended.downloadToggle"></span>
+        </label>
       </div>
       <!-- Issue #85: live match count for the just-picked selector -->
       <p id="field-extended-match-count" class="match-count-hint hidden"></p>
