@@ -51,10 +51,11 @@ describe('restorePendingSelection', () => {
   let bridge;
 
   beforeEach(() => {
-    state = { current: STATES.IDLE, groups: [], browserActions: [], pagination: { enabled: false } };
+    state = { current: STATES.IDLE, groups: [], browserActions: [], pagination: { enabled: false }, url: 'https://example.com' };
     bridge = {
       getState: () => state,
       setState: jest.fn((current, patch = {}) => { state = { ...state, current, ...patch }; }),
+      patchState: jest.fn((patch = {}) => { state = { ...state, ...patch }; }),
     };
     global.chrome = {
       storage: {
@@ -118,5 +119,38 @@ describe('restorePendingSelection', () => {
     expect(bridge.setState).toHaveBeenCalledWith(STATES.SELECTING, expect.objectContaining({
       pendingSelector: '.price', pendingRawText: '12,99 €', pendingTransforms: [],
     }));
+  });
+
+  // Issue: the side panel's tracked _state.url only gets set once at panel-
+  // load/companion-connection time — no chrome.tabs.onUpdated listener exists
+  // anywhere in this extension, so it silently goes stale if the same tab
+  // navigates to a different page while the panel is closed and the pending
+  // selection is recovered on reopen.
+  describe('stale tracked URL self-correction (pendingUrl)', () => {
+    test('self-corrects state.url when the pending selection was made on a different page', async () => {
+      await restorePendingSelection(bridge, { pendingSelector: '.price', pendingUrl: 'https://example.com/other-page' });
+      expect(bridge.patchState).toHaveBeenCalledWith({ url: 'https://example.com/other-page' });
+      expect(state.url).toBe('https://example.com/other-page');
+    });
+
+    test('does not patch url when pendingUrl matches the already-tracked url', async () => {
+      await restorePendingSelection(bridge, { pendingSelector: '.price', pendingUrl: 'https://example.com' });
+      expect(bridge.patchState).not.toHaveBeenCalled();
+    });
+
+    test('does not patch url when pendingUrl is absent (older/unaffected pending selection)', async () => {
+      await restorePendingSelection(bridge, { pendingSelector: '.price' });
+      expect(bridge.patchState).not.toHaveBeenCalled();
+      expect(state.url).toBe('https://example.com');
+    });
+
+    test('applies the url correction even for the container-insert recovery branch', async () => {
+      const stored = {
+        pendingSelector: '.item', mode: 'container', selectionKind: 'container',
+        pendingNewContainer: { name: 'Kategorie', repeating: true }, pendingUrl: 'https://example.com/other-page',
+      };
+      await restorePendingSelection(bridge, stored);
+      expect(state.url).toBe('https://example.com/other-page');
+    });
   });
 });
