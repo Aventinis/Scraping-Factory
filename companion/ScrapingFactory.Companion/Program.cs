@@ -70,7 +70,19 @@ app.MapPost("/configs", (SaveConfigRequest? request, SavedConfigStore store) =>
         return Results.BadRequest(new { error = "Url, Name and a Config object are required." });
     }
 
-    var saved = store.Save(url, name, request.Config.GetRawText());
+    // Issue #207: derive BlueprintId once, at save time, from this same
+    // already-parsed Config — see SavedConfigStore.EnsureCreated's own doc
+    // comment on why this is the one place ConfigJson's structure is looked
+    // at at all. Absent/malformed outputBlueprint or blueprintId simply
+    // yields null, same as "no Blueprint set".
+    long? blueprintId = request.Config.TryGetProperty("outputBlueprint", out var blueprintProp) &&
+        blueprintProp.ValueKind == System.Text.Json.JsonValueKind.Object &&
+        blueprintProp.TryGetProperty("blueprintId", out var blueprintIdProp) &&
+        blueprintIdProp.ValueKind == System.Text.Json.JsonValueKind.Number
+        ? blueprintIdProp.GetInt64()
+        : null;
+
+    var saved = store.Save(url, name, request.Config.GetRawText(), blueprintId);
     return Results.Created($"/configs/{saved.Id}", saved);
 });
 
@@ -94,6 +106,7 @@ app.MapGet("/configs/{id:long}", (long id, SavedConfigStore store) =>
         record.Url,
         record.Name,
         record.SavedAt,
+        record.BlueprintId,
         config = System.Text.Json.JsonDocument.Parse(record.ConfigJson).RootElement,
     });
 });
