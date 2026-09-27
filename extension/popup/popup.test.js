@@ -80,8 +80,8 @@ describe('applyConfigToState', () => {
 
   test('flat mode: round-trips fields (with attribute/framePath/transforms), scriptFileName/outputFileName, useJsonOutput, additionalStartUrls', () => {
     const fields = [
-      { name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null },
-      { name: 'Bild', selector: 'img', attribute: 'src', framePath: ['#widget'], transforms: [{ kind: 'trim' }] },
+      { name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null, download: false, maxDownloadSizeBytes: null, allowedContentTypes: [] },
+      { name: 'Bild', selector: 'img', attribute: 'src', framePath: ['#widget'], transforms: [{ kind: 'trim' }], download: false, maxDownloadSizeBytes: null, allowedContentTypes: [] },
     ];
     const config = buildScrapingConfig(
       'https://example.com', 'flat', fields, [], null, 'myscraper', 'result', 'Static', [], false, true,
@@ -98,6 +98,18 @@ describe('applyConfigToState', () => {
     expect(result.outputFileName).toBe('result');
     expect(result.useJsonOutput).toBe(true);
     expect(result.additionalStartUrls).toEqual(['https://example.com/page2']);
+  });
+
+  // Issue #214
+  test('flat mode: round-trips a downloading field with its safety net', () => {
+    const fields = [
+      {
+        name: 'Datei', selector: 'a.file', attribute: 'href', framePath: null, transforms: null,
+        download: true, maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'],
+      },
+    ];
+    const config = buildScrapingConfig('https://example.com', 'flat', fields);
+    expect(applyConfigToState(config).fields).toEqual(fields);
   });
 
   test('container mode: round-trips a nested group tree through serialize/deserialize', () => {
@@ -277,10 +289,12 @@ describe('buildGroupNode / buildFieldNode', () => {
 
   test('buildFieldNode nulls attribute unless mode is attribute', () => {
     expect(buildFieldNode('Titel', 'h2', 'text', 'href')).toEqual({
-      kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null, framePath: null, transforms: null, download: false,
+      kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null, framePath: null, transforms: null,
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
     });
     expect(buildFieldNode('Link', 'a', 'attribute', 'href')).toEqual({
-      kind: 'field', name: 'Link', selector: 'a', mode: 'attribute', attribute: 'href', framePath: null, transforms: null, download: false,
+      kind: 'field', name: 'Link', selector: 'a', mode: 'attribute', attribute: 'href', framePath: null, transforms: null,
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
     });
   });
 
@@ -288,10 +302,12 @@ describe('buildGroupNode / buildFieldNode', () => {
   test('buildFieldNode carries transforms except for Exists mode', () => {
     const transforms = [{ kind: 'regexExtract', pattern: '\\d+', group: 0 }];
     expect(buildFieldNode('Preis', '.price', 'text', null, null, transforms)).toEqual({
-      kind: 'field', name: 'Preis', selector: '.price', mode: 'text', attribute: null, framePath: null, transforms, download: false,
+      kind: 'field', name: 'Preis', selector: '.price', mode: 'text', attribute: null, framePath: null, transforms,
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
     });
     expect(buildFieldNode('Vegan', '.vegan', 'exists', null, null, transforms)).toEqual({
-      kind: 'field', name: 'Vegan', selector: '.vegan', mode: 'exists', attribute: null, framePath: null, transforms: null, download: false,
+      kind: 'field', name: 'Vegan', selector: '.vegan', mode: 'exists', attribute: null, framePath: null, transforms: null,
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
     });
   });
 

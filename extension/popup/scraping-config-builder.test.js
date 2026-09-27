@@ -75,6 +75,32 @@ describe('buildScrapingConfig (flat mode)', () => {
     expect(result.fields[0].framePath).toEqual(['#price-widget']);
     expect(result.fields[1]).not.toHaveProperty('framePath');
   });
+
+  // Issue #214
+  test('includes download + safety net on a field when set, omits when off', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [
+      {
+        name: 'Datei', selector: 'a.file', attribute: 'href', download: true,
+        maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'],
+      },
+      { name: 'Titel', selector: 'h1' },
+    ]);
+    expect(result.fields[0].download).toBe(true);
+    expect(result.fields[0].maxDownloadSizeBytes).toBe(1024);
+    expect(result.fields[0].allowedContentTypes).toEqual(['application/pdf']);
+    expect(result.fields[1]).not.toHaveProperty('download');
+    expect(result.fields[1]).not.toHaveProperty('maxDownloadSizeBytes');
+    expect(result.fields[1]).not.toHaveProperty('allowedContentTypes');
+  });
+
+  test('omits maxDownloadSizeBytes/allowedContentTypes when download is off', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [
+      { name: 'Datei', selector: 'a.file', attribute: 'href', maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'] },
+    ]);
+    expect(result.fields[0]).not.toHaveProperty('download');
+    expect(result.fields[0]).not.toHaveProperty('maxDownloadSizeBytes');
+    expect(result.fields[0]).not.toHaveProperty('allowedContentTypes');
+  });
 });
 
 describe('buildScrapingConfig (combined mode, Issue #239)', () => {
@@ -1291,20 +1317,46 @@ describe('buildConfigExport', () => {
 describe('addField', () => {
   test('appends field with null attribute', () => {
     const result = addField([], 'Titel', 'h1');
-    expect(result).toEqual([{ name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null }]);
+    expect(result).toEqual([{
+      name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null,
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
+    }]);
   });
 
   // Issue #42, Phase 7
   test('appends field with framePath when given', () => {
     const result = addField([], 'Preis', 'h2', ['#price-widget']);
-    expect(result).toEqual([{ name: 'Preis', selector: 'h2', attribute: null, framePath: ['#price-widget'], transforms: null }]);
+    expect(result).toEqual([{
+      name: 'Preis', selector: 'h2', attribute: null, framePath: ['#price-widget'], transforms: null,
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
+    }]);
   });
 
   // Issue #84
   test('appends field with transforms when given', () => {
     const transforms = [{ kind: 'trim' }, { kind: 'toNumber' }];
     const result = addField([], 'Preis', '.price', null, transforms);
-    expect(result).toEqual([{ name: 'Preis', selector: '.price', attribute: null, framePath: null, transforms }]);
+    expect(result).toEqual([{
+      name: 'Preis', selector: '.price', attribute: null, framePath: null, transforms,
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
+    }]);
+  });
+
+  // Issue #214
+  test('appends attribute-mode field with download and safety net when given', () => {
+    const result = addField([], 'Datei', 'a.file', null, [], 'href', true, 1024, ['application/pdf']);
+    expect(result).toEqual([{
+      name: 'Datei', selector: 'a.file', attribute: 'href', framePath: null, transforms: null,
+      download: true, maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'],
+    }]);
+  });
+
+  test('ignores download/safety net when no attribute is given', () => {
+    const result = addField([], 'Titel', 'h1', null, [], null, true, 1024, ['application/pdf']);
+    expect(result).toEqual([{
+      name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null,
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
+    }]);
   });
 
   test('does not mutate original array', () => {

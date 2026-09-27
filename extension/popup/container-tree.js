@@ -22,7 +22,11 @@ const SFContainerTree = (function () {
     return { kind: 'group', name, selector, repeating, children: [], framePath: framePath || null };
   }
 
-  function buildFieldNode(name, selector, mode, attribute, framePath = null, transforms = [], download = false) {
+  function buildFieldNode(
+    name, selector, mode, attribute, framePath = null, transforms = [], download = false,
+    maxDownloadSizeBytes = null, allowedContentTypes = [],
+  ) {
+    const isDownload = mode === 'attribute' && !!download;
     return {
       kind: 'field', name, selector, mode, attribute: mode === 'attribute' ? attribute : null,
       framePath: framePath || null,
@@ -33,7 +37,11 @@ const SFContainerTree = (function () {
       // Issue #213: only meaningful for Attribute mode (the raw value is a
       // URL only then) — same "gate on mode, don't trust the caller" pattern
       // attribute/transforms above already use.
-      download: mode === 'attribute' && !!download,
+      download: isDownload,
+      // Issue #214: the optional safety net alongside download — same
+      // "only meaningful when download is actually on" gate.
+      maxDownloadSizeBytes: isDownload ? (maxDownloadSizeBytes || null) : null,
+      allowedContentTypes: isDownload && allowedContentTypes.length > 0 ? allowedContentTypes : [],
     };
   }
 
@@ -202,6 +210,12 @@ const SFContainerTree = (function () {
           // same "incomplete/off = key omitted" convention transforms/
           // framePath above already use.
           ...(node.mode === 'attribute' && node.download ? { download: true } : {}),
+          // Issue #214: the optional safety net alongside download — only
+          // sent when download is actually on and a value was configured.
+          ...(node.mode === 'attribute' && node.download && node.maxDownloadSizeBytes
+            ? { maxDownloadSizeBytes: node.maxDownloadSizeBytes } : {}),
+          ...(node.mode === 'attribute' && node.download && node.allowedContentTypes?.length > 0
+            ? { allowedContentTypes: node.allowedContentTypes } : {}),
         });
   }
 

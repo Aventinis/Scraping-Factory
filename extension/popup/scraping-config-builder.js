@@ -403,6 +403,11 @@ function buildScrapingConfig(
       name: f.name, selector: f.selector, attribute: f.attribute ?? null,
       ...(f.framePath ? { framePath: f.framePath } : {}),
       ...(f.transforms && f.transforms.length > 0 ? { transforms: f.transforms } : {}),
+      // Issue #214: same "incomplete/off = key omitted" convention
+      // framePath/transforms above already use.
+      ...(f.download ? { download: true } : {}),
+      ...(f.download && f.maxDownloadSizeBytes ? { maxDownloadSizeBytes: f.maxDownloadSizeBytes } : {}),
+      ...(f.download && f.allowedContentTypes?.length > 0 ? { allowedContentTypes: f.allowedContentTypes } : {}),
     })),
     outputFormat: useJsonOutput ? 'Json' : 'Csv',
     scriptFileName: scriptFileName || null,
@@ -440,10 +445,22 @@ function buildConfigExport(
   };
 }
 
-function addField(fields, name, selector, framePath = null, transforms = []) {
+// Issue #214: attribute/download/maxDownloadSizeBytes/allowedContentTypes
+// let flat mode gain the same Attribute-mode-with-Download capability
+// container mode's own buildFieldNode already has — attribute defaults to
+// null (today's exact pre-#214 behavior, a plain text field) for every
+// existing caller that doesn't pass one.
+function addField(
+  fields, name, selector, framePath = null, transforms = [], attribute = null,
+  download = false, maxDownloadSizeBytes = null, allowedContentTypes = [],
+) {
+  const isDownload = !!attribute && !!download;
   return [...fields, {
-    name, selector, attribute: null, framePath: framePath || null,
+    name, selector, attribute: attribute || null, framePath: framePath || null,
     transforms: transforms.length > 0 ? transforms : null,
+    download: isDownload,
+    maxDownloadSizeBytes: isDownload ? (maxDownloadSizeBytes || null) : null,
+    allowedContentTypes: isDownload && allowedContentTypes.length > 0 ? allowedContentTypes : [],
   }];
 }
 
