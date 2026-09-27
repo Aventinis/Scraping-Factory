@@ -55,7 +55,8 @@ public class PlaywrightDownloadResourceEndToEndTests
         throw new InvalidOperationException("No Python interpreter found (tried: python3, python).", lastError);
     }
 
-    private static ScrapingPlan BuildPlan(string startUrl, bool download) => new()
+    private static ScrapingPlan BuildPlan(
+        string startUrl, bool download, int? maxDownloadSizeBytes = null, List<string>? allowedContentTypes = null) => new()
     {
         Engine = ScrapingEngine.Browser,
         Steps =
@@ -70,7 +71,11 @@ public class PlaywrightDownloadResourceEndToEndTests
                         Name = "Item", Selector = ".item", Repeating = true,
                         Children =
                         [
-                            new DataFieldNode { Name = "Photo", Selector = ".photo", Mode = ExtractMode.Attribute, Attribute = "src", Download = download },
+                            new DataFieldNode
+                            {
+                                Name = "Photo", Selector = ".photo", Mode = ExtractMode.Attribute, Attribute = "src", Download = download,
+                                MaxDownloadSizeBytes = maxDownloadSizeBytes, AllowedContentTypes = allowedContentTypes,
+                            },
                         ],
                     },
                 ],
@@ -130,6 +135,62 @@ public class PlaywrightDownloadResourceEndToEndTests
         {
             Assert.Equal(0, exit);
             Assert.Contains("WARNING", stderr);
+
+            var outputXml = await File.ReadAllTextAsync(Path.Combine(workDir, "output.xml"));
+            Assert.Contains("<Photo />", outputXml);
+        }
+        finally
+        {
+            Directory.Delete(workDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadExceedingMaxSize_LeavesFieldEmptyAndPrintsWarningButDoesNotFailTheRun()
+    {
+        const string imageBytes = "FAKE_IMAGE_BYTES_LONGER_THAN_THE_CONFIGURED_LIMIT";
+        using var server = new LocalTestServer(request =>
+            request.Url!.AbsolutePath == "/image.jpg"
+                ? new LocalTestServerResponse(imageBytes, "image/jpeg")
+                : new LocalTestServerResponse(
+                    "<html><body><div class='item'><img class='photo' src='/image.jpg' /></div></body></html>",
+                    "text/html; charset=utf-8"));
+        var plan = BuildPlan(server.BaseUrl, download: true, maxDownloadSizeBytes: 10);
+
+        var (exit, stderr, workDir) = await GenerateAndRunAsync(plan, "scrapingfactory-pw-download-test-");
+        try
+        {
+            Assert.Equal(0, exit);
+            Assert.Contains("WARNING", stderr);
+            Assert.Contains("exceeds", stderr);
+
+            var outputXml = await File.ReadAllTextAsync(Path.Combine(workDir, "output.xml"));
+            Assert.Contains("<Photo />", outputXml);
+        }
+        finally
+        {
+            Directory.Delete(workDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadWithDisallowedContentType_LeavesFieldEmptyAndPrintsWarningButDoesNotFailTheRun()
+    {
+        const string imageBytes = "FAKE_IMAGE_BYTES_NOT_A_REAL_JPEG";
+        using var server = new LocalTestServer(request =>
+            request.Url!.AbsolutePath == "/image.jpg"
+                ? new LocalTestServerResponse(imageBytes, "image/jpeg")
+                : new LocalTestServerResponse(
+                    "<html><body><div class='item'><img class='photo' src='/image.jpg' /></div></body></html>",
+                    "text/html; charset=utf-8"));
+        var plan = BuildPlan(server.BaseUrl, download: true, allowedContentTypes: ["application/pdf"]);
+
+        var (exit, stderr, workDir) = await GenerateAndRunAsync(plan, "scrapingfactory-pw-download-test-");
+        try
+        {
+            Assert.Equal(0, exit);
+            Assert.Contains("WARNING", stderr);
+            Assert.Contains("content type", stderr);
 
             var outputXml = await File.ReadAllTextAsync(Path.Combine(workDir, "output.xml"));
             Assert.Contains("<Photo />", outputXml);

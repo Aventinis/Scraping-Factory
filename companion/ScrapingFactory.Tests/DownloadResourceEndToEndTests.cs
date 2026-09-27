@@ -56,7 +56,8 @@ public class DownloadResourceEndToEndTests
         throw new InvalidOperationException("No Python interpreter found (tried: python3, python).", lastError);
     }
 
-    private static ScrapingPlan BuildPlan(string startUrl, bool download) => new()
+    private static ScrapingPlan BuildPlan(
+        string startUrl, bool download, int? maxDownloadSizeBytes = null, List<string>? allowedContentTypes = null) => new()
     {
         Steps =
         [
@@ -70,7 +71,11 @@ public class DownloadResourceEndToEndTests
                         Name = "Item", Selector = ".item", Repeating = true,
                         Children =
                         [
-                            new DataFieldNode { Name = "Photo", Selector = ".photo", Mode = ExtractMode.Attribute, Attribute = "src", Download = download },
+                            new DataFieldNode
+                            {
+                                Name = "Photo", Selector = ".photo", Mode = ExtractMode.Attribute, Attribute = "src", Download = download,
+                                MaxDownloadSizeBytes = maxDownloadSizeBytes, AllowedContentTypes = allowedContentTypes,
+                            },
                         ],
                     },
                 ],
@@ -160,6 +165,78 @@ public class DownloadResourceEndToEndTests
 
             var outputXml = await File.ReadAllTextAsync(Path.Combine(workDir, "output.xml"));
             Assert.Contains("<Photo />", outputXml); // empty value, not the broken URL
+        }
+        finally
+        {
+            Directory.Delete(workDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadExceedingMaxSize_LeavesFieldEmptyAndPrintsWarningButDoesNotFailTheRun()
+    {
+        const string imageBytes = "FAKE_IMAGE_BYTES_LONGER_THAN_THE_CONFIGURED_LIMIT";
+        using var server = CreateFixtureServer(imageBytes);
+        var plan = BuildPlan(server.BaseUrl, download: true, maxDownloadSizeBytes: 10);
+
+        var (exit, stderr, workDir) = await GenerateAndRunAsync(plan, "scrapingfactory-download-test-");
+        try
+        {
+            Assert.Equal(0, exit);
+            Assert.Contains("WARNING", stderr);
+            Assert.Contains("exceeds", stderr);
+
+            var outputXml = await File.ReadAllTextAsync(Path.Combine(workDir, "output.xml"));
+            Assert.Contains("<Photo />", outputXml);
+            Assert.False(Directory.Exists(Path.Combine(workDir, "output.xml.downloads")) &&
+                         Directory.GetFiles(Path.Combine(workDir, "output.xml.downloads")).Length > 0);
+        }
+        finally
+        {
+            Directory.Delete(workDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadWithDisallowedContentType_LeavesFieldEmptyAndPrintsWarningButDoesNotFailTheRun()
+    {
+        const string imageBytes = "FAKE_IMAGE_BYTES_NOT_A_REAL_JPEG";
+        using var server = CreateFixtureServer(imageBytes);
+        var plan = BuildPlan(server.BaseUrl, download: true, allowedContentTypes: ["application/pdf"]);
+
+        var (exit, stderr, workDir) = await GenerateAndRunAsync(plan, "scrapingfactory-download-test-");
+        try
+        {
+            Assert.Equal(0, exit);
+            Assert.Contains("WARNING", stderr);
+            Assert.Contains("content type", stderr);
+
+            var outputXml = await File.ReadAllTextAsync(Path.Combine(workDir, "output.xml"));
+            Assert.Contains("<Photo />", outputXml);
+        }
+        finally
+        {
+            Directory.Delete(workDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadWithinSafetyNet_StillSucceeds()
+    {
+        const string imageBytes = "FAKE_IMAGE_BYTES_NOT_A_REAL_JPEG";
+        using var server = CreateFixtureServer(imageBytes);
+        var plan = BuildPlan(server.BaseUrl, download: true, maxDownloadSizeBytes: 1024, allowedContentTypes: ["image/jpeg"]);
+
+        var (exit, stderr, workDir) = await GenerateAndRunAsync(plan, "scrapingfactory-download-test-");
+        try
+        {
+            Assert.Equal(0, exit);
+            Assert.Empty(stderr);
+
+            var outputXml = await File.ReadAllTextAsync(Path.Combine(workDir, "output.xml"));
+            var match = Regex.Match(outputXml, "<Photo>(.*?)</Photo>");
+            Assert.True(match.Success, $"Expected a <Photo> element in:\n{outputXml}");
+            Assert.True(File.Exists(Path.Combine(workDir, match.Groups[1].Value)));
         }
         finally
         {
