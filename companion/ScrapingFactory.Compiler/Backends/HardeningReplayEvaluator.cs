@@ -187,11 +187,19 @@ public static class HardeningReplayEvaluator
         }
     }
 
-    private sealed class FlatDataset(List<Dictionary<string, string>> rows) : ParsedDataset
+    // knownFields is tracked separately from the row list itself (the CSV
+    // header, or the union of every row's own JSON keys) specifically so
+    // FieldExists still correctly recognizes a genuinely configured field
+    // even when there are zero data rows at all — the exact "no data was
+    // extracted" case NoResultCheck itself exists to catch, where relying on
+    // rows.Any(...) alone would otherwise report every other check's field
+    // as "not present" (a misleading message, even though the Inconclusive
+    // outcome it'd produce either way happens to still be correct).
+    private sealed class FlatDataset(List<Dictionary<string, string>> rows, IReadOnlyCollection<string> knownFields) : ParsedDataset
     {
         public override int ResultCount => rows.Count;
 
-        public override bool FieldExists(string fieldName) => rows.Any(row => row.ContainsKey(fieldName));
+        public override bool FieldExists(string fieldName) => knownFields.Contains(fieldName);
 
         public override IEnumerable<string> ValuesFor(string fieldName) =>
             rows.Select(row => row.GetValueOrDefault(fieldName, ""));
@@ -202,7 +210,7 @@ public static class HardeningReplayEvaluator
         public static FlatDataset FromCsv(string content)
         {
             var lines = content.Replace("\r\n", "\n").Split('\n').Where(line => line.Length > 0).ToList();
-            if (lines.Count == 0) return new FlatDataset([]);
+            if (lines.Count == 0) return new FlatDataset([], []);
 
             var columns = ParseCsvLine(lines[0]);
             var rows = lines.Skip(1).Select(line =>
@@ -213,7 +221,7 @@ public static class HardeningReplayEvaluator
                     row[columns[i]] = i < values.Count ? values[i] : "";
                 return row;
             }).ToList();
-            return new FlatDataset(rows);
+            return new FlatDataset(rows, columns);
         }
 
         // Same "excel" CSV dialect (comma-separated, "..."-quoted fields may
@@ -251,6 +259,12 @@ public static class HardeningReplayEvaluator
             return fields;
         }
 
+        // Unlike CSV, a JSON array carries no header — knownFields here can
+        // only ever be the union of whatever rows actually exist, so (unlike
+        // CSV) a genuinely empty [] can never distinguish "field not
+        // present" from "no rows at all" for FieldExists' own message; the
+        // Inconclusive outcome itself is still correct either way, just the
+        // wording is a documented, JSON-specific limitation.
         public static FlatDataset FromJson(string content)
         {
             using var document = JsonDocument.Parse(content);
@@ -261,7 +275,8 @@ public static class HardeningReplayEvaluator
                     row[property.Name] = JsonValueToString(property.Value);
                 return row;
             }).ToList();
-            return new FlatDataset(rows);
+            var knownFields = rows.SelectMany(row => row.Keys).Distinct().ToList();
+            return new FlatDataset(rows, knownFields);
         }
 
         private static string JsonValueToString(JsonElement value) => value.ValueKind switch

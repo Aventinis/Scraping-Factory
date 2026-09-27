@@ -72,6 +72,19 @@ public class HardeningReplayEvaluatorTests
         Assert.Equal(HardeningReplayOutcome.Inconclusive, result.Outcome);
     }
 
+    // A CSV's header line still names its own columns even when every data
+    // row was dropped (e.g. the exact scenario NoResultCheck itself exists
+    // to catch) — FieldExists must still recognize "Titel" here, not
+    // misreport it as an unknown field just because rows.Any(...) is empty.
+    [Fact]
+    public void NullRate_CsvWithHeaderButZeroRows_RecognizesTheFieldAsPresent()
+    {
+        var check = new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "Titel", Threshold = 0.1 };
+        var result = EvaluateSingle(check, "output.csv", "Titel\n");
+        Assert.Equal(HardeningReplayOutcome.Inconclusive, result.Outcome);
+        Assert.Equal("This saved output has no rows/elements to evaluate.", result.Message);
+    }
+
     [Theory]
     [InlineData("output.csv", Csv)]
     [InlineData("output.json", Json)]
