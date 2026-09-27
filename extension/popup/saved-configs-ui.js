@@ -149,6 +149,7 @@ function buildHardeningReplayPanelEl(bridge, outputEntry) {
     panelEl.innerHTML =
       `<p class="hardening-replay-compare-basis-label">${escapeHtml(t('idle.hardeningReplayCompareBasisLabel'))}</p>` +
       `<div class="mode-toggle hardening-replay-compare-basis-toggle">` +
+      `<div class="mode-toggle-thumb"></div>` +
       `<button type="button" class="mode-btn btn-hardening-replay-basis${replay.compareBasis === 'config' ? ' active' : ''}" data-basis="config">${escapeHtml(t('idle.hardeningReplayCompareBasisConfig'))}</button>` +
       `<button type="button" class="mode-btn btn-hardening-replay-basis${replay.compareBasis === 'blueprint' ? ' active' : ''}" data-basis="blueprint">${escapeHtml(t('idle.hardeningReplayCompareBasisBlueprint', { name: blueprintName }))}</button>` +
       `</div>` +
