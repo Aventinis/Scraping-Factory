@@ -382,6 +382,25 @@ body {
 .saved-output-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .saved-outputs-loading, .saved-outputs-empty { font-size: 11px; color: var(--color-text-faint); margin: 2px 0; }
 
+/* Issue #207: "Test hardening" — the compare-basis picker/loading/error/
+   results phases of _state.hardeningReplay, nested under the specific
+   saved-output row it belongs to (same visual nesting .saved-outputs-panel
+   itself already establishes one level up). */
+.hardening-replay-panel { margin: 2px 0 6px 14px; padding: 4px 0 4px 6px; border-left: 2px solid var(--color-border); font-size: 11px; }
+.hardening-replay-compare-basis-label { margin: 0 0 4px; color: var(--color-text-muted); }
+.hardening-replay-compare-basis-toggle { margin-bottom: 6px; }
+.hardening-replay-loading, .hardening-replay-error { color: var(--color-text-faint); margin: 2px 0 6px; }
+.hardening-replay-error { color: var(--color-danger); }
+.hardening-replay-results-list { list-style: none; padding: 0; margin: 0 0 6px; }
+.hardening-replay-result { padding: 3px 0; border-bottom: 1px solid var(--color-border); }
+.hardening-replay-result:last-child { border-bottom: none; }
+.hardening-replay-result-kind { font-weight: 600; }
+.hardening-replay-result-outcome { margin-left: 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.02em; }
+.hardening-replay-result-message { margin: 2px 0 0; color: var(--color-text-muted); }
+.hardening-replay-result-passed .hardening-replay-result-outcome { color: var(--color-success); }
+.hardening-replay-result-triggered .hardening-replay-result-outcome { color: var(--color-danger); }
+.hardening-replay-result-inconclusive .hardening-replay-result-outcome { color: var(--color-warning); }
+
 /* Issue #191: Output Blueprints — the management list (modal-manage-
    blueprints, mirrors .saved-config-row) and the create/edit modal's own
    ordered field-name rows (mirrors .transform-row), plus the per-scrape

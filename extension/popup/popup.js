@@ -491,6 +491,18 @@ let _state = {
   savedOutputs:                null,
   savedOutputsLoading:         false,
   savedOutputsPendingDeleteId: null,
+  // Issue #207: "Test hardening" replays the currently-configured live
+  // hardening checks (_state.hardening, via buildHardeningConfig) against
+  // one specific saved output — at most one such replay in flight/shown at
+  // a time, the same singular-slot pattern savedConfigsExpandedId already
+  // uses for "at most one thing expanded". needsCompareBasisChoice is only
+  // ever true when the live checks include a BaselineCheck AND this saved
+  // output's own config has an Output Blueprint set (only then does "same
+  // configuration vs. same Blueprint" mean two actually-different things) —
+  // the confirm button is held back until then; every other case runs
+  // immediately with compareBasis 'config' (irrelevant when there's no
+  // BaselineCheck to begin with).
+  hardeningReplay:             null,
   // Issue #191: opt-in output blueprint field mapping — only reachable in
   // the UI for flat mode/Api mode's flat shape, persisted like proxy/
   // hardening above (real scrape-target configuration, not a per-generate

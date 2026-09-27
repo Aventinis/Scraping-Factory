@@ -58,6 +58,44 @@ public class SavedConfigsEndpointTests : IDisposable
         Assert.Equal("My config", body.GetProperty("name").GetString());
     }
 
+    // Issue #207: BlueprintId is derived once, at save time, from the same
+    // Config object's own "outputBlueprint.blueprintId" — round-tripped
+    // through Get so a later hardening-replay request can resolve "every
+    // config sharing this Blueprint" without re-parsing ConfigJson.
+    [Fact]
+    public async Task Post_ConfigWithOutputBlueprint_DerivesBlueprintId()
+    {
+        var response = await _client.PostAsync("/configs", JsonBody(new
+        {
+            url = "https://example.com/products",
+            name = "My config",
+            config = new { url = "https://example.com/products", fields = Array.Empty<object>(), outputBlueprint = new { blueprintId = 42, schemaKind = "Flat" } },
+        }));
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var id = body.GetProperty("id").GetInt64();
+
+        var getResponse = await _client.GetAsync($"/configs/{id}");
+        var getBody = await getResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(42, getBody.GetProperty("blueprintId").GetInt64());
+    }
+
+    [Fact]
+    public async Task Post_ConfigWithoutOutputBlueprint_BlueprintIdIsNull()
+    {
+        var response = await _client.PostAsync("/configs", JsonBody(new
+        {
+            url = "https://example.com/products",
+            name = "My config",
+            config = new { url = "https://example.com/products", fields = Array.Empty<object>() },
+        }));
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var id = body.GetProperty("id").GetInt64();
+
+        var getResponse = await _client.GetAsync($"/configs/{id}");
+        var getBody = await getResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(JsonValueKind.Null, getBody.GetProperty("blueprintId").ValueKind);
+    }
+
     [Theory]
     [InlineData(null, "name")]
     [InlineData("https://example.com", null)]
