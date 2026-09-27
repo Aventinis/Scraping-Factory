@@ -85,7 +85,7 @@ public class PythonCodeGeneratorTests
         Assert.Contains("""{"kind": "toNumber"}""", script);
         Assert.Contains("def _apply_transforms(value, transforms):", script);
         Assert.Contains("def _to_number(value):", script);
-        Assert.Contains("row[name] = _apply_transforms(raw_value, TRANSFORMS.get(name, []))", script);
+        Assert.Contains("value = _apply_transforms(raw_value, TRANSFORMS.get(name, []))", script);
     }
 
     [Fact]
@@ -309,7 +309,7 @@ public class PythonCodeGeneratorTests
         Assert.Contains("PAGINATION_MAX_PAGES = 20", script);
         Assert.Contains("PAGINATION_NEXT_LINK_SELECTOR = 'a.next'", script);
         Assert.DoesNotContain("PAGINATION_URL_TEMPLATE", script);
-        Assert.Contains("def _extract_page_rows(soup):", script);
+        Assert.Contains("def _extract_page_rows(soup, base_url):", script);
         Assert.Contains("while page_url:", script);
         Assert.Contains("next_tag = soup.select_one(PAGINATION_NEXT_LINK_SELECTOR)", script);
         Assert.Contains("from urllib.parse import urljoin", script);

@@ -477,6 +477,14 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
             var hasBlockGroups = blocks[i].Groups is { Count: > 0 };
             if (hasBlockFields == hasBlockGroups)
                 return Results.BadRequest(new { error = $"Block #{i + 1} needs exactly one of Fields or Groups." });
+            // Issue #214: Download isn't wired into Blocks-mode's own flat
+            // field serialization yet (see ScrapingPlanBuilder's Blocks
+            // branch, which deliberately doesn't carry it onto ExtractStep)
+            // — same "not designed for this yet, reject rather than
+            // silently no-op" precedent as ExternalConfig/OutputBlueprint
+            // above.
+            if (blocks[i].Fields?.Any(f => f.Download) == true)
+                return Results.BadRequest(new { error = $"Block #{i + 1}: Download is not supported on a block's own fields yet." });
         }
 
         var (blockPlan, blockScript, blockValidationError, blockGeneratorError) = GenerateScript(config, registry);

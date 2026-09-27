@@ -1,21 +1,19 @@
 using System.Diagnostics;
 using System.Net;
-using System.Text.RegularExpressions;
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
 using Xunit;
 
 namespace ScrapingFactory.Tests;
 
-// Issue #213: real end-to-end proof that an Attribute-mode field with
-// Download enabled actually downloads the resource and writes its own local
-// file path into the output instead of the bare URL — a black-box "did
-// /generate succeed" check can't distinguish "wrote the URL" from "wrote a
-// local path", so this runs the generated script as a real subprocess
-// against a real local HTTP server (LocalTestServer) and inspects both the
-// output file and the downloaded file on disk. Static engine only, same
-// scope as this issue's own first version (container mode, Attribute mode).
-public class DownloadResourceEndToEndTests
+// Issue #214: the flat-mode counterpart to DownloadResourceEndToEndTests —
+// proves an Attribute-mode flat field (e.g. an <a>'s href) with Download
+// enabled downloads the linked file and writes its own local path into the
+// output CSV instead of the bare URL, generalizing Issue #213's mechanism
+// (previously container-mode only) to flat mode. Static engine only, same
+// scope split DownloadResourceEndToEndTests/PlaywrightDownloadResourceEndToEndTests
+// already establish per engine.
+public class FlatModeDownloadEndToEndTests
 {
     private static async Task<(int ExitCode, string Stderr, string WorkDir)> GenerateAndRunAsync(ScrapingPlan plan, string tempPrefix)
     {
@@ -62,58 +60,56 @@ public class DownloadResourceEndToEndTests
         Steps =
         [
             new NavigateStep { Urls = [startUrl] },
-            new ExtractGroupStep
+            new ExtractStep
             {
-                Roots =
-                [
-                    new GroupNode
-                    {
-                        Name = "Item", Selector = ".item", Repeating = true,
-                        Children =
-                        [
-                            new DataFieldNode
-                            {
-                                Name = "Photo", Selector = ".photo", Mode = ExtractMode.Attribute, Attribute = "src", Download = download,
-                                MaxDownloadSizeBytes = maxDownloadSizeBytes, AllowedContentTypes = allowedContentTypes,
-                            },
-                        ],
-                    },
-                ],
+                Name = "FileLink", Selector = "a.file", Attribute = "href", Download = download,
+                MaxDownloadSizeBytes = maxDownloadSizeBytes, AllowedContentTypes = allowedContentTypes,
             },
         ],
     };
 
-    private static LocalTestServer CreateFixtureServer(string imageBytes) => new(request =>
-        request.Url!.AbsolutePath == "/image.jpg"
-            ? new LocalTestServerResponse(imageBytes, "image/jpeg")
+    private static LocalTestServer CreateFixtureServer(string fileBytes) => new(request =>
+        request.Url!.AbsolutePath == "/report.pdf"
+            ? new LocalTestServerResponse(fileBytes, "application/pdf")
             : new LocalTestServerResponse(
-                "<html><body><div class='item'><img class='photo' src='/image.jpg' /></div></body></html>",
+                "<html><body><a class='file' href='/report.pdf'>Report</a></body></html>",
                 "text/html; charset=utf-8"));
+
+    private static string ExtractCsvValue(string csv, string columnName)
+    {
+        var lines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var header = lines[0].Split(',');
+        var columnIndex = Array.IndexOf(header, columnName);
+        Assert.True(columnIndex >= 0, $"Expected a '{columnName}' column in:\n{csv}");
+        var row = lines[1].Split(',');
+        var value = row.Length > columnIndex ? row[columnIndex] : "";
+        // Python's csv module quotes an otherwise-completely-empty row's sole
+        // field as "" to disambiguate it from a blank line — strip that back
+        // off for a plain string comparison.
+        return value is "\"\"" ? "" : value;
+    }
 
     [Fact]
     public async Task AttributeFieldWithDownload_SavesLocalFileAndWritesItsOwnPathInstead()
     {
-        const string imageBytes = "FAKE_IMAGE_BYTES_NOT_A_REAL_JPEG";
-        using var server = CreateFixtureServer(imageBytes);
+        const string fileBytes = "FAKE_PDF_BYTES_NOT_A_REAL_PDF";
+        using var server = CreateFixtureServer(fileBytes);
         var plan = BuildPlan(server.BaseUrl, download: true);
 
-        var (exit, stderr, workDir) = await GenerateAndRunAsync(plan, "scrapingfactory-download-test-");
+        var (exit, stderr, workDir) = await GenerateAndRunAsync(plan, "scrapingfactory-flat-download-test-");
         try
         {
             Assert.Equal(0, exit);
             Assert.Empty(stderr);
 
-            var outputXml = await File.ReadAllTextAsync(Path.Combine(workDir, "output.xml"));
-            var match = Regex.Match(outputXml, "<Photo>(.*?)</Photo>");
-            Assert.True(match.Success, $"Expected a <Photo> element in:\n{outputXml}");
-
-            var localPath = match.Groups[1].Value;
-            Assert.DoesNotContain("http://", localPath); // not the bare URL
-            Assert.EndsWith(".jpg", localPath); // preserved the URL's own extension
+            var outputCsv = await File.ReadAllTextAsync(Path.Combine(workDir, "output.csv"));
+            var localPath = ExtractCsvValue(outputCsv, "FileLink");
+            Assert.DoesNotContain("http://", localPath);
+            Assert.EndsWith(".pdf", localPath);
 
             var fullLocalPath = Path.Combine(workDir, localPath);
             Assert.True(File.Exists(fullLocalPath), $"Expected downloaded file at {fullLocalPath}");
-            Assert.Equal(imageBytes, await File.ReadAllTextAsync(fullLocalPath));
+            Assert.Equal(fileBytes, await File.ReadAllTextAsync(fullLocalPath));
         }
         finally
         {
@@ -124,19 +120,19 @@ public class DownloadResourceEndToEndTests
     [Fact]
     public async Task AttributeFieldWithoutDownload_StillWritesTheBareUrl()
     {
-        const string imageBytes = "FAKE_IMAGE_BYTES_NOT_A_REAL_JPEG";
-        using var server = CreateFixtureServer(imageBytes);
+        const string fileBytes = "FAKE_PDF_BYTES_NOT_A_REAL_PDF";
+        using var server = CreateFixtureServer(fileBytes);
         var plan = BuildPlan(server.BaseUrl, download: false);
 
-        var (exit, stderr, workDir) = await GenerateAndRunAsync(plan, "scrapingfactory-download-test-");
+        var (exit, stderr, workDir) = await GenerateAndRunAsync(plan, "scrapingfactory-flat-download-test-");
         try
         {
             Assert.Equal(0, exit);
             Assert.Empty(stderr);
 
-            var outputXml = await File.ReadAllTextAsync(Path.Combine(workDir, "output.xml"));
-            Assert.Contains("<Photo>/image.jpg</Photo>", outputXml);
-            Assert.False(Directory.Exists(Path.Combine(workDir, "output.xml.downloads")));
+            var outputCsv = await File.ReadAllTextAsync(Path.Combine(workDir, "output.csv"));
+            Assert.Contains("/report.pdf", outputCsv);
+            Assert.False(Directory.Exists(Path.Combine(workDir, "output.csv.downloads")));
         }
         finally
         {
@@ -147,24 +143,23 @@ public class DownloadResourceEndToEndTests
     [Fact]
     public async Task FailedDownload_LeavesFieldEmptyAndPrintsWarningButDoesNotFailTheRun()
     {
-        // The main page loads fine (200) — only the image itself 404s.
         using var server = new LocalTestServer(request =>
-            request.Url!.AbsolutePath == "/missing.jpg"
+            request.Url!.AbsolutePath == "/missing.pdf"
                 ? new LocalTestServerResponse("not found", "text/plain", HttpStatusCode.NotFound)
                 : new LocalTestServerResponse(
-                    "<html><body><div class='item'><img class='photo' src='/missing.jpg' /></div></body></html>",
+                    "<html><body><a class='file' href='/missing.pdf'>Report</a></body></html>",
                     "text/html; charset=utf-8"));
         var plan = BuildPlan(server.BaseUrl, download: true);
 
-        var (exit, stderr, workDir) = await GenerateAndRunAsync(plan, "scrapingfactory-download-test-");
+        var (exit, stderr, workDir) = await GenerateAndRunAsync(plan, "scrapingfactory-flat-download-test-");
         try
         {
-            Assert.Equal(0, exit); // a broken resource must not fail the whole run
+            Assert.Equal(0, exit); // a broken file link must not fail the whole run
             Assert.Contains("WARNING", stderr);
-            Assert.Contains("/missing.jpg", stderr);
+            Assert.Contains("/missing.pdf", stderr);
 
-            var outputXml = await File.ReadAllTextAsync(Path.Combine(workDir, "output.xml"));
-            Assert.Contains("<Photo />", outputXml); // empty value, not the broken URL
+            var outputCsv = await File.ReadAllTextAsync(Path.Combine(workDir, "output.csv"));
+            Assert.Equal("", ExtractCsvValue(outputCsv, "FileLink"));
         }
         finally
         {
@@ -175,21 +170,19 @@ public class DownloadResourceEndToEndTests
     [Fact]
     public async Task DownloadExceedingMaxSize_LeavesFieldEmptyAndPrintsWarningButDoesNotFailTheRun()
     {
-        const string imageBytes = "FAKE_IMAGE_BYTES_LONGER_THAN_THE_CONFIGURED_LIMIT";
-        using var server = CreateFixtureServer(imageBytes);
+        const string fileBytes = "FAKE_PDF_BYTES_LONGER_THAN_THE_CONFIGURED_LIMIT";
+        using var server = CreateFixtureServer(fileBytes);
         var plan = BuildPlan(server.BaseUrl, download: true, maxDownloadSizeBytes: 10);
 
-        var (exit, stderr, workDir) = await GenerateAndRunAsync(plan, "scrapingfactory-download-test-");
+        var (exit, stderr, workDir) = await GenerateAndRunAsync(plan, "scrapingfactory-flat-download-test-");
         try
         {
             Assert.Equal(0, exit);
             Assert.Contains("WARNING", stderr);
             Assert.Contains("exceeds", stderr);
 
-            var outputXml = await File.ReadAllTextAsync(Path.Combine(workDir, "output.xml"));
-            Assert.Contains("<Photo />", outputXml);
-            Assert.False(Directory.Exists(Path.Combine(workDir, "output.xml.downloads")) &&
-                         Directory.GetFiles(Path.Combine(workDir, "output.xml.downloads")).Length > 0);
+            var outputCsv = await File.ReadAllTextAsync(Path.Combine(workDir, "output.csv"));
+            Assert.Equal("", ExtractCsvValue(outputCsv, "FileLink"));
         }
         finally
         {
@@ -200,43 +193,19 @@ public class DownloadResourceEndToEndTests
     [Fact]
     public async Task DownloadWithDisallowedContentType_LeavesFieldEmptyAndPrintsWarningButDoesNotFailTheRun()
     {
-        const string imageBytes = "FAKE_IMAGE_BYTES_NOT_A_REAL_JPEG";
-        using var server = CreateFixtureServer(imageBytes);
-        var plan = BuildPlan(server.BaseUrl, download: true, allowedContentTypes: ["application/pdf"]);
+        const string fileBytes = "FAKE_PDF_BYTES_NOT_A_REAL_PDF";
+        using var server = CreateFixtureServer(fileBytes);
+        var plan = BuildPlan(server.BaseUrl, download: true, allowedContentTypes: ["application/zip"]);
 
-        var (exit, stderr, workDir) = await GenerateAndRunAsync(plan, "scrapingfactory-download-test-");
+        var (exit, stderr, workDir) = await GenerateAndRunAsync(plan, "scrapingfactory-flat-download-test-");
         try
         {
             Assert.Equal(0, exit);
             Assert.Contains("WARNING", stderr);
             Assert.Contains("content type", stderr);
 
-            var outputXml = await File.ReadAllTextAsync(Path.Combine(workDir, "output.xml"));
-            Assert.Contains("<Photo />", outputXml);
-        }
-        finally
-        {
-            Directory.Delete(workDir, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task DownloadWithinSafetyNet_StillSucceeds()
-    {
-        const string imageBytes = "FAKE_IMAGE_BYTES_NOT_A_REAL_JPEG";
-        using var server = CreateFixtureServer(imageBytes);
-        var plan = BuildPlan(server.BaseUrl, download: true, maxDownloadSizeBytes: 1024, allowedContentTypes: ["image/jpeg"]);
-
-        var (exit, stderr, workDir) = await GenerateAndRunAsync(plan, "scrapingfactory-download-test-");
-        try
-        {
-            Assert.Equal(0, exit);
-            Assert.Empty(stderr);
-
-            var outputXml = await File.ReadAllTextAsync(Path.Combine(workDir, "output.xml"));
-            var match = Regex.Match(outputXml, "<Photo>(.*?)</Photo>");
-            Assert.True(match.Success, $"Expected a <Photo> element in:\n{outputXml}");
-            Assert.True(File.Exists(Path.Combine(workDir, match.Groups[1].Value)));
+            var outputCsv = await File.ReadAllTextAsync(Path.Combine(workDir, "output.csv"));
+            Assert.Equal("", ExtractCsvValue(outputCsv, "FileLink"));
         }
         finally
         {
@@ -248,22 +217,22 @@ public class DownloadResourceEndToEndTests
     public async Task RepeatedRun_ReusesTheAlreadyDownloadedFileInsteadOfRedownloading()
     {
         var requestCount = 0;
-        const string imageBytes = "FAKE_IMAGE_BYTES_NOT_A_REAL_JPEG";
+        const string fileBytes = "FAKE_PDF_BYTES_NOT_A_REAL_PDF";
         using var server = new LocalTestServer(request =>
         {
-            if (request.Url!.AbsolutePath == "/image.jpg")
+            if (request.Url!.AbsolutePath == "/report.pdf")
             {
                 requestCount++;
-                return new LocalTestServerResponse(imageBytes, "image/jpeg");
+                return new LocalTestServerResponse(fileBytes, "application/pdf");
             }
             return new LocalTestServerResponse(
-                "<html><body><div class='item'><img class='photo' src='/image.jpg' /></div></body></html>",
+                "<html><body><a class='file' href='/report.pdf'>Report</a></body></html>",
                 "text/html; charset=utf-8");
         });
         var plan = BuildPlan(server.BaseUrl, download: true);
 
         var script = new PythonCodeGenerator().Generate(plan);
-        var workDir = Directory.CreateTempSubdirectory("scrapingfactory-download-test-").FullName;
+        var workDir = Directory.CreateTempSubdirectory("scrapingfactory-flat-download-test-").FullName;
         try
         {
             var scriptPath = Path.Combine(workDir, "scraper.py");

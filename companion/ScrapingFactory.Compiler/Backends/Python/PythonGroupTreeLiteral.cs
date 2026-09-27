@@ -78,7 +78,12 @@ internal static class PythonGroupTreeLiteral
         // upstream), but extract_group() can still just do
         // node.get("download", False) uniformly regardless of mode.
         var downloadPart = $$""", "download": {{(field.Download ? "True" : "False")}}""";
-        return $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "selector": {{PythonLiteral.Str(field.Selector)}}, "mode": {{PythonLiteral.Str(mode)}}{{attributePart}}{{framePathPart}}{{transformPart}}{{downloadPart}}}""";
+        // Issue #214: same "always present" convention — None/[] when unset
+        // is a harmless, always-safe default for extract_group()'s own
+        // node.get(...) reads.
+        var maxSizePart = $$""", "maxDownloadSizeBytes": {{field.MaxDownloadSizeBytes?.ToString() ?? "None"}}""";
+        var allowedTypesPart = $$""", "allowedContentTypes": {{(field.AllowedContentTypes is { Count: > 0 } ? PythonLiteral.StrList(field.AllowedContentTypes) : "[]")}}""";
+        return $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "selector": {{PythonLiteral.Str(field.Selector)}}, "mode": {{PythonLiteral.Str(mode)}}{{attributePart}}{{framePathPart}}{{transformPart}}{{downloadPart}}{{maxSizePart}}{{allowedTypesPart}}}""";
     }
 
     private static string FramePathPart(List<string>? framePath) =>

@@ -47,7 +47,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Assert.Contains("""{"kind": "trim"}""", script);
         Assert.Contains("""{"kind": "toNumber"}""", script);
         Assert.Contains("def _apply_transforms(value, transforms):", script);
-        Assert.Contains("row[name] = _apply_transforms(raw_value, TRANSFORMS.get(name, []))", script);
+        Assert.Contains("value = _apply_transforms(raw_value, TRANSFORMS.get(name, []))", script);
     }
 
     private static ScrapingPlan LoginPlan() => new()

@@ -22,7 +22,11 @@ const SFContainerTree = (function () {
     return { kind: 'group', name, selector, repeating, children: [], framePath: framePath || null };
   }
 
-  function buildFieldNode(name, selector, mode, attribute, framePath = null, transforms = [], download = false) {
+  function buildFieldNode(
+    name, selector, mode, attribute, framePath = null, transforms = [], download = false,
+    maxDownloadSizeBytes = null, allowedContentTypes = [],
+  ) {
+    const isDownload = mode === 'attribute' && !!download;
     return {
       kind: 'field', name, selector, mode, attribute: mode === 'attribute' ? attribute : null,
       framePath: framePath || null,
@@ -33,8 +37,34 @@ const SFContainerTree = (function () {
       // Issue #213: only meaningful for Attribute mode (the raw value is a
       // URL only then) — same "gate on mode, don't trust the caller" pattern
       // attribute/transforms above already use.
-      download: mode === 'attribute' && !!download,
+      download: isDownload,
+      // Issue #214: the optional safety net alongside download — same
+      // "only meaningful when download is actually on" gate.
+      maxDownloadSizeBytes: isDownload ? (maxDownloadSizeBytes || null) : null,
+      allowedContentTypes: isDownload && allowedContentTypes.length > 0 ? allowedContentTypes : [],
     };
+  }
+
+  // Issue #214: shared by container mode's modal-field-extended and flat
+  // mode's modal-field-name (both container-tree-ui.js/flat-mode-ui.js
+  // import these from here rather than scraping-config-builder.js, which
+  // loads too late in popup.html's actual <script> order to be usable from
+  // container-tree-ui.js — see classic-script-loading.test.js) — a
+  // comma-separated content-type allowlist, same "split, trim, drop blanks"
+  // shape scraping-config-builder.js's own parseAdditionalUrls already uses
+  // for a newline-separated list.
+  function parseAllowedContentTypes(text) {
+    return (text || '').split(',').map(part => part.trim()).filter(part => part.length > 0);
+  }
+
+  // Issue #214: the download safety net's max-size input is collected as MB
+  // (friendlier for a non-technical user) but the wire format/generated
+  // script work in bytes — same "convert at the UI boundary" pattern
+  // Hardening's own percent(UI)<->fraction(wire) conversion already uses.
+  // null/non-positive input means "no limit", not zero.
+  function megabytesToBytes(value) {
+    const mb = parseFloat(value);
+    return Number.isFinite(mb) && mb > 0 ? Math.round(mb * 1024 * 1024) : null;
   }
 
   // Issue #213 follow-up: guesses which of a clicked element's own
@@ -202,6 +232,12 @@ const SFContainerTree = (function () {
           // same "incomplete/off = key omitted" convention transforms/
           // framePath above already use.
           ...(node.mode === 'attribute' && node.download ? { download: true } : {}),
+          // Issue #214: the optional safety net alongside download — only
+          // sent when download is actually on and a value was configured.
+          ...(node.mode === 'attribute' && node.download && node.maxDownloadSizeBytes
+            ? { maxDownloadSizeBytes: node.maxDownloadSizeBytes } : {}),
+          ...(node.mode === 'attribute' && node.download && node.allowedContentTypes?.length > 0
+            ? { allowedContentTypes: node.allowedContentTypes } : {}),
         });
   }
 
@@ -209,7 +245,7 @@ const SFContainerTree = (function () {
     buildGroupNode, buildFieldNode, resolveGroupNode, hasRepeatingAncestor,
     insertContainerNode, removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode,
     groupNodeSuffix, formatGroupNodeLabel, serializeGroupTree,
-    guessUrlAttribute,
+    guessUrlAttribute, parseAllowedContentTypes, megabytesToBytes,
   };
 })();
 

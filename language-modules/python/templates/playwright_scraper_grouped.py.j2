@@ -69,7 +69,14 @@ OUTPUT_PATH = "{{ output_filename }}.{{ if blueprint_mapping_enabled }}{{ if out
 DOWNLOADS_DIR = OUTPUT_PATH + ".downloads"
 
 
-def _download_resource(page, url):
+# Issue #214: max_size/allowed_types are an optional safety net — None/[]
+# (the default) means no restriction, today's exact Issue #213 behavior.
+# Unlike the static engine's own streamed version, page.context.request.get()
+# has no incremental-read API — the response is already fully in memory by
+# the time .body() is called, so a size check here can only reject an
+# already-downloaded response, not abort mid-transfer.
+def _download_resource(page, url, max_size=None, allowed_types=None):
+    allowed_types = [t.lower() for t in (allowed_types or [])]
     absolute_url = urllib.parse.urljoin(page.url, url)
     os.makedirs(DOWNLOADS_DIR, exist_ok=True)
     digest = hashlib.sha1(absolute_url.encode("utf-8")).hexdigest()[:16]
@@ -83,8 +90,16 @@ def _download_resource(page, url):
             response = page.context.request.get(absolute_url)
             if not response.ok:
                 raise RuntimeError(f"HTTP {response.status}")
+            content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+            if allowed_types and content_type not in allowed_types:
+                print(f"WARNING: skipped download of '{absolute_url}': content type '{content_type}' is not in the allowed list.", file=sys.stderr)
+                return ""
+            body = response.body()
+            if max_size is not None and len(body) > max_size:
+                print(f"WARNING: skipped download of '{absolute_url}': size ({len(body)} bytes) exceeds the {max_size}-byte limit.", file=sys.stderr)
+                return ""
             with open(local_path, "wb") as f:
-                f.write(response.body())
+                f.write(body)
         except Exception as exc:
             print(f"WARNING: failed to download resource '{absolute_url}': {exc}", file=sys.stderr)
             return ""
@@ -795,7 +810,7 @@ def extract_group(page, scope, node):
         # Issue #213: see scraper_grouped.py.j2's own identical doc comment —
         # applied after transforms, replaces the raw URL with its own
         # downloaded local file path.
-        el.text = _download_resource(page, value) if node.get("download") and value else value
+        el.text = _download_resource(page, value, node.get("maxDownloadSizeBytes"), node.get("allowedContentTypes")) if node.get("download") and value else value
     elif node["mode"] == "ownText":
         # Direct text-node children only, excluding any nested element's own
         # text — see scraper_grouped.py.j2's own doc comment on this same

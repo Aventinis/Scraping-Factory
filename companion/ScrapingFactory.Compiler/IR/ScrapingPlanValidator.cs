@@ -290,6 +290,15 @@ public static class ScrapingPlanValidator
             var transformError = FieldTransformValidator.Validate(step.Transforms, $"field '{step.Name}'");
             if (transformError is not null)
                 return Invalid(transformError);
+
+            // Issue #213/#214: same rule as DataFieldNode's own Download —
+            // there's no URL value to download unless the field is actually
+            // reading an attribute.
+            if (step.Download && string.IsNullOrWhiteSpace(step.Attribute))
+                return Invalid($"Field '{step.Name}' has Download enabled but has no attribute configured — there is no URL value to download.");
+            var downloadError = ValidateDownloadSafetyNet(step.MaxDownloadSizeBytes, step.AllowedContentTypes, $"field '{step.Name}'");
+            if (downloadError is not null)
+                return Invalid(downloadError);
         }
 
         var duplicateNames = FindDuplicates(extractSteps, step => step.Name);
@@ -444,6 +453,20 @@ public static class ScrapingPlanValidator
     private static List<string> FindDuplicates<T>(IEnumerable<T> items, Func<T, string> keySelector) =>
         items.GroupBy(keySelector).Where(group => group.Count() > 1).Select(group => group.Key).ToList();
 
+    // Issue #214: shared by both flat ExtractStep.Download and container
+    // DataFieldNode.Download — a mode/shape-agnostic check on the optional
+    // safety net alongside Download itself (whether Download is actually
+    // enabled at all is validated separately by each caller, the same way
+    // Attribute-mode-requiredness already is).
+    private static string? ValidateDownloadSafetyNet(int? maxSizeBytes, List<string>? allowedContentTypes, string fieldDescription)
+    {
+        if (maxSizeBytes is <= 0)
+            return $"Max download size for {fieldDescription} must be greater than zero.";
+        if (allowedContentTypes is { Count: > 0 } && allowedContentTypes.Any(string.IsNullOrWhiteSpace))
+            return $"Allowed content type list for {fieldDescription} must not contain blank entries.";
+        return null;
+    }
+
     // Deliberately doesn't check whether Name is a valid XML tag name, or
     // whether a non-repeating GroupNode's selector could ever match more
     // than once — same laissez-faire as CSS selector syntax elsewhere in
@@ -476,6 +499,9 @@ public static class ScrapingPlanValidator
                         return $"Data field '{field.Name}' with mode 'Attribute' needs an attribute.";
                     if (field.Download && field.Mode != ExtractMode.Attribute)
                         return $"Data field '{field.Name}' has Download enabled but is not in 'Attribute' mode — there is no URL value to download.";
+                    var downloadError = ValidateDownloadSafetyNet(field.MaxDownloadSizeBytes, field.AllowedContentTypes, $"data field '{field.Name}'");
+                    if (downloadError is not null)
+                        return downloadError;
                     var fieldFrameError = ValidateFramePath(field.FramePath, $"data field '{field.Name}'", engine);
                     if (fieldFrameError is not null)
                         return fieldFrameError;

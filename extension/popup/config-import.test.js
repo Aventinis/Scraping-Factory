@@ -23,6 +23,37 @@ describe('config-import (Issue #213): deserializeGroupTree download handling', (
   });
 });
 
+// Issue #214: same reverse-of-serializeGroupTree relationship as the
+// download flag itself, for the new safety-net fields alongside it.
+describe('config-import (Issue #214): deserializeGroupTree download safety net', () => {
+  test('restores maxDownloadSizeBytes/allowedContentTypes for a downloading Attribute-mode field', () => {
+    const wire = [{
+      name: 'Datei', selector: 'a.file', mode: 'Attribute', attribute: 'href', download: true,
+      maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'],
+    }];
+    const node = deserializeGroupTree(wire)[0];
+    expect(node.maxDownloadSizeBytes).toBe(1024);
+    expect(node.allowedContentTypes).toEqual(['application/pdf']);
+  });
+
+  test('defaults to null/[] when the wire omits them', () => {
+    const wire = [{ name: 'Bild', selector: 'img.photo', mode: 'Attribute', attribute: 'src', download: true }];
+    const node = deserializeGroupTree(wire)[0];
+    expect(node.maxDownloadSizeBytes).toBeNull();
+    expect(node.allowedContentTypes).toEqual([]);
+  });
+
+  test('forces null/[] when download is off, even if the wire somehow carries values', () => {
+    const wire = [{
+      name: 'Datei', selector: 'a.file', mode: 'Attribute', attribute: 'href', download: false,
+      maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'],
+    }];
+    const node = deserializeGroupTree(wire)[0];
+    expect(node.maxDownloadSizeBytes).toBeNull();
+    expect(node.allowedContentTypes).toEqual([]);
+  });
+});
+
 // Issue #191/#244: applyOutputBlueprintConfig is the reverse of
 // buildOutputBlueprintMapping — reproducing the mapping picker's own state
 // from a wire-format OutputBlueprintMapping (e.g. loaded from a saved

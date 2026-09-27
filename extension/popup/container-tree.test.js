@@ -22,6 +22,26 @@ describe('container-tree (Issue #213): buildFieldNode download handling', () => 
   });
 });
 
+describe('container-tree (Issue #214): buildFieldNode download safety net', () => {
+  test('carries maxDownloadSizeBytes/allowedContentTypes through when download is on', () => {
+    const node = buildFieldNode('Datei', 'a.file', 'attribute', 'href', null, [], true, 1024, ['application/pdf']);
+    expect(node.maxDownloadSizeBytes).toBe(1024);
+    expect(node.allowedContentTypes).toEqual(['application/pdf']);
+  });
+
+  test('forces the safety net to null/[] when download is off, even if the caller passed values', () => {
+    const node = buildFieldNode('Datei', 'a.file', 'attribute', 'href', null, [], false, 1024, ['application/pdf']);
+    expect(node.maxDownloadSizeBytes).toBeNull();
+    expect(node.allowedContentTypes).toEqual([]);
+  });
+
+  test('defaults to null/[] when omitted', () => {
+    const node = buildFieldNode('Bild', 'img.photo', 'attribute', 'src', null, [], true);
+    expect(node.maxDownloadSizeBytes).toBeNull();
+    expect(node.allowedContentTypes).toEqual([]);
+  });
+});
+
 describe('container-tree (Issue #213): serializeGroupTree download handling', () => {
   test('includes download:true only for an Attribute-mode field with it enabled', () => {
     const groups = [
@@ -63,6 +83,44 @@ describe('container-tree (Issue #213): serializeGroupTree download handling', ()
     expect(serializeGroupTree(groups)[0].children[0]).toEqual(
       { name: 'Bild', selector: 'img.photo', mode: 'Attribute', attribute: 'src', download: true },
     );
+  });
+});
+
+describe('container-tree (Issue #214): serializeGroupTree download safety net', () => {
+  test('includes maxDownloadSizeBytes/allowedContentTypes when download is on and set', () => {
+    const groups = [
+      {
+        kind: 'field', name: 'Datei', selector: 'a.file', mode: 'attribute', attribute: 'href', download: true,
+        maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'],
+      },
+    ];
+    expect(serializeGroupTree(groups)).toEqual([
+      {
+        name: 'Datei', selector: 'a.file', mode: 'Attribute', attribute: 'href', download: true,
+        maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'],
+      },
+    ]);
+  });
+
+  test('omits maxDownloadSizeBytes/allowedContentTypes when not set, even with download on', () => {
+    const groups = [
+      { kind: 'field', name: 'Bild', selector: 'img.photo', mode: 'attribute', attribute: 'src', download: true },
+    ];
+    const [serialized] = serializeGroupTree(groups);
+    expect(serialized).not.toHaveProperty('maxDownloadSizeBytes');
+    expect(serialized).not.toHaveProperty('allowedContentTypes');
+  });
+
+  test('omits maxDownloadSizeBytes/allowedContentTypes when download is off, even if set', () => {
+    const groups = [
+      {
+        kind: 'field', name: 'Datei', selector: 'a.file', mode: 'attribute', attribute: 'href', download: false,
+        maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'],
+      },
+    ];
+    const [serialized] = serializeGroupTree(groups);
+    expect(serialized).not.toHaveProperty('maxDownloadSizeBytes');
+    expect(serialized).not.toHaveProperty('allowedContentTypes');
   });
 });
 

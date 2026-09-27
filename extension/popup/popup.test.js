@@ -80,8 +80,8 @@ describe('applyConfigToState', () => {
 
   test('flat mode: round-trips fields (with attribute/framePath/transforms), scriptFileName/outputFileName, useJsonOutput, additionalStartUrls', () => {
     const fields = [
-      { name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null },
-      { name: 'Bild', selector: 'img', attribute: 'src', framePath: ['#widget'], transforms: [{ kind: 'trim' }] },
+      { name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null, download: false, maxDownloadSizeBytes: null, allowedContentTypes: [] },
+      { name: 'Bild', selector: 'img', attribute: 'src', framePath: ['#widget'], transforms: [{ kind: 'trim' }], download: false, maxDownloadSizeBytes: null, allowedContentTypes: [] },
     ];
     const config = buildScrapingConfig(
       'https://example.com', 'flat', fields, [], null, 'myscraper', 'result', 'Static', [], false, true,
@@ -98,6 +98,18 @@ describe('applyConfigToState', () => {
     expect(result.outputFileName).toBe('result');
     expect(result.useJsonOutput).toBe(true);
     expect(result.additionalStartUrls).toEqual(['https://example.com/page2']);
+  });
+
+  // Issue #214
+  test('flat mode: round-trips a downloading field with its safety net', () => {
+    const fields = [
+      {
+        name: 'Datei', selector: 'a.file', attribute: 'href', framePath: null, transforms: null,
+        download: true, maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'],
+      },
+    ];
+    const config = buildScrapingConfig('https://example.com', 'flat', fields);
+    expect(applyConfigToState(config).fields).toEqual(fields);
   });
 
   test('container mode: round-trips a nested group tree through serialize/deserialize', () => {
@@ -277,10 +289,12 @@ describe('buildGroupNode / buildFieldNode', () => {
 
   test('buildFieldNode nulls attribute unless mode is attribute', () => {
     expect(buildFieldNode('Titel', 'h2', 'text', 'href')).toEqual({
-      kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null, framePath: null, transforms: null, download: false,
+      kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null, framePath: null, transforms: null,
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
     });
     expect(buildFieldNode('Link', 'a', 'attribute', 'href')).toEqual({
-      kind: 'field', name: 'Link', selector: 'a', mode: 'attribute', attribute: 'href', framePath: null, transforms: null, download: false,
+      kind: 'field', name: 'Link', selector: 'a', mode: 'attribute', attribute: 'href', framePath: null, transforms: null,
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
     });
   });
 
@@ -288,10 +302,12 @@ describe('buildGroupNode / buildFieldNode', () => {
   test('buildFieldNode carries transforms except for Exists mode', () => {
     const transforms = [{ kind: 'regexExtract', pattern: '\\d+', group: 0 }];
     expect(buildFieldNode('Preis', '.price', 'text', null, null, transforms)).toEqual({
-      kind: 'field', name: 'Preis', selector: '.price', mode: 'text', attribute: null, framePath: null, transforms, download: false,
+      kind: 'field', name: 'Preis', selector: '.price', mode: 'text', attribute: null, framePath: null, transforms,
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
     });
     expect(buildFieldNode('Vegan', '.vegan', 'exists', null, null, transforms)).toEqual({
-      kind: 'field', name: 'Vegan', selector: '.vegan', mode: 'exists', attribute: null, framePath: null, transforms: null, download: false,
+      kind: 'field', name: 'Vegan', selector: '.vegan', mode: 'exists', attribute: null, framePath: null, transforms: null,
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
     });
   });
 
@@ -3208,6 +3224,46 @@ describe('Live selector match-count preview (Issue #85)', () => {
     capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' }); // no matchCount field at all
 
     expect(document.getElementById('field-name-match-count').classList.contains('hidden')).toBe(true);
+  });
+
+  // Issue: the side panel's tracked _state.url only ever gets set once at
+  // panel-load/companion-connection time (chrome.tabs.query, see this
+  // describe block's own beforeEach: "https://example.com") — there's no
+  // chrome.tabs.onUpdated listener anywhere in this extension, so it
+  // silently goes stale if the same tab navigates to a different page while
+  // the panel stays open. message-router.js self-corrects the instant a
+  // selection carries a different page's own url.
+  describe('stale tracked URL self-correction', () => {
+    test('updates the tracked url and shows an info toast when the picked element came from a different page', () => {
+      document.getElementById('btn-add-field').click();
+      capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item', url: 'https://example.com/other-page' });
+
+      const toast = document.getElementById('error-toast');
+      expect(toast.classList.contains('hidden')).toBe(false);
+      expect(toast.classList.contains('toast-info')).toBe(true);
+      expect(document.getElementById('error-toast-message').textContent).toContain('https://example.com/other-page');
+
+      // Cancel back to the idle screen — #url-display re-renders from the
+      // now-corrected _state.url.
+      document.getElementById('btn-field-cancel').click();
+      expect(document.getElementById('url-display').textContent).toBe('https://example.com/other-page');
+    });
+
+    test('does nothing when the picked element came from the already-tracked page', () => {
+      document.getElementById('btn-add-field').click();
+      capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item', url: 'https://example.com' });
+
+      expect(document.getElementById('error-toast').classList.contains('hidden')).toBe(true);
+      document.getElementById('btn-field-cancel').click();
+      expect(document.getElementById('url-display').textContent).toBe('https://example.com');
+    });
+
+    test('does nothing when the message carries no url at all (older content-script parity)', () => {
+      document.getElementById('btn-add-field').click();
+      capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+
+      expect(document.getElementById('error-toast').classList.contains('hidden')).toBe(true);
+    });
   });
 
   test('a container field pick shows the match count in the extended modal', async () => {

@@ -312,7 +312,13 @@
       "ownTextOption": "Solo texto propio (sin elementos anidados)",
       "attributeLabel": "¿Qué atributo contiene el valor?",
       "noAttributesFound": "Este elemento no tiene atributos.",
-      "downloadToggle": "Descargar este recurso (p. ej. una imagen) y guardarlo localmente"
+      "downloadToggle": "Descargar este recurso/archivo (p. ej. una imagen, PDF o ZIP) y guardarlo localmente"
+    },
+    "download": {
+      "maxSizeLabel": "Tamaño máx. de archivo (MB, opcional)",
+      "maxSizePlaceholder": "Sin límite",
+      "allowedTypesLabel": "Tipos de contenido permitidos (opcional, separados por comas)",
+      "allowedTypesPlaceholder": "p. ej. application/pdf, application/zip"
     },
     "apiGroupNew": {
       "nameLabel": "Nombre del grupo (p. ej. \"Subcategoría\")",
@@ -372,6 +378,7 @@
     "selectionUnavailable": "No es posible seleccionar elementos en esta página.",
     "scopeSelectorNotFound": "Ya no se pudo encontrar el punto de referencia seleccionado — la página cambió mientras tanto (p. ej. un estado de hover o de carga). Inténtalo de nuevo o elige otro punto de partida.",
     "clickOutsideScope": "Selecciona un elemento dentro de un contenedor.",
+    "trackedUrlUpdated": "Página seguida actualizada a {url} — el elemento que acabas de seleccionar proviene de una página diferente a la anterior.",
     "previewUnavailable": "No es posible la vista previa en esta página.",
     "captureUnavailable": "No es posible grabar red en esta página.",
     "invalidCompanionUrl": "Dirección no válida — incluye http:// o https://.",

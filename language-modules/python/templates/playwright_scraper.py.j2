@@ -11,10 +11,10 @@ import csv
 {{~ end ~}}
 import re
 from datetime import date
-{{~ if needs_os_import || external_config.enabled ~}}
+{{~ if needs_os_import || external_config.enabled || download_enabled ~}}
 import os
 {{~ end ~}}
-{{~ if needs_exit_helper || hardening.enabled || external_config.enabled ~}}
+{{~ if needs_exit_helper || hardening.enabled || external_config.enabled || download_enabled ~}}
 import sys
 {{~ end ~}}
 {{~ if hardening.has_baseline ~}}
@@ -23,7 +23,7 @@ import json
 {{~ if proxy.enabled ~}}
 import itertools
 {{~ end ~}}
-{{~ if proxy.enabled || hardening.enabled ~}}
+{{~ if proxy.enabled || hardening.enabled || download_enabled ~}}
 import urllib.parse
 {{~ end ~}}
 {{~ if external_config.enabled ~}}
@@ -33,6 +33,9 @@ import xml.etree.ElementTree as ET
 {{~ if pagination.kind == "nextLink" ~}}
 import urllib.parse
 {{~ end ~}}
+{{~ end ~}}
+{{~ if download_enabled ~}}
+import hashlib
 {{~ end ~}}
 {{~ if change_detection.enabled ~}}
 import difflib
@@ -51,6 +54,46 @@ from playwright.sync_api import sync_playwright
 URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 
 OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else }}csv{{ end }}"
+
+{{~ if download_enabled ~}}
+# Issue #213/#214: see scraper_grouped.py.j2's own identical doc comment on
+# DOWNLOADS_DIR/_download_resource for the full rationale — this engine
+# uses page.context.request.get() instead of a bare `requests` import, the
+# same reasoning the container-mode Playwright template already documents
+# (shares cookies/auth with the browser session that already navigated).
+DOWNLOADS_DIR = OUTPUT_PATH + ".downloads"
+
+
+def _download_resource(page, url, max_size=None, allowed_types=None):
+    allowed_types = [t.lower() for t in (allowed_types or [])]
+    absolute_url = urllib.parse.urljoin(page.url, url)
+    os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+    digest = hashlib.sha1(absolute_url.encode("utf-8")).hexdigest()[:16]
+    path_only = absolute_url.split("?", 1)[0].split("#", 1)[0]
+    ext = os.path.splitext(path_only)[1]
+    if not re.fullmatch(r"\.[A-Za-z0-9]{1,8}", ext):
+        ext = ""
+    local_path = os.path.join(DOWNLOADS_DIR, digest + ext)
+    if not os.path.exists(local_path):
+        try:
+            response = page.context.request.get(absolute_url)
+            if not response.ok:
+                raise RuntimeError(f"HTTP {response.status}")
+            content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+            if allowed_types and content_type not in allowed_types:
+                print(f"WARNING: skipped download of '{absolute_url}': content type '{content_type}' is not in the allowed list.", file=sys.stderr)
+                return ""
+            body = response.body()
+            if max_size is not None and len(body) > max_size:
+                print(f"WARNING: skipped download of '{absolute_url}': size ({len(body)} bytes) exceeds the {max_size}-byte limit.", file=sys.stderr)
+                return ""
+            with open(local_path, "wb") as f:
+                f.write(body)
+        except Exception as exc:
+            print(f"WARNING: failed to download resource '{absolute_url}': {exc}", file=sys.stderr)
+            return ""
+    return local_path
+{{~ end ~}}
 
 {{~ if external_config.enabled ~}}
 # Issue #178: see scraper.py.j2's own doc comment for the full rationale — an
@@ -408,6 +451,25 @@ TRANSFORMS = {
 {{- end }}
 }
 
+# Issue #213/#214: same "always present" convention as TRANSFORMS above.
+DOWNLOAD = {
+{{- for field in fields }}
+    "{{ field.name }}": {{ if field.download }}True{{ else }}False{{ end }},
+{{- end }}
+}
+
+MAX_DOWNLOAD_SIZE = {
+{{- for field in fields }}
+    "{{ field.name }}": {{ if field.max_download_size_bytes }}{{ field.max_download_size_bytes }}{{ else }}None{{ end }},
+{{- end }}
+}
+
+ALLOWED_CONTENT_TYPES = {
+{{- for field in fields }}
+    "{{ field.name }}": [{{ for t in field.allowed_content_types }}"{{ t }}"{{ if !for.last }}, {{ end }}{{ end }}],
+{{- end }}
+}
+
 # Issue #191: optional Output Blueprint field mapping — see scraper.py.j2's
 # own identical BLUEPRINT_MAPPING doc comment.
 BLUEPRINT_MAPPING = {{ blueprint_mapping_literal }}
@@ -634,7 +696,13 @@ def _extract_page_rows(page):
             if i < len(elements):
                 attr = ATTRIBUTES.get(name)
                 raw_value = (elements[i].get_attribute(attr) or "") if attr else (elements[i].text_content() or "").strip()
-                row[name] = _apply_transforms(raw_value, TRANSFORMS.get(name, []))
+                value = _apply_transforms(raw_value, TRANSFORMS.get(name, []))
+                # Issue #213/#214: see scraper.py.j2's own identical doc
+                # comment — applied after transforms, only ever True for an
+                # attribute-mode field (validated upstream).
+                if attr and DOWNLOAD.get(name) and value:
+                    value = _download_resource(page, value, MAX_DOWNLOAD_SIZE.get(name), ALLOWED_CONTENT_TYPES.get(name))
+                row[name] = value
             else:
                 row[name] = ""
         rows.append(row)

@@ -159,7 +159,8 @@ public static class ScrapingPlanBuilder
             (ScrapingStep)new ExtractStep
             {
                 Name = field.Name, Selector = field.Selector, Attribute = field.Attribute, FramePath = field.FramePath,
-                Transforms = field.Transforms,
+                Transforms = field.Transforms, Download = field.Download,
+                MaxDownloadSizeBytes = field.MaxDownloadSizeBytes, AllowedContentTypes = field.AllowedContentTypes,
             }));
 
         return new ScrapingPlan

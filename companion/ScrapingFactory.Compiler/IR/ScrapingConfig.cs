@@ -198,6 +198,16 @@ public sealed class ScrapingField
     // See ExtractStep.Transforms (Issue #84) — same meaning, just the
     // wire-format mirror.
     public List<FieldTransform>? Transforms { get; init; }
+
+    // See ExtractStep.Download (Issue #213/#214) — same meaning, just the
+    // wire-format mirror. Only valid (and only meaningful) when Attribute is
+    // set — flat mode has no separate Mode enum the way DataFieldNode does,
+    // so "Attribute mode" here just means a non-blank Attribute.
+    public bool Download { get; init; }
+
+    // See ExtractStep.MaxDownloadSizeBytes/AllowedContentTypes.
+    public int? MaxDownloadSizeBytes { get; init; }
+    public List<string>? AllowedContentTypes { get; init; }
 }
 
 // Json (Issue #86) is a third, user-choosable alternative to Csv/Xml for

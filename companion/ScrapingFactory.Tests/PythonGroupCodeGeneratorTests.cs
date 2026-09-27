@@ -312,9 +312,10 @@ public class PythonGroupCodeGeneratorTests
     public void Generate_TextFieldHasTextModeAndNoAttributeKey()
     {
         var script = _generator.Generate(NestedGroupPlan());
-        // "transform" (Issue #84) and "download" (Issue #213) are always
-        // present, even when empty/false.
-        Assert.Contains("{\"name\": 'Titel', \"selector\": 'h2', \"mode\": 'text', \"transform\": [], \"download\": False}", script);
+        // "transform" (Issue #84), "download" (Issue #213), and
+        // "maxDownloadSizeBytes"/"allowedContentTypes" (Issue #214) are
+        // always present, even when empty/false/None.
+        Assert.Contains("{\"name\": 'Titel', \"selector\": 'h2', \"mode\": 'text', \"transform\": [], \"download\": False, \"maxDownloadSizeBytes\": None, \"allowedContentTypes\": []}", script);
     }
 
     [Fact]

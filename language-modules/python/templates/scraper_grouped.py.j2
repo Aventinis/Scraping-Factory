@@ -83,10 +83,16 @@ DOWNLOADS_DIR = OUTPUT_PATH + ".downloads"
 # idempotent across repeated runs of the same script — a file that already
 # exists on disk is trusted as-is and never re-fetched, so scraping the same
 # page again doesn't grow DOWNLOADS_DIR without bound. A failed download
-# (network error, non-2xx status, ...) is never fatal to the row/run — it's
-# printed as a warning and the caller gets "" back, exactly like any other
-# field whose selector simply found nothing.
-def _download_resource(url, base_url):
+# (network error, non-2xx status, disallowed content type, over the size
+# limit, ...) is never fatal to the row/run — it's printed as a warning and
+# the caller gets "" back, exactly like any other field whose selector
+# simply found nothing.
+# Issue #214: max_size/allowed_types are an optional safety net — None/[]
+# (the default) means no restriction, today's exact Issue #213 behavior.
+# Streamed (stream=True) so an oversized response is aborted mid-download
+# instead of always being pulled fully into memory first.
+def _download_resource(url, base_url, max_size=None, allowed_types=None):
+    allowed_types = [t.lower() for t in (allowed_types or [])]
     absolute_url = urljoin(base_url, url)
     os.makedirs(DOWNLOADS_DIR, exist_ok=True)
     digest = hashlib.sha1(absolute_url.encode("utf-8")).hexdigest()[:16]
@@ -99,10 +105,26 @@ def _download_resource(url, base_url):
     local_path = os.path.join(DOWNLOADS_DIR, digest + ext)
     if not os.path.exists(local_path):
         try:
-            response = requests.get(absolute_url, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
+            response = requests.get(absolute_url, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10, stream=True)
             response.raise_for_status()
+            content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+            if allowed_types and content_type not in allowed_types:
+                response.close()
+                print(f"WARNING: skipped download of '{absolute_url}': content type '{content_type}' is not in the allowed list.", file=sys.stderr)
+                return ""
+            content_length = response.headers.get("Content-Length")
+            if max_size is not None and content_length is not None and int(content_length) > max_size:
+                response.close()
+                print(f"WARNING: skipped download of '{absolute_url}': size ({content_length} bytes) exceeds the {max_size}-byte limit.", file=sys.stderr)
+                return ""
+            data = bytearray()
+            for chunk in response.iter_content(chunk_size=65536):
+                data += chunk
+                if max_size is not None and len(data) > max_size:
+                    print(f"WARNING: skipped download of '{absolute_url}': exceeded the {max_size}-byte limit while downloading.", file=sys.stderr)
+                    return ""
             with open(local_path, "wb") as f:
-                f.write(response.content)
+                f.write(data)
         except Exception as exc:
             print(f"WARNING: failed to download resource '{absolute_url}': {exc}", file=sys.stderr)
             return ""
@@ -810,7 +832,7 @@ def extract_group(scope, node, base_url):
             # file path — applied AFTER transforms, so e.g. a `replace`
             # transform fixing up a protocol-relative "//host/x.jpg" URL is
             # already in effect by the time it's resolved/downloaded.
-            el.text = _download_resource(value, base_url) if node.get("download") and value else value
+            el.text = _download_resource(value, base_url, node.get("maxDownloadSizeBytes"), node.get("allowedContentTypes")) if node.get("download") and value else value
         elif node["mode"] == "ownText":
             # Direct text-node children only, excluding any nested element's
             # own text — e.g. a badge <span> inside a name <h3> no longer

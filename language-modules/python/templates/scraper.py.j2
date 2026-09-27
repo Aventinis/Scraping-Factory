@@ -12,13 +12,13 @@ import re
 from datetime import date
 import requests
 from bs4 import BeautifulSoup
-{{~ if config.change_detection.enabled || config.proxy.enabled || config.external_config.enabled ~}}
+{{~ if config.change_detection.enabled || config.proxy.enabled || config.external_config.enabled || config.download_enabled ~}}
 import os
 {{~ end ~}}
 {{~ if config.proxy.enabled ~}}
 import itertools
 {{~ end ~}}
-{{~ if config.proxy.enabled || config.hardening.enabled || config.external_config.enabled ~}}
+{{~ if config.proxy.enabled || config.hardening.enabled || config.external_config.enabled || config.download_enabled ~}}
 import sys
 {{~ end ~}}
 {{~ if config.hardening.has_baseline ~}}
@@ -30,10 +30,11 @@ from urllib.parse import urlsplit
 {{~ if config.external_config.enabled ~}}
 import xml.etree.ElementTree as ET
 {{~ end ~}}
-{{~ if config.pagination.enabled ~}}
-{{~ if config.pagination.kind == "nextLink" ~}}
+{{~ if (config.pagination.enabled && config.pagination.kind == "nextLink") || config.download_enabled ~}}
 from urllib.parse import urljoin
 {{~ end ~}}
+{{~ if config.download_enabled ~}}
+import hashlib
 {{~ end ~}}
 {{~ if config.change_detection.enabled ~}}
 import difflib
@@ -56,6 +57,53 @@ URLS = [{{ for u in config.urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"}
 
 OUTPUT_PATH = "{{ config.output_filename }}.{{ if config.output_is_json }}json{{ else }}csv{{ end }}"
+
+{{~ if config.download_enabled ~}}
+# Issue #213/#214: see scraper_grouped.py.j2's own identical doc comment on
+# DOWNLOADS_DIR/_download_resource for the full rationale (hash-named,
+# idempotent, non-fatal on failure, optional size/content-type safety net).
+# Flat mode's own version needs no `node` dict to read from — the field's
+# download/max-size/allowed-types settings are passed in directly instead.
+DOWNLOADS_DIR = OUTPUT_PATH + ".downloads"
+
+
+def _download_resource(url, base_url, max_size=None, allowed_types=None):
+    allowed_types = [t.lower() for t in (allowed_types or [])]
+    absolute_url = urljoin(base_url, url)
+    os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+    digest = hashlib.sha1(absolute_url.encode("utf-8")).hexdigest()[:16]
+    path_only = absolute_url.split("?", 1)[0].split("#", 1)[0]
+    ext = os.path.splitext(path_only)[1]
+    if not re.fullmatch(r"\.[A-Za-z0-9]{1,8}", ext):
+        ext = ""
+    local_path = os.path.join(DOWNLOADS_DIR, digest + ext)
+    if not os.path.exists(local_path):
+        try:
+            response = requests.get(absolute_url, headers=HEADERS, {{ if config.proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10, stream=True)
+            response.raise_for_status()
+            content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+            if allowed_types and content_type not in allowed_types:
+                response.close()
+                print(f"WARNING: skipped download of '{absolute_url}': content type '{content_type}' is not in the allowed list.", file=sys.stderr)
+                return ""
+            content_length = response.headers.get("Content-Length")
+            if max_size is not None and content_length is not None and int(content_length) > max_size:
+                response.close()
+                print(f"WARNING: skipped download of '{absolute_url}': size ({content_length} bytes) exceeds the {max_size}-byte limit.", file=sys.stderr)
+                return ""
+            data = bytearray()
+            for chunk in response.iter_content(chunk_size=65536):
+                data += chunk
+                if max_size is not None and len(data) > max_size:
+                    print(f"WARNING: skipped download of '{absolute_url}': exceeded the {max_size}-byte limit while downloading.", file=sys.stderr)
+                    return ""
+            with open(local_path, "wb") as f:
+                f.write(data)
+        except Exception as exc:
+            print(f"WARNING: failed to download resource '{absolute_url}': {exc}", file=sys.stderr)
+            return ""
+    return local_path
+{{~ end ~}}
 
 {{~ if config.external_config.enabled ~}}
 # Issue #178: an opt-in sidecar XML file next to the *script* itself (not the
@@ -375,6 +423,28 @@ TRANSFORMS = {
 {{- end }}
 }
 
+# Issue #213/#214: same "always present" convention as TRANSFORMS above — a
+# field with Download disabled just gets False/None/[] here, which
+# _extract_page_rows below reads uniformly regardless of whether ANY field
+# has it enabled at all.
+DOWNLOAD = {
+{{- for field in config.fields }}
+    "{{ field.name }}": {{ if field.download }}True{{ else }}False{{ end }},
+{{- end }}
+}
+
+MAX_DOWNLOAD_SIZE = {
+{{- for field in config.fields }}
+    "{{ field.name }}": {{ if field.max_download_size_bytes }}{{ field.max_download_size_bytes }}{{ else }}None{{ end }},
+{{- end }}
+}
+
+ALLOWED_CONTENT_TYPES = {
+{{- for field in config.fields }}
+    "{{ field.name }}": [{{ for t in field.allowed_content_types }}"{{ t }}"{{ if !for.last }}, {{ end }}{{ end }}],
+{{- end }}
+}
+
 # Issue #191: optional Output Blueprint field mapping — ordered
 # target-field -> source-field pairs. When set, this replaces
 # FIELD_OUTPUT_NAMES for the write-time remap below entirely: the output's
@@ -557,7 +627,7 @@ def _notify_change(old_content, new_content):
 {{~ end ~}}
 
 
-def _extract_page_rows(soup):
+def _extract_page_rows(soup, base_url):
     columns = {name: soup.select(sel) for name, sel in SELECTORS.items()}
     n = max((len(v) for v in columns.values()), default=0)
 
@@ -568,7 +638,14 @@ def _extract_page_rows(soup):
             if i < len(elements):
                 attr = ATTRIBUTES.get(name)
                 raw_value = elements[i].get(attr, "").strip() if attr else elements[i].get_text(strip=True)
-                row[name] = _apply_transforms(raw_value, TRANSFORMS.get(name, []))
+                value = _apply_transforms(raw_value, TRANSFORMS.get(name, []))
+                # Issue #213/#214: replaces the raw URL with its own
+                # downloaded local file path — applied AFTER transforms, the
+                # same order the container-mode templates already use. Only
+                # ever True for an attribute-mode field (validated upstream).
+                if attr and DOWNLOAD.get(name) and value:
+                    value = _download_resource(value, base_url, MAX_DOWNLOAD_SIZE.get(name), ALLOWED_CONTENT_TYPES.get(name))
+                row[name] = value
             else:
                 row[name] = ""
         rows.append(row)
@@ -591,7 +668,7 @@ def scrape(url):
         # that only declare their charset via <meta charset>. BeautifulSoup
         # detects that meta tag itself.
         soup = BeautifulSoup(response.content, "html.parser")
-        page_rows = _extract_page_rows(soup)
+        page_rows = _extract_page_rows(soup, response.url)
         if not page_rows:
             break
         rows.extend(page_rows)

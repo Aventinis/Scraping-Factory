@@ -119,6 +119,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         pendingElementAttributes: message.attributes ?? null,
         // Issue #169: same treatment, for OwnText mode's own live preview.
         pendingOwnText: typeof message.ownText === 'string' ? message.ownText : null,
+        // The page this selection actually happened on — same treatment,
+        // for session-restore.js's own stale-tracked-url self-correction.
+        pendingUrl: typeof message.url === 'string' ? message.url : null,
       })
       .then(() => log('STORE OK'))
       .catch(err => log('STORE ERR', err.message));

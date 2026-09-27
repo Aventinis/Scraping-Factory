@@ -32,6 +32,9 @@ const SFConfigImport = (function () {
             // Issue #213: same "only meaningful under Attribute mode" gate
             // attribute itself already uses; absent on the wire = false.
             download: node.mode === 'Attribute' && !!node.download,
+            // Issue #214: same gate as download itself.
+            maxDownloadSizeBytes: node.mode === 'Attribute' && node.download ? (node.maxDownloadSizeBytes ?? null) : null,
+            allowedContentTypes: node.mode === 'Attribute' && node.download ? (node.allowedContentTypes || []) : [],
           }
     ));
   }
@@ -270,6 +273,11 @@ const SFConfigImport = (function () {
         ? (config.fields || []).map(f => ({
             name: f.name, selector: f.selector, attribute: f.attribute ?? null,
             framePath: f.framePath || null, transforms: f.transforms && f.transforms.length > 0 ? f.transforms : null,
+            // Issue #214: same "only meaningful with an attribute set" gate
+            // container mode's own deserializeGroupTree already uses.
+            download: !!f.attribute && !!f.download,
+            maxDownloadSizeBytes: f.attribute && f.download ? (f.maxDownloadSizeBytes ?? null) : null,
+            allowedContentTypes: f.attribute && f.download ? (f.allowedContentTypes || []) : [],
           }))
         : [],
       groups: mode === 'container' ? deserializeGroupTree(config.groups) : [],

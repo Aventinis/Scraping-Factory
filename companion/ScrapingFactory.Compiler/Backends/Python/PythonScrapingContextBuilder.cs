@@ -76,7 +76,8 @@ internal static class PythonScrapingContextBuilder
     public static Dictionary<string, object?> BuildFlatModeContext(ScrapingPlan plan)
     {
         var navigate = plan.Steps.OfType<NavigateStep>().Single();
-        var fields = plan.Steps.OfType<ExtractStep>()
+        var extractSteps = plan.Steps.OfType<ExtractStep>().ToList();
+        var fields = extractSteps
             .Select(step => new Dictionary<string, object?>
             {
                 ["name"] = step.Name,
@@ -84,6 +85,14 @@ internal static class PythonScrapingContextBuilder
                 ["attribute"] = step.Attribute,
                 ["frame_path"] = step.FramePath,
                 ["transforms_literal"] = PythonFieldTransformLiteral.Render(step.Transforms),
+                // Issue #214: same always-present convention Container-Mode's
+                // PythonGroupTreeLiteral.RenderField already uses for these
+                // three keys — a plain bool/int?/List<string>? here, since
+                // (unlike the group tree) this dict is bound through Scriban
+                // rather than pre-rendered to a Python literal string.
+                ["download"] = step.Download,
+                ["max_download_size_bytes"] = step.MaxDownloadSizeBytes,
+                ["allowed_content_types"] = step.AllowedContentTypes ?? new List<string>(),
             })
             .ToList();
 
@@ -94,6 +103,11 @@ internal static class PythonScrapingContextBuilder
             ["script_filename"] = plan.ScriptFileName,
             ["output_filename"] = plan.OutputFileBaseName,
             ["output_is_json"] = plan.OutputFormat == OutputFormat.Json,
+            // Issue #214: gates the download helper's own conditional
+            // imports (os/sys/hashlib/urljoin) — see PythonGroupTreeLiteral.
+            // AnyDownloadEnabled's own doc comment for the Container-Mode
+            // equivalent this mirrors.
+            ["download_enabled"] = extractSteps.Any(step => step.Download),
             ["change_detection"] = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection),
             ["proxy"] = PythonProxyLiteral.BuildContext(plan.Proxy),
             ["hardening"] = PythonHardeningLiteral.BuildContext(plan.Hardening),

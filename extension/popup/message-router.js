@@ -72,6 +72,20 @@ const SFMessageRouter = (function () {
         }
         // Clear the storage entry the service worker wrote — we have it now.
         chrome.storage.session.remove('pendingSelector');
+        // The tracked _state.url only ever gets set once, at panel-load/
+        // companion-connection time (checkCompanion) — there's no
+        // chrome.tabs.onUpdated listener anywhere in this extension, so it
+        // silently goes stale if the same tab navigates to a different page
+        // while the panel stays open. The just-picked element's own page
+        // (message.url) is unambiguous ground truth for "what page the user
+        // is actually working with now" — self-correct rather than letting
+        // an eventual /generate request run against the wrong page with a
+        // confusingly unrelated-looking "no data" failure.
+        if (typeof message.url === 'string' && message.url && message.url !== state.url) {
+          log('ELEMENT_SELECTED page changed since last sync', { from: state.url, to: message.url });
+          bridge.setState(STATES.SELECTING, { url: message.url });
+          showToast(t('toast.trackedUrlUpdated', { url: message.url }), null, 'info');
+        }
         const framePath = message.framePath || null;
         const matchCount = typeof message.matchCount === 'number' ? message.matchCount : null;
         // Issue #182: Blocks mode reuses this exact same "new top-level

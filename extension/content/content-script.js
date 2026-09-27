@@ -1121,6 +1121,14 @@ function onClick(e) {
       // Issue #169: ownText is the third such raw value, for OwnText mode.
       rawText: clickedText, attributes: clickedAttributes, ownText: clickedOwnText,
       framePath: framePath && framePath.length > 0 ? framePath : null,
+      // The page this click actually happened on — there's no tab-navigation
+      // listener anywhere in this extension (see CLAUDE.md), so the side
+      // panel's own tracked _state.url can silently go stale if the same tab
+      // navigates to a different page while the panel stays open. Lets
+      // message-router.js/session-restore.js detect and self-correct that
+      // mismatch instead of the eventual /generate request silently running
+      // against the wrong page.
+      url: window.location.href,
     });
 
     // API-mode search: additionally correlate the clicked element's text
