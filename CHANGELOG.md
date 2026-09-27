@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.15.5](https://github.com/Aventinis/Scraping-Factory/compare/v1.15.4...v1.15.5) (2026-09-27)
+
+
+### Features
+
+* **hardening-replay:** add "Test hardening" to the saved-outputs panel ([5b85256](https://github.com/Aventinis/Scraping-Factory/commit/5b852566d25a6ebd10e07d8b190ca54e73b80ae8))
+* **hardening-replay:** add HardeningReplayEvaluator mirroring the runtime checks ([da9404a](https://github.com/Aventinis/Scraping-Factory/commit/da9404a9f1522782f438918cb6b203c400775599))
+* **hardening-replay:** add POST /configs/{configId}/outputs/{id}/replay-hardening ([757bf52](https://github.com/Aventinis/Scraping-Factory/commit/757bf522e8ff176e25cccd6a49033710c21791d9))
+* **hardening-replay:** add SavedConfigs.BlueprintId and baseline-comparison queries ([aba6bd5](https://github.com/Aventinis/Scraping-Factory/commit/aba6bd5e03bdd03c13f17345deedd910bf6966d9))
+* **hardening-replay:** replay hardening checks against saved outputs ([#207](https://github.com/Aventinis/Scraping-Factory/issues/207)) ([2ef9902](https://github.com/Aventinis/Scraping-Factory/commit/2ef990219c9cc084f78d8e9623633b0a00b2acb3))
+
+
+### Bug Fixes
+
+* **hardening-replay:** recognize a CSV/JSON field even with zero data rows ([d291a90](https://github.com/Aventinis/Scraping-Factory/commit/d291a90aeaedac07e5505def9e912a2f31495294))
+
 ## [1.15.4](https://github.com/Aventinis/Scraping-Factory/compare/v1.15.3...v1.15.4) (2026-09-27)
 
 
