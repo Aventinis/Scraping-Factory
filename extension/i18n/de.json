@@ -273,17 +273,22 @@
     "toIntegerOption": "In Ganzzahl umwandeln",
     "toBooleanOption": "In Wahrheitswert umwandeln",
     "toDateOption": "In Datum umwandeln",
+    "combineFieldsOption": "Mit anderem/anderen Feld(ern) kombinieren",
+    "splitFieldOption": "Aus anderem Feld aufteilen",
     "patternPlaceholder": "Regex-Muster (z. B. \"\\d+\")",
     "groupPlaceholder": "Gruppe (0 = ganzer Treffer)",
     "findPlaceholder": "Suchen",
     "replacementPlaceholder": "Ersetzen durch",
     "sourceFormatPlaceholder": "Quellformat (z. B. \"{dd}.{mm}.{yyyy}\")",
+    "separatorPlaceholder": "Trennzeichen (z. B. \", \")",
+    "splitSourcePlaceholderOption": "Feld auswählen…",
+    "splitIndexPlaceholder": "Teil (0 = erster)",
     "onErrorKeepOriginalOption": "Bei Fehler: Originalwert behalten",
     "onErrorUseDefaultOption": "Bei Fehler: Standardwert verwenden",
     "defaultValuePlaceholder": "Standardwert",
     "previewLabel": "Vorschau: {value}",
     "previewEmptyValue": "(leer)",
-    "previewUnavailable": "Vorschau nicht möglich (ungültiges Muster)"
+    "previewUnavailable": "Vorschau nicht möglich"
   },
   "generating": {
     "message": "Generiere Skript…"

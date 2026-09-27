@@ -149,6 +149,21 @@ const SFContainerTree = (function () {
     return groups.map((n, i) => (i === head ? { ...n, children: insertContainerNode(n.children, rest, node) } : n));
   }
 
+  // Issue #206: the field-name options a new field's combineFields/
+  // splitField transform may reference — every already-present *field*
+  // child (kind === 'field') directly under `parentPath` (or at root level
+  // when null), in declared order. Deliberately not global-by-name (unlike
+  // collectFieldNames, used by the hardening null-rate/required-fields
+  // pickers) — modal-field-extended only ever inserts a brand-new field as
+  // the last child of this exact parent, so every current field sibling
+  // here is already guaranteed to be "declared earlier" once the new one is
+  // appended, matching ScrapingPlanValidator's own same-immediate-parent-
+  // group ordering rule exactly, with no slicing needed.
+  function collectSiblingFieldNames(groups, parentPath) {
+    const siblings = !parentPath || parentPath.length === 0 ? groups : (resolveGroupNode(groups, parentPath)?.children || []);
+    return siblings.filter(n => n.kind === 'field').map(n => n.name);
+  }
+
   // Removes the node (and its subtree) at `path` — always non-empty, unlike
   // insertContainerNode's parentPath.
   function removeGroupTreeNode(groups, path) {
@@ -246,6 +261,7 @@ const SFContainerTree = (function () {
     insertContainerNode, removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode,
     groupNodeSuffix, formatGroupNodeLabel, serializeGroupTree,
     guessUrlAttribute, parseAllowedContentTypes, megabytesToBytes,
+    collectSiblingFieldNames,
   };
 })();
 

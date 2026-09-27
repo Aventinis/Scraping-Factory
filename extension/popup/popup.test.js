@@ -32,6 +32,7 @@ const {
   updateGroupTreeNode, moveGroupTreeNode,
   formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport, hasRepeatingAncestor,
   buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
+  collectPrecedingApiFieldSiblingNames,
   serializeApiTree, renderApiTree, updateApiTreeNode, apiTreeNodesHaveNonBlankNames,
   lastPathSegmentName, buildApiSubtreeFromCandidate, resolveApiGroupScopePath, countApiConfigFields,
   renderApiCandidates, renderApiEntriesList,
@@ -646,6 +647,23 @@ describe('field-transforms.js (createDefaultTransform / add / remove / update / 
     expect(transformsAreValid([{ kind: 'toDate', sourceFormat: '  ', onError: 'KeepOriginal', defaultValue: '' }])).toBe(false);
     expect(transformsAreValid([{ kind: 'toDate', sourceFormat: '{yyyy}-{mm}-{dd}', onError: 'KeepOriginal', defaultValue: '' }])).toBe(true);
   });
+
+  // Issue #206
+  test('createDefaultTransform returns the right shape for combineFields/splitField', () => {
+    expect(createDefaultTransform('combineFields')).toEqual({ kind: 'combineFields', sourceFieldNames: [], separator: ' ' });
+    expect(createDefaultTransform('splitField')).toEqual({ kind: 'splitField', sourceFieldName: '', separator: ' ', index: 0 });
+  });
+
+  test('transformsAreValid rejects combineFields with fewer than 2 source fields', () => {
+    expect(transformsAreValid([{ kind: 'combineFields', sourceFieldNames: [], separator: ' ' }])).toBe(false);
+    expect(transformsAreValid([{ kind: 'combineFields', sourceFieldNames: ['A'], separator: ' ' }])).toBe(false);
+    expect(transformsAreValid([{ kind: 'combineFields', sourceFieldNames: ['A', 'B'], separator: ' ' }])).toBe(true);
+  });
+
+  test('transformsAreValid rejects splitField with a blank source field', () => {
+    expect(transformsAreValid([{ kind: 'splitField', sourceFieldName: '', separator: ' ', index: 0 }])).toBe(false);
+    expect(transformsAreValid([{ kind: 'splitField', sourceFieldName: 'Adresse', separator: ' ', index: 0 }])).toBe(true);
+  });
 });
 
 // Issue #143: JS mirror of the Python runtime's _apply_transforms/_to_number
@@ -760,6 +778,15 @@ describe('applyTransformsPreview / toNumberPreview', () => {
     ];
     expect(applyTransformsPreview('  24.09.2026  ', transforms)).toBe('2026-09-24');
     expect(applyTransformsPreview('  not a date  ', transforms)).toBe('unknown');
+  });
+
+  // Issue #206: no sibling field's value is available client-side at
+  // preview time — both kinds signal "preview unavailable" (null), the same
+  // as an invalid regexExtract pattern, rather than showing this field's own
+  // untouched raw value.
+  test('combineFields/splitField have no client-side preview', () => {
+    expect(applyTransformsPreview('anything', [{ kind: 'combineFields', sourceFieldNames: ['A', 'B'], separator: ' ' }])).toBeNull();
+    expect(applyTransformsPreview('anything', [{ kind: 'splitField', sourceFieldName: 'A', separator: ',', index: 0 }])).toBeNull();
   });
 });
 
@@ -919,6 +946,45 @@ describe('resolveApiTreeNode / insertApiTreeNode / removeApiTreeNode', () => {
   test('removeApiTreeNode removes a nested node', () => {
     const result = removeApiTreeNode(tree(), [0, 0]);
     expect(result[0].children).toEqual([]);
+  });
+});
+
+// Issue #206: the combineFields/splitField source-field picker's option list
+// for an *already-placed* ApiField leaf (modal-api-field-transforms reopens
+// against an existing node, unlike flat/container mode's own "always a new
+// field" modals) — only siblings declared strictly before its own position
+// within the same parent group are offered.
+describe('collectPrecedingApiFieldSiblingNames', () => {
+  const groups = () => [
+    {
+      kind: 'group', name: 'Kategorie', path: 'categories',
+      children: [
+        { kind: 'field', name: 'Strasse', path: 'street' },
+        { kind: 'group', name: 'Innen', path: 'inner', children: [{ kind: 'field', name: 'Tief', path: 'deep' }] },
+        { kind: 'field', name: 'Hausnummer', path: 'number' },
+        { kind: 'field', name: 'Adresse', path: 'address' },
+      ],
+    },
+  ];
+
+  test('returns an empty list for a null/empty path', () => {
+    expect(collectPrecedingApiFieldSiblingNames(groups(), null)).toEqual([]);
+    expect(collectPrecedingApiFieldSiblingNames(groups(), [])).toEqual([]);
+  });
+
+  test('returns only field siblings declared before the given path, excluding groups', () => {
+    // path [0, 3] is "Adresse" — preceding siblings are Strasse, Innen (a
+    // group, excluded), Hausnummer.
+    expect(collectPrecedingApiFieldSiblingNames(groups(), [0, 3])).toEqual(['Strasse', 'Hausnummer']);
+  });
+
+  test('does not offer a sibling declared after the given path', () => {
+    // path [0, 0] is "Strasse" itself — nothing precedes it.
+    expect(collectPrecedingApiFieldSiblingNames(groups(), [0, 0])).toEqual([]);
+  });
+
+  test('scopes strictly to the immediate parent group', () => {
+    expect(collectPrecedingApiFieldSiblingNames(groups(), [0, 1, 0])).toEqual([]);
   });
 });
 
@@ -3704,6 +3770,125 @@ describe('Field transform-chain editor (Issue #84)', () => {
 
     const rows = document.querySelectorAll('#group-tree-root .group-tree-row');
     expect(rows[1].querySelector('.group-tree-name').value).toBe('Preis');
+  });
+
+  // Issue #206
+  test('combineFields offers already-added flat fields as source-field options', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.street' });
+    document.getElementById('input-field-name').value = 'Strasse';
+    document.getElementById('btn-field-confirm').click();
+
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.number' });
+    document.getElementById('btn-field-transform-add').click();
+    const select = document.querySelector('#field-transform-list .transform-kind-select');
+    select.value = 'combineFields';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const options = [...document.querySelectorAll('#field-transform-list .transform-combine-source-select option')].map(o => o.value);
+    expect(options).toEqual(['Strasse']);
+  });
+
+  test('picking combine source fields updates state and survives a re-render', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.street' });
+    document.getElementById('input-field-name').value = 'Strasse';
+    document.getElementById('btn-field-confirm').click();
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.number' });
+    document.getElementById('input-field-name').value = 'Hausnummer';
+    document.getElementById('btn-field-confirm').click();
+
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.address' });
+    document.getElementById('btn-field-transform-add').click();
+    const kindSelect = document.querySelector('#field-transform-list .transform-kind-select');
+    kindSelect.value = 'combineFields';
+    kindSelect.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const sourceSelect = document.querySelector('#field-transform-list .transform-combine-source-select');
+    [...sourceSelect.options].forEach(o => { o.selected = true; });
+    sourceSelect.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const selected = [...document.querySelector('#field-transform-list .transform-combine-source-select').selectedOptions].map(o => o.value);
+    expect(selected).toEqual(['Strasse', 'Hausnummer']);
+  });
+
+  test('confirming a combineFields chain with only one picked source field is blocked', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.street' });
+    document.getElementById('input-field-name').value = 'Strasse';
+    document.getElementById('btn-field-confirm').click();
+
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.address' });
+    document.getElementById('input-field-name').value = 'Adresse';
+    document.getElementById('btn-field-transform-add').click();
+    const kindSelect = document.querySelector('#field-transform-list .transform-kind-select');
+    kindSelect.value = 'combineFields';
+    kindSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    const sourceSelect = document.querySelector('#field-transform-list .transform-combine-source-select');
+    sourceSelect.options[0].selected = true;
+    sourceSelect.dispatchEvent(new Event('change', { bubbles: true }));
+
+    document.getElementById('btn-field-confirm').click();
+
+    // Only "Strasse" was ever confirmed — the second field never was.
+    expect(document.querySelectorAll('#fields-list .field-row')).toHaveLength(1);
+  });
+
+  test('splitField renders a source-field select, separator, and index inputs', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.address' });
+    document.getElementById('input-field-name').value = 'Adresse';
+    document.getElementById('btn-field-confirm').click();
+
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.street' });
+    document.getElementById('btn-field-transform-add').click();
+    const kindSelect = document.querySelector('#field-transform-list .transform-kind-select');
+    kindSelect.value = 'splitField';
+    kindSelect.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const sourceSelect = document.querySelector('#field-transform-list .transform-split-source-select');
+    expect([...sourceSelect.options].map(o => o.value)).toEqual(['', 'Adresse']);
+    sourceSelect.value = 'Adresse';
+    sourceSelect.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const indexInput = document.querySelector('#field-transform-list .transform-split-index-input');
+    indexInput.value = '1';
+    indexInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(document.querySelector('#field-transform-list .transform-split-source-select').value).toBe('Adresse');
+    expect(document.querySelector('#field-transform-list .transform-split-index-input').value).toBe('1');
+  });
+
+  test('container mode: combineFields offers only field siblings under the same immediate parent group', async () => {
+    document.getElementById('btn-mode-container').click();
+    document.getElementById('btn-add-root-container').click();
+    document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('btn-container-confirm').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category' });
+    await flushMicrotasks();
+    chrome.runtime.sendMessage.mockClear();
+
+    document.querySelector('.btn-add-subfield').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.street' });
+    await flushMicrotasks();
+    document.getElementById('input-field-extended-name').value = 'Strasse';
+    document.getElementById('btn-field-extended-confirm').click();
+
+    document.querySelector('.btn-add-subfield').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.number' });
+    await flushMicrotasks();
+    document.getElementById('btn-field-extended-transform-add').click();
+    const kindSelect = document.querySelector('#field-extended-transform-list .transform-kind-select');
+    kindSelect.value = 'combineFields';
+    kindSelect.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const options = [...document.querySelectorAll('#field-extended-transform-list .transform-combine-source-select option')].map(o => o.value);
+    expect(options).toEqual(['Strasse']);
   });
 });
 

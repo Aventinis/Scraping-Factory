@@ -373,6 +373,22 @@ const SFApiConfig = (function () {
     return groups.map((n, i) => (i === head ? { ...n, children: insertApiTreeNode(n.children, rest, node) } : n));
   }
 
+  // Issue #206: preceding sibling field names (own parent group, indices
+  // strictly before this node's own position) an already-inserted ApiField
+  // leaf's own combineFields/splitField transform may reference — unlike
+  // container-tree.js's collectSiblingFieldNames, this modal reopens
+  // against an *already-placed* leaf (see openApiFieldTransformsModal), so
+  // only siblings actually declared before it count; a later sibling isn't
+  // offered at all here, rather than being offered and then rejected only
+  // once "Apply" reaches the companion's own ordering check.
+  function collectPrecedingApiFieldSiblingNames(groups, path) {
+    if (!path || path.length === 0) return [];
+    const parentPath = path.slice(0, -1);
+    const ownIndex = path[path.length - 1];
+    const siblings = parentPath.length === 0 ? groups : (resolveApiTreeNode(groups, parentPath)?.children || []);
+    return siblings.slice(0, ownIndex).filter(n => n.kind === 'field').map(n => n.name);
+  }
+
   // Removes the node (and its subtree) at `path` — always non-empty, unlike
   // insertApiTreeNode's parentPath.
   function removeApiTreeNode(groups, path) {
@@ -670,6 +686,7 @@ const SFApiConfig = (function () {
     compileRangeFormatPattern, detectRangeFormat, findUrlPartValue, rangeFormatExample,
     buildApiHeaders, buildApiConfig,
     buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
+    collectPrecedingApiFieldSiblingNames,
     serializeApiTree, countApiConfigFields, updateApiTreeNode, apiTreeNodesHaveNonBlankNames,
     jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
     bodyTreeLeavesAreBound, serializeBodyTree, lastPathSegmentName, buildApiSubtreeFromCandidate,

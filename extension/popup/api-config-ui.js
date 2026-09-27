@@ -33,6 +33,7 @@ const SFApiConfigUI = (function () {
     buildStaticListSource, buildDiscoverySource, buildRangeSource, RANGE_FORMAT_PRESETS,
     detectRangeFormat, findUrlPartValue, rangeFormatExample,
     buildApiConfig, buildApiGroupDraft, insertApiTreeNode, updateApiTreeNode, resolveApiTreeNode,
+    collectPrecedingApiFieldSiblingNames,
     jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
     buildApiSubtreeFromCandidate, resolveApiGroupScopePath, allParameterParts, apiConfigDraftHasAllSourcesChosen,
   } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
@@ -1256,7 +1257,12 @@ function renderApiConfigModals(bridge) {
 
   if (state.apiFieldTransformModalOpen) {
     document.getElementById('modal-api-field-transforms')?.classList.remove('hidden');
-    renderTransformList('api-field-transform-list', state.pendingTransforms);
+    // Issue #206: only siblings actually declared *before* this
+    // already-placed leaf, within its own parent group — see
+    // collectPrecedingApiFieldSiblingNames's own doc comment.
+    renderTransformList(
+      'api-field-transform-list', state.pendingTransforms,
+      collectPrecedingApiFieldSiblingNames(state.apiConfigDraft.groups, state.pendingApiFieldTransformPath));
     // Issue #147: live preview against the node's own sampleValue, threaded
     // through as pendingRawText by openApiFieldTransformsModal — reuses the
     // same renderTransformPreview flat mode's own preview already calls.

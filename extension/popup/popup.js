@@ -17,6 +17,7 @@ const {
   detectRangeFormat, findUrlPartValue, rangeFormatExample,
   buildApiHeaders, buildApiConfig,
   buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
+  collectPrecedingApiFieldSiblingNames,
   serializeApiTree, countApiConfigFields, updateApiTreeNode, apiTreeNodesHaveNonBlankNames,
   jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
   bodyTreeLeavesAreBound, serializeBodyTree, lastPathSegmentName, buildApiSubtreeFromCandidate,
@@ -26,7 +27,7 @@ const {
 const {
   buildGroupNode, buildFieldNode, resolveGroupNode, hasRepeatingAncestor,
   insertContainerNode, removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode,
-  formatGroupNodeLabel, serializeGroupTree,
+  formatGroupNodeLabel, serializeGroupTree, collectSiblingFieldNames,
 } = typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
 
 const {
@@ -1106,6 +1107,7 @@ if (typeof module !== 'undefined') {
     updateGroupTreeNode, moveGroupTreeNode,
     formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport, hasRepeatingAncestor,
     buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
+    collectPrecedingApiFieldSiblingNames, collectSiblingFieldNames,
     updateApiTreeNode, apiTreeNodesHaveNonBlankNames, lastPathSegmentName, buildApiSubtreeFromCandidate,
     resolveApiGroupScopePath, countApiConfigFields,
     serializeApiTree, renderApiTree,

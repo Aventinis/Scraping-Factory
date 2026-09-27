@@ -34,6 +34,8 @@ const SFFieldTransformsUI = (function () {
     ['toInteger', 'transforms.toIntegerOption'],
     ['toBoolean', 'transforms.toBooleanOption'],
     ['toDate', 'transforms.toDateOption'],
+    ['combineFields', 'transforms.combineFieldsOption'],
+    ['splitField', 'transforms.splitFieldOption'],
   ];
 
   // Issue #205: shared by all three type-conversion kinds — an onError
@@ -65,7 +67,65 @@ const SFFieldTransformsUI = (function () {
     }
   }
 
-  function buildTransformRowEl(transform, index, total) {
+  // Issue #206: shared separator text input for both combineFields and
+  // splitField — same underlying property name/semantic for either kind.
+  function appendSeparatorInput(li, transform) {
+    const separatorInput = document.createElement('input');
+    separatorInput.type = 'text';
+    separatorInput.className = 'transform-separator-input';
+    separatorInput.placeholder = t('transforms.separatorPlaceholder');
+    separatorInput.value = transform.separator;
+    li.appendChild(separatorInput);
+  }
+
+  // Issue #206: options come from availableFieldNames (already-declared
+  // sibling field names in the same scope — see container-tree.js's
+  // collectSiblingFieldNames/api-config.js's collectPrecedingApiFieldSiblingNames
+  // for how each mode computes this) rather than a free-text input, so a
+  // typo can't silently reference a field name that doesn't exist.
+  function appendCombineFieldsInputs(li, transform, availableFieldNames) {
+    const select = document.createElement('select');
+    select.className = 'transform-combine-source-select';
+    select.multiple = true;
+    availableFieldNames.forEach((name) => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      option.selected = transform.sourceFieldNames.includes(name);
+      select.appendChild(option);
+    });
+    li.appendChild(select);
+    appendSeparatorInput(li, transform);
+  }
+
+  function appendSplitFieldInputs(li, transform, availableFieldNames) {
+    const select = document.createElement('select');
+    select.className = 'transform-split-source-select';
+    const placeholderOption = document.createElement('option');
+    placeholderOption.value = '';
+    placeholderOption.textContent = t('transforms.splitSourcePlaceholderOption');
+    placeholderOption.selected = !transform.sourceFieldName;
+    select.appendChild(placeholderOption);
+    availableFieldNames.forEach((name) => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      option.selected = name === transform.sourceFieldName;
+      select.appendChild(option);
+    });
+    li.appendChild(select);
+    appendSeparatorInput(li, transform);
+
+    const indexInput = document.createElement('input');
+    indexInput.type = 'number';
+    indexInput.min = '0';
+    indexInput.className = 'transform-split-index-input';
+    indexInput.placeholder = t('transforms.splitIndexPlaceholder');
+    indexInput.value = String(transform.index);
+    li.appendChild(indexInput);
+  }
+
+  function buildTransformRowEl(transform, index, total, availableFieldNames = []) {
     const li = document.createElement('li');
     li.className = 'transform-row';
     li.dataset.index = String(index);
@@ -120,6 +180,10 @@ const SFFieldTransformsUI = (function () {
       appendTypeConversionInputs(li, transform);
     } else if (transform.kind === 'toInteger' || transform.kind === 'toBoolean') {
       appendTypeConversionInputs(li, transform);
+    } else if (transform.kind === 'combineFields') {
+      appendCombineFieldsInputs(li, transform, availableFieldNames);
+    } else if (transform.kind === 'splitField') {
+      appendSplitFieldInputs(li, transform, availableFieldNames);
     }
 
     const moveUpBtn = document.createElement('button');
@@ -145,11 +209,17 @@ const SFFieldTransformsUI = (function () {
     return li;
   }
 
-  function renderTransformList(listElId, transforms) {
+  // availableFieldNames (Issue #206): the sibling field names combineFields/
+  // splitField may reference in the current scope — see each call site in
+  // popup.js/flat-mode-ui.js/container-tree-ui.js/api-config-ui.js for how
+  // that scope is computed. Optional/defaults to none, so a caller with no
+  // notion of "other fields" (or an existing test not exercising these two
+  // kinds) doesn't need to pass anything new.
+  function renderTransformList(listElId, transforms, availableFieldNames = []) {
     const root = document.getElementById(listElId);
     if (!root) return;
     root.innerHTML = '';
-    transforms.forEach((transform, i) => root.appendChild(buildTransformRowEl(transform, i, transforms.length)));
+    transforms.forEach((transform, i) => root.appendChild(buildTransformRowEl(transform, i, transforms.length, availableFieldNames)));
   }
 
   // Issue #143: live "what would this chain actually produce" hint, run
@@ -210,6 +280,16 @@ const SFFieldTransformsUI = (function () {
         setTransforms(updateTransform(transforms, index, { onError: e.target.value }));
       } else if (e.target.classList.contains('transform-default-value-input')) {
         setTransforms(updateTransform(transforms, index, { defaultValue: e.target.value }));
+      } else if (e.target.classList.contains('transform-combine-source-select')) {
+        const sourceFieldNames = Array.from(e.target.selectedOptions).map(o => o.value);
+        setTransforms(updateTransform(transforms, index, { sourceFieldNames }));
+      } else if (e.target.classList.contains('transform-split-source-select')) {
+        setTransforms(updateTransform(transforms, index, { sourceFieldName: e.target.value }));
+      } else if (e.target.classList.contains('transform-separator-input')) {
+        setTransforms(updateTransform(transforms, index, { separator: e.target.value }));
+      } else if (e.target.classList.contains('transform-split-index-input')) {
+        const parsedIndex = parseInt(e.target.value, 10);
+        setTransforms(updateTransform(transforms, index, { index: Number.isFinite(parsedIndex) && parsedIndex >= 0 ? parsedIndex : 0 }));
       }
     });
 

@@ -130,7 +130,11 @@ const SFFlatModeUI = (function () {
       if (allowedTypesInput) allowedTypesInput.value = '';
     }
     renderMatchCountHint('field-name-match-count', state.pendingMatchCount);
-    renderTransformList('field-transform-list', state.pendingTransforms);
+    // Issue #206: the field being added is always appended last, so every
+    // field already in the current draft (flat mode's own `fields`, or
+    // Blocks mode's identically-shaped in-progress flat draft) is a valid,
+    // already-"declared earlier" combineFields/splitField source.
+    renderTransformList('field-transform-list', state.pendingTransforms, (state.fields || []).map(f => f.name));
     refreshFlatTransformPreview(bridge);
   }
 

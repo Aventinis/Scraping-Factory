@@ -273,17 +273,22 @@
     "toIntegerOption": "Convert to integer",
     "toBooleanOption": "Convert to boolean",
     "toDateOption": "Convert to date",
+    "combineFieldsOption": "Combine with other field(s)",
+    "splitFieldOption": "Split from another field",
     "patternPlaceholder": "Regex pattern (e.g. \"\\d+\")",
     "groupPlaceholder": "Group (0 = whole match)",
     "findPlaceholder": "Find",
     "replacementPlaceholder": "Replace with",
     "sourceFormatPlaceholder": "Source format (e.g. \"{dd}.{mm}.{yyyy}\")",
+    "separatorPlaceholder": "Separator (e.g. \", \")",
+    "splitSourcePlaceholderOption": "Select field…",
+    "splitIndexPlaceholder": "Part (0 = first)",
     "onErrorKeepOriginalOption": "On failure: keep original value",
     "onErrorUseDefaultOption": "On failure: use default value",
     "defaultValuePlaceholder": "Default value",
     "previewLabel": "Preview: {value}",
     "previewEmptyValue": "(empty)",
-    "previewUnavailable": "Preview unavailable (invalid pattern)"
+    "previewUnavailable": "Preview unavailable"
   },
   "generating": {
     "message": "Generating script…"

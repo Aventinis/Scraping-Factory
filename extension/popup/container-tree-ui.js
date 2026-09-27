@@ -24,7 +24,7 @@ const SFContainerTreeUI = (function () {
   const {
     groupNodeSuffix, resolveGroupNode, hasRepeatingAncestor, buildFieldNode, insertContainerNode,
     removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode, guessUrlAttribute,
-    parseAllowedContentTypes, megabytesToBytes,
+    parseAllowedContentTypes, megabytesToBytes, collectSiblingFieldNames,
   } = typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
   const { transformsAreValid, addTransform } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
   const { renderTransformList, renderTransformPreview, wireTransformList } =
@@ -343,7 +343,13 @@ const SFContainerTreeUI = (function () {
       if (allowedTypesInput) allowedTypesInput.value = '';
     }
     renderMatchCountHint('field-extended-match-count', state.pendingMatchCount);
-    renderTransformList('field-extended-transform-list', state.pendingTransforms);
+    // Issue #206: the new field is always appended last under
+    // state.pendingParentPath, so every current field sibling there is
+    // already "declared earlier" — see collectSiblingFieldNames's own doc
+    // comment.
+    renderTransformList(
+      'field-extended-transform-list', state.pendingTransforms,
+      collectSiblingFieldNames(state.groups, state.pendingParentPath));
     refreshExtendedTransformPreview(bridge);
   }
 

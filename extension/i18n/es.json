@@ -273,17 +273,22 @@
     "toIntegerOption": "Convertir a entero",
     "toBooleanOption": "Convertir a booleano",
     "toDateOption": "Convertir a fecha",
+    "combineFieldsOption": "Combinar con otro(s) campo(s)",
+    "splitFieldOption": "Dividir desde otro campo",
     "patternPlaceholder": "Patrón regex (p. ej. \"\\d+\")",
     "groupPlaceholder": "Grupo (0 = coincidencia completa)",
     "findPlaceholder": "Buscar",
     "replacementPlaceholder": "Reemplazar con",
     "sourceFormatPlaceholder": "Formato de origen (p. ej. \"{dd}.{mm}.{yyyy}\")",
+    "separatorPlaceholder": "Separador (p. ej. \", \")",
+    "splitSourcePlaceholderOption": "Seleccionar campo…",
+    "splitIndexPlaceholder": "Parte (0 = primera)",
     "onErrorKeepOriginalOption": "En caso de error: mantener valor original",
     "onErrorUseDefaultOption": "En caso de error: usar valor predeterminado",
     "defaultValuePlaceholder": "Valor predeterminado",
     "previewLabel": "Vista previa: {value}",
     "previewEmptyValue": "(vacío)",
-    "previewUnavailable": "Vista previa no disponible (patrón no válido)"
+    "previewUnavailable": "Vista previa no disponible"
   },
   "generating": {
     "message": "Generando script…"
