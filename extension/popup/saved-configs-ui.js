@@ -20,7 +20,7 @@ const { STATES, escapeHtml } =
 const { showToast } =
   typeof require !== 'undefined' ? require('./toast') : self.SFToast;
 
-const { buildScrapingConfig } =
+const { buildScrapingConfig, buildHardeningConfig } =
   typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
 
 const { downloadFile } =
@@ -115,11 +115,76 @@ function buildSavedOutputsPanelEl(bridge, configId) {
         `<span class="saved-output-name" title="${escapeHtml(entry.fileName)}">${escapeHtml(entry.name)}</span>` +
         `<span class="saved-config-date">${escapeHtml(savedAtText)}</span>` +
         `<button type="button" class="btn-secondary btn-tiny btn-saved-output-download" data-config-id="${configId}" data-id="${entry.id}">${escapeHtml(t('idle.savedOutputsDownloadBtn'))}</button>` +
+        `<button type="button" class="btn-secondary btn-tiny btn-saved-output-replay-hardening" data-config-id="${configId}" data-id="${entry.id}">${escapeHtml(t('idle.savedOutputsReplayHardeningBtn'))}</button>` +
         `<button type="button" class="btn-danger btn-tiny btn-saved-output-delete" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteBtn'))}</button>`;
     }
     panelEl.appendChild(rowEl);
+
+    // Issue #207: the in-progress/last "Test hardening" run for this
+    // specific output — appended right after its own row, mirroring how
+    // this whole outputs sub-panel itself is appended after its own
+    // saved-config row.
+    if (state.hardeningReplay && state.hardeningReplay.outputId === entry.id) {
+      panelEl.appendChild(buildHardeningReplayPanelEl(bridge, entry));
+    }
   });
 
+  return panelEl;
+}
+
+// Issue #207: renders whichever phase _state.hardeningReplay is currently
+// in — a compare-basis choice (only when needed, see startHardeningReplay's
+// own doc comment), a loading state, an error, or the per-check results
+// themselves (one line per check: kind, outcome, message).
+function buildHardeningReplayPanelEl(bridge, outputEntry) {
+  const state = bridge.getState();
+  const replay = state.hardeningReplay;
+  const panelEl = document.createElement('div');
+  panelEl.className = 'hardening-replay-panel';
+
+  if (replay.needsCompareBasisChoice) {
+    const configEntry = (state.savedConfigs || []).find((c) => c.id === replay.configId);
+    const blueprint = (state.outputBlueprints || []).find((bp) => bp.id === configEntry?.blueprintId);
+    const blueprintName = blueprint?.name ?? String(configEntry?.blueprintId ?? '');
+    panelEl.innerHTML =
+      `<p class="hardening-replay-compare-basis-label">${escapeHtml(t('idle.hardeningReplayCompareBasisLabel'))}</p>` +
+      `<div class="mode-toggle hardening-replay-compare-basis-toggle">` +
+      `<button type="button" class="mode-btn btn-hardening-replay-basis${replay.compareBasis === 'config' ? ' active' : ''}" data-basis="config">${escapeHtml(t('idle.hardeningReplayCompareBasisConfig'))}</button>` +
+      `<button type="button" class="mode-btn btn-hardening-replay-basis${replay.compareBasis === 'blueprint' ? ' active' : ''}" data-basis="blueprint">${escapeHtml(t('idle.hardeningReplayCompareBasisBlueprint', { name: blueprintName }))}</button>` +
+      `</div>` +
+      `<button type="button" class="btn-primary btn-tiny btn-hardening-replay-run">${escapeHtml(t('idle.hardeningReplayRunBtn'))}</button>` +
+      `<button type="button" class="btn-secondary btn-tiny btn-hardening-replay-cancel">${escapeHtml(t('common.cancel'))}</button>`;
+    return panelEl;
+  }
+
+  if (replay.loading) {
+    panelEl.innerHTML = `<p class="hardening-replay-loading">${escapeHtml(t('idle.hardeningReplayLoading'))}</p>`;
+    return panelEl;
+  }
+
+  if (replay.error) {
+    panelEl.innerHTML =
+      `<p class="hardening-replay-error">${escapeHtml(t('idle.hardeningReplayError', { message: replay.error }))}</p>` +
+      `<button type="button" class="btn-secondary btn-tiny btn-hardening-replay-cancel">${escapeHtml(t('common.cancel'))}</button>`;
+    return panelEl;
+  }
+
+  const resultLines = (replay.results || []).map((result) => {
+    const outcomeClass = {
+      Triggered: 'hardening-replay-result-triggered',
+      NotEvaluable: 'hardening-replay-result-inconclusive',
+      Inconclusive: 'hardening-replay-result-inconclusive',
+      Passed: 'hardening-replay-result-passed',
+    }[result.outcome] || '';
+    return `<li class="hardening-replay-result ${outcomeClass}">` +
+      `<span class="hardening-replay-result-kind">${escapeHtml(result.kind)}</span> ` +
+      `<span class="hardening-replay-result-outcome">${escapeHtml(t(`idle.hardeningReplayOutcome${result.outcome}`))}</span>` +
+      `<p class="hardening-replay-result-message">${escapeHtml(result.message)}</p>` +
+      `</li>`;
+  }).join('');
+  panelEl.innerHTML =
+    `<ul class="hardening-replay-results-list">${resultLines}</ul>` +
+    `<button type="button" class="btn-secondary btn-tiny btn-hardening-replay-cancel">${escapeHtml(t('common.cancel'))}</button>`;
   return panelEl;
 }
 
@@ -372,6 +437,68 @@ async function downloadSavedOutput(configId, id) {
   }
 }
 
+// Issue #207: kicks off "Test hardening" for one specific saved output —
+// sends whatever's currently configured live in _state.hardening (via
+// buildHardeningConfig, the same converter a real /generate request already
+// uses), not necessarily what was saved with this output originally, per
+// the issue's own "what would today's checks report" framing. A
+// BaselineCheck needs a "previous" dataset to compare against, resolved by
+// the companion via one of two comparison bases — this only actually asks
+// the user to choose when there's a genuine choice to make (a Baseline
+// check is live AND this output's own config has a Blueprint set); every
+// other case runs immediately.
+function startHardeningReplay(bridge, configId, outputId) {
+  const state = bridge.getState();
+  const checks = buildHardeningConfig(state.hardening);
+  if (!checks) {
+    showToast(t('idle.hardeningReplayNoChecks'), null, 'warn');
+    return;
+  }
+
+  const hasBaseline = checks.some((check) => check.kind === 'baseline');
+  const configEntry = (state.savedConfigs || []).find((c) => c.id === configId);
+  const needsCompareBasisChoice = hasBaseline && !!configEntry?.blueprintId;
+
+  log('BTN saved-output-replay-hardening', { configId, outputId, needsCompareBasisChoice });
+  bridge.patchState({
+    hardeningReplay: {
+      configId, outputId, checks, compareBasis: 'config',
+      needsCompareBasisChoice, loading: false, results: null, error: null,
+    },
+  });
+  if (!needsCompareBasisChoice) runHardeningReplay(bridge);
+}
+
+function chooseHardeningReplayCompareBasis(bridge, basis) {
+  const replay = bridge.getState().hardeningReplay;
+  if (!replay) return;
+  bridge.patchState({ hardeningReplay: { ...replay, compareBasis: basis } });
+}
+
+async function runHardeningReplay(bridge) {
+  const replay = bridge.getState().hardeningReplay;
+  if (!replay) return;
+  bridge.patchState({ hardeningReplay: { ...replay, needsCompareBasisChoice: false, loading: true, error: null } });
+
+  try {
+    const res = await fetch(`${getResolvedCompanionUrl()}/configs/${replay.configId}/outputs/${replay.outputId}/replay-hardening`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ checks: replay.checks, compareBasis: replay.compareBasis }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const body = await res.json();
+    bridge.patchState({ hardeningReplay: { ...bridge.getState().hardeningReplay, loading: false, results: body.results } });
+  } catch (err) {
+    log('HARDENING_REPLAY FAIL', err.message);
+    bridge.patchState({ hardeningReplay: { ...bridge.getState().hardeningReplay, loading: false, error: err.message } });
+  }
+}
+
+function cancelHardeningReplay(bridge) {
+  bridge.patchState({ hardeningReplay: null });
+}
+
 function requestDeleteSavedOutput(bridge, id) {
   bridge.patchState({ savedOutputsPendingDeleteId: id });
 }
@@ -546,6 +673,26 @@ function wireSavedConfigsEvents(bridge) {
         parseInt(outputDownloadBtn.dataset.configId, 10), parseInt(outputDownloadBtn.dataset.id, 10));
       return;
     }
+    const replayBtn = e.target.closest('.btn-saved-output-replay-hardening');
+    if (replayBtn) {
+      startHardeningReplay(bridge, parseInt(replayBtn.dataset.configId, 10), parseInt(replayBtn.dataset.id, 10));
+      return;
+    }
+    const basisBtn = e.target.closest('.btn-hardening-replay-basis');
+    if (basisBtn) {
+      chooseHardeningReplayCompareBasis(bridge, basisBtn.dataset.basis);
+      return;
+    }
+    const runBtn = e.target.closest('.btn-hardening-replay-run');
+    if (runBtn) {
+      runHardeningReplay(bridge);
+      return;
+    }
+    const replayCancelBtn = e.target.closest('.btn-hardening-replay-cancel');
+    if (replayCancelBtn) {
+      cancelHardeningReplay(bridge);
+      return;
+    }
     const outputDeleteBtn = e.target.closest('.btn-saved-output-delete');
     if (outputDeleteBtn) {
       requestDeleteSavedOutput(bridge, parseInt(outputDeleteBtn.dataset.id, 10));
@@ -569,7 +716,9 @@ function wireSavedConfigsEvents(bridge) {
     openSaveConfigModal,
     saveCurrentOutput, createConfigAndSaveOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
     requestDeleteSavedOutput, cancelDeleteSavedOutput, deleteSavedOutput,
-    renderSaveOutputModal,};
+    renderSaveOutputModal,
+    startHardeningReplay, chooseHardeningReplayCompareBasis, runHardeningReplay, cancelHardeningReplay,
+    buildHardeningReplayPanelEl,};
 })();
 
 if (typeof module !== 'undefined') module.exports = SFSavedConfigsUI;
