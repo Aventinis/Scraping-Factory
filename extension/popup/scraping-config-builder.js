@@ -43,6 +43,7 @@ function parseAdditionalUrls(text) {
   return (text || '').split('\n').map(line => line.trim()).filter(line => line.length > 0);
 }
 
+
 // Issue #87: converts _state.changeDetection's editable draft shape into
 // the wire ChangeDetectionConfig, or null when disabled or not yet fully
 // configured (a required env-var-name field left blank) — buildScrapingConfig

@@ -45,6 +45,28 @@ const SFContainerTree = (function () {
     };
   }
 
+  // Issue #214: shared by container mode's modal-field-extended and flat
+  // mode's modal-field-name (both container-tree-ui.js/flat-mode-ui.js
+  // import these from here rather than scraping-config-builder.js, which
+  // loads too late in popup.html's actual <script> order to be usable from
+  // container-tree-ui.js — see classic-script-loading.test.js) — a
+  // comma-separated content-type allowlist, same "split, trim, drop blanks"
+  // shape scraping-config-builder.js's own parseAdditionalUrls already uses
+  // for a newline-separated list.
+  function parseAllowedContentTypes(text) {
+    return (text || '').split(',').map(part => part.trim()).filter(part => part.length > 0);
+  }
+
+  // Issue #214: the download safety net's max-size input is collected as MB
+  // (friendlier for a non-technical user) but the wire format/generated
+  // script work in bytes — same "convert at the UI boundary" pattern
+  // Hardening's own percent(UI)<->fraction(wire) conversion already uses.
+  // null/non-positive input means "no limit", not zero.
+  function megabytesToBytes(value) {
+    const mb = parseFloat(value);
+    return Number.isFinite(mb) && mb > 0 ? Math.round(mb * 1024 * 1024) : null;
+  }
+
   // Issue #213 follow-up: guesses which of a clicked element's own
   // attributes most likely holds a downloadable resource URL, so the
   // extension can pre-select it in the attribute picker instead of leaving
@@ -223,7 +245,7 @@ const SFContainerTree = (function () {
     buildGroupNode, buildFieldNode, resolveGroupNode, hasRepeatingAncestor,
     insertContainerNode, removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode,
     groupNodeSuffix, formatGroupNodeLabel, serializeGroupTree,
-    guessUrlAttribute,
+    guessUrlAttribute, parseAllowedContentTypes, megabytesToBytes,
   };
 })();
 

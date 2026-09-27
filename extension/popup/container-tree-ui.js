@@ -24,6 +24,7 @@ const SFContainerTreeUI = (function () {
   const {
     groupNodeSuffix, resolveGroupNode, hasRepeatingAncestor, buildFieldNode, insertContainerNode,
     removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode, guessUrlAttribute,
+    parseAllowedContentTypes, megabytesToBytes,
   } = typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
   const { transformsAreValid, addTransform } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
   const { renderTransformList, renderTransformPreview, wireTransformList } =
@@ -217,10 +218,15 @@ const SFContainerTreeUI = (function () {
     const attribute = document.getElementById('select-field-attribute')?.value.trim();
     if (mode === 'attribute' && !attribute) return;
     const download = document.getElementById('toggle-field-download')?.checked ?? false;
+    const maxDownloadSizeBytes = megabytesToBytes(document.getElementById('input-field-download-max-size')?.value);
+    const allowedContentTypes = parseAllowedContentTypes(document.getElementById('input-field-download-allowed-types')?.value);
 
     const state = bridge.getState();
     if (!transformsAreValid(state.pendingTransforms)) return;
-    const node = buildFieldNode(name, state.pendingSelector, mode, attribute, state.pendingFramePath, state.pendingTransforms, download);
+    const node = buildFieldNode(
+      name, state.pendingSelector, mode, attribute, state.pendingFramePath, state.pendingTransforms, download,
+      maxDownloadSizeBytes, allowedContentTypes,
+    );
     log('FIELD_ADD(container) confirm', node);
     bridge.setState(STATES.IDLE, {
       groups:            insertContainerNode(state.groups, state.pendingParentPath, node),
@@ -330,6 +336,11 @@ const SFContainerTreeUI = (function () {
       populateAttributeSelect(state.pendingElementAttributes);
       const downloadToggle = document.getElementById('toggle-field-download');
       if (downloadToggle) downloadToggle.checked = false;
+      document.getElementById('field-download-options')?.classList.add('hidden');
+      const maxSizeInput = document.getElementById('input-field-download-max-size');
+      if (maxSizeInput) maxSizeInput.value = '';
+      const allowedTypesInput = document.getElementById('input-field-download-allowed-types');
+      if (allowedTypesInput) allowedTypesInput.value = '';
     }
     renderMatchCountHint('field-extended-match-count', state.pendingMatchCount);
     renderTransformList('field-extended-transform-list', state.pendingTransforms);
@@ -396,6 +407,13 @@ const SFContainerTreeUI = (function () {
     if (e.key === 'Enter') confirmExtendedField(bridge);
   });
   document.getElementById('btn-field-extended-cancel')?.addEventListener('click', () => cancelExtendedField(bridge));
+  // Issue #214: the safety-net inputs only make sense once Download itself
+  // is actually checked — same "hide until relevant" treatment the
+  // attribute row already gets from the mode select just below.
+  document.getElementById('toggle-field-download')?.addEventListener('change', (e) => {
+    document.getElementById('field-download-options')?.classList.toggle('hidden', !e.target.checked);
+  });
+
   document.getElementById('select-field-mode')?.addEventListener('change', (e) => {
     document.getElementById('field-attribute-row')?.classList.toggle('hidden', e.target.value !== 'attribute');
     // Issue #84: transforms are a string post-processing pipeline — not
