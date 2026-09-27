@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.15.4](https://github.com/Aventinis/Scraping-Factory/compare/v1.15.3...v1.15.4) (2026-09-27)
+
+
+### Features
+
+* download files linked from scraped pages (Issue [#214](https://github.com/Aventinis/Scraping-Factory/issues/214)) ([b41bdc4](https://github.com/Aventinis/Scraping-Factory/commit/b41bdc4365be0b5a64a471c6b5ccc9d67c71f4ae))
+* **download:** add safety-net inputs and flat mode's attribute/download UI ([f28c138](https://github.com/Aventinis/Scraping-Factory/commit/f28c1388e5c166c27ff161726e0094644007b09c))
+* **download:** enforce max size + content-type allowlist in container mode ([381715f](https://github.com/Aventinis/Scraping-Factory/commit/381715ff1463862b2d2985443f680faa15a2c068))
+* **download:** extend Download support to flat mode's Python templates ([95b01ca](https://github.com/Aventinis/Scraping-Factory/commit/95b01caab9f524697f587043a868145dd8244008))
+* **download:** generalize Issue [#213](https://github.com/Aventinis/Scraping-Factory/issues/213)'s Download flag with a size/content-type safety net ([cdc23ca](https://github.com/Aventinis/Scraping-Factory/commit/cdc23ca54e3dc79ec43addb957ae0ddf0cb804df))
+* **download:** serialize the new safety-net fields into codegen context ([a645752](https://github.com/Aventinis/Scraping-Factory/commit/a645752eeaf14ed3df0dbfd4980878dc4dd4d30a))
+* **download:** thread the safety net + flat-mode Download through wire helpers ([51ba108](https://github.com/Aventinis/Scraping-Factory/commit/51ba108d17a003a7e50f36c41ffa67d8460cf46c))
+* **download:** wire the safety-net inputs and flat mode's new field UI ([0057139](https://github.com/Aventinis/Scraping-Factory/commit/00571396854fdad04528a305b94b6da6b0a41dfe))
+
+
+### Bug Fixes
+
+* **popup:** self-correct the tracked page URL when a selection came from a different page ([718bb67](https://github.com/Aventinis/Scraping-Factory/commit/718bb67845359d1f11698679edb79722146e5f49))
+
 ## [1.15.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.15.2...v1.15.3) (2026-09-26)
 
 
