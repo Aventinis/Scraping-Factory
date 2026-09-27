@@ -37,6 +37,15 @@ public sealed class ExtractStep : ScrapingStep
     // it's written to the output row — see IR/FieldTransform.cs. Null/empty
     // = today's behavior, the raw value unchanged.
     public List<FieldTransform>? Transforms { get; init; }
+
+    // Issue #213/#214: see DataFieldNode.Download's own doc comment — same
+    // meaning, generalized to flat mode. Only valid (and only meaningful)
+    // when Attribute is set, the flat-mode equivalent of "Mode == Attribute".
+    public bool Download { get; init; }
+
+    // See DataFieldNode.MaxDownloadSizeBytes/AllowedContentTypes.
+    public int? MaxDownloadSizeBytes { get; init; }
+    public List<string>? AllowedContentTypes { get; init; }
 }
 
 // Browser-engine only: waits for a selector to appear before continuing,
