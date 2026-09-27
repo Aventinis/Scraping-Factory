@@ -312,7 +312,13 @@
       "ownTextOption": "Own text only (excludes nested elements)",
       "attributeLabel": "Which attribute holds the value?",
       "noAttributesFound": "This element has no attributes.",
-      "downloadToggle": "Download this resource (e.g. an image) and save it locally"
+      "downloadToggle": "Download this resource/file (e.g. an image, PDF, or ZIP) and save it locally"
+    },
+    "download": {
+      "maxSizeLabel": "Max. file size (MB, optional)",
+      "maxSizePlaceholder": "No limit",
+      "allowedTypesLabel": "Allowed content types (optional, comma-separated)",
+      "allowedTypesPlaceholder": "e.g. application/pdf, application/zip"
     },
     "apiGroupNew": {
       "nameLabel": "Group name (e.g. \"Subcategory\")",

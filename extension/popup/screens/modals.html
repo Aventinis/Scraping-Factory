@@ -3,6 +3,33 @@
     <div class="modal-inner">
       <label for="input-field-name" data-i18n="modals.fieldName.label"></label>
       <input id="input-field-name" type="text" data-i18n-placeholder="modals.fieldName.placeholder" autocomplete="off" />
+      <!-- Issue #214: flat mode gains the same Attribute-mode-with-Download
+           capability container mode's own modal-field-extended already has
+           (mode select + attribute picker + download checkbox + safety
+           net) — hidden entirely in Blocks mode, which reuses this same
+           modal for its own flat draft shape but doesn't support Download
+           yet (see flat-mode-ui.js's renderFlatFieldModal). -->
+      <div id="field-name-mode-section">
+        <label for="select-field-name-mode" data-i18n="modals.fieldExtended.typeLabel"></label>
+        <select id="select-field-name-mode">
+          <option value="text" data-i18n="modals.fieldExtended.textOption"></option>
+          <option value="attribute" data-i18n="modals.fieldExtended.attributeOption"></option>
+        </select>
+        <div id="field-name-attribute-row" class="hidden">
+          <label for="select-field-name-attribute" data-i18n="modals.fieldExtended.attributeLabel"></label>
+          <select id="select-field-name-attribute"></select>
+          <label class="output-settings-toggle" id="field-name-download-toggle-row">
+            <input type="checkbox" id="toggle-field-name-download" />
+            <span data-i18n="modals.fieldExtended.downloadToggle"></span>
+          </label>
+          <div id="field-name-download-options" class="hidden">
+            <label for="input-field-name-download-max-size" data-i18n="modals.download.maxSizeLabel"></label>
+            <input id="input-field-name-download-max-size" type="number" min="0" step="any" data-i18n-placeholder="modals.download.maxSizePlaceholder" autocomplete="off" />
+            <label for="input-field-name-download-allowed-types" data-i18n="modals.download.allowedTypesLabel"></label>
+            <input id="input-field-name-download-allowed-types" type="text" data-i18n-placeholder="modals.download.allowedTypesPlaceholder" autocomplete="off" />
+          </div>
+        </div>
+      </div>
       <!-- Issue #85: live match count for the just-picked selector -->
       <p id="field-name-match-count" class="match-count-hint hidden"></p>
       <!-- Issue #84: optional per-field transform chain -->
@@ -118,6 +145,15 @@
           <input type="checkbox" id="toggle-field-download" />
           <span data-i18n="modals.fieldExtended.downloadToggle"></span>
         </label>
+        <!-- Issue #214: optional safety net alongside Download — hidden
+             unless the checkbox above is checked, mirroring the checkbox's
+             own field-attribute-row-driven visibility. -->
+        <div id="field-download-options" class="hidden">
+          <label for="input-field-download-max-size" data-i18n="modals.download.maxSizeLabel"></label>
+          <input id="input-field-download-max-size" type="number" min="0" step="any" data-i18n-placeholder="modals.download.maxSizePlaceholder" autocomplete="off" />
+          <label for="input-field-download-allowed-types" data-i18n="modals.download.allowedTypesLabel"></label>
+          <input id="input-field-download-allowed-types" type="text" data-i18n-placeholder="modals.download.allowedTypesPlaceholder" autocomplete="off" />
+        </div>
       </div>
       <!-- Issue #85: live match count for the just-picked selector -->
       <p id="field-extended-match-count" class="match-count-hint hidden"></p>

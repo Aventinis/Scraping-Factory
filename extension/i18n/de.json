@@ -312,7 +312,13 @@
       "ownTextOption": "Nur eigener Text (ohne verschachtelte Elemente)",
       "attributeLabel": "Welches Attribut enthält den Wert?",
       "noAttributesFound": "Dieses Element hat keine Attribute.",
-      "downloadToggle": "Diese Ressource (z. B. ein Bild) herunterladen und lokal speichern"
+      "downloadToggle": "Diese Ressource/Datei (z. B. ein Bild, PDF oder ZIP) herunterladen und lokal speichern"
+    },
+    "download": {
+      "maxSizeLabel": "Max. Dateigröße (MB, optional)",
+      "maxSizePlaceholder": "Kein Limit",
+      "allowedTypesLabel": "Erlaubte Content-Types (optional, kommagetrennt)",
+      "allowedTypesPlaceholder": "z. B. application/pdf, application/zip"
     },
     "apiGroupNew": {
       "nameLabel": "Name der Gruppe (z. B. \"Subkategorie\")",
