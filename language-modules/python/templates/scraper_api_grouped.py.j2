@@ -93,6 +93,12 @@ def _blueprint_chain_prefix_match(a, b):
 # repeating-ness is discovered, tracked via the module-level
 # _blueprint_resolved_chain across every call (including separate parameter
 # combinations/requests within the same run).
+#
+# Issue #206 note: same as scraper_grouped.py.j2's own
+# _resolve_flatten_leaf_value — there's no in-construction sibling element
+# to resolve a combineFields/splitField transform's own reference against
+# here, so it resolves to "" for a Blueprint-mapped field. Out of scope for
+# this first version, same as Download already is for Blueprint flattening.
 def _flatten_api_group_for_blueprint(scope, node, context, repeating_ancestors):
     global _blueprint_resolved_chain
     if "children" in node:
@@ -254,7 +260,9 @@ def _blueprint_resolve_group_chain(scope, ancestor_chain, ancestor_full_path, ta
 # the full design reasoning (list for a target group, single Element for a
 # target leaf; `top_scope` resolves a "broadcast" field — one with no
 # repeating source ancestor anywhere in its lineage — independently of the
-# current recursion depth).
+# current recursion depth). Issue #206 note: same as
+# _flatten_api_group_for_blueprint above — no sibling element to resolve a
+# combineFields/splitField transform against here.
 def _build_blueprint_node(top_scope, scope, ancestor_chain, ancestor_full_path, target_node):
     if "children" in target_node:
         row_chain = _blueprint_resolve_group_chain(scope, ancestor_chain, ancestor_full_path, target_node["children"])
@@ -731,7 +739,16 @@ def _to_date(value, source_format, on_error, default_value):
 # Applies a field's ordered transform chain (node["transform"], built by
 # PythonFieldTransformLiteral) — each step's output feeds the next step's
 # input, in the order the user configured them in.
-def _apply_transforms(value, transforms):
+def _resolve_transform_sibling(siblings, name):
+    if siblings is None:
+        return ""
+    if isinstance(siblings, dict):
+        return siblings.get(name, "")
+    found = siblings.find(name)
+    return (found.text or "") if found is not None else ""
+
+
+def _apply_transforms(value, transforms, siblings=None):
     for t in transforms:
         kind = t["kind"]
         if kind == "trim":
@@ -755,6 +772,12 @@ def _apply_transforms(value, transforms):
             value = _to_boolean(value, t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
         elif kind == "toDate":
             value = _to_date(value, t.get("sourceFormat", "{yyyy}-{mm}-{dd}"), t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
+        elif kind == "combineFields":
+            value = t.get("separator", " ").join(_resolve_transform_sibling(siblings, n) for n in t.get("sourceFieldNames", []))
+        elif kind == "splitField":
+            parts = _resolve_transform_sibling(siblings, t.get("sourceFieldName", "")).split(t.get("separator", " "))
+            idx = t.get("index", 0)
+            value = parts[idx] if 0 <= idx < len(parts) else ""
     return value
 
 
@@ -937,7 +960,7 @@ def _extract_embedded_json(response):
 # `scope` directly. One function handles any nesting depth without the
 # template needing to mirror the tree structure — the same pattern
 # extract_group() already uses for Container-Mode's CSS-selector tree.
-def _extract_api_group(scope, node):
+def _extract_api_group(scope, node, siblings=None):
     if "children" in node:
         instances = _resolve_items(scope, node["path"])
 {{~ if hardening.enabled ~}}
@@ -956,8 +979,11 @@ def _extract_api_group(scope, node):
         elements = []
         for instance in instances:
             el = ET.Element(node["name"])
+            # Issue #206: el is this group instance's own in-construction
+            # element — see scraper_grouped.py.j2's own identical doc
+            # comment on this same pattern.
             for child in node["children"]:
-                result = _extract_api_group(instance, child)
+                result = _extract_api_group(instance, child, el)
                 if isinstance(result, list):
                     el.extend(result)
                 else:
@@ -971,7 +997,7 @@ def _extract_api_group(scope, node):
 
     el = ET.Element(node["name"])
     value = _resolve_field(scope, node["path"])
-    el.text = "" if value is None else _apply_transforms(str(value), node["transform"])
+    el.text = "" if value is None else _apply_transforms(str(value), node["transform"], siblings)
     return el
 
 

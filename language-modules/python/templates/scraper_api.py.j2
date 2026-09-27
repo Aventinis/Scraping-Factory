@@ -462,7 +462,16 @@ def _to_date(value, source_format, on_error, default_value):
 # Applies a field's ordered transform chain (field["transform"], built by
 # PythonFieldTransformLiteral) — each step's output feeds the next step's
 # input, in the order the user configured them in.
-def _apply_transforms(value, transforms):
+def _resolve_transform_sibling(siblings, name):
+    if siblings is None:
+        return ""
+    if isinstance(siblings, dict):
+        return siblings.get(name, "")
+    found = siblings.find(name)
+    return (found.text or "") if found is not None else ""
+
+
+def _apply_transforms(value, transforms, siblings=None):
     for t in transforms:
         kind = t["kind"]
         if kind == "trim":
@@ -486,6 +495,12 @@ def _apply_transforms(value, transforms):
             value = _to_boolean(value, t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
         elif kind == "toDate":
             value = _to_date(value, t.get("sourceFormat", "{yyyy}-{mm}-{dd}"), t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
+        elif kind == "combineFields":
+            value = t.get("separator", " ").join(_resolve_transform_sibling(siblings, n) for n in t.get("sourceFieldNames", []))
+        elif kind == "splitField":
+            parts = _resolve_transform_sibling(siblings, t.get("sourceFieldName", "")).split(t.get("separator", " "))
+            idx = t.get("index", 0)
+            value = parts[idx] if 0 <= idx < len(parts) else ""
     return value
 
 
@@ -664,7 +679,7 @@ def _extract_row(record, combo):
     row = dict(combo)
     for field in FIELDS:
         value = _resolve_field(record, field["path"])
-        row[field["name"]] = "" if value is None else _apply_transforms(str(value), field["transform"])
+        row[field["name"]] = "" if value is None else _apply_transforms(str(value), field["transform"], row)
     return row
 
 

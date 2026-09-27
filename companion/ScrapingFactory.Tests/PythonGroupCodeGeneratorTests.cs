@@ -368,7 +368,7 @@ public class PythonGroupCodeGeneratorTests
         // generated Python source.
         Assert.Contains(""""kind": "regexExtract", "pattern": '[\\d,]+', "group": 0"""", script);
         Assert.Contains("""{"kind": "toNumber"}""", script);
-        Assert.Contains("def _apply_transforms(value, transforms):", script);
+        Assert.Contains("def _apply_transforms(value, transforms, siblings=None):", script);
     }
 
     [Fact]
@@ -401,7 +401,7 @@ public class PythonGroupCodeGeneratorTests
     public void Generate_ContainsRecursiveExtractGroupFunction()
     {
         var script = _generator.Generate(NestedGroupPlan());
-        Assert.Contains("def extract_group(scope, node, base_url):", script);
+        Assert.Contains("def extract_group(scope, node, base_url, siblings=None):", script);
         Assert.Contains("scope.select(node[\"selector\"])", script);
         Assert.Contains("scope.select_one(node[\"selector\"])", script);
     }

@@ -458,7 +458,10 @@ def _blueprint_subtree_has_mapped_field(node):
 # leaf branch — see scraper_grouped.py.j2's identical-in-spirit
 # _resolve_flatten_leaf_value for the full "why a separate function"
 # reasoning, including the Issue #213 note that Download is deliberately
-# not applied here (a flattened Output Blueprint row keeps the raw URL).
+# not applied here (a flattened Output Blueprint row keeps the raw URL), and
+# the Issue #206 note that a combineFields/splitField transform has no
+# sibling element to resolve against here either (see scraper_grouped.py.j2's
+# own identical doc comment).
 # Uses _resolve_field_match (defined further below, resolved lazily at
 # call time — Python doesn't require def order to match call order) so
 # FramePath-scoped fields work here exactly like they do for
@@ -697,7 +700,16 @@ def _to_date(value, source_format, on_error, default_value):
 # PythonFieldTransformLiteral) — each step's output feeds the next step's
 # input, in the order the user configured them in. Not called for
 # node["mode"] == "exists" — see extract_group below.
-def _apply_transforms(value, transforms):
+def _resolve_transform_sibling(siblings, name):
+    if siblings is None:
+        return ""
+    if isinstance(siblings, dict):
+        return siblings.get(name, "")
+    found = siblings.find(name)
+    return (found.text or "") if found is not None else ""
+
+
+def _apply_transforms(value, transforms, siblings=None):
     for t in transforms:
         kind = t["kind"]
         if kind == "trim":
@@ -721,6 +733,12 @@ def _apply_transforms(value, transforms):
             value = _to_boolean(value, t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
         elif kind == "toDate":
             value = _to_date(value, t.get("sourceFormat", "{yyyy}-{mm}-{dd}"), t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
+        elif kind == "combineFields":
+            value = t.get("separator", " ").join(_resolve_transform_sibling(siblings, n) for n in t.get("sourceFieldNames", []))
+        elif kind == "splitField":
+            parts = _resolve_transform_sibling(siblings, t.get("sourceFieldName", "")).split(t.get("separator", " "))
+            idx = t.get("index", 0)
+            value = parts[idx] if 0 <= idx < len(parts) else ""
     return value
 
 
@@ -779,15 +797,18 @@ def _resolve_field_match(page, scope, node):
 # closure capture) purely so frame_path resolution — always relative to the
 # top-level page, never to `scope` — has something to resolve from
 # regardless of how deep the current recursion already is.
-def extract_group(page, scope, node):
+def extract_group(page, scope, node, siblings=None):
     if "children" in node:
         matches = _resolve_group_matches(page, scope, node)
 
         elements = []
         for match in matches:
             el = ET.Element(node["name"])
+            # Issue #206: el is this group instance's own in-construction
+            # element — see scraper_grouped.py.j2's own identical doc
+            # comment on this same pattern.
             for child in node["children"]:
-                result = extract_group(page, match, child)
+                result = extract_group(page, match, child, el)
                 if isinstance(result, list):
                     el.extend(result)
                 else:
@@ -806,7 +827,7 @@ def extract_group(page, scope, node):
     elif found is None:
         el.text = ""
     elif node["mode"] == "attribute":
-        value = _apply_transforms(found.get_attribute(node["attribute"]) or "", node["transform"])
+        value = _apply_transforms(found.get_attribute(node["attribute"]) or "", node["transform"], siblings)
         # Issue #213: see scraper_grouped.py.j2's own identical doc comment —
         # applied after transforms, replaces the raw URL with its own
         # downloaded local file path.
@@ -820,9 +841,9 @@ def extract_group(page, scope, node):
         own_text = found.evaluate(
             "el => Array.from(el.childNodes).filter(n => n.nodeType === 3).map(n => n.textContent).join('')"
         ).strip()
-        el.text = _apply_transforms(own_text, node["transform"])
+        el.text = _apply_transforms(own_text, node["transform"], siblings)
     else:
-        el.text = _apply_transforms((found.text_content() or "").strip(), node["transform"])
+        el.text = _apply_transforms((found.text_content() or "").strip(), node["transform"], siblings)
     return el
 
 
