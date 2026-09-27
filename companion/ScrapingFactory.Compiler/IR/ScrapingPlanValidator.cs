@@ -273,6 +273,7 @@ public static class ScrapingPlanValidator
         if (extractSteps.Count == 0)
             return Invalid("Plan must contain at least one ExtractStep.");
 
+        var precedingFieldNames = new List<string>();
         foreach (var step in extractSteps)
         {
             if (string.IsNullOrWhiteSpace(step.Name))
@@ -290,6 +291,11 @@ public static class ScrapingPlanValidator
             var transformError = FieldTransformValidator.Validate(step.Transforms, $"field '{step.Name}'");
             if (transformError is not null)
                 return Invalid(transformError);
+
+            var orderError = ValidateFieldTransformOrdering(step.Transforms, step.Name, precedingFieldNames, $"field '{step.Name}'");
+            if (orderError is not null)
+                return Invalid(orderError);
+            precedingFieldNames.Add(step.Name);
 
             // Issue #213/#214: same rule as DataFieldNode's own Download —
             // there's no URL value to download unless the field is actually
@@ -319,6 +325,45 @@ public static class ScrapingPlanValidator
         }
 
         return new PlanValidationResult { Success = true };
+    }
+
+    // Issue #206: CombineFieldsTransform/SplitFieldTransform reference
+    // another field's own already-computed value by name (see
+    // FieldTransform.cs's own doc comment) — the runtime only ever has that
+    // value available once extraction has already reached that sibling, so
+    // the referenced name must be a field declared *earlier* in the very
+    // same list precedingSiblingNames represents. Callers reset this list
+    // per scope: the whole field list for flat/Api-flat mode, or just one
+    // group's own Children for container/Api-tree mode (siblings under a
+    // *different* parent group are out of scope entirely, mirroring how the
+    // Python runtime only ever has the current scope's own in-progress
+    // values on hand — see CLAUDE.md's Python Templates section).
+    private static string? ValidateFieldTransformOrdering(IReadOnlyList<FieldTransform>? transforms, string fieldName, IReadOnlyList<string> precedingSiblingNames, string fieldLabel)
+    {
+        if (transforms is null)
+            return null;
+
+        foreach (var transform in transforms)
+        {
+            IReadOnlyList<string>? referenced = transform switch
+            {
+                CombineFieldsTransform combine => combine.SourceFieldNames,
+                SplitFieldTransform split => new[] { split.SourceFieldName },
+                _ => null,
+            };
+            if (referenced is null)
+                continue;
+
+            foreach (var name in referenced)
+            {
+                if (name == fieldName)
+                    return $"{fieldLabel}: a combine/split transform cannot reference its own field.";
+                if (!precedingSiblingNames.Contains(name))
+                    return $"{fieldLabel}: combine/split transform references '{name}', which must be another field declared earlier in the same list.";
+            }
+        }
+
+        return null;
     }
 
     // Issue #191: availableSourceFields is the mode's own already-resolved
@@ -474,6 +519,11 @@ public static class ScrapingPlanValidator
     // real Python exception via PythonScriptVerifier, not here.
     private static string? ValidateContainerNodes(IEnumerable<ContainerNode> nodes, ScrapingEngine engine)
     {
+        // Issue #206: one scope per call (a fresh ValidateContainerNodes
+        // call per group's own Children) — a combine/split transform can
+        // only reference a sibling DataFieldNode already declared earlier
+        // within this exact scope, never a node under a different group.
+        var precedingFieldNames = new List<string>();
         foreach (var node in nodes)
         {
             if (string.IsNullOrWhiteSpace(node.Name))
@@ -508,6 +558,10 @@ public static class ScrapingPlanValidator
                     var fieldTransformError = FieldTransformValidator.Validate(field.Transforms, $"data field '{field.Name}'");
                     if (fieldTransformError is not null)
                         return fieldTransformError;
+                    var orderError = ValidateFieldTransformOrdering(field.Transforms, field.Name, precedingFieldNames, $"data field '{field.Name}'");
+                    if (orderError is not null)
+                        return orderError;
+                    precedingFieldNames.Add(field.Name);
                     break;
             }
         }
@@ -523,6 +577,10 @@ public static class ScrapingPlanValidator
     // would silently extract nothing.
     private static string? ValidateApiNodes(IEnumerable<ApiNode> nodes)
     {
+        // Issue #206: same per-scope tracking as ValidateContainerNodes —
+        // a combine/split transform can only reference a sibling ApiField
+        // already declared earlier within this exact group's own Children.
+        var precedingFieldNames = new List<string>();
         foreach (var node in nodes)
         {
             if (string.IsNullOrWhiteSpace(node.Name))
@@ -544,6 +602,10 @@ public static class ScrapingPlanValidator
                     var apiFieldTransformError = FieldTransformValidator.Validate(field.Transforms, $"field '{field.Name}'");
                     if (apiFieldTransformError is not null)
                         return apiFieldTransformError;
+                    var orderError = ValidateFieldTransformOrdering(field.Transforms, field.Name, precedingFieldNames, $"field '{field.Name}'");
+                    if (orderError is not null)
+                        return orderError;
+                    precedingFieldNames.Add(field.Name);
                     break;
             }
         }
@@ -690,6 +752,7 @@ public static class ScrapingPlanValidator
             if (api.Fields.Count == 0)
                 return "Api configuration must contain at least one field.";
 
+            var precedingFieldNames = new List<string>();
             foreach (var field in api.Fields)
             {
                 if (string.IsNullOrWhiteSpace(field.Name))
@@ -699,6 +762,10 @@ public static class ScrapingPlanValidator
                 var transformError = FieldTransformValidator.Validate(field.Transforms, $"field '{field.Name}'");
                 if (transformError is not null)
                     return transformError;
+                var orderError = ValidateFieldTransformOrdering(field.Transforms, field.Name, precedingFieldNames, $"field '{field.Name}'");
+                if (orderError is not null)
+                    return orderError;
+                precedingFieldNames.Add(field.Name);
             }
 
             var duplicateFieldNames = FindDuplicates(api.Fields, field => field.Name);
@@ -989,6 +1056,7 @@ public static class ScrapingPlanValidator
             }
             else if (block.Fields is { Count: > 0 } fields)
             {
+                var precedingFieldNames = new List<string>();
                 foreach (var step in fields)
                 {
                     if (string.IsNullOrWhiteSpace(step.Name))
@@ -1001,6 +1069,10 @@ public static class ScrapingPlanValidator
                     var transformError = FieldTransformValidator.Validate(step.Transforms, $"field '{step.Name}' in block '{block.Name}'");
                     if (transformError is not null)
                         return transformError;
+                    var orderError = ValidateFieldTransformOrdering(step.Transforms, step.Name, precedingFieldNames, $"field '{step.Name}' in block '{block.Name}'");
+                    if (orderError is not null)
+                        return orderError;
+                    precedingFieldNames.Add(step.Name);
                 }
 
                 var duplicateFieldNames = FindDuplicates(fields, step => step.Name);
