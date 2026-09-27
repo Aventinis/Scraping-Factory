@@ -119,9 +119,9 @@ app.MapDelete("/configs/{id:long}", (long id, SavedConfigStore store) =>
 // to /configs above. Explicit, opt-in "Save output" action mirroring "Save
 // configuration"'s own opt-in nature, not automatic/implicit saving of every
 // run. Same local/opt-in trust boundary as /configs — nothing here leaves
-// the user's machine. Deliberately does not evaluate hardening checks
-// against a saved output — that's its own issue (#207), since hardening
-// today only ever runs live, inside the generated script itself.
+// the user's machine. Replaying hardening checks against a saved output
+// (once its own separate issue, #207) is its own endpoint further down —
+// see /configs/{configId}/outputs/{id}/replay-hardening below.
 app.MapPost("/configs/{configId:long}/outputs", (long configId, SaveOutputRequest? request, SavedConfigStore store) =>
 {
     if (store.Get(configId) is null)
@@ -161,6 +161,68 @@ app.MapDelete("/configs/{configId:long}/outputs/{id:long}", (long configId, long
         return Results.NotFound(new { error = "Saved output not found." });
 
     return store.DeleteOutput(id) ? Results.NoContent() : Results.NotFound();
+});
+
+// Issue #207: replays hardening checks against this already-saved output —
+// a popup-driven, on-demand analysis/tuning aid, resolved above by this same
+// comment on /configs/{configId}/outputs' own doc comment. Never touches the
+// generated .py script or any of its templates; HardeningReplayEvaluator is
+// the one source of truth for the actual per-check logic, mirrored from
+// (not reimplemented independently of) the Python templates' own runtime
+// helpers. checks is exactly ScrapingConfig.Hardening's own wire shape — the
+// extension sends whatever's currently configured live in its own popup
+// (via buildHardeningConfig), not necessarily what was saved with this
+// output originally, per the issue's own "what would today's checks report"
+// framing.
+app.MapPost("/configs/{configId:long}/outputs/{id:long}/replay-hardening",
+    (long configId, long id, ReplayHardeningRequest? request, SavedConfigStore store) =>
+{
+    var output = store.GetOutput(id);
+    if (output is null || output.SavedConfigId != configId)
+        return Results.NotFound(new { error = "Saved output not found." });
+
+    if (request?.Checks is not { Count: > 0 })
+        return Results.BadRequest(new { error = "At least one hardening check is required." });
+
+    // Only resolved when a BaselineCheck is actually present — every other
+    // check kind needs nothing beyond the one output being evaluated.
+    int? previousResultCount = null;
+    string? previousUnavailableReason = null;
+    if (request.Checks.Any(check => check is BaselineCheck))
+    {
+        SavedOutputSummary? previous;
+        if (request.CompareBasis == "blueprint")
+        {
+            var config = store.Get(configId);
+            if (config?.BlueprintId is { } blueprintId)
+            {
+                previous = store.GetMostRecentOutputForBlueprint(blueprintId, excludeOutputId: id);
+            }
+            else
+            {
+                previous = null;
+                previousUnavailableReason = "This configuration has no Output Blueprint set — pick \"same configuration\" instead, or set a Blueprint first.";
+            }
+        }
+        else
+        {
+            previous = store.GetMostRecentOutputForConfig(configId, excludeOutputId: id);
+        }
+
+        if (previous is not null)
+        {
+            var previousRecord = store.GetOutput(previous.Id)!;
+            previousResultCount = HardeningReplayEvaluator.GetResultCount(previousRecord.FileName, previousRecord.Content);
+        }
+        else
+        {
+            previousUnavailableReason ??= "No earlier saved output is available to compare against.";
+        }
+    }
+
+    var results = HardeningReplayEvaluator.Evaluate(
+        request.Checks, output.FileName, output.Content, previousResultCount, previousUnavailableReason);
+    return Results.Ok(new { results });
 });
 
 // Issue #191: Output Blueprints — a small local CRUD store of named,
@@ -618,6 +680,18 @@ public sealed class SaveOutputRequest
     public string? Name { get; set; }
     public string? FileName { get; set; }
     public string? Content { get; set; }
+}
+
+// Issue #207: POST /configs/{configId}/outputs/{id}/replay-hardening body —
+// Checks reuses ScrapingConfig.Hardening's own polymorphic wire shape
+// verbatim (the extension sends buildHardeningConfig's own output, exactly
+// as a real /generate request would). CompareBasis is only meaningful
+// when Checks includes a BaselineCheck — "config" (default when
+// null/anything else) or "blueprint".
+public sealed class ReplayHardeningRequest
+{
+    public List<HardeningCheck>? Checks { get; set; }
+    public string? CompareBasis { get; set; }
 }
 
 // Issue #191: POST/PUT /blueprints body.
