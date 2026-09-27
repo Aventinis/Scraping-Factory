@@ -266,6 +266,85 @@ public class ScrapingPlanValidatorTests
         Assert.Contains("Selector", result.Error);
     }
 
+    // ── Issue #213/#214: flat-mode Download ──────────────────────────────
+
+    [Fact]
+    public void Validate_FlatFieldDownloadWithoutAttribute_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ExtractStep { Name = "Link", Selector = "a", Download = true }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("attribute", result.Error);
+        Assert.Contains("Link", result.Error);
+    }
+
+    [Fact]
+    public void Validate_FlatFieldDownloadWithAttribute_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ExtractStep { Name = "Link", Selector = "a", Attribute = "href", Download = true }],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Validate_FlatFieldDownloadWithNonPositiveMaxSize_Fails(int maxSize)
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ExtractStep { Name = "Link", Selector = "a", Attribute = "href", Download = true, MaxDownloadSizeBytes = maxSize },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Max download size", result.Error);
+    }
+
+    [Fact]
+    public void Validate_FlatFieldDownloadWithBlankAllowedContentTypeEntry_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ExtractStep { Name = "Link", Selector = "a", Attribute = "href", Download = true, AllowedContentTypes = ["application/pdf", " "] },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Allowed content type", result.Error);
+    }
+
+    [Fact]
+    public void Validate_FlatFieldDownloadWithSafetyNet_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ExtractStep
+                {
+                    Name = "Link", Selector = "a", Attribute = "href", Download = true,
+                    MaxDownloadSizeBytes = 1024, AllowedContentTypes = ["application/pdf", "application/zip"],
+                },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
     // ── Issue #84: field transform chains ────────────────────────────────
 
     [Fact]
@@ -1093,6 +1172,62 @@ public class ScrapingPlanValidatorTests
         Assert.False(result.Success);
         Assert.Contains("attribute", result.Error);
         Assert.Contains("Link", result.Error);
+    }
+
+    // ── Issue #214: container-mode Download safety net ──────────────────────
+
+    [Fact]
+    public void Validate_ContainerFieldDownloadWithNonPositiveMaxSize_Fails()
+    {
+        var roots = new List<GroupNode>
+        {
+            new()
+            {
+                Name = "Kategorie", Selector = "section", Repeating = true,
+                Children = [new DataFieldNode { Name = "Link", Selector = "a", Mode = ExtractMode.Attribute, Attribute = "href", Download = true, MaxDownloadSizeBytes = 0 }],
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(GroupPlan(roots));
+        Assert.False(result.Success);
+        Assert.Contains("Max download size", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ContainerFieldDownloadWithBlankAllowedContentTypeEntry_Fails()
+    {
+        var roots = new List<GroupNode>
+        {
+            new()
+            {
+                Name = "Kategorie", Selector = "section", Repeating = true,
+                Children = [new DataFieldNode { Name = "Link", Selector = "a", Mode = ExtractMode.Attribute, Attribute = "href", Download = true, AllowedContentTypes = [""] }],
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(GroupPlan(roots));
+        Assert.False(result.Success);
+        Assert.Contains("Allowed content type", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ContainerFieldDownloadWithSafetyNet_Succeeds()
+    {
+        var roots = new List<GroupNode>
+        {
+            new()
+            {
+                Name = "Kategorie", Selector = "section", Repeating = true,
+                Children =
+                [
+                    new DataFieldNode
+                    {
+                        Name = "Link", Selector = "a", Mode = ExtractMode.Attribute, Attribute = "href", Download = true,
+                        MaxDownloadSizeBytes = 2048, AllowedContentTypes = ["application/pdf"],
+                    },
+                ],
+            },
+        };
+        var result = ScrapingPlanValidator.Validate(GroupPlan(roots));
+        Assert.True(result.Success, result.Error);
     }
 
     // ── Container-Mode FramePath (Issue #42, Phase 3) ───────────────────────
