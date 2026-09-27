@@ -85,6 +85,7 @@ test('ELEMENT_SELECTED stores selector in session storage', async () => {
     pendingRawText: null,
     pendingElementAttributes: null,
     pendingOwnText: null,
+    pendingUrl: null,
   });
 });
 
@@ -104,6 +105,7 @@ test('ELEMENT_SELECTED with a framePath stores it alongside the selector', async
     pendingRawText: null,
     pendingElementAttributes: null,
     pendingOwnText: null,
+    pendingUrl: null,
   });
 });
 
@@ -122,6 +124,7 @@ test('ELEMENT_SELECTED with a matchCount stores it alongside the selector', asyn
     pendingRawText: null,
     pendingElementAttributes: null,
     pendingOwnText: null,
+    pendingUrl: null,
   });
 });
 
@@ -140,6 +143,7 @@ test('ELEMENT_SELECTED with rawText/attributes stores them alongside the selecto
     pendingRawText: 'Preis: 12,99 €',
     pendingElementAttributes: { 'data-id': '42' },
     pendingOwnText: null,
+    pendingUrl: null,
   });
 });
 
@@ -157,6 +161,29 @@ test('ELEMENT_SELECTED with ownText stores it alongside the selector', async () 
     pendingRawText: null,
     pendingElementAttributes: null,
     pendingOwnText: 'Burrata mit Tomaten',
+    pendingUrl: null,
+  });
+});
+
+// Issue: side panel's tracked _state.url only gets set once at panel-load/
+// companion-connection time — no chrome.tabs.onUpdated listener exists
+// anywhere in this extension, so it silently goes stale if the same tab
+// navigates to a different page while the panel stays open. The selection's
+// own page (message.url) is persisted alongside the rest of the pending
+// state so session-restore.js can self-correct on a popup reopen.
+test('ELEMENT_SELECTED with url stores it alongside the selector', async () => {
+  capturedListener({ type: 'ELEMENT_SELECTED', selector: 'a.download', url: 'https://example.com/other-page' }, {});
+
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  expect(chrome.storage.session.set).toHaveBeenCalledWith({
+    pendingSelector: 'a.download',
+    pendingFramePath: null,
+    pendingMatchCount: null,
+    pendingRawText: null,
+    pendingElementAttributes: null,
+    pendingOwnText: null,
+    pendingUrl: 'https://example.com/other-page',
   });
 });
 

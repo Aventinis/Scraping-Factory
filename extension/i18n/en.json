@@ -378,6 +378,7 @@
     "selectionUnavailable": "Element selection isn't possible on this page.",
     "scopeSelectorNotFound": "The selected reference point could no longer be found — the page changed in the meantime (e.g. a hover or loading state). Please try again or pick a different starting point.",
     "clickOutsideScope": "Please select an element inside a container.",
+    "trackedUrlUpdated": "Tracked page updated to {url} — the element you just picked came from a different page than before.",
     "previewUnavailable": "Preview isn't possible on this page.",
     "captureUnavailable": "Network recording isn't possible on this page.",
     "invalidCompanionUrl": "Invalid address — please include http:// or https://.",

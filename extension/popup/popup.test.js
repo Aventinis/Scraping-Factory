@@ -3226,6 +3226,46 @@ describe('Live selector match-count preview (Issue #85)', () => {
     expect(document.getElementById('field-name-match-count').classList.contains('hidden')).toBe(true);
   });
 
+  // Issue: the side panel's tracked _state.url only ever gets set once at
+  // panel-load/companion-connection time (chrome.tabs.query, see this
+  // describe block's own beforeEach: "https://example.com") — there's no
+  // chrome.tabs.onUpdated listener anywhere in this extension, so it
+  // silently goes stale if the same tab navigates to a different page while
+  // the panel stays open. message-router.js self-corrects the instant a
+  // selection carries a different page's own url.
+  describe('stale tracked URL self-correction', () => {
+    test('updates the tracked url and shows an info toast when the picked element came from a different page', () => {
+      document.getElementById('btn-add-field').click();
+      capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item', url: 'https://example.com/other-page' });
+
+      const toast = document.getElementById('error-toast');
+      expect(toast.classList.contains('hidden')).toBe(false);
+      expect(toast.classList.contains('toast-info')).toBe(true);
+      expect(document.getElementById('error-toast-message').textContent).toContain('https://example.com/other-page');
+
+      // Cancel back to the idle screen — #url-display re-renders from the
+      // now-corrected _state.url.
+      document.getElementById('btn-field-cancel').click();
+      expect(document.getElementById('url-display').textContent).toBe('https://example.com/other-page');
+    });
+
+    test('does nothing when the picked element came from the already-tracked page', () => {
+      document.getElementById('btn-add-field').click();
+      capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item', url: 'https://example.com' });
+
+      expect(document.getElementById('error-toast').classList.contains('hidden')).toBe(true);
+      document.getElementById('btn-field-cancel').click();
+      expect(document.getElementById('url-display').textContent).toBe('https://example.com');
+    });
+
+    test('does nothing when the message carries no url at all (older content-script parity)', () => {
+      document.getElementById('btn-add-field').click();
+      capturedListener({ type: 'ELEMENT_SELECTED', selector: 'li.item' });
+
+      expect(document.getElementById('error-toast').classList.contains('hidden')).toBe(true);
+    });
+  });
+
   test('a container field pick shows the match count in the extended modal', async () => {
     document.getElementById('btn-mode-container').click();
     document.getElementById('btn-add-root-container').click();
