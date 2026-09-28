@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.15.6](https://github.com/Aventinis/Scraping-Factory/compare/v1.15.5...v1.15.6) (2026-09-28)
+
+
+### Features
+
+* **field-transforms:** add combineFields/splitField editor UI, scoped to same-parent-group siblings ([21aa7b6](https://github.com/Aventinis/Scraping-Factory/commit/21aa7b69bbebf56fd5ca6259729923628e9ca85c))
+* **field-transforms:** add CombineFieldsTransform/SplitFieldTransform IR types ([5ff2b7c](https://github.com/Aventinis/Scraping-Factory/commit/5ff2b7ce523dc34d5462c360ec36df7d5b1fc874))
+* **field-transforms:** combine/split field mapping for Output Blueprints ([#206](https://github.com/Aventinis/Scraping-Factory/issues/206)) ([e647c67](https://github.com/Aventinis/Scraping-Factory/commit/e647c67d2330b2781bb54e7f6074cf85047e3c38))
+* **field-transforms:** implement combineFields/splitField transforms in all 8 Python templates ([c4013e1](https://github.com/Aventinis/Scraping-Factory/commit/c4013e1427dfb1fb1dd46a18eae4077a082acd39))
+* **field-transforms:** make combineFields/splitField fields selector-less, add HiddenFromOutput ([056ae6a](https://github.com/Aventinis/Scraping-Factory/commit/056ae6ac3c93b7a7338ff89a7a44d87050e467b8))
+* **field-transforms:** replace combine/split transform-kind UI with dedicated creation flow ([3a555b8](https://github.com/Aventinis/Scraping-Factory/commit/3a555b81877580cf231dbc91af1136074aa8eadb))
+* **field-transforms:** validate combine/split transforms structurally and against sibling ordering ([f48c08c](https://github.com/Aventinis/Scraping-Factory/commit/f48c08cb2dc5d759cc833b80bbef5aed056ec0de))
+
 ## [1.15.5](https://github.com/Aventinis/Scraping-Factory/compare/v1.15.4...v1.15.5) (2026-09-27)
 
 
