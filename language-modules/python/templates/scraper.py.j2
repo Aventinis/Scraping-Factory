@@ -445,6 +445,17 @@ ALLOWED_CONTENT_TYPES = {
 {{- end }}
 }
 
+# Issue #206 follow-up: field names whose value is still computed (so a
+# combineFields/splitField transform elsewhere can still reference it via
+# the usual sibling lookup) but excluded from the written output — set only
+# through the extension's "remove original field(s)" checkbox on the
+# combine/split field creation modal.
+HIDDEN_FIELD_NAMES = {
+{{- for field in config.fields }}{{- if field.hidden_from_output }}
+    "{{ field.name }}",
+{{- end }}{{- end }}
+}
+
 # Issue #191: optional Output Blueprint field mapping — ordered
 # target-field -> source-field pairs. When set, this replaces
 # FIELD_OUTPUT_NAMES for the write-time remap below entirely: the output's
@@ -654,13 +665,22 @@ def _notify_change(old_content, new_content):
 
 
 def _extract_page_rows(soup, base_url):
-    columns = {name: soup.select(sel) for name, sel in SELECTORS.items()}
+    # Issue #206 follow-up: a field derived from a combineFields/splitField
+    # transform has no selector of its own (SELECTORS[name] == "") — it's
+    # excluded from the selector-match zip below and instead computed once
+    # per row, in SELECTORS' own declaration order, from whatever sibling
+    # values are already in `row` by that point.
+    columns = {name: soup.select(sel) for name, sel in SELECTORS.items() if sel}
     n = max((len(v) for v in columns.values()), default=0)
 
     rows = []
     for i in range(n):
         row = {}
-        for name, elements in columns.items():
+        for name in SELECTORS:
+            if name not in columns:
+                row[name] = _apply_transforms("", TRANSFORMS.get(name, []), row)
+                continue
+            elements = columns[name]
             if i < len(elements):
                 attr = ATTRIBUTES.get(name)
                 raw_value = elements[i].get(attr, "").strip() if attr else elements[i].get_text(strip=True)
@@ -739,8 +759,16 @@ def main():
         output_rows = [{m["target"]: row.get(m["source"], "") for m in BLUEPRINT_MAPPING} for row in data]
         output_fieldnames = [m["target"] for m in BLUEPRINT_MAPPING]
     else:
-        output_rows = [{FIELD_OUTPUT_NAMES.get(k, k): v for k, v in row.items()} for row in data]
-        output_fieldnames = [FIELD_OUTPUT_NAMES.get(name, name) for name in SELECTORS.keys()]
+        # Issue #206 follow-up: a HiddenFromOutput field is dropped here —
+        # at the write-time projection only, same as FIELD_OUTPUT_NAMES —
+        # never from `data` itself, which hardening/change detection (and
+        # any combineFields/splitField transform referencing it) still need
+        # to see under its real name.
+        output_rows = [
+            {FIELD_OUTPUT_NAMES.get(k, k): v for k, v in row.items() if k not in HIDDEN_FIELD_NAMES}
+            for row in data
+        ]
+        output_fieldnames = [FIELD_OUTPUT_NAMES.get(name, name) for name in SELECTORS.keys() if name not in HIDDEN_FIELD_NAMES]
 {{~ if config.output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(output_rows, f, ensure_ascii=False, indent=2)

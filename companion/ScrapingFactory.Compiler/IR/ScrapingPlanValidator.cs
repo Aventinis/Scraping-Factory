@@ -278,7 +278,7 @@ public static class ScrapingPlanValidator
         {
             if (string.IsNullOrWhiteSpace(step.Name))
                 return Invalid("Field name must not be empty.");
-            if (string.IsNullOrWhiteSpace(step.Selector))
+            if (string.IsNullOrWhiteSpace(step.Selector) && !IsDerivedField(step.Transforms))
                 return Invalid($"Selector for field '{step.Name}' must not be empty.");
 
             // FramePath is Browser-engine-only, unlike ExtractStep itself
@@ -338,6 +338,17 @@ public static class ScrapingPlanValidator
     // *different* parent group are out of scope entirely, mirroring how the
     // Python runtime only ever has the current scope's own in-progress
     // values on hand — see CLAUDE.md's Python Templates section).
+    // Issue #206 follow-up: a field whose entire value comes from a
+    // combineFields/splitField transform has no DOM value/JSON path of its
+    // own to select — the extension's dedicated creation flow for these two
+    // kinds never collects one, so Selector/Path is allowed to be blank
+    // precisely (and only) in this case. Must be the *first* transform —
+    // that's already the only shape the extension ever produces (a derived
+    // field carries exactly one transform), and requiring it here instead
+    // of "anywhere in the chain" keeps the check cheap and unambiguous.
+    private static bool IsDerivedField(IReadOnlyList<FieldTransform>? transforms) =>
+        transforms is { Count: > 0 } && transforms[0] is CombineFieldsTransform or SplitFieldTransform;
+
     private static string? ValidateFieldTransformOrdering(IReadOnlyList<FieldTransform>? transforms, string fieldName, IReadOnlyList<string> precedingSiblingNames, string fieldLabel)
     {
         if (transforms is null)
@@ -543,7 +554,7 @@ public static class ScrapingPlanValidator
                     break;
 
                 case DataFieldNode field:
-                    if (string.IsNullOrWhiteSpace(field.Selector))
+                    if (string.IsNullOrWhiteSpace(field.Selector) && !IsDerivedField(field.Transforms))
                         return $"Selector of data field '{field.Name}' must not be empty.";
                     if (field.Mode == ExtractMode.Attribute && string.IsNullOrWhiteSpace(field.Attribute))
                         return $"Data field '{field.Name}' with mode 'Attribute' needs an attribute.";
@@ -597,7 +608,7 @@ public static class ScrapingPlanValidator
                     break;
 
                 case ApiField field:
-                    if (string.IsNullOrWhiteSpace(field.Path))
+                    if (string.IsNullOrWhiteSpace(field.Path) && !IsDerivedField(field.Transforms))
                         return $"Path of field '{field.Name}' must not be empty.";
                     var apiFieldTransformError = FieldTransformValidator.Validate(field.Transforms, $"field '{field.Name}'");
                     if (apiFieldTransformError is not null)
@@ -757,7 +768,7 @@ public static class ScrapingPlanValidator
             {
                 if (string.IsNullOrWhiteSpace(field.Name))
                     return "Field name must not be empty.";
-                if (string.IsNullOrWhiteSpace(field.Path))
+                if (string.IsNullOrWhiteSpace(field.Path) && !IsDerivedField(field.Transforms))
                     return $"Path for field '{field.Name}' must not be empty.";
                 var transformError = FieldTransformValidator.Validate(field.Transforms, $"field '{field.Name}'");
                 if (transformError is not null)

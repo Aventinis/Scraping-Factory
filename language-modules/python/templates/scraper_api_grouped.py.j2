@@ -45,6 +45,23 @@ URL_TEMPLATE = {{ url_template_literal }}
 METHOD = {{ method_literal }}
 BODY = {{ body_literal }}
 GROUPS = {{ groups_literal }}
+
+# Issue #206 follow-up — see scraper_grouped.py.j2's own identical
+# HIDDEN_FIELD_NAMES/_tree_without_hidden_fields doc comments.
+HIDDEN_FIELD_NAMES = set({{ hidden_field_names_literal }})
+
+
+def _tree_without_hidden_fields(el):
+    if not HIDDEN_FIELD_NAMES:
+        return el
+    clone = ET.Element(el.tag, el.attrib)
+    clone.text = el.text
+    for child in el:
+        if child.tag not in HIDDEN_FIELD_NAMES:
+            clone.append(_tree_without_hidden_fields(child))
+    return clone
+
+
 PARAMETERS = {{ parameters_literal }}
 HEADERS = {{ headers_literal }}
 # Issue #136 (embedded JSON source): None for an ordinary live API call. When
@@ -996,6 +1013,16 @@ def _extract_api_group(scope, node, siblings=None):
         return elements
 
     el = ET.Element(node["name"])
+    # Issue #206 follow-up: a derived (combineFields/splitField) field has
+    # no path of its own — _resolve_json_path("") would otherwise resolve to
+    # the whole scope object rather than "nothing found", so this is
+    # guarded explicitly rather than relying on that coincidence. The
+    # transform chain still always runs (its own combine/split branch
+    # ignores the "" passed here and reads siblings instead), unlike the
+    # ordinary "path resolved to nothing" case just below.
+    if not node["path"]:
+        el.text = _apply_transforms("", node["transform"], siblings)
+        return el
     value = _resolve_field(scope, node["path"])
     el.text = "" if value is None else _apply_transforms(str(value), node["transform"], siblings)
     return el
@@ -1178,12 +1205,13 @@ def main():
 {{~ end ~}}
     count = len(blueprint_tree_root.findall(".//*"))
 {{~ else ~}}
+    output_root = _tree_without_hidden_fields(root)
 {{~ if output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(_xml_to_dict(root), f, ensure_ascii=False, indent=2)
+        json.dump(_xml_to_dict(output_root), f, ensure_ascii=False, indent=2)
     count = len(root.findall(".//*"))
 {{~ else ~}}
-    tree = ET.ElementTree(root)
+    tree = ET.ElementTree(output_root)
     ET.indent(tree)
     tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
     count = len(root.findall(".//*"))

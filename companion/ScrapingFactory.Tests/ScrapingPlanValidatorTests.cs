@@ -440,6 +440,80 @@ public class ScrapingPlanValidatorTests
         Assert.True(result.Success, result.Error);
     }
 
+    // Issue #206 follow-up: the dedicated combine/split creation flow never
+    // collects a Selector at all — Selector may be blank precisely (and
+    // only) when the field's own Transforms starts with combineFields/
+    // splitField.
+    [Fact]
+    public void Validate_CombineFieldsWithBlankSelector_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ExtractStep { Name = "Strasse", Selector = ".street" },
+                new ExtractStep { Name = "Hausnummer", Selector = ".house-number" },
+                new ExtractStep
+                {
+                    Name = "Adresse", Selector = null,
+                    Transforms = [new CombineFieldsTransform { SourceFieldNames = ["Strasse", "Hausnummer"] }],
+                },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_BlankSelectorWithoutCombineOrSplitTransform_StillFails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ExtractStep { Name = "Titel", Selector = null },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("Selector", result.Error);
+    }
+
+    [Fact]
+    public void Validate_DataFieldNodeWithBlankSelectorAndSplitFieldTransform_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ExtractGroupStep
+                {
+                    Roots =
+                    [
+                        new GroupNode
+                        {
+                            Name = "Item", Selector = ".item", Repeating = true,
+                            Children =
+                            [
+                                new DataFieldNode { Name = "Adresse", Selector = ".address" },
+                                new DataFieldNode
+                                {
+                                    Name = "Strasse", Selector = null,
+                                    Transforms = [new SplitFieldTransform { SourceFieldName = "Adresse", Separator = ",", Index = 0 }],
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
     [Fact]
     public void Validate_CombineFieldsReferencingFieldDeclaredLater_Fails()
     {
