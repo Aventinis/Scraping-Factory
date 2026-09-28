@@ -81,8 +81,8 @@ describe('applyConfigToState', () => {
 
   test('flat mode: round-trips fields (with attribute/framePath/transforms), scriptFileName/outputFileName, useJsonOutput, additionalStartUrls', () => {
     const fields = [
-      { name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null, download: false, maxDownloadSizeBytes: null, allowedContentTypes: [] },
-      { name: 'Bild', selector: 'img', attribute: 'src', framePath: ['#widget'], transforms: [{ kind: 'trim' }], download: false, maxDownloadSizeBytes: null, allowedContentTypes: [] },
+      { name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null, download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false },
+      { name: 'Bild', selector: 'img', attribute: 'src', framePath: ['#widget'], transforms: [{ kind: 'trim' }], download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false },
     ];
     const config = buildScrapingConfig(
       'https://example.com', 'flat', fields, [], null, 'myscraper', 'result', 'Static', [], false, true,
@@ -106,7 +106,7 @@ describe('applyConfigToState', () => {
     const fields = [
       {
         name: 'Datei', selector: 'a.file', attribute: 'href', framePath: null, transforms: null,
-        download: true, maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'],
+        download: true, maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'], hiddenFromOutput: false,
       },
     ];
     const config = buildScrapingConfig('https://example.com', 'flat', fields);
@@ -291,11 +291,11 @@ describe('buildGroupNode / buildFieldNode', () => {
   test('buildFieldNode nulls attribute unless mode is attribute', () => {
     expect(buildFieldNode('Titel', 'h2', 'text', 'href')).toEqual({
       kind: 'field', name: 'Titel', selector: 'h2', mode: 'text', attribute: null, framePath: null, transforms: null,
-      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false,
     });
     expect(buildFieldNode('Link', 'a', 'attribute', 'href')).toEqual({
       kind: 'field', name: 'Link', selector: 'a', mode: 'attribute', attribute: 'href', framePath: null, transforms: null,
-      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false,
     });
   });
 
@@ -304,11 +304,11 @@ describe('buildGroupNode / buildFieldNode', () => {
     const transforms = [{ kind: 'regexExtract', pattern: '\\d+', group: 0 }];
     expect(buildFieldNode('Preis', '.price', 'text', null, null, transforms)).toEqual({
       kind: 'field', name: 'Preis', selector: '.price', mode: 'text', attribute: null, framePath: null, transforms,
-      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false,
     });
     expect(buildFieldNode('Vegan', '.vegan', 'exists', null, null, transforms)).toEqual({
       kind: 'field', name: 'Vegan', selector: '.vegan', mode: 'exists', attribute: null, framePath: null, transforms: null,
-      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false,
     });
   });
 
@@ -992,12 +992,12 @@ describe('collectPrecedingApiFieldSiblingNames', () => {
 // chain, mirroring Container-Mode's own buildFieldNode default.
 describe('buildApiFieldDraft transforms', () => {
   test('defaults to null when no transforms are given', () => {
-    expect(buildApiFieldDraft('Preis', 'price')).toEqual({ kind: 'field', name: 'Preis', path: 'price', transforms: null });
+    expect(buildApiFieldDraft('Preis', 'price')).toEqual({ kind: 'field', name: 'Preis', path: 'price', transforms: null, sampleValue: undefined, hiddenFromOutput: false });
   });
 
   test('carries an explicit transform chain', () => {
     const transforms = [{ kind: 'trim' }, { kind: 'toNumber' }];
-    expect(buildApiFieldDraft('Preis', 'price', transforms)).toEqual({ kind: 'field', name: 'Preis', path: 'price', transforms });
+    expect(buildApiFieldDraft('Preis', 'price', transforms)).toEqual({ kind: 'field', name: 'Preis', path: 'price', transforms, sampleValue: undefined, hiddenFromOutput: false });
   });
 
   // Issue #147: sampleValue is the popup-internal raw value the
@@ -1165,7 +1165,7 @@ describe('buildApiSubtreeFromCandidate (Phase A5)', () => {
   test('a single-level match (skipSegments 0) becomes one auto-named group wrapping the named field', () => {
     const oneLevel = { path: 'data.items[0].name', treeSkeleton: [{ kind: 'group', path: 'data.items' }, { kind: 'field', path: 'name' }] };
     expect(buildApiSubtreeFromCandidate(oneLevel, 'Titel', [])).toEqual([
-      { kind: 'group', name: 'items', path: 'data.items', children: [{ kind: 'field', name: 'Titel', path: 'name', transforms: null }] },
+      { kind: 'group', name: 'items', path: 'data.items', children: [{ kind: 'field', name: 'Titel', path: 'name', transforms: null, sampleValue: undefined, hiddenFromOutput: false }] },
     ]);
   });
 
@@ -1177,7 +1177,7 @@ describe('buildApiSubtreeFromCandidate (Phase A5)', () => {
         kind: 'group', name: 'subcategories', path: 'subcategories',
         children: [{
           kind: 'group', name: 'products', path: 'products',
-          children: [{ kind: 'field', name: 'Titel', path: 'title', transforms: null }],
+          children: [{ kind: 'field', name: 'Titel', path: 'title', transforms: null, sampleValue: undefined, hiddenFromOutput: false }],
         }],
       }],
     });
@@ -1187,9 +1187,9 @@ describe('buildApiSubtreeFromCandidate (Phase A5)', () => {
     const oneLevel = { path: 'data.items[0].name', treeSkeleton: [{ kind: 'group', path: 'data.items' }, { kind: 'field', path: 'name' }] };
     const [root] = buildApiSubtreeFromCandidate(oneLevel, 'Titel', ['price', 'unit']);
     expect(root.children).toEqual([
-      { kind: 'field', name: 'Titel', path: 'name', transforms: null },
-      { kind: 'field', name: 'price', path: 'price', transforms: null },
-      { kind: 'field', name: 'unit', path: 'unit', transforms: null },
+      { kind: 'field', name: 'Titel', path: 'name', transforms: null, sampleValue: undefined, hiddenFromOutput: false },
+      { kind: 'field', name: 'price', path: 'price', transforms: null, sampleValue: undefined, hiddenFromOutput: false },
+      { kind: 'field', name: 'unit', path: 'unit', transforms: null, sampleValue: undefined, hiddenFromOutput: false },
     ]);
   });
 
@@ -1225,14 +1225,14 @@ describe('buildApiSubtreeFromCandidate (Phase A5)', () => {
   // target group's own tree depth's worth of leading skeleton segments are
   // already represented by existing ancestors — see resolveApiGroupScopePath.
   test('skipSegments strips already-represented ancestor levels — a sibling field at the innermost scope needs no new group at all', () => {
-    expect(buildApiSubtreeFromCandidate(deepCandidate, 'Titel', [], 3)).toEqual([{ kind: 'field', name: 'Titel', path: 'title', transforms: null }]);
+    expect(buildApiSubtreeFromCandidate(deepCandidate, 'Titel', [], 3)).toEqual([{ kind: 'field', name: 'Titel', path: 'title', transforms: null, sampleValue: undefined, hiddenFromOutput: false }]);
   });
 
   test('skipSegments partway through still nests the remaining levels', () => {
     const [node] = buildApiSubtreeFromCandidate(deepCandidate, 'Titel', [], 1);
     expect(node).toEqual({
       kind: 'group', name: 'subcategories', path: 'subcategories',
-      children: [{ kind: 'group', name: 'products', path: 'products', children: [{ kind: 'field', name: 'Titel', path: 'title', transforms: null }] }],
+      children: [{ kind: 'group', name: 'products', path: 'products', children: [{ kind: 'field', name: 'Titel', path: 'title', transforms: null, sampleValue: undefined, hiddenFromOutput: false }] }],
     });
   });
 
@@ -3422,6 +3422,8 @@ describe('Field transform-chain editor (Issue #84)', () => {
         <div id="flat-mode-section">
           <div id="fields-list"></div>
           <button id="btn-add-field"></button>
+          <button id="btn-add-combine-field"></button>
+          <button id="btn-add-split-field"></button>
         </div>
         <div id="container-mode-section" class="hidden">
           <ul id="group-tree-root"></ul>
@@ -3449,6 +3451,23 @@ describe('Field transform-chain editor (Issue #84)', () => {
         </div>
         <button id="btn-field-confirm"></button>
         <button id="btn-field-cancel"></button>
+      </div>
+      <div id="modal-combine-field" class="hidden">
+        <input id="input-combine-field-name" />
+        <ul id="combine-field-source-list"></ul>
+        <input id="input-combine-field-separator" />
+        <input type="checkbox" id="toggle-combine-field-remove-originals" />
+        <button id="btn-combine-field-confirm"></button>
+        <button id="btn-combine-field-cancel"></button>
+      </div>
+      <div id="modal-split-field" class="hidden">
+        <input id="input-split-field-name" />
+        <select id="select-split-field-source"></select>
+        <input id="input-split-field-separator" />
+        <input id="input-split-field-index" type="number" />
+        <input type="checkbox" id="toggle-split-field-remove-original" />
+        <button id="btn-split-field-confirm"></button>
+        <button id="btn-split-field-cancel"></button>
       </div>
       <div id="modal-container-new" class="hidden">
         <input id="input-container-name" />
@@ -3772,25 +3791,27 @@ describe('Field transform-chain editor (Issue #84)', () => {
     expect(rows[1].querySelector('.group-tree-name').value).toBe('Preis');
   });
 
-  // Issue #206
-  test('combineFields offers already-added flat fields as source-field options', () => {
+  test('the "Felder kombinieren"/"Feld aufteilen" buttons are disabled until enough real fields exist', () => {
+    expect(document.getElementById('btn-add-combine-field').disabled).toBe(true);
+    expect(document.getElementById('btn-add-split-field').disabled).toBe(true);
+
     document.getElementById('btn-add-field').click();
     capturedListener({ type: 'ELEMENT_SELECTED', selector: '.street' });
     document.getElementById('input-field-name').value = 'Strasse';
     document.getElementById('btn-field-confirm').click();
 
+    expect(document.getElementById('btn-add-split-field').disabled).toBe(false);
+    expect(document.getElementById('btn-add-combine-field').disabled).toBe(true);
+
     document.getElementById('btn-add-field').click();
     capturedListener({ type: 'ELEMENT_SELECTED', selector: '.number' });
-    document.getElementById('btn-field-transform-add').click();
-    const select = document.querySelector('#field-transform-list .transform-kind-select');
-    select.value = 'combineFields';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('input-field-name').value = 'Hausnummer';
+    document.getElementById('btn-field-confirm').click();
 
-    const options = [...document.querySelectorAll('#field-transform-list .transform-combine-source-select option')].map(o => o.value);
-    expect(options).toEqual(['Strasse']);
+    expect(document.getElementById('btn-add-combine-field').disabled).toBe(false);
   });
 
-  test('picking combine source fields updates state and survives a re-render', () => {
+  test('"Felder kombinieren" opens a modal with no click-based selection, listing existing fields as checkboxes', () => {
     document.getElementById('btn-add-field').click();
     capturedListener({ type: 'ELEMENT_SELECTED', selector: '.street' });
     document.getElementById('input-field-name').value = 'Strasse';
@@ -3800,71 +3821,104 @@ describe('Field transform-chain editor (Issue #84)', () => {
     document.getElementById('input-field-name').value = 'Hausnummer';
     document.getElementById('btn-field-confirm').click();
 
-    document.getElementById('btn-add-field').click();
-    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.address' });
-    document.getElementById('btn-field-transform-add').click();
-    const kindSelect = document.querySelector('#field-transform-list .transform-kind-select');
-    kindSelect.value = 'combineFields';
-    kindSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    chrome.runtime.sendMessage.mockClear();
+    document.getElementById('btn-add-combine-field').click();
 
-    const sourceSelect = document.querySelector('#field-transform-list .transform-combine-source-select');
-    [...sourceSelect.options].forEach(o => { o.selected = true; });
-    sourceSelect.dispatchEvent(new Event('change', { bubbles: true }));
-
-    const selected = [...document.querySelector('#field-transform-list .transform-combine-source-select').selectedOptions].map(o => o.value);
-    expect(selected).toEqual(['Strasse', 'Hausnummer']);
+    expect(document.getElementById('modal-combine-field').classList.contains('hidden')).toBe(false);
+    // No START_SELECTION message was sent — this flow never asks the
+    // content script to enter click-based selection mode.
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+    const names = [...document.querySelectorAll('#combine-field-source-list .combine-field-source-checkbox')].map(cb => cb.dataset.fieldName);
+    expect(names).toEqual(['Strasse', 'Hausnummer']);
   });
 
-  test('confirming a combineFields chain with only one picked source field is blocked', () => {
+  test('confirming "Felder kombinieren" adds a derived field, without removing the sources by default', () => {
     document.getElementById('btn-add-field').click();
     capturedListener({ type: 'ELEMENT_SELECTED', selector: '.street' });
     document.getElementById('input-field-name').value = 'Strasse';
     document.getElementById('btn-field-confirm').click();
-
     document.getElementById('btn-add-field').click();
-    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.address' });
-    document.getElementById('input-field-name').value = 'Adresse';
-    document.getElementById('btn-field-transform-add').click();
-    const kindSelect = document.querySelector('#field-transform-list .transform-kind-select');
-    kindSelect.value = 'combineFields';
-    kindSelect.dispatchEvent(new Event('change', { bubbles: true }));
-    const sourceSelect = document.querySelector('#field-transform-list .transform-combine-source-select');
-    sourceSelect.options[0].selected = true;
-    sourceSelect.dispatchEvent(new Event('change', { bubbles: true }));
-
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.number' });
+    document.getElementById('input-field-name').value = 'Hausnummer';
     document.getElementById('btn-field-confirm').click();
 
-    // Only "Strasse" was ever confirmed — the second field never was.
-    expect(document.querySelectorAll('#fields-list .field-row')).toHaveLength(1);
+    document.getElementById('btn-add-combine-field').click();
+    document.getElementById('input-combine-field-name').value = 'Adresse';
+    document.querySelectorAll('#combine-field-source-list .combine-field-source-checkbox').forEach(cb => { cb.checked = true; });
+    document.getElementById('input-combine-field-separator').value = ', ';
+    document.getElementById('btn-combine-field-confirm').click();
+
+    expect(document.getElementById('modal-combine-field').classList.contains('hidden')).toBe(true);
+    const rows = document.querySelectorAll('#fields-list .field-row');
+    expect(rows).toHaveLength(3);
+    expect(rows[2].querySelector('.field-name').textContent).toBe('Adresse');
+    // No "versteckt" badge on any row — remove-originals wasn't checked.
+    expect(document.querySelectorAll('#fields-list .field-hidden-badge')).toHaveLength(0);
   });
 
-  test('splitField renders a source-field select, separator, and index inputs', () => {
-    document.getElementById('btn-add-field').click();
-    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.address' });
-    document.getElementById('input-field-name').value = 'Adresse';
-    document.getElementById('btn-field-confirm').click();
-
+  test('"Ursprüngliche Felder entfernen" marks the source fields hidden instead of deleting them', () => {
     document.getElementById('btn-add-field').click();
     capturedListener({ type: 'ELEMENT_SELECTED', selector: '.street' });
-    document.getElementById('btn-field-transform-add').click();
-    const kindSelect = document.querySelector('#field-transform-list .transform-kind-select');
-    kindSelect.value = 'splitField';
-    kindSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('input-field-name').value = 'Strasse';
+    document.getElementById('btn-field-confirm').click();
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.number' });
+    document.getElementById('input-field-name').value = 'Hausnummer';
+    document.getElementById('btn-field-confirm').click();
 
-    const sourceSelect = document.querySelector('#field-transform-list .transform-split-source-select');
-    expect([...sourceSelect.options].map(o => o.value)).toEqual(['', 'Adresse']);
-    sourceSelect.value = 'Adresse';
-    sourceSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('btn-add-combine-field').click();
+    document.getElementById('input-combine-field-name').value = 'Adresse';
+    document.querySelectorAll('#combine-field-source-list .combine-field-source-checkbox').forEach(cb => { cb.checked = true; });
+    document.getElementById('toggle-combine-field-remove-originals').checked = true;
+    document.getElementById('btn-combine-field-confirm').click();
 
-    const indexInput = document.querySelector('#field-transform-list .transform-split-index-input');
-    indexInput.value = '1';
-    indexInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-    expect(document.querySelector('#field-transform-list .transform-split-source-select').value).toBe('Adresse');
-    expect(document.querySelector('#field-transform-list .transform-split-index-input').value).toBe('1');
+    // Still 3 rows — the sources are hidden from the *output*, not deleted.
+    const rows = document.querySelectorAll('#fields-list .field-row');
+    expect(rows).toHaveLength(3);
+    expect(document.querySelectorAll('#fields-list .field-hidden-badge')).toHaveLength(2);
   });
 
-  test('container mode: combineFields offers only field siblings under the same immediate parent group', async () => {
+  test('confirming "Felder kombinieren" without at least 2 checked sources is silently blocked', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.street' });
+    document.getElementById('input-field-name').value = 'Strasse';
+    document.getElementById('btn-field-confirm').click();
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.number' });
+    document.getElementById('input-field-name').value = 'Hausnummer';
+    document.getElementById('btn-field-confirm').click();
+
+    document.getElementById('btn-add-combine-field').click();
+    document.getElementById('input-combine-field-name').value = 'Adresse';
+    document.querySelector('#combine-field-source-list .combine-field-source-checkbox').checked = true; // only one
+    document.getElementById('btn-combine-field-confirm').click();
+
+    expect(document.getElementById('modal-combine-field').classList.contains('hidden')).toBe(false);
+    expect(document.querySelectorAll('#fields-list .field-row')).toHaveLength(2);
+  });
+
+  test('"Feld aufteilen" adds a derived field sourced from a single picked field', () => {
+    document.getElementById('btn-add-field').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.address' });
+    document.getElementById('input-field-name').value = 'Adresse';
+    document.getElementById('btn-field-confirm').click();
+
+    document.getElementById('btn-add-split-field').click();
+    expect(document.getElementById('modal-split-field').classList.contains('hidden')).toBe(false);
+    const options = [...document.getElementById('select-split-field-source').options].map(o => o.value);
+    expect(options).toEqual(['', 'Adresse']);
+
+    document.getElementById('input-split-field-name').value = 'Strasse';
+    document.getElementById('select-split-field-source').value = 'Adresse';
+    document.getElementById('input-split-field-index').value = '0';
+    document.getElementById('btn-split-field-confirm').click();
+
+    const rows = document.querySelectorAll('#fields-list .field-row');
+    expect(rows).toHaveLength(2);
+    expect(rows[1].querySelector('.field-name').textContent).toBe('Strasse');
+  });
+
+  test('container mode: "Felder kombinieren" is scoped to the same immediate parent group', async () => {
     document.getElementById('btn-mode-container').click();
     document.getElementById('btn-add-root-container').click();
     document.getElementById('input-container-name').value = 'Vorspeisen';
@@ -3882,13 +3936,22 @@ describe('Field transform-chain editor (Issue #84)', () => {
     document.querySelector('.btn-add-subfield').click();
     capturedListener({ type: 'ELEMENT_SELECTED', selector: '.number' });
     await flushMicrotasks();
-    document.getElementById('btn-field-extended-transform-add').click();
-    const kindSelect = document.querySelector('#field-extended-transform-list .transform-kind-select');
-    kindSelect.value = 'combineFields';
-    kindSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('input-field-extended-name').value = 'Hausnummer';
+    document.getElementById('btn-field-extended-confirm').click();
 
-    const options = [...document.querySelectorAll('#field-extended-transform-list .transform-combine-source-select option')].map(o => o.value);
-    expect(options).toEqual(['Strasse']);
+    const combineBtn = document.querySelector('.btn-add-combine-field');
+    expect(combineBtn.disabled).toBe(false);
+    combineBtn.click();
+
+    const names = [...document.querySelectorAll('#combine-field-source-list .combine-field-source-checkbox')].map(cb => cb.dataset.fieldName);
+    expect(names).toEqual(['Strasse', 'Hausnummer']);
+
+    document.getElementById('input-combine-field-name').value = 'Adresse';
+    document.querySelectorAll('#combine-field-source-list .combine-field-source-checkbox').forEach(cb => { cb.checked = true; });
+    document.getElementById('btn-combine-field-confirm').click();
+
+    const rows = document.querySelectorAll('#group-tree-root .group-tree-row');
+    expect(rows[3].querySelector('.group-tree-name').value).toBe('Adresse');
   });
 });
 
@@ -3916,6 +3979,8 @@ describe('Transform-chain live preview (Issue #143)', () => {
         <div id="flat-mode-section">
           <div id="fields-list"></div>
           <button id="btn-add-field"></button>
+          <button id="btn-add-combine-field"></button>
+          <button id="btn-add-split-field"></button>
         </div>
         <div id="container-mode-section" class="hidden">
           <ul id="group-tree-root"></ul>
@@ -3943,6 +4008,23 @@ describe('Transform-chain live preview (Issue #143)', () => {
         </div>
         <button id="btn-field-confirm"></button>
         <button id="btn-field-cancel"></button>
+      </div>
+      <div id="modal-combine-field" class="hidden">
+        <input id="input-combine-field-name" />
+        <ul id="combine-field-source-list"></ul>
+        <input id="input-combine-field-separator" />
+        <input type="checkbox" id="toggle-combine-field-remove-originals" />
+        <button id="btn-combine-field-confirm"></button>
+        <button id="btn-combine-field-cancel"></button>
+      </div>
+      <div id="modal-split-field" class="hidden">
+        <input id="input-split-field-name" />
+        <select id="select-split-field-source"></select>
+        <input id="input-split-field-separator" />
+        <input id="input-split-field-index" type="number" />
+        <input type="checkbox" id="toggle-split-field-remove-original" />
+        <button id="btn-split-field-confirm"></button>
+        <button id="btn-split-field-cancel"></button>
       </div>
       <div id="modal-container-new" class="hidden">
         <input id="input-container-name" />

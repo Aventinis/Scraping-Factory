@@ -52,6 +52,8 @@
     "combinedPickerOption": "{name} ({host})",
     "addFieldBtn": "+ Feld hinzufügen",
     "addContainerBtn": "+ Container hinzufügen",
+    "combineFieldsBtn": "Felder kombinieren",
+    "splitFieldBtn": "Feld aufteilen",
     "apiCaptureTitle": "Zeichnet fetch/XHR-Netzwerkanfragen dieser Seite auf",
     "apiCaptureStartBtn": "Netzwerk-Aufzeichnung starten",
     "apiCaptureStopBtn": "Netzwerk-Aufzeichnung beenden",
@@ -253,7 +255,12 @@
     "existsMode": "Vorhanden?",
     "ownTextMode": "Nur eigener Text",
     "addSubcontainerBtn": "+ Container",
-    "addSubfieldBtn": "+ Datenfeld"
+    "addSubfieldBtn": "+ Datenfeld",
+    "combineFieldsBtn": "+ Felder kombinieren",
+    "splitFieldBtn": "+ Feld aufteilen",
+    "combinedFieldMode": "Kombiniert aus: {sources}",
+    "splitFieldMode": "Aufgeteilt aus: {source}",
+    "hiddenFromOutputBadge": "versteckt"
   },
   "apiTree": {
     "addSubgroupBtn": "+ Gruppe",
@@ -261,7 +268,9 @@
     "addRootGroupBtn": "+ Neue Gruppe (oberste Ebene)",
     "defaultGroupName": "Gruppe",
     "transformsBtn": "Transformieren",
-    "transformsBtnCount": "Transformieren ({count})"
+    "transformsBtnCount": "Transformieren ({count})",
+    "combineFieldsBtn": "+ Felder kombinieren",
+    "splitFieldBtn": "+ Feld aufteilen"
   },
   "transforms": {
     "sectionLabel": "Transformationen (optional)",
@@ -273,8 +282,6 @@
     "toIntegerOption": "In Ganzzahl umwandeln",
     "toBooleanOption": "In Wahrheitswert umwandeln",
     "toDateOption": "In Datum umwandeln",
-    "combineFieldsOption": "Mit anderem/anderen Feld(ern) kombinieren",
-    "splitFieldOption": "Aus anderem Feld aufteilen",
     "patternPlaceholder": "Regex-Muster (z. B. \"\\d+\")",
     "groupPlaceholder": "Gruppe (0 = ganzer Treffer)",
     "findPlaceholder": "Suchen",
@@ -347,6 +354,21 @@
     "apiBodyParameterNew": {
       "nameLabel": "Name des Parameters (z. B. \"kategorie\")",
       "namePlaceholder": "Name"
+    },
+    "combineField": {
+      "nameLabel": "Feldname (z. B. \"Adresse\")",
+      "namePlaceholder": "Feldname",
+      "sourcesLabel": "Welche Felder sollen kombiniert werden? (mindestens 2)",
+      "separatorLabel": "Trennzeichen",
+      "removeOriginalsToggle": "Ursprüngliche Felder aus der Ausgabe entfernen"
+    },
+    "splitField": {
+      "nameLabel": "Feldname (z. B. \"Hausnummer\")",
+      "namePlaceholder": "Feldname",
+      "sourceLabel": "Welches Feld soll aufgeteilt werden?",
+      "separatorLabel": "Trennzeichen",
+      "indexLabel": "Teil (0 = erster)",
+      "removeOriginalToggle": "Ursprüngliches Feld aus der Ausgabe entfernen"
     },
     "saveConfig": {
       "label": "Name der Konfiguration (z. B. \"Produktliste\")",

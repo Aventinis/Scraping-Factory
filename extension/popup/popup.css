@@ -311,6 +311,26 @@ body {
   background: var(--color-warning-soft); color: var(--color-warning-strong); white-space: nowrap;
 }
 
+/* Issue #206 follow-up: flags a field marked HiddenFromOutput — still
+   computed (a combine/split transform elsewhere may reference it), just
+   excluded from the written output. Neutral/muted tone (unlike the amber
+   frame-badge above) since this isn't a warning, just informational. */
+.field-hidden-badge {
+  flex: none; font-size: 10px; padding: 1px 6px; border-radius: var(--radius-pill);
+  background: var(--color-surface-muted); color: var(--color-text-muted); white-space: nowrap;
+}
+
+/* Issue #206 follow-up: the "Felder kombinieren" modal's source-field
+   picker — a real checkbox per row (see modal-combine-field), replacing the
+   original design's native <select multiple> (which needed an
+   undiscoverable Ctrl/Cmd-click to select more than one option). */
+.combine-field-source-list {
+  list-style: none; margin: 0 0 10px; padding: 0; max-height: 160px; overflow-y: auto;
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+}
+.combine-field-source-row { padding: 4px 8px; }
+.combine-field-source-row label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
 /* Mode toggle */
 .mode-toggle {
   display: flex; gap: 4px; margin-bottom: 14px; background: var(--color-surface-muted);

@@ -22,6 +22,7 @@ const {
   jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
   bodyTreeLeavesAreBound, serializeBodyTree, lastPathSegmentName, buildApiSubtreeFromCandidate,
   resolveApiGroupScopePath, variableUrlParts, allParameterParts, apiConfigDraftHasAllSourcesChosen,
+  collectApiGroupFieldNames,
 } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
 
 const {
@@ -29,6 +30,13 @@ const {
   insertContainerNode, removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode,
   formatGroupNodeLabel, serializeGroupTree, collectSiblingFieldNames,
 } = typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
+
+const { buildCombineFieldsTransform, buildSplitFieldTransform } =
+  typeof require !== 'undefined' ? require('./combine-split-fields') : self.SFCombineSplitFields;
+
+const {
+  renderCombineFieldModal, renderSplitFieldModal, wireCombineSplitFieldsEvents,
+} = typeof require !== 'undefined' ? require('./combine-split-fields-ui') : self.SFCombineSplitFieldsUI;
 
 const {
   renderApiTree, renderApiCandidates, renderApiEntriesList,
@@ -94,7 +102,7 @@ const {
   buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildHardeningConfig,
   computeInitialMonitoringSectionOpen, collectFieldNames,
   buildScrapingConfig, buildConfigExport,
-  addField, removeField,
+  addField, removeField, updateField,
   addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions,
   buildVerificationValues,
   addNullRateCheck, removeNullRateCheck, updateNullRateCheck,
@@ -397,6 +405,16 @@ let _state = {
   // those two modals are never open at once.
   apiFieldTransformModalOpen: false,
   pendingApiFieldTransformPath: null,
+  // Issue #206 follow-up: modal-combine-field/modal-split-field visibility
+  // — the dedicated "Felder kombinieren"/"Feld aufteilen" creation flow,
+  // shared across flat/container/API mode (combine-split-fields-ui.js).
+  // pendingDerivedFieldScope carries which mode/parent the confirmed field
+  // gets inserted into: { mode: 'flat' } | { mode: 'container', parentPath }
+  // | { mode: 'api', groupPath } — same "not persisted, no content-script
+  // round trip involved" reasoning as apiGroupModalOpen above.
+  combineFieldModalOpen: false,
+  splitFieldModalOpen: false,
+  pendingDerivedFieldScope: null,
   apiConfigDraft:     null, // set once a candidate is confirmed as the primary field — the in-progress ApiConfig being built, see buildApiConfig/confirmApiFieldCandidate
   apiConfig:          null, // the "Apply"-confirmed ApiConfig wire object — Phase 6 will read this; persisted like fields/groups
   robotsTxtChecking: false, // not persisted, always off on popup reopen (like previewActive/apiCaptureActive)
@@ -642,6 +660,84 @@ function applyStaticTranslations() {
   renderThemeToggle();
 }
 
+// Issue #206 follow-up: the mode-dispatch glue for the shared combine/split
+// field creation modals (combine-split-fields-ui.js, deliberately
+// mode-agnostic — see its own doc comment for why this glue lives here
+// instead of in any one mode's own -ui.js file: popup.js is the one place
+// that already imports every mode's own field-name/insert/update helper,
+// and — per Architecture Decision #12 — logic that doesn't cleanly belong
+// to any single extracted feature module is exactly what popup.js itself
+// is meant to still hold, the same role it already plays for switchMode.
+//
+// scope shapes (see popup.js's own pendingDerivedFieldScope doc comment):
+// { mode: 'flat' } | { mode: 'container', parentPath } | { mode: 'api', groupPath }
+function computeDerivedFieldAvailableNames(state, scope) {
+  if (!scope) return [];
+  if (scope.mode === 'flat') return (state.fields || []).map(f => f.name);
+  if (scope.mode === 'container') return collectSiblingFieldNames(state.groups, scope.parentPath);
+  if (scope.mode === 'api') return collectApiGroupFieldNames(state.apiConfigDraft?.groups || [], scope.groupPath);
+  return [];
+}
+
+// Inserts the new derived field/node into whichever mode/scope the modal
+// was opened for, then — if requested — marks the picked source fields
+// hiddenFromOutput (never deletes them: their value is still needed for the
+// new field's own combine/split transform to read via the runtime's usual
+// sibling lookup, see scraping-config-builder.js's own updateField doc
+// comment). Returns the full _state patch to apply in one setState call.
+function insertDerivedField(state, scope, name, transform, sourceFieldNames, removeOriginals) {
+  if (scope.mode === 'flat') {
+    let fields = addField(state.fields, name, null, null, [transform]);
+    if (removeOriginals) {
+      sourceFieldNames.forEach((sourceName) => {
+        const index = fields.findIndex(f => f.name === sourceName);
+        if (index !== -1) fields = updateField(fields, index, { hiddenFromOutput: true });
+      });
+    }
+    return { fields };
+  }
+  if (scope.mode === 'container') {
+    const node = buildFieldNode(name, null, 'text', null, null, [transform]);
+    let groups = insertContainerNode(state.groups, scope.parentPath, node);
+    if (removeOriginals) {
+      const siblingsPath = scope.parentPath || [];
+      const siblings = siblingsPath.length === 0 ? state.groups : resolveGroupNode(state.groups, siblingsPath).children;
+      siblings.forEach((sibling, i) => {
+        if (sibling.kind === 'field' && sourceFieldNames.includes(sibling.name)) {
+          groups = updateGroupTreeNode(groups, [...siblingsPath, i], (n) => ({ ...n, hiddenFromOutput: true }));
+        }
+      });
+    }
+    return { groups };
+  }
+  // scope.mode === 'api'
+  const node = buildApiFieldDraft(name, null, [transform]);
+  let apiGroups = insertApiTreeNode(state.apiConfigDraft.groups, scope.groupPath, node);
+  if (removeOriginals) {
+    const siblings = resolveApiTreeNode(state.apiConfigDraft.groups, scope.groupPath).children;
+    siblings.forEach((sibling, i) => {
+      if (sibling.kind === 'field' && sourceFieldNames.includes(sibling.name)) {
+        apiGroups = updateApiTreeNode(apiGroups, [...scope.groupPath, i], (n) => ({ ...n, hiddenFromOutput: true }));
+      }
+    });
+  }
+  return { apiConfigDraft: { ...state.apiConfigDraft, groups: apiGroups } };
+}
+
+function onConfirmCombineField(scope, name, sourceFieldNames, separator, removeOriginals) {
+  const transform = buildCombineFieldsTransform(sourceFieldNames, separator);
+  const patch = insertDerivedField(_state, scope, name, transform, sourceFieldNames, removeOriginals);
+  setState(scope.mode === 'api' ? STATES.API_CONFIG : STATES.IDLE, patch);
+  return true;
+}
+
+function onConfirmSplitField(scope, name, sourceFieldName, separator, index, removeOriginal) {
+  const transform = buildSplitFieldTransform(sourceFieldName, separator, index);
+  const patch = insertDerivedField(_state, scope, name, transform, [sourceFieldName], removeOriginal);
+  setState(scope.mode === 'api' ? STATES.API_CONFIG : STATES.IDLE, patch);
+  return true;
+}
+
 // Issue #84: render() hides every modal unconditionally at its own top
 // (see below) and re-shows modal-field-name/-extended each pass while a
 // pick is pending — so a DOM-visibility check can't tell "just reopened"
@@ -666,6 +762,8 @@ function render() {
   hide('modal-save-output');
   hide('modal-manage-blueprints');
   hide('modal-blueprint-edit');
+  hide('modal-combine-field');
+  hide('modal-split-field');
 
   const screenKey = {
     [STATES.CHECKING_COMPANION]: 'checking',
@@ -692,6 +790,16 @@ function render() {
     show('modal-manage-blueprints');
     renderManageBlueprintsModal(bridge);
   }
+
+  // Issue #206 follow-up: same "global overlay" treatment as modal-save-
+  // config/modal-manage-blueprints above — reachable from flat/container
+  // mode's own field-list buttons (IDLE screen) and API mode's per-group
+  // tree buttons (API_CONFIG screen) alike, so this can't be scoped to
+  // either screen's own render block. Both functions already toggle their
+  // own modal's visibility internally based on _state.combineFieldModalOpen/
+  // splitFieldModalOpen, so no separate show()/hide() gate is needed here.
+  renderCombineFieldModal(bridge, computeDerivedFieldAvailableNames(_state, _state.pendingDerivedFieldScope));
+  renderSplitFieldModal(bridge, computeDerivedFieldAvailableNames(_state, _state.pendingDerivedFieldScope));
   if (_state.blueprintEditModalOpen) {
     show('modal-blueprint-edit');
     renderBlueprintEditModal(bridge);
@@ -962,6 +1070,11 @@ function wireEvents() {
   wireBlocksConfigEvents(bridge);
 
   wireContainerModeEvents(bridge);
+
+  wireCombineSplitFieldsEvents(bridge, {
+    onConfirmCombine: onConfirmCombineField,
+    onConfirmSplit: onConfirmSplitField,
+  });
 
   document.getElementById('btn-cancel-selection')?.addEventListener('click', () => {
     log('BTN cancel-selection → STOP_SELECTION');

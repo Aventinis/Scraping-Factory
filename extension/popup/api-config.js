@@ -353,8 +353,14 @@ const SFApiConfig = (function () {
   // modal-api-group-new's sibling flows some day — so the preview can tell
   // "no sample" apart from a real JSON `null` (which the runtime turns into
   // an empty string, see scraper_api.py.j2's own "value is None" check).
-  function buildApiFieldDraft(name, path, transforms = null, sampleValue = undefined) {
-    return { kind: 'field', name, path, transforms, sampleValue };
+  // Issue #206 follow-up: path may be null — the dedicated combine/split
+  // creation flow (combine-split-fields-ui.js) always calls this with
+  // path=null, since a derived field has no JSON path of its own (its
+  // value comes entirely from other already-resolved sibling fields).
+  // hiddenFromOutput defaults false, set only via that same flow's own
+  // "remove original field(s)" checkbox (updateApiTreeNode elsewhere).
+  function buildApiFieldDraft(name, path, transforms = null, sampleValue = undefined, hiddenFromOutput = false) {
+    return { kind: 'field', name, path, transforms, sampleValue, hiddenFromOutput };
   }
 
   function resolveApiTreeNode(groups, path) {
@@ -389,6 +395,18 @@ const SFApiConfig = (function () {
     return siblings.slice(0, ownIndex).filter(n => n.kind === 'field').map(n => n.name);
   }
 
+  // Issue #206 follow-up: every existing field child directly under
+  // groupPath (or at root when null/empty) — the dedicated combine/split
+  // creation flow always inserts its new field as the group's own last
+  // child, so (mirroring container-tree.js's own collectSiblingFieldNames)
+  // every current field sibling here already counts as "declared earlier"
+  // with no slicing needed, unlike collectPrecedingApiFieldSiblingNames
+  // above (which targets an already-placed leaf's own position instead).
+  function collectApiGroupFieldNames(groups, groupPath) {
+    const children = !groupPath || groupPath.length === 0 ? groups : (resolveApiTreeNode(groups, groupPath)?.children || []);
+    return children.filter(n => n.kind === 'field').map(n => n.name);
+  }
+
   // Removes the node (and its subtree) at `path` — always non-empty, unlike
   // insertApiTreeNode's parentPath.
   function removeApiTreeNode(groups, path) {
@@ -410,6 +428,9 @@ const SFApiConfig = (function () {
       : {
           name: node.name, path: node.path,
           ...(node.transforms && node.transforms.length > 0 ? { transforms: node.transforms } : {}),
+          // Issue #206 follow-up: same "incomplete/off = key omitted"
+          // convention container mode's own serializeGroupTree already uses.
+          ...(node.hiddenFromOutput ? { hiddenFromOutput: true } : {}),
         }));
   }
 
@@ -686,7 +707,7 @@ const SFApiConfig = (function () {
     compileRangeFormatPattern, detectRangeFormat, findUrlPartValue, rangeFormatExample,
     buildApiHeaders, buildApiConfig,
     buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
-    collectPrecedingApiFieldSiblingNames,
+    collectPrecedingApiFieldSiblingNames, collectApiGroupFieldNames,
     serializeApiTree, countApiConfigFields, updateApiTreeNode, apiTreeNodesHaveNonBlankNames,
     jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
     bodyTreeLeavesAreBound, serializeBodyTree, lastPathSegmentName, buildApiSubtreeFromCandidate,

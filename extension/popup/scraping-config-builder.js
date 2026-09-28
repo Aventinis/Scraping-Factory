@@ -409,6 +409,8 @@ function buildScrapingConfig(
       ...(f.download ? { download: true } : {}),
       ...(f.download && f.maxDownloadSizeBytes ? { maxDownloadSizeBytes: f.maxDownloadSizeBytes } : {}),
       ...(f.download && f.allowedContentTypes?.length > 0 ? { allowedContentTypes: f.allowedContentTypes } : {}),
+      // Issue #206 follow-up: same "incomplete/off = key omitted" convention.
+      ...(f.hiddenFromOutput ? { hiddenFromOutput: true } : {}),
     })),
     outputFormat: useJsonOutput ? 'Json' : 'Csv',
     scriptFileName: scriptFileName || null,
@@ -450,10 +452,15 @@ function buildConfigExport(
 // let flat mode gain the same Attribute-mode-with-Download capability
 // container mode's own buildFieldNode already has — attribute defaults to
 // null (today's exact pre-#214 behavior, a plain text field) for every
-// existing caller that doesn't pass one.
+// existing caller that doesn't pass one. Issue #206 follow-up: selector may
+// be null — combine-split-fields-ui.js's own confirm handlers pass null for
+// a field created through the dedicated combine/split flow, which has no
+// selector of its own (see ScrapingPlanValidator.IsDerivedField, companion
+// side); hiddenFromOutput defaults false, set only via that same flow's own
+// "remove original field(s)" checkbox (updateField below), never here.
 function addField(
   fields, name, selector, framePath = null, transforms = [], attribute = null,
-  download = false, maxDownloadSizeBytes = null, allowedContentTypes = [],
+  download = false, maxDownloadSizeBytes = null, allowedContentTypes = [], hiddenFromOutput = false,
 ) {
   const isDownload = !!attribute && !!download;
   return [...fields, {
@@ -462,7 +469,17 @@ function addField(
     download: isDownload,
     maxDownloadSizeBytes: isDownload ? (maxDownloadSizeBytes || null) : null,
     allowedContentTypes: isDownload && allowedContentTypes.length > 0 ? allowedContentTypes : [],
+    hiddenFromOutput,
   }];
+}
+
+// Issue #206 follow-up: generic in-place field patch — same shape as
+// updateBrowserAction below — used by the combine/split creation flow's own
+// "remove original field(s)" checkbox to set hiddenFromOutput on the picked
+// source fields without deleting them (their value is still needed for the
+// new field's own combine/split transform to read).
+function updateField(fields, index, patch) {
+  return fields.map((f, i) => (i === index ? { ...f, ...patch } : f));
 }
 
 // Issue #41/#42, Phase 5/6: browser actions (WaitFor/Fill/Click/Scroll,
@@ -582,7 +599,7 @@ function frameBadgeHtml(framePath) {
     buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildHardeningConfig,
     computeInitialMonitoringSectionOpen, collectFieldNames,
     buildScrapingConfig, buildConfigExport,
-    addField, removeField,
+    addField, removeField, updateField,
     addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions,
     buildVerificationValues,
     addNullRateCheck, removeNullRateCheck, updateNullRateCheck,

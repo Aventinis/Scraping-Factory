@@ -52,6 +52,8 @@
     "combinedPickerOption": "{name} ({host})",
     "addFieldBtn": "+ Add field",
     "addContainerBtn": "+ Add container",
+    "combineFieldsBtn": "Combine fields",
+    "splitFieldBtn": "Split field",
     "apiCaptureTitle": "Records this page's fetch/XHR network requests",
     "apiCaptureStartBtn": "Start network recording",
     "apiCaptureStopBtn": "Stop network recording",
@@ -253,7 +255,12 @@
     "existsMode": "Exists?",
     "ownTextMode": "Own text only",
     "addSubcontainerBtn": "+ Container",
-    "addSubfieldBtn": "+ Data field"
+    "addSubfieldBtn": "+ Data field",
+    "combineFieldsBtn": "+ Combine fields",
+    "splitFieldBtn": "+ Split field",
+    "combinedFieldMode": "Combined from: {sources}",
+    "splitFieldMode": "Split from: {source}",
+    "hiddenFromOutputBadge": "hidden"
   },
   "apiTree": {
     "addSubgroupBtn": "+ Group",
@@ -261,7 +268,9 @@
     "addRootGroupBtn": "+ New group (top level)",
     "defaultGroupName": "Group",
     "transformsBtn": "Transform",
-    "transformsBtnCount": "Transform ({count})"
+    "transformsBtnCount": "Transform ({count})",
+    "combineFieldsBtn": "+ Combine fields",
+    "splitFieldBtn": "+ Split field"
   },
   "transforms": {
     "sectionLabel": "Transformations (optional)",
@@ -273,8 +282,6 @@
     "toIntegerOption": "Convert to integer",
     "toBooleanOption": "Convert to boolean",
     "toDateOption": "Convert to date",
-    "combineFieldsOption": "Combine with other field(s)",
-    "splitFieldOption": "Split from another field",
     "patternPlaceholder": "Regex pattern (e.g. \"\\d+\")",
     "groupPlaceholder": "Group (0 = whole match)",
     "findPlaceholder": "Find",
@@ -347,6 +354,21 @@
     "apiBodyParameterNew": {
       "nameLabel": "Parameter name (e.g. \"category\")",
       "namePlaceholder": "Name"
+    },
+    "combineField": {
+      "nameLabel": "Field name (e.g. \"Address\")",
+      "namePlaceholder": "Field name",
+      "sourcesLabel": "Which fields should be combined? (at least 2)",
+      "separatorLabel": "Separator",
+      "removeOriginalsToggle": "Remove the original fields from the output"
+    },
+    "splitField": {
+      "nameLabel": "Field name (e.g. \"House number\")",
+      "namePlaceholder": "Field name",
+      "sourceLabel": "Which field should be split?",
+      "separatorLabel": "Separator",
+      "indexLabel": "Part (0 = first)",
+      "removeOriginalToggle": "Remove the original field from the output"
     },
     "saveConfig": {
       "label": "Configuration name (e.g. \"Product listing\")",
