@@ -52,6 +52,8 @@
     "combinedPickerOption": "{name} ({host})",
     "addFieldBtn": "+ Add field",
     "addContainerBtn": "+ Add container",
+    "combineFieldsBtn": "Combine fields",
+    "splitFieldBtn": "Split field",
     "apiCaptureTitle": "Records this page's fetch/XHR network requests",
     "apiCaptureStartBtn": "Start network recording",
     "apiCaptureStopBtn": "Stop network recording",
@@ -253,7 +255,12 @@
     "existsMode": "Exists?",
     "ownTextMode": "Own text only",
     "addSubcontainerBtn": "+ Container",
-    "addSubfieldBtn": "+ Data field"
+    "addSubfieldBtn": "+ Data field",
+    "combineFieldsBtn": "+ Combine fields",
+    "splitFieldBtn": "+ Split field",
+    "combinedFieldMode": "Combined from: {sources}",
+    "splitFieldMode": "Split from: {source}",
+    "hiddenFromOutputBadge": "hidden"
   },
   "apiTree": {
     "addSubgroupBtn": "+ Group",
@@ -261,7 +268,9 @@
     "addRootGroupBtn": "+ New group (top level)",
     "defaultGroupName": "Group",
     "transformsBtn": "Transform",
-    "transformsBtnCount": "Transform ({count})"
+    "transformsBtnCount": "Transform ({count})",
+    "combineFieldsBtn": "+ Combine fields",
+    "splitFieldBtn": "+ Split field"
   },
   "transforms": {
     "sectionLabel": "Transformations (optional)",
@@ -278,12 +287,15 @@
     "findPlaceholder": "Find",
     "replacementPlaceholder": "Replace with",
     "sourceFormatPlaceholder": "Source format (e.g. \"{dd}.{mm}.{yyyy}\")",
+    "separatorPlaceholder": "Separator (e.g. \", \")",
+    "splitSourcePlaceholderOption": "Select field…",
+    "splitIndexPlaceholder": "Part (0 = first)",
     "onErrorKeepOriginalOption": "On failure: keep original value",
     "onErrorUseDefaultOption": "On failure: use default value",
     "defaultValuePlaceholder": "Default value",
     "previewLabel": "Preview: {value}",
     "previewEmptyValue": "(empty)",
-    "previewUnavailable": "Preview unavailable (invalid pattern)"
+    "previewUnavailable": "Preview unavailable"
   },
   "generating": {
     "message": "Generating script…"
@@ -342,6 +354,21 @@
     "apiBodyParameterNew": {
       "nameLabel": "Parameter name (e.g. \"category\")",
       "namePlaceholder": "Name"
+    },
+    "combineField": {
+      "nameLabel": "Field name (e.g. \"Address\")",
+      "namePlaceholder": "Field name",
+      "sourcesLabel": "Which fields should be combined? (at least 2)",
+      "separatorLabel": "Separator",
+      "removeOriginalsToggle": "Remove the original fields from the output"
+    },
+    "splitField": {
+      "nameLabel": "Field name (e.g. \"House number\")",
+      "namePlaceholder": "Field name",
+      "sourceLabel": "Which field should be split?",
+      "separatorLabel": "Separator",
+      "indexLabel": "Part (0 = first)",
+      "removeOriginalToggle": "Remove the original field from the output"
     },
     "saveConfig": {
       "label": "Configuration name (e.g. \"Product listing\")",

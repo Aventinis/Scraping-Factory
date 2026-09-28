@@ -188,7 +188,15 @@ public sealed class ScrapingConfig
 public sealed class ScrapingField
 {
     public required string Name { get; init; }
-    public required string Selector { get; init; }
+
+    // Required to be non-blank UNLESS Transforms starts with a
+    // CombineFieldsTransform/SplitFieldTransform (Issue #206 follow-up) — a
+    // field entirely derived from other already-computed sibling fields has
+    // no DOM value of its own to select, so forcing a real (functionally
+    // unused) selector on it no longer makes sense once the extension has
+    // its own dedicated, selector-less creation flow for these two kinds.
+    // See ScrapingPlanValidator's own IsDerivedFieldOnly check.
+    public string? Selector { get; init; }
     // null = text content; "href", "src" etc. for attribute extraction
     public string? Attribute { get; init; }
 
@@ -208,6 +216,14 @@ public sealed class ScrapingField
     // See ExtractStep.MaxDownloadSizeBytes/AllowedContentTypes.
     public int? MaxDownloadSizeBytes { get; init; }
     public List<string>? AllowedContentTypes { get; init; }
+
+    // Issue #206 follow-up: this field is still computed (so a later
+    // combineFields/splitField transform can still reference its value via
+    // the usual sibling lookup) but excluded from the written output — set
+    // only via the extension's "remove original field(s)" checkbox on the
+    // new combine/split creation modal, never a standalone toggle. Plain
+    // non-nullable bool, same convention as Download.
+    public bool HiddenFromOutput { get; init; }
 }
 
 // Json (Issue #86) is a third, user-choosable alternative to Csv/Xml for

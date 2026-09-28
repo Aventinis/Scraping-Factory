@@ -22,9 +22,17 @@ const SFContainerTree = (function () {
     return { kind: 'group', name, selector, repeating, children: [], framePath: framePath || null };
   }
 
+  // Issue #206 follow-up: selector may be null — the dedicated combine/split
+  // creation flow (combine-split-fields-ui.js) always calls this with
+  // selector=null and mode='text' (the mode/wire "Text" is functionally
+  // irrelevant for a derived field, since its own extracted value is always
+  // discarded — see groupNodeSuffix below for how the tree row still shows a
+  // distinguishing label instead of "Text"). hiddenFromOutput defaults
+  // false, set only via that same flow's own "remove original field(s)"
+  // checkbox (updateGroupTreeNode elsewhere), never here.
   function buildFieldNode(
     name, selector, mode, attribute, framePath = null, transforms = [], download = false,
-    maxDownloadSizeBytes = null, allowedContentTypes = [],
+    maxDownloadSizeBytes = null, allowedContentTypes = [], hiddenFromOutput = false,
   ) {
     const isDownload = mode === 'attribute' && !!download;
     return {
@@ -42,6 +50,7 @@ const SFContainerTree = (function () {
       // "only meaningful when download is actually on" gate.
       maxDownloadSizeBytes: isDownload ? (maxDownloadSizeBytes || null) : null,
       allowedContentTypes: isDownload && allowedContentTypes.length > 0 ? allowedContentTypes : [],
+      hiddenFromOutput,
     };
   }
 
@@ -149,6 +158,21 @@ const SFContainerTree = (function () {
     return groups.map((n, i) => (i === head ? { ...n, children: insertContainerNode(n.children, rest, node) } : n));
   }
 
+  // Issue #206: the field-name options a new field's combineFields/
+  // splitField transform may reference — every already-present *field*
+  // child (kind === 'field') directly under `parentPath` (or at root level
+  // when null), in declared order. Deliberately not global-by-name (unlike
+  // collectFieldNames, used by the hardening null-rate/required-fields
+  // pickers) — modal-field-extended only ever inserts a brand-new field as
+  // the last child of this exact parent, so every current field sibling
+  // here is already guaranteed to be "declared earlier" once the new one is
+  // appended, matching ScrapingPlanValidator's own same-immediate-parent-
+  // group ordering rule exactly, with no slicing needed.
+  function collectSiblingFieldNames(groups, parentPath) {
+    const siblings = !parentPath || parentPath.length === 0 ? groups : (resolveGroupNode(groups, parentPath)?.children || []);
+    return siblings.filter(n => n.kind === 'field').map(n => n.name);
+  }
+
   // Removes the node (and its subtree) at `path` — always non-empty, unlike
   // insertContainerNode's parentPath.
   function removeGroupTreeNode(groups, path) {
@@ -195,6 +219,18 @@ const SFContainerTree = (function () {
     if (node.kind === 'group') {
       return `(${t(node.repeating ? 'group.repeating' : 'group.single')})`;
     }
+    // Issue #206 follow-up: a field created through the dedicated combine/
+    // split flow always carries mode='text' (see buildFieldNode's own doc
+    // comment) — branching on the transform's own kind first, rather than
+    // on node.mode, is what shows a distinguishing label instead of "Text"
+    // for a field whose actual extracted value is always discarded.
+    const derivedKind = node.transforms?.[0]?.kind;
+    if (derivedKind === 'combineFields') {
+      return `— ${t('group.combinedFieldMode', { sources: node.transforms[0].sourceFieldNames.join(', ') })}`;
+    }
+    if (derivedKind === 'splitField') {
+      return `— ${t('group.splitFieldMode', { source: node.transforms[0].sourceFieldName })}`;
+    }
     const modeLabel = {
       text: t('group.textMode'),
       attribute: t('group.attributeMode', { attribute: node.attribute }),
@@ -238,6 +274,9 @@ const SFContainerTree = (function () {
             ? { maxDownloadSizeBytes: node.maxDownloadSizeBytes } : {}),
           ...(node.mode === 'attribute' && node.download && node.allowedContentTypes?.length > 0
             ? { allowedContentTypes: node.allowedContentTypes } : {}),
+          // Issue #206 follow-up: same "incomplete/off = key omitted"
+          // convention as download above.
+          ...(node.hiddenFromOutput ? { hiddenFromOutput: true } : {}),
         });
   }
 
@@ -246,6 +285,7 @@ const SFContainerTree = (function () {
     insertContainerNode, removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode,
     groupNodeSuffix, formatGroupNodeLabel, serializeGroupTree,
     guessUrlAttribute, parseAllowedContentTypes, megabytesToBytes,
+    collectSiblingFieldNames,
   };
 })();
 

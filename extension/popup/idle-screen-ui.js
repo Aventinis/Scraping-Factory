@@ -168,6 +168,20 @@ const SFIdleScreenUI = (function () {
 
     if (state.mode === 'blocks') renderBlocksSection(bridge);
 
+    // Issue #206 follow-up: the dedicated combine/split field buttons are
+    // deliberately excluded from Blocks mode's own (shared) flat draft —
+    // same "not designed for this yet, reject rather than silently no-op"
+    // precedent Download already established there (see companion-side
+    // Program.cs). Disabled (not hidden) below that count, since a real
+    // click-based field still needs to exist to combine/split first.
+    const combineSplitActionsHidden = state.mode === 'blocks';
+    document.getElementById('btn-add-combine-field')?.classList.toggle('hidden', combineSplitActionsHidden);
+    document.getElementById('btn-add-split-field')?.classList.toggle('hidden', combineSplitActionsHidden);
+    const combineFieldBtn = document.getElementById('btn-add-combine-field');
+    if (combineFieldBtn) combineFieldBtn.disabled = (state.fields || []).length < 2;
+    const splitFieldBtn = document.getElementById('btn-add-split-field');
+    if (splitFieldBtn) splitFieldBtn.disabled = (state.fields || []).length < 1;
+
     const hasConfig = state.mode === 'container' ? state.groups.length > 0
       : state.mode === 'api' ? !!state.apiConfig
       : state.mode === 'combined' ? (state.combinedComponents || []).length >= 2

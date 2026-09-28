@@ -17,7 +17,11 @@ public sealed class NavigateStep : ScrapingStep
 public sealed class ExtractStep : ScrapingStep
 {
     public required string Name { get; init; }
-    public required string Selector { get; init; }
+
+    // See ScrapingField.Selector — same "blank iff derived from a
+    // combineFields/splitField transform" relaxation, just the plan-level
+    // mirror (Issue #206 follow-up).
+    public string? Selector { get; init; }
 
     // null = text content; "href", "src" etc. for attribute extraction
     public string? Attribute { get; init; }
@@ -46,6 +50,9 @@ public sealed class ExtractStep : ScrapingStep
     // See DataFieldNode.MaxDownloadSizeBytes/AllowedContentTypes.
     public int? MaxDownloadSizeBytes { get; init; }
     public List<string>? AllowedContentTypes { get; init; }
+
+    // See ScrapingField.HiddenFromOutput — same plan-level mirror.
+    public bool HiddenFromOutput { get; init; }
 }
 
 // Browser-engine only: waits for a selector to appear before continuing,

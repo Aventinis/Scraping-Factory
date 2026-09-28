@@ -46,6 +46,10 @@ internal static class PythonFieldTransformLiteral
             $$"""{"kind": "toBoolean", "onError": {{PythonLiteral.Str(toBoolean.OnError.ToString())}}, "defaultValue": {{PythonLiteral.Str(toBoolean.DefaultValue ?? "")}}}""",
         ToDateTransform toDate =>
             $$"""{"kind": "toDate", "sourceFormat": {{PythonLiteral.Str(RangeFormat.Resolve(RangeType.Date, toDate.SourceFormat))}}, "onError": {{PythonLiteral.Str(toDate.OnError.ToString())}}, "defaultValue": {{PythonLiteral.Str(toDate.DefaultValue ?? "")}}}""",
+        CombineFieldsTransform combine =>
+            $$"""{"kind": "combineFields", "sourceFieldNames": {{PythonLiteral.StrList(combine.SourceFieldNames)}}, "separator": {{PythonLiteral.Str(combine.Separator)}}}""",
+        SplitFieldTransform split =>
+            $$"""{"kind": "splitField", "sourceFieldName": {{PythonLiteral.Str(split.SourceFieldName)}}, "separator": {{PythonLiteral.Str(split.Separator)}}, "index": {{split.Index}}}""",
         _ => throw new InvalidOperationException($"Unknown FieldTransform type: {transform.GetType()}"),
     };
 }

@@ -3,7 +3,7 @@
 // dedicated test file before this (only indirect coverage via popup.test.js's
 // own integration-style tests) — this file stays scoped to what this issue
 // actually touched rather than retroactively covering the whole module.
-const { buildFieldNode, serializeGroupTree, guessUrlAttribute } = require('./container-tree');
+const { buildFieldNode, serializeGroupTree, guessUrlAttribute, collectSiblingFieldNames } = require('./container-tree');
 
 describe('container-tree (Issue #213): buildFieldNode download handling', () => {
   test('carries download through for Attribute mode', () => {
@@ -163,5 +163,42 @@ describe('container-tree (Issue #213): guessUrlAttribute', () => {
 
   test('never picks a data: URI, even with no better alternative', () => {
     expect(guessUrlAttribute({ src: 'data:image/png;base64,abcd' })).toBeNull();
+  });
+});
+
+// Issue #206: the combineFields/splitField source-field picker's option list
+// — scoped to only the *field* children (not groups) directly under the
+// given parent, since a new field is always appended last there, matching
+// ScrapingPlanValidator's own same-immediate-parent-group ordering rule.
+describe('container-tree (Issue #206): collectSiblingFieldNames', () => {
+  const groups = [
+    {
+      kind: 'group', name: 'Angebot', selector: '.offer', repeating: true,
+      children: [
+        { kind: 'field', name: 'Strasse', selector: '.street' },
+        { kind: 'group', name: 'Innen', selector: '.inner', repeating: false, children: [
+          { kind: 'field', name: 'Tief', selector: '.deep' },
+        ] },
+        { kind: 'field', name: 'Hausnummer', selector: '.number' },
+      ],
+    },
+    { kind: 'field', name: 'Root', selector: '.root' },
+  ];
+
+  test('returns only field siblings at root level, excluding groups', () => {
+    expect(collectSiblingFieldNames(groups, null)).toEqual(['Root']);
+  });
+
+  test('returns only field siblings under the given parent group, excluding nested groups', () => {
+    expect(collectSiblingFieldNames(groups, [0])).toEqual(['Strasse', 'Hausnummer']);
+  });
+
+  test('scopes strictly to the immediate parent — does not reach into a nested group', () => {
+    expect(collectSiblingFieldNames(groups, [0, 1])).toEqual(['Tief']);
+  });
+
+  test('returns an empty list for a parent with no field children yet', () => {
+    expect(collectSiblingFieldNames([{ kind: 'group', name: 'Leer', selector: '.empty', repeating: true, children: [] }], [0]))
+      .toEqual([]);
   });
 });

@@ -560,6 +560,15 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
             // above.
             if (blocks[i].Fields?.Any(f => f.Download) == true)
                 return Results.BadRequest(new { error = $"Block #{i + 1}: Download is not supported on a block's own fields yet." });
+            // Issue #206 follow-up: the dedicated combineFields/splitField
+            // creation flow (and HiddenFromOutput) is deliberately not
+            // exposed for Blocks mode — it happens to reuse flat mode's own
+            // field modal, but neither scraper_blocks.py.j2 nor
+            // playwright_scraper_blocks.py.j2 were updated to handle a
+            // blank Selector or a hidden field, same "reject rather than
+            // silently no-op" precedent as Download above.
+            if (blocks[i].Fields?.Any(f => string.IsNullOrWhiteSpace(f.Selector) || f.HiddenFromOutput) == true)
+                return Results.BadRequest(new { error = $"Block #{i + 1}: combineFields/splitField-derived fields and HiddenFromOutput are not supported on a block's own fields yet." });
         }
 
         var (blockPlan, blockScript, blockValidationError, blockGeneratorError) = GenerateScript(config, registry);

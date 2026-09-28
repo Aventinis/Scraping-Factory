@@ -48,6 +48,11 @@ internal static class PythonScrapingContextBuilder
             // imports (os/sys/hashlib/urljoin) — see
             // PythonGroupTreeLiteral.AnyDownloadEnabled's own doc comment.
             ["download_enabled"] = PythonGroupTreeLiteral.AnyDownloadEnabled(groupStep.Roots),
+            // Issue #206 follow-up: a Python list literal of every field
+            // name anywhere in the tree with HiddenFromOutput set — the
+            // grouped templates turn this into a set and strip matching
+            // elements from the built tree right before writing output.
+            ["hidden_field_names_literal"] = PythonLiteral.StrList(PythonGroupTreeLiteral.CollectHiddenFieldNames(groupStep.Roots)),
             ["change_detection"] = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection),
             ["proxy"] = PythonProxyLiteral.BuildContext(plan.Proxy),
             ["hardening"] = PythonHardeningLiteral.BuildContext(plan.Hardening),
@@ -93,6 +98,8 @@ internal static class PythonScrapingContextBuilder
                 ["download"] = step.Download,
                 ["max_download_size_bytes"] = step.MaxDownloadSizeBytes,
                 ["allowed_content_types"] = step.AllowedContentTypes ?? new List<string>(),
+                // Issue #206 follow-up: see ScrapingField.HiddenFromOutput.
+                ["hidden_from_output"] = step.HiddenFromOutput,
             })
             .ToList();
 

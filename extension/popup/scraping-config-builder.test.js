@@ -1319,7 +1319,7 @@ describe('addField', () => {
     const result = addField([], 'Titel', 'h1');
     expect(result).toEqual([{
       name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null,
-      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false,
     }]);
   });
 
@@ -1328,7 +1328,7 @@ describe('addField', () => {
     const result = addField([], 'Preis', 'h2', ['#price-widget']);
     expect(result).toEqual([{
       name: 'Preis', selector: 'h2', attribute: null, framePath: ['#price-widget'], transforms: null,
-      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false,
     }]);
   });
 
@@ -1338,7 +1338,7 @@ describe('addField', () => {
     const result = addField([], 'Preis', '.price', null, transforms);
     expect(result).toEqual([{
       name: 'Preis', selector: '.price', attribute: null, framePath: null, transforms,
-      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false,
     }]);
   });
 
@@ -1347,7 +1347,7 @@ describe('addField', () => {
     const result = addField([], 'Datei', 'a.file', null, [], 'href', true, 1024, ['application/pdf']);
     expect(result).toEqual([{
       name: 'Datei', selector: 'a.file', attribute: 'href', framePath: null, transforms: null,
-      download: true, maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'],
+      download: true, maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'], hiddenFromOutput: false,
     }]);
   });
 
@@ -1355,7 +1355,7 @@ describe('addField', () => {
     const result = addField([], 'Titel', 'h1', null, [], null, true, 1024, ['application/pdf']);
     expect(result).toEqual([{
       name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null,
-      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [],
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false,
     }]);
   });
 

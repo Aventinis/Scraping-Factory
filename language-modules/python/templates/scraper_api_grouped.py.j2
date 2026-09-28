@@ -45,6 +45,23 @@ URL_TEMPLATE = {{ url_template_literal }}
 METHOD = {{ method_literal }}
 BODY = {{ body_literal }}
 GROUPS = {{ groups_literal }}
+
+# Issue #206 follow-up — see scraper_grouped.py.j2's own identical
+# HIDDEN_FIELD_NAMES/_tree_without_hidden_fields doc comments.
+HIDDEN_FIELD_NAMES = set({{ hidden_field_names_literal }})
+
+
+def _tree_without_hidden_fields(el):
+    if not HIDDEN_FIELD_NAMES:
+        return el
+    clone = ET.Element(el.tag, el.attrib)
+    clone.text = el.text
+    for child in el:
+        if child.tag not in HIDDEN_FIELD_NAMES:
+            clone.append(_tree_without_hidden_fields(child))
+    return clone
+
+
 PARAMETERS = {{ parameters_literal }}
 HEADERS = {{ headers_literal }}
 # Issue #136 (embedded JSON source): None for an ordinary live API call. When
@@ -93,6 +110,12 @@ def _blueprint_chain_prefix_match(a, b):
 # repeating-ness is discovered, tracked via the module-level
 # _blueprint_resolved_chain across every call (including separate parameter
 # combinations/requests within the same run).
+#
+# Issue #206 note: same as scraper_grouped.py.j2's own
+# _resolve_flatten_leaf_value — there's no in-construction sibling element
+# to resolve a combineFields/splitField transform's own reference against
+# here, so it resolves to "" for a Blueprint-mapped field. Out of scope for
+# this first version, same as Download already is for Blueprint flattening.
 def _flatten_api_group_for_blueprint(scope, node, context, repeating_ancestors):
     global _blueprint_resolved_chain
     if "children" in node:
@@ -254,7 +277,9 @@ def _blueprint_resolve_group_chain(scope, ancestor_chain, ancestor_full_path, ta
 # the full design reasoning (list for a target group, single Element for a
 # target leaf; `top_scope` resolves a "broadcast" field — one with no
 # repeating source ancestor anywhere in its lineage — independently of the
-# current recursion depth).
+# current recursion depth). Issue #206 note: same as
+# _flatten_api_group_for_blueprint above — no sibling element to resolve a
+# combineFields/splitField transform against here.
 def _build_blueprint_node(top_scope, scope, ancestor_chain, ancestor_full_path, target_node):
     if "children" in target_node:
         row_chain = _blueprint_resolve_group_chain(scope, ancestor_chain, ancestor_full_path, target_node["children"])
@@ -731,7 +756,16 @@ def _to_date(value, source_format, on_error, default_value):
 # Applies a field's ordered transform chain (node["transform"], built by
 # PythonFieldTransformLiteral) — each step's output feeds the next step's
 # input, in the order the user configured them in.
-def _apply_transforms(value, transforms):
+def _resolve_transform_sibling(siblings, name):
+    if siblings is None:
+        return ""
+    if isinstance(siblings, dict):
+        return siblings.get(name, "")
+    found = siblings.find(name)
+    return (found.text or "") if found is not None else ""
+
+
+def _apply_transforms(value, transforms, siblings=None):
     for t in transforms:
         kind = t["kind"]
         if kind == "trim":
@@ -755,6 +789,12 @@ def _apply_transforms(value, transforms):
             value = _to_boolean(value, t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
         elif kind == "toDate":
             value = _to_date(value, t.get("sourceFormat", "{yyyy}-{mm}-{dd}"), t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
+        elif kind == "combineFields":
+            value = t.get("separator", " ").join(_resolve_transform_sibling(siblings, n) for n in t.get("sourceFieldNames", []))
+        elif kind == "splitField":
+            parts = _resolve_transform_sibling(siblings, t.get("sourceFieldName", "")).split(t.get("separator", " "))
+            idx = t.get("index", 0)
+            value = parts[idx] if 0 <= idx < len(parts) else ""
     return value
 
 
@@ -937,7 +977,7 @@ def _extract_embedded_json(response):
 # `scope` directly. One function handles any nesting depth without the
 # template needing to mirror the tree structure — the same pattern
 # extract_group() already uses for Container-Mode's CSS-selector tree.
-def _extract_api_group(scope, node):
+def _extract_api_group(scope, node, siblings=None):
     if "children" in node:
         instances = _resolve_items(scope, node["path"])
 {{~ if hardening.enabled ~}}
@@ -956,8 +996,11 @@ def _extract_api_group(scope, node):
         elements = []
         for instance in instances:
             el = ET.Element(node["name"])
+            # Issue #206: el is this group instance's own in-construction
+            # element — see scraper_grouped.py.j2's own identical doc
+            # comment on this same pattern.
             for child in node["children"]:
-                result = _extract_api_group(instance, child)
+                result = _extract_api_group(instance, child, el)
                 if isinstance(result, list):
                     el.extend(result)
                 else:
@@ -970,8 +1013,18 @@ def _extract_api_group(scope, node):
         return elements
 
     el = ET.Element(node["name"])
+    # Issue #206 follow-up: a derived (combineFields/splitField) field has
+    # no path of its own — _resolve_json_path("") would otherwise resolve to
+    # the whole scope object rather than "nothing found", so this is
+    # guarded explicitly rather than relying on that coincidence. The
+    # transform chain still always runs (its own combine/split branch
+    # ignores the "" passed here and reads siblings instead), unlike the
+    # ordinary "path resolved to nothing" case just below.
+    if not node["path"]:
+        el.text = _apply_transforms("", node["transform"], siblings)
+        return el
     value = _resolve_field(scope, node["path"])
-    el.text = "" if value is None else _apply_transforms(str(value), node["transform"])
+    el.text = "" if value is None else _apply_transforms(str(value), node["transform"], siblings)
     return el
 
 
@@ -1152,12 +1205,13 @@ def main():
 {{~ end ~}}
     count = len(blueprint_tree_root.findall(".//*"))
 {{~ else ~}}
+    output_root = _tree_without_hidden_fields(root)
 {{~ if output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(_xml_to_dict(root), f, ensure_ascii=False, indent=2)
+        json.dump(_xml_to_dict(output_root), f, ensure_ascii=False, indent=2)
     count = len(root.findall(".//*"))
 {{~ else ~}}
-    tree = ET.ElementTree(root)
+    tree = ET.ElementTree(output_root)
     ET.indent(tree)
     tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
     count = len(root.findall(".//*"))

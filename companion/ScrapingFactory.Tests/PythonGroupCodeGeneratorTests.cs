@@ -312,10 +312,11 @@ public class PythonGroupCodeGeneratorTests
     public void Generate_TextFieldHasTextModeAndNoAttributeKey()
     {
         var script = _generator.Generate(NestedGroupPlan());
-        // "transform" (Issue #84), "download" (Issue #213), and
-        // "maxDownloadSizeBytes"/"allowedContentTypes" (Issue #214) are
-        // always present, even when empty/false/None.
-        Assert.Contains("{\"name\": 'Titel', \"selector\": 'h2', \"mode\": 'text', \"transform\": [], \"download\": False, \"maxDownloadSizeBytes\": None, \"allowedContentTypes\": []}", script);
+        // "transform" (Issue #84), "download" (Issue #213),
+        // "maxDownloadSizeBytes"/"allowedContentTypes" (Issue #214), and
+        // "hiddenFromOutput" (Issue #206 follow-up) are always present, even
+        // when empty/false/None.
+        Assert.Contains("{\"name\": 'Titel', \"selector\": 'h2', \"mode\": 'text', \"transform\": [], \"download\": False, \"maxDownloadSizeBytes\": None, \"allowedContentTypes\": [], \"hiddenFromOutput\": False}", script);
     }
 
     [Fact]
@@ -368,7 +369,7 @@ public class PythonGroupCodeGeneratorTests
         // generated Python source.
         Assert.Contains(""""kind": "regexExtract", "pattern": '[\\d,]+', "group": 0"""", script);
         Assert.Contains("""{"kind": "toNumber"}""", script);
-        Assert.Contains("def _apply_transforms(value, transforms):", script);
+        Assert.Contains("def _apply_transforms(value, transforms, siblings=None):", script);
     }
 
     [Fact]
@@ -401,7 +402,7 @@ public class PythonGroupCodeGeneratorTests
     public void Generate_ContainsRecursiveExtractGroupFunction()
     {
         var script = _generator.Generate(NestedGroupPlan());
-        Assert.Contains("def extract_group(scope, node, base_url):", script);
+        Assert.Contains("def extract_group(scope, node, base_url, siblings=None):", script);
         Assert.Contains("scope.select(node[\"selector\"])", script);
         Assert.Contains("scope.select_one(node[\"selector\"])", script);
     }

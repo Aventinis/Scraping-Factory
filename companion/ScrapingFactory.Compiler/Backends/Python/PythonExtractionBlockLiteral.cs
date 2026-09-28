@@ -45,7 +45,11 @@ internal static class PythonExtractionBlockLiteral
 
     private static string BuildFlatShapePart(List<ExtractStep> fields)
     {
-        var selectors = "{" + string.Join(", ", fields.Select(f => $"{PythonLiteral.Str(f.Name)}: {PythonLiteral.Str(f.Selector)}")) + "}";
+        // Issue #206 follow-up: Blocks mode rejects a blank Selector outright
+        // in Program.cs before this is ever reached (see that file's own
+        // doc comment) — the ?? "" here is only to satisfy ExtractStep.
+        // Selector's now-nullable type, never an actually-reachable blank.
+        var selectors = "{" + string.Join(", ", fields.Select(f => $"{PythonLiteral.Str(f.Name)}: {PythonLiteral.Str(f.Selector ?? "")}")) + "}";
         var attributes = "{" + string.Join(", ", fields.Where(f => f.Attribute is not null)
             .Select(f => $"{PythonLiteral.Str(f.Name)}: {PythonLiteral.Str(f.Attribute!)}")) + "}";
         var transforms = "{" + string.Join(", ", fields.Select(f => $"{PythonLiteral.Str(f.Name)}: {PythonFieldTransformLiteral.Render(f.Transforms)}")) + "}";

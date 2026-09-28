@@ -36,7 +36,9 @@ public sealed class GroupNode : ContainerNode
 
 public sealed class DataFieldNode : ContainerNode
 {
-    public required string Selector { get; init; }
+    // See ScrapingField.Selector — same "blank iff derived from a
+    // combineFields/splitField transform" relaxation (Issue #206 follow-up).
+    public string? Selector { get; init; }
     public ExtractMode Mode { get; init; } = ExtractMode.Text;
 
     // Only meaningful (and required) when Mode == Attribute.
@@ -75,6 +77,9 @@ public sealed class DataFieldNode : ContainerNode
     // today's exact Issue #213 behavior.
     public int? MaxDownloadSizeBytes { get; init; }
     public List<string>? AllowedContentTypes { get; init; }
+
+    // See ScrapingField.HiddenFromOutput.
+    public bool HiddenFromOutput { get; init; }
 }
 
 // Issue #169: OwnText extracts only the direct text-node children of the

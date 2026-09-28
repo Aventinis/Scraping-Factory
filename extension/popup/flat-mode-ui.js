@@ -25,6 +25,25 @@ const SFFlatModeUI = (function () {
   // codebase already draws elsewhere (see renderMatchCountHint).
   const { guessUrlAttribute, parseAllowedContentTypes, megabytesToBytes } =
     typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
+  const { isDerivedField } =
+    typeof require !== 'undefined' ? require('./combine-split-fields') : self.SFCombineSplitFields;
+  const { openCombineFieldModal, openSplitFieldModal } =
+    typeof require !== 'undefined' ? require('./combine-split-fields-ui') : self.SFCombineSplitFieldsUI;
+
+  // Issue #206 follow-up: a field created through the dedicated combine/
+  // split flow has no real selector (see addField's own doc comment) —
+  // shows a distinguishing description instead of the (functionally
+  // unused) selector string, mirroring container-tree.js's own
+  // groupNodeSuffix branch for the identical case.
+  function fieldSelectorLabel(field) {
+    if (isDerivedField(field.transforms)) {
+      const transform = field.transforms[0];
+      return transform.kind === 'combineFields'
+        ? t('group.combinedFieldMode', { sources: transform.sourceFieldNames.join(', ') })
+        : t('group.splitFieldMode', { source: transform.sourceFieldName });
+    }
+    return field.selector;
+  }
 
   function renderFields(fields) {
     const listEl = document.getElementById('fields-list');
@@ -33,9 +52,11 @@ const SFFlatModeUI = (function () {
     fields.forEach((field, i) => {
       const row = document.createElement('div');
       row.className = 'field-row';
+      const selectorLabel = fieldSelectorLabel(field);
       row.innerHTML =
         `<span class="field-name" title="${escapeHtml(field.name)}">${escapeHtml(field.name)}</span>` +
-        `<span class="field-selector" title="${escapeHtml(field.selector)}">${escapeHtml(field.selector)}</span>` +
+        `<span class="field-selector" title="${escapeHtml(selectorLabel)}">${escapeHtml(selectorLabel)}</span>` +
+        (field.hiddenFromOutput ? `<span class="field-hidden-badge">${escapeHtml(t('group.hiddenFromOutputBadge'))}</span>` : '') +
         frameBadgeHtml(field.framePath) +
         `<button class="btn-danger btn-remove-field" data-index="${i}">${escapeHtml(t('common.remove'))}</button>`;
       listEl.appendChild(row);
@@ -174,6 +195,14 @@ const SFFlatModeUI = (function () {
       log('DOM view was enabled → re-requesting tree');
       bridge.requestDomTree();
     }
+  });
+  // Issue #206 follow-up: no click-based selection at all — opens the
+  // shared combine/split creation modal directly (combine-split-fields-ui.js).
+  document.getElementById('btn-add-combine-field')?.addEventListener('click', () => {
+    openCombineFieldModal(bridge, { mode: 'flat' });
+  });
+  document.getElementById('btn-add-split-field')?.addEventListener('click', () => {
+    openSplitFieldModal(bridge, { mode: 'flat' });
   });
   document.getElementById('btn-field-transform-add')?.addEventListener('click', () => {
     bridge.patchState({ pendingTransforms: addTransform(bridge.getState().pendingTransforms) });

@@ -353,8 +353,14 @@ const SFApiConfig = (function () {
   // modal-api-group-new's sibling flows some day — so the preview can tell
   // "no sample" apart from a real JSON `null` (which the runtime turns into
   // an empty string, see scraper_api.py.j2's own "value is None" check).
-  function buildApiFieldDraft(name, path, transforms = null, sampleValue = undefined) {
-    return { kind: 'field', name, path, transforms, sampleValue };
+  // Issue #206 follow-up: path may be null — the dedicated combine/split
+  // creation flow (combine-split-fields-ui.js) always calls this with
+  // path=null, since a derived field has no JSON path of its own (its
+  // value comes entirely from other already-resolved sibling fields).
+  // hiddenFromOutput defaults false, set only via that same flow's own
+  // "remove original field(s)" checkbox (updateApiTreeNode elsewhere).
+  function buildApiFieldDraft(name, path, transforms = null, sampleValue = undefined, hiddenFromOutput = false) {
+    return { kind: 'field', name, path, transforms, sampleValue, hiddenFromOutput };
   }
 
   function resolveApiTreeNode(groups, path) {
@@ -371,6 +377,34 @@ const SFApiConfig = (function () {
     if (path.length === 0) return [...groups, node];
     const [head, ...rest] = path;
     return groups.map((n, i) => (i === head ? { ...n, children: insertApiTreeNode(n.children, rest, node) } : n));
+  }
+
+  // Issue #206: preceding sibling field names (own parent group, indices
+  // strictly before this node's own position) an already-inserted ApiField
+  // leaf's own combineFields/splitField transform may reference — unlike
+  // container-tree.js's collectSiblingFieldNames, this modal reopens
+  // against an *already-placed* leaf (see openApiFieldTransformsModal), so
+  // only siblings actually declared before it count; a later sibling isn't
+  // offered at all here, rather than being offered and then rejected only
+  // once "Apply" reaches the companion's own ordering check.
+  function collectPrecedingApiFieldSiblingNames(groups, path) {
+    if (!path || path.length === 0) return [];
+    const parentPath = path.slice(0, -1);
+    const ownIndex = path[path.length - 1];
+    const siblings = parentPath.length === 0 ? groups : (resolveApiTreeNode(groups, parentPath)?.children || []);
+    return siblings.slice(0, ownIndex).filter(n => n.kind === 'field').map(n => n.name);
+  }
+
+  // Issue #206 follow-up: every existing field child directly under
+  // groupPath (or at root when null/empty) — the dedicated combine/split
+  // creation flow always inserts its new field as the group's own last
+  // child, so (mirroring container-tree.js's own collectSiblingFieldNames)
+  // every current field sibling here already counts as "declared earlier"
+  // with no slicing needed, unlike collectPrecedingApiFieldSiblingNames
+  // above (which targets an already-placed leaf's own position instead).
+  function collectApiGroupFieldNames(groups, groupPath) {
+    const children = !groupPath || groupPath.length === 0 ? groups : (resolveApiTreeNode(groups, groupPath)?.children || []);
+    return children.filter(n => n.kind === 'field').map(n => n.name);
   }
 
   // Removes the node (and its subtree) at `path` — always non-empty, unlike
@@ -394,6 +428,9 @@ const SFApiConfig = (function () {
       : {
           name: node.name, path: node.path,
           ...(node.transforms && node.transforms.length > 0 ? { transforms: node.transforms } : {}),
+          // Issue #206 follow-up: same "incomplete/off = key omitted"
+          // convention container mode's own serializeGroupTree already uses.
+          ...(node.hiddenFromOutput ? { hiddenFromOutput: true } : {}),
         }));
   }
 
@@ -670,6 +707,7 @@ const SFApiConfig = (function () {
     compileRangeFormatPattern, detectRangeFormat, findUrlPartValue, rangeFormatExample,
     buildApiHeaders, buildApiConfig,
     buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
+    collectPrecedingApiFieldSiblingNames, collectApiGroupFieldNames,
     serializeApiTree, countApiConfigFields, updateApiTreeNode, apiTreeNodesHaveNonBlankNames,
     jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
     bodyTreeLeavesAreBound, serializeBodyTree, lastPathSegmentName, buildApiSubtreeFromCandidate,

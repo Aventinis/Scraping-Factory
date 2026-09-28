@@ -35,6 +35,9 @@ const SFConfigImport = (function () {
             // Issue #214: same gate as download itself.
             maxDownloadSizeBytes: node.mode === 'Attribute' && node.download ? (node.maxDownloadSizeBytes ?? null) : null,
             allowedContentTypes: node.mode === 'Attribute' && node.download ? (node.allowedContentTypes || []) : [],
+            // Issue #206 follow-up: absent on the wire = false, same
+            // convention as download itself.
+            hiddenFromOutput: !!node.hiddenFromOutput,
           }
     ));
   }
@@ -278,6 +281,8 @@ const SFConfigImport = (function () {
             download: !!f.attribute && !!f.download,
             maxDownloadSizeBytes: f.attribute && f.download ? (f.maxDownloadSizeBytes ?? null) : null,
             allowedContentTypes: f.attribute && f.download ? (f.allowedContentTypes || []) : [],
+            // Issue #206 follow-up: absent on the wire = false.
+            hiddenFromOutput: !!f.hiddenFromOutput,
           }))
         : [],
       groups: mode === 'container' ? deserializeGroupTree(config.groups) : [],

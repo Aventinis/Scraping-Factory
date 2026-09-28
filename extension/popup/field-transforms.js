@@ -18,6 +18,8 @@ const SFFieldTransforms = (function () {
       case 'toInteger': return { kind: 'toInteger', onError: 'KeepOriginal', defaultValue: '' };
       case 'toBoolean': return { kind: 'toBoolean', onError: 'KeepOriginal', defaultValue: '' };
       case 'toDate': return { kind: 'toDate', sourceFormat: '{yyyy}-{mm}-{dd}', onError: 'KeepOriginal', defaultValue: '' };
+      case 'combineFields': return { kind: 'combineFields', sourceFieldNames: [], separator: ' ' };
+      case 'splitField': return { kind: 'splitField', sourceFieldName: '', separator: ' ', index: 0 };
       case 'trim':
       default: return { kind: 'trim' };
     }
@@ -62,10 +64,17 @@ const SFFieldTransforms = (function () {
   // onError/defaultValue never reach an invalid state through this UI (the
   // default value input always starts at '', never null), so they need no
   // check here.
+  // Issue #206: combineFields needs at least 2 picked source fields (the
+  // multi-select itself can obviously end up empty/single right after
+  // switching to this kind); splitField needs a picked source field —
+  // mirrors FieldTransformValidator's own structural checks companion-side,
+  // just surfaced here before a round trip is even attempted.
   function transformsAreValid(transforms) {
     return transforms.every(t => {
       if (t.kind === 'regexExtract') return t.pattern.trim() !== '';
       if (t.kind === 'toDate') return t.sourceFormat.trim() !== '';
+      if (t.kind === 'combineFields') return t.sourceFieldNames.length >= 2;
+      if (t.kind === 'splitField') return t.sourceFieldName.trim() !== '';
       return true;
     });
   }
@@ -207,6 +216,16 @@ const SFFieldTransforms = (function () {
         case 'toDate':
           value = typeConversionFallback(value, t, toDatePreview(value, t.sourceFormat || ''));
           break;
+        case 'combineFields':
+        case 'splitField':
+          // Issue #206: no sibling field's own value is available client-side
+          // at preview time (this preview only ever has the *one* field
+          // currently being edited's own picked raw value, see
+          // renderTransformPreview's own doc comment) — null signals
+          // "preview unavailable" here, the same as an invalid regexExtract
+          // pattern, rather than misleadingly showing this field's own raw
+          // value untouched.
+          return null;
       }
     }
     return value;

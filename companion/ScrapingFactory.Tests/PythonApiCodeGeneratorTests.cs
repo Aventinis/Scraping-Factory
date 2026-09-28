@@ -46,8 +46,8 @@ public class PythonApiCodeGeneratorTests
         var script = _generator.Generate(PlanWith(api));
         Assert.Contains("""{"kind": "trim"}""", script);
         Assert.Contains("""{"kind": "toNumber"}""", script);
-        Assert.Contains("def _apply_transforms(value, transforms):", script);
-        Assert.Contains("_apply_transforms(str(value), field[\"transform\"])", script);
+        Assert.Contains("def _apply_transforms(value, transforms, siblings=None):", script);
+        Assert.Contains("_apply_transforms(str(value), field[\"transform\"], row)", script);
     }
 
     [Fact]
@@ -426,8 +426,8 @@ public class PythonApiCodeGeneratorTests
 
         var script = _generator.Generate(PlanWith(api));
         Assert.Contains("""{"kind": "toNumber"}""", script);
-        Assert.Contains("def _apply_transforms(value, transforms):", script);
-        Assert.Contains("_apply_transforms(str(value), node[\"transform\"])", script);
+        Assert.Contains("def _apply_transforms(value, transforms, siblings=None):", script);
+        Assert.Contains("_apply_transforms(str(value), node[\"transform\"], siblings)", script);
     }
 
     [Fact]

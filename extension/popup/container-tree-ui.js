@@ -24,11 +24,13 @@ const SFContainerTreeUI = (function () {
   const {
     groupNodeSuffix, resolveGroupNode, hasRepeatingAncestor, buildFieldNode, insertContainerNode,
     removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode, guessUrlAttribute,
-    parseAllowedContentTypes, megabytesToBytes,
+    parseAllowedContentTypes, megabytesToBytes, collectSiblingFieldNames,
   } = typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
   const { transformsAreValid, addTransform } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
   const { renderTransformList, renderTransformPreview, wireTransformList } =
     typeof require !== 'undefined' ? require('./field-transforms-ui') : self.SFFieldTransformsUI;
+  const { openCombineFieldModal, openSplitFieldModal } =
+    typeof require !== 'undefined' ? require('./combine-split-fields-ui') : self.SFCombineSplitFieldsUI;
 
   // Issue #139: one static inline chevron per row instead of swapping between
   // two different Unicode glyphs (▸/▾) on click — collapsed/expanded is now a
@@ -71,14 +73,24 @@ const SFContainerTreeUI = (function () {
     nameInput.className = 'group-tree-name';
     nameInput.dataset.path = JSON.stringify(path);
     nameInput.value = node.name;
-    nameInput.title = node.selector;
+    // Issue #206 follow-up: node.selector is null for a combine/split-
+    // derived field (see buildFieldNode's own doc comment) — '' avoids
+    // setting the title attribute to the literal string "null".
+    nameInput.title = node.selector || '';
     row.appendChild(nameInput);
 
     const suffix = document.createElement('span');
     suffix.className = 'group-tree-label';
     suffix.textContent = groupNodeSuffix(node);
-    suffix.title = node.selector;
+    suffix.title = node.selector || '';
     row.appendChild(suffix);
+
+    if (node.kind === 'field' && node.hiddenFromOutput) {
+      const hiddenBadge = document.createElement('span');
+      hiddenBadge.className = 'field-hidden-badge';
+      hiddenBadge.textContent = t('group.hiddenFromOutputBadge');
+      row.appendChild(hiddenBadge);
+    }
 
     if (node.framePath) {
       const badge = document.createElement('span');
@@ -116,6 +128,24 @@ const SFContainerTreeUI = (function () {
       addFieldBtn.className = 'btn-secondary btn-tiny btn-add-subfield';
       addFieldBtn.textContent = t('group.addSubfieldBtn');
       row.appendChild(addFieldBtn);
+
+      // Issue #206 follow-up: disabled (not hidden) below the minimum field
+      // count each kind needs — clicking "+ Datenfeld" first to build up
+      // real fields to combine/split is the expected path, same reasoning
+      // idle-screen-ui.js's own flat-mode button-disable logic uses.
+      const fieldSiblingCount = node.children.filter(c => c.kind === 'field').length;
+
+      const addCombineFieldBtn = document.createElement('button');
+      addCombineFieldBtn.className = 'btn-secondary btn-tiny btn-add-combine-field';
+      addCombineFieldBtn.textContent = t('group.combineFieldsBtn');
+      addCombineFieldBtn.disabled = fieldSiblingCount < 2;
+      row.appendChild(addCombineFieldBtn);
+
+      const addSplitFieldBtn = document.createElement('button');
+      addSplitFieldBtn.className = 'btn-secondary btn-tiny btn-add-split-field';
+      addSplitFieldBtn.textContent = t('group.splitFieldBtn');
+      addSplitFieldBtn.disabled = fieldSiblingCount < 1;
+      row.appendChild(addSplitFieldBtn);
     }
 
     const removeBtn = document.createElement('button');
@@ -358,6 +388,11 @@ const SFContainerTreeUI = (function () {
 
     if (e.target.closest('.btn-add-subcontainer')) { openContainerModal(bridge, path); return; }
     if (e.target.closest('.btn-add-subfield')) { startFieldSelection(bridge, path); return; }
+    // Issue #206 follow-up: no click-based selection — opens the shared
+    // combine/split creation modal directly, scoped to this group's own
+    // children (same `path` .btn-add-subfield already targets).
+    if (e.target.closest('.btn-add-combine-field')) { openCombineFieldModal(bridge, { mode: 'container', parentPath: path }); return; }
+    if (e.target.closest('.btn-add-split-field')) { openSplitFieldModal(bridge, { mode: 'container', parentPath: path }); return; }
     if (e.target.closest('.btn-remove-group-node')) {
       log('GROUP_NODE_REMOVE', { path });
       bridge.stopPreviewIfActive();

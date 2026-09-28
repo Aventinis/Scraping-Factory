@@ -79,7 +79,7 @@ public class FieldTransformJsonTests
     }
 
     [Fact]
-    public void SerializeThenDeserialize_RoundTripsAllSevenVariants()
+    public void SerializeThenDeserialize_RoundTripsAllNineVariants()
     {
         FieldTransform[] transforms =
         [
@@ -90,6 +90,8 @@ public class FieldTransformJsonTests
             new ToIntegerTransform { OnError = TransformErrorMode.UseDefault, DefaultValue = "0" },
             new ToBooleanTransform(),
             new ToDateTransform { SourceFormat = "{dd}.{mm}.{yyyy}" },
+            new CombineFieldsTransform { SourceFieldNames = ["Strasse", "Hausnummer"], Separator = " " },
+            new SplitFieldTransform { SourceFieldName = "Adresse", Separator = ",", Index = 1 },
         ];
 
         foreach (var transform in transforms)
@@ -155,6 +157,52 @@ public class FieldTransformJsonTests
         var transform = JsonSerializer.Deserialize<FieldTransform>(json, Options);
 
         Assert.Null(Assert.IsType<ToDateTransform>(transform).SourceFormat);
+    }
+
+    // Issue #206
+    [Fact]
+    public void Deserialize_CombineFieldsByKind_ProducesCombineFieldsTransform()
+    {
+        const string json = """{ "kind": "combineFields", "sourceFieldNames": ["Strasse", "Hausnummer"], "separator": " " }""";
+
+        var transform = JsonSerializer.Deserialize<FieldTransform>(json, Options);
+
+        var combine = Assert.IsType<CombineFieldsTransform>(transform);
+        Assert.Equal(["Strasse", "Hausnummer"], combine.SourceFieldNames);
+        Assert.Equal(" ", combine.Separator);
+    }
+
+    [Fact]
+    public void Deserialize_CombineFieldsWithoutSeparator_DefaultsToSpace()
+    {
+        const string json = """{ "kind": "combineFields", "sourceFieldNames": ["A", "B"] }""";
+
+        var transform = JsonSerializer.Deserialize<FieldTransform>(json, Options);
+
+        Assert.Equal(" ", Assert.IsType<CombineFieldsTransform>(transform).Separator);
+    }
+
+    [Fact]
+    public void Deserialize_SplitFieldByKind_ProducesSplitFieldTransform()
+    {
+        const string json = """{ "kind": "splitField", "sourceFieldName": "Adresse", "separator": ",", "index": 1 }""";
+
+        var transform = JsonSerializer.Deserialize<FieldTransform>(json, Options);
+
+        var split = Assert.IsType<SplitFieldTransform>(transform);
+        Assert.Equal("Adresse", split.SourceFieldName);
+        Assert.Equal(",", split.Separator);
+        Assert.Equal(1, split.Index);
+    }
+
+    [Fact]
+    public void Deserialize_SplitFieldWithoutIndex_DefaultsToZero()
+    {
+        const string json = """{ "kind": "splitField", "sourceFieldName": "Adresse" }""";
+
+        var transform = JsonSerializer.Deserialize<FieldTransform>(json, Options);
+
+        Assert.Equal(0, Assert.IsType<SplitFieldTransform>(transform).Index);
     }
 
     // Proves the discriminator survives being nested inside a full

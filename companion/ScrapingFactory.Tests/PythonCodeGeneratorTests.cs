@@ -83,9 +83,9 @@ public class PythonCodeGeneratorTests
         Assert.Contains("""{"kind": "trim"}""", script);
         Assert.Contains(""""kind": "replace", "find": '€', "replacement": ''"""", script);
         Assert.Contains("""{"kind": "toNumber"}""", script);
-        Assert.Contains("def _apply_transforms(value, transforms):", script);
+        Assert.Contains("def _apply_transforms(value, transforms, siblings=None):", script);
         Assert.Contains("def _to_number(value):", script);
-        Assert.Contains("value = _apply_transforms(raw_value, TRANSFORMS.get(name, []))", script);
+        Assert.Contains("value = _apply_transforms(raw_value, TRANSFORMS.get(name, []), row)", script);
     }
 
     [Fact]

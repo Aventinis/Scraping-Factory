@@ -78,6 +78,29 @@ internal static class FieldTransformValidator
                     return $"Default value for {fieldLabel} must be set when the conversion's error behavior is 'use default value'.";
             }
 
+            // Issue #206: structural checks only — whether the referenced
+            // name(s) actually exist and are declared *earlier* in the same
+            // field/tree-children list is a cross-field concern this
+            // per-transform validator has no visibility into; that's
+            // ScrapingPlanValidator.ValidateFieldTransformOrdering's job.
+            if (transform is CombineFieldsTransform combine)
+            {
+                if (combine.SourceFieldNames is not { Count: >= 2 })
+                    return $"Combine transform for {fieldLabel} needs at least 2 source fields.";
+                if (combine.SourceFieldNames.Any(string.IsNullOrWhiteSpace))
+                    return $"Combine transform for {fieldLabel} has a blank source field name.";
+                if (combine.SourceFieldNames.Distinct().Count() != combine.SourceFieldNames.Count)
+                    return $"Combine transform for {fieldLabel} lists the same source field more than once.";
+            }
+
+            if (transform is SplitFieldTransform split)
+            {
+                if (string.IsNullOrWhiteSpace(split.SourceFieldName))
+                    return $"Split transform for {fieldLabel} needs a source field.";
+                if (split.Index < 0)
+                    return $"Split index for {fieldLabel} must not be negative.";
+            }
+
             // TrimTransform/ReplaceTransform/ToNumberTransform: nothing to
             // validate structurally — an empty Find/Replacement is a valid
             // (if useless) no-op, and ToNumberTransform has no parameters at

@@ -229,6 +229,55 @@
     </div>
   </div>
 
+  <!-- Modal: dedicated "Felder kombinieren" creation flow (Issue #206
+       follow-up) — replaces the original combineFields transform-kind UI.
+       No click-based selection: the checkbox list is populated from
+       whichever mode/scope opened it (combine-split-fields-ui.js), shared
+       across flat/container/API mode. -->
+  <div id="modal-combine-field" class="modal hidden">
+    <div class="modal-inner">
+      <label for="input-combine-field-name" data-i18n="modals.combineField.nameLabel"></label>
+      <input id="input-combine-field-name" type="text" data-i18n-placeholder="modals.combineField.namePlaceholder" autocomplete="off" />
+      <label data-i18n="modals.combineField.sourcesLabel"></label>
+      <ul id="combine-field-source-list" class="combine-field-source-list"></ul>
+      <label for="input-combine-field-separator" data-i18n="modals.combineField.separatorLabel"></label>
+      <input id="input-combine-field-separator" type="text" data-i18n-placeholder="transforms.separatorPlaceholder" autocomplete="off" />
+      <label class="output-settings-toggle" id="combine-field-remove-toggle-row">
+        <input type="checkbox" id="toggle-combine-field-remove-originals" />
+        <span data-i18n="modals.combineField.removeOriginalsToggle"></span>
+      </label>
+      <div class="modal-actions">
+        <button id="btn-combine-field-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-combine-field-confirm" class="btn-primary" data-i18n="common.add"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: dedicated "Feld aufteilen" creation flow (Issue #206
+       follow-up) — same "no click-based selection" reasoning as
+       modal-combine-field above, single source field so a plain <select>
+       already works well (no checkbox-list UX issue to solve here). -->
+  <div id="modal-split-field" class="modal hidden">
+    <div class="modal-inner">
+      <label for="input-split-field-name" data-i18n="modals.splitField.nameLabel"></label>
+      <input id="input-split-field-name" type="text" data-i18n-placeholder="modals.splitField.namePlaceholder" autocomplete="off" />
+      <label for="select-split-field-source" data-i18n="modals.splitField.sourceLabel"></label>
+      <select id="select-split-field-source"></select>
+      <label for="input-split-field-separator" data-i18n="modals.splitField.separatorLabel"></label>
+      <input id="input-split-field-separator" type="text" data-i18n-placeholder="transforms.separatorPlaceholder" autocomplete="off" />
+      <label for="input-split-field-index" data-i18n="modals.splitField.indexLabel"></label>
+      <input id="input-split-field-index" type="number" min="0" data-i18n-placeholder="transforms.splitIndexPlaceholder" autocomplete="off" />
+      <label class="output-settings-toggle" id="split-field-remove-toggle-row">
+        <input type="checkbox" id="toggle-split-field-remove-original" />
+        <span data-i18n="modals.splitField.removeOriginalToggle"></span>
+      </label>
+      <div class="modal-actions">
+        <button id="btn-split-field-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
+        <button id="btn-split-field-confirm" class="btn-primary" data-i18n="common.add"></button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Output Blueprints management (Issue #191) — lists every
        persisted blueprint (unscoped, reusable across any site), reached via
        "Manage" next to the per-scrape mapping picker in the Settings

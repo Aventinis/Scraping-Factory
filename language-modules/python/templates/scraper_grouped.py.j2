@@ -421,6 +421,33 @@ def _run_hardening_checks(root):
 
 GROUPS = {{ groups_literal }}
 
+# Issue #206 follow-up: every field name anywhere in the tree with
+# HiddenFromOutput set (see PythonGroupTreeLiteral.CollectHiddenFieldNames)
+# — matched globally by name, the same simplification REQUIRED_FIELD_NAMES/
+# the null-rate hardening check already use for this tree shape. Stripped
+# from the built tree right before it's written (see _strip_hidden_fields
+# below), not during extract_group() itself, so a combine/split transform
+# elsewhere can still find the hidden field's own already-built element via
+# el.find(name) while the tree is still being constructed.
+HIDDEN_FIELD_NAMES = set({{ hidden_field_names_literal }})
+
+
+# Returns a fresh tree with every HIDDEN_FIELD_NAMES-tagged element removed
+# (recursively) — never mutates `el` in place, since hardening/change-
+# detection (and, mid-construction, a combine/split transform's own sibling
+# lookup) still need to see the full, unstripped tree. A no-op fast path
+# when nothing is hidden — the common case — returns `el` itself unchanged.
+def _tree_without_hidden_fields(el):
+    if not HIDDEN_FIELD_NAMES:
+        return el
+    clone = ET.Element(el.tag, el.attrib)
+    clone.text = el.text
+    for child in el:
+        if child.tag not in HIDDEN_FIELD_NAMES:
+            clone.append(_tree_without_hidden_fields(child))
+    return clone
+
+
 # Issue #192: optional Output Blueprint field mapping (see scraper.py.j2's
 # own identical BLUEPRINT_MAPPING doc comment for the flat-mode case this
 # extends) — for this tree-shaped mode, an active mapping doesn't just
@@ -461,7 +488,22 @@ def _blueprint_subtree_has_mapped_field(node):
 # still gets the raw URL, not a local file path. Combining these two
 # features is out of scope for this first version (undocumented anywhere
 # else — the two simply haven't been wired together yet).
+# Issue #206 note: for the same reason, this walk has no in-construction
+# sibling element to pass as _apply_transforms' own `siblings` argument (it
+# resolves one leaf value in isolation, not via extract_group()'s own
+# recursive tree build) — a combineFields/splitField transform on a
+# Blueprint-mapped field resolves every referenced sibling to "" here,
+# rather than the value it would have during an ordinary (non-flattened)
+# run. Same out-of-scope-for-now interaction as Download above.
 def _resolve_flatten_leaf_value(scope, node):
+    # Issue #206 follow-up: a derived (combineFields/splitField) field has
+    # no selector of its own — same as extract_group()'s own guard below,
+    # this resolves to "found nothing" here rather than calling
+    # select_one("") (a combine/split transform already resolves every
+    # referenced sibling to "" in this flattened context regardless, per
+    # this function's own doc comment above).
+    if not node["selector"]:
+        return "false" if node["mode"] == "exists" else ""
     if node["mode"] == "exists":
         return "true" if scope.select_one(node["selector"]) else "false"
     found = scope.select_one(node["selector"])
@@ -760,7 +802,16 @@ def _to_date(value, source_format, on_error, default_value):
 # input, in the order the user configured them in. Not called for
 # node["mode"] == "exists" (a boolean-ish presence check, not a string
 # pipeline) — see extract_group below.
-def _apply_transforms(value, transforms):
+def _resolve_transform_sibling(siblings, name):
+    if siblings is None:
+        return ""
+    if isinstance(siblings, dict):
+        return siblings.get(name, "")
+    found = siblings.find(name)
+    return (found.text or "") if found is not None else ""
+
+
+def _apply_transforms(value, transforms, siblings=None):
     for t in transforms:
         kind = t["kind"]
         if kind == "trim":
@@ -784,6 +835,12 @@ def _apply_transforms(value, transforms):
             value = _to_boolean(value, t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
         elif kind == "toDate":
             value = _to_date(value, t.get("sourceFormat", "{yyyy}-{mm}-{dd}"), t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
+        elif kind == "combineFields":
+            value = t.get("separator", " ").join(_resolve_transform_sibling(siblings, n) for n in t.get("sourceFieldNames", []))
+        elif kind == "splitField":
+            parts = _resolve_transform_sibling(siblings, t.get("sourceFieldName", "")).split(t.get("separator", " "))
+            idx = t.get("index", 0)
+            value = parts[idx] if 0 <= idx < len(parts) else ""
     return value
 
 
@@ -792,7 +849,7 @@ def _apply_transforms(value, transforms):
 # node["repeating"]) and recurses into each match; a data-field leaf reads
 # text/attribute/existence from `scope` directly. One function handles any
 # nesting depth without the template needing to mirror the tree structure.
-def extract_group(scope, node, base_url):
+def extract_group(scope, node, base_url, siblings=None):
     if "children" in node:
         if node["repeating"]:
             matches = scope.select(node["selector"])
@@ -806,8 +863,15 @@ def extract_group(scope, node, base_url):
         elements = []
         for match in matches:
             el = ET.Element(node["name"])
+            # Issue #206: el is this group instance's own in-construction
+            # element — passed down as `siblings` so a combine/split
+            # transform on a later child can look up an earlier child's
+            # already-computed value via el.find(name). Only ever populated
+            # with this instance's own direct children, matching
+            # ValidateFieldTransformOrdering's "same immediate parent group"
+            # scope exactly.
             for child in node["children"]:
-                result = extract_group(match, child, base_url)
+                result = extract_group(match, child, base_url, el)
                 if isinstance(result, list):
                     el.extend(result)
                 else:
@@ -820,6 +884,16 @@ def extract_group(scope, node, base_url):
         return elements
 
     el = ET.Element(node["name"])
+    # Issue #206 follow-up: a derived (combineFields/splitField) field has
+    # no selector of its own — unlike an ordinary missing-element case below
+    # (which writes "" without ever running the transform chain, since
+    # there's nothing more for it to do), a derived field's whole value
+    # comes from this call — it must always run through _apply_transforms,
+    # which reads sibling values already resolved into `siblings` and
+    # ignores the "" passed here entirely.
+    if not node["selector"]:
+        el.text = "false" if node["mode"] == "exists" else _apply_transforms("", node["transform"], siblings)
+        return el
     if node["mode"] == "exists":
         el.text = "true" if scope.select_one(node["selector"]) else "false"
     else:
@@ -827,7 +901,7 @@ def extract_group(scope, node, base_url):
         if found is None:
             el.text = ""
         elif node["mode"] == "attribute":
-            value = _apply_transforms(found.get(node["attribute"], "") or "", node["transform"])
+            value = _apply_transforms(found.get(node["attribute"], "") or "", node["transform"], siblings)
             # Issue #213: replaces the raw URL with its own downloaded local
             # file path — applied AFTER transforms, so e.g. a `replace`
             # transform fixing up a protocol-relative "//host/x.jpg" URL is
@@ -841,9 +915,9 @@ def extract_group(scope, node, base_url):
             # subclass, so this filters out child Tags without a separate
             # import.
             own_text = "".join(c for c in found.contents if isinstance(c, str)).strip()
-            el.text = _apply_transforms(own_text, node["transform"])
+            el.text = _apply_transforms(own_text, node["transform"], siblings)
         else:
-            el.text = _apply_transforms(found.get_text(strip=True), node["transform"])
+            el.text = _apply_transforms(found.get_text(strip=True), node["transform"], siblings)
     return el
 
 
@@ -1038,12 +1112,16 @@ def main():
 {{~ end ~}}
     count = len(blueprint_tree_root.findall(".//*"))
 {{~ else ~}}
+    # Issue #206 follow-up: writes a HIDDEN_FIELD_NAMES-stripped copy — count
+    # and every use of `root` below (hardening, change detection) still see
+    # the full, unstripped tree.
+    output_root = _tree_without_hidden_fields(root)
 {{~ if output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(_xml_to_dict(root), f, ensure_ascii=False, indent=2)
+        json.dump(_xml_to_dict(output_root), f, ensure_ascii=False, indent=2)
     count = len(root.findall(".//*"))
 {{~ else ~}}
-    tree = ET.ElementTree(root)
+    tree = ET.ElementTree(output_root)
     ET.indent(tree)
     tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
     count = len(root.findall(".//*"))
