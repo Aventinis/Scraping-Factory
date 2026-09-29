@@ -278,25 +278,6 @@
     </div>
   </div>
 
-  <!-- Modal: Output Blueprints management (Issue #191) — lists every
-       persisted blueprint (unscoped, reusable across any site), reached via
-       "Manage" next to the per-scrape mapping picker in the Settings
-       section. Same row-list pattern as #saved-configs-section, just without
-       a hostname scope. -->
-  <div id="modal-manage-blueprints" class="modal hidden">
-    <div class="modal-inner">
-      <p class="preview-summary" data-i18n="modals.manageBlueprints.title"></p>
-      <div id="manage-blueprints-list"></div>
-      <p id="manage-blueprints-empty" class="preview-summary hidden" data-i18n="modals.manageBlueprints.empty"></p>
-      <div class="actions">
-        <button type="button" id="btn-blueprint-new" class="btn-secondary btn-tiny" data-i18n="modals.manageBlueprints.newBtn"></button>
-      </div>
-      <div class="modal-actions">
-        <button id="btn-manage-blueprints-close" class="btn-secondary" data-i18n="common.cancel"></button>
-      </div>
-    </div>
-  </div>
-
   <!-- Modal: create/edit one Output Blueprint's own name + ordered target
        field-name list — opened from modal-manage-blueprints' own "+ New"
        button or a row's "Edit" button (blueprintEditingId distinguishes the

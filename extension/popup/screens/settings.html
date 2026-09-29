@@ -1,0 +1,71 @@
+<div class="url-row">
+  <div class="row-label" data-i18n="settings.title"></div>
+  <button id="btn-close-settings" class="btn-secondary btn-tiny" type="button" data-i18n="common.back"></button>
+</div>
+
+<!-- Cross-session preferences — moved here from the per-scrape Settings
+     section (Issue-driven follow-up): these are personal preferences about
+     how every future scrape should behave, not properties of the scrape
+     currently being configured, so they persist via chrome.storage.local
+     (shared/global-settings.js) instead of the per-scrape _state. -->
+<div id="settings-preferences-section">
+  <p class="row-label" data-i18n="settings.preferencesTitle"></p>
+  <label class="output-settings-toggle">
+    <input type="checkbox" id="toggle-output-json" />
+    <span data-i18n="idle.outputJsonToggle"></span>
+  </label>
+  <label class="output-settings-toggle">
+    <input type="checkbox" id="toggle-include-data-preview" />
+    <span data-i18n="idle.dataPreviewToggle"></span>
+  </label>
+  <label class="output-settings-toggle">
+    <input type="checkbox" id="toggle-include-output-file" />
+    <span data-i18n="idle.outputFileToggle"></span>
+  </label>
+  <label class="output-settings-toggle">
+    <input type="checkbox" id="toggle-external-config" />
+    <span data-i18n="idle.externalConfigToggle"></span>
+  </label>
+  <p class="preview-summary" data-i18n="idle.externalConfigHint"></p>
+
+  <!-- Default script name — pre-fills the per-scrape "Skriptname" input
+       whenever a new site is detected (checkCompanion/the stale-URL
+       correction), still editable per-scrape afterward. -->
+  <p class="row-label" data-i18n="settings.scriptNameModeLabel"></p>
+  <div class="mode-toggle" id="script-name-mode-toggle">
+    <div class="mode-toggle-thumb"></div>
+    <button id="btn-script-name-mode-fixed" class="mode-btn" type="button" data-i18n="settings.scriptNameModeFixed"></button>
+    <button id="btn-script-name-mode-hostname" class="mode-btn" type="button" data-i18n="settings.scriptNameModeHostname"></button>
+  </div>
+  <div id="script-name-fixed-row" class="output-settings-row">
+    <label for="input-script-name-fixed" data-i18n="settings.scriptNameFixedLabel"></label>
+    <input type="text" id="input-script-name-fixed" data-i18n-placeholder="idle.scriptFilenamePlaceholder" autocomplete="off" />
+  </div>
+  <p class="preview-summary" data-i18n="settings.scriptNameHostnameHint" id="script-name-hostname-hint"></p>
+</div>
+
+<!-- Output Blueprint management — moved here from modal-manage-blueprints
+     (the per-scrape mapping *picker* stays in the idle screen's own
+     Settings section; only create/edit/delete moves, since a blueprint is
+     reusable across any site, not scoped to the scrape currently being
+     configured). -->
+<div id="settings-blueprints-section">
+  <p class="row-label" data-i18n="modals.manageBlueprints.title"></p>
+  <div id="manage-blueprints-list"></div>
+  <p id="manage-blueprints-empty" class="preview-summary hidden" data-i18n="modals.manageBlueprints.empty"></p>
+  <div class="actions">
+    <button type="button" id="btn-blueprint-new" class="btn-secondary btn-tiny" data-i18n="modals.manageBlueprints.newBtn"></button>
+  </div>
+</div>
+
+<!-- Cross-site saved configurations/outputs — the per-site "Saved
+     configurations" panel on the idle screen (scoped to the currently open
+     tab's hostname, with its own "Laden" action) is unaffected; this is a
+     seitenübergreifende (cross-site) view for browsing/deleting anything
+     saved for any site, with no "Laden" — loading only makes sense in the
+     context of that site's own currently-open tab. -->
+<div id="settings-all-configs-section">
+  <p class="row-label" data-i18n="settings.allConfigsTitle"></p>
+  <div id="all-saved-configs-list"></div>
+  <p id="all-saved-configs-empty" class="preview-summary hidden" data-i18n="settings.allConfigsEmpty"></p>
+</div>

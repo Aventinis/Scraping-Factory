@@ -10,6 +10,9 @@ const { initI18n, setLanguage, getLanguage, t } =
 const { initTheme, getTheme, cycleTheme } =
   typeof require !== 'undefined' ? require('../shared/theme') : self.SFTheme;
 
+const { loadGlobalSettings, getGlobalSettings, updateGlobalSettings } =
+  typeof require !== 'undefined' ? require('../shared/global-settings') : self.SFGlobalSettings;
+
 const {
   STATES, escapeHtml,
   parseUrlTemplateParts, buildUrlTemplate, parseValueListInput, findUrlTemplateMatches, mergeValueListValues,
@@ -144,11 +147,14 @@ const { wireSettingsPanelEvents } =
 const {
   fetchOutputBlueprints, selectOutputBlueprint,
   renderOutputBlueprintMappingSection,
-  renderManageBlueprintsModal, openManageBlueprintsModal, closeManageBlueprintsModal,
   requestDeleteBlueprint, cancelDeleteBlueprint, deleteBlueprint,
   openBlueprintCreateModal, openBlueprintEditModal, closeBlueprintEditModal, saveBlueprintEdit,
   renderBlueprintEditModal, wireOutputBlueprintsEvents,
 } = typeof require !== 'undefined' ? require('./output-blueprints-ui') : self.SFOutputBlueprintsUI;
+
+const {
+  renderSettingsScreen, wireSettingsScreenEvents,
+} = typeof require !== 'undefined' ? require('./global-settings-ui') : self.SFGlobalSettingsUI;
 
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (e) => log('UNCAUGHT_ERROR', e.message));
@@ -236,12 +242,6 @@ let _state = {
   // see buildScrapingConfig's "only send the key when true" handling), so
   // it's a plain boolean rather than an { enabled, ... } object.
   persistentSession: false,
-  // Issue #178: opt-in external XML config file — mode-independent (Fields/
-  // Groups/Api alike), persisted the same way as persistentSession above
-  // (real scrape-target configuration, not a per-generate toggle). Also a
-  // plain boolean with no sub-fields: which values end up editable depends
-  // entirely on the current mode/shape, nothing the user chooses here.
-  externalConfig: false,
   // Issue #129: opt-in script hardening checks — mode-independent like
   // engine/changeDetection/proxy above, persisted the same way (real
   // scrape-target configuration, not a per-generate toggle). Nested one
@@ -419,27 +419,21 @@ let _state = {
   apiConfig:          null, // the "Apply"-confirmed ApiConfig wire object — Phase 6 will read this; persisted like fields/groups
   robotsTxtChecking: false, // not persisted, always off on popup reopen (like previewActive/apiCaptureActive)
   robotsTxtResult:   null,  // {ok, robotsUrl, path, notFound, allowed, matchedRule} | {ok:false, error} from the content script's CHECK_ROBOTS_TXT response, or null before the first check
-  // Issue #122: opt-in trial-run data preview — deliberately named
-  // "dataPreview" throughout, not "preview", to avoid any confusion with
-  // the unrelated DOM-highlight feature above (previewActive/togglePreview/
-  // #btn-preview) — that one highlights matched elements on the live page;
-  // this one shows a sample of what the last /generate trial run actually
-  // scraped. includeDataPreview is the checkbox's own state (not persisted,
-  // always off on popup reopen, same as previewActive/apiCaptureActive —
-  // it's a per-generate opt-in, not a sticky preference).
-  includeDataPreview: false,
+  // Issue #122: trial-run data preview — deliberately named "dataPreview"
+  // throughout, not "preview", to avoid any confusion with the unrelated
+  // DOM-highlight feature above (previewActive/togglePreview/#btn-preview)
+  // — that one highlights matched elements on the live page; this one shows
+  // a sample of what the last /generate trial run actually scraped.
+  // Whether to *request* one (includeDataPreview) moved to the global
+  // Settings tab (shared/global-settings.js, Issue-driven follow-up) — a
+  // cross-session preference now, not a per-scrape toggle — but the
+  // *result* of the last request still lives here, same as before.
   dataPreview:        null, // the companion's ScriptPreviewData from the last successful /generate with includeDataPreview on, or null
-  // Issue #161: opt-in full trial-run output download — the complete,
-  // uncapped counterpart to includeDataPreview/dataPreview above (they're
-  // independent, either/both/neither may be on). Not persisted, always off
-  // on popup reopen, same per-generate-opt-in treatment as includeDataPreview.
-  includeOutputFile:  false,
+  // Issue #161: full trial-run output download — the complete, uncapped
+  // counterpart to dataPreview above (independent of it, either/both/
+  // neither may be on). Same "request-toggle moved to global Settings,
+  // result stays here" split as dataPreview above.
   outputFile:         null, // {fileName, content} from the last successful /generate with includeOutputFile on, or null
-  // Issue #86: opt-in Json output, mode-independent (like includeDataPreview
-  // above) — not persisted, always off on popup reopen; a per-generate
-  // choice, not a sticky preference. See buildScrapingConfig for exactly
-  // what this adds/replaces per mode.
-  useJsonOutput:      false,
   // Issue #141: local SQLite-backed configuration history. savedConfigs is
   // null before the first GET /configs?url=... for the current tab
   // completes (or if it fails — an older companion without this route, a
@@ -546,7 +540,6 @@ let _state = {
   // same pull-based tradeoff savedConfigs/allSavedConfigs already accept.
   outputBlueprints:            null,
   outputBlueprintsLoading:     false,
-  manageBlueprintsModalOpen:   false,
   blueprintEditModalOpen:      false,
   blueprintEditingId:          null, // null = creating a new blueprint, else editing this id
   blueprintEditDraft:          { name: '', fieldNames: [] },
@@ -586,7 +579,6 @@ function persistState() {
       proxy: _state.proxy,
       pagination: _state.pagination,
       persistentSession: _state.persistentSession,
-      externalConfig: _state.externalConfig,
       hardening: _state.hardening,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
@@ -749,7 +741,7 @@ function onConfirmSplitField(scope, name, sourceFieldName, separator, index, rem
 let lastFieldModalSelector = null;
 
 function render() {
-  ['checking', 'error', 'idle', 'selecting', 'api-config', 'generating', 'done'].forEach(s =>
+  ['checking', 'error', 'idle', 'selecting', 'api-config', 'settings', 'generating', 'done'].forEach(s =>
     hide(`screen-${s}`)
   );
   hide('modal-field-name');
@@ -760,7 +752,6 @@ function render() {
   hide('modal-api-field-transforms');
   hide('modal-save-config');
   hide('modal-save-output');
-  hide('modal-manage-blueprints');
   hide('modal-blueprint-edit');
   hide('modal-combine-field');
   hide('modal-split-field');
@@ -771,25 +762,24 @@ function render() {
     [STATES.IDLE]:               'idle',
     [STATES.SELECTING]:          'selecting',
     [STATES.API_CONFIG]:         'api-config',
+    [STATES.SETTINGS]:           'settings',
     [STATES.GENERATING]:         'generating',
     [STATES.DONE]:               'done',
   }[_state.current];
 
   if (screenKey) show(`screen-${screenKey}`);
+  // The header's own Settings icon isn't inside any .screen (always
+  // visible/clickable, like theme-toggle/lang-select), so its own "active"
+  // visual state has to be driven from here rather than from
+  // renderSettingsScreen, which only ever runs while that screen is current.
+  document.getElementById('btn-open-settings')?.classList.toggle('active', _state.current === STATES.SETTINGS);
+  if (_state.current === STATES.SETTINGS) renderSettingsScreen(bridge);
 
   // modal-save-config is a global overlay, not scoped to the IDLE screen's
   // own render block below — Issue #202's "save configuration first"
   // shortcut (openSaveConfigModal) can now also open it from the DONE
   // screen, so this check must run regardless of which screen is current.
   if (_state.saveConfigModalOpen) show('modal-save-config');
-
-  // Issue #191: same "global overlay" treatment as modal-save-config above
-  // — reachable from the IDLE screen's Settings section, but not scoped to
-  // it, since a blueprint could plausibly be managed independently later.
-  if (_state.manageBlueprintsModalOpen) {
-    show('modal-manage-blueprints');
-    renderManageBlueprintsModal(bridge);
-  }
 
   // Issue #206 follow-up: same "global overlay" treatment as modal-save-
   // config/modal-manage-blueprints above — reachable from flat/container
@@ -1103,12 +1093,20 @@ function wireEvents() {
   wireSavedConfigsEvents(bridge);
 
   wireOutputBlueprintsEvents(bridge);
+  wireSettingsScreenEvents(bridge);
 
   document.getElementById('btn-new-scraper')?.addEventListener('click', () => {
     log('BTN new-scraper → reset state');
     stopPreviewIfActive(bridge);
-    chrome.storage.session.set({ fields: [], url: '', groups: [], apiConfig: null });
-    setState(STATES.CHECKING_COMPANION, { fields: [], groups: [], apiConfig: null, scriptText: '', url: '' });
+    // scriptFileName/outputFileName are reset here too (Issue-driven
+    // follow-up): 'fixed' scriptNameMode only ever fills a *blank*
+    // scriptFileName (computeScriptFileNamePatch), so without this reset a
+    // manually-typed name from the previous scrape would keep being carried
+    // over instead of "New scraper" giving 'fixed' mode's own default a
+    // fresh chance to apply, the same "start over" behavior every other
+    // field here already gets.
+    chrome.storage.session.set({ fields: [], url: '', groups: [], apiConfig: null, scriptFileName: '', outputFileName: '' });
+    setState(STATES.CHECKING_COMPANION, { fields: [], groups: [], apiConfig: null, scriptText: '', url: '', scriptFileName: '', outputFileName: '' });
     checkCompanion(bridge);
   });
 
@@ -1166,6 +1164,7 @@ async function loadScreenPartials() {
   await Promise.all([
     loadScreenPartial('screen-idle', 'popup/screens/idle.html'),
     loadScreenPartial('screen-api-config', 'popup/screens/api-config.html'),
+    loadScreenPartial('screen-settings', 'popup/screens/settings.html'),
     loadScreenPartial('modals-mount', 'popup/screens/modals.html'),
   ]);
 }
@@ -1181,6 +1180,9 @@ async function init() {
   const theme = await initTheme();
   log('INIT theme', theme ?? 'system');
 
+  await loadGlobalSettings();
+  log('INIT global settings', getGlobalSettings());
+
   applyStaticTranslations();
 
   wireEvents();
@@ -1189,7 +1191,7 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pagination', 'persistentSession', 'externalConfig', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pagination', 'persistentSession', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
     'scriptFileName', 'outputFileName',
@@ -1255,7 +1257,6 @@ if (typeof module !== 'undefined') {
     requestDeleteSavedOutput, cancelDeleteSavedOutput, deleteSavedOutput, renderSaveOutputModal,
     fetchOutputBlueprints, selectOutputBlueprint,
     renderOutputBlueprintMappingSection,
-    renderManageBlueprintsModal, openManageBlueprintsModal, closeManageBlueprintsModal,
     requestDeleteBlueprint, cancelDeleteBlueprint, deleteBlueprint,
     openBlueprintCreateModal, openBlueprintEditModal, closeBlueprintEditModal, saveBlueprintEdit,
     renderBlueprintEditModal,

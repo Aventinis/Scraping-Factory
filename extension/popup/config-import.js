@@ -202,11 +202,16 @@ const SFConfigImport = (function () {
   function applyConfigToState(config) {
     // Issue #239: Combined mode has none of Fields/Groups/Api/engine/
     // browserActions/changeDetection/proxy/pagination/hardening/
-    // persistentSession/externalConfig of its own (the companion rejects
-    // all of those at this outer level) — reloading one only ever restores
+    // persistentSession of its own (the companion rejects all of those at
+    // this outer level) — reloading one only ever restores
     // combinedComponents (each entry's own full config lives in its own,
     // separately-saved configuration, resolved live at generate/save/export
     // time, never re-imported into ad-hoc fields/groups/apiConfig here).
+    // Issue-driven follow-up: outputAsJson/includeDataPreview/
+    // includeOutputFile/externalConfig are no longer part of this patch at
+    // all — they're cross-session global preferences now (shared/
+    // global-settings.js), so loading a saved/exported config must not
+    // touch them.
     if (config.combined) {
       return {
         mode: 'combined',
@@ -216,14 +221,12 @@ const SFConfigImport = (function () {
         browserActions: [],
         scriptFileName: config.scriptFileName || '',
         outputFileName: config.outputFileName || '',
-        useJsonOutput: false,
         additionalStartUrls: [],
         changeDetection: applyChangeDetectionConfig(null),
         proxy: applyProxyConfig(null),
         pagination: applyPaginationConfig(null),
         hardening: applyHardeningConfig(null),
         persistentSession: false,
-        externalConfig: false,
         ...applyOutputBlueprintConfig(null),
       };
     }
@@ -257,14 +260,12 @@ const SFConfigImport = (function () {
         browserActions: deserializeBrowserActions(config.browserActions),
         scriptFileName: config.scriptFileName || '',
         outputFileName: '',
-        useJsonOutput: false,
         additionalStartUrls: config.additionalUrls || [],
         changeDetection: applyChangeDetectionConfig(null),
         proxy: applyProxyConfig(config.proxy),
         pagination: applyPaginationConfig(config.pagination),
         hardening: applyHardeningConfig(null),
         persistentSession: config.persistentSession === true,
-        externalConfig: false,
         ...applyOutputBlueprintConfig(null),
       };
     }
@@ -292,16 +293,12 @@ const SFConfigImport = (function () {
       browserActions: deserializeBrowserActions(config.browserActions),
       scriptFileName: config.scriptFileName || '',
       outputFileName: config.outputFileName || '',
-      useJsonOutput: config.outputFormat === 'Json',
       additionalStartUrls: config.additionalUrls || [],
       changeDetection: applyChangeDetectionConfig(config.changeDetection),
       proxy: applyProxyConfig(config.proxy),
       pagination: applyPaginationConfig(config.pagination),
       hardening: applyHardeningConfig(config.hardening),
       persistentSession: config.persistentSession === true,
-      // Issue #178: same plain-boolean passthrough as persistentSession
-      // above — nothing to default/reshape beyond the bool itself.
-      externalConfig: config.externalConfig === true,
       // Issue #191: only ever present on the wire for flat mode/Api's flat
       // shape — applyOutputBlueprintConfig(undefined) already resets to
       // "none" for every other mode, so no per-mode branching is needed here.

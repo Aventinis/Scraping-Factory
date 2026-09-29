@@ -16,6 +16,18 @@
          *current* state, same as the language <select>'s own value does —
          see popup.js's renderThemeToggle. -->
     <button id="theme-toggle" type="button" data-i18n-title="theme.toggleTitle"></button>
+    <!-- Global Settings tab: cross-session preferences (Output as JSON,
+         trial-run data preview, full output-file download, editable XML
+         config, default script name), Output Blueprint management, and
+         cross-site saved-config/output browsing — reachable independent of
+         app state, same as theme-toggle/lang-select, and never touches
+         switchMode/MODE_SWITCH_CLEARS since it isn't a scraping mode. -->
+    <button id="btn-open-settings" type="button" data-i18n-title="settings.tabTitle">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+      </svg>
+    </button>
     <select id="lang-select" aria-label="Language / Sprache / Idioma" title="Language / Sprache / Idioma">
       <option value="de">Deutsch</option>
       <option value="en">English</option>
@@ -83,6 +95,12 @@
        flow (see screen-idle above), which only shows once mode === 'api'. -->
   <section id="screen-api-config" class="screen hidden">
   </section>
+
+  <!-- SETTINGS — global, cross-session preferences (see #btn-open-settings
+       above). Kept as its own top-level screen, not a modal, since it hosts
+       genuinely permanent content (blueprint management, cross-site saved
+       configs) that a modal's transient-overlay framing doesn't fit well. -->
+  <section id="screen-settings" class="screen hidden"></section>
 
   <!-- GENERATING -->
   <section id="screen-generating" class="screen hidden">
@@ -154,6 +172,7 @@
   <script src="../shared/logger.js"></script>
   <script src="../shared/companion-config.js"></script>
   <script src="../shared/theme.js"></script>
+  <script src="../shared/global-settings.js"></script>
   <script src="../i18n/i18n.js"></script>
   <script src="api-config.js"></script>
   <script src="container-tree.js"></script>
@@ -181,6 +200,7 @@
   <script src="blocks-config.js"></script>
   <script src="blocks-config-ui.js"></script>
   <script src="output-blueprints-ui.js"></script>
+  <script src="global-settings-ui.js"></script>
   <script src="idle-screen-ui.js"></script>
   <script src="message-router.js"></script>
   <script src="session-restore.js"></script>
