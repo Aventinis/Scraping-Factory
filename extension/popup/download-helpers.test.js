@@ -115,7 +115,7 @@ describe('downloadConfigExport (btn-export-config)', () => {
       url: 'https://example.com/speisekarte',
       fields: [{ name: 'Titel', selector: 'h1', attribute: null }],
       outputFormat: 'Csv',
-      scriptFileName: null,
+      scriptFileName: 'scraper',
       outputFileName: null,
     });
   });
@@ -139,7 +139,7 @@ describe('downloadConfigExport (btn-export-config)', () => {
       version: '1',
       url: 'https://example.com/speisekarte',
       groups: [{ name: 'Vorspeisen', selector: 'section.menu-category', repeating: true, children: [] }],
-      scriptFileName: null,
+      scriptFileName: 'scraper',
       outputFileName: null,
     });
   });

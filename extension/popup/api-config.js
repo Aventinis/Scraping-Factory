@@ -27,6 +27,12 @@ const SFApiConfig = (function () {
     API_CONFIG:         'API_CONFIG', // Issue #53 Phase 5 — configuring a confirmed candidate into an ApiConfig
     GENERATING:         'GENERATING',
     DONE:               'DONE',
+    // The global Settings tab — reachable from the persistent header
+    // (outside any .screen), independent of `mode`/switchMode's own
+    // MODE_SWITCH_CLEARS, since it isn't a scraping mode and must never
+    // clear in-progress fields/groups/apiConfig. "Back" returns to IDLE
+    // with no patch, mirroring btn-back-to-config.
+    SETTINGS:           'SETTINGS',
   };
 
   // Generic, dependency-free HTML-escaping helper — lives here for the same

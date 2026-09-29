@@ -187,22 +187,22 @@ input, textarea, select { transition: border-color var(--transition-fast), box-s
    a combined selector rather than a new shared class, so none of these
    five elements' existing class lists (and anything that queries them)
    needs to change. */
-.screen-idle-scroll::-webkit-scrollbar, #screen-api-config::-webkit-scrollbar,
+.screen-idle-scroll::-webkit-scrollbar, #screen-api-config::-webkit-scrollbar, #screen-settings::-webkit-scrollbar,
 .dom-tree-wrapper::-webkit-scrollbar, .data-preview-table-wrap::-webkit-scrollbar,
 .data-preview-text::-webkit-scrollbar {
   width: 8px; height: 8px;
 }
-.screen-idle-scroll::-webkit-scrollbar-track, #screen-api-config::-webkit-scrollbar-track,
+.screen-idle-scroll::-webkit-scrollbar-track, #screen-api-config::-webkit-scrollbar-track, #screen-settings::-webkit-scrollbar-track,
 .dom-tree-wrapper::-webkit-scrollbar-track, .data-preview-table-wrap::-webkit-scrollbar-track,
 .data-preview-text::-webkit-scrollbar-track {
   background: transparent;
 }
-.screen-idle-scroll::-webkit-scrollbar-thumb, #screen-api-config::-webkit-scrollbar-thumb,
+.screen-idle-scroll::-webkit-scrollbar-thumb, #screen-api-config::-webkit-scrollbar-thumb, #screen-settings::-webkit-scrollbar-thumb,
 .dom-tree-wrapper::-webkit-scrollbar-thumb, .data-preview-table-wrap::-webkit-scrollbar-thumb,
 .data-preview-text::-webkit-scrollbar-thumb {
   background: var(--color-border); border-radius: var(--radius-pill); border: 2px solid transparent; background-clip: padding-box;
 }
-.screen-idle-scroll::-webkit-scrollbar-thumb:hover, #screen-api-config::-webkit-scrollbar-thumb:hover,
+.screen-idle-scroll::-webkit-scrollbar-thumb:hover, #screen-api-config::-webkit-scrollbar-thumb:hover, #screen-settings::-webkit-scrollbar-thumb:hover,
 .dom-tree-wrapper::-webkit-scrollbar-thumb:hover, .data-preview-table-wrap::-webkit-scrollbar-thumb:hover,
 .data-preview-text::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-faint); background-clip: padding-box;
@@ -491,6 +491,7 @@ body {
    now grows via the shared .screen flex:1 rule and just scrolls
    internally within whatever height that ends up being. */
 #screen-api-config { padding: 16px; overflow-y: auto; min-height: 0; }
+#screen-settings { padding: 16px; overflow-y: auto; min-height: 0; }
 .api-config-parts, .api-config-headers { list-style: none; margin-bottom: 4px; }
 .api-config-part-row, .api-config-header-row {
   display: flex; align-items: center; gap: 6px; padding: 5px 6px; background: var(--color-surface-subtle); border-radius: var(--radius-md); margin-bottom: 4px; font-size: 11px;
@@ -812,3 +813,13 @@ button:active:not(:disabled) { transform: translateY(1px); }
   background: var(--color-surface); color: var(--color-text-secondary);
 }
 #theme-toggle svg { width: 14px; height: 14px; }
+/* Global Settings tab entry point — same compact icon-button treatment as
+   #theme-toggle right next to it. */
+#btn-open-settings {
+  display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0;
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  background: var(--color-surface); color: var(--color-text-secondary);
+}
+#btn-open-settings svg { width: 14px; height: 14px; }
+#btn-open-settings.active { background: var(--color-primary); color: var(--color-on-accent); border-color: var(--color-primary); }

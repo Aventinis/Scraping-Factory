@@ -32,6 +32,46 @@ function sanitizeFileNameBase(input, fallback) {
   return sanitized || fallback;
 }
 
+// Issue-driven follow-up (default script name preference): derives a
+// sanitized script-name base from a URL's own hostname, for the global
+// Settings tab's "always from the website" scriptNameMode. A malformed/
+// relative `url` (same possibility openSaveConfigModal's own defaultName
+// already has to guard against) falls back to `fallback` — new URL() throws
+// rather than returning something sanitizeFileNameBase could clean up on
+// its own.
+function deriveScriptFileNameFromHostname(url, fallback) {
+  let hostname = '';
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    // hostname stays '' — sanitizeFileNameBase below falls back to
+    // `fallback`, same as any other unreachable default elsewhere in this
+    // popup.
+  }
+  return sanitizeFileNameBase(hostname, fallback);
+}
+
+// Issue-driven follow-up: the scriptFileName patch to apply whenever a
+// fresh site is detected — checkCompanion()'s own health check, and the
+// stale-tracked-URL self-correction in message-router.js/session-restore.js
+// — reused by every call site instead of duplicating the mode branch. In
+// 'hostname' mode, the field always recomputes/overwrites, tracking
+// whichever site is current ("immer von der Webseite abgeleitet"); in
+// 'fixed' mode, it only ever fills the field once, when it's still blank —
+// a starting point that never stomps a manual edit. Returns {} when neither
+// applies (fixed mode with an already-non-blank name), the same "omit the
+// key entirely rather than send a no-op" convention this module's own
+// build*Config helpers already use for an incomplete/inactive draft.
+function computeScriptFileNamePatch(currentScriptFileName, url, globalSettings) {
+  if (globalSettings.scriptNameMode === 'hostname') {
+    return { scriptFileName: deriveScriptFileNameFromHostname(url, globalSettings.scriptNameFixed) };
+  }
+  if (!currentScriptFileName) {
+    return { scriptFileName: globalSettings.scriptNameFixed };
+  }
+  return {};
+}
+
 // Issue #83: one URL per line, pasted/typed into the additional-start-urls
 // textarea — blank lines (a trailing newline, or blank lines between pasted
 // entries) are a formatting artifact, not a URL the user meant to add, so
@@ -595,7 +635,7 @@ function frameBadgeHtml(framePath) {
   return `<span class="frame-badge" title="${title}">${escapeHtml(t('frame.badge'))}</span>`;
 }
 
-  return {sanitizeFileNameBase, parseAdditionalUrls,
+  return {sanitizeFileNameBase, deriveScriptFileNameFromHostname, computeScriptFileNamePatch, parseAdditionalUrls,
     buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildHardeningConfig,
     computeInitialMonitoringSectionOpen, collectFieldNames,
     buildScrapingConfig, buildConfigExport,

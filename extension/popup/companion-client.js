@@ -22,8 +22,11 @@ const { STATES } =
 const { showToast, setLastError } =
   typeof require !== 'undefined' ? require('./toast') : self.SFToast;
 
-const { buildScrapingConfig, buildVerificationValues } =
+const { buildScrapingConfig, buildVerificationValues, computeScriptFileNamePatch } =
   typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
+
+const { getGlobalSettings } =
+  typeof require !== 'undefined' ? require('../shared/global-settings') : self.SFGlobalSettings;
 
 // Resolved fresh in checkCompanion() (default or the user's persisted
 // override, see shared/companion-config.js) and reused by generate()/the
@@ -49,7 +52,11 @@ async function checkCompanion(bridge) {
     );
     const url = tabs[0]?.url ?? '';
     log('TAB_URL', url);
-    bridge.setState(STATES.IDLE, { url });
+    // Issue-driven follow-up: the default-script-name preference — see
+    // computeScriptFileNamePatch's own doc comment for the 'hostname'-vs-
+    // 'fixed' mode rule.
+    const scriptFileNamePatch = computeScriptFileNamePatch(bridge.getState().scriptFileName, url, getGlobalSettings());
+    bridge.setState(STATES.IDLE, { url, ...scriptFileNamePatch });
     // Issue #141: fire-and-forget — fetchSavedConfigs patches state itself
     // once (or if) it resolves, no need to await/block the IDLE transition
     // on it.
@@ -166,11 +173,15 @@ async function generate(bridge) {
     }
   }
 
+  // Issue-driven follow-up: outputAsJson/includeDataPreview/includeOutputFile/
+  // externalConfig moved from per-scrape _state to the cross-session global
+  // Settings tab (shared/global-settings.js) — read from there now.
+  const globalSettings = getGlobalSettings();
   const config = buildScrapingConfig(
     state.url, state.mode, state.fields, state.groups, state.apiConfig,
-    state.scriptFileName, state.outputFileName, state.engine, state.browserActions, state.includeDataPreview,
-    state.useJsonOutput, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
-    state.pagination, state.persistentSession, state.includeOutputFile, state.externalConfig, combinedComponents,
+    state.scriptFileName, state.outputFileName, state.engine, state.browserActions, globalSettings.includeDataPreview,
+    globalSettings.outputAsJson, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
+    state.pagination, state.persistentSession, globalSettings.includeOutputFile, globalSettings.externalConfig, combinedComponents,
     state.blocks, state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
     state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
   );
@@ -221,7 +232,7 @@ async function generate(bridge) {
     let dataPreview = null;
     let outputFile = null;
     let blocksOutput = null;
-    if (state.includeDataPreview || state.includeOutputFile) {
+    if (globalSettings.includeDataPreview || globalSettings.includeOutputFile) {
       const data = await res.json();
       scriptText = data.script;
       // Issue #182: Blocks mode's own envelope is { script, blocks: [...] }

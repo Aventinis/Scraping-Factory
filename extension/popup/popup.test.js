@@ -79,7 +79,7 @@ describe('applyConfigToState', () => {
     expect(applyConfigToState(config)).not.toHaveProperty('url');
   });
 
-  test('flat mode: round-trips fields (with attribute/framePath/transforms), scriptFileName/outputFileName, useJsonOutput, additionalStartUrls', () => {
+  test('flat mode: round-trips fields (with attribute/framePath/transforms), scriptFileName/outputFileName, additionalStartUrls', () => {
     const fields = [
       { name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null, download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false },
       { name: 'Bild', selector: 'img', attribute: 'src', framePath: ['#widget'], transforms: [{ kind: 'trim' }], download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false },
@@ -97,7 +97,10 @@ describe('applyConfigToState', () => {
     expect(result.apiConfig).toBeNull();
     expect(result.scriptFileName).toBe('myscraper');
     expect(result.outputFileName).toBe('result');
-    expect(result.useJsonOutput).toBe(true);
+    // useJsonOutput moved off per-scrape state to the global Settings tab
+    // (shared/global-settings.js) — applyConfigToState no longer touches it
+    // at all, so a loaded/exported config never stomps that preference.
+    expect(result).not.toHaveProperty('useJsonOutput');
     expect(result.additionalStartUrls).toEqual(['https://example.com/page2']);
   });
 
@@ -236,18 +239,16 @@ describe('applyConfigToState', () => {
     expect(result.persistentSession).toBe(false);
   });
 
-  // Issue #178
-  test('round-trips externalConfig', () => {
+  // Issue #178 / Issue-driven follow-up: externalConfig moved off per-scrape
+  // state to the global Settings tab (shared/global-settings.js) —
+  // applyConfigToState no longer touches it at all, regardless of whether
+  // the loaded/exported config itself had it set.
+  test('never round-trips externalConfig — it is a global preference now', () => {
     const config = buildScrapingConfig(
       'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
       false, [], null, null, null, null, false, false, true,
     );
-    expect(applyConfigToState(config).externalConfig).toBe(true);
-  });
-
-  test('defaults externalConfig to false when omitted', () => {
-    const config = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
-    expect(applyConfigToState(config).externalConfig).toBe(false);
+    expect(applyConfigToState(config)).not.toHaveProperty('externalConfig');
   });
 
   test('round-trips every hardening check kind', () => {
@@ -4354,6 +4355,21 @@ describe('output settings (script/output filename)', () => {
     expect(ext.textContent).toBe('.csv');
   });
 
+  // Issue-driven follow-up: "Output as JSON" moved off per-scrape state to
+  // the global Settings tab (shared/global-settings.js) — the extension
+  // hint has to read it from there now, overriding whichever of .csv/.xml
+  // the current mode would otherwise show (Architecture Decision, Issue #86).
+  test('the output extension hint shows .json when the global "Output as JSON" preference is on', async () => {
+    const { updateGlobalSettings } = require('../shared/global-settings');
+    await updateGlobalSettings({ outputAsJson: true });
+    // Any re-render picks the new preference up — switching modes is a
+    // convenient one already exercised by the test above.
+    document.getElementById('btn-mode-container').click();
+    expect(document.getElementById('output-filename-ext').textContent).toBe('.json');
+    document.getElementById('btn-mode-flat').click();
+    expect(document.getElementById('output-filename-ext').textContent).toBe('.json');
+  });
+
   test('generate() sends the configured script/output filenames to /generate', async () => {
     document.getElementById('input-script-filename').value = 'mein-scraper';
     document.getElementById('input-script-filename').dispatchEvent(new Event('input'));
@@ -6115,7 +6131,7 @@ describe('API-Mode third mode integration (Issue #53 Phase 6)', () => {
 
     expect(body).toEqual({
       version: '1', url: 'https://example.com', api: seededApiConfig,
-      scriptFileName: null, outputFileName: null,
+      scriptFileName: 'scraper', outputFileName: null,
     });
   });
 });

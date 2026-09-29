@@ -1,6 +1,7 @@
 {
   "common": {
     "cancel": "Cancel",
+    "back": "Back",
     "add": "Add",
     "remove": "Remove",
     "use": "Use",
@@ -312,6 +313,18 @@
     "dataPreviewTruncatedXml": "Excerpt — not all data is shown",
     "blocksOutputTitle": "Block outputs",
     "blocksOutputDownloadBtn": "Download"
+  },
+  "settings": {
+    "tabTitle": "Settings",
+    "title": "Settings",
+    "preferencesTitle": "Preferences",
+    "scriptNameModeLabel": "Default script name",
+    "scriptNameModeFixed": "Fixed name",
+    "scriptNameModeHostname": "From website",
+    "scriptNameFixedLabel": "Fixed script name",
+    "scriptNameHostnameHint": "The script name is always derived from the current website's hostname.",
+    "allConfigsTitle": "All saved configurations",
+    "allConfigsEmpty": "No saved configurations yet."
   },
   "modals": {
     "fieldName": {

@@ -38,7 +38,6 @@ const SFSessionRestore = (function () {
     if (stored.proxy)                 next = { ...next, proxy: stored.proxy };
     if (stored.pagination)            next = { ...next, pagination: stored.pagination };
     if (stored.persistentSession !== undefined) next = { ...next, persistentSession: stored.persistentSession };
-    if (stored.externalConfig !== undefined) next = { ...next, externalConfig: stored.externalConfig };
     if (stored.hardening)             next = { ...next, hardening: stored.hardening };
     if (stored.scriptFileName)        next = { ...next, scriptFileName: stored.scriptFileName };
     if (stored.outputFileName)        next = { ...next, outputFileName: stored.outputFileName };

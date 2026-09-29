@@ -29,6 +29,8 @@ const SFIdleScreenUI = (function () {
     typeof require !== 'undefined' ? require('./output-blueprints') : self.SFOutputBlueprints;
   const { renderOutputBlueprintMappingSection } =
     typeof require !== 'undefined' ? require('./output-blueprints-ui') : self.SFOutputBlueprintsUI;
+  const { getGlobalSettings } =
+    typeof require !== 'undefined' ? require('../shared/global-settings') : self.SFGlobalSettings;
 
   // Duplicated verbatim from popup.js's own tiny show(id) helper — same "no
   // cross-module includes for small DOM helpers" convention already used
@@ -315,23 +317,16 @@ const SFIdleScreenUI = (function () {
     document.getElementById('output-filename-row')?.classList.toggle('hidden', state.mode === 'blocks');
     // Container mode always forces Xml server-side (absent Json); API mode
     // forces Xml too, but only for its tree shape (Groups) — its flat shape
-    // forces Csv, same as flat mode itself. Issue #86's useJsonOutput
-    // toggle overrides whichever of those would otherwise apply.
+    // forces Csv, same as flat mode itself. Issue #86's "Output as JSON"
+    // preference (now a global Settings-tab preference, not per-scrape
+    // state — see shared/global-settings.js) overrides whichever of those
+    // would otherwise apply.
     const isTreeShapedMode = state.mode === 'container'
       || (state.mode === 'api' && !!state.apiConfig?.groups?.length);
     const outputExtEl = document.getElementById('output-filename-ext');
     if (outputExtEl) {
-      outputExtEl.textContent = state.useJsonOutput ? '.json' : (isTreeShapedMode ? '.xml' : '.csv');
+      outputExtEl.textContent = getGlobalSettings().outputAsJson ? '.json' : (isTreeShapedMode ? '.xml' : '.csv');
     }
-
-    const outputJsonToggle = document.getElementById('toggle-output-json');
-    if (outputJsonToggle) outputJsonToggle.checked = state.useJsonOutput;
-
-    const dataPreviewToggle = document.getElementById('toggle-include-data-preview');
-    if (dataPreviewToggle) dataPreviewToggle.checked = state.includeDataPreview;
-
-    const outputFileToggle = document.getElementById('toggle-include-output-file');
-    if (outputFileToggle) outputFileToggle.checked = state.includeOutputFile;
 
     // Issue #83: hidden for API mode — Api builds its own request URL from
     // apiConfig.urlTemplate and never reads this list at all (the companion

@@ -32,6 +32,9 @@ const { getResolvedCompanionUrl, resolveCombinedComponents } =
 const { applyConfigToState } =
   typeof require !== 'undefined' ? require('./config-import') : self.SFConfigImport;
 
+const { getGlobalSettings } =
+  typeof require !== 'undefined' ? require('../shared/global-settings') : self.SFGlobalSettings;
+
 // Issue #141: renders _state.savedConfigs (scoped to the current page's
 // hostname, see fetchSavedConfigs) as a Load/Delete row per entry. A row
 // whose id matches savedConfigsPendingDeleteId swaps to an inline
@@ -247,11 +250,16 @@ async function createSavedConfig(bridge, name) {
   const combinedComponents = state.mode === 'combined'
     ? await resolveCombinedComponents(state.combinedComponents || [])
     : null;
+  // Issue-driven follow-up: outputAsJson/includeDataPreview/includeOutputFile/
+  // externalConfig moved from per-scrape _state to the cross-session global
+  // Settings tab (shared/global-settings.js) — read from there now, same as
+  // every other buildScrapingConfig/buildConfigExport call site.
+  const globalSettings = getGlobalSettings();
   const config = buildScrapingConfig(
     state.url, state.mode, state.fields, state.groups, state.apiConfig,
-    state.scriptFileName, state.outputFileName, state.engine, state.browserActions, state.includeDataPreview,
-    state.useJsonOutput, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
-    state.pagination, state.persistentSession, false, state.externalConfig, combinedComponents, state.blocks,
+    state.scriptFileName, state.outputFileName, state.engine, state.browserActions, globalSettings.includeDataPreview,
+    globalSettings.outputAsJson, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
+    state.pagination, state.persistentSession, false, globalSettings.externalConfig, combinedComponents, state.blocks,
     state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
     state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
   );
@@ -566,6 +574,169 @@ function renderSaveOutputModal(bridge) {
   }
 }
 
+// Issue-driven follow-up: the global Settings tab's own cross-site saved-
+// configurations section — the unscoped counterpart to
+// renderSavedConfigsList above, browsing/deleting anything saved for *any*
+// site (state.allSavedConfigs, already fetched unconditionally by
+// checkCompanion() for Combined mode's own component picker — no new fetch
+// needed here). No "Laden" action here — loading only makes sense in the
+// context of the site currently open in the tracked browser tab (see
+// loadSavedConfig's own doc comment on why _state.url is never touched by
+// it), which an arbitrary entry in this unscoped list may not even be. Uses
+// its own allSavedConfigsPendingDeleteId state slot rather than sharing
+// savedConfigsPendingDeleteId with the per-site list, so an in-progress
+// delete-confirm on one screen never leaks into the other; the outputs
+// sub-panel itself (toggle/download/delete/replay-hardening) is shared
+// global state (savedConfigsExpandedId etc.) the same way it already is
+// across a single screen's own re-renders — harmless, since only one of
+// the IDLE/Settings screens is ever visible at a time.
+function renderAllSavedConfigsList(bridge) {
+  const state = bridge.getState();
+  const listEl = document.getElementById('all-saved-configs-list');
+  const emptyEl = document.getElementById('all-saved-configs-empty');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+
+  const allSavedConfigs = state.allSavedConfigs || [];
+  if (emptyEl) emptyEl.classList.toggle('hidden', allSavedConfigs.length > 0);
+
+  allSavedConfigs.forEach((entry) => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'saved-config-row';
+    const savedDate = new Date(entry.savedAt);
+    const savedAtText = Number.isNaN(savedDate.getTime()) ? entry.savedAt : savedDate.toLocaleString();
+
+    if (state.allSavedConfigsPendingDeleteId === entry.id) {
+      rowEl.innerHTML =
+        `<span class="saved-config-name">${escapeHtml(entry.name)}</span>` +
+        `<span class="saved-config-confirm-text">${escapeHtml(t('idle.savedConfigsDeleteConfirm'))}</span>` +
+        `<button type="button" class="btn-danger btn-tiny btn-all-saved-config-delete-confirm" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteConfirmYes'))}</button>` +
+        `<button type="button" class="btn-secondary btn-tiny btn-all-saved-config-delete-cancel" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteConfirmNo'))}</button>`;
+    } else {
+      const outputsExpanded = state.savedConfigsExpandedId === entry.id;
+      rowEl.innerHTML =
+        `<span class="saved-config-name" title="${escapeHtml(entry.url)}">${escapeHtml(entry.name)}</span>` +
+        `<span class="saved-config-date">${escapeHtml(savedAtText)}</span>` +
+        `<button type="button" class="btn-secondary btn-tiny btn-saved-config-outputs-toggle" data-id="${entry.id}">${escapeHtml(t(outputsExpanded ? 'idle.savedConfigsOutputsHideBtn' : 'idle.savedConfigsOutputsBtn'))}</button>` +
+        `<button type="button" class="btn-danger btn-tiny btn-all-saved-config-delete" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteBtn'))}</button>`;
+    }
+    listEl.appendChild(rowEl);
+
+    if (state.savedConfigsExpandedId === entry.id) {
+      listEl.appendChild(buildSavedOutputsPanelEl(bridge, entry.id));
+    }
+  });
+}
+
+function requestDeleteAllSavedConfig(bridge, id) {
+  bridge.patchState({ allSavedConfigsPendingDeleteId: id });
+}
+
+function cancelDeleteAllSavedConfig(bridge) {
+  bridge.patchState({ allSavedConfigsPendingDeleteId: null });
+}
+
+// Same DELETE /configs/{id} as deleteSavedConfig above, but refreshes both
+// lists afterward — allSavedConfigs (this screen's own list) and, since the
+// deleted entry might belong to the site currently open in the tracked tab,
+// the per-site savedConfigs list too, so the IDLE screen's own panel isn't
+// left showing a now-deleted entry after navigating back to it.
+async function deleteAllSavedConfigsEntry(bridge, id) {
+  log('DELETE_ALL_SAVED_CONFIGS_ENTRY', id);
+  try {
+    const res = await fetch(`${getResolvedCompanionUrl()}/configs/${id}`, { method: 'DELETE' });
+    if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
+    log('DELETE_ALL_SAVED_CONFIGS_ENTRY OK');
+    bridge.patchState({ allSavedConfigsPendingDeleteId: null });
+    showToast(t('toast.configDeleted'), null, 'info');
+    await fetchAllSavedConfigs(bridge);
+    const url = bridge.getState().url;
+    if (url) await fetchSavedConfigs(bridge, url);
+  } catch (err) {
+    log('DELETE_ALL_SAVED_CONFIGS_ENTRY FAIL', err.message);
+    showToast(t('toast.configDeleteFailed', { message: err.message }), 'Delete configuration');
+  }
+}
+
+// Shared by wireSavedConfigsEvents/wireAllSavedConfigsEvents' own delegated
+// listeners below — the outputs sub-panel's own actions (toggle/download/
+// delete/replay-hardening) are identical regardless of which list a saved
+// config's own row happens to live in, since buildSavedOutputsPanelEl always
+// renders the same fixed class names. Returns true once it has handled the
+// click (so the caller's own list-specific branches, checked first, still
+// take priority).
+function handleSavedOutputsSubPanelClick(bridge, e) {
+  const outputsToggleBtn = e.target.closest('.btn-saved-config-outputs-toggle');
+  if (outputsToggleBtn) {
+    toggleSavedConfigOutputs(bridge, parseInt(outputsToggleBtn.dataset.id, 10));
+    return true;
+  }
+  const outputDownloadBtn = e.target.closest('.btn-saved-output-download');
+  if (outputDownloadBtn) {
+    downloadSavedOutput(
+      parseInt(outputDownloadBtn.dataset.configId, 10), parseInt(outputDownloadBtn.dataset.id, 10));
+    return true;
+  }
+  const replayBtn = e.target.closest('.btn-saved-output-replay-hardening');
+  if (replayBtn) {
+    startHardeningReplay(bridge, parseInt(replayBtn.dataset.configId, 10), parseInt(replayBtn.dataset.id, 10));
+    return true;
+  }
+  const basisBtn = e.target.closest('.btn-hardening-replay-basis');
+  if (basisBtn) {
+    chooseHardeningReplayCompareBasis(bridge, basisBtn.dataset.basis);
+    return true;
+  }
+  const runBtn = e.target.closest('.btn-hardening-replay-run');
+  if (runBtn) {
+    runHardeningReplay(bridge);
+    return true;
+  }
+  const replayCancelBtn = e.target.closest('.btn-hardening-replay-cancel');
+  if (replayCancelBtn) {
+    cancelHardeningReplay(bridge);
+    return true;
+  }
+  const outputDeleteBtn = e.target.closest('.btn-saved-output-delete');
+  if (outputDeleteBtn) {
+    requestDeleteSavedOutput(bridge, parseInt(outputDeleteBtn.dataset.id, 10));
+    return true;
+  }
+  const outputConfirmBtn = e.target.closest('.btn-saved-output-delete-confirm');
+  if (outputConfirmBtn) {
+    deleteSavedOutput(
+      bridge, parseInt(outputConfirmBtn.dataset.configId, 10), parseInt(outputConfirmBtn.dataset.id, 10));
+    return true;
+  }
+  const outputCancelBtn = e.target.closest('.btn-saved-output-delete-cancel');
+  if (outputCancelBtn) {
+    cancelDeleteSavedOutput(bridge);
+    return true;
+  }
+  return false;
+}
+
+function wireAllSavedConfigsEvents(bridge) {
+  document.getElementById('all-saved-configs-list')?.addEventListener('click', (e) => {
+    const deleteBtn = e.target.closest('.btn-all-saved-config-delete');
+    if (deleteBtn) {
+      requestDeleteAllSavedConfig(bridge, parseInt(deleteBtn.dataset.id, 10));
+      return;
+    }
+    const confirmBtn = e.target.closest('.btn-all-saved-config-delete-confirm');
+    if (confirmBtn) {
+      deleteAllSavedConfigsEntry(bridge, parseInt(confirmBtn.dataset.id, 10));
+      return;
+    }
+    const cancelBtn = e.target.closest('.btn-all-saved-config-delete-cancel');
+    if (cancelBtn) {
+      cancelDeleteAllSavedConfig(bridge);
+      return;
+    }
+    handleSavedOutputsSubPanelClick(bridge, e);
+  });
+}
+
 // Wires every button/input this module's own render functions above put on
 // the page — "Save configuration"/"Save output" modal open+confirm+cancel,
 // and the saved-configs-list's own delegated Load/Delete/Outputs-toggle/
@@ -662,51 +833,10 @@ function wireSavedConfigsEvents(bridge) {
     // Issue #202: a saved config row's own "Outputs" toggle and, once
     // expanded, its Download/Delete actions — same delegated-listener
     // treatment as the config-level buttons above, since these rows are
-    // also rebuilt on every render() (see renderSavedConfigsList).
-    const outputsToggleBtn = e.target.closest('.btn-saved-config-outputs-toggle');
-    if (outputsToggleBtn) {
-      toggleSavedConfigOutputs(bridge, parseInt(outputsToggleBtn.dataset.id, 10));
-      return;
-    }
-    const outputDownloadBtn = e.target.closest('.btn-saved-output-download');
-    if (outputDownloadBtn) {
-      downloadSavedOutput(
-        parseInt(outputDownloadBtn.dataset.configId, 10), parseInt(outputDownloadBtn.dataset.id, 10));
-      return;
-    }
-    const replayBtn = e.target.closest('.btn-saved-output-replay-hardening');
-    if (replayBtn) {
-      startHardeningReplay(bridge, parseInt(replayBtn.dataset.configId, 10), parseInt(replayBtn.dataset.id, 10));
-      return;
-    }
-    const basisBtn = e.target.closest('.btn-hardening-replay-basis');
-    if (basisBtn) {
-      chooseHardeningReplayCompareBasis(bridge, basisBtn.dataset.basis);
-      return;
-    }
-    const runBtn = e.target.closest('.btn-hardening-replay-run');
-    if (runBtn) {
-      runHardeningReplay(bridge);
-      return;
-    }
-    const replayCancelBtn = e.target.closest('.btn-hardening-replay-cancel');
-    if (replayCancelBtn) {
-      cancelHardeningReplay(bridge);
-      return;
-    }
-    const outputDeleteBtn = e.target.closest('.btn-saved-output-delete');
-    if (outputDeleteBtn) {
-      requestDeleteSavedOutput(bridge, parseInt(outputDeleteBtn.dataset.id, 10));
-      return;
-    }
-    const outputConfirmBtn = e.target.closest('.btn-saved-output-delete-confirm');
-    if (outputConfirmBtn) {
-      deleteSavedOutput(
-        bridge, parseInt(outputConfirmBtn.dataset.configId, 10), parseInt(outputConfirmBtn.dataset.id, 10));
-      return;
-    }
-    const outputCancelBtn = e.target.closest('.btn-saved-output-delete-cancel');
-    if (outputCancelBtn) cancelDeleteSavedOutput(bridge);
+    // also rebuilt on every render() (see renderSavedConfigsList). Shared
+    // with renderAllSavedConfigsList's own delegated listener above, since
+    // buildSavedOutputsPanelEl's own markup is identical either way.
+    handleSavedOutputsSubPanelClick(bridge, e);
   });
 }
 
@@ -719,7 +849,9 @@ function wireSavedConfigsEvents(bridge) {
     requestDeleteSavedOutput, cancelDeleteSavedOutput, deleteSavedOutput,
     renderSaveOutputModal,
     startHardeningReplay, chooseHardeningReplayCompareBasis, runHardeningReplay, cancelHardeningReplay,
-    buildHardeningReplayPanelEl,};
+    buildHardeningReplayPanelEl,
+    renderAllSavedConfigsList, wireAllSavedConfigsEvents,
+    requestDeleteAllSavedConfig, cancelDeleteAllSavedConfig, deleteAllSavedConfigsEntry,};
 })();
 
 if (typeof module !== 'undefined') module.exports = SFSavedConfigsUI;

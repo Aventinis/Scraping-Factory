@@ -402,3 +402,116 @@ describe('robots.txt check (btn-check-robots)', () => {
     expect(document.getElementById('btn-check-robots').disabled).toBe(false);
   });
 });
+
+// Issue-driven follow-up: outputAsJson/includeDataPreview/includeOutputFile/
+// externalConfig moved off per-scrape state into the cross-session global
+// Settings tab (shared/global-settings.js) — generate() now has to read
+// them from there, persisted via chrome.storage.local, instead of from
+// _state. checkCompanion()'s own default-script-name preference is exercised
+// separately by scraping-config-builder.test.js's computeScriptFileNamePatch
+// coverage; this describe block is specifically about generate() picking up
+// a toggle flipped on the Settings screen.
+describe('generate() reads the global Settings tab\'s preferences, not per-scrape state', () => {
+  const flushMicrotasks = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+
+  let storedGlobalSettings;
+
+  beforeEach(async () => {
+    jest.resetModules();
+    storedGlobalSettings = undefined;
+
+    document.body.innerHTML = `
+      <div id="header-bar">
+        <button id="btn-open-settings"></button>
+      </div>
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div id="fields-list"></div>
+        <button id="btn-generate"></button>
+      </section>
+      <section id="screen-generating" class="hidden"></section>
+      <section id="screen-settings" class="hidden">
+        <button id="btn-close-settings"></button>
+        <input type="checkbox" id="toggle-output-json" />
+        <input type="checkbox" id="toggle-include-data-preview" />
+        <input type="checkbox" id="toggle-include-output-file" />
+        <input type="checkbox" id="toggle-external-config" />
+        <div id="manage-blueprints-list"></div>
+        <p id="manage-blueprints-empty" class="hidden"></p>
+        <div id="all-saved-configs-list"></div>
+        <p id="all-saved-configs-empty" class="hidden"></p>
+      </section>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: jest.fn() },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({
+            fields: [{ name: 'Preis', selector: '.price', attribute: null }],
+            url: 'https://example.com',
+          }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+        // A real (in-memory) chrome.storage.local, unlike this file's other
+        // describe blocks — global-settings.js persists through this, so a
+        // toggle flipped on the Settings screen actually survives.
+        local: {
+          get: jest.fn((key) => Promise.resolve(storedGlobalSettings ? { globalSettings: storedGlobalSettings } : {})),
+          set: jest.fn((obj) => {
+            storedGlobalSettings = obj.globalSettings;
+            return Promise.resolve();
+          }),
+        },
+      },
+    };
+
+    global.fetch = jest.fn((url) => {
+      if (String(url).endsWith('/health')) return Promise.resolve({ ok: true });
+      if (String(url).endsWith('/generate')) return Promise.resolve({ ok: true, text: () => Promise.resolve('# script') });
+      return Promise.reject(new Error(`unexpected fetch: ${url}`));
+    });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE, fields restored from storage
+  });
+
+  test('flipping "Output as JSON" on the Settings screen is reflected in the next /generate request', async () => {
+    document.getElementById('btn-open-settings').click();
+    const toggle = document.getElementById('toggle-output-json');
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+    expect(storedGlobalSettings.outputAsJson).toBe(true);
+
+    document.getElementById('btn-close-settings').click();
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const generateCall = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/generate'));
+    const body = JSON.parse(generateCall[1].body);
+    expect(body.outputFormat).toBe('Json');
+  });
+
+  test('leaving every preference off sends today\'s exact byte shape — no outputFormat key for flat mode\'s default Csv', async () => {
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const generateCall = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/generate'));
+    const body = JSON.parse(generateCall[1].body);
+    expect(body.outputFormat).toBe('Csv');
+    expect(body).not.toHaveProperty('includePreview');
+    expect(body).not.toHaveProperty('includeOutputFile');
+    expect(body).not.toHaveProperty('externalConfig');
+  });
+});
