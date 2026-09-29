@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.15.7](https://github.com/Aventinis/Scraping-Factory/compare/v1.15.6...v1.15.7) (2026-09-29)
+
+
+### Features
+
+* **settings:** add chrome.storage.local-backed global settings module ([95ab1d3](https://github.com/Aventinis/Scraping-Factory/commit/95ab1d33befc4ba6627b90218336f09dc1f14564))
+* **settings:** add global Settings tab for cross-session preferences ([6b8e7ab](https://github.com/Aventinis/Scraping-Factory/commit/6b8e7ab4348a2fc40a52782df6655cc1df3c06db))
+* **settings:** add global Settings tab for cross-session preferences ([c121f5e](https://github.com/Aventinis/Scraping-Factory/commit/c121f5e6abc0aaba20315e825448bd6b72bc69f0))
+
 ## [1.15.6](https://github.com/Aventinis/Scraping-Factory/compare/v1.15.5...v1.15.6) (2026-09-28)
 
 
