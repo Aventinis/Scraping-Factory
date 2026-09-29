@@ -1143,6 +1143,55 @@ map into a different target branch.
   `config-import.test.js` (`applyOutputBlueprintConfig` for both schema
   kinds).
 
+### 2.24 Global Settings tab: cross-session preferences
+
+A fifth top-level screen (`STATES.SETTINGS`), reachable from a persistent
+header icon (`#btn-open-settings`, outside every `.screen`, alongside
+`#theme-toggle`/`#lang-select`) rather than folded into the flat/container/
+api/combined/blocks mode toggle — it isn't a scraping mode and must never
+trigger `switchMode`'s `MODE_SWITCH_CLEARS`. Pulls four toggles that used to
+be per-scrape opt-ins in the IDLE screen's own "Settings" section (Output as
+JSON, trial-run data preview, full output-file download, editable XML
+config) out into cross-session preferences, plus a new default-script-name
+preference, and relocates Output Blueprint *management* (create/edit/
+delete — the per-scrape mapping *picker* stays on IDLE) and a new
+cross-site saved-configurations browser into the same screen, since both
+are inherently site-independent concepts. No companion/wire-format changes
+at all — every request `/generate` receives is still byte-for-byte the same
+shape; only *where the extension sources those four values from* changed.
+
+- Extension: `shared/global-settings.js` — one `chrome.storage.local` key
+  (`globalSettings`) holding all six preferences, mirroring
+  `shared/theme.js`'s exact cache-then-sync-read pattern
+  (`loadGlobalSettings`/`getGlobalSettings`/`updateGlobalSettings`).
+  `popup/screens/settings.html` (new runtime-loaded partial, same
+  `loadScreenPartial` convention as `idle.html`/`api-config.html`) +
+  `popup/global-settings-ui.js` (`renderSettingsScreen`/
+  `wireSettingsScreenEvents` — the four toggles and the script-name
+  mode/fixed-name controls directly; delegates blueprint management to
+  `output-blueprints-ui.js`'s `renderManageBlueprintsModal` — unchanged,
+  just repointed from a modal to a permanent section — and the cross-site
+  list to `saved-configs-ui.js`'s new `renderAllSavedConfigsList`/
+  `wireAllSavedConfigsEvents`, which read the already-unconditionally-
+  fetched `state.allSavedConfigs` — Issue #239's own Combined-mode
+  component-picker fetch, reused here — and share `buildSavedOutputsPanelEl`/
+  `handleSavedOutputsSubPanelClick` with the per-site panel's own delegated
+  listener). `scraping-config-builder.js` gains
+  `deriveScriptFileNameFromHostname`/`computeScriptFileNamePatch` (pure —
+  'hostname' mode always overwrites `scriptFileName` from the current
+  site, 'fixed' mode only fills a still-blank one), called from
+  `companion-client.js`'s `checkCompanion()` and `message-router.js`'s
+  stale-tracked-URL self-correction (Issue #85's own `ELEMENT_SELECTED`
+  page-changed branch) — both "a fresh site was just detected" points.
+  `popup.js`'s `_state` drops `useJsonOutput`/`includeDataPreview`/
+  `includeOutputFile`/`externalConfig` entirely; every `buildScrapingConfig`/
+  `buildConfigExport` call site (`companion-client.js`'s `generate()`,
+  `download-helpers.js`'s `downloadConfigExport`, `saved-configs-ui.js`'s
+  `createSavedConfig`) reads them from `getGlobalSettings()` instead.
+  `config-import.js`'s `applyConfigToState` no longer restores any of the
+  four — loading/importing a saved config must never touch a cross-session
+  preference.
+
 ---
 
 ## 3. Class & Module Relationship Model
