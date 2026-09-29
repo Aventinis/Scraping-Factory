@@ -8,7 +8,7 @@ beforeAll(() => initI18n('de-DE'));
 
 const {
   buildScrapingConfig, buildConfigExport,
-  sanitizeFileNameBase, parseAdditionalUrls,
+  sanitizeFileNameBase, deriveScriptFileNameFromHostname, computeScriptFileNamePatch, parseAdditionalUrls,
   buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildHardeningConfig,
   computeInitialMonitoringSectionOpen, collectFieldNames,
   addField, removeField,
@@ -1240,6 +1240,43 @@ describe('sanitizeFileNameBase', () => {
 
   test('falls back when every character is invalid', () => {
     expect(sanitizeFileNameBase('///', 'output')).toBe('output');
+  });
+});
+
+// ── deriveScriptFileNameFromHostname / computeScriptFileNamePatch ───────────
+// Issue-driven follow-up: the global Settings tab's default-script-name
+// preference — 'hostname' mode derives the name from the current site,
+// 'fixed' mode only ever fills a still-blank name.
+
+describe('deriveScriptFileNameFromHostname', () => {
+  test('sanitizes the URL\'s own hostname', () => {
+    expect(deriveScriptFileNameFromHostname('https://www.example.com/products?x=1', 'scraper')).toBe('www_example_com');
+  });
+
+  test('falls back for a malformed/relative URL', () => {
+    expect(deriveScriptFileNameFromHostname('not a url', 'scraper')).toBe('scraper');
+    expect(deriveScriptFileNameFromHostname('', 'scraper')).toBe('scraper');
+  });
+});
+
+describe('computeScriptFileNamePatch', () => {
+  test('hostname mode always recomputes/overwrites, regardless of the current name', () => {
+    const settings = { scriptNameMode: 'hostname', scriptNameFixed: 'scraper' };
+    expect(computeScriptFileNamePatch('', 'https://shop.example.com/', settings))
+      .toEqual({ scriptFileName: 'shop_example_com' });
+    expect(computeScriptFileNamePatch('already-set', 'https://shop.example.com/', settings))
+      .toEqual({ scriptFileName: 'shop_example_com' });
+  });
+
+  test('hostname mode falls back to scriptNameFixed for a malformed URL', () => {
+    const settings = { scriptNameMode: 'hostname', scriptNameFixed: 'myfallback' };
+    expect(computeScriptFileNamePatch('', 'not a url', settings)).toEqual({ scriptFileName: 'myfallback' });
+  });
+
+  test('fixed mode only fills a blank name, never stomps a manual edit', () => {
+    const settings = { scriptNameMode: 'fixed', scriptNameFixed: 'scraper' };
+    expect(computeScriptFileNamePatch('', 'https://example.com/', settings)).toEqual({ scriptFileName: 'scraper' });
+    expect(computeScriptFileNamePatch('my-custom-name', 'https://example.com/', settings)).toEqual({});
   });
 });
 

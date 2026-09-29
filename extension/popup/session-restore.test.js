@@ -23,9 +23,8 @@ describe('applyStoredSessionState', () => {
   });
 
   test('restores boolean flags even when false, via the !== undefined check', () => {
-    const result = applyStoredSessionState(baseState, { persistentSession: false, externalConfig: false });
+    const result = applyStoredSessionState(baseState, { persistentSession: false });
     expect(result.persistentSession).toBe(false);
-    expect(result.externalConfig).toBe(false);
   });
 
   test('restores pendingParentPath even when null (root level), via the !== undefined check', () => {

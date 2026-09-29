@@ -752,3 +752,155 @@ describe('replay hardening checks against saved outputs (Issue #207)', () => {
     expect(document.querySelector('.hardening-replay-panel')).toBeNull();
   });
 });
+
+// Issue-driven follow-up: the global Settings tab's own cross-site saved-
+// configurations section (renderAllSavedConfigsList/wireAllSavedConfigsEvents)
+// — the unscoped counterpart to the per-site "Saved configurations" panel
+// above, reachable via the header's #btn-open-settings icon.
+describe('global Settings tab: cross-site saved configurations', () => {
+  const flushMicrotasks = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+
+  let fetchMock;
+  let allSavedConfigs;
+  let savedOutputsByConfigId;
+
+  const html = `
+    <div id="header-bar">
+      <button id="btn-open-settings"></button>
+    </div>
+    <section id="screen-idle" class="hidden">
+      <div id="url-display"></div>
+      <div id="fields-list"></div>
+      <button id="btn-generate" disabled></button>
+      <div id="saved-configs-list"></div>
+      <p id="saved-configs-empty" class="hidden"></p>
+    </section>
+    <section id="screen-generating" class="hidden"></section>
+    <section id="screen-settings" class="hidden">
+      <button id="btn-close-settings"></button>
+      <input type="checkbox" id="toggle-output-json" />
+      <input type="checkbox" id="toggle-include-data-preview" />
+      <input type="checkbox" id="toggle-include-output-file" />
+      <input type="checkbox" id="toggle-external-config" />
+      <div id="manage-blueprints-list"></div>
+      <p id="manage-blueprints-empty" class="hidden"></p>
+      <div id="all-saved-configs-list"></div>
+      <p id="all-saved-configs-empty" class="hidden"></p>
+    </section>
+    <div id="error-toast" class="hidden">
+      <span id="error-toast-message"></span>
+      <button id="btn-report-bug-toast" class="hidden"></button>
+    </div>
+  `;
+
+  beforeEach(async () => {
+    jest.resetModules();
+    document.body.innerHTML = html;
+
+    allSavedConfigs = [
+      { id: 1, url: 'https://a.example.com/products', name: 'Site A config', savedAt: '2026-01-01T00:00:00.000Z' },
+      { id: 2, url: 'https://b.example.com/listing', name: 'Site B config', savedAt: '2026-01-02T00:00:00.000Z' },
+    ];
+    savedOutputsByConfigId = {
+      1: [{ id: 100, savedConfigId: 1, name: 'Run 1', fileName: 'output.csv', savedAt: '2026-01-03T00:00:00.000Z' }],
+    };
+
+    global.chrome = {
+      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://a.example.com/products' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({ fields: [], url: 'https://a.example.com/products' }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+
+    fetchMock = jest.fn((url, init) => {
+      const method = init?.method || 'GET';
+      const urlStr = String(url);
+      if (urlStr.endsWith('/health')) return Promise.resolve({ ok: true });
+      if (urlStr.includes('/configs?url=')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      if (urlStr.endsWith('/configs') && method === 'GET') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(allSavedConfigs) });
+      }
+      if (urlStr.endsWith('/blueprints') && method === 'GET') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      const outputsMatch = urlStr.match(/\/configs\/(\d+)\/outputs$/);
+      if (outputsMatch && method === 'GET') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(savedOutputsByConfigId[Number(outputsMatch[1])] || []) });
+      }
+      if (/\/configs\/\d+$/.test(urlStr) && method === 'DELETE') {
+        return Promise.resolve({ ok: true, status: 204 });
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${method} ${urlStr}`));
+    });
+    global.fetch = fetchMock;
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE, allSavedConfigs fetched
+  });
+
+  function openSettings() {
+    document.getElementById('btn-open-settings').click();
+  }
+
+  test('lists every saved configuration regardless of host, with no Load button', () => {
+    openSettings();
+    const rows = document.querySelectorAll('#all-saved-configs-list .saved-config-row');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain('Site A config');
+    expect(rows[1].textContent).toContain('Site B config');
+    expect(document.querySelector('#all-saved-configs-list .btn-saved-config-load')).toBeNull();
+  });
+
+  test('Delete requires an inline confirm before sending DELETE, then refreshes the list — down to the empty-state hint once nothing is left', async () => {
+    openSettings();
+    document.querySelectorAll('#all-saved-configs-list .btn-all-saved-config-delete')[0].click();
+
+    expect(document.querySelector('.btn-all-saved-config-delete-confirm')).not.toBeNull();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+
+    allSavedConfigs = allSavedConfigs.filter((c) => c.id !== 1);
+    document.querySelector('.btn-all-saved-config-delete-confirm').click();
+    await flushMicrotasks();
+
+    expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith('/configs/1') && init?.method === 'DELETE')).toBe(true);
+    let rows = document.querySelectorAll('#all-saved-configs-list .saved-config-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain('Site B config');
+    expect(document.getElementById('all-saved-configs-empty').classList.contains('hidden')).toBe(true);
+
+    document.querySelectorAll('#all-saved-configs-list .btn-all-saved-config-delete')[0].click();
+    allSavedConfigs = [];
+    document.querySelector('.btn-all-saved-config-delete-confirm').click();
+    await flushMicrotasks();
+
+    rows = document.querySelectorAll('#all-saved-configs-list .saved-config-row');
+    expect(rows).toHaveLength(0);
+    expect(document.getElementById('all-saved-configs-empty').classList.contains('hidden')).toBe(false);
+  });
+
+  test('Delete confirm can be cancelled without sending the DELETE request', () => {
+    openSettings();
+    document.querySelectorAll('#all-saved-configs-list .btn-all-saved-config-delete')[0].click();
+    document.querySelector('.btn-all-saved-config-delete-cancel').click();
+
+    expect(document.querySelector('.btn-all-saved-config-delete-confirm')).toBeNull();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+  });
+
+  test('a row\'s own "Outputs" toggle expands its saved-output list, same as the per-site panel', async () => {
+    openSettings();
+    document.querySelectorAll('#all-saved-configs-list .btn-saved-config-outputs-toggle')[0].click();
+    await flushMicrotasks();
+
+    const outputRows = document.querySelectorAll('.saved-output-row');
+    expect(outputRows).toHaveLength(1);
+    expect(outputRows[0].textContent).toContain('Run 1');
+  });
+});
