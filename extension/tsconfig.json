@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "allowJs": true,
+    // Type checking is opt-in per file via a leading "// @ts-check" pragma
+    // (Issue #238) — flipping this to true would try to typecheck every .js
+    // file in the extension at once, most of which (the DOM-rendering
+    // "<feature>-ui.js" modules, popup.js itself) were never written with
+    // JSDoc types in mind and would produce a wall of noise rather than
+    // catching real bugs. Annotate a file (a pure "<feature>.js" data/logic
+    // module is the natural first candidate, per CLAUDE.md's Architecture
+    // Decision #12) by adding the pragma and real @param/@returns JSDoc —
+    // see types/companion-ir.d.ts for the wire-format types to annotate
+    // against.
+    "checkJs": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "types": ["node"]
+  },
+  "include": ["**/*.js", "types/**/*.d.ts"],
+  "exclude": ["node_modules", "e2e"]
+}
