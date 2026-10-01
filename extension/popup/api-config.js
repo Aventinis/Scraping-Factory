@@ -12,6 +12,103 @@
 // — a bare top-level `const`/`function` here would collide with popup.js's
 // own declarations, since classic scripts sharing one document all share one
 // global scope.
+// @ts-check
+// Issue #238: JSDoc-annotated and typechecked via `// @ts-check` + tsconfig
+// (`npm run typecheck`). Wire-shape inputs/outputs are typed against
+// types/companion-ir.d.ts's `SFWire` namespace; this module's own draft
+// shapes (the URL-template decomposition, the ApiGroup/ApiField response
+// tree, the ApiBodyNode request-body tree) are described by the local
+// `@typedef`s below rather than types/popup-drafts.d.ts's `SFDraft`
+// namespace, since — unlike container-tree.js's tree or the Monitoring/
+// Settings section drafts — nothing outside this file ever references them
+// (scraping-config-builder.js's own `collectFieldNames` reads `apiConfig`
+// only in its already-*serialized* `SFWire.ApiConfig` shape, never this
+// module's own draft). A recorded/embedded-JSON "candidate" (the message
+// content-script.js sends back after a click-based search, carrying
+// `treeSkeleton`/`siblings`/etc. — see `buildApiSubtreeFromCandidate`'s own
+// doc comment) is deliberately left as a loosely-typed `object` throughout:
+// it's an ephemeral cross-context message shape produced by a completely
+// different file this pass doesn't cover, not a shape this module itself
+// owns or persists.
+/**
+ * @typedef {Object} UrlTemplatePart
+ * @property {string} [key]
+ * @property {string} value
+ * @property {boolean} variable
+ * @property {string} name
+ */
+/**
+ * @typedef {Object} UrlParts
+ * @property {string} origin
+ * @property {UrlTemplatePart[]} pathSegments
+ * @property {UrlTemplatePart[]} queryParams
+ */
+/**
+ * @typedef {SFWire.ApiParameterSource} ApiParameterSourceDraft
+ */
+/**
+ * @typedef {Object} ApiGroupDraft
+ * @property {'group'} kind
+ * @property {string} name
+ * @property {string} path
+ * @property {ApiNodeDraft[]} children
+ */
+/**
+ * @typedef {Object} ApiFieldDraft
+ * @property {'field'} kind
+ * @property {string} name
+ * @property {string | null} path
+ * @property {SFWire.FieldTransform[] | null} transforms
+ * @property {*} [sampleValue]
+ * @property {boolean} hiddenFromOutput
+ */
+/** @typedef {ApiGroupDraft | ApiFieldDraft} ApiNodeDraft */
+/**
+ * @typedef {Object} ApiBodyObjectDraft
+ * @property {'object'} kind
+ * @property {Record<string, ApiBodyNodeDraft>} properties
+ */
+/**
+ * @typedef {Object} ApiBodyArrayDraft
+ * @property {'array'} kind
+ * @property {ApiBodyNodeDraft[]} items
+ */
+/**
+ * @typedef {Object} ApiBodyLiteralDraft
+ * @property {'literal'} kind
+ * @property {SFWire.ApiBodyLiteralKind} literalKind
+ * @property {*} value
+ */
+/**
+ * @typedef {Object} ApiBodyVariableDraft
+ * @property {'variable'} kind
+ * @property {SFWire.ApiBodyLiteralKind} literalKind
+ * @property {*} value
+ * @property {string | null} parameterId
+ * @property {SFWire.ApiBodyLiteralKind | null} [coerceTo]
+ */
+/** @typedef {ApiBodyObjectDraft | ApiBodyArrayDraft | ApiBodyLiteralDraft | ApiBodyVariableDraft} ApiBodyNodeDraft */
+/**
+ * @typedef {Object} ParameterPart
+ * @property {string} id
+ * @property {string} name
+ */
+/**
+ * @typedef {Object} ApiConfigDraft
+ * @property {UrlParts} urlParts
+ * @property {string} [itemsPath]
+ * @property {ApiFieldDraft[]} [fields]
+ * @property {ApiNodeDraft[]} [groups]
+ * @property {Record<string, ApiParameterSourceDraft>} parameterSources
+ * @property {Array<{name: string, value: string}>} capturedHeaders
+ * @property {Record<string, {include: boolean, mode: 'literal' | 'env', envName?: string}>} headerDecisions
+ * @property {'GET' | 'POST'} [method]
+ * @property {ApiBodyNodeDraft} [bodyTree]
+ * @property {string[]} [bodyParameterNames]
+ * @property {Record<string, string>} [parameterIdToName]
+ * @property {SFWire.EmbeddedJsonSource | null} [embeddedJsonSource]
+ * @property {ParameterPart[]} [bodyParameters]
+ */
 const SFApiConfig = (function () {
   const { t } = typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
 
@@ -37,6 +134,10 @@ const SFApiConfig = (function () {
 
   // Generic, dependency-free HTML-escaping helper — lives here for the same
   // reason as STATES above.
+  /**
+   * @param {*} str
+   * @returns {string}
+   */
   function escapeHtml(str) {
     return String(str)
       .replace(/&/g, '&amp;')
@@ -56,6 +157,10 @@ const SFApiConfig = (function () {
   // One entry per non-empty path segment / query param, `variable`/`name`
   // default to "not parameterized yet" so the URL-editor screen can render
   // the decomposed request before the user has toggled anything.
+  /**
+   * @param {string} urlString
+   * @returns {UrlParts}
+   */
   function parseUrlTemplateParts(urlString) {
     const url = new URL(urlString);
     const pathSegments = url.pathname.split('/').filter(s => s !== '').map(value => ({ value, variable: false, name: '' }));
@@ -69,16 +174,24 @@ const SFApiConfig = (function () {
   // from url.pathname (already percent-encoded, so used as-is); query values
   // come from url.searchParams (percent-*decoded* by the URL API), so those
   // need re-encoding when rebuilt.
+  /**
+   * @param {UrlParts} urlParts
+   * @returns {string}
+   */
   function buildUrlTemplate({ origin, pathSegments, queryParams }) {
     const path = pathSegments.map(seg => (seg.variable ? `{${seg.name}}` : seg.value)).join('/');
     const query = queryParams
-      .map(p => `${encodeURIComponent(p.key)}=${p.variable ? `{${p.name}}` : encodeURIComponent(p.value)}`)
+      .map(p => `${encodeURIComponent(/** @type {string} */ (p.key))}=${p.variable ? `{${p.name}}` : encodeURIComponent(p.value)}`)
       .join('&');
     return `${origin}/${path}${query ? `?${query}` : ''}`;
   }
 
   // Werteliste source: comma- or newline-separated free text → trimmed,
   // non-empty values.
+  /**
+   * @param {string | null | undefined} text
+   * @returns {string[]}
+   */
   function parseValueListInput(text) {
     return String(text ?? '').split(/[,\n]/).map(s => s.trim()).filter(s => s.length > 0);
   }
@@ -97,9 +210,17 @@ const SFApiConfig = (function () {
   // (percent-encoded-as-is for a path segment, percent-decoded for a query
   // param) — no extra normalization needed. Returns distinct values in
   // first-seen order.
+  /**
+   * @param {UrlParts} urlParts
+   * @param {string} targetPartId
+   * @param {Array<{url: string}>} entries
+   * @returns {string[]}
+   */
   function findUrlTemplateMatches(urlParts, targetPartId, entries) {
     const [targetScope, targetKey] = targetPartId.split(':');
+    /** @type {Set<string>} */
     const seen = new Set();
+    /** @type {string[]} */
     const values = [];
 
     (entries || []).forEach((entry) => {
@@ -151,6 +272,11 @@ const SFApiConfig = (function () {
   // "merge, don't replace" decision this mirrors). Dedupes against
   // parseValueListInput's own reading of the existing text, the same split
   // the textarea itself is interpreted with everywhere else.
+  /**
+   * @param {string} existingText
+   * @param {string[]} newValues
+   * @returns {{text: string, addedCount: number}}
+   */
   function mergeValueListValues(existingText, newValues) {
     const existing = new Set(parseValueListInput(existingText));
     const added = newValues.filter(v => !existing.has(v));
@@ -159,6 +285,10 @@ const SFApiConfig = (function () {
     return { text: prefix + added.join('\n'), addedCount: added.length };
   }
 
+  /**
+   * @param {string} valuesText
+   * @returns {SFWire.StaticListSource}
+   */
   function buildStaticListSource(valuesText) {
     return { kind: 'staticList', values: parseValueListInput(valuesText) };
   }
@@ -168,6 +298,12 @@ const SFApiConfig = (function () {
   // expected to be fully static (see ScrapingPlanValidator.ValidateDiscoverySource:
   // no cross-checking against the main request's parameters, by design, since
   // Phase 1 rules out dependencies between parameters).
+  /**
+   * @param {string} urlTemplate
+   * @param {string} itemsPath
+   * @param {string} valuePath
+   * @returns {SFWire.DiscoverySource}
+   */
   function buildDiscoverySource(urlTemplate, itemsPath, valuePath) {
     return { kind: 'discovery', urlTemplate, itemsPath, valuePath };
   }
@@ -179,6 +315,13 @@ const SFApiConfig = (function () {
   // runtime's own hardcoded default (RangeFormat.Resolve) stays the single
   // source of truth for "what ISO-Standard actually means" when nothing was
   // explicitly chosen.
+  /**
+   * @param {SFWire.RangeType} type
+   * @param {string} from
+   * @param {string} to
+   * @param {string} [format]
+   * @returns {SFWire.RangeSource}
+   */
   function buildRangeSource(type, from, to, format) {
     return { kind: 'range', type, from, to, ...(format ? { format } : {}) };
   }
@@ -192,6 +335,7 @@ const SFApiConfig = (function () {
   // list) is the escape hatch for anything else. Order matters: the first
   // entry per type is also the "nothing else matched" fallback in
   // detectRangeFormat, so it must be the ISO-8601/RangeFormat.Resolve default.
+  /** @type {Partial<Record<SFWire.RangeType, Array<{format: string, labelKey: string}>>>} */
   const RANGE_FORMAT_PRESETS = {
     IsoWeek: [
       { format: '{yyyy}-W{ww}', labelKey: 'apiConfig.presetIsoWeekStandard' },
@@ -213,6 +357,10 @@ const SFApiConfig = (function () {
   // shared code across the extension/companion boundary, same as every other
   // piece of duplicated-but-consistent logic in this app (e.g. the JSON-path
   // DSL, per CLAUDE.md).
+  /**
+   * @param {string} format
+   * @returns {RegExp}
+   */
   function compileRangeFormatPattern(format) {
     let pattern = format.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     for (const [token, valuePattern] of Object.entries(RANGE_FORMAT_TOKEN_PATTERNS)) {
@@ -229,6 +377,11 @@ const SFApiConfig = (function () {
   // raw value yet. For the reported bug's exact case ("2026-35"), this picks
   // "Jahr-Woche ohne Trennzeichen" with zero typing. Returns null for Number,
   // which has no format concept.
+  /**
+   * @param {SFWire.RangeType} type
+   * @param {string | null | undefined} rawValue
+   * @returns {string | null}
+   */
   function detectRangeFormat(type, rawValue) {
     const presets = RANGE_FORMAT_PRESETS[type];
     if (!presets) return null;
@@ -244,6 +397,11 @@ const SFApiConfig = (function () {
   // toggle preserves it via object spread, and variableUrlParts carries it
   // through as part.value; this just looks it up by partId for
   // detectRangeFormat's benefit.
+  /**
+   * @param {UrlParts} urlParts
+   * @param {string} partId
+   * @returns {string | undefined}
+   */
   function findUrlPartValue(urlParts, partId) {
     return variableUrlParts(urlParts).find(p => p.id === partId)?.value;
   }
@@ -257,6 +415,11 @@ const SFApiConfig = (function () {
   // different preset's template. Kept translation-free (unlike the render
   // functions that call it) so it stays a pure, load-order-independent
   // function to unit-test directly.
+  /**
+   * @param {string | null | undefined} format
+   * @param {string | null | undefined} fromValue
+   * @returns {string | null}
+   */
   function rangeFormatExample(format, fromValue) {
     if (!format) return null;
     if (fromValue && compileRangeFormatPattern(format).test(fromValue)) return fromValue;
@@ -268,6 +431,11 @@ const SFApiConfig = (function () {
   // {include, mode: 'literal'|'env', envName}} — the header-adoption table's
   // per-row choice. Mirrors FillStep's env-var pattern: a header adopted via
   // an environment variable is never embedded literally.
+  /**
+   * @param {Array<{name: string, value: string}>} capturedHeaders
+   * @param {Record<string, {include: boolean, mode: 'literal' | 'env', envName?: string}>} decisions
+   * @returns {SFWire.ApiHeader[]}
+   */
   function buildApiHeaders(capturedHeaders, decisions) {
     return capturedHeaders
       .filter(h => decisions[h.name]?.include)
@@ -309,6 +477,10 @@ const SFApiConfig = (function () {
   // IR/ApiConfig.cs's own EmbeddedJsonSource property, a plain optional
   // object with no serialization of its own to do here (unlike groups/body,
   // which are draft shapes needing conversion to the wire format).
+  /**
+   * @param {ApiConfigDraft} draft
+   * @returns {SFWire.ApiConfig}
+   */
   function buildApiConfig({
     urlParts, itemsPath, fields, groups, parameterSources, capturedHeaders, headerDecisions,
     method, bodyTree, bodyParameterNames = [], parameterIdToName = {}, embeddedJsonSource = null,
@@ -322,7 +494,13 @@ const SFApiConfig = (function () {
     return {
       urlTemplate,
       ...(method && method !== 'GET' ? { method } : {}),
-      ...(groups ? { groups: serializeApiTree(groups) } : { itemsPath, fields }),
+      // The tree's own root is always ApiGroup nodes (never a bare ApiField
+      // at the top level) — see confirmApiTreeFieldCandidate/
+      // buildApiSubtreeFromCandidate, which only ever insert a leaf nested
+      // under at least one root group — so this cast just narrows
+      // serializeApiTree's generic ApiNode[] return to what ApiConfig.Groups
+      // itself requires.
+      ...(groups ? { groups: /** @type {SFWire.ApiGroup[]} */ (serializeApiTree(groups)) } : { itemsPath, fields }),
       parameters,
       ...(headers.length > 0 ? { headers } : {}),
       ...(bodyTree ? { body: serializeBodyTree(bodyTree, parameterIdToName) } : {}),
@@ -341,6 +519,11 @@ const SFApiConfig = (function () {
   // Pure helpers only in this phase; event wiring into the API_CONFIG screen
   // is Phase A5.
 
+  /**
+   * @param {string} name
+   * @param {string} path
+   * @returns {ApiGroupDraft}
+   */
   function buildApiGroupDraft(name, path) {
     return { kind: 'group', name, path, children: [] };
   }
@@ -365,24 +548,46 @@ const SFApiConfig = (function () {
   // value comes entirely from other already-resolved sibling fields).
   // hiddenFromOutput defaults false, set only via that same flow's own
   // "remove original field(s)" checkbox (updateApiTreeNode elsewhere).
+  /**
+   * @param {string} name
+   * @param {string | null} path
+   * @param {SFWire.FieldTransform[] | null} [transforms]
+   * @param {*} [sampleValue]
+   * @param {boolean} [hiddenFromOutput]
+   * @returns {ApiFieldDraft}
+   */
   function buildApiFieldDraft(name, path, transforms = null, sampleValue = undefined, hiddenFromOutput = false) {
     return { kind: 'field', name, path, transforms, sampleValue, hiddenFromOutput };
   }
 
+  /**
+   * @param {ApiNodeDraft[]} groups
+   * @param {number[] | null | undefined} path
+   * @returns {ApiNodeDraft | null}
+   */
   function resolveApiTreeNode(groups, path) {
     if (!path || path.length === 0) return null;
+    /** @type {ApiNodeDraft} */
     let node = groups[path[0]];
-    for (let i = 1; i < path.length; i++) node = node.children[path[i]];
+    for (let i = 1; i < path.length; i++) node = /** @type {ApiGroupDraft} */ (node).children[path[i]];
     return node;
   }
 
   // Appends `node` as the last child at `parentPath` (or at root level when
   // `parentPath` is null) — immutable, like insertContainerNode below.
+  /**
+   * @param {ApiNodeDraft[]} groups
+   * @param {number[] | null | undefined} parentPath
+   * @param {ApiNodeDraft} node
+   * @returns {ApiNodeDraft[]}
+   */
   function insertApiTreeNode(groups, parentPath, node) {
     const path = parentPath || [];
     if (path.length === 0) return [...groups, node];
     const [head, ...rest] = path;
-    return groups.map((n, i) => (i === head ? { ...n, children: insertApiTreeNode(n.children, rest, node) } : n));
+    return groups.map((n, i) => (i === head
+      ? { ...n, children: insertApiTreeNode(/** @type {ApiGroupDraft} */ (n).children, rest, node) }
+      : n));
   }
 
   // Issue #206: preceding sibling field names (own parent group, indices
@@ -393,11 +598,19 @@ const SFApiConfig = (function () {
   // only siblings actually declared before it count; a later sibling isn't
   // offered at all here, rather than being offered and then rejected only
   // once "Apply" reaches the companion's own ordering check.
+  /**
+   * @param {ApiNodeDraft[]} groups
+   * @param {number[] | null | undefined} path
+   * @returns {string[]}
+   */
   function collectPrecedingApiFieldSiblingNames(groups, path) {
     if (!path || path.length === 0) return [];
     const parentPath = path.slice(0, -1);
     const ownIndex = path[path.length - 1];
-    const siblings = parentPath.length === 0 ? groups : (resolveApiTreeNode(groups, parentPath)?.children || []);
+    const parent = parentPath.length === 0 ? null : resolveApiTreeNode(groups, parentPath);
+    const siblings = parentPath.length === 0
+      ? groups
+      : (parent && parent.kind === 'group' ? parent.children : []);
     return siblings.slice(0, ownIndex).filter(n => n.kind === 'field').map(n => n.name);
   }
 
@@ -408,17 +621,32 @@ const SFApiConfig = (function () {
   // every current field sibling here already counts as "declared earlier"
   // with no slicing needed, unlike collectPrecedingApiFieldSiblingNames
   // above (which targets an already-placed leaf's own position instead).
+  /**
+   * @param {ApiNodeDraft[]} groups
+   * @param {number[] | null | undefined} groupPath
+   * @returns {string[]}
+   */
   function collectApiGroupFieldNames(groups, groupPath) {
-    const children = !groupPath || groupPath.length === 0 ? groups : (resolveApiTreeNode(groups, groupPath)?.children || []);
+    const group = !groupPath || groupPath.length === 0 ? null : resolveApiTreeNode(groups, groupPath);
+    const children = !groupPath || groupPath.length === 0
+      ? groups
+      : (group && group.kind === 'group' ? group.children : []);
     return children.filter(n => n.kind === 'field').map(n => n.name);
   }
 
   // Removes the node (and its subtree) at `path` — always non-empty, unlike
   // insertApiTreeNode's parentPath.
+  /**
+   * @param {ApiNodeDraft[]} groups
+   * @param {number[]} path
+   * @returns {ApiNodeDraft[]}
+   */
   function removeApiTreeNode(groups, path) {
     if (path.length === 1) return groups.filter((_, i) => i !== path[0]);
     const [head, ...rest] = path;
-    return groups.map((n, i) => (i === head ? { ...n, children: removeApiTreeNode(n.children, rest) } : n));
+    return groups.map((n, i) => (i === head
+      ? { ...n, children: removeApiTreeNode(/** @type {ApiGroupDraft} */ (n).children, rest) }
+      : n));
   }
 
   // Strips the popup's internal `kind` tag and shapes each node exactly like
@@ -428,6 +656,10 @@ const SFApiConfig = (function () {
   // codegen side for the same discriminator). transforms (Issue #84) is only
   // included when non-empty, the same "omit rather than send an empty/null
   // key" convention Container-Mode's own serializeGroupTree already uses.
+  /**
+   * @param {ApiNodeDraft[]} groups
+   * @returns {SFWire.ApiNode[]}
+   */
   function serializeApiTree(groups) {
     return groups.map(node => (node.kind === 'group'
       ? { name: node.name, path: node.path, children: serializeApiTree(node.children) }
@@ -444,9 +676,17 @@ const SFApiConfig = (function () {
   // a leaf-field count regardless of shape: the older flat ApiConfig.Fields is
   // already flat, but a tree-shaped ApiConfig.Groups (Issue #54) needs
   // counting recursively — every ApiField anywhere in the tree, at any depth.
+  /**
+   * @param {SFWire.ApiConfig} apiConfig
+   * @returns {number}
+   */
   function countApiConfigFields(apiConfig) {
-    if (!apiConfig.groups) return apiConfig.fields.length;
-    const countNodes = nodes => nodes.reduce((sum, node) => sum + (node.children ? countNodes(node.children) : 1), 0);
+    if (!apiConfig.groups) return (apiConfig.fields || []).length;
+    /** @param {SFWire.ApiNode[]} nodes @returns {number} */
+    const countNodes = nodes => nodes.reduce((sum, node) => {
+      const children = /** @type {any} */ (node).children;
+      return sum + (children ? countNodes(children) : 1);
+    }, 0);
     return countNodes(apiConfig.groups);
   }
 
@@ -454,11 +694,19 @@ const SFApiConfig = (function () {
   // alongside insert/remove, needed once node names became editable in place
   // (Phase A5, see setApiTreeNodeName) rather than only ever chosen once at
   // creation time.
+  /**
+   * @param {ApiNodeDraft[]} groups
+   * @param {number[]} path
+   * @param {(node: ApiNodeDraft) => ApiNodeDraft} updater
+   * @returns {ApiNodeDraft[]}
+   */
   function updateApiTreeNode(groups, path, updater) {
     const [head, ...rest] = path;
     return groups.map((node, i) => {
       if (i !== head) return node;
-      return rest.length === 0 ? updater(node) : { ...node, children: updateApiTreeNode(node.children, rest, updater) };
+      return rest.length === 0
+        ? updater(node)
+        : { ...node, children: updateApiTreeNode(/** @type {ApiGroupDraft} */ (node).children, rest, updater) };
     });
   }
 
@@ -467,6 +715,10 @@ const SFApiConfig = (function () {
   // check does, generalized: intermediate groups are auto-named (see
   // buildApiSubtreeFromCandidate) but that name is editable like any other and
   // so can still be blanked out.
+  /**
+   * @param {ApiNodeDraft[]} nodes
+   * @returns {boolean}
+   */
   function apiTreeNodesHaveNonBlankNames(nodes) {
     return nodes.every(node => !!node.name?.trim() && (node.kind !== 'group' || apiTreeNodesHaveNonBlankNames(node.children)));
   }
@@ -495,9 +747,14 @@ const SFApiConfig = (function () {
   // by JS's own typeof (JSON has no separate "integer"/"float", so every
   // number becomes ApiBodyLiteralKind.Number regardless of ApiBodyLiteral's
   // own C#-side double NumberValue).
+  /**
+   * @param {*} value
+   * @returns {ApiBodyNodeDraft}
+   */
   function jsonValueToBodyDraft(value) {
     if (Array.isArray(value)) return { kind: 'array', items: value.map(jsonValueToBodyDraft) };
     if (value !== null && typeof value === 'object') {
+      /** @type {Record<string, ApiBodyNodeDraft>} */
       const properties = {};
       for (const [key, child] of Object.entries(value)) properties[key] = jsonValueToBodyDraft(child);
       return { kind: 'object', properties };
@@ -511,7 +768,13 @@ const SFApiConfig = (function () {
   // path steps are either a string (an object property key) or a number (an
   // array index) — object/array are never mixed at the same tree level, so
   // this is an unambiguous discriminator for which branch to take.
+  /**
+   * @param {ApiBodyNodeDraft} node
+   * @param {Array<string | number>} path
+   * @returns {ApiBodyNodeDraft}
+   */
   function resolveBodyTreeNode(node, path) {
+    /** @type {any} */
     let current = node;
     for (const step of path) current = typeof step === 'number' ? current.items[step] : current.properties[step];
     return current;
@@ -520,19 +783,31 @@ const SFApiConfig = (function () {
   // Immutable "map the one node at `path`" — the body tree's only edit
   // primitive (see this section's own doc comment on why there's no
   // insert/remove here, unlike the response tree's updateApiTreeNode).
+  /**
+   * @param {ApiBodyNodeDraft} node
+   * @param {Array<string | number>} path
+   * @param {(node: ApiBodyNodeDraft) => ApiBodyNodeDraft} updater
+   * @returns {ApiBodyNodeDraft}
+   */
   function updateBodyTreeNode(node, path, updater) {
     if (path.length === 0) return updater(node);
     const [step, ...rest] = path;
+    const n = /** @type {any} */ (node);
     if (typeof step === 'number') {
-      return { ...node, items: node.items.map((item, i) => (i === step ? updateBodyTreeNode(item, rest, updater) : item)) };
+      return { ...n, items: n.items.map((/** @type {ApiBodyNodeDraft} */ item, /** @type {number} */ i) => (i === step ? updateBodyTreeNode(item, rest, updater) : item)) };
     }
-    return { ...node, properties: { ...node.properties, [step]: updateBodyTreeNode(node.properties[step], rest, updater) } };
+    return { ...n, properties: { ...n.properties, [step]: updateBodyTreeNode(n.properties[step], rest, updater) } };
   }
 
   // Whether any 'variable' leaf anywhere in the tree is still bound to
   // `parameterId` — used to decide whether reverting one such leaf back to
   // 'literal' also orphans the body-only parameter it referenced (see
   // toggleBodyLeafToFixed).
+  /**
+   * @param {ApiBodyNodeDraft} node
+   * @param {string} parameterId
+   * @returns {boolean}
+   */
   function bodyTreeReferencesParameterId(node, parameterId) {
     if (node.kind === 'object') return Object.values(node.properties).some(child => bodyTreeReferencesParameterId(child, parameterId));
     if (node.kind === 'array') return node.items.some(child => bodyTreeReferencesParameterId(child, parameterId));
@@ -543,6 +818,10 @@ const SFApiConfig = (function () {
   // per-parameter check: a leaf toggled to 'variable' but not yet bound to a
   // parameter (parameterId still null, see toggleBodyLeafToVariable) must
   // block confirmation the same way an unchosen source kind already does.
+  /**
+   * @param {ApiBodyNodeDraft} node
+   * @returns {boolean}
+   */
   function bodyTreeLeavesAreBound(node) {
     if (node.kind === 'object') return Object.values(node.properties).every(bodyTreeLeavesAreBound);
     if (node.kind === 'array') return node.items.every(bodyTreeLeavesAreBound);
@@ -559,8 +838,14 @@ const SFApiConfig = (function () {
   // wire format references it by — built once by the caller (confirmApiConfig)
   // from the same allParameterParts list the parameter-source cards render
   // from, since a draft-only id has no meaning outside this popup.
+  /**
+   * @param {ApiBodyNodeDraft} node
+   * @param {Record<string, string>} parameterIdToName
+   * @returns {SFWire.ApiBodyNode}
+   */
   function serializeBodyTree(node, parameterIdToName) {
     if (node.kind === 'object') {
+      /** @type {Record<string, SFWire.ApiBodyNode>} */
       const properties = {};
       for (const [key, child] of Object.entries(node.properties)) properties[key] = serializeBodyTree(child, parameterIdToName);
       return { properties };
@@ -570,7 +855,7 @@ const SFApiConfig = (function () {
     }
     if (node.kind === 'variable') {
       return {
-        parameterName: parameterIdToName[node.parameterId],
+        parameterName: parameterIdToName[/** @type {string} */ (node.parameterId)],
         ...(node.coerceTo ? { coerceTo: node.coerceTo } : {}),
       };
     }
@@ -595,6 +880,10 @@ const SFApiConfig = (function () {
   // already named after its own JSON key. Returns null for an empty path (the
   // array-of-arrays case, see ApiGroup.Path) or a path with no plain key
   // segment at all — callers fall back to a generic placeholder.
+  /**
+   * @param {string | null | undefined} path
+   * @returns {string | null}
+   */
   function lastPathSegmentName(path) {
     if (!path) return null;
     const tokens = path.match(/[^.[\]]+|\[\d+\]/g) || [];
@@ -626,17 +915,27 @@ const SFApiConfig = (function () {
   // .value (from candidate.siblings, see content-script.js's siblingFields)
   // are carried onto the new field drafts as sampleValue — the raw JSON
   // value the transform-chain modal's live preview runs against later.
+  /**
+   * @param {any} candidate
+   * @param {string} fieldName
+   * @param {string[]} siblingNames
+   * @param {number} [skipSegments]
+   * @returns {ApiNodeDraft[]}
+   */
   function buildApiSubtreeFromCandidate(candidate, fieldName, siblingNames, skipSegments = 0) {
+    /** @type {Array<{path: string}>} */
     const skeleton = candidate.treeSkeleton.slice(skipSegments);
     const leafField = buildApiFieldDraft(fieldName, skeleton[skeleton.length - 1].path, null, candidate.value);
     const siblingDrafts = siblingNames.map((name) => {
-      const sibling = (candidate.siblings || []).find(s => s.name === name);
+      const sibling = (candidate.siblings || []).find((/** @type {any} */ s) => s.name === name);
       return buildApiFieldDraft(name, name, null, sibling ? sibling.value : undefined);
     });
     const groupSegments = skeleton.slice(0, -1);
+    /** @type {ApiNodeDraft[]} */
+    const leaves = [leafField, ...siblingDrafts];
     return groupSegments.reduceRight((children, seg) => [
       { ...buildApiGroupDraft(lastPathSegmentName(seg.path) || t('apiTree.defaultGroupName'), seg.path), children },
-    ], [leafField, ...siblingDrafts]);
+    ], leaves);
   }
 
   // The absolute JSON path to scope an "add sub-field"/"add sub-group" search
@@ -646,11 +945,16 @@ const SFApiConfig = (function () {
   // scopeSelector already relies on (see content-script.js's
   // pathStartsWithScope). E.g. tree path [0, 1] under {path:'categories'} →
   // {path:'subcategories'} resolves to "categories[0].subcategories[0]".
+  /**
+   * @param {ApiNodeDraft[]} groups
+   * @param {number[]} path
+   * @returns {string}
+   */
   function resolveApiGroupScopePath(groups, path) {
     let scope = '';
     let nodes = groups;
     for (const index of path) {
-      const node = nodes[index];
+      const node = /** @type {ApiGroupDraft} */ (nodes[index]);
       scope = node.path ? (scope ? `${scope}.${node.path}[0]` : `${node.path}[0]`) : `${scope}[0]`;
       nodes = node.children;
     }
@@ -660,6 +964,10 @@ const SFApiConfig = (function () {
   // Every {variable: true} part, tagged with its partId — the single source
   // of truth for "which parameter cards exist" (independent of whether a
   // name has been typed for it yet).
+  /**
+   * @param {UrlParts} urlParts
+   * @returns {Array<UrlTemplatePart & {id: string}>}
+   */
   function variableUrlParts(urlParts) {
     return [
       ...urlParts.pathSegments.map((seg, i) => ({ ...seg, id: `path:${i}` })),
@@ -676,6 +984,10 @@ const SFApiConfig = (function () {
   // apiConfigDraftHasAllSourcesChosen/confirmApiConfig actually need — a
   // body-only entry needs no more than that since its "value" (unlike a URL
   // part's) was never itself part of anything else to preserve.
+  /**
+   * @param {ApiConfigDraft} draft
+   * @returns {ParameterPart[]}
+   */
   function allParameterParts(draft) {
     return [...variableUrlParts(draft.urlParts), ...(draft.bodyParameters || [])];
   }
@@ -696,6 +1008,10 @@ const SFApiConfig = (function () {
   // body-only parameters alongside URL ones, see allParameterParts — a body
   // leaf toggled to 'variable' but not yet bound to any parameter still blocks
   // confirmation the same way an unchosen source kind already does).
+  /**
+   * @param {ApiConfigDraft} draft
+   * @returns {boolean}
+   */
   function apiConfigDraftHasAllSourcesChosen(draft) {
     const namesOk = draft.groups
       ? apiTreeNodesHaveNonBlankNames(draft.groups)
