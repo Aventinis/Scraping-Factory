@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.15.8](https://github.com/Aventinis/Scraping-Factory/compare/v1.15.7...v1.15.8) (2026-10-01)
+
+
+### Features
+
+* **extension:** add opt-in JSDoc type checking for popup data/logic modules (Issue [#238](https://github.com/Aventinis/Scraping-Factory/issues/238)) ([a2954bd](https://github.com/Aventinis/Scraping-Factory/commit/a2954bd173b0107b8f7858a5407610cebe8e8ce2))
+* **jsdoc-typecheck:** add tsconfig and ambient wire/draft/global type declarations ([b25f521](https://github.com/Aventinis/Scraping-Factory/commit/b25f521c34a738a9a80cff9a56e15f4cfeedf457))
+* **jsdoc-typecheck:** annotate api-config.js with JSDoc types ([d04c4fc](https://github.com/Aventinis/Scraping-Factory/commit/d04c4fca2815fe1f4cba217cd4b8529ecc9d744a))
+* **jsdoc-typecheck:** annotate config-import.js with JSDoc types ([5ee4c1a](https://github.com/Aventinis/Scraping-Factory/commit/5ee4c1a4736471679d3844131aa571e4809c3b07))
+* **jsdoc-typecheck:** annotate container-tree.js with JSDoc types ([d799cc8](https://github.com/Aventinis/Scraping-Factory/commit/d799cc888a3dd927235a333d1a52f0cbeab46f92))
+* **jsdoc-typecheck:** annotate field-transforms.js with JSDoc types ([be88b3b](https://github.com/Aventinis/Scraping-Factory/commit/be88b3be9eaa45da7feda73df37ec607576dc37c))
+* **jsdoc-typecheck:** annotate scraping-config-builder.js with JSDoc types ([91a67c3](https://github.com/Aventinis/Scraping-Factory/commit/91a67c31d53d2873a10d46c8cf477f681720b75d))
+
 ## [1.15.7](https://github.com/Aventinis/Scraping-Factory/compare/v1.15.6...v1.15.7) (2026-09-29)
 
 
