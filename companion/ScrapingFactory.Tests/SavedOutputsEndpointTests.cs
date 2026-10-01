@@ -198,4 +198,182 @@ public class SavedOutputsEndpointTests : IDisposable
         var getOutputResponse = await _client.GetAsync($"/configs/{configId}/outputs/{outputId}");
         Assert.Equal(HttpStatusCode.NotFound, getOutputResponse.StatusCode);
     }
+
+    // ── Issue #207: POST /configs/{configId}/outputs/{id}/replay-hardening ──
+
+    private async Task<long> CreateOutputAsync(long configId, string content, string fileName = "output.csv")
+    {
+        var created = await (await _client.PostAsync($"/configs/{configId}/outputs", JsonBody(new
+        {
+            name = "Run", fileName, content,
+        }))).Content.ReadFromJsonAsync<JsonElement>();
+        return created.GetProperty("id").GetInt64();
+    }
+
+    [Fact]
+    public async Task ReplayHardening_NoResultCheck_AgainstNonEmptyCsv_Passes()
+    {
+        var configId = await CreateConfigAsync();
+        var outputId = await CreateOutputAsync(configId, "Titel\nA\nB\n");
+
+        var response = await _client.PostAsync($"/configs/{configId}/outputs/{outputId}/replay-hardening", JsonBody(new
+        {
+            checks = new object[] { new { kind = "noResult", severity = "Error" } },
+        }));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var results = body.GetProperty("results");
+        Assert.Equal(1, results.GetArrayLength());
+        Assert.Equal("noResult", results[0].GetProperty("kind").GetString());
+        Assert.Equal("Passed", results[0].GetProperty("outcome").GetString());
+    }
+
+    [Fact]
+    public async Task ReplayHardening_NoResultCheck_AgainstEmptyCsv_Triggers()
+    {
+        var configId = await CreateConfigAsync();
+        var outputId = await CreateOutputAsync(configId, "Titel\n");
+
+        var response = await _client.PostAsync($"/configs/{configId}/outputs/{outputId}/replay-hardening", JsonBody(new
+        {
+            checks = new object[] { new { kind = "noResult", severity = "Error" } },
+        }));
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Triggered", body.GetProperty("results")[0].GetProperty("outcome").GetString());
+    }
+
+    [Fact]
+    public async Task ReplayHardening_UnknownConfigId_Returns404()
+    {
+        var response = await _client.PostAsync("/configs/999999/outputs/1/replay-hardening", JsonBody(new
+        {
+            checks = new object[] { new { kind = "noResult", severity = "Error" } },
+        }));
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ReplayHardening_MismatchedConfigId_Returns404()
+    {
+        var configIdA = await CreateConfigAsync();
+        var configIdB = await CreateConfigAsync();
+        var outputId = await CreateOutputAsync(configIdA, "Titel\nA\n");
+
+        var response = await _client.PostAsync($"/configs/{configIdB}/outputs/{outputId}/replay-hardening", JsonBody(new
+        {
+            checks = new object[] { new { kind = "noResult", severity = "Error" } },
+        }));
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ReplayHardening_NoChecks_Returns400()
+    {
+        var configId = await CreateConfigAsync();
+        var outputId = await CreateOutputAsync(configId, "Titel\nA\n");
+
+        var response = await _client.PostAsync($"/configs/{configId}/outputs/{outputId}/replay-hardening", JsonBody(new { checks = Array.Empty<object>() }));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ReplayHardening_BaselineCheck_CompareBySameConfig_UsesOlderOutputAsPrevious()
+    {
+        var configId = await CreateConfigAsync();
+        await CreateOutputAsync(configId, "Titel\nA\nB\nC\nD\n"); // 4 rows, older
+        var newestOutputId = await CreateOutputAsync(configId, "Titel\nA\n"); // 1 row, being evaluated
+
+        var response = await _client.PostAsync($"/configs/{configId}/outputs/{newestOutputId}/replay-hardening", JsonBody(new
+        {
+            checks = new object[] { new { kind = "baseline", severity = "Error", dropThreshold = 0.1 } },
+            compareBasis = "config",
+        }));
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var result = body.GetProperty("results")[0];
+        Assert.Equal("Triggered", result.GetProperty("outcome").GetString());
+        Assert.Contains("4", result.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task ReplayHardening_BaselineCheck_NoEarlierOutput_IsInconclusive()
+    {
+        var configId = await CreateConfigAsync();
+        var outputId = await CreateOutputAsync(configId, "Titel\nA\n");
+
+        var response = await _client.PostAsync($"/configs/{configId}/outputs/{outputId}/replay-hardening", JsonBody(new
+        {
+            checks = new object[] { new { kind = "baseline", severity = "Error", dropThreshold = 0.1 } },
+        }));
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Inconclusive", body.GetProperty("results")[0].GetProperty("outcome").GetString());
+    }
+
+    [Fact]
+    public async Task ReplayHardening_BaselineCheck_CompareByBlueprint_UsesMostRecentOutputAcrossOtherConfig()
+    {
+        var configA = await (await _client.PostAsync("/configs", JsonBody(new
+        {
+            url = "https://a.example.com", name = "A",
+            config = new { fields = Array.Empty<object>(), outputBlueprint = new { blueprintId = 5, schemaKind = "Flat" } },
+        }))).Content.ReadFromJsonAsync<JsonElement>();
+        var configIdA = configA.GetProperty("id").GetInt64();
+
+        var configB = await (await _client.PostAsync("/configs", JsonBody(new
+        {
+            url = "https://b.example.com", name = "B",
+            config = new { fields = Array.Empty<object>(), outputBlueprint = new { blueprintId = 5, schemaKind = "Flat" } },
+        }))).Content.ReadFromJsonAsync<JsonElement>();
+        var configIdB = configB.GetProperty("id").GetInt64();
+
+        await CreateOutputAsync(configIdA, "Titel\nA\nB\nC\nD\n"); // 4 rows, another config sharing the blueprint
+        var outputIdB = await CreateOutputAsync(configIdB, "Titel\nA\n"); // 1 row, being evaluated
+
+        var response = await _client.PostAsync($"/configs/{configIdB}/outputs/{outputIdB}/replay-hardening", JsonBody(new
+        {
+            checks = new object[] { new { kind = "baseline", severity = "Error", dropThreshold = 0.1 } },
+            compareBasis = "blueprint",
+        }));
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var result = body.GetProperty("results")[0];
+        Assert.Equal("Triggered", result.GetProperty("outcome").GetString());
+        Assert.Contains("4", result.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task ReplayHardening_BaselineCheck_CompareByBlueprint_NoBlueprintSet_IsInconclusiveWithClearReason()
+    {
+        var configId = await CreateConfigAsync(); // no outputBlueprint set
+        var outputId = await CreateOutputAsync(configId, "Titel\nA\n");
+
+        var response = await _client.PostAsync($"/configs/{configId}/outputs/{outputId}/replay-hardening", JsonBody(new
+        {
+            checks = new object[] { new { kind = "baseline", severity = "Error", dropThreshold = 0.1 } },
+            compareBasis = "blueprint",
+        }));
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var result = body.GetProperty("results")[0];
+        Assert.Equal("Inconclusive", result.GetProperty("outcome").GetString());
+        Assert.Contains("Output Blueprint", result.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task ReplayHardening_BlockingCheck_IsAlwaysNotEvaluable()
+    {
+        var configId = await CreateConfigAsync();
+        var outputId = await CreateOutputAsync(configId, "Titel\nA\n");
+
+        var response = await _client.PostAsync($"/configs/{configId}/outputs/{outputId}/replay-hardening", JsonBody(new
+        {
+            checks = new object[] { new { kind = "blocking", severity = "Warning" } },
+        }));
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("NotEvaluable", body.GetProperty("results")[0].GetProperty("outcome").GetString());
+    }
 }

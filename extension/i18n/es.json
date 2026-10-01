@@ -1,6 +1,7 @@
 {
   "common": {
     "cancel": "Cancelar",
+    "back": "Atrás",
     "add": "Añadir",
     "remove": "Eliminar",
     "use": "Usar",
@@ -52,6 +53,8 @@
     "combinedPickerOption": "{name} ({host})",
     "addFieldBtn": "+ Añadir campo",
     "addContainerBtn": "+ Añadir contenedor",
+    "combineFieldsBtn": "Combinar campos",
+    "splitFieldBtn": "Dividir campo",
     "apiCaptureTitle": "Registra las solicitudes de red fetch/XHR de esta página",
     "apiCaptureStartBtn": "Iniciar grabación de red",
     "apiCaptureStopBtn": "Detener grabación de red",
@@ -89,7 +92,19 @@
     "savedOutputsEmpty": "Todavía no hay salidas guardadas para esta configuración.",
     "savedOutputsLoading": "Cargando…",
     "savedOutputsDownloadBtn": "Descargar",
+    "savedOutputsReplayHardeningBtn": "Probar hardening",
     "savedOutputsDeleteConfirm": "¿Eliminar esta salida guardada?",
+    "hardeningReplayNoChecks": "No hay comprobaciones de hardening configuradas actualmente — configura una en la sección \"Monitorización\" primero.",
+    "hardeningReplayCompareBasisLabel": "Esta comprobación necesita un resultado anterior para comparar:",
+    "hardeningReplayCompareBasisConfig": "Misma configuración",
+    "hardeningReplayCompareBasisBlueprint": "Blueprint \"{name}\"",
+    "hardeningReplayRunBtn": "Ejecutar",
+    "hardeningReplayLoading": "Probando…",
+    "hardeningReplayError": "No se pudo probar el hardening: {message}",
+    "hardeningReplayOutcomePassed": "Superado",
+    "hardeningReplayOutcomeTriggered": "Activado",
+    "hardeningReplayOutcomeInconclusive": "No concluyente",
+    "hardeningReplayOutcomeNotEvaluable": "No evaluable",
     "scriptFilenameLabel": "Nombre del script",
     "scriptFilenamePlaceholder": "scraper",
     "outputFilenameLabel": "Nombre del archivo de salida",
@@ -241,7 +256,12 @@
     "existsMode": "¿Existe?",
     "ownTextMode": "Solo texto propio",
     "addSubcontainerBtn": "+ Contenedor",
-    "addSubfieldBtn": "+ Campo de datos"
+    "addSubfieldBtn": "+ Campo de datos",
+    "combineFieldsBtn": "+ Combinar campos",
+    "splitFieldBtn": "+ Dividir campo",
+    "combinedFieldMode": "Combinado de: {sources}",
+    "splitFieldMode": "Dividido de: {source}",
+    "hiddenFromOutputBadge": "oculto"
   },
   "apiTree": {
     "addSubgroupBtn": "+ Grupo",
@@ -249,7 +269,9 @@
     "addRootGroupBtn": "+ Nuevo grupo (nivel superior)",
     "defaultGroupName": "Grupo",
     "transformsBtn": "Transformar",
-    "transformsBtnCount": "Transformar ({count})"
+    "transformsBtnCount": "Transformar ({count})",
+    "combineFieldsBtn": "+ Combinar campos",
+    "splitFieldBtn": "+ Dividir campo"
   },
   "transforms": {
     "sectionLabel": "Transformaciones (opcional)",
@@ -266,12 +288,15 @@
     "findPlaceholder": "Buscar",
     "replacementPlaceholder": "Reemplazar con",
     "sourceFormatPlaceholder": "Formato de origen (p. ej. \"{dd}.{mm}.{yyyy}\")",
+    "separatorPlaceholder": "Separador (p. ej. \", \")",
+    "splitSourcePlaceholderOption": "Seleccionar campo…",
+    "splitIndexPlaceholder": "Parte (0 = primera)",
     "onErrorKeepOriginalOption": "En caso de error: mantener valor original",
     "onErrorUseDefaultOption": "En caso de error: usar valor predeterminado",
     "defaultValuePlaceholder": "Valor predeterminado",
     "previewLabel": "Vista previa: {value}",
     "previewEmptyValue": "(vacío)",
-    "previewUnavailable": "Vista previa no disponible (patrón no válido)"
+    "previewUnavailable": "Vista previa no disponible"
   },
   "generating": {
     "message": "Generando script…"
@@ -288,6 +313,18 @@
     "dataPreviewTruncatedXml": "Extracto — no se muestran todos los datos",
     "blocksOutputTitle": "Salidas de los bloques",
     "blocksOutputDownloadBtn": "Descargar"
+  },
+  "settings": {
+    "tabTitle": "Configuración",
+    "title": "Configuración",
+    "preferencesTitle": "Preferencias",
+    "scriptNameModeLabel": "Nombre de script predeterminado",
+    "scriptNameModeFixed": "Nombre fijo",
+    "scriptNameModeHostname": "Desde el sitio web",
+    "scriptNameFixedLabel": "Nombre de script fijo",
+    "scriptNameHostnameHint": "El nombre del script siempre se deriva del nombre de host del sitio web actual.",
+    "allConfigsTitle": "Todas las configuraciones guardadas",
+    "allConfigsEmpty": "Todavía no hay configuraciones guardadas."
   },
   "modals": {
     "fieldName": {
@@ -310,8 +347,15 @@
       "attributeOption": "Atributo",
       "existsOption": "¿Existe?",
       "ownTextOption": "Solo texto propio (sin elementos anidados)",
-      "attributeLabel": "Nombre del atributo (p. ej. \"href\")",
-      "attributePlaceholder": "Atributo"
+      "attributeLabel": "¿Qué atributo contiene el valor?",
+      "noAttributesFound": "Este elemento no tiene atributos.",
+      "downloadToggle": "Descargar este recurso/archivo (p. ej. una imagen, PDF o ZIP) y guardarlo localmente"
+    },
+    "download": {
+      "maxSizeLabel": "Tamaño máx. de archivo (MB, opcional)",
+      "maxSizePlaceholder": "Sin límite",
+      "allowedTypesLabel": "Tipos de contenido permitidos (opcional, separados por comas)",
+      "allowedTypesPlaceholder": "p. ej. application/pdf, application/zip"
     },
     "apiGroupNew": {
       "nameLabel": "Nombre del grupo (p. ej. \"Subcategoría\")",
@@ -323,6 +367,21 @@
     "apiBodyParameterNew": {
       "nameLabel": "Nombre del parámetro (p. ej. \"categoria\")",
       "namePlaceholder": "Nombre"
+    },
+    "combineField": {
+      "nameLabel": "Nombre del campo (p. ej. \"Dirección\")",
+      "namePlaceholder": "Nombre del campo",
+      "sourcesLabel": "¿Qué campos se deben combinar? (mínimo 2)",
+      "separatorLabel": "Separador",
+      "removeOriginalsToggle": "Eliminar los campos originales de la salida"
+    },
+    "splitField": {
+      "nameLabel": "Nombre del campo (p. ej. \"Número\")",
+      "namePlaceholder": "Nombre del campo",
+      "sourceLabel": "¿Qué campo se debe dividir?",
+      "separatorLabel": "Separador",
+      "indexLabel": "Parte (0 = primera)",
+      "removeOriginalToggle": "Eliminar el campo original de la salida"
     },
     "saveConfig": {
       "label": "Nombre de la configuración (p. ej. \"Listado de productos\")",
@@ -371,6 +430,7 @@
     "selectionUnavailable": "No es posible seleccionar elementos en esta página.",
     "scopeSelectorNotFound": "Ya no se pudo encontrar el punto de referencia seleccionado — la página cambió mientras tanto (p. ej. un estado de hover o de carga). Inténtalo de nuevo o elige otro punto de partida.",
     "clickOutsideScope": "Selecciona un elemento dentro de un contenedor.",
+    "trackedUrlUpdated": "Página seguida actualizada a {url} — el elemento que acabas de seleccionar proviene de una página diferente a la anterior.",
     "previewUnavailable": "No es posible la vista previa en esta página.",
     "captureUnavailable": "No es posible grabar red en esta página.",
     "invalidCompanionUrl": "Dirección no válida — incluye http:// o https://.",

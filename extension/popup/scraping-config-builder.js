@@ -1,9 +1,28 @@
+// @ts-check
 // ── Pure scraping-config builder functions ─────────────────────────────────
 // Extracted from popup.js (see CLAUDE.md's "Popup module boundaries"
 // architecture decision) — every function here is a pure data
 // transformation with no DOM/state access, taking plain values in and
 // returning plain values out, so it's trivially testable in isolation
 // (see scraping-config-builder.test.js).
+//
+// Issue #238: JSDoc-annotated and typechecked via `// @ts-check` + tsconfig
+// (`npm run typecheck`), against types/companion-ir.d.ts's `SFWire`
+// namespace. `buildScrapingConfig`/`buildConfigExport` deliberately return
+// a plain `object` rather than `SFWire.ScrapingConfig` — each one has five
+// mutually-exclusive branches (blocks/combined/container/api/flat) built as
+// separate object literals, and TypeScript's excess-property checks on a
+// returned object literal would have to be fought branch by branch for
+// little real benefit; every *input* parameter is still precisely typed, so
+// a caller passing e.g. a field where a transform chain is expected is
+// still caught at the call site either way.
+// Draft (popup-internal) shapes referenced below — SFDraft.ChangeDetectionState,
+// SFDraft.ProxyState, SFDraft.PaginationState, SFDraft.HardeningState,
+// SFDraft.GlobalSettings, SFDraft.Field, SFDraft.CombinedComponent,
+// SFDraft.Block, SFDraft.BrowserAction, SFDraft.ContainerNode — all live in
+// types/popup-drafts.d.ts rather than as local @typedefs here, since
+// container-tree.js's own JSDoc needs to reference the very same shapes
+// (see that file's own top-of-file comment).
 const SFScrapingConfigBuilder = (function() {
 const { escapeHtml } =
   typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
@@ -26,10 +45,66 @@ const { buildOutputBlueprintMapping } =
 // RangeFormat's client-side mirror) so the name shown here — used for the
 // actual download — always matches what the companion baked into the
 // generated script's "# Run: python X.py" comment for the same raw input.
+/**
+ * @param {string} input
+ * @param {string} fallback
+ * @returns {string}
+ */
 function sanitizeFileNameBase(input, fallback) {
   if (!input || !input.trim()) return fallback;
   const sanitized = input.trim().replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^[-_]+|[-_]+$/g, '');
   return sanitized || fallback;
+}
+
+// Issue-driven follow-up (default script name preference): derives a
+// sanitized script-name base from a URL's own hostname, for the global
+// Settings tab's "always from the website" scriptNameMode. A malformed/
+// relative `url` (same possibility openSaveConfigModal's own defaultName
+// already has to guard against) falls back to `fallback` — new URL() throws
+// rather than returning something sanitizeFileNameBase could clean up on
+// its own.
+/**
+ * @param {string} url
+ * @param {string} fallback
+ * @returns {string}
+ */
+function deriveScriptFileNameFromHostname(url, fallback) {
+  let hostname = '';
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    // hostname stays '' — sanitizeFileNameBase below falls back to
+    // `fallback`, same as any other unreachable default elsewhere in this
+    // popup.
+  }
+  return sanitizeFileNameBase(hostname, fallback);
+}
+
+// Issue-driven follow-up: the scriptFileName patch to apply whenever a
+// fresh site is detected — checkCompanion()'s own health check, and the
+// stale-tracked-URL self-correction in message-router.js/session-restore.js
+// — reused by every call site instead of duplicating the mode branch. In
+// 'hostname' mode, the field always recomputes/overwrites, tracking
+// whichever site is current ("immer von der Webseite abgeleitet"); in
+// 'fixed' mode, it only ever fills the field once, when it's still blank —
+// a starting point that never stomps a manual edit. Returns {} when neither
+// applies (fixed mode with an already-non-blank name), the same "omit the
+// key entirely rather than send a no-op" convention this module's own
+// build*Config helpers already use for an incomplete/inactive draft.
+/**
+ * @param {string} currentScriptFileName
+ * @param {string} url
+ * @param {SFDraft.GlobalSettings} globalSettings
+ * @returns {{scriptFileName?: string}}
+ */
+function computeScriptFileNamePatch(currentScriptFileName, url, globalSettings) {
+  if (globalSettings.scriptNameMode === 'hostname') {
+    return { scriptFileName: deriveScriptFileNameFromHostname(url, globalSettings.scriptNameFixed) };
+  }
+  if (!currentScriptFileName) {
+    return { scriptFileName: globalSettings.scriptNameFixed };
+  }
+  return {};
 }
 
 // Issue #83: one URL per line, pasted/typed into the additional-start-urls
@@ -39,9 +114,14 @@ function sanitizeFileNameBase(input, fallback) {
 // error later. A genuinely malformed non-blank entry is deliberately left
 // as-is — it's still sent to the companion, which rejects it the same way
 // it already rejects a malformed primary `url` (ScrapingPlanValidator).
+/**
+ * @param {string} text
+ * @returns {string[]}
+ */
 function parseAdditionalUrls(text) {
   return (text || '').split('\n').map(line => line.trim()).filter(line => line.length > 0);
 }
+
 
 // Issue #87: converts _state.changeDetection's editable draft shape into
 // the wire ChangeDetectionConfig, or null when disabled or not yet fully
@@ -50,6 +130,10 @@ function parseAdditionalUrls(text) {
 // an incomplete draft is simply treated the same as the toggle being off
 // rather than sending a partial config the companion would reject with 400.
 // Every field here is an environment-variable *name*, never a value.
+/**
+ * @param {SFDraft.ChangeDetectionState | null | undefined} changeDetection
+ * @returns {SFWire.ChangeDetectionConfig | null}
+ */
 function buildChangeDetectionConfig(changeDetection) {
   if (!changeDetection?.enabled) return null;
 
@@ -83,6 +167,10 @@ function buildChangeDetectionConfig(changeDetection) {
 // blank — same "incomplete draft treated as toggle-off" convention as
 // buildChangeDetectionConfig. The field is an environment-variable *name*,
 // never a literal proxy address.
+/**
+ * @param {SFDraft.ProxyState | null | undefined} proxy
+ * @returns {SFWire.ProxyConfig | null}
+ */
 function buildProxyConfig(proxy) {
   if (!proxy?.enabled) return null;
   const environmentVariableName = (proxy.envVar || '').trim();
@@ -96,6 +184,10 @@ function buildProxyConfig(proxy) {
 // buildChangeDetectionConfig/buildProxyConfig. maxPages is clamped/
 // defaulted the same way hardening's own percent thresholds are, so a
 // cleared/invalid number input doesn't block generation.
+/**
+ * @param {SFDraft.PaginationState | null | undefined} pagination
+ * @returns {SFWire.PaginationConfig | null}
+ */
 function buildPaginationConfig(pagination) {
   if (!pagination?.enabled) return null;
   const maxPagesRaw = Number(pagination.maxPages);
@@ -118,7 +210,12 @@ function buildPaginationConfig(pagination) {
 // PascalCase like `severity`, which is a plain enum). Returns null (not [])
 // when nothing is enabled, same "omit the key entirely" convention
 // buildChangeDetectionConfig/buildProxyConfig already use.
+/**
+ * @param {SFDraft.HardeningState | null | undefined} hardening
+ * @returns {SFWire.HardeningCheck[] | null}
+ */
 function buildHardeningConfig(hardening) {
+  /** @type {SFWire.HardeningCheck[]} */
   const checks = [];
   if (hardening?.noResult?.enabled) {
     checks.push({ kind: 'noResult', severity: hardening.noResult.severity });
@@ -182,6 +279,11 @@ function buildHardeningConfig(hardening) {
 // buildChangeDetectionConfig's own "does this actually produce a wire
 // config" logic rather than re-deriving "is anything enabled" separately,
 // so the two can never quietly disagree about what counts as "configured".
+/**
+ * @param {SFDraft.ChangeDetectionState | null | undefined} changeDetection
+ * @param {SFDraft.HardeningState | null | undefined} hardening
+ * @returns {boolean}
+ */
 function computeInitialMonitoringSectionOpen(changeDetection, hardening) {
   return buildChangeDetectionConfig(changeDetection) !== null || buildHardeningConfig(hardening) !== null;
 }
@@ -199,23 +301,35 @@ function computeInitialMonitoringSectionOpen(changeDetection, hardening) {
 // (a tree can repeat the same field name at several nesting depths —
 // NullRateCheck itself matches by name globally, see the companion-side doc
 // comment on NullRateCheck) and order-preserving.
+/**
+ * @param {string} mode
+ * @param {SFDraft.Field[] | null | undefined} fields
+ * @param {SFDraft.ContainerNode[] | null | undefined} groups
+ * @param {SFWire.ApiConfig | null | undefined} apiConfig
+ * @returns {string[]}
+ */
 function collectFieldNames(mode, fields, groups, apiConfig) {
+  /** @type {string[]} */
   const names = [];
+  /** @param {string} name */
   const add = (name) => { if (name && !names.includes(name)) names.push(name); };
 
   if (mode === 'container') {
+    /** @param {SFDraft.ContainerNode[] | undefined} nodes */
     const walk = (nodes) => {
       for (const node of nodes || []) {
         if (node.kind === 'field') add(node.name);
         else if (node.kind === 'group') walk(node.children);
       }
     };
-    walk(groups);
+    walk(groups || []);
   } else if (mode === 'api') {
+    /** @param {SFWire.ApiNode[] | undefined} nodes */
     const walk = (nodes) => {
       for (const node of nodes || []) {
-        if (node.children) walk(node.children);
-        else add(node.name);
+        const n = /** @type {any} */ (node);
+        if (n.children) walk(n.children);
+        else add(n.name);
       }
     };
     if (apiConfig?.groups) walk(apiConfig.groups);
@@ -260,6 +374,36 @@ function collectFieldNames(mode, fields, groups, apiConfig) {
 // mode === 'api'" convention as additionalUrls, for the same reason (API
 // mode already has its own page-parameter mechanism via a Number
 // RangeSource, and the companion rejects the combination outright).
+/**
+ * @param {string} url
+ * @param {string} mode
+ * @param {SFDraft.Field[]} fields
+ * @param {SFDraft.ContainerNode[]} groups
+ * @param {SFWire.ApiConfig | null} [apiConfig]
+ * @param {string | null} [scriptFileName]
+ * @param {string | null} [outputFileName]
+ * @param {SFWire.ScrapingEngine} [engine]
+ * @param {SFDraft.BrowserAction[]} [browserActions]
+ * @param {boolean} [includePreview]
+ * @param {boolean} [useJsonOutput]
+ * @param {string[]} [additionalUrls]
+ * @param {SFDraft.ChangeDetectionState | null} [changeDetection]
+ * @param {SFDraft.ProxyState | null} [proxy]
+ * @param {SFDraft.HardeningState | null} [hardening]
+ * @param {SFDraft.PaginationState | null} [pagination]
+ * @param {boolean} [persistentSession]
+ * @param {boolean} [includeOutputFile]
+ * @param {boolean} [externalConfig]
+ * @param {SFDraft.CombinedComponent[] | null} [combinedComponents]
+ * @param {SFDraft.Block[] | null} [blocks]
+ * @param {number | string | null} [outputBlueprintId]
+ * @param {string[]} [outputBlueprintFieldNames]
+ * @param {Record<string, string>} [outputBlueprintMapping]
+ * @param {SFWire.OutputBlueprintSchemaKind} [outputBlueprintSchemaKind]
+ * @param {SFDraft.OutputBlueprintTreeNode[]} [outputBlueprintTree]
+ * @param {Record<string, string>} [outputBlueprintTreeMapping]
+ * @returns {object}
+ */
 function buildScrapingConfig(
   url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
@@ -403,6 +547,13 @@ function buildScrapingConfig(
       name: f.name, selector: f.selector, attribute: f.attribute ?? null,
       ...(f.framePath ? { framePath: f.framePath } : {}),
       ...(f.transforms && f.transforms.length > 0 ? { transforms: f.transforms } : {}),
+      // Issue #214: same "incomplete/off = key omitted" convention
+      // framePath/transforms above already use.
+      ...(f.download ? { download: true } : {}),
+      ...(f.download && f.maxDownloadSizeBytes ? { maxDownloadSizeBytes: f.maxDownloadSizeBytes } : {}),
+      ...(f.download && f.allowedContentTypes?.length > 0 ? { allowedContentTypes: f.allowedContentTypes } : {}),
+      // Issue #206 follow-up: same "incomplete/off = key omitted" convention.
+      ...(f.hiddenFromOutput ? { hiddenFromOutput: true } : {}),
     })),
     outputFormat: useJsonOutput ? 'Json' : 'Csv',
     scriptFileName: scriptFileName || null,
@@ -419,6 +570,37 @@ function buildScrapingConfig(
 // the literal request body /generate would receive — no need to describe
 // the setup by hand. `manifest` is injected so this stays a pure, testable
 // function instead of reaching into chrome.runtime itself.
+/**
+ * @param {string} url
+ * @param {string} mode
+ * @param {SFDraft.Field[]} fields
+ * @param {SFDraft.ContainerNode[]} groups
+ * @param {{version?: string}} [manifest]
+ * @param {SFWire.ApiConfig | null} [apiConfig]
+ * @param {string | null} [scriptFileName]
+ * @param {string | null} [outputFileName]
+ * @param {SFWire.ScrapingEngine} [engine]
+ * @param {SFDraft.BrowserAction[]} [browserActions]
+ * @param {boolean} [includePreview]
+ * @param {boolean} [useJsonOutput]
+ * @param {string[]} [additionalUrls]
+ * @param {SFDraft.ChangeDetectionState | null} [changeDetection]
+ * @param {SFDraft.ProxyState | null} [proxy]
+ * @param {SFDraft.HardeningState | null} [hardening]
+ * @param {SFDraft.PaginationState | null} [pagination]
+ * @param {boolean} [persistentSession]
+ * @param {boolean} [includeOutputFile]
+ * @param {boolean} [externalConfig]
+ * @param {SFDraft.CombinedComponent[] | null} [combinedComponents]
+ * @param {SFDraft.Block[] | null} [blocks]
+ * @param {number | string | null} [outputBlueprintId]
+ * @param {string[]} [outputBlueprintFieldNames]
+ * @param {Record<string, string>} [outputBlueprintMapping]
+ * @param {SFWire.OutputBlueprintSchemaKind} [outputBlueprintSchemaKind]
+ * @param {SFDraft.OutputBlueprintTreeNode[]} [outputBlueprintTree]
+ * @param {Record<string, string>} [outputBlueprintTreeMapping]
+ * @returns {{exportedAt: string, extensionVersion: string, config: object}}
+ */
 function buildConfigExport(
   url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false, additionalUrls = [],
@@ -440,11 +622,57 @@ function buildConfigExport(
   };
 }
 
-function addField(fields, name, selector, framePath = null, transforms = []) {
+// Issue #214: attribute/download/maxDownloadSizeBytes/allowedContentTypes
+// let flat mode gain the same Attribute-mode-with-Download capability
+// container mode's own buildFieldNode already has — attribute defaults to
+// null (today's exact pre-#214 behavior, a plain text field) for every
+// existing caller that doesn't pass one. Issue #206 follow-up: selector may
+// be null — combine-split-fields-ui.js's own confirm handlers pass null for
+// a field created through the dedicated combine/split flow, which has no
+// selector of its own (see ScrapingPlanValidator.IsDerivedField, companion
+// side); hiddenFromOutput defaults false, set only via that same flow's own
+// "remove original field(s)" checkbox (updateField below), never here.
+/**
+ * @param {SFDraft.Field[]} fields
+ * @param {string} name
+ * @param {string | null} selector
+ * @param {string[] | null} [framePath]
+ * @param {SFWire.FieldTransform[]} [transforms]
+ * @param {string | null} [attribute]
+ * @param {boolean} [download]
+ * @param {number | null} [maxDownloadSizeBytes]
+ * @param {string[]} [allowedContentTypes]
+ * @param {boolean} [hiddenFromOutput]
+ * @returns {SFDraft.Field[]}
+ */
+function addField(
+  fields, name, selector, framePath = null, transforms = [], attribute = null,
+  download = false, maxDownloadSizeBytes = null, allowedContentTypes = [], hiddenFromOutput = false,
+) {
+  const isDownload = !!attribute && !!download;
   return [...fields, {
-    name, selector, attribute: null, framePath: framePath || null,
+    name, selector, attribute: attribute || null, framePath: framePath || null,
     transforms: transforms.length > 0 ? transforms : null,
+    download: isDownload,
+    maxDownloadSizeBytes: isDownload ? (maxDownloadSizeBytes || null) : null,
+    allowedContentTypes: isDownload && allowedContentTypes.length > 0 ? allowedContentTypes : [],
+    hiddenFromOutput,
   }];
+}
+
+// Issue #206 follow-up: generic in-place field patch — same shape as
+// updateBrowserAction below — used by the combine/split creation flow's own
+// "remove original field(s)" checkbox to set hiddenFromOutput on the picked
+// source fields without deleting them (their value is still needed for the
+// new field's own combine/split transform to read).
+/**
+ * @param {SFDraft.Field[]} fields
+ * @param {number} index
+ * @param {Partial<SFDraft.Field>} patch
+ * @returns {SFDraft.Field[]}
+ */
+function updateField(fields, index, patch) {
+  return fields.map((f, i) => (i === index ? { ...f, ...patch } : f));
 }
 
 // Issue #41/#42, Phase 5/6: browser actions (WaitFor/Fill/Click/Scroll,
@@ -452,7 +680,13 @@ function addField(fields, name, selector, framePath = null, transforms = []) {
 // as addField/removeField above, so setState() callers stay trivial.
 // MaxIterations/WaitAfterMs default to the same values ScrollStep itself
 // defaults to server-side (IR/ScrapingStep.cs), kept in sync by hand.
+/**
+ * @param {SFDraft.BrowserAction[]} actions
+ * @param {SFDraft.BrowserAction['kind']} kind
+ * @returns {SFDraft.BrowserAction[]}
+ */
 function addBrowserAction(actions, kind) {
+  /** @type {Record<SFDraft.BrowserAction['kind'], SFDraft.BrowserAction>} */
   const defaults = {
     waitFor: { kind: 'waitFor', selector: '', timeoutMs: 5000 },
     fill:    { kind: 'fill', selector: '', environmentVariableName: '' },
@@ -462,10 +696,21 @@ function addBrowserAction(actions, kind) {
   return [...actions, defaults[kind]];
 }
 
+/**
+ * @param {SFDraft.BrowserAction[]} actions
+ * @param {number} index
+ * @returns {SFDraft.BrowserAction[]}
+ */
 function removeBrowserAction(actions, index) {
   return actions.filter((_, i) => i !== index);
 }
 
+/**
+ * @param {SFDraft.BrowserAction[]} actions
+ * @param {number} index
+ * @param {Partial<SFDraft.BrowserAction>} patch
+ * @returns {SFDraft.BrowserAction[]}
+ */
 function updateBrowserAction(actions, index, patch) {
   return actions.map((a, i) => (i === index ? { ...a, ...patch } : a));
 }
@@ -476,11 +721,22 @@ function updateBrowserAction(actions, index, patch) {
 // ScrollStep's ContainerSelector/LoadMoreButtonSelector are nullable on the
 // server, and "set but blank" is rejected (ScrapingPlanValidator) — an
 // unpicked '' here must serialize to null, never ''.
+/**
+ * @param {SFDraft.BrowserAction[]} actions
+ * @returns {SFWire.BrowserAction[]}
+ */
 function serializeBrowserActions(actions) {
   return actions.map((a) => {
     const framePath = a.framePath ? { framePath: a.framePath } : {};
-    if (a.kind === 'waitFor') return { kind: 'waitFor', selector: a.selector, timeoutMs: a.timeoutMs, ...framePath };
-    if (a.kind === 'fill') return { kind: 'fill', selector: a.selector, environmentVariableName: a.environmentVariableName, ...framePath };
+    const selector = /** @type {string} */ (a.selector);
+    if (a.kind === 'waitFor') return { kind: 'waitFor', selector, timeoutMs: a.timeoutMs, ...framePath };
+    if (a.kind === 'fill') {
+      return {
+        kind: 'fill', selector,
+        environmentVariableName: /** @type {string} */ (a.environmentVariableName),
+        ...framePath,
+      };
+    }
     if (a.kind === 'scroll') {
       return {
         kind: 'scroll',
@@ -491,7 +747,7 @@ function serializeBrowserActions(actions) {
         ...framePath,
       };
     }
-    return { kind: 'click', selector: a.selector, ...framePath };
+    return { kind: 'click', selector, ...framePath };
   });
 }
 
@@ -500,7 +756,13 @@ function serializeBrowserActions(actions) {
 // FillAction itself carries. Never touches buildScrapingConfig or
 // persistState. Returns {} when there's nothing to send (e.g. no test values
 // typed, or no fill actions at all).
+/**
+ * @param {SFDraft.BrowserAction[]} browserActions
+ * @param {Record<string, string>} fillTestValues
+ * @returns {Record<string, string>}
+ */
 function buildVerificationValues(browserActions, fillTestValues) {
+  /** @type {Record<string, string>} */
   const result = {};
   for (const action of browserActions) {
     if (action.kind !== 'fill') continue;
@@ -511,6 +773,11 @@ function buildVerificationValues(browserActions, fillTestValues) {
   return result;
 }
 
+/**
+ * @param {SFDraft.Field[]} fields
+ * @param {number} index
+ * @returns {SFDraft.Field[]}
+ */
 function removeField(fields, index) {
   return fields.filter((_, i) => i !== index);
 }
@@ -520,14 +787,30 @@ function removeField(fields, index) {
 // nullRate rows. threshold defaults to 50 (%) — an arbitrary but reasonable
 // starting point, the same role addBrowserAction's own kind-specific
 // defaults play.
+/**
+ * @param {SFDraft.NullRateRow[]} nullRate
+ * @param {string} fieldName
+ * @returns {SFDraft.NullRateRow[]}
+ */
 function addNullRateCheck(nullRate, fieldName) {
-  return [...nullRate, { fieldName: fieldName || '', threshold: 50, severity: 'Warning' }];
+  return [...nullRate, { fieldName: fieldName || '', threshold: 50, severity: /** @type {SFWire.HardeningSeverity} */ ('Warning') }];
 }
 
+/**
+ * @param {SFDraft.NullRateRow[]} nullRate
+ * @param {number} index
+ * @returns {SFDraft.NullRateRow[]}
+ */
 function removeNullRateCheck(nullRate, index) {
   return nullRate.filter((_, i) => i !== index);
 }
 
+/**
+ * @param {SFDraft.NullRateRow[]} nullRate
+ * @param {number} index
+ * @param {Partial<SFDraft.NullRateRow>} patch
+ * @returns {SFDraft.NullRateRow[]}
+ */
 function updateNullRateCheck(nullRate, index, patch) {
   return nullRate.map((row, i) => (i === index ? { ...row, ...patch } : row));
 }
@@ -538,11 +821,21 @@ function updateNullRateCheck(nullRate, index, patch) {
 // so no updateRequiredField counterpart exists. A duplicate add is a no-op
 // rather than an error, mirroring how the add-field <select> below is
 // itself already filtered to exclude already-added names.
+/**
+ * @param {string[]} fields
+ * @param {string} fieldName
+ * @returns {string[]}
+ */
 function addRequiredField(fields, fieldName) {
   if (!fieldName || fields.includes(fieldName)) return fields;
   return [...fields, fieldName];
 }
 
+/**
+ * @param {string[]} fields
+ * @param {number} index
+ * @returns {string[]}
+ */
 function removeRequiredField(fields, index) {
   return fields.filter((_, i) => i !== index);
 }
@@ -554,17 +847,21 @@ function removeRequiredField(fields, index) {
 // selection (see createOverlay's frameDepth-based styling). `path.join(' > ')`
 // matches the top-to-target reading order the backend itself documents on
 // FramePath (IR/BrowserAction.cs, ContainerNode.cs).
+/**
+ * @param {string[] | null | undefined} framePath
+ * @returns {string}
+ */
 function frameBadgeHtml(framePath) {
   if (!framePath || framePath.length === 0) return '';
   const title = escapeHtml(t('frame.badgeTitle', { path: framePath.join(' > ') }));
   return `<span class="frame-badge" title="${title}">${escapeHtml(t('frame.badge'))}</span>`;
 }
 
-  return {sanitizeFileNameBase, parseAdditionalUrls,
+  return {sanitizeFileNameBase, deriveScriptFileNameFromHostname, computeScriptFileNamePatch, parseAdditionalUrls,
     buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildHardeningConfig,
     computeInitialMonitoringSectionOpen, collectFieldNames,
     buildScrapingConfig, buildConfigExport,
-    addField, removeField,
+    addField, removeField, updateField,
     addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions,
     buildVerificationValues,
     addNullRateCheck, removeNullRateCheck, updateNullRateCheck,

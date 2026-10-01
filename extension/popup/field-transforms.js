@@ -1,3 +1,4 @@
+// @ts-check
 // Issue #84: pure, DOM-free helpers for a field's transform chain (trim/
 // regexExtract/replace/toNumber, applied in order — mirrors the backend
 // IR's FieldTransform.cs). Split out the same way container-tree.js/
@@ -9,7 +10,18 @@
 // wire format 1:1 (camelCase keys = the companion's own JSON property
 // names), so there's no separate serialize step the way container-tree.js's
 // serializeGroupTree needs one — these objects are sent as-is.
+//
+// Issue #238: JSDoc-annotated and typechecked via `// @ts-check` + tsconfig
+// (`npm run typecheck`) — every exported function's wire-shape inputs/
+// outputs are typed against types/companion-ir.d.ts's SFWire namespace; a
+// transform kind string is narrowed with `/** @type {...} */` casts at the
+// few spots TypeScript's control-flow narrowing can't follow (a `switch` on
+// `t.kind` inside a loop where `value` itself changes type per-iteration).
 const SFFieldTransforms = (function () {
+  /**
+   * @param {SFWire.FieldTransform['kind']} kind
+   * @returns {SFWire.FieldTransform}
+   */
   function createDefaultTransform(kind) {
     switch (kind) {
       case 'regexExtract': return { kind: 'regexExtract', pattern: '', group: 0 };
@@ -18,19 +30,42 @@ const SFFieldTransforms = (function () {
       case 'toInteger': return { kind: 'toInteger', onError: 'KeepOriginal', defaultValue: '' };
       case 'toBoolean': return { kind: 'toBoolean', onError: 'KeepOriginal', defaultValue: '' };
       case 'toDate': return { kind: 'toDate', sourceFormat: '{yyyy}-{mm}-{dd}', onError: 'KeepOriginal', defaultValue: '' };
+      case 'combineFields': return { kind: 'combineFields', sourceFieldNames: [], separator: ' ' };
+      case 'splitField': return { kind: 'splitField', sourceFieldName: '', separator: ' ', index: 0 };
       case 'trim':
       default: return { kind: 'trim' };
     }
   }
 
+  /**
+   * @param {SFWire.FieldTransform[]} transforms
+   * @returns {SFWire.FieldTransform[]}
+   */
   function addTransform(transforms) {
     return [...transforms, createDefaultTransform('trim')];
   }
 
+  /**
+   * @param {SFWire.FieldTransform[]} transforms
+   * @param {number} index
+   * @returns {SFWire.FieldTransform[]}
+   */
   function removeTransform(transforms, index) {
     return transforms.filter((_, i) => i !== index);
   }
 
+  /**
+   * `patch` is intentionally untyped beyond a plain record — it carries
+   * whichever kind-specific fields the currently-open modal's own inputs
+   * happen to produce (pattern/group, find/replacement, onError/
+   * defaultValue, ...), which only a per-kind union could express
+   * precisely, and TypeScript's `Partial<T>` over `T` already a union
+   * doesn't meaningfully narrow that for a generic patch merge anyway.
+   * @param {SFWire.FieldTransform[]} transforms
+   * @param {number} index
+   * @param {Record<string, unknown>} patch
+   * @returns {SFWire.FieldTransform[]}
+   */
   function updateTransform(transforms, index, patch) {
     return transforms.map((t, i) => (i === index ? { ...t, ...patch } : t));
   }
@@ -38,6 +73,12 @@ const SFFieldTransforms = (function () {
   // Switching kind starts that step over with fresh defaults rather than
   // trying to carry over unrelated fields (e.g. a "replace" step's find/
   // replacement wouldn't mean anything on a "trim" step).
+  /**
+   * @param {SFWire.FieldTransform[]} transforms
+   * @param {number} index
+   * @param {SFWire.FieldTransform['kind']} kind
+   * @returns {SFWire.FieldTransform[]}
+   */
   function changeTransformKind(transforms, index, kind) {
     return transforms.map((t, i) => (i === index ? createDefaultTransform(kind) : t));
   }
@@ -45,6 +86,12 @@ const SFFieldTransforms = (function () {
   // direction: -1 (up) or +1 (down). Out-of-range moves are a no-op rather
   // than clamped/wrapped — the UI already disables the button at either end
   // (see field-transforms-ui.js), this is just the data-layer safety net.
+  /**
+   * @param {SFWire.FieldTransform[]} transforms
+   * @param {number} index
+   * @param {number} direction
+   * @returns {SFWire.FieldTransform[]}
+   */
   function moveTransform(transforms, index, direction) {
     const target = index + direction;
     if (target < 0 || target >= transforms.length) return transforms;
@@ -62,10 +109,24 @@ const SFFieldTransforms = (function () {
   // onError/defaultValue never reach an invalid state through this UI (the
   // default value input always starts at '', never null), so they need no
   // check here.
+  // Issue #206: combineFields needs at least 2 picked source fields (the
+  // multi-select itself can obviously end up empty/single right after
+  // switching to this kind); splitField needs a picked source field —
+  // mirrors FieldTransformValidator's own structural checks companion-side,
+  // just surfaced here before a round trip is even attempted.
+  /**
+   * @param {SFWire.FieldTransform[]} transforms
+   * @returns {boolean}
+   */
   function transformsAreValid(transforms) {
     return transforms.every(t => {
       if (t.kind === 'regexExtract') return t.pattern.trim() !== '';
-      if (t.kind === 'toDate') return t.sourceFormat.trim() !== '';
+      // sourceFormat is optional on the wire (falls back to the ISO default
+      // server-side), but this UI always starts it at a non-blank default —
+      // `?? ''` only guards the type, never actually fires in practice.
+      if (t.kind === 'toDate') return (t.sourceFormat ?? '').trim() !== '';
+      if (t.kind === 'combineFields') return t.sourceFieldNames.length >= 2;
+      if (t.kind === 'splitField') return t.sourceFieldName.trim() !== '';
       return true;
     });
   }
@@ -75,6 +136,10 @@ const SFFieldTransforms = (function () {
   // independently reach the same result" pattern as sanitizeFileNameBase's
   // relationship to the companion's FileNameSanitizer, since this only ever
   // has to *look* right in the popup, never actually run server-side.
+  /**
+   * @param {string} value
+   * @returns {string}
+   */
   function toNumberPreview(value) {
     const match = value.match(/-?\d[\d.,]*/);
     if (!match) return '';
@@ -102,11 +167,19 @@ const SFFieldTransforms = (function () {
   // transform's own onError/defaultValue the same way _apply_transforms
   // does, rather than the generic "preview unavailable" regexExtract uses
   // for an outright invalid pattern.
+  /**
+   * @param {string} value
+   * @returns {string | null}
+   */
   function toIntegerPreview(value) {
     const trimmed = value.trim();
     return /^[+-]?\d+$/.test(trimmed) ? String(parseInt(trimmed, 10)) : null;
   }
 
+  /**
+   * @param {string} value
+   * @returns {string | null}
+   */
   function toBooleanPreview(value) {
     const normalized = value.trim().toLowerCase();
     if (['true', '1', 'yes', 'y'].includes(normalized)) return 'True';
@@ -114,6 +187,10 @@ const SFFieldTransforms = (function () {
     return null;
   }
 
+  /**
+   * @param {string} value
+   * @returns {string}
+   */
   function escapeRegExpLiteral(value) {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
@@ -130,6 +207,11 @@ const SFFieldTransforms = (function () {
   // is broken" outcome to report separately; any mismatch (wrong shape,
   // wrong token, or a structurally-valid but non-existent calendar date)
   // is just a conversion failure, handled by the caller's onError contract.
+  /**
+   * @param {string} value
+   * @param {string} sourceFormat
+   * @returns {string | null}
+   */
   function toDatePreview(value, sourceFormat) {
     let pattern = escapeRegExpLiteral(sourceFormat);
     for (const [token, tokenPattern] of Object.entries(DATE_FORMAT_TOKEN_PATTERNS)) {
@@ -147,6 +229,7 @@ const SFFieldTransforms = (function () {
     // by checking the constructed date's own fields didn't move, the same
     // check Python's date() raising ValueError gives us for free server-side.
     if (d.getUTCFullYear() !== yyyy || d.getUTCMonth() !== mm - 1 || d.getUTCDate() !== dd) return null;
+    /** @param {number} n */
     const pad = (n) => String(n).padStart(2, '0');
     return `${yyyy}-${pad(mm)}-${pad(dd)}`;
   }
@@ -158,6 +241,12 @@ const SFFieldTransforms = (function () {
   // _type_conversion_fallback: "KeepOriginal" passes currentValue through
   // unchanged (the chain keeps going, it does NOT mean "preview
   // unavailable"), "UseDefault" substitutes defaultValue.
+  /**
+   * @param {string} currentValue
+   * @param {SFWire.ToIntegerTransform | SFWire.ToBooleanTransform | SFWire.ToDateTransform} t
+   * @param {string | null} converted
+   * @returns {string}
+   */
   function typeConversionFallback(currentValue, t, converted) {
     if (converted !== null) return converted;
     return t.onError === 'UseDefault' ? (t.defaultValue ?? '') : currentValue;
@@ -173,6 +262,11 @@ const SFFieldTransforms = (function () {
   // RegExp makes this return null (distinct from a valid empty-string
   // result) so the caller can show "preview unavailable" instead of a wrong
   // value.
+  /**
+   * @param {string} rawValue
+   * @param {SFWire.FieldTransform[]} transforms
+   * @returns {string | null}
+   */
   function applyTransformsPreview(rawValue, transforms) {
     let value = rawValue;
     for (const t of transforms) {
@@ -207,6 +301,16 @@ const SFFieldTransforms = (function () {
         case 'toDate':
           value = typeConversionFallback(value, t, toDatePreview(value, t.sourceFormat || ''));
           break;
+        case 'combineFields':
+        case 'splitField':
+          // Issue #206: no sibling field's own value is available client-side
+          // at preview time (this preview only ever has the *one* field
+          // currently being edited's own picked raw value, see
+          // renderTransformPreview's own doc comment) — null signals
+          // "preview unavailable" here, the same as an invalid regexExtract
+          // pattern, rather than misleadingly showing this field's own raw
+          // value untouched.
+          return null;
       }
     }
     return value;

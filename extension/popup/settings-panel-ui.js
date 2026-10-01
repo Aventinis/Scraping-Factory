@@ -47,12 +47,6 @@ function renderSettingsPanel(bridge) {
       if (input && document.activeElement !== input) input.value = value;
     }
 
-    // Issue #178: opt-in external XML config file — mode-independent, lives
-    // in the Settings section like Proxy/Json-output, needs no visibility
-    // gating of its own.
-    const externalConfigToggle = document.getElementById('toggle-external-config');
-    if (externalConfigToggle) externalConfigToggle.checked = state.externalConfig;
-
     // Issue #88: opt-in proxy support.
     const proxyToggle = document.getElementById('toggle-proxy');
     if (proxyToggle) proxyToggle.checked = state.proxy.enabled;
@@ -262,12 +256,6 @@ function wireSettingsPanelEvents(bridge) {
   // (no sub-fields), unlike proxy/pagination's { enabled, ... } shape.
   document.getElementById('toggle-persistent-session')?.addEventListener('change', (e) => {
     bridge.setState(bridge.getState().current, { persistentSession: e.target.checked });
-  });
-
-  // Issue #178: opt-in external XML config file — a plain boolean (no
-  // sub-fields), same shape as persistentSession above.
-  document.getElementById('toggle-external-config')?.addEventListener('change', (e) => {
-    bridge.setState(bridge.getState().current, { externalConfig: e.target.checked });
   });
 
   // Issue #88: opt-in proxy support.
@@ -509,21 +497,6 @@ function wireSettingsPanelEvents(bridge) {
       e.preventDefault();
       bridge.setState(bridge.getState().current, { settingsSectionOpen: !bridge.getState().settingsSectionOpen });
     }
-  });
-
-  document.getElementById('toggle-include-data-preview')?.addEventListener('change', (e) => {
-    log('BTN toggle-include-data-preview', e.target.checked);
-    bridge.patchState({ includeDataPreview: e.target.checked });
-  });
-
-  document.getElementById('toggle-include-output-file')?.addEventListener('change', (e) => {
-    log('BTN toggle-include-output-file', e.target.checked);
-    bridge.patchState({ includeOutputFile: e.target.checked });
-  });
-
-  document.getElementById('toggle-output-json')?.addEventListener('change', (e) => {
-    log('BTN toggle-output-json', e.target.checked);
-    bridge.patchState({ useJsonOutput: e.target.checked });
   });
 
 }

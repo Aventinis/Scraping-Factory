@@ -26,6 +26,11 @@ const SFFieldTransformsUI = (function () {
     return value.length > MAX_PREVIEW_CHARS ? `${value.slice(0, MAX_PREVIEW_CHARS)}…` : value;
   }
 
+  // Issue #206 follow-up: combineFields/splitField are no longer reachable
+  // through this generic per-field transform-kind dropdown — they have
+  // their own dedicated "Felder kombinieren"/"Feld aufteilen" creation flow
+  // (combine-split-fields.js/-ui.js) instead, since neither kind actually
+  // transforms *this* field's own value the way every other kind here does.
   const KIND_OPTIONS = [
     ['trim', 'transforms.trimOption'],
     ['regexExtract', 'transforms.regexExtractOption'],

@@ -187,22 +187,22 @@ input, textarea, select { transition: border-color var(--transition-fast), box-s
    a combined selector rather than a new shared class, so none of these
    five elements' existing class lists (and anything that queries them)
    needs to change. */
-.screen-idle-scroll::-webkit-scrollbar, #screen-api-config::-webkit-scrollbar,
+.screen-idle-scroll::-webkit-scrollbar, #screen-api-config::-webkit-scrollbar, #screen-settings::-webkit-scrollbar,
 .dom-tree-wrapper::-webkit-scrollbar, .data-preview-table-wrap::-webkit-scrollbar,
 .data-preview-text::-webkit-scrollbar {
   width: 8px; height: 8px;
 }
-.screen-idle-scroll::-webkit-scrollbar-track, #screen-api-config::-webkit-scrollbar-track,
+.screen-idle-scroll::-webkit-scrollbar-track, #screen-api-config::-webkit-scrollbar-track, #screen-settings::-webkit-scrollbar-track,
 .dom-tree-wrapper::-webkit-scrollbar-track, .data-preview-table-wrap::-webkit-scrollbar-track,
 .data-preview-text::-webkit-scrollbar-track {
   background: transparent;
 }
-.screen-idle-scroll::-webkit-scrollbar-thumb, #screen-api-config::-webkit-scrollbar-thumb,
+.screen-idle-scroll::-webkit-scrollbar-thumb, #screen-api-config::-webkit-scrollbar-thumb, #screen-settings::-webkit-scrollbar-thumb,
 .dom-tree-wrapper::-webkit-scrollbar-thumb, .data-preview-table-wrap::-webkit-scrollbar-thumb,
 .data-preview-text::-webkit-scrollbar-thumb {
   background: var(--color-border); border-radius: var(--radius-pill); border: 2px solid transparent; background-clip: padding-box;
 }
-.screen-idle-scroll::-webkit-scrollbar-thumb:hover, #screen-api-config::-webkit-scrollbar-thumb:hover,
+.screen-idle-scroll::-webkit-scrollbar-thumb:hover, #screen-api-config::-webkit-scrollbar-thumb:hover, #screen-settings::-webkit-scrollbar-thumb:hover,
 .dom-tree-wrapper::-webkit-scrollbar-thumb:hover, .data-preview-table-wrap::-webkit-scrollbar-thumb:hover,
 .data-preview-text::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-faint); background-clip: padding-box;
@@ -311,6 +311,26 @@ body {
   background: var(--color-warning-soft); color: var(--color-warning-strong); white-space: nowrap;
 }
 
+/* Issue #206 follow-up: flags a field marked HiddenFromOutput — still
+   computed (a combine/split transform elsewhere may reference it), just
+   excluded from the written output. Neutral/muted tone (unlike the amber
+   frame-badge above) since this isn't a warning, just informational. */
+.field-hidden-badge {
+  flex: none; font-size: 10px; padding: 1px 6px; border-radius: var(--radius-pill);
+  background: var(--color-surface-muted); color: var(--color-text-muted); white-space: nowrap;
+}
+
+/* Issue #206 follow-up: the "Felder kombinieren" modal's source-field
+   picker — a real checkbox per row (see modal-combine-field), replacing the
+   original design's native <select multiple> (which needed an
+   undiscoverable Ctrl/Cmd-click to select more than one option). */
+.combine-field-source-list {
+  list-style: none; margin: 0 0 10px; padding: 0; max-height: 160px; overflow-y: auto;
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+}
+.combine-field-source-row { padding: 4px 8px; }
+.combine-field-source-row label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
 /* Mode toggle */
 .mode-toggle {
   display: flex; gap: 4px; margin-bottom: 14px; background: var(--color-surface-muted);
@@ -382,6 +402,25 @@ body {
 .saved-output-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .saved-outputs-loading, .saved-outputs-empty { font-size: 11px; color: var(--color-text-faint); margin: 2px 0; }
 
+/* Issue #207: "Test hardening" — the compare-basis picker/loading/error/
+   results phases of _state.hardeningReplay, nested under the specific
+   saved-output row it belongs to (same visual nesting .saved-outputs-panel
+   itself already establishes one level up). */
+.hardening-replay-panel { margin: 2px 0 6px 14px; padding: 4px 0 4px 6px; border-left: 2px solid var(--color-border); font-size: 11px; }
+.hardening-replay-compare-basis-label { margin: 0 0 4px; color: var(--color-text-muted); }
+.hardening-replay-compare-basis-toggle { margin-bottom: 6px; }
+.hardening-replay-loading, .hardening-replay-error { color: var(--color-text-faint); margin: 2px 0 6px; }
+.hardening-replay-error { color: var(--color-danger); }
+.hardening-replay-results-list { list-style: none; padding: 0; margin: 0 0 6px; }
+.hardening-replay-result { padding: 3px 0; border-bottom: 1px solid var(--color-border); }
+.hardening-replay-result:last-child { border-bottom: none; }
+.hardening-replay-result-kind { font-weight: 600; }
+.hardening-replay-result-outcome { margin-left: 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.02em; }
+.hardening-replay-result-message { margin: 2px 0 0; color: var(--color-text-muted); }
+.hardening-replay-result-passed .hardening-replay-result-outcome { color: var(--color-success); }
+.hardening-replay-result-triggered .hardening-replay-result-outcome { color: var(--color-danger); }
+.hardening-replay-result-inconclusive .hardening-replay-result-outcome { color: var(--color-warning); }
+
 /* Issue #191: Output Blueprints — the management list (modal-manage-
    blueprints, mirrors .saved-config-row) and the create/edit modal's own
    ordered field-name rows (mirrors .transform-row), plus the per-scrape
@@ -452,6 +491,7 @@ body {
    now grows via the shared .screen flex:1 rule and just scrolls
    internally within whatever height that ends up being. */
 #screen-api-config { padding: 16px; overflow-y: auto; min-height: 0; }
+#screen-settings { padding: 16px; overflow-y: auto; min-height: 0; }
 .api-config-parts, .api-config-headers { list-style: none; margin-bottom: 4px; }
 .api-config-part-row, .api-config-header-row {
   display: flex; align-items: center; gap: 6px; padding: 5px 6px; background: var(--color-surface-subtle); border-radius: var(--radius-md); margin-bottom: 4px; font-size: 11px;
@@ -712,6 +752,15 @@ button:active:not(:disabled) { transform: translateY(1px); }
   padding: 7px 10px; font-size: 14px; margin-bottom: 12px; font-family: inherit; outline: none;
 }
 .modal-inner input:focus { border-color: var(--color-primary); box-shadow: var(--focus-ring); }
+/* Issue #213: a checkbox toggle (e.g. #toggle-field-download) reuses the
+   same .output-settings-toggle flex-row pattern idle.html's own toggles
+   already use outside any modal — without this override, the two generic
+   rules above (higher specificity than .output-settings-toggle alone, and
+   width:100%/padding meant for text inputs) stretched the checkbox into a
+   full-width bar and forced its label onto its own block-level line instead
+   of sitting inline next to it. */
+.modal-inner label.output-settings-toggle { display: flex; }
+.modal-inner input[type="checkbox"] { width: auto; padding: 0; margin: 0; }
 .modal-inner select {
   width: 100%; border: 1px solid var(--color-border-input); border-radius: var(--radius-md);
   padding: 7px 10px; font-size: 14px; margin-bottom: 12px; font-family: inherit; outline: none;
@@ -764,3 +813,13 @@ button:active:not(:disabled) { transform: translateY(1px); }
   background: var(--color-surface); color: var(--color-text-secondary);
 }
 #theme-toggle svg { width: 14px; height: 14px; }
+/* Global Settings tab entry point — same compact icon-button treatment as
+   #theme-toggle right next to it. */
+#btn-open-settings {
+  display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0;
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  background: var(--color-surface); color: var(--color-text-secondary);
+}
+#btn-open-settings svg { width: 14px; height: 14px; }
+#btn-open-settings.active { background: var(--color-primary); color: var(--color-on-accent); border-color: var(--color-primary); }

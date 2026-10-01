@@ -10,6 +10,9 @@ const { initI18n, setLanguage, getLanguage, t } =
 const { initTheme, getTheme, cycleTheme } =
   typeof require !== 'undefined' ? require('../shared/theme') : self.SFTheme;
 
+const { loadGlobalSettings, getGlobalSettings, updateGlobalSettings } =
+  typeof require !== 'undefined' ? require('../shared/global-settings') : self.SFGlobalSettings;
+
 const {
   STATES, escapeHtml,
   parseUrlTemplateParts, buildUrlTemplate, parseValueListInput, findUrlTemplateMatches, mergeValueListValues,
@@ -17,17 +20,26 @@ const {
   detectRangeFormat, findUrlPartValue, rangeFormatExample,
   buildApiHeaders, buildApiConfig,
   buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
+  collectPrecedingApiFieldSiblingNames,
   serializeApiTree, countApiConfigFields, updateApiTreeNode, apiTreeNodesHaveNonBlankNames,
   jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
   bodyTreeLeavesAreBound, serializeBodyTree, lastPathSegmentName, buildApiSubtreeFromCandidate,
   resolveApiGroupScopePath, variableUrlParts, allParameterParts, apiConfigDraftHasAllSourcesChosen,
+  collectApiGroupFieldNames,
 } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
 
 const {
   buildGroupNode, buildFieldNode, resolveGroupNode, hasRepeatingAncestor,
   insertContainerNode, removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode,
-  formatGroupNodeLabel, serializeGroupTree,
+  formatGroupNodeLabel, serializeGroupTree, collectSiblingFieldNames,
 } = typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
+
+const { buildCombineFieldsTransform, buildSplitFieldTransform } =
+  typeof require !== 'undefined' ? require('./combine-split-fields') : self.SFCombineSplitFields;
+
+const {
+  renderCombineFieldModal, renderSplitFieldModal, wireCombineSplitFieldsEvents,
+} = typeof require !== 'undefined' ? require('./combine-split-fields-ui') : self.SFCombineSplitFieldsUI;
 
 const {
   renderApiTree, renderApiCandidates, renderApiEntriesList,
@@ -93,7 +105,7 @@ const {
   buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildHardeningConfig,
   computeInitialMonitoringSectionOpen, collectFieldNames,
   buildScrapingConfig, buildConfigExport,
-  addField, removeField,
+  addField, removeField, updateField,
   addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions,
   buildVerificationValues,
   addNullRateCheck, removeNullRateCheck, updateNullRateCheck,
@@ -135,11 +147,14 @@ const { wireSettingsPanelEvents } =
 const {
   fetchOutputBlueprints, selectOutputBlueprint,
   renderOutputBlueprintMappingSection,
-  renderManageBlueprintsModal, openManageBlueprintsModal, closeManageBlueprintsModal,
   requestDeleteBlueprint, cancelDeleteBlueprint, deleteBlueprint,
   openBlueprintCreateModal, openBlueprintEditModal, closeBlueprintEditModal, saveBlueprintEdit,
   renderBlueprintEditModal, wireOutputBlueprintsEvents,
 } = typeof require !== 'undefined' ? require('./output-blueprints-ui') : self.SFOutputBlueprintsUI;
+
+const {
+  renderSettingsScreen, wireSettingsScreenEvents,
+} = typeof require !== 'undefined' ? require('./global-settings-ui') : self.SFGlobalSettingsUI;
 
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (e) => log('UNCAUGHT_ERROR', e.message));
@@ -227,12 +242,6 @@ let _state = {
   // see buildScrapingConfig's "only send the key when true" handling), so
   // it's a plain boolean rather than an { enabled, ... } object.
   persistentSession: false,
-  // Issue #178: opt-in external XML config file — mode-independent (Fields/
-  // Groups/Api alike), persisted the same way as persistentSession above
-  // (real scrape-target configuration, not a per-generate toggle). Also a
-  // plain boolean with no sub-fields: which values end up editable depends
-  // entirely on the current mode/shape, nothing the user chooses here.
-  externalConfig: false,
   // Issue #129: opt-in script hardening checks — mode-independent like
   // engine/changeDetection/proxy above, persisted the same way (real
   // scrape-target configuration, not a per-generate toggle). Nested one
@@ -396,31 +405,35 @@ let _state = {
   // those two modals are never open at once.
   apiFieldTransformModalOpen: false,
   pendingApiFieldTransformPath: null,
+  // Issue #206 follow-up: modal-combine-field/modal-split-field visibility
+  // — the dedicated "Felder kombinieren"/"Feld aufteilen" creation flow,
+  // shared across flat/container/API mode (combine-split-fields-ui.js).
+  // pendingDerivedFieldScope carries which mode/parent the confirmed field
+  // gets inserted into: { mode: 'flat' } | { mode: 'container', parentPath }
+  // | { mode: 'api', groupPath } — same "not persisted, no content-script
+  // round trip involved" reasoning as apiGroupModalOpen above.
+  combineFieldModalOpen: false,
+  splitFieldModalOpen: false,
+  pendingDerivedFieldScope: null,
   apiConfigDraft:     null, // set once a candidate is confirmed as the primary field — the in-progress ApiConfig being built, see buildApiConfig/confirmApiFieldCandidate
   apiConfig:          null, // the "Apply"-confirmed ApiConfig wire object — Phase 6 will read this; persisted like fields/groups
   robotsTxtChecking: false, // not persisted, always off on popup reopen (like previewActive/apiCaptureActive)
   robotsTxtResult:   null,  // {ok, robotsUrl, path, notFound, allowed, matchedRule} | {ok:false, error} from the content script's CHECK_ROBOTS_TXT response, or null before the first check
-  // Issue #122: opt-in trial-run data preview — deliberately named
-  // "dataPreview" throughout, not "preview", to avoid any confusion with
-  // the unrelated DOM-highlight feature above (previewActive/togglePreview/
-  // #btn-preview) — that one highlights matched elements on the live page;
-  // this one shows a sample of what the last /generate trial run actually
-  // scraped. includeDataPreview is the checkbox's own state (not persisted,
-  // always off on popup reopen, same as previewActive/apiCaptureActive —
-  // it's a per-generate opt-in, not a sticky preference).
-  includeDataPreview: false,
+  // Issue #122: trial-run data preview — deliberately named "dataPreview"
+  // throughout, not "preview", to avoid any confusion with the unrelated
+  // DOM-highlight feature above (previewActive/togglePreview/#btn-preview)
+  // — that one highlights matched elements on the live page; this one shows
+  // a sample of what the last /generate trial run actually scraped.
+  // Whether to *request* one (includeDataPreview) moved to the global
+  // Settings tab (shared/global-settings.js, Issue-driven follow-up) — a
+  // cross-session preference now, not a per-scrape toggle — but the
+  // *result* of the last request still lives here, same as before.
   dataPreview:        null, // the companion's ScriptPreviewData from the last successful /generate with includeDataPreview on, or null
-  // Issue #161: opt-in full trial-run output download — the complete,
-  // uncapped counterpart to includeDataPreview/dataPreview above (they're
-  // independent, either/both/neither may be on). Not persisted, always off
-  // on popup reopen, same per-generate-opt-in treatment as includeDataPreview.
-  includeOutputFile:  false,
+  // Issue #161: full trial-run output download — the complete, uncapped
+  // counterpart to dataPreview above (independent of it, either/both/
+  // neither may be on). Same "request-toggle moved to global Settings,
+  // result stays here" split as dataPreview above.
   outputFile:         null, // {fileName, content} from the last successful /generate with includeOutputFile on, or null
-  // Issue #86: opt-in Json output, mode-independent (like includeDataPreview
-  // above) — not persisted, always off on popup reopen; a per-generate
-  // choice, not a sticky preference. See buildScrapingConfig for exactly
-  // what this adds/replaces per mode.
-  useJsonOutput:      false,
   // Issue #141: local SQLite-backed configuration history. savedConfigs is
   // null before the first GET /configs?url=... for the current tab
   // completes (or if it fails — an older companion without this route, a
@@ -491,6 +504,18 @@ let _state = {
   savedOutputs:                null,
   savedOutputsLoading:         false,
   savedOutputsPendingDeleteId: null,
+  // Issue #207: "Test hardening" replays the currently-configured live
+  // hardening checks (_state.hardening, via buildHardeningConfig) against
+  // one specific saved output — at most one such replay in flight/shown at
+  // a time, the same singular-slot pattern savedConfigsExpandedId already
+  // uses for "at most one thing expanded". needsCompareBasisChoice is only
+  // ever true when the live checks include a BaselineCheck AND this saved
+  // output's own config has an Output Blueprint set (only then does "same
+  // configuration vs. same Blueprint" mean two actually-different things) —
+  // the confirm button is held back until then; every other case runs
+  // immediately with compareBasis 'config' (irrelevant when there's no
+  // BaselineCheck to begin with).
+  hardeningReplay:             null,
   // Issue #191: opt-in output blueprint field mapping — only reachable in
   // the UI for flat mode/Api mode's flat shape, persisted like proxy/
   // hardening above (real scrape-target configuration, not a per-generate
@@ -515,7 +540,6 @@ let _state = {
   // same pull-based tradeoff savedConfigs/allSavedConfigs already accept.
   outputBlueprints:            null,
   outputBlueprintsLoading:     false,
-  manageBlueprintsModalOpen:   false,
   blueprintEditModalOpen:      false,
   blueprintEditingId:          null, // null = creating a new blueprint, else editing this id
   blueprintEditDraft:          { name: '', fieldNames: [] },
@@ -555,7 +579,6 @@ function persistState() {
       proxy: _state.proxy,
       pagination: _state.pagination,
       persistentSession: _state.persistentSession,
-      externalConfig: _state.externalConfig,
       hardening: _state.hardening,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
@@ -629,6 +652,84 @@ function applyStaticTranslations() {
   renderThemeToggle();
 }
 
+// Issue #206 follow-up: the mode-dispatch glue for the shared combine/split
+// field creation modals (combine-split-fields-ui.js, deliberately
+// mode-agnostic — see its own doc comment for why this glue lives here
+// instead of in any one mode's own -ui.js file: popup.js is the one place
+// that already imports every mode's own field-name/insert/update helper,
+// and — per Architecture Decision #12 — logic that doesn't cleanly belong
+// to any single extracted feature module is exactly what popup.js itself
+// is meant to still hold, the same role it already plays for switchMode.
+//
+// scope shapes (see popup.js's own pendingDerivedFieldScope doc comment):
+// { mode: 'flat' } | { mode: 'container', parentPath } | { mode: 'api', groupPath }
+function computeDerivedFieldAvailableNames(state, scope) {
+  if (!scope) return [];
+  if (scope.mode === 'flat') return (state.fields || []).map(f => f.name);
+  if (scope.mode === 'container') return collectSiblingFieldNames(state.groups, scope.parentPath);
+  if (scope.mode === 'api') return collectApiGroupFieldNames(state.apiConfigDraft?.groups || [], scope.groupPath);
+  return [];
+}
+
+// Inserts the new derived field/node into whichever mode/scope the modal
+// was opened for, then — if requested — marks the picked source fields
+// hiddenFromOutput (never deletes them: their value is still needed for the
+// new field's own combine/split transform to read via the runtime's usual
+// sibling lookup, see scraping-config-builder.js's own updateField doc
+// comment). Returns the full _state patch to apply in one setState call.
+function insertDerivedField(state, scope, name, transform, sourceFieldNames, removeOriginals) {
+  if (scope.mode === 'flat') {
+    let fields = addField(state.fields, name, null, null, [transform]);
+    if (removeOriginals) {
+      sourceFieldNames.forEach((sourceName) => {
+        const index = fields.findIndex(f => f.name === sourceName);
+        if (index !== -1) fields = updateField(fields, index, { hiddenFromOutput: true });
+      });
+    }
+    return { fields };
+  }
+  if (scope.mode === 'container') {
+    const node = buildFieldNode(name, null, 'text', null, null, [transform]);
+    let groups = insertContainerNode(state.groups, scope.parentPath, node);
+    if (removeOriginals) {
+      const siblingsPath = scope.parentPath || [];
+      const siblings = siblingsPath.length === 0 ? state.groups : resolveGroupNode(state.groups, siblingsPath).children;
+      siblings.forEach((sibling, i) => {
+        if (sibling.kind === 'field' && sourceFieldNames.includes(sibling.name)) {
+          groups = updateGroupTreeNode(groups, [...siblingsPath, i], (n) => ({ ...n, hiddenFromOutput: true }));
+        }
+      });
+    }
+    return { groups };
+  }
+  // scope.mode === 'api'
+  const node = buildApiFieldDraft(name, null, [transform]);
+  let apiGroups = insertApiTreeNode(state.apiConfigDraft.groups, scope.groupPath, node);
+  if (removeOriginals) {
+    const siblings = resolveApiTreeNode(state.apiConfigDraft.groups, scope.groupPath).children;
+    siblings.forEach((sibling, i) => {
+      if (sibling.kind === 'field' && sourceFieldNames.includes(sibling.name)) {
+        apiGroups = updateApiTreeNode(apiGroups, [...scope.groupPath, i], (n) => ({ ...n, hiddenFromOutput: true }));
+      }
+    });
+  }
+  return { apiConfigDraft: { ...state.apiConfigDraft, groups: apiGroups } };
+}
+
+function onConfirmCombineField(scope, name, sourceFieldNames, separator, removeOriginals) {
+  const transform = buildCombineFieldsTransform(sourceFieldNames, separator);
+  const patch = insertDerivedField(_state, scope, name, transform, sourceFieldNames, removeOriginals);
+  setState(scope.mode === 'api' ? STATES.API_CONFIG : STATES.IDLE, patch);
+  return true;
+}
+
+function onConfirmSplitField(scope, name, sourceFieldName, separator, index, removeOriginal) {
+  const transform = buildSplitFieldTransform(sourceFieldName, separator, index);
+  const patch = insertDerivedField(_state, scope, name, transform, [sourceFieldName], removeOriginal);
+  setState(scope.mode === 'api' ? STATES.API_CONFIG : STATES.IDLE, patch);
+  return true;
+}
+
 // Issue #84: render() hides every modal unconditionally at its own top
 // (see below) and re-shows modal-field-name/-extended each pass while a
 // pick is pending — so a DOM-visibility check can't tell "just reopened"
@@ -640,7 +741,7 @@ function applyStaticTranslations() {
 let lastFieldModalSelector = null;
 
 function render() {
-  ['checking', 'error', 'idle', 'selecting', 'api-config', 'generating', 'done'].forEach(s =>
+  ['checking', 'error', 'idle', 'selecting', 'api-config', 'settings', 'generating', 'done'].forEach(s =>
     hide(`screen-${s}`)
   );
   hide('modal-field-name');
@@ -651,8 +752,9 @@ function render() {
   hide('modal-api-field-transforms');
   hide('modal-save-config');
   hide('modal-save-output');
-  hide('modal-manage-blueprints');
   hide('modal-blueprint-edit');
+  hide('modal-combine-field');
+  hide('modal-split-field');
 
   const screenKey = {
     [STATES.CHECKING_COMPANION]: 'checking',
@@ -660,11 +762,18 @@ function render() {
     [STATES.IDLE]:               'idle',
     [STATES.SELECTING]:          'selecting',
     [STATES.API_CONFIG]:         'api-config',
+    [STATES.SETTINGS]:           'settings',
     [STATES.GENERATING]:         'generating',
     [STATES.DONE]:               'done',
   }[_state.current];
 
   if (screenKey) show(`screen-${screenKey}`);
+  // The header's own Settings icon isn't inside any .screen (always
+  // visible/clickable, like theme-toggle/lang-select), so its own "active"
+  // visual state has to be driven from here rather than from
+  // renderSettingsScreen, which only ever runs while that screen is current.
+  document.getElementById('btn-open-settings')?.classList.toggle('active', _state.current === STATES.SETTINGS);
+  if (_state.current === STATES.SETTINGS) renderSettingsScreen(bridge);
 
   // modal-save-config is a global overlay, not scoped to the IDLE screen's
   // own render block below — Issue #202's "save configuration first"
@@ -672,13 +781,15 @@ function render() {
   // screen, so this check must run regardless of which screen is current.
   if (_state.saveConfigModalOpen) show('modal-save-config');
 
-  // Issue #191: same "global overlay" treatment as modal-save-config above
-  // — reachable from the IDLE screen's Settings section, but not scoped to
-  // it, since a blueprint could plausibly be managed independently later.
-  if (_state.manageBlueprintsModalOpen) {
-    show('modal-manage-blueprints');
-    renderManageBlueprintsModal(bridge);
-  }
+  // Issue #206 follow-up: same "global overlay" treatment as modal-save-
+  // config/modal-manage-blueprints above — reachable from flat/container
+  // mode's own field-list buttons (IDLE screen) and API mode's per-group
+  // tree buttons (API_CONFIG screen) alike, so this can't be scoped to
+  // either screen's own render block. Both functions already toggle their
+  // own modal's visibility internally based on _state.combineFieldModalOpen/
+  // splitFieldModalOpen, so no separate show()/hide() gate is needed here.
+  renderCombineFieldModal(bridge, computeDerivedFieldAvailableNames(_state, _state.pendingDerivedFieldScope));
+  renderSplitFieldModal(bridge, computeDerivedFieldAvailableNames(_state, _state.pendingDerivedFieldScope));
   if (_state.blueprintEditModalOpen) {
     show('modal-blueprint-edit');
     renderBlueprintEditModal(bridge);
@@ -950,6 +1061,11 @@ function wireEvents() {
 
   wireContainerModeEvents(bridge);
 
+  wireCombineSplitFieldsEvents(bridge, {
+    onConfirmCombine: onConfirmCombineField,
+    onConfirmSplit: onConfirmSplitField,
+  });
+
   document.getElementById('btn-cancel-selection')?.addEventListener('click', () => {
     log('BTN cancel-selection → STOP_SELECTION');
     chrome.runtime.sendMessage({ type: 'STOP_SELECTION' });
@@ -977,12 +1093,20 @@ function wireEvents() {
   wireSavedConfigsEvents(bridge);
 
   wireOutputBlueprintsEvents(bridge);
+  wireSettingsScreenEvents(bridge);
 
   document.getElementById('btn-new-scraper')?.addEventListener('click', () => {
     log('BTN new-scraper → reset state');
     stopPreviewIfActive(bridge);
-    chrome.storage.session.set({ fields: [], url: '', groups: [], apiConfig: null });
-    setState(STATES.CHECKING_COMPANION, { fields: [], groups: [], apiConfig: null, scriptText: '', url: '' });
+    // scriptFileName/outputFileName are reset here too (Issue-driven
+    // follow-up): 'fixed' scriptNameMode only ever fills a *blank*
+    // scriptFileName (computeScriptFileNamePatch), so without this reset a
+    // manually-typed name from the previous scrape would keep being carried
+    // over instead of "New scraper" giving 'fixed' mode's own default a
+    // fresh chance to apply, the same "start over" behavior every other
+    // field here already gets.
+    chrome.storage.session.set({ fields: [], url: '', groups: [], apiConfig: null, scriptFileName: '', outputFileName: '' });
+    setState(STATES.CHECKING_COMPANION, { fields: [], groups: [], apiConfig: null, scriptText: '', url: '', scriptFileName: '', outputFileName: '' });
     checkCompanion(bridge);
   });
 
@@ -1040,6 +1164,7 @@ async function loadScreenPartials() {
   await Promise.all([
     loadScreenPartial('screen-idle', 'popup/screens/idle.html'),
     loadScreenPartial('screen-api-config', 'popup/screens/api-config.html'),
+    loadScreenPartial('screen-settings', 'popup/screens/settings.html'),
     loadScreenPartial('modals-mount', 'popup/screens/modals.html'),
   ]);
 }
@@ -1055,6 +1180,9 @@ async function init() {
   const theme = await initTheme();
   log('INIT theme', theme ?? 'system');
 
+  await loadGlobalSettings();
+  log('INIT global settings', getGlobalSettings());
+
   applyStaticTranslations();
 
   wireEvents();
@@ -1063,7 +1191,7 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pagination', 'persistentSession', 'externalConfig', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pagination', 'persistentSession', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
     'scriptFileName', 'outputFileName',
@@ -1094,6 +1222,7 @@ if (typeof module !== 'undefined') {
     updateGroupTreeNode, moveGroupTreeNode,
     formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport, hasRepeatingAncestor,
     buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
+    collectPrecedingApiFieldSiblingNames, collectSiblingFieldNames,
     updateApiTreeNode, apiTreeNodesHaveNonBlankNames, lastPathSegmentName, buildApiSubtreeFromCandidate,
     resolveApiGroupScopePath, countApiConfigFields,
     serializeApiTree, renderApiTree,
@@ -1128,7 +1257,6 @@ if (typeof module !== 'undefined') {
     requestDeleteSavedOutput, cancelDeleteSavedOutput, deleteSavedOutput, renderSaveOutputModal,
     fetchOutputBlueprints, selectOutputBlueprint,
     renderOutputBlueprintMappingSection,
-    renderManageBlueprintsModal, openManageBlueprintsModal, closeManageBlueprintsModal,
     requestDeleteBlueprint, cancelDeleteBlueprint, deleteBlueprint,
     openBlueprintCreateModal, openBlueprintEditModal, closeBlueprintEditModal, saveBlueprintEdit,
     renderBlueprintEditModal,

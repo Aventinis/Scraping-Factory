@@ -22,6 +22,9 @@ const { resolveCombinedComponents } =
 const { showToast } =
   typeof require !== 'undefined' ? require('./toast') : self.SFToast;
 
+const { getGlobalSettings } =
+  typeof require !== 'undefined' ? require('../shared/global-settings') : self.SFGlobalSettings;
+
 function triggerDownload(bridge) {
   const state = bridge.getState();
   const fileName = `${sanitizeFileNameBase(state.scriptFileName, 'scraper')}.py`;
@@ -88,11 +91,15 @@ async function downloadConfigExport(bridge) {
     }
   }
 
+  // Issue-driven follow-up: outputAsJson/includeDataPreview/externalConfig
+  // moved from per-scrape _state to the cross-session global Settings tab
+  // (shared/global-settings.js) — read from there now, same as generate().
+  const globalSettings = getGlobalSettings();
   const exportObj = buildConfigExport(
     state.url, state.mode, state.fields, state.groups, manifest, state.apiConfig,
-    state.scriptFileName, state.outputFileName, state.engine, state.browserActions, state.includeDataPreview,
-    state.useJsonOutput, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
-    state.pagination, state.persistentSession, false, state.externalConfig, combinedComponents, state.blocks,
+    state.scriptFileName, state.outputFileName, state.engine, state.browserActions, globalSettings.includeDataPreview,
+    globalSettings.outputAsJson, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
+    state.pagination, state.persistentSession, false, globalSettings.externalConfig, combinedComponents, state.blocks,
     state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
     state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
   );

@@ -72,10 +72,13 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
                 // scope once the real response is known, not here.
                 blueprint_tree_mapping_enabled = plan.OutputBlueprint?.SchemaKind == OutputBlueprintSchemaKind.Tree,
                 blueprint_tree_mapping_literal = PythonOutputBlueprintLiteral.RenderTree(plan.OutputBlueprint),
+                // Issue #206 follow-up: see PythonApiConfigLiteral.
+                // CollectHiddenFieldNames's own doc comment.
+                hidden_field_names_literal = PythonLiteral.StrList(PythonApiConfigLiteral.CollectHiddenFieldNames(api.Groups)),
             });
         }
 
-        var fields = api.Fields!.Select(field => new { name = field.Name, path = field.Path }).ToList();
+        var fields = api.Fields!.Select(field => new { name = field.Name, path = field.Path ?? "" }).ToList();
 
         var template = EmbeddedScribanTemplate.Load(assembly, "scraper_api.py.j2");
         return template.Render(new
@@ -100,6 +103,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
             hardening,
             external_config = externalConfig,
             blueprint_mapping_literal = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),
+            hidden_field_names_literal = PythonLiteral.StrList(api.Fields!.Where(f => f.HiddenFromOutput).Select(f => f.Name)),
         });
     }
 

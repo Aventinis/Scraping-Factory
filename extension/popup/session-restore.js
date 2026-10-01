@@ -12,12 +12,13 @@
 const SFSessionRestore = (function () {
   const { createLogger } = typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
   const log = createLogger('SF:Popup');
+  const { t } = typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
   const { STATES } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
   const { buildGroupNode, insertContainerNode } =
     typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
   const { updateBrowserAction, computeInitialMonitoringSectionOpen } =
     typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
-  const { showMatchCountToast } = typeof require !== 'undefined' ? require('./toast') : self.SFToast;
+  const { showToast, showMatchCountToast } = typeof require !== 'undefined' ? require('./toast') : self.SFToast;
 
   // Pure: folds chrome.storage.session's restored values onto a fresh
   // _state, the same "only overwrite what was actually persisted" shape
@@ -37,7 +38,6 @@ const SFSessionRestore = (function () {
     if (stored.proxy)                 next = { ...next, proxy: stored.proxy };
     if (stored.pagination)            next = { ...next, pagination: stored.pagination };
     if (stored.persistentSession !== undefined) next = { ...next, persistentSession: stored.persistentSession };
-    if (stored.externalConfig !== undefined) next = { ...next, externalConfig: stored.externalConfig };
     if (stored.hardening)             next = { ...next, hardening: stored.hardening };
     if (stored.scriptFileName)        next = { ...next, scriptFileName: stored.scriptFileName };
     if (stored.outputFileName)        next = { ...next, outputFileName: stored.outputFileName };
@@ -77,6 +77,20 @@ const SFSessionRestore = (function () {
     if (!stored.pendingSelector) return false;
     await chrome.storage.session.remove('pendingSelector');
     const state = bridge.getState();
+
+    // Same self-correction as message-router.js's live ELEMENT_SELECTED path
+    // — the pending selection was made on stored.pendingUrl (persisted by
+    // service-worker.js's own session-storage fallback), which can differ
+    // from the already-restored state.url if the tab navigated to a
+    // different page between the click and the popup reopening.
+    // patchState (not setState) here is enough: whichever branch below
+    // still runs its own setState afterward, which persists the corrected
+    // url along with everything else.
+    if (typeof stored.pendingUrl === 'string' && stored.pendingUrl && stored.pendingUrl !== state.url) {
+      log('INIT pending selector\'s page changed since last sync', { from: state.url, to: stored.pendingUrl });
+      bridge.patchState({ url: stored.pendingUrl });
+      showToast(t('toast.trackedUrlUpdated', { url: stored.pendingUrl }), null, 'info');
+    }
 
     if (stored.apiSearchTarget) {
       // Unlike the other pending-selector cases below, there's nothing to

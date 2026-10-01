@@ -556,3 +556,351 @@ describe('persist and browse run outputs (Issue #202): no saved config yet', () 
     expect(document.getElementById('modal-save-output').classList.contains('hidden')).toBe(true);
   });
 });
+
+describe('replay hardening checks against saved outputs (Issue #207)', () => {
+  const flushMicrotasks = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+
+  let fetchMock;
+  let savedConfigs;
+  let savedOutputsByConfigId;
+  let replayResults;
+
+  const html = `
+    <section id="screen-idle" class="hidden">
+      <div id="url-display"></div>
+      <div id="fields-list"></div>
+      <button id="btn-generate" disabled></button>
+      <div id="hardening-config">
+        <input type="checkbox" id="toggle-hardening-no-result" />
+        <input type="checkbox" id="toggle-hardening-baseline" />
+        <input type="number" id="input-hardening-baseline-threshold" />
+      </div>
+      <button id="btn-save-config"></button>
+      <div id="saved-configs-list"></div>
+      <p id="saved-configs-empty" class="hidden"></p>
+    </section>
+    <section id="screen-generating" class="hidden"></section>
+    <section id="screen-done" class="hidden">
+      <button id="btn-back-to-config"></button>
+      <button id="btn-download"></button>
+      <button id="btn-download-output" class="hidden"></button>
+      <button id="btn-save-output" class="hidden"></button>
+    </section>
+    <div id="modal-save-config" class="modal hidden">
+      <input id="input-save-config-name" />
+      <button id="btn-save-config-cancel"></button>
+      <button id="btn-save-config-confirm"></button>
+    </div>
+    <div id="modal-save-output" class="modal hidden">
+      <div id="save-output-picker">
+        <select id="select-save-output-config"></select>
+      </div>
+      <div id="save-output-create-config" class="hidden">
+        <input id="input-save-output-config-name" />
+      </div>
+      <input id="input-save-output-name" />
+      <button id="btn-save-output-cancel"></button>
+      <button id="btn-save-output-confirm"></button>
+    </div>
+    <div id="error-toast" class="hidden">
+      <span id="error-toast-message"></span>
+      <button id="btn-report-bug-toast" class="hidden"></button>
+    </div>
+  `;
+
+  beforeEach(async () => {
+    jest.resetModules();
+    document.body.innerHTML = html;
+
+    savedConfigs = [
+      { id: 1, url: 'https://example.com/products', name: 'My config', savedAt: '2026-01-01T00:00:00.000Z', blueprintId: null },
+    ];
+    savedOutputsByConfigId = {
+      1: [{ id: 100, savedConfigId: 1, name: 'Run 1', fileName: 'output.csv', savedAt: '2026-01-02T00:00:00.000Z' }],
+    };
+    replayResults = [{ kind: 'noResult', severity: 'Warning', outcome: 'Passed', message: '3 row(s)/element(s) found.' }];
+
+    global.chrome = {
+      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com/products' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({
+            fields: [{ name: 'Titel', selector: 'h1', attribute: null }],
+            url: 'https://example.com/products',
+          }),
+          set: jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+
+    fetchMock = jest.fn((url, init) => {
+      const method = init?.method || 'GET';
+      const urlStr = String(url);
+
+      if (urlStr.endsWith('/health')) return Promise.resolve({ ok: true });
+      if (urlStr.includes('/configs?url=')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(savedConfigs) });
+      }
+
+      const outputsListMatch = urlStr.match(/\/configs\/(\d+)\/outputs$/);
+      if (outputsListMatch && method === 'GET') {
+        const configId = Number(outputsListMatch[1]);
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(savedOutputsByConfigId[configId] || []) });
+      }
+
+      const replayMatch = urlStr.match(/\/configs\/(\d+)\/outputs\/(\d+)\/replay-hardening$/);
+      if (replayMatch && method === 'POST') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ results: replayResults }) });
+      }
+
+      return Promise.reject(new Error(`unexpected fetch: ${method} ${urlStr}`));
+    });
+    global.fetch = fetchMock;
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE, saved-configs list fetched
+
+    document.querySelector('.btn-saved-config-outputs-toggle').click();
+    await flushMicrotasks(); // outputs panel expanded, its own list fetched
+  });
+
+  function enableNoResultCheck() {
+    const toggle = document.getElementById('toggle-hardening-no-result');
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+  }
+
+  test('shows a "Test hardening" button on a saved output row', () => {
+    expect(document.querySelector('.btn-saved-output-replay-hardening')).not.toBeNull();
+  });
+
+  test('clicking it with no hardening checks configured shows a toast instead of calling the companion', async () => {
+    document.querySelector('.btn-saved-output-replay-hardening').click();
+    await flushMicrotasks();
+
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('replay-hardening'))).toBe(false);
+    expect(document.getElementById('error-toast').classList.contains('hidden')).toBe(false);
+  });
+
+  test('clicking it with a check configured sends buildHardeningConfig\'s own output and renders the results', async () => {
+    enableNoResultCheck();
+    document.querySelector('.btn-saved-output-replay-hardening').click();
+    await flushMicrotasks();
+
+    const replayCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/configs/1/outputs/100/replay-hardening'));
+    expect(replayCall).toBeDefined();
+    expect(JSON.parse(replayCall[1].body)).toEqual({ checks: [{ kind: 'noResult', severity: 'Warning' }], compareBasis: 'config' });
+
+    const resultsList = document.querySelector('.hardening-replay-results-list');
+    expect(resultsList).not.toBeNull();
+    expect(resultsList.textContent).toContain('noResult');
+  });
+
+  test('a Baseline check with no Blueprint on this config skips the compare-basis picker and runs immediately', async () => {
+    document.getElementById('toggle-hardening-baseline').checked = true;
+    document.getElementById('toggle-hardening-baseline').dispatchEvent(new Event('change'));
+    document.querySelector('.btn-saved-output-replay-hardening').click();
+    await flushMicrotasks();
+
+    expect(document.querySelector('.hardening-replay-compare-basis-toggle')).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('replay-hardening'))).toBe(true);
+  });
+
+  test('a Baseline check with a Blueprint set on this config shows the compare-basis picker and waits for "Run"', async () => {
+    savedConfigs[0].blueprintId = 42;
+    document.getElementById('toggle-hardening-baseline').checked = true;
+    document.getElementById('toggle-hardening-baseline').dispatchEvent(new Event('change'));
+    document.querySelector('.btn-saved-output-replay-hardening').click();
+    await flushMicrotasks();
+
+    expect(document.querySelector('.hardening-replay-compare-basis-toggle')).not.toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('replay-hardening'))).toBe(false);
+
+    document.querySelector('.btn-hardening-replay-basis[data-basis="blueprint"]').click();
+    document.querySelector('.btn-hardening-replay-run').click();
+    await flushMicrotasks();
+
+    const replayCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/configs/1/outputs/100/replay-hardening'));
+    expect(JSON.parse(replayCall[1].body).compareBasis).toBe('blueprint');
+  });
+
+  test('a fetch failure shows an inline error with a way to dismiss it', async () => {
+    fetchMock.mockImplementationOnce(() => Promise.resolve({ ok: false, status: 500 }));
+    // The above mockImplementationOnce only intercepts the very next call —
+    // wrap it back into the branching mock for every call after.
+    const original = fetchMock.getMockImplementation();
+    let first = true;
+    fetchMock.mockImplementation((url, init) => {
+      if (first && String(url).includes('replay-hardening')) {
+        first = false;
+        return Promise.resolve({ ok: false, status: 500 });
+      }
+      return original(url, init);
+    });
+
+    enableNoResultCheck();
+    document.querySelector('.btn-saved-output-replay-hardening').click();
+    await flushMicrotasks();
+
+    expect(document.querySelector('.hardening-replay-error')).not.toBeNull();
+
+    document.querySelector('.btn-hardening-replay-cancel').click();
+    expect(document.querySelector('.hardening-replay-panel')).toBeNull();
+  });
+});
+
+// Issue-driven follow-up: the global Settings tab's own cross-site saved-
+// configurations section (renderAllSavedConfigsList/wireAllSavedConfigsEvents)
+// — the unscoped counterpart to the per-site "Saved configurations" panel
+// above, reachable via the header's #btn-open-settings icon.
+describe('global Settings tab: cross-site saved configurations', () => {
+  const flushMicrotasks = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+
+  let fetchMock;
+  let allSavedConfigs;
+  let savedOutputsByConfigId;
+
+  const html = `
+    <div id="header-bar">
+      <button id="btn-open-settings"></button>
+    </div>
+    <section id="screen-idle" class="hidden">
+      <div id="url-display"></div>
+      <div id="fields-list"></div>
+      <button id="btn-generate" disabled></button>
+      <div id="saved-configs-list"></div>
+      <p id="saved-configs-empty" class="hidden"></p>
+    </section>
+    <section id="screen-generating" class="hidden"></section>
+    <section id="screen-settings" class="hidden">
+      <button id="btn-close-settings"></button>
+      <input type="checkbox" id="toggle-output-json" />
+      <input type="checkbox" id="toggle-include-data-preview" />
+      <input type="checkbox" id="toggle-include-output-file" />
+      <input type="checkbox" id="toggle-external-config" />
+      <div id="manage-blueprints-list"></div>
+      <p id="manage-blueprints-empty" class="hidden"></p>
+      <div id="all-saved-configs-list"></div>
+      <p id="all-saved-configs-empty" class="hidden"></p>
+    </section>
+    <div id="error-toast" class="hidden">
+      <span id="error-toast-message"></span>
+      <button id="btn-report-bug-toast" class="hidden"></button>
+    </div>
+  `;
+
+  beforeEach(async () => {
+    jest.resetModules();
+    document.body.innerHTML = html;
+
+    allSavedConfigs = [
+      { id: 1, url: 'https://a.example.com/products', name: 'Site A config', savedAt: '2026-01-01T00:00:00.000Z' },
+      { id: 2, url: 'https://b.example.com/listing', name: 'Site B config', savedAt: '2026-01-02T00:00:00.000Z' },
+    ];
+    savedOutputsByConfigId = {
+      1: [{ id: 100, savedConfigId: 1, name: 'Run 1', fileName: 'output.csv', savedAt: '2026-01-03T00:00:00.000Z' }],
+    };
+
+    global.chrome = {
+      runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://a.example.com/products' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({ fields: [], url: 'https://a.example.com/products' }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+
+    fetchMock = jest.fn((url, init) => {
+      const method = init?.method || 'GET';
+      const urlStr = String(url);
+      if (urlStr.endsWith('/health')) return Promise.resolve({ ok: true });
+      if (urlStr.includes('/configs?url=')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      if (urlStr.endsWith('/configs') && method === 'GET') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(allSavedConfigs) });
+      }
+      if (urlStr.endsWith('/blueprints') && method === 'GET') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      const outputsMatch = urlStr.match(/\/configs\/(\d+)\/outputs$/);
+      if (outputsMatch && method === 'GET') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(savedOutputsByConfigId[Number(outputsMatch[1])] || []) });
+      }
+      if (/\/configs\/\d+$/.test(urlStr) && method === 'DELETE') {
+        return Promise.resolve({ ok: true, status: 204 });
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${method} ${urlStr}`));
+    });
+    global.fetch = fetchMock;
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE, allSavedConfigs fetched
+  });
+
+  function openSettings() {
+    document.getElementById('btn-open-settings').click();
+  }
+
+  test('lists every saved configuration regardless of host, with no Load button', () => {
+    openSettings();
+    const rows = document.querySelectorAll('#all-saved-configs-list .saved-config-row');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain('Site A config');
+    expect(rows[1].textContent).toContain('Site B config');
+    expect(document.querySelector('#all-saved-configs-list .btn-saved-config-load')).toBeNull();
+  });
+
+  test('Delete requires an inline confirm before sending DELETE, then refreshes the list — down to the empty-state hint once nothing is left', async () => {
+    openSettings();
+    document.querySelectorAll('#all-saved-configs-list .btn-all-saved-config-delete')[0].click();
+
+    expect(document.querySelector('.btn-all-saved-config-delete-confirm')).not.toBeNull();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+
+    allSavedConfigs = allSavedConfigs.filter((c) => c.id !== 1);
+    document.querySelector('.btn-all-saved-config-delete-confirm').click();
+    await flushMicrotasks();
+
+    expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith('/configs/1') && init?.method === 'DELETE')).toBe(true);
+    let rows = document.querySelectorAll('#all-saved-configs-list .saved-config-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain('Site B config');
+    expect(document.getElementById('all-saved-configs-empty').classList.contains('hidden')).toBe(true);
+
+    document.querySelectorAll('#all-saved-configs-list .btn-all-saved-config-delete')[0].click();
+    allSavedConfigs = [];
+    document.querySelector('.btn-all-saved-config-delete-confirm').click();
+    await flushMicrotasks();
+
+    rows = document.querySelectorAll('#all-saved-configs-list .saved-config-row');
+    expect(rows).toHaveLength(0);
+    expect(document.getElementById('all-saved-configs-empty').classList.contains('hidden')).toBe(false);
+  });
+
+  test('Delete confirm can be cancelled without sending the DELETE request', () => {
+    openSettings();
+    document.querySelectorAll('#all-saved-configs-list .btn-all-saved-config-delete')[0].click();
+    document.querySelector('.btn-all-saved-config-delete-cancel').click();
+
+    expect(document.querySelector('.btn-all-saved-config-delete-confirm')).toBeNull();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+  });
+
+  test('a row\'s own "Outputs" toggle expands its saved-output list, same as the per-site panel', async () => {
+    openSettings();
+    document.querySelectorAll('#all-saved-configs-list .btn-saved-config-outputs-toggle')[0].click();
+    await flushMicrotasks();
+
+    const outputRows = document.querySelectorAll('.saved-output-row');
+    expect(outputRows).toHaveLength(1);
+    expect(outputRows[0].textContent).toContain('Run 1');
+  });
+});

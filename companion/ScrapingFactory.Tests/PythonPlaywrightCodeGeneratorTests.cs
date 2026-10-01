@@ -46,8 +46,8 @@ public class PythonPlaywrightCodeGeneratorTests
         var script = _generator.Generate(plan);
         Assert.Contains("""{"kind": "trim"}""", script);
         Assert.Contains("""{"kind": "toNumber"}""", script);
-        Assert.Contains("def _apply_transforms(value, transforms):", script);
-        Assert.Contains("row[name] = _apply_transforms(raw_value, TRANSFORMS.get(name, []))", script);
+        Assert.Contains("def _apply_transforms(value, transforms, siblings=None):", script);
+        Assert.Contains("value = _apply_transforms(raw_value, TRANSFORMS.get(name, []), row)", script);
     }
 
     private static ScrapingPlan LoginPlan() => new()
@@ -511,7 +511,7 @@ public class PythonPlaywrightCodeGeneratorTests
         var script = _generator.Generate(GroupPlan());
         Assert.Contains("def _resolve_group_matches(page, scope, node):", script);
         Assert.Contains("def _resolve_field_match(page, scope, node):", script);
-        Assert.Contains("def extract_group(page, scope, node):", script);
+        Assert.Contains("def extract_group(page, scope, node, siblings=None):", script);
     }
 
     [Fact]

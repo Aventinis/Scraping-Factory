@@ -1,4 +1,58 @@
-const { applyOutputBlueprintConfig } = require('./config-import');
+const { applyOutputBlueprintConfig, deserializeGroupTree } = require('./config-import');
+
+// Issue #213: deserializeGroupTree is the reverse of container-tree.js's
+// serializeGroupTree — a loaded/exported config's Attribute-mode field with
+// "download": true on the wire should come back as download: true in the
+// internal draft shape, and any other mode should always come back false
+// regardless of what the wire happened to carry (defensive, mirrors
+// serializeGroupTree's own equally defensive gate).
+describe('config-import (Issue #213): deserializeGroupTree download handling', () => {
+  test('restores download:true for an Attribute-mode field that has it', () => {
+    const wire = [{ name: 'Bild', selector: 'img.photo', mode: 'Attribute', attribute: 'src', download: true }];
+    expect(deserializeGroupTree(wire)[0].download).toBe(true);
+  });
+
+  test('defaults to false when the wire omits download entirely', () => {
+    const wire = [{ name: 'Bild', selector: 'img.photo', mode: 'Attribute', attribute: 'src' }];
+    expect(deserializeGroupTree(wire)[0].download).toBe(false);
+  });
+
+  test('forces false for a non-Attribute-mode field even if the wire somehow carries download:true', () => {
+    const wire = [{ name: 'Titel', selector: 'h2', mode: 'Text', download: true }];
+    expect(deserializeGroupTree(wire)[0].download).toBe(false);
+  });
+});
+
+// Issue #214: same reverse-of-serializeGroupTree relationship as the
+// download flag itself, for the new safety-net fields alongside it.
+describe('config-import (Issue #214): deserializeGroupTree download safety net', () => {
+  test('restores maxDownloadSizeBytes/allowedContentTypes for a downloading Attribute-mode field', () => {
+    const wire = [{
+      name: 'Datei', selector: 'a.file', mode: 'Attribute', attribute: 'href', download: true,
+      maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'],
+    }];
+    const node = deserializeGroupTree(wire)[0];
+    expect(node.maxDownloadSizeBytes).toBe(1024);
+    expect(node.allowedContentTypes).toEqual(['application/pdf']);
+  });
+
+  test('defaults to null/[] when the wire omits them', () => {
+    const wire = [{ name: 'Bild', selector: 'img.photo', mode: 'Attribute', attribute: 'src', download: true }];
+    const node = deserializeGroupTree(wire)[0];
+    expect(node.maxDownloadSizeBytes).toBeNull();
+    expect(node.allowedContentTypes).toEqual([]);
+  });
+
+  test('forces null/[] when download is off, even if the wire somehow carries values', () => {
+    const wire = [{
+      name: 'Datei', selector: 'a.file', mode: 'Attribute', attribute: 'href', download: false,
+      maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'],
+    }];
+    const node = deserializeGroupTree(wire)[0];
+    expect(node.maxDownloadSizeBytes).toBeNull();
+    expect(node.allowedContentTypes).toEqual([]);
+  });
+});
 
 // Issue #191/#244: applyOutputBlueprintConfig is the reverse of
 // buildOutputBlueprintMapping — reproducing the mapping picker's own state

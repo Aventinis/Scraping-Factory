@@ -1,6 +1,7 @@
 {
   "common": {
     "cancel": "Cancel",
+    "back": "Back",
     "add": "Add",
     "remove": "Remove",
     "use": "Use",
@@ -52,6 +53,8 @@
     "combinedPickerOption": "{name} ({host})",
     "addFieldBtn": "+ Add field",
     "addContainerBtn": "+ Add container",
+    "combineFieldsBtn": "Combine fields",
+    "splitFieldBtn": "Split field",
     "apiCaptureTitle": "Records this page's fetch/XHR network requests",
     "apiCaptureStartBtn": "Start network recording",
     "apiCaptureStopBtn": "Stop network recording",
@@ -89,7 +92,19 @@
     "savedOutputsEmpty": "No saved outputs for this configuration yet.",
     "savedOutputsLoading": "Loading…",
     "savedOutputsDownloadBtn": "Download",
+    "savedOutputsReplayHardeningBtn": "Test hardening",
     "savedOutputsDeleteConfirm": "Delete this saved output?",
+    "hardeningReplayNoChecks": "No hardening checks are currently configured — set one up in the Monitoring section first.",
+    "hardeningReplayCompareBasisLabel": "This check needs a previous result to compare against:",
+    "hardeningReplayCompareBasisConfig": "Same configuration",
+    "hardeningReplayCompareBasisBlueprint": "Blueprint \"{name}\"",
+    "hardeningReplayRunBtn": "Run",
+    "hardeningReplayLoading": "Testing…",
+    "hardeningReplayError": "Could not test hardening: {message}",
+    "hardeningReplayOutcomePassed": "Passed",
+    "hardeningReplayOutcomeTriggered": "Triggered",
+    "hardeningReplayOutcomeInconclusive": "Inconclusive",
+    "hardeningReplayOutcomeNotEvaluable": "Not evaluable",
     "scriptFilenameLabel": "Script name",
     "scriptFilenamePlaceholder": "scraper",
     "outputFilenameLabel": "Output file name",
@@ -241,7 +256,12 @@
     "existsMode": "Exists?",
     "ownTextMode": "Own text only",
     "addSubcontainerBtn": "+ Container",
-    "addSubfieldBtn": "+ Data field"
+    "addSubfieldBtn": "+ Data field",
+    "combineFieldsBtn": "+ Combine fields",
+    "splitFieldBtn": "+ Split field",
+    "combinedFieldMode": "Combined from: {sources}",
+    "splitFieldMode": "Split from: {source}",
+    "hiddenFromOutputBadge": "hidden"
   },
   "apiTree": {
     "addSubgroupBtn": "+ Group",
@@ -249,7 +269,9 @@
     "addRootGroupBtn": "+ New group (top level)",
     "defaultGroupName": "Group",
     "transformsBtn": "Transform",
-    "transformsBtnCount": "Transform ({count})"
+    "transformsBtnCount": "Transform ({count})",
+    "combineFieldsBtn": "+ Combine fields",
+    "splitFieldBtn": "+ Split field"
   },
   "transforms": {
     "sectionLabel": "Transformations (optional)",
@@ -266,12 +288,15 @@
     "findPlaceholder": "Find",
     "replacementPlaceholder": "Replace with",
     "sourceFormatPlaceholder": "Source format (e.g. \"{dd}.{mm}.{yyyy}\")",
+    "separatorPlaceholder": "Separator (e.g. \", \")",
+    "splitSourcePlaceholderOption": "Select field…",
+    "splitIndexPlaceholder": "Part (0 = first)",
     "onErrorKeepOriginalOption": "On failure: keep original value",
     "onErrorUseDefaultOption": "On failure: use default value",
     "defaultValuePlaceholder": "Default value",
     "previewLabel": "Preview: {value}",
     "previewEmptyValue": "(empty)",
-    "previewUnavailable": "Preview unavailable (invalid pattern)"
+    "previewUnavailable": "Preview unavailable"
   },
   "generating": {
     "message": "Generating script…"
@@ -288,6 +313,18 @@
     "dataPreviewTruncatedXml": "Excerpt — not all data is shown",
     "blocksOutputTitle": "Block outputs",
     "blocksOutputDownloadBtn": "Download"
+  },
+  "settings": {
+    "tabTitle": "Settings",
+    "title": "Settings",
+    "preferencesTitle": "Preferences",
+    "scriptNameModeLabel": "Default script name",
+    "scriptNameModeFixed": "Fixed name",
+    "scriptNameModeHostname": "From website",
+    "scriptNameFixedLabel": "Fixed script name",
+    "scriptNameHostnameHint": "The script name is always derived from the current website's hostname.",
+    "allConfigsTitle": "All saved configurations",
+    "allConfigsEmpty": "No saved configurations yet."
   },
   "modals": {
     "fieldName": {
@@ -310,8 +347,15 @@
       "attributeOption": "Attribute",
       "existsOption": "Exists?",
       "ownTextOption": "Own text only (excludes nested elements)",
-      "attributeLabel": "Attribute name (e.g. \"href\")",
-      "attributePlaceholder": "Attribute"
+      "attributeLabel": "Which attribute holds the value?",
+      "noAttributesFound": "This element has no attributes.",
+      "downloadToggle": "Download this resource/file (e.g. an image, PDF, or ZIP) and save it locally"
+    },
+    "download": {
+      "maxSizeLabel": "Max. file size (MB, optional)",
+      "maxSizePlaceholder": "No limit",
+      "allowedTypesLabel": "Allowed content types (optional, comma-separated)",
+      "allowedTypesPlaceholder": "e.g. application/pdf, application/zip"
     },
     "apiGroupNew": {
       "nameLabel": "Group name (e.g. \"Subcategory\")",
@@ -323,6 +367,21 @@
     "apiBodyParameterNew": {
       "nameLabel": "Parameter name (e.g. \"category\")",
       "namePlaceholder": "Name"
+    },
+    "combineField": {
+      "nameLabel": "Field name (e.g. \"Address\")",
+      "namePlaceholder": "Field name",
+      "sourcesLabel": "Which fields should be combined? (at least 2)",
+      "separatorLabel": "Separator",
+      "removeOriginalsToggle": "Remove the original fields from the output"
+    },
+    "splitField": {
+      "nameLabel": "Field name (e.g. \"House number\")",
+      "namePlaceholder": "Field name",
+      "sourceLabel": "Which field should be split?",
+      "separatorLabel": "Separator",
+      "indexLabel": "Part (0 = first)",
+      "removeOriginalToggle": "Remove the original field from the output"
     },
     "saveConfig": {
       "label": "Configuration name (e.g. \"Product listing\")",
@@ -371,6 +430,7 @@
     "selectionUnavailable": "Element selection isn't possible on this page.",
     "scopeSelectorNotFound": "The selected reference point could no longer be found — the page changed in the meantime (e.g. a hover or loading state). Please try again or pick a different starting point.",
     "clickOutsideScope": "Please select an element inside a container.",
+    "trackedUrlUpdated": "Tracked page updated to {url} — the element you just picked came from a different page than before.",
     "previewUnavailable": "Preview isn't possible on this page.",
     "captureUnavailable": "Network recording isn't possible on this page.",
     "invalidCompanionUrl": "Invalid address — please include http:// or https://.",

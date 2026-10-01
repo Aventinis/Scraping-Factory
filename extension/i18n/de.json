@@ -1,6 +1,7 @@
 {
   "common": {
     "cancel": "Abbrechen",
+    "back": "Zurück",
     "add": "Hinzufügen",
     "remove": "Entfernen",
     "use": "Verwenden",
@@ -52,6 +53,8 @@
     "combinedPickerOption": "{name} ({host})",
     "addFieldBtn": "+ Feld hinzufügen",
     "addContainerBtn": "+ Container hinzufügen",
+    "combineFieldsBtn": "Felder kombinieren",
+    "splitFieldBtn": "Feld aufteilen",
     "apiCaptureTitle": "Zeichnet fetch/XHR-Netzwerkanfragen dieser Seite auf",
     "apiCaptureStartBtn": "Netzwerk-Aufzeichnung starten",
     "apiCaptureStopBtn": "Netzwerk-Aufzeichnung beenden",
@@ -89,7 +92,19 @@
     "savedOutputsEmpty": "Für diese Konfiguration wurden noch keine Outputs gespeichert.",
     "savedOutputsLoading": "Lädt…",
     "savedOutputsDownloadBtn": "Herunterladen",
+    "savedOutputsReplayHardeningBtn": "Hardening testen",
     "savedOutputsDeleteConfirm": "Diesen gespeicherten Output löschen?",
+    "hardeningReplayNoChecks": "Aktuell sind keine Hardening-Prüfungen konfiguriert — zuerst eine im Bereich „Monitoring“ einrichten.",
+    "hardeningReplayCompareBasisLabel": "Diese Prüfung benötigt ein vorheriges Ergebnis zum Vergleich:",
+    "hardeningReplayCompareBasisConfig": "Gleiche Konfiguration",
+    "hardeningReplayCompareBasisBlueprint": "Blueprint „{name}“",
+    "hardeningReplayRunBtn": "Ausführen",
+    "hardeningReplayLoading": "Wird getestet…",
+    "hardeningReplayError": "Hardening-Test fehlgeschlagen: {message}",
+    "hardeningReplayOutcomePassed": "Bestanden",
+    "hardeningReplayOutcomeTriggered": "Ausgelöst",
+    "hardeningReplayOutcomeInconclusive": "Nicht eindeutig",
+    "hardeningReplayOutcomeNotEvaluable": "Nicht auswertbar",
     "scriptFilenameLabel": "Skriptname",
     "scriptFilenamePlaceholder": "scraper",
     "outputFilenameLabel": "Name der Ausgabedatei",
@@ -241,7 +256,12 @@
     "existsMode": "Vorhanden?",
     "ownTextMode": "Nur eigener Text",
     "addSubcontainerBtn": "+ Container",
-    "addSubfieldBtn": "+ Datenfeld"
+    "addSubfieldBtn": "+ Datenfeld",
+    "combineFieldsBtn": "+ Felder kombinieren",
+    "splitFieldBtn": "+ Feld aufteilen",
+    "combinedFieldMode": "Kombiniert aus: {sources}",
+    "splitFieldMode": "Aufgeteilt aus: {source}",
+    "hiddenFromOutputBadge": "versteckt"
   },
   "apiTree": {
     "addSubgroupBtn": "+ Gruppe",
@@ -249,7 +269,9 @@
     "addRootGroupBtn": "+ Neue Gruppe (oberste Ebene)",
     "defaultGroupName": "Gruppe",
     "transformsBtn": "Transformieren",
-    "transformsBtnCount": "Transformieren ({count})"
+    "transformsBtnCount": "Transformieren ({count})",
+    "combineFieldsBtn": "+ Felder kombinieren",
+    "splitFieldBtn": "+ Feld aufteilen"
   },
   "transforms": {
     "sectionLabel": "Transformationen (optional)",
@@ -266,12 +288,15 @@
     "findPlaceholder": "Suchen",
     "replacementPlaceholder": "Ersetzen durch",
     "sourceFormatPlaceholder": "Quellformat (z. B. \"{dd}.{mm}.{yyyy}\")",
+    "separatorPlaceholder": "Trennzeichen (z. B. \", \")",
+    "splitSourcePlaceholderOption": "Feld auswählen…",
+    "splitIndexPlaceholder": "Teil (0 = erster)",
     "onErrorKeepOriginalOption": "Bei Fehler: Originalwert behalten",
     "onErrorUseDefaultOption": "Bei Fehler: Standardwert verwenden",
     "defaultValuePlaceholder": "Standardwert",
     "previewLabel": "Vorschau: {value}",
     "previewEmptyValue": "(leer)",
-    "previewUnavailable": "Vorschau nicht möglich (ungültiges Muster)"
+    "previewUnavailable": "Vorschau nicht möglich"
   },
   "generating": {
     "message": "Generiere Skript…"
@@ -288,6 +313,18 @@
     "dataPreviewTruncatedXml": "Ausschnitt — nicht alle Daten werden angezeigt",
     "blocksOutputTitle": "Block-Ausgaben",
     "blocksOutputDownloadBtn": "Herunterladen"
+  },
+  "settings": {
+    "tabTitle": "Einstellungen",
+    "title": "Einstellungen",
+    "preferencesTitle": "Präferenzen",
+    "scriptNameModeLabel": "Standard-Skriptname",
+    "scriptNameModeFixed": "Fester Name",
+    "scriptNameModeHostname": "Von der Webseite",
+    "scriptNameFixedLabel": "Fester Skriptname",
+    "scriptNameHostnameHint": "Der Skriptname wird immer vom Hostnamen der aktuellen Webseite abgeleitet.",
+    "allConfigsTitle": "Alle gespeicherten Konfigurationen",
+    "allConfigsEmpty": "Noch keine gespeicherten Konfigurationen."
   },
   "modals": {
     "fieldName": {
@@ -310,8 +347,15 @@
       "attributeOption": "Attribut",
       "existsOption": "Vorhanden?",
       "ownTextOption": "Nur eigener Text (ohne verschachtelte Elemente)",
-      "attributeLabel": "Attribut-Name (z. B. \"href\")",
-      "attributePlaceholder": "Attribut"
+      "attributeLabel": "Welches Attribut enthält den Wert?",
+      "noAttributesFound": "Dieses Element hat keine Attribute.",
+      "downloadToggle": "Diese Ressource/Datei (z. B. ein Bild, PDF oder ZIP) herunterladen und lokal speichern"
+    },
+    "download": {
+      "maxSizeLabel": "Max. Dateigröße (MB, optional)",
+      "maxSizePlaceholder": "Kein Limit",
+      "allowedTypesLabel": "Erlaubte Content-Types (optional, kommagetrennt)",
+      "allowedTypesPlaceholder": "z. B. application/pdf, application/zip"
     },
     "apiGroupNew": {
       "nameLabel": "Name der Gruppe (z. B. \"Subkategorie\")",
@@ -323,6 +367,21 @@
     "apiBodyParameterNew": {
       "nameLabel": "Name des Parameters (z. B. \"kategorie\")",
       "namePlaceholder": "Name"
+    },
+    "combineField": {
+      "nameLabel": "Feldname (z. B. \"Adresse\")",
+      "namePlaceholder": "Feldname",
+      "sourcesLabel": "Welche Felder sollen kombiniert werden? (mindestens 2)",
+      "separatorLabel": "Trennzeichen",
+      "removeOriginalsToggle": "Ursprüngliche Felder aus der Ausgabe entfernen"
+    },
+    "splitField": {
+      "nameLabel": "Feldname (z. B. \"Hausnummer\")",
+      "namePlaceholder": "Feldname",
+      "sourceLabel": "Welches Feld soll aufgeteilt werden?",
+      "separatorLabel": "Trennzeichen",
+      "indexLabel": "Teil (0 = erster)",
+      "removeOriginalToggle": "Ursprüngliches Feld aus der Ausgabe entfernen"
     },
     "saveConfig": {
       "label": "Name der Konfiguration (z. B. \"Produktliste\")",
@@ -371,6 +430,7 @@
     "selectionUnavailable": "Element-Auswahl auf dieser Seite nicht möglich.",
     "scopeSelectorNotFound": "Der gewählte Bezugspunkt wurde nicht mehr gefunden — die Seite hat sich zwischenzeitlich verändert (z. B. Hover- oder Ladezustand). Bitte versuche es erneut oder wähle einen anderen Ausgangspunkt.",
     "clickOutsideScope": "Bitte ein Element innerhalb eines Containers auswählen.",
+    "trackedUrlUpdated": "Verfolgte Seite aktualisiert auf {url} — das gerade ausgewählte Element stammt von einer anderen Seite als zuvor.",
     "previewUnavailable": "Vorschau auf dieser Seite nicht möglich.",
     "captureUnavailable": "Netzwerk-Aufzeichnung auf dieser Seite nicht möglich.",
     "invalidCompanionUrl": "Ungültige Adresse — bitte mit http:// oder https:// angeben.",

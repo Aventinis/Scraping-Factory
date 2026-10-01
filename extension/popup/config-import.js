@@ -5,37 +5,79 @@
 // module, no behavior beyond the mapping itself. Same IIFE-wrapped-single-
 // global pattern as those (see their own doc comments) — popup.html loads
 // this as a classic <script> before popup.js.
+// @ts-check
+// Issue #238: JSDoc-annotated and typechecked via `// @ts-check` + tsconfig
+// (`npm run typecheck`) — inputs are typed against types/companion-ir.d.ts's
+// `SFWire` namespace (the exact wire shape this module reverses), outputs
+// against types/popup-drafts.d.ts's `SFDraft` namespace for the
+// popup-internal draft shapes it reconstructs (`SFDraft.HardeningState`,
+// `SFDraft.OutputBlueprintTreeNode`, etc. — shared there, not a local
+// `@typedef` here, so scraping-config-builder.js's own JSDoc can reference
+// the same shapes this module reverses them from — see that file's own
+// top-of-file comment and types/popup-drafts.d.ts's). `applyConfigToState`'s
+// own return type is intentionally loose (`object`) — it's a `_state` patch
+// spanning every mode's own slice at once (mode/fields/groups/apiConfig/
+// combinedComponents/blocks/engine/...), and no single interface here would
+// usefully describe five mutually-exclusive branches without fighting
+// TypeScript's excess-property checks for little real benefit; its own
+// per-branch helpers (deserializeGroupTree, applyHardeningConfig, etc.) are
+// each typed precisely instead, which is where a real shape mismatch would
+// actually get caught.
 const SFConfigImport = (function () {
   // Inverse of container-tree.js's FIELD_MODE_WIRE_NAMES — kept as its own
   // copy rather than importing that module, the same "small, hand-kept
   // mirror" tradeoff already made elsewhere in this codebase (e.g.
   // sanitizeFileNameBase vs. FileNameSanitizer) rather than adding a
   // cross-module dependency for four constant strings.
+  /** @type {Record<SFWire.ExtractMode, string>} */
   const FIELD_MODE_INTERNAL_NAMES = { Text: 'text', Attribute: 'attribute', Exists: 'exists', OwnText: 'ownText' };
 
   // Reverse of container-tree.js's serializeGroupTree — a wire GroupNode is
   // told apart from a DataFieldNode structurally (children present vs. not),
   // exactly like the companion's own ContainerNodeJsonConverter.
+  /**
+   * @param {SFWire.ContainerNode[] | null | undefined} wireNodes
+   * @returns {object[]}
+   */
   function deserializeGroupTree(wireNodes) {
-    return (wireNodes || []).map((node) => (
-      Array.isArray(node.children)
+    return (wireNodes || []).map((node) => {
+      // Same structural discriminator the companion's own
+      // ContainerNodeJsonConverter uses (children present = group); a
+      // DataFieldNode's own type has none of GroupNode's fields (or vice
+      // versa) at all, so reading whichever one applies here goes through
+      // an `any` view rather than narrowing the union field by field.
+      const n = /** @type {any} */ (node);
+      return Array.isArray(n.children)
         ? {
-            kind: 'group', name: node.name, selector: node.selector, repeating: !!node.repeating,
-            children: deserializeGroupTree(node.children), framePath: node.framePath || null,
+            kind: 'group', name: n.name, selector: n.selector, repeating: !!n.repeating,
+            children: deserializeGroupTree(n.children), framePath: n.framePath || null,
           }
         : {
-            kind: 'field', name: node.name, selector: node.selector,
-            mode: FIELD_MODE_INTERNAL_NAMES[node.mode] || 'text',
-            attribute: node.mode === 'Attribute' ? (node.attribute ?? null) : null,
-            framePath: node.framePath || null,
-            transforms: node.transforms && node.transforms.length > 0 ? node.transforms : null,
-          }
-    ));
+            kind: 'field', name: n.name, selector: n.selector,
+            mode: FIELD_MODE_INTERNAL_NAMES[/** @type {SFWire.ExtractMode} */ (n.mode)] || 'text',
+            attribute: n.mode === 'Attribute' ? (n.attribute ?? null) : null,
+            framePath: n.framePath || null,
+            transforms: n.transforms && n.transforms.length > 0 ? n.transforms : null,
+            // Issue #213: same "only meaningful under Attribute mode" gate
+            // attribute itself already uses; absent on the wire = false.
+            download: n.mode === 'Attribute' && !!n.download,
+            // Issue #214: same gate as download itself.
+            maxDownloadSizeBytes: n.mode === 'Attribute' && n.download ? (n.maxDownloadSizeBytes ?? null) : null,
+            allowedContentTypes: n.mode === 'Attribute' && n.download ? (n.allowedContentTypes || []) : [],
+            // Issue #206 follow-up: absent on the wire = false, same
+            // convention as download itself.
+            hiddenFromOutput: !!n.hiddenFromOutput,
+          };
+    });
   }
 
   // Reverse of popup.js's serializeBrowserActions — fills back in each
   // kind's own defaults (mirroring addBrowserAction) for whichever fields
   // a wire action of that kind doesn't carry.
+  /**
+   * @param {SFWire.BrowserAction[] | null | undefined} wireActions
+   * @returns {object[]}
+   */
   function deserializeBrowserActions(wireActions) {
     return (wireActions || []).map((a) => {
       const framePath = a.framePath || null;
@@ -56,6 +98,10 @@ const SFConfigImport = (function () {
   // disabled; a present wire config's optional sub-fields (smtpPortEnvVar
   // etc.) may themselves be absent, so defaults are spread first and the
   // wire values written on top, never the other way round.
+  /**
+   * @param {SFWire.ChangeDetectionConfig | null | undefined} wire
+   * @returns {object}
+   */
   function applyChangeDetectionConfig(wire) {
     const defaults = {
       enabled: false,
@@ -73,20 +119,34 @@ const SFConfigImport = (function () {
   }
 
   // Reverse of buildProxyConfig.
+  /**
+   * @param {SFWire.ProxyConfig | null | undefined} wire
+   * @returns {{enabled: boolean, envVar: string}}
+   */
   function applyProxyConfig(wire) {
     return wire ? { enabled: true, envVar: wire.environmentVariableName || '' } : { enabled: false, envVar: '' };
   }
 
   // Reverse of buildPaginationConfig.
+  /**
+   * @param {SFWire.PaginationConfig | null | undefined} wire
+   * @returns {object}
+   */
   function applyPaginationConfig(wire) {
     const defaults = { enabled: false, kind: 'nextLink', nextLinkSelector: '', urlTemplate: '', maxPages: 50 };
     if (!wire) return defaults;
+    // Cross-branch field access (a NextLinkPagination has no urlTemplate,
+    // a PageNumberPagination has no nextLinkSelector) — reading both
+    // unconditionally and keeping only the relevant one (via `kind` below)
+    // is simpler than narrowing twice, so this one spot reads through an
+    // `any` cast rather than fighting the union.
+    const w = /** @type {any} */ (wire);
     return {
       enabled: true,
       kind: wire.kind === 'pageNumber' ? 'pageNumber' : 'nextLink',
-      nextLinkSelector: wire.nextLinkSelector || '',
-      urlTemplate: wire.urlTemplate || '',
-      maxPages: Number.isFinite(wire.maxPages) && wire.maxPages > 0 ? wire.maxPages : 50,
+      nextLinkSelector: w.nextLinkSelector || '',
+      urlTemplate: w.urlTemplate || '',
+      maxPages: Number.isFinite(wire.maxPages) && (wire.maxPages ?? 0) > 0 ? wire.maxPages : 50,
     };
   }
 
@@ -95,7 +155,12 @@ const SFConfigImport = (function () {
   // nested per-check state shape (see _state.hardening's own doc comment),
   // converting the wire's 0.0-1.0 fraction back to a 0-100 whole percent for
   // the UI, the exact inverse of buildHardeningConfig's own `/ 100`.
+  /**
+   * @param {SFWire.HardeningCheck[] | null | undefined} wire
+   * @returns {SFDraft.HardeningState}
+   */
   function applyHardeningConfig(wire) {
+    /** @type {SFDraft.HardeningState} */
     const result = {
       noResult: { enabled: false, severity: 'Warning' },
       nullRate: [],
@@ -134,29 +199,47 @@ const SFConfigImport = (function () {
   // updateTreeMappingSource's own path-keyed draft convention, walking the
   // wire tree and the (structurally identical, since it was built FROM that
   // tree) draft in lockstep.
+  /** @type {{selectedOutputBlueprintId: string, selectedOutputBlueprintFieldNames: string[], outputBlueprintMapping: Record<string, string>, selectedOutputBlueprintSchemaKind: SFWire.OutputBlueprintSchemaKind, selectedOutputBlueprintTree: SFDraft.OutputBlueprintTreeNode[], outputBlueprintTreeMapping: Record<string, string>}} */
   const EMPTY_OUTPUT_BLUEPRINT_STATE = {
     selectedOutputBlueprintId: '', selectedOutputBlueprintFieldNames: [], outputBlueprintMapping: {},
     selectedOutputBlueprintSchemaKind: 'Flat', selectedOutputBlueprintTree: [], outputBlueprintTreeMapping: {},
   };
 
+  /**
+   * @param {SFWire.OutputBlueprintTreeMappingNode[]} wireNodes
+   * @param {string} prefix
+   * @param {SFDraft.OutputBlueprintTreeNode[]} tree
+   * @param {Record<string, string>} draft
+   */
   function applyOutputBlueprintTreeMapping(wireNodes, prefix, tree, draft) {
     wireNodes.forEach((wireNode, i) => {
       const path = prefix ? `${prefix}.${i}` : `${i}`;
-      if (Array.isArray(wireNode.children)) {
-        tree.push({ name: wireNode.name, children: [] });
-        applyOutputBlueprintTreeMapping(wireNode.children, path, tree[tree.length - 1].children, draft);
+      // Same structural group-vs-leaf discriminator as the companion's own
+      // OutputBlueprintTreeMappingNodeJsonConverter.
+      const n = /** @type {any} */ (wireNode);
+      if (Array.isArray(n.children)) {
+        /** @type {SFDraft.OutputBlueprintTreeNode} */
+        const groupNode = { name: n.name, children: [] };
+        tree.push(groupNode);
+        applyOutputBlueprintTreeMapping(n.children, path, /** @type {SFDraft.OutputBlueprintTreeNode[]} */ (groupNode.children), draft);
       } else {
-        tree.push({ name: wireNode.name });
-        draft[path] = wireNode.sourceField;
+        tree.push({ name: n.name });
+        draft[path] = n.sourceField;
       }
     });
   }
 
+  /**
+   * @param {SFWire.OutputBlueprintMapping | null | undefined} wire
+   * @returns {object}
+   */
   function applyOutputBlueprintConfig(wire) {
     if (!wire) return { ...EMPTY_OUTPUT_BLUEPRINT_STATE };
 
     if (wire.schemaKind === 'Tree') {
+      /** @type {SFDraft.OutputBlueprintTreeNode[]} */
       const tree = [];
+      /** @type {Record<string, string>} */
       const mapping = {};
       applyOutputBlueprintTreeMapping(wire.tree || [], '', tree, mapping);
       return {
@@ -169,9 +252,11 @@ const SFConfigImport = (function () {
       };
     }
 
-    const fieldNames = wire.fields.map(f => f.targetField);
+    const wireFields = wire.fields || [];
+    const fieldNames = wireFields.map(f => f.targetField);
+    /** @type {Record<string, string>} */
     const mapping = {};
-    for (const f of wire.fields) mapping[f.targetField] = f.sourceField;
+    for (const f of wireFields) mapping[f.targetField] = f.sourceField;
     return {
       selectedOutputBlueprintId: wire.blueprintId != null ? String(wire.blueprintId) : '',
       selectedOutputBlueprintFieldNames: fieldNames,
@@ -190,14 +275,23 @@ const SFConfigImport = (function () {
   // loadSavedConfig), so a loaded config only ever replaces the extraction
   // setup/settings, never navigates the popup away from the page it's
   // actually looking at.
+  /**
+   * @param {SFWire.ScrapingConfig} config
+   * @returns {object}
+   */
   function applyConfigToState(config) {
     // Issue #239: Combined mode has none of Fields/Groups/Api/engine/
     // browserActions/changeDetection/proxy/pagination/hardening/
-    // persistentSession/externalConfig of its own (the companion rejects
-    // all of those at this outer level) — reloading one only ever restores
+    // persistentSession of its own (the companion rejects all of those at
+    // this outer level) — reloading one only ever restores
     // combinedComponents (each entry's own full config lives in its own,
     // separately-saved configuration, resolved live at generate/save/export
     // time, never re-imported into ad-hoc fields/groups/apiConfig here).
+    // Issue-driven follow-up: outputAsJson/includeDataPreview/
+    // includeOutputFile/externalConfig are no longer part of this patch at
+    // all — they're cross-session global preferences now (shared/
+    // global-settings.js), so loading a saved/exported config must not
+    // touch them.
     if (config.combined) {
       return {
         mode: 'combined',
@@ -207,14 +301,12 @@ const SFConfigImport = (function () {
         browserActions: [],
         scriptFileName: config.scriptFileName || '',
         outputFileName: config.outputFileName || '',
-        useJsonOutput: false,
         additionalStartUrls: [],
         changeDetection: applyChangeDetectionConfig(null),
         proxy: applyProxyConfig(null),
         pagination: applyPaginationConfig(null),
         hardening: applyHardeningConfig(null),
         persistentSession: false,
-        externalConfig: false,
         ...applyOutputBlueprintConfig(null),
       };
     }
@@ -248,14 +340,12 @@ const SFConfigImport = (function () {
         browserActions: deserializeBrowserActions(config.browserActions),
         scriptFileName: config.scriptFileName || '',
         outputFileName: '',
-        useJsonOutput: false,
         additionalStartUrls: config.additionalUrls || [],
         changeDetection: applyChangeDetectionConfig(null),
         proxy: applyProxyConfig(config.proxy),
         pagination: applyPaginationConfig(config.pagination),
         hardening: applyHardeningConfig(null),
         persistentSession: config.persistentSession === true,
-        externalConfig: false,
         ...applyOutputBlueprintConfig(null),
       };
     }
@@ -267,6 +357,13 @@ const SFConfigImport = (function () {
         ? (config.fields || []).map(f => ({
             name: f.name, selector: f.selector, attribute: f.attribute ?? null,
             framePath: f.framePath || null, transforms: f.transforms && f.transforms.length > 0 ? f.transforms : null,
+            // Issue #214: same "only meaningful with an attribute set" gate
+            // container mode's own deserializeGroupTree already uses.
+            download: !!f.attribute && !!f.download,
+            maxDownloadSizeBytes: f.attribute && f.download ? (f.maxDownloadSizeBytes ?? null) : null,
+            allowedContentTypes: f.attribute && f.download ? (f.allowedContentTypes || []) : [],
+            // Issue #206 follow-up: absent on the wire = false.
+            hiddenFromOutput: !!f.hiddenFromOutput,
           }))
         : [],
       groups: mode === 'container' ? deserializeGroupTree(config.groups) : [],
@@ -276,16 +373,12 @@ const SFConfigImport = (function () {
       browserActions: deserializeBrowserActions(config.browserActions),
       scriptFileName: config.scriptFileName || '',
       outputFileName: config.outputFileName || '',
-      useJsonOutput: config.outputFormat === 'Json',
       additionalStartUrls: config.additionalUrls || [],
       changeDetection: applyChangeDetectionConfig(config.changeDetection),
       proxy: applyProxyConfig(config.proxy),
       pagination: applyPaginationConfig(config.pagination),
       hardening: applyHardeningConfig(config.hardening),
       persistentSession: config.persistentSession === true,
-      // Issue #178: same plain-boolean passthrough as persistentSession
-      // above — nothing to default/reshape beyond the bool itself.
-      externalConfig: config.externalConfig === true,
       // Issue #191: only ever present on the wire for flat mode/Api's flat
       // shape — applyOutputBlueprintConfig(undefined) already resets to
       // "none" for every other mode, so no per-mode branching is needed here.

@@ -33,12 +33,17 @@ const SFApiConfigUI = (function () {
     buildStaticListSource, buildDiscoverySource, buildRangeSource, RANGE_FORMAT_PRESETS,
     detectRangeFormat, findUrlPartValue, rangeFormatExample,
     buildApiConfig, buildApiGroupDraft, insertApiTreeNode, updateApiTreeNode, resolveApiTreeNode,
+    collectPrecedingApiFieldSiblingNames,
     jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
     buildApiSubtreeFromCandidate, resolveApiGroupScopePath, allParameterParts, apiConfigDraftHasAllSourcesChosen,
   } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
   const { transformsAreValid, addTransform } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
   const { wireTransformList, renderTransformList, renderTransformPreview } =
     typeof require !== 'undefined' ? require('./field-transforms-ui') : self.SFFieldTransformsUI;
+  const { isDerivedField } =
+    typeof require !== 'undefined' ? require('./combine-split-fields') : self.SFCombineSplitFields;
+  const { openCombineFieldModal, openSplitFieldModal } =
+    typeof require !== 'undefined' ? require('./combine-split-fields-ui') : self.SFCombineSplitFieldsUI;
 
   // Issue #139: one static inline chevron per row instead of swapping between
   // two different Unicode glyphs (▸/▾) on click — see container-tree-ui.js's
@@ -79,9 +84,24 @@ const SFApiConfigUI = (function () {
 
     const pathLabel = document.createElement('span');
     pathLabel.className = 'api-tree-path';
-    pathLabel.textContent = node.path || '—';
-    pathLabel.title = node.path;
+    // Issue #206 follow-up: node.path is null for a combine/split-derived
+    // field (see buildApiFieldDraft's own doc comment) — shows a
+    // distinguishing description instead of "—", mirroring container-tree.js's
+    // own groupNodeSuffix branch for the identical case.
+    pathLabel.textContent = isDerivedField(node.transforms)
+      ? (node.transforms[0].kind === 'combineFields'
+        ? t('group.combinedFieldMode', { sources: node.transforms[0].sourceFieldNames.join(', ') })
+        : t('group.splitFieldMode', { source: node.transforms[0].sourceFieldName }))
+      : (node.path || '—');
+    pathLabel.title = node.path || '';
     row.appendChild(pathLabel);
+
+    if (node.kind === 'field' && node.hiddenFromOutput) {
+      const hiddenBadge = document.createElement('span');
+      hiddenBadge.className = 'field-hidden-badge';
+      hiddenBadge.textContent = t('group.hiddenFromOutputBadge');
+      row.appendChild(hiddenBadge);
+    }
 
     if (node.kind === 'group') {
       const addSubgroupBtn = document.createElement('button');
@@ -93,6 +113,23 @@ const SFApiConfigUI = (function () {
       addFieldBtn.className = 'btn-secondary btn-tiny btn-add-api-subfield';
       addFieldBtn.textContent = t('apiTree.addSubfieldBtn');
       row.appendChild(addFieldBtn);
+
+      // Issue #206 follow-up: disabled below the minimum field count each
+      // kind needs — same reasoning container-tree-ui.js's own
+      // buildGroupTreeNodeEl uses.
+      const fieldSiblingCount = node.children.filter(c => c.kind === 'field').length;
+
+      const addCombineFieldBtn = document.createElement('button');
+      addCombineFieldBtn.className = 'btn-secondary btn-tiny btn-add-api-combine-field';
+      addCombineFieldBtn.textContent = t('apiTree.combineFieldsBtn');
+      addCombineFieldBtn.disabled = fieldSiblingCount < 2;
+      row.appendChild(addCombineFieldBtn);
+
+      const addSplitFieldBtn = document.createElement('button');
+      addSplitFieldBtn.className = 'btn-secondary btn-tiny btn-add-api-split-field';
+      addSplitFieldBtn.textContent = t('apiTree.splitFieldBtn');
+      addSplitFieldBtn.disabled = fieldSiblingCount < 1;
+      row.appendChild(addSplitFieldBtn);
     }
 
     // Issue #84 follow-up: only a leaf actually extracts a value (ApiGroup
@@ -1355,6 +1392,12 @@ function wireApiConfigEvents(bridge) {
 
     if (e.target.closest('.btn-add-api-subgroup')) { openApiGroupModal(bridge, path); return; }
     if (e.target.closest('.btn-add-api-subfield')) { startApiTreeFieldSearch(bridge, path); return; }
+    // Issue #206 follow-up: no click-based/JSON-path search at all — opens
+    // the shared combine/split creation modal directly, scoped to this
+    // group's own children (same `path` .btn-add-api-subfield already
+    // targets).
+    if (e.target.closest('.btn-add-api-combine-field')) { openCombineFieldModal(bridge, { mode: 'api', groupPath: path }); return; }
+    if (e.target.closest('.btn-add-api-split-field')) { openSplitFieldModal(bridge, { mode: 'api', groupPath: path }); return; }
     if (e.target.closest('.btn-api-field-transforms')) { openApiFieldTransformsModal(bridge, path); return; }
     if (e.target.closest('.btn-remove-api-node')) {
       log('API_TREE_NODE_REMOVE', { path });

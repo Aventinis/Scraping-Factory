@@ -8,7 +8,7 @@ beforeAll(() => initI18n('de-DE'));
 
 const {
   buildScrapingConfig, buildConfigExport,
-  sanitizeFileNameBase, parseAdditionalUrls,
+  sanitizeFileNameBase, deriveScriptFileNameFromHostname, computeScriptFileNamePatch, parseAdditionalUrls,
   buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildHardeningConfig,
   computeInitialMonitoringSectionOpen, collectFieldNames,
   addField, removeField,
@@ -74,6 +74,32 @@ describe('buildScrapingConfig (flat mode)', () => {
     ]);
     expect(result.fields[0].framePath).toEqual(['#price-widget']);
     expect(result.fields[1]).not.toHaveProperty('framePath');
+  });
+
+  // Issue #214
+  test('includes download + safety net on a field when set, omits when off', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [
+      {
+        name: 'Datei', selector: 'a.file', attribute: 'href', download: true,
+        maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'],
+      },
+      { name: 'Titel', selector: 'h1' },
+    ]);
+    expect(result.fields[0].download).toBe(true);
+    expect(result.fields[0].maxDownloadSizeBytes).toBe(1024);
+    expect(result.fields[0].allowedContentTypes).toEqual(['application/pdf']);
+    expect(result.fields[1]).not.toHaveProperty('download');
+    expect(result.fields[1]).not.toHaveProperty('maxDownloadSizeBytes');
+    expect(result.fields[1]).not.toHaveProperty('allowedContentTypes');
+  });
+
+  test('omits maxDownloadSizeBytes/allowedContentTypes when download is off', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [
+      { name: 'Datei', selector: 'a.file', attribute: 'href', maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'] },
+    ]);
+    expect(result.fields[0]).not.toHaveProperty('download');
+    expect(result.fields[0]).not.toHaveProperty('maxDownloadSizeBytes');
+    expect(result.fields[0]).not.toHaveProperty('allowedContentTypes');
   });
 });
 
@@ -1217,6 +1243,43 @@ describe('sanitizeFileNameBase', () => {
   });
 });
 
+// ── deriveScriptFileNameFromHostname / computeScriptFileNamePatch ───────────
+// Issue-driven follow-up: the global Settings tab's default-script-name
+// preference — 'hostname' mode derives the name from the current site,
+// 'fixed' mode only ever fills a still-blank name.
+
+describe('deriveScriptFileNameFromHostname', () => {
+  test('sanitizes the URL\'s own hostname', () => {
+    expect(deriveScriptFileNameFromHostname('https://www.example.com/products?x=1', 'scraper')).toBe('www_example_com');
+  });
+
+  test('falls back for a malformed/relative URL', () => {
+    expect(deriveScriptFileNameFromHostname('not a url', 'scraper')).toBe('scraper');
+    expect(deriveScriptFileNameFromHostname('', 'scraper')).toBe('scraper');
+  });
+});
+
+describe('computeScriptFileNamePatch', () => {
+  test('hostname mode always recomputes/overwrites, regardless of the current name', () => {
+    const settings = { scriptNameMode: 'hostname', scriptNameFixed: 'scraper' };
+    expect(computeScriptFileNamePatch('', 'https://shop.example.com/', settings))
+      .toEqual({ scriptFileName: 'shop_example_com' });
+    expect(computeScriptFileNamePatch('already-set', 'https://shop.example.com/', settings))
+      .toEqual({ scriptFileName: 'shop_example_com' });
+  });
+
+  test('hostname mode falls back to scriptNameFixed for a malformed URL', () => {
+    const settings = { scriptNameMode: 'hostname', scriptNameFixed: 'myfallback' };
+    expect(computeScriptFileNamePatch('', 'not a url', settings)).toEqual({ scriptFileName: 'myfallback' });
+  });
+
+  test('fixed mode only fills a blank name, never stomps a manual edit', () => {
+    const settings = { scriptNameMode: 'fixed', scriptNameFixed: 'scraper' };
+    expect(computeScriptFileNamePatch('', 'https://example.com/', settings)).toEqual({ scriptFileName: 'scraper' });
+    expect(computeScriptFileNamePatch('my-custom-name', 'https://example.com/', settings)).toEqual({});
+  });
+});
+
 // ── parseAdditionalUrls ──────────────────────────────────────────────────────
 // Issue #83: one URL per line, pasted/typed into the additional-start-urls
 // textarea.
@@ -1291,20 +1354,46 @@ describe('buildConfigExport', () => {
 describe('addField', () => {
   test('appends field with null attribute', () => {
     const result = addField([], 'Titel', 'h1');
-    expect(result).toEqual([{ name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null }]);
+    expect(result).toEqual([{
+      name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null,
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false,
+    }]);
   });
 
   // Issue #42, Phase 7
   test('appends field with framePath when given', () => {
     const result = addField([], 'Preis', 'h2', ['#price-widget']);
-    expect(result).toEqual([{ name: 'Preis', selector: 'h2', attribute: null, framePath: ['#price-widget'], transforms: null }]);
+    expect(result).toEqual([{
+      name: 'Preis', selector: 'h2', attribute: null, framePath: ['#price-widget'], transforms: null,
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false,
+    }]);
   });
 
   // Issue #84
   test('appends field with transforms when given', () => {
     const transforms = [{ kind: 'trim' }, { kind: 'toNumber' }];
     const result = addField([], 'Preis', '.price', null, transforms);
-    expect(result).toEqual([{ name: 'Preis', selector: '.price', attribute: null, framePath: null, transforms }]);
+    expect(result).toEqual([{
+      name: 'Preis', selector: '.price', attribute: null, framePath: null, transforms,
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false,
+    }]);
+  });
+
+  // Issue #214
+  test('appends attribute-mode field with download and safety net when given', () => {
+    const result = addField([], 'Datei', 'a.file', null, [], 'href', true, 1024, ['application/pdf']);
+    expect(result).toEqual([{
+      name: 'Datei', selector: 'a.file', attribute: 'href', framePath: null, transforms: null,
+      download: true, maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'], hiddenFromOutput: false,
+    }]);
+  });
+
+  test('ignores download/safety net when no attribute is given', () => {
+    const result = addField([], 'Titel', 'h1', null, [], null, true, 1024, ['application/pdf']);
+    expect(result).toEqual([{
+      name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null,
+      download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false,
+    }]);
   });
 
   test('does not mutate original array', () => {

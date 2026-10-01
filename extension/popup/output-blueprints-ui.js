@@ -22,7 +22,7 @@ const SFOutputBlueprintsUI = (function () {
   const { t } =
     typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
 
-  const { escapeHtml } =
+  const { escapeHtml, STATES } =
     typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
 
   const { showToast } =
@@ -242,7 +242,15 @@ const SFOutputBlueprintsUI = (function () {
     }
   }
 
-  // ── Blueprint management modal (list + create/edit/delete) ─────────────
+  // ── Blueprint management (list + create/edit/delete) ────────────────────
+  // Issue-driven follow-up: renderManageBlueprintsModal now renders into a
+  // permanent section of the global Settings tab (screens/settings.html)
+  // instead of a modal — the function itself needed no changes, since it
+  // never assumed anything about its container beyond the #manage-
+  // blueprints-list/#manage-blueprints-empty ids (the generic hide()/show()
+  // sweep in popup.js's render() is what used to toggle the modal, not this
+  // file). modal-blueprint-edit (create/edit) is unaffected — it still opens
+  // as an actual overlay on top of whatever screen is behind it.
 
   function renderManageBlueprintsModal(bridge) {
     const state = bridge.getState();
@@ -269,15 +277,6 @@ const SFOutputBlueprintsUI = (function () {
         `<button type="button" class="btn-danger btn-tiny btn-blueprint-delete" data-id="${bp.id}">${escapeHtml(t('idle.savedConfigsDeleteBtn'))}</button>` +
         `</div>`;
     }).join('');
-  }
-
-  function openManageBlueprintsModal(bridge) {
-    log('OPEN manage-blueprints modal');
-    bridge.patchState({ manageBlueprintsModalOpen: true, blueprintDeletePendingId: null });
-  }
-
-  function closeManageBlueprintsModal(bridge) {
-    bridge.patchState({ manageBlueprintsModalOpen: false, blueprintDeletePendingId: null });
   }
 
   function requestDeleteBlueprint(bridge, id) {
@@ -553,8 +552,12 @@ const SFOutputBlueprintsUI = (function () {
       updateOutputBlueprintTreeMappingSource(bridge, select.dataset.path, select.value);
     });
 
-    document.getElementById('btn-manage-blueprints')?.addEventListener('click', () => openManageBlueprintsModal(bridge));
-    document.getElementById('btn-manage-blueprints-close')?.addEventListener('click', () => closeManageBlueprintsModal(bridge));
+    // Issue-driven follow-up: blueprint management moved from a modal
+    // (openManageBlueprintsModal) into the permanent global Settings tab —
+    // this button now just navigates there.
+    document.getElementById('btn-manage-blueprints')?.addEventListener('click', () => {
+      bridge.setState(STATES.SETTINGS, { blueprintDeletePendingId: null });
+    });
 
     document.getElementById('manage-blueprints-list')?.addEventListener('click', (e) => {
       const editBtn = e.target.closest('.btn-blueprint-edit');
@@ -667,7 +670,7 @@ const SFOutputBlueprintsUI = (function () {
     fetchOutputBlueprints, fetchOutputBlueprint, selectOutputBlueprint,
     updateOutputBlueprintMappingSource, updateOutputBlueprintTreeMappingSource,
     renderOutputBlueprintMappingSection, renderOutputBlueprintTreeMapping,
-    renderManageBlueprintsModal, openManageBlueprintsModal, closeManageBlueprintsModal,
+    renderManageBlueprintsModal,
     requestDeleteBlueprint, cancelDeleteBlueprint, deleteBlueprint,
     openBlueprintCreateModal, openBlueprintEditModal, closeBlueprintEditModal, saveBlueprintEdit,
     setBlueprintSchemaKind, importBlueprintFieldNamesFromSample, renderBlueprintEditModal, renderBlueprintSchemaTree,

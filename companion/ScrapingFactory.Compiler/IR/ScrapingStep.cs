@@ -17,7 +17,11 @@ public sealed class NavigateStep : ScrapingStep
 public sealed class ExtractStep : ScrapingStep
 {
     public required string Name { get; init; }
-    public required string Selector { get; init; }
+
+    // See ScrapingField.Selector — same "blank iff derived from a
+    // combineFields/splitField transform" relaxation, just the plan-level
+    // mirror (Issue #206 follow-up).
+    public string? Selector { get; init; }
 
     // null = text content; "href", "src" etc. for attribute extraction
     public string? Attribute { get; init; }
@@ -37,6 +41,18 @@ public sealed class ExtractStep : ScrapingStep
     // it's written to the output row — see IR/FieldTransform.cs. Null/empty
     // = today's behavior, the raw value unchanged.
     public List<FieldTransform>? Transforms { get; init; }
+
+    // Issue #213/#214: see DataFieldNode.Download's own doc comment — same
+    // meaning, generalized to flat mode. Only valid (and only meaningful)
+    // when Attribute is set, the flat-mode equivalent of "Mode == Attribute".
+    public bool Download { get; init; }
+
+    // See DataFieldNode.MaxDownloadSizeBytes/AllowedContentTypes.
+    public int? MaxDownloadSizeBytes { get; init; }
+    public List<string>? AllowedContentTypes { get; init; }
+
+    // See ScrapingField.HiddenFromOutput — same plan-level mirror.
+    public bool HiddenFromOutput { get; init; }
 }
 
 // Browser-engine only: waits for a selector to appear before continuing,

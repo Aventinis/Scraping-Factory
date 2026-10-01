@@ -12,13 +12,13 @@ import re
 from datetime import date
 import requests
 from bs4 import BeautifulSoup
-{{~ if config.change_detection.enabled || config.proxy.enabled || config.external_config.enabled ~}}
+{{~ if config.change_detection.enabled || config.proxy.enabled || config.external_config.enabled || config.download_enabled ~}}
 import os
 {{~ end ~}}
 {{~ if config.proxy.enabled ~}}
 import itertools
 {{~ end ~}}
-{{~ if config.proxy.enabled || config.hardening.enabled || config.external_config.enabled ~}}
+{{~ if config.proxy.enabled || config.hardening.enabled || config.external_config.enabled || config.download_enabled ~}}
 import sys
 {{~ end ~}}
 {{~ if config.hardening.has_baseline ~}}
@@ -30,10 +30,11 @@ from urllib.parse import urlsplit
 {{~ if config.external_config.enabled ~}}
 import xml.etree.ElementTree as ET
 {{~ end ~}}
-{{~ if config.pagination.enabled ~}}
-{{~ if config.pagination.kind == "nextLink" ~}}
+{{~ if (config.pagination.enabled && config.pagination.kind == "nextLink") || config.download_enabled ~}}
 from urllib.parse import urljoin
 {{~ end ~}}
+{{~ if config.download_enabled ~}}
+import hashlib
 {{~ end ~}}
 {{~ if config.change_detection.enabled ~}}
 import difflib
@@ -56,6 +57,53 @@ URLS = [{{ for u in config.urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"}
 
 OUTPUT_PATH = "{{ config.output_filename }}.{{ if config.output_is_json }}json{{ else }}csv{{ end }}"
+
+{{~ if config.download_enabled ~}}
+# Issue #213/#214: see scraper_grouped.py.j2's own identical doc comment on
+# DOWNLOADS_DIR/_download_resource for the full rationale (hash-named,
+# idempotent, non-fatal on failure, optional size/content-type safety net).
+# Flat mode's own version needs no `node` dict to read from — the field's
+# download/max-size/allowed-types settings are passed in directly instead.
+DOWNLOADS_DIR = OUTPUT_PATH + ".downloads"
+
+
+def _download_resource(url, base_url, max_size=None, allowed_types=None):
+    allowed_types = [t.lower() for t in (allowed_types or [])]
+    absolute_url = urljoin(base_url, url)
+    os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+    digest = hashlib.sha1(absolute_url.encode("utf-8")).hexdigest()[:16]
+    path_only = absolute_url.split("?", 1)[0].split("#", 1)[0]
+    ext = os.path.splitext(path_only)[1]
+    if not re.fullmatch(r"\.[A-Za-z0-9]{1,8}", ext):
+        ext = ""
+    local_path = os.path.join(DOWNLOADS_DIR, digest + ext)
+    if not os.path.exists(local_path):
+        try:
+            response = requests.get(absolute_url, headers=HEADERS, {{ if config.proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10, stream=True)
+            response.raise_for_status()
+            content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+            if allowed_types and content_type not in allowed_types:
+                response.close()
+                print(f"WARNING: skipped download of '{absolute_url}': content type '{content_type}' is not in the allowed list.", file=sys.stderr)
+                return ""
+            content_length = response.headers.get("Content-Length")
+            if max_size is not None and content_length is not None and int(content_length) > max_size:
+                response.close()
+                print(f"WARNING: skipped download of '{absolute_url}': size ({content_length} bytes) exceeds the {max_size}-byte limit.", file=sys.stderr)
+                return ""
+            data = bytearray()
+            for chunk in response.iter_content(chunk_size=65536):
+                data += chunk
+                if max_size is not None and len(data) > max_size:
+                    print(f"WARNING: skipped download of '{absolute_url}': exceeded the {max_size}-byte limit while downloading.", file=sys.stderr)
+                    return ""
+            with open(local_path, "wb") as f:
+                f.write(data)
+        except Exception as exc:
+            print(f"WARNING: failed to download resource '{absolute_url}': {exc}", file=sys.stderr)
+            return ""
+    return local_path
+{{~ end ~}}
 
 {{~ if config.external_config.enabled ~}}
 # Issue #178: an opt-in sidecar XML file next to the *script* itself (not the
@@ -375,6 +423,39 @@ TRANSFORMS = {
 {{- end }}
 }
 
+# Issue #213/#214: same "always present" convention as TRANSFORMS above — a
+# field with Download disabled just gets False/None/[] here, which
+# _extract_page_rows below reads uniformly regardless of whether ANY field
+# has it enabled at all.
+DOWNLOAD = {
+{{- for field in config.fields }}
+    "{{ field.name }}": {{ if field.download }}True{{ else }}False{{ end }},
+{{- end }}
+}
+
+MAX_DOWNLOAD_SIZE = {
+{{- for field in config.fields }}
+    "{{ field.name }}": {{ if field.max_download_size_bytes }}{{ field.max_download_size_bytes }}{{ else }}None{{ end }},
+{{- end }}
+}
+
+ALLOWED_CONTENT_TYPES = {
+{{- for field in config.fields }}
+    "{{ field.name }}": [{{ for t in field.allowed_content_types }}"{{ t }}"{{ if !for.last }}, {{ end }}{{ end }}],
+{{- end }}
+}
+
+# Issue #206 follow-up: field names whose value is still computed (so a
+# combineFields/splitField transform elsewhere can still reference it via
+# the usual sibling lookup) but excluded from the written output — set only
+# through the extension's "remove original field(s)" checkbox on the
+# combine/split field creation modal.
+HIDDEN_FIELD_NAMES = {
+{{- for field in config.fields }}{{- if field.hidden_from_output }}
+    "{{ field.name }}",
+{{- end }}{{- end }}
+}
+
 # Issue #191: optional Output Blueprint field mapping — ordered
 # target-field -> source-field pairs. When set, this replaces
 # FIELD_OUTPUT_NAMES for the write-time remap below entirely: the output's
@@ -470,7 +551,27 @@ def _to_date(value, source_format, on_error, default_value):
 
 # Applies a field's ordered transform chain — each step's output feeds the
 # next step's input, in the order the user configured them in.
-def _apply_transforms(value, transforms):
+# Issue #206: looks up another field's own already-computed value for
+# CombineFieldsTransform/SplitFieldTransform. `siblings` is whatever
+# representation the calling shape already has on hand at this point in
+# extraction — a plain dict for flat/API-flat mode's in-progress row, or the
+# in-construction parent ET.Element for container/API-tree mode (only that
+# element's own direct children are considered, i.e. only siblings under the
+# very same immediate parent group — see ScrapingPlanValidator's
+# ValidateFieldTransformOrdering for why this is guaranteed to already be
+# populated for a valid config). Missing/not-yet-computed simply resolves to
+# "" rather than raising, the same "don't fail the whole row/element over
+# one field" spirit every other transform here already follows.
+def _resolve_transform_sibling(siblings, name):
+    if siblings is None:
+        return ""
+    if isinstance(siblings, dict):
+        return siblings.get(name, "")
+    found = siblings.find(name)
+    return (found.text or "") if found is not None else ""
+
+
+def _apply_transforms(value, transforms, siblings=None):
     for t in transforms:
         kind = t["kind"]
         if kind == "trim":
@@ -494,6 +595,12 @@ def _apply_transforms(value, transforms):
             value = _to_boolean(value, t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
         elif kind == "toDate":
             value = _to_date(value, t.get("sourceFormat", "{yyyy}-{mm}-{dd}"), t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
+        elif kind == "combineFields":
+            value = t.get("separator", " ").join(_resolve_transform_sibling(siblings, n) for n in t.get("sourceFieldNames", []))
+        elif kind == "splitField":
+            parts = _resolve_transform_sibling(siblings, t.get("sourceFieldName", "")).split(t.get("separator", " "))
+            idx = t.get("index", 0)
+            value = parts[idx] if 0 <= idx < len(parts) else ""
     return value
 
 
@@ -557,18 +664,34 @@ def _notify_change(old_content, new_content):
 {{~ end ~}}
 
 
-def _extract_page_rows(soup):
-    columns = {name: soup.select(sel) for name, sel in SELECTORS.items()}
+def _extract_page_rows(soup, base_url):
+    # Issue #206 follow-up: a field derived from a combineFields/splitField
+    # transform has no selector of its own (SELECTORS[name] == "") — it's
+    # excluded from the selector-match zip below and instead computed once
+    # per row, in SELECTORS' own declaration order, from whatever sibling
+    # values are already in `row` by that point.
+    columns = {name: soup.select(sel) for name, sel in SELECTORS.items() if sel}
     n = max((len(v) for v in columns.values()), default=0)
 
     rows = []
     for i in range(n):
         row = {}
-        for name, elements in columns.items():
+        for name in SELECTORS:
+            if name not in columns:
+                row[name] = _apply_transforms("", TRANSFORMS.get(name, []), row)
+                continue
+            elements = columns[name]
             if i < len(elements):
                 attr = ATTRIBUTES.get(name)
                 raw_value = elements[i].get(attr, "").strip() if attr else elements[i].get_text(strip=True)
-                row[name] = _apply_transforms(raw_value, TRANSFORMS.get(name, []))
+                value = _apply_transforms(raw_value, TRANSFORMS.get(name, []), row)
+                # Issue #213/#214: replaces the raw URL with its own
+                # downloaded local file path — applied AFTER transforms, the
+                # same order the container-mode templates already use. Only
+                # ever True for an attribute-mode field (validated upstream).
+                if attr and DOWNLOAD.get(name) and value:
+                    value = _download_resource(value, base_url, MAX_DOWNLOAD_SIZE.get(name), ALLOWED_CONTENT_TYPES.get(name))
+                row[name] = value
             else:
                 row[name] = ""
         rows.append(row)
@@ -591,7 +714,7 @@ def scrape(url):
         # that only declare their charset via <meta charset>. BeautifulSoup
         # detects that meta tag itself.
         soup = BeautifulSoup(response.content, "html.parser")
-        page_rows = _extract_page_rows(soup)
+        page_rows = _extract_page_rows(soup, response.url)
         if not page_rows:
             break
         rows.extend(page_rows)
@@ -636,8 +759,16 @@ def main():
         output_rows = [{m["target"]: row.get(m["source"], "") for m in BLUEPRINT_MAPPING} for row in data]
         output_fieldnames = [m["target"] for m in BLUEPRINT_MAPPING]
     else:
-        output_rows = [{FIELD_OUTPUT_NAMES.get(k, k): v for k, v in row.items()} for row in data]
-        output_fieldnames = [FIELD_OUTPUT_NAMES.get(name, name) for name in SELECTORS.keys()]
+        # Issue #206 follow-up: a HiddenFromOutput field is dropped here —
+        # at the write-time projection only, same as FIELD_OUTPUT_NAMES —
+        # never from `data` itself, which hardening/change detection (and
+        # any combineFields/splitField transform referencing it) still need
+        # to see under its real name.
+        output_rows = [
+            {FIELD_OUTPUT_NAMES.get(k, k): v for k, v in row.items() if k not in HIDDEN_FIELD_NAMES}
+            for row in data
+        ]
+        output_fieldnames = [FIELD_OUTPUT_NAMES.get(name, name) for name in SELECTORS.keys() if name not in HIDDEN_FIELD_NAMES]
 {{~ if config.output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(output_rows, f, ensure_ascii=False, indent=2)

@@ -17,8 +17,10 @@ const SFMessageRouter = (function () {
   const { STATES } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
   const { buildGroupNode, insertContainerNode } =
     typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
-  const { updateBrowserAction } =
+  const { updateBrowserAction, computeScriptFileNamePatch } =
     typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
+  const { getGlobalSettings } =
+    typeof require !== 'undefined' ? require('../shared/global-settings') : self.SFGlobalSettings;
   const { showToast, showMatchCountToast, setLastError } =
     typeof require !== 'undefined' ? require('./toast') : self.SFToast;
   const { cancelPendingDomTreeRequest, renderDomTree, highlightHover, highlightSelected } =
@@ -72,6 +74,26 @@ const SFMessageRouter = (function () {
         }
         // Clear the storage entry the service worker wrote — we have it now.
         chrome.storage.session.remove('pendingSelector');
+        // The tracked _state.url only ever gets set once, at panel-load/
+        // companion-connection time (checkCompanion) — there's no
+        // chrome.tabs.onUpdated listener anywhere in this extension, so it
+        // silently goes stale if the same tab navigates to a different page
+        // while the panel stays open. The just-picked element's own page
+        // (message.url) is unambiguous ground truth for "what page the user
+        // is actually working with now" — self-correct rather than letting
+        // an eventual /generate request run against the wrong page with a
+        // confusingly unrelated-looking "no data" failure.
+        if (typeof message.url === 'string' && message.url && message.url !== state.url) {
+          log('ELEMENT_SELECTED page changed since last sync', { from: state.url, to: message.url });
+          // Issue-driven follow-up: the default-script-name preference — see
+          // computeScriptFileNamePatch's own doc comment for the
+          // 'hostname'-vs-'fixed' mode rule. A fresh site detected mid-
+          // session (this stale-URL self-correction) is treated the same
+          // as checkCompanion()'s own initial site detection.
+          const scriptFileNamePatch = computeScriptFileNamePatch(state.scriptFileName, message.url, getGlobalSettings());
+          bridge.setState(STATES.SELECTING, { url: message.url, ...scriptFileNamePatch });
+          showToast(t('toast.trackedUrlUpdated', { url: message.url }), null, 'info');
+        }
         const framePath = message.framePath || null;
         const matchCount = typeof message.matchCount === 'number' ? message.matchCount : null;
         // Issue #182: Blocks mode reuses this exact same "new top-level

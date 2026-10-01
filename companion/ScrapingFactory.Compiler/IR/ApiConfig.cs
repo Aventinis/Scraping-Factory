@@ -201,11 +201,16 @@ public sealed class ApiField : ApiNode
     // Minimal JSON-path notation relative to the parent scope — one
     // ItemsPath record in the flat shape (Issue #53), or one ApiGroup
     // instance in the tree shape (Issue #54) — e.g. "title" or
-    // "meta.price".
-    public required string Path { get; init; }
+    // "meta.price". See ScrapingField.Selector — same "blank iff derived
+    // from a combineFields/splitField transform" relaxation (Issue #206
+    // follow-up).
+    public string? Path { get; init; }
 
     // See ExtractStep.Transforms (Issue #84) — same meaning, applied to
     // whatever value Path resolves to (already string-coerced by the
     // runtime's JSON-path resolver before the chain runs).
     public List<FieldTransform>? Transforms { get; init; }
+
+    // See ScrapingField.HiddenFromOutput.
+    public bool HiddenFromOutput { get; init; }
 }

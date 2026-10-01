@@ -30,6 +30,8 @@ namespace ScrapingFactory.Compiler.IR;
 [JsonDerivedType(typeof(ToIntegerTransform), "toInteger")]
 [JsonDerivedType(typeof(ToBooleanTransform), "toBoolean")]
 [JsonDerivedType(typeof(ToDateTransform), "toDate")]
+[JsonDerivedType(typeof(CombineFieldsTransform), "combineFields")]
+[JsonDerivedType(typeof(SplitFieldTransform), "splitField")]
 public abstract class FieldTransform
 {
 }
@@ -138,4 +140,40 @@ public sealed class ToDateTransform : FieldTransform
     public string? SourceFormat { get; init; }
     public TransformErrorMode OnError { get; init; } = TransformErrorMode.KeepOriginal;
     public string? DefaultValue { get; init; }
+}
+
+// Issue #206: concatenates the values of two or more *other* fields,
+// declared earlier in the same field/tree-children list, with Separator in
+// between — deliberately ignores this field's own selector-derived raw
+// value entirely once it runs (the field still needs a normal Selector,
+// same click-based-selection UI flow as any other field; that selector's
+// own extracted value is simply discarded). Only ever sees a sibling's
+// already fully-transformed value, since it reads whatever that sibling's
+// own chain already produced by the time extraction reaches this field —
+// see ScrapingPlanValidator's ValidateFieldTransformOrdering for why the
+// referenced names must already be declared earlier in the very same list
+// (flat mode: the whole field list; container/API-tree mode: only siblings
+// under the same immediate parent group, not a global-by-name lookup the
+// way NullRateCheck/RequiredFieldsCheck use — the runtime only ever has the
+// current scope's own in-progress values on hand, see the Python Templates
+// section in CLAUDE.md for the mechanics).
+public sealed class CombineFieldsTransform : FieldTransform
+{
+    public required List<string> SourceFieldNames { get; init; }
+    public string Separator { get; init; } = " ";
+}
+
+// Issue #206: the reverse of CombineFieldsTransform — splits *another*
+// already-computed field's value (same "earlier in the same list" rule) on
+// Separator and keeps the part at Index (0-based); an out-of-range Index
+// yields an empty string rather than a validation/runtime error, the same
+// "don't fail the whole row/element over one field" spirit
+// RegexExtractTransform's own no-match case already follows. Also ignores
+// this field's own raw extracted value entirely, exactly like
+// CombineFieldsTransform.
+public sealed class SplitFieldTransform : FieldTransform
+{
+    public required string SourceFieldName { get; init; }
+    public string Separator { get; init; } = " ";
+    public int Index { get; init; } = 0;
 }

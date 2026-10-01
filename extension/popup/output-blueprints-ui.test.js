@@ -45,12 +45,12 @@ describe('Output Blueprints (Issue #191)', () => {
     </section>
     <section id="screen-generating" class="hidden"></section>
     <section id="screen-done" class="hidden"></section>
-    <div id="modal-manage-blueprints" class="modal hidden">
+    <section id="screen-settings" class="hidden">
+      <button id="btn-close-settings"></button>
       <div id="manage-blueprints-list"></div>
       <p id="manage-blueprints-empty" class="hidden"></p>
       <button type="button" id="btn-blueprint-new"></button>
-      <button id="btn-manage-blueprints-close"></button>
-    </div>
+    </section>
     <div id="modal-blueprint-edit" class="modal hidden">
       <input id="input-blueprint-name" type="text" />
       <div class="mode-toggle" id="blueprint-schema-kind-toggle">
@@ -259,7 +259,7 @@ describe('Output Blueprints (Issue #191)', () => {
 
   test('creating a new blueprint via the management modal posts it and refreshes the picker', async () => {
     document.getElementById('btn-manage-blueprints').click();
-    expect(document.getElementById('modal-manage-blueprints').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('screen-settings').classList.contains('hidden')).toBe(false);
 
     document.getElementById('btn-blueprint-new').click();
     expect(document.getElementById('modal-blueprint-edit').classList.contains('hidden')).toBe(false);
@@ -283,6 +283,11 @@ describe('Output Blueprints (Issue #191)', () => {
     expect(JSON.parse(postCall[1].body)).toEqual({ name: 'New blueprint', schemaKind: 'Flat', fieldNames: ['Title'] });
     expect(document.getElementById('modal-blueprint-edit').classList.contains('hidden')).toBe(true);
 
+    // The mapping picker itself only lives on the IDLE screen (see
+    // idle-screen-ui.js's renderIdleScreen) — the underlying blueprint list
+    // is already refreshed (state.outputBlueprints), but the picker's own
+    // <select> only re-renders once IDLE is shown again.
+    document.getElementById('btn-close-settings').click();
     const options = [...document.querySelectorAll('#select-output-blueprint option')];
     expect(options.map((o) => o.value)).toEqual(['', '1', '2']);
   });
@@ -428,6 +433,9 @@ describe('Output Blueprints (Issue #191)', () => {
     await flushMicrotasks();
 
     expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith('/blueprints/1') && init?.method === 'DELETE')).toBe(true);
+    // Same as the creation test above — the picker's own <select> only
+    // re-renders once IDLE is shown again.
+    document.getElementById('btn-close-settings').click();
     const options = [...document.querySelectorAll('#select-output-blueprint option')];
     expect(options.map((o) => o.value)).toEqual(['']);
   });

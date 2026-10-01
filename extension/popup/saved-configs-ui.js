@@ -20,7 +20,7 @@ const { STATES, escapeHtml } =
 const { showToast } =
   typeof require !== 'undefined' ? require('./toast') : self.SFToast;
 
-const { buildScrapingConfig } =
+const { buildScrapingConfig, buildHardeningConfig } =
   typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
 
 const { downloadFile } =
@@ -31,6 +31,9 @@ const { getResolvedCompanionUrl, resolveCombinedComponents } =
 
 const { applyConfigToState } =
   typeof require !== 'undefined' ? require('./config-import') : self.SFConfigImport;
+
+const { getGlobalSettings } =
+  typeof require !== 'undefined' ? require('../shared/global-settings') : self.SFGlobalSettings;
 
 // Issue #141: renders _state.savedConfigs (scoped to the current page's
 // hostname, see fetchSavedConfigs) as a Load/Delete row per entry. A row
@@ -115,11 +118,77 @@ function buildSavedOutputsPanelEl(bridge, configId) {
         `<span class="saved-output-name" title="${escapeHtml(entry.fileName)}">${escapeHtml(entry.name)}</span>` +
         `<span class="saved-config-date">${escapeHtml(savedAtText)}</span>` +
         `<button type="button" class="btn-secondary btn-tiny btn-saved-output-download" data-config-id="${configId}" data-id="${entry.id}">${escapeHtml(t('idle.savedOutputsDownloadBtn'))}</button>` +
+        `<button type="button" class="btn-secondary btn-tiny btn-saved-output-replay-hardening" data-config-id="${configId}" data-id="${entry.id}">${escapeHtml(t('idle.savedOutputsReplayHardeningBtn'))}</button>` +
         `<button type="button" class="btn-danger btn-tiny btn-saved-output-delete" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteBtn'))}</button>`;
     }
     panelEl.appendChild(rowEl);
+
+    // Issue #207: the in-progress/last "Test hardening" run for this
+    // specific output — appended right after its own row, mirroring how
+    // this whole outputs sub-panel itself is appended after its own
+    // saved-config row.
+    if (state.hardeningReplay && state.hardeningReplay.outputId === entry.id) {
+      panelEl.appendChild(buildHardeningReplayPanelEl(bridge, entry));
+    }
   });
 
+  return panelEl;
+}
+
+// Issue #207: renders whichever phase _state.hardeningReplay is currently
+// in — a compare-basis choice (only when needed, see startHardeningReplay's
+// own doc comment), a loading state, an error, or the per-check results
+// themselves (one line per check: kind, outcome, message).
+function buildHardeningReplayPanelEl(bridge, outputEntry) {
+  const state = bridge.getState();
+  const replay = state.hardeningReplay;
+  const panelEl = document.createElement('div');
+  panelEl.className = 'hardening-replay-panel';
+
+  if (replay.needsCompareBasisChoice) {
+    const configEntry = (state.savedConfigs || []).find((c) => c.id === replay.configId);
+    const blueprint = (state.outputBlueprints || []).find((bp) => bp.id === configEntry?.blueprintId);
+    const blueprintName = blueprint?.name ?? String(configEntry?.blueprintId ?? '');
+    panelEl.innerHTML =
+      `<p class="hardening-replay-compare-basis-label">${escapeHtml(t('idle.hardeningReplayCompareBasisLabel'))}</p>` +
+      `<div class="mode-toggle hardening-replay-compare-basis-toggle">` +
+      `<div class="mode-toggle-thumb"></div>` +
+      `<button type="button" class="mode-btn btn-hardening-replay-basis${replay.compareBasis === 'config' ? ' active' : ''}" data-basis="config">${escapeHtml(t('idle.hardeningReplayCompareBasisConfig'))}</button>` +
+      `<button type="button" class="mode-btn btn-hardening-replay-basis${replay.compareBasis === 'blueprint' ? ' active' : ''}" data-basis="blueprint">${escapeHtml(t('idle.hardeningReplayCompareBasisBlueprint', { name: blueprintName }))}</button>` +
+      `</div>` +
+      `<button type="button" class="btn-primary btn-tiny btn-hardening-replay-run">${escapeHtml(t('idle.hardeningReplayRunBtn'))}</button>` +
+      `<button type="button" class="btn-secondary btn-tiny btn-hardening-replay-cancel">${escapeHtml(t('common.cancel'))}</button>`;
+    return panelEl;
+  }
+
+  if (replay.loading) {
+    panelEl.innerHTML = `<p class="hardening-replay-loading">${escapeHtml(t('idle.hardeningReplayLoading'))}</p>`;
+    return panelEl;
+  }
+
+  if (replay.error) {
+    panelEl.innerHTML =
+      `<p class="hardening-replay-error">${escapeHtml(t('idle.hardeningReplayError', { message: replay.error }))}</p>` +
+      `<button type="button" class="btn-secondary btn-tiny btn-hardening-replay-cancel">${escapeHtml(t('common.cancel'))}</button>`;
+    return panelEl;
+  }
+
+  const resultLines = (replay.results || []).map((result) => {
+    const outcomeClass = {
+      Triggered: 'hardening-replay-result-triggered',
+      NotEvaluable: 'hardening-replay-result-inconclusive',
+      Inconclusive: 'hardening-replay-result-inconclusive',
+      Passed: 'hardening-replay-result-passed',
+    }[result.outcome] || '';
+    return `<li class="hardening-replay-result ${outcomeClass}">` +
+      `<span class="hardening-replay-result-kind">${escapeHtml(result.kind)}</span> ` +
+      `<span class="hardening-replay-result-outcome">${escapeHtml(t(`idle.hardeningReplayOutcome${result.outcome}`))}</span>` +
+      `<p class="hardening-replay-result-message">${escapeHtml(result.message)}</p>` +
+      `</li>`;
+  }).join('');
+  panelEl.innerHTML =
+    `<ul class="hardening-replay-results-list">${resultLines}</ul>` +
+    `<button type="button" class="btn-secondary btn-tiny btn-hardening-replay-cancel">${escapeHtml(t('common.cancel'))}</button>`;
   return panelEl;
 }
 
@@ -181,11 +250,16 @@ async function createSavedConfig(bridge, name) {
   const combinedComponents = state.mode === 'combined'
     ? await resolveCombinedComponents(state.combinedComponents || [])
     : null;
+  // Issue-driven follow-up: outputAsJson/includeDataPreview/includeOutputFile/
+  // externalConfig moved from per-scrape _state to the cross-session global
+  // Settings tab (shared/global-settings.js) — read from there now, same as
+  // every other buildScrapingConfig/buildConfigExport call site.
+  const globalSettings = getGlobalSettings();
   const config = buildScrapingConfig(
     state.url, state.mode, state.fields, state.groups, state.apiConfig,
-    state.scriptFileName, state.outputFileName, state.engine, state.browserActions, state.includeDataPreview,
-    state.useJsonOutput, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
-    state.pagination, state.persistentSession, false, state.externalConfig, combinedComponents, state.blocks,
+    state.scriptFileName, state.outputFileName, state.engine, state.browserActions, globalSettings.includeDataPreview,
+    globalSettings.outputAsJson, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
+    state.pagination, state.persistentSession, false, globalSettings.externalConfig, combinedComponents, state.blocks,
     state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
     state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
   );
@@ -372,6 +446,68 @@ async function downloadSavedOutput(configId, id) {
   }
 }
 
+// Issue #207: kicks off "Test hardening" for one specific saved output —
+// sends whatever's currently configured live in _state.hardening (via
+// buildHardeningConfig, the same converter a real /generate request already
+// uses), not necessarily what was saved with this output originally, per
+// the issue's own "what would today's checks report" framing. A
+// BaselineCheck needs a "previous" dataset to compare against, resolved by
+// the companion via one of two comparison bases — this only actually asks
+// the user to choose when there's a genuine choice to make (a Baseline
+// check is live AND this output's own config has a Blueprint set); every
+// other case runs immediately.
+function startHardeningReplay(bridge, configId, outputId) {
+  const state = bridge.getState();
+  const checks = buildHardeningConfig(state.hardening);
+  if (!checks) {
+    showToast(t('idle.hardeningReplayNoChecks'), null, 'warn');
+    return;
+  }
+
+  const hasBaseline = checks.some((check) => check.kind === 'baseline');
+  const configEntry = (state.savedConfigs || []).find((c) => c.id === configId);
+  const needsCompareBasisChoice = hasBaseline && !!configEntry?.blueprintId;
+
+  log('BTN saved-output-replay-hardening', { configId, outputId, needsCompareBasisChoice });
+  bridge.patchState({
+    hardeningReplay: {
+      configId, outputId, checks, compareBasis: 'config',
+      needsCompareBasisChoice, loading: false, results: null, error: null,
+    },
+  });
+  if (!needsCompareBasisChoice) runHardeningReplay(bridge);
+}
+
+function chooseHardeningReplayCompareBasis(bridge, basis) {
+  const replay = bridge.getState().hardeningReplay;
+  if (!replay) return;
+  bridge.patchState({ hardeningReplay: { ...replay, compareBasis: basis } });
+}
+
+async function runHardeningReplay(bridge) {
+  const replay = bridge.getState().hardeningReplay;
+  if (!replay) return;
+  bridge.patchState({ hardeningReplay: { ...replay, needsCompareBasisChoice: false, loading: true, error: null } });
+
+  try {
+    const res = await fetch(`${getResolvedCompanionUrl()}/configs/${replay.configId}/outputs/${replay.outputId}/replay-hardening`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ checks: replay.checks, compareBasis: replay.compareBasis }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const body = await res.json();
+    bridge.patchState({ hardeningReplay: { ...bridge.getState().hardeningReplay, loading: false, results: body.results } });
+  } catch (err) {
+    log('HARDENING_REPLAY FAIL', err.message);
+    bridge.patchState({ hardeningReplay: { ...bridge.getState().hardeningReplay, loading: false, error: err.message } });
+  }
+}
+
+function cancelHardeningReplay(bridge) {
+  bridge.patchState({ hardeningReplay: null });
+}
+
 function requestDeleteSavedOutput(bridge, id) {
   bridge.patchState({ savedOutputsPendingDeleteId: id });
 }
@@ -436,6 +572,169 @@ function renderSaveOutputModal(bridge) {
     }
     configNameInput.value = defaultName;
   }
+}
+
+// Issue-driven follow-up: the global Settings tab's own cross-site saved-
+// configurations section — the unscoped counterpart to
+// renderSavedConfigsList above, browsing/deleting anything saved for *any*
+// site (state.allSavedConfigs, already fetched unconditionally by
+// checkCompanion() for Combined mode's own component picker — no new fetch
+// needed here). No "Laden" action here — loading only makes sense in the
+// context of the site currently open in the tracked browser tab (see
+// loadSavedConfig's own doc comment on why _state.url is never touched by
+// it), which an arbitrary entry in this unscoped list may not even be. Uses
+// its own allSavedConfigsPendingDeleteId state slot rather than sharing
+// savedConfigsPendingDeleteId with the per-site list, so an in-progress
+// delete-confirm on one screen never leaks into the other; the outputs
+// sub-panel itself (toggle/download/delete/replay-hardening) is shared
+// global state (savedConfigsExpandedId etc.) the same way it already is
+// across a single screen's own re-renders — harmless, since only one of
+// the IDLE/Settings screens is ever visible at a time.
+function renderAllSavedConfigsList(bridge) {
+  const state = bridge.getState();
+  const listEl = document.getElementById('all-saved-configs-list');
+  const emptyEl = document.getElementById('all-saved-configs-empty');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+
+  const allSavedConfigs = state.allSavedConfigs || [];
+  if (emptyEl) emptyEl.classList.toggle('hidden', allSavedConfigs.length > 0);
+
+  allSavedConfigs.forEach((entry) => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'saved-config-row';
+    const savedDate = new Date(entry.savedAt);
+    const savedAtText = Number.isNaN(savedDate.getTime()) ? entry.savedAt : savedDate.toLocaleString();
+
+    if (state.allSavedConfigsPendingDeleteId === entry.id) {
+      rowEl.innerHTML =
+        `<span class="saved-config-name">${escapeHtml(entry.name)}</span>` +
+        `<span class="saved-config-confirm-text">${escapeHtml(t('idle.savedConfigsDeleteConfirm'))}</span>` +
+        `<button type="button" class="btn-danger btn-tiny btn-all-saved-config-delete-confirm" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteConfirmYes'))}</button>` +
+        `<button type="button" class="btn-secondary btn-tiny btn-all-saved-config-delete-cancel" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteConfirmNo'))}</button>`;
+    } else {
+      const outputsExpanded = state.savedConfigsExpandedId === entry.id;
+      rowEl.innerHTML =
+        `<span class="saved-config-name" title="${escapeHtml(entry.url)}">${escapeHtml(entry.name)}</span>` +
+        `<span class="saved-config-date">${escapeHtml(savedAtText)}</span>` +
+        `<button type="button" class="btn-secondary btn-tiny btn-saved-config-outputs-toggle" data-id="${entry.id}">${escapeHtml(t(outputsExpanded ? 'idle.savedConfigsOutputsHideBtn' : 'idle.savedConfigsOutputsBtn'))}</button>` +
+        `<button type="button" class="btn-danger btn-tiny btn-all-saved-config-delete" data-id="${entry.id}">${escapeHtml(t('idle.savedConfigsDeleteBtn'))}</button>`;
+    }
+    listEl.appendChild(rowEl);
+
+    if (state.savedConfigsExpandedId === entry.id) {
+      listEl.appendChild(buildSavedOutputsPanelEl(bridge, entry.id));
+    }
+  });
+}
+
+function requestDeleteAllSavedConfig(bridge, id) {
+  bridge.patchState({ allSavedConfigsPendingDeleteId: id });
+}
+
+function cancelDeleteAllSavedConfig(bridge) {
+  bridge.patchState({ allSavedConfigsPendingDeleteId: null });
+}
+
+// Same DELETE /configs/{id} as deleteSavedConfig above, but refreshes both
+// lists afterward — allSavedConfigs (this screen's own list) and, since the
+// deleted entry might belong to the site currently open in the tracked tab,
+// the per-site savedConfigs list too, so the IDLE screen's own panel isn't
+// left showing a now-deleted entry after navigating back to it.
+async function deleteAllSavedConfigsEntry(bridge, id) {
+  log('DELETE_ALL_SAVED_CONFIGS_ENTRY', id);
+  try {
+    const res = await fetch(`${getResolvedCompanionUrl()}/configs/${id}`, { method: 'DELETE' });
+    if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
+    log('DELETE_ALL_SAVED_CONFIGS_ENTRY OK');
+    bridge.patchState({ allSavedConfigsPendingDeleteId: null });
+    showToast(t('toast.configDeleted'), null, 'info');
+    await fetchAllSavedConfigs(bridge);
+    const url = bridge.getState().url;
+    if (url) await fetchSavedConfigs(bridge, url);
+  } catch (err) {
+    log('DELETE_ALL_SAVED_CONFIGS_ENTRY FAIL', err.message);
+    showToast(t('toast.configDeleteFailed', { message: err.message }), 'Delete configuration');
+  }
+}
+
+// Shared by wireSavedConfigsEvents/wireAllSavedConfigsEvents' own delegated
+// listeners below — the outputs sub-panel's own actions (toggle/download/
+// delete/replay-hardening) are identical regardless of which list a saved
+// config's own row happens to live in, since buildSavedOutputsPanelEl always
+// renders the same fixed class names. Returns true once it has handled the
+// click (so the caller's own list-specific branches, checked first, still
+// take priority).
+function handleSavedOutputsSubPanelClick(bridge, e) {
+  const outputsToggleBtn = e.target.closest('.btn-saved-config-outputs-toggle');
+  if (outputsToggleBtn) {
+    toggleSavedConfigOutputs(bridge, parseInt(outputsToggleBtn.dataset.id, 10));
+    return true;
+  }
+  const outputDownloadBtn = e.target.closest('.btn-saved-output-download');
+  if (outputDownloadBtn) {
+    downloadSavedOutput(
+      parseInt(outputDownloadBtn.dataset.configId, 10), parseInt(outputDownloadBtn.dataset.id, 10));
+    return true;
+  }
+  const replayBtn = e.target.closest('.btn-saved-output-replay-hardening');
+  if (replayBtn) {
+    startHardeningReplay(bridge, parseInt(replayBtn.dataset.configId, 10), parseInt(replayBtn.dataset.id, 10));
+    return true;
+  }
+  const basisBtn = e.target.closest('.btn-hardening-replay-basis');
+  if (basisBtn) {
+    chooseHardeningReplayCompareBasis(bridge, basisBtn.dataset.basis);
+    return true;
+  }
+  const runBtn = e.target.closest('.btn-hardening-replay-run');
+  if (runBtn) {
+    runHardeningReplay(bridge);
+    return true;
+  }
+  const replayCancelBtn = e.target.closest('.btn-hardening-replay-cancel');
+  if (replayCancelBtn) {
+    cancelHardeningReplay(bridge);
+    return true;
+  }
+  const outputDeleteBtn = e.target.closest('.btn-saved-output-delete');
+  if (outputDeleteBtn) {
+    requestDeleteSavedOutput(bridge, parseInt(outputDeleteBtn.dataset.id, 10));
+    return true;
+  }
+  const outputConfirmBtn = e.target.closest('.btn-saved-output-delete-confirm');
+  if (outputConfirmBtn) {
+    deleteSavedOutput(
+      bridge, parseInt(outputConfirmBtn.dataset.configId, 10), parseInt(outputConfirmBtn.dataset.id, 10));
+    return true;
+  }
+  const outputCancelBtn = e.target.closest('.btn-saved-output-delete-cancel');
+  if (outputCancelBtn) {
+    cancelDeleteSavedOutput(bridge);
+    return true;
+  }
+  return false;
+}
+
+function wireAllSavedConfigsEvents(bridge) {
+  document.getElementById('all-saved-configs-list')?.addEventListener('click', (e) => {
+    const deleteBtn = e.target.closest('.btn-all-saved-config-delete');
+    if (deleteBtn) {
+      requestDeleteAllSavedConfig(bridge, parseInt(deleteBtn.dataset.id, 10));
+      return;
+    }
+    const confirmBtn = e.target.closest('.btn-all-saved-config-delete-confirm');
+    if (confirmBtn) {
+      deleteAllSavedConfigsEntry(bridge, parseInt(confirmBtn.dataset.id, 10));
+      return;
+    }
+    const cancelBtn = e.target.closest('.btn-all-saved-config-delete-cancel');
+    if (cancelBtn) {
+      cancelDeleteAllSavedConfig(bridge);
+      return;
+    }
+    handleSavedOutputsSubPanelClick(bridge, e);
+  });
 }
 
 // Wires every button/input this module's own render functions above put on
@@ -534,31 +833,10 @@ function wireSavedConfigsEvents(bridge) {
     // Issue #202: a saved config row's own "Outputs" toggle and, once
     // expanded, its Download/Delete actions — same delegated-listener
     // treatment as the config-level buttons above, since these rows are
-    // also rebuilt on every render() (see renderSavedConfigsList).
-    const outputsToggleBtn = e.target.closest('.btn-saved-config-outputs-toggle');
-    if (outputsToggleBtn) {
-      toggleSavedConfigOutputs(bridge, parseInt(outputsToggleBtn.dataset.id, 10));
-      return;
-    }
-    const outputDownloadBtn = e.target.closest('.btn-saved-output-download');
-    if (outputDownloadBtn) {
-      downloadSavedOutput(
-        parseInt(outputDownloadBtn.dataset.configId, 10), parseInt(outputDownloadBtn.dataset.id, 10));
-      return;
-    }
-    const outputDeleteBtn = e.target.closest('.btn-saved-output-delete');
-    if (outputDeleteBtn) {
-      requestDeleteSavedOutput(bridge, parseInt(outputDeleteBtn.dataset.id, 10));
-      return;
-    }
-    const outputConfirmBtn = e.target.closest('.btn-saved-output-delete-confirm');
-    if (outputConfirmBtn) {
-      deleteSavedOutput(
-        bridge, parseInt(outputConfirmBtn.dataset.configId, 10), parseInt(outputConfirmBtn.dataset.id, 10));
-      return;
-    }
-    const outputCancelBtn = e.target.closest('.btn-saved-output-delete-cancel');
-    if (outputCancelBtn) cancelDeleteSavedOutput(bridge);
+    // also rebuilt on every render() (see renderSavedConfigsList). Shared
+    // with renderAllSavedConfigsList's own delegated listener above, since
+    // buildSavedOutputsPanelEl's own markup is identical either way.
+    handleSavedOutputsSubPanelClick(bridge, e);
   });
 }
 
@@ -569,7 +847,11 @@ function wireSavedConfigsEvents(bridge) {
     openSaveConfigModal,
     saveCurrentOutput, createConfigAndSaveOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
     requestDeleteSavedOutput, cancelDeleteSavedOutput, deleteSavedOutput,
-    renderSaveOutputModal,};
+    renderSaveOutputModal,
+    startHardeningReplay, chooseHardeningReplayCompareBasis, runHardeningReplay, cancelHardeningReplay,
+    buildHardeningReplayPanelEl,
+    renderAllSavedConfigsList, wireAllSavedConfigsEvents,
+    requestDeleteAllSavedConfig, cancelDeleteAllSavedConfig, deleteAllSavedConfigsEntry,};
 })();
 
 if (typeof module !== 'undefined') module.exports = SFSavedConfigsUI;

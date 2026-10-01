@@ -202,4 +202,79 @@ public class SavedConfigStoreTests : IDisposable
 
         Assert.Null(_store.GetOutput(saved.Id));
     }
+
+    // ── Issue #207: BlueprintId + baseline comparison-basis queries ────────
+
+    [Fact]
+    public void Save_WithBlueprintId_RoundTripsThroughGetAndListMethods()
+    {
+        var saved = _store.Save("https://example.com", "Config", "{}", blueprintId: 42);
+
+        Assert.Equal(42, saved.BlueprintId);
+        Assert.Equal(42, _store.Get(saved.Id)!.BlueprintId);
+        Assert.Equal(42, _store.ListByUrl("https://example.com").Single().BlueprintId);
+        Assert.Equal(42, _store.ListAll().Single().BlueprintId);
+    }
+
+    [Fact]
+    public void Save_WithoutBlueprintId_DefaultsToNull()
+    {
+        var saved = _store.Save("https://example.com", "Config", "{}");
+
+        Assert.Null(saved.BlueprintId);
+        Assert.Null(_store.Get(saved.Id)!.BlueprintId);
+    }
+
+    [Fact]
+    public void GetMostRecentOutputForConfig_ExcludesTheGivenOutputAndOtherConfigs()
+    {
+        var configA = _store.Save("https://a.com", "A", "{}");
+        var configB = _store.Save("https://b.com", "B", "{}");
+        var older = _store.SaveOutput(configA.Id, "Older", "output.csv", "a");
+        Thread.Sleep(5);
+        var newest = _store.SaveOutput(configA.Id, "Newest", "output.csv", "b");
+        _store.SaveOutput(configB.Id, "Other config", "output.csv", "c");
+
+        var result = _store.GetMostRecentOutputForConfig(configA.Id, excludeOutputId: newest.Id);
+
+        Assert.NotNull(result);
+        Assert.Equal(older.Id, result!.Id);
+    }
+
+    [Fact]
+    public void GetMostRecentOutputForConfig_NoOtherOutput_ReturnsNull()
+    {
+        var config = _store.Save("https://example.com", "Config", "{}");
+        var only = _store.SaveOutput(config.Id, "Only", "output.csv", "a");
+
+        Assert.Null(_store.GetMostRecentOutputForConfig(config.Id, excludeOutputId: only.Id));
+    }
+
+    [Fact]
+    public void GetMostRecentOutputForBlueprint_FindsNewestAcrossDifferentConfigsSharingTheBlueprint()
+    {
+        var configA = _store.Save("https://a.com", "A", "{}", blueprintId: 7);
+        var configB = _store.Save("https://b.com", "B", "{}", blueprintId: 7);
+        var configC = _store.Save("https://c.com", "C (different blueprint)", "{}", blueprintId: 9);
+        var olderA = _store.SaveOutput(configA.Id, "Older A", "output.csv", "a");
+        Thread.Sleep(5);
+        var newestB = _store.SaveOutput(configB.Id, "Newest B", "output.csv", "b");
+        var thisOutput = _store.SaveOutput(configA.Id, "This one, being evaluated", "output.csv", "c");
+        _store.SaveOutput(configC.Id, "Different blueprint", "output.csv", "d");
+
+        var result = _store.GetMostRecentOutputForBlueprint(7, excludeOutputId: thisOutput.Id);
+
+        Assert.NotNull(result);
+        Assert.Equal(newestB.Id, result!.Id);
+        Assert.NotEqual(olderA.Id, result.Id);
+    }
+
+    [Fact]
+    public void GetMostRecentOutputForBlueprint_NoConfigSharesIt_ReturnsNull()
+    {
+        var config = _store.Save("https://example.com", "Config", "{}", blueprintId: 1);
+        _store.SaveOutput(config.Id, "Output", "output.csv", "a");
+
+        Assert.Null(_store.GetMostRecentOutputForBlueprint(999, excludeOutputId: -1));
+    }
 }

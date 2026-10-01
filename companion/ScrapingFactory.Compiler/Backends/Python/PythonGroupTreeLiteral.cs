@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using ScrapingFactory.Compiler.IR;
 
@@ -12,6 +13,29 @@ namespace ScrapingFactory.Compiler.Backends.Python;
 // consumed at runtime is identical either way.
 internal static class PythonGroupTreeLiteral
 {
+    // Issue #213: whether the generated script needs the download helper
+    // (and its own conditional imports — os/sys/hashlib/urljoin) at all —
+    // true iff at least one field anywhere in the tree has Download enabled.
+    public static bool AnyDownloadEnabled(IReadOnlyList<ContainerNode> nodes) => nodes.Any(node => node switch
+    {
+        DataFieldNode field => field.Download,
+        GroupNode group => AnyDownloadEnabled(group.Children),
+        _ => false,
+    });
+
+    // Issue #206 follow-up: every field name anywhere in the tree with
+    // HiddenFromOutput set, matched globally by name at write time — the
+    // same "global by name" simplification NullRateCheck/RequiredFieldsCheck
+    // already use for this tree shape (see CLAUDE.md). Used to build the
+    // grouped templates' own HIDDEN_FIELD_NAMES set.
+    public static IReadOnlyList<string> CollectHiddenFieldNames(IReadOnlyList<ContainerNode> nodes) => nodes.SelectMany(node => node switch
+    {
+        DataFieldNode { HiddenFromOutput: true } field => new[] { field.Name },
+        DataFieldNode => Array.Empty<string>(),
+        GroupNode group => CollectHiddenFieldNames(group.Children),
+        _ => Array.Empty<string>(),
+    }).ToList();
+
     public static string Render(IReadOnlyList<ContainerNode> nodes, int indent = 0)
     {
         if (nodes.Count == 0)
@@ -62,7 +86,27 @@ internal static class PythonGroupTreeLiteral
         // Issue #84's transform chain isn't tied to a specific Mode branch,
         // so extract_group() can just do node.get("transform", []) uniformly.
         var transformPart = $$""", "transform": {{PythonFieldTransformLiteral.Render(field.Transforms)}}""";
-        return $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "selector": {{PythonLiteral.Str(field.Selector)}}, "mode": {{PythonLiteral.Str(mode)}}{{attributePart}}{{framePathPart}}{{transformPart}}}""";
+        // Issue #213: same "always present" convention as transform above —
+        // Download is only ever true under Mode == Attribute (validated
+        // upstream), but extract_group() can still just do
+        // node.get("download", False) uniformly regardless of mode.
+        var downloadPart = $$""", "download": {{(field.Download ? "True" : "False")}}""";
+        // Issue #214: same "always present" convention — None/[] when unset
+        // is a harmless, always-safe default for extract_group()'s own
+        // node.get(...) reads.
+        var maxSizePart = $$""", "maxDownloadSizeBytes": {{field.MaxDownloadSizeBytes?.ToString() ?? "None"}}""";
+        var allowedTypesPart = $$""", "allowedContentTypes": {{(field.AllowedContentTypes is { Count: > 0 } ? PythonLiteral.StrList(field.AllowedContentTypes) : "[]")}}""";
+        // Issue #206 follow-up: always present, same convention as
+        // transform/download above — extract_group() reads it uniformly via
+        // node.get("hiddenFromOutput", False) regardless of whether any
+        // field in the tree actually uses it.
+        var hiddenPart = $$""", "hiddenFromOutput": {{(field.HiddenFromOutput ? "True" : "False")}}""";
+        // Selector is "" (never None) when blank — a derived (combineFields/
+        // splitField) field's own selector is never read at runtime anyway
+        // (see extract_group()'s "if selector:" guard), so a plain empty
+        // Python string is the simplest sentinel, consistent with how
+        // SELECTORS is built for flat mode.
+        return $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "selector": {{PythonLiteral.Str(field.Selector ?? "")}}, "mode": {{PythonLiteral.Str(mode)}}{{attributePart}}{{framePathPart}}{{transformPart}}{{downloadPart}}{{maxSizePart}}{{allowedTypesPart}}{{hiddenPart}}}""";
     }
 
     private static string FramePathPart(List<string>? framePath) =>

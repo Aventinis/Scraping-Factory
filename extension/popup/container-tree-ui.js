@@ -23,11 +23,14 @@ const SFContainerTreeUI = (function () {
   const { STATES, escapeHtml } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
   const {
     groupNodeSuffix, resolveGroupNode, hasRepeatingAncestor, buildFieldNode, insertContainerNode,
-    removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode,
+    removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode, guessUrlAttribute,
+    parseAllowedContentTypes, megabytesToBytes, collectSiblingFieldNames,
   } = typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
   const { transformsAreValid, addTransform } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
   const { renderTransformList, renderTransformPreview, wireTransformList } =
     typeof require !== 'undefined' ? require('./field-transforms-ui') : self.SFFieldTransformsUI;
+  const { openCombineFieldModal, openSplitFieldModal } =
+    typeof require !== 'undefined' ? require('./combine-split-fields-ui') : self.SFCombineSplitFieldsUI;
 
   // Issue #139: one static inline chevron per row instead of swapping between
   // two different Unicode glyphs (▸/▾) on click — collapsed/expanded is now a
@@ -70,14 +73,24 @@ const SFContainerTreeUI = (function () {
     nameInput.className = 'group-tree-name';
     nameInput.dataset.path = JSON.stringify(path);
     nameInput.value = node.name;
-    nameInput.title = node.selector;
+    // Issue #206 follow-up: node.selector is null for a combine/split-
+    // derived field (see buildFieldNode's own doc comment) — '' avoids
+    // setting the title attribute to the literal string "null".
+    nameInput.title = node.selector || '';
     row.appendChild(nameInput);
 
     const suffix = document.createElement('span');
     suffix.className = 'group-tree-label';
     suffix.textContent = groupNodeSuffix(node);
-    suffix.title = node.selector;
+    suffix.title = node.selector || '';
     row.appendChild(suffix);
+
+    if (node.kind === 'field' && node.hiddenFromOutput) {
+      const hiddenBadge = document.createElement('span');
+      hiddenBadge.className = 'field-hidden-badge';
+      hiddenBadge.textContent = t('group.hiddenFromOutputBadge');
+      row.appendChild(hiddenBadge);
+    }
 
     if (node.framePath) {
       const badge = document.createElement('span');
@@ -115,6 +128,24 @@ const SFContainerTreeUI = (function () {
       addFieldBtn.className = 'btn-secondary btn-tiny btn-add-subfield';
       addFieldBtn.textContent = t('group.addSubfieldBtn');
       row.appendChild(addFieldBtn);
+
+      // Issue #206 follow-up: disabled (not hidden) below the minimum field
+      // count each kind needs — clicking "+ Datenfeld" first to build up
+      // real fields to combine/split is the expected path, same reasoning
+      // idle-screen-ui.js's own flat-mode button-disable logic uses.
+      const fieldSiblingCount = node.children.filter(c => c.kind === 'field').length;
+
+      const addCombineFieldBtn = document.createElement('button');
+      addCombineFieldBtn.className = 'btn-secondary btn-tiny btn-add-combine-field';
+      addCombineFieldBtn.textContent = t('group.combineFieldsBtn');
+      addCombineFieldBtn.disabled = fieldSiblingCount < 2;
+      row.appendChild(addCombineFieldBtn);
+
+      const addSplitFieldBtn = document.createElement('button');
+      addSplitFieldBtn.className = 'btn-secondary btn-tiny btn-add-split-field';
+      addSplitFieldBtn.textContent = t('group.splitFieldBtn');
+      addSplitFieldBtn.disabled = fieldSiblingCount < 1;
+      row.appendChild(addSplitFieldBtn);
     }
 
     const removeBtn = document.createElement('button');
@@ -214,12 +245,18 @@ const SFContainerTreeUI = (function () {
     const name = document.getElementById('input-field-extended-name')?.value.trim();
     if (!name) return;
     const mode = document.getElementById('select-field-mode')?.value ?? 'text';
-    const attribute = document.getElementById('input-field-attribute')?.value.trim();
+    const attribute = document.getElementById('select-field-attribute')?.value.trim();
     if (mode === 'attribute' && !attribute) return;
+    const download = document.getElementById('toggle-field-download')?.checked ?? false;
+    const maxDownloadSizeBytes = megabytesToBytes(document.getElementById('input-field-download-max-size')?.value);
+    const allowedContentTypes = parseAllowedContentTypes(document.getElementById('input-field-download-allowed-types')?.value);
 
     const state = bridge.getState();
     if (!transformsAreValid(state.pendingTransforms)) return;
-    const node = buildFieldNode(name, state.pendingSelector, mode, attribute, state.pendingFramePath, state.pendingTransforms);
+    const node = buildFieldNode(
+      name, state.pendingSelector, mode, attribute, state.pendingFramePath, state.pendingTransforms, download,
+      maxDownloadSizeBytes, allowedContentTypes,
+    );
     log('FIELD_ADD(container) confirm', node);
     bridge.setState(STATES.IDLE, {
       groups:            insertContainerNode(state.groups, state.pendingParentPath, node),
@@ -277,7 +314,7 @@ const SFContainerTreeUI = (function () {
     if (mode === 'text') {
       rawValue = state.pendingRawText;
     } else if (mode === 'attribute') {
-      const attrName = document.getElementById('input-field-attribute')?.value.trim();
+      const attrName = document.getElementById('select-field-attribute')?.value.trim();
       if (attrName) rawValue = (state.pendingElementAttributes?.[attrName] ?? '').trim();
     } else if (mode === 'ownText') {
       rawValue = state.pendingOwnText;
@@ -291,6 +328,31 @@ const SFContainerTreeUI = (function () {
   // closed→open transition (reset name/mode/focus) from a re-render
   // triggered by editing the transform chain (which must not wipe what's
   // already typed/chosen).
+  // Issue #213 follow-up: populates the attribute picker with the actually-
+  // clicked element's own attributes ("name: value preview" options)
+  // instead of a free text field the user would otherwise need to
+  // guess/inspect DevTools for — per CLAUDE.md's own "no programming
+  // knowledge" target audience, typing a raw HTML attribute name blind
+  // defeats the point of a visual tool. guessUrlAttribute (container-tree.js)
+  // preselects whichever attribute looks most like a downloadable resource
+  // URL, but every other attribute the element actually has is still listed
+  // and pickable — the heuristic is a convenience default, not a hard gate.
+  function populateAttributeSelect(attributes) {
+    const select = document.getElementById('select-field-attribute');
+    if (!select) return;
+    const entries = Object.entries(attributes || {});
+    if (entries.length === 0) {
+      select.innerHTML = `<option value="">${escapeHtml(t('modals.fieldExtended.noAttributesFound'))}</option>`;
+      return;
+    }
+    const guess = guessUrlAttribute(attributes);
+    select.innerHTML = entries.map(([name, value]) => {
+      const preview = value.length > 40 ? `${value.slice(0, 40)}…` : value;
+      const label = preview ? `${name}: ${preview}` : name;
+      return `<option value="${escapeHtml(name)}"${name === guess ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+    }).join('');
+  }
+
   function renderContainerFieldModal(bridge, isNewPick) {
     const state = bridge.getState();
     document.getElementById('modal-field-extended')?.classList.remove('hidden');
@@ -301,8 +363,14 @@ const SFContainerTreeUI = (function () {
       if (modeSelect) modeSelect.value = 'text';
       document.getElementById('field-attribute-row')?.classList.add('hidden');
       document.getElementById('field-extended-transforms-section')?.classList.remove('hidden');
-      const attrInput = document.getElementById('input-field-attribute');
-      if (attrInput) attrInput.value = '';
+      populateAttributeSelect(state.pendingElementAttributes);
+      const downloadToggle = document.getElementById('toggle-field-download');
+      if (downloadToggle) downloadToggle.checked = false;
+      document.getElementById('field-download-options')?.classList.add('hidden');
+      const maxSizeInput = document.getElementById('input-field-download-max-size');
+      if (maxSizeInput) maxSizeInput.value = '';
+      const allowedTypesInput = document.getElementById('input-field-download-allowed-types');
+      if (allowedTypesInput) allowedTypesInput.value = '';
     }
     renderMatchCountHint('field-extended-match-count', state.pendingMatchCount);
     renderTransformList('field-extended-transform-list', state.pendingTransforms);
@@ -320,6 +388,11 @@ const SFContainerTreeUI = (function () {
 
     if (e.target.closest('.btn-add-subcontainer')) { openContainerModal(bridge, path); return; }
     if (e.target.closest('.btn-add-subfield')) { startFieldSelection(bridge, path); return; }
+    // Issue #206 follow-up: no click-based selection — opens the shared
+    // combine/split creation modal directly, scoped to this group's own
+    // children (same `path` .btn-add-subfield already targets).
+    if (e.target.closest('.btn-add-combine-field')) { openCombineFieldModal(bridge, { mode: 'container', parentPath: path }); return; }
+    if (e.target.closest('.btn-add-split-field')) { openSplitFieldModal(bridge, { mode: 'container', parentPath: path }); return; }
     if (e.target.closest('.btn-remove-group-node')) {
       log('GROUP_NODE_REMOVE', { path });
       bridge.stopPreviewIfActive();
@@ -369,6 +442,13 @@ const SFContainerTreeUI = (function () {
     if (e.key === 'Enter') confirmExtendedField(bridge);
   });
   document.getElementById('btn-field-extended-cancel')?.addEventListener('click', () => cancelExtendedField(bridge));
+  // Issue #214: the safety-net inputs only make sense once Download itself
+  // is actually checked — same "hide until relevant" treatment the
+  // attribute row already gets from the mode select just below.
+  document.getElementById('toggle-field-download')?.addEventListener('change', (e) => {
+    document.getElementById('field-download-options')?.classList.toggle('hidden', !e.target.checked);
+  });
+
   document.getElementById('select-field-mode')?.addEventListener('change', (e) => {
     document.getElementById('field-attribute-row')?.classList.toggle('hidden', e.target.value !== 'attribute');
     // Issue #84: transforms are a string post-processing pipeline — not
@@ -379,7 +459,10 @@ const SFContainerTreeUI = (function () {
   });
   // Issue #143: typing an attribute name updates the preview live, without
   // requiring a transform edit first.
-  document.getElementById('input-field-attribute')?.addEventListener('input', () => refreshExtendedTransformPreview(bridge));
+  // Issue #213 follow-up: now a <select> (was a free-text <input>) — 'change'
+  // matches select-field-mode's own listener convention, fired once a pick
+  // is actually made rather than per-keystroke.
+  document.getElementById('select-field-attribute')?.addEventListener('change', () => refreshExtendedTransformPreview(bridge));
   document.getElementById('btn-field-extended-transform-add')?.addEventListener('click', () => {
     bridge.patchState({ pendingTransforms: addTransform(bridge.getState().pendingTransforms) });
   });

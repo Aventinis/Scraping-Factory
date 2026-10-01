@@ -53,12 +53,27 @@ internal static class PythonApiConfigLiteral
         return $$"""{"name": {{PythonLiteral.Str(group.Name)}}, "path": {{PythonLiteral.Str(group.Path)}}, "children": {{children}}}""";
     }
 
-    // Always includes "transform" (Issue #84), even when empty — used by
-    // both the flat RenderFields (FIELDS constant) and the tree shape's
-    // RenderNode above, so _resolve_field/_extract_api_group can apply it
-    // uniformly via a plain node.get("transform", []) either way.
+    // Always includes "transform" (Issue #84) and "hiddenFromOutput" (Issue
+    // #206 follow-up), even when empty/False — used by both the flat
+    // RenderFields (FIELDS constant) and the tree shape's RenderNode above,
+    // so _resolve_field/_extract_api_group can apply them uniformly via a
+    // plain node.get(...) either way. "path" is "" (never None) when blank —
+    // a derived (combineFields/splitField) field's own path is never read
+    // at runtime (see _resolve_field's/_extract_api_group's "if path:"
+    // guard).
     private static string RenderField(ApiField field) =>
-        $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "path": {{PythonLiteral.Str(field.Path)}}, "transform": {{PythonFieldTransformLiteral.Render(field.Transforms)}}}""";
+        $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "path": {{PythonLiteral.Str(field.Path ?? "")}}, "transform": {{PythonFieldTransformLiteral.Render(field.Transforms)}}, "hiddenFromOutput": {{(field.HiddenFromOutput ? "True" : "False")}}}""";
+
+    // See PythonGroupTreeLiteral.CollectHiddenFieldNames — same "global by
+    // name" tree walk, used to build scraper_api_grouped.py.j2's own
+    // HIDDEN_FIELD_NAMES set.
+    public static IReadOnlyList<string> CollectHiddenFieldNames(IReadOnlyList<ApiNode> nodes) => nodes.SelectMany(node => node switch
+    {
+        ApiField { HiddenFromOutput: true } field => new[] { field.Name },
+        ApiField => Array.Empty<string>(),
+        ApiGroup group => CollectHiddenFieldNames(group.Children),
+        _ => Array.Empty<string>(),
+    }).ToList();
 
     // Serializes ApiConfig.Body (Issue #55's request-body tree) into the
     // same kind of dict-of-dicts literal RenderGroups already builds for the
