@@ -65,3 +65,7 @@ jobs:
       - name: Run tests
         working-directory: extension
         run: npm test
+
+      - name: Typecheck JSDoc-annotated modules
+        working-directory: extension
+        run: npm run typecheck
