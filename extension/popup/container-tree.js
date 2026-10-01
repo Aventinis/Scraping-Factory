@@ -9,6 +9,20 @@
 // the functions it needs off `self.SFContainerTree` — a bare top-level
 // `const`/`function` here would collide with popup.js's own declarations,
 // since classic scripts sharing one document all share one global scope.
+// @ts-check
+// Issue #238: JSDoc-annotated and typechecked via `// @ts-check` + tsconfig
+// (`npm run typecheck`). This module's own tree nodes are a popup-internal
+// "draft" shape, not the wire format itself (e.g. `kind: 'group'|'field'`
+// instead of structural `children`-presence discrimination, lowercase
+// `mode` values) — described by types/popup-drafts.d.ts's `SFDraft`
+// namespace (`SFDraft.ContainerNode`/`GroupNode`/`FieldNode`/`FieldMode`)
+// rather than types/companion-ir.d.ts's `SFWire`, which only models the
+// wire shape `serializeGroupTree` actually produces. `SFDraft` lives in its
+// own ambient file, not a local `@typedef` here, specifically so
+// scraping-config-builder.js's own JSDoc can reference this module's tree
+// shape too — see that file's own top-of-file comment and
+// types/popup-drafts.d.ts's.
+
 const SFContainerTree = (function () {
   const { t } = typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
 
@@ -18,6 +32,13 @@ const SFContainerTree = (function () {
   // leaf. `path` addresses a node the same way the DOM-tree-view already does
   // (an array of child indices) — see buildTreeNodeEl's `node.path`.
 
+  /**
+   * @param {string} name
+   * @param {string} selector
+   * @param {boolean} repeating
+   * @param {string[] | null} [framePath]
+   * @returns {SFDraft.GroupNode}
+   */
   function buildGroupNode(name, selector, repeating, framePath = null) {
     return { kind: 'group', name, selector, repeating, children: [], framePath: framePath || null };
   }
@@ -30,6 +51,19 @@ const SFContainerTree = (function () {
   // distinguishing label instead of "Text"). hiddenFromOutput defaults
   // false, set only via that same flow's own "remove original field(s)"
   // checkbox (updateGroupTreeNode elsewhere), never here.
+  /**
+   * @param {string} name
+   * @param {string | null} selector
+   * @param {SFDraft.FieldMode} mode
+   * @param {string | null} attribute
+   * @param {string[] | null} [framePath]
+   * @param {SFWire.FieldTransform[]} [transforms]
+   * @param {boolean} [download]
+   * @param {number | null} [maxDownloadSizeBytes]
+   * @param {string[]} [allowedContentTypes]
+   * @param {boolean} [hiddenFromOutput]
+   * @returns {SFDraft.FieldNode}
+   */
   function buildFieldNode(
     name, selector, mode, attribute, framePath = null, transforms = [], download = false,
     maxDownloadSizeBytes = null, allowedContentTypes = [], hiddenFromOutput = false,
@@ -62,6 +96,10 @@ const SFContainerTree = (function () {
   // comma-separated content-type allowlist, same "split, trim, drop blanks"
   // shape scraping-config-builder.js's own parseAdditionalUrls already uses
   // for a newline-separated list.
+  /**
+   * @param {string} text
+   * @returns {string[]}
+   */
   function parseAllowedContentTypes(text) {
     return (text || '').split(',').map(part => part.trim()).filter(part => part.length > 0);
   }
@@ -71,6 +109,10 @@ const SFContainerTree = (function () {
   // script work in bytes — same "convert at the UI boundary" pattern
   // Hardening's own percent(UI)<->fraction(wire) conversion already uses.
   // null/non-positive input means "no limit", not zero.
+  /**
+   * @param {string} value
+   * @returns {number | null}
+   */
   function megabytesToBytes(value) {
     const mb = parseFloat(value);
     return Number.isFinite(mb) && mb > 0 ? Math.round(mb * 1024 * 1024) : null;
@@ -91,12 +133,21 @@ const SFContainerTree = (function () {
   // A "data:" URI is inline base64 content, not a fetchable resource — the
   // classic case being a 1x1 tracking-pixel placeholder sitting in `src`
   // while the real image URL waits in a lazy-load `data-*` attribute.
+  /**
+   * @param {string} value
+   * @returns {boolean}
+   */
   function looksLikeResourceUrl(value) {
     if (!value) return false;
     if (value.startsWith('data:')) return false;
     return value.includes('/') || RESOURCE_LIKE_EXTENSION_RE.test(value);
   }
 
+  /**
+   * @param {string} name
+   * @param {string} value
+   * @returns {number}
+   */
   function scoreAttributeForDownload(name, value) {
     if (!looksLikeResourceUrl(value)) return -1;
     const lower = name.toLowerCase();
@@ -113,6 +164,10 @@ const SFContainerTree = (function () {
   // Returns the best-guess attribute name, or null when nothing on the
   // element looks like a resource URL at all (the picker then simply lists
   // every attribute with no preselection).
+  /**
+   * @param {Record<string, string> | null | undefined} attributes
+   * @returns {string | null}
+   */
   function guessUrlAttribute(attributes) {
     if (!attributes) return null;
     let best = null;
@@ -124,10 +179,16 @@ const SFContainerTree = (function () {
     return best;
   }
 
+  /**
+   * @param {SFDraft.ContainerNode[]} groups
+   * @param {number[] | null | undefined} path
+   * @returns {SFDraft.ContainerNode | null}
+   */
   function resolveGroupNode(groups, path) {
     if (!path || path.length === 0) return null;
+    /** @type {SFDraft.ContainerNode} */
     let node = groups[path[0]];
-    for (let i = 1; i < path.length; i++) node = node.children[path[i]];
+    for (let i = 1; i < path.length; i++) node = /** @type {SFDraft.GroupNode} */ (node).children[path[i]];
     return node;
   }
 
@@ -138,24 +199,37 @@ const SFContainerTree = (function () {
   // page-unique, so a selector built from one can only ever match a single
   // instance, silently starving every other repetition of that field/nested
   // container.
+  /**
+   * @param {SFDraft.ContainerNode[]} groups
+   * @param {number[] | null | undefined} path
+   * @returns {boolean}
+   */
   function hasRepeatingAncestor(groups, path) {
     if (!path) return false;
     let nodes = groups;
     for (const index of path) {
       const node = nodes[index];
       if (node.kind === 'group' && node.repeating) return true;
-      nodes = node.children;
+      nodes = node.kind === 'group' ? node.children : [];
     }
     return false;
   }
 
   // Appends `node` as the last child at `parentPath` (or at root level when
   // `parentPath` is null) — immutable, like addField above.
+  /**
+   * @param {SFDraft.ContainerNode[]} groups
+   * @param {number[] | null | undefined} parentPath
+   * @param {SFDraft.ContainerNode} node
+   * @returns {SFDraft.ContainerNode[]}
+   */
   function insertContainerNode(groups, parentPath, node) {
     const path = parentPath || [];
     if (path.length === 0) return [...groups, node];
     const [head, ...rest] = path;
-    return groups.map((n, i) => (i === head ? { ...n, children: insertContainerNode(n.children, rest, node) } : n));
+    return groups.map((n, i) => (i === head
+      ? { ...n, children: insertContainerNode(/** @type {SFDraft.GroupNode} */ (n).children, rest, node) }
+      : n));
   }
 
   // Issue #206: the field-name options a new field's combineFields/
@@ -168,27 +242,50 @@ const SFContainerTree = (function () {
   // here is already guaranteed to be "declared earlier" once the new one is
   // appended, matching ScrapingPlanValidator's own same-immediate-parent-
   // group ordering rule exactly, with no slicing needed.
+  /**
+   * @param {SFDraft.ContainerNode[]} groups
+   * @param {number[] | null | undefined} parentPath
+   * @returns {string[]}
+   */
   function collectSiblingFieldNames(groups, parentPath) {
-    const siblings = !parentPath || parentPath.length === 0 ? groups : (resolveGroupNode(groups, parentPath)?.children || []);
+    const parent = !parentPath || parentPath.length === 0 ? null : resolveGroupNode(groups, parentPath);
+    const siblings = !parentPath || parentPath.length === 0
+      ? groups
+      : (parent && parent.kind === 'group' ? parent.children : []);
     return siblings.filter(n => n.kind === 'field').map(n => n.name);
   }
 
   // Removes the node (and its subtree) at `path` — always non-empty, unlike
   // insertContainerNode's parentPath.
+  /**
+   * @param {SFDraft.ContainerNode[]} groups
+   * @param {number[]} path
+   * @returns {SFDraft.ContainerNode[]}
+   */
   function removeGroupTreeNode(groups, path) {
     if (path.length === 1) return groups.filter((_, i) => i !== path[0]);
     const [head, ...rest] = path;
-    return groups.map((n, i) => (i === head ? { ...n, children: removeGroupTreeNode(n.children, rest) } : n));
+    return groups.map((n, i) => (i === head
+      ? { ...n, children: removeGroupTreeNode(/** @type {SFDraft.GroupNode} */ (n).children, rest) }
+      : n));
   }
 
   // Issue #177: replaces the node at `path` with `updater(node)` — same
   // recursive path-walk shape as api-config.js's own updateApiTreeNode, used
   // there for the API tree's own rename-in-place input.
+  /**
+   * @param {SFDraft.ContainerNode[]} groups
+   * @param {number[]} path
+   * @param {(node: SFDraft.ContainerNode) => SFDraft.ContainerNode} updater
+   * @returns {SFDraft.ContainerNode[]}
+   */
   function updateGroupTreeNode(groups, path, updater) {
     const [head, ...rest] = path;
     return groups.map((n, i) => {
       if (i !== head) return n;
-      return rest.length === 0 ? updater(n) : { ...n, children: updateGroupTreeNode(n.children, rest, updater) };
+      return rest.length === 0
+        ? updater(n)
+        : { ...n, children: updateGroupTreeNode(/** @type {SFDraft.GroupNode} */ (n).children, rest, updater) };
     });
   }
 
@@ -197,10 +294,18 @@ const SFContainerTree = (function () {
   // moveTransform. No-ops (returns `groups` unchanged) past either end of the
   // sibling list, so callers can wire this straight to an unconditional
   // button click without checking the boundary themselves first.
+  /**
+   * @param {SFDraft.ContainerNode[]} groups
+   * @param {number[]} path
+   * @param {number} direction
+   * @returns {SFDraft.ContainerNode[]}
+   */
   function moveGroupTreeNode(groups, path, direction) {
     const parentPath = path.slice(0, -1);
     const index = path[path.length - 1];
-    const siblings = parentPath.length === 0 ? groups : resolveGroupNode(groups, parentPath).children;
+    const siblings = parentPath.length === 0
+      ? groups
+      : /** @type {SFDraft.GroupNode} */ (resolveGroupNode(groups, parentPath)).children;
     const target = index + direction;
     if (target < 0 || target >= siblings.length) return groups;
 
@@ -215,6 +320,10 @@ const SFContainerTree = (function () {
   // Issue #177: the part of formatGroupNodeLabel below that isn't the name
   // itself — split out so the tree-row editor can render the name as an
   // editable input and this suffix as a separate, read-only label next to it.
+  /**
+   * @param {SFDraft.ContainerNode} node
+   * @returns {string}
+   */
   function groupNodeSuffix(node) {
     if (node.kind === 'group') {
       return `(${t(node.repeating ? 'group.repeating' : 'group.single')})`;
@@ -224,12 +333,15 @@ const SFContainerTree = (function () {
     // comment) — branching on the transform's own kind first, rather than
     // on node.mode, is what shows a distinguishing label instead of "Text"
     // for a field whose actual extracted value is always discarded.
-    const derivedKind = node.transforms?.[0]?.kind;
+    const firstTransform = node.transforms?.[0];
+    const derivedKind = firstTransform?.kind;
     if (derivedKind === 'combineFields') {
-      return `— ${t('group.combinedFieldMode', { sources: node.transforms[0].sourceFieldNames.join(', ') })}`;
+      const combine = /** @type {SFWire.CombineFieldsTransform} */ (firstTransform);
+      return `— ${t('group.combinedFieldMode', { sources: combine.sourceFieldNames.join(', ') })}`;
     }
     if (derivedKind === 'splitField') {
-      return `— ${t('group.splitFieldMode', { source: node.transforms[0].sourceFieldName })}`;
+      const split = /** @type {SFWire.SplitFieldTransform} */ (firstTransform);
+      return `— ${t('group.splitFieldMode', { source: split.sourceFieldName })}`;
     }
     const modeLabel = {
       text: t('group.textMode'),
@@ -240,15 +352,24 @@ const SFContainerTree = (function () {
     return `— ${modeLabel}`;
   }
 
+  /**
+   * @param {SFDraft.ContainerNode} node
+   * @returns {string}
+   */
   function formatGroupNodeLabel(node) {
     return `${node.name} ${groupNodeSuffix(node)}`;
   }
 
+  /** @type {Record<SFDraft.FieldMode, SFWire.ExtractMode>} */
   const FIELD_MODE_WIRE_NAMES = { text: 'Text', attribute: 'Attribute', exists: 'Exists', ownText: 'OwnText' };
 
   // Strips the popup's internal `kind` tag and shapes each node exactly like
   // the wire format the Companion expects (ContainerNode.cs / ContainerNodeJsonConverter):
   // `children` present only for groups, `attribute` present only when mode is Attribute.
+  /**
+   * @param {SFDraft.ContainerNode[]} groups
+   * @returns {SFWire.ContainerNode[]}
+   */
   function serializeGroupTree(groups) {
     return groups.map(node => node.kind === 'group'
       ? {

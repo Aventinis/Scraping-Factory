@@ -137,6 +137,16 @@ is a separate, isolated Jest module with no shared closure. `api-config.js` and
 `container-tree.js` need no such bridge: they're pure, DOM-free functions
 (build/resolve/insert/remove/serialize tree drafts, no state or DOM access).
 
+These DOM-free `<feature>.js` modules are also exactly the ones opted into
+JSDoc type checking (Issue #238, see CLAUDE.md's own entry on this) — a
+leading `// @ts-check` pragma plus `extension/tsconfig.json`
+(`npm run typecheck`, wired into CI) against two ambient namespaces under
+`extension/types/`: `SFWire` (`companion-ir.d.ts`, a hand-kept mirror of the
+companion's wire-format IR) and `SFDraft` (`popup-drafts.d.ts`, this popup's
+own internal pre-serialization shapes, e.g. `container-tree.js`'s tree
+nodes). `checkJs` stays off project-wide — the DOM-rendering `<feature>-ui.js`
+files and `popup.js` itself aren't annotated (yet).
+
 ### 1.3 The companion pipeline: wire format → canonical IR → codegen → real execution
 
 Everything the extension sends is `ScrapingFactory.Compiler.IR.ScrapingConfig` —
