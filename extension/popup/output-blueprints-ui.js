@@ -389,16 +389,27 @@ const SFOutputBlueprintsUI = (function () {
   // "Parse & fill fields" stays the one action that commits a sample
   // regardless of which input method produced its text (consistent with the
   // existing paste flow, and reusing the exact same
-  // importBlueprintFieldNamesFromSample code path for both).
-  async function loadBlueprintImportSampleFile(file) {
+  // importBlueprintFieldNamesFromSample code path for both). Uses
+  // FileReader rather than File.text() — same convention
+  // download-helpers.test.js/popup.test.js's own readBlobText helper already
+  // established, since jsdom (this project's test environment) doesn't
+  // implement Blob/File.text().
+  function loadBlueprintImportSampleFile(file) {
     const textarea = document.getElementById('input-blueprint-import-sample');
-    try {
-      const text = await file.text();
-      if (textarea) textarea.value = text;
-    } catch (err) {
-      log('BLUEPRINT_IMPORT_FILE_READ_FAIL', err.message);
-      showToast(t('toast.blueprintImportFileReadFailed', { message: err.message }), 'Output Blueprint');
-    }
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (textarea) textarea.value = reader.result;
+        resolve();
+      };
+      reader.onerror = () => {
+        const message = reader.error ? reader.error.message : '';
+        log('BLUEPRINT_IMPORT_FILE_READ_FAIL', message);
+        showToast(t('toast.blueprintImportFileReadFailed', { message }), 'Output Blueprint');
+        resolve();
+      };
+      reader.readAsText(file);
+    });
   }
 
   async function saveBlueprintEdit(bridge) {

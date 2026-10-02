@@ -7,6 +7,16 @@ describe('Output Blueprints (Issue #191)', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
+  // jsdom's FileReader resolves over several macrotask ticks (unlike a
+  // fetch-mock Promise, which settles within one), so a single
+  // flushMicrotasks() isn't always enough to observe its onload — loop a
+  // few extra ticks instead of relying on exact timing.
+  const flushFileReader = async () => {
+    for (let i = 0; i < 10; i++) {
+      await flushMicrotasks();
+    }
+  };
+
   let fetchMock;
   let blueprints;
   let blueprintRecords;
@@ -59,6 +69,7 @@ describe('Output Blueprints (Issue #191)', () => {
       </div>
       <div id="blueprint-import-section" class="hidden">
         <textarea id="input-blueprint-import-sample"></textarea>
+        <input type="file" id="input-blueprint-import-file" />
         <button type="button" id="btn-blueprint-import-parse"></button>
       </div>
       <div id="blueprint-flat-schema-section">
@@ -338,6 +349,42 @@ describe('Output Blueprints (Issue #191)', () => {
 
     const inputs = document.querySelectorAll('.blueprint-field-name-input');
     expect([...inputs].map((i) => i.value)).toEqual(['']); // still the single blank row openBlueprintCreateModal seeded
+  });
+
+  // Issue #252: picking a file from disk is a second way to get text into
+  // the same textarea the paste flow already uses — it must not auto-parse,
+  // the same single "Parse & fill fields" action still has to be pressed
+  // regardless of which input method produced the textarea's content.
+  test('picking a file fills the textarea with its content but does not parse it automatically', async () => {
+    document.getElementById('btn-manage-blueprints').click();
+    document.getElementById('btn-blueprint-new').click();
+
+    const file = new File(['Title,Price,Sku'], 'sample.csv', { type: 'text/csv' });
+    const fileInput = document.getElementById('input-blueprint-import-file');
+    Object.defineProperty(fileInput, 'files', { value: [file], configurable: true });
+    fileInput.dispatchEvent(new Event('change'));
+    await flushFileReader();
+
+    expect(document.getElementById('input-blueprint-import-sample').value).toBe('Title,Price,Sku');
+    const inputs = document.querySelectorAll('.blueprint-field-name-input');
+    expect([...inputs].map((i) => i.value)).toEqual(['']); // untouched until "Parse" is pressed
+    expect(fileInput.value).toBe(''); // reset so the same file can be re-picked
+  });
+
+  test('pressing Parse after picking a file applies the file content the same way a pasted sample would', async () => {
+    document.getElementById('btn-manage-blueprints').click();
+    document.getElementById('btn-blueprint-new').click();
+
+    const file = new File(['Title,Price,Sku'], 'sample.csv', { type: 'text/csv' });
+    const fileInput = document.getElementById('input-blueprint-import-file');
+    Object.defineProperty(fileInput, 'files', { value: [file], configurable: true });
+    fileInput.dispatchEvent(new Event('change'));
+    await flushFileReader();
+
+    document.getElementById('btn-blueprint-import-parse').click();
+
+    const inputs = document.querySelectorAll('.blueprint-field-name-input');
+    expect([...inputs].map((i) => i.value)).toEqual(['Title', 'Price', 'Sku']);
   });
 
   // Issue #253: importing a Tree-schema blueprint's own target tree from a
