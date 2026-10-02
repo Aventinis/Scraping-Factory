@@ -605,24 +605,27 @@ const SFApiConfigUI = (function () {
 
       if (action.kind === 'waitFor') {
         card.appendChild(pickRow(i, 'selector', action.selector, null));
-        card.insertAdjacentHTML('beforeend',
-          `<label>${escapeHtml(t('browserActions.timeoutLabel'))}</label>` +
-          `<input type="number" class="discovery-action-timeout" data-part-id="${safePartId}" data-index="${i}" value="${action.timeoutMs}" min="1" />`);
+        card.insertAdjacentHTML('beforeend', `<div class="browser-action-field-row">
+          <label>${escapeHtml(t('browserActions.timeoutLabel'))}</label>
+          <input type="number" class="discovery-action-timeout" data-part-id="${safePartId}" data-index="${i}" value="${action.timeoutMs}" min="1" />
+        </div>`);
       } else if (action.kind === 'fill') {
         card.appendChild(pickRow(i, 'selector', action.selector, null));
-        card.insertAdjacentHTML('beforeend',
-          `<label>${escapeHtml(t('browserActions.envVarLabel'))}</label>` +
-          `<input type="text" class="discovery-action-env-name" data-part-id="${safePartId}" data-index="${i}" value="${escapeHtml(action.environmentVariableName || '')}" />`);
+        card.insertAdjacentHTML('beforeend', `<div class="browser-action-field-row">
+          <label>${escapeHtml(t('browserActions.envVarLabel'))}</label>
+          <input type="text" class="discovery-action-env-name" data-part-id="${safePartId}" data-index="${i}" value="${escapeHtml(action.environmentVariableName || '')}" />
+        </div>`);
       } else if (action.kind === 'click') {
         card.appendChild(pickRow(i, 'selector', action.selector, null));
       } else if (action.kind === 'scroll') {
         card.appendChild(pickRow(i, 'containerSelector', action.containerSelector, t('browserActions.containerSelectorLabel')));
         card.appendChild(pickRow(i, 'loadMoreButtonSelector', action.loadMoreButtonSelector, t('browserActions.loadMoreButtonSelectorLabel')));
-        card.insertAdjacentHTML('beforeend',
-          `<label>${escapeHtml(t('browserActions.maxIterationsLabel'))}</label>` +
-          `<input type="number" class="discovery-action-max-iterations" data-part-id="${safePartId}" data-index="${i}" value="${action.maxIterations}" min="1" />` +
-          `<label>${escapeHtml(t('browserActions.waitAfterMsLabel'))}</label>` +
-          `<input type="number" class="discovery-action-wait-after-ms" data-part-id="${safePartId}" data-index="${i}" value="${action.waitAfterMs}" min="0" />`);
+        card.insertAdjacentHTML('beforeend', `<div class="browser-action-field-row">
+          <label>${escapeHtml(t('browserActions.maxIterationsLabel'))}</label>
+          <input type="number" class="discovery-action-max-iterations" data-part-id="${safePartId}" data-index="${i}" value="${action.maxIterations}" min="1" />
+          <label>${escapeHtml(t('browserActions.waitAfterMsLabel'))}</label>
+          <input type="number" class="discovery-action-wait-after-ms" data-part-id="${safePartId}" data-index="${i}" value="${action.waitAfterMs}" min="0" />
+        </div>`);
       }
 
       list.appendChild(card);
@@ -630,7 +633,7 @@ const SFApiConfigUI = (function () {
     wrap.appendChild(list);
 
     const addRow = document.createElement('div');
-    addRow.className = 'browser-actions-add-row';
+    addRow.className = 'actions';
     addRow.innerHTML = ['waitFor', 'fill', 'click', 'scroll'].map(kind =>
       `<button type="button" class="btn-secondary btn-tiny btn-add-discovery-action" data-part-id="${safePartId}" data-kind="${kind}">+ ${escapeHtml(kindLabels[kind])}</button>`,
     ).join('');
