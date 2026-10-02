@@ -69,7 +69,11 @@ describe('Output Blueprints (Issue #191)', () => {
       </div>
       <div id="blueprint-import-section" class="hidden">
         <textarea id="input-blueprint-import-sample"></textarea>
-        <input type="file" id="input-blueprint-import-file" />
+        <div class="blueprint-import-file-row">
+          <label for="input-blueprint-import-file" class="blueprint-import-file-trigger"></label>
+          <input type="file" id="input-blueprint-import-file" />
+          <span id="blueprint-import-file-name"></span>
+        </div>
         <button type="button" id="btn-blueprint-import-parse"></button>
       </div>
       <div id="blueprint-flat-schema-section">
@@ -369,6 +373,24 @@ describe('Output Blueprints (Issue #191)', () => {
     const inputs = document.querySelectorAll('.blueprint-field-name-input');
     expect([...inputs].map((i) => i.value)).toEqual(['']); // untouched until "Parse" is pressed
     expect(fileInput.value).toBe(''); // reset so the same file can be re-picked
+    expect(document.getElementById('blueprint-import-file-name').textContent).toBe('sample.csv');
+  });
+
+  test('the picked-file name is reset back to the placeholder when the modal is reopened', async () => {
+    document.getElementById('btn-manage-blueprints').click();
+    document.getElementById('btn-blueprint-new').click();
+
+    const file = new File(['Title,Price,Sku'], 'sample.csv', { type: 'text/csv' });
+    const fileInput = document.getElementById('input-blueprint-import-file');
+    Object.defineProperty(fileInput, 'files', { value: [file], configurable: true });
+    fileInput.dispatchEvent(new Event('change'));
+    await flushFileReader();
+    expect(document.getElementById('blueprint-import-file-name').textContent).toBe('sample.csv');
+
+    document.getElementById('btn-blueprint-edit-cancel').click();
+    document.getElementById('btn-blueprint-new').click();
+
+    expect(document.getElementById('blueprint-import-file-name').textContent).not.toBe('sample.csv');
   });
 
   test('pressing Parse after picking a file applies the file content the same way a pasted sample would', async () => {

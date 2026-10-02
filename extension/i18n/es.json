@@ -418,6 +418,8 @@
       "importLabel": "Importar desde una muestra (JSON, fila de encabezado CSV o una lista simple de nombres de campo)",
       "importPlaceholder": "Pega una muestra JSON, una fila de encabezado CSV o un nombre de campo por línea…",
       "importFileLabel": "…o sube un archivo de muestra (.csv, .json, .txt):",
+      "importFileBtn": "Elegir archivo",
+      "importFileNone": "Ningún archivo seleccionado",
       "importBtn": "Analizar y rellenar campos",
       "save": "Guardar",
       "editBtn": "Editar"

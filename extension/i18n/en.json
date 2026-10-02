@@ -418,6 +418,8 @@
       "importLabel": "Import from a sample (JSON, CSV header row, or a plain field-name list)",
       "importPlaceholder": "Paste a JSON sample, a CSV header row, or one field name per line…",
       "importFileLabel": "…or upload a sample file (.csv, .json, .txt):",
+      "importFileBtn": "Choose file",
+      "importFileNone": "No file selected",
       "importBtn": "Parse & fill fields",
       "save": "Save",
       "editBtn": "Edit"

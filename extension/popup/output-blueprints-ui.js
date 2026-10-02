@@ -310,8 +310,20 @@ const SFOutputBlueprintsUI = (function () {
 
   // ── Create/edit modal ────────────────────────────────────────────────────
 
+  // Issue #252: the picked-file indicator (#blueprint-import-file-name) is
+  // plain static markup, not re-rendered from state — once a file is picked
+  // its text is overwritten with that file's own name (see the 'change'
+  // listener below), so it has to be put back to the "no file selected"
+  // placeholder explicitly whenever the modal is (re)opened, or a stale
+  // filename from a previous attempt would otherwise linger across reopens.
+  function resetBlueprintImportFileIndicator() {
+    const nameEl = document.getElementById('blueprint-import-file-name');
+    if (nameEl) nameEl.textContent = t('modals.blueprintEdit.importFileNone');
+  }
+
   function openBlueprintCreateModal(bridge) {
     log('OPEN blueprint-edit modal (new)');
+    resetBlueprintImportFileIndicator();
     bridge.patchState({
       blueprintEditModalOpen: true, blueprintEditingId: null,
       blueprintEditDraft: { name: '', schemaKind: 'Flat', fieldNames: [''], tree: [] },
@@ -320,6 +332,7 @@ const SFOutputBlueprintsUI = (function () {
 
   async function openBlueprintEditModal(bridge, id) {
     log('OPEN blueprint-edit modal (edit)', id);
+    resetBlueprintImportFileIndicator();
     try {
       const record = await fetchOutputBlueprint(id);
       bridge.patchState({
@@ -615,6 +628,8 @@ const SFOutputBlueprintsUI = (function () {
       const file = e.target.files && e.target.files[0];
       e.target.value = ''; // allow re-picking the same file to re-trigger 'change'
       if (!file) return;
+      const nameEl = document.getElementById('blueprint-import-file-name');
+      if (nameEl) nameEl.textContent = file.name;
       await loadBlueprintImportSampleFile(file);
     });
 

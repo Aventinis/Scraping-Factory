@@ -418,6 +418,8 @@
       "importLabel": "Aus einer Beispieldatei importieren (JSON, CSV-Kopfzeile oder eine einfache Feldnamenliste)",
       "importPlaceholder": "JSON-Beispiel, CSV-Kopfzeile oder einen Feldnamen pro Zeile einfügen…",
       "importFileLabel": "…oder eine Beispieldatei hochladen (.csv, .json, .txt):",
+      "importFileBtn": "Datei auswählen",
+      "importFileNone": "Keine Datei ausgewählt",
       "importBtn": "Analysieren & Felder befüllen",
       "save": "Speichern",
       "editBtn": "Bearbeiten"

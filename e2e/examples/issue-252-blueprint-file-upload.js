@@ -41,8 +41,14 @@ const { launchBrowser, openPopup, focusFixture, waitForIdleScreen, startCompanio
     const modal = popupPage.locator('#modal-blueprint-edit');
     if (!(await modal.isVisible())) throw new Error('Expected #modal-blueprint-edit to be visible after "+ New blueprint"');
 
+    // The native <input type="file"> is intentionally hidden — a styled
+    // <label for=...> is the visible/clickable trigger standing in for it
+    // (its own OS-chrome "Choose file" button can't be restyled to match
+    // this extension's design tokens). Playwright's setInputFiles() still
+    // works on a hidden input directly.
+    const fileTrigger = popupPage.locator('.blueprint-import-file-trigger');
+    if (!(await fileTrigger.isVisible())) throw new Error('Expected the styled file-picker trigger label to be visible');
     const fileInput = popupPage.locator('#input-blueprint-import-file');
-    if (!(await fileInput.isVisible())) throw new Error('Expected #input-blueprint-import-file to be visible');
 
     const screenshotBefore = path.join(__dirname, 'issue-252-before.png');
     await modal.screenshot({ path: screenshotBefore });
@@ -54,6 +60,12 @@ const { launchBrowser, openPopup, focusFixture, waitForIdleScreen, startCompanio
     console.log(`Textarea value after picking the file: "${textareaValue}"`);
     if (textareaValue !== 'Title,Price,Sku') {
       throw new Error(`Expected the textarea to be filled with the file's content, got "${textareaValue}"`);
+    }
+
+    const fileNameText = await popupPage.locator('#blueprint-import-file-name').textContent();
+    console.log(`Picked-file name indicator reads: "${fileNameText}"`);
+    if (!fileNameText || !fileNameText.includes(path.basename(sampleFilePath))) {
+      throw new Error(`Expected the filename indicator to show "${path.basename(sampleFilePath)}", got "${fileNameText}"`);
     }
 
     const fieldInputsBeforeParse = await popupPage.locator('.blueprint-field-name-input').all();
