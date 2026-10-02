@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.16.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.1...v1.16.2) (2026-10-02)
+
+
+### Features
+
+* **output-blueprints:** upload a sample file for field import ([eb20366](https://github.com/Aventinis/Scraping-Factory/commit/eb20366632257e74ede974c890299cb7c85d80e8))
+* **output-blueprints:** upload a sample file for field import ([0e4c202](https://github.com/Aventinis/Scraping-Factory/commit/0e4c2021a6b654605f686637f2c33d02b2edfcf7))
+
 ## [1.16.1](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.0...v1.16.1) (2026-10-01)
 
 
