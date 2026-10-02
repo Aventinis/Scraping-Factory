@@ -326,6 +326,29 @@ const SFApiConfig = (function () {
     return { kind: 'range', type, from, to, ...(format ? { format } : {}) };
   }
 
+  // Issue #216: deliberately no URL-match-pattern field — the runtime
+  // matches captured requests against the main request's own UrlTemplate
+  // (see BrowserDiscoverySource's own doc comment on the companion side),
+  // so this only ever needs DiscoveryUrl plus the action list. While being
+  // edited, the action list is kept in the same draft shape (SFDraft.
+  // BrowserAction[]) the top-level login-flow editor already uses — reusing
+  // addBrowserAction/removeBrowserAction/updateBrowserAction from
+  // scraping-config-builder.js directly (api-config.js can't import that
+  // module itself: scraping-config-builder.js already imports THIS module,
+  // and the reverse would be a circular require) — so `actions` here is
+  // already serialized to wire shape (via that module's
+  // serializeBrowserActions) by the caller (confirmApiConfig in
+  // api-config-ui.js), exactly mirroring how staticList/range's own drafts
+  // are converted to wire shape at that same call site.
+  /**
+   * @param {string} discoveryUrl
+   * @param {SFWire.BrowserAction[]} [actions]
+   * @returns {SFWire.BrowserDiscoverySource}
+   */
+  function buildBrowserDiscoverySource(discoveryUrl, actions) {
+    return { kind: 'browserDiscovery', discoveryUrl, ...(actions && actions.length ? { actions } : {}) };
+  }
+
   // ── Range format presets (bug/api-range-format follow-up) ──────────────────
   // A target site can encode a year-week or date however it likes in its own
   // URL — the reported bug: penny.de uses "2026-35" where the ISO-8601
@@ -1025,7 +1048,7 @@ const SFApiConfig = (function () {
   return {
     STATES, escapeHtml,
     parseUrlTemplateParts, buildUrlTemplate, parseValueListInput, findUrlTemplateMatches, mergeValueListValues,
-    buildStaticListSource, buildDiscoverySource, buildRangeSource, RANGE_FORMAT_PRESETS,
+    buildStaticListSource, buildDiscoverySource, buildRangeSource, buildBrowserDiscoverySource, RANGE_FORMAT_PRESETS,
     compileRangeFormatPattern, detectRangeFormat, findUrlPartValue, rangeFormatExample,
     buildApiHeaders, buildApiConfig,
     buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,

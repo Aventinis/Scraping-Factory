@@ -238,11 +238,13 @@ declare namespace SFWire {
     source: ApiParameterSource;
   }
 
-  type ApiParameterSource = StaticListSource | DiscoverySource | RangeSource;
+  type ApiParameterSource = StaticListSource | DiscoverySource | RangeSource | BrowserDiscoverySource;
 
   interface StaticListSource { kind: 'staticList'; values: string[]; }
   interface DiscoverySource { kind: 'discovery'; method?: 'GET'; urlTemplate: string; itemsPath: string; valuePath: string; }
   interface RangeSource { kind: 'range'; type: RangeType; from: string; to: string; format?: string; }
+  /** Issue #216 — no URL-match-pattern field of its own; matched against the enclosing ApiConfig.urlTemplate at runtime. */
+  interface BrowserDiscoverySource { kind: 'browserDiscovery'; discoveryUrl: string; actions?: BrowserAction[]; }
 
   type RangeType = 'IsoWeek' | 'Number' | 'Date';
 

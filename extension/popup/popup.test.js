@@ -37,7 +37,7 @@ const {
   lastPathSegmentName, buildApiSubtreeFromCandidate, resolveApiGroupScopePath, countApiConfigFields,
   renderApiCandidates, renderApiEntriesList,
   parseUrlTemplateParts, buildUrlTemplate, parseValueListInput,
-  buildStaticListSource, buildDiscoverySource, buildRangeSource, buildApiHeaders, buildApiConfig,
+  buildStaticListSource, buildDiscoverySource, buildRangeSource, buildBrowserDiscoverySource, buildApiHeaders, buildApiConfig,
   findUrlTemplateMatches, mergeValueListValues,
   variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
   detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase, parseAdditionalUrls,
@@ -1715,6 +1715,24 @@ describe('parseValueListInput / buildStaticListSource / buildDiscoverySource / b
   test('buildRangeSource omits format entirely when unset', () => {
     const source = buildRangeSource('Number', '1', '10', null);
     expect(source).not.toHaveProperty('format');
+  });
+
+  // Issue #216: deliberately no URL-match-pattern field — see
+  // BrowserDiscoverySource's own doc comment (companion IR/ApiConfig.cs).
+  test('buildBrowserDiscoverySource carries the discriminator, DiscoveryUrl and actions', () => {
+    const actions = [{ kind: 'click', selector: '#load-more' }];
+    expect(buildBrowserDiscoverySource('https://example.com/angebote', actions)).toEqual({
+      kind: 'browserDiscovery', discoveryUrl: 'https://example.com/angebote', actions,
+    });
+  });
+
+  test('buildBrowserDiscoverySource omits actions entirely when empty/unset', () => {
+    expect(buildBrowserDiscoverySource('https://example.com/angebote')).toEqual({
+      kind: 'browserDiscovery', discoveryUrl: 'https://example.com/angebote',
+    });
+    expect(buildBrowserDiscoverySource('https://example.com/angebote', [])).toEqual({
+      kind: 'browserDiscovery', discoveryUrl: 'https://example.com/angebote',
+    });
   });
 });
 
