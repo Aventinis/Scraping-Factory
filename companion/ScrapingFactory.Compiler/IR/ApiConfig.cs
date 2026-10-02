@@ -115,6 +115,7 @@ public sealed class ApiParameter
 [JsonDerivedType(typeof(StaticListSource), "staticList")]
 [JsonDerivedType(typeof(DiscoverySource), "discovery")]
 [JsonDerivedType(typeof(RangeSource), "range")]
+[JsonDerivedType(typeof(BrowserDiscoverySource), "browserDiscovery")]
 public abstract class ApiParameterSource
 {
 }
@@ -159,6 +160,44 @@ public sealed class RangeSource : ApiParameterSource
     // (bug: a site using "2026-35" instead of ISO-8601 "2026-W35" crashed
     // the generated script) — see RangeFormat.
     public string? Format { get; init; }
+}
+
+// Issue #216: values a {name} placeholder can take aren't always exposable
+// via a single discoverable endpoint (DiscoverySource) or a computable range
+// (RangeSource) — some target sites only ever reveal them by actually
+// rendering the page and letting lazy-loading/pagination/search trigger the
+// value-specific requests themselves (e.g. penny.de/angebote: scrolling
+// triggers one .../by-category/{category}/{week} request per category, and
+// the set of categories isn't known any other way). Resolved fresh on every
+// script run via a dedicated Playwright session, the same "runtime, not
+// frozen at generate-time" category DiscoverySource already belongs to.
+//
+// Deliberately carries no URL-match-pattern field of its own: the requests
+// expected to fire during discovery are expected to match the *same*
+// ApiConfig.UrlTemplate the main request already uses (that's the whole
+// point — discovery observes the real calls the main request will later
+// make itself), so the runtime matches captured request URLs against
+// UrlTemplate directly, treating this parameter's own {name} placeholder as
+// the value to harvest and every *other* {name} placeholder as free to
+// differ — the exact same semantics findUrlTemplateMatches
+// (popup/api-config.js) already implements at configuration time for the
+// identical "which other recorded requests are the same endpoint, different
+// value" question. See ScrapingPlanValidator's own check that this
+// parameter's name actually appears in UrlTemplate — without that there
+// would be nothing to match captured requests against.
+//
+// Actions reuses BrowserAction (the same WaitFor/Fill/Click/Scroll wire type
+// ScrapingConfig.BrowserActions already uses for login flows) rather than a
+// Scroll-only shape — real sites may need more than scrolling to reveal the
+// lazy-loaded requests (typing into a search box, clicking through
+// pagination), and a bespoke per-interaction-kind source variant would be
+// exactly the one-off duplication problem Issue #221's future "preparation
+// phase" IR concept exists to avoid. Null/empty = just load DiscoveryUrl and
+// observe whatever requests fire natively, no interaction needed.
+public sealed class BrowserDiscoverySource : ApiParameterSource
+{
+    public required string DiscoveryUrl { get; init; }
+    public List<BrowserAction>? Actions { get; init; }
 }
 
 public enum RangeType { IsoWeek, Number, Date }

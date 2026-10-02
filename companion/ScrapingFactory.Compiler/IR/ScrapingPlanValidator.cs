@@ -856,6 +856,16 @@ public static class ScrapingPlanValidator
                     $"Parameter '{parameter.Name}' with a value list needs at least one value.",
                 DiscoverySource discovery => ValidateDiscoverySource(parameter.Name, discovery),
                 RangeSource range => ValidateRangeSource(parameter.Name, range),
+                // Issue #216: unlike DiscoverySource's own deliberately
+                // unrelated UrlTemplate, a BrowserDiscoverySource only means
+                // anything relative to THIS UrlTemplate — it's matched
+                // against at runtime (see BrowserDiscoverySource's own doc
+                // comment), so the parameter's own {name} placeholder must
+                // actually occur in it, or there would be nothing to match
+                // captured requests against.
+                BrowserDiscoverySource when !placeholders.Contains(parameter.Name) =>
+                    $"Parameter '{parameter.Name}' uses browser discovery but doesn't appear in UrlTemplate — there would be nothing to match captured requests against.",
+                BrowserDiscoverySource browserDiscovery => ValidateBrowserDiscoverySource(parameter.Name, browserDiscovery),
                 _ => null,
             };
             if (sourceError is not null)
@@ -916,6 +926,62 @@ public static class ScrapingPlanValidator
             return $"Start value '{range.From}' for parameter '{parameterName}' does not match format '{format}'.";
         if (!RangeFormat.IsValid(range.To, format, allowToday: true))
             return $"End value '{range.To}' for parameter '{parameterName}' does not match format '{format}'.";
+
+        return null;
+    }
+
+    // Issue #216: DiscoveryUrl is the page actually opened/scrolled — unlike
+    // UrlTemplate (checked separately, see the call site above), it's always
+    // a fully concrete, unparameterized address, so a plain absolute-URI
+    // check is enough, mirroring the NavigateStep URL check at the top of
+    // this validator. Each action is validated the same way its plan-level
+    // WaitForStep/FillStep/ClickStep/ScrollStep counterpart already is above
+    // — duplicated rather than shared, since those checks run against
+    // ScrapingStep (post-ScrapingPlanBuilder translation), not the
+    // wire-level BrowserAction this list is made of. FramePath is validated
+    // against a literal ScrapingEngine.Browser regardless of plan.Engine
+    // (always ScrapingEngine.Api here) — this action list always runs
+    // inside its own dedicated Playwright session, independent of whatever
+    // engine the main request itself uses.
+    private static string? ValidateBrowserDiscoverySource(string parameterName, BrowserDiscoverySource source)
+    {
+        if (!Uri.TryCreate(source.DiscoveryUrl, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return $"Browser discovery for parameter '{parameterName}' needs an absolute http(s) DiscoveryUrl.";
+        }
+
+        foreach (var action in source.Actions ?? [])
+        {
+            var actionError = action switch
+            {
+                WaitForAction wait => string.IsNullOrWhiteSpace(wait.Selector)
+                    ? $"Selector of a WaitForAction in browser discovery for parameter '{parameterName}' must not be empty."
+                    : wait.TimeoutMs <= 0
+                        ? $"Timeout of a WaitForAction in browser discovery for parameter '{parameterName}' must be positive."
+                        : ValidateFramePath(wait.FramePath, "WaitForAction", ScrapingEngine.Browser),
+                FillAction fill => string.IsNullOrWhiteSpace(fill.Selector)
+                    ? $"Selector of a FillAction in browser discovery for parameter '{parameterName}' must not be empty."
+                    : !EnvironmentVariableNamePattern.IsMatch(fill.EnvironmentVariableName)
+                        ? $"Invalid environment variable name '{fill.EnvironmentVariableName}' in browser discovery for parameter '{parameterName}'."
+                        : ValidateFramePath(fill.FramePath, "FillAction", ScrapingEngine.Browser),
+                ClickAction click => string.IsNullOrWhiteSpace(click.Selector)
+                    ? $"Selector of a ClickAction in browser discovery for parameter '{parameterName}' must not be empty."
+                    : ValidateFramePath(click.FramePath, "ClickAction", ScrapingEngine.Browser),
+                ScrollAction scroll => (scroll.ContainerSelector is not null && string.IsNullOrWhiteSpace(scroll.ContainerSelector))
+                    ? $"ContainerSelector of a ScrollAction in browser discovery for parameter '{parameterName}' must not be empty when set."
+                    : (scroll.LoadMoreButtonSelector is not null && string.IsNullOrWhiteSpace(scroll.LoadMoreButtonSelector))
+                        ? $"LoadMoreButtonSelector of a ScrollAction in browser discovery for parameter '{parameterName}' must not be empty when set."
+                        : scroll.MaxIterations <= 0
+                            ? $"MaxIterations of a ScrollAction in browser discovery for parameter '{parameterName}' must be positive."
+                            : scroll.WaitAfterMs < 0
+                                ? $"WaitAfterMs of a ScrollAction in browser discovery for parameter '{parameterName}' must not be negative."
+                                : ValidateFramePath(scroll.FramePath, "ScrollAction", ScrapingEngine.Browser),
+                _ => null,
+            };
+            if (actionError is not null)
+                return actionError;
+        }
 
         return null;
     }
