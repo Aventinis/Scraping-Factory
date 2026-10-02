@@ -383,6 +383,24 @@ const SFOutputBlueprintsUI = (function () {
     showToast(t('toast.blueprintImportParsed', { count: parsed.length }), null, 'info');
   }
 
+  // Issue #252: lets the sample be picked from disk instead of opened and
+  // pasted in by hand — this only reads the file's text and writes it into
+  // the existing textarea, it never parses/applies anything itself, so
+  // "Parse & fill fields" stays the one action that commits a sample
+  // regardless of which input method produced its text (consistent with the
+  // existing paste flow, and reusing the exact same
+  // importBlueprintFieldNamesFromSample code path for both).
+  async function loadBlueprintImportSampleFile(file) {
+    const textarea = document.getElementById('input-blueprint-import-sample');
+    try {
+      const text = await file.text();
+      if (textarea) textarea.value = text;
+    } catch (err) {
+      log('BLUEPRINT_IMPORT_FILE_READ_FAIL', err.message);
+      showToast(t('toast.blueprintImportFileReadFailed', { message: err.message }), 'Output Blueprint');
+    }
+  }
+
   async function saveBlueprintEdit(bridge) {
     const state = bridge.getState();
     const { name, schemaKind, fieldNames, tree } = state.blueprintEditDraft;
@@ -580,6 +598,13 @@ const SFOutputBlueprintsUI = (function () {
     document.getElementById('btn-blueprint-import-parse')?.addEventListener('click', () => {
       const textarea = document.getElementById('input-blueprint-import-sample');
       importBlueprintFieldNamesFromSample(bridge, textarea ? textarea.value : '');
+    });
+
+    document.getElementById('input-blueprint-import-file')?.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = ''; // allow re-picking the same file to re-trigger 'change'
+      if (!file) return;
+      await loadBlueprintImportSampleFile(file);
     });
 
     document.getElementById('input-blueprint-name')?.addEventListener('change', (e) => {

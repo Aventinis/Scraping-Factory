@@ -313,10 +313,19 @@
            shown while CREATING a new blueprint (blueprintEditingId is null)
            — a deliberate first-version scope decision, not yet wired for
            merging newly-seen fields into an already-existing blueprint (see
-           CLAUDE.md's Output Blueprints section). -->
+           CLAUDE.md's Output Blueprints section).
+
+           Issue #252: a file input lets the sample be picked from disk
+           instead of opened and pasted in by hand — it only reads the file
+           (File.text()) and writes its content into the very same textarea
+           below, it does not parse/apply anything itself, so "Parse & fill
+           fields" stays the one action that commits a sample regardless of
+           which input method produced its text. -->
       <div id="blueprint-import-section" class="hidden">
         <label for="input-blueprint-import-sample" data-i18n="modals.blueprintEdit.importLabel"></label>
         <textarea id="input-blueprint-import-sample" rows="3" data-i18n-placeholder="modals.blueprintEdit.importPlaceholder"></textarea>
+        <label for="input-blueprint-import-file" data-i18n="modals.blueprintEdit.importFileLabel"></label>
+        <input type="file" id="input-blueprint-import-file" accept=".csv,.json,.txt" />
         <button type="button" id="btn-blueprint-import-parse" class="btn-secondary btn-tiny" data-i18n="modals.blueprintEdit.importBtn"></button>
       </div>
       <div id="blueprint-flat-schema-section">

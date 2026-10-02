@@ -417,6 +417,7 @@
       "addGroupBtn": "+ Añadir grupo",
       "importLabel": "Importar desde una muestra (JSON, fila de encabezado CSV o una lista simple de nombres de campo)",
       "importPlaceholder": "Pega una muestra JSON, una fila de encabezado CSV o un nombre de campo por línea…",
+      "importFileLabel": "…o sube un archivo de muestra (.csv, .json, .txt):",
       "importBtn": "Analizar y rellenar campos",
       "save": "Guardar",
       "editBtn": "Editar"
@@ -452,7 +453,8 @@
     "blueprintSaved": "Plantilla de salida guardada.",
     "blueprintSaveFailed": "No se pudo guardar la plantilla de salida: {message}",
     "blueprintImportEmpty": "No se encontraron nombres de campo en la muestra pegada.",
-    "blueprintImportParsed": "Se importaron {count} campo(s) de la muestra."
+    "blueprintImportParsed": "Se importaron {count} campo(s) de la muestra.",
+    "blueprintImportFileReadFailed": "No se pudo leer el archivo seleccionado: {message}"
   },
   "frame": {
     "badge": "iframe",

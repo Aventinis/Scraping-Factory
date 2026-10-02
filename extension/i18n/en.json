@@ -417,6 +417,7 @@
       "addGroupBtn": "+ Add group",
       "importLabel": "Import from a sample (JSON, CSV header row, or a plain field-name list)",
       "importPlaceholder": "Paste a JSON sample, a CSV header row, or one field name per line…",
+      "importFileLabel": "…or upload a sample file (.csv, .json, .txt):",
       "importBtn": "Parse & fill fields",
       "save": "Save",
       "editBtn": "Edit"
@@ -452,7 +453,8 @@
     "blueprintSaved": "Output blueprint saved.",
     "blueprintSaveFailed": "Could not save output blueprint: {message}",
     "blueprintImportEmpty": "Could not find any field names in the pasted sample.",
-    "blueprintImportParsed": "Imported {count} field(s) from the sample."
+    "blueprintImportParsed": "Imported {count} field(s) from the sample.",
+    "blueprintImportFileReadFailed": "Could not read the selected file: {message}"
   },
   "frame": {
     "badge": "iframe",

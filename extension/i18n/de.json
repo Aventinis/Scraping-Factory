@@ -417,6 +417,7 @@
       "addGroupBtn": "+ Gruppe hinzufügen",
       "importLabel": "Aus einer Beispieldatei importieren (JSON, CSV-Kopfzeile oder eine einfache Feldnamenliste)",
       "importPlaceholder": "JSON-Beispiel, CSV-Kopfzeile oder einen Feldnamen pro Zeile einfügen…",
+      "importFileLabel": "…oder eine Beispieldatei hochladen (.csv, .json, .txt):",
       "importBtn": "Analysieren & Felder befüllen",
       "save": "Speichern",
       "editBtn": "Bearbeiten"
@@ -452,7 +453,8 @@
     "blueprintSaved": "Output-Blueprint gespeichert.",
     "blueprintSaveFailed": "Output-Blueprint konnte nicht gespeichert werden: {message}",
     "blueprintImportEmpty": "In der eingefügten Beispieldatei wurden keine Feldnamen gefunden.",
-    "blueprintImportParsed": "{count} Feld(er) aus der Beispieldatei importiert."
+    "blueprintImportParsed": "{count} Feld(er) aus der Beispieldatei importiert.",
+    "blueprintImportFileReadFailed": "Die ausgewählte Datei konnte nicht gelesen werden: {message}"
   },
   "frame": {
     "badge": "iframe",
