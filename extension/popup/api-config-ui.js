@@ -30,13 +30,21 @@ const SFApiConfigUI = (function () {
   const {
     STATES, escapeHtml,
     parseUrlTemplateParts, findUrlTemplateMatches, mergeValueListValues,
-    buildStaticListSource, buildDiscoverySource, buildRangeSource, RANGE_FORMAT_PRESETS,
+    buildStaticListSource, buildDiscoverySource, buildRangeSource, buildBrowserDiscoverySource, RANGE_FORMAT_PRESETS,
     detectRangeFormat, findUrlPartValue, rangeFormatExample,
     buildApiConfig, buildApiGroupDraft, insertApiTreeNode, updateApiTreeNode, resolveApiTreeNode,
     collectPrecedingApiFieldSiblingNames,
     jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
     buildApiSubtreeFromCandidate, resolveApiGroupScopePath, allParameterParts, apiConfigDraftHasAllSourcesChosen,
   } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
+  // Issue #216: BrowserDiscoverySource's action list reuses the exact same
+  // draft shape/helpers the top-level login-flow editor already uses —
+  // api-config.js can't import these itself (scraping-config-builder.js
+  // already imports api-config.js; the reverse would be a circular
+  // require), so this module (which already sits one layer above both)
+  // does the wiring instead.
+  const { addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, frameBadgeHtml } =
+    typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
   const { transformsAreValid, addTransform } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
   const { wireTransformList, renderTransformList, renderTransformPreview } =
     typeof require !== 'undefined' ? require('./field-transforms-ui') : self.SFFieldTransformsUI;
@@ -430,8 +438,9 @@ const SFApiConfigUI = (function () {
         staticList: t('apiConfig.sourceKindStaticList'),
         discovery: t('apiConfig.sourceKindDiscovery'),
         range: t('apiConfig.sourceKindRange'),
+        browserDiscovery: t('apiConfig.sourceKindBrowserDiscovery'),
       };
-      kindRow.innerHTML = ['staticList', 'discovery', 'range'].map(kind => `
+      kindRow.innerHTML = ['staticList', 'discovery', 'range', 'browserDiscovery'].map(kind => `
         <label>
           <input type="radio" name="source-kind-${safePartId}" class="api-config-source-kind-radio"
             data-part-id="${safePartId}" value="${kind}" ${source?.kind === kind ? 'checked' : ''} />
@@ -459,6 +468,8 @@ const SFApiConfigUI = (function () {
           </div>
           ${renderRangeFormatFields(source, safePartId)}
         `;
+      } else if (source?.kind === 'browserDiscovery') {
+        fieldsEl.appendChild(renderBrowserDiscoverySourceFields(part, source));
       }
       card.appendChild(fieldsEl);
 
@@ -529,6 +540,101 @@ const SFApiConfigUI = (function () {
       }
       wrap.appendChild(list);
     }
+
+    return wrap;
+  }
+
+  // Issue #216: BrowserDiscoverySource's own action-list editor — visually
+  // mirrors browser-actions-ui.js's renderBrowserActions (one card per
+  // action, a kind label, a frame badge, a remove button, kind-specific
+  // fields) but is its own smaller renderer rather than a reused/
+  // parameterized version of that function: renderBrowserActions is
+  // hardcoded to the single, page-level '#browser-actions-list' container,
+  // and this is this codebase's own established convention for a second,
+  // differently-scoped instance of the same kind of small DOM helper (see
+  // CLAUDE.md's "no cross-module includes for small DOM helpers" note on
+  // renderMatchCountHint). Every control carries both data-part-id and
+  // data-index so the single delegated listener on #api-config-parameters
+  // can address the right parameter's own action array.
+  function renderBrowserDiscoverySourceFields(part, source) {
+    const safePartId = escapeHtml(part.id);
+    const actions = source.actions || [];
+    const wrap = document.createElement('div');
+    wrap.className = 'api-discovery-source';
+
+    const urlRow = document.createElement('div');
+    urlRow.innerHTML =
+      `<label>${escapeHtml(t('apiConfig.discoveryUrlLabel'))}</label>` +
+      `<input type="text" class="api-discovery-url" data-part-id="${safePartId}" placeholder="https://example.com/angebote" value="${escapeHtml(source.discoveryUrl || '')}" />`;
+    wrap.appendChild(urlRow);
+
+    const kindLabels = {
+      waitFor: t('browserActions.kindWaitFor'),
+      fill: t('browserActions.kindFill'),
+      click: t('browserActions.kindClick'),
+      scroll: t('browserActions.kindScroll'),
+    };
+
+    function pickRow(index, field, value, label) {
+      const row = document.createElement('div');
+      row.className = 'browser-action-selector-row';
+      const selectorText = value || t('browserActions.noSelector');
+      const labelHtml = label ? `<label>${escapeHtml(label)}</label>` : '';
+      row.innerHTML =
+        labelHtml +
+        `<span class="field-selector" title="${escapeHtml(selectorText)}">${escapeHtml(selectorText)}</span>` +
+        `<button type="button" class="btn-secondary btn-tiny btn-pick-discovery-action-selector" data-part-id="${safePartId}" data-index="${index}" data-field="${field}">${escapeHtml(t('browserActions.pickSelectorBtn'))}</button>`;
+      return row;
+    }
+
+    const list = document.createElement('div');
+    list.className = 'api-discovery-actions-list';
+    actions.forEach((action, i) => {
+      const card = document.createElement('div');
+      card.className = 'browser-action-card';
+      card.dataset.partId = part.id;
+      card.dataset.index = i;
+
+      const header = document.createElement('div');
+      header.className = 'browser-action-header';
+      header.innerHTML =
+        `<span class="row-label">${escapeHtml(kindLabels[action.kind] || action.kind)}</span>` +
+        frameBadgeHtml(action.framePath) +
+        `<button type="button" class="btn-danger btn-remove-discovery-action" data-part-id="${safePartId}" data-index="${i}">${escapeHtml(t('common.remove'))}</button>`;
+      card.appendChild(header);
+
+      if (action.kind === 'waitFor') {
+        card.appendChild(pickRow(i, 'selector', action.selector, null));
+        card.insertAdjacentHTML('beforeend',
+          `<label>${escapeHtml(t('browserActions.timeoutLabel'))}</label>` +
+          `<input type="number" class="discovery-action-timeout" data-part-id="${safePartId}" data-index="${i}" value="${action.timeoutMs}" min="1" />`);
+      } else if (action.kind === 'fill') {
+        card.appendChild(pickRow(i, 'selector', action.selector, null));
+        card.insertAdjacentHTML('beforeend',
+          `<label>${escapeHtml(t('browserActions.envVarLabel'))}</label>` +
+          `<input type="text" class="discovery-action-env-name" data-part-id="${safePartId}" data-index="${i}" value="${escapeHtml(action.environmentVariableName || '')}" />`);
+      } else if (action.kind === 'click') {
+        card.appendChild(pickRow(i, 'selector', action.selector, null));
+      } else if (action.kind === 'scroll') {
+        card.appendChild(pickRow(i, 'containerSelector', action.containerSelector, t('browserActions.containerSelectorLabel')));
+        card.appendChild(pickRow(i, 'loadMoreButtonSelector', action.loadMoreButtonSelector, t('browserActions.loadMoreButtonSelectorLabel')));
+        card.insertAdjacentHTML('beforeend',
+          `<label>${escapeHtml(t('browserActions.maxIterationsLabel'))}</label>` +
+          `<input type="number" class="discovery-action-max-iterations" data-part-id="${safePartId}" data-index="${i}" value="${action.maxIterations}" min="1" />` +
+          `<label>${escapeHtml(t('browserActions.waitAfterMsLabel'))}</label>` +
+          `<input type="number" class="discovery-action-wait-after-ms" data-part-id="${safePartId}" data-index="${i}" value="${action.waitAfterMs}" min="0" />`);
+      }
+
+      list.appendChild(card);
+    });
+    wrap.appendChild(list);
+
+    const addRow = document.createElement('div');
+    addRow.className = 'browser-actions-add-row';
+    addRow.innerHTML = ['waitFor', 'fill', 'click', 'scroll'].map(kind =>
+      `<button type="button" class="btn-secondary btn-tiny btn-add-discovery-action" data-part-id="${safePartId}" data-kind="${kind}">+ ${escapeHtml(kindLabels[kind])}</button>`,
+    ).join('');
+    wrap.appendChild(addRow);
 
     return wrap;
   }
@@ -1044,23 +1150,57 @@ const SFApiConfigUI = (function () {
     staticList: { kind: 'staticList', valuesText: '' },
     range: { kind: 'range', type: 'IsoWeek', from: '', to: '' },
     discovery: { kind: 'discovery' }, // incomplete until confirmDiscoveryCandidate fills in urlTemplate/itemsPath/valuePath
+    // Issue #216: discoveryUrl/actions stay in draft shape (actions: a
+    // plain SFDraft.BrowserAction[], same shape _state.browserActions
+    // already uses) until confirmApiConfig serializes them — see
+    // buildBrowserDiscoverySource's own doc comment.
+    browserDiscovery: { kind: 'browserDiscovery', discoveryUrl: '', actions: [] },
   };
 
   // Range sources get their format auto-detected from the part's own
   // captured example value the moment "Range" is picked — see
-  // detectRangeFormat's doc comment.
+  // detectRangeFormat's doc comment. Browser discovery's own DiscoveryUrl
+  // is prefilled from the currently inspected page for the same reason
+  // (the live page is overwhelmingly the most likely discovery page) —
+  // still freely editable afterward, e.g. for a dedicated listing page
+  // different from wherever the clicked data point itself lives.
   function setApiConfigSourceKind(bridge, partId, kind) {
-    const draft = bridge.getState().apiConfigDraft;
+    const state = bridge.getState();
+    const draft = state.apiConfigDraft;
     const defaults = API_CONFIG_SOURCE_DEFAULTS[kind];
     const source = kind === 'range'
       ? { ...defaults, format: detectRangeFormat(defaults.type, findUrlPartValue(draft.urlParts, partId)) }
-      : defaults;
+      : kind === 'browserDiscovery'
+        ? { ...defaults, discoveryUrl: state.url || '' }
+        : defaults;
     patchApiConfigDraft(bridge, { parameterSources: { ...draft.parameterSources, [partId]: source } });
   }
 
   function patchApiConfigSource(bridge, partId, patch) {
     const draft = bridge.getState().apiConfigDraft;
     patchApiConfigDraft(bridge, { parameterSources: { ...draft.parameterSources, [partId]: { ...draft.parameterSources[partId], ...patch } } });
+  }
+
+  // ── BrowserDiscoverySource action list (Issue #216) ─────────────────────
+  // Thin per-parameter wrappers around scraping-config-builder.js's own
+  // add/remove/updateBrowserAction — those are already fully generic over
+  // "some actions array", so no new mutation logic is needed here, only
+  // routing the result back into this one parameter's own source object
+  // instead of _state.browserActions.
+
+  function addDiscoveryAction(bridge, partId, kind) {
+    const source = bridge.getState().apiConfigDraft.parameterSources[partId];
+    patchApiConfigSource(bridge, partId, { actions: addBrowserAction(source.actions || [], kind) });
+  }
+
+  function removeDiscoveryAction(bridge, partId, index) {
+    const source = bridge.getState().apiConfigDraft.parameterSources[partId];
+    patchApiConfigSource(bridge, partId, { actions: removeBrowserAction(source.actions || [], index) });
+  }
+
+  function updateDiscoveryAction(bridge, partId, index, patch) {
+    const source = bridge.getState().apiConfigDraft.parameterSources[partId];
+    patchApiConfigSource(bridge, partId, { actions: updateBrowserAction(source.actions || [], index, patch) });
   }
 
   function setApiConfigHeaderDecision(bridge, headerName, patch) {
@@ -1175,7 +1315,9 @@ const SFApiConfigUI = (function () {
         ? buildStaticListSource(source.valuesText)
         : source.kind === 'range'
           ? buildRangeSource(source.type, source.from, source.to, source.format)
-          : source;
+          : source.kind === 'browserDiscovery'
+            ? buildBrowserDiscoverySource(source.discoveryUrl, serializeBrowserActions(source.actions || []))
+            : source;
       idToName[part.id] = part.name;
     });
 
@@ -1476,7 +1618,41 @@ function wireApiConfigEvents(bridge) {
     const formatPreset = e.target.closest('.api-config-range-format-preset');
     if (formatPreset) { patchApiConfigSource(bridge, formatPreset.dataset.partId, { format: formatPreset.value === 'custom' ? '' : formatPreset.value }); return; }
     const formatCustom = e.target.closest('.api-config-range-format-custom');
-    if (formatCustom) patchApiConfigSource(bridge, formatCustom.dataset.partId, { format: formatCustom.value.trim() });
+    if (formatCustom) { patchApiConfigSource(bridge, formatCustom.dataset.partId, { format: formatCustom.value.trim() }); return; }
+
+    // ── BrowserDiscoverySource (Issue #216) ───────────────────────────────
+    const discoveryUrl = e.target.closest('.api-discovery-url');
+    if (discoveryUrl) { patchApiConfigSource(bridge, discoveryUrl.dataset.partId, { discoveryUrl: discoveryUrl.value.trim() }); return; }
+    const actionTimeout = e.target.closest('.discovery-action-timeout');
+    if (actionTimeout) {
+      const timeoutMs = parseInt(actionTimeout.value, 10);
+      updateDiscoveryAction(bridge, actionTimeout.dataset.partId, parseInt(actionTimeout.dataset.index, 10), {
+        timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 5000,
+      });
+      return;
+    }
+    const actionEnvName = e.target.closest('.discovery-action-env-name');
+    if (actionEnvName) {
+      updateDiscoveryAction(bridge, actionEnvName.dataset.partId, parseInt(actionEnvName.dataset.index, 10), {
+        environmentVariableName: actionEnvName.value.trim(),
+      });
+      return;
+    }
+    const actionMaxIterations = e.target.closest('.discovery-action-max-iterations');
+    if (actionMaxIterations) {
+      const maxIterations = parseInt(actionMaxIterations.value, 10);
+      updateDiscoveryAction(bridge, actionMaxIterations.dataset.partId, parseInt(actionMaxIterations.dataset.index, 10), {
+        maxIterations: Number.isFinite(maxIterations) && maxIterations > 0 ? maxIterations : 10,
+      });
+      return;
+    }
+    const actionWaitAfterMs = e.target.closest('.discovery-action-wait-after-ms');
+    if (actionWaitAfterMs) {
+      const waitAfterMs = parseInt(actionWaitAfterMs.value, 10);
+      updateDiscoveryAction(bridge, actionWaitAfterMs.dataset.partId, parseInt(actionWaitAfterMs.dataset.index, 10), {
+        waitAfterMs: Number.isFinite(waitAfterMs) && waitAfterMs >= 0 ? waitAfterMs : 1000,
+      });
+    }
   });
 
   document.getElementById('api-config-parameters')?.addEventListener('click', (e) => {
@@ -1490,7 +1666,27 @@ function wireApiConfigEvents(bridge) {
       return;
     }
     const autofillBtn = e.target.closest('.api-config-autofill-pool');
-    if (autofillBtn) fillStaticListFromPool(bridge, autofillBtn.dataset.partId);
+    if (autofillBtn) { fillStaticListFromPool(bridge, autofillBtn.dataset.partId); return; }
+
+    // ── BrowserDiscoverySource (Issue #216) ───────────────────────────────
+    const addActionBtn = e.target.closest('.btn-add-discovery-action');
+    if (addActionBtn) { addDiscoveryAction(bridge, addActionBtn.dataset.partId, addActionBtn.dataset.kind); return; }
+    const removeActionBtn = e.target.closest('.btn-remove-discovery-action');
+    if (removeActionBtn) { removeDiscoveryAction(bridge, removeActionBtn.dataset.partId, parseInt(removeActionBtn.dataset.index, 10)); return; }
+    const pickActionBtn = e.target.closest('.btn-pick-discovery-action-selector');
+    if (pickActionBtn) {
+      const partId = pickActionBtn.dataset.partId;
+      const index = parseInt(pickActionBtn.dataset.index, 10);
+      const field = pickActionBtn.dataset.field;
+      log('BTN pick-discovery-action-selector → START_SELECTION', { partId, index, field });
+      bridge.stopPreviewIfActive();
+      chrome.runtime.sendMessage({ type: 'START_SELECTION' });
+      bridge.setState(STATES.SELECTING, {
+        pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
+        selectionKind: 'apiDiscoveryAction', pendingApiDiscoveryPartId: partId, pendingApiDiscoveryActionIndex: index, pendingApiDiscoveryActionField: field,
+        domTree: null, domTreeTruncated: false, domTreeError: null,
+      });
+    }
   });
 
   document.getElementById('api-config-headers')?.addEventListener('change', (e) => {
@@ -1551,7 +1747,7 @@ function wireApiConfigEvents(bridge) {
     buildApiTreeNodeEl, renderApiTree,
     renderApiCandidates, renderApiEntriesList,
     renderApiConfigScreen, renderApiConfigUrlParts, renderApiConfigParameters,
-    renderRangeFormatFields, renderDiscoverySourceFields, renderApiConfigHeaders,
+    renderRangeFormatFields, renderDiscoverySourceFields, renderBrowserDiscoverySourceFields, renderApiConfigHeaders,
     bodyNodeLabel, buildBodyTreeNodeEl, renderBodyTree,
     startApiCapture, stopApiCapture, toggleApiCapture,
     startApiFieldSearch, confirmApiFieldCandidate, loadInitialBodyTreeForCandidate, cancelApiConfig,
@@ -1562,6 +1758,7 @@ function wireApiConfigEvents(bridge) {
     startDiscoverySearch, confirmDiscoveryCandidate,
     toggleApiConfigPartVariable, setApiConfigPartName, setApiConfigSourceKind,
     patchApiConfigSource, setApiConfigHeaderDecision,
+    addDiscoveryAction, removeDiscoveryAction, updateDiscoveryAction,
     toggleBodyLeafToVariable, toggleBodyLeafToFixed, setBodyLeafParameter, setBodyLeafCoerceTo,
     openBodyParameterModal, confirmBodyParameterModal, cancelBodyParameterModal, confirmApiConfig,
     fetchApiCaptureEntries, toggleApiEntriesPanel, fillStaticListFromPool,

@@ -46,6 +46,9 @@ const SFSessionRestore = (function () {
     if (stored.pendingNewContainer)   next = { ...next, pendingNewContainer: stored.pendingNewContainer };
     if (stored.pendingBrowserActionIndex !== undefined) next = { ...next, pendingBrowserActionIndex: stored.pendingBrowserActionIndex };
     if (stored.pendingBrowserActionField)   next = { ...next, pendingBrowserActionField: stored.pendingBrowserActionField };
+    if (stored.pendingApiDiscoveryPartId !== undefined) next = { ...next, pendingApiDiscoveryPartId: stored.pendingApiDiscoveryPartId };
+    if (stored.pendingApiDiscoveryActionIndex !== undefined) next = { ...next, pendingApiDiscoveryActionIndex: stored.pendingApiDiscoveryActionIndex };
+    if (stored.pendingApiDiscoveryActionField) next = { ...next, pendingApiDiscoveryActionField: stored.pendingApiDiscoveryActionField };
     if (stored.apiConfigDraft)        next = { ...next, apiConfigDraft: stored.apiConfigDraft };
     if (stored.apiConfig)             next = { ...next, apiConfig: stored.apiConfig };
     if (Array.isArray(stored.combinedComponents)) next = { ...next, combinedComponents: stored.combinedComponents };
@@ -134,6 +137,35 @@ const SFSessionRestore = (function () {
       await chrome.storage.session.set({ browserActions });
       bridge.setState(STATES.IDLE, {
         browserActions, selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
+      });
+      return true;
+    }
+
+    if (stored.selectionKind === 'apiDiscoveryAction' && stored.pendingApiDiscoveryPartId && stored.pendingApiDiscoveryActionIndex !== null && stored.pendingApiDiscoveryActionIndex !== undefined) {
+      // Issue #216: same as the live ELEMENT_SELECTED path, nested one
+      // level deeper (one specific BrowserDiscoverySource's own action
+      // list) and returning to API_CONFIG, where this picker lives.
+      const partId = stored.pendingApiDiscoveryPartId;
+      const field = stored.pendingApiDiscoveryActionField || 'selector';
+      const draft = state.apiConfigDraft;
+      const source = draft.parameterSources[partId];
+      log('INIT pending api-discovery-action selector found → updating action', { partId, field, selector: stored.pendingSelector });
+      const apiConfigDraft = {
+        ...draft,
+        parameterSources: {
+          ...draft.parameterSources,
+          [partId]: {
+            ...source,
+            actions: updateBrowserAction(source.actions || [], stored.pendingApiDiscoveryActionIndex, {
+              [field]: stored.pendingSelector, framePath: stored.pendingFramePath || null,
+            }),
+          },
+        },
+      };
+      await chrome.storage.session.set({ apiConfigDraft });
+      bridge.setState(STATES.API_CONFIG, {
+        apiConfigDraft, selectionKind: null, pendingApiDiscoveryPartId: null, pendingApiDiscoveryActionIndex: null, pendingApiDiscoveryActionField: 'selector',
+        pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
       });
       return true;
     }

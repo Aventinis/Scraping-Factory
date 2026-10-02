@@ -219,6 +219,8 @@
     "sourceKindStaticList": "Werteliste",
     "sourceKindDiscovery": "Discovery-Endpunkt",
     "sourceKindRange": "Bereich",
+    "sourceKindBrowserDiscovery": "Browser-Erkennung",
+    "discoveryUrlLabel": "Erkennungs-URL",
     "valueListPlaceholder": "Werte, kommagetrennt oder pro Zeile",
     "rangeFromPlaceholder": "Von",
     "rangeToPlaceholder": "Bis (z. B. \"today\")",

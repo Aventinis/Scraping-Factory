@@ -219,6 +219,8 @@
     "sourceKindStaticList": "Lista de valores",
     "sourceKindDiscovery": "Endpoint de descubrimiento",
     "sourceKindRange": "Rango",
+    "sourceKindBrowserDiscovery": "Descubrimiento con navegador",
+    "discoveryUrlLabel": "URL de descubrimiento",
     "valueListPlaceholder": "Valores, separados por comas o uno por línea",
     "rangeFromPlaceholder": "Desde",
     "rangeToPlaceholder": "Hasta (p. ej. \"today\")",

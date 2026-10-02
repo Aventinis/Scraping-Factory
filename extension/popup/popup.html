@@ -180,13 +180,19 @@
   <script src="field-transforms-ui.js"></script>
   <script src="combine-split-fields.js"></script>
   <script src="combine-split-fields-ui.js"></script>
-  <script src="api-config-ui.js"></script>
   <script src="container-tree-ui.js"></script>
   <script src="config-import.js"></script>
   <script src="toast.js"></script>
   <script src="bug-report.js"></script>
   <script src="output-blueprints.js"></script>
   <script src="scraping-config-builder.js"></script>
+  <!-- Issue #216: BrowserDiscoverySource's action-list editor reuses
+       scraping-config-builder.js's addBrowserAction/removeBrowserAction/
+       updateBrowserAction/serializeBrowserActions/frameBadgeHtml, so this
+       must load after it (same reason browser-actions-ui.js below already
+       does) — it used to load earlier, right after combine-split-fields-ui.js,
+       back when it had no such dependency. -->
+  <script src="api-config-ui.js"></script>
   <script src="dom-tree-ui.js"></script>
   <script src="preview.js"></script>
   <script src="companion-client.js"></script>

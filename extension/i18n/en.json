@@ -219,6 +219,8 @@
     "sourceKindStaticList": "Value list",
     "sourceKindDiscovery": "Discovery endpoint",
     "sourceKindRange": "Range",
+    "sourceKindBrowserDiscovery": "Browser discovery",
+    "discoveryUrlLabel": "Discovery URL",
     "valueListPlaceholder": "Values, comma-separated or one per line",
     "rangeFromPlaceholder": "From",
     "rangeToPlaceholder": "To (e.g. \"today\")",
