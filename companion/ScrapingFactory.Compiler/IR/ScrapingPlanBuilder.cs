@@ -190,6 +190,7 @@ public static class ScrapingPlanBuilder
             LoadMoreButtonSelector = a.LoadMoreButtonSelector,
             MaxIterations = a.MaxIterations,
             WaitAfterMs = a.WaitAfterMs,
+            ScrollStepPx = a.ScrollStepPx,
             FramePath = a.FramePath,
         },
         _ => throw new InvalidOperationException($"Unknown BrowserAction type: {action.GetType().Name}"),

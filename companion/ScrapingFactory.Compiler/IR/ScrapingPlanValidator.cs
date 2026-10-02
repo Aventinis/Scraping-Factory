@@ -132,6 +132,8 @@ public static class ScrapingPlanValidator
                 return Invalid("MaxIterations of a ScrollStep must be positive.");
             if (scrollStep.WaitAfterMs < 0)
                 return Invalid("WaitAfterMs of a ScrollStep must not be negative.");
+            if (scrollStep.ScrollStepPx is <= 0)
+                return Invalid("ScrollStepPx of a ScrollStep must be positive when set.");
             var scrollFrameError = ValidateFramePath(scrollStep.FramePath, "ScrollStep", plan.Engine);
             if (scrollFrameError is not null)
                 return Invalid(scrollFrameError);
@@ -976,7 +978,9 @@ public static class ScrapingPlanValidator
                             ? $"MaxIterations of a ScrollAction in browser discovery for parameter '{parameterName}' must be positive."
                             : scroll.WaitAfterMs < 0
                                 ? $"WaitAfterMs of a ScrollAction in browser discovery for parameter '{parameterName}' must not be negative."
-                                : ValidateFramePath(scroll.FramePath, "ScrollAction", ScrapingEngine.Browser),
+                                : scroll.ScrollStepPx is <= 0
+                                    ? $"ScrollStepPx of a ScrollAction in browser discovery for parameter '{parameterName}' must be positive when set."
+                                    : ValidateFramePath(scroll.FramePath, "ScrollAction", ScrapingEngine.Browser),
                 _ => null,
             };
             if (actionError is not null)
