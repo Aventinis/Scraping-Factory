@@ -708,14 +708,19 @@ body {
    in the file (transition token + a uniform :active "press" feedback)
    instead of each variant only ever defining its own hover — mode-btn/
    btn-toggle below are plain <button>s too, so they inherit both from
-   here for free. */
-button {
+   here for free. Issue #252: .blueprint-import-file-trigger is a <label>,
+   not a <button> (it has to be a <label for=...> to trigger the native
+   file picker it's visually standing in for) — added to this same
+   selector list rather than duplicating the rule, so it gets the exact
+   same border/radius/cursor/transition/press-feedback treatment as every
+   real button for free. */
+button, .blueprint-import-file-trigger {
   border: none; border-radius: var(--radius-md); cursor: pointer;
   font-size: 13px; padding: 7px 12px; font-family: inherit;
   transition: background-color var(--transition-fast), color var(--transition-fast),
     box-shadow var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
 }
-button:active:not(:disabled) { transform: translateY(1px); }
+button:active:not(:disabled), .blueprint-import-file-trigger:active { transform: translateY(1px); }
 .btn-primary             { background: var(--color-primary); color: var(--color-on-accent); }
 .btn-primary:hover       { background: var(--color-primary-hover); box-shadow: var(--glow-primary); }
 .btn-primary:disabled    { background: var(--color-primary-disabled); cursor: default; box-shadow: none; }
@@ -761,6 +766,27 @@ button:active:not(:disabled) { transform: translateY(1px); }
    of sitting inline next to it. */
 .modal-inner label.output-settings-toggle { display: flex; }
 .modal-inner input[type="checkbox"] { width: auto; padding: 0; margin: 0; }
+/* Issue #252: the same "override the generic .modal-inner label block
+   style" need as .output-settings-toggle above, for the file-picker
+   trigger label instead of a checkbox toggle — without this,
+   .modal-inner label's display:block/margin-bottom/muted-color would
+   stack it on its own line and mute its button coloring instead of
+   sitting inline as a compact button next to the filename text. The
+   native <input type="file"> itself is hidden (its own OS-chrome button
+   can't be restyled, see the button/.blueprint-import-file-trigger rule
+   above) — the <label for=...> is the only visible/clickable trigger,
+   same keyboard-activation behavior (Enter/Space while focused) a real
+   button would have. */
+.modal-inner label.blueprint-import-file-trigger {
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-bottom: 0; color: var(--color-text-secondary);
+}
+.blueprint-import-file-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.blueprint-import-file-row input[type="file"] { display: none; }
+.blueprint-import-file-name {
+  font-size: 12px; color: var(--color-text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .modal-inner select {
   width: 100%; border: 1px solid var(--color-border-input); border-radius: var(--radius-md);
   padding: 7px 10px; font-size: 14px; margin-bottom: 12px; font-family: inherit; outline: none;
