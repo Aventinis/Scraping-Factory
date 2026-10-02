@@ -5294,6 +5294,98 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
 
     expect(document.getElementById('api-config-panel').classList.contains('hidden')).toBe(true);
   });
+
+  // ── BrowserDiscoverySource (Issue #216) ─────────────────────────────────
+  describe('Browser discovery parameter source', () => {
+    function makeVariableWithBrowserDiscovery() {
+      confirmPrimaryCandidate();
+      const toggle = document.querySelectorAll('#api-config-segments .api-config-part-toggle')[2];
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+      const nameInput = document.querySelector('#api-config-segments .api-config-part-name');
+      nameInput.value = 'category';
+      nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+      const kindRadio = document.querySelector('.api-config-source-kind-radio[value="browserDiscovery"]');
+      kindRadio.checked = true;
+      kindRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    test('picking "Browser discovery" prefills the discovery URL from the current page and renders no actions yet', () => {
+      makeVariableWithBrowserDiscovery();
+
+      expect(document.querySelector('.api-discovery-url').value).toBe('https://example.com');
+      expect(document.querySelectorAll('.browser-action-card').length).toBe(0);
+    });
+
+    test('adding a Click action renders a pick-selector button; clicking it starts selection', () => {
+      makeVariableWithBrowserDiscovery();
+
+      document.querySelector('.btn-add-discovery-action[data-kind="click"]').click();
+      expect(document.querySelectorAll('.browser-action-card').length).toBe(1);
+
+      const pickBtn = document.querySelector('.btn-pick-discovery-action-selector');
+      expect(pickBtn).not.toBeNull();
+      pickBtn.click();
+
+      expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'START_SELECTION' });
+      expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(false);
+    });
+
+    test('ELEMENT_SELECTED writes the picked selector into the right action and returns to API_CONFIG', () => {
+      makeVariableWithBrowserDiscovery();
+      document.querySelector('.btn-add-discovery-action[data-kind="click"]').click();
+      document.querySelector('.btn-pick-discovery-action-selector').click();
+
+      capturedListener({ type: 'ELEMENT_SELECTED', selector: '#load-more', framePath: null });
+
+      expect(document.getElementById('screen-api-config').classList.contains('hidden')).toBe(false);
+      expect(document.querySelector('.browser-action-card .field-selector').textContent).toBe('#load-more');
+    });
+
+    test('removing an action drops it from the list', () => {
+      makeVariableWithBrowserDiscovery();
+      document.querySelector('.btn-add-discovery-action[data-kind="click"]').click();
+      expect(document.querySelectorAll('.browser-action-card').length).toBe(1);
+
+      document.querySelector('.btn-remove-discovery-action').click();
+
+      expect(document.querySelectorAll('.browser-action-card').length).toBe(0);
+    });
+
+    test('confirming sends a browserDiscovery source with the DiscoveryUrl and serialized actions', () => {
+      makeVariableWithBrowserDiscovery();
+      document.querySelector('.btn-add-discovery-action[data-kind="click"]').click();
+      document.querySelector('.btn-pick-discovery-action-selector').click();
+      capturedListener({ type: 'ELEMENT_SELECTED', selector: '#load-more', framePath: null });
+
+      document.getElementById('btn-api-config-confirm').click();
+
+      const persistedConfig = chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig;
+      expect(persistedConfig.parameters).toEqual([
+        {
+          name: 'category',
+          source: { kind: 'browserDiscovery', discoveryUrl: 'https://example.com', actions: [{ kind: 'click', selector: '#load-more' }] },
+        },
+      ]);
+    });
+
+    // DiscoveryUrl stays freely editable after the prefill (e.g. for a
+    // dedicated listing page different from wherever the clicked data
+    // point itself lives) — see setApiConfigSourceKind's own doc comment.
+    test('the discovery URL can be edited after the prefill', () => {
+      makeVariableWithBrowserDiscovery();
+      const urlInput = document.querySelector('.api-discovery-url');
+      urlInput.value = 'https://example.com/angebote';
+      urlInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+      document.getElementById('btn-api-config-confirm').click();
+
+      const persistedConfig = chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig;
+      expect(persistedConfig.parameters[0].source.discoveryUrl).toBe('https://example.com/angebote');
+      // No actions were ever added — omitted entirely, not an empty array.
+      expect(persistedConfig.parameters[0].source).not.toHaveProperty('actions');
+    });
+  });
 });
 
 // ── API-tree wiring end-to-end (Issue #54, Phase A5) ────────────────────────
