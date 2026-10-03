@@ -690,15 +690,25 @@ def _run_scroll_action(page, action):
     frame_path = action.get("framePath")
     container_selector = action.get("containerSelector")
     load_more_selector = action.get("loadMoreButtonSelector")
+    # Issue #289: None (the default) keeps the original "jump straight to
+    # the current bottom" behavior, correct for classic infinite-scroll
+    # (new items simply append below the old ones). When set, each
+    # iteration instead moves by exactly this many pixels — needed for a
+    # site that only lazy-loads a section once it's actually scrolled
+    # *through* (an IntersectionObserver per section), where jumping
+    # straight to the bottom skips every section in between.
+    step_px = action.get("scrollStepPx")
     prev_height = None
     for _ in range(action.get("maxIterations", 10)):
         if container_selector:
+            script = f"el => el.scrollTop += {step_px}" if step_px else "el => el.scrollTop = el.scrollHeight"
             if frame_path:
-                _resolve_locator(page, container_selector, frame_path).evaluate("el => el.scrollTop = el.scrollHeight")
+                _resolve_locator(page, container_selector, frame_path).evaluate(script)
             else:
-                page.eval_on_selector(container_selector, "el => el.scrollTop = el.scrollHeight")
+                page.eval_on_selector(container_selector, script)
         else:
-            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            script = f"window.scrollBy(0, {step_px})" if step_px else "window.scrollTo(0, document.body.scrollHeight)"
+            page.evaluate(script)
 
         if load_more_selector:
             if frame_path:
@@ -715,14 +725,29 @@ def _run_scroll_action(page, action):
             continue
 
         page.wait_for_timeout(action.get("waitAfterMs", 1000))
+        # Issue #289: at_bottom defaults to True (a no-op for the stop
+        # condition below) when step_px is unset — the original
+        # "height == prev_height" signal alone is already correct there.
+        # With step_px, that signal alone can trigger too early (a short
+        # step can legitimately report the same height for several rounds
+        # before genuinely reaching the bottom), so it's combined with
+        # "have we actually reached the bottom yet".
+        at_bottom = True
         if container_selector:
             if frame_path:
-                height = _resolve_locator(page, container_selector, frame_path).evaluate("el => el.scrollHeight")
+                container = _resolve_locator(page, container_selector, frame_path)
+                height = container.evaluate("el => el.scrollHeight")
+                if step_px:
+                    at_bottom = container.evaluate("el => el.scrollTop + el.clientHeight >= el.scrollHeight - 1")
             else:
                 height = page.eval_on_selector(container_selector, "el => el.scrollHeight")
+                if step_px:
+                    at_bottom = page.eval_on_selector(container_selector, "el => el.scrollTop + el.clientHeight >= el.scrollHeight - 1")
         else:
             height = page.evaluate("document.body.scrollHeight")
-        if height == prev_height:
+            if step_px:
+                at_bottom = page.evaluate("window.scrollY + window.innerHeight >= document.body.scrollHeight - 1")
+        if height == prev_height and at_bottom:
             break
         prev_height = height
 

@@ -180,7 +180,11 @@ internal static class PythonApiConfigLiteral
         WaitForAction a => $$"""{"kind": "waitFor", "selector": {{PythonLiteral.Str(a.Selector)}}, "timeoutMs": {{a.TimeoutMs}}{{FramePathSuffix(a.FramePath)}}}""",
         FillAction a => $$"""{"kind": "fill", "selector": {{PythonLiteral.Str(a.Selector)}}, "environmentVariableName": {{PythonLiteral.Str(a.EnvironmentVariableName)}}{{FramePathSuffix(a.FramePath)}}}""",
         ClickAction a => $$"""{"kind": "click", "selector": {{PythonLiteral.Str(a.Selector)}}{{FramePathSuffix(a.FramePath)}}}""",
-        ScrollAction a => $$"""{"kind": "scroll", "containerSelector": {{(a.ContainerSelector is null ? "None" : PythonLiteral.Str(a.ContainerSelector))}}, "loadMoreButtonSelector": {{(a.LoadMoreButtonSelector is null ? "None" : PythonLiteral.Str(a.LoadMoreButtonSelector))}}, "maxIterations": {{a.MaxIterations}}, "waitAfterMs": {{a.WaitAfterMs}}{{FramePathSuffix(a.FramePath)}}}""",
+        // Issue #289: "scrollStepPx" omitted entirely when unset — None is
+        // the runtime's own "jump straight to the bottom" default (see
+        // _run_scroll_action in scraper_api.py.j2), same "absent key = no
+        // override" convention FramePath already uses.
+        ScrollAction a => $$"""{"kind": "scroll", "containerSelector": {{(a.ContainerSelector is null ? "None" : PythonLiteral.Str(a.ContainerSelector))}}, "loadMoreButtonSelector": {{(a.LoadMoreButtonSelector is null ? "None" : PythonLiteral.Str(a.LoadMoreButtonSelector))}}, "maxIterations": {{a.MaxIterations}}, "waitAfterMs": {{a.WaitAfterMs}}{{(a.ScrollStepPx is { } stepPx ? $""", "scrollStepPx": {stepPx}""" : "")}}{{FramePathSuffix(a.FramePath)}}}""",
         _ => throw new InvalidOperationException($"Unknown BrowserAction type: {action.GetType()}"),
     };
 

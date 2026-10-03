@@ -55,6 +55,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
                         load_more_button_selector = s.LoadMoreButtonSelector,
                         max_iterations = s.MaxIterations,
                         wait_after_ms = s.WaitAfterMs,
+                        scroll_step_px = s.ScrollStepPx,
                         frame_path = s.FramePath,
                     },
                 }).TrimEnd(),

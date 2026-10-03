@@ -232,6 +232,66 @@ public class PythonApiCodeGeneratorTests
         Assert.Contains("def _run_browser_action(page, action):", script);
     }
 
+    // Issue #289
+    [Fact]
+    public void Generate_BrowserDiscoverySourceScrollActionWithStepPx_ContainsScrollStepPxLiteral()
+    {
+        var api = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter
+                {
+                    Name = "category",
+                    Source = new BrowserDiscoverySource
+                    {
+                        DiscoveryUrl = "https://example.com/angebote",
+                        Actions = [new ScrollAction { ScrollStepPx = 400 }],
+                    },
+                },
+            ],
+        };
+
+        var script = _generator.Generate(PlanWith(api));
+
+        Assert.Contains("\"scrollStepPx\": 400", script);
+    }
+
+    [Fact]
+    public void Generate_BrowserDiscoverySourceScrollActionWithoutStepPx_OmitsScrollStepPxKey()
+    {
+        var api = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter
+                {
+                    Name = "category",
+                    Source = new BrowserDiscoverySource
+                    {
+                        DiscoveryUrl = "https://example.com/angebote",
+                        Actions = [new ScrollAction()],
+                    },
+                },
+            ],
+        };
+
+        var script = _generator.Generate(PlanWith(api));
+
+        // Not DoesNotContain("scrollStepPx") on the whole script — the
+        // generic runtime dispatcher (_run_scroll_action) always references
+        // the key by name via action.get("scrollStepPx") regardless of
+        // whether any specific action actually sets it; only the rendered
+        // action literal itself should omit the key when unset.
+        Assert.DoesNotContain("\"scrollStepPx\":", script);
+    }
+
     // Conditional Playwright dependency (Architecture Decision #4's own
     // note on Engine.Api being a deliberate compromise) — a script with no
     // browser-discovery-sourced parameter must stay exactly as lightweight

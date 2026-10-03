@@ -48,5 +48,16 @@ public sealed class ScrollAction : BrowserAction
     public string? LoadMoreButtonSelector { get; init; }
     public int MaxIterations { get; init; } = 10;
     public int WaitAfterMs { get; init; } = 1000;
+
+    // Issue #289: null (the default) keeps today's exact behavior — jump
+    // straight to the current bottom of the page/container every iteration,
+    // which is correct for classic "infinite scroll" (new items simply
+    // append below the old ones). When set, each iteration instead scrolls
+    // by exactly this many pixels — needed for a site that lazy-loads a
+    // section only once it's actually scrolled *through* (an
+    // IntersectionObserver per section), where jumping straight to the
+    // bottom skips every section in between without it ever entering the
+    // viewport. See ScrollStep's own identical field for the runtime side.
+    public int? ScrollStepPx { get; init; }
     public List<string>? FramePath { get; init; }
 }

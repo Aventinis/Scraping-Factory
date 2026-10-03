@@ -171,6 +171,81 @@ describe('generate() surfaces a 400 config rejection without inviting a bug repo
   });
 });
 
+describe('generate() surfaces the verification-skipped warning header', () => {
+  const flushMicrotasks = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <div id="url-display"></div>
+        <div id="fields-list"></div>
+        <button id="btn-generate"></button>
+      </section>
+      <section id="screen-generating" class="hidden"></section>
+      <section id="screen-done" class="hidden"></section>
+      <div id="error-toast" class="hidden">
+        <span id="error-toast-message"></span>
+        <button id="btn-report-bug-toast" class="hidden"></button>
+      </div>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: jest.fn() },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get: jest.fn().mockResolvedValue({
+            fields: [{ name: 'Preis', selector: '.price', attribute: null }],
+            url: 'https://example.com',
+          }),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+
+    global.fetch = jest.fn((url) => {
+      if (String(url).endsWith('/health')) return Promise.resolve({ ok: true });
+      if (String(url).endsWith('/generate')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: {
+            get: (name) => (name === 'X-ScrapingFactory-Verification-Skipped'
+              ? 'Estimated extra verification time (00:12:00) exceeds the 00:10:00 cap for a /generate ' +
+                'trial run — the generated script was returned without being run against the live page first. ' +
+                'Test it manually before relying on it.'
+              : null),
+          },
+          text: () => Promise.resolve('# generated script\n'),
+        });
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${url}`));
+    });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE, fields restored from storage
+  });
+
+  test('shows a warning toast with the companion\'s own reason text, without a "Report bug" button', async () => {
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const toast = document.getElementById('error-toast');
+    expect(toast.classList.contains('hidden')).toBe(false);
+    expect(toast.classList.contains('toast-warn')).toBe(true);
+    expect(document.getElementById('error-toast-message').textContent).toContain('exceeds the 00:10:00 cap');
+    expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(true);
+  });
+});
+
 describe('COMPANION_ERROR screen: manual companion URL override', () => {
   const flushMicrotasks = async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));

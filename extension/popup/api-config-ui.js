@@ -625,6 +625,10 @@ const SFApiConfigUI = (function () {
           <input type="number" class="discovery-action-max-iterations" data-part-id="${safePartId}" data-index="${i}" value="${action.maxIterations}" min="1" />
           <label>${escapeHtml(t('browserActions.waitAfterMsLabel'))}</label>
           <input type="number" class="discovery-action-wait-after-ms" data-part-id="${safePartId}" data-index="${i}" value="${action.waitAfterMs}" min="0" />
+        </div>
+        <div class="browser-action-field-row">
+          <label>${escapeHtml(t('browserActions.scrollStepPxLabel'))}</label>
+          <input type="number" class="discovery-action-scroll-step-px" data-part-id="${safePartId}" data-index="${i}" placeholder="${escapeHtml(t('browserActions.scrollStepPxPlaceholder'))}" value="${action.scrollStepPx || ''}" min="1" />
         </div>`);
       }
 
@@ -1654,6 +1658,16 @@ function wireApiConfigEvents(bridge) {
       const waitAfterMs = parseInt(actionWaitAfterMs.value, 10);
       updateDiscoveryAction(bridge, actionWaitAfterMs.dataset.partId, parseInt(actionWaitAfterMs.dataset.index, 10), {
         waitAfterMs: Number.isFinite(waitAfterMs) && waitAfterMs >= 0 ? waitAfterMs : 1000,
+      });
+      return;
+    }
+    // Issue #289: a blank input deliberately resets to null (today's
+    // jump-to-bottom default), not a clamped fallback number.
+    const actionScrollStepPx = e.target.closest('.discovery-action-scroll-step-px');
+    if (actionScrollStepPx) {
+      const scrollStepPx = parseInt(actionScrollStepPx.value, 10);
+      updateDiscoveryAction(bridge, actionScrollStepPx.dataset.partId, parseInt(actionScrollStepPx.dataset.index, 10), {
+        scrollStepPx: Number.isFinite(scrollStepPx) && scrollStepPx > 0 ? scrollStepPx : null,
       });
     }
   });

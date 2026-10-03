@@ -5385,6 +5385,32 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
       // No actions were ever added — omitted entirely, not an empty array.
       expect(persistedConfig.parameters[0].source).not.toHaveProperty('actions');
     });
+
+    // Issue #289
+    test('a Scroll action\'s scrollStepPx is sent when set', () => {
+      makeVariableWithBrowserDiscovery();
+      document.querySelector('.btn-add-discovery-action[data-kind="scroll"]').click();
+
+      const stepInput = document.querySelector('.discovery-action-scroll-step-px');
+      expect(stepInput.value).toBe(''); // blank = null = today's jump-to-bottom default
+      stepInput.value = '400';
+      stepInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+      document.getElementById('btn-api-config-confirm').click();
+
+      const persistedConfig = chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig;
+      expect(persistedConfig.parameters[0].source.actions[0].scrollStepPx).toBe(400);
+    });
+
+    test('a Scroll action left with a blank scrollStepPx omits the key entirely', () => {
+      makeVariableWithBrowserDiscovery();
+      document.querySelector('.btn-add-discovery-action[data-kind="scroll"]').click();
+
+      document.getElementById('btn-api-config-confirm').click();
+
+      const persistedConfig = chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig;
+      expect(persistedConfig.parameters[0].source.actions[0]).not.toHaveProperty('scrollStepPx');
+    });
   });
 });
 
