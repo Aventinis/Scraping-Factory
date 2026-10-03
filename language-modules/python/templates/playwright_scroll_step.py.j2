@@ -52,13 +52,13 @@
 {{~ if step.scroll_step_px ~}}
                 _scroll_at_bottom = page.evaluate("window.scrollY + window.innerHeight >= document.body.scrollHeight - 1")
 {{~ end ~}}
+{{~ if step.scroll_step_px ~}}
             # Issue #289: without ScrollStepPx, reaching the same height twice
             # in a row (today's original signal) is already "nothing more to
             # load". With it, a still-short step can legitimately report the
             # same height for several rounds before genuinely reaching the
-            # bottom — the extra _scroll_at_bottom check (only computed above
-            # when ScrollStepPx is set) tells the two cases apart.
-{{~ if step.scroll_step_px ~}}
+            # bottom — the extra _scroll_at_bottom check (computed above)
+            # tells the two cases apart.
             if _scroll_height == _scroll_prev_height and _scroll_at_bottom:
                 break
 {{~ else ~}}

@@ -1130,6 +1130,42 @@ public class ScrapingPlanValidatorTests
         Assert.Contains("WaitAfterMs", result.Error);
     }
 
+    // Issue #289
+    [Fact]
+    public void Validate_ScrollStepWithPositiveScrollStepPx_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ScrollStep { ScrollStepPx = 400 },
+                new ExtractStep { Name = "Titel", Selector = ".item" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ScrollStepWithNonPositiveScrollStepPx_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ScrollStep { ScrollStepPx = 0 },
+                new ExtractStep { Name = "Titel", Selector = ".item" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("ScrollStepPx", result.Error);
+    }
+
     // ── FramePath for Action Steps (Issue #42, Phase 4) ─────────────────────
 
     [Fact]
@@ -2105,6 +2141,33 @@ public class ScrapingPlanValidatorTests
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.False(result.Success);
         Assert.Contains("environment variable", result.Error);
+    }
+
+    // Issue #289
+    [Fact]
+    public void Validate_ApiConfigWithBrowserDiscoverySourceScrollActionNonPositiveScrollStepPx_Fails()
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter
+                {
+                    Name = "category",
+                    Source = new BrowserDiscoverySource
+                    {
+                        DiscoveryUrl = "https://example.com/angebote",
+                        Actions = [new ScrollAction { ScrollStepPx = 0 }],
+                    },
+                },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("ScrollStepPx", result.Error);
     }
 
     [Fact]
