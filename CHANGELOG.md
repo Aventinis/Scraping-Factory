@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.16.5](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.4...v1.16.5) (2026-10-03)
+
+
+### Features
+
+* **discovered-urls:** add discovery pass to all four flat/container templates ([4587542](https://github.com/Aventinis/Scraping-Factory/commit/4587542da88dd00ef8e80bbd5e89e39f5077b244))
+* **discovered-urls:** add idle-screen UI toggle and settings-panel wiring ([299b1e0](https://github.com/Aventinis/Scraping-Factory/commit/299b1e0a9f00e45200ce41c6fdcff3a1d9d90600))
+* **discovered-urls:** add IR/validator for discovered additional start URLs ([251d4e3](https://github.com/Aventinis/Scraping-Factory/commit/251d4e33d70b57ccb99c50d770c8e4dbaf2ebfd2))
+* **discovered-urls:** discovered additional start URLs for flat/container mode (Issue [#218](https://github.com/Aventinis/Scraping-Factory/issues/218)) ([32c98af](https://github.com/Aventinis/Scraping-Factory/commit/32c98af92c37f15891a4929934cf768ef17f524d))
+* **discovered-urls:** pick the navigation link by clicking it ([8a1edfb](https://github.com/Aventinis/Scraping-Factory/commit/8a1edfb34283dbee9f54d2e4bd53de0a286106ee))
+* **discovered-urls:** reject DiscoveredUrls together with Api/Combined/Blocks ([dbd6248](https://github.com/Aventinis/Scraping-Factory/commit/dbd6248e900d7c8d17de17b1f825aeac4f109c2c))
+* **discovered-urls:** wire discovered_urls into the shared Scriban context ([595e258](https://github.com/Aventinis/Scraping-Factory/commit/595e258aac7fba13b585f000179477b53e49d610))
+* **discovered-urls:** wire discoveredUrls into the scraping-config builder ([99df544](https://github.com/Aventinis/Scraping-Factory/commit/99df54463901538150c903f75a497ca01d90346e))
+
 ## [1.16.4](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.3...v1.16.4) (2026-10-03)
 
 
