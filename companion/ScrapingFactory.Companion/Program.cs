@@ -394,7 +394,68 @@ static (ScrapingPlan? Plan, string? Script, string? ValidationError, string? Gen
     return (plan, generator.Generate(plan), null, null);
 }
 
-app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModuleRegistry registry) =>
+// Issue #289 follow-up: a ScrollStep/WaitForStep's own configured cost can
+// make the verifier's trial run legitimately take a long time — summed
+// across every such step in the plan AND every BrowserDiscoverySource
+// parameter's own nested Actions (Issue #216), since those run as their own
+// separate, sequential Playwright sessions during parameter resolution,
+// before the main request loop even starts, and never go through
+// ScrapingPlanBuilder's own step translation (see BrowserDiscoverySource's
+// own doc comment) — invisible to a plain plan.Steps.OfType<ScrollStep>()
+// scan on its own, which is exactly the gap that let a long-running
+// discovery configuration always fail verification with a generic timeout.
+static long EstimateExtraVerificationTimeoutMs(ScrapingPlan plan)
+{
+    var ms = plan.Steps.OfType<ScrollStep>().Sum(step => (long)step.MaxIterations * step.WaitAfterMs)
+        + plan.Steps.OfType<WaitForStep>().Sum(step => (long)step.TimeoutMs);
+
+    var apiCallStep = plan.Steps.OfType<ApiCallStep>().SingleOrDefault();
+    if (apiCallStep is not null)
+    {
+        foreach (var parameter in apiCallStep.Config.Parameters)
+        {
+            if (parameter.Source is not BrowserDiscoverySource { Actions: { } actions })
+                continue;
+            ms += actions.OfType<ScrollAction>().Sum(action => (long)action.MaxIterations * action.WaitAfterMs)
+                + actions.OfType<WaitForAction>().Sum(action => (long)action.TimeoutMs);
+        }
+    }
+
+    return ms;
+}
+
+// A trial run exists to prove the artifact works, not to accommodate an
+// unboundedly slow configuration — once EstimateExtraVerificationTimeoutMs
+// alone exceeds this, the real run is skipped entirely (the script is still
+// generated and returned, just without having been run against the live
+// page first — see VerificationSkippedHeader) rather than letting one
+// /generate call tie up the companion for an arbitrary amount of time. A
+// local function (top-level statements can't declare a plain static
+// readonly field) rather than a CompanionBackendOverrides knob like
+// VerifierTimeoutSeconds — this is a safety cap on the *estimate*, not a
+// tuning parameter for a slower machine.
+static TimeSpan VerificationTimeoutCap() => TimeSpan.FromMinutes(10);
+
+// Present on the /generate response (regardless of whether the body ends up
+// plain-text or the JSON preview/outputFile envelope — a header survives
+// either shape unchanged) whenever the trial run was skipped for exceeding
+// VerificationTimeoutCap. Value is a plain English reason, same "companion
+// error text is always English, never part of the extension's i18n system"
+// convention CLAUDE.md already documents for /generate's 400/422 bodies.
+const string VerificationSkippedHeader = "X-ScrapingFactory-Verification-Skipped";
+
+static string? CheckVerificationTimeoutCap(long extraTimeoutMs)
+{
+    var extra = TimeSpan.FromMilliseconds(extraTimeoutMs);
+    var cap = VerificationTimeoutCap();
+    if (extra <= cap)
+        return null;
+    return $"Estimated extra verification time ({extra:hh\\:mm\\:ss}) exceeds the {cap:hh\\:mm\\:ss} cap for a " +
+           "/generate trial run — the generated script was returned without being run against the live page first. Test it " +
+           "manually before relying on it.";
+}
+
+app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModuleRegistry registry, HttpContext httpContext) =>
 {
     if (config is null)
     {
@@ -471,7 +532,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
                 return Results.UnprocessableEntity(new { error = $"Component '{componentName}': {componentGeneratorError}" });
 
             componentScripts.Add((componentName, componentScript!));
-            componentExtraTimeoutMs += componentPlan!.Steps.OfType<ScrollStep>().Sum(step => (long)step.MaxIterations * step.WaitAfterMs);
+            componentExtraTimeoutMs += EstimateExtraVerificationTimeoutMs(componentPlan!);
 
             // See CombinedComponentConfig.VerificationValues's own doc
             // comment — merged flat across every component (a name
@@ -491,17 +552,28 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
 
         // The verifier's own baseline timeout covers running every
         // component sequentially inside the combined script, not just one
-        // script — extraTimeout only ever accounts for each component's own
-        // ScrollStep cost the same way a single-mode request's own does; a
-        // combined request with many slow components may need
-        // VerifierTimeoutSeconds raised (see CompanionBackendOverrides).
-        var combinedVerifier = registry.ResolveScriptVerifier("python");
-        var combinedVerification = await combinedVerifier.VerifyAsync(
-            combinedScript, OutputFormat.Json, combinedOutputFileBaseName, TimeSpan.FromMilliseconds(componentExtraTimeoutMs),
-            mergedVerificationValues.Count > 0 ? mergedVerificationValues : null,
-            config.IncludePreview == true, config.IncludeOutputFile == true);
-        if (!combinedVerification.Success)
-            return Results.UnprocessableEntity(new { error = combinedVerification.Error ?? "Script verification failed." });
+        // script — extraTimeoutMs sums each component's own estimate the
+        // same way a single-mode request's own does; a combined request
+        // with many slow components may need VerifierTimeoutSeconds raised
+        // (see CompanionBackendOverrides) on top of that, for the baseline
+        // itself.
+        ScriptVerificationResult combinedVerification;
+        var combinedSkipReason = CheckVerificationTimeoutCap(componentExtraTimeoutMs);
+        if (combinedSkipReason is not null)
+        {
+            httpContext.Response.Headers[VerificationSkippedHeader] = combinedSkipReason;
+            combinedVerification = new ScriptVerificationResult { Success = true };
+        }
+        else
+        {
+            var combinedVerifier = registry.ResolveScriptVerifier("python");
+            combinedVerification = await combinedVerifier.VerifyAsync(
+                combinedScript, OutputFormat.Json, combinedOutputFileBaseName, TimeSpan.FromMilliseconds(componentExtraTimeoutMs),
+                mergedVerificationValues.Count > 0 ? mergedVerificationValues : null,
+                config.IncludePreview == true, config.IncludeOutputFile == true);
+            if (!combinedVerification.Success)
+                return Results.UnprocessableEntity(new { error = combinedVerification.Error ?? "Script verification failed." });
+        }
 
         if (config.IncludePreview != true && config.IncludeOutputFile != true)
             return Results.Text(combinedScript, "text/plain");
@@ -581,17 +653,30 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
         var blockOutputSpecs = blockExtractionStep.Blocks
             .Select(b => new BlockOutputSpec(b.Name, b.OutputFormat, b.OutputFileBaseName))
             .ToList();
-        var blockExtraTimeout = TimeSpan.FromMilliseconds(
-            blockPlan.Steps.OfType<ScrollStep>().Sum(step => (long)step.MaxIterations * step.WaitAfterMs));
+        var blockExtraTimeoutMs = EstimateExtraVerificationTimeoutMs(blockPlan);
         var blockVerificationEnv = FillVerificationValues.Filter(config.BrowserActions, config.VerificationValues);
 
-        var blockVerifier = registry.ResolveScriptVerifier("python");
-        var blockVerification = await blockVerifier.VerifyBlocksAsync(
-            blockScript!, blockOutputSpecs, blockExtraTimeout,
-            blockVerificationEnv.Count > 0 ? blockVerificationEnv : null,
-            config.IncludePreview == true, config.IncludeOutputFile == true);
-        if (!blockVerification.Success)
-            return Results.UnprocessableEntity(new { error = blockVerification.Error ?? "Script verification failed." });
+        ScriptVerificationResult blockVerification;
+        var blockSkipReason = CheckVerificationTimeoutCap(blockExtraTimeoutMs);
+        if (blockSkipReason is not null)
+        {
+            httpContext.Response.Headers[VerificationSkippedHeader] = blockSkipReason;
+            blockVerification = new ScriptVerificationResult
+            {
+                Success = true,
+                Blocks = blockOutputSpecs.Select(spec => new BlockVerificationResult { Name = spec.Name }).ToList(),
+            };
+        }
+        else
+        {
+            var blockVerifier = registry.ResolveScriptVerifier("python");
+            blockVerification = await blockVerifier.VerifyBlocksAsync(
+                blockScript!, blockOutputSpecs, TimeSpan.FromMilliseconds(blockExtraTimeoutMs),
+                blockVerificationEnv.Count > 0 ? blockVerificationEnv : null,
+                config.IncludePreview == true, config.IncludeOutputFile == true);
+            if (!blockVerification.Success)
+                return Results.UnprocessableEntity(new { error = blockVerification.Error ?? "Script verification failed." });
+        }
 
         if (config.IncludePreview != true && config.IncludeOutputFile != true)
             return Results.Text(blockScript!, "text/plain");
@@ -614,24 +699,30 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     if (exclusivityError is not null)
         return Results.BadRequest(new { error = exclusivityError });
 
-    var (plan, script, validationError, generatorError) = GenerateScript(config, registry);
+    var (planOrNull, script, validationError, generatorError) = GenerateScript(config, registry);
     if (validationError is not null)
         return Results.BadRequest(new { error = validationError });
     if (generatorError is not null)
         return Results.UnprocessableEntity(new { error = generatorError });
+    // GenerateScript's own invariant: Plan is non-null exactly when both
+    // ValidationError and GeneratorError are null, i.e. right here — but the
+    // compiler can't see across that tuple, so this makes it explicit once
+    // instead of needing a `!` at every later plan.* access.
+    var plan = planOrNull!;
 
     // Actually run the generated script against the live page before handing
     // it out — this proves the exact artifact the user is about to download
     // works (network fetch, parsing, CSV export, no runtime errors) and
     // returns real data, rather than approximating that with a static
     // selector check that could disagree with what BeautifulSoup does.
-    // A ScrollStep's own configured cost (MaxIterations × WaitAfterMs) can
-    // exceed the verifier's baseline timeout on its own — added on top
-    // rather than baked into the baseline, so scripts without a ScrollStep
+    // A ScrollStep/WaitForStep's own configured cost (and, for Api-mode, any
+    // BrowserDiscoverySource parameter's own nested Actions — Issue #216)
+    // can exceed the verifier's baseline timeout on its own — added on top
+    // rather than baked into the baseline, so scripts without any of these
     // keep the tight default instead of everyone paying for the slowest
-    // possible configuration.
-    var extraTimeout = TimeSpan.FromMilliseconds(
-        plan!.Steps.OfType<ScrollStep>().Sum(step => (long)step.MaxIterations * step.WaitAfterMs));
+    // possible configuration. See VerificationTimeoutCap below for what
+    // happens once the estimate itself gets unreasonably large.
+    var extraTimeoutMs = EstimateExtraVerificationTimeoutMs(plan);
 
     // One-time login/test values (Issue #43) for FillAction steps, matched
     // against BrowserActions.FillAction.EnvironmentVariableName and applied
@@ -639,16 +730,26 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     // generator/generated script (see IR/FillVerificationValues.cs).
     var verificationEnv = FillVerificationValues.Filter(config.BrowserActions, config.VerificationValues);
 
-    var verifier = registry.ResolveScriptVerifier("python");
-    var verification = await verifier.VerifyAsync(
-        script!, plan.OutputFormat, plan.OutputFileBaseName, extraTimeout,
-        verificationEnv.Count > 0 ? verificationEnv : null, config.IncludePreview == true, config.IncludeOutputFile == true);
-    if (!verification.Success)
+    ScriptVerificationResult verification;
+    var skipReason = CheckVerificationTimeoutCap(extraTimeoutMs);
+    if (skipReason is not null)
     {
-        return Results.UnprocessableEntity(new
+        httpContext.Response.Headers[VerificationSkippedHeader] = skipReason;
+        verification = new ScriptVerificationResult { Success = true };
+    }
+    else
+    {
+        var verifier = registry.ResolveScriptVerifier("python");
+        verification = await verifier.VerifyAsync(
+            script!, plan.OutputFormat, plan.OutputFileBaseName, TimeSpan.FromMilliseconds(extraTimeoutMs),
+            verificationEnv.Count > 0 ? verificationEnv : null, config.IncludePreview == true, config.IncludeOutputFile == true);
+        if (!verification.Success)
         {
-            error = verification.Error ?? "Script verification failed.",
-        });
+            return Results.UnprocessableEntity(new
+            {
+                error = verification.Error ?? "Script verification failed.",
+            });
+        }
     }
 
     // Issue #122/#161: only a JSON envelope when the caller actually opted
