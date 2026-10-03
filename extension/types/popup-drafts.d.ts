@@ -110,6 +110,14 @@ declare namespace SFDraft {
     maxPages: number;
   }
 
+  // Issue #218.
+  interface DiscoveredUrlsState {
+    enabled: boolean;
+    pageUrl: string;
+    linkSelector: string;
+    maxUrls: number;
+  }
+
   interface NullRateRow {
     fieldName: string;
     threshold: number;

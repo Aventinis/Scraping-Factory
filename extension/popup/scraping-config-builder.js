@@ -200,6 +200,28 @@ function buildPaginationConfig(pagination) {
   return nextLinkSelector ? { kind: 'nextLink', nextLinkSelector, maxPages } : null;
 }
 
+// Issue #218: builds the wire-format DiscoveredUrlsConfig from
+// _state.discoveredUrls — same "incomplete draft = toggle-off" convention
+// buildPaginationConfig/buildProxyConfig already establish: a missing
+// PageUrl/LinkSelector means there's nothing a discovery pass could
+// meaningfully do yet, so the whole key is omitted rather than sent
+// half-filled. MaxUrls falls back to the companion's own default (100,
+// IR/DiscoveredUrlsConfig.cs) for an invalid/blank number input, the same
+// way buildPaginationConfig's own MaxPages already does.
+/**
+ * @param {SFDraft.DiscoveredUrlsState | null | undefined} discoveredUrls
+ * @returns {SFWire.DiscoveredUrlsConfig | null}
+ */
+function buildDiscoveredUrlsConfig(discoveredUrls) {
+  if (!discoveredUrls?.enabled) return null;
+  const pageUrl = (discoveredUrls.pageUrl || '').trim();
+  const linkSelector = (discoveredUrls.linkSelector || '').trim();
+  if (!pageUrl || !linkSelector) return null;
+  const maxUrlsRaw = Number(discoveredUrls.maxUrls);
+  const maxUrls = Number.isFinite(maxUrlsRaw) && maxUrlsRaw > 0 ? Math.floor(maxUrlsRaw) : 100;
+  return { pageUrl, linkSelector, maxUrls };
+}
+
 // Issue #129: builds the wire-format Hardening list (companion's
 // List<HardeningCheck>?) from every enabled check in _state.hardening — an
 // array even though only one check exists today, since the wire format is
@@ -414,6 +436,11 @@ function buildScrapingConfig(
   // — outputBlueprintSchemaKind picks which pair buildOutputBlueprintMapping
   // actually reads, the other pair is simply ignored.
   outputBlueprintSchemaKind = 'Flat', outputBlueprintTree = [], outputBlueprintTreeMapping = {},
+  // Issue #218: appended at the end, not alongside pagination above, since
+  // this function already has dozens of positional callers (including every
+  // existing test) — inserting a new parameter in the middle would silently
+  // shift every argument after it rather than failing loudly.
+  discoveredUrls = null,
 ) {
   // Issue #182: Blocks mode has no ad-hoc fields/groups/apiConfig of its own
   // either — each block is a fully independent {name, outputFileName,
@@ -493,6 +520,8 @@ function buildScrapingConfig(
   const hardeningFields = hardeningConfig ? { hardening: hardeningConfig } : {};
   const paginationConfig = buildPaginationConfig(pagination);
   const paginationFields = paginationConfig ? { pagination: paginationConfig } : {};
+  const discoveredUrlsConfig = buildDiscoveredUrlsConfig(discoveredUrls);
+  const discoveredUrlsFields = discoveredUrlsConfig ? { discoveredUrls: discoveredUrlsConfig } : {};
   // Issue #175: Browser-engine only, but simply sent as-is (like
   // browserActions) rather than gated on `engine === 'Browser'` here — the
   // toggle itself is only reachable through the UI while the browser-actions
@@ -527,8 +556,8 @@ function buildScrapingConfig(
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
-      ...externalConfigFields, ...outputBlueprintFields,
+      ...proxyFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
   if (mode === 'api') {
@@ -536,8 +565,8 @@ function buildScrapingConfig(
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
-      ...externalConfigFields, ...outputBlueprintFields,
+      ...proxyFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
   return {
@@ -559,8 +588,8 @@ function buildScrapingConfig(
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
     ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields,
-    ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields, ...externalConfigFields,
-    ...outputBlueprintFields,
+    ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+    ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
   };
 }
 
@@ -608,6 +637,9 @@ function buildConfigExport(
   includeOutputFile = false, externalConfig = false, combinedComponents = null, blocks = null,
   outputBlueprintId = null, outputBlueprintFieldNames = [], outputBlueprintMapping = {},
   outputBlueprintSchemaKind = 'Flat', outputBlueprintTree = [], outputBlueprintTreeMapping = {},
+  // Issue #218: see buildScrapingConfig's own doc comment on why this is
+  // appended at the end rather than alongside pagination above.
+  discoveredUrls = null,
 ) {
   return {
     exportedAt: new Date().toISOString(),
@@ -617,7 +649,7 @@ function buildConfigExport(
       useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession,
       includeOutputFile, externalConfig, combinedComponents, blocks,
       outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping,
-      outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping,
+      outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping, discoveredUrls,
     ),
   };
 }
@@ -863,7 +895,7 @@ function frameBadgeHtml(framePath) {
 }
 
   return {sanitizeFileNameBase, deriveScriptFileNameFromHostname, computeScriptFileNamePatch, parseAdditionalUrls,
-    buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildHardeningConfig,
+    buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildDiscoveredUrlsConfig, buildHardeningConfig,
     computeInitialMonitoringSectionOpen, collectFieldNames,
     buildScrapingConfig, buildConfigExport,
     addField, removeField, updateField,

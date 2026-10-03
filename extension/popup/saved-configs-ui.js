@@ -262,6 +262,7 @@ async function createSavedConfig(bridge, name) {
     state.pagination, state.persistentSession, false, globalSettings.externalConfig, combinedComponents, state.blocks,
     state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
     state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
+    state.discoveredUrls,
   );
   const res = await fetch(`${getResolvedCompanionUrl()}/configs`, {
     method: 'POST',

@@ -45,6 +45,7 @@ declare namespace SFWire {
     proxy?: ProxyConfig;
     hardening?: HardeningCheck[];
     pagination?: PaginationConfig;
+    discoveredUrls?: DiscoveredUrlsConfig;
     persistentSession?: boolean;
     externalConfig?: boolean;
     combined?: CombinedComponentConfig[];
@@ -171,6 +172,10 @@ declare namespace SFWire {
 
   interface NextLinkPagination { kind: 'nextLink'; nextLinkSelector: string; maxPages?: number; }
   interface PageNumberPagination { kind: 'pageNumber'; urlTemplate: string; maxPages?: number; }
+
+  // ── Discovered start URLs (DiscoveredUrlsConfig.cs, Issue #218) ──────────
+
+  interface DiscoveredUrlsConfig { pageUrl: string; linkSelector: string; maxUrls?: number; }
 
   // ── Hardening (HardeningCheck.cs) ────────────────────────────────────────
 
