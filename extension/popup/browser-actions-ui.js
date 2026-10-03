@@ -73,6 +73,16 @@ const SFBrowserActionsUI = (function () {
           `<input type="number" min="0" class="browser-action-wait-after-ms" data-index="${i}" value="${action.waitAfterMs}" />`;
         card.appendChild(row);
 
+        // Issue #289: empty = null = today's "jump straight to the bottom"
+        // default — only a site whose sections lazy-load per scrolled-through
+        // viewport (not classic append-below infinite scroll) needs this set.
+        const stepRow = document.createElement('div');
+        stepRow.className = 'browser-action-field-row';
+        stepRow.innerHTML =
+          `<label>${escapeHtml(t('browserActions.scrollStepPxLabel'))}</label>` +
+          `<input type="number" min="1" class="browser-action-scroll-step-px" data-index="${i}" placeholder="${escapeHtml(t('browserActions.scrollStepPxPlaceholder'))}" value="${action.scrollStepPx || ''}" />`;
+        card.appendChild(stepRow);
+
         container.appendChild(card);
         return;
       }
@@ -237,6 +247,21 @@ const SFBrowserActionsUI = (function () {
         bridge.setState(bridge.getState().current, {
           browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
             waitAfterMs: Number.isFinite(waitAfterMs) && waitAfterMs >= 0 ? waitAfterMs : 1000,
+          }),
+        });
+        return;
+      }
+      // Issue #289: a blank input is a deliberate "go back to the
+      // jump-to-bottom default", not an invalid value falling back to some
+      // other number — unlike maxIterations/waitAfterMs above, there's no
+      // sensible non-null default to clamp to here.
+      const scrollStepPxInput = e.target.closest('.browser-action-scroll-step-px');
+      if (scrollStepPxInput) {
+        const index = parseInt(scrollStepPxInput.dataset.index, 10);
+        const scrollStepPx = parseInt(scrollStepPxInput.value, 10);
+        bridge.setState(bridge.getState().current, {
+          browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
+            scrollStepPx: Number.isFinite(scrollStepPx) && scrollStepPx > 0 ? scrollStepPx : null,
           }),
         });
       }
