@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.16.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.2...v1.16.3) (2026-10-03)
+
+
+### Features
+
+* **api-mode:** add BrowserDiscoverySource IR type and validation ([7ae9a6b](https://github.com/Aventinis/Scraping-Factory/commit/7ae9a6bf27d677cbcfb51eae84ffea6bcb65706f))
+* **api-mode:** discover parameter values via browser scroll/click + network capture ([cf6be10](https://github.com/Aventinis/Scraping-Factory/commit/cf6be10ff29c5bfbfc95084a8a6119a329b40f69))
+* **api-mode:** implement browser-discovery parameter resolution at runtime ([ae2b693](https://github.com/Aventinis/Scraping-Factory/commit/ae2b693a0a3b8744fa89752fcdf75cc5a1cbcbda))
+* **api-mode:** serialize BrowserDiscoverySource for the Python templates ([0a14927](https://github.com/Aventinis/Scraping-Factory/commit/0a14927d433227e7cd31f0c9115b85e62ae4c7e7))
+* **extension:** add BrowserDiscoverySource UI with click-based action picking ([c6cacdf](https://github.com/Aventinis/Scraping-Factory/commit/c6cacdf3bf0028998df081baf9336131ea093164))
+* **extension:** add BrowserDiscoverySource wire type and builder ([8441eef](https://github.com/Aventinis/Scraping-Factory/commit/8441eef66c14d5fa219021b60af2074b5a46791a))
+* **extension:** add scroll step distance input to both scroll action editors ([1b46b17](https://github.com/Aventinis/Scraping-Factory/commit/1b46b17ea1b0ceeda1690321712da46d47bf0364))
+* **extension:** add scrollStepPx to the ScrollAction draft/wire types ([b24a491](https://github.com/Aventinis/Scraping-Factory/commit/b24a4917d335263fd0c22f2d78f818a04fdd7eda))
+* **generate:** show a warning toast when the companion skipped trial-run verification ([57ce23f](https://github.com/Aventinis/Scraping-Factory/commit/57ce23f88964d4bf486ffc4845073ebe1ce38ff1))
+* **scroll:** add configurable scroll step distance (Issue [#289](https://github.com/Aventinis/Scraping-Factory/issues/289)) ([0677c9f](https://github.com/Aventinis/Scraping-Factory/commit/0677c9fc4b04b3e8d8d352920e57d5311afcd85b))
+* **scroll:** add configurable scroll step distance (Issue [#289](https://github.com/Aventinis/Scraping-Factory/issues/289)) ([1c131e5](https://github.com/Aventinis/Scraping-Factory/commit/1c131e5d4b0c60b0e9a0bae5f5e77dcf3b5e5ee8))
+
+
+### Bug Fixes
+
+* **generate:** scale verification timeout estimate to cover BrowserDiscoverySource actions, cap it instead of hanging ([05eb703](https://github.com/Aventinis/Scraping-Factory/commit/05eb703aed06c0798d4699bc53ddb33670d17aa0))
+
 ## [1.16.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.1...v1.16.2) (2026-10-02)
 
 
