@@ -1200,7 +1200,10 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.True(HttpStatusCode.OK == response.StatusCode, body);
         Assert.Contains("import requests", body);
         Assert.DoesNotContain("BeautifulSoup", body);
-        Assert.Contains("itertools.product", body);
+        // Issue #217: the independent "resolve every parameter, then take
+        // the full cartesian product" model was replaced by an incremental,
+        // dependency-aware combo builder.
+        Assert.Contains("def _resolve_parameter_combos(headers):", body);
     }
 
     // Issue #132: a full /generate trial run (real subprocess execution via

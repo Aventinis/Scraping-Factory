@@ -131,6 +131,18 @@ public sealed class StaticListSource : ApiParameterSource
 // "stale/newly added values" problem a StaticListSource would have (e.g.
 // newly added categories) by re-resolving values at script runtime instead
 // of freezing them at configuration time.
+//
+// UrlTemplate may itself reference an earlier-declared parameter's own
+// value via the same "{name}" placeholder syntax ApiConfig.UrlTemplate
+// already uses (Issue #217) — e.g. a category-scoped discovery endpoint
+// like ".../categories/{category}/weeks" that only returns the right weeks
+// once {category} is substituted with that parameter's own
+// already-resolved value. Declaration order defines dependency order (a
+// strict chain, not a full dependency graph, per this issue's own
+// deliberately simpler scope) — ScrapingPlanValidator's
+// ValidateParameterDependencyOrder rejects a reference to the same or a
+// later-declared parameter. Directly resolves Architecture Decision #5's
+// long-documented "no dependencies between parameters" limitation.
 public sealed class DiscoverySource : ApiParameterSource
 {
     public string Method { get; init; } = "GET";
@@ -196,6 +208,10 @@ public sealed class RangeSource : ApiParameterSource
 // observe whatever requests fire natively, no interaction needed.
 public sealed class BrowserDiscoverySource : ApiParameterSource
 {
+    // May itself reference an earlier-declared parameter's own value via a
+    // "{name}" placeholder, same as DiscoverySource.UrlTemplate above
+    // (Issue #217) — substituted with that parameter's already-resolved
+    // value before the throwaway Playwright session navigates to it.
     public required string DiscoveryUrl { get; init; }
     public List<BrowserAction>? Actions { get; init; }
 }

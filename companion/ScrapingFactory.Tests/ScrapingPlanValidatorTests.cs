@@ -2067,6 +2067,188 @@ public class ScrapingPlanValidatorTests
         Assert.Contains("DiscoveryUrl", result.Error);
     }
 
+    // Issue #217: a DiscoverySource/BrowserDiscoverySource may reference an
+    // earlier-declared parameter's own value via the same "{name}"
+    // placeholder syntax UrlTemplate itself uses.
+    [Fact]
+    public void Validate_ApiConfigWithDiscoverySourceReferencingEarlierParameter_Succeeds()
+    {
+        var valid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}&week={week}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["a", "b"] } },
+                new ApiParameter
+                {
+                    Name = "week",
+                    Source = new DiscoverySource
+                    {
+                        UrlTemplate = "https://example.com/api/categories/{category}/weeks",
+                        ItemsPath = "data",
+                        ValuePath = "id",
+                    },
+                },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithDiscoverySourceReferencingItself_Fails()
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter
+                {
+                    Name = "category",
+                    Source = new DiscoverySource
+                    {
+                        UrlTemplate = "https://example.com/api/categories/{category}",
+                        ItemsPath = "data",
+                        ValuePath = "id",
+                    },
+                },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("cannot reference itself", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithDiscoverySourceReferencingLaterParameter_Fails()
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}&week={week}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter
+                {
+                    Name = "category",
+                    Source = new DiscoverySource
+                    {
+                        UrlTemplate = "https://example.com/api/categories/{week}",
+                        ItemsPath = "data",
+                        ValuePath = "id",
+                    },
+                },
+                new ApiParameter { Name = "week", Source = new StaticListSource { Values = ["1", "2"] } },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("declared later", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithDiscoverySourceReferencingUnknownPlaceholder_Succeeds()
+    {
+        // A placeholder that isn't any declared parameter's name at all is
+        // left alone — same laissez-faire this template's own
+        // un-cross-checked UrlTemplate always had, not a reference this
+        // validator understands.
+        var valid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter
+                {
+                    Name = "category",
+                    Source = new DiscoverySource
+                    {
+                        UrlTemplate = "https://example.com/api/categories/{unrelated}",
+                        ItemsPath = "data",
+                        ValuePath = "id",
+                    },
+                },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithBrowserDiscoverySourceReferencingEarlierParameter_Succeeds()
+    {
+        var valid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}&week={week}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter { Name = "category", Source = new StaticListSource { Values = ["a", "b"] } },
+                new ApiParameter
+                {
+                    Name = "week",
+                    Source = new BrowserDiscoverySource { DiscoveryUrl = "https://example.com/angebote/{category}" },
+                },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithBrowserDiscoverySourceReferencingItself_Fails()
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter
+                {
+                    Name = "category",
+                    Source = new BrowserDiscoverySource { DiscoveryUrl = "https://example.com/angebote/{category}" },
+                },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("cannot reference itself", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithBrowserDiscoverySourceReferencingLaterParameter_Fails()
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}&week={week}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter
+                {
+                    Name = "category",
+                    Source = new BrowserDiscoverySource { DiscoveryUrl = "https://example.com/angebote/{week}" },
+                },
+                new ApiParameter { Name = "week", Source = new StaticListSource { Values = ["1", "2"] } },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("declared later", result.Error);
+    }
+
     // BrowserDiscoverySource only means anything relative to UrlTemplate
     // itself (see its own doc comment) — a parameter using it that never
     // appears in UrlTemplate would have nothing to match captured requests

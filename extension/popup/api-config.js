@@ -1015,6 +1015,31 @@ const SFApiConfig = (function () {
     return [...variableUrlParts(draft.urlParts), ...(draft.bodyParameters || [])];
   }
 
+  // Issue #217: which already-declared parameter names a given part's own
+  // DiscoverySource.UrlTemplate/BrowserDiscoverySource.DiscoveryUrl could
+  // legally reference via a "{name}" placeholder — ScrapingPlanValidator
+  // rejects a reference to the same or a later-declared one, so this is the
+  // exact set the extension's own "insert parameter" picker should offer.
+  // allParameterParts(draft) is already in declaration order (URL path
+  // segments, then query params, then body parameters — the same order
+  // ApiConfig.Parameters itself ends up in, see buildApiConfig), so "earlier"
+  // simply means "every named part before partId's own index", with no
+  // separate reordering concept needed (declaration order IS dependency
+  // order, per the issue's own deliberately simpler scope). A part not found
+  // at all (e.g. one just removed) yields an empty list rather than every
+  // part, the safer default for an already-stale caller.
+  /**
+   * @param {ApiConfigDraft} draft
+   * @param {string} partId
+   * @returns {string[]}
+   */
+  function earlierParameterNames(draft, partId) {
+    const parts = allParameterParts(draft);
+    const index = parts.findIndex(p => p.id === partId);
+    if (index < 0) return [];
+    return parts.slice(0, index).map(p => p.name?.trim()).filter(Boolean);
+  }
+
   // Gates "Übernehmen" — also the single place guarding against a blank
   // field/group name reaching buildApiConfig: a name could always be blanked
   // out again on the API_CONFIG screen (renderApiTree's editable name inputs;
@@ -1056,7 +1081,7 @@ const SFApiConfig = (function () {
     serializeApiTree, countApiConfigFields, updateApiTreeNode, apiTreeNodesHaveNonBlankNames,
     jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
     bodyTreeLeavesAreBound, serializeBodyTree, lastPathSegmentName, buildApiSubtreeFromCandidate,
-    resolveApiGroupScopePath, variableUrlParts, allParameterParts, apiConfigDraftHasAllSourcesChosen,
+    resolveApiGroupScopePath, variableUrlParts, allParameterParts, earlierParameterNames, apiConfigDraftHasAllSourcesChosen,
   };
 })();
 
