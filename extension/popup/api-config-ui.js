@@ -520,6 +520,7 @@ const SFApiConfigUI = (function () {
         <option value="">${escapeHtml(t('apiConfig.insertParameterPlaceholder'))}</option>
         ${options}
       </select>
+      <p class="api-param-placeholder-hint">${escapeHtml(t('apiConfig.insertParameterHint'))}</p>
     `;
   }
 
@@ -1267,8 +1268,19 @@ const SFApiConfigUI = (function () {
     const card = selectEl.closest('.api-config-param-card');
     const targetInput = card?.querySelector(selectEl.dataset.targetSelector);
     if (!targetInput) return;
-    const start = targetInput.selectionStart ?? targetInput.value.length;
-    const end = targetInput.selectionEnd ?? targetInput.value.length;
+    // Picking from the <select> moves focus to the select itself, not the
+    // text input — so targetInput.selectionStart/selectionEnd (meaningful
+    // only while an input is actually focused) would otherwise read as the
+    // browser's default for a never-focused field, which is the *start* of
+    // the value, not the end — silently inserting the placeholder in front
+    // of the whole URL (even before "https://") instead of appending it
+    // where it's actually useful. Only trust the live selection while the
+    // input is the actually-focused element; otherwise always append at the
+    // end, the far more useful default for the common "never clicked into
+    // the field first" case.
+    const hasLiveSelection = document.activeElement === targetInput;
+    const start = hasLiveSelection ? (targetInput.selectionStart ?? targetInput.value.length) : targetInput.value.length;
+    const end = hasLiveSelection ? (targetInput.selectionEnd ?? targetInput.value.length) : targetInput.value.length;
     const newValue = `${targetInput.value.slice(0, start)}{${name}}${targetInput.value.slice(end)}`;
     patchApiConfigSource(bridge, selectEl.dataset.partId, { [selectEl.dataset.patchField]: newValue.trim() });
   }

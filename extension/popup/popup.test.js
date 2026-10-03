@@ -5453,8 +5453,16 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
       expect(Array.from(select.options).map(o => o.value)).toEqual(['', 'category']);
     });
 
-    test('picking a parameter inserts its placeholder into the discovery URL and persists it', () => {
+    // Regression test: picking from the <select> moves focus to the select
+    // itself, never the text input — inserting at "wherever the input's own
+    // selectionStart happens to default to for a never-focused field" would
+    // put the placeholder at the very start (even before "https://"), not
+    // where it's actually useful. Asserts the exact resulting value (not
+    // just .toContain) specifically to catch that.
+    test('picking a parameter appends its placeholder at the end of the discovery URL and persists it', () => {
       makeTwoBrowserDiscoveryParameters();
+      const urlInput = document.querySelectorAll('.api-discovery-url')[1]; // query:category's own card
+      expect(urlInput.value).toBe('https://example.com'); // prefilled from the current page, never focused
       const select = document.querySelector('[data-part-id="query:category"].api-param-placeholder-select');
       select.value = 'category';
       select.dispatchEvent(new Event('change', { bubbles: true }));
@@ -5463,7 +5471,7 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
 
       const persistedConfig = chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig;
       const weekParam = persistedConfig.parameters.find(p => p.name === 'week');
-      expect(weekParam.source.discoveryUrl).toContain('{category}');
+      expect(weekParam.source.discoveryUrl).toBe('https://example.com{category}');
     });
 
     // DiscoverySource's own UrlTemplate is ordinarily read-only (derived via
