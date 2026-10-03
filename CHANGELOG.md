@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.16.4](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.3...v1.16.4) (2026-10-03)
+
+
+### Features
+
+* **api-mode:** add earlierParameterNames helper for the UI's parameter picker ([bb8b6b4](https://github.com/Aventinis/Scraping-Factory/commit/bb8b6b4cc62d3ff871ddbd880d1d50bdf5937bd9))
+* **api-mode:** dependent/chained parameter discovery (Issue [#217](https://github.com/Aventinis/Scraping-Factory/issues/217)) ([2bc8363](https://github.com/Aventinis/Scraping-Factory/commit/2bc8363df9301540bf551c6cc3d6b8fccb2f7a53))
+* **api-mode:** extension UI for chained parameter discovery ([eb0c96c](https://github.com/Aventinis/Scraping-Factory/commit/eb0c96c8f7a9d7d9ac5b4d3c4da181e2d1da58b9))
+* **api-mode:** resolve chained parameter dependencies at runtime ([d5a820b](https://github.com/Aventinis/Scraping-Factory/commit/d5a820bca031f4e8f5e15a66fc859b23e7f71a37))
+* **api-mode:** validate dependency order for chained parameter discovery ([78f99bf](https://github.com/Aventinis/Scraping-Factory/commit/78f99bfd12da3b4fab7f61ed792ea597683a328c))
+
+
+### Bug Fixes
+
+* **api-mode:** insert parameter placeholder at the end, not the start, of an unfocused template field ([b086ad2](https://github.com/Aventinis/Scraping-Factory/commit/b086ad294b3491a236fe65a2863590f84a63abe8))
+
 ## [1.16.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.2...v1.16.3) (2026-10-03)
 
 
