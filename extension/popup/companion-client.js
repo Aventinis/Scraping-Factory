@@ -223,6 +223,16 @@ async function generate(bridge) {
     }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
+    // Issue #289 follow-up: present regardless of whether the body below
+    // ends up plain-text or the JSON preview/outputFile envelope — a header
+    // survives either response shape unchanged, unlike a body field that
+    // would need its own per-shape plumbing. Shown as a warning toast (the
+    // same "raw companion-originated English text, not routed through
+    // i18n" convention buildVerificationErrorMessage's own 422 handling
+    // already uses) rather than failing the request — the script itself was
+    // still generated successfully, just not run against the live page.
+    const verificationSkippedReason = res.headers?.get('X-ScrapingFactory-Verification-Skipped');
+
     // Issue #122/#161: only when includeDataPreview or includeOutputFile
     // asked for it does the companion respond with a JSON envelope
     // ({ script, preview, outputFile }) instead of the plain script text —
@@ -253,6 +263,12 @@ async function generate(bridge) {
       (dataPreview ? `, preview: ${dataPreview.totalCount} rows/elements` : '') +
       (outputFile ? `, outputFile: ${outputFile.fileName} (${outputFile.content.length} chars)` : '') +
       (blocksOutput ? `, blocks: ${blocksOutput.length}` : ''));
+    if (verificationSkippedReason) {
+      // Expected, safety-cap behavior, not a malfunction — no "Report bug"
+      // context (null), same treatment the 400/config-invalid toast above
+      // already gives a deterministic, non-bug outcome.
+      showToast(verificationSkippedReason, null, 'warn');
+    }
     bridge.setState(STATES.DONE, { scriptText, dataPreview, outputFile, blocksOutput });
   } catch (err) {
     log('GENERATE FAIL', err.message);
