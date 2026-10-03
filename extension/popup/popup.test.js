@@ -5412,6 +5412,145 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
       expect(persistedConfig.parameters[0].source.actions[0]).not.toHaveProperty('scrollStepPx');
     });
   });
+
+  // ── Chained parameter discovery (Issue #217) ────────────────────────────
+  describe('Chained parameter discovery', () => {
+    // First parameter (path segment "42" → "category", nothing earlier to
+    // reference); second (the query param → "week") can reference it.
+    function makeTwoBrowserDiscoveryParameters() {
+      confirmPrimaryCandidate();
+
+      const pathToggle = document.querySelectorAll('#api-config-segments .api-config-part-toggle')[2];
+      pathToggle.checked = true;
+      pathToggle.dispatchEvent(new Event('change', { bubbles: true }));
+      const pathNameInput = document.querySelector('#api-config-segments .api-config-part-name');
+      pathNameInput.value = 'category';
+      pathNameInput.dispatchEvent(new Event('change', { bubbles: true }));
+      const pathKindRadio = document.querySelector('[data-part-id="path:2"].api-config-source-kind-radio[value="browserDiscovery"]');
+      pathKindRadio.checked = true;
+      pathKindRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+      const queryToggle = document.querySelector('#api-config-query-params .api-config-part-toggle');
+      queryToggle.checked = true;
+      queryToggle.dispatchEvent(new Event('change', { bubbles: true }));
+      const queryNameInput = document.querySelector('#api-config-query-params .api-config-part-name');
+      queryNameInput.value = 'week';
+      queryNameInput.dispatchEvent(new Event('change', { bubbles: true }));
+      const queryKindRadio = document.querySelector('[data-part-id="query:category"].api-config-source-kind-radio[value="browserDiscovery"]');
+      queryKindRadio.checked = true;
+      queryKindRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    test('the first (earliest) parameter renders no insert-parameter picker at all', () => {
+      makeTwoBrowserDiscoveryParameters();
+      expect(document.querySelector('[data-part-id="path:2"].api-param-placeholder-select')).toBeNull();
+    });
+
+    test('a later parameter offers every earlier-declared parameter as an insertable placeholder', () => {
+      makeTwoBrowserDiscoveryParameters();
+      const select = document.querySelector('[data-part-id="query:category"].api-param-placeholder-select');
+      expect(select).not.toBeNull();
+      expect(Array.from(select.options).map(o => o.value)).toEqual(['', 'category']);
+    });
+
+    test('picking a parameter inserts its placeholder into the discovery URL and persists it', () => {
+      makeTwoBrowserDiscoveryParameters();
+      const select = document.querySelector('[data-part-id="query:category"].api-param-placeholder-select');
+      select.value = 'category';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+
+      document.getElementById('btn-api-config-confirm').click();
+
+      const persistedConfig = chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig;
+      const weekParam = persistedConfig.parameters.find(p => p.name === 'week');
+      expect(weekParam.source.discoveryUrl).toContain('{category}');
+    });
+
+    // DiscoverySource's own UrlTemplate is ordinarily read-only (derived via
+    // the search-and-confirm flow, see 'the discovery round-trip' above) —
+    // "Edit template" temporarily swaps it for an editable input so a
+    // concrete segment can be manually replaced with an earlier parameter's
+    // own placeholder.
+    function makeDiscoverySourceWithEarlierParameter() {
+      confirmPrimaryCandidate();
+
+      const pathToggle = document.querySelectorAll('#api-config-segments .api-config-part-toggle')[2];
+      pathToggle.checked = true;
+      pathToggle.dispatchEvent(new Event('change', { bubbles: true }));
+      const pathNameInput = document.querySelector('#api-config-segments .api-config-part-name');
+      pathNameInput.value = 'category';
+      pathNameInput.dispatchEvent(new Event('change', { bubbles: true }));
+      const pathKindRadio = document.querySelector('[data-part-id="path:2"].api-config-source-kind-radio[value="staticList"]');
+      pathKindRadio.checked = true;
+      pathKindRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+      const queryToggle = document.querySelector('#api-config-query-params .api-config-part-toggle');
+      queryToggle.checked = true;
+      queryToggle.dispatchEvent(new Event('change', { bubbles: true }));
+      const queryNameInput = document.querySelector('#api-config-query-params .api-config-part-name');
+      queryNameInput.value = 'week';
+      queryNameInput.dispatchEvent(new Event('change', { bubbles: true }));
+      const discoveryRadio = document.querySelector('[data-part-id="query:category"].api-config-source-kind-radio[value="discovery"]');
+      discoveryRadio.checked = true;
+      discoveryRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+      document.querySelector('.api-config-discovery-search').click();
+      capturedListener({
+        type: 'API_CANDIDATES', target: 'Elektronik',
+        candidates: [{
+          entryId: 2, url: 'https://example.com/api/categories', method: 'GET',
+          path: 'data[0].name', value: 'Elektronik', siblings: [],
+          itemsPath: 'data', valuePath: 'name', requestHeaders: [],
+        }],
+      });
+      document.querySelector('.api-config-discovery-confirm').click();
+    }
+
+    test('no "Edit template" button is shown before a template has ever been found', () => {
+      makeTwoBrowserDiscoveryParameters(); // neither parameter is a DiscoverySource here
+      expect(document.querySelector('.btn-discovery-template-edit')).toBeNull();
+    });
+
+    test('"Edit template" swaps the read-only summary for an editable input seeded with the current template', () => {
+      makeDiscoverySourceWithEarlierParameter();
+
+      expect(document.querySelector('.api-discovery-url-template')).toBeNull();
+      document.querySelector('.btn-discovery-template-edit').click();
+
+      const templateInput = document.querySelector('.api-discovery-url-template');
+      expect(templateInput).not.toBeNull();
+      expect(templateInput.value).toBe('https://example.com/api/categories');
+      expect(document.querySelector('[data-part-id="query:category"].api-param-placeholder-select')).not.toBeNull();
+    });
+
+    test('editing and confirming the template updates UrlTemplate but leaves ItemsPath/ValuePath untouched', () => {
+      makeDiscoverySourceWithEarlierParameter();
+      document.querySelector('.btn-discovery-template-edit').click();
+
+      const templateInput = document.querySelector('.api-discovery-url-template');
+      templateInput.value = 'https://example.com/api/categories/{category}';
+      templateInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+      document.getElementById('btn-api-config-confirm').click();
+
+      const persistedConfig = chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig;
+      const weekParam = persistedConfig.parameters.find(p => p.name === 'week');
+      expect(weekParam.source.urlTemplate).toBe('https://example.com/api/categories/{category}');
+      expect(weekParam.source.itemsPath).toBe('data');
+      expect(weekParam.source.valuePath).toBe('name');
+    });
+
+    test('"Done" returns to the read-only summary', () => {
+      makeDiscoverySourceWithEarlierParameter();
+      document.querySelector('.btn-discovery-template-edit').click();
+      expect(document.querySelector('.api-discovery-url-template')).not.toBeNull();
+
+      document.querySelector('.btn-discovery-template-done').click();
+
+      expect(document.querySelector('.api-discovery-url-template')).toBeNull();
+      expect(document.querySelector('.api-candidates-target')).not.toBeNull();
+    });
+  });
 });
 
 // ── API-tree wiring end-to-end (Issue #54, Phase A5) ────────────────────────

@@ -35,7 +35,7 @@ const SFApiConfigUI = (function () {
     buildApiConfig, buildApiGroupDraft, insertApiTreeNode, updateApiTreeNode, resolveApiTreeNode,
     collectPrecedingApiFieldSiblingNames,
     jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
-    buildApiSubtreeFromCandidate, resolveApiGroupScopePath, allParameterParts, apiConfigDraftHasAllSourcesChosen,
+    buildApiSubtreeFromCandidate, resolveApiGroupScopePath, allParameterParts, earlierParameterNames, apiConfigDraftHasAllSourcesChosen,
   } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
   // Issue #216: BrowserDiscoverySource's action list reuses the exact same
   // draft shape/helpers the top-level login-flow editor already uses —
@@ -347,10 +347,10 @@ const SFApiConfigUI = (function () {
   // every level beyond that reuses unchanged. renderApiConfigFieldsList is
   // gone; renderApiTree (Phase A4) is the only rendering left for this part
   // of the screen.
-  function renderApiConfigScreen(draft, discoveryCandidates) {
+  function renderApiConfigScreen(draft, discoveryCandidates, discoveryTemplateEditingPartId) {
     renderApiTree(draft.groups);
     renderApiConfigUrlParts(draft.urlParts);
-    renderApiConfigParameters(draft, discoveryCandidates);
+    renderApiConfigParameters(draft, discoveryCandidates, discoveryTemplateEditingPartId);
     renderApiConfigHeaders(draft.capturedHeaders, draft.headerDecisions);
     renderBodyTree(draft);
 
@@ -415,7 +415,7 @@ const SFApiConfigUI = (function () {
   }
 
 
-  function renderApiConfigParameters(draft, discoveryCandidates) {
+  function renderApiConfigParameters(draft, discoveryCandidates, discoveryTemplateEditingPartId) {
     const container = document.getElementById('api-config-parameters');
     if (!container) return;
     container.innerHTML = '';
@@ -456,7 +456,7 @@ const SFApiConfigUI = (function () {
           `<textarea class="api-config-static-list" data-part-id="${safePartId}" rows="2" placeholder="${escapeHtml(t('apiConfig.valueListPlaceholder'))}">${escapeHtml(source.valuesText || '')}</textarea>` +
           `<button type="button" class="btn-secondary btn-tiny api-config-autofill-pool" data-part-id="${safePartId}" title="${escapeHtml(t('apiConfig.autoFillFromPoolTitle'))}">${escapeHtml(t('apiConfig.autoFillFromPoolBtn'))}</button>`;
       } else if (source?.kind === 'discovery') {
-        fieldsEl.appendChild(renderDiscoverySourceFields(part, source, discoveryCandidates));
+        fieldsEl.appendChild(renderDiscoverySourceFields(draft, part, source, discoveryCandidates, discoveryTemplateEditingPartId));
       } else if (source?.kind === 'range') {
         fieldsEl.innerHTML = `
           <div class="api-config-range-row">
@@ -469,7 +469,7 @@ const SFApiConfigUI = (function () {
           ${renderRangeFormatFields(source, safePartId)}
         `;
       } else if (source?.kind === 'browserDiscovery') {
-        fieldsEl.appendChild(renderBrowserDiscoverySourceFields(part, source));
+        fieldsEl.appendChild(renderBrowserDiscoverySourceFields(draft, part, source));
       }
       card.appendChild(fieldsEl);
 
@@ -502,14 +502,71 @@ const SFApiConfigUI = (function () {
     `;
   }
 
-  function renderDiscoverySourceFields(part, source, discoveryCandidates) {
+  // Issue #217: a small "insert parameter" picker next to a free-text
+  // UrlTemplate/DiscoveryUrl input, listing every already-declared parameter
+  // this field could legally reference via a "{name}" placeholder
+  // (ScrapingPlanValidator rejects anything else — see
+  // earlierParameterNames's own doc comment for why declaration order is
+  // already the right order with no separate reordering concept needed).
+  // Picking one inserts "{name}" at the target input's own cursor position
+  // via insertParameterPlaceholder, rather than requiring the user to
+  // remember/type the exact placeholder syntax by hand. Renders nothing at
+  // all once there's no earlier parameter yet to offer.
+  function renderParameterPlaceholderPicker(earlierNames, safePartId, targetSelector, patchField) {
+    if (earlierNames.length === 0) return '';
+    const options = earlierNames.map(name => `<option value="${escapeHtml(name)}">{${escapeHtml(name)}}</option>`).join('');
+    return `
+      <select class="api-param-placeholder-select" data-part-id="${safePartId}" data-target-selector="${escapeHtml(targetSelector)}" data-patch-field="${escapeHtml(patchField)}">
+        <option value="">${escapeHtml(t('apiConfig.insertParameterPlaceholder'))}</option>
+        ${options}
+      </select>
+    `;
+  }
+
+  // Issue #217: DiscoverySource.UrlTemplate is ordinarily read-only (derived
+  // via the click-correlation "Search again" flow below) — editingPartId
+  // (state.discoveryTemplateEditingPartId, a screen-scoped UI flag living
+  // outside apiConfigDraft, same precedent discoveryCandidates itself
+  // already sets, since draft.parameterSources[partId] is sent to the
+  // companion byte-for-byte via buildApiConfig and must never carry a
+  // UI-only field) temporarily swaps the summary for an editable text input
+  // so the user can manually replace a concrete segment with
+  // "{earlierParameterName}" to turn a discovered, single-shot endpoint into
+  // a chained one. Only UrlTemplate itself is ever edited this way —
+  // itemsPath/valuePath stay exactly as originally derived.
+  function renderDiscoverySourceFields(draft, part, source, discoveryCandidates, editingPartId) {
     const wrap = document.createElement('div');
+    const safePartId = escapeHtml(part.id);
+    const earlierNames = earlierParameterNames(draft, part.id);
+
+    if (editingPartId === part.id) {
+      const editRow = document.createElement('div');
+      editRow.innerHTML =
+        `<input type="text" class="api-discovery-url-template" data-part-id="${safePartId}" value="${escapeHtml(source.urlTemplate || '')}" />` +
+        renderParameterPlaceholderPicker(earlierNames, safePartId, '.api-discovery-url-template', 'urlTemplate');
+      wrap.appendChild(editRow);
+
+      const doneBtn = document.createElement('button');
+      doneBtn.type = 'button';
+      doneBtn.className = 'btn-secondary btn-tiny btn-discovery-template-done';
+      doneBtn.dataset.partId = part.id;
+      doneBtn.textContent = t('apiConfig.doneEditingTemplateBtn');
+      wrap.appendChild(doneBtn);
+      return wrap;
+    }
 
     if (source.urlTemplate) {
       const summary = document.createElement('p');
       summary.className = 'api-candidates-target';
       summary.textContent = t('apiConfig.discoverySource', { urlTemplate: source.urlTemplate, itemsPath: source.itemsPath, valuePath: source.valuePath });
       wrap.appendChild(summary);
+
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'btn-secondary btn-tiny btn-discovery-template-edit';
+      editBtn.dataset.partId = part.id;
+      editBtn.textContent = t('apiConfig.editTemplateBtn');
+      wrap.appendChild(editBtn);
     }
 
     const searchBtn = document.createElement('button');
@@ -556,16 +613,21 @@ const SFApiConfigUI = (function () {
   // renderMatchCountHint). Every control carries both data-part-id and
   // data-index so the single delegated listener on #api-config-parameters
   // can address the right parameter's own action array.
-  function renderBrowserDiscoverySourceFields(part, source) {
+  function renderBrowserDiscoverySourceFields(draft, part, source) {
     const safePartId = escapeHtml(part.id);
     const actions = source.actions || [];
     const wrap = document.createElement('div');
     wrap.className = 'api-discovery-source';
 
+    // Issue #217: DiscoveryUrl may itself reference an earlier-declared
+    // parameter's own value — see renderParameterPlaceholderPicker's doc
+    // comment.
+    const earlierNames = earlierParameterNames(draft, part.id);
     const urlRow = document.createElement('div');
     urlRow.innerHTML =
       `<label>${escapeHtml(t('apiConfig.discoveryUrlLabel'))}</label>` +
-      `<input type="text" class="api-discovery-url" data-part-id="${safePartId}" placeholder="https://example.com/angebote" value="${escapeHtml(source.discoveryUrl || '')}" />`;
+      `<input type="text" class="api-discovery-url" data-part-id="${safePartId}" placeholder="https://example.com/angebote" value="${escapeHtml(source.discoveryUrl || '')}" />` +
+      renderParameterPlaceholderPicker(earlierNames, safePartId, '.api-discovery-url', 'discoveryUrl');
     wrap.appendChild(urlRow);
 
     const kindLabels = {
@@ -1188,6 +1250,29 @@ const SFApiConfigUI = (function () {
     patchApiConfigDraft(bridge, { parameterSources: { ...draft.parameterSources, [partId]: { ...draft.parameterSources[partId], ...patch } } });
   }
 
+  // Issue #217: the delegated `change` handler for every
+  // `.api-param-placeholder-select` picker rendered by
+  // renderParameterPlaceholderPicker — inserts "{name}" at the target
+  // input's own cursor position (falling back to the end when nothing is
+  // selected/focused) and commits the result through patchApiConfigSource,
+  // the same key (`discoveryUrl`/`urlTemplate`, named by the select's own
+  // data-patch-field) the target input's own `change` handler would commit
+  // on blur. A `change`-triggered commit already causes a full re-render
+  // (see this file's own doc comment on that trade-off), so no attempt is
+  // made to restore focus/selection afterward — the input is about to be
+  // torn down and rebuilt anyway.
+  function insertParameterPlaceholder(bridge, selectEl) {
+    const name = selectEl.value;
+    if (!name) return;
+    const card = selectEl.closest('.api-config-param-card');
+    const targetInput = card?.querySelector(selectEl.dataset.targetSelector);
+    if (!targetInput) return;
+    const start = targetInput.selectionStart ?? targetInput.value.length;
+    const end = targetInput.selectionEnd ?? targetInput.value.length;
+    const newValue = `${targetInput.value.slice(0, start)}{${name}}${targetInput.value.slice(end)}`;
+    patchApiConfigSource(bridge, selectEl.dataset.partId, { [selectEl.dataset.patchField]: newValue.trim() });
+  }
+
   // ── BrowserDiscoverySource action list (Issue #216) ─────────────────────
   // Thin per-parameter wrappers around scraping-config-builder.js's own
   // add/remove/updateBrowserAction — those are already fully generic over
@@ -1414,7 +1499,7 @@ const SFApiConfigUI = (function () {
 // field's transform chain).
 function renderApiConfigModals(bridge) {
   const state = bridge.getState();
-  renderApiConfigScreen(state.apiConfigDraft, state.apiDiscoveryCandidates);
+  renderApiConfigScreen(state.apiConfigDraft, state.apiDiscoveryCandidates, state.discoveryTemplateEditingPartId);
 
   const apiTreeSearchPanel = document.getElementById('api-tree-search-panel');
   if (apiTreeSearchPanel) {
@@ -1630,6 +1715,12 @@ function wireApiConfigEvents(bridge) {
     // ── BrowserDiscoverySource (Issue #216) ───────────────────────────────
     const discoveryUrl = e.target.closest('.api-discovery-url');
     if (discoveryUrl) { patchApiConfigSource(bridge, discoveryUrl.dataset.partId, { discoveryUrl: discoveryUrl.value.trim() }); return; }
+
+    // ── Chained parameter discovery (Issue #217) ──────────────────────────
+    const discoveryUrlTemplate = e.target.closest('.api-discovery-url-template');
+    if (discoveryUrlTemplate) { patchApiConfigSource(bridge, discoveryUrlTemplate.dataset.partId, { urlTemplate: discoveryUrlTemplate.value.trim() }); return; }
+    const paramPlaceholderSelect = e.target.closest('.api-param-placeholder-select');
+    if (paramPlaceholderSelect) { insertParameterPlaceholder(bridge, paramPlaceholderSelect); return; }
     const actionTimeout = e.target.closest('.discovery-action-timeout');
     if (actionTimeout) {
       const timeoutMs = parseInt(actionTimeout.value, 10);
@@ -1684,6 +1775,12 @@ function wireApiConfigEvents(bridge) {
     }
     const autofillBtn = e.target.closest('.api-config-autofill-pool');
     if (autofillBtn) { fillStaticListFromPool(bridge, autofillBtn.dataset.partId); return; }
+
+    // ── Chained parameter discovery (Issue #217) ──────────────────────────
+    const editTemplateBtn = e.target.closest('.btn-discovery-template-edit');
+    if (editTemplateBtn) { bridge.patchState({ discoveryTemplateEditingPartId: editTemplateBtn.dataset.partId }); return; }
+    const doneTemplateBtn = e.target.closest('.btn-discovery-template-done');
+    if (doneTemplateBtn) { bridge.patchState({ discoveryTemplateEditingPartId: null }); return; }
 
     // ── BrowserDiscoverySource (Issue #216) ───────────────────────────────
     const addActionBtn = e.target.closest('.btn-add-discovery-action');
