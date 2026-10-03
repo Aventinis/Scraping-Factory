@@ -80,6 +80,29 @@ function renderSettingsPanel(bridge) {
       paginationMaxPagesInput.value = state.pagination.maxPages;
     }
 
+    // Issue #218: opt-in discovery of additional start URLs — hidden for
+    // the same three modes the companion rejects it together with (Api,
+    // which builds its own request URL; Combined/Blocks, which have no
+    // single start URL of their own at the outer level).
+    document.getElementById('discovered-urls-toggle-row')?.classList.toggle(
+      'hidden', state.mode === 'api' || state.mode === 'combined' || state.mode === 'blocks',
+    );
+    const discoveredUrlsToggle = document.getElementById('toggle-discovered-urls');
+    if (discoveredUrlsToggle) discoveredUrlsToggle.checked = state.discoveredUrls.enabled;
+    document.getElementById('discovered-urls-config')?.classList.toggle('hidden', !state.discoveredUrls.enabled);
+    const discoveredUrlsInputs = {
+      'input-discovered-urls-page-url': state.discoveredUrls.pageUrl,
+      'input-discovered-urls-link-selector': state.discoveredUrls.linkSelector,
+    };
+    for (const [id, value] of Object.entries(discoveredUrlsInputs)) {
+      const input = document.getElementById(id);
+      if (input && document.activeElement !== input) input.value = value;
+    }
+    const discoveredUrlsMaxInput = document.getElementById('input-discovered-urls-max-urls');
+    if (discoveredUrlsMaxInput && document.activeElement !== discoveredUrlsMaxInput) {
+      discoveredUrlsMaxInput.value = state.discoveredUrls.maxUrls;
+    }
+
     // Issue #183: collapsible "Monitoring" section (change detection +
     // hardening) — see popup.html's own comment on this markup for why a
     // chevron+.collapsed toggle was chosen over the API panel's Show/Hide
@@ -298,6 +321,20 @@ function wireSettingsPanelEvents(bridge) {
       pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [], selectionKind: 'pagination',
       domTree: null, domTreeTruncated: false, domTreeError: null,
     });
+  });
+
+  // Issue #218: opt-in discovery of additional start URLs.
+  document.getElementById('toggle-discovered-urls')?.addEventListener('change', (e) => {
+    bridge.setState(bridge.getState().current, { discoveredUrls: { ...bridge.getState().discoveredUrls, enabled: e.target.checked } });
+  });
+  document.getElementById('input-discovered-urls-page-url')?.addEventListener('input', (e) => {
+    bridge.setState(bridge.getState().current, { discoveredUrls: { ...bridge.getState().discoveredUrls, pageUrl: e.target.value } });
+  });
+  document.getElementById('input-discovered-urls-link-selector')?.addEventListener('input', (e) => {
+    bridge.setState(bridge.getState().current, { discoveredUrls: { ...bridge.getState().discoveredUrls, linkSelector: e.target.value } });
+  });
+  document.getElementById('input-discovered-urls-max-urls')?.addEventListener('input', (e) => {
+    bridge.setState(bridge.getState().current, { discoveredUrls: { ...bridge.getState().discoveredUrls, maxUrls: parseInt(e.target.value, 10) } });
   });
 
   // Issue #129: opt-in script hardening — the "no result" check.

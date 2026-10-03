@@ -235,6 +235,14 @@ let _state = {
   // urlTemplate) — see buildPaginationConfig. maxPages is a whole-number
   // safety cap, always active regardless of kind.
   pagination: { enabled: false, kind: 'nextLink', nextLinkSelector: '', urlTemplate: '', maxPages: 50 },
+  // Issue #218: opt-in discovery of additional start URLs by harvesting
+  // links from a navigation/listing page — mode-independent like
+  // additionalStartUrls/pagination above (Fields/Groups only; hidden
+  // entirely for API mode), persisted the same way (real scrape-target
+  // configuration, not a per-generate toggle). Composes additively with
+  // additionalStartUrls — see buildDiscoveredUrlsConfig. maxUrls is a
+  // whole-number safety cap, always active.
+  discoveredUrls: { enabled: false, pageUrl: '', linkSelector: '', maxUrls: 100 },
   // Issue #175: opt-in persistent session/cookie handling — Browser-engine
   // only, persisted the same way as proxy/pagination above (real
   // scrape-target configuration, not a per-generate toggle). Unlike proxy/
@@ -585,6 +593,7 @@ function persistState() {
       changeDetection: _state.changeDetection,
       proxy: _state.proxy,
       pagination: _state.pagination,
+      discoveredUrls: _state.discoveredUrls,
       persistentSession: _state.persistentSession,
       hardening: _state.hardening,
       scriptFileName: _state.scriptFileName,
