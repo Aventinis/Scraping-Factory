@@ -290,6 +290,42 @@
               <input type="number" id="input-pagination-max-pages" min="1" step="1" />
             </div>
           </div>
+          <!-- Issue #218: opt-in discovery of additional start URLs by
+               harvesting links from a navigation/listing page, combined
+               additively with the "Additional start URLs" textarea above —
+               for a target whose set of listing/category pages isn't fixed
+               (e.g. a navigation menu that changes over time). Hidden
+               entirely for API mode (see render()'s own
+               #discovered-urls-toggle-row toggle), same reasoning as
+               #additional-urls-row/#pagination-toggle-row above. -->
+          <label class="output-settings-toggle" id="discovered-urls-toggle-row">
+            <input type="checkbox" id="toggle-discovered-urls" />
+            <span data-i18n="idle.discoveredUrlsToggle"></span>
+          </label>
+          <div id="discovered-urls-config" class="hidden">
+            <div class="output-settings-row">
+              <label for="input-discovered-urls-page-url" data-i18n="idle.discoveredUrlsPageUrlLabel"></label>
+              <input type="text" id="input-discovered-urls-page-url" data-i18n-placeholder="idle.discoveredUrlsPageUrlPlaceholder" autocomplete="off" />
+            </div>
+            <div class="output-settings-row">
+              <label for="input-discovered-urls-link-selector" data-i18n="idle.discoveredUrlsLinkSelectorLabel"></label>
+              <input type="text" id="input-discovered-urls-link-selector" data-i18n-placeholder="idle.discoveredUrlsLinkSelectorPlaceholder" autocomplete="off" />
+            </div>
+            <!-- Issue #218 follow-up: lets a non-developer pick a navigation
+                 link by clicking it on the live page, writing both the
+                 clicked page's own URL (Page-URL) and a generalized selector
+                 (Link-selector) at once — no need to know/type either by
+                 hand. Same click-based selection flow browser actions'/
+                 pagination's own pick button already use. -->
+            <div class="actions">
+              <button id="btn-pick-discovered-urls-link" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.pickSelectorBtn"></button>
+            </div>
+            <p class="preview-summary" data-i18n="idle.discoveredUrlsHint"></p>
+            <div class="output-settings-row">
+              <label for="input-discovered-urls-max-urls" data-i18n="idle.discoveredUrlsMaxUrlsLabel"></label>
+              <input type="number" id="input-discovered-urls-max-urls" min="1" step="1" />
+            </div>
+          </div>
           <!-- Issue #191/#192: opt-in output blueprint field mapping —
                reachable for flat mode, container mode, and both of API
                mode's shapes (hidden only for Combined/Blocks, which have no

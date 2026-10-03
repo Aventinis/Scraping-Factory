@@ -37,6 +37,7 @@ const SFSessionRestore = (function () {
     if (stored.changeDetection) next = { ...next, changeDetection: stored.changeDetection };
     if (stored.proxy)                 next = { ...next, proxy: stored.proxy };
     if (stored.pagination)            next = { ...next, pagination: stored.pagination };
+    if (stored.discoveredUrls)        next = { ...next, discoveredUrls: stored.discoveredUrls };
     if (stored.persistentSession !== undefined) next = { ...next, persistentSession: stored.persistentSession };
     if (stored.hardening)             next = { ...next, hardening: stored.hardening };
     if (stored.scriptFileName)        next = { ...next, scriptFileName: stored.scriptFileName };
@@ -178,6 +179,24 @@ const SFSessionRestore = (function () {
       await chrome.storage.session.set({ pagination });
       bridge.setState(STATES.IDLE, {
         pagination, selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
+      });
+      return true;
+    }
+
+    if (stored.selectionKind === 'discoveredUrls' && stored.pendingSelector) {
+      // Same as the live ELEMENT_SELECTED path: write the picked selector
+      // and the clicked page's own URL (already self-corrected into
+      // state.url by the block above, if it had changed) straight into
+      // discoveredUrls, no naming modal needed.
+      log('INIT pending discoveredUrls selector found → updating discoveredUrls', stored.pendingSelector);
+      const discoveredUrls = {
+        ...state.discoveredUrls,
+        pageUrl: stored.pendingUrl || state.discoveredUrls.pageUrl,
+        linkSelector: stored.pendingSelector,
+      };
+      await chrome.storage.session.set({ discoveredUrls });
+      bridge.setState(STATES.IDLE, {
+        discoveredUrls, selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
       });
       return true;
     }

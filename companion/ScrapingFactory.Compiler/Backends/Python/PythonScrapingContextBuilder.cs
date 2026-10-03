@@ -57,6 +57,7 @@ internal static class PythonScrapingContextBuilder
             ["proxy"] = PythonProxyLiteral.BuildContext(plan.Proxy),
             ["hardening"] = PythonHardeningLiteral.BuildContext(plan.Hardening),
             ["pagination"] = PythonPaginationLiteral.BuildContext(plan.Pagination),
+            ["discovered_urls"] = PythonDiscoveredUrlsLiteral.BuildContext(plan.DiscoveredUrls),
             ["external_config"] = PythonExternalConfigLiteral.BuildContext(plan.ExternalConfig),
             // Issue #192/#244: both always rendered, only one ever non-empty
             // for a given plan — see PythonOutputBlueprintLiteral.RenderTree's
@@ -119,6 +120,7 @@ internal static class PythonScrapingContextBuilder
             ["proxy"] = PythonProxyLiteral.BuildContext(plan.Proxy),
             ["hardening"] = PythonHardeningLiteral.BuildContext(plan.Hardening),
             ["pagination"] = PythonPaginationLiteral.BuildContext(plan.Pagination),
+            ["discovered_urls"] = PythonDiscoveredUrlsLiteral.BuildContext(plan.DiscoveredUrls),
             ["external_config"] = PythonExternalConfigLiteral.BuildContext(plan.ExternalConfig),
             ["blueprint_mapping_literal"] = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),
         };

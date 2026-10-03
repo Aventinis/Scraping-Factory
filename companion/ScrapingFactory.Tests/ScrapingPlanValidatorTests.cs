@@ -3161,6 +3161,67 @@ public class ScrapingPlanValidatorTests
         Assert.Contains("missing placeholder", result.Error);
     }
 
+    // Issue #218
+    [Fact]
+    public void Validate_ValidDiscoveredUrls_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            DiscoveredUrls = new DiscoveredUrlsConfig { PageUrl = "https://example.com/kategorien", LinkSelector = "nav.categories a" },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_NoDiscoveredUrls_Succeeds()
+    {
+        var result = ScrapingPlanValidator.Validate(ValidPlan());
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Theory]
+    [InlineData("not-a-url")]
+    [InlineData("ftp://example.com/kategorien")]
+    public void Validate_DiscoveredUrlsWithInvalidPageUrl_Fails(string pageUrl)
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            DiscoveredUrls = new DiscoveredUrlsConfig { PageUrl = pageUrl, LinkSelector = "a" },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("PageUrl", result.Error);
+    }
+
+    [Fact]
+    public void Validate_DiscoveredUrlsWithBlankLinkSelector_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            DiscoveredUrls = new DiscoveredUrlsConfig { PageUrl = "https://example.com/kategorien", LinkSelector = " " },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("LinkSelector", result.Error);
+    }
+
+    [Fact]
+    public void Validate_DiscoveredUrlsWithZeroOrNegativeMaxUrls_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            DiscoveredUrls = new DiscoveredUrlsConfig { PageUrl = "https://example.com/kategorien", LinkSelector = "a", MaxUrls = 0 },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("MaxUrls", result.Error);
+    }
+
     // Issue #175
     [Fact]
     public void Validate_PersistentSessionWithBrowserEngine_Succeeds()

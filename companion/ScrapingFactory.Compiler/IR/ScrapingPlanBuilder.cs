@@ -63,7 +63,8 @@ public static class ScrapingPlanBuilder
                 Steps = steps, OutputFormat = groupsOutputFormat, Engine = config.Engine,
                 ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
                 ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, Hardening = config.Hardening,
-                Pagination = config.Pagination, PersistentSession = config.PersistentSession ?? false,
+                Pagination = config.Pagination, DiscoveredUrls = config.DiscoveredUrls,
+                PersistentSession = config.PersistentSession ?? false,
                 ExternalConfig = config.ExternalConfig ?? false,
                 OutputBlueprint = config.OutputBlueprint,
             };
@@ -170,7 +171,8 @@ public static class ScrapingPlanBuilder
             Steps = steps, OutputFormat = config.OutputFormat, Engine = config.Engine,
             ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
             ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, Hardening = config.Hardening,
-            Pagination = config.Pagination, PersistentSession = config.PersistentSession ?? false,
+            Pagination = config.Pagination, DiscoveredUrls = config.DiscoveredUrls,
+            PersistentSession = config.PersistentSession ?? false,
             ExternalConfig = config.ExternalConfig ?? false,
             OutputBlueprint = config.OutputBlueprint,
         };
