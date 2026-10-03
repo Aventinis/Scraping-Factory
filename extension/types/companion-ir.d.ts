@@ -133,6 +133,8 @@ declare namespace SFWire {
     loadMoreButtonSelector?: string | null;
     maxIterations?: number;
     waitAfterMs?: number;
+    /** Issue #289 — null/unset keeps the default "jump straight to the current bottom" behavior. */
+    scrollStepPx?: number | null;
     framePath?: string[] | null;
   }
 
