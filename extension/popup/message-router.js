@@ -170,6 +170,23 @@ const SFMessageRouter = (function () {
             pagination: { ...state.pagination, nextLinkSelector: message.selector },
             selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
           });
+        } else if (state.selectionKind === 'discoveredUrls') {
+          // Issue #218 follow-up: lets a non-developer pick a navigation/
+          // listing link by clicking it, writing both the clicked page's own
+          // URL (message.url — unambiguous ground truth for "which page has
+          // this navigation", same source the stale-tracked-URL
+          // self-correction above already uses) and the selector at once —
+          // avoidId (set when this selection round was started) is what
+          // keeps the selector generalized across every sibling link rather
+          // than collapsing to a single #id-based match.
+          bridge.setState(STATES.IDLE, {
+            discoveredUrls: {
+              ...state.discoveredUrls,
+              pageUrl: message.url || state.discoveredUrls.pageUrl,
+              linkSelector: message.selector,
+            },
+            selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
+          });
         } else {
           bridge.setState(STATES.SELECTING, {
             pendingSelector: message.selector, pendingFramePath: framePath, pendingMatchCount: matchCount,

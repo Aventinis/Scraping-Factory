@@ -336,6 +336,21 @@ function wireSettingsPanelEvents(bridge) {
   document.getElementById('input-discovered-urls-max-urls')?.addEventListener('input', (e) => {
     bridge.setState(bridge.getState().current, { discoveredUrls: { ...bridge.getState().discoveredUrls, maxUrls: parseInt(e.target.value, 10) } });
   });
+  // Issue #218 follow-up: lets a non-developer pick a navigation link by
+  // clicking it instead of having to know/type a CSS selector or copy the
+  // page's own URL by hand — avoidId generalizes the resulting selector
+  // across every sibling link (the same "repeating" treatment a container's
+  // own pick already gets), rather than collapsing to a single #id-based
+  // match the way pagination's own single "next" link deliberately keeps.
+  document.getElementById('btn-pick-discovered-urls-link')?.addEventListener('click', () => {
+    log('BTN pick-discovered-urls-link → START_SELECTION');
+    bridge.stopPreviewIfActive();
+    chrome.runtime.sendMessage({ type: 'START_SELECTION', avoidId: true });
+    bridge.setState(STATES.SELECTING, {
+      pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [], selectionKind: 'discoveredUrls',
+      domTree: null, domTreeTruncated: false, domTreeError: null,
+    });
+  });
 
   // Issue #129: opt-in script hardening — the "no result" check.
   document.getElementById('toggle-hardening-no-result')?.addEventListener('change', (e) => {

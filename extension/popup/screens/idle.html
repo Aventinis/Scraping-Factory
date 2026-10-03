@@ -311,6 +311,15 @@
               <label for="input-discovered-urls-link-selector" data-i18n="idle.discoveredUrlsLinkSelectorLabel"></label>
               <input type="text" id="input-discovered-urls-link-selector" data-i18n-placeholder="idle.discoveredUrlsLinkSelectorPlaceholder" autocomplete="off" />
             </div>
+            <!-- Issue #218 follow-up: lets a non-developer pick a navigation
+                 link by clicking it on the live page, writing both the
+                 clicked page's own URL (Page-URL) and a generalized selector
+                 (Link-selector) at once — no need to know/type either by
+                 hand. Same click-based selection flow browser actions'/
+                 pagination's own pick button already use. -->
+            <div class="actions">
+              <button id="btn-pick-discovered-urls-link" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.pickSelectorBtn"></button>
+            </div>
             <p class="preview-summary" data-i18n="idle.discoveredUrlsHint"></p>
             <div class="output-settings-row">
               <label for="input-discovered-urls-max-urls" data-i18n="idle.discoveredUrlsMaxUrlsLabel"></label>

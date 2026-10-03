@@ -183,6 +183,24 @@ const SFSessionRestore = (function () {
       return true;
     }
 
+    if (stored.selectionKind === 'discoveredUrls' && stored.pendingSelector) {
+      // Same as the live ELEMENT_SELECTED path: write the picked selector
+      // and the clicked page's own URL (already self-corrected into
+      // state.url by the block above, if it had changed) straight into
+      // discoveredUrls, no naming modal needed.
+      log('INIT pending discoveredUrls selector found → updating discoveredUrls', stored.pendingSelector);
+      const discoveredUrls = {
+        ...state.discoveredUrls,
+        pageUrl: stored.pendingUrl || state.discoveredUrls.pageUrl,
+        linkSelector: stored.pendingSelector,
+      };
+      await chrome.storage.session.set({ discoveredUrls });
+      bridge.setState(STATES.IDLE, {
+        discoveredUrls, selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
+      });
+      return true;
+    }
+
     // Flat field or container field — show the (extended, in container
     // mode) field-name modal without re-checking the companion. The
     // transform chain itself is never persisted (see pendingTransforms'
