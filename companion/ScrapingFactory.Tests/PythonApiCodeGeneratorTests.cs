@@ -200,6 +200,142 @@ public class PythonApiCodeGeneratorTests
     }
 
     [Fact]
+    public void Generate_BrowserDiscoverySourceParameter_ContainsDiscoveryUrlAndActionsAndPlaywrightHelpers()
+    {
+        var api = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter
+                {
+                    Name = "category",
+                    Source = new BrowserDiscoverySource
+                    {
+                        DiscoveryUrl = "https://example.com/angebote",
+                        Actions = [new ClickAction { Selector = "#load-more" }],
+                    },
+                },
+            ],
+        };
+
+        var script = _generator.Generate(PlanWith(api));
+
+        Assert.Contains("\"kind\": \"browserDiscovery\"", script);
+        Assert.Contains("'https://example.com/angebote'", script);
+        Assert.Contains("\"kind\": \"click\", \"selector\": '#load-more'", script);
+        Assert.Contains("from playwright.sync_api import sync_playwright", script);
+        Assert.Contains("def _resolve_browser_discovery(source, headers, target_name):", script);
+        Assert.Contains("def _match_url_against_template(candidate_url, template, target_name):", script);
+        Assert.Contains("def _run_browser_action(page, action):", script);
+    }
+
+    // Issue #289
+    [Fact]
+    public void Generate_BrowserDiscoverySourceScrollActionWithStepPx_ContainsScrollStepPxLiteral()
+    {
+        var api = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter
+                {
+                    Name = "category",
+                    Source = new BrowserDiscoverySource
+                    {
+                        DiscoveryUrl = "https://example.com/angebote",
+                        Actions = [new ScrollAction { ScrollStepPx = 400 }],
+                    },
+                },
+            ],
+        };
+
+        var script = _generator.Generate(PlanWith(api));
+
+        Assert.Contains("\"scrollStepPx\": 400", script);
+    }
+
+    [Fact]
+    public void Generate_BrowserDiscoverySourceScrollActionWithoutStepPx_OmitsScrollStepPxKey()
+    {
+        var api = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter
+                {
+                    Name = "category",
+                    Source = new BrowserDiscoverySource
+                    {
+                        DiscoveryUrl = "https://example.com/angebote",
+                        Actions = [new ScrollAction()],
+                    },
+                },
+            ],
+        };
+
+        var script = _generator.Generate(PlanWith(api));
+
+        // Not DoesNotContain("scrollStepPx") on the whole script — the
+        // generic runtime dispatcher (_run_scroll_action) always references
+        // the key by name via action.get("scrollStepPx") regardless of
+        // whether any specific action actually sets it; only the rendered
+        // action literal itself should omit the key when unset.
+        Assert.DoesNotContain("\"scrollStepPx\":", script);
+    }
+
+    // Conditional Playwright dependency (Architecture Decision #4's own
+    // note on Engine.Api being a deliberate compromise) — a script with no
+    // browser-discovery-sourced parameter must stay exactly as lightweight
+    // as before this feature existed.
+    [Fact]
+    public void Generate_WithoutBrowserDiscoverySource_OmitsPlaywrightImport()
+    {
+        var script = _generator.Generate(PlanWith(SampleApi()));
+        Assert.DoesNotContain("playwright", script);
+    }
+
+    [Fact]
+    public void Generate_BrowserDiscoverySourceWithFillAction_RendersRequireEnvHelperWithoutProxy()
+    {
+        var api = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter
+                {
+                    Name = "category",
+                    Source = new BrowserDiscoverySource
+                    {
+                        DiscoveryUrl = "https://example.com/angebote",
+                        Actions = [new FillAction { Selector = "#q", EnvironmentVariableName = "SF_SEARCH_TERM" }],
+                    },
+                },
+            ],
+        };
+
+        var script = _generator.Generate(PlanWith(api));
+
+        Assert.Contains("EXIT_MISSING_ENV_VAR = 78", script);
+        Assert.Contains("def _require_env(name):", script);
+        Assert.Contains("import os", script);
+        // Proves the Fill action's own env var name reaches the rendered
+        // literal, not a hardcoded placeholder.
+        Assert.Contains("\"environmentVariableName\": 'SF_SEARCH_TERM'", script);
+    }
+
+    [Fact]
     public void Generate_HeaderWithValue_ContainsLiteralValueNotEnvironmentLookup()
     {
         var api = SampleApi();

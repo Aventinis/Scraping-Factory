@@ -75,8 +75,45 @@ public class ApiParameterSourceJsonTests
         Assert.Equal("{yyyy}-{ww}", range.Format);
     }
 
+    // Issue #216: unlike the other three, BrowserDiscoverySource nests
+    // another polymorphic list of its own (Actions: List<BrowserAction>) —
+    // proves the outer "kind" discriminator still resolves correctly with a
+    // nested one in play, not just a flat object.
     [Fact]
-    public void SerializeThenDeserialize_RoundTripsAllThreeVariants()
+    public void Deserialize_BrowserDiscoverySourceByKind_ProducesBrowserDiscoverySource()
+    {
+        const string json = """
+            {
+              "kind": "browserDiscovery",
+              "discoveryUrl": "https://example.com/angebote",
+              "actions": [
+                { "kind": "click", "selector": "#load-more" }
+              ]
+            }
+            """;
+
+        var source = JsonSerializer.Deserialize<ApiParameterSource>(json, Options);
+
+        var browserDiscovery = Assert.IsType<BrowserDiscoverySource>(source);
+        Assert.Equal("https://example.com/angebote", browserDiscovery.DiscoveryUrl);
+        var action = Assert.Single(browserDiscovery.Actions!);
+        Assert.IsType<ClickAction>(action);
+        Assert.Equal("#load-more", ((ClickAction)action).Selector);
+    }
+
+    [Fact]
+    public void Deserialize_BrowserDiscoverySourceWithNoActions_ProducesEmptyActions()
+    {
+        const string json = """{ "kind": "browserDiscovery", "discoveryUrl": "https://example.com/angebote" }""";
+
+        var source = JsonSerializer.Deserialize<ApiParameterSource>(json, Options);
+
+        var browserDiscovery = Assert.IsType<BrowserDiscoverySource>(source);
+        Assert.Null(browserDiscovery.Actions);
+    }
+
+    [Fact]
+    public void SerializeThenDeserialize_RoundTripsAllFourVariants()
     {
         ApiParameterSource[] sources =
         [
@@ -84,6 +121,12 @@ public class ApiParameterSourceJsonTests
             new DiscoverySource { UrlTemplate = "https://example.com/api/categories", ItemsPath = "data", ValuePath = "slug" },
             new RangeSource { Type = RangeType.Number, From = "1", To = "10" },
             new RangeSource { Type = RangeType.IsoWeek, From = "2026-35", To = "2026-50", Format = "{yyyy}-{ww}" },
+            new BrowserDiscoverySource { DiscoveryUrl = "https://example.com/angebote" },
+            new BrowserDiscoverySource
+            {
+                DiscoveryUrl = "https://example.com/angebote",
+                Actions = [new ScrollAction { MaxIterations = 5 }, new ClickAction { Selector = "#more" }],
+            },
         ];
 
         foreach (var source in sources)

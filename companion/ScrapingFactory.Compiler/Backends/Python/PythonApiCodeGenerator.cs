@@ -33,6 +33,16 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
         var hardening = PythonHardeningLiteral.BuildContext(plan.Hardening);
         var externalConfig = PythonExternalConfigLiteral.BuildContext(plan.ExternalConfig);
 
+        // Issue #216: Playwright (and the shared EXIT_MISSING_ENV_VAR/
+        // _require_env helper, needed when a discovery action itself fills
+        // in a credential) are both conditional dependencies — every other
+        // Api-mode script stays exactly as lightweight as before this
+        // existed (see Architecture Decision #4's own note on Engine.Api
+        // being a deliberate compromise).
+        var needsBrowserDiscovery = api.Parameters.Any(p => p.Source is BrowserDiscoverySource);
+        var needsRequireEnvHelper = api.Parameters.Any(p =>
+            p.Source is BrowserDiscoverySource { Actions: { } actions } && actions.Any(a => a is FillAction));
+
         if (api.Groups is { Count: > 0 })
         {
             var rootNames = api.Groups.Select(root => root.Name).ToList();
@@ -41,7 +51,9 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
             {
                 url_template = api.UrlTemplate,
                 root_names = rootNames,
-                needs_os_import = NeedsOsImport(api.Headers, plan.ChangeDetection, plan.Proxy),
+                needs_os_import = NeedsOsImport(api.Headers, plan.ChangeDetection, plan.Proxy, needsRequireEnvHelper),
+                needs_browser_discovery = needsBrowserDiscovery,
+                needs_require_env_helper = needsRequireEnvHelper,
                 url_template_literal = PythonLiteral.Str(api.UrlTemplate),
                 method_literal = PythonLiteral.Str(api.Method),
                 body_literal = PythonApiConfigLiteral.RenderBody(api.Body),
@@ -85,7 +97,9 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
         {
             url_template = api.UrlTemplate,
             fields,
-            needs_os_import = NeedsOsImport(api.Headers, plan.ChangeDetection, plan.Proxy),
+            needs_os_import = NeedsOsImport(api.Headers, plan.ChangeDetection, plan.Proxy, needsRequireEnvHelper),
+            needs_browser_discovery = needsBrowserDiscovery,
+            needs_require_env_helper = needsRequireEnvHelper,
             url_template_literal = PythonLiteral.Str(api.UrlTemplate),
             method_literal = PythonLiteral.Str(api.Method),
             body_literal = PythonApiConfigLiteral.RenderBody(api.Body),
@@ -114,7 +128,10 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
     // Issue #87/#88: change detection and proxy support also read env vars
     // at runtime (SMTP/webhook credentials, proxy URL list), same reason a
     // configured header already needs `import os`.
-    private static bool NeedsOsImport(List<ApiHeader>? headers, ChangeDetectionConfig? changeDetection, ProxyConfig? proxy) =>
+    // Issue #216: needsRequireEnvHelper also needs `os` — _require_env reads
+    // os.environ[...] the same way FillStep's own copy already does in the
+    // Playwright templates.
+    private static bool NeedsOsImport(List<ApiHeader>? headers, ChangeDetectionConfig? changeDetection, ProxyConfig? proxy, bool needsRequireEnvHelper) =>
         (headers?.Any(header => !string.IsNullOrWhiteSpace(header.EnvironmentVariableName)) ?? false) ||
-        changeDetection is not null || proxy is not null;
+        changeDetection is not null || proxy is not null || needsRequireEnvHelper;
 }

@@ -509,6 +509,14 @@ body {
 .api-config-range-format-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
 .api-config-range-format-row select, .api-config-range-format-row input[type="text"] { flex: 1; }
 .api-config-range-format-example { flex-basis: 100%; margin: 2px 0 0; font-size: 11px; color: var(--color-text-muted); }
+/* Issue #216: BrowserDiscoverySource's own fields — reuses browser-action-card/
+   browser-action-selector-row/field-selector verbatim (see renderBrowserDiscoverySourceFields's
+   own doc comment), so only the two new elements below (the URL row and the
+   action-list/add-row spacing) need their own rules. */
+.api-discovery-source > div:first-child { margin-bottom: 6px; }
+.api-discovery-source > div:first-child label { display: block; font-size: 11px; color: var(--color-text-muted); margin-bottom: 2px; }
+.api-discovery-url { width: 100%; }
+.api-discovery-actions-list { margin-bottom: 6px; }
 .api-config-header-row .api-config-header-name { flex: 1; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .api-config-header-mode { display: flex; gap: 6px; }
 .api-config-env-name { width: 90px; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }

@@ -16,7 +16,7 @@ const { loadGlobalSettings, getGlobalSettings, updateGlobalSettings } =
 const {
   STATES, escapeHtml,
   parseUrlTemplateParts, buildUrlTemplate, parseValueListInput, findUrlTemplateMatches, mergeValueListValues,
-  buildStaticListSource, buildDiscoverySource, buildRangeSource, RANGE_FORMAT_PRESETS,
+  buildStaticListSource, buildDiscoverySource, buildRangeSource, buildBrowserDiscoverySource, RANGE_FORMAT_PRESETS,
   detectRangeFormat, findUrlPartValue, rangeFormatExample,
   buildApiHeaders, buildApiConfig,
   buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
@@ -324,7 +324,7 @@ let _state = {
   // itself already gets). Written onto the resulting field/node once
   // confirmed (see confirmField/confirmExtendedField).
   pendingTransforms:   [],
-  selectionKind:       null,  // 'field' | 'container' | 'browserAction' | 'pagination' | null — which kind the current SELECTING round is for
+  selectionKind:       null,  // 'field' | 'container' | 'browserAction' | 'pagination' | 'apiDiscoveryAction' | null — which kind the current SELECTING round is for
   pendingParentPath:   null,  // number[] | null — where the next inserted group-tree node goes; null = root level
   pendingNewContainer: null,  // {name, repeating} captured by modal-container-new before element-selection starts
   pendingBrowserActionIndex: null, // number | null — which browserActions entry the current SELECTING round's result is written into (selectionKind === 'browserAction')
@@ -332,6 +332,13 @@ let _state = {
   // property of that entry gets the picked value; only a ScrollStep action
   // has more than one pickable field, everything else always uses 'selector'.
   pendingBrowserActionField: 'selector',
+  // Issue #216: same shape as pendingBrowserActionIndex/Field above, just
+  // nested one level deeper — which BrowserDiscoverySource (by parameter-
+  // part id) and which of its own actions the current SELECTING round's
+  // result is written into (selectionKind === 'apiDiscoveryAction').
+  pendingApiDiscoveryPartId: null, // string | null
+  pendingApiDiscoveryActionIndex: null, // number | null
+  pendingApiDiscoveryActionField: 'selector',
   containerModalOpen:  false, // modal-container-new visibility
   domViewEnabled:    false, // user preference, kept across selection rounds
   domTree:           null,  // serialized tree from the content script, or null while loading/errored
@@ -587,6 +594,9 @@ function persistState() {
       pendingNewContainer: _state.pendingNewContainer,
       pendingBrowserActionIndex: _state.pendingBrowserActionIndex,
       pendingBrowserActionField: _state.pendingBrowserActionField,
+      pendingApiDiscoveryPartId: _state.pendingApiDiscoveryPartId,
+      pendingApiDiscoveryActionIndex: _state.pendingApiDiscoveryActionIndex,
+      pendingApiDiscoveryActionField: _state.pendingApiDiscoveryActionField,
       apiSearchTarget: _state.apiSearchTarget,
       apiConfigDraft: _state.apiConfigDraft,
       apiConfig: _state.apiConfig,
@@ -1192,6 +1202,7 @@ async function init() {
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
     'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pagination', 'persistentSession', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'pendingApiDiscoveryPartId', 'pendingApiDiscoveryActionIndex', 'pendingApiDiscoveryActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
     'scriptFileName', 'outputFileName',
@@ -1228,7 +1239,7 @@ if (typeof module !== 'undefined') {
     serializeApiTree, renderApiTree,
     renderApiCandidates, renderApiEntriesList,
     parseUrlTemplateParts, buildUrlTemplate, parseValueListInput,
-    buildStaticListSource, buildDiscoverySource, buildRangeSource, buildApiHeaders, buildApiConfig,
+    buildStaticListSource, buildDiscoverySource, buildRangeSource, buildBrowserDiscoverySource, buildApiHeaders, buildApiConfig,
     findUrlTemplateMatches, mergeValueListValues,
     variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
     detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,

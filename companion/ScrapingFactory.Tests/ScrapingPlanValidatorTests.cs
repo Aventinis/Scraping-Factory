@@ -1130,6 +1130,42 @@ public class ScrapingPlanValidatorTests
         Assert.Contains("WaitAfterMs", result.Error);
     }
 
+    // Issue #289
+    [Fact]
+    public void Validate_ScrollStepWithPositiveScrollStepPx_Succeeds()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ScrollStep { ScrollStepPx = 400 },
+                new ExtractStep { Name = "Titel", Selector = ".item" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_ScrollStepWithNonPositiveScrollStepPx_Fails()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ScrollStep { ScrollStepPx = 0 },
+                new ExtractStep { Name = "Titel", Selector = ".item" },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("ScrollStepPx", result.Error);
+    }
+
     // ── FramePath for Action Steps (Issue #42, Phase 4) ─────────────────────
 
     [Fact]
@@ -1968,6 +2004,170 @@ public class ScrapingPlanValidatorTests
         };
         var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
         Assert.True(result.Success);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithValidBrowserDiscoverySource_Succeeds()
+    {
+        var valid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter
+                {
+                    Name = "category",
+                    Source = new BrowserDiscoverySource
+                    {
+                        DiscoveryUrl = "https://example.com/angebote",
+                        Actions = [new ClickAction { Selector = "#load-more" }],
+                    },
+                },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success, result.Error);
+    }
+
+    // Actions is optional/null — "just load DiscoveryUrl and observe
+    // whatever fires natively" is a valid, minimal configuration.
+    [Fact]
+    public void Validate_ApiConfigWithBrowserDiscoverySourceNoActions_Succeeds()
+    {
+        var valid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter { Name = "category", Source = new BrowserDiscoverySource { DiscoveryUrl = "https://example.com/angebote" } },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(valid));
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Theory]
+    [InlineData("not-a-url")]
+    [InlineData("ftp://example.com/angebote")]
+    public void Validate_ApiConfigWithBrowserDiscoverySourceInvalidDiscoveryUrl_Fails(string discoveryUrl)
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters = [new ApiParameter { Name = "category", Source = new BrowserDiscoverySource { DiscoveryUrl = discoveryUrl } }],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("DiscoveryUrl", result.Error);
+    }
+
+    // BrowserDiscoverySource only means anything relative to UrlTemplate
+    // itself (see its own doc comment) — a parameter using it that never
+    // appears in UrlTemplate would have nothing to match captured requests
+    // against. Referenced from Body instead (Method "POST") rather than
+    // left fully unused, so this specifically exercises the
+    // BrowserDiscoverySource-vs-UrlTemplate check rather than the more
+    // generic "parameter referenced by neither UrlTemplate nor Body" one.
+    [Fact]
+    public void Validate_ApiConfigWithBrowserDiscoverySourceParameterNotInUrlTemplate_Fails()
+    {
+        var invalid = new ApiConfig
+        {
+            Method = "POST",
+            UrlTemplate = "https://example.com/api/items",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters = [new ApiParameter { Name = "category", Source = new BrowserDiscoverySource { DiscoveryUrl = "https://example.com/angebote" } }],
+            Body = new ApiBodyObject { Properties = new() { ["category"] = new ApiBodyVariable { ParameterName = "category" } } },
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("nothing to match", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithBrowserDiscoverySourceActionBlankSelector_Fails()
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter
+                {
+                    Name = "category",
+                    Source = new BrowserDiscoverySource
+                    {
+                        DiscoveryUrl = "https://example.com/angebote",
+                        Actions = [new ClickAction { Selector = " " }],
+                    },
+                },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("ClickAction", result.Error);
+    }
+
+    [Fact]
+    public void Validate_ApiConfigWithBrowserDiscoverySourceFillActionInvalidEnvVar_Fails()
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter
+                {
+                    Name = "category",
+                    Source = new BrowserDiscoverySource
+                    {
+                        DiscoveryUrl = "https://example.com/angebote",
+                        Actions = [new FillAction { Selector = "#q", EnvironmentVariableName = "123-invalid" }],
+                    },
+                },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("environment variable", result.Error);
+    }
+
+    // Issue #289
+    [Fact]
+    public void Validate_ApiConfigWithBrowserDiscoverySourceScrollActionNonPositiveScrollStepPx_Fails()
+    {
+        var invalid = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api/items?category={category}",
+            ItemsPath = "data.items",
+            Fields = [new ApiField { Name = "Titel", Path = "title" }],
+            Parameters =
+            [
+                new ApiParameter
+                {
+                    Name = "category",
+                    Source = new BrowserDiscoverySource
+                    {
+                        DiscoveryUrl = "https://example.com/angebote",
+                        Actions = [new ScrollAction { ScrollStepPx = 0 }],
+                    },
+                },
+            ],
+        };
+        var result = ScrapingPlanValidator.Validate(ApiPlan(invalid));
+        Assert.False(result.Success);
+        Assert.Contains("ScrollStepPx", result.Error);
     }
 
     [Fact]

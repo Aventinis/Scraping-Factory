@@ -5,11 +5,11 @@
         for _ in range({{ step.max_iterations }}):
             if _scroll_container_selector:
                 if _scroll_frame_path:
-                    _resolve_locator(page, _scroll_container_selector, _scroll_frame_path).evaluate("el => el.scrollTop = el.scrollHeight")
+                    _resolve_locator(page, _scroll_container_selector, _scroll_frame_path).evaluate("{{ if step.scroll_step_px }}el => el.scrollTop += {{ step.scroll_step_px }}{{ else }}el => el.scrollTop = el.scrollHeight{{ end }}")
                 else:
-                    page.eval_on_selector(_scroll_container_selector, "el => el.scrollTop = el.scrollHeight")
+                    page.eval_on_selector(_scroll_container_selector, "{{ if step.scroll_step_px }}el => el.scrollTop += {{ step.scroll_step_px }}{{ else }}el => el.scrollTop = el.scrollHeight{{ end }}")
             else:
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                page.evaluate("{{ if step.scroll_step_px }}window.scrollBy(0, {{ step.scroll_step_px }}){{ else }}window.scrollTo(0, document.body.scrollHeight){{ end }}")
 
             # A configured "load more" button is a more reliable stop signal
             # than page height: newly loaded content can still fit within
@@ -39,10 +39,30 @@
             if _scroll_container_selector:
                 if _scroll_frame_path:
                     _scroll_height = _resolve_locator(page, _scroll_container_selector, _scroll_frame_path).evaluate("el => el.scrollHeight")
+{{~ if step.scroll_step_px ~}}
+                    _scroll_at_bottom = _resolve_locator(page, _scroll_container_selector, _scroll_frame_path).evaluate("el => el.scrollTop + el.clientHeight >= el.scrollHeight - 1")
+{{~ end ~}}
                 else:
                     _scroll_height = page.eval_on_selector(_scroll_container_selector, "el => el.scrollHeight")
+{{~ if step.scroll_step_px ~}}
+                    _scroll_at_bottom = page.eval_on_selector(_scroll_container_selector, "el => el.scrollTop + el.clientHeight >= el.scrollHeight - 1")
+{{~ end ~}}
             else:
                 _scroll_height = page.evaluate("document.body.scrollHeight")
+{{~ if step.scroll_step_px ~}}
+                _scroll_at_bottom = page.evaluate("window.scrollY + window.innerHeight >= document.body.scrollHeight - 1")
+{{~ end ~}}
+{{~ if step.scroll_step_px ~}}
+            # Issue #289: without ScrollStepPx, reaching the same height twice
+            # in a row (today's original signal) is already "nothing more to
+            # load". With it, a still-short step can legitimately report the
+            # same height for several rounds before genuinely reaching the
+            # bottom — the extra _scroll_at_bottom check (computed above)
+            # tells the two cases apart.
+            if _scroll_height == _scroll_prev_height and _scroll_at_bottom:
+                break
+{{~ else ~}}
             if _scroll_height == _scroll_prev_height:
                 break
+{{~ end ~}}
             _scroll_prev_height = _scroll_height

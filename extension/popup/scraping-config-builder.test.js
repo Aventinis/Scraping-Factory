@@ -1458,7 +1458,7 @@ describe('addBrowserAction', () => {
 
   test('appends a scroll action with defaults (Issue #41, Phase 6)', () => {
     expect(addBrowserAction([], 'scroll')).toEqual([
-      { kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000 },
+      { kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000, scrollStepPx: null },
     ]);
   });
 
@@ -1534,6 +1534,17 @@ describe('serializeBrowserActions', () => {
     const result = serializeBrowserActions(actions);
     expect(result[0].containerSelector).toBeNull();
     expect(result[0].loadMoreButtonSelector).toBeNull();
+  });
+
+  // Issue #289
+  test('serializes scrollStepPx when set', () => {
+    const actions = [{ kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000, scrollStepPx: 400 }];
+    expect(serializeBrowserActions(actions)[0].scrollStepPx).toBe(400);
+  });
+
+  test('omits scrollStepPx entirely (not null/0) when unset, keeping the jump-to-bottom default', () => {
+    const actions = [{ kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000, scrollStepPx: null }];
+    expect(serializeBrowserActions(actions)[0]).not.toHaveProperty('scrollStepPx');
   });
 
   // Issue #42, Phase 7

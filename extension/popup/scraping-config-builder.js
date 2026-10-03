@@ -691,7 +691,9 @@ function addBrowserAction(actions, kind) {
     waitFor: { kind: 'waitFor', selector: '', timeoutMs: 5000 },
     fill:    { kind: 'fill', selector: '', environmentVariableName: '' },
     click:   { kind: 'click', selector: '' },
-    scroll:  { kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000 },
+    // Issue #289: scrollStepPx stays null (keeping today's "jump straight
+    // to the bottom" default) until the user explicitly types a value.
+    scroll:  { kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000, scrollStepPx: null },
   };
   return [...actions, defaults[kind]];
 }
@@ -744,6 +746,9 @@ function serializeBrowserActions(actions) {
         loadMoreButtonSelector: a.loadMoreButtonSelector || null,
         maxIterations: a.maxIterations,
         waitAfterMs: a.waitAfterMs,
+        // Issue #289: omitted (not 0/null) when unset — None is the
+        // runtime's own "jump straight to the bottom" default.
+        ...(a.scrollStepPx ? { scrollStepPx: a.scrollStepPx } : {}),
         ...framePath,
       };
     }

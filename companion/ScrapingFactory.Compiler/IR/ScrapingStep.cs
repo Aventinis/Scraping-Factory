@@ -111,6 +111,14 @@ public sealed class ScrollStep : ScrapingStep
     public int MaxIterations { get; init; } = 10;
     public int WaitAfterMs { get; init; } = 1000;
 
+    // Issue #289: null (the default) keeps today's exact behavior — jump
+    // straight to the current bottom of the page/container every iteration.
+    // When set, each iteration instead scrolls by exactly this many pixels,
+    // so a section that only lazy-loads once actually scrolled *through*
+    // (an IntersectionObserver per section) gets a chance to enter the
+    // viewport instead of being skipped by a direct jump to the bottom.
+    public int? ScrollStepPx { get; init; }
+
     // See ExtractStep.FramePath (Issue #42, Phase 4) — applies to both
     // ContainerSelector and LoadMoreButtonSelector, since a single ScrollStep
     // already targets one specific area of one specific page/frame.

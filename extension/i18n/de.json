@@ -219,6 +219,8 @@
     "sourceKindStaticList": "Werteliste",
     "sourceKindDiscovery": "Discovery-Endpunkt",
     "sourceKindRange": "Bereich",
+    "sourceKindBrowserDiscovery": "Browser-Erkennung",
+    "discoveryUrlLabel": "Erkennungs-URL",
     "valueListPlaceholder": "Werte, kommagetrennt oder pro Zeile",
     "rangeFromPlaceholder": "Von",
     "rangeToPlaceholder": "Bis (z. B. \"today\")",
@@ -486,6 +488,8 @@
     "loadMoreButtonSelectorLabel": "„Mehr laden“-Button (optional)",
     "maxIterationsLabel": "Max. Durchläufe",
     "waitAfterMsLabel": "Wartezeit (ms)",
+    "scrollStepPxLabel": "Scroll-Schrittweite (px)",
+    "scrollStepPxPlaceholder": "leer = ans Ende springen",
     "persistentSessionToggle": "Sitzung zwischen Läufen wiederverwenden",
     "persistentSessionHint": "Speichert Cookies/Login-Status nach jedem Lauf und überspringt beim nächsten Mal die obigen Login-Aktionen. Achtung: Die gespeicherte Datei enthält echte Sitzungs-Cookies — wie ein Passwort behandeln, niemals teilen oder committen. Läuft die Sitzung ab, schlägt der Lauf einfach fehl; es gibt keinen automatischen erneuten Login."
   }

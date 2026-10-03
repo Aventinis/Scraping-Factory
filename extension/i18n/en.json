@@ -219,6 +219,8 @@
     "sourceKindStaticList": "Value list",
     "sourceKindDiscovery": "Discovery endpoint",
     "sourceKindRange": "Range",
+    "sourceKindBrowserDiscovery": "Browser discovery",
+    "discoveryUrlLabel": "Discovery URL",
     "valueListPlaceholder": "Values, comma-separated or one per line",
     "rangeFromPlaceholder": "From",
     "rangeToPlaceholder": "To (e.g. \"today\")",
@@ -486,6 +488,8 @@
     "loadMoreButtonSelectorLabel": "\"Load more\" button (optional)",
     "maxIterationsLabel": "Max. rounds",
     "waitAfterMsLabel": "Wait time (ms)",
+    "scrollStepPxLabel": "Scroll step (px)",
+    "scrollStepPxPlaceholder": "blank = jump to bottom",
     "persistentSessionToggle": "Reuse session between runs",
     "persistentSessionHint": "Saves cookies/login state after each run and skips the login actions above on the next run. Warning: the saved file contains live session cookies — treat it like a password and never share or commit it. If the session ever expires, the run simply fails; there is no automatic re-login."
   }
