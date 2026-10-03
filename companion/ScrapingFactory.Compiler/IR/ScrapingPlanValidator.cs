@@ -74,6 +74,16 @@ public static class ScrapingPlanValidator
                 return Invalid(paginationError);
         }
 
+        // Issue #218: mode-independent (Fields/Groups — ScrapingPlanBuilder
+        // never sets this for an Api/Blocks-mode plan), same placement as
+        // ChangeDetection/Proxy/Hardening/Pagination above.
+        if (plan.DiscoveredUrls is { } discoveredUrls)
+        {
+            var discoveredUrlsError = ValidateDiscoveredUrls(discoveredUrls);
+            if (discoveredUrlsError is not null)
+                return Invalid(discoveredUrlsError);
+        }
+
         // Issue #175: session persistence only means anything for the
         // Browser engine — a Static/Api-mode request has no browser session
         // to keep alive between runs. Same placement as ChangeDetection/
@@ -1163,6 +1173,30 @@ public static class ScrapingPlanValidator
         return missing.Count > 0
             ? $"PageNumberPagination.UrlTemplate is missing placeholder(s): {string.Join(", ", missing.Select(token => $"{{{token}}}"))}."
             : null;
+    }
+
+    // Issue #218: PageUrl is always a fully concrete, unparameterized
+    // address (the page actually fetched for the discovery pass) — same
+    // plain absolute-URI check as NavigateStep's own start URL / Issue
+    // #216's DiscoveryUrl, not the "{name}"-placeholder-aware check
+    // UrlTemplate itself gets. LinkSelector's own CSS syntax is deliberately
+    // not validated — same laissez-faire this project already applies to
+    // every other CSS selector (see CLAUDE.md's "Selector compatibility"
+    // architecture note); a bad selector simply matches nothing, caught the
+    // same way an unrelated bad field selector already would be, by the
+    // real trial run finding no data.
+    private static string? ValidateDiscoveredUrls(DiscoveredUrlsConfig discoveredUrls)
+    {
+        if (!Uri.TryCreate(discoveredUrls.PageUrl, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return "DiscoveredUrls needs an absolute http(s) PageUrl.";
+        }
+        if (string.IsNullOrWhiteSpace(discoveredUrls.LinkSelector))
+            return "DiscoveredUrls.LinkSelector must not be empty.";
+        if (discoveredUrls.MaxUrls <= 0)
+            return $"DiscoveredUrls.MaxUrls must be positive (was {discoveredUrls.MaxUrls}).";
+        return null;
     }
 
     // Issue #182: at least 2 blocks (a single block is just Fields/Groups —

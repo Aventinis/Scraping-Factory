@@ -113,6 +113,16 @@ public sealed class ScrapingConfig
     // start URL, no further pages followed).
     public PaginationConfig? Pagination { get; init; }
 
+    // Issue #218: opt-in discovery of additional start URLs by harvesting
+    // links from a navigation/listing page — see IR/DiscoveredUrlsConfig.cs.
+    // Applies to Fields/Groups alike; mutually exclusive with Api (same
+    // reasoning as AdditionalUrls/Pagination above). Composes with both:
+    // additive with AdditionalUrls (the discovered list is combined with,
+    // not instead of, the statically-typed one), and each discovered URL
+    // paginates onward independently exactly like any other start URL
+    // already does. Null is today's exact behavior (no discovery pass runs).
+    public DiscoveredUrlsConfig? DiscoveredUrls { get; init; }
+
     // Issue #175: opt-in persistent session/cookie handling, Browser-engine
     // only (rejected server-side otherwise, same as WaitFor/Fill/Click/
     // Scroll — see ScrapingPlanValidator). When true, the generated script
