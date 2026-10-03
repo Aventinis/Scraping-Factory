@@ -347,6 +347,10 @@ static string? ValidateModeExclusivity(ScrapingConfig config)
     if (hasApi && config.Pagination is not null)
         return "Pagination and Api are mutually exclusive.";
 
+    // Issue #218: same reasoning as AdditionalUrls/Pagination above.
+    if (hasApi && config.DiscoveredUrls is not null)
+        return "DiscoveredUrls and Api are mutually exclusive.";
+
     return null;
 }
 
@@ -484,6 +488,8 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
             return Results.BadRequest(new { error = "AdditionalUrls is not supported on a Combined request — set it on each component's own config instead." });
         if (config.Pagination is not null)
             return Results.BadRequest(new { error = "Pagination is not supported on a Combined request — set it on each component's own config instead." });
+        if (config.DiscoveredUrls is not null)
+            return Results.BadRequest(new { error = "DiscoveredUrls is not supported on a Combined request — set it on each component's own config instead." });
         if (config.BrowserActions is { Count: > 0 })
             return Results.BadRequest(new { error = "BrowserActions is not supported on a Combined request — set it on each component's own config instead." });
         if (config.ChangeDetection is not null)
@@ -617,6 +623,11 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
         // need its own mapping, not yet reachable from this UI.
         if (config.OutputBlueprint is not null)
             return Results.BadRequest(new { error = "OutputBlueprint is not supported together with Blocks." });
+        // Issue #218: not designed for Blocks' multi-output shape yet — same
+        // "reject outright rather than guess" precedent as ExternalConfig/
+        // OutputBlueprint above.
+        if (config.DiscoveredUrls is not null)
+            return Results.BadRequest(new { error = "DiscoveredUrls is not supported together with Blocks." });
 
         for (var i = 0; i < blocks.Count; i++)
         {
