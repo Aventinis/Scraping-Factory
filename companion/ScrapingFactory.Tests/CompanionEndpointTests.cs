@@ -1165,6 +1165,26 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.Contains("mutually exclusive", doc.RootElement.GetProperty("error").GetString());
     }
 
+    // Issue #218: same reasoning as AdditionalUrls/Pagination above.
+    [Fact]
+    public async Task Generate_DiscoveredUrlsAndApiBothSet_Returns400()
+    {
+        var payload = $$"""
+            {
+              "url": "https://example.com",
+              "discoveredUrls": { "pageUrl": "https://example.com/kategorien", "linkSelector": "a" },
+              "api": {{SampleApiPayload}}
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("mutually exclusive", doc.RootElement.GetProperty("error").GetString());
+    }
+
     // End-to-end through the real HTTP endpoint: engine selection resolves
     // PythonApiCodeGenerator, and the generated script is actually run
     // against a fake JSON API (real subprocess + real HTTP request, like
