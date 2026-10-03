@@ -850,8 +850,26 @@ public static class ScrapingPlanValidator
         if (unusedParameters.Count > 0)
             return $"Parameters with no placeholder in UrlTemplate: {string.Join(", ", unusedParameters)}.";
 
+        // Issue #217: a later parameter's DiscoverySource.UrlTemplate/
+        // BrowserDiscoverySource.DiscoveryUrl may itself reference an
+        // earlier-declared parameter's own {name} placeholder (e.g. a
+        // category-scoped discovery endpoint like
+        // ".../categories/{category}/weeks") — resolves Architecture
+        // Decision #5's long-documented "no dependencies between
+        // parameters" limitation. Declaration order defines dependency
+        // order (a strict chain, not a full dependency graph — the
+        // issue's own deliberately simpler scope), so this is checked
+        // incrementally alongside the existing per-source-kind validation
+        // below rather than as a separate pass: declaredSoFar only ever
+        // contains names declared strictly before the one currently being
+        // checked.
+        var declaredSoFar = new HashSet<string>();
         foreach (var parameter in api.Parameters)
         {
+            var dependencyError = ValidateParameterDependencyOrder(parameter, declaredSoFar, parameterNames);
+            if (dependencyError is not null)
+                return dependencyError;
+
             var sourceError = parameter.Source switch
             {
                 StaticListSource { Values.Count: 0 } =>
@@ -872,16 +890,51 @@ public static class ScrapingPlanValidator
             };
             if (sourceError is not null)
                 return sourceError;
+
+            declaredSoFar.Add(parameter.Name);
         }
 
         return api.Headers is { } headers ? ValidateApiHeaders(headers) : null;
     }
 
-    // DiscoverySource.UrlTemplate is deliberately not cross-checked against
-    // api.Parameters the way the main UrlTemplate is: Phase 1 explicitly
-    // rules out dependencies between parameters (see issue #53's scope
-    // boundaries), so a discovery endpoint's own template is expected to be
-    // fully static.
+    // Issue #217: only DiscoverySource/BrowserDiscoverySource have a
+    // template string a {name} placeholder could even appear in —
+    // StaticListSource/RangeSource have no such field, so they can never
+    // depend on anything (out of scope per the issue's own open
+    // questions) and this returns null immediately for them. A placeholder
+    // naming something that isn't a declared parameter at all is left
+    // alone (same laissez-faire ValidateDiscoverySource's own doc comment
+    // already establishes for an otherwise-unrelated template) — only a
+    // name that IS a declared parameter, just not one declared before this
+    // one, is actually rejected.
+    private static string? ValidateParameterDependencyOrder(
+        ApiParameter parameter, HashSet<string> declaredSoFar, HashSet<string> allParameterNames)
+    {
+        var template = parameter.Source switch
+        {
+            DiscoverySource discovery => discovery.UrlTemplate,
+            BrowserDiscoverySource browserDiscovery => browserDiscovery.DiscoveryUrl,
+            _ => null,
+        };
+        if (template is null)
+            return null;
+
+        foreach (Match match in UrlTemplatePlaceholderPattern.Matches(template))
+        {
+            var referenced = match.Groups[1].Value;
+            if (!allParameterNames.Contains(referenced))
+                continue;
+            if (referenced == parameter.Name)
+                return $"Parameter '{parameter.Name}' cannot reference itself.";
+            if (!declaredSoFar.Contains(referenced))
+                return $"Parameter '{parameter.Name}' references '{referenced}', which is declared later — a parameter can only depend on an earlier-declared parameter.";
+        }
+        return null;
+    }
+
+    // DiscoverySource.UrlTemplate may now reference an earlier-declared
+    // parameter's own value (Issue #217, validated above) — otherwise it's
+    // still expected to be fully static, same as before that existed.
     private static string? ValidateDiscoverySource(string parameterName, DiscoverySource discovery)
     {
         if (discovery.Method != "GET")
@@ -933,10 +986,15 @@ public static class ScrapingPlanValidator
     }
 
     // Issue #216: DiscoveryUrl is the page actually opened/scrolled — unlike
-    // UrlTemplate (checked separately, see the call site above), it's always
-    // a fully concrete, unparameterized address, so a plain absolute-URI
-    // check is enough, mirroring the NavigateStep URL check at the top of
-    // this validator. Each action is validated the same way its plan-level
+    // UrlTemplate (checked separately, see the call site above), it needs no
+    // cross-check against api.Parameters here (that's ValidateParameterDependencyOrder's
+    // job, called before this): Uri.TryCreate(..., UriKind.Absolute, ...)
+    // happily parses a "{name}"-templated string too (confirmed: curly
+    // braces don't make .NET's Uri parser reject an otherwise well-formed
+    // absolute URL), so the same plain absolute-URI check already works
+    // whether or not this Issue #217 chaining is actually used, mirroring
+    // the NavigateStep URL check at the top of this validator. Each action
+    // is validated the same way its plan-level
     // WaitForStep/FillStep/ClickStep/ScrollStep counterpart already is above
     // — duplicated rather than shared, since those checks run against
     // ScrapingStep (post-ScrapingPlanBuilder translation), not the
