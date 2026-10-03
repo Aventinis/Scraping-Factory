@@ -902,10 +902,62 @@ def _number_range(from_value, to_value):
     return [str(n) for n in range(int(from_value), int(to_value) + 1)]
 
 
-{{~ if needs_browser_discovery ~}}
 _URL_TEMPLATE_PLACEHOLDER_PATTERN = re.compile(r"\{([^{}]+)\}")
 
 
+# Issue #217: a DiscoverySource/BrowserDiscoverySource may reference an
+# earlier-declared parameter's own value via the same "{name}" placeholder
+# syntax URL_TEMPLATE itself uses (e.g. a category-scoped discovery endpoint
+# like ".../categories/{category}/weeks") — ScrapingPlanValidator already
+# guarantees any such reference names an earlier parameter, never a later or
+# self one, so by the time this parameter is being resolved every name it
+# could possibly reference is already a key in `combo`. A placeholder naming
+# something that isn't a resolved-so-far parameter at all (a typo, or simply
+# not a reference this mechanism understands) is left untouched.
+def _substitute_known_parameters(template, combo):
+    def _replace(match):
+        name = match.group(1)
+        return quote(str(combo[name]), safe="") if name in combo else match.group(0)
+    return _URL_TEMPLATE_PLACEHOLDER_PATTERN.sub(_replace, template)
+
+
+# Resolving every parameter independently and then taking the full
+# cartesian product (this function's only job before Issue #217) breaks
+# down once a later parameter's own source can depend on an earlier one's
+# value — that parameter's value list isn't one fixed list anymore, it's a
+# different list per distinct combination of whatever it actually
+# references. `cache` still resolves a parameter exactly once when it
+# depends on nothing already resolved — every StaticListSource/RangeSource,
+# and any Discovery/BrowserDiscovery source with no "{name}" reference to an
+# earlier parameter — the same "resolve once, not once per combo" behavior
+# this had before chaining existed, since a source with no such reference
+# always maps to the same (empty) cache key regardless of `combo`.
+def _resolve_parameter_combos(headers):
+    combos = [{}]
+    for parameter in PARAMETERS:
+        name = parameter["name"]
+        source = parameter["source"]
+        new_combos = []
+        cache = {}
+        for combo in combos:
+            kind = source.get("kind")
+            if kind == "discovery":
+                template = source.get("urlTemplate", "")
+            elif kind == "browserDiscovery":
+                template = source.get("discoveryUrl", "")
+            else:
+                template = ""
+            referenced = set(_URL_TEMPLATE_PLACEHOLDER_PATTERN.findall(template)) & combo.keys()
+            cache_key = tuple(sorted((ref_name, combo[ref_name]) for ref_name in referenced))
+            if cache_key not in cache:
+                cache[cache_key] = _resolve_parameter_values(source, headers, name, combo)
+            for value in cache[cache_key]:
+                new_combos.append({**combo, name: value})
+        combos = new_combos
+    return combos
+
+
+{{~ if needs_browser_discovery ~}}
 # Decomposes an absolute URL (or a "{name}"-templated URL, read the same
 # way — a placeholder is just another path-segment/query-value string as
 # far as this is concerned) into origin/path-segments/query-params, the same
@@ -1068,8 +1120,11 @@ def _run_browser_action(page, action):
 # reuses the main request's own resolved HEADERS (set via
 # page.set_extra_http_headers), the same "discovery reuses the main
 # request's auth" precedent DiscoverySource's own requests.get call already
-# established.
-def _resolve_browser_discovery(source, headers, target_name):
+# established. Issue #217: DiscoveryUrl may itself reference an
+# earlier-declared parameter's own value via combo, substituted before
+# navigating there.
+def _resolve_browser_discovery(source, headers, target_name, combo):
+    discovery_url = _substitute_known_parameters(source["discoveryUrl"], combo)
     captured_urls = []
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -1077,7 +1132,7 @@ def _resolve_browser_discovery(source, headers, target_name):
         if headers:
             page.set_extra_http_headers(headers)
         page.on("request", lambda request: captured_urls.append(request.url))
-        page.goto(source["discoveryUrl"])
+        page.goto(discovery_url)
         for action in source["actions"]:
             _run_browser_action(page, action)
         browser.close()
@@ -1108,7 +1163,11 @@ def _build_headers():
 
 # Discovery requests reuse the main HEADERS (e.g. an auth token) since a
 # discovery endpoint is typically part of the same API as the main request.
-def _resolve_parameter_values(source, headers, parameter_name):
+# `combo` holds every earlier-declared parameter's own already-resolved
+# value (Issue #217) — substituted into a discovery/browserDiscovery
+# source's own template before it's used, so e.g. a category-scoped
+# discovery endpoint resolves against this specific run's category.
+def _resolve_parameter_values(source, headers, parameter_name, combo):
     kind = source["kind"]
     if kind == "staticList":
         return list(source["values"])
@@ -1120,12 +1179,13 @@ def _resolve_parameter_values(source, headers, parameter_name):
             return _date_range(source["from"], source["to"], source.get("format", _DEFAULT_DATE_FORMAT))
         return _number_range(source["from"], source["to"])
     if kind == "discovery":
-        response = requests.get(source["urlTemplate"], headers=headers, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
+        url_template = _substitute_known_parameters(source["urlTemplate"], combo)
+        response = requests.get(url_template, headers=headers, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
         response.raise_for_status()
         items = _resolve_items(response.json(), source["itemsPath"])
         return [str(_resolve_field(item, source["valuePath"])) for item in items]
     if kind == "browserDiscovery":
-        return _resolve_browser_discovery(source, headers, parameter_name)
+        return _resolve_browser_discovery(source, headers, parameter_name, combo)
     raise ValueError(f"Unknown parameter source: {kind}")
 
 
@@ -1332,8 +1392,7 @@ def _notify_change(old_content, new_content):
 
 def scrape():
     headers = _build_headers()
-    parameter_names = [parameter["name"] for parameter in PARAMETERS]
-    value_lists = [_resolve_parameter_values(parameter["source"], headers, parameter["name"]) for parameter in PARAMETERS]
+    combos = _resolve_parameter_combos(headers)
 
     # Multiple root groups (and/or multiple parameter combinations, each its
     # own request) are siblings in GROUPS/across requests, but XML needs
@@ -1342,8 +1401,7 @@ def scrape():
     root = ET.Element("Ergebnis")
     blueprint_rows = []
     blueprint_tree_elements = []
-    for combo_values in itertools.product(*value_lists):
-        combo = dict(zip(parameter_names, combo_values))
+    for combo in combos:
         # Every parameter value is URL-encoded before being substituted into
         # UrlTemplate — values discovered at runtime (DiscoverySource) could
         # contain spaces or other characters that aren't valid unescaped in a

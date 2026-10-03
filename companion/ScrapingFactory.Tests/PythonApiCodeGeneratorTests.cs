@@ -94,11 +94,16 @@ public class PythonApiCodeGeneratorTests
     }
 
     [Fact]
-    public void Generate_ContainsItertoolsProductAndCsvDictWriter()
+    public void Generate_ContainsParameterComboResolutionAndCsvDictWriter()
     {
         var script = _generator.Generate(PlanWith(SampleApi()));
-        Assert.Contains("import itertools", script);
-        Assert.Contains("itertools.product", script);
+        // Issue #217: the independent "resolve every parameter, then take
+        // the full cartesian product" model was replaced by an incremental,
+        // dependency-aware combo builder — itertools.product is no longer
+        // used here (import itertools stays, for _proxy_cycle elsewhere).
+        Assert.Contains("def _resolve_parameter_combos(headers):", script);
+        Assert.Contains("combos = _resolve_parameter_combos(headers)", script);
+        Assert.DoesNotContain("itertools.product", script);
         Assert.Contains("csv.DictWriter", script);
     }
 
@@ -227,7 +232,7 @@ public class PythonApiCodeGeneratorTests
         Assert.Contains("'https://example.com/angebote'", script);
         Assert.Contains("\"kind\": \"click\", \"selector\": '#load-more'", script);
         Assert.Contains("from playwright.sync_api import sync_playwright", script);
-        Assert.Contains("def _resolve_browser_discovery(source, headers, target_name):", script);
+        Assert.Contains("def _resolve_browser_discovery(source, headers, target_name, combo):", script);
         Assert.Contains("def _match_url_against_template(candidate_url, template, target_name):", script);
         Assert.Contains("def _run_browser_action(page, action):", script);
     }
@@ -463,8 +468,11 @@ public class PythonApiCodeGeneratorTests
 
         var script = _generator.Generate(plan);
 
+        // Issue #217: the discovery request's URL now goes through
+        // _substitute_known_parameters first (resolving any earlier-
+        // parameter reference) before being proxied.
         Assert.Contains(
-            "requests.get(source[\"urlTemplate\"], headers=headers, proxies=_proxies_for_requests(), timeout=10)",
+            "requests.get(url_template, headers=headers, proxies=_proxies_for_requests(), timeout=10)",
             script);
     }
 
