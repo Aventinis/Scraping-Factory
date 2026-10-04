@@ -25,6 +25,9 @@ const { showToast, setLastError } =
 const { buildScrapingConfig, buildVerificationValues, computeScriptFileNamePatch } =
   typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
 
+const { buildBootstrapVerificationValues } =
+  typeof require !== 'undefined' ? require('./api-bootstrap') : self.SFApiBootstrap;
+
 const { getGlobalSettings } =
   typeof require !== 'undefined' ? require('../shared/global-settings') : self.SFGlobalSettings;
 
@@ -184,14 +187,19 @@ async function generate(bridge) {
     state.pagination, state.persistentSession, globalSettings.includeOutputFile, globalSettings.externalConfig, combinedComponents,
     state.blocks, state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
     state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
+    state.discoveredUrls, state.preflight,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
   // below, buildConfigExport, and the "Report bug" log export) since none of
   // those are meant to ever see them. See fillTestValues/buildVerificationValues.
-  const verificationValues = state.engine === 'Browser'
-    ? buildVerificationValues(state.browserActions, state.fillTestValues)
-    : {};
+  // Issue #220: Api mode's bootstrap credentials get the same one-time
+  // test-value treatment, from the API_CONFIG screen's own inputs.
+  const verificationValues = state.mode === 'api'
+    ? buildBootstrapVerificationValues(state.apiConfig, state.apiBootstrapTestValues || {})
+    : state.engine === 'Browser'
+      ? buildVerificationValues(state.browserActions, state.fillTestValues)
+      : {};
   log('GENERATE request', config);
   try {
     const res = await fetch(`${companionUrl}/generate`, {
@@ -223,6 +231,16 @@ async function generate(bridge) {
     }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
+    // Issue #289 follow-up: present regardless of whether the body below
+    // ends up plain-text or the JSON preview/outputFile envelope — a header
+    // survives either response shape unchanged, unlike a body field that
+    // would need its own per-shape plumbing. Shown as a warning toast (the
+    // same "raw companion-originated English text, not routed through
+    // i18n" convention buildVerificationErrorMessage's own 422 handling
+    // already uses) rather than failing the request — the script itself was
+    // still generated successfully, just not run against the live page.
+    const verificationSkippedReason = res.headers?.get('X-ScrapingFactory-Verification-Skipped');
+
     // Issue #122/#161: only when includeDataPreview or includeOutputFile
     // asked for it does the companion respond with a JSON envelope
     // ({ script, preview, outputFile }) instead of the plain script text —
@@ -253,6 +271,12 @@ async function generate(bridge) {
       (dataPreview ? `, preview: ${dataPreview.totalCount} rows/elements` : '') +
       (outputFile ? `, outputFile: ${outputFile.fileName} (${outputFile.content.length} chars)` : '') +
       (blocksOutput ? `, blocks: ${blocksOutput.length}` : ''));
+    if (verificationSkippedReason) {
+      // Expected, safety-cap behavior, not a malfunction — no "Report bug"
+      // context (null), same treatment the 400/config-invalid toast above
+      // already gives a deterministic, non-bug outcome.
+      showToast(verificationSkippedReason, null, 'warn');
+    }
     bridge.setState(STATES.DONE, { scriptText, dataPreview, outputFile, blocksOutput });
   } catch (err) {
     log('GENERATE FAIL', err.message);

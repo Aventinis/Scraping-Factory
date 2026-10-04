@@ -149,3 +149,96 @@ describe('Pagination: pick next-link selector', () => {
     expect(document.getElementById('input-pagination-next-link-selector').value).toBe('.pagination__next');
   });
 });
+
+// ── Discovered start URLs: pick the link by clicking it (Issue #218 follow-up) ──
+// Same click-based selection flow pagination's own pick button already uses,
+// except this one also writes the clicked page's own URL (message.url) into
+// pageUrl, not just the selector — picking a navigation link conceptually
+// identifies both "which page has this navigation" and "which links to
+// harvest" in one click.
+describe('Discovered start URLs: pick the link by clicking it', () => {
+  let capturedListener;
+
+  const flushMicrotasks = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+
+  beforeEach(async () => {
+    jest.resetModules();
+
+    document.body.innerHTML = `
+      <section id="screen-idle" class="hidden">
+        <label>
+          <input type="checkbox" id="toggle-discovered-urls" />
+        </label>
+        <div id="discovered-urls-config" class="hidden">
+          <input type="text" id="input-discovered-urls-page-url" />
+          <input type="text" id="input-discovered-urls-link-selector" />
+          <button id="btn-pick-discovered-urls-link" type="button"></button>
+          <input type="number" id="input-discovered-urls-max-urls" />
+        </div>
+        <button id="btn-generate" disabled></button>
+      </section>
+      <section id="screen-selecting" class="hidden">
+        <input type="checkbox" id="toggle-dom-view" />
+        <div id="dom-tree-wrapper" class="hidden">
+          <p id="dom-tree-loading"></p>
+          <p id="dom-tree-error" class="hidden"></p>
+          <p id="dom-tree-truncated" class="hidden"></p>
+          <ul id="dom-tree-root"></ul>
+        </div>
+        <button id="btn-cancel-selection"></button>
+      </section>
+    `;
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+      tabs: { query: jest.fn((_, cb) => cb([{ url: 'https://example.com' }])) },
+      storage: {
+        session: {
+          get:    jest.fn().mockResolvedValue({}),
+          set:    jest.fn().mockResolvedValue(undefined),
+          remove: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    require('./popup');
+    await flushMicrotasks(); // → STATES.IDLE
+  });
+
+  test('clicking the pick button starts a selection round with avoidId (generalizes across sibling links)', () => {
+    document.getElementById('btn-pick-discovered-urls-link').click();
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'START_SELECTION', avoidId: true });
+    expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(true);
+  });
+
+  test('the picked selector and the clicked page\'s own URL are written straight into discoveredUrls — no modal', async () => {
+    document.getElementById('btn-pick-discovered-urls-link').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.side_categories a', url: 'https://books.toscrape.com/' });
+    await flushMicrotasks();
+
+    expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('input-discovered-urls-link-selector').value).toBe('.side_categories a');
+    expect(document.getElementById('input-discovered-urls-page-url').value).toBe('https://books.toscrape.com/');
+  });
+
+  test('picking again overwrites a previously picked selector/pageUrl', async () => {
+    document.getElementById('btn-pick-discovered-urls-link').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.nav-old a', url: 'https://old.example.com/' });
+    await flushMicrotasks();
+
+    document.getElementById('btn-pick-discovered-urls-link').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.side_categories a', url: 'https://books.toscrape.com/' });
+    await flushMicrotasks();
+
+    expect(document.getElementById('input-discovered-urls-link-selector').value).toBe('.side_categories a');
+    expect(document.getElementById('input-discovered-urls-page-url').value).toBe('https://books.toscrape.com/');
+  });
+});

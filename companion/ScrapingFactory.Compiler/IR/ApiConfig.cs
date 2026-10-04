@@ -69,7 +69,68 @@ public sealed class ApiConfig
     // orthogonal to the flat-vs-tree response shape, which still describes
     // the shape of whatever JSON the script tag contains.
     public EmbeddedJsonSource? EmbeddedJsonSource { get; init; }
+
+    // Token/auth bootstrap (Issue #220): one extra request the generated
+    // script sends once at the start of every run, before any parameter is
+    // resolved, extracting a single short-lived value (a bearer token, a
+    // signed URL parameter, a nonce) from its JSON response. That value is
+    // then referenceable as "{<Bootstrap.Name>}" wherever a parameter
+    // placeholder already is — UrlTemplate, a DiscoverySource/
+    // BrowserDiscoverySource template (Issue #217), an ApiBodyVariable's
+    // ParameterName — plus an ApiHeader.Template (e.g. "Bearer {token}").
+    // Deliberately *not* modeled as an ApiParameter/ApiParameterSource:
+    // parameter values become output columns (flat shape) and are printed
+    // in "Skipped (404)" lines, and a live credential must never end up in
+    // either. Null = no bootstrap, byte-for-byte today's behavior.
+    public ApiBootstrap? Bootstrap { get; init; }
 }
+
+// See ApiConfig.Bootstrap. A narrower, purpose-built shape than ApiConfig
+// itself (Issue #220's own open question): a token endpoint needs no
+// parameters/response tree, just one request and one JSON path — and its
+// body, when it has one, is a flat set of credential fields (a JSON object,
+// or an OAuth2-style form-encoded body), never a deep GraphQL-like tree.
+public sealed class ApiBootstrap
+{
+    // The placeholder name the extracted value is referenced by, e.g.
+    // "token" for "{token}". Must not collide with a parameter name.
+    public required string Name { get; init; }
+
+    public string Method { get; init; } = "GET";
+
+    // Absolute http(s) URL — fully static, since the bootstrap runs before
+    // any parameter is resolved and so can't reference one.
+    public required string Url { get; init; }
+
+    // Same Value/EnvironmentVariableName shape as the main request's own
+    // headers (a Template header makes no sense here — the value it would
+    // reference is exactly what this request is producing).
+    public List<ApiHeader>? Headers { get; init; }
+
+    // POST only. Each field is either a literal Value or an
+    // EnvironmentVariableName (a credential), mirroring ApiHeader/FillStep:
+    // a credential is never embedded literally in the generated script.
+    public List<ApiBootstrapBodyField>? BodyFields { get; init; }
+
+    public ApiBootstrapBodyEncoding BodyEncoding { get; init; } = ApiBootstrapBodyEncoding.Json;
+
+    // JSON path (same minimal dot/[*]/[n] DSL as ItemsPath/ApiField.Path)
+    // to the value within the bootstrap response, e.g. "access_token" or
+    // "data.auth.token".
+    public required string ValuePath { get; init; }
+}
+
+public sealed class ApiBootstrapBodyField
+{
+    public required string Name { get; init; }
+    public string? Value { get; init; }
+    public string? EnvironmentVariableName { get; init; }
+}
+
+// Json: sent as a JSON object (requests' json=...). Form: sent
+// application/x-www-form-urlencoded (requests' data=...), the encoding an
+// OAuth2 client_credentials/password token endpoint expects.
+public enum ApiBootstrapBodyEncoding { Json, Form }
 
 // See ApiConfig.EmbeddedJsonSource. A plain optional object, not part of any
 // polymorphic list — unlike ApiParameterSource's three variants, there's
@@ -85,10 +146,10 @@ public sealed class EmbeddedJsonSource
     public required string ScriptSelector { get; init; }
 }
 
-// Exactly one of Value/EnvironmentVariableName is set — same "one of two
-// optional properties is required, depending on context" shape as
-// DataFieldNode.Attribute (there gated by Mode, here just by which one is
-// non-null). A header sourced from an environment variable (e.g. an auth
+// Exactly one of Value/EnvironmentVariableName/Template is set — same "one
+// of several optional properties is required, depending on context" shape
+// as DataFieldNode.Attribute (there gated by Mode, here just by which one
+// is non-null). A header sourced from an environment variable (e.g. an auth
 // token) is never embedded literally in the generated script, analogous to
 // FillStep.
 public sealed class ApiHeader
@@ -96,6 +157,13 @@ public sealed class ApiHeader
     public required string Name { get; init; }
     public string? Value { get; init; }
     public string? EnvironmentVariableName { get; init; }
+
+    // Issue #220: a header value built at runtime from ApiConfig.Bootstrap's
+    // freshly fetched value, e.g. "Bearer {token}" — the only placeholder a
+    // template may reference is Bootstrap.Name (validated in
+    // ScrapingPlanValidator), so a literal "{" elsewhere in an ordinary
+    // Value header is never at risk of being misread as a placeholder.
+    public string? Template { get; init; }
 }
 
 public sealed class ApiParameter
@@ -115,6 +183,7 @@ public sealed class ApiParameter
 [JsonDerivedType(typeof(StaticListSource), "staticList")]
 [JsonDerivedType(typeof(DiscoverySource), "discovery")]
 [JsonDerivedType(typeof(RangeSource), "range")]
+[JsonDerivedType(typeof(BrowserDiscoverySource), "browserDiscovery")]
 public abstract class ApiParameterSource
 {
 }
@@ -130,6 +199,18 @@ public sealed class StaticListSource : ApiParameterSource
 // "stale/newly added values" problem a StaticListSource would have (e.g.
 // newly added categories) by re-resolving values at script runtime instead
 // of freezing them at configuration time.
+//
+// UrlTemplate may itself reference an earlier-declared parameter's own
+// value via the same "{name}" placeholder syntax ApiConfig.UrlTemplate
+// already uses (Issue #217) — e.g. a category-scoped discovery endpoint
+// like ".../categories/{category}/weeks" that only returns the right weeks
+// once {category} is substituted with that parameter's own
+// already-resolved value. Declaration order defines dependency order (a
+// strict chain, not a full dependency graph, per this issue's own
+// deliberately simpler scope) — ScrapingPlanValidator's
+// ValidateParameterDependencyOrder rejects a reference to the same or a
+// later-declared parameter. Directly resolves Architecture Decision #5's
+// long-documented "no dependencies between parameters" limitation.
 public sealed class DiscoverySource : ApiParameterSource
 {
     public string Method { get; init; } = "GET";
@@ -159,6 +240,48 @@ public sealed class RangeSource : ApiParameterSource
     // (bug: a site using "2026-35" instead of ISO-8601 "2026-W35" crashed
     // the generated script) — see RangeFormat.
     public string? Format { get; init; }
+}
+
+// Issue #216: values a {name} placeholder can take aren't always exposable
+// via a single discoverable endpoint (DiscoverySource) or a computable range
+// (RangeSource) — some target sites only ever reveal them by actually
+// rendering the page and letting lazy-loading/pagination/search trigger the
+// value-specific requests themselves (e.g. penny.de/angebote: scrolling
+// triggers one .../by-category/{category}/{week} request per category, and
+// the set of categories isn't known any other way). Resolved fresh on every
+// script run via a dedicated Playwright session, the same "runtime, not
+// frozen at generate-time" category DiscoverySource already belongs to.
+//
+// Deliberately carries no URL-match-pattern field of its own: the requests
+// expected to fire during discovery are expected to match the *same*
+// ApiConfig.UrlTemplate the main request already uses (that's the whole
+// point — discovery observes the real calls the main request will later
+// make itself), so the runtime matches captured request URLs against
+// UrlTemplate directly, treating this parameter's own {name} placeholder as
+// the value to harvest and every *other* {name} placeholder as free to
+// differ — the exact same semantics findUrlTemplateMatches
+// (popup/api-config.js) already implements at configuration time for the
+// identical "which other recorded requests are the same endpoint, different
+// value" question. See ScrapingPlanValidator's own check that this
+// parameter's name actually appears in UrlTemplate — without that there
+// would be nothing to match captured requests against.
+//
+// Actions reuses BrowserAction (the same WaitFor/Fill/Click/Scroll wire type
+// ScrapingConfig.BrowserActions already uses for login flows) rather than a
+// Scroll-only shape — real sites may need more than scrolling to reveal the
+// lazy-loaded requests (typing into a search box, clicking through
+// pagination), and a bespoke per-interaction-kind source variant would be
+// exactly the one-off duplication problem Issue #221's future "preparation
+// phase" IR concept exists to avoid. Null/empty = just load DiscoveryUrl and
+// observe whatever requests fire natively, no interaction needed.
+public sealed class BrowserDiscoverySource : ApiParameterSource
+{
+    // May itself reference an earlier-declared parameter's own value via a
+    // "{name}" placeholder, same as DiscoverySource.UrlTemplate above
+    // (Issue #217) — substituted with that parameter's already-resolved
+    // value before the throwaway Playwright session navigates to it.
+    public required string DiscoveryUrl { get; init; }
+    public List<BrowserAction>? Actions { get; init; }
 }
 
 public enum RangeType { IsoWeek, Number, Date }

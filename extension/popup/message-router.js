@@ -37,6 +37,7 @@ const SFMessageRouter = (function () {
         bridge.setState(returnTo, {
           selectionKind: null, pendingParentPath: null, pendingNewContainer: null,
           pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', apiSearchTarget: null,
+          pendingApiDiscoveryPartId: null, pendingApiDiscoveryActionIndex: null, pendingApiDiscoveryActionField: 'selector',
         });
         // Issue #137 follow-up: content-script.js's retryScopeSelector tags
         // its own "retried and still nothing" case with unavailableKind —
@@ -132,6 +133,33 @@ const SFMessageRouter = (function () {
             }),
             selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
           });
+        } else if (state.selectionKind === 'apiDiscoveryAction' && state.pendingApiDiscoveryPartId !== null && state.pendingApiDiscoveryActionIndex !== null) {
+          // Issue #216: same "write straight into the field the pick button
+          // was for, no naming modal" shape as the browserAction branch
+          // above, just nested one level deeper (one specific
+          // BrowserDiscoverySource's own action list, inside
+          // apiConfigDraft.parameterSources) and returning to API_CONFIG
+          // (where this picker lives) instead of IDLE.
+          const partId = state.pendingApiDiscoveryPartId;
+          const draft = state.apiConfigDraft;
+          const source = draft.parameterSources[partId];
+          bridge.setState(STATES.API_CONFIG, {
+            apiConfigDraft: {
+              ...draft,
+              parameterSources: {
+                ...draft.parameterSources,
+                [partId]: {
+                  ...source,
+                  actions: updateBrowserAction(source.actions || [], state.pendingApiDiscoveryActionIndex, {
+                    [state.pendingApiDiscoveryActionField]: message.selector,
+                    framePath,
+                  }),
+                },
+              },
+            },
+            selectionKind: null, pendingApiDiscoveryPartId: null, pendingApiDiscoveryActionIndex: null, pendingApiDiscoveryActionField: 'selector',
+            pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
+          });
         } else if (state.selectionKind === 'pagination') {
           // Issue #174 follow-up: lets a non-developer pick the "next page"
           // link by clicking it instead of having to know/type a CSS
@@ -140,6 +168,23 @@ const SFMessageRouter = (function () {
           // no index (there's only ever one nextLinkSelector).
           bridge.setState(STATES.IDLE, {
             pagination: { ...state.pagination, nextLinkSelector: message.selector },
+            selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
+          });
+        } else if (state.selectionKind === 'discoveredUrls') {
+          // Issue #218 follow-up: lets a non-developer pick a navigation/
+          // listing link by clicking it, writing both the clicked page's own
+          // URL (message.url — unambiguous ground truth for "which page has
+          // this navigation", same source the stale-tracked-URL
+          // self-correction above already uses) and the selector at once —
+          // avoidId (set when this selection round was started) is what
+          // keeps the selector generalized across every sibling link rather
+          // than collapsing to a single #id-based match.
+          bridge.setState(STATES.IDLE, {
+            discoveredUrls: {
+              ...state.discoveredUrls,
+              pageUrl: message.url || state.discoveredUrls.pageUrl,
+              linkSelector: message.selector,
+            },
             selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
           });
         } else {

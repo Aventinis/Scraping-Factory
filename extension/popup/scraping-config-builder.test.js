@@ -9,7 +9,7 @@ beforeAll(() => initI18n('de-DE'));
 const {
   buildScrapingConfig, buildConfigExport,
   sanitizeFileNameBase, deriveScriptFileNameFromHostname, computeScriptFileNamePatch, parseAdditionalUrls,
-  buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildHardeningConfig,
+  buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildDiscoveredUrlsConfig, buildHardeningConfig,
   computeInitialMonitoringSectionOpen, collectFieldNames,
   addField, removeField,
   addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions,
@@ -614,6 +614,46 @@ describe('buildPaginationConfig', () => {
   });
 });
 
+describe('buildDiscoveredUrlsConfig (Issue #218)', () => {
+  test('returns null when disabled', () => {
+    expect(buildDiscoveredUrlsConfig({ enabled: false, pageUrl: 'https://example.com/nav', linkSelector: 'a', maxUrls: 100 })).toBeNull();
+  });
+
+  test('returns null for null/undefined input', () => {
+    expect(buildDiscoveredUrlsConfig(null)).toBeNull();
+    expect(buildDiscoveredUrlsConfig(undefined)).toBeNull();
+  });
+
+  test('returns null when pageUrl is blank', () => {
+    expect(buildDiscoveredUrlsConfig({ enabled: true, pageUrl: '', linkSelector: 'a', maxUrls: 100 })).toBeNull();
+    expect(buildDiscoveredUrlsConfig({ enabled: true, pageUrl: '   ', linkSelector: 'a', maxUrls: 100 })).toBeNull();
+  });
+
+  test('returns null when linkSelector is blank', () => {
+    expect(buildDiscoveredUrlsConfig({ enabled: true, pageUrl: 'https://example.com/nav', linkSelector: '', maxUrls: 100 })).toBeNull();
+  });
+
+  test('builds the wire shape with trimmed pageUrl/linkSelector', () => {
+    expect(buildDiscoveredUrlsConfig({
+      enabled: true, pageUrl: '  https://example.com/nav  ', linkSelector: '  nav.categories a  ', maxUrls: 50,
+    })).toEqual({ pageUrl: 'https://example.com/nav', linkSelector: 'nav.categories a', maxUrls: 50 });
+  });
+
+  test('clamps/defaults an invalid maxUrls to 100', () => {
+    for (const invalid of [0, NaN, -5]) {
+      expect(buildDiscoveredUrlsConfig({ enabled: true, pageUrl: 'https://example.com/nav', linkSelector: 'a', maxUrls: invalid })).toEqual({
+        pageUrl: 'https://example.com/nav', linkSelector: 'a', maxUrls: 100,
+      });
+    }
+  });
+
+  test('floors a fractional maxUrls', () => {
+    expect(buildDiscoveredUrlsConfig({ enabled: true, pageUrl: 'https://example.com/nav', linkSelector: 'a', maxUrls: 12.7 })).toEqual({
+      pageUrl: 'https://example.com/nav', linkSelector: 'a', maxUrls: 12,
+    });
+  });
+});
+
 describe('buildScrapingConfig (pagination, Issue #174)', () => {
   test('omits pagination entirely when disabled (the default)', () => {
     const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
@@ -636,6 +676,65 @@ describe('buildScrapingConfig (pagination, Issue #174)', () => {
       'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null, null, pagination,
     );
     expect(containerResult.pagination).toEqual({ kind: 'pageNumber', urlTemplate: '{url}?page={page}', maxPages: 10 });
+  });
+});
+
+// Issue #218: discoveredUrls is appended as the very last positional
+// parameter (see buildScrapingConfig's own doc comment on why), so these
+// calls explicitly spell out every intervening default rather than relying
+// on them — unlike every other integration test in this file, which only
+// ever needs to reach as far as the one parameter it's testing.
+describe('buildScrapingConfig (discoveredUrls, Issue #218)', () => {
+  test('omits discoveredUrls entirely when disabled (the default)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.discoveredUrls).toBeUndefined();
+  });
+
+  test('includes discoveredUrls when enabled and configured', () => {
+    const discoveredUrls = { enabled: true, pageUrl: 'https://example.com/nav', linkSelector: 'nav a', maxUrls: 20 };
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, null, null, false, false, false, null, null, null, [], {}, 'Flat', [], {}, discoveredUrls,
+    );
+    expect(result.discoveredUrls).toEqual({ pageUrl: 'https://example.com/nav', linkSelector: 'nav a', maxUrls: 20 });
+  });
+
+  test('works the same way for container mode', () => {
+    const discoveredUrls = { enabled: true, pageUrl: 'https://example.com/nav', linkSelector: 'nav a', maxUrls: 20 };
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null,
+      null, null, false, false, false, null, null, null, [], {}, 'Flat', [], {}, discoveredUrls,
+    );
+    expect(containerResult.discoveredUrls).toEqual({ pageUrl: 'https://example.com/nav', linkSelector: 'nav a', maxUrls: 20 });
+  });
+});
+
+// Issue #219: preflight is appended as the very last positional parameter
+// (after discoveredUrls, see buildScrapingConfig's own doc comment), same
+// "spell out every intervening default" style as the discoveredUrls tests
+// just above.
+describe('buildScrapingConfig (preflight, Issue #219)', () => {
+  test('omits preflight entirely when disabled (the default)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.preflight).toBeUndefined();
+  });
+
+  test('includes preflight: true when enabled', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, null, null, false, false, false, null, null, null, [], {}, 'Flat', [], {}, null, true,
+    );
+    expect(result.preflight).toBe(true);
+  });
+
+  test('works the same way for container mode', () => {
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null,
+      null, null, false, false, false, null, null, null, [], {}, 'Flat', [], {}, null, true,
+    );
+    expect(containerResult.preflight).toBe(true);
   });
 });
 
@@ -1458,7 +1557,7 @@ describe('addBrowserAction', () => {
 
   test('appends a scroll action with defaults (Issue #41, Phase 6)', () => {
     expect(addBrowserAction([], 'scroll')).toEqual([
-      { kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000 },
+      { kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000, scrollStepPx: null },
     ]);
   });
 
@@ -1534,6 +1633,17 @@ describe('serializeBrowserActions', () => {
     const result = serializeBrowserActions(actions);
     expect(result[0].containerSelector).toBeNull();
     expect(result[0].loadMoreButtonSelector).toBeNull();
+  });
+
+  // Issue #289
+  test('serializes scrollStepPx when set', () => {
+    const actions = [{ kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000, scrollStepPx: 400 }];
+    expect(serializeBrowserActions(actions)[0].scrollStepPx).toBe(400);
+  });
+
+  test('omits scrollStepPx entirely (not null/0) when unset, keeping the jump-to-bottom default', () => {
+    const actions = [{ kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000, scrollStepPx: null }];
+    expect(serializeBrowserActions(actions)[0]).not.toHaveProperty('scrollStepPx');
   });
 
   // Issue #42, Phase 7

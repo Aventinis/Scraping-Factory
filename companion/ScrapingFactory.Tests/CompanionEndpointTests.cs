@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -346,6 +347,133 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.True(HttpStatusCode.OK == response.StatusCode, body);
         Assert.Contains("_scroll_prev_height", body);
+    }
+
+    // Issue #289 follow-up: a ScrollStep's own configured cost can make the
+    // real trial run legitimately take far longer than any reasonable
+    // request timeout — proves /generate recognizes this up front (from the
+    // config alone, before ever spawning a subprocess) and skips the real
+    // run entirely rather than actually waiting the ~2.7 hours this
+    // configuration would otherwise take. The elapsed-time assertion is the
+    // actual proof: if the real Chromium scroll loop had been attempted
+    // instead, this test would never finish in any reasonable CI timeout.
+    [Fact]
+    public async Task Generate_ScrollActionExceedingTimeoutCap_SkipsVerificationAndReturnsWarningHeader()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var payload = $$"""
+            {
+              "url": "{{server.BaseUrl}}",
+              "engine": "Browser",
+              "fields": [ { "name": "Titel", "selector": "h1" } ],
+              "browserActions": [
+                { "kind": "scroll", "maxIterations": 10000, "waitAfterMs": 1000 }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var stopwatch = Stopwatch.StartNew();
+        var response = await _client.PostAsync("/generate", content);
+        stopwatch.Stop();
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.True(response.Headers.TryGetValues("X-ScrapingFactory-Verification-Skipped", out var reasons), body);
+        Assert.Contains("exceeds the 00:10:00 cap", reasons!.Single());
+        Assert.Contains("from playwright.sync_api import sync_playwright", body); // the script was still generated and returned
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(30), $"Expected verification to be skipped quickly, took {stopwatch.Elapsed}.");
+    }
+
+    // Issue #289 follow-up: this is the actual bug the cap-check closes —
+    // BrowserDiscoverySource's own Actions (Issue #216) live nested inside
+    // ApiConfig.Parameters, never going through ScrapingPlanBuilder's step
+    // translation, so a plain scan over plan.Steps alone would never see
+    // this ScrollAction's cost at all. Points DiscoveryUrl/UrlTemplate at a
+    // non-existent host deliberately — if the estimate ever failed to
+    // account for this nested action and fell through to a real
+    // verification attempt, the test would hang/fail on an actual network
+    // call instead of returning almost immediately.
+    [Fact]
+    public async Task Generate_BrowserDiscoverySourceScrollActionExceedingTimeoutCap_SkipsVerificationAndReturnsWarningHeader()
+    {
+        var payload = """
+            {
+              "url": "https://example.invalid/angebote/",
+              "api": {
+                "urlTemplate": "https://example.invalid/api/items?category={category}",
+                "itemsPath": "data.items",
+                "fields": [ { "name": "Titel", "path": "title" } ],
+                "parameters": [
+                  {
+                    "name": "category",
+                    "source": {
+                      "kind": "browserDiscovery",
+                      "discoveryUrl": "https://example.invalid/angebote/",
+                      "actions": [
+                        { "kind": "scroll", "maxIterations": 10000, "waitAfterMs": 1000 }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var stopwatch = Stopwatch.StartNew();
+        var response = await _client.PostAsync("/generate", content);
+        stopwatch.Stop();
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.True(response.Headers.TryGetValues("X-ScrapingFactory-Verification-Skipped", out var reasons), body);
+        Assert.Contains("exceeds the 00:10:00 cap", reasons!.Single());
+        Assert.Contains("browserDiscovery", body);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(30), $"Expected verification to be skipped quickly, took {stopwatch.Elapsed}.");
+    }
+
+    // Issue #289 follow-up: Blocks mode shares the same cap check, applied
+    // to the whole plan's BrowserActions (shared across every block) — the
+    // skipped verification's own per-block envelope shape must still match
+    // what a real VerifyBlocksAsync result would have produced (one entry
+    // per block, just with null preview/outputFile) since the extension
+    // reads this the same way either way.
+    [Fact]
+    public async Task Generate_BlocksWithScrollActionExceedingTimeoutCap_SkipsVerificationAndReturnsBlocksEnvelope()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var payload = $$"""
+            {
+              "url": "{{server.BaseUrl}}",
+              "engine": "Browser",
+              "includePreview": true,
+              "browserActions": [
+                { "kind": "scroll", "maxIterations": 10000, "waitAfterMs": 1000 }
+              ],
+              "blocks": [
+                { "name": "block1", "fields": [ { "name": "Titel", "selector": "h1" } ] },
+                { "name": "block2", "fields": [ { "name": "Titel", "selector": "h1" } ] }
+              ]
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var stopwatch = Stopwatch.StartNew();
+        var response = await _client.PostAsync("/generate", content);
+        stopwatch.Stop();
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.True(response.Headers.TryGetValues("X-ScrapingFactory-Verification-Skipped", out _), body);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(30), $"Expected verification to be skipped quickly, took {stopwatch.Elapsed}.");
+
+        using var json = JsonDocument.Parse(body);
+        var blocksJson = json.RootElement.GetProperty("blocks").EnumerateArray().ToList();
+        Assert.Equal(2, blocksJson.Count);
+        Assert.Equal("block1", blocksJson[0].GetProperty("name").GetString());
+        Assert.Equal(JsonValueKind.Null, blocksJson[0].GetProperty("preview").ValueKind);
+        Assert.Equal(JsonValueKind.Null, blocksJson[0].GetProperty("outputFile").ValueKind);
     }
 
     // Issue #43: proves verificationValues is wired end-to-end through the
@@ -1037,6 +1165,47 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.Contains("mutually exclusive", doc.RootElement.GetProperty("error").GetString());
     }
 
+    // Issue #218: same reasoning as AdditionalUrls/Pagination above.
+    [Fact]
+    public async Task Generate_DiscoveredUrlsAndApiBothSet_Returns400()
+    {
+        var payload = $$"""
+            {
+              "url": "https://example.com",
+              "discoveredUrls": { "pageUrl": "https://example.com/kategorien", "linkSelector": "a" },
+              "api": {{SampleApiPayload}}
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("mutually exclusive", doc.RootElement.GetProperty("error").GetString());
+    }
+
+    // Issue #219: same reasoning as AdditionalUrls/Pagination/DiscoveredUrls
+    // above — Api has no single fixed start URL to preflight-check.
+    [Fact]
+    public async Task Generate_PreflightAndApiBothSet_Returns400()
+    {
+        var payload = $$"""
+            {
+              "url": "https://example.com",
+              "preflight": true,
+              "api": {{SampleApiPayload}}
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("mutually exclusive", doc.RootElement.GetProperty("error").GetString());
+    }
+
     // End-to-end through the real HTTP endpoint: engine selection resolves
     // PythonApiCodeGenerator, and the generated script is actually run
     // against a fake JSON API (real subprocess + real HTTP request, like
@@ -1072,7 +1241,67 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.True(HttpStatusCode.OK == response.StatusCode, body);
         Assert.Contains("import requests", body);
         Assert.DoesNotContain("BeautifulSoup", body);
-        Assert.Contains("itertools.product", body);
+        // Issue #217: the independent "resolve every parameter, then take
+        // the full cartesian product" model was replaced by an incremental,
+        // dependency-aware combo builder.
+        Assert.Contains("def _resolve_parameter_combos(headers):", body);
+    }
+
+    // Issue #220: wire-format round trip for ApiConfig.Bootstrap — a
+    // form-encoded token request whose client secret only ever arrives as a
+    // one-time verificationValues entry (never as an OS env var on the
+    // companion host), plus a "template" header splicing the token in.
+    [Fact]
+    public async Task Generate_ApiPayloadWithBootstrap_UsesVerificationValueAndReturns200()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            if (request.Url!.AbsolutePath == "/token")
+            {
+                using var reader = new StreamReader(request.InputStream);
+                var requestBody = reader.ReadToEnd();
+                return requestBody.Contains("client_secret=s3cret")
+                    ? new LocalTestServerResponse("""{ "access_token": "tok-1" }""", "application/json")
+                    : new LocalTestServerResponse("{}", "application/json", HttpStatusCode.Unauthorized);
+            }
+            if (request.Headers["Authorization"] != "Bearer tok-1")
+                return new LocalTestServerResponse("{}", "application/json", HttpStatusCode.Unauthorized);
+            return new LocalTestServerResponse("""{ "data": { "items": [ { "title": "Item" } ] } }""", "application/json");
+        });
+
+        var payload = $$"""
+            {
+              "url": "https://example.com",
+              "api": {
+                "urlTemplate": "{{server.BaseUrl}}items",
+                "itemsPath": "data.items",
+                "fields": [ { "name": "Titel", "path": "title" } ],
+                "parameters": [],
+                "headers": [ { "name": "Authorization", "template": "Bearer {token}" } ],
+                "bootstrap": {
+                  "name": "token",
+                  "method": "POST",
+                  "url": "{{server.BaseUrl}}token",
+                  "bodyEncoding": "Form",
+                  "bodyFields": [
+                    { "name": "grant_type", "value": "client_credentials" },
+                    { "name": "client_secret", "environmentVariableName": "SF_TEST_CLIENT_SECRET_220" }
+                  ],
+                  "valuePath": "access_token"
+                }
+              },
+              "verificationValues": { "SF_TEST_CLIENT_SECRET_220": "s3cret" }
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Contains("def _run_bootstrap():", body);
+        Assert.Contains("\"bodyEncoding\": 'Form'", body);
+        Assert.DoesNotContain("s3cret", body);
     }
 
     // Issue #132: a full /generate trial run (real subprocess execution via

@@ -74,6 +74,16 @@ public static class ScrapingPlanValidator
                 return Invalid(paginationError);
         }
 
+        // Issue #218: mode-independent (Fields/Groups — ScrapingPlanBuilder
+        // never sets this for an Api/Blocks-mode plan), same placement as
+        // ChangeDetection/Proxy/Hardening/Pagination above.
+        if (plan.DiscoveredUrls is { } discoveredUrls)
+        {
+            var discoveredUrlsError = ValidateDiscoveredUrls(discoveredUrls);
+            if (discoveredUrlsError is not null)
+                return Invalid(discoveredUrlsError);
+        }
+
         // Issue #175: session persistence only means anything for the
         // Browser engine — a Static/Api-mode request has no browser session
         // to keep alive between runs. Same placement as ChangeDetection/
@@ -132,6 +142,8 @@ public static class ScrapingPlanValidator
                 return Invalid("MaxIterations of a ScrollStep must be positive.");
             if (scrollStep.WaitAfterMs < 0)
                 return Invalid("WaitAfterMs of a ScrollStep must not be negative.");
+            if (scrollStep.ScrollStepPx is <= 0)
+                return Invalid("ScrollStepPx of a ScrollStep must be positive when set.");
             var scrollFrameError = ValidateFramePath(scrollStep.FramePath, "ScrollStep", plan.Engine);
             if (scrollFrameError is not null)
                 return Invalid(scrollFrameError);
@@ -827,7 +839,24 @@ public static class ScrapingPlanValidator
             .ToHashSet();
         var parameterNames = api.Parameters.Select(parameter => parameter.Name).ToHashSet();
 
-        var missingParameters = placeholders.Except(parameterNames).ToList();
+        // Issue #220: the bootstrap value is referenceable everywhere a
+        // parameter placeholder is (UrlTemplate, body variables), without
+        // being a parameter itself — see ApiConfig.Bootstrap's own doc
+        // comment for why it isn't simply modeled as one.
+        var bootstrapName = api.Bootstrap?.Name;
+        if (api.Bootstrap is { } bootstrap)
+        {
+            var bootstrapError = ValidateApiBootstrap(bootstrap);
+            if (bootstrapError is not null)
+                return bootstrapError;
+            if (parameterNames.Contains(bootstrap.Name))
+                return $"Bootstrap value name '{bootstrap.Name}' collides with a parameter name.";
+            if (api.Fields?.Any(field => field.Name == bootstrap.Name) == true)
+                return $"Bootstrap value name '{bootstrap.Name}' collides with a field name.";
+        }
+        var placeholderNames = bootstrapName is null ? parameterNames : [.. parameterNames, bootstrapName];
+
+        var missingParameters = placeholders.Except(placeholderNames).ToList();
         if (missingParameters.Count > 0)
             return $"UrlTemplate references unknown parameters: {string.Join(", ", missingParameters)}.";
 
@@ -839,7 +868,7 @@ public static class ScrapingPlanValidator
         var referencedByBody = new HashSet<string>();
         if (api.Body is not null)
         {
-            var bodyError = ValidateApiBodyNode(api.Body, parameterNames, referencedByBody);
+            var bodyError = ValidateApiBodyNode(api.Body, placeholderNames, referencedByBody);
             if (bodyError is not null)
                 return bodyError;
         }
@@ -848,28 +877,141 @@ public static class ScrapingPlanValidator
         if (unusedParameters.Count > 0)
             return $"Parameters with no placeholder in UrlTemplate: {string.Join(", ", unusedParameters)}.";
 
+        // Issue #217: a later parameter's DiscoverySource.UrlTemplate/
+        // BrowserDiscoverySource.DiscoveryUrl may itself reference an
+        // earlier-declared parameter's own {name} placeholder (e.g. a
+        // category-scoped discovery endpoint like
+        // ".../categories/{category}/weeks") — resolves Architecture
+        // Decision #5's long-documented "no dependencies between
+        // parameters" limitation. Declaration order defines dependency
+        // order (a strict chain, not a full dependency graph — the
+        // issue's own deliberately simpler scope), so this is checked
+        // incrementally alongside the existing per-source-kind validation
+        // below rather than as a separate pass: declaredSoFar only ever
+        // contains names declared strictly before the one currently being
+        // checked.
+        var declaredSoFar = new HashSet<string>();
         foreach (var parameter in api.Parameters)
         {
+            var dependencyError = ValidateParameterDependencyOrder(parameter, declaredSoFar, parameterNames);
+            if (dependencyError is not null)
+                return dependencyError;
+
             var sourceError = parameter.Source switch
             {
                 StaticListSource { Values.Count: 0 } =>
                     $"Parameter '{parameter.Name}' with a value list needs at least one value.",
                 DiscoverySource discovery => ValidateDiscoverySource(parameter.Name, discovery),
                 RangeSource range => ValidateRangeSource(parameter.Name, range),
+                // Issue #216: unlike DiscoverySource's own deliberately
+                // unrelated UrlTemplate, a BrowserDiscoverySource only means
+                // anything relative to THIS UrlTemplate — it's matched
+                // against at runtime (see BrowserDiscoverySource's own doc
+                // comment), so the parameter's own {name} placeholder must
+                // actually occur in it, or there would be nothing to match
+                // captured requests against.
+                BrowserDiscoverySource when !placeholders.Contains(parameter.Name) =>
+                    $"Parameter '{parameter.Name}' uses browser discovery but doesn't appear in UrlTemplate — there would be nothing to match captured requests against.",
+                BrowserDiscoverySource browserDiscovery => ValidateBrowserDiscoverySource(parameter.Name, browserDiscovery),
                 _ => null,
             };
             if (sourceError is not null)
                 return sourceError;
+
+            declaredSoFar.Add(parameter.Name);
         }
 
-        return api.Headers is { } headers ? ValidateApiHeaders(headers) : null;
+        return api.Headers is { } headers ? ValidateApiHeaders(headers, bootstrapName) : null;
     }
 
-    // DiscoverySource.UrlTemplate is deliberately not cross-checked against
-    // api.Parameters the way the main UrlTemplate is: Phase 1 explicitly
-    // rules out dependencies between parameters (see issue #53's scope
-    // boundaries), so a discovery endpoint's own template is expected to be
-    // fully static.
+    // Issue #220: see ApiBootstrap's own doc comment. The value name itself
+    // is checked against EnvironmentVariableNamePattern too — it has to be a
+    // valid Python str.format() keyword (it's substituted into UrlTemplate
+    // via URL_TEMPLATE.format(**...)), which is exactly the same
+    // identifier-shaped character set.
+    private static string? ValidateApiBootstrap(ApiBootstrap bootstrap)
+    {
+        if (string.IsNullOrWhiteSpace(bootstrap.Name))
+            return "Bootstrap value needs a name.";
+        if (!EnvironmentVariableNamePattern.IsMatch(bootstrap.Name))
+            return $"Invalid bootstrap value name '{bootstrap.Name}': use letters, digits and underscores only.";
+        if (bootstrap.Method is not ("GET" or "POST"))
+            return $"Unsupported bootstrap request method '{bootstrap.Method}': expected GET or POST.";
+        if (!Uri.TryCreate(bootstrap.Url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            return $"Invalid bootstrap request URL '{bootstrap.Url}'.";
+        if (UrlTemplatePlaceholderPattern.IsMatch(bootstrap.Url))
+            return "Bootstrap request URL must not contain placeholders — it runs before any parameter is resolved.";
+        if (string.IsNullOrWhiteSpace(bootstrap.ValuePath))
+            return "Bootstrap request needs a ValuePath.";
+
+        if (bootstrap.BodyFields is { Count: > 0 } bodyFields)
+        {
+            if (bootstrap.Method != "POST")
+                return "Bootstrap body fields require method 'POST'.";
+            foreach (var field in bodyFields)
+            {
+                if (string.IsNullOrWhiteSpace(field.Name))
+                    return "Name of a bootstrap body field must not be empty.";
+                var hasEnvironmentVariable = !string.IsNullOrWhiteSpace(field.EnvironmentVariableName);
+                if ((field.Value is not null) == hasEnvironmentVariable)
+                    return $"Bootstrap body field '{field.Name}' needs exactly one of Value/EnvironmentVariableName.";
+                if (hasEnvironmentVariable && !EnvironmentVariableNamePattern.IsMatch(field.EnvironmentVariableName!))
+                    return $"Invalid environment variable name '{field.EnvironmentVariableName}' in bootstrap body field '{field.Name}'.";
+            }
+            var duplicateBodyFields = FindDuplicates(bodyFields, field => field.Name);
+            if (duplicateBodyFields.Count > 0)
+                return $"Duplicate bootstrap body field names: {string.Join(", ", duplicateBodyFields)}.";
+        }
+
+        if (bootstrap.Headers is { } bootstrapHeaders)
+        {
+            if (bootstrapHeaders.Any(header => header.Template is not null))
+                return "Bootstrap request headers cannot use a template — the bootstrap value doesn't exist yet when this request is sent.";
+            var headerError = ValidateApiHeaders(bootstrapHeaders, bootstrapName: null);
+            if (headerError is not null)
+                return $"Bootstrap request: {headerError}";
+        }
+        return null;
+    }
+
+    // Issue #217: only DiscoverySource/BrowserDiscoverySource have a
+    // template string a {name} placeholder could even appear in —
+    // StaticListSource/RangeSource have no such field, so they can never
+    // depend on anything (out of scope per the issue's own open
+    // questions) and this returns null immediately for them. A placeholder
+    // naming something that isn't a declared parameter at all is left
+    // alone (same laissez-faire ValidateDiscoverySource's own doc comment
+    // already establishes for an otherwise-unrelated template) — only a
+    // name that IS a declared parameter, just not one declared before this
+    // one, is actually rejected.
+    private static string? ValidateParameterDependencyOrder(
+        ApiParameter parameter, HashSet<string> declaredSoFar, HashSet<string> allParameterNames)
+    {
+        var template = parameter.Source switch
+        {
+            DiscoverySource discovery => discovery.UrlTemplate,
+            BrowserDiscoverySource browserDiscovery => browserDiscovery.DiscoveryUrl,
+            _ => null,
+        };
+        if (template is null)
+            return null;
+
+        foreach (Match match in UrlTemplatePlaceholderPattern.Matches(template))
+        {
+            var referenced = match.Groups[1].Value;
+            if (!allParameterNames.Contains(referenced))
+                continue;
+            if (referenced == parameter.Name)
+                return $"Parameter '{parameter.Name}' cannot reference itself.";
+            if (!declaredSoFar.Contains(referenced))
+                return $"Parameter '{parameter.Name}' references '{referenced}', which is declared later — a parameter can only depend on an earlier-declared parameter.";
+        }
+        return null;
+    }
+
+    // DiscoverySource.UrlTemplate may now reference an earlier-declared
+    // parameter's own value (Issue #217, validated above) — otherwise it's
+    // still expected to be fully static, same as before that existed.
     private static string? ValidateDiscoverySource(string parameterName, DiscoverySource discovery)
     {
         if (discovery.Method != "GET")
@@ -920,7 +1062,70 @@ public static class ScrapingPlanValidator
         return null;
     }
 
-    private static string? ValidateApiHeaders(List<ApiHeader> headers)
+    // Issue #216: DiscoveryUrl is the page actually opened/scrolled — unlike
+    // UrlTemplate (checked separately, see the call site above), it needs no
+    // cross-check against api.Parameters here (that's ValidateParameterDependencyOrder's
+    // job, called before this): Uri.TryCreate(..., UriKind.Absolute, ...)
+    // happily parses a "{name}"-templated string too (confirmed: curly
+    // braces don't make .NET's Uri parser reject an otherwise well-formed
+    // absolute URL), so the same plain absolute-URI check already works
+    // whether or not this Issue #217 chaining is actually used, mirroring
+    // the NavigateStep URL check at the top of this validator. Each action
+    // is validated the same way its plan-level
+    // WaitForStep/FillStep/ClickStep/ScrollStep counterpart already is above
+    // — duplicated rather than shared, since those checks run against
+    // ScrapingStep (post-ScrapingPlanBuilder translation), not the
+    // wire-level BrowserAction this list is made of. FramePath is validated
+    // against a literal ScrapingEngine.Browser regardless of plan.Engine
+    // (always ScrapingEngine.Api here) — this action list always runs
+    // inside its own dedicated Playwright session, independent of whatever
+    // engine the main request itself uses.
+    private static string? ValidateBrowserDiscoverySource(string parameterName, BrowserDiscoverySource source)
+    {
+        if (!Uri.TryCreate(source.DiscoveryUrl, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return $"Browser discovery for parameter '{parameterName}' needs an absolute http(s) DiscoveryUrl.";
+        }
+
+        foreach (var action in source.Actions ?? [])
+        {
+            var actionError = action switch
+            {
+                WaitForAction wait => string.IsNullOrWhiteSpace(wait.Selector)
+                    ? $"Selector of a WaitForAction in browser discovery for parameter '{parameterName}' must not be empty."
+                    : wait.TimeoutMs <= 0
+                        ? $"Timeout of a WaitForAction in browser discovery for parameter '{parameterName}' must be positive."
+                        : ValidateFramePath(wait.FramePath, "WaitForAction", ScrapingEngine.Browser),
+                FillAction fill => string.IsNullOrWhiteSpace(fill.Selector)
+                    ? $"Selector of a FillAction in browser discovery for parameter '{parameterName}' must not be empty."
+                    : !EnvironmentVariableNamePattern.IsMatch(fill.EnvironmentVariableName)
+                        ? $"Invalid environment variable name '{fill.EnvironmentVariableName}' in browser discovery for parameter '{parameterName}'."
+                        : ValidateFramePath(fill.FramePath, "FillAction", ScrapingEngine.Browser),
+                ClickAction click => string.IsNullOrWhiteSpace(click.Selector)
+                    ? $"Selector of a ClickAction in browser discovery for parameter '{parameterName}' must not be empty."
+                    : ValidateFramePath(click.FramePath, "ClickAction", ScrapingEngine.Browser),
+                ScrollAction scroll => (scroll.ContainerSelector is not null && string.IsNullOrWhiteSpace(scroll.ContainerSelector))
+                    ? $"ContainerSelector of a ScrollAction in browser discovery for parameter '{parameterName}' must not be empty when set."
+                    : (scroll.LoadMoreButtonSelector is not null && string.IsNullOrWhiteSpace(scroll.LoadMoreButtonSelector))
+                        ? $"LoadMoreButtonSelector of a ScrollAction in browser discovery for parameter '{parameterName}' must not be empty when set."
+                        : scroll.MaxIterations <= 0
+                            ? $"MaxIterations of a ScrollAction in browser discovery for parameter '{parameterName}' must be positive."
+                            : scroll.WaitAfterMs < 0
+                                ? $"WaitAfterMs of a ScrollAction in browser discovery for parameter '{parameterName}' must not be negative."
+                                : scroll.ScrollStepPx is <= 0
+                                    ? $"ScrollStepPx of a ScrollAction in browser discovery for parameter '{parameterName}' must be positive when set."
+                                    : ValidateFramePath(scroll.FramePath, "ScrollAction", ScrapingEngine.Browser),
+                _ => null,
+            };
+            if (actionError is not null)
+                return actionError;
+        }
+
+        return null;
+    }
+
+    private static string? ValidateApiHeaders(List<ApiHeader> headers, string? bootstrapName)
     {
         foreach (var header in headers)
         {
@@ -929,8 +1134,25 @@ public static class ScrapingPlanValidator
 
             var hasValue = !string.IsNullOrWhiteSpace(header.Value);
             var hasEnvironmentVariable = !string.IsNullOrWhiteSpace(header.EnvironmentVariableName);
-            if (hasValue == hasEnvironmentVariable)
-                return $"Header '{header.Name}' needs exactly one of Value/EnvironmentVariableName.";
+            var hasTemplate = !string.IsNullOrWhiteSpace(header.Template);
+            if ((hasValue ? 1 : 0) + (hasEnvironmentVariable ? 1 : 0) + (hasTemplate ? 1 : 0) != 1)
+                return $"Header '{header.Name}' needs exactly one of Value/EnvironmentVariableName/Template.";
+
+            // Issue #220: a Template's only purpose is splicing in the
+            // bootstrap value, so it must reference it, and nothing else —
+            // there's no per-combination parameter context when headers are
+            // built (they're shared by every request of the run).
+            if (hasTemplate)
+            {
+                if (bootstrapName is null)
+                    return $"Header '{header.Name}' uses a template, but no bootstrap request is configured.";
+                var referenced = UrlTemplatePlaceholderPattern.Matches(header.Template!).Select(match => match.Groups[1].Value).ToHashSet();
+                if (!referenced.Contains(bootstrapName))
+                    return $"Header '{header.Name}' template must reference the bootstrap value '{{{bootstrapName}}}'.";
+                var unknown = referenced.Where(name => name != bootstrapName).ToList();
+                if (unknown.Count > 0)
+                    return $"Header '{header.Name}' template references unknown placeholder(s): {string.Join(", ", unknown)}.";
+            }
 
             if (hasEnvironmentVariable && !EnvironmentVariableNamePattern.IsMatch(header.EnvironmentVariableName!))
                 return $"Invalid environment variable name '{header.EnvironmentVariableName}' in header '{header.Name}'.";
@@ -1035,6 +1257,30 @@ public static class ScrapingPlanValidator
         return missing.Count > 0
             ? $"PageNumberPagination.UrlTemplate is missing placeholder(s): {string.Join(", ", missing.Select(token => $"{{{token}}}"))}."
             : null;
+    }
+
+    // Issue #218: PageUrl is always a fully concrete, unparameterized
+    // address (the page actually fetched for the discovery pass) — same
+    // plain absolute-URI check as NavigateStep's own start URL / Issue
+    // #216's DiscoveryUrl, not the "{name}"-placeholder-aware check
+    // UrlTemplate itself gets. LinkSelector's own CSS syntax is deliberately
+    // not validated — same laissez-faire this project already applies to
+    // every other CSS selector (see CLAUDE.md's "Selector compatibility"
+    // architecture note); a bad selector simply matches nothing, caught the
+    // same way an unrelated bad field selector already would be, by the
+    // real trial run finding no data.
+    private static string? ValidateDiscoveredUrls(DiscoveredUrlsConfig discoveredUrls)
+    {
+        if (!Uri.TryCreate(discoveredUrls.PageUrl, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return "DiscoveredUrls needs an absolute http(s) PageUrl.";
+        }
+        if (string.IsNullOrWhiteSpace(discoveredUrls.LinkSelector))
+            return "DiscoveredUrls.LinkSelector must not be empty.";
+        if (discoveredUrls.MaxUrls <= 0)
+            return $"DiscoveredUrls.MaxUrls must be positive (was {discoveredUrls.MaxUrls}).";
+        return null;
     }
 
     // Issue #182: at least 2 blocks (a single block is just Fields/Groups —

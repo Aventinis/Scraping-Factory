@@ -37,6 +37,18 @@ public sealed class ScrapingPlan
     // IR/PaginationConfig.cs.
     public PaginationConfig? Pagination { get; init; }
 
+    // Issue #218: mode-independent (Fields/Groups alike, not Api — see
+    // ScrapingConfig.DiscoveredUrls), carried through unchanged from
+    // ScrapingConfig.DiscoveredUrls by ScrapingPlanBuilder — see
+    // IR/DiscoveredUrlsConfig.cs.
+    public DiscoveredUrlsConfig? DiscoveredUrls { get; init; }
+
+    // Issue #219: mode-independent (Fields/Groups alike, not Api — see
+    // ScrapingConfig.Preflight), carried through from ScrapingConfig.Preflight
+    // by ScrapingPlanBuilder (null defaults to false here, same as
+    // PersistentSession/ExternalConfig below).
+    public bool Preflight { get; init; }
+
     // Issue #175: Browser-engine only (see ScrapingPlanValidator), carried
     // through from ScrapingConfig.PersistentSession by ScrapingPlanBuilder
     // (null defaults to false here, unlike the wire format's nullable bool).
@@ -73,6 +85,8 @@ public sealed class ScrapingPlan
         Proxy = Proxy,
         Hardening = Hardening,
         Pagination = Pagination,
+        DiscoveredUrls = DiscoveredUrls,
+        Preflight = Preflight,
         PersistentSession = PersistentSession,
         ExternalConfig = ExternalConfig,
         // Issue #191: preserved even though Combined mode itself rejects

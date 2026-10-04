@@ -80,6 +80,29 @@ function renderSettingsPanel(bridge) {
       paginationMaxPagesInput.value = state.pagination.maxPages;
     }
 
+    // Issue #218: opt-in discovery of additional start URLs — hidden for
+    // the same three modes the companion rejects it together with (Api,
+    // which builds its own request URL; Combined/Blocks, which have no
+    // single start URL of their own at the outer level).
+    document.getElementById('discovered-urls-toggle-row')?.classList.toggle(
+      'hidden', state.mode === 'api' || state.mode === 'combined' || state.mode === 'blocks',
+    );
+    const discoveredUrlsToggle = document.getElementById('toggle-discovered-urls');
+    if (discoveredUrlsToggle) discoveredUrlsToggle.checked = state.discoveredUrls.enabled;
+    document.getElementById('discovered-urls-config')?.classList.toggle('hidden', !state.discoveredUrls.enabled);
+    const discoveredUrlsInputs = {
+      'input-discovered-urls-page-url': state.discoveredUrls.pageUrl,
+      'input-discovered-urls-link-selector': state.discoveredUrls.linkSelector,
+    };
+    for (const [id, value] of Object.entries(discoveredUrlsInputs)) {
+      const input = document.getElementById(id);
+      if (input && document.activeElement !== input) input.value = value;
+    }
+    const discoveredUrlsMaxInput = document.getElementById('input-discovered-urls-max-urls');
+    if (discoveredUrlsMaxInput && document.activeElement !== discoveredUrlsMaxInput) {
+      discoveredUrlsMaxInput.value = state.discoveredUrls.maxUrls;
+    }
+
     // Issue #183: collapsible "Monitoring" section (change detection +
     // hardening) — see popup.html's own comment on this markup for why a
     // chevron+.collapsed toggle was chosen over the API panel's Show/Hide
@@ -140,6 +163,17 @@ function renderSettingsPanel(bridge) {
     document.getElementById('btn-hardening-required-fields-warning')?.classList.toggle('active', state.hardening.requiredFields.severity === 'Warning');
     document.getElementById('btn-hardening-required-fields-error')?.classList.toggle('active', state.hardening.requiredFields.severity === 'Error');
     renderHardeningRequiredFieldsList(bridge);
+
+    // Issue #219: opt-in preflight check — a plain boolean (no sub-fields),
+    // same shape as persistentSession/externalConfig. Hidden for the same
+    // three modes DiscoveredUrls already hides for (Api has no single fixed
+    // start URL to preflight-check; Combined/Blocks have no single start URL
+    // of their own at the outer level either).
+    document.getElementById('preflight-toggle-row')?.classList.toggle(
+      'hidden', state.mode === 'api' || state.mode === 'combined' || state.mode === 'blocks',
+    );
+    const preflightToggle = document.getElementById('toggle-preflight');
+    if (preflightToggle) preflightToggle.checked = state.preflight;
 }
 
 // Issue #130: one row per _state.hardening.nullRate entry — a field
@@ -258,6 +292,12 @@ function wireSettingsPanelEvents(bridge) {
     bridge.setState(bridge.getState().current, { persistentSession: e.target.checked });
   });
 
+  // Issue #219: opt-in preflight check — same plain-boolean shape as
+  // persistentSession above.
+  document.getElementById('toggle-preflight')?.addEventListener('change', (e) => {
+    bridge.setState(bridge.getState().current, { preflight: e.target.checked });
+  });
+
   // Issue #88: opt-in proxy support.
   document.getElementById('toggle-proxy')?.addEventListener('change', (e) => {
     bridge.setState(bridge.getState().current, { proxy: { ...bridge.getState().proxy, enabled: e.target.checked } });
@@ -296,6 +336,35 @@ function wireSettingsPanelEvents(bridge) {
     chrome.runtime.sendMessage({ type: 'START_SELECTION' });
     bridge.setState(STATES.SELECTING, {
       pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [], selectionKind: 'pagination',
+      domTree: null, domTreeTruncated: false, domTreeError: null,
+    });
+  });
+
+  // Issue #218: opt-in discovery of additional start URLs.
+  document.getElementById('toggle-discovered-urls')?.addEventListener('change', (e) => {
+    bridge.setState(bridge.getState().current, { discoveredUrls: { ...bridge.getState().discoveredUrls, enabled: e.target.checked } });
+  });
+  document.getElementById('input-discovered-urls-page-url')?.addEventListener('input', (e) => {
+    bridge.setState(bridge.getState().current, { discoveredUrls: { ...bridge.getState().discoveredUrls, pageUrl: e.target.value } });
+  });
+  document.getElementById('input-discovered-urls-link-selector')?.addEventListener('input', (e) => {
+    bridge.setState(bridge.getState().current, { discoveredUrls: { ...bridge.getState().discoveredUrls, linkSelector: e.target.value } });
+  });
+  document.getElementById('input-discovered-urls-max-urls')?.addEventListener('input', (e) => {
+    bridge.setState(bridge.getState().current, { discoveredUrls: { ...bridge.getState().discoveredUrls, maxUrls: parseInt(e.target.value, 10) } });
+  });
+  // Issue #218 follow-up: lets a non-developer pick a navigation link by
+  // clicking it instead of having to know/type a CSS selector or copy the
+  // page's own URL by hand — avoidId generalizes the resulting selector
+  // across every sibling link (the same "repeating" treatment a container's
+  // own pick already gets), rather than collapsing to a single #id-based
+  // match the way pagination's own single "next" link deliberately keeps.
+  document.getElementById('btn-pick-discovered-urls-link')?.addEventListener('click', () => {
+    log('BTN pick-discovered-urls-link → START_SELECTION');
+    bridge.stopPreviewIfActive();
+    chrome.runtime.sendMessage({ type: 'START_SELECTION', avoidId: true });
+    bridge.setState(STATES.SELECTING, {
+      pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [], selectionKind: 'discoveredUrls',
       domTree: null, domTreeTruncated: false, domTreeError: null,
     });
   });

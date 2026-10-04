@@ -137,9 +137,27 @@ internal static class PythonApiConfigLiteral
     // (IsNullOrWhiteSpace, not just != null) — an empty-string
     // EnvironmentVariableName alongside a set Value passes validation as "Value
     // wins" there, so codegen has to agree on which one is actually set.
-    private static string RenderHeader(ApiHeader header) => !string.IsNullOrWhiteSpace(header.EnvironmentVariableName)
-        ? $$"""{"name": {{PythonLiteral.Str(header.Name)}}, "envVar": {{PythonLiteral.Str(header.EnvironmentVariableName)}}}"""
-        : $$"""{"name": {{PythonLiteral.Str(header.Name)}}, "value": {{PythonLiteral.Str(header.Value!)}}}""";
+    // Issue #220: a Template header renders as {"name", "template"} —
+    // _build_headers() substitutes the bootstrap value into it at runtime.
+    private static string RenderHeader(ApiHeader header) =>
+        !string.IsNullOrWhiteSpace(header.EnvironmentVariableName)
+            ? $$"""{"name": {{PythonLiteral.Str(header.Name)}}, "envVar": {{PythonLiteral.Str(header.EnvironmentVariableName)}}}"""
+            : !string.IsNullOrWhiteSpace(header.Template)
+                ? $$"""{"name": {{PythonLiteral.Str(header.Name)}}, "template": {{PythonLiteral.Str(header.Template!)}}}"""
+                : $$"""{"name": {{PythonLiteral.Str(header.Name)}}, "value": {{PythonLiteral.Str(header.Value!)}}}""";
+
+    // Issue #220: "None" when no bootstrap is configured, same "None means
+    // absent" convention as RenderBody/RenderEmbeddedJsonSource. Body fields
+    // reuse the header dict shape ({"name", "value"|"envVar"}) so the
+    // runtime resolves both through one helper (_resolve_bootstrap_pairs).
+    public static string RenderBootstrap(ApiBootstrap? bootstrap) => bootstrap is null
+        ? "None"
+        : $$"""{"name": {{PythonLiteral.Str(bootstrap.Name)}}, "method": {{PythonLiteral.Str(bootstrap.Method)}}, "url": {{PythonLiteral.Str(bootstrap.Url)}}, "headers": {{RenderHeaders(bootstrap.Headers)}}, "bodyFields": {{RenderBootstrapBodyFields(bootstrap.BodyFields)}}, "bodyEncoding": {{PythonLiteral.Str(bootstrap.BodyEncoding.ToString())}}, "valuePath": {{PythonLiteral.Str(bootstrap.ValuePath)}}}""";
+
+    private static string RenderBootstrapBodyFields(List<ApiBootstrapBodyField>? fields) =>
+        fields is null ? "[]" : RenderList(fields, field => !string.IsNullOrWhiteSpace(field.EnvironmentVariableName)
+            ? $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "envVar": {{PythonLiteral.Str(field.EnvironmentVariableName)}}}"""
+            : $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "value": {{PythonLiteral.Str(field.Value ?? "")}}}""");
 
     private static string RenderSource(ApiParameterSource source) => source switch
     {
@@ -150,11 +168,46 @@ internal static class PythonApiConfigLiteral
         // (_resolve_parameter_values's `source.get("format")` fallback in
         // scraper_api.py.j2) stays the single source of truth for defaults.
         RangeSource r => $$"""{"kind": "range", "type": {{PythonLiteral.Str(r.Type.ToString())}}, "from": {{PythonLiteral.Str(r.From)}}, "to": {{PythonLiteral.Str(r.To)}}{{RenderFormatSuffix(r.Format)}}}""",
+        // Issue #216: Actions is rendered as a runtime-interpreted
+        // list-of-dicts (see RenderBrowserActions), not baked as literal
+        // Playwright code the way the top-level login action sequence
+        // already is (PythonPlaywrightCodeGenerator) — this list can occur
+        // once per parameter, so a generic runtime dispatcher (see
+        // _run_browser_action in scraper_api.py.j2) scales better than one
+        // bespoke generated function per discovery source.
+        BrowserDiscoverySource b => $$"""{"kind": "browserDiscovery", "discoveryUrl": {{PythonLiteral.Str(b.DiscoveryUrl)}}, "actions": {{RenderBrowserActions(b.Actions)}}}""",
         _ => throw new InvalidOperationException($"Unknown ApiParameterSource type: {source.GetType()}"),
     };
 
     private static string RenderFormatSuffix(string? format) =>
         format is null ? "" : $$""", "format": {{PythonLiteral.Str(format)}}""";
+
+    // Issue #216: serializes BrowserDiscoverySource.Actions the same
+    // camelCase-key-matches-the-wire-JSON convention every other dict this
+    // class builds already uses (unlike PythonGroupTreeLiteral's own
+    // snake_case "frame_path", a one-off for that specific tree walker) —
+    // _run_browser_action/_run_scroll_action in scraper_api.py.j2 read these
+    // keys directly. FramePath is omitted entirely when unset, same
+    // "absent key = no FramePath" convention PythonGroupTreeLiteral's
+    // FramePathPart already established.
+    private static string RenderBrowserActions(List<BrowserAction>? actions) =>
+        actions is null ? "[]" : RenderList(actions, RenderBrowserAction);
+
+    private static string RenderBrowserAction(BrowserAction action) => action switch
+    {
+        WaitForAction a => $$"""{"kind": "waitFor", "selector": {{PythonLiteral.Str(a.Selector)}}, "timeoutMs": {{a.TimeoutMs}}{{FramePathSuffix(a.FramePath)}}}""",
+        FillAction a => $$"""{"kind": "fill", "selector": {{PythonLiteral.Str(a.Selector)}}, "environmentVariableName": {{PythonLiteral.Str(a.EnvironmentVariableName)}}{{FramePathSuffix(a.FramePath)}}}""",
+        ClickAction a => $$"""{"kind": "click", "selector": {{PythonLiteral.Str(a.Selector)}}{{FramePathSuffix(a.FramePath)}}}""",
+        // Issue #289: "scrollStepPx" omitted entirely when unset — None is
+        // the runtime's own "jump straight to the bottom" default (see
+        // _run_scroll_action in scraper_api.py.j2), same "absent key = no
+        // override" convention FramePath already uses.
+        ScrollAction a => $$"""{"kind": "scroll", "containerSelector": {{(a.ContainerSelector is null ? "None" : PythonLiteral.Str(a.ContainerSelector))}}, "loadMoreButtonSelector": {{(a.LoadMoreButtonSelector is null ? "None" : PythonLiteral.Str(a.LoadMoreButtonSelector))}}, "maxIterations": {{a.MaxIterations}}, "waitAfterMs": {{a.WaitAfterMs}}{{(a.ScrollStepPx is { } stepPx ? $""", "scrollStepPx": {stepPx}""" : "")}}{{FramePathSuffix(a.FramePath)}}}""",
+        _ => throw new InvalidOperationException($"Unknown BrowserAction type: {action.GetType()}"),
+    };
+
+    private static string FramePathSuffix(List<string>? framePath) =>
+        framePath is { Count: > 0 } ? $$""", "framePath": {{PythonLiteral.StrList(framePath)}}""" : "";
 
     private static string RenderList<T>(List<T> items, Func<T, string> renderItem) =>
         "[" + string.Join(", ", items.Select(renderItem)) + "]";

@@ -37,7 +37,9 @@ const SFSessionRestore = (function () {
     if (stored.changeDetection) next = { ...next, changeDetection: stored.changeDetection };
     if (stored.proxy)                 next = { ...next, proxy: stored.proxy };
     if (stored.pagination)            next = { ...next, pagination: stored.pagination };
+    if (stored.discoveredUrls)        next = { ...next, discoveredUrls: stored.discoveredUrls };
     if (stored.persistentSession !== undefined) next = { ...next, persistentSession: stored.persistentSession };
+    if (stored.preflight !== undefined) next = { ...next, preflight: stored.preflight };
     if (stored.hardening)             next = { ...next, hardening: stored.hardening };
     if (stored.scriptFileName)        next = { ...next, scriptFileName: stored.scriptFileName };
     if (stored.outputFileName)        next = { ...next, outputFileName: stored.outputFileName };
@@ -46,6 +48,9 @@ const SFSessionRestore = (function () {
     if (stored.pendingNewContainer)   next = { ...next, pendingNewContainer: stored.pendingNewContainer };
     if (stored.pendingBrowserActionIndex !== undefined) next = { ...next, pendingBrowserActionIndex: stored.pendingBrowserActionIndex };
     if (stored.pendingBrowserActionField)   next = { ...next, pendingBrowserActionField: stored.pendingBrowserActionField };
+    if (stored.pendingApiDiscoveryPartId !== undefined) next = { ...next, pendingApiDiscoveryPartId: stored.pendingApiDiscoveryPartId };
+    if (stored.pendingApiDiscoveryActionIndex !== undefined) next = { ...next, pendingApiDiscoveryActionIndex: stored.pendingApiDiscoveryActionIndex };
+    if (stored.pendingApiDiscoveryActionField) next = { ...next, pendingApiDiscoveryActionField: stored.pendingApiDiscoveryActionField };
     if (stored.apiConfigDraft)        next = { ...next, apiConfigDraft: stored.apiConfigDraft };
     if (stored.apiConfig)             next = { ...next, apiConfig: stored.apiConfig };
     if (Array.isArray(stored.combinedComponents)) next = { ...next, combinedComponents: stored.combinedComponents };
@@ -138,6 +143,35 @@ const SFSessionRestore = (function () {
       return true;
     }
 
+    if (stored.selectionKind === 'apiDiscoveryAction' && stored.pendingApiDiscoveryPartId && stored.pendingApiDiscoveryActionIndex !== null && stored.pendingApiDiscoveryActionIndex !== undefined) {
+      // Issue #216: same as the live ELEMENT_SELECTED path, nested one
+      // level deeper (one specific BrowserDiscoverySource's own action
+      // list) and returning to API_CONFIG, where this picker lives.
+      const partId = stored.pendingApiDiscoveryPartId;
+      const field = stored.pendingApiDiscoveryActionField || 'selector';
+      const draft = state.apiConfigDraft;
+      const source = draft.parameterSources[partId];
+      log('INIT pending api-discovery-action selector found → updating action', { partId, field, selector: stored.pendingSelector });
+      const apiConfigDraft = {
+        ...draft,
+        parameterSources: {
+          ...draft.parameterSources,
+          [partId]: {
+            ...source,
+            actions: updateBrowserAction(source.actions || [], stored.pendingApiDiscoveryActionIndex, {
+              [field]: stored.pendingSelector, framePath: stored.pendingFramePath || null,
+            }),
+          },
+        },
+      };
+      await chrome.storage.session.set({ apiConfigDraft });
+      bridge.setState(STATES.API_CONFIG, {
+        apiConfigDraft, selectionKind: null, pendingApiDiscoveryPartId: null, pendingApiDiscoveryActionIndex: null, pendingApiDiscoveryActionField: 'selector',
+        pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
+      });
+      return true;
+    }
+
     if (stored.selectionKind === 'pagination' && stored.pendingSelector) {
       // Same as the live ELEMENT_SELECTED path: write the picked selector
       // straight into pagination.nextLinkSelector, no naming modal needed.
@@ -146,6 +180,24 @@ const SFSessionRestore = (function () {
       await chrome.storage.session.set({ pagination });
       bridge.setState(STATES.IDLE, {
         pagination, selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
+      });
+      return true;
+    }
+
+    if (stored.selectionKind === 'discoveredUrls' && stored.pendingSelector) {
+      // Same as the live ELEMENT_SELECTED path: write the picked selector
+      // and the clicked page's own URL (already self-corrected into
+      // state.url by the block above, if it had changed) straight into
+      // discoveredUrls, no naming modal needed.
+      log('INIT pending discoveredUrls selector found → updating discoveredUrls', stored.pendingSelector);
+      const discoveredUrls = {
+        ...state.discoveredUrls,
+        pageUrl: stored.pendingUrl || state.discoveredUrls.pageUrl,
+        linkSelector: stored.pendingSelector,
+      };
+      await chrome.storage.session.set({ discoveredUrls });
+      bridge.setState(STATES.IDLE, {
+        discoveredUrls, selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
       });
       return true;
     }

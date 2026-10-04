@@ -76,6 +76,8 @@ declare namespace SFDraft {
     loadMoreButtonSelector?: string;
     maxIterations?: number;
     waitAfterMs?: number;
+    /** Issue #289 — null/unset keeps the default "jump straight to the current bottom" behavior. */
+    scrollStepPx?: number | null;
     framePath?: string[] | null;
   }
 
@@ -106,6 +108,14 @@ declare namespace SFDraft {
     nextLinkSelector: string;
     urlTemplate: string;
     maxPages: number;
+  }
+
+  // Issue #218.
+  interface DiscoveredUrlsState {
+    enabled: boolean;
+    pageUrl: string;
+    linkSelector: string;
+    maxUrls: number;
   }
 
   interface NullRateRow {
@@ -150,5 +160,37 @@ declare namespace SFDraft {
   interface OutputBlueprintTreeNode {
     name: string;
     children?: OutputBlueprintTreeNode[];
+  }
+
+  // ── API mode: token/auth bootstrap (api-bootstrap.js, Issue #220) ─────────
+
+  interface ApiBootstrapPair {
+    name: string;
+    mode: 'literal' | 'env';
+    value: string;
+    envName: string;
+  }
+
+  interface ApiBootstrap {
+    name: string;
+    method: 'GET' | 'POST';
+    url: string;
+    valuePath: string;
+    bodyEncoding: 'Json' | 'Form';
+    headers: ApiBootstrapPair[];
+    bodyFields: ApiBootstrapPair[];
+  }
+
+  // One GET_API_CAPTURE_ENTRIES entry (content/api-capture.js's buildEntry).
+  interface ApiCaptureEntry {
+    id: number;
+    url: string;
+    method: string;
+    status: number;
+    contentType: string | null;
+    body: string;
+    requestHeaders?: Array<{ name: string; value: string }>;
+    requestBody?: string;
+    requestBodySkipped?: boolean;
   }
 }

@@ -37,7 +37,7 @@ const {
   lastPathSegmentName, buildApiSubtreeFromCandidate, resolveApiGroupScopePath, countApiConfigFields,
   renderApiCandidates, renderApiEntriesList,
   parseUrlTemplateParts, buildUrlTemplate, parseValueListInput,
-  buildStaticListSource, buildDiscoverySource, buildRangeSource, buildApiHeaders, buildApiConfig,
+  buildStaticListSource, buildDiscoverySource, buildRangeSource, buildBrowserDiscoverySource, buildApiHeaders, buildApiConfig,
   findUrlTemplateMatches, mergeValueListValues,
   variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
   detectRangeFormat, findUrlPartValue, rangeFormatExample, sanitizeFileNameBase, parseAdditionalUrls,
@@ -1715,6 +1715,24 @@ describe('parseValueListInput / buildStaticListSource / buildDiscoverySource / b
   test('buildRangeSource omits format entirely when unset', () => {
     const source = buildRangeSource('Number', '1', '10', null);
     expect(source).not.toHaveProperty('format');
+  });
+
+  // Issue #216: deliberately no URL-match-pattern field — see
+  // BrowserDiscoverySource's own doc comment (companion IR/ApiConfig.cs).
+  test('buildBrowserDiscoverySource carries the discriminator, DiscoveryUrl and actions', () => {
+    const actions = [{ kind: 'click', selector: '#load-more' }];
+    expect(buildBrowserDiscoverySource('https://example.com/angebote', actions)).toEqual({
+      kind: 'browserDiscovery', discoveryUrl: 'https://example.com/angebote', actions,
+    });
+  });
+
+  test('buildBrowserDiscoverySource omits actions entirely when empty/unset', () => {
+    expect(buildBrowserDiscoverySource('https://example.com/angebote')).toEqual({
+      kind: 'browserDiscovery', discoveryUrl: 'https://example.com/angebote',
+    });
+    expect(buildBrowserDiscoverySource('https://example.com/angebote', [])).toEqual({
+      kind: 'browserDiscovery', discoveryUrl: 'https://example.com/angebote',
+    });
   });
 });
 
@@ -5275,6 +5293,271 @@ describe('API-Mode config screen end-to-end (Issue #53 Phase 5)', () => {
     document.getElementById('btn-api-config-discard').click();
 
     expect(document.getElementById('api-config-panel').classList.contains('hidden')).toBe(true);
+  });
+
+  // ── BrowserDiscoverySource (Issue #216) ─────────────────────────────────
+  describe('Browser discovery parameter source', () => {
+    function makeVariableWithBrowserDiscovery() {
+      confirmPrimaryCandidate();
+      const toggle = document.querySelectorAll('#api-config-segments .api-config-part-toggle')[2];
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+      const nameInput = document.querySelector('#api-config-segments .api-config-part-name');
+      nameInput.value = 'category';
+      nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+      const kindRadio = document.querySelector('.api-config-source-kind-radio[value="browserDiscovery"]');
+      kindRadio.checked = true;
+      kindRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    test('picking "Browser discovery" prefills the discovery URL from the current page and renders no actions yet', () => {
+      makeVariableWithBrowserDiscovery();
+
+      expect(document.querySelector('.api-discovery-url').value).toBe('https://example.com');
+      expect(document.querySelectorAll('.browser-action-card').length).toBe(0);
+    });
+
+    test('adding a Click action renders a pick-selector button; clicking it starts selection', () => {
+      makeVariableWithBrowserDiscovery();
+
+      document.querySelector('.btn-add-discovery-action[data-kind="click"]').click();
+      expect(document.querySelectorAll('.browser-action-card').length).toBe(1);
+
+      const pickBtn = document.querySelector('.btn-pick-discovery-action-selector');
+      expect(pickBtn).not.toBeNull();
+      pickBtn.click();
+
+      expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'START_SELECTION' });
+      expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(false);
+    });
+
+    test('ELEMENT_SELECTED writes the picked selector into the right action and returns to API_CONFIG', () => {
+      makeVariableWithBrowserDiscovery();
+      document.querySelector('.btn-add-discovery-action[data-kind="click"]').click();
+      document.querySelector('.btn-pick-discovery-action-selector').click();
+
+      capturedListener({ type: 'ELEMENT_SELECTED', selector: '#load-more', framePath: null });
+
+      expect(document.getElementById('screen-api-config').classList.contains('hidden')).toBe(false);
+      expect(document.querySelector('.browser-action-card .field-selector').textContent).toBe('#load-more');
+    });
+
+    test('removing an action drops it from the list', () => {
+      makeVariableWithBrowserDiscovery();
+      document.querySelector('.btn-add-discovery-action[data-kind="click"]').click();
+      expect(document.querySelectorAll('.browser-action-card').length).toBe(1);
+
+      document.querySelector('.btn-remove-discovery-action').click();
+
+      expect(document.querySelectorAll('.browser-action-card').length).toBe(0);
+    });
+
+    test('confirming sends a browserDiscovery source with the DiscoveryUrl and serialized actions', () => {
+      makeVariableWithBrowserDiscovery();
+      document.querySelector('.btn-add-discovery-action[data-kind="click"]').click();
+      document.querySelector('.btn-pick-discovery-action-selector').click();
+      capturedListener({ type: 'ELEMENT_SELECTED', selector: '#load-more', framePath: null });
+
+      document.getElementById('btn-api-config-confirm').click();
+
+      const persistedConfig = chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig;
+      expect(persistedConfig.parameters).toEqual([
+        {
+          name: 'category',
+          source: { kind: 'browserDiscovery', discoveryUrl: 'https://example.com', actions: [{ kind: 'click', selector: '#load-more' }] },
+        },
+      ]);
+    });
+
+    // DiscoveryUrl stays freely editable after the prefill (e.g. for a
+    // dedicated listing page different from wherever the clicked data
+    // point itself lives) — see setApiConfigSourceKind's own doc comment.
+    test('the discovery URL can be edited after the prefill', () => {
+      makeVariableWithBrowserDiscovery();
+      const urlInput = document.querySelector('.api-discovery-url');
+      urlInput.value = 'https://example.com/angebote';
+      urlInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+      document.getElementById('btn-api-config-confirm').click();
+
+      const persistedConfig = chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig;
+      expect(persistedConfig.parameters[0].source.discoveryUrl).toBe('https://example.com/angebote');
+      // No actions were ever added — omitted entirely, not an empty array.
+      expect(persistedConfig.parameters[0].source).not.toHaveProperty('actions');
+    });
+
+    // Issue #289
+    test('a Scroll action\'s scrollStepPx is sent when set', () => {
+      makeVariableWithBrowserDiscovery();
+      document.querySelector('.btn-add-discovery-action[data-kind="scroll"]').click();
+
+      const stepInput = document.querySelector('.discovery-action-scroll-step-px');
+      expect(stepInput.value).toBe(''); // blank = null = today's jump-to-bottom default
+      stepInput.value = '400';
+      stepInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+      document.getElementById('btn-api-config-confirm').click();
+
+      const persistedConfig = chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig;
+      expect(persistedConfig.parameters[0].source.actions[0].scrollStepPx).toBe(400);
+    });
+
+    test('a Scroll action left with a blank scrollStepPx omits the key entirely', () => {
+      makeVariableWithBrowserDiscovery();
+      document.querySelector('.btn-add-discovery-action[data-kind="scroll"]').click();
+
+      document.getElementById('btn-api-config-confirm').click();
+
+      const persistedConfig = chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig;
+      expect(persistedConfig.parameters[0].source.actions[0]).not.toHaveProperty('scrollStepPx');
+    });
+  });
+
+  // ── Chained parameter discovery (Issue #217) ────────────────────────────
+  describe('Chained parameter discovery', () => {
+    // First parameter (path segment "42" → "category", nothing earlier to
+    // reference); second (the query param → "week") can reference it.
+    function makeTwoBrowserDiscoveryParameters() {
+      confirmPrimaryCandidate();
+
+      const pathToggle = document.querySelectorAll('#api-config-segments .api-config-part-toggle')[2];
+      pathToggle.checked = true;
+      pathToggle.dispatchEvent(new Event('change', { bubbles: true }));
+      const pathNameInput = document.querySelector('#api-config-segments .api-config-part-name');
+      pathNameInput.value = 'category';
+      pathNameInput.dispatchEvent(new Event('change', { bubbles: true }));
+      const pathKindRadio = document.querySelector('[data-part-id="path:2"].api-config-source-kind-radio[value="browserDiscovery"]');
+      pathKindRadio.checked = true;
+      pathKindRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+      const queryToggle = document.querySelector('#api-config-query-params .api-config-part-toggle');
+      queryToggle.checked = true;
+      queryToggle.dispatchEvent(new Event('change', { bubbles: true }));
+      const queryNameInput = document.querySelector('#api-config-query-params .api-config-part-name');
+      queryNameInput.value = 'week';
+      queryNameInput.dispatchEvent(new Event('change', { bubbles: true }));
+      const queryKindRadio = document.querySelector('[data-part-id="query:category"].api-config-source-kind-radio[value="browserDiscovery"]');
+      queryKindRadio.checked = true;
+      queryKindRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    test('the first (earliest) parameter renders no insert-parameter picker at all', () => {
+      makeTwoBrowserDiscoveryParameters();
+      expect(document.querySelector('[data-part-id="path:2"].api-param-placeholder-select')).toBeNull();
+    });
+
+    test('a later parameter offers every earlier-declared parameter as an insertable placeholder', () => {
+      makeTwoBrowserDiscoveryParameters();
+      const select = document.querySelector('[data-part-id="query:category"].api-param-placeholder-select');
+      expect(select).not.toBeNull();
+      expect(Array.from(select.options).map(o => o.value)).toEqual(['', 'category']);
+    });
+
+    // Regression test: picking from the <select> moves focus to the select
+    // itself, never the text input — inserting at "wherever the input's own
+    // selectionStart happens to default to for a never-focused field" would
+    // put the placeholder at the very start (even before "https://"), not
+    // where it's actually useful. Asserts the exact resulting value (not
+    // just .toContain) specifically to catch that.
+    test('picking a parameter appends its placeholder at the end of the discovery URL and persists it', () => {
+      makeTwoBrowserDiscoveryParameters();
+      const urlInput = document.querySelectorAll('.api-discovery-url')[1]; // query:category's own card
+      expect(urlInput.value).toBe('https://example.com'); // prefilled from the current page, never focused
+      const select = document.querySelector('[data-part-id="query:category"].api-param-placeholder-select');
+      select.value = 'category';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+
+      document.getElementById('btn-api-config-confirm').click();
+
+      const persistedConfig = chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig;
+      const weekParam = persistedConfig.parameters.find(p => p.name === 'week');
+      expect(weekParam.source.discoveryUrl).toBe('https://example.com{category}');
+    });
+
+    // DiscoverySource's own UrlTemplate is ordinarily read-only (derived via
+    // the search-and-confirm flow, see 'the discovery round-trip' above) —
+    // "Edit template" temporarily swaps it for an editable input so a
+    // concrete segment can be manually replaced with an earlier parameter's
+    // own placeholder.
+    function makeDiscoverySourceWithEarlierParameter() {
+      confirmPrimaryCandidate();
+
+      const pathToggle = document.querySelectorAll('#api-config-segments .api-config-part-toggle')[2];
+      pathToggle.checked = true;
+      pathToggle.dispatchEvent(new Event('change', { bubbles: true }));
+      const pathNameInput = document.querySelector('#api-config-segments .api-config-part-name');
+      pathNameInput.value = 'category';
+      pathNameInput.dispatchEvent(new Event('change', { bubbles: true }));
+      const pathKindRadio = document.querySelector('[data-part-id="path:2"].api-config-source-kind-radio[value="staticList"]');
+      pathKindRadio.checked = true;
+      pathKindRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+      const queryToggle = document.querySelector('#api-config-query-params .api-config-part-toggle');
+      queryToggle.checked = true;
+      queryToggle.dispatchEvent(new Event('change', { bubbles: true }));
+      const queryNameInput = document.querySelector('#api-config-query-params .api-config-part-name');
+      queryNameInput.value = 'week';
+      queryNameInput.dispatchEvent(new Event('change', { bubbles: true }));
+      const discoveryRadio = document.querySelector('[data-part-id="query:category"].api-config-source-kind-radio[value="discovery"]');
+      discoveryRadio.checked = true;
+      discoveryRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+      document.querySelector('.api-config-discovery-search').click();
+      capturedListener({
+        type: 'API_CANDIDATES', target: 'Elektronik',
+        candidates: [{
+          entryId: 2, url: 'https://example.com/api/categories', method: 'GET',
+          path: 'data[0].name', value: 'Elektronik', siblings: [],
+          itemsPath: 'data', valuePath: 'name', requestHeaders: [],
+        }],
+      });
+      document.querySelector('.api-config-discovery-confirm').click();
+    }
+
+    test('no "Edit template" button is shown before a template has ever been found', () => {
+      makeTwoBrowserDiscoveryParameters(); // neither parameter is a DiscoverySource here
+      expect(document.querySelector('.btn-discovery-template-edit')).toBeNull();
+    });
+
+    test('"Edit template" swaps the read-only summary for an editable input seeded with the current template', () => {
+      makeDiscoverySourceWithEarlierParameter();
+
+      expect(document.querySelector('.api-discovery-url-template')).toBeNull();
+      document.querySelector('.btn-discovery-template-edit').click();
+
+      const templateInput = document.querySelector('.api-discovery-url-template');
+      expect(templateInput).not.toBeNull();
+      expect(templateInput.value).toBe('https://example.com/api/categories');
+      expect(document.querySelector('[data-part-id="query:category"].api-param-placeholder-select')).not.toBeNull();
+    });
+
+    test('editing and confirming the template updates UrlTemplate but leaves ItemsPath/ValuePath untouched', () => {
+      makeDiscoverySourceWithEarlierParameter();
+      document.querySelector('.btn-discovery-template-edit').click();
+
+      const templateInput = document.querySelector('.api-discovery-url-template');
+      templateInput.value = 'https://example.com/api/categories/{category}';
+      templateInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+      document.getElementById('btn-api-config-confirm').click();
+
+      const persistedConfig = chrome.storage.session.set.mock.calls.at(-1)[0].apiConfig;
+      const weekParam = persistedConfig.parameters.find(p => p.name === 'week');
+      expect(weekParam.source.urlTemplate).toBe('https://example.com/api/categories/{category}');
+      expect(weekParam.source.itemsPath).toBe('data');
+      expect(weekParam.source.valuePath).toBe('name');
+    });
+
+    test('"Done" returns to the read-only summary', () => {
+      makeDiscoverySourceWithEarlierParameter();
+      document.querySelector('.btn-discovery-template-edit').click();
+      expect(document.querySelector('.api-discovery-url-template')).not.toBeNull();
+
+      document.querySelector('.btn-discovery-template-done').click();
+
+      expect(document.querySelector('.api-discovery-url-template')).toBeNull();
+      expect(document.querySelector('.api-candidates-target')).not.toBeNull();
+    });
   });
 });
 

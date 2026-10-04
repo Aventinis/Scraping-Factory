@@ -175,6 +175,22 @@ describe('Engine + browser actions integration', () => {
     expect(document.querySelector('.browser-action-wait-after-ms').value).toBe('2500');
   });
 
+  // Issue #289
+  test('editing a scroll action\'s scrollStepPx persists it, and clearing it resets to null', () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-scroll').click();
+
+    const stepInput = document.querySelector('.browser-action-scroll-step-px');
+    expect(stepInput.value).toBe(''); // null default renders as an empty, placeholder-only input
+    stepInput.value = '400';
+    stepInput.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(document.querySelector('.browser-action-scroll-step-px').value).toBe('400');
+
+    document.querySelector('.browser-action-scroll-step-px').value = '';
+    document.querySelector('.browser-action-scroll-step-px').dispatchEvent(new Event('change', { bubbles: true }));
+    expect(document.querySelector('.browser-action-scroll-step-px').value).toBe('');
+  });
+
   test('removing an action drops only that card', () => {
     document.getElementById('btn-engine-browser').click();
     document.getElementById('btn-add-action-wait').click();
@@ -382,5 +398,32 @@ describe('Engine + browser actions integration', () => {
     expect(body.browserActions).toEqual([
       { kind: 'scroll', containerSelector: null, loadMoreButtonSelector: '#load-more', maxIterations: 6, waitAfterMs: 1000 },
     ]);
+  });
+
+  // Issue #289
+  test('a scroll action with scrollStepPx set is sent with it; left unset, the key is omitted', async () => {
+    document.getElementById('btn-engine-browser').click();
+    document.getElementById('btn-add-action-scroll').click();
+
+    document.querySelector('.browser-action-scroll-step-px').value = '350';
+    document.querySelector('.browser-action-scroll-step-px').dispatchEvent(new Event('change', { bubbles: true }));
+
+    document.getElementById('btn-generate').disabled = false;
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const [, options] = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/generate'));
+    const body = JSON.parse(options.body);
+    expect(body.browserActions[0].scrollStepPx).toBe(350);
+
+    document.querySelector('.browser-action-scroll-step-px').value = '';
+    document.querySelector('.browser-action-scroll-step-px').dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('btn-generate').disabled = false;
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const [, options2] = global.fetch.mock.calls.filter(([url]) => String(url).endsWith('/generate')).at(-1);
+    const body2 = JSON.parse(options2.body);
+    expect(body2.browserActions[0]).not.toHaveProperty('scrollStepPx');
   });
 });

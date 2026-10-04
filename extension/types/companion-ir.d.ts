@@ -45,7 +45,9 @@ declare namespace SFWire {
     proxy?: ProxyConfig;
     hardening?: HardeningCheck[];
     pagination?: PaginationConfig;
+    discoveredUrls?: DiscoveredUrlsConfig;
     persistentSession?: boolean;
+    preflight?: boolean;
     externalConfig?: boolean;
     combined?: CombinedComponentConfig[];
     blocks?: ExtractionBlockConfig[];
@@ -133,6 +135,8 @@ declare namespace SFWire {
     loadMoreButtonSelector?: string | null;
     maxIterations?: number;
     waitAfterMs?: number;
+    /** Issue #289 — null/unset keeps the default "jump straight to the current bottom" behavior. */
+    scrollStepPx?: number | null;
     framePath?: string[] | null;
   }
 
@@ -169,6 +173,10 @@ declare namespace SFWire {
 
   interface NextLinkPagination { kind: 'nextLink'; nextLinkSelector: string; maxPages?: number; }
   interface PageNumberPagination { kind: 'pageNumber'; urlTemplate: string; maxPages?: number; }
+
+  // ── Discovered start URLs (DiscoveredUrlsConfig.cs, Issue #218) ──────────
+
+  interface DiscoveredUrlsConfig { pageUrl: string; linkSelector: string; maxUrls?: number; }
 
   // ── Hardening (HardeningCheck.cs) ────────────────────────────────────────
 
@@ -221,6 +229,24 @@ declare namespace SFWire {
     groups?: ApiGroup[] | null;
     body?: ApiBodyNode;
     embeddedJsonSource?: EmbeddedJsonSource;
+    bootstrap?: ApiBootstrap;
+  }
+
+  // Issue #220: see ApiConfig.Bootstrap in IR/ApiConfig.cs.
+  interface ApiBootstrap {
+    name: string;
+    method?: 'GET' | 'POST';
+    url: string;
+    headers?: ApiHeader[];
+    bodyFields?: ApiBootstrapBodyField[];
+    bodyEncoding?: 'Json' | 'Form';
+    valuePath: string;
+  }
+
+  interface ApiBootstrapBodyField {
+    name: string;
+    value?: string | null;
+    environmentVariableName?: string | null;
   }
 
   interface EmbeddedJsonSource {
@@ -231,6 +257,7 @@ declare namespace SFWire {
     name: string;
     value?: string | null;
     environmentVariableName?: string | null;
+    template?: string | null;
   }
 
   interface ApiParameter {
@@ -238,11 +265,13 @@ declare namespace SFWire {
     source: ApiParameterSource;
   }
 
-  type ApiParameterSource = StaticListSource | DiscoverySource | RangeSource;
+  type ApiParameterSource = StaticListSource | DiscoverySource | RangeSource | BrowserDiscoverySource;
 
   interface StaticListSource { kind: 'staticList'; values: string[]; }
   interface DiscoverySource { kind: 'discovery'; method?: 'GET'; urlTemplate: string; itemsPath: string; valuePath: string; }
   interface RangeSource { kind: 'range'; type: RangeType; from: string; to: string; format?: string; }
+  /** Issue #216 — no URL-match-pattern field of its own; matched against the enclosing ApiConfig.urlTemplate at runtime. */
+  interface BrowserDiscoverySource { kind: 'browserDiscovery'; discoveryUrl: string; actions?: BrowserAction[]; }
 
   type RangeType = 'IsoWeek' | 'Number' | 'Date';
 

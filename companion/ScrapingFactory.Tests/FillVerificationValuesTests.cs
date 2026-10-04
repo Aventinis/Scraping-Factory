@@ -66,4 +66,29 @@ public class FillVerificationValuesTests
 
         Assert.Empty(result);
     }
+
+    // Issue #220: the Api-mode bootstrap request's own credential env vars
+    // (body fields and headers) are legitimate verification-value targets,
+    // just like a FillAction's.
+    [Fact]
+    public void Filter_KeepsValuesMatchingABootstrapCredentialEnvVarName()
+    {
+        var api = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/api",
+            ItemsPath = "items",
+            Fields = [new ApiField { Name = "a", Path = "a" }],
+            Bootstrap = new ApiBootstrap
+            {
+                Name = "token", Method = "POST", Url = "https://example.com/token", ValuePath = "t",
+                BodyFields = [new ApiBootstrapBodyField { Name = "password", EnvironmentVariableName = "API_PASS" }],
+                Headers = [new ApiHeader { Name = "X-Client", EnvironmentVariableName = "API_CLIENT" }],
+            },
+        };
+        var values = new Dictionary<string, string> { ["API_PASS"] = "s3cret", ["API_CLIENT"] = "c1", ["SF_UNRELATED"] = "x" };
+
+        var result = FillVerificationValues.Filter(null, values, api);
+
+        Assert.Equal(new Dictionary<string, string> { ["API_PASS"] = "s3cret", ["API_CLIENT"] = "c1" }, result);
+    }
 }

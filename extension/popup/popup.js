@@ -16,7 +16,7 @@ const { loadGlobalSettings, getGlobalSettings, updateGlobalSettings } =
 const {
   STATES, escapeHtml,
   parseUrlTemplateParts, buildUrlTemplate, parseValueListInput, findUrlTemplateMatches, mergeValueListValues,
-  buildStaticListSource, buildDiscoverySource, buildRangeSource, RANGE_FORMAT_PRESETS,
+  buildStaticListSource, buildDiscoverySource, buildRangeSource, buildBrowserDiscoverySource, RANGE_FORMAT_PRESETS,
   detectRangeFormat, findUrlPartValue, rangeFormatExample,
   buildApiHeaders, buildApiConfig,
   buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
@@ -51,6 +51,10 @@ const {
   openBodyParameterModal, confirmBodyParameterModal, confirmApiConfig,
   renderApiConfigModals, wireApiConfigEvents,
 } = typeof require !== 'undefined' ? require('./api-config-ui') : self.SFApiConfigUI;
+
+const {
+  renderApiBootstrapSection, wireApiBootstrapEvents,
+} = typeof require !== 'undefined' ? require('./api-bootstrap-ui') : self.SFApiBootstrapUI;
 
 const {
   renderGroupTree,
@@ -235,6 +239,14 @@ let _state = {
   // urlTemplate) — see buildPaginationConfig. maxPages is a whole-number
   // safety cap, always active regardless of kind.
   pagination: { enabled: false, kind: 'nextLink', nextLinkSelector: '', urlTemplate: '', maxPages: 50 },
+  // Issue #218: opt-in discovery of additional start URLs by harvesting
+  // links from a navigation/listing page — mode-independent like
+  // additionalStartUrls/pagination above (Fields/Groups only; hidden
+  // entirely for API mode), persisted the same way (real scrape-target
+  // configuration, not a per-generate toggle). Composes additively with
+  // additionalStartUrls — see buildDiscoveredUrlsConfig. maxUrls is a
+  // whole-number safety cap, always active.
+  discoveredUrls: { enabled: false, pageUrl: '', linkSelector: '', maxUrls: 100 },
   // Issue #175: opt-in persistent session/cookie handling — Browser-engine
   // only, persisted the same way as proxy/pagination above (real
   // scrape-target configuration, not a per-generate toggle). Unlike proxy/
@@ -242,6 +254,16 @@ let _state = {
   // see buildScrapingConfig's "only send the key when true" handling), so
   // it's a plain boolean rather than an { enabled, ... } object.
   persistentSession: false,
+  // Issue #219: opt-in preflight check — a single cheap HEAD request against
+  // the primary start URL, run before the main extraction phase even
+  // starts, so an unchanged target (or one that's unreachable) doesn't need
+  // the full cost of a real scrape on the next scheduled run. Mode-
+  // independent like persistentSession above (Fields/Groups only; hidden
+  // entirely for API/Combined/Blocks mode), persisted the same way. A plain
+  // boolean, same "no sub-fields" shape as persistentSession/externalConfig
+  // — which ETag/Last-Modified value counts as "changed" is tracked
+  // entirely by the generated script's own sidecar file, never here.
+  preflight: false,
   // Issue #129: opt-in script hardening checks — mode-independent like
   // engine/changeDetection/proxy above, persisted the same way (real
   // scrape-target configuration, not a per-generate toggle). Nested one
@@ -324,7 +346,7 @@ let _state = {
   // itself already gets). Written onto the resulting field/node once
   // confirmed (see confirmField/confirmExtendedField).
   pendingTransforms:   [],
-  selectionKind:       null,  // 'field' | 'container' | 'browserAction' | 'pagination' | null — which kind the current SELECTING round is for
+  selectionKind:       null,  // 'field' | 'container' | 'browserAction' | 'pagination' | 'apiDiscoveryAction' | null — which kind the current SELECTING round is for
   pendingParentPath:   null,  // number[] | null — where the next inserted group-tree node goes; null = root level
   pendingNewContainer: null,  // {name, repeating} captured by modal-container-new before element-selection starts
   pendingBrowserActionIndex: null, // number | null — which browserActions entry the current SELECTING round's result is written into (selectionKind === 'browserAction')
@@ -332,6 +354,13 @@ let _state = {
   // property of that entry gets the picked value; only a ScrollStep action
   // has more than one pickable field, everything else always uses 'selector'.
   pendingBrowserActionField: 'selector',
+  // Issue #216: same shape as pendingBrowserActionIndex/Field above, just
+  // nested one level deeper — which BrowserDiscoverySource (by parameter-
+  // part id) and which of its own actions the current SELECTING round's
+  // result is written into (selectionKind === 'apiDiscoveryAction').
+  pendingApiDiscoveryPartId: null, // string | null
+  pendingApiDiscoveryActionIndex: null, // number | null
+  pendingApiDiscoveryActionField: 'selector',
   containerModalOpen:  false, // modal-container-new visibility
   domViewEnabled:    false, // user preference, kept across selection rounds
   domTree:           null,  // serialized tree from the content script, or null while loading/errored
@@ -379,6 +408,12 @@ let _state = {
   // startApiTreeFieldSearch.
   apiSearchTarget:   null,
   apiCandidates:      null, // {target, candidates} from the last primary-field search, or null
+  // Issue #220: the "Take from recording" picker's list (null = closed) and
+  // one-time bootstrap credential test values for the /generate trial run,
+  // keyed by env-var name — like fillTestValues, deliberately absent from
+  // persistState() and only ever written via patchState().
+  apiBootstrapRecordingEntries: null,
+  apiBootstrapTestValues: {},
   apiDiscoveryCandidates: null, // {target, candidates} from the last in-progress Discovery search, or null
   // {treeParentPath, target, candidates} from the last in-progress "add root
   // group"/"add sub-field" search (Issue #54) — not persisted, same as
@@ -578,7 +613,9 @@ function persistState() {
       changeDetection: _state.changeDetection,
       proxy: _state.proxy,
       pagination: _state.pagination,
+      discoveredUrls: _state.discoveredUrls,
       persistentSession: _state.persistentSession,
+      preflight: _state.preflight,
       hardening: _state.hardening,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
@@ -587,6 +624,9 @@ function persistState() {
       pendingNewContainer: _state.pendingNewContainer,
       pendingBrowserActionIndex: _state.pendingBrowserActionIndex,
       pendingBrowserActionField: _state.pendingBrowserActionField,
+      pendingApiDiscoveryPartId: _state.pendingApiDiscoveryPartId,
+      pendingApiDiscoveryActionIndex: _state.pendingApiDiscoveryActionIndex,
+      pendingApiDiscoveryActionField: _state.pendingApiDiscoveryActionField,
       apiSearchTarget: _state.apiSearchTarget,
       apiConfigDraft: _state.apiConfigDraft,
       apiConfig: _state.apiConfig,
@@ -805,6 +845,7 @@ function render() {
 
   if (_state.current === STATES.API_CONFIG && _state.apiConfigDraft) {
     renderApiConfigModals(bridge);
+    renderApiBootstrapSection(bridge);
   }
 
   if (_state.current === STATES.DONE) {
@@ -1051,6 +1092,8 @@ function wireEvents() {
 
   wireApiConfigEvents(bridge);
 
+  wireApiBootstrapEvents(bridge);
+
   wireFlatModeEvents(bridge);
 
   wireIdleScreenEvents(bridge);
@@ -1191,7 +1234,8 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pagination', 'persistentSession', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pagination', 'persistentSession', 'preflight', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'pendingApiDiscoveryPartId', 'pendingApiDiscoveryActionIndex', 'pendingApiDiscoveryActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
     'scriptFileName', 'outputFileName',
@@ -1228,7 +1272,7 @@ if (typeof module !== 'undefined') {
     serializeApiTree, renderApiTree,
     renderApiCandidates, renderApiEntriesList,
     parseUrlTemplateParts, buildUrlTemplate, parseValueListInput,
-    buildStaticListSource, buildDiscoverySource, buildRangeSource, buildApiHeaders, buildApiConfig,
+    buildStaticListSource, buildDiscoverySource, buildRangeSource, buildBrowserDiscoverySource, buildApiHeaders, buildApiConfig,
     findUrlTemplateMatches, mergeValueListValues,
     variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
     detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,

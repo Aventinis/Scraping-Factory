@@ -18,10 +18,10 @@ import os
 {{~ if config.proxy.enabled ~}}
 import itertools
 {{~ end ~}}
-{{~ if config.proxy.enabled || config.hardening.enabled || config.external_config.enabled || config.download_enabled ~}}
+{{~ if config.proxy.enabled || config.hardening.enabled || config.external_config.enabled || config.download_enabled || config.preflight.enabled ~}}
 import sys
 {{~ end ~}}
-{{~ if config.hardening.has_baseline ~}}
+{{~ if config.hardening.has_baseline || config.preflight.enabled ~}}
 import json
 {{~ end ~}}
 {{~ if config.hardening.enabled ~}}
@@ -30,7 +30,7 @@ from urllib.parse import urlsplit
 {{~ if config.external_config.enabled ~}}
 import xml.etree.ElementTree as ET
 {{~ end ~}}
-{{~ if (config.pagination.enabled && config.pagination.kind == "nextLink") || config.download_enabled ~}}
+{{~ if (config.pagination.enabled && config.pagination.kind == "nextLink") || config.download_enabled || config.discovered_urls.enabled ~}}
 from urllib.parse import urljoin
 {{~ end ~}}
 {{~ if config.download_enabled ~}}
@@ -50,6 +50,14 @@ import urllib.request
 # Issue #83: one or more start URLs — the same extraction runs against each,
 # and results are combined into a single output file.
 URLS = [{{ for u in config.urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
+{{~ if config.discovered_urls.enabled ~}}
+# Issue #218: a lightweight pre-run pass harvesting additional start URLs
+# from a navigation/listing page, combined with URLS above (additive, not a
+# replacement) — see _discover_additional_urls().
+DISCOVERED_URLS_PAGE_URL = {{ config.discovered_urls.page_url_literal }}
+DISCOVERED_URLS_LINK_SELECTOR = {{ config.discovered_urls.link_selector_literal }}
+DISCOVERED_URLS_MAX = {{ config.discovered_urls.max_urls_literal }}
+{{~ end ~}}
 
 # Many sites (Wikipedia among them) reject the bare "python-requests/x.y"
 # default User-Agent with 403 Forbidden — an honest, identifying UA (not a
@@ -698,6 +706,95 @@ def _extract_page_rows(soup, base_url):
     return rows
 
 
+{{~ if config.preflight.enabled ~}}
+# Issue #219: a single cheap HEAD request against the primary start URL, run
+# before the main extraction phase even starts — a target that hasn't
+# changed since the last successful run (same ETag/Last-Modified) or isn't
+# reachable at all doesn't need the full cost of a real scrape. Not every
+# target reliably sends useful ETag/Last-Modified headers — when neither is
+# present (or they differ from the stored value, or there's no stored value
+# yet), the check can't tell "changed" from "unchanged" at all, so it
+# conservatively falls through to a normal run rather than risk silently
+# never updating stale data. Missing/corrupt sidecar (first run ever, or the
+# file was deleted) is treated the same as "no previous state yet".
+PREFLIGHT_STATE_PATH = OUTPUT_PATH + ".preflight-state.json"
+EXIT_PREFLIGHT_UNCHANGED = 4
+EXIT_PREFLIGHT_UNREACHABLE = 5
+
+
+def _read_preflight_state():
+    try:
+        with open(PREFLIGHT_STATE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, ValueError, OSError):
+        return {}
+
+
+def _write_preflight_state(etag, last_modified):
+    with open(PREFLIGHT_STATE_PATH, "w", encoding="utf-8") as f:
+        json.dump({"etag": etag, "lastModified": last_modified}, f)
+
+
+# Returns (status, etag, last_modified) — status is "unreachable" (the
+# request itself failed or came back with an error status), "unchanged" (a
+# response header matches the value stored from the last successful run),
+# or "proceed" (no comparable header, no previous state yet, or the value
+# differs — the main run should go ahead as normal).
+def _run_preflight_check(url):
+    try:
+        response = requests.head(url, headers=HEADERS, {{ if config.proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10, allow_redirects=True)
+        response.raise_for_status()
+    except Exception as e:
+        print(f"ERROR: Preflight check failed — target is unreachable: {url} ({e})", file=sys.stderr)
+        return "unreachable", None, None
+
+    etag = response.headers.get("ETag")
+    last_modified = response.headers.get("Last-Modified")
+    previous = _read_preflight_state()
+    if etag and previous.get("etag") == etag:
+        return "unchanged", etag, last_modified
+    if not etag and last_modified and previous.get("lastModified") == last_modified:
+        return "unchanged", etag, last_modified
+    return "proceed", etag, last_modified
+{{~ end ~}}
+
+
+{{~ if config.discovered_urls.enabled ~}}
+# Issue #218: fetches DISCOVERED_URLS_PAGE_URL and harvests every distinct
+# href matching DISCOVERED_URLS_LINK_SELECTOR, resolved to an absolute URL
+# via urljoin against the page it was found on, capped at DISCOVERED_URLS_MAX
+# (order of appearance, not sorted) — a misconfigured selector matching an
+# entire sitemap/nav tree shouldn't silently balloon a run to thousands of
+# pages. Deliberately plain requests+BeautifulSoup, never whatever engine the
+# main scrape itself uses — the same "discovery doesn't need the full
+# machinery of the main run" precedent DiscoverySource/BrowserDiscoverySource
+# already established for API mode. A failed fetch/parse is a warning, not a
+# crash — the main run still proceeds with URLS/AdditionalUrls as already
+# configured, the same "degrade, don't crash" treatment a failed Download
+# already gets.
+def _discover_additional_urls():
+    try:
+        response = requests.get(DISCOVERED_URLS_PAGE_URL, headers=HEADERS, {{ if config.proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, "html.parser")
+    except Exception as e:
+        print(f"WARNING: Could not discover additional URLs from {DISCOVERED_URLS_PAGE_URL}: {e}")
+        return []
+
+    discovered = []
+    for el in soup.select(DISCOVERED_URLS_LINK_SELECTOR):
+        href = el.get("href")
+        if not href:
+            continue
+        absolute_url = urljoin(DISCOVERED_URLS_PAGE_URL, href)
+        if absolute_url not in discovered:
+            discovered.append(absolute_url)
+        if len(discovered) >= DISCOVERED_URLS_MAX:
+            break
+    return discovered
+{{~ end ~}}
+
+
 def scrape(url):
     rows = []
     page_number = 1
@@ -737,11 +834,27 @@ def scrape(url):
 
 
 def main():
+{{~ if config.preflight.enabled ~}}
+    preflight_status, preflight_etag, preflight_last_modified = _run_preflight_check(URLS[0])
+    if preflight_status == "unreachable":
+        sys.exit(EXIT_PREFLIGHT_UNREACHABLE)
+    if preflight_status == "unchanged":
+        print("Preflight check: no change detected since the last run — skipping.")
+        sys.exit(EXIT_PREFLIGHT_UNCHANGED)
+{{~ end ~}}
 {{~ if config.change_detection.enabled ~}}
     previous_content = _read_previous_output(OUTPUT_PATH)
 {{~ end ~}}
+{{~ if config.discovered_urls.enabled ~}}
+    all_urls = list(URLS)
+    for discovered_url in _discover_additional_urls():
+        if discovered_url not in all_urls:
+            all_urls.append(discovered_url)
+{{~ else ~}}
+    all_urls = URLS
+{{~ end ~}}
     data = []
-    for url in URLS:
+    for url in all_urls:
         data.extend(scrape(url))
 {{~ if config.hardening.enabled ~}}
     data, required_fields_failed = _filter_required_fields(data)
@@ -793,6 +906,13 @@ def main():
 {{~ end ~}}
     if hardening_failed:
         sys.exit(EXIT_HARDENING_FAILED)
+{{~ end ~}}
+{{~ if config.preflight.enabled ~}}
+    # Only reached if hardening (when enabled) didn't just sys.exit() above —
+    # a run that's about to be flagged as hardening-failed must never
+    # advance the preflight state, same "don't let a bad run become the new
+    # normal" rule BaselineCheck's own write already follows.
+    _write_preflight_state(preflight_etag, preflight_last_modified)
 {{~ end ~}}
 {{~ if config.proxy.enabled ~}}
     if _PROXY_ENV_MISSING:

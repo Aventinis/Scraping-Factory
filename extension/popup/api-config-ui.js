@@ -30,13 +30,25 @@ const SFApiConfigUI = (function () {
   const {
     STATES, escapeHtml,
     parseUrlTemplateParts, findUrlTemplateMatches, mergeValueListValues,
-    buildStaticListSource, buildDiscoverySource, buildRangeSource, RANGE_FORMAT_PRESETS,
+    buildStaticListSource, buildDiscoverySource, buildRangeSource, buildBrowserDiscoverySource, RANGE_FORMAT_PRESETS,
     detectRangeFormat, findUrlPartValue, rangeFormatExample,
     buildApiConfig, buildApiGroupDraft, insertApiTreeNode, updateApiTreeNode, resolveApiTreeNode,
     collectPrecedingApiFieldSiblingNames,
     jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
-    buildApiSubtreeFromCandidate, resolveApiGroupScopePath, allParameterParts, apiConfigDraftHasAllSourcesChosen,
+    buildApiSubtreeFromCandidate, resolveApiGroupScopePath, allParameterParts, earlierParameterNames, apiConfigDraftHasAllSourcesChosen,
   } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
+  // Issue #220: a variable URL part can take the bootstrap value as its
+  // source, and a captured header can be built from it ("Bearer {token}").
+  const { BOOTSTRAP_SOURCE_KIND, resolveBootstrapUrlParts } =
+    typeof require !== 'undefined' ? require('./api-bootstrap') : self.SFApiBootstrap;
+  // Issue #216: BrowserDiscoverySource's action list reuses the exact same
+  // draft shape/helpers the top-level login-flow editor already uses —
+  // api-config.js can't import these itself (scraping-config-builder.js
+  // already imports api-config.js; the reverse would be a circular
+  // require), so this module (which already sits one layer above both)
+  // does the wiring instead.
+  const { addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, frameBadgeHtml } =
+    typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
   const { transformsAreValid, addTransform } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
   const { wireTransformList, renderTransformList, renderTransformPreview } =
     typeof require !== 'undefined' ? require('./field-transforms-ui') : self.SFFieldTransformsUI;
@@ -339,11 +351,11 @@ const SFApiConfigUI = (function () {
   // every level beyond that reuses unchanged. renderApiConfigFieldsList is
   // gone; renderApiTree (Phase A4) is the only rendering left for this part
   // of the screen.
-  function renderApiConfigScreen(draft, discoveryCandidates) {
+  function renderApiConfigScreen(draft, discoveryCandidates, discoveryTemplateEditingPartId) {
     renderApiTree(draft.groups);
     renderApiConfigUrlParts(draft.urlParts);
-    renderApiConfigParameters(draft, discoveryCandidates);
-    renderApiConfigHeaders(draft.capturedHeaders, draft.headerDecisions);
+    renderApiConfigParameters(draft, discoveryCandidates, discoveryTemplateEditingPartId);
+    renderApiConfigHeaders(draft.capturedHeaders, draft.headerDecisions, draft.bootstrap);
     renderBodyTree(draft);
 
     // Issue #136: clarifies why the URL segments above describe a plain page
@@ -407,7 +419,7 @@ const SFApiConfigUI = (function () {
   }
 
 
-  function renderApiConfigParameters(draft, discoveryCandidates) {
+  function renderApiConfigParameters(draft, discoveryCandidates, discoveryTemplateEditingPartId) {
     const container = document.getElementById('api-config-parameters');
     if (!container) return;
     container.innerHTML = '';
@@ -421,7 +433,9 @@ const SFApiConfigUI = (function () {
 
       const title = document.createElement('div');
       title.className = 'row-label';
-      title.textContent = part.name ? part.name : t('apiConfig.unnamedPart');
+      title.textContent = source?.kind === BOOTSTRAP_SOURCE_KIND && draft.bootstrap
+        ? `{${draft.bootstrap.name}}`
+        : part.name ? part.name : t('apiConfig.unnamedPart');
       card.appendChild(title);
 
       const kindRow = document.createElement('div');
@@ -430,8 +444,16 @@ const SFApiConfigUI = (function () {
         staticList: t('apiConfig.sourceKindStaticList'),
         discovery: t('apiConfig.sourceKindDiscovery'),
         range: t('apiConfig.sourceKindRange'),
+        browserDiscovery: t('apiConfig.sourceKindBrowserDiscovery'),
+        [BOOTSTRAP_SOURCE_KIND]: t('apiBootstrap.sourceKind'),
       };
-      kindRow.innerHTML = ['staticList', 'discovery', 'range'].map(kind => `
+      // Issue #220: "Bootstrap value" is only offered for a URL part (never a
+      // body-only parameter — the body references the bootstrap by name
+      // directly on the wire) and only while a bootstrap is configured.
+      const isUrlPart = part.id.startsWith('path:') || part.id.startsWith('query:');
+      const sourceKinds = ['staticList', 'discovery', 'range', 'browserDiscovery'];
+      if (isUrlPart && (draft.bootstrap || source?.kind === BOOTSTRAP_SOURCE_KIND)) sourceKinds.push(BOOTSTRAP_SOURCE_KIND);
+      kindRow.innerHTML = sourceKinds.map(kind => `
         <label>
           <input type="radio" name="source-kind-${safePartId}" class="api-config-source-kind-radio"
             data-part-id="${safePartId}" value="${kind}" ${source?.kind === kind ? 'checked' : ''} />
@@ -447,7 +469,7 @@ const SFApiConfigUI = (function () {
           `<textarea class="api-config-static-list" data-part-id="${safePartId}" rows="2" placeholder="${escapeHtml(t('apiConfig.valueListPlaceholder'))}">${escapeHtml(source.valuesText || '')}</textarea>` +
           `<button type="button" class="btn-secondary btn-tiny api-config-autofill-pool" data-part-id="${safePartId}" title="${escapeHtml(t('apiConfig.autoFillFromPoolTitle'))}">${escapeHtml(t('apiConfig.autoFillFromPoolBtn'))}</button>`;
       } else if (source?.kind === 'discovery') {
-        fieldsEl.appendChild(renderDiscoverySourceFields(part, source, discoveryCandidates));
+        fieldsEl.appendChild(renderDiscoverySourceFields(draft, part, source, discoveryCandidates, discoveryTemplateEditingPartId));
       } else if (source?.kind === 'range') {
         fieldsEl.innerHTML = `
           <div class="api-config-range-row">
@@ -459,6 +481,15 @@ const SFApiConfigUI = (function () {
           </div>
           ${renderRangeFormatFields(source, safePartId)}
         `;
+      } else if (source?.kind === 'browserDiscovery') {
+        fieldsEl.appendChild(renderBrowserDiscoverySourceFields(draft, part, source));
+      } else if (source?.kind === BOOTSTRAP_SOURCE_KIND) {
+        const note = document.createElement('p');
+        note.className = 'api-config-source-note';
+        note.textContent = draft.bootstrap
+          ? t('apiBootstrap.sourceKindNote', { placeholder: `{${draft.bootstrap.name}}` })
+          : t('apiBootstrap.sourceKindMissing');
+        fieldsEl.appendChild(note);
       }
       card.appendChild(fieldsEl);
 
@@ -491,14 +522,72 @@ const SFApiConfigUI = (function () {
     `;
   }
 
-  function renderDiscoverySourceFields(part, source, discoveryCandidates) {
+  // Issue #217: a small "insert parameter" picker next to a free-text
+  // UrlTemplate/DiscoveryUrl input, listing every already-declared parameter
+  // this field could legally reference via a "{name}" placeholder
+  // (ScrapingPlanValidator rejects anything else — see
+  // earlierParameterNames's own doc comment for why declaration order is
+  // already the right order with no separate reordering concept needed).
+  // Picking one inserts "{name}" at the target input's own cursor position
+  // via insertParameterPlaceholder, rather than requiring the user to
+  // remember/type the exact placeholder syntax by hand. Renders nothing at
+  // all once there's no earlier parameter yet to offer.
+  function renderParameterPlaceholderPicker(earlierNames, safePartId, targetSelector, patchField) {
+    if (earlierNames.length === 0) return '';
+    const options = earlierNames.map(name => `<option value="${escapeHtml(name)}">{${escapeHtml(name)}}</option>`).join('');
+    return `
+      <select class="api-param-placeholder-select" data-part-id="${safePartId}" data-target-selector="${escapeHtml(targetSelector)}" data-patch-field="${escapeHtml(patchField)}">
+        <option value="">${escapeHtml(t('apiConfig.insertParameterPlaceholder'))}</option>
+        ${options}
+      </select>
+      <p class="api-param-placeholder-hint">${escapeHtml(t('apiConfig.insertParameterHint'))}</p>
+    `;
+  }
+
+  // Issue #217: DiscoverySource.UrlTemplate is ordinarily read-only (derived
+  // via the click-correlation "Search again" flow below) — editingPartId
+  // (state.discoveryTemplateEditingPartId, a screen-scoped UI flag living
+  // outside apiConfigDraft, same precedent discoveryCandidates itself
+  // already sets, since draft.parameterSources[partId] is sent to the
+  // companion byte-for-byte via buildApiConfig and must never carry a
+  // UI-only field) temporarily swaps the summary for an editable text input
+  // so the user can manually replace a concrete segment with
+  // "{earlierParameterName}" to turn a discovered, single-shot endpoint into
+  // a chained one. Only UrlTemplate itself is ever edited this way —
+  // itemsPath/valuePath stay exactly as originally derived.
+  function renderDiscoverySourceFields(draft, part, source, discoveryCandidates, editingPartId) {
     const wrap = document.createElement('div');
+    const safePartId = escapeHtml(part.id);
+    const earlierNames = earlierParameterNames(draft, part.id);
+
+    if (editingPartId === part.id) {
+      const editRow = document.createElement('div');
+      editRow.innerHTML =
+        `<input type="text" class="api-discovery-url-template" data-part-id="${safePartId}" value="${escapeHtml(source.urlTemplate || '')}" />` +
+        renderParameterPlaceholderPicker(earlierNames, safePartId, '.api-discovery-url-template', 'urlTemplate');
+      wrap.appendChild(editRow);
+
+      const doneBtn = document.createElement('button');
+      doneBtn.type = 'button';
+      doneBtn.className = 'btn-secondary btn-tiny btn-discovery-template-done';
+      doneBtn.dataset.partId = part.id;
+      doneBtn.textContent = t('apiConfig.doneEditingTemplateBtn');
+      wrap.appendChild(doneBtn);
+      return wrap;
+    }
 
     if (source.urlTemplate) {
       const summary = document.createElement('p');
       summary.className = 'api-candidates-target';
       summary.textContent = t('apiConfig.discoverySource', { urlTemplate: source.urlTemplate, itemsPath: source.itemsPath, valuePath: source.valuePath });
       wrap.appendChild(summary);
+
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'btn-secondary btn-tiny btn-discovery-template-edit';
+      editBtn.dataset.partId = part.id;
+      editBtn.textContent = t('apiConfig.editTemplateBtn');
+      wrap.appendChild(editBtn);
     }
 
     const searchBtn = document.createElement('button');
@@ -533,7 +622,117 @@ const SFApiConfigUI = (function () {
     return wrap;
   }
 
-  function renderApiConfigHeaders(capturedHeaders, headerDecisions) {
+  // Issue #216: BrowserDiscoverySource's own action-list editor — visually
+  // mirrors browser-actions-ui.js's renderBrowserActions (one card per
+  // action, a kind label, a frame badge, a remove button, kind-specific
+  // fields) but is its own smaller renderer rather than a reused/
+  // parameterized version of that function: renderBrowserActions is
+  // hardcoded to the single, page-level '#browser-actions-list' container,
+  // and this is this codebase's own established convention for a second,
+  // differently-scoped instance of the same kind of small DOM helper (see
+  // CLAUDE.md's "no cross-module includes for small DOM helpers" note on
+  // renderMatchCountHint). Every control carries both data-part-id and
+  // data-index so the single delegated listener on #api-config-parameters
+  // can address the right parameter's own action array.
+  function renderBrowserDiscoverySourceFields(draft, part, source) {
+    const safePartId = escapeHtml(part.id);
+    const actions = source.actions || [];
+    const wrap = document.createElement('div');
+    wrap.className = 'api-discovery-source';
+
+    // Issue #217: DiscoveryUrl may itself reference an earlier-declared
+    // parameter's own value — see renderParameterPlaceholderPicker's doc
+    // comment.
+    const earlierNames = earlierParameterNames(draft, part.id);
+    const urlRow = document.createElement('div');
+    urlRow.innerHTML =
+      `<label>${escapeHtml(t('apiConfig.discoveryUrlLabel'))}</label>` +
+      `<input type="text" class="api-discovery-url" data-part-id="${safePartId}" placeholder="https://example.com/angebote" value="${escapeHtml(source.discoveryUrl || '')}" />` +
+      renderParameterPlaceholderPicker(earlierNames, safePartId, '.api-discovery-url', 'discoveryUrl');
+    wrap.appendChild(urlRow);
+
+    const kindLabels = {
+      waitFor: t('browserActions.kindWaitFor'),
+      fill: t('browserActions.kindFill'),
+      click: t('browserActions.kindClick'),
+      scroll: t('browserActions.kindScroll'),
+    };
+
+    function pickRow(index, field, value, label) {
+      const row = document.createElement('div');
+      row.className = 'browser-action-selector-row';
+      const selectorText = value || t('browserActions.noSelector');
+      const labelHtml = label ? `<label>${escapeHtml(label)}</label>` : '';
+      row.innerHTML =
+        labelHtml +
+        `<span class="field-selector" title="${escapeHtml(selectorText)}">${escapeHtml(selectorText)}</span>` +
+        `<button type="button" class="btn-secondary btn-tiny btn-pick-discovery-action-selector" data-part-id="${safePartId}" data-index="${index}" data-field="${field}">${escapeHtml(t('browserActions.pickSelectorBtn'))}</button>`;
+      return row;
+    }
+
+    const list = document.createElement('div');
+    list.className = 'api-discovery-actions-list';
+    actions.forEach((action, i) => {
+      const card = document.createElement('div');
+      card.className = 'browser-action-card';
+      card.dataset.partId = part.id;
+      card.dataset.index = i;
+
+      const header = document.createElement('div');
+      header.className = 'browser-action-header';
+      header.innerHTML =
+        `<span class="row-label">${escapeHtml(kindLabels[action.kind] || action.kind)}</span>` +
+        frameBadgeHtml(action.framePath) +
+        `<button type="button" class="btn-danger btn-remove-discovery-action" data-part-id="${safePartId}" data-index="${i}">${escapeHtml(t('common.remove'))}</button>`;
+      card.appendChild(header);
+
+      if (action.kind === 'waitFor') {
+        card.appendChild(pickRow(i, 'selector', action.selector, null));
+        card.insertAdjacentHTML('beforeend', `<div class="browser-action-field-row">
+          <label>${escapeHtml(t('browserActions.timeoutLabel'))}</label>
+          <input type="number" class="discovery-action-timeout" data-part-id="${safePartId}" data-index="${i}" value="${action.timeoutMs}" min="1" />
+        </div>`);
+      } else if (action.kind === 'fill') {
+        card.appendChild(pickRow(i, 'selector', action.selector, null));
+        card.insertAdjacentHTML('beforeend', `<div class="browser-action-field-row">
+          <label>${escapeHtml(t('browserActions.envVarLabel'))}</label>
+          <input type="text" class="discovery-action-env-name" data-part-id="${safePartId}" data-index="${i}" value="${escapeHtml(action.environmentVariableName || '')}" />
+        </div>`);
+      } else if (action.kind === 'click') {
+        card.appendChild(pickRow(i, 'selector', action.selector, null));
+      } else if (action.kind === 'scroll') {
+        card.appendChild(pickRow(i, 'containerSelector', action.containerSelector, t('browserActions.containerSelectorLabel')));
+        card.appendChild(pickRow(i, 'loadMoreButtonSelector', action.loadMoreButtonSelector, t('browserActions.loadMoreButtonSelectorLabel')));
+        card.insertAdjacentHTML('beforeend', `<div class="browser-action-field-row">
+          <label>${escapeHtml(t('browserActions.maxIterationsLabel'))}</label>
+          <input type="number" class="discovery-action-max-iterations" data-part-id="${safePartId}" data-index="${i}" value="${action.maxIterations}" min="1" />
+          <label>${escapeHtml(t('browserActions.waitAfterMsLabel'))}</label>
+          <input type="number" class="discovery-action-wait-after-ms" data-part-id="${safePartId}" data-index="${i}" value="${action.waitAfterMs}" min="0" />
+        </div>
+        <div class="browser-action-field-row">
+          <label>${escapeHtml(t('browserActions.scrollStepPxLabel'))}</label>
+          <input type="number" class="discovery-action-scroll-step-px" data-part-id="${safePartId}" data-index="${i}" placeholder="${escapeHtml(t('browserActions.scrollStepPxPlaceholder'))}" value="${action.scrollStepPx || ''}" min="1" />
+        </div>`);
+      }
+
+      list.appendChild(card);
+    });
+    wrap.appendChild(list);
+
+    const addRow = document.createElement('div');
+    addRow.className = 'actions';
+    addRow.innerHTML = ['waitFor', 'fill', 'click', 'scroll'].map(kind =>
+      `<button type="button" class="btn-secondary btn-tiny btn-add-discovery-action" data-part-id="${safePartId}" data-kind="${kind}">+ ${escapeHtml(kindLabels[kind])}</button>`,
+    ).join('');
+    wrap.appendChild(addRow);
+
+    return wrap;
+  }
+
+  // Issue #220: `bootstrap` (apiConfigDraft.bootstrap, or null) adds a third
+  // "From token" mode whose template (e.g. "Bearer {token}") is filled with
+  // the freshly fetched bootstrap value at runtime.
+  function renderApiConfigHeaders(capturedHeaders, headerDecisions, bootstrap = null) {
     const listEl = document.getElementById('api-config-headers');
     if (!listEl) return;
     listEl.innerHTML = '';
@@ -553,11 +752,16 @@ const SFApiConfigUI = (function () {
         (decision.include
           ? `<span class="api-config-header-mode">
                <label><input type="radio" name="header-mode-${escapeHtml(header.name)}" class="api-config-header-mode-radio" data-header-name="${escapeHtml(header.name)}" value="literal" ${decision.mode === 'literal' ? 'checked' : ''} /> ${escapeHtml(t('apiConfig.headerModeValue'))}</label>
-               <label><input type="radio" name="header-mode-${escapeHtml(header.name)}" class="api-config-header-mode-radio" data-header-name="${escapeHtml(header.name)}" value="env" ${decision.mode === 'env' ? 'checked' : ''} /> ${escapeHtml(t('apiConfig.headerModeEnv'))}</label>
-             </span>` +
+               <label><input type="radio" name="header-mode-${escapeHtml(header.name)}" class="api-config-header-mode-radio" data-header-name="${escapeHtml(header.name)}" value="env" ${decision.mode === 'env' ? 'checked' : ''} /> ${escapeHtml(t('apiConfig.headerModeEnv'))}</label>` +
+              (bootstrap || decision.mode === 'bootstrap'
+                ? `<label><input type="radio" name="header-mode-${escapeHtml(header.name)}" class="api-config-header-mode-radio" data-header-name="${escapeHtml(header.name)}" value="bootstrap" ${decision.mode === 'bootstrap' ? 'checked' : ''} /> ${escapeHtml(t('apiBootstrap.headerMode'))}</label>`
+                : '') +
+            `</span>` +
             (decision.mode === 'env'
               ? `<input type="text" class="api-config-env-name" data-header-name="${escapeHtml(header.name)}" placeholder="${escapeHtml(t('apiConfig.envNamePlaceholder'))}" value="${escapeHtml(decision.envName || '')}" />`
-              : '')
+              : decision.mode === 'bootstrap'
+                ? `<input type="text" class="api-config-header-template" data-header-name="${escapeHtml(header.name)}" placeholder="Bearer {${escapeHtml(bootstrap?.name || 'token')}}" value="${escapeHtml(decision.template || '')}" />`
+                : '')
           : '');
       listEl.appendChild(li);
     });
@@ -1044,17 +1248,31 @@ const SFApiConfigUI = (function () {
     staticList: { kind: 'staticList', valuesText: '' },
     range: { kind: 'range', type: 'IsoWeek', from: '', to: '' },
     discovery: { kind: 'discovery' }, // incomplete until confirmDiscoveryCandidate fills in urlTemplate/itemsPath/valuePath
+    // Issue #216: discoveryUrl/actions stay in draft shape (actions: a
+    // plain SFDraft.BrowserAction[], same shape _state.browserActions
+    // already uses) until confirmApiConfig serializes them — see
+    // buildBrowserDiscoverySource's own doc comment.
+    browserDiscovery: { kind: 'browserDiscovery', discoveryUrl: '', actions: [] },
   };
 
   // Range sources get their format auto-detected from the part's own
   // captured example value the moment "Range" is picked — see
-  // detectRangeFormat's doc comment.
+  // detectRangeFormat's doc comment. Browser discovery's own DiscoveryUrl
+  // is prefilled from the currently inspected page for the same reason
+  // (the live page is overwhelmingly the most likely discovery page) —
+  // still freely editable afterward, e.g. for a dedicated listing page
+  // different from wherever the clicked data point itself lives.
   function setApiConfigSourceKind(bridge, partId, kind) {
-    const draft = bridge.getState().apiConfigDraft;
+    const state = bridge.getState();
+    const draft = state.apiConfigDraft;
     const defaults = API_CONFIG_SOURCE_DEFAULTS[kind];
-    const source = kind === 'range'
+    const source = kind === BOOTSTRAP_SOURCE_KIND
+      ? { kind: BOOTSTRAP_SOURCE_KIND }
+      : kind === 'range'
       ? { ...defaults, format: detectRangeFormat(defaults.type, findUrlPartValue(draft.urlParts, partId)) }
-      : defaults;
+      : kind === 'browserDiscovery'
+        ? { ...defaults, discoveryUrl: state.url || '' }
+        : defaults;
     patchApiConfigDraft(bridge, { parameterSources: { ...draft.parameterSources, [partId]: source } });
   }
 
@@ -1063,10 +1281,75 @@ const SFApiConfigUI = (function () {
     patchApiConfigDraft(bridge, { parameterSources: { ...draft.parameterSources, [partId]: { ...draft.parameterSources[partId], ...patch } } });
   }
 
+  // Issue #217: the delegated `change` handler for every
+  // `.api-param-placeholder-select` picker rendered by
+  // renderParameterPlaceholderPicker — inserts "{name}" at the target
+  // input's own cursor position (falling back to the end when nothing is
+  // selected/focused) and commits the result through patchApiConfigSource,
+  // the same key (`discoveryUrl`/`urlTemplate`, named by the select's own
+  // data-patch-field) the target input's own `change` handler would commit
+  // on blur. A `change`-triggered commit already causes a full re-render
+  // (see this file's own doc comment on that trade-off), so no attempt is
+  // made to restore focus/selection afterward — the input is about to be
+  // torn down and rebuilt anyway.
+  function insertParameterPlaceholder(bridge, selectEl) {
+    const name = selectEl.value;
+    if (!name) return;
+    const card = selectEl.closest('.api-config-param-card');
+    const targetInput = card?.querySelector(selectEl.dataset.targetSelector);
+    if (!targetInput) return;
+    // Picking from the <select> moves focus to the select itself, not the
+    // text input — so targetInput.selectionStart/selectionEnd (meaningful
+    // only while an input is actually focused) would otherwise read as the
+    // browser's default for a never-focused field, which is the *start* of
+    // the value, not the end — silently inserting the placeholder in front
+    // of the whole URL (even before "https://") instead of appending it
+    // where it's actually useful. Only trust the live selection while the
+    // input is the actually-focused element; otherwise always append at the
+    // end, the far more useful default for the common "never clicked into
+    // the field first" case.
+    const hasLiveSelection = document.activeElement === targetInput;
+    const start = hasLiveSelection ? (targetInput.selectionStart ?? targetInput.value.length) : targetInput.value.length;
+    const end = hasLiveSelection ? (targetInput.selectionEnd ?? targetInput.value.length) : targetInput.value.length;
+    const newValue = `${targetInput.value.slice(0, start)}{${name}}${targetInput.value.slice(end)}`;
+    patchApiConfigSource(bridge, selectEl.dataset.partId, { [selectEl.dataset.patchField]: newValue.trim() });
+  }
+
+  // ── BrowserDiscoverySource action list (Issue #216) ─────────────────────
+  // Thin per-parameter wrappers around scraping-config-builder.js's own
+  // add/remove/updateBrowserAction — those are already fully generic over
+  // "some actions array", so no new mutation logic is needed here, only
+  // routing the result back into this one parameter's own source object
+  // instead of _state.browserActions.
+
+  function addDiscoveryAction(bridge, partId, kind) {
+    const source = bridge.getState().apiConfigDraft.parameterSources[partId];
+    patchApiConfigSource(bridge, partId, { actions: addBrowserAction(source.actions || [], kind) });
+  }
+
+  function removeDiscoveryAction(bridge, partId, index) {
+    const source = bridge.getState().apiConfigDraft.parameterSources[partId];
+    patchApiConfigSource(bridge, partId, { actions: removeBrowserAction(source.actions || [], index) });
+  }
+
+  function updateDiscoveryAction(bridge, partId, index, patch) {
+    const source = bridge.getState().apiConfigDraft.parameterSources[partId];
+    patchApiConfigSource(bridge, partId, { actions: updateBrowserAction(source.actions || [], index, patch) });
+  }
+
   function setApiConfigHeaderDecision(bridge, headerName, patch) {
     const draft = bridge.getState().apiConfigDraft;
     const current = draft.headerDecisions[headerName] || { include: false, mode: 'literal', envName: '' };
-    patchApiConfigDraft(bridge, { headerDecisions: { ...draft.headerDecisions, [headerName]: { ...current, ...patch } } });
+    const next = { ...current, ...patch };
+    // Issue #220: switching a header to "From token" pre-fills a sensible
+    // template — "Bearer {token}" for a recorded bearer header, else just
+    // "{token}" — instead of starting from an empty input.
+    if (patch.mode === 'bootstrap' && !next.template) {
+      const recorded = draft.capturedHeaders.find(h => h.name === headerName)?.value || '';
+      const name = draft.bootstrap?.name || 'token';
+      next.template = /^bearer\s/i.test(recorded) ? `Bearer {${name}}` : `{${name}}`;
+    }
+    patchApiConfigDraft(bridge, { headerDecisions: { ...draft.headerDecisions, [headerName]: next } });
   }
 
   // ── API-Mode request-body wiring (Issue #55, Phase B4) ──────────────────────
@@ -1171,16 +1454,24 @@ const SFApiConfigUI = (function () {
     const idToName = {};
     allParameterParts(draft).forEach((part) => {
       const source = draft.parameterSources[part.id];
+      // Issue #220: a bootstrap-sourced URL part is a placeholder for the
+      // bootstrap value, never a declared parameter (resolveBootstrapUrlParts
+      // below names it after the bootstrap instead).
+      if (source.kind === BOOTSTRAP_SOURCE_KIND) return;
       parameterSources[part.name] = source.kind === 'staticList'
         ? buildStaticListSource(source.valuesText)
         : source.kind === 'range'
           ? buildRangeSource(source.type, source.from, source.to, source.format)
-          : source;
+          : source.kind === 'browserDiscovery'
+            ? buildBrowserDiscoverySource(source.discoveryUrl, serializeBrowserActions(source.actions || []))
+            : source;
       idToName[part.id] = part.name;
     });
 
     const apiConfig = buildApiConfig({
-      urlParts: draft.urlParts,
+      urlParts: draft.bootstrap
+        ? resolveBootstrapUrlParts(draft.urlParts, draft.parameterSources, draft.bootstrap.name.trim())
+        : draft.urlParts,
       groups: draft.groups,
       parameterSources,
       capturedHeaders: draft.capturedHeaders,
@@ -1190,6 +1481,7 @@ const SFApiConfigUI = (function () {
       bodyParameterNames: (draft.bodyParameters || []).map(p => p.name),
       parameterIdToName: idToName,
       embeddedJsonSource: draft.embeddedJsonSource,
+      bootstrap: draft.bootstrap,
     });
 
     log('API_CONFIG confirm', apiConfig);
@@ -1265,7 +1557,7 @@ const SFApiConfigUI = (function () {
 // field's transform chain).
 function renderApiConfigModals(bridge) {
   const state = bridge.getState();
-  renderApiConfigScreen(state.apiConfigDraft, state.apiDiscoveryCandidates);
+  renderApiConfigScreen(state.apiConfigDraft, state.apiDiscoveryCandidates, state.discoveryTemplateEditingPartId);
 
   const apiTreeSearchPanel = document.getElementById('api-tree-search-panel');
   if (apiTreeSearchPanel) {
@@ -1476,7 +1768,57 @@ function wireApiConfigEvents(bridge) {
     const formatPreset = e.target.closest('.api-config-range-format-preset');
     if (formatPreset) { patchApiConfigSource(bridge, formatPreset.dataset.partId, { format: formatPreset.value === 'custom' ? '' : formatPreset.value }); return; }
     const formatCustom = e.target.closest('.api-config-range-format-custom');
-    if (formatCustom) patchApiConfigSource(bridge, formatCustom.dataset.partId, { format: formatCustom.value.trim() });
+    if (formatCustom) { patchApiConfigSource(bridge, formatCustom.dataset.partId, { format: formatCustom.value.trim() }); return; }
+
+    // ── BrowserDiscoverySource (Issue #216) ───────────────────────────────
+    const discoveryUrl = e.target.closest('.api-discovery-url');
+    if (discoveryUrl) { patchApiConfigSource(bridge, discoveryUrl.dataset.partId, { discoveryUrl: discoveryUrl.value.trim() }); return; }
+
+    // ── Chained parameter discovery (Issue #217) ──────────────────────────
+    const discoveryUrlTemplate = e.target.closest('.api-discovery-url-template');
+    if (discoveryUrlTemplate) { patchApiConfigSource(bridge, discoveryUrlTemplate.dataset.partId, { urlTemplate: discoveryUrlTemplate.value.trim() }); return; }
+    const paramPlaceholderSelect = e.target.closest('.api-param-placeholder-select');
+    if (paramPlaceholderSelect) { insertParameterPlaceholder(bridge, paramPlaceholderSelect); return; }
+    const actionTimeout = e.target.closest('.discovery-action-timeout');
+    if (actionTimeout) {
+      const timeoutMs = parseInt(actionTimeout.value, 10);
+      updateDiscoveryAction(bridge, actionTimeout.dataset.partId, parseInt(actionTimeout.dataset.index, 10), {
+        timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 5000,
+      });
+      return;
+    }
+    const actionEnvName = e.target.closest('.discovery-action-env-name');
+    if (actionEnvName) {
+      updateDiscoveryAction(bridge, actionEnvName.dataset.partId, parseInt(actionEnvName.dataset.index, 10), {
+        environmentVariableName: actionEnvName.value.trim(),
+      });
+      return;
+    }
+    const actionMaxIterations = e.target.closest('.discovery-action-max-iterations');
+    if (actionMaxIterations) {
+      const maxIterations = parseInt(actionMaxIterations.value, 10);
+      updateDiscoveryAction(bridge, actionMaxIterations.dataset.partId, parseInt(actionMaxIterations.dataset.index, 10), {
+        maxIterations: Number.isFinite(maxIterations) && maxIterations > 0 ? maxIterations : 10,
+      });
+      return;
+    }
+    const actionWaitAfterMs = e.target.closest('.discovery-action-wait-after-ms');
+    if (actionWaitAfterMs) {
+      const waitAfterMs = parseInt(actionWaitAfterMs.value, 10);
+      updateDiscoveryAction(bridge, actionWaitAfterMs.dataset.partId, parseInt(actionWaitAfterMs.dataset.index, 10), {
+        waitAfterMs: Number.isFinite(waitAfterMs) && waitAfterMs >= 0 ? waitAfterMs : 1000,
+      });
+      return;
+    }
+    // Issue #289: a blank input deliberately resets to null (today's
+    // jump-to-bottom default), not a clamped fallback number.
+    const actionScrollStepPx = e.target.closest('.discovery-action-scroll-step-px');
+    if (actionScrollStepPx) {
+      const scrollStepPx = parseInt(actionScrollStepPx.value, 10);
+      updateDiscoveryAction(bridge, actionScrollStepPx.dataset.partId, parseInt(actionScrollStepPx.dataset.index, 10), {
+        scrollStepPx: Number.isFinite(scrollStepPx) && scrollStepPx > 0 ? scrollStepPx : null,
+      });
+    }
   });
 
   document.getElementById('api-config-parameters')?.addEventListener('click', (e) => {
@@ -1490,7 +1832,33 @@ function wireApiConfigEvents(bridge) {
       return;
     }
     const autofillBtn = e.target.closest('.api-config-autofill-pool');
-    if (autofillBtn) fillStaticListFromPool(bridge, autofillBtn.dataset.partId);
+    if (autofillBtn) { fillStaticListFromPool(bridge, autofillBtn.dataset.partId); return; }
+
+    // ── Chained parameter discovery (Issue #217) ──────────────────────────
+    const editTemplateBtn = e.target.closest('.btn-discovery-template-edit');
+    if (editTemplateBtn) { bridge.patchState({ discoveryTemplateEditingPartId: editTemplateBtn.dataset.partId }); return; }
+    const doneTemplateBtn = e.target.closest('.btn-discovery-template-done');
+    if (doneTemplateBtn) { bridge.patchState({ discoveryTemplateEditingPartId: null }); return; }
+
+    // ── BrowserDiscoverySource (Issue #216) ───────────────────────────────
+    const addActionBtn = e.target.closest('.btn-add-discovery-action');
+    if (addActionBtn) { addDiscoveryAction(bridge, addActionBtn.dataset.partId, addActionBtn.dataset.kind); return; }
+    const removeActionBtn = e.target.closest('.btn-remove-discovery-action');
+    if (removeActionBtn) { removeDiscoveryAction(bridge, removeActionBtn.dataset.partId, parseInt(removeActionBtn.dataset.index, 10)); return; }
+    const pickActionBtn = e.target.closest('.btn-pick-discovery-action-selector');
+    if (pickActionBtn) {
+      const partId = pickActionBtn.dataset.partId;
+      const index = parseInt(pickActionBtn.dataset.index, 10);
+      const field = pickActionBtn.dataset.field;
+      log('BTN pick-discovery-action-selector → START_SELECTION', { partId, index, field });
+      bridge.stopPreviewIfActive();
+      chrome.runtime.sendMessage({ type: 'START_SELECTION' });
+      bridge.setState(STATES.SELECTING, {
+        pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
+        selectionKind: 'apiDiscoveryAction', pendingApiDiscoveryPartId: partId, pendingApiDiscoveryActionIndex: index, pendingApiDiscoveryActionField: field,
+        domTree: null, domTreeTruncated: false, domTreeError: null,
+      });
+    }
   });
 
   document.getElementById('api-config-headers')?.addEventListener('change', (e) => {
@@ -1499,7 +1867,9 @@ function wireApiConfigEvents(bridge) {
     const modeRadio = e.target.closest('.api-config-header-mode-radio');
     if (modeRadio) { setApiConfigHeaderDecision(bridge, modeRadio.dataset.headerName, { mode: modeRadio.value }); return; }
     const envName = e.target.closest('.api-config-env-name');
-    if (envName) setApiConfigHeaderDecision(bridge, envName.dataset.headerName, { envName: envName.value.trim() });
+    if (envName) { setApiConfigHeaderDecision(bridge, envName.dataset.headerName, { envName: envName.value.trim() }); return; }
+    const template = e.target.closest('.api-config-header-template');
+    if (template) setApiConfigHeaderDecision(bridge, template.dataset.headerName, { template: template.value });
   });
 
   // ── API-Mode request-body tree (Issue #55, Phase B4) ─────────────────────
@@ -1551,7 +1921,7 @@ function wireApiConfigEvents(bridge) {
     buildApiTreeNodeEl, renderApiTree,
     renderApiCandidates, renderApiEntriesList,
     renderApiConfigScreen, renderApiConfigUrlParts, renderApiConfigParameters,
-    renderRangeFormatFields, renderDiscoverySourceFields, renderApiConfigHeaders,
+    renderRangeFormatFields, renderDiscoverySourceFields, renderBrowserDiscoverySourceFields, renderApiConfigHeaders,
     bodyNodeLabel, buildBodyTreeNodeEl, renderBodyTree,
     startApiCapture, stopApiCapture, toggleApiCapture,
     startApiFieldSearch, confirmApiFieldCandidate, loadInitialBodyTreeForCandidate, cancelApiConfig,
@@ -1562,6 +1932,7 @@ function wireApiConfigEvents(bridge) {
     startDiscoverySearch, confirmDiscoveryCandidate,
     toggleApiConfigPartVariable, setApiConfigPartName, setApiConfigSourceKind,
     patchApiConfigSource, setApiConfigHeaderDecision,
+    addDiscoveryAction, removeDiscoveryAction, updateDiscoveryAction,
     toggleBodyLeafToVariable, toggleBodyLeafToFixed, setBodyLeafParameter, setBodyLeafCoerceTo,
     openBodyParameterModal, confirmBodyParameterModal, cancelBodyParameterModal, confirmApiConfig,
     fetchApiCaptureEntries, toggleApiEntriesPanel, fillStaticListFromPool,

@@ -101,15 +101,22 @@
  * @property {ApiNodeDraft[]} [groups]
  * @property {Record<string, ApiParameterSourceDraft>} parameterSources
  * @property {Array<{name: string, value: string}>} capturedHeaders
- * @property {Record<string, {include: boolean, mode: 'literal' | 'env', envName?: string}>} headerDecisions
+ * @property {Record<string, {include: boolean, mode: 'literal' | 'env' | 'bootstrap', envName?: string, template?: string}>} headerDecisions
  * @property {'GET' | 'POST'} [method]
  * @property {ApiBodyNodeDraft} [bodyTree]
  * @property {string[]} [bodyParameterNames]
  * @property {Record<string, string>} [parameterIdToName]
  * @property {SFWire.EmbeddedJsonSource | null} [embeddedJsonSource]
  * @property {ParameterPart[]} [bodyParameters]
+ * @property {SFDraft.ApiBootstrap | null} [bootstrap]
  */
 const SFApiConfig = (function () {
+  // Issue #220: the bootstrap request's own draft→wire logic lives in its
+  // own module (api-bootstrap.js, loaded before this file — see popup.html);
+  // this file only needs it to fold the bootstrap into buildApiConfig's
+  // output and into the "Apply" gate.
+  const { BOOTSTRAP_SOURCE_KIND, buildApiBootstrap, bootstrapDraftIsComplete } =
+    typeof require !== 'undefined' ? require('./api-bootstrap') : self.SFApiBootstrap;
   const { t } = typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
 
   // Popup screen names. Lives here (rather than in popup.js, which loads
@@ -326,6 +333,29 @@ const SFApiConfig = (function () {
     return { kind: 'range', type, from, to, ...(format ? { format } : {}) };
   }
 
+  // Issue #216: deliberately no URL-match-pattern field — the runtime
+  // matches captured requests against the main request's own UrlTemplate
+  // (see BrowserDiscoverySource's own doc comment on the companion side),
+  // so this only ever needs DiscoveryUrl plus the action list. While being
+  // edited, the action list is kept in the same draft shape (SFDraft.
+  // BrowserAction[]) the top-level login-flow editor already uses — reusing
+  // addBrowserAction/removeBrowserAction/updateBrowserAction from
+  // scraping-config-builder.js directly (api-config.js can't import that
+  // module itself: scraping-config-builder.js already imports THIS module,
+  // and the reverse would be a circular require) — so `actions` here is
+  // already serialized to wire shape (via that module's
+  // serializeBrowserActions) by the caller (confirmApiConfig in
+  // api-config-ui.js), exactly mirroring how staticList/range's own drafts
+  // are converted to wire shape at that same call site.
+  /**
+   * @param {string} discoveryUrl
+   * @param {SFWire.BrowserAction[]} [actions]
+   * @returns {SFWire.BrowserDiscoverySource}
+   */
+  function buildBrowserDiscoverySource(discoveryUrl, actions) {
+    return { kind: 'browserDiscovery', discoveryUrl, ...(actions && actions.length ? { actions } : {}) };
+  }
+
   // ── Range format presets (bug/api-range-format follow-up) ──────────────────
   // A target site can encode a year-week or date however it likes in its own
   // URL — the reported bug: penny.de uses "2026-35" where the ISO-8601
@@ -433,7 +463,7 @@ const SFApiConfig = (function () {
   // an environment variable is never embedded literally.
   /**
    * @param {Array<{name: string, value: string}>} capturedHeaders
-   * @param {Record<string, {include: boolean, mode: 'literal' | 'env', envName?: string}>} decisions
+   * @param {Record<string, {include: boolean, mode: 'literal' | 'env' | 'bootstrap', envName?: string, template?: string}>} decisions
    * @returns {SFWire.ApiHeader[]}
    */
   function buildApiHeaders(capturedHeaders, decisions) {
@@ -441,6 +471,9 @@ const SFApiConfig = (function () {
       .filter(h => decisions[h.name]?.include)
       .map((h) => {
         const decision = decisions[h.name];
+        // Issue #220: 'bootstrap' builds the header from the freshly
+        // fetched bootstrap value at runtime, e.g. "Bearer {token}".
+        if (decision.mode === 'bootstrap') return { name: h.name, template: decision.template || '' };
         return decision.mode === 'env'
           ? { name: h.name, environmentVariableName: decision.envName }
           : { name: h.name, value: h.value };
@@ -483,10 +516,15 @@ const SFApiConfig = (function () {
    */
   function buildApiConfig({
     urlParts, itemsPath, fields, groups, parameterSources, capturedHeaders, headerDecisions,
-    method, bodyTree, bodyParameterNames = [], parameterIdToName = {}, embeddedJsonSource = null,
+    method, bodyTree, bodyParameterNames = [], parameterIdToName = {}, embeddedJsonSource = null, bootstrap = null,
   }) {
     const urlTemplate = buildUrlTemplate(urlParts);
-    const variableParts = [...urlParts.pathSegments, ...urlParts.queryParams].filter(p => p.variable);
+    // Issue #220: a variable URL part carrying the bootstrap value (already
+    // renamed to the bootstrap's own name by resolveBootstrapUrlParts) is a
+    // placeholder, not a declared parameter — see api-bootstrap.js.
+    const bootstrapWire = buildApiBootstrap(bootstrap);
+    const variableParts = [...urlParts.pathSegments, ...urlParts.queryParams]
+      .filter(p => p.variable && !(bootstrapWire && p.name === bootstrapWire.name));
     const parameterNames = [...variableParts.map(p => p.name), ...bodyParameterNames];
     const parameters = parameterNames.map(name => ({ name, source: parameterSources[name] }));
     const headers = buildApiHeaders(capturedHeaders, headerDecisions);
@@ -505,6 +543,7 @@ const SFApiConfig = (function () {
       ...(headers.length > 0 ? { headers } : {}),
       ...(bodyTree ? { body: serializeBodyTree(bodyTree, parameterIdToName) } : {}),
       ...(embeddedJsonSource ? { embeddedJsonSource } : {}),
+      ...(bootstrapWire ? { bootstrap: bootstrapWire } : {}),
     };
   }
 
@@ -992,6 +1031,31 @@ const SFApiConfig = (function () {
     return [...variableUrlParts(draft.urlParts), ...(draft.bodyParameters || [])];
   }
 
+  // Issue #217: which already-declared parameter names a given part's own
+  // DiscoverySource.UrlTemplate/BrowserDiscoverySource.DiscoveryUrl could
+  // legally reference via a "{name}" placeholder — ScrapingPlanValidator
+  // rejects a reference to the same or a later-declared one, so this is the
+  // exact set the extension's own "insert parameter" picker should offer.
+  // allParameterParts(draft) is already in declaration order (URL path
+  // segments, then query params, then body parameters — the same order
+  // ApiConfig.Parameters itself ends up in, see buildApiConfig), so "earlier"
+  // simply means "every named part before partId's own index", with no
+  // separate reordering concept needed (declaration order IS dependency
+  // order, per the issue's own deliberately simpler scope). A part not found
+  // at all (e.g. one just removed) yields an empty list rather than every
+  // part, the safer default for an already-stale caller.
+  /**
+   * @param {ApiConfigDraft} draft
+   * @param {string} partId
+   * @returns {string[]}
+   */
+  function earlierParameterNames(draft, partId) {
+    const parts = allParameterParts(draft);
+    const index = parts.findIndex(p => p.id === partId);
+    if (index < 0) return [];
+    return parts.slice(0, index).map(p => p.name?.trim()).filter(Boolean);
+  }
+
   // Gates "Übernehmen" — also the single place guarding against a blank
   // field/group name reaching buildApiConfig: a name could always be blanked
   // out again on the API_CONFIG screen (renderApiTree's editable name inputs;
@@ -1018,14 +1082,25 @@ const SFApiConfig = (function () {
       : !(draft.fields || []).some(f => !f.name?.trim());
     if (!namesOk) return false;
     const parts = allParameterParts(draft);
-    if (!parts.every(p => !!p.name?.trim() && !!draft.parameterSources[p.id]?.kind)) return false;
+    // Issue #220: a bootstrap-sourced URL part takes the bootstrap's own name
+    // (see resolveBootstrapUrlParts), so its own name may stay blank — but
+    // it, and any header in bootstrap mode, need a bootstrap to exist.
+    const partOk = (/** @type {ParameterPart} */ p) => draft.parameterSources[p.id]?.kind === BOOTSTRAP_SOURCE_KIND
+      ? !!draft.bootstrap
+      : !!p.name?.trim() && !!draft.parameterSources[p.id]?.kind;
+    if (!parts.every(partOk)) return false;
+    if (!bootstrapDraftIsComplete(draft.bootstrap)) return false;
+    const bootstrapHeadersOk = Object.values(draft.headerDecisions || {}).every(decision =>
+      !decision.include || decision.mode !== 'bootstrap' ||
+      (!!draft.bootstrap && (decision.template || '').includes(`{${draft.bootstrap.name.trim()}}`)));
+    if (!bootstrapHeadersOk) return false;
     return draft.bodyTree ? bodyTreeLeavesAreBound(draft.bodyTree) : true;
   }
 
   return {
     STATES, escapeHtml,
     parseUrlTemplateParts, buildUrlTemplate, parseValueListInput, findUrlTemplateMatches, mergeValueListValues,
-    buildStaticListSource, buildDiscoverySource, buildRangeSource, RANGE_FORMAT_PRESETS,
+    buildStaticListSource, buildDiscoverySource, buildRangeSource, buildBrowserDiscoverySource, RANGE_FORMAT_PRESETS,
     compileRangeFormatPattern, detectRangeFormat, findUrlPartValue, rangeFormatExample,
     buildApiHeaders, buildApiConfig,
     buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
@@ -1033,7 +1108,7 @@ const SFApiConfig = (function () {
     serializeApiTree, countApiConfigFields, updateApiTreeNode, apiTreeNodesHaveNonBlankNames,
     jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
     bodyTreeLeavesAreBound, serializeBodyTree, lastPathSegmentName, buildApiSubtreeFromCandidate,
-    resolveApiGroupScopePath, variableUrlParts, allParameterParts, apiConfigDraftHasAllSourcesChosen,
+    resolveApiGroupScopePath, variableUrlParts, allParameterParts, earlierParameterNames, apiConfigDraftHasAllSourcesChosen,
   };
 })();
 

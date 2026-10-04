@@ -150,6 +150,24 @@ const SFConfigImport = (function () {
     };
   }
 
+  // Reverse of buildDiscoveredUrlsConfig (Issue #218) — mirrors
+  // applyPaginationConfig's own shape exactly, just with no polymorphic
+  // kind to narrow.
+  /**
+   * @param {SFWire.DiscoveredUrlsConfig | null | undefined} wire
+   * @returns {object}
+   */
+  function applyDiscoveredUrlsConfig(wire) {
+    const defaults = { enabled: false, pageUrl: '', linkSelector: '', maxUrls: 100 };
+    if (!wire) return defaults;
+    return {
+      enabled: true,
+      pageUrl: wire.pageUrl || '',
+      linkSelector: wire.linkSelector || '',
+      maxUrls: Number.isFinite(wire.maxUrls) && (wire.maxUrls ?? 0) > 0 ? wire.maxUrls : 100,
+    };
+  }
+
   // Reverse of buildHardeningConfig — wire is a flat list of `{kind, ...}`
   // checks (or null/absent); each kind writes into its own slot of the
   // nested per-check state shape (see _state.hardening's own doc comment),
@@ -305,8 +323,12 @@ const SFConfigImport = (function () {
         changeDetection: applyChangeDetectionConfig(null),
         proxy: applyProxyConfig(null),
         pagination: applyPaginationConfig(null),
+        discoveredUrls: applyDiscoveredUrlsConfig(null),
         hardening: applyHardeningConfig(null),
         persistentSession: false,
+        // Issue #219: never present on a Combined wire config either (same
+        // outer-level rejection as discoveredUrls above).
+        preflight: false,
         ...applyOutputBlueprintConfig(null),
       };
     }
@@ -344,8 +366,15 @@ const SFConfigImport = (function () {
         changeDetection: applyChangeDetectionConfig(null),
         proxy: applyProxyConfig(config.proxy),
         pagination: applyPaginationConfig(config.pagination),
+        // Issue #218: never present on a Blocks wire config (rejected
+        // server-side, not designed for this mode's multi-output shape yet).
+        discoveredUrls: applyDiscoveredUrlsConfig(null),
         hardening: applyHardeningConfig(null),
         persistentSession: config.persistentSession === true,
+        // Issue #219: never present on a Blocks wire config (rejected
+        // server-side, not designed for this mode's multi-output shape yet —
+        // same reasoning as discoveredUrls above).
+        preflight: false,
         ...applyOutputBlueprintConfig(null),
       };
     }
@@ -377,8 +406,12 @@ const SFConfigImport = (function () {
       changeDetection: applyChangeDetectionConfig(config.changeDetection),
       proxy: applyProxyConfig(config.proxy),
       pagination: applyPaginationConfig(config.pagination),
+      discoveredUrls: applyDiscoveredUrlsConfig(config.discoveredUrls),
       hardening: applyHardeningConfig(config.hardening),
       persistentSession: config.persistentSession === true,
+      // Issue #219: plain bool, same convention as persistentSession above —
+      // absent on the wire (an older companion/export, or Api mode) = false.
+      preflight: config.preflight === true,
       // Issue #191: only ever present on the wire for flat mode/Api's flat
       // shape — applyOutputBlueprintConfig(undefined) already resets to
       // "none" for every other mode, so no per-mode branching is needed here.
@@ -388,7 +421,7 @@ const SFConfigImport = (function () {
 
   return {
     deserializeGroupTree, deserializeBrowserActions,
-    applyChangeDetectionConfig, applyProxyConfig, applyPaginationConfig, applyHardeningConfig,
+    applyChangeDetectionConfig, applyProxyConfig, applyPaginationConfig, applyDiscoveredUrlsConfig, applyHardeningConfig,
     applyOutputBlueprintConfig,
     applyConfigToState,
   };

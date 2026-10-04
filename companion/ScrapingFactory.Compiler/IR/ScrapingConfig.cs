@@ -113,6 +113,31 @@ public sealed class ScrapingConfig
     // start URL, no further pages followed).
     public PaginationConfig? Pagination { get; init; }
 
+    // Issue #218: opt-in discovery of additional start URLs by harvesting
+    // links from a navigation/listing page — see IR/DiscoveredUrlsConfig.cs.
+    // Applies to Fields/Groups alike; mutually exclusive with Api (same
+    // reasoning as AdditionalUrls/Pagination above). Composes with both:
+    // additive with AdditionalUrls (the discovered list is combined with,
+    // not instead of, the statically-typed one), and each discovered URL
+    // paginates onward independently exactly like any other start URL
+    // already does. Null is today's exact behavior (no discovery pass runs).
+    public DiscoveredUrlsConfig? DiscoveredUrls { get; init; }
+
+    // Issue #219: opt-in preflight check — a single cheap HEAD request
+    // against the primary start URL, run before the main extraction phase
+    // even starts, mode-independent like DiscoveredUrls above (Fields/Groups
+    // only; mutually exclusive with Api, same reasoning as AdditionalUrls/
+    // Pagination/DiscoveredUrls — Api has no single fixed start URL to
+    // preflight-check). A plain on/off switch with no sub-fields, same as
+    // PersistentSession/ExternalConfig below — which ETag/Last-Modified
+    // value counts as "changed" is tracked entirely by the generated
+    // script's own sidecar file, never configured here. Engine-independent:
+    // even a Browser-engine script's preflight check is a plain `requests`
+    // call, never Playwright, so a skip avoids the cost of ever launching a
+    // browser session at all. Null/false is today's exact behavior (the
+    // main extraction always runs unconditionally).
+    public bool? Preflight { get; init; }
+
     // Issue #175: opt-in persistent session/cookie handling, Browser-engine
     // only (rejected server-side otherwise, same as WaitFor/Fill/Click/
     // Scroll — see ScrapingPlanValidator). When true, the generated script

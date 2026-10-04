@@ -310,8 +310,20 @@ const SFOutputBlueprintsUI = (function () {
 
   // ── Create/edit modal ────────────────────────────────────────────────────
 
+  // Issue #252: the picked-file indicator (#blueprint-import-file-name) is
+  // plain static markup, not re-rendered from state — once a file is picked
+  // its text is overwritten with that file's own name (see the 'change'
+  // listener below), so it has to be put back to the "no file selected"
+  // placeholder explicitly whenever the modal is (re)opened, or a stale
+  // filename from a previous attempt would otherwise linger across reopens.
+  function resetBlueprintImportFileIndicator() {
+    const nameEl = document.getElementById('blueprint-import-file-name');
+    if (nameEl) nameEl.textContent = t('modals.blueprintEdit.importFileNone');
+  }
+
   function openBlueprintCreateModal(bridge) {
     log('OPEN blueprint-edit modal (new)');
+    resetBlueprintImportFileIndicator();
     bridge.patchState({
       blueprintEditModalOpen: true, blueprintEditingId: null,
       blueprintEditDraft: { name: '', schemaKind: 'Flat', fieldNames: [''], tree: [] },
@@ -320,6 +332,7 @@ const SFOutputBlueprintsUI = (function () {
 
   async function openBlueprintEditModal(bridge, id) {
     log('OPEN blueprint-edit modal (edit)', id);
+    resetBlueprintImportFileIndicator();
     try {
       const record = await fetchOutputBlueprint(id);
       bridge.patchState({
@@ -381,6 +394,35 @@ const SFOutputBlueprintsUI = (function () {
     }
     bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, fieldNames: parsed } });
     showToast(t('toast.blueprintImportParsed', { count: parsed.length }), null, 'info');
+  }
+
+  // Issue #252: lets the sample be picked from disk instead of opened and
+  // pasted in by hand — this only reads the file's text and writes it into
+  // the existing textarea, it never parses/applies anything itself, so
+  // "Parse & fill fields" stays the one action that commits a sample
+  // regardless of which input method produced its text (consistent with the
+  // existing paste flow, and reusing the exact same
+  // importBlueprintFieldNamesFromSample code path for both). Uses
+  // FileReader rather than File.text() — same convention
+  // download-helpers.test.js/popup.test.js's own readBlobText helper already
+  // established, since jsdom (this project's test environment) doesn't
+  // implement Blob/File.text().
+  function loadBlueprintImportSampleFile(file) {
+    const textarea = document.getElementById('input-blueprint-import-sample');
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (textarea) textarea.value = reader.result;
+        resolve();
+      };
+      reader.onerror = () => {
+        const message = reader.error ? reader.error.message : '';
+        log('BLUEPRINT_IMPORT_FILE_READ_FAIL', message);
+        showToast(t('toast.blueprintImportFileReadFailed', { message }), 'Output Blueprint');
+        resolve();
+      };
+      reader.readAsText(file);
+    });
   }
 
   async function saveBlueprintEdit(bridge) {
@@ -580,6 +622,15 @@ const SFOutputBlueprintsUI = (function () {
     document.getElementById('btn-blueprint-import-parse')?.addEventListener('click', () => {
       const textarea = document.getElementById('input-blueprint-import-sample');
       importBlueprintFieldNamesFromSample(bridge, textarea ? textarea.value : '');
+    });
+
+    document.getElementById('input-blueprint-import-file')?.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = ''; // allow re-picking the same file to re-trigger 'change'
+      if (!file) return;
+      const nameEl = document.getElementById('blueprint-import-file-name');
+      if (nameEl) nameEl.textContent = file.name;
+      await loadBlueprintImportSampleFile(file);
     });
 
     document.getElementById('input-blueprint-name')?.addEventListener('change', (e) => {

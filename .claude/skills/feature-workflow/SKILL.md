@@ -112,3 +112,18 @@ Short paragraph on what the feature does and which problem it solves.
 ```
 
 Share the PR URL with the user once it's created (`gh pr create` prints it in its output).
+
+## Step 9: Hand the user a hands-on test guide
+
+The PR's test steps are written for reviewers (in English, inside the PR). The user also wants to try the feature themselves right away, so end the workflow with a final message to the user — **in the language of the conversation** (usually German) — that tells them exactly how to test the new feature by hand. Don't stop at "here's the PR link".
+
+The guide should contain:
+
+1. **Where to test**: name at least one concrete page or target the user can open immediately:
+   - a local fixture (e.g. under `test-pages/`) together with its exact start command and URL; if no existing fixture fits, add one as part of step 6
+   - if feasible, also a real, publicly reachable site where the feature applies. **Verify that it really behaves as described before naming it** (e.g. a quick `curl` showing the expected response or status code). Never suggest a site you haven't checked.
+2. **Preconditions**: what needs to be running or reloaded first (e.g. check out the branch, start the companion, reload the unpacked extension), plus any credentials or test data the page needs.
+3. **Numbered steps**: name UI elements by their visible label in the user's UI language. If a step needs input the user can't easily come up with (a snippet, a URL, a value), include it ready to copy.
+4. **Expected result** after the key steps, plus one or two quick negative checks (what should fail, and how it should look).
+
+Keep it short and copy-paste-friendly. The user should be able to follow it without reading the PR or the code.

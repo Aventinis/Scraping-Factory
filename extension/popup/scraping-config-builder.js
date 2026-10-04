@@ -200,6 +200,28 @@ function buildPaginationConfig(pagination) {
   return nextLinkSelector ? { kind: 'nextLink', nextLinkSelector, maxPages } : null;
 }
 
+// Issue #218: builds the wire-format DiscoveredUrlsConfig from
+// _state.discoveredUrls — same "incomplete draft = toggle-off" convention
+// buildPaginationConfig/buildProxyConfig already establish: a missing
+// PageUrl/LinkSelector means there's nothing a discovery pass could
+// meaningfully do yet, so the whole key is omitted rather than sent
+// half-filled. MaxUrls falls back to the companion's own default (100,
+// IR/DiscoveredUrlsConfig.cs) for an invalid/blank number input, the same
+// way buildPaginationConfig's own MaxPages already does.
+/**
+ * @param {SFDraft.DiscoveredUrlsState | null | undefined} discoveredUrls
+ * @returns {SFWire.DiscoveredUrlsConfig | null}
+ */
+function buildDiscoveredUrlsConfig(discoveredUrls) {
+  if (!discoveredUrls?.enabled) return null;
+  const pageUrl = (discoveredUrls.pageUrl || '').trim();
+  const linkSelector = (discoveredUrls.linkSelector || '').trim();
+  if (!pageUrl || !linkSelector) return null;
+  const maxUrlsRaw = Number(discoveredUrls.maxUrls);
+  const maxUrls = Number.isFinite(maxUrlsRaw) && maxUrlsRaw > 0 ? Math.floor(maxUrlsRaw) : 100;
+  return { pageUrl, linkSelector, maxUrls };
+}
+
 // Issue #129: builds the wire-format Hardening list (companion's
 // List<HardeningCheck>?) from every enabled check in _state.hardening — an
 // array even though only one check exists today, since the wire format is
@@ -414,6 +436,14 @@ function buildScrapingConfig(
   // — outputBlueprintSchemaKind picks which pair buildOutputBlueprintMapping
   // actually reads, the other pair is simply ignored.
   outputBlueprintSchemaKind = 'Flat', outputBlueprintTree = [], outputBlueprintTreeMapping = {},
+  // Issue #218: appended at the end, not alongside pagination above, since
+  // this function already has dozens of positional callers (including every
+  // existing test) — inserting a new parameter in the middle would silently
+  // shift every argument after it rather than failing loudly.
+  discoveredUrls = null,
+  // Issue #219: same "append at the end, never insert in the middle" rule as
+  // discoveredUrls just above.
+  preflight = false,
 ) {
   // Issue #182: Blocks mode has no ad-hoc fields/groups/apiConfig of its own
   // either — each block is a fully independent {name, outputFileName,
@@ -493,12 +523,20 @@ function buildScrapingConfig(
   const hardeningFields = hardeningConfig ? { hardening: hardeningConfig } : {};
   const paginationConfig = buildPaginationConfig(pagination);
   const paginationFields = paginationConfig ? { pagination: paginationConfig } : {};
+  const discoveredUrlsConfig = buildDiscoveredUrlsConfig(discoveredUrls);
+  const discoveredUrlsFields = discoveredUrlsConfig ? { discoveredUrls: discoveredUrlsConfig } : {};
   // Issue #175: Browser-engine only, but simply sent as-is (like
   // browserActions) rather than gated on `engine === 'Browser'` here — the
   // toggle itself is only reachable through the UI while the browser-actions
   // section is visible (Engine=Browser), and the companion rejects the
   // combination server-side regardless (see ScrapingPlanValidator).
   const persistentSessionFields = persistentSession ? { persistentSession: true } : {};
+  // Issue #219: mirrors persistentSessionFields exactly — a plain on/off
+  // switch, only included when true. Hidden from the UI (and thus never
+  // true) for API/Combined/Blocks mode, but that's enforced by the UI's own
+  // visibility toggle, not here — this function doesn't need its own
+  // mode-specific gate since those branches simply never reference it.
+  const preflightFields = preflight ? { preflight: true } : {};
   // Issue #161: mirrors previewFields exactly — only included when true, so
   // the default (checkbox unchecked) request stays byte-for-byte identical
   // to before this existed. See companion's ScrapingConfig.IncludeOutputFile.
@@ -527,8 +565,8 @@ function buildScrapingConfig(
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
-      ...externalConfigFields, ...outputBlueprintFields,
+      ...proxyFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
   if (mode === 'api') {
@@ -536,8 +574,8 @@ function buildScrapingConfig(
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
-      ...externalConfigFields, ...outputBlueprintFields,
+      ...proxyFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
   return {
@@ -559,8 +597,8 @@ function buildScrapingConfig(
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
     ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields,
-    ...hardeningFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields, ...externalConfigFields,
-    ...outputBlueprintFields,
+    ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+    ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
   };
 }
 
@@ -599,6 +637,7 @@ function buildScrapingConfig(
  * @param {SFWire.OutputBlueprintSchemaKind} [outputBlueprintSchemaKind]
  * @param {SFDraft.OutputBlueprintTreeNode[]} [outputBlueprintTree]
  * @param {Record<string, string>} [outputBlueprintTreeMapping]
+ * @param {boolean} [preflight]
  * @returns {{exportedAt: string, extensionVersion: string, config: object}}
  */
 function buildConfigExport(
@@ -608,6 +647,11 @@ function buildConfigExport(
   includeOutputFile = false, externalConfig = false, combinedComponents = null, blocks = null,
   outputBlueprintId = null, outputBlueprintFieldNames = [], outputBlueprintMapping = {},
   outputBlueprintSchemaKind = 'Flat', outputBlueprintTree = [], outputBlueprintTreeMapping = {},
+  // Issue #218: see buildScrapingConfig's own doc comment on why this is
+  // appended at the end rather than alongside pagination above.
+  discoveredUrls = null,
+  // Issue #219: same "append at the end" rule as discoveredUrls just above.
+  preflight = false,
 ) {
   return {
     exportedAt: new Date().toISOString(),
@@ -617,7 +661,7 @@ function buildConfigExport(
       useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession,
       includeOutputFile, externalConfig, combinedComponents, blocks,
       outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping,
-      outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping,
+      outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping, discoveredUrls, preflight,
     ),
   };
 }
@@ -691,7 +735,9 @@ function addBrowserAction(actions, kind) {
     waitFor: { kind: 'waitFor', selector: '', timeoutMs: 5000 },
     fill:    { kind: 'fill', selector: '', environmentVariableName: '' },
     click:   { kind: 'click', selector: '' },
-    scroll:  { kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000 },
+    // Issue #289: scrollStepPx stays null (keeping today's "jump straight
+    // to the bottom" default) until the user explicitly types a value.
+    scroll:  { kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000, scrollStepPx: null },
   };
   return [...actions, defaults[kind]];
 }
@@ -744,6 +790,9 @@ function serializeBrowserActions(actions) {
         loadMoreButtonSelector: a.loadMoreButtonSelector || null,
         maxIterations: a.maxIterations,
         waitAfterMs: a.waitAfterMs,
+        // Issue #289: omitted (not 0/null) when unset — None is the
+        // runtime's own "jump straight to the bottom" default.
+        ...(a.scrollStepPx ? { scrollStepPx: a.scrollStepPx } : {}),
         ...framePath,
       };
     }
@@ -858,7 +907,7 @@ function frameBadgeHtml(framePath) {
 }
 
   return {sanitizeFileNameBase, deriveScriptFileNameFromHostname, computeScriptFileNamePatch, parseAdditionalUrls,
-    buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildHardeningConfig,
+    buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildDiscoveredUrlsConfig, buildHardeningConfig,
     computeInitialMonitoringSectionOpen, collectFieldNames,
     buildScrapingConfig, buildConfigExport,
     addField, removeField, updateField,

@@ -1,5 +1,117 @@
 # Changelog
 
+## [1.17.1](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.7...v1.17.1) (2026-10-04)
+
+Stable release consolidating the 1.16.2–1.16.7 prereleases below. Highlights:
+
+### Features
+
+* **api-mode:** token/auth bootstrap value for API mode requests, including "Take from recording" (Issue [#220](https://github.com/Aventinis/Scraping-Factory/issues/220))
+* **api-mode:** dependent/chained parameter discovery (Issue [#217](https://github.com/Aventinis/Scraping-Factory/issues/217))
+* **api-mode:** discover parameter values via browser scroll/click + network capture (Issue [#216](https://github.com/Aventinis/Scraping-Factory/issues/216))
+* **discovered-urls:** discovered additional start URLs for flat/container mode (Issue [#218](https://github.com/Aventinis/Scraping-Factory/issues/218))
+* **preflight:** preflight check — skip an expensive run when nothing's changed or the target's unreachable (Issue [#219](https://github.com/Aventinis/Scraping-Factory/issues/219))
+* **scroll:** configurable scroll step distance (Issue [#289](https://github.com/Aventinis/Scraping-Factory/issues/289))
+* **output-blueprints:** upload a sample file for field import (Issue [#252](https://github.com/Aventinis/Scraping-Factory/issues/252))
+
+### Bug Fixes
+
+* **api:** report failed API requests as clean, actionable errors instead of raw tracebacks
+
+### Miscellaneous
+
+* version promoted from the 1.16.x prerelease line (the automatically generated 1.17.1 entry, which re-listed commits from long before 1.16.7, was replaced by this summary)
+
+
+## [1.16.7](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.6...v1.16.7) (2026-10-04)
+
+
+### Features
+
+* **api-bootstrap:** accept verification values for bootstrap credentials ([096357e](https://github.com/Aventinis/Scraping-Factory/commit/096357ee5dfdcd5a26669612c7aa6e14c9c93ca3))
+* **api-bootstrap:** add ApiBootstrap IR and validation ([8f9498f](https://github.com/Aventinis/Scraping-Factory/commit/8f9498f49ef870664024d24970d857b8eb3d1def))
+* **api-bootstrap:** add auth bootstrap section with take-from-recording picker ([b1afe81](https://github.com/Aventinis/Scraping-Factory/commit/b1afe815431d2b9611ca1d381fbed4f3473c9841))
+* **api-bootstrap:** add bootstrap draft/wire logic and fold it into buildApiConfig ([f29268f](https://github.com/Aventinis/Scraping-Factory/commit/f29268f97dff53588cb892c85954442af8105c6f))
+* **api-bootstrap:** fetch bootstrap value at runtime in API templates ([23ce94c](https://github.com/Aventinis/Scraping-Factory/commit/23ce94c362e38c3d1f9383243efd5ece3d766458))
+* token/auth bootstrap value for API mode requests (Issue [#220](https://github.com/Aventinis/Scraping-Factory/issues/220)) ([5ffc1da](https://github.com/Aventinis/Scraping-Factory/commit/5ffc1da9cbb587a70cd099812059e85b9ed1c39e))
+
+
+### Bug Fixes
+
+* **api:** report failed API requests as clean, actionable errors ([9a0a8ba](https://github.com/Aventinis/Scraping-Factory/commit/9a0a8ba47b39de2ddef768c41fd4b3fe72dd7483))
+
+## [1.16.6](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.5...v1.16.6) (2026-10-04)
+
+
+### Features
+
+* preflight check — skip an expensive run when nothing's changed or the target's unreachable (Issue [#219](https://github.com/Aventinis/Scraping-Factory/issues/219)) ([3d24fa3](https://github.com/Aventinis/Scraping-Factory/commit/3d24fa386cf7f817704c6f41c7fe0ed97e40f3dc))
+* **preflight:** add extension UI for the opt-in preflight check ([e062043](https://github.com/Aventinis/Scraping-Factory/commit/e0620435b48be5054caf202ead4f61c3845524b2))
+* **preflight:** add IR plumbing for the preflight-check toggle ([9924a3f](https://github.com/Aventinis/Scraping-Factory/commit/9924a3f8468852e69e9b0558f50580816323e99c))
+* **preflight:** add preflight-check runtime to all four flat/container templates ([8c4fe0d](https://github.com/Aventinis/Scraping-Factory/commit/8c4fe0de664838472f8c707d8fc6e98ffbaa8b34))
+* **preflight:** thread preflight through buildScrapingConfig/buildConfigExport ([e3635eb](https://github.com/Aventinis/Scraping-Factory/commit/e3635eb84f1fe103f2f387535f8613c73355c999))
+* **preflight:** wire preflight into the shared Scriban context ([90db589](https://github.com/Aventinis/Scraping-Factory/commit/90db5893642795a586781ab67468a0310addbaab))
+
+## [1.16.5](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.4...v1.16.5) (2026-10-03)
+
+
+### Features
+
+* **discovered-urls:** add discovery pass to all four flat/container templates ([4587542](https://github.com/Aventinis/Scraping-Factory/commit/4587542da88dd00ef8e80bbd5e89e39f5077b244))
+* **discovered-urls:** add idle-screen UI toggle and settings-panel wiring ([299b1e0](https://github.com/Aventinis/Scraping-Factory/commit/299b1e0a9f00e45200ce41c6fdcff3a1d9d90600))
+* **discovered-urls:** add IR/validator for discovered additional start URLs ([251d4e3](https://github.com/Aventinis/Scraping-Factory/commit/251d4e33d70b57ccb99c50d770c8e4dbaf2ebfd2))
+* **discovered-urls:** discovered additional start URLs for flat/container mode (Issue [#218](https://github.com/Aventinis/Scraping-Factory/issues/218)) ([32c98af](https://github.com/Aventinis/Scraping-Factory/commit/32c98af92c37f15891a4929934cf768ef17f524d))
+* **discovered-urls:** pick the navigation link by clicking it ([8a1edfb](https://github.com/Aventinis/Scraping-Factory/commit/8a1edfb34283dbee9f54d2e4bd53de0a286106ee))
+* **discovered-urls:** reject DiscoveredUrls together with Api/Combined/Blocks ([dbd6248](https://github.com/Aventinis/Scraping-Factory/commit/dbd6248e900d7c8d17de17b1f825aeac4f109c2c))
+* **discovered-urls:** wire discovered_urls into the shared Scriban context ([595e258](https://github.com/Aventinis/Scraping-Factory/commit/595e258aac7fba13b585f000179477b53e49d610))
+* **discovered-urls:** wire discoveredUrls into the scraping-config builder ([99df544](https://github.com/Aventinis/Scraping-Factory/commit/99df54463901538150c903f75a497ca01d90346e))
+
+## [1.16.4](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.3...v1.16.4) (2026-10-03)
+
+
+### Features
+
+* **api-mode:** add earlierParameterNames helper for the UI's parameter picker ([bb8b6b4](https://github.com/Aventinis/Scraping-Factory/commit/bb8b6b4cc62d3ff871ddbd880d1d50bdf5937bd9))
+* **api-mode:** dependent/chained parameter discovery (Issue [#217](https://github.com/Aventinis/Scraping-Factory/issues/217)) ([2bc8363](https://github.com/Aventinis/Scraping-Factory/commit/2bc8363df9301540bf551c6cc3d6b8fccb2f7a53))
+* **api-mode:** extension UI for chained parameter discovery ([eb0c96c](https://github.com/Aventinis/Scraping-Factory/commit/eb0c96c8f7a9d7d9ac5b4d3c4da181e2d1da58b9))
+* **api-mode:** resolve chained parameter dependencies at runtime ([d5a820b](https://github.com/Aventinis/Scraping-Factory/commit/d5a820bca031f4e8f5e15a66fc859b23e7f71a37))
+* **api-mode:** validate dependency order for chained parameter discovery ([78f99bf](https://github.com/Aventinis/Scraping-Factory/commit/78f99bfd12da3b4fab7f61ed792ea597683a328c))
+
+
+### Bug Fixes
+
+* **api-mode:** insert parameter placeholder at the end, not the start, of an unfocused template field ([b086ad2](https://github.com/Aventinis/Scraping-Factory/commit/b086ad294b3491a236fe65a2863590f84a63abe8))
+
+## [1.16.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.2...v1.16.3) (2026-10-03)
+
+
+### Features
+
+* **api-mode:** add BrowserDiscoverySource IR type and validation ([7ae9a6b](https://github.com/Aventinis/Scraping-Factory/commit/7ae9a6bf27d677cbcfb51eae84ffea6bcb65706f))
+* **api-mode:** discover parameter values via browser scroll/click + network capture ([cf6be10](https://github.com/Aventinis/Scraping-Factory/commit/cf6be10ff29c5bfbfc95084a8a6119a329b40f69))
+* **api-mode:** implement browser-discovery parameter resolution at runtime ([ae2b693](https://github.com/Aventinis/Scraping-Factory/commit/ae2b693a0a3b8744fa89752fcdf75cc5a1cbcbda))
+* **api-mode:** serialize BrowserDiscoverySource for the Python templates ([0a14927](https://github.com/Aventinis/Scraping-Factory/commit/0a14927d433227e7cd31f0c9115b85e62ae4c7e7))
+* **extension:** add BrowserDiscoverySource UI with click-based action picking ([c6cacdf](https://github.com/Aventinis/Scraping-Factory/commit/c6cacdf3bf0028998df081baf9336131ea093164))
+* **extension:** add BrowserDiscoverySource wire type and builder ([8441eef](https://github.com/Aventinis/Scraping-Factory/commit/8441eef66c14d5fa219021b60af2074b5a46791a))
+* **extension:** add scroll step distance input to both scroll action editors ([1b46b17](https://github.com/Aventinis/Scraping-Factory/commit/1b46b17ea1b0ceeda1690321712da46d47bf0364))
+* **extension:** add scrollStepPx to the ScrollAction draft/wire types ([b24a491](https://github.com/Aventinis/Scraping-Factory/commit/b24a4917d335263fd0c22f2d78f818a04fdd7eda))
+* **generate:** show a warning toast when the companion skipped trial-run verification ([57ce23f](https://github.com/Aventinis/Scraping-Factory/commit/57ce23f88964d4bf486ffc4845073ebe1ce38ff1))
+* **scroll:** add configurable scroll step distance (Issue [#289](https://github.com/Aventinis/Scraping-Factory/issues/289)) ([0677c9f](https://github.com/Aventinis/Scraping-Factory/commit/0677c9fc4b04b3e8d8d352920e57d5311afcd85b))
+* **scroll:** add configurable scroll step distance (Issue [#289](https://github.com/Aventinis/Scraping-Factory/issues/289)) ([1c131e5](https://github.com/Aventinis/Scraping-Factory/commit/1c131e5d4b0c60b0e9a0bae5f5e77dcf3b5e5ee8))
+
+
+### Bug Fixes
+
+* **generate:** scale verification timeout estimate to cover BrowserDiscoverySource actions, cap it instead of hanging ([05eb703](https://github.com/Aventinis/Scraping-Factory/commit/05eb703aed06c0798d4699bc53ddb33670d17aa0))
+
+## [1.16.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.1...v1.16.2) (2026-10-02)
+
+
+### Features
+
+* **output-blueprints:** upload a sample file for field import ([eb20366](https://github.com/Aventinis/Scraping-Factory/commit/eb20366632257e74ede974c890299cb7c85d80e8))
+* **output-blueprints:** upload a sample file for field import ([0e4c202](https://github.com/Aventinis/Scraping-Factory/commit/0e4c2021a6b654605f686637f2c33d02b2edfcf7))
+
 ## [1.16.1](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.0...v1.16.1) (2026-10-01)
 
 

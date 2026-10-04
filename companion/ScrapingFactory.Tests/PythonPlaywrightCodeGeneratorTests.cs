@@ -105,7 +105,7 @@ public class PythonPlaywrightCodeGeneratorTests
         var script = _generator.Generate(plan);
 
         Assert.Contains("""URLS = ["https://example.com/a", "https://example.com/b"]""", script);
-        Assert.Contains("for url in URLS:", script);
+        Assert.Contains("for url in all_urls:", script);
         Assert.Contains("data.extend(scrape(url))", script);
     }
 
@@ -279,6 +279,39 @@ public class PythonPlaywrightCodeGeneratorTests
         Assert.Contains("el.scrollTop = el.scrollHeight", script);
         Assert.Contains("for _ in range(3):", script);
         Assert.Contains("page.wait_for_timeout(500)", script);
+    }
+
+    // Issue #289
+    [Fact]
+    public void Generate_ScrollWithStepPx_ScrollsByFixedStepAndChecksAtBottom()
+    {
+        var plan = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ScrollStep { MaxIterations = 5, WaitAfterMs = 250, ScrollStepPx = 400 },
+                new ExtractStep { Name = "Titel", Selector = ".item" },
+            ],
+        };
+
+        var script = _generator.Generate(plan);
+        Assert.Contains("window.scrollBy(0, 400)", script);
+        Assert.DoesNotContain("window.scrollTo(0, document.body.scrollHeight)", script);
+        Assert.Contains("_scroll_at_bottom = page.evaluate(\"window.scrollY + window.innerHeight >= document.body.scrollHeight - 1\")", script);
+        Assert.Contains("if _scroll_height == _scroll_prev_height and _scroll_at_bottom:", script);
+    }
+
+    [Fact]
+    public void Generate_ScrollWithoutStepPx_KeepsOriginalJumpToBottomStopCondition()
+    {
+        // Byte-for-byte compatibility: a config that never sets ScrollStepPx
+        // must keep exactly today's stop condition, not a conditionally
+        // always-true variant of the new one.
+        var script = _generator.Generate(ScrollOnlyPlan());
+        Assert.Contains("if _scroll_height == _scroll_prev_height:", script);
+        Assert.DoesNotContain("_scroll_at_bottom", script);
     }
 
     // ── FramePath (Issue #42) ───────────────────────────────────────────────
