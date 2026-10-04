@@ -102,6 +102,15 @@ declare namespace SFDraft {
     envVar: string;
   }
 
+  // Issue #223: inputs as typed — see buildRetryConfig.
+  interface RetryState {
+    enabled: boolean;
+    maxAttemptsText: string;
+    delaySecondsText: string;
+    exponential: boolean;
+    statusCodesText: string;
+  }
+
   // Issue #222: seconds as typed (decimal comma or point); blank max = fixed.
   interface RequestDelayState {
     enabled: boolean;

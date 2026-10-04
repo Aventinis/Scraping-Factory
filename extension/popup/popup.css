@@ -890,7 +890,10 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
    label + one input per row — here "from"/"to" are short inline words, so
    they size to their content, and the row may wrap on a very narrow panel
    instead of overflowing its right edge. */
-.output-settings-row.request-delay-row { flex-wrap: wrap; }
-.output-settings-row.request-delay-row label { width: auto; }
-.output-settings-row.request-delay-row input[type="text"] { flex: 0 1 64px; width: 64px; min-width: 40px; }
-.output-settings-row.request-delay-row span { font-size: 11px; color: var(--color-text-muted); }
+/* Shared by Issue #223's retry row ("Attempts [ ] Wait [ ] seconds"). */
+.output-settings-row.request-delay-row, .output-settings-row.retry-row { flex-wrap: wrap; }
+.output-settings-row.request-delay-row label, .output-settings-row.retry-row label { width: auto; }
+.output-settings-row.request-delay-row input[type="text"], .output-settings-row.retry-row input[type="text"] { flex: 0 1 64px; width: 64px; min-width: 40px; }
+.output-settings-row.request-delay-row span, .output-settings-row.retry-row span { font-size: 11px; color: var(--color-text-muted); }
+/* Issue #223: attempts/wait only ever hold short numbers. */
+.output-settings-row.retry-row input[type="text"] { flex-basis: 44px; width: 44px; }

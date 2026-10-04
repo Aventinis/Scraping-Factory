@@ -98,7 +98,11 @@ def _download_resource(page, url, max_size=None, allowed_types=None):
 {{~ if request_delay.enabled ~}}
             _pace_request()
 {{~ end ~}}
+{{~ if retry.enabled ~}}
+            response = _send_with_retry(lambda _u=absolute_url: page.context.request.get(_u), absolute_url)
+{{~ else ~}}
             response = page.context.request.get(absolute_url)
+{{~ end ~}}
             if not response.ok:
                 raise RuntimeError(f"HTTP {response.status}")
             content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
@@ -843,12 +847,20 @@ def _run_preflight_check(url):
 {{~ if request_delay.enabled ~}}
         _pace_request()
 {{~ end ~}}
+{{~ if retry.enabled ~}}
+        response = _send_with_retry(lambda _u=url: requests.head(_u, headers=headers, proxies=proxies, timeout=10, allow_redirects=True), url)
+{{~ else ~}}
         response = requests.head(url, headers=headers, proxies=proxies, timeout=10, allow_redirects=True)
+{{~ end ~}}
 {{~ else ~}}
 {{~ if request_delay.enabled ~}}
         _pace_request()
 {{~ end ~}}
+{{~ if retry.enabled ~}}
+        response = _send_with_retry(lambda _u=url: requests.head(_u, headers=headers, timeout=10, allow_redirects=True), url)
+{{~ else ~}}
         response = requests.head(url, headers=headers, timeout=10, allow_redirects=True)
+{{~ end ~}}
 {{~ end ~}}
         response.raise_for_status()
     except Exception as e:
@@ -888,12 +900,20 @@ def _discover_additional_urls():
 {{~ if request_delay.enabled ~}}
         _pace_request()
 {{~ end ~}}
+{{~ if retry.enabled ~}}
+        response = _send_with_retry(lambda _u=DISCOVERED_URLS_PAGE_URL: requests.get(_u, headers=headers, proxies=proxies, timeout=10), DISCOVERED_URLS_PAGE_URL)
+{{~ else ~}}
         response = requests.get(DISCOVERED_URLS_PAGE_URL, headers=headers, proxies=proxies, timeout=10)
+{{~ end ~}}
 {{~ else ~}}
 {{~ if request_delay.enabled ~}}
         _pace_request()
 {{~ end ~}}
+{{~ if retry.enabled ~}}
+        response = _send_with_retry(lambda _u=DISCOVERED_URLS_PAGE_URL: requests.get(_u, headers=headers, timeout=10), DISCOVERED_URLS_PAGE_URL)
+{{~ else ~}}
         response = requests.get(DISCOVERED_URLS_PAGE_URL, headers=headers, timeout=10)
+{{~ end ~}}
 {{~ end ~}}
         response.raise_for_status()
         soup = BeautifulSoup(response.content, "html.parser")
@@ -967,12 +987,20 @@ def scrape(url):
 {{~ if request_delay.enabled ~}}
             _pace_request()
 {{~ end ~}}
+{{~ if retry.enabled ~}}
+            _send_with_retry(lambda _u=urllib.parse.urljoin(page.url, next_href): page.goto(_u, wait_until="load", timeout=30000), urllib.parse.urljoin(page.url, next_href))
+{{~ else ~}}
             page.goto(urllib.parse.urljoin(page.url, next_href), wait_until="load", timeout=30000)
+{{~ end ~}}
 {{~ else ~}}
 {{~ if request_delay.enabled ~}}
             _pace_request()
 {{~ end ~}}
+{{~ if retry.enabled ~}}
+            _send_with_retry(lambda _u=PAGINATION_URL_TEMPLATE.format(url=url, page=page_number): page.goto(_u, wait_until="load", timeout=30000), PAGINATION_URL_TEMPLATE.format(url=url, page=page_number))
+{{~ else ~}}
             page.goto(PAGINATION_URL_TEMPLATE.format(url=url, page=page_number), wait_until="load", timeout=30000)
+{{~ end ~}}
 {{~ end ~}}
 {{~ else ~}}
             break
@@ -1011,6 +1039,95 @@ def _pace_request():
             print(f"Pausing {remaining:.2f} s before the next request (request delay)...", flush=True)
             time.sleep(remaining)
     _last_request_started_at = time.monotonic()
+
+
+{{~ end ~}}
+{{~ if retry.enabled ~}}
+# Issue #223: optional retry with backoff on transient request failures — a
+# connection error/timeout, or one of RETRY_ON_STATUS_CODES. Between attempts
+# the script waits RETRY_DELAY_S (doubled after every retry when
+# RETRY_EXPONENTIAL), or exactly what a 429/503's Retry-After header asks
+# for; every wait is capped at RETRY_MAX_WAIT_S. Each retry is announced on
+# stdout, so a scheduled run never degrades silently (and so the companion's
+# trial run can tell the wait apart from a stuck script). Any other status
+# (404/401/403, ...) is returned immediately, and once every attempt has
+# failed, the last response is returned / the last error re-raised — exactly
+# what the caller would have seen without retries.
+import time
+
+RETRY_MAX_ATTEMPTS = {{ retry.max_attempts }}
+RETRY_DELAY_S = {{ retry.delay_s_literal }}
+RETRY_EXPONENTIAL = {{ retry.exponential_literal }}
+RETRY_MAX_WAIT_S = {{ retry.max_wait_s_literal }}
+RETRY_ON_STATUS_CODES = {{ retry.status_codes_literal }}
+
+
+# Connection errors/timeouts of whichever HTTP stacks this script uses:
+# requests' own, and Playwright's (navigations and page.context.request).
+def _retryable_exceptions():
+    found = []
+    try:
+        import requests as _requests
+        found.append(_requests.RequestException)
+    except ImportError:
+        pass
+    try:
+        from playwright.sync_api import Error as _PlaywrightError
+        found.append(_PlaywrightError)
+    except ImportError:
+        pass
+    return tuple(found)
+
+
+_RETRYABLE_EXCEPTIONS = _retryable_exceptions()
+
+
+# Retry-After is either a number of seconds or an HTTP date; anything
+# unparseable is ignored in favour of the configured delay.
+def _retry_after_seconds(response):
+    try:
+        headers = {str(k).lower(): v for k, v in dict(getattr(response, "headers", None) or {}).items()}
+    except (TypeError, ValueError):
+        return None
+    value = str(headers.get("retry-after") or "").strip()
+    if not value:
+        return None
+    if value.isdigit():
+        return float(value)
+    try:
+        from datetime import datetime, timezone
+        from email.utils import parsedate_to_datetime
+        return max(0.0, (parsedate_to_datetime(value) - datetime.now(timezone.utc)).total_seconds())
+    except (TypeError, ValueError, IndexError):
+        return None
+
+
+def _send_with_retry(send, url):
+    attempt = 1
+    while True:
+        try:
+            response = send()
+            # requests: status_code; Playwright: status (page.goto may also return None)
+            status = getattr(response, "status_code", None)
+            if status is None:
+                status = getattr(response, "status", None)
+            if status not in RETRY_ON_STATUS_CODES or attempt >= RETRY_MAX_ATTEMPTS:
+                return response
+            reason = f"HTTP {status}"
+            retry_after = _retry_after_seconds(response) if status in (429, 503) else None
+        except _RETRYABLE_EXCEPTIONS as e:
+            if attempt >= RETRY_MAX_ATTEMPTS:
+                raise
+            reason = e.__class__.__name__
+            retry_after = None
+        wait = retry_after if retry_after is not None else RETRY_DELAY_S * (2 ** (attempt - 1) if RETRY_EXPONENTIAL else 1)
+        wait = min(wait, RETRY_MAX_WAIT_S)
+        attempt += 1
+        print(f"Retrying in {wait:.1f} s (attempt {attempt} of {RETRY_MAX_ATTEMPTS}) after {reason}: {url}", flush=True)
+        time.sleep(wait)
+{{~ if request_delay.enabled ~}}
+        _pace_request()
+{{~ end ~}}
 
 
 {{~ end ~}}

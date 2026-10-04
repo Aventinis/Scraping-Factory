@@ -32,7 +32,10 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         // — it comes from scrape()'s own `url` parameter at runtime, since
         // the same action sequence now runs once per start URL. See
         // playwright_navigate_step.py.j2.
-        var navigateFragment = navigateTemplate.Render(new { }).TrimEnd();
+        // Issue #223: with retries on, the navigation itself is wrapped in
+        // _send_with_retry (the shell defines it) — only the navigation, never
+        // a half-run login action sequence.
+        var navigateFragment = navigateTemplate.Render(new { retry_enabled = plan.Retry is not null }).TrimEnd();
 
         var actionLines = plan.Steps
             .Select(step => step switch

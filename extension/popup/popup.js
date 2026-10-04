@@ -238,6 +238,9 @@ let _state = {
   // Issue #222: opt-in pause between outbound requests, in seconds as typed
   // (see buildRequestDelayConfig) — persisted like proxy.
   requestDelay: { enabled: false, minSecondsText: '1', maxSecondsText: '' },
+  // Issue #223: opt-in retry with backoff — persisted like proxy, see
+  // buildRetryConfig for how the text inputs are read.
+  retry: { enabled: false, maxAttemptsText: '3', delaySecondsText: '2', exponential: true, statusCodesText: '429, 502, 503, 504' },
   // Issue #174: opt-in classic multi-page pagination — mode-independent
   // like additionalStartUrls/changeDetection/proxy above (Fields/Groups
   // only; hidden entirely for API mode, which already has its own page-
@@ -629,6 +632,7 @@ function persistState() {
       changeDetection: _state.changeDetection,
       proxy: _state.proxy,
       requestDelay: _state.requestDelay,
+      retry: _state.retry,
       pagination: _state.pagination,
       discoveredUrls: _state.discoveredUrls,
       persistentSession: _state.persistentSession,
@@ -1262,7 +1266,7 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'requestDelay', 'hardening', 'pagination', 'persistentSession', 'preflight', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'requestDelay', 'retry', 'hardening', 'pagination', 'persistentSession', 'preflight', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'pendingApiDiscoveryPartId', 'pendingApiDiscoveryActionIndex', 'pendingApiDiscoveryActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',

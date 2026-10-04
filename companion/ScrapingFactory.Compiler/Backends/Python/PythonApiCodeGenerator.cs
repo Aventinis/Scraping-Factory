@@ -31,6 +31,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
         var changeDetection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection);
         var proxy = PythonProxyLiteral.BuildContext(plan.Proxy);
         var requestDelay = PythonRequestDelayLiteral.BuildContext(plan.RequestDelay);
+        var retry = PythonRetryLiteral.BuildContext(plan.Retry);
         var hardening = PythonHardeningLiteral.BuildContext(plan.Hardening);
         var externalConfig = PythonExternalConfigLiteral.BuildContext(plan.ExternalConfig);
 
@@ -77,6 +78,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
                 change_detection = changeDetection,
                 proxy,
                 request_delay = requestDelay,
+                retry,
                 hardening,
                 external_config = externalConfig,
                 // Issue #192: unlike Container-Mode, the row-scope group
@@ -127,6 +129,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
             change_detection = changeDetection,
             proxy,
             request_delay = requestDelay,
+            retry,
             hardening,
             external_config = externalConfig,
             blueprint_mapping_literal = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),
