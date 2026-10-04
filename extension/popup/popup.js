@@ -53,6 +53,10 @@ const {
 } = typeof require !== 'undefined' ? require('./api-config-ui') : self.SFApiConfigUI;
 
 const {
+  renderApiBootstrapSection, wireApiBootstrapEvents,
+} = typeof require !== 'undefined' ? require('./api-bootstrap-ui') : self.SFApiBootstrapUI;
+
+const {
   renderGroupTree,
   renderContainerFieldModal, wireContainerModeEvents,
 } = typeof require !== 'undefined' ? require('./container-tree-ui') : self.SFContainerTreeUI;
@@ -404,6 +408,12 @@ let _state = {
   // startApiTreeFieldSearch.
   apiSearchTarget:   null,
   apiCandidates:      null, // {target, candidates} from the last primary-field search, or null
+  // Issue #220: the "Take from recording" picker's list (null = closed) and
+  // one-time bootstrap credential test values for the /generate trial run,
+  // keyed by env-var name — like fillTestValues, deliberately absent from
+  // persistState() and only ever written via patchState().
+  apiBootstrapRecordingEntries: null,
+  apiBootstrapTestValues: {},
   apiDiscoveryCandidates: null, // {target, candidates} from the last in-progress Discovery search, or null
   // {treeParentPath, target, candidates} from the last in-progress "add root
   // group"/"add sub-field" search (Issue #54) — not persisted, same as
@@ -835,6 +845,7 @@ function render() {
 
   if (_state.current === STATES.API_CONFIG && _state.apiConfigDraft) {
     renderApiConfigModals(bridge);
+    renderApiBootstrapSection(bridge);
   }
 
   if (_state.current === STATES.DONE) {
@@ -1080,6 +1091,8 @@ function wireEvents() {
   wireSettingsPanelEvents(bridge);
 
   wireApiConfigEvents(bridge);
+
+  wireApiBootstrapEvents(bridge);
 
   wireFlatModeEvents(bridge);
 

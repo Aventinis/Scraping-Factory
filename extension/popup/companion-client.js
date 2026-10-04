@@ -25,6 +25,9 @@ const { showToast, setLastError } =
 const { buildScrapingConfig, buildVerificationValues, computeScriptFileNamePatch } =
   typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
 
+const { buildBootstrapVerificationValues } =
+  typeof require !== 'undefined' ? require('./api-bootstrap') : self.SFApiBootstrap;
+
 const { getGlobalSettings } =
   typeof require !== 'undefined' ? require('../shared/global-settings') : self.SFGlobalSettings;
 
@@ -190,9 +193,13 @@ async function generate(bridge) {
   // deliberately kept out of `config` (and therefore out of the log line
   // below, buildConfigExport, and the "Report bug" log export) since none of
   // those are meant to ever see them. See fillTestValues/buildVerificationValues.
-  const verificationValues = state.engine === 'Browser'
-    ? buildVerificationValues(state.browserActions, state.fillTestValues)
-    : {};
+  // Issue #220: Api mode's bootstrap credentials get the same one-time
+  // test-value treatment, from the API_CONFIG screen's own inputs.
+  const verificationValues = state.mode === 'api'
+    ? buildBootstrapVerificationValues(state.apiConfig, state.apiBootstrapTestValues || {})
+    : state.engine === 'Browser'
+      ? buildVerificationValues(state.browserActions, state.fillTestValues)
+      : {};
   log('GENERATE request', config);
   try {
     const res = await fetch(`${companionUrl}/generate`, {

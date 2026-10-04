@@ -161,4 +161,36 @@ declare namespace SFDraft {
     name: string;
     children?: OutputBlueprintTreeNode[];
   }
+
+  // ── API mode: token/auth bootstrap (api-bootstrap.js, Issue #220) ─────────
+
+  interface ApiBootstrapPair {
+    name: string;
+    mode: 'literal' | 'env';
+    value: string;
+    envName: string;
+  }
+
+  interface ApiBootstrap {
+    name: string;
+    method: 'GET' | 'POST';
+    url: string;
+    valuePath: string;
+    bodyEncoding: 'Json' | 'Form';
+    headers: ApiBootstrapPair[];
+    bodyFields: ApiBootstrapPair[];
+  }
+
+  // One GET_API_CAPTURE_ENTRIES entry (content/api-capture.js's buildEntry).
+  interface ApiCaptureEntry {
+    id: number;
+    url: string;
+    method: string;
+    status: number;
+    contentType: string | null;
+    body: string;
+    requestHeaders?: Array<{ name: string; value: string }>;
+    requestBody?: string;
+    requestBodySkipped?: boolean;
+  }
 }

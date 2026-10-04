@@ -101,15 +101,22 @@
  * @property {ApiNodeDraft[]} [groups]
  * @property {Record<string, ApiParameterSourceDraft>} parameterSources
  * @property {Array<{name: string, value: string}>} capturedHeaders
- * @property {Record<string, {include: boolean, mode: 'literal' | 'env', envName?: string}>} headerDecisions
+ * @property {Record<string, {include: boolean, mode: 'literal' | 'env' | 'bootstrap', envName?: string, template?: string}>} headerDecisions
  * @property {'GET' | 'POST'} [method]
  * @property {ApiBodyNodeDraft} [bodyTree]
  * @property {string[]} [bodyParameterNames]
  * @property {Record<string, string>} [parameterIdToName]
  * @property {SFWire.EmbeddedJsonSource | null} [embeddedJsonSource]
  * @property {ParameterPart[]} [bodyParameters]
+ * @property {SFDraft.ApiBootstrap | null} [bootstrap]
  */
 const SFApiConfig = (function () {
+  // Issue #220: the bootstrap request's own draft→wire logic lives in its
+  // own module (api-bootstrap.js, loaded before this file — see popup.html);
+  // this file only needs it to fold the bootstrap into buildApiConfig's
+  // output and into the "Apply" gate.
+  const { BOOTSTRAP_SOURCE_KIND, buildApiBootstrap, bootstrapDraftIsComplete } =
+    typeof require !== 'undefined' ? require('./api-bootstrap') : self.SFApiBootstrap;
   const { t } = typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
 
   // Popup screen names. Lives here (rather than in popup.js, which loads
@@ -456,7 +463,7 @@ const SFApiConfig = (function () {
   // an environment variable is never embedded literally.
   /**
    * @param {Array<{name: string, value: string}>} capturedHeaders
-   * @param {Record<string, {include: boolean, mode: 'literal' | 'env', envName?: string}>} decisions
+   * @param {Record<string, {include: boolean, mode: 'literal' | 'env' | 'bootstrap', envName?: string, template?: string}>} decisions
    * @returns {SFWire.ApiHeader[]}
    */
   function buildApiHeaders(capturedHeaders, decisions) {
@@ -464,6 +471,9 @@ const SFApiConfig = (function () {
       .filter(h => decisions[h.name]?.include)
       .map((h) => {
         const decision = decisions[h.name];
+        // Issue #220: 'bootstrap' builds the header from the freshly
+        // fetched bootstrap value at runtime, e.g. "Bearer {token}".
+        if (decision.mode === 'bootstrap') return { name: h.name, template: decision.template || '' };
         return decision.mode === 'env'
           ? { name: h.name, environmentVariableName: decision.envName }
           : { name: h.name, value: h.value };
@@ -506,10 +516,15 @@ const SFApiConfig = (function () {
    */
   function buildApiConfig({
     urlParts, itemsPath, fields, groups, parameterSources, capturedHeaders, headerDecisions,
-    method, bodyTree, bodyParameterNames = [], parameterIdToName = {}, embeddedJsonSource = null,
+    method, bodyTree, bodyParameterNames = [], parameterIdToName = {}, embeddedJsonSource = null, bootstrap = null,
   }) {
     const urlTemplate = buildUrlTemplate(urlParts);
-    const variableParts = [...urlParts.pathSegments, ...urlParts.queryParams].filter(p => p.variable);
+    // Issue #220: a variable URL part carrying the bootstrap value (already
+    // renamed to the bootstrap's own name by resolveBootstrapUrlParts) is a
+    // placeholder, not a declared parameter — see api-bootstrap.js.
+    const bootstrapWire = buildApiBootstrap(bootstrap);
+    const variableParts = [...urlParts.pathSegments, ...urlParts.queryParams]
+      .filter(p => p.variable && !(bootstrapWire && p.name === bootstrapWire.name));
     const parameterNames = [...variableParts.map(p => p.name), ...bodyParameterNames];
     const parameters = parameterNames.map(name => ({ name, source: parameterSources[name] }));
     const headers = buildApiHeaders(capturedHeaders, headerDecisions);
@@ -528,6 +543,7 @@ const SFApiConfig = (function () {
       ...(headers.length > 0 ? { headers } : {}),
       ...(bodyTree ? { body: serializeBodyTree(bodyTree, parameterIdToName) } : {}),
       ...(embeddedJsonSource ? { embeddedJsonSource } : {}),
+      ...(bootstrapWire ? { bootstrap: bootstrapWire } : {}),
     };
   }
 
@@ -1066,7 +1082,18 @@ const SFApiConfig = (function () {
       : !(draft.fields || []).some(f => !f.name?.trim());
     if (!namesOk) return false;
     const parts = allParameterParts(draft);
-    if (!parts.every(p => !!p.name?.trim() && !!draft.parameterSources[p.id]?.kind)) return false;
+    // Issue #220: a bootstrap-sourced URL part takes the bootstrap's own name
+    // (see resolveBootstrapUrlParts), so its own name may stay blank — but
+    // it, and any header in bootstrap mode, need a bootstrap to exist.
+    const partOk = (/** @type {ParameterPart} */ p) => draft.parameterSources[p.id]?.kind === BOOTSTRAP_SOURCE_KIND
+      ? !!draft.bootstrap
+      : !!p.name?.trim() && !!draft.parameterSources[p.id]?.kind;
+    if (!parts.every(partOk)) return false;
+    if (!bootstrapDraftIsComplete(draft.bootstrap)) return false;
+    const bootstrapHeadersOk = Object.values(draft.headerDecisions || {}).every(decision =>
+      !decision.include || decision.mode !== 'bootstrap' ||
+      (!!draft.bootstrap && (decision.template || '').includes(`{${draft.bootstrap.name.trim()}}`)));
+    if (!bootstrapHeadersOk) return false;
     return draft.bodyTree ? bodyTreeLeavesAreBound(draft.bodyTree) : true;
   }
 

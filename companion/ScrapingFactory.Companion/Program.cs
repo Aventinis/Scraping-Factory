@@ -750,8 +750,9 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     // One-time login/test values (Issue #43) for FillAction steps, matched
     // against BrowserActions.FillAction.EnvironmentVariableName and applied
     // only to this trial subprocess — never persisted, never reaches the
-    // generator/generated script (see IR/FillVerificationValues.cs).
-    var verificationEnv = FillVerificationValues.Filter(config.BrowserActions, config.VerificationValues);
+    // generator/generated script (see IR/FillVerificationValues.cs). Also
+    // covers Api mode's bootstrap credentials (Issue #220).
+    var verificationEnv = FillVerificationValues.Filter(config.BrowserActions, config.VerificationValues, config.Api);
 
     ScriptVerificationResult verification;
     var skipReason = CheckVerificationTimeoutCap(extraTimeoutMs);

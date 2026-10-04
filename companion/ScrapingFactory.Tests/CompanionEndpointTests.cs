@@ -1247,6 +1247,63 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.Contains("def _resolve_parameter_combos(headers):", body);
     }
 
+    // Issue #220: wire-format round trip for ApiConfig.Bootstrap — a
+    // form-encoded token request whose client secret only ever arrives as a
+    // one-time verificationValues entry (never as an OS env var on the
+    // companion host), plus a "template" header splicing the token in.
+    [Fact]
+    public async Task Generate_ApiPayloadWithBootstrap_UsesVerificationValueAndReturns200()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            if (request.Url!.AbsolutePath == "/token")
+            {
+                using var reader = new StreamReader(request.InputStream);
+                var requestBody = reader.ReadToEnd();
+                return requestBody.Contains("client_secret=s3cret")
+                    ? new LocalTestServerResponse("""{ "access_token": "tok-1" }""", "application/json")
+                    : new LocalTestServerResponse("{}", "application/json", HttpStatusCode.Unauthorized);
+            }
+            if (request.Headers["Authorization"] != "Bearer tok-1")
+                return new LocalTestServerResponse("{}", "application/json", HttpStatusCode.Unauthorized);
+            return new LocalTestServerResponse("""{ "data": { "items": [ { "title": "Item" } ] } }""", "application/json");
+        });
+
+        var payload = $$"""
+            {
+              "url": "https://example.com",
+              "api": {
+                "urlTemplate": "{{server.BaseUrl}}items",
+                "itemsPath": "data.items",
+                "fields": [ { "name": "Titel", "path": "title" } ],
+                "parameters": [],
+                "headers": [ { "name": "Authorization", "template": "Bearer {token}" } ],
+                "bootstrap": {
+                  "name": "token",
+                  "method": "POST",
+                  "url": "{{server.BaseUrl}}token",
+                  "bodyEncoding": "Form",
+                  "bodyFields": [
+                    { "name": "grant_type", "value": "client_credentials" },
+                    { "name": "client_secret", "environmentVariableName": "SF_TEST_CLIENT_SECRET_220" }
+                  ],
+                  "valuePath": "access_token"
+                }
+              },
+              "verificationValues": { "SF_TEST_CLIENT_SECRET_220": "s3cret" }
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/generate", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.Contains("def _run_bootstrap():", body);
+        Assert.Contains("\"bodyEncoding\": 'Form'", body);
+        Assert.DoesNotContain("s3cret", body);
+    }
+
     // Issue #132: a full /generate trial run (real subprocess execution via
     // PythonScriptVerifier) is the only way to catch a Scriban syntax error
     // inside a template's `{{ if hardening.enabled }}` block that a test

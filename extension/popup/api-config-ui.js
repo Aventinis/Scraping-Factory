@@ -37,6 +37,10 @@ const SFApiConfigUI = (function () {
     jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
     buildApiSubtreeFromCandidate, resolveApiGroupScopePath, allParameterParts, earlierParameterNames, apiConfigDraftHasAllSourcesChosen,
   } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
+  // Issue #220: a variable URL part can take the bootstrap value as its
+  // source, and a captured header can be built from it ("Bearer {token}").
+  const { BOOTSTRAP_SOURCE_KIND, resolveBootstrapUrlParts } =
+    typeof require !== 'undefined' ? require('./api-bootstrap') : self.SFApiBootstrap;
   // Issue #216: BrowserDiscoverySource's action list reuses the exact same
   // draft shape/helpers the top-level login-flow editor already uses —
   // api-config.js can't import these itself (scraping-config-builder.js
@@ -351,7 +355,7 @@ const SFApiConfigUI = (function () {
     renderApiTree(draft.groups);
     renderApiConfigUrlParts(draft.urlParts);
     renderApiConfigParameters(draft, discoveryCandidates, discoveryTemplateEditingPartId);
-    renderApiConfigHeaders(draft.capturedHeaders, draft.headerDecisions);
+    renderApiConfigHeaders(draft.capturedHeaders, draft.headerDecisions, draft.bootstrap);
     renderBodyTree(draft);
 
     // Issue #136: clarifies why the URL segments above describe a plain page
@@ -429,7 +433,9 @@ const SFApiConfigUI = (function () {
 
       const title = document.createElement('div');
       title.className = 'row-label';
-      title.textContent = part.name ? part.name : t('apiConfig.unnamedPart');
+      title.textContent = source?.kind === BOOTSTRAP_SOURCE_KIND && draft.bootstrap
+        ? `{${draft.bootstrap.name}}`
+        : part.name ? part.name : t('apiConfig.unnamedPart');
       card.appendChild(title);
 
       const kindRow = document.createElement('div');
@@ -439,8 +445,15 @@ const SFApiConfigUI = (function () {
         discovery: t('apiConfig.sourceKindDiscovery'),
         range: t('apiConfig.sourceKindRange'),
         browserDiscovery: t('apiConfig.sourceKindBrowserDiscovery'),
+        [BOOTSTRAP_SOURCE_KIND]: t('apiBootstrap.sourceKind'),
       };
-      kindRow.innerHTML = ['staticList', 'discovery', 'range', 'browserDiscovery'].map(kind => `
+      // Issue #220: "Bootstrap value" is only offered for a URL part (never a
+      // body-only parameter — the body references the bootstrap by name
+      // directly on the wire) and only while a bootstrap is configured.
+      const isUrlPart = part.id.startsWith('path:') || part.id.startsWith('query:');
+      const sourceKinds = ['staticList', 'discovery', 'range', 'browserDiscovery'];
+      if (isUrlPart && (draft.bootstrap || source?.kind === BOOTSTRAP_SOURCE_KIND)) sourceKinds.push(BOOTSTRAP_SOURCE_KIND);
+      kindRow.innerHTML = sourceKinds.map(kind => `
         <label>
           <input type="radio" name="source-kind-${safePartId}" class="api-config-source-kind-radio"
             data-part-id="${safePartId}" value="${kind}" ${source?.kind === kind ? 'checked' : ''} />
@@ -470,6 +483,13 @@ const SFApiConfigUI = (function () {
         `;
       } else if (source?.kind === 'browserDiscovery') {
         fieldsEl.appendChild(renderBrowserDiscoverySourceFields(draft, part, source));
+      } else if (source?.kind === BOOTSTRAP_SOURCE_KIND) {
+        const note = document.createElement('p');
+        note.className = 'api-config-source-note';
+        note.textContent = draft.bootstrap
+          ? t('apiBootstrap.sourceKindNote', { placeholder: `{${draft.bootstrap.name}}` })
+          : t('apiBootstrap.sourceKindMissing');
+        fieldsEl.appendChild(note);
       }
       card.appendChild(fieldsEl);
 
@@ -709,7 +729,10 @@ const SFApiConfigUI = (function () {
     return wrap;
   }
 
-  function renderApiConfigHeaders(capturedHeaders, headerDecisions) {
+  // Issue #220: `bootstrap` (apiConfigDraft.bootstrap, or null) adds a third
+  // "From token" mode whose template (e.g. "Bearer {token}") is filled with
+  // the freshly fetched bootstrap value at runtime.
+  function renderApiConfigHeaders(capturedHeaders, headerDecisions, bootstrap = null) {
     const listEl = document.getElementById('api-config-headers');
     if (!listEl) return;
     listEl.innerHTML = '';
@@ -729,11 +752,16 @@ const SFApiConfigUI = (function () {
         (decision.include
           ? `<span class="api-config-header-mode">
                <label><input type="radio" name="header-mode-${escapeHtml(header.name)}" class="api-config-header-mode-radio" data-header-name="${escapeHtml(header.name)}" value="literal" ${decision.mode === 'literal' ? 'checked' : ''} /> ${escapeHtml(t('apiConfig.headerModeValue'))}</label>
-               <label><input type="radio" name="header-mode-${escapeHtml(header.name)}" class="api-config-header-mode-radio" data-header-name="${escapeHtml(header.name)}" value="env" ${decision.mode === 'env' ? 'checked' : ''} /> ${escapeHtml(t('apiConfig.headerModeEnv'))}</label>
-             </span>` +
+               <label><input type="radio" name="header-mode-${escapeHtml(header.name)}" class="api-config-header-mode-radio" data-header-name="${escapeHtml(header.name)}" value="env" ${decision.mode === 'env' ? 'checked' : ''} /> ${escapeHtml(t('apiConfig.headerModeEnv'))}</label>` +
+              (bootstrap || decision.mode === 'bootstrap'
+                ? `<label><input type="radio" name="header-mode-${escapeHtml(header.name)}" class="api-config-header-mode-radio" data-header-name="${escapeHtml(header.name)}" value="bootstrap" ${decision.mode === 'bootstrap' ? 'checked' : ''} /> ${escapeHtml(t('apiBootstrap.headerMode'))}</label>`
+                : '') +
+            `</span>` +
             (decision.mode === 'env'
               ? `<input type="text" class="api-config-env-name" data-header-name="${escapeHtml(header.name)}" placeholder="${escapeHtml(t('apiConfig.envNamePlaceholder'))}" value="${escapeHtml(decision.envName || '')}" />`
-              : '')
+              : decision.mode === 'bootstrap'
+                ? `<input type="text" class="api-config-header-template" data-header-name="${escapeHtml(header.name)}" placeholder="Bearer {${escapeHtml(bootstrap?.name || 'token')}}" value="${escapeHtml(decision.template || '')}" />`
+                : '')
           : '');
       listEl.appendChild(li);
     });
@@ -1238,7 +1266,9 @@ const SFApiConfigUI = (function () {
     const state = bridge.getState();
     const draft = state.apiConfigDraft;
     const defaults = API_CONFIG_SOURCE_DEFAULTS[kind];
-    const source = kind === 'range'
+    const source = kind === BOOTSTRAP_SOURCE_KIND
+      ? { kind: BOOTSTRAP_SOURCE_KIND }
+      : kind === 'range'
       ? { ...defaults, format: detectRangeFormat(defaults.type, findUrlPartValue(draft.urlParts, partId)) }
       : kind === 'browserDiscovery'
         ? { ...defaults, discoveryUrl: state.url || '' }
@@ -1310,7 +1340,16 @@ const SFApiConfigUI = (function () {
   function setApiConfigHeaderDecision(bridge, headerName, patch) {
     const draft = bridge.getState().apiConfigDraft;
     const current = draft.headerDecisions[headerName] || { include: false, mode: 'literal', envName: '' };
-    patchApiConfigDraft(bridge, { headerDecisions: { ...draft.headerDecisions, [headerName]: { ...current, ...patch } } });
+    const next = { ...current, ...patch };
+    // Issue #220: switching a header to "From token" pre-fills a sensible
+    // template — "Bearer {token}" for a recorded bearer header, else just
+    // "{token}" — instead of starting from an empty input.
+    if (patch.mode === 'bootstrap' && !next.template) {
+      const recorded = draft.capturedHeaders.find(h => h.name === headerName)?.value || '';
+      const name = draft.bootstrap?.name || 'token';
+      next.template = /^bearer\s/i.test(recorded) ? `Bearer {${name}}` : `{${name}}`;
+    }
+    patchApiConfigDraft(bridge, { headerDecisions: { ...draft.headerDecisions, [headerName]: next } });
   }
 
   // ── API-Mode request-body wiring (Issue #55, Phase B4) ──────────────────────
@@ -1415,6 +1454,10 @@ const SFApiConfigUI = (function () {
     const idToName = {};
     allParameterParts(draft).forEach((part) => {
       const source = draft.parameterSources[part.id];
+      // Issue #220: a bootstrap-sourced URL part is a placeholder for the
+      // bootstrap value, never a declared parameter (resolveBootstrapUrlParts
+      // below names it after the bootstrap instead).
+      if (source.kind === BOOTSTRAP_SOURCE_KIND) return;
       parameterSources[part.name] = source.kind === 'staticList'
         ? buildStaticListSource(source.valuesText)
         : source.kind === 'range'
@@ -1426,7 +1469,9 @@ const SFApiConfigUI = (function () {
     });
 
     const apiConfig = buildApiConfig({
-      urlParts: draft.urlParts,
+      urlParts: draft.bootstrap
+        ? resolveBootstrapUrlParts(draft.urlParts, draft.parameterSources, draft.bootstrap.name.trim())
+        : draft.urlParts,
       groups: draft.groups,
       parameterSources,
       capturedHeaders: draft.capturedHeaders,
@@ -1436,6 +1481,7 @@ const SFApiConfigUI = (function () {
       bodyParameterNames: (draft.bodyParameters || []).map(p => p.name),
       parameterIdToName: idToName,
       embeddedJsonSource: draft.embeddedJsonSource,
+      bootstrap: draft.bootstrap,
     });
 
     log('API_CONFIG confirm', apiConfig);
@@ -1821,7 +1867,9 @@ function wireApiConfigEvents(bridge) {
     const modeRadio = e.target.closest('.api-config-header-mode-radio');
     if (modeRadio) { setApiConfigHeaderDecision(bridge, modeRadio.dataset.headerName, { mode: modeRadio.value }); return; }
     const envName = e.target.closest('.api-config-env-name');
-    if (envName) setApiConfigHeaderDecision(bridge, envName.dataset.headerName, { envName: envName.value.trim() });
+    if (envName) { setApiConfigHeaderDecision(bridge, envName.dataset.headerName, { envName: envName.value.trim() }); return; }
+    const template = e.target.closest('.api-config-header-template');
+    if (template) setApiConfigHeaderDecision(bridge, template.dataset.headerName, { template: template.value });
   });
 
   // ── API-Mode request-body tree (Issue #55, Phase B4) ─────────────────────

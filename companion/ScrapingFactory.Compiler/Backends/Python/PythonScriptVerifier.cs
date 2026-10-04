@@ -216,12 +216,33 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
             if (process.ExitCode != 0 && process.ExitCode != MissingEnvVarExitCode && process.ExitCode != HardeningFailedExitCode)
             {
                 return (false,
-                    $"Script ({executableUsed}) exited with an error (exit code {process.ExitCode}): {Truncate(stderr)}",
+                    CleanScriptError(stderr)
+                        ?? $"Script ({executableUsed}) exited with an error (exit code {process.ExitCode}): {Truncate(stderr)}",
                     process.ExitCode, stderr);
             }
 
             return (true, null, process.ExitCode, stderr);
         }
+    }
+
+    // A generated script that stops deliberately (a failed API request, a
+    // failed auth bootstrap, a broken external config file, ...) prints one
+    // or more self-explanatory "ERROR: ..." lines to stderr and exits with
+    // its own dedicated code — those lines are what the user should see,
+    // not a "Script exited with an error (exit code N)" wrapper around the
+    // raw stderr. Anything that looks like an uncaught crash (a Python
+    // traceback) or has no such line keeps the generic, full-detail message,
+    // since there the raw stderr is the only clue to what went wrong.
+    private static string? CleanScriptError(string stderr)
+    {
+        if (stderr.Contains("Traceback (most recent call last)", StringComparison.Ordinal))
+            return null;
+        var errorLines = stderr.Split('\n')
+            .Select(line => line.TrimEnd('\r'))
+            .Where(line => line.StartsWith("ERROR: ", StringComparison.Ordinal))
+            .Select(line => line["ERROR: ".Length..])
+            .ToList();
+        return errorLines.Count == 0 ? null : Truncate(string.Join("\n", errorLines));
     }
 
     // CSV output check, factored out of VerifyAsync so VerifyBlocksAsync can

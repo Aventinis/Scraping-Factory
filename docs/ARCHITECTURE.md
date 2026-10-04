@@ -349,6 +349,48 @@ API-mode request (fetch-mechanism-agnostic by design).
 - Templates: `scraper_api.py.j2` and `scraper_api_grouped.py.j2`
   (`EMBEDDED_JSON_SOURCE` constant, `_extract_embedded_json`)
 
+### 2.5b API mode — token/auth bootstrap value (Issue #220)
+
+For JSON APIs that only answer with a short-lived credential (bearer token,
+signed URL parameter, nonce) obtained from a separate login/token request. The
+generated script sends that one bootstrap request at the start of every run —
+before any parameter is resolved — extracts a single value via a JSON path,
+and splices it into the main request's headers (an `ApiHeader.Template` such as
+`"Bearer {token}"`), its URL (`{token}` in `UrlTemplate`), a discovery request's
+template, or a body variable. Deliberately *not* an `ApiParameter`: parameter
+values become output columns and appear in "Skipped (404)" lines, and a live
+credential must reach neither (the script also masks it in every URL it
+prints). Credentials in the bootstrap request's own body/headers are env-var
+names only; `/generate`'s trial run takes one-time test values for them via
+`verificationValues` (§2.6's Issue #43 mechanism). The API_CONFIG screen's
+"Take from recording" button adopts a recorded login request wholesale and
+auto-detects the token's JSON path by finding the response value the main
+request actually sends.
+
+- Extension: `popup/api-bootstrap.js` (pure draft/wire logic:
+  `bootstrapDraftFromCaptureEntry`, `detectTokenInResponse`,
+  `wireTokenIntoMainRequest`, `buildApiBootstrap`, `resolveBootstrapUrlParts`,
+  `buildBootstrapVerificationValues`), `popup/api-bootstrap-ui.js` (the
+  section's render/wiring, recording picker), `popup/api-config.js`
+  (`buildApiConfig`'s `bootstrap` param, `buildApiHeaders`'s `'bootstrap'`
+  mode, the Apply gate), `popup/api-config-ui.js` (header "From token" mode,
+  the "Token value" URL-part source, `confirmApiConfig`),
+  `popup/companion-client.js` (bootstrap test values → `verificationValues`),
+  `popup/screens/api-config.html` (`#api-bootstrap-section`)
+- Companion: `IR/ApiConfig.cs` (`ApiConfig.Bootstrap`, `ApiBootstrap`,
+  `ApiBootstrapBodyField`, `ApiBootstrapBodyEncoding`, `ApiHeader.Template`),
+  `ScrapingPlanValidator.cs` (`ValidateApiBootstrap`, `ValidateApiHeaders`'s
+  template check, bootstrap name accepted as a placeholder),
+  `IR/FillVerificationValues.cs` (bootstrap env vars accepted),
+  `Backends/Python/PythonApiConfigLiteral.cs` (`RenderBootstrap`, template
+  headers), `PythonApiCodeGenerator.cs` (`has_bootstrap`/`bootstrap_literal`)
+- Templates: `scraper_api.py.j2` and `scraper_api_grouped.py.j2` (`BOOTSTRAP`,
+  `_run_bootstrap`, `_redact_bootstrap`, `EXIT_BOOTSTRAP_FAILED = 6`)
+- Tests: `ApiBootstrapValidatorTests.cs`, `ApiBootstrapEndToEndTests.cs`,
+  `api-bootstrap.test.js`, `api-bootstrap-ui.test.js`; real-browser check
+  `e2e/examples/issue-220-api-token-bootstrap-check.js` against the
+  `test-pages/api-token-bootstrap` fixture
+
 ### 2.6 Browser engine, browser actions & login flows (Issues #41/#42/#43)
 
 Adds an optional Playwright-based rendering engine (real Chromium, executes the
@@ -1407,9 +1449,10 @@ compile time anywhere.
 |---|---|---|---|
 | Flat field | `popup.js`: `addField()`, `buildScrapingConfig()`'s `fields.map(...)` | `{name, selector, attribute?, framePath?}` | `IR/ScrapingConfig.cs`: `ScrapingField` |
 | Container tree node | `container-tree.js`: `buildGroupNode`/`buildFieldNode`, `serializeGroupTree` | `{name,selector,repeating,children:[...],framePath?}` or `{name,selector,mode,attribute?,framePath?}` | `IR/ContainerNode.cs`: `GroupNode`/`DataFieldNode` (via `ContainerNodeJsonConverter`) |
-| API config (top level) | `api-config.js`: `buildApiConfig()` | `{urlTemplate, method?, parameters:[...], headers?, itemsPath+fields \| groups, body?, embeddedJsonSource?}` | `IR/ApiConfig.cs`: `ApiConfig` |
+| API config (top level) | `api-config.js`: `buildApiConfig()` | `{urlTemplate, method?, parameters:[...], headers?, itemsPath+fields \| groups, body?, embeddedJsonSource?, bootstrap?}` | `IR/ApiConfig.cs`: `ApiConfig` |
 | API parameter source | `api-config.js`: `buildStaticListSource`/`buildDiscoverySource`/`buildRangeSource` | `{kind:"staticList"\|"discovery"\|"range", ...}` | `IR/ApiConfig.cs`: `ApiParameterSource` (`[JsonPolymorphic]`) |
 | API embedded JSON source (Issue #136) | `api-config-ui.js`: `confirmEmbeddedJsonFieldCandidate()` (`{scriptSelector}`, stamped from `content-script.js`'s `scriptTagSelector`) | `{scriptSelector}` | `IR/ApiConfig.cs`: `EmbeddedJsonSource` (plain optional object, no converter) |
+| API token/auth bootstrap (Issue #220) | `api-bootstrap.js`: `buildApiBootstrap()` (draft `{name,method,url,valuePath,bodyEncoding,headers,bodyFields}`) | `{name, method?, url, headers?, bodyFields?, bodyEncoding?, valuePath}` | `IR/ApiConfig.cs`: `ApiBootstrap` (plain optional object, no converter) |
 | API response tree node | `api-config.js`: `buildApiGroupDraft`/`buildApiFieldDraft`, `serializeApiTree` | `{name,path,children:[...]}` or `{name,path}` | `IR/ApiConfig.cs`: `ApiGroup`/`ApiField` (via `ApiNodeJsonConverter`) |
 | API request body node | `api-config.js`: `jsonValueToBodyDraft`/`serializeBodyTree` | `{properties:{...}}` / `{items:[...]}` / `{kind,stringValue\|numberValue\|boolValue}` / `{parameterName, coerceTo?}` | `IR/ApiBodyNode.cs`: `ApiBodyObject`/`Array`/`Literal`/`Variable` (via `ApiBodyNodeJsonConverter`) |
 | Browser action | `popup.js`: `addBrowserAction`/`serializeBrowserActions` | `{kind:"waitFor"\|"fill"\|"click"\|"scroll", selector, ...}` | `IR/BrowserAction.cs`: `WaitForAction`/`FillAction`/`ClickAction`/`ScrollAction` (`[JsonPolymorphic]`) |

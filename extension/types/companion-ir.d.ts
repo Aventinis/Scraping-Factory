@@ -229,6 +229,24 @@ declare namespace SFWire {
     groups?: ApiGroup[] | null;
     body?: ApiBodyNode;
     embeddedJsonSource?: EmbeddedJsonSource;
+    bootstrap?: ApiBootstrap;
+  }
+
+  // Issue #220: see ApiConfig.Bootstrap in IR/ApiConfig.cs.
+  interface ApiBootstrap {
+    name: string;
+    method?: 'GET' | 'POST';
+    url: string;
+    headers?: ApiHeader[];
+    bodyFields?: ApiBootstrapBodyField[];
+    bodyEncoding?: 'Json' | 'Form';
+    valuePath: string;
+  }
+
+  interface ApiBootstrapBodyField {
+    name: string;
+    value?: string | null;
+    environmentVariableName?: string | null;
   }
 
   interface EmbeddedJsonSource {
@@ -239,6 +257,7 @@ declare namespace SFWire {
     name: string;
     value?: string | null;
     environmentVariableName?: string | null;
+    template?: string | null;
   }
 
   interface ApiParameter {
