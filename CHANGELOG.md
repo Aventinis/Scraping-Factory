@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.16.7](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.6...v1.16.7) (2026-10-04)
+
+
+### Features
+
+* **api-bootstrap:** accept verification values for bootstrap credentials ([096357e](https://github.com/Aventinis/Scraping-Factory/commit/096357ee5dfdcd5a26669612c7aa6e14c9c93ca3))
+* **api-bootstrap:** add ApiBootstrap IR and validation ([8f9498f](https://github.com/Aventinis/Scraping-Factory/commit/8f9498f49ef870664024d24970d857b8eb3d1def))
+* **api-bootstrap:** add auth bootstrap section with take-from-recording picker ([b1afe81](https://github.com/Aventinis/Scraping-Factory/commit/b1afe815431d2b9611ca1d381fbed4f3473c9841))
+* **api-bootstrap:** add bootstrap draft/wire logic and fold it into buildApiConfig ([f29268f](https://github.com/Aventinis/Scraping-Factory/commit/f29268f97dff53588cb892c85954442af8105c6f))
+* **api-bootstrap:** fetch bootstrap value at runtime in API templates ([23ce94c](https://github.com/Aventinis/Scraping-Factory/commit/23ce94c362e38c3d1f9383243efd5ece3d766458))
+* token/auth bootstrap value for API mode requests (Issue [#220](https://github.com/Aventinis/Scraping-Factory/issues/220)) ([5ffc1da](https://github.com/Aventinis/Scraping-Factory/commit/5ffc1da9cbb587a70cd099812059e85b9ed1c39e))
+
+
+### Bug Fixes
+
+* **api:** report failed API requests as clean, actionable errors ([9a0a8ba](https://github.com/Aventinis/Scraping-Factory/commit/9a0a8ba47b39de2ddef768c41fd4b3fe72dd7483))
+
 ## [1.16.6](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.5...v1.16.6) (2026-10-04)
 
 
