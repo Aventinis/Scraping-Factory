@@ -163,6 +163,17 @@ function renderSettingsPanel(bridge) {
     document.getElementById('btn-hardening-required-fields-warning')?.classList.toggle('active', state.hardening.requiredFields.severity === 'Warning');
     document.getElementById('btn-hardening-required-fields-error')?.classList.toggle('active', state.hardening.requiredFields.severity === 'Error');
     renderHardeningRequiredFieldsList(bridge);
+
+    // Issue #219: opt-in preflight check — a plain boolean (no sub-fields),
+    // same shape as persistentSession/externalConfig. Hidden for the same
+    // three modes DiscoveredUrls already hides for (Api has no single fixed
+    // start URL to preflight-check; Combined/Blocks have no single start URL
+    // of their own at the outer level either).
+    document.getElementById('preflight-toggle-row')?.classList.toggle(
+      'hidden', state.mode === 'api' || state.mode === 'combined' || state.mode === 'blocks',
+    );
+    const preflightToggle = document.getElementById('toggle-preflight');
+    if (preflightToggle) preflightToggle.checked = state.preflight;
 }
 
 // Issue #130: one row per _state.hardening.nullRate entry — a field
@@ -279,6 +290,12 @@ function wireSettingsPanelEvents(bridge) {
   // (no sub-fields), unlike proxy/pagination's { enabled, ... } shape.
   document.getElementById('toggle-persistent-session')?.addEventListener('change', (e) => {
     bridge.setState(bridge.getState().current, { persistentSession: e.target.checked });
+  });
+
+  // Issue #219: opt-in preflight check — same plain-boolean shape as
+  // persistentSession above.
+  document.getElementById('toggle-preflight')?.addEventListener('change', (e) => {
+    bridge.setState(bridge.getState().current, { preflight: e.target.checked });
   });
 
   // Issue #88: opt-in proxy support.

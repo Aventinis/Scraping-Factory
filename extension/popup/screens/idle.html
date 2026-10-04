@@ -553,6 +553,22 @@
               </div>
             </div>
           </div>
+          <!-- Issue #219: opt-in preflight check — a single cheap HEAD
+               request against the page above, run before the main
+               extraction phase even starts, so an unchanged target (or one
+               that's temporarily unreachable) doesn't need the full cost of
+               a real scrape on the next scheduled run. A plain on/off
+               switch, no sub-fields — which ETag/Last-Modified value counts
+               as "changed" is tracked entirely by the generated script's
+               own sidecar file. Hidden entirely for API/Combined/Blocks
+               mode (see render()'s own #preflight-toggle-row toggle), same
+               reasoning as #additional-urls-row/#pagination-toggle-row/
+               #discovered-urls-toggle-row above. -->
+          <label class="output-settings-toggle" id="preflight-toggle-row">
+            <input type="checkbox" id="toggle-preflight" />
+            <span data-i18n="idle.preflightToggle"></span>
+          </label>
+          <p class="preview-summary" data-i18n="idle.preflightHint"></p>
         </div>
       </div>
       <!-- Filenames last: a final naming step right before Export/Generate,

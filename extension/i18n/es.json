@@ -172,6 +172,8 @@
     "hardeningBlockingPhrasesPlaceholder": "p. ej. \"Access Denied\", \"Por favor verifica que eres humano\"",
     "hardeningRequiredFieldsToggle": "Exigir campos (descartar filas incompletas)",
     "hardeningRequiredFieldsAddBtn": "+ Añadir campo",
+    "preflightToggle": "Comprobar antes si la página ha cambiado y omitir la ejecución si no",
+    "preflightHint": "Envía una solicitud rápida a la página antes de iniciar el scraping real. Si no ha cambiado nada desde la última ejecución, o la página no está accesible en este momento, la ejecución se omite sin el coste de un scraping completo.",
     "modeBlocks": "Bloques",
     "blocksHint": "Crea varios bloques de extracción independientes (planos o de contenedor, combinados libremente) que comparten la navegación de esta página; cada uno escribe su propio archivo de salida en una sola ejecución del script.",
     "blocksNameLabel": "Nombre del bloque",
