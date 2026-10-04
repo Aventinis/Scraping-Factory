@@ -710,6 +710,34 @@ describe('buildScrapingConfig (discoveredUrls, Issue #218)', () => {
   });
 });
 
+// Issue #219: preflight is appended as the very last positional parameter
+// (after discoveredUrls, see buildScrapingConfig's own doc comment), same
+// "spell out every intervening default" style as the discoveredUrls tests
+// just above.
+describe('buildScrapingConfig (preflight, Issue #219)', () => {
+  test('omits preflight entirely when disabled (the default)', () => {
+    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    expect(result.preflight).toBeUndefined();
+  });
+
+  test('includes preflight: true when enabled', () => {
+    const result = buildScrapingConfig(
+      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
+      false, [], null, null, null, null, false, false, false, null, null, null, [], {}, 'Flat', [], {}, null, true,
+    );
+    expect(result.preflight).toBe(true);
+  });
+
+  test('works the same way for container mode', () => {
+    const groups = [buildGroupNode('Kategorie', 'section', true)];
+    const containerResult = buildScrapingConfig(
+      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null,
+      null, null, false, false, false, null, null, null, [], {}, 'Flat', [], {}, null, true,
+    );
+    expect(containerResult.preflight).toBe(true);
+  });
+});
+
 // Issue #175
 describe('buildScrapingConfig (persistentSession, Issue #175)', () => {
   test('omits persistentSession entirely when false (the default)', () => {
