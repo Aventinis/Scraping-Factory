@@ -48,6 +48,10 @@ builder.Services.AddSingleton<SavedConfigStore>();
 // doc comment for why this isn't just a third table there.
 builder.Services.AddSingleton<OutputBlueprintStore>();
 
+// Issue #279: same lazy-construction reasoning, its own SQLite file — see
+// TransformPresetStore's own doc comment.
+builder.Services.AddSingleton<TransformPresetStore>();
+
 var app = builder.Build();
 
 app.UseCors();
@@ -315,6 +319,72 @@ app.MapPut("/blueprints/{id:long}", (long id, SaveBlueprintRequest? request, Out
 
 app.MapDelete("/blueprints/{id:long}", (long id, OutputBlueprintStore store) =>
     store.Delete(id) ? Results.NoContent() : Results.NotFound(new { error = "Output blueprint not found." }));
+
+// Issue #279: reusable, named transform-chain presets — see
+// TransformPresetStore. A preset is validated with the exact same rules a
+// field's own chain gets at /generate time (ScrapingPlanValidator, via a
+// throwaway one-field plan, so FieldTransformValidator's regex/format/onError
+// checks apply unchanged), plus two preset-specific ones: at least one step,
+// and no combineFields/splitField — those reference *other* fields by name,
+// which only means something inside one specific field list, never as a
+// reusable chain applied to arbitrary fields.
+static string? ValidateTransformPresetChain(List<FieldTransform>? transforms)
+{
+    const string PresetFieldName = "__transform_preset__";
+    if (transforms is not { Count: > 0 })
+        return "A preset needs at least one transform step.";
+    if (transforms.Any(t => t is null))
+        return "A preset contains an invalid transform step.";
+    if (transforms.Any(t => t is CombineFieldsTransform or SplitFieldTransform))
+        return "Combine/split steps reference other fields by name and can't be part of a reusable preset.";
+
+    var plan = new ScrapingPlan
+    {
+        Steps =
+        [
+            new NavigateStep { Urls = ["https://example.com"] },
+            new ExtractStep { Name = PresetFieldName, Selector = "*", Transforms = transforms },
+        ],
+    };
+    var result = ScrapingPlanValidator.Validate(plan);
+    // The validator words its errors per field ("... for field 'x'") — the
+    // throwaway field's label is swapped for wording that fits a preset.
+    return result.Success ? null : result.Error?.Replace($"field '{PresetFieldName}'", "this preset");
+}
+
+app.MapPost("/transform-presets", (SaveTransformPresetRequest? request, TransformPresetStore store) =>
+{
+    var name = request?.Name?.Trim();
+    if (string.IsNullOrWhiteSpace(name))
+        return Results.BadRequest(new { error = "Name is required." });
+    var chainError = ValidateTransformPresetChain(request!.Transforms);
+    if (chainError is not null)
+        return Results.BadRequest(new { error = chainError });
+    if (store.NameTaken(name))
+        return Results.Conflict(new { error = $"A preset named '{name}' already exists." });
+
+    var saved = store.Save(name, request.Transforms!);
+    return Results.Created($"/transform-presets/{saved.Id}", saved);
+});
+
+app.MapGet("/transform-presets", (TransformPresetStore store) => Results.Ok(store.ListAll()));
+
+app.MapPut("/transform-presets/{id:long}", (long id, RenameTransformPresetRequest? request, TransformPresetStore store) =>
+{
+    if (!store.Exists(id))
+        return Results.NotFound(new { error = "Transform preset not found." });
+    var name = request?.Name?.Trim();
+    if (string.IsNullOrWhiteSpace(name))
+        return Results.BadRequest(new { error = "Name is required." });
+    if (store.NameTaken(name, id))
+        return Results.Conflict(new { error = $"A preset named '{name}' already exists." });
+
+    store.Rename(id, name);
+    return Results.Ok(new { id, name });
+});
+
+app.MapDelete("/transform-presets/{id:long}", (long id, TransformPresetStore store) =>
+    store.Delete(id) ? Results.NoContent() : Results.NotFound(new { error = "Transform preset not found." }));
 
 // Flat-Mode (Fields → Csv), Container-Mode (Groups → Xml) and API-Mode
 // (Api → Csv) are strictly separate — mixing any two in one request would
@@ -826,6 +896,19 @@ public sealed class ReplayHardeningRequest
 {
     public List<HardeningCheck>? Checks { get; set; }
     public string? CompareBasis { get; set; }
+}
+
+// Issue #279: POST /transform-presets body.
+public sealed class SaveTransformPresetRequest
+{
+    public string? Name { get; set; }
+    public List<FieldTransform>? Transforms { get; set; }
+}
+
+// Issue #279: PUT /transform-presets/{id} body (rename only).
+public sealed class RenameTransformPresetRequest
+{
+    public string? Name { get; set; }
 }
 
 // Issue #191: POST/PUT /blueprints body.

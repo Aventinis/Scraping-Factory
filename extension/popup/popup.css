@@ -872,3 +872,15 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
 .api-bootstrap-recording-entry.likely { border-left: 3px solid var(--color-success); }
 .api-config-header-template { width: 120px; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-family: monospace; }
 .api-config-source-note { margin: 4px 0 0; font-size: 11px; color: var(--color-text-muted); }
+
+/* ── Transform-chain presets (Issue #279) ────────────────────────────────── */
+.transform-preset-controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.transform-preset-controls select { flex: 1; min-width: 0; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+.transform-preset-name-input { flex: 1; min-width: 0; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+.transform-preset-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 6px 8px; margin-bottom: 4px; background: var(--color-surface-subtle); border-radius: var(--radius-md); }
+.transform-preset-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.transform-preset-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.transform-preset-summary { font-size: 11px; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.transform-preset-rename-input { font-size: 12px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+.transform-preset-actions { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+.transform-preset-delete-prompt { font-size: 11px; }

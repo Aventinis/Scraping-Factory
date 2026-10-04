@@ -344,6 +344,27 @@
       "apostropheGrouped": "1'234.56 (CH)"
     }
   },
+  "transformPresets": {
+    "applyPlaceholder": "Apply preset …",
+    "builtinSuffix": "(built-in)",
+    "builtinPriceCommaDecimal": "Clean up price (1.234,56)",
+    "builtinPriceDotDecimal": "Clean up price (1,234.56)",
+    "saveBtn": "Save as preset",
+    "namePlaceholder": "Preset name",
+    "saveConfirm": "Save",
+    "saved": "Preset \"{name}\" saved.",
+    "saveFailed": "Couldn't save the preset: {error}",
+    "deleteFailed": "Couldn't delete the preset: {error}",
+    "saveNotPossibleHint": "Add at least one complete transformation first (combine/split steps can't be saved as a preset).",
+    "saveUnavailableHint": "The companion isn't reachable or is too old — your own presets aren't available right now.",
+    "settingsTitle": "Transformation presets",
+    "settingsHint": "Save a transformation chain from a field's dialog with \"Save as preset\", then apply it to any field via \"Apply preset …\".",
+    "unavailableHint": "Your own presets aren't available (companion unreachable or too old) — only the built-in ones are shown.",
+    "renameBtn": "Rename",
+    "deleteConfirmPrompt": "Delete?",
+    "deleteYes": "Yes",
+    "deleteNo": "No"
+  },
   "generating": {
     "message": "Generating script…"
   },

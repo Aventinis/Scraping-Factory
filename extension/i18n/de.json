@@ -344,6 +344,27 @@
       "apostropheGrouped": "1'234.56 (CH)"
     }
   },
+  "transformPresets": {
+    "applyPlaceholder": "Vorlage anwenden …",
+    "builtinSuffix": "(mitgeliefert)",
+    "builtinPriceCommaDecimal": "Preis bereinigen (1.234,56)",
+    "builtinPriceDotDecimal": "Preis bereinigen (1,234.56)",
+    "saveBtn": "Als Vorlage speichern",
+    "namePlaceholder": "Name der Vorlage",
+    "saveConfirm": "Speichern",
+    "saved": "Vorlage „{name}“ gespeichert.",
+    "saveFailed": "Vorlage konnte nicht gespeichert werden: {error}",
+    "deleteFailed": "Vorlage konnte nicht gelöscht werden: {error}",
+    "saveNotPossibleHint": "Erst mindestens eine vollständige Transformation hinzufügen (Kombinieren/Aufteilen lassen sich nicht als Vorlage speichern).",
+    "saveUnavailableHint": "Der Companion ist nicht erreichbar oder zu alt — eigene Vorlagen sind gerade nicht verfügbar.",
+    "settingsTitle": "Transformations-Vorlagen",
+    "settingsHint": "Speichere eine Transformationskette im Feld-Dialog mit „Als Vorlage speichern“ und wende sie bei jedem Feld über „Vorlage anwenden …“ an.",
+    "unavailableHint": "Eigene Vorlagen sind nicht verfügbar (Companion nicht erreichbar oder zu alt) — nur die mitgelieferten werden angezeigt.",
+    "renameBtn": "Umbenennen",
+    "deleteConfirmPrompt": "Löschen?",
+    "deleteYes": "Ja",
+    "deleteNo": "Nein"
+  },
   "generating": {
     "message": "Generiere Skript…"
   },
