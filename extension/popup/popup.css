@@ -884,3 +884,7 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
 .transform-preset-rename-input { font-size: 12px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
 .transform-preset-actions { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
 .transform-preset-delete-prompt { font-size: 11px; }
+
+/* ── Pause between requests (Issue #222) ─────────────────────────────────── */
+.request-delay-row { display: flex; align-items: center; gap: 6px; }
+.request-delay-row input { width: 56px; flex: 0 0 auto; }

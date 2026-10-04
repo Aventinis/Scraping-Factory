@@ -43,6 +43,7 @@ declare namespace SFWire {
     includeOutputFile?: boolean;
     changeDetection?: ChangeDetectionConfig;
     proxy?: ProxyConfig;
+    requestDelay?: RequestDelayConfig;
     hardening?: HardeningCheck[];
     pagination?: PaginationConfig;
     discoveredUrls?: DiscoveredUrlsConfig;
@@ -167,6 +168,12 @@ declare namespace SFWire {
 
   interface ProxyConfig {
     environmentVariableName: string;
+  }
+
+  // Issue #222: see IR/RequestDelayConfig.cs.
+  interface RequestDelayConfig {
+    minMs: number;
+    maxMs: number;
   }
 
   // ── Pagination (PaginationConfig.cs) ─────────────────────────────────────

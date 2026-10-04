@@ -127,6 +127,22 @@ const SFConfigImport = (function () {
     return wire ? { enabled: true, envVar: wire.environmentVariableName || '' } : { enabled: false, envVar: '' };
   }
 
+  // Issue #222: reverse of buildRequestDelayConfig — milliseconds back into
+  // the popup's two "seconds" text inputs (a fixed pause leaves "to" blank).
+  /**
+   * @param {SFWire.RequestDelayConfig | null | undefined} wire
+   * @returns {SFDraft.RequestDelayState}
+   */
+  function applyRequestDelayConfig(wire) {
+    if (!wire) return { enabled: false, minSecondsText: '1', maxSecondsText: '' };
+    const seconds = (/** @type {number} */ ms) => String(Math.round(ms) / 1000);
+    return {
+      enabled: true,
+      minSecondsText: seconds(wire.minMs ?? 0),
+      maxSecondsText: (wire.maxMs ?? wire.minMs) === wire.minMs ? '' : seconds(wire.maxMs ?? 0),
+    };
+  }
+
   // Reverse of buildPaginationConfig.
   /**
    * @param {SFWire.PaginationConfig | null | undefined} wire
@@ -322,6 +338,7 @@ const SFConfigImport = (function () {
         additionalStartUrls: [],
         changeDetection: applyChangeDetectionConfig(null),
         proxy: applyProxyConfig(null),
+        requestDelay: applyRequestDelayConfig(null),
         pagination: applyPaginationConfig(null),
         discoveredUrls: applyDiscoveredUrlsConfig(null),
         hardening: applyHardeningConfig(null),
@@ -365,6 +382,7 @@ const SFConfigImport = (function () {
         additionalStartUrls: config.additionalUrls || [],
         changeDetection: applyChangeDetectionConfig(null),
         proxy: applyProxyConfig(config.proxy),
+        requestDelay: applyRequestDelayConfig(config.requestDelay),
         pagination: applyPaginationConfig(config.pagination),
         // Issue #218: never present on a Blocks wire config (rejected
         // server-side, not designed for this mode's multi-output shape yet).
@@ -405,6 +423,7 @@ const SFConfigImport = (function () {
       additionalStartUrls: config.additionalUrls || [],
       changeDetection: applyChangeDetectionConfig(config.changeDetection),
       proxy: applyProxyConfig(config.proxy),
+      requestDelay: applyRequestDelayConfig(config.requestDelay),
       pagination: applyPaginationConfig(config.pagination),
       discoveredUrls: applyDiscoveredUrlsConfig(config.discoveredUrls),
       hardening: applyHardeningConfig(config.hardening),

@@ -48,6 +48,15 @@ function renderSettingsPanel(bridge) {
     }
 
     // Issue #88: opt-in proxy support.
+    // Issue #222: opt-in pause between requests.
+    const requestDelayToggle = document.getElementById('toggle-request-delay');
+    if (requestDelayToggle) requestDelayToggle.checked = state.requestDelay.enabled;
+    document.getElementById('request-delay-config')?.classList.toggle('hidden', !state.requestDelay.enabled);
+    [['input-request-delay-min', 'minSecondsText'], ['input-request-delay-max', 'maxSecondsText']].forEach(([id, key]) => {
+      const input = /** @type {HTMLInputElement | null} */ (document.getElementById(id));
+      if (input && document.activeElement !== input) input.value = state.requestDelay[key];
+    });
+
     const proxyToggle = document.getElementById('toggle-proxy');
     if (proxyToggle) proxyToggle.checked = state.proxy.enabled;
     document.getElementById('proxy-config')?.classList.toggle('hidden', !state.proxy.enabled);
@@ -296,6 +305,17 @@ function wireSettingsPanelEvents(bridge) {
   // persistentSession above.
   document.getElementById('toggle-preflight')?.addEventListener('change', (e) => {
     bridge.setState(bridge.getState().current, { preflight: e.target.checked });
+  });
+
+  // Issue #222: opt-in pause between requests.
+  document.getElementById('toggle-request-delay')?.addEventListener('change', (e) => {
+    bridge.setState(bridge.getState().current, { requestDelay: { ...bridge.getState().requestDelay, enabled: e.target.checked } });
+  });
+  document.getElementById('input-request-delay-min')?.addEventListener('input', (e) => {
+    bridge.setState(bridge.getState().current, { requestDelay: { ...bridge.getState().requestDelay, minSecondsText: e.target.value } });
+  });
+  document.getElementById('input-request-delay-max')?.addEventListener('input', (e) => {
+    bridge.setState(bridge.getState().current, { requestDelay: { ...bridge.getState().requestDelay, maxSecondsText: e.target.value } });
   });
 
   // Issue #88: opt-in proxy support.
