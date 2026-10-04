@@ -55,6 +55,7 @@ internal static class PythonScrapingContextBuilder
             ["hidden_field_names_literal"] = PythonLiteral.StrList(PythonGroupTreeLiteral.CollectHiddenFieldNames(groupStep.Roots)),
             ["change_detection"] = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection),
             ["proxy"] = PythonProxyLiteral.BuildContext(plan.Proxy),
+            ["request_delay"] = PythonRequestDelayLiteral.BuildContext(plan.RequestDelay),
             ["hardening"] = PythonHardeningLiteral.BuildContext(plan.Hardening),
             ["pagination"] = PythonPaginationLiteral.BuildContext(plan.Pagination),
             ["discovered_urls"] = PythonDiscoveredUrlsLiteral.BuildContext(plan.DiscoveredUrls),
@@ -119,6 +120,7 @@ internal static class PythonScrapingContextBuilder
             ["download_enabled"] = extractSteps.Any(step => step.Download),
             ["change_detection"] = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection),
             ["proxy"] = PythonProxyLiteral.BuildContext(plan.Proxy),
+            ["request_delay"] = PythonRequestDelayLiteral.BuildContext(plan.RequestDelay),
             ["hardening"] = PythonHardeningLiteral.BuildContext(plan.Hardening),
             ["pagination"] = PythonPaginationLiteral.BuildContext(plan.Pagination),
             ["discovered_urls"] = PythonDiscoveredUrlsLiteral.BuildContext(plan.DiscoveredUrls),
@@ -150,6 +152,7 @@ internal static class PythonScrapingContextBuilder
             ["hardening_has_baseline_any"] = blockStep.Blocks.Any(b => b.Hardening?.Any(check => check is BaselineCheck) == true),
             ["change_detection_any"] = blockStep.Blocks.Any(b => b.ChangeDetection is not null),
             ["proxy"] = PythonProxyLiteral.BuildContext(plan.Proxy),
+            ["request_delay"] = PythonRequestDelayLiteral.BuildContext(plan.RequestDelay),
             ["pagination"] = PythonPaginationLiteral.BuildContext(plan.Pagination),
             ["script_filename"] = plan.ScriptFileName,
         };

@@ -573,6 +573,8 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
             return Results.BadRequest(new { error = "ChangeDetection is not supported on a Combined request — set it on each component's own config instead." });
         if (config.Proxy is not null)
             return Results.BadRequest(new { error = "Proxy is not supported on a Combined request — set it on each component's own config instead." });
+        if (config.RequestDelay is not null)
+            return Results.BadRequest(new { error = "RequestDelay is not supported on a Combined request — set it on each component's own config instead." });
         if (config.Hardening is { Count: > 0 })
             return Results.BadRequest(new { error = "Hardening is not supported on a Combined request — set it on each component's own config instead." });
         if (config.PersistentSession == true)

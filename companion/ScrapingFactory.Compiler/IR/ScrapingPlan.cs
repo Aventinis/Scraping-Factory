@@ -26,6 +26,11 @@ public sealed class ScrapingPlan
     // ScrapingConfig.Proxy by ScrapingPlanBuilder — see IR/ProxyConfig.cs.
     public ProxyConfig? Proxy { get; init; }
 
+    // Issue #222: mode-independent, carried through unchanged from
+    // ScrapingConfig.RequestDelay by ScrapingPlanBuilder — see
+    // IR/RequestDelayConfig.cs.
+    public RequestDelayConfig? RequestDelay { get; init; }
+
     // Issue #129: mode-independent, carried through unchanged from
     // ScrapingConfig.Hardening by ScrapingPlanBuilder — see
     // IR/HardeningCheck.cs.
@@ -83,6 +88,7 @@ public sealed class ScrapingPlan
         OutputFileBaseName = outputFileBaseName,
         ChangeDetection = ChangeDetection,
         Proxy = Proxy,
+        RequestDelay = RequestDelay,
         Hardening = Hardening,
         Pagination = Pagination,
         DiscoveredUrls = DiscoveredUrls,

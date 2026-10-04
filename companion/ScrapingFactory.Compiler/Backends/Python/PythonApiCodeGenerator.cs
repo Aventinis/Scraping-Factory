@@ -30,6 +30,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
         // runtime walk (_extract_api_group) consumes it.
         var changeDetection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection);
         var proxy = PythonProxyLiteral.BuildContext(plan.Proxy);
+        var requestDelay = PythonRequestDelayLiteral.BuildContext(plan.RequestDelay);
         var hardening = PythonHardeningLiteral.BuildContext(plan.Hardening);
         var externalConfig = PythonExternalConfigLiteral.BuildContext(plan.ExternalConfig);
 
@@ -75,6 +76,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
                 output_is_json = plan.OutputFormat == OutputFormat.Json,
                 change_detection = changeDetection,
                 proxy,
+                request_delay = requestDelay,
                 hardening,
                 external_config = externalConfig,
                 // Issue #192: unlike Container-Mode, the row-scope group
@@ -124,6 +126,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
             output_is_json = plan.OutputFormat == OutputFormat.Json,
             change_detection = changeDetection,
             proxy,
+            request_delay = requestDelay,
             hardening,
             external_config = externalConfig,
             blueprint_mapping_literal = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),

@@ -96,6 +96,11 @@ public sealed class ScrapingConfig
     // connection, no proxying).
     public ProxyConfig? Proxy { get; init; }
 
+    // Issue #222: opt-in pause between outbound requests, mode-independent
+    // (Fields/Groups/Api/Blocks alike) — see IR/RequestDelayConfig.cs. Null
+    // is today's exact behavior (no pacing at all).
+    public RequestDelayConfig? RequestDelay { get; init; }
+
     // Issue #129: opt-in script hardening checks, mode-independent
     // (Fields/Groups/Api alike) — see IR/HardeningCheck.cs. Null/empty is
     // today's exact behavior (the generated script never re-checks its own
