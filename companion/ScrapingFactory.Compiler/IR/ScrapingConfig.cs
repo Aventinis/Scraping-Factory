@@ -101,6 +101,11 @@ public sealed class ScrapingConfig
     // is today's exact behavior (no pacing at all).
     public RequestDelayConfig? RequestDelay { get; init; }
 
+    // Issue #223: opt-in retry with backoff on transient request failures,
+    // mode-independent — see IR/RetryConfig.cs. Null is today's exact
+    // behavior (a failed request is never retried).
+    public RetryConfig? Retry { get; init; }
+
     // Issue #129: opt-in script hardening checks, mode-independent
     // (Fields/Groups/Api alike) — see IR/HardeningCheck.cs. Null/empty is
     // today's exact behavior (the generated script never re-checks its own

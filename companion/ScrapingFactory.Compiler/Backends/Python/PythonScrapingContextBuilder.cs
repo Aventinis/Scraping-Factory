@@ -56,6 +56,7 @@ internal static class PythonScrapingContextBuilder
             ["change_detection"] = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection),
             ["proxy"] = PythonProxyLiteral.BuildContext(plan.Proxy),
             ["request_delay"] = PythonRequestDelayLiteral.BuildContext(plan.RequestDelay),
+            ["retry"] = PythonRetryLiteral.BuildContext(plan.Retry),
             ["hardening"] = PythonHardeningLiteral.BuildContext(plan.Hardening),
             ["pagination"] = PythonPaginationLiteral.BuildContext(plan.Pagination),
             ["discovered_urls"] = PythonDiscoveredUrlsLiteral.BuildContext(plan.DiscoveredUrls),
@@ -121,6 +122,7 @@ internal static class PythonScrapingContextBuilder
             ["change_detection"] = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection),
             ["proxy"] = PythonProxyLiteral.BuildContext(plan.Proxy),
             ["request_delay"] = PythonRequestDelayLiteral.BuildContext(plan.RequestDelay),
+            ["retry"] = PythonRetryLiteral.BuildContext(plan.Retry),
             ["hardening"] = PythonHardeningLiteral.BuildContext(plan.Hardening),
             ["pagination"] = PythonPaginationLiteral.BuildContext(plan.Pagination),
             ["discovered_urls"] = PythonDiscoveredUrlsLiteral.BuildContext(plan.DiscoveredUrls),
@@ -153,6 +155,7 @@ internal static class PythonScrapingContextBuilder
             ["change_detection_any"] = blockStep.Blocks.Any(b => b.ChangeDetection is not null),
             ["proxy"] = PythonProxyLiteral.BuildContext(plan.Proxy),
             ["request_delay"] = PythonRequestDelayLiteral.BuildContext(plan.RequestDelay),
+            ["retry"] = PythonRetryLiteral.BuildContext(plan.Retry),
             ["pagination"] = PythonPaginationLiteral.BuildContext(plan.Pagination),
             ["script_filename"] = plan.ScriptFileName,
         };

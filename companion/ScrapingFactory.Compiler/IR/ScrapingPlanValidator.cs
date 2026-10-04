@@ -66,6 +66,22 @@ public static class ScrapingPlanValidator
                 return Invalid($"RequestDelay.MaxMs must not exceed {RequestDelayConfig.MaxAllowedMs} ms (one minute per pause).");
         }
 
+        // Issue #223: mode-independent, same placement as RequestDelay above.
+        if (plan.Retry is { } retry)
+        {
+            if (retry.MaxAttempts is < RetryConfig.MinAllowedAttempts or > RetryConfig.MaxAllowedAttempts)
+                return Invalid($"Retry.MaxAttempts must be between {RetryConfig.MinAllowedAttempts} and {RetryConfig.MaxAllowedAttempts}.");
+            if (retry.DelayMs is < 0 or > RetryConfig.MaxWaitMs)
+                return Invalid($"Retry.DelayMs must be between 0 and {RetryConfig.MaxWaitMs} ms.");
+            if (retry.RetryOnStatusCodes is { } codes)
+            {
+                if (codes.Any(code => code is < 400 or > 599))
+                    return Invalid("Retry.RetryOnStatusCodes may only contain HTTP error status codes (400-599).");
+                if (codes.Distinct().Count() != codes.Count)
+                    return Invalid("Retry.RetryOnStatusCodes must not contain duplicates.");
+            }
+        }
+
         // Issue #129: mode-independent, same placement as ChangeDetection/
         // Proxy above.
         if (plan.Hardening is { Count: > 0 } hardening)
