@@ -244,7 +244,8 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                 {
                     TryKill(process);
                     return (false, pausedMs > 0
-                        ? $"Script execution exceeded the {effectiveTimeout.TotalSeconds:0}s timeout (not counting {pausedMs / 1000.0:0.#}s of request-delay pauses)."
+                        ? string.Create(CultureInfo.InvariantCulture,
+                            $"Script execution exceeded the {effectiveTimeout.TotalSeconds:0}s timeout (not counting {pausedMs / 1000.0:0.#}s of request-delay pauses).")
                         : $"Script execution exceeded the {effectiveTimeout.TotalSeconds:0}s timeout.", -1, "");
                 }
 
