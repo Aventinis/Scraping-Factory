@@ -23,6 +23,7 @@ const FIXTURES = {
   'api-nested-and-post': { dir: path.join(REPO_ROOT, 'test-pages/api-nested-and-post'), port: 8600, kind: 'script', script: 'server.py' },
   'embedded-json-menu': { dir: path.join(REPO_ROOT, 'test-pages/embedded-json-menu'), port: 8700, kind: 'script', script: 'server.py' },
   'api-token-bootstrap': { dir: path.join(REPO_ROOT, 'test-pages/api-token-bootstrap'), port: 8800, kind: 'script', script: 'server.py' },
+  'flaky-server': { dir: path.join(REPO_ROOT, 'test-pages/flaky-server'), port: 8900, kind: 'script', script: 'server.py' },
 };
 
 function resolveFixture(name) {

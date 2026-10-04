@@ -895,3 +895,5 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
 .output-settings-row.request-delay-row label, .output-settings-row.retry-row label { width: auto; }
 .output-settings-row.request-delay-row input[type="text"], .output-settings-row.retry-row input[type="text"] { flex: 0 1 64px; width: 64px; min-width: 40px; }
 .output-settings-row.request-delay-row span, .output-settings-row.retry-row span { font-size: 11px; color: var(--color-text-muted); }
+/* Issue #223: attempts/wait only ever hold short numbers. */
+.output-settings-row.retry-row input[type="text"] { flex-basis: 44px; width: 44px; }

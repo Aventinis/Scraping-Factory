@@ -143,7 +143,7 @@
     "requestDelayHint": "Das Skript wartet zwischen zwei Anfragen an die Seite – fest oder zufällig im Bereich (z. B. 1 bis 3). Schützt vor Sperren und Rate-Limits, macht den Lauf aber entsprechend länger (z. B. 50 Seiten × 2 s ≈ 1,5 Minuten mehr). Der Probelauf beim Generieren zählt die Pausen nicht gegen sein Zeitlimit.",
     "retryToggle": "Bei vorübergehenden Fehlern erneut versuchen",
     "retryAttemptsLabel": "Versuche",
-    "retryDelayLabel": "Wartezeit",
+    "retryDelayLabel": "Wartezeit (s)",
     "retryExponentialToggle": "Wartezeit jedes Mal verdoppeln",
     "retryStatusCodesLabel": "Bei Statuscodes",
     "retryHint": "Schlägt eine Anfrage wegen eines Verbindungsfehlers, Timeouts oder eines der Statuscodes fehl, versucht das Skript sie nach der Wartezeit erneut (bei 429/503 so lange, wie der Server per Retry-After verlangt; je Wartezeit höchstens 60 s). Andere Fehler wie 404 oder 403 scheitern sofort. Scheitern alle Versuche, bricht der Lauf wie bisher ab.",

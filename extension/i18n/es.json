@@ -143,7 +143,7 @@
     "requestDelayHint": "El script espera entre dos solicitudes al sitio — de forma fija o aleatoria dentro de un rango (p. ej. 1 a 3). Protege contra bloqueos y límites de frecuencia, pero alarga la ejecución en proporción (p. ej. 50 páginas × 2 s ≈ 1,5 minutos más). La ejecución de prueba al generar no cuenta las pausas en su límite de tiempo.",
     "retryToggle": "Reintentar ante errores transitorios",
     "retryAttemptsLabel": "Intentos",
-    "retryDelayLabel": "Espera",
+    "retryDelayLabel": "Espera (s)",
     "retryExponentialToggle": "Duplicar la espera tras cada reintento",
     "retryStatusCodesLabel": "Con códigos de estado",
     "retryHint": "Si una solicitud falla por un error de conexión, un tiempo de espera agotado o uno de los códigos de estado, el script la reintenta tras la espera (con 429/503, tanto como el servidor indique con Retry-After; como máximo 60 s por espera). Otros errores como 404 o 403 fallan de inmediato. Si fallan todos los intentos, la ejecución se detiene como hasta ahora.",
