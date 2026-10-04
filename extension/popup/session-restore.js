@@ -36,6 +36,7 @@ const SFSessionRestore = (function () {
     if (Array.isArray(stored.additionalStartUrls)) next = { ...next, additionalStartUrls: stored.additionalStartUrls };
     if (stored.changeDetection) next = { ...next, changeDetection: stored.changeDetection };
     if (stored.proxy)                 next = { ...next, proxy: stored.proxy };
+    if (stored.requestDelay)          next = { ...next, requestDelay: stored.requestDelay };
     if (stored.pagination)            next = { ...next, pagination: stored.pagination };
     if (stored.discoveredUrls)        next = { ...next, discoveredUrls: stored.discoveredUrls };
     if (stored.persistentSession !== undefined) next = { ...next, persistentSession: stored.persistentSession };

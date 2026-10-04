@@ -55,6 +55,17 @@ public static class ScrapingPlanValidator
                 return Invalid(proxyError);
         }
 
+        // Issue #222: mode-independent, same placement as Proxy above.
+        if (plan.RequestDelay is { } requestDelay)
+        {
+            if (requestDelay.MinMs < 0)
+                return Invalid("RequestDelay.MinMs must not be negative.");
+            if (requestDelay.MaxMs < requestDelay.MinMs)
+                return Invalid("RequestDelay.MaxMs must not be smaller than RequestDelay.MinMs.");
+            if (requestDelay.MaxMs > RequestDelayConfig.MaxAllowedMs)
+                return Invalid($"RequestDelay.MaxMs must not exceed {RequestDelayConfig.MaxAllowedMs} ms (one minute per pause).");
+        }
+
         // Issue #129: mode-independent, same placement as ChangeDetection/
         // Proxy above.
         if (plan.Hardening is { Count: > 0 } hardening)

@@ -245,6 +245,24 @@
             </div>
             <p class="preview-summary" data-i18n="idle.proxyHint"></p>
           </div>
+          <!-- Issue #222: opt-in pause between outbound requests (a minimum
+               gap between two requests, fixed or randomized within a
+               range) — the most common protection against being
+               rate-limited or blocked. Mode- and engine-independent. -->
+          <label class="output-settings-toggle">
+            <input type="checkbox" id="toggle-request-delay" />
+            <span data-i18n="idle.requestDelayToggle"></span>
+          </label>
+          <div id="request-delay-config" class="hidden">
+            <div class="output-settings-row request-delay-row">
+              <label for="input-request-delay-min" data-i18n="idle.requestDelayFromLabel"></label>
+              <input type="text" inputmode="decimal" id="input-request-delay-min" autocomplete="off" />
+              <label for="input-request-delay-max" data-i18n="idle.requestDelayToLabel"></label>
+              <input type="text" inputmode="decimal" id="input-request-delay-max" data-i18n-placeholder="idle.requestDelayToPlaceholder" autocomplete="off" />
+              <span data-i18n="idle.requestDelaySecondsUnit"></span>
+            </div>
+            <p class="preview-summary" data-i18n="idle.requestDelayHint"></p>
+          </div>
           <!-- Issue #174: opt-in classic multi-page pagination — follows
                either a "next page" link (CSS selector, href resolved
                relative to the current page) or a {page}-templated URL,

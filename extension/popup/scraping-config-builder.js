@@ -177,6 +177,37 @@ function buildProxyConfig(proxy) {
   return environmentVariableName ? { environmentVariableName } : null;
 }
 
+// Issue #222: converts _state.requestDelay's editable draft (two free-text
+// second inputs, so "1,5" and "1.5" both work) into the wire
+// RequestDelayConfig in milliseconds, or null when disabled or the "from"
+// value isn't a usable number — the same "incomplete draft treated as
+// toggle-off" convention buildProxyConfig uses. A blank "to" means a fixed
+// pause; a "to" below "from" is raised to it; both are clamped to
+// RequestDelayConfig.MaxAllowedMs (60 s) the way buildPaginationConfig
+// clamps maxPages, so a stray value never turns into a 400 from /generate.
+const REQUEST_DELAY_MAX_MS = 60000;
+/**
+ * @param {string | null | undefined} text
+ * @returns {number | null}
+ */
+function parseSecondsToMs(text) {
+  const normalized = String(text ?? '').trim().replace(',', '.');
+  if (normalized === '') return null;
+  const seconds = Number(normalized);
+  return Number.isFinite(seconds) && seconds >= 0 ? Math.min(Math.round(seconds * 1000), REQUEST_DELAY_MAX_MS) : null;
+}
+/**
+ * @param {SFDraft.RequestDelayState | null | undefined} requestDelay
+ * @returns {SFWire.RequestDelayConfig | null}
+ */
+function buildRequestDelayConfig(requestDelay) {
+  if (!requestDelay?.enabled) return null;
+  const minMs = parseSecondsToMs(requestDelay.minSecondsText);
+  if (minMs === null) return null;
+  const maxMs = parseSecondsToMs(requestDelay.maxSecondsText);
+  return { minMs, maxMs: maxMs === null ? minMs : Math.max(minMs, maxMs) };
+}
+
 // Issue #174: converts _state.pagination's editable draft shape into the
 // wire PaginationConfig, or null when disabled or the kind-specific
 // required field (nextLinkSelector / urlTemplate) is left blank — same
@@ -424,6 +455,9 @@ function collectFieldNames(mode, fields, groups, apiConfig) {
  * @param {SFWire.OutputBlueprintSchemaKind} [outputBlueprintSchemaKind]
  * @param {SFDraft.OutputBlueprintTreeNode[]} [outputBlueprintTree]
  * @param {Record<string, string>} [outputBlueprintTreeMapping]
+ * @param {SFDraft.DiscoveredUrlsState | null} [discoveredUrls]
+ * @param {boolean} [preflight]
+ * @param {SFDraft.RequestDelayState | null} [requestDelay]
  * @returns {object}
  */
 function buildScrapingConfig(
@@ -444,7 +478,11 @@ function buildScrapingConfig(
   // Issue #219: same "append at the end, never insert in the middle" rule as
   // discoveredUrls just above.
   preflight = false,
+  // Issue #222: same "append at the end" rule.
+  requestDelay = null,
 ) {
+  const requestDelayConfig = buildRequestDelayConfig(requestDelay);
+  const requestDelayFields = requestDelayConfig ? { requestDelay: requestDelayConfig } : {};
   // Issue #182: Blocks mode has no ad-hoc fields/groups/apiConfig of its own
   // either — each block is a fully independent {name, outputFileName,
   // fields|groups} sent verbatim, sharing this one request's Url/engine/
@@ -483,7 +521,7 @@ function buildScrapingConfig(
       })),
       scriptFileName: scriptFileName || null,
       ...engineFields, ...previewFields, ...additionalUrlsFields,
-      ...proxyFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
+      ...proxyFields, ...requestDelayFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
     };
   }
   // Combined mode (Issue #239): no ad-hoc fields/groups/apiConfig of its own
@@ -565,7 +603,7 @@ function buildScrapingConfig(
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...proxyFields, ...requestDelayFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
       ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
@@ -574,7 +612,7 @@ function buildScrapingConfig(
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...proxyFields, ...requestDelayFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
       ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
@@ -596,7 +634,7 @@ function buildScrapingConfig(
     outputFormat: useJsonOutput ? 'Json' : 'Csv',
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
-    ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields,
+    ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields, ...requestDelayFields,
     ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
     ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
   };
@@ -638,6 +676,7 @@ function buildScrapingConfig(
  * @param {SFDraft.OutputBlueprintTreeNode[]} [outputBlueprintTree]
  * @param {Record<string, string>} [outputBlueprintTreeMapping]
  * @param {boolean} [preflight]
+ * @param {SFDraft.RequestDelayState | null} [requestDelay]
  * @returns {{exportedAt: string, extensionVersion: string, config: object}}
  */
 function buildConfigExport(
@@ -652,6 +691,8 @@ function buildConfigExport(
   discoveredUrls = null,
   // Issue #219: same "append at the end" rule as discoveredUrls just above.
   preflight = false,
+  // Issue #222: same "append at the end" rule.
+  requestDelay = null,
 ) {
   return {
     exportedAt: new Date().toISOString(),
@@ -661,7 +702,7 @@ function buildConfigExport(
       useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession,
       includeOutputFile, externalConfig, combinedComponents, blocks,
       outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping,
-      outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping, discoveredUrls, preflight,
+      outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping, discoveredUrls, preflight, requestDelay,
     ),
   };
 }
@@ -907,7 +948,7 @@ function frameBadgeHtml(framePath) {
 }
 
   return {sanitizeFileNameBase, deriveScriptFileNameFromHostname, computeScriptFileNamePatch, parseAdditionalUrls,
-    buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildDiscoveredUrlsConfig, buildHardeningConfig,
+    buildChangeDetectionConfig, buildProxyConfig, buildRequestDelayConfig, buildPaginationConfig, buildDiscoveredUrlsConfig, buildHardeningConfig,
     computeInitialMonitoringSectionOpen, collectFieldNames,
     buildScrapingConfig, buildConfigExport,
     addField, removeField, updateField,

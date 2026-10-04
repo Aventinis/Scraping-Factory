@@ -102,6 +102,13 @@ declare namespace SFDraft {
     envVar: string;
   }
 
+  // Issue #222: seconds as typed (decimal comma or point); blank max = fixed.
+  interface RequestDelayState {
+    enabled: boolean;
+    minSecondsText: string;
+    maxSecondsText: string;
+  }
+
   interface PaginationState {
     enabled: boolean;
     kind: 'nextLink' | 'pageNumber';

@@ -1174,6 +1174,9 @@ def _resolve_browser_discovery(source, headers, target_name, combo):
         if headers:
             page.set_extra_http_headers(headers)
         page.on("request", lambda request: captured_urls.append(request.url))
+{{~ if request_delay.enabled ~}}
+        _pace_request()
+{{~ end ~}}
         page.goto(discovery_url)
         for action in source["actions"]:
             _run_browser_action(page, action)
@@ -1308,12 +1311,24 @@ def _run_bootstrap():
     try:
         if BOOTSTRAP["method"] == "POST":
             if not BOOTSTRAP["bodyFields"]:
+{{~ if request_delay.enabled ~}}
+                _pace_request()
+{{~ end ~}}
                 response = requests.post(BOOTSTRAP["url"], **request_kwargs)
             elif BOOTSTRAP["bodyEncoding"] == "Form":
+{{~ if request_delay.enabled ~}}
+                _pace_request()
+{{~ end ~}}
                 response = requests.post(BOOTSTRAP["url"], data=body, **request_kwargs)
             else:
+{{~ if request_delay.enabled ~}}
+                _pace_request()
+{{~ end ~}}
                 response = requests.post(BOOTSTRAP["url"], json=body, **request_kwargs)
         else:
+{{~ if request_delay.enabled ~}}
+            _pace_request()
+{{~ end ~}}
             response = requests.get(BOOTSTRAP["url"], **request_kwargs)
     except requests.RequestException as e:
         _bootstrap_error(str(e))
@@ -1355,6 +1370,9 @@ def _resolve_parameter_values(source, headers, parameter_name, combo):
         return _number_range(source["from"], source["to"])
     if kind == "discovery":
         url_template = _substitute_known_parameters(source["urlTemplate"], combo)
+{{~ if request_delay.enabled ~}}
+        _pace_request()
+{{~ end ~}}
         response = _checked_request("Discovery request", url_template, lambda: requests.get(url_template, headers=headers, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10))
         _require_ok("Discovery request", url_template, response)
         items = _resolve_items(_json_or_fail("Discovery request", url_template, response), source["itemsPath"])
@@ -1592,8 +1610,14 @@ def scrape():
 
         body = _render_body(BODY, {{ if has_bootstrap }}{**_BOOTSTRAP_VALUES, **combo}{{ else }}combo{{ end }})
         if METHOD == "POST":
+{{~ if request_delay.enabled ~}}
+            _pace_request()
+{{~ end ~}}
             response = _checked_request("Request", url, lambda: requests.post(url, headers=headers, json=body, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10))
         else:
+{{~ if request_delay.enabled ~}}
+            _pace_request()
+{{~ end ~}}
             response = _checked_request("Request", url, lambda: requests.get(url, headers=headers, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10))
         # A 404 is treated as "this combination doesn't exist" and skipped
         # rather than aborting the whole run — same reasoning as the flat
@@ -1623,6 +1647,35 @@ def scrape():
     return root, blueprint_rows, blueprint_tree_elements
 
 
+{{~ if request_delay.enabled ~}}
+# Issue #222: optional pause between outbound requests — a minimum gap
+# between the starts of two consecutive requests, drawn uniformly from
+# [REQUEST_DELAY_MIN_S, REQUEST_DELAY_MAX_S] each time. Only the part of the
+# pause that hasn't already elapsed (e.g. while parsing the previous page) is
+# actually slept, and the very first request of a run starts immediately.
+# Each pause is announced on stdout — so a long run visibly isn't hanging,
+# and so the companion's trial run can tell waiting apart from a stuck
+# script (PythonScriptVerifier extends its own deadline by exactly the
+# announced pause).
+import random
+import time
+
+REQUEST_DELAY_MIN_S = {{ request_delay.min_s_literal }}
+REQUEST_DELAY_MAX_S = {{ request_delay.max_s_literal }}
+_last_request_started_at = None
+
+
+def _pace_request():
+    global _last_request_started_at
+    if _last_request_started_at is not None:
+        remaining = random.uniform(REQUEST_DELAY_MIN_S, REQUEST_DELAY_MAX_S) - (time.monotonic() - _last_request_started_at)
+        if remaining > 0:
+            print(f"Pausing {remaining:.2f} s before the next request (request delay)...", flush=True)
+            time.sleep(remaining)
+    _last_request_started_at = time.monotonic()
+
+
+{{~ end ~}}
 def main():
 {{~ if change_detection.enabled ~}}
     previous_content = _read_previous_output(OUTPUT_PATH)

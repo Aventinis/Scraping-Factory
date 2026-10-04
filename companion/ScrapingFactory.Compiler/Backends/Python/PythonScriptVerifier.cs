@@ -1,8 +1,10 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using ScrapingFactory.Compiler.Backends;
 using ScrapingFactory.Compiler.IR;
@@ -168,6 +170,14 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
         _ => $"{baseName}.csv",
     };
 
+    // Issue #222: see RunScriptAsync — the exact line _pace_request in the
+    // templates prints before each pause, and the most total pause time one
+    // trial run may add to its deadline (the same 10 minutes Program.cs's
+    // VerificationTimeoutCap allows for an estimated extra timeout).
+    private static readonly Regex PauseAnnouncementPattern = new(@"^Pausing (\d+(?:\.\d+)?) s before the next request \(request delay\)");
+    private static readonly TimeSpan MaxRequestDelayExtension = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(200);
+
     // Shared by VerifyAsync/VerifyBlocksAsync: writes the script, spawns it,
     // and waits — everything before "now check the output file(s)", which is
     // the one part that genuinely differs between the two callers (one file
@@ -197,20 +207,53 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
             var stderrBuilder = new StringBuilder();
             process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderrBuilder.AppendLine(e.Data); };
             process.BeginErrorReadLine();
-            var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
 
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeoutCts.CancelAfter(effectiveTimeout);
-            try
+            // Issue #222: a script with a request delay announces every pause
+            // on stdout right before sleeping ("Pausing 2.30 s before the next
+            // request (request delay)..."). Each announced pause extends this
+            // run's deadline by exactly that long, so pure waiting never counts
+            // against the timeout — however many requests the run turns out
+            // to make — while a genuinely stuck script still times out as
+            // before. The extension itself is capped (MaxRequestDelayExtension)
+            // so one trial run can't tie up the companion indefinitely.
+            long announcedPauseMs = 0;
+            process.OutputDataReceived += (_, e) =>
             {
-                await process.WaitForExitAsync(timeoutCts.Token);
-            }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                if (e.Data is null) return;
+                var match = PauseAnnouncementPattern.Match(e.Data);
+                if (match.Success && double.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds))
+                    Interlocked.Add(ref announcedPauseMs, (long)Math.Ceiling(seconds * 1000));
+            };
+            process.BeginOutputReadLine();
+
+            var started = Stopwatch.StartNew();
+            var exitTask = process.WaitForExitAsync(ct);
+            while (!exitTask.IsCompleted)
             {
-                TryKill(process);
-                return (false, $"Script execution exceeded the {effectiveTimeout.TotalSeconds:0}s timeout.", -1, "");
+                var pausedMs = Interlocked.Read(ref announcedPauseMs);
+                if (pausedMs > MaxRequestDelayExtension.TotalMilliseconds)
+                {
+                    TryKill(process);
+                    return (false,
+                        $"The configured request delay made the trial run pause for more than {MaxRequestDelayExtension.TotalMinutes:0} minutes in total " +
+                        "— reduce the pause between requests, or the number of pages/requests (e.g. pagination's maximum page count).", -1, "");
+                }
+
+                var remaining = effectiveTimeout + TimeSpan.FromMilliseconds(pausedMs) - started.Elapsed;
+                if (remaining <= TimeSpan.Zero)
+                {
+                    TryKill(process);
+                    return (false, pausedMs > 0
+                        ? string.Create(CultureInfo.InvariantCulture,
+                            $"Script execution exceeded the {effectiveTimeout.TotalSeconds:0}s timeout (not counting {pausedMs / 1000.0:0.#}s of request-delay pauses).")
+                        : $"Script execution exceeded the {effectiveTimeout.TotalSeconds:0}s timeout.", -1, "");
+                }
+
+                await Task.WhenAny(exitTask, Task.Delay(remaining < PollInterval ? remaining : PollInterval, ct));
+                ct.ThrowIfCancellationRequested();
             }
-            await stdoutTask;
+            await exitTask;
+            process.WaitForExit(); // flushes the async stdout/stderr readers before stderrBuilder is read
 
             var stderr = stderrBuilder.ToString();
             if (process.ExitCode != 0 && process.ExitCode != MissingEnvVarExitCode && process.ExitCode != HardeningFailedExitCode)
