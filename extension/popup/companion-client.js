@@ -75,6 +75,8 @@ async function checkCompanion(bridge) {
     // a blueprint is reusable across any site/mode, so there's no "current
     // mode" gate to wait for either.
     bridge.fetchOutputBlueprints();
+    // Issue #279: same "reusable across any site" reasoning as blueprints.
+    bridge.fetchTransformPresets?.();
   } catch (err) {
     log('HEALTH_CHECK FAIL', err.message);
     setLastError(err.message, 'Companion connection');

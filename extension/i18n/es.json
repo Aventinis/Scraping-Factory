@@ -344,6 +344,27 @@
       "apostropheGrouped": "1'234.56 (CH)"
     }
   },
+  "transformPresets": {
+    "applyPlaceholder": "Aplicar plantilla …",
+    "builtinSuffix": "(incluida)",
+    "builtinPriceCommaDecimal": "Limpiar precio (1.234,56)",
+    "builtinPriceDotDecimal": "Limpiar precio (1,234.56)",
+    "saveBtn": "Guardar como plantilla",
+    "namePlaceholder": "Nombre de la plantilla",
+    "saveConfirm": "Guardar",
+    "saved": "Plantilla \"{name}\" guardada.",
+    "saveFailed": "No se pudo guardar la plantilla: {error}",
+    "deleteFailed": "No se pudo eliminar la plantilla: {error}",
+    "saveNotPossibleHint": "Añade primero al menos una transformación completa (los pasos de combinar/dividir no se pueden guardar como plantilla).",
+    "saveUnavailableHint": "El companion no está disponible o es demasiado antiguo — tus plantillas no están disponibles ahora mismo.",
+    "settingsTitle": "Plantillas de transformación",
+    "settingsHint": "Guarda una cadena de transformaciones desde el diálogo de un campo con \"Guardar como plantilla\" y aplícala a cualquier campo con \"Aplicar plantilla …\".",
+    "unavailableHint": "Tus plantillas no están disponibles (companion inaccesible o demasiado antiguo) — solo se muestran las incluidas.",
+    "renameBtn": "Renombrar",
+    "deleteConfirmPrompt": "¿Eliminar?",
+    "deleteYes": "Sí",
+    "deleteNo": "No"
+  },
   "generating": {
     "message": "Generando script…"
   },

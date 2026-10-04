@@ -53,6 +53,11 @@ const {
 } = typeof require !== 'undefined' ? require('./api-config-ui') : self.SFApiConfigUI;
 
 const {
+  fetchTransformPresets, renderTransformPresetControls, wireTransformPresetControls,
+  renderTransformPresetsSettings, wireTransformPresetsSettings,
+} = typeof require !== 'undefined' ? require('./transform-presets-ui') : self.SFTransformPresetsUI;
+
+const {
   renderApiBootstrapSection, wireApiBootstrapEvents,
 } = typeof require !== 'undefined' ? require('./api-bootstrap-ui') : self.SFApiBootstrapUI;
 
@@ -574,6 +579,14 @@ let _state = {
   // after any create/edit/delete in modal-manage-blueprints. Not persisted,
   // same pull-based tradeoff savedConfigs/allSavedConfigs already accept.
   outputBlueprints:            null,
+  // Issue #279: reusable transform-chain presets — see transform-presets-ui.js
+  // for what each of these means. Not persisted (re-fetched from the
+  // companion on every health check, like outputBlueprints).
+  transformPresets:             null,
+  transformPresetsAvailable:    false,
+  transformPresetSaveOpen:      false,
+  transformPresetRenameId:      null,
+  transformPresetDeletePendingId: null,
   outputBlueprintsLoading:     false,
   blueprintEditModalOpen:      false,
   blueprintEditingId:          null, // null = creating a new blueprint, else editing this id
@@ -813,7 +826,14 @@ function render() {
   // visual state has to be driven from here rather than from
   // renderSettingsScreen, which only ever runs while that screen is current.
   document.getElementById('btn-open-settings')?.classList.toggle('active', _state.current === STATES.SETTINGS);
-  if (_state.current === STATES.SETTINGS) renderSettingsScreen(bridge);
+  if (_state.current === STATES.SETTINGS) {
+    renderSettingsScreen(bridge);
+    renderTransformPresetsSettings(bridge);
+  }
+  // Issue #279: the preset controls live inside all three transform editors'
+  // modals; only one is ever visible, and the controls' own signature check
+  // keeps this a no-op unless something they show actually changed.
+  renderTransformPresetControls(bridge);
 
   // modal-save-config is a global overlay, not scoped to the IDLE screen's
   // own render block below — Issue #202's "save configuration first"
@@ -1059,6 +1079,7 @@ const bridge = {
   fetchSavedConfigs: (url) => fetchSavedConfigs(bridge, url),
   fetchAllSavedConfigs: () => fetchAllSavedConfigs(bridge),
   fetchOutputBlueprints: () => fetchOutputBlueprints(bridge),
+  fetchTransformPresets: () => fetchTransformPresets(bridge),
 };
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
@@ -1093,6 +1114,9 @@ function wireEvents() {
   wireApiConfigEvents(bridge);
 
   wireApiBootstrapEvents(bridge);
+
+  wireTransformPresetControls(bridge);
+  wireTransformPresetsSettings(bridge);
 
   wireFlatModeEvents(bridge);
 
