@@ -1007,6 +1007,31 @@ already keeps credentials env-var-name-only.
   that round-robin rotation picks a different proxy per request across
   multiple start URLs.
 
+### 2.21a Pause between requests (Issue #222)
+
+An opt-in, mode- and engine-independent pause before every outbound request
+of the generated script (fixed, or random within a range), as protection
+against rate limits and blocks. Measured as a minimum gap between request
+starts; the first request isn't delayed. Each pause is announced on stdout,
+which the trial-run verifier uses to extend its deadline by exactly that
+pause — so many requests never make `/generate` time out (capped at 10
+minutes of pauses).
+
+- IR: `IR/RequestDelayConfig.cs` (`ScrapingConfig.RequestDelay`/
+  `ScrapingPlan.RequestDelay`), validation in `ScrapingPlanValidator`,
+  Combined-mode outer-config rejection in `Program.cs`
+- `Backends/Python/PythonRequestDelayLiteral` (`request_delay.*`), wired in
+  `PythonScrapingContextBuilder` and `PythonApiCodeGenerator`
+- Templates: all eight request-making templates — `_pace_request()` before
+  every request / page navigation
+- `Backends/Python/PythonScriptVerifier.RunScriptAsync`
+  (`PauseAnnouncementPattern`, `MaxRequestDelayExtension`, moving deadline)
+- Extension: `scraping-config-builder.js` (`buildRequestDelayConfig`),
+  `config-import.js` (`applyRequestDelayConfig`), `settings-panel-ui.js`,
+  `#toggle-request-delay`/`#request-delay-config` in `screens/idle.html`
+- Tests: `RequestDelayTests.cs`, `extension/popup/request-delay.test.js`,
+  real-browser check `e2e/examples/issue-222-request-delay-check.js`
+
 ### 2.22 Persistent session/cookie handling (Issue #175)
 
 Browser-engine only (rejected server-side for Static/Api, same as
