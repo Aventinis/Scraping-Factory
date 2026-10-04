@@ -798,6 +798,28 @@ float rounding); a mismatch goes through the shared `onError` contract.
   mirror, plus the editor row), real-browser check
   `e2e/examples/issue-234-to-currency-check.js`
 
+### 2.18c Reusable transform-chain presets (Issue #279)
+
+A transform chain built once can be saved under a name and applied to any
+field of any scrape, instead of re-adding each step. Two read-only built-in
+presets ("Clean up price", trim + §2.18b's conversion, in two formats) ship
+with the extension; the user's own presets live in a small cross-site
+companion store, the same way Output Blueprints do (§2.23). Applying appends
+a copy of the steps (an existing chain is never replaced).
+
+- Extension: `popup/transform-presets.js` (`BUILTIN_TRANSFORM_PRESETS`,
+  `allTransformPresets`, `applyTransformPreset`, `transformChainIsSaveable`),
+  `popup/transform-presets-ui.js` (fetch wrappers, the "Apply preset … / Save
+  as preset" controls under all three transform editors, the Settings
+  section), `.transform-preset-controls` in `screens/modals.html`,
+  `#settings-transform-presets-section` in `screens/settings.html`,
+  `bridge.fetchTransformPresets` called from `companion-client.js`'s health
+  check
+- Companion: `TransformPresetStore.cs` (`transform-presets.db`), `/transform-presets`
+  POST/GET/PUT(rename)/DELETE and `ValidateTransformPresetChain` in `Program.cs`
+- Tests: `TransformPresetsEndpointTests.cs`, `extension/popup/transform-presets.test.js`,
+  real-browser check `e2e/examples/issue-279-transform-presets-check.js`
+
 ### 2.19 Multiple start URLs (Issue #83)
 
 Lets the same Fields/Groups extraction config run against a static,
