@@ -46,6 +46,8 @@ internal static class PythonFieldTransformLiteral
             $$"""{"kind": "toBoolean", "onError": {{PythonLiteral.Str(toBoolean.OnError.ToString())}}, "defaultValue": {{PythonLiteral.Str(toBoolean.DefaultValue ?? "")}}}""",
         ToDateTransform toDate =>
             $$"""{"kind": "toDate", "sourceFormat": {{PythonLiteral.Str(RangeFormat.Resolve(RangeType.Date, toDate.SourceFormat))}}, "onError": {{PythonLiteral.Str(toDate.OnError.ToString())}}, "defaultValue": {{PythonLiteral.Str(toDate.DefaultValue ?? "")}}}""",
+        ToCurrencyTransform toCurrency =>
+            $$"""{"kind": "toCurrency", "format": {{PythonLiteral.Str(toCurrency.Format)}}, "onError": {{PythonLiteral.Str(toCurrency.OnError.ToString())}}, "defaultValue": {{PythonLiteral.Str(toCurrency.DefaultValue ?? "")}}}""",
         CombineFieldsTransform combine =>
             $$"""{"kind": "combineFields", "sourceFieldNames": {{PythonLiteral.StrList(combine.SourceFieldNames)}}, "separator": {{PythonLiteral.Str(combine.Separator)}}}""",
         SplitFieldTransform split =>
