@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.16.6](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.5...v1.16.6) (2026-10-04)
+
+
+### Features
+
+* preflight check — skip an expensive run when nothing's changed or the target's unreachable (Issue [#219](https://github.com/Aventinis/Scraping-Factory/issues/219)) ([3d24fa3](https://github.com/Aventinis/Scraping-Factory/commit/3d24fa386cf7f817704c6f41c7fe0ed97e40f3dc))
+* **preflight:** add extension UI for the opt-in preflight check ([e062043](https://github.com/Aventinis/Scraping-Factory/commit/e0620435b48be5054caf202ead4f61c3845524b2))
+* **preflight:** add IR plumbing for the preflight-check toggle ([9924a3f](https://github.com/Aventinis/Scraping-Factory/commit/9924a3f8468852e69e9b0558f50580816323e99c))
+* **preflight:** add preflight-check runtime to all four flat/container templates ([8c4fe0d](https://github.com/Aventinis/Scraping-Factory/commit/8c4fe0de664838472f8c707d8fc6e98ffbaa8b34))
+* **preflight:** thread preflight through buildScrapingConfig/buildConfigExport ([e3635eb](https://github.com/Aventinis/Scraping-Factory/commit/e3635eb84f1fe103f2f387535f8613c73355c999))
+* **preflight:** wire preflight into the shared Scriban context ([90db589](https://github.com/Aventinis/Scraping-Factory/commit/90db5893642795a586781ab67468a0310addbaab))
+
 ## [1.16.5](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.4...v1.16.5) (2026-10-03)
 
 
