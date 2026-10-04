@@ -322,6 +322,7 @@
     "toIntegerOption": "In Ganzzahl umwandeln",
     "toBooleanOption": "In Wahrheitswert umwandeln",
     "toDateOption": "In Datum umwandeln",
+    "toCurrencyOption": "Preis/Währung in Zahl umwandeln",
     "patternPlaceholder": "Regex-Muster (z. B. \"\\d+\")",
     "groupPlaceholder": "Gruppe (0 = ganzer Treffer)",
     "findPlaceholder": "Suchen",
@@ -335,7 +336,13 @@
     "defaultValuePlaceholder": "Standardwert",
     "previewLabel": "Vorschau: {value}",
     "previewEmptyValue": "(leer)",
-    "previewUnavailable": "Vorschau nicht möglich"
+    "previewUnavailable": "Vorschau nicht möglich",
+    "currencyFormat": {
+      "commaDecimal": "1.234,56 — Komma als Dezimaltrenner (DE/AT/IT…)",
+      "dotDecimal": "1,234.56 — Punkt als Dezimaltrenner (EN/US/UK…)",
+      "spaceGrouped": "1 234,56 — Leerzeichen als Tausendertrenner, Komma dezimal (FR/Skandinavien…)",
+      "apostropheGrouped": "1'234.56 — Apostroph als Tausendertrenner, Punkt dezimal (CH)"
+    }
   },
   "generating": {
     "message": "Generiere Skript…"

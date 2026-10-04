@@ -322,6 +322,7 @@
     "toIntegerOption": "Convertir a entero",
     "toBooleanOption": "Convertir a booleano",
     "toDateOption": "Convertir a fecha",
+    "toCurrencyOption": "Convertir precio/moneda a número",
     "patternPlaceholder": "Patrón regex (p. ej. \"\\d+\")",
     "groupPlaceholder": "Grupo (0 = coincidencia completa)",
     "findPlaceholder": "Buscar",
@@ -335,7 +336,13 @@
     "defaultValuePlaceholder": "Valor predeterminado",
     "previewLabel": "Vista previa: {value}",
     "previewEmptyValue": "(vacío)",
-    "previewUnavailable": "Vista previa no disponible"
+    "previewUnavailable": "Vista previa no disponible",
+    "currencyFormat": {
+      "commaDecimal": "1.234,56 — la coma es el separador decimal (ES/DE/IT…)",
+      "dotDecimal": "1,234.56 — el punto es el separador decimal (EN/US/MX…)",
+      "spaceGrouped": "1 234,56 — espacio para miles, coma decimal (FR/países nórdicos…)",
+      "apostropheGrouped": "1'234.56 — apóstrofo para miles, punto decimal (CH)"
+    }
   },
   "generating": {
     "message": "Generando script…"
