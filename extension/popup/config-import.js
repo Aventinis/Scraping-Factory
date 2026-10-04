@@ -143,6 +143,23 @@ const SFConfigImport = (function () {
     };
   }
 
+  // Issue #223: reverse of buildRetryConfig.
+  /**
+   * @param {SFWire.RetryConfig | null | undefined} wire
+   * @returns {SFDraft.RetryState}
+   */
+  function applyRetryConfig(wire) {
+    const defaults = { enabled: false, maxAttemptsText: '3', delaySecondsText: '2', exponential: true, statusCodesText: '429, 502, 503, 504' };
+    if (!wire) return defaults;
+    return {
+      enabled: true,
+      maxAttemptsText: String(wire.maxAttempts ?? 3),
+      delaySecondsText: String((wire.delayMs ?? 2000) / 1000),
+      exponential: wire.exponential !== false,
+      statusCodesText: wire.retryOnStatusCodes?.length ? wire.retryOnStatusCodes.join(', ') : defaults.statusCodesText,
+    };
+  }
+
   // Reverse of buildPaginationConfig.
   /**
    * @param {SFWire.PaginationConfig | null | undefined} wire
@@ -339,6 +356,7 @@ const SFConfigImport = (function () {
         changeDetection: applyChangeDetectionConfig(null),
         proxy: applyProxyConfig(null),
         requestDelay: applyRequestDelayConfig(null),
+        retry: applyRetryConfig(null),
         pagination: applyPaginationConfig(null),
         discoveredUrls: applyDiscoveredUrlsConfig(null),
         hardening: applyHardeningConfig(null),
@@ -383,6 +401,7 @@ const SFConfigImport = (function () {
         changeDetection: applyChangeDetectionConfig(null),
         proxy: applyProxyConfig(config.proxy),
         requestDelay: applyRequestDelayConfig(config.requestDelay),
+        retry: applyRetryConfig(config.retry),
         pagination: applyPaginationConfig(config.pagination),
         // Issue #218: never present on a Blocks wire config (rejected
         // server-side, not designed for this mode's multi-output shape yet).
@@ -424,6 +443,7 @@ const SFConfigImport = (function () {
       changeDetection: applyChangeDetectionConfig(config.changeDetection),
       proxy: applyProxyConfig(config.proxy),
       requestDelay: applyRequestDelayConfig(config.requestDelay),
+      retry: applyRetryConfig(config.retry),
       pagination: applyPaginationConfig(config.pagination),
       discoveredUrls: applyDiscoveredUrlsConfig(config.discoveredUrls),
       hardening: applyHardeningConfig(config.hardening),

@@ -208,6 +208,34 @@ function buildRequestDelayConfig(requestDelay) {
   return { minMs, maxMs: maxMs === null ? minMs : Math.max(minMs, maxMs) };
 }
 
+// Issue #223: converts _state.retry's editable draft into the wire
+// RetryConfig, or null when disabled. Unlike buildRequestDelayConfig there's
+// no "incomplete = off" case: every input falls back to its default when
+// blank or unusable (3 attempts, 2 s, the companion's default status-code
+// list), and attempts/delay are clamped to RetryConfig's own bounds (2-10
+// attempts, 0-60 s) — so a stray value never turns into a 400 from /generate.
+// Status codes accept any separator ("429, 503" / "429 503"); only 400-599
+// are kept, deduplicated, and an empty result is omitted so the companion's
+// own default list applies.
+const RETRY_DEFAULT_ATTEMPTS = 3;
+const RETRY_DEFAULT_DELAY_MS = 2000;
+/**
+ * @param {SFDraft.RetryState | null | undefined} retry
+ * @returns {SFWire.RetryConfig | null}
+ */
+function buildRetryConfig(retry) {
+  if (!retry?.enabled) return null;
+  const attempts = parseInt(String(retry.maxAttemptsText ?? '').trim(), 10);
+  const maxAttempts = Number.isFinite(attempts) ? Math.min(Math.max(attempts, 2), 10) : RETRY_DEFAULT_ATTEMPTS;
+  const delayMs = parseSecondsToMs(retry.delaySecondsText) ?? RETRY_DEFAULT_DELAY_MS;
+  const codes = [...new Set(String(retry.statusCodesText ?? '').split(/[^0-9]+/).filter(Boolean).map(Number))]
+    .filter(code => code >= 400 && code <= 599);
+  return {
+    maxAttempts, delayMs, exponential: retry.exponential !== false,
+    ...(codes.length > 0 ? { retryOnStatusCodes: codes } : {}),
+  };
+}
+
 // Issue #174: converts _state.pagination's editable draft shape into the
 // wire PaginationConfig, or null when disabled or the kind-specific
 // required field (nextLinkSelector / urlTemplate) is left blank — same
@@ -458,6 +486,7 @@ function collectFieldNames(mode, fields, groups, apiConfig) {
  * @param {SFDraft.DiscoveredUrlsState | null} [discoveredUrls]
  * @param {boolean} [preflight]
  * @param {SFDraft.RequestDelayState | null} [requestDelay]
+ * @param {SFDraft.RetryState | null} [retry]
  * @returns {object}
  */
 function buildScrapingConfig(
@@ -480,9 +509,13 @@ function buildScrapingConfig(
   preflight = false,
   // Issue #222: same "append at the end" rule.
   requestDelay = null,
+  // Issue #223: same "append at the end" rule.
+  retry = null,
 ) {
   const requestDelayConfig = buildRequestDelayConfig(requestDelay);
   const requestDelayFields = requestDelayConfig ? { requestDelay: requestDelayConfig } : {};
+  const retryConfig = buildRetryConfig(retry);
+  const retryFields = retryConfig ? { retry: retryConfig } : {};
   // Issue #182: Blocks mode has no ad-hoc fields/groups/apiConfig of its own
   // either — each block is a fully independent {name, outputFileName,
   // fields|groups} sent verbatim, sharing this one request's Url/engine/
@@ -521,7 +554,7 @@ function buildScrapingConfig(
       })),
       scriptFileName: scriptFileName || null,
       ...engineFields, ...previewFields, ...additionalUrlsFields,
-      ...proxyFields, ...requestDelayFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
+      ...proxyFields, ...requestDelayFields, ...retryFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
     };
   }
   // Combined mode (Issue #239): no ad-hoc fields/groups/apiConfig of its own
@@ -603,7 +636,7 @@ function buildScrapingConfig(
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...requestDelayFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...proxyFields, ...requestDelayFields, ...retryFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
       ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
@@ -612,7 +645,7 @@ function buildScrapingConfig(
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...requestDelayFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...proxyFields, ...requestDelayFields, ...retryFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
       ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
@@ -634,7 +667,7 @@ function buildScrapingConfig(
     outputFormat: useJsonOutput ? 'Json' : 'Csv',
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
-    ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields, ...requestDelayFields,
+    ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields, ...requestDelayFields, ...retryFields,
     ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
     ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
   };
@@ -677,6 +710,7 @@ function buildScrapingConfig(
  * @param {Record<string, string>} [outputBlueprintTreeMapping]
  * @param {boolean} [preflight]
  * @param {SFDraft.RequestDelayState | null} [requestDelay]
+ * @param {SFDraft.RetryState | null} [retry]
  * @returns {{exportedAt: string, extensionVersion: string, config: object}}
  */
 function buildConfigExport(
@@ -693,6 +727,8 @@ function buildConfigExport(
   preflight = false,
   // Issue #222: same "append at the end" rule.
   requestDelay = null,
+  // Issue #223: same "append at the end" rule.
+  retry = null,
 ) {
   return {
     exportedAt: new Date().toISOString(),
@@ -702,7 +738,7 @@ function buildConfigExport(
       useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession,
       includeOutputFile, externalConfig, combinedComponents, blocks,
       outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping,
-      outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping, discoveredUrls, preflight, requestDelay,
+      outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping, discoveredUrls, preflight, requestDelay, retry,
     ),
   };
 }
@@ -948,7 +984,7 @@ function frameBadgeHtml(framePath) {
 }
 
   return {sanitizeFileNameBase, deriveScriptFileNameFromHostname, computeScriptFileNamePatch, parseAdditionalUrls,
-    buildChangeDetectionConfig, buildProxyConfig, buildRequestDelayConfig, buildPaginationConfig, buildDiscoveredUrlsConfig, buildHardeningConfig,
+    buildChangeDetectionConfig, buildProxyConfig, buildRequestDelayConfig, buildRetryConfig, buildPaginationConfig, buildDiscoveredUrlsConfig, buildHardeningConfig,
     computeInitialMonitoringSectionOpen, collectFieldNames,
     buildScrapingConfig, buildConfigExport,
     addField, removeField, updateField,

@@ -44,6 +44,7 @@ declare namespace SFWire {
     changeDetection?: ChangeDetectionConfig;
     proxy?: ProxyConfig;
     requestDelay?: RequestDelayConfig;
+    retry?: RetryConfig;
     hardening?: HardeningCheck[];
     pagination?: PaginationConfig;
     discoveredUrls?: DiscoveredUrlsConfig;
@@ -168,6 +169,14 @@ declare namespace SFWire {
 
   interface ProxyConfig {
     environmentVariableName: string;
+  }
+
+  // Issue #223: see IR/RetryConfig.cs.
+  interface RetryConfig {
+    maxAttempts?: number;
+    delayMs?: number;
+    exponential?: boolean;
+    retryOnStatusCodes?: number[] | null;
   }
 
   // Issue #222: see IR/RequestDelayConfig.cs.

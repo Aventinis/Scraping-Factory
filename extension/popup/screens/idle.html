@@ -263,6 +263,31 @@
             </div>
             <p class="preview-summary" data-i18n="idle.requestDelayHint"></p>
           </div>
+          <!-- Issue #223: opt-in retry with backoff on transient request
+               failures (connection errors/timeouts, 429/502/503/504 by
+               default) — mode- and engine-independent. -->
+          <label class="output-settings-toggle">
+            <input type="checkbox" id="toggle-retry" />
+            <span data-i18n="idle.retryToggle"></span>
+          </label>
+          <div id="retry-config" class="hidden">
+            <div class="output-settings-row retry-row">
+              <label for="input-retry-attempts" data-i18n="idle.retryAttemptsLabel"></label>
+              <input type="text" inputmode="numeric" id="input-retry-attempts" autocomplete="off" />
+              <label for="input-retry-delay" data-i18n="idle.retryDelayLabel"></label>
+              <input type="text" inputmode="decimal" id="input-retry-delay" autocomplete="off" />
+              <span data-i18n="idle.requestDelaySecondsUnit"></span>
+            </div>
+            <label class="output-settings-toggle">
+              <input type="checkbox" id="toggle-retry-exponential" />
+              <span data-i18n="idle.retryExponentialToggle"></span>
+            </label>
+            <div class="output-settings-row">
+              <label for="input-retry-status-codes" data-i18n="idle.retryStatusCodesLabel"></label>
+              <input type="text" id="input-retry-status-codes" autocomplete="off" />
+            </div>
+            <p class="preview-summary" data-i18n="idle.retryHint"></p>
+          </div>
           <!-- Issue #174: opt-in classic multi-page pagination — follows
                either a "next page" link (CSS selector, href resolved
                relative to the current page) or a {page}-templated URL,
