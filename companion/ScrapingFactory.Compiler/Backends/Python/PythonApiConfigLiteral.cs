@@ -137,9 +137,27 @@ internal static class PythonApiConfigLiteral
     // (IsNullOrWhiteSpace, not just != null) — an empty-string
     // EnvironmentVariableName alongside a set Value passes validation as "Value
     // wins" there, so codegen has to agree on which one is actually set.
-    private static string RenderHeader(ApiHeader header) => !string.IsNullOrWhiteSpace(header.EnvironmentVariableName)
-        ? $$"""{"name": {{PythonLiteral.Str(header.Name)}}, "envVar": {{PythonLiteral.Str(header.EnvironmentVariableName)}}}"""
-        : $$"""{"name": {{PythonLiteral.Str(header.Name)}}, "value": {{PythonLiteral.Str(header.Value!)}}}""";
+    // Issue #220: a Template header renders as {"name", "template"} —
+    // _build_headers() substitutes the bootstrap value into it at runtime.
+    private static string RenderHeader(ApiHeader header) =>
+        !string.IsNullOrWhiteSpace(header.EnvironmentVariableName)
+            ? $$"""{"name": {{PythonLiteral.Str(header.Name)}}, "envVar": {{PythonLiteral.Str(header.EnvironmentVariableName)}}}"""
+            : !string.IsNullOrWhiteSpace(header.Template)
+                ? $$"""{"name": {{PythonLiteral.Str(header.Name)}}, "template": {{PythonLiteral.Str(header.Template!)}}}"""
+                : $$"""{"name": {{PythonLiteral.Str(header.Name)}}, "value": {{PythonLiteral.Str(header.Value!)}}}""";
+
+    // Issue #220: "None" when no bootstrap is configured, same "None means
+    // absent" convention as RenderBody/RenderEmbeddedJsonSource. Body fields
+    // reuse the header dict shape ({"name", "value"|"envVar"}) so the
+    // runtime resolves both through one helper (_resolve_bootstrap_pairs).
+    public static string RenderBootstrap(ApiBootstrap? bootstrap) => bootstrap is null
+        ? "None"
+        : $$"""{"name": {{PythonLiteral.Str(bootstrap.Name)}}, "method": {{PythonLiteral.Str(bootstrap.Method)}}, "url": {{PythonLiteral.Str(bootstrap.Url)}}, "headers": {{RenderHeaders(bootstrap.Headers)}}, "bodyFields": {{RenderBootstrapBodyFields(bootstrap.BodyFields)}}, "bodyEncoding": {{PythonLiteral.Str(bootstrap.BodyEncoding.ToString())}}, "valuePath": {{PythonLiteral.Str(bootstrap.ValuePath)}}}""";
+
+    private static string RenderBootstrapBodyFields(List<ApiBootstrapBodyField>? fields) =>
+        fields is null ? "[]" : RenderList(fields, field => !string.IsNullOrWhiteSpace(field.EnvironmentVariableName)
+            ? $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "envVar": {{PythonLiteral.Str(field.EnvironmentVariableName)}}}"""
+            : $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "value": {{PythonLiteral.Str(field.Value ?? "")}}}""");
 
     private static string RenderSource(ApiParameterSource source) => source switch
     {

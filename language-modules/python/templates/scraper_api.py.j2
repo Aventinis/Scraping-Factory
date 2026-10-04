@@ -641,7 +641,7 @@ def _substitute_known_parameters(template, combo):
 # earlier parameter — the same "resolve once, not once per combo" behavior
 # this had before chaining existed, since a source with no such reference
 # always maps to the same (empty) cache key regardless of `combo`.
-def _resolve_parameter_combos(headers):
+def _resolve_parameter_combos(headers{{ if has_bootstrap }}, bootstrap_values{{ end }}):
     combos = [{}]
     for parameter in PARAMETERS:
         name = parameter["name"]
@@ -659,7 +659,14 @@ def _resolve_parameter_combos(headers):
             referenced = set(_URL_TEMPLATE_PLACEHOLDER_PATTERN.findall(template)) & combo.keys()
             cache_key = tuple(sorted((ref_name, combo[ref_name]) for ref_name in referenced))
             if cache_key not in cache:
+{{~ if has_bootstrap ~}}
+                # Issue #220: the bootstrap value is substitutable into a
+                # discovery template too, but never becomes part of `combo`
+                # itself (combo values end up as output columns).
+                cache[cache_key] = _resolve_parameter_values(source, headers, name, {**bootstrap_values, **combo})
+{{~ else ~}}
                 cache[cache_key] = _resolve_parameter_values(source, headers, name, combo)
+{{~ end ~}}
             for value in cache[cache_key]:
                 new_combos.append({**combo, name: value})
         combos = new_combos
@@ -857,7 +864,14 @@ def _resolve_browser_discovery(source, headers, target_name, combo):
 {{~ end ~}}
 
 
+{{~ if has_bootstrap ~}}
+# Issue #220: a "template" header (e.g. "Bearer {token}") gets the bootstrap
+# value substituted in — ScrapingPlanValidator guarantees a template only
+# ever references the bootstrap value's own name.
+def _build_headers(bootstrap_values):
+{{~ else ~}}
 def _build_headers():
+{{~ end ~}}
     # Many sites (Wikipedia among them) reject the bare "python-requests/x.y"
     # default User-Agent with 403 Forbidden — an honest, identifying UA (not
     # a spoofed browser) is enough to pass that check on most sites. Set
@@ -866,10 +880,76 @@ def _build_headers():
     # handling means the later entry wins regardless of casing).
     headers = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"}
     for header in HEADERS:
+{{~ if has_bootstrap ~}}
+        if "template" in header:
+            headers[header["name"]] = _URL_TEMPLATE_PLACEHOLDER_PATTERN.sub(
+                lambda match: bootstrap_values.get(match.group(1), match.group(0)), header["template"])
+            continue
+{{~ end ~}}
         headers[header["name"]] = header["value"] if "value" in header else os.environ[header["envVar"]]
     return headers
 
 
+{{~ if has_bootstrap ~}}
+# Issue #220: a short-lived credential (bearer token, signed URL parameter,
+# nonce, ...) fetched fresh at the start of every run from a separate
+# bootstrap/login request, instead of being pasted in as a static literal
+# that eventually expires. Fetched once per script execution — a token that
+# expires mid-run (a very long multi-parameter run) isn't refreshed.
+# Credentials in the bootstrap request's own body/headers are read from
+# environment variables via _require_env, never written into this script.
+# The fetched value itself is never printed: _redact_bootstrap() masks it in
+# every URL this script prints (e.g. a "Skipped (404 Not Found)" line).
+BOOTSTRAP = {{ bootstrap_literal }}
+EXIT_BOOTSTRAP_FAILED = 6
+_BOOTSTRAP_VALUES = {}
+
+
+def _bootstrap_error(message):
+    print(f"ERROR: bootstrap request to {BOOTSTRAP['url']} failed: {message}", file=sys.stderr)
+    sys.exit(EXIT_BOOTSTRAP_FAILED)
+
+
+def _resolve_bootstrap_pairs(entries):
+    return {entry["name"]: entry["value"] if "value" in entry else _require_env(entry["envVar"]) for entry in entries}
+
+
+def _run_bootstrap():
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"}
+    headers.update(_resolve_bootstrap_pairs(BOOTSTRAP["headers"]))
+    body = _resolve_bootstrap_pairs(BOOTSTRAP["bodyFields"])
+    request_kwargs = {"headers": headers, {{ if proxy.enabled }}"proxies": _proxies_for_requests(), {{ end }}"timeout": 10}
+    try:
+        if BOOTSTRAP["method"] == "POST":
+            if not BOOTSTRAP["bodyFields"]:
+                response = requests.post(BOOTSTRAP["url"], **request_kwargs)
+            elif BOOTSTRAP["bodyEncoding"] == "Form":
+                response = requests.post(BOOTSTRAP["url"], data=body, **request_kwargs)
+            else:
+                response = requests.post(BOOTSTRAP["url"], json=body, **request_kwargs)
+        else:
+            response = requests.get(BOOTSTRAP["url"], **request_kwargs)
+    except requests.RequestException as e:
+        _bootstrap_error(str(e))
+    if not response.ok:
+        _bootstrap_error(f"HTTP {response.status_code}.")
+    try:
+        data = response.json()
+    except ValueError:
+        _bootstrap_error("the response is not JSON.")
+    value = _resolve_field(data, BOOTSTRAP["valuePath"])
+    if value is None or isinstance(value, (dict, list)) or str(value) == "":
+        _bootstrap_error(f"no value found at JSON path '{BOOTSTRAP['valuePath']}' in the response.")
+    return {BOOTSTRAP["name"]: str(value)}
+
+
+def _redact_bootstrap(text):
+    for value in _BOOTSTRAP_VALUES.values():
+        text = text.replace(quote(value, safe=""), "***").replace(value, "***")
+    return text
+
+
+{{~ end ~}}
 # Discovery requests reuse the main HEADERS (e.g. an auth token) since a
 # discovery endpoint is typically part of the same API as the main request.
 # `combo` holds every earlier-declared parameter's own already-resolved
@@ -1034,8 +1114,14 @@ def _notify_change(old_content, new_content):
 
 
 def scrape():
+{{~ if has_bootstrap ~}}
+    _BOOTSTRAP_VALUES.update(_run_bootstrap())
+    headers = _build_headers(_BOOTSTRAP_VALUES)
+    combos = _resolve_parameter_combos(headers, _BOOTSTRAP_VALUES)
+{{~ else ~}}
     headers = _build_headers()
     combos = _resolve_parameter_combos(headers)
+{{~ end ~}}
 
     rows = []
     for combo in combos:
@@ -1043,10 +1129,10 @@ def scrape():
         # UrlTemplate — values discovered at runtime (DiscoverySource) could
         # contain spaces or other characters that aren't valid unescaped in a
         # URL.
-        encoded_combo = {name: quote(str(value), safe="") for name, value in combo.items()}
+        encoded_combo = {name: quote(str(value), safe="") for name, value in {{ if has_bootstrap }}{**_BOOTSTRAP_VALUES, **combo}{{ else }}combo{{ end }}.items()}
         url = URL_TEMPLATE.format(**encoded_combo)
 
-        body = _render_body(BODY, combo)
+        body = _render_body(BODY, {{ if has_bootstrap }}{**_BOOTSTRAP_VALUES, **combo}{{ else }}combo{{ end }})
         if METHOD == "POST":
             response = requests.post(url, headers=headers, json=body, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
         else:
@@ -1065,11 +1151,11 @@ def scrape():
         # existing "at least one output row" check in PythonScriptVerifier
         # still catches that — this doesn't need to track failures itself.
         if response.status_code == 404:
-            print(f"Skipped (404 Not Found): {url}")
+            print(f"Skipped (404 Not Found): {{ if has_bootstrap }}{_redact_bootstrap(url)}{{ else }}{url}{{ end }}")
             continue
         response.raise_for_status()
 {{~ if hardening.enabled ~}}
-        _BLOCKING_RESPONSES.append({"url": url, "final_url": response.url, "length": len(response.content), "text": response.text})
+        _BLOCKING_RESPONSES.append({"url": {{ if has_bootstrap }}_redact_bootstrap(url){{ else }}url{{ end }}, "final_url": {{ if has_bootstrap }}_redact_bootstrap(response.url){{ else }}response.url{{ end }}, "length": len(response.content), "text": response.text})
 {{~ end ~}}
 {{~ if embedded_json_source ~}}
         data = _extract_embedded_json(response)
