@@ -771,6 +771,33 @@ for a hardening check that runs once at the very end, not per-transform).
   `PythonScriptVerifier` can't see per-cell values" reasoning
   `HardeningNullRateEndToEndTests` already documents).
 
+### 2.18b Price/currency-to-number transform (Issue #234)
+
+A fourth strict conversion next to §2.18a's three: "Convert price/currency to
+number" (`toCurrency`) turns a scraped amount like "Preis: 1.234,56 €",
+"£51.77" or "CHF 1'234.50" into a plain decimal string ("1234.56"). Unlike
+`toNumber`'s heuristic (which reads a lone "1.234" as 1.234), the user picks
+one of four format presets — each written as its own example amount
+(`1.234,56`, `1,234.56`, `1 234,56`, `1'234.56`) — so the decimal vs.
+thousands separator is never guessed. The first number in the value must
+match the preset strictly; fraction digits are kept exactly as scraped (no
+float rounding); a mismatch goes through the shared `onError` contract.
+
+- IR: `IR/FieldTransform.cs` (`ToCurrencyTransform`, `"kind": "toCurrency"`,
+  `Format`/`OnError`/`DefaultValue`, `SupportedFormats`)
+- `Backends/Python/FieldTransformValidator` (preset whitelist, shared
+  `UseDefault`-needs-a-value rule), `PythonFieldTransformLiteral`
+- Every template carrying `_apply_transforms` (all eight): `_CURRENCY_FORMATS`
+  table + `_to_currency`
+- Extension: `field-transforms.js` (`toCurrencyPreview` — hand-kept JS mirror
+  of `_to_currency` — plus `CURRENCY_FORMAT_IDS`), `field-transforms-ui.js`
+  (format `<select>`), i18n `transforms.toCurrencyOption`/`transforms.currencyFormat.*`
+- Tests: `CurrencyTransformTests.cs` (wire format, validation, real
+  generated-script runs for every preset across flat/container/API),
+  `extension/popup/to-currency.test.js` (the same cases against the JS
+  mirror, plus the editor row), real-browser check
+  `e2e/examples/issue-234-to-currency-check.js`
+
 ### 2.19 Multiple start URLs (Issue #83)
 
 Lets the same Fields/Groups extraction config run against a static,

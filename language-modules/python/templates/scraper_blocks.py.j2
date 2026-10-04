@@ -310,6 +310,41 @@ def _to_date(value, source_format, on_error, default_value):
     return _type_conversion_fallback(value, on_error, default_value)
 
 
+# Issue #234: strict price/currency conversion. number_format is one of
+# ToCurrencyTransform.SupportedFormats, each written as its own example
+# amount — its first punctuation mark is the thousands separator, its last
+# the decimal separator (a space format also accepts no-break/narrow
+# no-break spaces, the apostrophe format a typographic apostrophe). Finds
+# the first number in the value (a separator only counts when a digit
+# follows, so a trailing "." or "," after the amount is never swallowed),
+# requires it to match the format strictly (thousands groups of exactly
+# three digits, at most one decimal separator), and keeps the fraction
+# digits exactly as scraped — no float rounding. Mirrored by
+# toCurrencyPreview in extension/popup/field-transforms.js.
+_CURRENCY_FORMATS = {
+    "1.234,56": (",", "."),
+    "1,234.56": (".", ","),
+    "1 234,56": (",", "   "),
+    "1'234.56": (".", "'’"),
+}
+
+
+def _to_currency(value, number_format, on_error, default_value):
+    decimal_sep, thousands_seps = _CURRENCY_FORMATS.get(number_format, _CURRENCY_FORMATS["1.234,56"])
+    candidate = re.search(r"[+-]?[0-9](?:[0-9]|[" + re.escape(decimal_sep + thousands_seps) + r"](?=[0-9]))*", value)
+    if candidate:
+        thousands = "[" + re.escape(thousands_seps) + "]"
+        match = re.fullmatch(
+            r"([+-]?)([0-9]{1,3}(?:" + thousands + r"[0-9]{3})+|[0-9]+)(?:" + re.escape(decimal_sep) + r"([0-9]+))?",
+            candidate.group(0),
+        )
+        if match:
+            integer = str(int(re.sub(thousands, "", match.group(2))))
+            sign = "-" if match.group(1) == "-" else ""
+            return sign + integer + ("." + match.group(3) if match.group(3) else "")
+    return _type_conversion_fallback(value, on_error, default_value)
+
+
 # Applies a field's ordered transform chain — each step's output feeds the
 # next step's input, in the order the user configured them in.
 def _resolve_transform_sibling(siblings, name):
@@ -345,6 +380,8 @@ def _apply_transforms(value, transforms, siblings=None):
             value = _to_boolean(value, t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
         elif kind == "toDate":
             value = _to_date(value, t.get("sourceFormat", "{yyyy}-{mm}-{dd}"), t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
+        elif kind == "toCurrency":
+            value = _to_currency(value, t.get("format", "1.234,56"), t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
         elif kind == "combineFields":
             value = t.get("separator", " ").join(_resolve_transform_sibling(siblings, n) for n in t.get("sourceFieldNames", []))
         elif kind == "splitField":

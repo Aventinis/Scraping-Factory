@@ -322,6 +322,7 @@
     "toIntegerOption": "Convert to integer",
     "toBooleanOption": "Convert to boolean",
     "toDateOption": "Convert to date",
+    "toCurrencyOption": "Convert price/currency to number",
     "patternPlaceholder": "Regex pattern (e.g. \"\\d+\")",
     "groupPlaceholder": "Group (0 = whole match)",
     "findPlaceholder": "Find",
@@ -335,7 +336,13 @@
     "defaultValuePlaceholder": "Default value",
     "previewLabel": "Preview: {value}",
     "previewEmptyValue": "(empty)",
-    "previewUnavailable": "Preview unavailable"
+    "previewUnavailable": "Preview unavailable",
+    "currencyFormat": {
+      "commaDecimal": "1.234,56 (DE/AT/IT …)",
+      "dotDecimal": "1,234.56 (EN/US/UK …)",
+      "spaceGrouped": "1 234,56 (FR/Nordics …)",
+      "apostropheGrouped": "1'234.56 (CH)"
+    }
   },
   "generating": {
     "message": "Generating script…"

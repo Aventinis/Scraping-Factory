@@ -30,6 +30,7 @@ namespace ScrapingFactory.Compiler.IR;
 [JsonDerivedType(typeof(ToIntegerTransform), "toInteger")]
 [JsonDerivedType(typeof(ToBooleanTransform), "toBoolean")]
 [JsonDerivedType(typeof(ToDateTransform), "toDate")]
+[JsonDerivedType(typeof(ToCurrencyTransform), "toCurrency")]
 [JsonDerivedType(typeof(CombineFieldsTransform), "combineFields")]
 [JsonDerivedType(typeof(SplitFieldTransform), "splitField")]
 public abstract class FieldTransform
@@ -140,6 +141,37 @@ public sealed class ToDateTransform : FieldTransform
     public string? SourceFormat { get; init; }
     public TransformErrorMode OnError { get; init; } = TransformErrorMode.KeepOriginal;
     public string? DefaultValue { get; init; }
+}
+
+// Issue #234: strict price/currency conversion — finds the first number in
+// the value (ignoring any surrounding currency symbol/code/text, e.g.
+// "Preis: 1.234,56 €" or "CHF 1'234.50") and normalizes it to a plain
+// decimal string ("1234.56"). Unlike ToNumberTransform's best-effort
+// heuristic (which reads a lone "1.234" as 1.234), Format says explicitly
+// which character is the decimal separator and which the thousands
+// separator, so a thousands-only amount like "€ 1.234" correctly becomes
+// "1234" under the "1.234,56" format. The number must match that format
+// strictly (thousands groups of exactly three digits, at most one decimal
+// separator), otherwise it's a conversion failure handled by OnError. The
+// fraction digits are kept exactly as scraped ("12,90" -> "12.90", never
+// rounded through a float). Extracting the currency symbol/code itself as a
+// separate value is out of scope (Issue #234's own first-version scope).
+public sealed class ToCurrencyTransform : FieldTransform
+{
+    // One of SupportedFormats — each preset is written as its own example
+    // amount, so the wire value is self-describing.
+    public string Format { get; init; } = DefaultFormat;
+    public TransformErrorMode OnError { get; init; } = TransformErrorMode.KeepOriginal;
+    public string? DefaultValue { get; init; }
+
+    public const string DefaultFormat = "1.234,56";
+
+    // Decimal separator is the format's last punctuation mark, the thousands
+    // separator its first ("1 234,56" also accepts a no-break/narrow
+    // no-break space, "1'234.56" also a typographic apostrophe) — see
+    // _to_currency in the templates and toCurrencyPreview in
+    // field-transforms.js, which must stay in sync with this list.
+    public static readonly IReadOnlyList<string> SupportedFormats = ["1.234,56", "1,234.56", "1 234,56", "1'234.56"];
 }
 
 // Issue #206: concatenates the values of two or more *other* fields,

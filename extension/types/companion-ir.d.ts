@@ -107,6 +107,7 @@ declare namespace SFWire {
     | ToIntegerTransform
     | ToBooleanTransform
     | ToDateTransform
+    | ToCurrencyTransform
     | CombineFieldsTransform
     | SplitFieldTransform;
 
@@ -119,6 +120,7 @@ declare namespace SFWire {
   interface ToIntegerTransform { kind: 'toInteger'; onError?: TransformErrorMode; defaultValue?: string | null; }
   interface ToBooleanTransform { kind: 'toBoolean'; onError?: TransformErrorMode; defaultValue?: string | null; }
   interface ToDateTransform { kind: 'toDate'; sourceFormat?: string | null; onError?: TransformErrorMode; defaultValue?: string | null; }
+  interface ToCurrencyTransform { kind: 'toCurrency'; format?: "1.234,56" | "1,234.56" | "1 234,56" | "1'234.56"; onError?: TransformErrorMode; defaultValue?: string | null; }
   interface CombineFieldsTransform { kind: 'combineFields'; sourceFieldNames: string[]; separator?: string; }
   interface SplitFieldTransform { kind: 'splitField'; sourceFieldName: string; separator?: string; index?: number; }
 
