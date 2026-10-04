@@ -106,6 +106,9 @@ def _download_resource(page, url, max_size=None, allowed_types=None):
     local_path = os.path.join(DOWNLOADS_DIR, digest + ext)
     if not os.path.exists(local_path):
         try:
+{{~ if request_delay.enabled ~}}
+            _pace_request()
+{{~ end ~}}
             response = page.context.request.get(absolute_url)
             if not response.ok:
                 raise RuntimeError(f"HTTP {response.status}")
@@ -1058,8 +1061,14 @@ def _run_preflight_check(url):
 {{~ if proxy.enabled ~}}
         proxy = _next_proxy()
         proxies = {"http": proxy, "https": proxy} if proxy else None
+{{~ if request_delay.enabled ~}}
+        _pace_request()
+{{~ end ~}}
         response = requests.head(url, headers=headers, proxies=proxies, timeout=10, allow_redirects=True)
 {{~ else ~}}
+{{~ if request_delay.enabled ~}}
+        _pace_request()
+{{~ end ~}}
         response = requests.head(url, headers=headers, timeout=10, allow_redirects=True)
 {{~ end ~}}
         response.raise_for_status()
@@ -1097,8 +1106,14 @@ def _discover_additional_urls():
 {{~ if proxy.enabled ~}}
         proxy = _next_proxy()
         proxies = {"http": proxy, "https": proxy} if proxy else None
+{{~ if request_delay.enabled ~}}
+        _pace_request()
+{{~ end ~}}
         response = requests.get(DISCOVERED_URLS_PAGE_URL, headers=headers, proxies=proxies, timeout=10)
 {{~ else ~}}
+{{~ if request_delay.enabled ~}}
+        _pace_request()
+{{~ end ~}}
         response = requests.get(DISCOVERED_URLS_PAGE_URL, headers=headers, timeout=10)
 {{~ end ~}}
         response.raise_for_status()
@@ -1128,6 +1143,9 @@ def scrape(url):
         _session_exists = os.path.exists(SESSION_STATE_PATH)
         context = browser.new_context(storage_state=SESSION_STATE_PATH if _session_exists else None)
         page = context.new_page()
+{{~ if request_delay.enabled ~}}
+        _pace_request()
+{{~ end ~}}
 {{ navigate_action }}
 {{~ if has_login_actions ~}}
         if not _session_exists:
@@ -1135,6 +1153,9 @@ def scrape(url):
 {{~ end ~}}
 {{~ else ~}}
         page = browser.new_page()
+{{~ if request_delay.enabled ~}}
+        _pace_request()
+{{~ end ~}}
 {{ actions }}
 {{~ end ~}}
 
@@ -1179,8 +1200,14 @@ def scrape(url):
             next_href = next_el.get_attribute("href") if next_el else None
             if not next_href:
                 break
+{{~ if request_delay.enabled ~}}
+            _pace_request()
+{{~ end ~}}
             page.goto(urllib.parse.urljoin(page.url, next_href), wait_until="load", timeout=30000)
 {{~ else ~}}
+{{~ if request_delay.enabled ~}}
+            _pace_request()
+{{~ end ~}}
             page.goto(PAGINATION_URL_TEMPLATE.format(url=url, page=page_number), wait_until="load", timeout=30000)
 {{~ end ~}}
 {{~ else ~}}
@@ -1194,6 +1221,35 @@ def scrape(url):
         return root, blueprint_rows, blueprint_tree_elements
 
 
+{{~ if request_delay.enabled ~}}
+# Issue #222: optional pause between outbound requests — a minimum gap
+# between the starts of two consecutive requests, drawn uniformly from
+# [REQUEST_DELAY_MIN_S, REQUEST_DELAY_MAX_S] each time. Only the part of the
+# pause that hasn't already elapsed (e.g. while parsing the previous page) is
+# actually slept, and the very first request of a run starts immediately.
+# Each pause is announced on stdout — so a long run visibly isn't hanging,
+# and so the companion's trial run can tell waiting apart from a stuck
+# script (PythonScriptVerifier extends its own deadline by exactly the
+# announced pause).
+import random
+import time
+
+REQUEST_DELAY_MIN_S = {{ request_delay.min_s_literal }}
+REQUEST_DELAY_MAX_S = {{ request_delay.max_s_literal }}
+_last_request_started_at = None
+
+
+def _pace_request():
+    global _last_request_started_at
+    if _last_request_started_at is not None:
+        remaining = random.uniform(REQUEST_DELAY_MIN_S, REQUEST_DELAY_MAX_S) - (time.monotonic() - _last_request_started_at)
+        if remaining > 0:
+            print(f"Pausing {remaining:.2f} s before the next request (request delay)...", flush=True)
+            time.sleep(remaining)
+    _last_request_started_at = time.monotonic()
+
+
+{{~ end ~}}
 def main():
 {{~ if preflight.enabled ~}}
     preflight_status, preflight_etag, preflight_last_modified = _run_preflight_check(URLS[0])
