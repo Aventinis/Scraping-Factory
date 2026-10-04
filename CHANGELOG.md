@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.17.6](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.5...v1.17.6) (2026-10-04)
+
+
+### Features
+
+* retry with backoff on transient request failures (Issue [#223](https://github.com/Aventinis/Scraping-Factory/issues/223)) ([630dda3](https://github.com/Aventinis/Scraping-Factory/commit/630dda3bf68c41cafdafabbe450724d85d033bae))
+* **retry:** add Retry on transient errors setting to the extension ([06f0469](https://github.com/Aventinis/Scraping-Factory/commit/06f046906802298eb81eaa9b2d61f50ab67e6ca7))
+* **retry:** add RetryConfig IR, validation and Scriban context ([3ad09a0](https://github.com/Aventinis/Scraping-Factory/commit/3ad09a035defedfcbb6f3686f1bd4d1ddd32f526))
+* **retry:** extend the trial run's deadline by announced retries ([83a9662](https://github.com/Aventinis/Scraping-Factory/commit/83a9662a612fd80eeba437a2f539bbcb048d2b94))
+* **retry:** retry every outbound request/navigation on transient failures in all request-making templates ([f51b5c2](https://github.com/Aventinis/Scraping-Factory/commit/f51b5c201a4454c7c53844065147f2dffa2406ec))
+
 ## [1.17.5](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.4...v1.17.5) (2026-10-04)
 
 
