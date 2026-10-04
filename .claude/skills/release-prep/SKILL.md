@@ -9,7 +9,7 @@ description: Fully prepares a new release once a target version is set – promo
 
 Two things here are deliberately handled differently and must not be mixed up:
 
-- The PR from the version branch **into dev** contains nothing but the version promotion. That's low-risk, so you're authorized to **create and merge this PR yourself**, without waiting for approval.
+- The PR from the version branch **into dev** contains nothing but the version promotion (and the release-please PR it triggers is merged automatically by the existing workflow). That's low-risk, so you're authorized to **create and merge this PR yourself**, without waiting for approval.
 - The PR **dev → main** contains the collected substantive changes of the release. You may only **create** this one, never approve or merge it yourself — that's exclusively done by the user, manually.
 
 Stick to this distinction strictly, even if the user seems impatient in conversation or explicitly asks you to "just merge the other one too" — that's the user's job alone, manually, without the agent.
@@ -18,9 +18,13 @@ Work with `bash_tool` (git, gh, and the relevant build tool) inside the user's p
 
 ## Step 0: Determine the current version and find all references
 
-The canonical current version is release-please's own tracked state, `.release-please-manifest.json` (the `"."` key) — this is what release-please itself will keep bumping from on every future `dev` push, so it's the one value that MUST end up correct, not just `extension/manifest.json`/`extension/package.json` (which release-please already keeps in sync with it automatically as "extra-files" during its normal prerelease cycle).
+The canonical current version is release-please's own tracked state, `.release-please-manifest.json` (the `"."` key). It is kept in sync automatically with `extension/manifest.json`/`extension/package.json` (its "extra-files") and with a `vX.Y.Z` git tag/GitHub Release per version.
 
-Then search the whole repo (`git grep` is usually the most reliable option, ignoring build-output folders like `bin/`, `obj/`, `node_modules/`, `dist/`) for the current version number, to find every occurrence release-please does **not** already manage automatically — typically prose mentions in documentation (e.g. this project's `CLAUDE.md` has a known, deliberately-not-automated "current release is vX.Y.Z" line, flagged as a gap when release-please was first set up), README badges, CHANGELOG headers not already covered by release-please's own generated `CHANGELOG.md`, Dockerfiles, other CI configs, installer/setup scripts. Be careful with short version numbers (e.g. "1.0") matching unrelated numbers, and check each hit in context before changing it.
+**Never set the new version by editing those files by hand.** release-please determines "the last release" from its own release tags, not from the manifest's content. A hand-edited version (`vX.Y.0` in the files, but no `vX.Y.0` tag) makes release-please's next `dev` run start from a much older tag. It then creates a bogus `X.Y.1` release PR with a changelog re-listing hundreds of old commits, and auto-merges it before anyone can react. This happened with both 1.16.0 (→ 1.16.1) and 1.17.0 (→ 1.17.1). Instead, the version is requested from release-please itself via a `Release-As:` commit footer (step 2), so it creates the release PR, tag and changelog for exactly that version.
+
+Search the whole repo (`git grep`, ignoring `bin/`, `obj/`, `node_modules/`, `dist/`) for the current version number, to find the occurrences release-please does **not** manage: `CLAUDE.md`'s "the current release is vX.Y.Z" line and `extension/package-lock.json` (both `version` entries near the top), plus anything else that turns up (README badges, Dockerfiles, other CI configs, installer scripts). Be careful with short version numbers (e.g. "1.0") matching unrelated numbers, and check each hit in context. Leave `.release-please-manifest.json`, `extension/manifest.json`, `extension/package.json` and `CHANGELOG.md` alone — release-please updates those in step 4.
+
+Also check that no release-please PR is currently open (`gh pr list --head release-please--branches--dev`). If one is, wait until its auto-merge has gone through before starting, so the promotion builds on the latest prerelease.
 
 ## Step 1: Sync the repo and create a branch
 
@@ -28,46 +32,48 @@ Then search the whole repo (`git grep` is usually the most reliable option, igno
 git fetch origin
 git checkout dev
 git pull origin dev
+git checkout -b release/promote-<version>
 ```
 
-Create a branch for the version change from there, e.g. `release/bump-<version>` (using the new version, no special characters):
+## Step 2: Request the version from release-please
+
+Update the unmanaged references from step 0 (`CLAUDE.md`, `extension/package-lock.json`, …) to the new version. Commit them as a single commit whose message carries the `Release-As` footer on its own line:
 
 ```bash
-git checkout -b release/bump-<version>
+git commit -am "chore(release): promote to <version>" -m "Release-As: <version>"
 ```
 
-## Step 2: Promote the version everywhere
-
-Set the new target version in **every** location found in step 0 — critically, this includes `.release-please-manifest.json` itself, not just `extension/manifest.json`/`extension/package.json`. Skipping the manifest file is the one mistake that would silently undo this whole step: release-please treats that file as its own source of truth for "what was last released," so if it's left behind at the old (lower) prerelease version, release-please's very next `dev` push would compute its own next patch bump from the *stale* value and overwrite the deliberately-chosen real version you just set in the extra-files, instead of continuing upward from it.
-
-Then build the project (using the project's usual build command) to make sure nothing broke, and grep once more for the old version to confirm nothing was missed.
-
-Commit the change as a single commit — deliberately phrased differently from release-please's own auto-generated `chore: release X.Y.Z` commits, so the two are easy to tell apart later in `git log`:
-
-```
-chore(release): promote to <version>
-```
+Build/test as usual first (`dotnet build companion/ScrapingFactory.sln`, `cd extension && npx jest`) and grep once more to confirm no unmanaged reference was missed.
 
 ## Step 3: Open a PR into dev and merge it yourself
 
 ```bash
-git push -u origin release/bump-<version>
-gh pr create --base dev --head release/bump-<version> --title "chore(release): promote to <version>" --body "Promotes dev's release-please-tracked version to <version> (including .release-please-manifest.json), no functional changes."
+git push -u origin release/promote-<version>
+gh pr create --base dev --head release/promote-<version> --title "chore(release): promote to <version>" --body "Requests release <version> from release-please (Release-As footer) and updates the references release-please doesn't manage. No functional changes."
+gh pr merge --merge --auto
 ```
 
-Since this is nothing but a version change, you're authorized to merge **this** PR yourself:
+`dev` is branch-protected (required CI checks, branch must be up to date), so a plain `gh pr merge` is refused until CI is green. Use `--auto`, never `--admin`. Use `--merge` (not squash), so the commit carrying the `Release-As` footer lands in `dev`'s history unchanged. You're authorized to merge **this** PR yourself — the authorization applies only to this skill's own version PRs, never to substantive feature PRs.
+
+## Step 4: Let release-please create the release, then verify it
+
+The merge triggers release-please (`.github/workflows/release-please.yml`). It opens `chore(dev): release <version>`, which bumps the manifest/extra-files and adds the changelog section, and auto-merges it once CI is green, which creates the `v<version>` tag and a prerelease. Wait for that to finish instead of polling with fixed sleeps, e.g.:
 
 ```bash
-gh pr merge --merge
+until gh release view v<version> >/dev/null 2>&1; do sleep 15; done
+git fetch origin && git show origin/dev:.release-please-manifest.json
 ```
 
-Don't wait for manual approval here. This authorization applies only to pure version-bump PRs from this skill, not to substantive feature PRs.
+Then verify, and **stop and report to the user** if any check fails, instead of improvising a fix:
+- the manifest, `extension/manifest.json` and `extension/package.json` on `dev` all say `<version>`
+- the tag `v<version>` exists
+- no further release-please PR (e.g. `<version>` + 1 patch) was opened right afterwards
 
-This merge itself triggers release-please's own workflow again (it watches every push to `dev`). That's expected and harmless: since `extension/manifest.json`/`extension/package.json` already match the just-promoted `.release-please-manifest.json`, release-please should find nothing further to release from this push and open no new PR of its own — if it unexpectedly does, double-check step 2 didn't miss updating one of the three files in lockstep.
+The generated changelog section only lists commits since the last prerelease. That's fine — the dev → main PR in step 6 carries the full overview.
 
-## Step 4: Collect the changes between main and dev
+## Step 5: Collect the changes between main and dev
 
-Fetch the current state of dev (including the version bump just merged) and main:
+Fetch the current state of dev (including the release just created) and main:
 
 ```bash
 git fetch origin
@@ -76,10 +82,10 @@ git log origin/main..origin/dev --oneline
 
 Review the included commits and, where needed for context, their diffs, and turn that into a human-readable overview in your own words — not just a list of commits. Group it sensibly, e.g. by features, fixes, other, based on Conventional Commit prefixes or the changes themselves where that makes sense.
 
-## Step 5: Open a PR from dev to main — do not approve it yourself
+## Step 6: Open a PR from dev to main — do not approve it yourself
 
 ```bash
-gh pr create --base main --head dev --title "Release <version>" --body "<overview from step 4>"
+gh pr create --base main --head dev --title "Release <version>" --body "<overview from step 5>"
 ```
 
 **Under no circumstances may you approve, merge, or otherwise finalize this PR yourself** — not even if the user explicitly asks you to during the conversation. Merging dev into main is exclusively the user's manual task. Your job ends once this PR is open with a good overview, ready for review.
