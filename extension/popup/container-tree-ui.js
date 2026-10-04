@@ -18,6 +18,8 @@
 // functions before the split and still are.
 const SFContainerTreeUI = (function () {
   const { createLogger } = typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+  const { buildGroupNodeHighlight, wireHoverHighlight } =
+    typeof require !== 'undefined' ? require('./hover-highlight') : self.SFHoverHighlight;
   const log = createLogger('SF:ContainerTreeUI');
   const { t } = typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
   const { STATES, escapeHtml } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
@@ -378,6 +380,11 @@ const SFContainerTreeUI = (function () {
   }
 
   function wireContainerModeEvents(bridge) {
+  // Issue #233: hovering a tree row (group or field) highlights that node's
+  // element(s) on the page — in every instance of its repeating ancestors.
+  wireHoverHighlight(document.getElementById('group-tree-root'), '.group-tree-row',
+    row => buildGroupNodeHighlight(bridge.getState().groups, JSON.parse(row.closest('.group-tree-node').dataset.path)));
+
   document.getElementById('btn-add-root-container')?.addEventListener('click', () => openContainerModal(bridge, null));
 
   // Event delegation for the container tree's per-row add/remove/move buttons

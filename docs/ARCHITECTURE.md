@@ -523,6 +523,14 @@ scraped values after a real `/generate` trial run, not live DOM matches.
   `highlightHover`/`highlightSelected`, `startPreview`/`stopPreview`/`togglePreview`),
   `content/content-script.js` (`serializeDomTree`, `computePreviewMatches`,
   `matchFlatFields`/`matchGroupTree`, the preview-overlay drawing functions)
+- Single-row hover highlight (Issue #233): hovering one flat field row or
+  container tree row highlights just that row's element(s) on the page, in
+  green, with no toggle — `popup/hover-highlight.js` (`buildFlatFieldHighlight`,
+  `buildGroupNodeHighlight`, `wireHoverHighlight`, wired from
+  `flat-mode-ui.js`/`container-tree-ui.js`), `HOVER_HIGHLIGHT`/
+  `HOVER_HIGHLIGHT_CLEAR` in `background/service-worker.js`'s
+  `FORWARD_TO_TAB`, `content/content-script.js` (`matchHoverHighlight`,
+  `showHoverHighlight`/`clearHoverHighlight`, the shared `createHighlightBox`)
 
 ### 2.14 Configuration export ("Konfiguration exportieren")
 

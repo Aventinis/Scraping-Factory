@@ -64,7 +64,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep the message channel open for the async sendResponse above
   }
 
-  const FORWARD_TO_TAB = ['START_SELECTION', 'STOP_SELECTION', 'ENABLE_DOM_VIEW', 'DISABLE_DOM_VIEW', 'PREVIEW_START', 'PREVIEW_STOP', 'API_CAPTURE_START', 'API_CAPTURE_STOP'];
+  const FORWARD_TO_TAB = ['START_SELECTION', 'STOP_SELECTION', 'ENABLE_DOM_VIEW', 'DISABLE_DOM_VIEW', 'PREVIEW_START', 'PREVIEW_STOP', 'HOVER_HIGHLIGHT', 'HOVER_HIGHLIGHT_CLEAR', 'API_CAPTURE_START', 'API_CAPTURE_STOP'];
   if (FORWARD_TO_TAB.includes(message.type)) {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs.length === 0) {
