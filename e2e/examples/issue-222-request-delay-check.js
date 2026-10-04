@@ -44,7 +44,24 @@ const { launchBrowser, openPopup, focusFixture, waitForIdleScreen, startCompanio
     await popupPage.click('#btn-pagination-page-number');
     await popupPage.fill('#input-pagination-url-template', '{url}?page={page}');
     await popupPage.fill('#input-pagination-max-pages', '3');
-    await popupPage.locator('#request-delay-config').screenshot({ path: path.join(__dirname, 'issue-222-request-delay.png') });
+    // Regression check (reported: the settings row overflowed the side
+    // panel's right edge) — at typical side-panel widths, nothing in the
+    // request-delay block may reach past the block's own right edge. (The
+    // page as a whole can scroll horizontally at 280px regardless of this
+    // feature — that's the panel's own min-width: 280px plus its scrollbar.)
+    for (const width of [280, 320, 400]) {
+      await popupPage.setViewportSize({ width, height: 900 });
+      const overflow = await popupPage.evaluate(() => {
+        const block = document.getElementById('request-delay-config');
+        const blockRight = block.getBoundingClientRect().right;
+        const widest = Math.max(...Array.from(block.querySelectorAll('*')).map(el => el.getBoundingClientRect().right));
+        return { widest, blockRight };
+      });
+      console.log(`width ${width}px: widest child right edge ${overflow.widest.toFixed(0)} / block ${overflow.blockRight.toFixed(0)}`);
+      if (overflow.widest > overflow.blockRight + 1) throw new Error(`Request-delay settings overflow at ${width}px`);
+      if (width === 320) await popupPage.locator('#request-delay-config').screenshot({ path: path.join(__dirname, 'issue-222-request-delay.png') });
+    }
+    await popupPage.setViewportSize({ width: 1280, height: 720 });
 
     await focusFixture(fixturePage);
     const started = Date.now();

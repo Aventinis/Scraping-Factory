@@ -886,6 +886,11 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
 .transform-preset-delete-prompt { font-size: 11px; }
 
 /* ── Pause between requests (Issue #222) ─────────────────────────────────── */
-.request-delay-row { display: flex; align-items: center; gap: 6px; }
-.output-settings-row.request-delay-row input { width: 64px; flex: 0 0 auto; }
-.output-settings-row.request-delay-row span { font-size: 12px; }
+/* The generic .output-settings-row label width (110px) is meant for one
+   label + one input per row — here "from"/"to" are short inline words, so
+   they size to their content, and the row may wrap on a very narrow panel
+   instead of overflowing its right edge. */
+.output-settings-row.request-delay-row { flex-wrap: wrap; }
+.output-settings-row.request-delay-row label { width: auto; }
+.output-settings-row.request-delay-row input[type="text"] { flex: 0 1 64px; width: 64px; min-width: 40px; }
+.output-settings-row.request-delay-row span { font-size: 11px; color: var(--color-text-muted); }
