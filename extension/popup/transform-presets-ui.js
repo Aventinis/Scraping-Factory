@@ -202,34 +202,46 @@ const SFTransformPresetsUI = (function () {
     saveTransformPreset(bridge, name, bridge.getState().pendingTransforms || []);
   }
 
-  // Delegated once on document, since the three containers live in three
-  // different modals, all already in the DOM.
+  // Delegated on each of the three containers (all already in the DOM — the
+  // modal partials are loaded before wireEvents runs), so re-rendering a
+  // container's contents never loses its listeners.
   function wireTransformPresetControls(bridge) {
-    document.addEventListener('change', (e) => {
-      const select = /** @type {HTMLSelectElement} */ (e.target);
-      if (!select.classList?.contains('transform-preset-apply-select') || !select.value) return;
-      const state = bridge.getState();
-      const preset = allTransformPresets(state.transformPresets, t).find(p => p.id === select.value);
-      select.value = '';
-      if (!preset) return;
-      log('TRANSFORM_PRESET_APPLY', preset.id);
-      bridge.patchState({ pendingTransforms: applyTransformPreset(state.pendingTransforms || [], preset) });
+    document.querySelectorAll('.transform-preset-controls').forEach((container) => {
+      container.addEventListener('change', (e) => {
+        const select = /** @type {HTMLSelectElement} */ (e.target);
+        if (!select.classList.contains('transform-preset-apply-select') || !select.value) return;
+        const state = bridge.getState();
+        const preset = allTransformPresets(state.transformPresets, t).find(p => p.id === select.value);
+        select.value = '';
+        if (!preset) return;
+        log('TRANSFORM_PRESET_APPLY', preset.id);
+        bridge.patchState({ pendingTransforms: applyTransformPreset(state.pendingTransforms || [], preset) });
+      });
+
+      container.addEventListener('click', (e) => {
+        const target = /** @type {HTMLElement} */ (e.target);
+        if (target.closest('.btn-transform-preset-save')) bridge.patchState({ transformPresetSaveOpen: true });
+        else if (target.closest('.btn-transform-preset-save-cancel')) bridge.patchState({ transformPresetSaveOpen: false });
+        else if (target.closest('.btn-transform-preset-save-confirm')) confirmSaveFromControls(bridge, container);
+      });
+
+      container.addEventListener('keydown', (e) => {
+        const target = /** @type {HTMLElement} */ (e.target);
+        if (!target.classList.contains('transform-preset-name-input')) return;
+        if (e.key === 'Enter') { e.preventDefault(); confirmSaveFromControls(bridge, container); }
+        if (e.key === 'Escape') { e.stopPropagation(); bridge.patchState({ transformPresetSaveOpen: false }); }
+      });
     });
 
-    document.addEventListener('click', (e) => {
-      const target = /** @type {HTMLElement} */ (e.target);
-      const container = target.closest?.('.transform-preset-controls');
-      if (!container) return;
-      if (target.closest('.btn-transform-preset-save')) bridge.patchState({ transformPresetSaveOpen: true });
-      else if (target.closest('.btn-transform-preset-save-cancel')) bridge.patchState({ transformPresetSaveOpen: false });
-      else if (target.closest('.btn-transform-preset-save-confirm')) confirmSaveFromControls(bridge, container);
-    });
-
-    document.addEventListener('keydown', (e) => {
-      const target = /** @type {HTMLElement} */ (e.target);
-      if (!target.classList?.contains('transform-preset-name-input')) return;
-      if (e.key === 'Enter') { e.preventDefault(); confirmSaveFromControls(bridge, target.closest('.transform-preset-controls')); }
-      if (e.key === 'Escape') { e.stopPropagation(); bridge.patchState({ transformPresetSaveOpen: false }); }
+    // Closing a field modal (confirm or cancel) also closes a still-open
+    // "name this preset" form, so it doesn't reappear in the next modal.
+    [
+      'btn-field-confirm', 'btn-field-cancel', 'btn-field-extended-confirm', 'btn-field-extended-cancel',
+      'btn-api-field-transforms-confirm', 'btn-api-field-transforms-cancel',
+    ].forEach((id) => {
+      document.getElementById(id)?.addEventListener('click', () => {
+        if (bridge.getState().transformPresetSaveOpen) bridge.patchState({ transformPresetSaveOpen: false });
+      });
     });
   }
 
