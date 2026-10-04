@@ -14,10 +14,10 @@ from datetime import date
 {{~ if needs_os_import || external_config.enabled || download_enabled ~}}
 import os
 {{~ end ~}}
-{{~ if needs_exit_helper || hardening.enabled || external_config.enabled || download_enabled ~}}
+{{~ if needs_exit_helper || hardening.enabled || external_config.enabled || download_enabled || preflight.enabled ~}}
 import sys
 {{~ end ~}}
-{{~ if hardening.has_baseline ~}}
+{{~ if hardening.has_baseline || preflight.enabled ~}}
 import json
 {{~ end ~}}
 {{~ if proxy.enabled ~}}
@@ -37,13 +37,15 @@ import urllib.parse
 {{~ if download_enabled ~}}
 import hashlib
 {{~ end ~}}
-{{~ if discovered_urls.enabled ~}}
-# Issue #218: the discovery pass is deliberately plain requests+
-# BeautifulSoup, never a live Playwright page (it runs before any
-# navigation happens) — same "discovery doesn't need the full machinery of
-# the main run" precedent DiscoverySource/BrowserDiscoverySource already
-# established for API mode.
+{{~ if discovered_urls.enabled || preflight.enabled ~}}
+# Issue #218/#219: both the discovery pass and the preflight check are
+# deliberately plain `requests` calls, never a live Playwright page (both
+# run before any navigation happens) — same "doesn't need the full
+# machinery of the main run" precedent DiscoverySource/BrowserDiscoverySource
+# already established for API mode.
 import requests
+{{~ end ~}}
+{{~ if discovered_urls.enabled ~}}
 from bs4 import BeautifulSoup
 {{~ end ~}}
 {{~ if change_detection.enabled ~}}
@@ -756,6 +758,68 @@ def _extract_page_rows(page):
     return rows
 
 
+{{~ if preflight.enabled ~}}
+# Issue #219: a single cheap HEAD request against the primary start URL, run
+# before the main extraction phase even starts (never via a live Playwright
+# page — no browser session needs to launch at all if this skips the run) —
+# a target that hasn't changed since the last successful run (same ETag/
+# Last-Modified) or isn't reachable at all doesn't need the cost of a real
+# scrape. Not every target reliably sends useful ETag/Last-Modified headers
+# — when neither is present (or they differ from the stored value, or
+# there's no stored value yet), the check can't tell "changed" from
+# "unchanged" at all, so it conservatively falls through to a normal run
+# rather than risk silently never updating stale data. Missing/corrupt
+# sidecar (first run ever, or the file was deleted) is treated the same as
+# "no previous state yet".
+PREFLIGHT_STATE_PATH = OUTPUT_PATH + ".preflight-state.json"
+EXIT_PREFLIGHT_UNCHANGED = 4
+EXIT_PREFLIGHT_UNREACHABLE = 5
+
+
+def _read_preflight_state():
+    try:
+        with open(PREFLIGHT_STATE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, ValueError, OSError):
+        return {}
+
+
+def _write_preflight_state(etag, last_modified):
+    with open(PREFLIGHT_STATE_PATH, "w", encoding="utf-8") as f:
+        json.dump({"etag": etag, "lastModified": last_modified}, f)
+
+
+# Returns (status, etag, last_modified) — status is "unreachable" (the
+# request itself failed or came back with an error status), "unchanged" (a
+# response header matches the value stored from the last successful run),
+# or "proceed" (no comparable header, no previous state yet, or the value
+# differs — the main run should go ahead as normal).
+def _run_preflight_check(url):
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"}
+    try:
+{{~ if proxy.enabled ~}}
+        proxy = _next_proxy()
+        proxies = {"http": proxy, "https": proxy} if proxy else None
+        response = requests.head(url, headers=headers, proxies=proxies, timeout=10, allow_redirects=True)
+{{~ else ~}}
+        response = requests.head(url, headers=headers, timeout=10, allow_redirects=True)
+{{~ end ~}}
+        response.raise_for_status()
+    except Exception as e:
+        print(f"ERROR: Preflight check failed — target is unreachable: {url} ({e})", file=sys.stderr)
+        return "unreachable", None, None
+
+    etag = response.headers.get("ETag")
+    last_modified = response.headers.get("Last-Modified")
+    previous = _read_preflight_state()
+    if etag and previous.get("etag") == etag:
+        return "unchanged", etag, last_modified
+    if not etag and last_modified and previous.get("lastModified") == last_modified:
+        return "unchanged", etag, last_modified
+    return "proceed", etag, last_modified
+{{~ end ~}}
+
+
 {{~ if discovered_urls.enabled ~}}
 # Issue #218: fetches DISCOVERED_URLS_PAGE_URL and harvests every distinct
 # href matching DISCOVERED_URLS_LINK_SELECTOR, resolved to an absolute URL
@@ -858,6 +922,14 @@ def scrape(url):
 
 
 def main():
+{{~ if preflight.enabled ~}}
+    preflight_status, preflight_etag, preflight_last_modified = _run_preflight_check(URLS[0])
+    if preflight_status == "unreachable":
+        sys.exit(EXIT_PREFLIGHT_UNREACHABLE)
+    if preflight_status == "unchanged":
+        print("Preflight check: no change detected since the last run — skipping.")
+        sys.exit(EXIT_PREFLIGHT_UNCHANGED)
+{{~ end ~}}
 {{~ if change_detection.enabled ~}}
     previous_content = _read_previous_output(OUTPUT_PATH)
 {{~ end ~}}
@@ -918,6 +990,13 @@ def main():
 {{~ end ~}}
     if hardening_failed:
         sys.exit(EXIT_HARDENING_FAILED)
+{{~ end ~}}
+{{~ if preflight.enabled ~}}
+    # Only reached if hardening (when enabled) didn't just sys.exit() above —
+    # a run that's about to be flagged as hardening-failed must never
+    # advance the preflight state, same "don't let a bad run become the new
+    # normal" rule BaselineCheck's own write already follows.
+    _write_preflight_state(preflight_etag, preflight_last_modified)
 {{~ end ~}}
 {{~ if proxy.enabled ~}}
     if _PROXY_ENV_MISSING:
