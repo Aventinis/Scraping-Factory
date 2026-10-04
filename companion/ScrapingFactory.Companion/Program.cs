@@ -330,6 +330,7 @@ app.MapDelete("/blueprints/{id:long}", (long id, OutputBlueprintStore store) =>
 // reusable chain applied to arbitrary fields.
 static string? ValidateTransformPresetChain(List<FieldTransform>? transforms)
 {
+    const string PresetFieldName = "__transform_preset__";
     if (transforms is not { Count: > 0 })
         return "A preset needs at least one transform step.";
     if (transforms.Any(t => t is null))
@@ -342,11 +343,13 @@ static string? ValidateTransformPresetChain(List<FieldTransform>? transforms)
         Steps =
         [
             new NavigateStep { Urls = ["https://example.com"] },
-            new ExtractStep { Name = "preset", Selector = "*", Transforms = transforms },
+            new ExtractStep { Name = PresetFieldName, Selector = "*", Transforms = transforms },
         ],
     };
     var result = ScrapingPlanValidator.Validate(plan);
-    return result.Success ? null : result.Error;
+    // The validator words its errors per field ("... for field 'x'") — the
+    // throwaway field's label is swapped for wording that fits a preset.
+    return result.Success ? null : result.Error?.Replace($"field '{PresetFieldName}'", "this preset");
 }
 
 app.MapPost("/transform-presets", (SaveTransformPresetRequest? request, TransformPresetStore store) =>
