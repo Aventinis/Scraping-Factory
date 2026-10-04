@@ -1032,6 +1032,31 @@ minutes of pauses).
 - Tests: `RequestDelayTests.cs`, `extension/popup/request-delay.test.js`,
   real-browser check `e2e/examples/issue-222-request-delay-check.js`
 
+### 2.21b Retry on transient errors (Issue #223)
+
+An opt-in, mode- and engine-independent retry of any outbound request or
+page navigation that failed transiently (connection error/timeout, or a
+configurable status code — 429/502/503/504 by default), with a fixed or
+doubling wait or a 429/503's Retry-After. Exhausted retries behave exactly
+like no retries. Every retry is announced on stdout; the trial-run verifier
+extends its deadline by the wait plus an allowance for the retried request.
+
+- IR: `IR/RetryConfig.cs` (`ScrapingConfig.Retry`/`ScrapingPlan.Retry`),
+  validation in `ScrapingPlanValidator`, Combined outer-config rejection in
+  `Program.cs`
+- `Backends/Python/PythonRetryLiteral` (`retry.*`), wired in
+  `PythonScrapingContextBuilder`, `PythonApiCodeGenerator` and (for the
+  navigate fragment) `PythonPlaywrightCodeGenerator`
+- Templates: all eight request-making templates (`_send_with_retry`) plus
+  `playwright_navigate_step.py.j2`
+- `Backends/Python/PythonScriptVerifier` (`RetryAnnouncementPattern`,
+  `RetryAttemptAllowance`)
+- Extension: `scraping-config-builder.js` (`buildRetryConfig`),
+  `config-import.js` (`applyRetryConfig`), `settings-panel-ui.js`,
+  `#toggle-retry`/`#retry-config` in `screens/idle.html`
+- Tests: `RetryTests.cs`, `extension/popup/retry.test.js`, fixture
+  `test-pages/flaky-server` + `e2e/examples/issue-223-retry-check.js`
+
 ### 2.22 Persistent session/cookie handling (Issue #175)
 
 Browser-engine only (rejected server-side for Static/Api, same as
