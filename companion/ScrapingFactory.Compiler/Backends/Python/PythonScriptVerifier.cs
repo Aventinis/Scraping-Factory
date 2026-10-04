@@ -170,11 +170,20 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
         _ => $"{baseName}.csv",
     };
 
-    // Issue #222: see RunScriptAsync — the exact line _pace_request in the
-    // templates prints before each pause, and the most total pause time one
-    // trial run may add to its deadline (the same 10 minutes Program.cs's
+    // Issue #222/#223: see RunScriptAsync — the exact lines the templates'
+    // _pace_request ("Pausing ...") and _send_with_retry ("Retrying in ...")
+    // print right before waiting, and the most total extension one trial
+    // run may add to its deadline (the same 10 minutes Program.cs's
     // VerificationTimeoutCap allows for an estimated extra timeout).
     private static readonly Regex PauseAnnouncementPattern = new(@"^Pausing (\d+(?:\.\d+)?) s before the next request \(request delay\)");
+    private static readonly Regex RetryAnnouncementPattern = new(@"^Retrying in (\d+(?:\.\d+)?) s \(attempt \d+ of \d+\)");
+
+    // Issue #223: a retry isn't just the announced wait — the retried
+    // request itself may again take up to its own timeout (10 s for
+    // requests, 30 s for a Playwright navigation), time a run without
+    // retries would never have spent. Granted per announced retry, on top
+    // of the wait.
+    private static readonly TimeSpan RetryAttemptAllowance = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan MaxRequestDelayExtension = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(200);
 
@@ -216,13 +225,20 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
             // to make — while a genuinely stuck script still times out as
             // before. The extension itself is capped (MaxRequestDelayExtension)
             // so one trial run can't tie up the companion indefinitely.
+            // Issue #223: a retry announcement extends the deadline the same
+            // way — by its wait plus RetryAttemptAllowance for the retried
+            // request itself — and counts toward the same cap.
             long announcedPauseMs = 0;
             process.OutputDataReceived += (_, e) =>
             {
                 if (e.Data is null) return;
-                var match = PauseAnnouncementPattern.Match(e.Data);
-                if (match.Success && double.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds))
-                    Interlocked.Add(ref announcedPauseMs, (long)Math.Ceiling(seconds * 1000));
+                var pause = PauseAnnouncementPattern.Match(e.Data);
+                var retry = pause.Success ? Match.Empty : RetryAnnouncementPattern.Match(e.Data);
+                var match = pause.Success ? pause : retry;
+                if (!match.Success || !double.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds))
+                    return;
+                var extensionMs = (long)Math.Ceiling(seconds * 1000) + (retry.Success ? (long)RetryAttemptAllowance.TotalMilliseconds : 0);
+                Interlocked.Add(ref announcedPauseMs, extensionMs);
             };
             process.BeginOutputReadLine();
 
@@ -235,8 +251,8 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                 {
                     TryKill(process);
                     return (false,
-                        $"The configured request delay made the trial run pause for more than {MaxRequestDelayExtension.TotalMinutes:0} minutes in total " +
-                        "— reduce the pause between requests, or the number of pages/requests (e.g. pagination's maximum page count).", -1, "");
+                        $"Pauses between requests and retries of failed requests made the trial run wait for more than {MaxRequestDelayExtension.TotalMinutes:0} minutes in total " +
+                        "— reduce the pause between requests or the number of retries, or the number of pages/requests (e.g. pagination's maximum page count).", -1, "");
                 }
 
                 var remaining = effectiveTimeout + TimeSpan.FromMilliseconds(pausedMs) - started.Elapsed;
@@ -245,7 +261,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                     TryKill(process);
                     return (false, pausedMs > 0
                         ? string.Create(CultureInfo.InvariantCulture,
-                            $"Script execution exceeded the {effectiveTimeout.TotalSeconds:0}s timeout (not counting {pausedMs / 1000.0:0.#}s of request-delay pauses).")
+                            $"Script execution exceeded the {effectiveTimeout.TotalSeconds:0}s timeout (not counting {pausedMs / 1000.0:0.#}s of request-delay pauses and retries).")
                         : $"Script execution exceeded the {effectiveTimeout.TotalSeconds:0}s timeout.", -1, "");
                 }
 

@@ -192,6 +192,6 @@ public class RequestDelayTests
         var result = await new PythonScriptVerifier(timeout: TimeSpan.FromSeconds(1)).VerifyAsync(script);
 
         Assert.False(result.Success);
-        Assert.Contains("exceeded the 1s timeout (not counting 0.5s of request-delay pauses)", result.Error);
+        Assert.Contains("exceeded the 1s timeout (not counting 0.5s of request-delay pauses and retries)", result.Error);
     }
 }
