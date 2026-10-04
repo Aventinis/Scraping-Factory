@@ -338,10 +338,10 @@
     "previewEmptyValue": "(vacío)",
     "previewUnavailable": "Vista previa no disponible",
     "currencyFormat": {
-      "commaDecimal": "1.234,56 — la coma es el separador decimal (ES/DE/IT…)",
-      "dotDecimal": "1,234.56 — el punto es el separador decimal (EN/US/MX…)",
-      "spaceGrouped": "1 234,56 — espacio para miles, coma decimal (FR/países nórdicos…)",
-      "apostropheGrouped": "1'234.56 — apóstrofo para miles, punto decimal (CH)"
+      "commaDecimal": "1.234,56 (ES/DE/IT …)",
+      "dotDecimal": "1,234.56 (EN/US/MX …)",
+      "spaceGrouped": "1 234,56 (FR/países nórdicos …)",
+      "apostropheGrouped": "1'234.56 (CH)"
     }
   },
   "generating": {

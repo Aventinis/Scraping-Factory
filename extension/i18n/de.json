@@ -338,10 +338,10 @@
     "previewEmptyValue": "(leer)",
     "previewUnavailable": "Vorschau nicht möglich",
     "currencyFormat": {
-      "commaDecimal": "1.234,56 — Komma als Dezimaltrenner (DE/AT/IT…)",
-      "dotDecimal": "1,234.56 — Punkt als Dezimaltrenner (EN/US/UK…)",
-      "spaceGrouped": "1 234,56 — Leerzeichen als Tausendertrenner, Komma dezimal (FR/Skandinavien…)",
-      "apostropheGrouped": "1'234.56 — Apostroph als Tausendertrenner, Punkt dezimal (CH)"
+      "commaDecimal": "1.234,56 (DE/AT/IT …)",
+      "dotDecimal": "1,234.56 (EN/US/UK …)",
+      "spaceGrouped": "1 234,56 (FR/Skandinavien …)",
+      "apostropheGrouped": "1'234.56 (CH)"
     }
   },
   "generating": {

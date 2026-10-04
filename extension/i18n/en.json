@@ -338,10 +338,10 @@
     "previewEmptyValue": "(empty)",
     "previewUnavailable": "Preview unavailable",
     "currencyFormat": {
-      "commaDecimal": "1.234,56 — comma is the decimal separator (DE/AT/IT…)",
-      "dotDecimal": "1,234.56 — dot is the decimal separator (EN/US/UK…)",
-      "spaceGrouped": "1 234,56 — space groups thousands, comma decimal (FR/Nordics…)",
-      "apostropheGrouped": "1'234.56 — apostrophe groups thousands, dot decimal (CH)"
+      "commaDecimal": "1.234,56 (DE/AT/IT …)",
+      "dotDecimal": "1,234.56 (EN/US/UK …)",
+      "spaceGrouped": "1 234,56 (FR/Nordics …)",
+      "apostropheGrouped": "1'234.56 (CH)"
     }
   },
   "generating": {
