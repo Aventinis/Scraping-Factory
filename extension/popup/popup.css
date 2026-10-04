@@ -887,4 +887,5 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
 
 /* ── Pause between requests (Issue #222) ─────────────────────────────────── */
 .request-delay-row { display: flex; align-items: center; gap: 6px; }
-.request-delay-row input { width: 56px; flex: 0 0 auto; }
+.output-settings-row.request-delay-row input { width: 64px; flex: 0 0 auto; }
+.output-settings-row.request-delay-row span { font-size: 12px; }
