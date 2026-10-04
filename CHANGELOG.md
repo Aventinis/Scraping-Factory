@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.17.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.2...v1.17.3) (2026-10-04)
+
+
+### Features
+
+* dedicated "Convert price/currency to number" transform (Issue [#234](https://github.com/Aventinis/Scraping-Factory/issues/234)) ([9d9ece4](https://github.com/Aventinis/Scraping-Factory/commit/9d9ece42aae3e46ed61d7d87a59449666af848ee))
+* **to-currency:** add _to_currency runtime helper to every transform-capable template ([61f75c8](https://github.com/Aventinis/Scraping-Factory/commit/61f75c8b4d804354cd62520b2ea9818ce05201ed))
+* **to-currency:** add Convert price/currency to number to the transform editor with live preview ([032685a](https://github.com/Aventinis/Scraping-Factory/commit/032685af6613c96aeb02efcea68e96803dd27b09))
+* **to-currency:** add ToCurrencyTransform IR, validation and Python literal ([dee7184](https://github.com/Aventinis/Scraping-Factory/commit/dee71842c8324288e908e6c65d79182e587e6de0))
+
 ## [1.17.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.1...v1.17.2) (2026-10-04)
 
 
