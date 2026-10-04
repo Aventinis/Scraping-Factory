@@ -69,7 +69,68 @@ public sealed class ApiConfig
     // orthogonal to the flat-vs-tree response shape, which still describes
     // the shape of whatever JSON the script tag contains.
     public EmbeddedJsonSource? EmbeddedJsonSource { get; init; }
+
+    // Token/auth bootstrap (Issue #220): one extra request the generated
+    // script sends once at the start of every run, before any parameter is
+    // resolved, extracting a single short-lived value (a bearer token, a
+    // signed URL parameter, a nonce) from its JSON response. That value is
+    // then referenceable as "{<Bootstrap.Name>}" wherever a parameter
+    // placeholder already is — UrlTemplate, a DiscoverySource/
+    // BrowserDiscoverySource template (Issue #217), an ApiBodyVariable's
+    // ParameterName — plus an ApiHeader.Template (e.g. "Bearer {token}").
+    // Deliberately *not* modeled as an ApiParameter/ApiParameterSource:
+    // parameter values become output columns (flat shape) and are printed
+    // in "Skipped (404)" lines, and a live credential must never end up in
+    // either. Null = no bootstrap, byte-for-byte today's behavior.
+    public ApiBootstrap? Bootstrap { get; init; }
 }
+
+// See ApiConfig.Bootstrap. A narrower, purpose-built shape than ApiConfig
+// itself (Issue #220's own open question): a token endpoint needs no
+// parameters/response tree, just one request and one JSON path — and its
+// body, when it has one, is a flat set of credential fields (a JSON object,
+// or an OAuth2-style form-encoded body), never a deep GraphQL-like tree.
+public sealed class ApiBootstrap
+{
+    // The placeholder name the extracted value is referenced by, e.g.
+    // "token" for "{token}". Must not collide with a parameter name.
+    public required string Name { get; init; }
+
+    public string Method { get; init; } = "GET";
+
+    // Absolute http(s) URL — fully static, since the bootstrap runs before
+    // any parameter is resolved and so can't reference one.
+    public required string Url { get; init; }
+
+    // Same Value/EnvironmentVariableName shape as the main request's own
+    // headers (a Template header makes no sense here — the value it would
+    // reference is exactly what this request is producing).
+    public List<ApiHeader>? Headers { get; init; }
+
+    // POST only. Each field is either a literal Value or an
+    // EnvironmentVariableName (a credential), mirroring ApiHeader/FillStep:
+    // a credential is never embedded literally in the generated script.
+    public List<ApiBootstrapBodyField>? BodyFields { get; init; }
+
+    public ApiBootstrapBodyEncoding BodyEncoding { get; init; } = ApiBootstrapBodyEncoding.Json;
+
+    // JSON path (same minimal dot/[*]/[n] DSL as ItemsPath/ApiField.Path)
+    // to the value within the bootstrap response, e.g. "access_token" or
+    // "data.auth.token".
+    public required string ValuePath { get; init; }
+}
+
+public sealed class ApiBootstrapBodyField
+{
+    public required string Name { get; init; }
+    public string? Value { get; init; }
+    public string? EnvironmentVariableName { get; init; }
+}
+
+// Json: sent as a JSON object (requests' json=...). Form: sent
+// application/x-www-form-urlencoded (requests' data=...), the encoding an
+// OAuth2 client_credentials/password token endpoint expects.
+public enum ApiBootstrapBodyEncoding { Json, Form }
 
 // See ApiConfig.EmbeddedJsonSource. A plain optional object, not part of any
 // polymorphic list — unlike ApiParameterSource's three variants, there's
@@ -85,10 +146,10 @@ public sealed class EmbeddedJsonSource
     public required string ScriptSelector { get; init; }
 }
 
-// Exactly one of Value/EnvironmentVariableName is set — same "one of two
-// optional properties is required, depending on context" shape as
-// DataFieldNode.Attribute (there gated by Mode, here just by which one is
-// non-null). A header sourced from an environment variable (e.g. an auth
+// Exactly one of Value/EnvironmentVariableName/Template is set — same "one
+// of several optional properties is required, depending on context" shape
+// as DataFieldNode.Attribute (there gated by Mode, here just by which one
+// is non-null). A header sourced from an environment variable (e.g. an auth
 // token) is never embedded literally in the generated script, analogous to
 // FillStep.
 public sealed class ApiHeader
@@ -96,6 +157,13 @@ public sealed class ApiHeader
     public required string Name { get; init; }
     public string? Value { get; init; }
     public string? EnvironmentVariableName { get; init; }
+
+    // Issue #220: a header value built at runtime from ApiConfig.Bootstrap's
+    // freshly fetched value, e.g. "Bearer {token}" — the only placeholder a
+    // template may reference is Bootstrap.Name (validated in
+    // ScrapingPlanValidator), so a literal "{" elsewhere in an ordinary
+    // Value header is never at risk of being misread as a placeholder.
+    public string? Template { get; init; }
 }
 
 public sealed class ApiParameter
