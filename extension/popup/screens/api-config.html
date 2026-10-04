@@ -40,6 +40,18 @@
       <ul id="body-tree-root" class="body-tree"></ul>
     </div>
 
+    <!-- Token/auth bootstrap (Issue #220): one extra request the generated
+         script sends at the start of every run to fetch a fresh token,
+         rendered by api-bootstrap-ui.js's renderApiBootstrapSection. -->
+    <div id="api-bootstrap-section" class="api-bootstrap-section">
+      <label class="output-settings-toggle" style="margin-top: 10px;">
+        <input type="checkbox" id="toggle-api-bootstrap" />
+        <span data-i18n="apiBootstrap.toggleLabel"></span>
+      </label>
+      <p class="browser-actions-hint" data-i18n="apiBootstrap.hint"></p>
+      <div id="api-bootstrap-config" class="api-bootstrap-config hidden"></div>
+    </div>
+
     <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.headersLabel"></div>
     <ul id="api-config-headers" class="api-config-headers"></ul>
 

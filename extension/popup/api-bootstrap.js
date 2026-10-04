@@ -308,6 +308,29 @@ const SFApiBootstrap = (function () {
     };
   }
 
+  // Turning the bootstrap off must not leave the main request pointing at a
+  // value that no longer exists: every header in bootstrap mode falls back
+  // to its recorded literal value, every bootstrap-sourced URL part loses
+  // its (now meaningless) source and must be given a real one again. Returns
+  // only the draft keys it changed, like wireTokenIntoMainRequest.
+  /**
+   * @param {*} draft
+   * @returns {Record<string, *>}
+   */
+  function stripBootstrapReferences(draft) {
+    /** @type {Record<string, *>} */
+    const headerDecisions = {};
+    Object.entries(draft.headerDecisions || {}).forEach(([name, decision]) => {
+      headerDecisions[name] = decision.mode === 'bootstrap' ? { ...decision, mode: 'literal', template: '' } : decision;
+    });
+    /** @type {Record<string, *>} */
+    const parameterSources = {};
+    Object.entries(draft.parameterSources || {}).forEach(([id, source]) => {
+      if (source?.kind !== BOOTSTRAP_SOURCE_KIND) parameterSources[id] = source;
+    });
+    return { headerDecisions, parameterSources };
+  }
+
   // Issue #43's verification-value convention, extended to the bootstrap:
   // one-time test values for its credential env vars, keyed by env-var
   // name, sent only with the /generate request so a token flow can be
@@ -334,7 +357,7 @@ const SFApiBootstrap = (function () {
     BOOTSTRAP_SOURCE_KIND, DEFAULT_BOOTSTRAP_NAME,
     createDefaultBootstrapDraft, createBootstrapPair, suggestEnvVarName, parseRecordedBody,
     collectStringLeaves, detectTokenInResponse, bootstrapDraftFromCaptureEntry, suggestHeaderTemplate,
-    wireTokenIntoMainRequest, bootstrapDraftIsComplete, buildApiBootstrap, resolveBootstrapUrlParts,
+    wireTokenIntoMainRequest, stripBootstrapReferences, bootstrapDraftIsComplete, buildApiBootstrap, resolveBootstrapUrlParts,
     buildBootstrapVerificationValues,
   };
 })();
