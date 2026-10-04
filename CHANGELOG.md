@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.17.5](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.4...v1.17.5) (2026-10-04)
+
+
+### Features
+
+* configurable pause (with optional jitter) between requests (Issue [#222](https://github.com/Aventinis/Scraping-Factory/issues/222)) ([b67058e](https://github.com/Aventinis/Scraping-Factory/commit/b67058e9470ac8bb3bd451429cee1ff06baa0664))
+* **request-delay:** add Pause between requests setting to the extension ([07e9ded](https://github.com/Aventinis/Scraping-Factory/commit/07e9dedd393a2cc39590353df2c771777723d881))
+* **request-delay:** add RequestDelayConfig IR, validation and Scriban context ([a1c05b9](https://github.com/Aventinis/Scraping-Factory/commit/a1c05b9e181ae9f3dd61c238821e3d86de4d55f6))
+* **request-delay:** extend the trial run's deadline by every announced request-delay pause ([67db179](https://github.com/Aventinis/Scraping-Factory/commit/67db1796df54b790dc8c2b23c78986a03f7637d3))
+* **request-delay:** pace every outbound request in all request-making templates ([4644c2d](https://github.com/Aventinis/Scraping-Factory/commit/4644c2d88eba9b657919cb17515926b5aadfaa52))
+
+
+### Bug Fixes
+
+* **request-delay:** keep the pause inputs within the side panel's width ([d03e47c](https://github.com/Aventinis/Scraping-Factory/commit/d03e47c5c8c86625c5649fa66e806c8febb27321))
+
 ## [1.17.4](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.3...v1.17.4) (2026-10-04)
 
 
