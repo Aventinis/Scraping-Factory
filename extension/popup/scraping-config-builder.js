@@ -441,6 +441,9 @@ function buildScrapingConfig(
   // existing test) — inserting a new parameter in the middle would silently
   // shift every argument after it rather than failing loudly.
   discoveredUrls = null,
+  // Issue #219: same "append at the end, never insert in the middle" rule as
+  // discoveredUrls just above.
+  preflight = false,
 ) {
   // Issue #182: Blocks mode has no ad-hoc fields/groups/apiConfig of its own
   // either — each block is a fully independent {name, outputFileName,
@@ -528,6 +531,12 @@ function buildScrapingConfig(
   // section is visible (Engine=Browser), and the companion rejects the
   // combination server-side regardless (see ScrapingPlanValidator).
   const persistentSessionFields = persistentSession ? { persistentSession: true } : {};
+  // Issue #219: mirrors persistentSessionFields exactly — a plain on/off
+  // switch, only included when true. Hidden from the UI (and thus never
+  // true) for API/Combined/Blocks mode, but that's enforced by the UI's own
+  // visibility toggle, not here — this function doesn't need its own
+  // mode-specific gate since those branches simply never reference it.
+  const preflightFields = preflight ? { preflight: true } : {};
   // Issue #161: mirrors previewFields exactly — only included when true, so
   // the default (checkbox unchecked) request stays byte-for-byte identical
   // to before this existed. See companion's ScrapingConfig.IncludeOutputFile.
@@ -557,7 +566,7 @@ function buildScrapingConfig(
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
       ...proxyFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
-      ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
+      ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
   if (mode === 'api') {
@@ -566,7 +575,7 @@ function buildScrapingConfig(
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
       ...proxyFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
-      ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
+      ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
   return {
@@ -589,7 +598,7 @@ function buildScrapingConfig(
     outputFileName: outputFileName || null,
     ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields,
     ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
-    ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
+    ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
   };
 }
 
@@ -628,6 +637,7 @@ function buildScrapingConfig(
  * @param {SFWire.OutputBlueprintSchemaKind} [outputBlueprintSchemaKind]
  * @param {SFDraft.OutputBlueprintTreeNode[]} [outputBlueprintTree]
  * @param {Record<string, string>} [outputBlueprintTreeMapping]
+ * @param {boolean} [preflight]
  * @returns {{exportedAt: string, extensionVersion: string, config: object}}
  */
 function buildConfigExport(
@@ -640,6 +650,8 @@ function buildConfigExport(
   // Issue #218: see buildScrapingConfig's own doc comment on why this is
   // appended at the end rather than alongside pagination above.
   discoveredUrls = null,
+  // Issue #219: same "append at the end" rule as discoveredUrls just above.
+  preflight = false,
 ) {
   return {
     exportedAt: new Date().toISOString(),
@@ -649,7 +661,7 @@ function buildConfigExport(
       useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession,
       includeOutputFile, externalConfig, combinedComponents, blocks,
       outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping,
-      outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping, discoveredUrls,
+      outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping, discoveredUrls, preflight,
     ),
   };
 }

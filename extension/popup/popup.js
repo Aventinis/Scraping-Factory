@@ -250,6 +250,16 @@ let _state = {
   // see buildScrapingConfig's "only send the key when true" handling), so
   // it's a plain boolean rather than an { enabled, ... } object.
   persistentSession: false,
+  // Issue #219: opt-in preflight check — a single cheap HEAD request against
+  // the primary start URL, run before the main extraction phase even
+  // starts, so an unchanged target (or one that's unreachable) doesn't need
+  // the full cost of a real scrape on the next scheduled run. Mode-
+  // independent like persistentSession above (Fields/Groups only; hidden
+  // entirely for API/Combined/Blocks mode), persisted the same way. A plain
+  // boolean, same "no sub-fields" shape as persistentSession/externalConfig
+  // — which ETag/Last-Modified value counts as "changed" is tracked
+  // entirely by the generated script's own sidecar file, never here.
+  preflight: false,
   // Issue #129: opt-in script hardening checks — mode-independent like
   // engine/changeDetection/proxy above, persisted the same way (real
   // scrape-target configuration, not a per-generate toggle). Nested one
@@ -595,6 +605,7 @@ function persistState() {
       pagination: _state.pagination,
       discoveredUrls: _state.discoveredUrls,
       persistentSession: _state.persistentSession,
+      preflight: _state.preflight,
       hardening: _state.hardening,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
@@ -1210,7 +1221,7 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pagination', 'persistentSession', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pagination', 'persistentSession', 'preflight', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'pendingApiDiscoveryPartId', 'pendingApiDiscoveryActionIndex', 'pendingApiDiscoveryActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',

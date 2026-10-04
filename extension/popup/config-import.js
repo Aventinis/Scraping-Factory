@@ -326,6 +326,9 @@ const SFConfigImport = (function () {
         discoveredUrls: applyDiscoveredUrlsConfig(null),
         hardening: applyHardeningConfig(null),
         persistentSession: false,
+        // Issue #219: never present on a Combined wire config either (same
+        // outer-level rejection as discoveredUrls above).
+        preflight: false,
         ...applyOutputBlueprintConfig(null),
       };
     }
@@ -368,6 +371,10 @@ const SFConfigImport = (function () {
         discoveredUrls: applyDiscoveredUrlsConfig(null),
         hardening: applyHardeningConfig(null),
         persistentSession: config.persistentSession === true,
+        // Issue #219: never present on a Blocks wire config (rejected
+        // server-side, not designed for this mode's multi-output shape yet —
+        // same reasoning as discoveredUrls above).
+        preflight: false,
         ...applyOutputBlueprintConfig(null),
       };
     }
@@ -402,6 +409,9 @@ const SFConfigImport = (function () {
       discoveredUrls: applyDiscoveredUrlsConfig(config.discoveredUrls),
       hardening: applyHardeningConfig(config.hardening),
       persistentSession: config.persistentSession === true,
+      // Issue #219: plain bool, same convention as persistentSession above —
+      // absent on the wire (an older companion/export, or Api mode) = false.
+      preflight: config.preflight === true,
       // Issue #191: only ever present on the wire for flat mode/Api's flat
       // shape — applyOutputBlueprintConfig(undefined) already resets to
       // "none" for every other mode, so no per-mode branching is needed here.

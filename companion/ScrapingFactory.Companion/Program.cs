@@ -351,6 +351,11 @@ static string? ValidateModeExclusivity(ScrapingConfig config)
     if (hasApi && config.DiscoveredUrls is not null)
         return "DiscoveredUrls and Api are mutually exclusive.";
 
+    // Issue #219: Api has no single fixed start URL to preflight-check —
+    // same reasoning as AdditionalUrls/Pagination/DiscoveredUrls above.
+    if (hasApi && config.Preflight == true)
+        return "Preflight and Api are mutually exclusive.";
+
     return null;
 }
 
@@ -490,6 +495,8 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
             return Results.BadRequest(new { error = "Pagination is not supported on a Combined request — set it on each component's own config instead." });
         if (config.DiscoveredUrls is not null)
             return Results.BadRequest(new { error = "DiscoveredUrls is not supported on a Combined request — set it on each component's own config instead." });
+        if (config.Preflight == true)
+            return Results.BadRequest(new { error = "Preflight is not supported on a Combined request — set it on each component's own config instead." });
         if (config.BrowserActions is { Count: > 0 })
             return Results.BadRequest(new { error = "BrowserActions is not supported on a Combined request — set it on each component's own config instead." });
         if (config.ChangeDetection is not null)
@@ -628,6 +635,11 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
         // OutputBlueprint above.
         if (config.DiscoveredUrls is not null)
             return Results.BadRequest(new { error = "DiscoveredUrls is not supported together with Blocks." });
+        // Issue #219: not designed for Blocks' multi-output shape yet — same
+        // "reject outright rather than guess" precedent as DiscoveredUrls/
+        // ExternalConfig/OutputBlueprint above.
+        if (config.Preflight == true)
+            return Results.BadRequest(new { error = "Preflight is not supported together with Blocks." });
 
         for (var i = 0; i < blocks.Count; i++)
         {

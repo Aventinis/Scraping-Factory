@@ -172,6 +172,8 @@
     "hardeningBlockingPhrasesPlaceholder": "e.g. \"Access Denied\", \"Please verify you are human\"",
     "hardeningRequiredFieldsToggle": "Require fields (drop incomplete rows)",
     "hardeningRequiredFieldsAddBtn": "+ Add field",
+    "preflightToggle": "Check beforehand whether the page has changed, and skip the run if not",
+    "preflightHint": "Sends a quick request to the page before the real scrape starts. If nothing has changed since the last run, or the page isn't reachable right now, the run is skipped without the cost of a full scrape.",
     "modeBlocks": "Blocks",
     "blocksHint": "Builds several independent extraction blocks (flat or container, freely mixed) sharing this page’s navigation — each writes its own output file in one script run.",
     "blocksNameLabel": "Block name",

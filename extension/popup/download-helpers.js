@@ -102,7 +102,7 @@ async function downloadConfigExport(bridge) {
     state.pagination, state.persistentSession, false, globalSettings.externalConfig, combinedComponents, state.blocks,
     state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
     state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
-    state.discoveredUrls,
+    state.discoveredUrls, state.preflight,
   );
   log('DOWNLOAD scraping-config.json', exportObj);
 

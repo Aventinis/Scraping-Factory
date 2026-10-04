@@ -79,6 +79,15 @@ internal sealed class LocalTestServer : IDisposable
             ctx.Response.ContentType = response.ContentType;
             if (response.Location is not null)
                 ctx.Response.RedirectLocation = response.Location;
+            // Issue #219: lets a test set ETag/Last-Modified (or any other
+            // header) on a response — needed for PreflightCheckEndToEndTests,
+            // the first test class here that needs to control anything beyond
+            // Content-Type/status/redirect-Location.
+            if (response.Headers is not null)
+            {
+                foreach (var (name, value) in response.Headers)
+                    ctx.Response.Headers[name] = value;
+            }
             ctx.Response.ContentLength64 = bytes.Length;
             await ctx.Response.OutputStream.WriteAsync(bytes);
             ctx.Response.OutputStream.Close();
@@ -118,4 +127,6 @@ internal sealed class LocalTestServer : IDisposable
 // redirect signal needs a real HTTP redirect to a different LocalTestServer
 // instance (a different loopback port counts as a different host) to
 // exercise end-to-end.
-internal sealed record LocalTestServerResponse(string Body, string ContentType, HttpStatusCode StatusCode = HttpStatusCode.OK, string? Location = null);
+internal sealed record LocalTestServerResponse(
+    string Body, string ContentType, HttpStatusCode StatusCode = HttpStatusCode.OK, string? Location = null,
+    IReadOnlyDictionary<string, string>? Headers = null);

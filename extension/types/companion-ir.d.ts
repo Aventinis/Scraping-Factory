@@ -47,6 +47,7 @@ declare namespace SFWire {
     pagination?: PaginationConfig;
     discoveredUrls?: DiscoveredUrlsConfig;
     persistentSession?: boolean;
+    preflight?: boolean;
     externalConfig?: boolean;
     combined?: CombinedComponentConfig[];
     blocks?: ExtractionBlockConfig[];

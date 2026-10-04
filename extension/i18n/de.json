@@ -172,6 +172,8 @@
     "hardeningBlockingPhrasesPlaceholder": "z. B. \"Access Denied\", \"Bitte bestätigen Sie, dass Sie ein Mensch sind\"",
     "hardeningRequiredFieldsToggle": "Felder verpflichtend machen (unvollständige Zeilen verwerfen)",
     "hardeningRequiredFieldsAddBtn": "+ Feld hinzufügen",
+    "preflightToggle": "Vorab prüfen, ob sich die Seite geändert hat, und den Lauf ggf. überspringen",
+    "preflightHint": "Fragt vor dem eigentlichen Scrapen einmal kurz die Seite an. Hat sich seit dem letzten Lauf nichts geändert, oder ist die Seite gerade nicht erreichbar, wird der Lauf ohne den vollen Scrape-Aufwand übersprungen.",
     "modeBlocks": "Blöcke",
     "blocksHint": "Erstellt mehrere unabhängige Extraktionsblöcke (flach oder verschachtelt, beliebig gemischt), die sich die Navigation dieser Seite teilen — jeder schreibt in einem Skriptlauf seine eigene Ausgabedatei.",
     "blocksNameLabel": "Blockname",
