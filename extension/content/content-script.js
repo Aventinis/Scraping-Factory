@@ -209,6 +209,36 @@ function computePreviewMatches(mode, fields, groups) {
   return matchFlatFields(fields || []);
 }
 
+// ── Hover highlight (Issue #233) ─────────────────────────────────────────────
+// Resolves the one field/container row the user is hovering in the side
+// panel to its element(s) on the live page. `steps` is the selector chain
+// from the root down to the hovered row ([{selector, all}], built by
+// popup/hover-highlight.js), applied with exactly matchGroupTree's own
+// semantics: each step is resolved inside every scope the previous step
+// produced, `all: true` (a repeating group, or a flat field) keeping every
+// match and `all: false` (a non-repeating group, or a container field) only
+// the first — so a nested field is highlighted once per enclosing instance,
+// the same set of elements the full "Vorschau" would draw for that row.
+//
+// A non-empty `framePath` means the row's element lives inside an iframe,
+// which this top-frame-only overlay can't reach (the full preview has the
+// same limitation) — the outermost <iframe> itself (framePath[0]) is
+// highlighted instead, so the user still sees *where* on the page it is.
+function matchHoverHighlight(steps, framePath) {
+  if (framePath && framePath.length > 0) {
+    return { elements: safeQueryAll(document, framePath[0]), inIframe: true };
+  }
+  let scopes = [document];
+  for (const step of steps || []) {
+    if (!step || !step.selector) return { elements: [], inIframe: false };
+    scopes = scopes.flatMap(scope => (step.all
+      ? safeQueryAll(scope, step.selector)
+      : [safeQueryOne(scope, step.selector)].filter(Boolean)));
+    if (scopes.length === 0) break;
+  }
+  return { elements: steps && steps.length > 0 ? scopes : [], inIframe: false };
+}
+
 // ── API-Mode candidate correlation (Issue #53 Phase 4) ──────────────────────
 // Given the text of a clicked element, searches the JSON bodies buffered by
 // Phase 3's recording (see the API-Mode capture bridge below) for a scalar
@@ -768,7 +798,7 @@ if (typeof window !== 'undefined') {
 if (typeof module !== 'undefined') {
   module.exports = {
     buildSelector, countSelectorMatches, collectElementAttributes, collectOwnText, elementPath, serializeDomTree,
-    matchFlatFields, matchGroupTree, computePreviewMatches,
+    matchFlatFields, matchGroupTree, computePreviewMatches, matchHoverHighlight,
     findValueInJson, siblingFields, siblingFieldsAt, findApiCandidates,
     deriveItemsAndValuePath, deriveApiTreeSkeleton,
     scriptTagSelector, findEmbeddedJsonCandidates,
@@ -875,6 +905,15 @@ const PREVIEW_MAX_BOXES = 300; // caps drawn boxes on pathological pages; the re
 let previewBoxes = [];
 
 function createPreviewBox(element, name) {
+  previewBoxes.push(createHighlightBox(element, name, PREVIEW_BOX_COLORS));
+}
+
+const PREVIEW_BOX_COLORS = { border: '#3b82f6', fill: 'rgba(59,130,246,0.15)' };
+
+// Shared by the full preview (blue, above) and Issue #233's hover highlight
+// (green, below) — one box + name label, appended to <body> and returned so
+// each caller can track/clear its own boxes independently.
+function createHighlightBox(element, name, colors) {
   const rect = element.getBoundingClientRect();
   const box = document.createElement('div');
   box.className = 'sf-preview-box';
@@ -884,8 +923,8 @@ function createPreviewBox(element, name) {
     left:          `${rect.left + window.scrollX}px`,
     width:         `${rect.width}px`,
     height:        `${rect.height}px`,
-    border:        '2px solid #3b82f6',
-    background:    'rgba(59,130,246,0.15)',
+    border:        `2px solid ${colors.border}`,
+    background:    colors.fill,
     boxSizing:     'border-box',
     pointerEvents: 'none',
     zIndex:        '2147483646',
@@ -897,7 +936,7 @@ function createPreviewBox(element, name) {
     position:      'absolute',
     top:           '-18px',
     left:          '0',
-    background:    '#3b82f6',
+    background:    colors.border,
     color:         '#fff',
     font:          '11px sans-serif',
     padding:       '1px 4px',
@@ -908,7 +947,7 @@ function createPreviewBox(element, name) {
   box.appendChild(label);
 
   document.body.appendChild(box);
-  previewBoxes.push(box);
+  return box;
 }
 
 function clearPreviewBoxes() {
@@ -929,6 +968,29 @@ function startPreview(mode, fields, groups) {
 function stopPreview() {
   log('PREVIEW stop');
   clearPreviewBoxes();
+}
+
+// ── Hover highlight overlay (Issue #233) ─────────────────────────────────────
+// A separate box layer from the full preview's, in green, so the two never
+// get confused and can be active at the same time — hovering a row while
+// "Vorschau" is on simply adds a green box on top of that row's blue ones.
+// Only ever one row at a time: every HOVER_HIGHLIGHT replaces the previous
+// highlight, HOVER_HIGHLIGHT_CLEAR removes it.
+
+const HOVER_HIGHLIGHT_COLORS = { border: '#16a34a', fill: 'rgba(22,163,74,0.18)' };
+
+let hoverHighlightBoxes = [];
+
+function clearHoverHighlight() {
+  hoverHighlightBoxes.forEach(box => box.remove());
+  hoverHighlightBoxes = [];
+}
+
+function showHoverHighlight(name, steps, framePath) {
+  clearHoverHighlight();
+  const { elements, inIframe } = matchHoverHighlight(steps, framePath);
+  const label = `${name}${inIframe ? ' (iframe)' : ''}${elements.length > 1 ? ` ×${elements.length}` : ''}`;
+  hoverHighlightBoxes = elements.slice(0, PREVIEW_MAX_BOXES).map(element => createHighlightBox(element, label, HOVER_HIGHLIGHT_COLORS));
 }
 
 // ── Selection mode ────────────────────────────────────────────────────────────
@@ -1368,6 +1430,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     if (message.type === 'DISABLE_DOM_VIEW' && isTopFrame()) disableDomView();
     if (message.type === 'PREVIEW_START' && isTopFrame()) startPreview(message.mode, message.fields, message.groups);
     if (message.type === 'PREVIEW_STOP' && isTopFrame()) stopPreview();
+    if (message.type === 'HOVER_HIGHLIGHT' && isTopFrame()) showHoverHighlight(message.name, message.steps, message.framePath);
+    if (message.type === 'HOVER_HIGHLIGHT_CLEAR' && isTopFrame()) clearHoverHighlight();
     if (message.type === 'API_CAPTURE_START' || message.type === 'API_CAPTURE_STOP') {
       log('API_CAPTURE forward to MAIN world', message.type);
       if (message.type === 'API_CAPTURE_START') capturedApiEntries = [];
