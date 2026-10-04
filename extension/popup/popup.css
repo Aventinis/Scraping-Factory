@@ -858,3 +858,17 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
 }
 #btn-open-settings svg { width: 14px; height: 14px; }
 #btn-open-settings.active { background: var(--color-primary); color: var(--color-on-accent); border-color: var(--color-primary); }
+
+/* ── API mode: token/auth bootstrap (Issue #220) ─────────────────────────── */
+.api-bootstrap-config { display: flex; flex-direction: column; gap: 6px; padding: 8px; margin-top: 4px; background: var(--color-surface-subtle); border-radius: var(--radius-md); }
+.api-bootstrap-config input[type="text"], .api-bootstrap-config input[type="password"], .api-bootstrap-config select { font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); min-width: 0; }
+.api-bootstrap-request-row { display: flex; gap: 6px; }
+.api-bootstrap-request-row input { flex: 1; }
+.api-bootstrap-pairs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.api-bootstrap-pair-row { display: flex; gap: 4px; align-items: center; }
+.api-bootstrap-pair-row input { flex: 1; }
+.api-bootstrap-encoding { display: flex; gap: 6px; align-items: center; font-size: 11px; }
+.api-bootstrap-recording-entry { cursor: pointer; }
+.api-bootstrap-recording-entry.likely { border-left: 3px solid var(--color-success); }
+.api-config-header-template { width: 120px; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-family: monospace; }
+.api-config-source-note { margin: 4px 0 0; font-size: 11px; color: var(--color-text-muted); }

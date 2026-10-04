@@ -40,7 +40,13 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
         // existed (see Architecture Decision #4's own note on Engine.Api
         // being a deliberate compromise).
         var needsBrowserDiscovery = api.Parameters.Any(p => p.Source is BrowserDiscoverySource);
-        var needsRequireEnvHelper = api.Parameters.Any(p =>
+        // Issue #220: the bootstrap request reads its credentials via
+        // _require_env too (a clean exit 78 instead of a KeyError
+        // traceback), and its own failure path needs `sys` — so a
+        // configured bootstrap always pulls in the helper, whether or not
+        // it actually declares an env var.
+        var hasBootstrap = api.Bootstrap is not null;
+        var needsRequireEnvHelper = hasBootstrap || api.Parameters.Any(p =>
             p.Source is BrowserDiscoverySource { Actions: { } actions } && actions.Any(a => a is FillAction));
 
         if (api.Groups is { Count: > 0 })
@@ -62,6 +68,8 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
                 headers_literal = PythonApiConfigLiteral.RenderHeaders(api.Headers),
                 embedded_json_source = api.EmbeddedJsonSource is not null,
                 embedded_json_source_literal = PythonApiConfigLiteral.RenderEmbeddedJsonSource(api.EmbeddedJsonSource),
+                has_bootstrap = hasBootstrap,
+                bootstrap_literal = PythonApiConfigLiteral.RenderBootstrap(api.Bootstrap),
                 script_filename = plan.ScriptFileName,
                 output_filename = plan.OutputFileBaseName,
                 output_is_json = plan.OutputFormat == OutputFormat.Json,
@@ -109,6 +117,8 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
             headers_literal = PythonApiConfigLiteral.RenderHeaders(api.Headers),
             embedded_json_source = api.EmbeddedJsonSource is not null,
             embedded_json_source_literal = PythonApiConfigLiteral.RenderEmbeddedJsonSource(api.EmbeddedJsonSource),
+            has_bootstrap = hasBootstrap,
+            bootstrap_literal = PythonApiConfigLiteral.RenderBootstrap(api.Bootstrap),
             script_filename = plan.ScriptFileName,
             output_filename = plan.OutputFileBaseName,
             output_is_json = plan.OutputFormat == OutputFormat.Json,

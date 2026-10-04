@@ -839,7 +839,24 @@ public static class ScrapingPlanValidator
             .ToHashSet();
         var parameterNames = api.Parameters.Select(parameter => parameter.Name).ToHashSet();
 
-        var missingParameters = placeholders.Except(parameterNames).ToList();
+        // Issue #220: the bootstrap value is referenceable everywhere a
+        // parameter placeholder is (UrlTemplate, body variables), without
+        // being a parameter itself — see ApiConfig.Bootstrap's own doc
+        // comment for why it isn't simply modeled as one.
+        var bootstrapName = api.Bootstrap?.Name;
+        if (api.Bootstrap is { } bootstrap)
+        {
+            var bootstrapError = ValidateApiBootstrap(bootstrap);
+            if (bootstrapError is not null)
+                return bootstrapError;
+            if (parameterNames.Contains(bootstrap.Name))
+                return $"Bootstrap value name '{bootstrap.Name}' collides with a parameter name.";
+            if (api.Fields?.Any(field => field.Name == bootstrap.Name) == true)
+                return $"Bootstrap value name '{bootstrap.Name}' collides with a field name.";
+        }
+        var placeholderNames = bootstrapName is null ? parameterNames : [.. parameterNames, bootstrapName];
+
+        var missingParameters = placeholders.Except(placeholderNames).ToList();
         if (missingParameters.Count > 0)
             return $"UrlTemplate references unknown parameters: {string.Join(", ", missingParameters)}.";
 
@@ -851,7 +868,7 @@ public static class ScrapingPlanValidator
         var referencedByBody = new HashSet<string>();
         if (api.Body is not null)
         {
-            var bodyError = ValidateApiBodyNode(api.Body, parameterNames, referencedByBody);
+            var bodyError = ValidateApiBodyNode(api.Body, placeholderNames, referencedByBody);
             if (bodyError is not null)
                 return bodyError;
         }
@@ -904,7 +921,57 @@ public static class ScrapingPlanValidator
             declaredSoFar.Add(parameter.Name);
         }
 
-        return api.Headers is { } headers ? ValidateApiHeaders(headers) : null;
+        return api.Headers is { } headers ? ValidateApiHeaders(headers, bootstrapName) : null;
+    }
+
+    // Issue #220: see ApiBootstrap's own doc comment. The value name itself
+    // is checked against EnvironmentVariableNamePattern too — it has to be a
+    // valid Python str.format() keyword (it's substituted into UrlTemplate
+    // via URL_TEMPLATE.format(**...)), which is exactly the same
+    // identifier-shaped character set.
+    private static string? ValidateApiBootstrap(ApiBootstrap bootstrap)
+    {
+        if (string.IsNullOrWhiteSpace(bootstrap.Name))
+            return "Bootstrap value needs a name.";
+        if (!EnvironmentVariableNamePattern.IsMatch(bootstrap.Name))
+            return $"Invalid bootstrap value name '{bootstrap.Name}': use letters, digits and underscores only.";
+        if (bootstrap.Method is not ("GET" or "POST"))
+            return $"Unsupported bootstrap request method '{bootstrap.Method}': expected GET or POST.";
+        if (!Uri.TryCreate(bootstrap.Url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            return $"Invalid bootstrap request URL '{bootstrap.Url}'.";
+        if (UrlTemplatePlaceholderPattern.IsMatch(bootstrap.Url))
+            return "Bootstrap request URL must not contain placeholders — it runs before any parameter is resolved.";
+        if (string.IsNullOrWhiteSpace(bootstrap.ValuePath))
+            return "Bootstrap request needs a ValuePath.";
+
+        if (bootstrap.BodyFields is { Count: > 0 } bodyFields)
+        {
+            if (bootstrap.Method != "POST")
+                return "Bootstrap body fields require method 'POST'.";
+            foreach (var field in bodyFields)
+            {
+                if (string.IsNullOrWhiteSpace(field.Name))
+                    return "Name of a bootstrap body field must not be empty.";
+                var hasEnvironmentVariable = !string.IsNullOrWhiteSpace(field.EnvironmentVariableName);
+                if ((field.Value is not null) == hasEnvironmentVariable)
+                    return $"Bootstrap body field '{field.Name}' needs exactly one of Value/EnvironmentVariableName.";
+                if (hasEnvironmentVariable && !EnvironmentVariableNamePattern.IsMatch(field.EnvironmentVariableName!))
+                    return $"Invalid environment variable name '{field.EnvironmentVariableName}' in bootstrap body field '{field.Name}'.";
+            }
+            var duplicateBodyFields = FindDuplicates(bodyFields, field => field.Name);
+            if (duplicateBodyFields.Count > 0)
+                return $"Duplicate bootstrap body field names: {string.Join(", ", duplicateBodyFields)}.";
+        }
+
+        if (bootstrap.Headers is { } bootstrapHeaders)
+        {
+            if (bootstrapHeaders.Any(header => header.Template is not null))
+                return "Bootstrap request headers cannot use a template — the bootstrap value doesn't exist yet when this request is sent.";
+            var headerError = ValidateApiHeaders(bootstrapHeaders, bootstrapName: null);
+            if (headerError is not null)
+                return $"Bootstrap request: {headerError}";
+        }
+        return null;
     }
 
     // Issue #217: only DiscoverySource/BrowserDiscoverySource have a
@@ -1058,7 +1125,7 @@ public static class ScrapingPlanValidator
         return null;
     }
 
-    private static string? ValidateApiHeaders(List<ApiHeader> headers)
+    private static string? ValidateApiHeaders(List<ApiHeader> headers, string? bootstrapName)
     {
         foreach (var header in headers)
         {
@@ -1067,8 +1134,25 @@ public static class ScrapingPlanValidator
 
             var hasValue = !string.IsNullOrWhiteSpace(header.Value);
             var hasEnvironmentVariable = !string.IsNullOrWhiteSpace(header.EnvironmentVariableName);
-            if (hasValue == hasEnvironmentVariable)
-                return $"Header '{header.Name}' needs exactly one of Value/EnvironmentVariableName.";
+            var hasTemplate = !string.IsNullOrWhiteSpace(header.Template);
+            if ((hasValue ? 1 : 0) + (hasEnvironmentVariable ? 1 : 0) + (hasTemplate ? 1 : 0) != 1)
+                return $"Header '{header.Name}' needs exactly one of Value/EnvironmentVariableName/Template.";
+
+            // Issue #220: a Template's only purpose is splicing in the
+            // bootstrap value, so it must reference it, and nothing else —
+            // there's no per-combination parameter context when headers are
+            // built (they're shared by every request of the run).
+            if (hasTemplate)
+            {
+                if (bootstrapName is null)
+                    return $"Header '{header.Name}' uses a template, but no bootstrap request is configured.";
+                var referenced = UrlTemplatePlaceholderPattern.Matches(header.Template!).Select(match => match.Groups[1].Value).ToHashSet();
+                if (!referenced.Contains(bootstrapName))
+                    return $"Header '{header.Name}' template must reference the bootstrap value '{{{bootstrapName}}}'.";
+                var unknown = referenced.Where(name => name != bootstrapName).ToList();
+                if (unknown.Count > 0)
+                    return $"Header '{header.Name}' template references unknown placeholder(s): {string.Join(", ", unknown)}.";
+            }
 
             if (hasEnvironmentVariable && !EnvironmentVariableNamePattern.IsMatch(header.EnvironmentVariableName!))
                 return $"Invalid environment variable name '{header.EnvironmentVariableName}' in header '{header.Name}'.";

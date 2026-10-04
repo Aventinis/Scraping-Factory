@@ -33,6 +33,7 @@ declare global {
     SFTheme: any;
     SFGlobalSettings: any;
     SFApiConfig: any;
+    SFApiBootstrap: any;
     SFContainerTree: any;
     SFFieldTransforms: any;
     SFConfigImport: any;
