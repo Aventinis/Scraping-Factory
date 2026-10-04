@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.17.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.1...v1.17.2) (2026-10-04)
+
+
+### Features
+
+* highlight the hovered field/container row on the live page (Issue [#233](https://github.com/Aventinis/Scraping-Factory/issues/233)) ([d34499b](https://github.com/Aventinis/Scraping-Factory/commit/d34499bf4c2cd3fe3481b17505fbfabb62e659c2))
+* **hover-highlight:** highlight a single row's elements on the live page ([d1cb8d3](https://github.com/Aventinis/Scraping-Factory/commit/d1cb8d31609521b750c1809f475cf13c4719731e))
+* **hover-highlight:** highlight hovered flat field / container tree rows on the page ([4622b99](https://github.com/Aventinis/Scraping-Factory/commit/4622b99e25f618d3b9ee7867d6ea4cd1e232ced9))
+
 ## [1.17.1](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.7...v1.17.1) (2026-10-04)
 
 Stable release consolidating the 1.16.2–1.16.7 prereleases below. Highlights:
