@@ -16,9 +16,7 @@ from datetime import date
 {{~ if needs_os_import || external_config.enabled ~}}
 import os
 {{~ end ~}}
-{{~ if proxy.enabled || hardening.enabled || external_config.enabled || needs_require_env_helper ~}}
 import sys
-{{~ end ~}}
 {{~ if external_config.enabled ~}}
 import xml.etree.ElementTree as ET
 {{~ end ~}}
@@ -864,6 +862,66 @@ def _resolve_browser_discovery(source, headers, target_name, combo):
 {{~ end ~}}
 
 
+# Turns a failed request into one clean, actionable error line (and a
+# dedicated exit code) instead of a raw requests traceback — a 401/403 in
+# particular almost always means missing or wrong authentication, which the
+# message says outright, together with what to configure.
+EXIT_REQUEST_FAILED = 7
+
+
+def _display_url(url):
+{{~ if has_bootstrap ~}}
+    return _redact_bootstrap(url)
+{{~ else ~}}
+    return url
+{{~ end ~}}
+
+
+def _request_failed(what, url, detail):
+    print(f"ERROR: {what} to {_display_url(url)} failed: {detail}", file=sys.stderr)
+    sys.exit(EXIT_REQUEST_FAILED)
+
+
+def _http_error_detail(status_code):
+    if status_code in (401, 403):
+        reason = "Unauthorized" if status_code == 401 else "Forbidden"
+{{~ if has_bootstrap ~}}
+        placeholder = "{" + BOOTSTRAP["name"] + "}"
+        return (f"HTTP {status_code} ({reason}). The API rejected the request even though a fresh "
+                f"bootstrap value was fetched — check that a header (e.g. \"Authorization: Bearer {placeholder}\") "
+                f"or the URL actually uses it, and that the bootstrap's JSON path points at the token.")
+{{~ else ~}}
+        return (f"HTTP {status_code} ({reason}). The API requires authentication that this configuration "
+                f"doesn't send — adopt the recorded authentication header (e.g. Authorization) or enable the "
+                f"auth bootstrap to fetch a fresh token before every run.")
+{{~ end ~}}
+    if status_code == 429:
+        return "HTTP 429 (Too Many Requests). The API is rate-limiting this script — try again later."
+    if status_code >= 500:
+        return f"HTTP {status_code}. The API's server reported an error — this is usually temporary, try again later."
+    return f"HTTP {status_code}."
+
+
+def _checked_request(what, url, send):
+    try:
+        response = send()
+    except requests.RequestException as e:
+        _request_failed(what, url, f"could not reach the API ({e.__class__.__name__}).")
+    return response
+
+
+def _require_ok(what, url, response):
+    if not response.ok:
+        _request_failed(what, url, _http_error_detail(response.status_code))
+
+
+def _json_or_fail(what, url, response):
+    try:
+        return response.json()
+    except ValueError:
+        _request_failed(what, url, f"the response is not JSON (Content-Type: {response.headers.get('Content-Type', 'unknown')}).")
+
+
 {{~ if has_bootstrap ~}}
 # Issue #220: a "template" header (e.g. "Bearer {token}") gets the bootstrap
 # value substituted in — ScrapingPlanValidator guarantees a template only
@@ -969,9 +1027,9 @@ def _resolve_parameter_values(source, headers, parameter_name, combo):
         return _number_range(source["from"], source["to"])
     if kind == "discovery":
         url_template = _substitute_known_parameters(source["urlTemplate"], combo)
-        response = requests.get(url_template, headers=headers, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
-        response.raise_for_status()
-        items = _resolve_items(response.json(), source["itemsPath"])
+        response = _checked_request("Discovery request", url_template, lambda: requests.get(url_template, headers=headers, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10))
+        _require_ok("Discovery request", url_template, response)
+        items = _resolve_items(_json_or_fail("Discovery request", url_template, response), source["itemsPath"])
         return [str(_resolve_field(item, source["valuePath"])) for item in items]
     if kind == "browserDiscovery":
         return _resolve_browser_discovery(source, headers, parameter_name, combo)
@@ -1134,9 +1192,9 @@ def scrape():
 
         body = _render_body(BODY, {{ if has_bootstrap }}{**_BOOTSTRAP_VALUES, **combo}{{ else }}combo{{ end }})
         if METHOD == "POST":
-            response = requests.post(url, headers=headers, json=body, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
+            response = _checked_request("Request", url, lambda: requests.post(url, headers=headers, json=body, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10))
         else:
-            response = requests.get(url, headers=headers, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
+            response = _checked_request("Request", url, lambda: requests.get(url, headers=headers, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10))
         # A 404 is treated as "this combination doesn't exist" and skipped
         # rather than aborting the whole run — Api-Mode tries the full
         # cartesian product of every parameter's values without knowing
@@ -1153,14 +1211,14 @@ def scrape():
         if response.status_code == 404:
             print(f"Skipped (404 Not Found): {{ if has_bootstrap }}{_redact_bootstrap(url)}{{ else }}{url}{{ end }}")
             continue
-        response.raise_for_status()
+        _require_ok("Request", url, response)
 {{~ if hardening.enabled ~}}
         _BLOCKING_RESPONSES.append({"url": {{ if has_bootstrap }}_redact_bootstrap(url){{ else }}url{{ end }}, "final_url": {{ if has_bootstrap }}_redact_bootstrap(response.url){{ else }}response.url{{ end }}, "length": len(response.content), "text": response.text})
 {{~ end ~}}
 {{~ if embedded_json_source ~}}
         data = _extract_embedded_json(response)
 {{~ else ~}}
-        data = response.json()
+        data = _json_or_fail("Request", url, response)
 {{~ end ~}}
         for record in _resolve_items(data, ITEMS_PATH):
             rows.append(_extract_row(record, combo))

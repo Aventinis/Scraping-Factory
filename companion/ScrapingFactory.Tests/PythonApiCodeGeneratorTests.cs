@@ -816,7 +816,7 @@ public class PythonApiCodeGeneratorTests
 
         Assert.Contains("EMBEDDED_JSON_SOURCE = None", script);
         Assert.DoesNotContain("BeautifulSoup", script);
-        Assert.Contains("data = response.json()", script);
+        Assert.Contains("data = _json_or_fail(\"Request\", url, response)", script);
     }
 
     [Fact]
