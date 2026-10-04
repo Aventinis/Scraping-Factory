@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.17.4](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.3...v1.17.4) (2026-10-04)
+
+
+### Features
+
+* reusable, named transform-chain presets (Issue [#279](https://github.com/Aventinis/Scraping-Factory/issues/279)) ([e40adfc](https://github.com/Aventinis/Scraping-Factory/commit/e40adfc6dd146c49e5428a10b7d2ac94736dc203))
+* **transform-presets:** add TransformPresetStore and /transform-presets endpoints ([8073bfa](https://github.com/Aventinis/Scraping-Factory/commit/8073bfae8ad6ccf23b48ae0f1a334582c018691a))
+* **transform-presets:** apply/save presets in every transform editor and manage them in Settings ([fa96fca](https://github.com/Aventinis/Scraping-Factory/commit/fa96fca87868b5333643436c102fce46f7dea527))
+
 ## [1.17.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.2...v1.17.3) (2026-10-04)
 
 
