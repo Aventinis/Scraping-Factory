@@ -9,6 +9,8 @@
 // closing over popup.js's own module-level state.
 const SFFlatModeUI = (function () {
   const { createLogger } = typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+  const { buildFlatFieldHighlight, wireHoverHighlight } =
+    typeof require !== 'undefined' ? require('./hover-highlight') : self.SFHoverHighlight;
   const log = createLogger('SF:Popup');
   const { t } = typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
   const { STATES, escapeHtml } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
@@ -52,6 +54,7 @@ const SFFlatModeUI = (function () {
     fields.forEach((field, i) => {
       const row = document.createElement('div');
       row.className = 'field-row';
+      row.dataset.index = String(i); // Issue #233: wireHoverHighlight resolves the hovered row's field by index
       const selectorLabel = fieldSelectorLabel(field);
       row.innerHTML =
         `<span class="field-name" title="${escapeHtml(field.name)}">${escapeHtml(field.name)}</span>` +
@@ -183,6 +186,10 @@ const SFFlatModeUI = (function () {
   }
 
   function wireFlatModeEvents(bridge) {
+  // Issue #233: hovering a field row highlights its element(s) on the page.
+  wireHoverHighlight(document.getElementById('fields-list'), '.field-row',
+    row => buildFlatFieldHighlight(bridge.getState().fields[parseInt(row.dataset.index, 10)]));
+
   document.getElementById('btn-add-field')?.addEventListener('click', () => {
     log('BTN add-field → START_SELECTION');
     bridge.stopPreviewIfActive();

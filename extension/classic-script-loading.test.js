@@ -56,6 +56,7 @@ test('shared/logger.js + i18n/i18n.js + popup/popup.js load together without a r
     'popup/api-bootstrap.js',
     'popup/api-config.js',
     'popup/container-tree.js',
+    'popup/hover-highlight.js',
     'popup/field-transforms.js',
     'popup/field-transforms-ui.js',
     'popup/combine-split-fields.js',
