@@ -275,6 +275,21 @@
     "bodyNewParameterOption": "+ New parameter…",
     "bodyCoerceToTitle": "Value type to use in the body (default: text)"
   },
+  "apiCursor": {
+    "toggleLabel": "Follow a next-page cursor (cursor/token pagination)",
+    "hint": "For APIs that only reveal the next page's cursor inside the current response (e.g. pageInfo.endCursor or next_page_token). The script fetches page after page for every parameter combination until no cursor is returned.",
+    "detectBtn": "Detect from recording",
+    "detectNone": "Nothing cursor-like found in the recorded request/response. Enter the paths manually.",
+    "detectApplied": "Cursor settings filled in from the recording — please check them.",
+    "nextCursorPathLabel": "Next cursor in the response (JSON path)",
+    "hasNextPathLabel": "\"Has more pages\" flag (JSON path, optional)",
+    "targetLabel": "Send the cursor as",
+    "targetQuery": "Query parameter",
+    "targetBody": "Request body field",
+    "bodyNeedsPost": "A body target needs a POST request with a recorded request body.",
+    "maxPagesLabel": "Maximum pages per request combination",
+    "firstPageHint": "Page 1 is sent exactly as recorded — make sure the recorded request is the first page, without a cursor."
+  },
   "apiBootstrap": {
     "toggleLabel": "Fetch a fresh token before every run (auth bootstrap)",
     "hint": "For APIs that need a short-lived token from a login/token request first. The script sends that request at the start of every run and uses the extracted value in the headers/URL below — credentials only ever come from environment variables.",

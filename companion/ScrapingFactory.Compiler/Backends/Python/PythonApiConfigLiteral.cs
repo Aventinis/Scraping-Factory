@@ -154,6 +154,13 @@ internal static class PythonApiConfigLiteral
         ? "None"
         : $$"""{"name": {{PythonLiteral.Str(bootstrap.Name)}}, "method": {{PythonLiteral.Str(bootstrap.Method)}}, "url": {{PythonLiteral.Str(bootstrap.Url)}}, "headers": {{RenderHeaders(bootstrap.Headers)}}, "bodyFields": {{RenderBootstrapBodyFields(bootstrap.BodyFields)}}, "bodyEncoding": {{PythonLiteral.Str(bootstrap.BodyEncoding.ToString())}}, "valuePath": {{PythonLiteral.Str(bootstrap.ValuePath)}}}""";
 
+    // Issue #224: same "None when absent" convention as RenderBootstrap.
+    // Only the key belonging to the chosen Target is meaningful at runtime
+    // (_apply_cursor), the other is rendered as None.
+    public static string RenderCursorPagination(ApiCursorPagination? cursor) => cursor is null
+        ? "None"
+        : $$"""{"nextCursorPath": {{PythonLiteral.Str(cursor.NextCursorPath)}}, "hasNextPagePath": {{(cursor.HasNextPagePath is null ? "None" : PythonLiteral.Str(cursor.HasNextPagePath))}}, "target": {{PythonLiteral.Str(cursor.Target.ToString())}}, "queryParameterName": {{(cursor.Target == ApiCursorTarget.Query ? PythonLiteral.Str(cursor.QueryParameterName!) : "None")}}, "bodyPath": {{(cursor.Target == ApiCursorTarget.Body ? PythonLiteral.Str(cursor.BodyPath!) : "None")}}, "maxPages": {{cursor.MaxPages}}}""";
+
     private static string RenderBootstrapBodyFields(List<ApiBootstrapBodyField>? fields) =>
         fields is null ? "[]" : RenderList(fields, field => !string.IsNullOrWhiteSpace(field.EnvironmentVariableName)
             ? $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "envVar": {{PythonLiteral.Str(field.EnvironmentVariableName)}}}"""

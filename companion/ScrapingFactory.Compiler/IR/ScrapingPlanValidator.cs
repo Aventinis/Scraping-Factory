@@ -948,7 +948,46 @@ public static class ScrapingPlanValidator
             declaredSoFar.Add(parameter.Name);
         }
 
+        if (api.CursorPagination is { } cursorPagination)
+        {
+            var cursorError = ValidateApiCursorPagination(api, cursorPagination);
+            if (cursorError is not null)
+                return cursorError;
+        }
+
         return api.Headers is { } headers ? ValidateApiHeaders(headers, bootstrapName) : null;
+    }
+
+    // Issue #224: see ApiCursorPagination's own doc comment.
+    private static string? ValidateApiCursorPagination(ApiConfig api, ApiCursorPagination cursor)
+    {
+        if (string.IsNullOrWhiteSpace(cursor.NextCursorPath))
+            return "Cursor pagination needs a NextCursorPath.";
+        if (cursor.HasNextPagePath is not null && string.IsNullOrWhiteSpace(cursor.HasNextPagePath))
+            return "Cursor pagination's HasNextPagePath must not be blank when set.";
+        if (cursor.MaxPages <= 0)
+            return "Cursor pagination's MaxPages must be greater than 0.";
+        if (api.EmbeddedJsonSource is not null)
+            return "Cursor pagination can't be combined with an embedded JSON source — a page load has no cursor to follow.";
+
+        switch (cursor.Target)
+        {
+            case ApiCursorTarget.Query:
+                if (string.IsNullOrWhiteSpace(cursor.QueryParameterName))
+                    return "Cursor pagination with target 'Query' needs a QueryParameterName.";
+                if (cursor.QueryParameterName.Any(c => char.IsWhiteSpace(c) || c is '&' or '=' or '#' or '?'))
+                    return $"Invalid cursor query parameter name '{cursor.QueryParameterName}'.";
+                break;
+            case ApiCursorTarget.Body:
+                if (api.Method != "POST" || api.Body is null)
+                    return "Cursor pagination with target 'Body' requires method 'POST' with a request body.";
+                if (string.IsNullOrWhiteSpace(cursor.BodyPath))
+                    return "Cursor pagination with target 'Body' needs a BodyPath.";
+                if (cursor.BodyPath.Split('.').Any(string.IsNullOrWhiteSpace) || cursor.BodyPath.Contains('['))
+                    return $"Invalid cursor BodyPath '{cursor.BodyPath}': use dot-separated object keys only.";
+                break;
+        }
+        return null;
     }
 
     // Issue #220: see ApiBootstrap's own doc comment. The value name itself

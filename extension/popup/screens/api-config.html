@@ -52,6 +52,19 @@
       <div id="api-bootstrap-config" class="api-bootstrap-config hidden"></div>
     </div>
 
+    <!-- Cursor/token-based pagination (Issue #224): follow a "next page"
+         cursor the API returns in its own response, rendered by
+         api-cursor-pagination-ui.js's renderApiCursorPaginationSection.
+         Hidden for an embedded-JSON source (a page load has no cursor). -->
+    <div id="api-cursor-section" class="api-cursor-section">
+      <label class="output-settings-toggle" style="margin-top: 10px;">
+        <input type="checkbox" id="toggle-api-cursor" />
+        <span data-i18n="apiCursor.toggleLabel"></span>
+      </label>
+      <p class="browser-actions-hint" data-i18n="apiCursor.hint"></p>
+      <div id="api-cursor-config" class="api-cursor-config hidden"></div>
+    </div>
+
     <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.headersLabel"></div>
     <ul id="api-config-headers" class="api-config-headers"></ul>
 
