@@ -275,6 +275,21 @@
     "bodyNewParameterOption": "+ Neuer Parameter…",
     "bodyCoerceToTitle": "Werttyp für die Übernahme in den Body (Standard: Text)"
   },
+  "apiCursor": {
+    "toggleLabel": "Cursor der nächsten Seite verfolgen (Cursor-/Token-Paginierung)",
+    "hint": "Für APIs, die den Cursor der nächsten Seite nur in der aktuellen Antwort verraten (z. B. pageInfo.endCursor oder next_page_token). Das Skript holt für jede Parameterkombination Seite für Seite, bis kein Cursor mehr zurückkommt.",
+    "detectBtn": "Aus Aufzeichnung erkennen",
+    "detectNone": "In der aufgezeichneten Anfrage/Antwort wurde nichts Cursor-Ähnliches gefunden. Bitte die Pfade manuell eintragen.",
+    "detectApplied": "Cursor-Einstellungen aus der Aufzeichnung übernommen – bitte prüfen.",
+    "nextCursorPathLabel": "Nächster Cursor in der Antwort (JSON-Pfad)",
+    "hasNextPathLabel": "„Weitere Seiten“-Flag (JSON-Pfad, optional)",
+    "targetLabel": "Cursor senden als",
+    "targetQuery": "Query-Parameter",
+    "targetBody": "Feld im Request-Body",
+    "bodyNeedsPost": "Ein Body-Ziel braucht eine POST-Anfrage mit aufgezeichnetem Request-Body.",
+    "maxPagesLabel": "Maximale Seiten pro Anfrage-Kombination",
+    "firstPageHint": "Seite 1 wird genau wie aufgezeichnet gesendet – die aufgezeichnete Anfrage sollte also die erste Seite ohne Cursor sein."
+  },
   "apiBootstrap": {
     "toggleLabel": "Vor jedem Lauf frisches Token holen (Auth-Bootstrap)",
     "hint": "Für APIs, die zuerst ein kurzlebiges Token aus einer Login-/Token-Anfrage brauchen. Das Skript sendet diese Anfrage zu Beginn jedes Laufs und nutzt den ausgelesenen Wert in den Headern/der URL unten — Zugangsdaten kommen ausschließlich aus Umgebungsvariablen.",

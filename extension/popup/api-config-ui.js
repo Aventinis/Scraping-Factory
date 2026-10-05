@@ -960,6 +960,9 @@ const SFApiConfigUI = (function () {
         bodyParameters: [],
         nextBodyParameterSeq: 0,
         embeddedJsonSource: null,
+        // Issue #224: lets the cursor-pagination section find this request's
+        // own recorded response again ("Detect from recording").
+        sourceEntryId: candidate.entryId,
       },
     });
     loadInitialBodyTreeForCandidate(bridge, candidate);
@@ -1482,6 +1485,7 @@ const SFApiConfigUI = (function () {
       parameterIdToName: idToName,
       embeddedJsonSource: draft.embeddedJsonSource,
       bootstrap: draft.bootstrap,
+      cursorPagination: draft.cursorPagination,
     });
 
     log('API_CONFIG confirm', apiConfig);

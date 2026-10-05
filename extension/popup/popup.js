@@ -62,6 +62,10 @@ const {
 } = typeof require !== 'undefined' ? require('./api-bootstrap-ui') : self.SFApiBootstrapUI;
 
 const {
+  renderApiCursorPaginationSection, wireApiCursorPaginationEvents,
+} = typeof require !== 'undefined' ? require('./api-cursor-pagination-ui') : self.SFApiCursorPaginationUI;
+
+const {
   renderGroupTree,
   renderContainerFieldModal, wireContainerModeEvents,
 } = typeof require !== 'undefined' ? require('./container-tree-ui') : self.SFContainerTreeUI;
@@ -874,6 +878,7 @@ function render() {
   if (_state.current === STATES.API_CONFIG && _state.apiConfigDraft) {
     renderApiConfigModals(bridge);
     renderApiBootstrapSection(bridge);
+    renderApiCursorPaginationSection(bridge);
   }
 
   if (_state.current === STATES.DONE) {
@@ -1122,6 +1127,8 @@ function wireEvents() {
   wireApiConfigEvents(bridge);
 
   wireApiBootstrapEvents(bridge);
+
+  wireApiCursorPaginationEvents(bridge);
 
   wireTransformPresetControls(bridge);
   wireTransformPresetsSettings(bridge);

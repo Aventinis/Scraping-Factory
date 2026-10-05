@@ -275,6 +275,21 @@
     "bodyNewParameterOption": "+ Nuevo parámetro…",
     "bodyCoerceToTitle": "Tipo de valor para usar en el cuerpo (por defecto: texto)"
   },
+  "apiCursor": {
+    "toggleLabel": "Seguir el cursor de la página siguiente (paginación por cursor/token)",
+    "hint": "Para APIs que solo revelan el cursor de la página siguiente dentro de la respuesta actual (p. ej. pageInfo.endCursor o next_page_token). El script pide página tras página para cada combinación de parámetros hasta que no se devuelva más cursor.",
+    "detectBtn": "Detectar desde la grabación",
+    "detectNone": "No se encontró nada similar a un cursor en la solicitud/respuesta grabada. Introduce las rutas manualmente.",
+    "detectApplied": "Ajustes de cursor rellenados desde la grabación; revísalos.",
+    "nextCursorPathLabel": "Siguiente cursor en la respuesta (ruta JSON)",
+    "hasNextPathLabel": "Indicador de «hay más páginas» (ruta JSON, opcional)",
+    "targetLabel": "Enviar el cursor como",
+    "targetQuery": "Parámetro de consulta",
+    "targetBody": "Campo del cuerpo de la solicitud",
+    "bodyNeedsPost": "Un destino en el cuerpo requiere una solicitud POST con cuerpo grabado.",
+    "maxPagesLabel": "Máximo de páginas por combinación de solicitud",
+    "firstPageHint": "La página 1 se envía exactamente como se grabó; asegúrate de que la solicitud grabada sea la primera página, sin cursor."
+  },
   "apiBootstrap": {
     "toggleLabel": "Obtener un token nuevo antes de cada ejecución (auth bootstrap)",
     "hint": "Para APIs que primero necesitan un token de corta duración de una solicitud de login/token. El script envía esa solicitud al inicio de cada ejecución y usa el valor extraído en los encabezados/la URL de abajo — las credenciales solo provienen de variables de entorno.",

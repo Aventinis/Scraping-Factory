@@ -109,6 +109,8 @@
  * @property {SFWire.EmbeddedJsonSource | null} [embeddedJsonSource]
  * @property {ParameterPart[]} [bodyParameters]
  * @property {SFDraft.ApiBootstrap | null} [bootstrap]
+ * @property {SFDraft.ApiCursorPagination | null} [cursorPagination]
+ * @property {string} [sourceEntryId]
  */
 const SFApiConfig = (function () {
   // Issue #220: the bootstrap request's own draft→wire logic lives in its
@@ -117,6 +119,10 @@ const SFApiConfig = (function () {
   // output and into the "Apply" gate.
   const { BOOTSTRAP_SOURCE_KIND, buildApiBootstrap, bootstrapDraftIsComplete } =
     typeof require !== 'undefined' ? require('./api-bootstrap') : self.SFApiBootstrap;
+  // Issue #224: same split — the cursor-pagination draft→wire/validity logic
+  // lives in api-cursor-pagination.js (loaded before this file).
+  const { buildApiCursorPagination, cursorDraftIsComplete } =
+    typeof require !== 'undefined' ? require('./api-cursor-pagination') : self.SFApiCursorPagination;
   const { t } = typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
 
   // Popup screen names. Lives here (rather than in popup.js, which loads
@@ -517,12 +523,14 @@ const SFApiConfig = (function () {
   function buildApiConfig({
     urlParts, itemsPath, fields, groups, parameterSources, capturedHeaders, headerDecisions,
     method, bodyTree, bodyParameterNames = [], parameterIdToName = {}, embeddedJsonSource = null, bootstrap = null,
+    cursorPagination = null,
   }) {
     const urlTemplate = buildUrlTemplate(urlParts);
     // Issue #220: a variable URL part carrying the bootstrap value (already
     // renamed to the bootstrap's own name by resolveBootstrapUrlParts) is a
     // placeholder, not a declared parameter — see api-bootstrap.js.
     const bootstrapWire = buildApiBootstrap(bootstrap);
+    const cursorWire = buildApiCursorPagination(cursorPagination);
     const variableParts = [...urlParts.pathSegments, ...urlParts.queryParams]
       .filter(p => p.variable && !(bootstrapWire && p.name === bootstrapWire.name));
     const parameterNames = [...variableParts.map(p => p.name), ...bodyParameterNames];
@@ -544,6 +552,7 @@ const SFApiConfig = (function () {
       ...(bodyTree ? { body: serializeBodyTree(bodyTree, parameterIdToName) } : {}),
       ...(embeddedJsonSource ? { embeddedJsonSource } : {}),
       ...(bootstrapWire ? { bootstrap: bootstrapWire } : {}),
+      ...(cursorWire ? { cursorPagination: cursorWire } : {}),
     };
   }
 
@@ -1094,6 +1103,7 @@ const SFApiConfig = (function () {
       !decision.include || decision.mode !== 'bootstrap' ||
       (!!draft.bootstrap && (decision.template || '').includes(`{${draft.bootstrap.name.trim()}}`)));
     if (!bootstrapHeadersOk) return false;
+    if (!cursorDraftIsComplete(draft.cursorPagination, { method: draft.method, hasBodyTree: !!draft.bodyTree })) return false;
     return draft.bodyTree ? bodyTreeLeavesAreBound(draft.bodyTree) : true;
   }
 
