@@ -120,7 +120,7 @@ const SFApiCursorPaginationUI = (function () {
     const entries = await fetchCaptureEntries();
     const entry = entries.find(e => draft.sourceEntryId !== undefined && e.id === draft.sourceEntryId)
       || [...entries].reverse().find(e => e.url === draft.sourceUrl && (e.method || 'GET') === (draft.method || 'GET'));
-    const found = entry ? detectCursorSuggestion(entry) : null;
+    const found = entry ? detectCursorSuggestion(entry, entries.filter(e => e !== entry)) : null;
     if (!found || (!found.nextCursorPath && !found.hasNextPagePath && !found.queryParameterName && !found.bodyPath)) {
       log('API_CURSOR detect: nothing found');
       bridge.showToast(t('apiCursor.detectNone'), null, 'warn');

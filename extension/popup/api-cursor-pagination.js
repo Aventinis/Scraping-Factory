@@ -138,9 +138,12 @@ const SFApiCursorPagination = (function () {
   /**
    * @param {{ url?: string, method?: string, body?: string, requestBody?: string, requestBodySkipped?: boolean }} entry
    *   a GET_API_CAPTURE_ENTRIES entry
+   * @param {Array<{ url?: string }>} [otherEntries] other recorded requests: when `entry` itself carries no
+   *   cursor-looking query parameter (it is page 1), a later page of the same endpoint (same origin + path)
+   *   usually does
    * @returns {{ nextCursorPath: string, hasNextPagePath: string, target: 'Query' | 'Body', queryParameterName: string, bodyPath: string }}
    */
-  function detectCursorSuggestion(entry) {
+  function detectCursorSuggestion(entry, otherEntries = []) {
     let nextCursorPath = '';
     let hasNextPagePath = '';
     try {
@@ -153,7 +156,18 @@ const SFApiCursorPagination = (function () {
 
     let queryParameterName = '';
     try {
-      queryParameterName = Array.from(new URL(entry.url || '').searchParams.keys()).find(key => CURSOR_REQUEST_KEY.test(key)) || '';
+      const own = new URL(entry.url || '');
+      const sameEndpoint = [entry, ...otherEntries].flatMap((candidate) => {
+        try {
+          const other = new URL(candidate.url || '');
+          return other.origin === own.origin && other.pathname === own.pathname ? [other] : [];
+        } catch {
+          return [];
+        }
+      });
+      queryParameterName = sameEndpoint
+        .flatMap(url => Array.from(url.searchParams.keys()))
+        .find(key => CURSOR_REQUEST_KEY.test(key)) || '';
     } catch {
       // unparsable URL — leave blank
     }

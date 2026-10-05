@@ -101,3 +101,14 @@ describe('detectCursorSuggestion', () => {
     });
   });
 });
+
+describe('detectCursorSuggestion across recorded pages', () => {
+  test('page 1 carries no cursor itself — the query parameter is taken from a later page of the same endpoint', () => {
+    const page1 = { url: 'https://example.com/api/items', method: 'GET', body: JSON.stringify({ pageInfo: { endCursor: 'abc', hasNextPage: true } }) };
+    const page2 = { url: 'https://example.com/api/items?cursor=abc', method: 'GET' };
+    const otherEndpoint = { url: 'https://example.com/api/other?after=zzz', method: 'GET' };
+
+    expect(detectCursorSuggestion(page1, [page2]).queryParameterName).toBe('cursor');
+    expect(detectCursorSuggestion(page1, [otherEndpoint]).queryParameterName).toBe('');
+  });
+});
