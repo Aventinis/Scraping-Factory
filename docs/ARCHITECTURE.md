@@ -391,6 +391,39 @@ request actually sends.
   `e2e/examples/issue-220-api-token-bootstrap-check.js` against the
   `test-pages/api-token-bootstrap` fixture
 
+### 2.5c API mode — cursor/token-based pagination (Issue #224)
+
+For JSON APIs whose next page's identifier only appears in the *current*
+page's response (Relay's `pageInfo.endCursor`, a `next_page_token`). A
+sequential fetch loop inside each parameter combination — deliberately not an
+`ApiParameter`, whose values are enumerated up front and become output
+columns. Page 1 is sent exactly as configured; from page 2 on the previous
+page's cursor goes to a fixed target: a query parameter, or a dot path inside
+the POST body (`variables.after` for GraphQL). The chain ends when no cursor
+is returned, an optional has-more flag is falsy, a cursor repeats, or
+`MaxPages` is reached. Works for the flat and the tree response shape. The
+"Detect from recording" button reads the recorded response/request for
+cursor-looking keys. Sibling follow-up: `Link`-header pagination (#321).
+
+- Extension: `popup/api-cursor-pagination.js` (pure draft/wire logic:
+  `cursorDraftIsComplete`, `buildApiCursorPagination`,
+  `detectCursorSuggestion`), `popup/api-cursor-pagination-ui.js` (the
+  section's render/wiring), `popup/api-config.js` (`buildApiConfig`'s
+  `cursorPagination` param, the Apply gate), `popup/api-config-ui.js`
+  (`confirmApiConfig`, `sourceEntryId` on the draft),
+  `popup/screens/api-config.html` (`#api-cursor-section`)
+- Companion: `IR/ApiConfig.cs` (`ApiConfig.CursorPagination`,
+  `ApiCursorPagination`, `ApiCursorTarget`), `ScrapingPlanValidator.cs`
+  (`ValidateApiCursorPagination`), `Backends/Python/PythonApiConfigLiteral.cs`
+  (`RenderCursorPagination`), `PythonApiCodeGenerator.cs`
+  (`cursor_pagination_enabled`/`cursor_pagination_literal`)
+- Templates: `scraper_api.py.j2` and `scraper_api_grouped.py.j2`
+  (`_fetch_page_data`, `_fetch_pages`, `CURSOR_PAGINATION`, `_apply_cursor`,
+  `_next_cursor`)
+- Tests: `ApiCursorPaginationValidatorTests.cs`,
+  `ApiCursorPaginationEndToEndTests.cs`, `api-cursor-pagination.test.js`,
+  `api-cursor-pagination-ui.test.js`
+
 ### 2.6 Browser engine, browser actions & login flows (Issues #41/#42/#43)
 
 Adds an optional Playwright-based rendering engine (real Chromium, executes the
@@ -1560,6 +1593,7 @@ compile time anywhere.
 | API parameter source | `api-config.js`: `buildStaticListSource`/`buildDiscoverySource`/`buildRangeSource` | `{kind:"staticList"\|"discovery"\|"range", ...}` | `IR/ApiConfig.cs`: `ApiParameterSource` (`[JsonPolymorphic]`) |
 | API embedded JSON source (Issue #136) | `api-config-ui.js`: `confirmEmbeddedJsonFieldCandidate()` (`{scriptSelector}`, stamped from `content-script.js`'s `scriptTagSelector`) | `{scriptSelector}` | `IR/ApiConfig.cs`: `EmbeddedJsonSource` (plain optional object, no converter) |
 | API token/auth bootstrap (Issue #220) | `api-bootstrap.js`: `buildApiBootstrap()` (draft `{name,method,url,valuePath,bodyEncoding,headers,bodyFields}`) | `{name, method?, url, headers?, bodyFields?, bodyEncoding?, valuePath}` | `IR/ApiConfig.cs`: `ApiBootstrap` (plain optional object, no converter) |
+| API cursor/token pagination (Issue #224) | `api-cursor-pagination.js`: `buildApiCursorPagination()` (draft `{nextCursorPath,hasNextPagePath,target,queryParameterName,bodyPath,maxPages}`) | `{nextCursorPath, hasNextPagePath?, target: 'Query'\|'Body', queryParameterName?, bodyPath?, maxPages}` | `IR/ApiConfig.cs`: `ApiCursorPagination` (plain optional object, no converter) |
 | API response tree node | `api-config.js`: `buildApiGroupDraft`/`buildApiFieldDraft`, `serializeApiTree` | `{name,path,children:[...]}` or `{name,path}` | `IR/ApiConfig.cs`: `ApiGroup`/`ApiField` (via `ApiNodeJsonConverter`) |
 | API request body node | `api-config.js`: `jsonValueToBodyDraft`/`serializeBodyTree` | `{properties:{...}}` / `{items:[...]}` / `{kind,stringValue\|numberValue\|boolValue}` / `{parameterName, coerceTo?}` | `IR/ApiBodyNode.cs`: `ApiBodyObject`/`Array`/`Literal`/`Variable` (via `ApiBodyNodeJsonConverter`) |
 | Browser action | `popup.js`: `addBrowserAction`/`serializeBrowserActions` | `{kind:"waitFor"\|"fill"\|"click"\|"scroll", selector, ...}` | `IR/BrowserAction.cs`: `WaitForAction`/`FillAction`/`ClickAction`/`ScrollAction` (`[JsonPolymorphic]`) |
