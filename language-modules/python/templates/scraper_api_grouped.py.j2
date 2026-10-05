@@ -10,6 +10,9 @@ import json
 {{~ if blueprint_mapping_enabled && !output_is_json ~}}
 import csv
 {{~ end ~}}
+{{~ if cursor_pagination_enabled ~}}
+import copy
+{{~ end ~}}
 import datetime
 import itertools
 import re
@@ -1607,6 +1610,146 @@ def _notify_change(old_content, new_content):
 {{~ end ~}}
 
 
+{{~ if cursor_pagination_enabled ~}}
+# Issue #224: cursor/token-based pagination. Unlike a RangeSource/
+# DiscoverySource parameter (a value list resolved up front), the next page's
+# cursor is only revealed by the current page's own response, so each
+# parameter combination runs its own sequential chain: page 1 is sent exactly
+# as configured, every further page carries the cursor the page before it
+# returned — as a query parameter, or at a dot-separated path within the
+# request body. The chain ends when no cursor is returned, the optional
+# "has next page" flag is falsy, a cursor repeats (an API that keeps handing
+# back the same one would otherwise loop forever), or CURSOR_PAGINATION's
+# maxPages safety cap is reached.
+CURSOR_PAGINATION = {{ cursor_pagination_literal }}
+
+
+def _with_query_param(url, name, value):
+    # Replaces (or appends) one query parameter without re-encoding any of
+    # the others — they stay byte-for-byte what UrlTemplate produced.
+    base, separator, query = url.partition("?")
+    fragment = ""
+    if "#" in query:
+        query, _, fragment = query.partition("#")
+        fragment = "#" + fragment
+    elif "#" in base:
+        base, _, fragment = base.partition("#")
+        fragment = "#" + fragment
+    pairs = [pair for pair in query.split("&") if pair and pair.partition("=")[0] != name]
+    pairs.append(f"{name}={quote(str(value), safe='')}")
+    return f"{base}?{'&'.join(pairs)}{fragment}"
+
+
+def _set_body_path(body, path, value):
+    # Sets one value at a dot-separated object path of the already-rendered
+    # request body (e.g. "variables.after" for a GraphQL query), creating
+    # missing intermediate objects.
+    if not isinstance(body, dict):
+        raise RuntimeError("Cursor pagination needs a JSON object as the request body.")
+    node = body
+    *parents, last = path.split(".")
+    for key in parents:
+        child = node.get(key)
+        if not isinstance(child, dict):
+            child = {}
+            node[key] = child
+        node = child
+    node[last] = value
+
+
+def _apply_cursor(url, body, cursor):
+    if CURSOR_PAGINATION["target"] == "Body":
+        page_body = copy.deepcopy(body)
+        _set_body_path(page_body, CURSOR_PAGINATION["bodyPath"], cursor)
+        return url, page_body
+    return _with_query_param(url, CURSOR_PAGINATION["queryParameterName"], cursor), body
+
+
+def _next_cursor(data):
+    # None = this was the last page.
+    has_next_path = CURSOR_PAGINATION["hasNextPagePath"]
+    if has_next_path is not None:
+        flag = _resolve_field(data, has_next_path)
+        if flag is None or flag is False or str(flag).strip().lower() in ("", "false", "0"):
+            return None
+    cursor = _resolve_field(data, CURSOR_PAGINATION["nextCursorPath"])
+    if cursor is None or isinstance(cursor, (dict, list)) or str(cursor) == "":
+        return None
+    return cursor
+
+
+{{~ end ~}}
+
+
+# Sends ONE request (page) and returns its parsed JSON, or None when the
+# endpoint answers 404 (see below). Factored out of scrape() (Issue #224) so
+# the same code serves a plain single request and every page of a cursor
+# chain.
+def _fetch_page_data(url, body, headers):
+    if METHOD == "POST":
+{{~ if request_delay.enabled ~}}
+        _pace_request()
+{{~ end ~}}
+{{~ if retry.enabled ~}}
+        response = _checked_request("Request", url, lambda: _send_with_retry(lambda _u=url: requests.post(_u, headers=headers, json=body, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10), _display_url(url)))
+{{~ else ~}}
+        response = _checked_request("Request", url, lambda: requests.post(url, headers=headers, json=body, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10))
+{{~ end ~}}
+    else:
+{{~ if request_delay.enabled ~}}
+        _pace_request()
+{{~ end ~}}
+{{~ if retry.enabled ~}}
+        response = _checked_request("Request", url, lambda: _send_with_retry(lambda _u=url: requests.get(_u, headers=headers, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10), _display_url(url)))
+{{~ else ~}}
+        response = _checked_request("Request", url, lambda: requests.get(url, headers=headers, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10))
+{{~ end ~}}
+    # A 404 is treated as "this combination doesn't exist" and skipped
+    # rather than aborting the whole run — same reasoning as the flat
+    # (CSV) API-Mode template, see scraper_api.py.j2.
+    if response.status_code == 404:
+        print(f"Skipped (404 Not Found): {{ if has_bootstrap }}{_redact_bootstrap(url)}{{ else }}{url}{{ end }}")
+        return None
+    _require_ok("Request", url, response)
+{{~ if hardening.enabled ~}}
+    _BLOCKING_RESPONSES.append({"url": {{ if has_bootstrap }}_redact_bootstrap(url){{ else }}url{{ end }}, "final_url": {{ if has_bootstrap }}_redact_bootstrap(response.url){{ else }}response.url{{ end }}, "length": len(response.content), "text": response.text})
+{{~ end ~}}
+{{~ if embedded_json_source ~}}
+    data = _extract_embedded_json(response)
+{{~ else ~}}
+    data = _json_or_fail("Request", url, response)
+{{~ end ~}}
+    return data
+
+
+{{~ if cursor_pagination_enabled ~}}
+def _fetch_pages(url, body, headers):
+    cursor = None
+    seen_cursors = set()
+    for page_number in range(1, CURSOR_PAGINATION["maxPages"] + 1):
+        page_url, page_body = (url, body) if cursor is None else _apply_cursor(url, body, cursor)
+        data = _fetch_page_data(page_url, page_body, headers)
+        if data is None:
+            # A 404 on page 1 means "this combination doesn't exist"; on a
+            # later page it simply ends the chain.
+            return
+        yield data
+        cursor = _next_cursor(data)
+        if cursor is None:
+            return
+        if str(cursor) in seen_cursors:
+            print(f"WARNING: cursor '{cursor}' was returned twice - stopping pagination to avoid an endless loop.", file=sys.stderr)
+            return
+        seen_cursors.add(str(cursor))
+    print(f"Stopped after {CURSOR_PAGINATION['maxPages']} page(s) (maxPages) although the API reported more.")
+{{~ else ~}}
+def _fetch_pages(url, body, headers):
+    data = _fetch_page_data(url, body, headers)
+    if data is not None:
+        yield data
+{{~ end ~}}
+
+
 def scrape():
 {{~ if has_bootstrap ~}}
     _BOOTSTRAP_VALUES.update(_run_bootstrap())
@@ -1633,48 +1776,16 @@ def scrape():
         url = URL_TEMPLATE.format(**encoded_combo)
 
         body = _render_body(BODY, {{ if has_bootstrap }}{**_BOOTSTRAP_VALUES, **combo}{{ else }}combo{{ end }})
-        if METHOD == "POST":
-{{~ if request_delay.enabled ~}}
-            _pace_request()
-{{~ end ~}}
-{{~ if retry.enabled ~}}
-            response = _checked_request("Request", url, lambda: _send_with_retry(lambda _u=url: requests.post(_u, headers=headers, json=body, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10), _display_url(url)))
-{{~ else ~}}
-            response = _checked_request("Request", url, lambda: requests.post(url, headers=headers, json=body, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10))
-{{~ end ~}}
-        else:
-{{~ if request_delay.enabled ~}}
-            _pace_request()
-{{~ end ~}}
-{{~ if retry.enabled ~}}
-            response = _checked_request("Request", url, lambda: _send_with_retry(lambda _u=url: requests.get(_u, headers=headers, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10), _display_url(url)))
-{{~ else ~}}
-            response = _checked_request("Request", url, lambda: requests.get(url, headers=headers, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10))
-{{~ end ~}}
-        # A 404 is treated as "this combination doesn't exist" and skipped
-        # rather than aborting the whole run — same reasoning as the flat
-        # (CSV) API-Mode template, see scraper_api.py.j2.
-        if response.status_code == 404:
-            print(f"Skipped (404 Not Found): {{ if has_bootstrap }}{_redact_bootstrap(url)}{{ else }}{url}{{ end }}")
-            continue
-        _require_ok("Request", url, response)
-{{~ if hardening.enabled ~}}
-        _BLOCKING_RESPONSES.append({"url": {{ if has_bootstrap }}_redact_bootstrap(url){{ else }}url{{ end }}, "final_url": {{ if has_bootstrap }}_redact_bootstrap(response.url){{ else }}response.url{{ end }}, "length": len(response.content), "text": response.text})
-{{~ end ~}}
-{{~ if embedded_json_source ~}}
-        data = _extract_embedded_json(response)
-{{~ else ~}}
-        data = _json_or_fail("Request", url, response)
-{{~ end ~}}
-        for node in GROUPS:
-            for el in _extract_api_group(data, node):
-                root.append(el)
+        for data in _fetch_pages(url, body, headers):
+            for node in GROUPS:
+                for el in _extract_api_group(data, node):
+                    root.append(el)
 {{~ if blueprint_mapping_enabled ~}}
-        for node in GROUPS:
-            blueprint_rows.extend(_flatten_api_group_for_blueprint(data, node, {}, []))
+            for node in GROUPS:
+                blueprint_rows.extend(_flatten_api_group_for_blueprint(data, node, {}, []))
 {{~ end ~}}
 {{~ if blueprint_tree_mapping_enabled ~}}
-        blueprint_tree_elements.extend(_build_blueprint_tree(data, BLUEPRINT_TREE_MAPPING))
+            blueprint_tree_elements.extend(_build_blueprint_tree(data, BLUEPRINT_TREE_MAPPING))
 {{~ end ~}}
     return root, blueprint_rows, blueprint_tree_elements
 
