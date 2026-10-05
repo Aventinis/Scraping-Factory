@@ -32,6 +32,8 @@ git pull origin dev
 
 Check beforehand (`git status`) whether there are uncommitted local changes that could block the checkout, and flag them to the user instead of silently discarding them (no `git reset --hard` or `git clean` without asking first).
 
+**Then re-read this `SKILL.md` from disk (and `.claude/skills/browser-test/SKILL.md`, `e2e/README.md`).** The copy of this skill that was loaded into the conversation came from whatever branch was checked out when the skill was invoked (often a stale `main`), while `dev` may contain a newer version with extra steps. Following the stale copy is how a mandatory step (the hands-on test guide in step 9) once got skipped.
+
 ## Step 2: Create the feature branch
 
 Derive a short, descriptive branch name from the feature name, in the format `feature/featurename` (lowercase, hyphens instead of spaces, e.g. `feature/csv-export`). If the user already specified a name, use it instead of inventing your own.
@@ -81,6 +83,17 @@ If tests fail: fix the underlying bug in the feature code (don't bend the test t
 
 Commit the tests with Conventional Commits in English too, e.g. `test(csv-export): cover empty dataset edge case`.
 
+### Real-browser check and fixture (mandatory for anything user-visible)
+
+Jest (jsdom) and `dotnet test` can't prove that a feature works in the real, unpacked extension. For every feature that touches the popup/side panel UI, the content script, or a popup ↔ companion flow, also do the following (use the `browser-test` skill and `e2e/README.md` for the mechanics):
+
+1. **Pick a fixture**: look at `test-pages/` and the registry in `e2e/fixtures.js` for the closest existing one. If none fits the scenario (e.g. a new kind of API behavior), add `test-pages/<name>/` (`index.html` plus a stdlib-only `server.py` if it needs endpoints, like `test-pages/api-token-bootstrap`) and register it in `e2e/fixtures.js` with a fresh, unused port.
+2. **Write an e2e check** `e2e/examples/issue-<N>-<topic>-check.js` (copy a sibling such as `issue-220-api-token-bootstrap-check.js`) that drives the real UI end to end and **asserts the actual outcome** — the concrete values/rows the feature should produce — not merely that the DONE screen was reached (a trial run already passes with one row).
+3. **Run it** (`node e2e/examples/issue-<N>-<topic>-check.js`) and fix until it passes. If the real browser reveals a problem Jest missed, fix the code, don't loosen the check.
+4. Commit fixture + check (and the screenshots the check writes) with a `test(...)` commit.
+
+Skip this only for changes with no browser-visible behavior (pure companion/template logic already covered by end-to-end tests that execute the generated script) — and then say so explicitly in the final message instead of silently omitting it.
+
 ## Step 7: Update documentation
 
 Update the documentation relevant to the project — e.g. README, doc comments on new public functions/classes (in the idiom of the respective language, e.g. XML doc comments for C#, JSDoc for TypeScript, docstrings for Python), and the CHANGELOG if one exists. Check which documentation conventions already exist in the project (including the language used) instead of introducing new ones. Commit this separately with an English commit message, e.g. `docs(csv-export): document CsvExportService usage`.
@@ -113,17 +126,21 @@ Short paragraph on what the feature does and which problem it solves.
 
 Share the PR URL with the user once it's created (`gh pr create` prints it in its output).
 
-## Step 9: Hand the user a hands-on test guide
+## Step 9: Hand the user a hands-on test guide (mandatory — never skip)
+
+A feature is **not finished** when the PR is open. The final message to the user must contain this guide; a bare PR link, or a summary of what was built, is an incomplete deliverable. If you realize you skipped it, write it immediately and say that you forgot it.
 
 The PR's test steps are written for reviewers (in English, inside the PR). The user also wants to try the feature themselves right away, so end the workflow with a final message to the user — **in the language of the conversation** (usually German) — that tells them exactly how to test the new feature by hand. Don't stop at "here's the PR link".
 
 The guide should contain:
 
 1. **Where to test**: name at least one concrete page or target the user can open immediately:
-   - a local fixture (e.g. under `test-pages/`) together with its exact start command and URL; if no existing fixture fits, add one as part of step 6
+   - a local fixture under `test-pages/` (the one from step 6) together with its exact start command (`python3 test-pages/<name>/server.py`, or `python3 -m http.server <port> --directory test-pages/<name>` for a static one — see `e2e/fixtures.js` for the port) and URL, plus what to click on that page to produce the data the feature needs (e.g. which buttons trigger the recorded requests)
    - if feasible, also a real, publicly reachable site where the feature applies. **Verify that it really behaves as described before naming it** (e.g. a quick `curl` showing the expected response or status code). Never suggest a site you haven't checked.
-2. **Preconditions**: what needs to be running or reloaded first (e.g. check out the branch, start the companion, reload the unpacked extension), plus any credentials or test data the page needs.
+2. **Preconditions**: what needs to be running or reloaded first — `git checkout <branch>`, start the companion (`dotnet run --project companion/ScrapingFactory.Companion`), reload the unpacked extension (`extension/`) in the browser — plus any credentials or test data the page needs.
 3. **Numbered steps**: name UI elements by their visible label in the user's UI language. If a step needs input the user can't easily come up with (a snippet, a URL, a value), include it ready to copy.
 4. **Expected result** after the key steps, plus one or two quick negative checks (what should fail, and how it should look).
 
 Keep it short and copy-paste-friendly. The user should be able to follow it without reading the PR or the code.
+
+Before sending the final message, tick off: fixture name + start command + URL, preconditions, numbered steps with the UI labels, expected result, a negative check — and the result of the step-6 e2e check (or the reason it was skipped).
