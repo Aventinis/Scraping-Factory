@@ -422,7 +422,10 @@ cursor-looking keys. Sibling follow-up: `Link`-header pagination (#321).
   `_next_cursor`)
 - Tests: `ApiCursorPaginationValidatorTests.cs`,
   `ApiCursorPaginationEndToEndTests.cs`, `api-cursor-pagination.test.js`,
-  `api-cursor-pagination-ui.test.js`
+  `api-cursor-pagination-ui.test.js`; real-browser check
+  `e2e/examples/issue-224-api-cursor-pagination-check.js` against the
+  `test-pages/api-cursor-pagination` fixture (REST `?cursor=` and GraphQL
+  `variables.after`, 7 items over 4 pages, port 9000)
 
 ### 2.6 Browser engine, browser actions & login flows (Issues #41/#42/#43)
 
