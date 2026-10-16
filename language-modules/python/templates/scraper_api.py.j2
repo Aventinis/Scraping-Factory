@@ -1547,6 +1547,11 @@ def _send_with_retry(send, url):
 
 
 {{~ end ~}}
+{{ if dedup.enabled }}
+{{ dedup.code }}
+{{ end }}
+
+
 def main():
 {{~ if change_detection.enabled ~}}
     previous_content = _read_previous_output(OUTPUT_PATH)
@@ -1555,19 +1560,28 @@ def main():
 {{~ if hardening.enabled ~}}
     data, required_fields_failed = _filter_required_fields(data)
 {{~ end ~}}
+{{~ if dedup.enabled ~}}
+    data, dedup_keys = _dedup_filter_rows(data)
+    written_data = _dedup_new_rows(data, dedup_keys)
+{{~ else ~}}
+    written_data = data
+{{~ end ~}}
     # Issue #191: a no-op remap (output_rows is just `data`, fieldnames are
     # the usual parameter+field columns) when no Output Blueprint is set —
     # `data` itself stays keyed by the original field/parameter names
     # throughout either way, since hardening below still needs to look
     # fields up by those original names.
     if BLUEPRINT_MAPPING:
-        output_rows = [{m["target"]: row.get(m["source"], "") for m in BLUEPRINT_MAPPING} for row in data]
+        output_rows = [{m["target"]: row.get(m["source"], "") for m in BLUEPRINT_MAPPING} for row in written_data]
     else:
         # Issue #206 follow-up: see scraper.py.j2's own identical comment —
         # a HiddenFromOutput field is dropped from the write-time projection
         # only, never from `data` itself.
-        output_rows = [{k: v for k, v in row.items() if k not in HIDDEN_FIELD_NAMES} for row in data] if HIDDEN_FIELD_NAMES else data
+        output_rows = [{k: v for k, v in row.items() if k not in HIDDEN_FIELD_NAMES} for row in written_data] if HIDDEN_FIELD_NAMES else written_data
 {{~ if output_is_json ~}}
+{{~ if dedup.append ~}}
+    output_rows = _dedup_with_previous_output(output_rows, [])
+{{~ end ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(output_rows, f, ensure_ascii=False, indent=2)
 {{~ else ~}}
@@ -1577,12 +1591,15 @@ def main():
         fieldnames = [parameter["name"] for parameter in PARAMETERS] + [
             field["name"] for field in FIELDS if field["name"] not in HIDDEN_FIELD_NAMES
         ]
+{{~ if dedup.append ~}}
+    output_rows = _dedup_with_previous_output(output_rows, fieldnames)
+{{~ end ~}}
     with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(output_rows)
 {{~ end ~}}
-    print(f"Done — {len(data)} rows written to {OUTPUT_PATH}")
+    print(f"Done — {{ if dedup.enabled }}{len(output_rows)}{{ else }}{len(data)}{{ end }} rows written to {OUTPUT_PATH}")
 {{~ if change_detection.enabled ~}}
     with open(OUTPUT_PATH, "r", encoding="utf-8") as f:
         new_content = f.read()
@@ -1597,6 +1614,9 @@ def main():
 {{~ end ~}}
     if hardening_failed:
         sys.exit(EXIT_HARDENING_FAILED)
+{{~ end ~}}
+{{~ if dedup.enabled ~}}
+    _dedup_save_state([key for key in dedup_keys if key is not None])
 {{~ end ~}}
 {{~ if proxy.enabled ~}}
     if _PROXY_ENV_MISSING:

@@ -901,6 +901,10 @@ def extract_group(page, scope, node, siblings=None):
             if node["repeating"] and not _passes_required_fields(el):
                 continue
 {{~ end ~}}
+{{~ if dedup.enabled ~}}
+            if node["repeating"] and not _dedup_register_instance(el):
+                continue
+{{~ end ~}}
             elements.append(el)
         return elements
 
@@ -1367,6 +1371,11 @@ def _send_with_retry(send, url):
 
 
 {{~ end ~}}
+{{ if dedup.enabled }}
+{{ dedup.code }}
+{{ end }}
+
+
 def main():
 {{~ if preflight.enabled ~}}
     preflight_status, preflight_etag, preflight_last_modified = _run_preflight_check(URLS[0])
@@ -1434,7 +1443,15 @@ def main():
 {{~ end ~}}
     count = len(blueprint_tree_root.findall(".//*"))
 {{~ else ~}}
+{{~ if dedup.enabled ~}}
+    # Issue #225: incremental mode writes a copy without the instances seen in
+    # an earlier run; `root` itself (hardening, baseline count, the key
+    # collection for the state file) stays the full tree.
+    output_root = _tree_without_hidden_fields(_dedup_delta_tree(root))
+    written_count = len(output_root.findall(".//*"))
+{{~ else ~}}
     output_root = _tree_without_hidden_fields(root)
+{{~ end ~}}
 {{~ if output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(_xml_to_dict(output_root), f, ensure_ascii=False, indent=2)
@@ -1446,7 +1463,10 @@ def main():
     count = len(root.findall(".//*"))
 {{~ end ~}}
 {{~ end ~}}
-    print(f"Done — {count} {{ if blueprint_mapping_enabled }}row(s){{ else }}elements{{ end }} written to {OUTPUT_PATH}")
+    print(f"Done — {{ if dedup.enabled }}{written_count}{{ else }}{count}{{ end }} {{ if blueprint_mapping_enabled }}row(s){{ else }}elements{{ end }} written to {OUTPUT_PATH}")
+{{~ if dedup.enabled ~}}
+    _dedup_report()
+{{~ end ~}}
 {{~ if change_detection.enabled ~}}
     with open(OUTPUT_PATH, "r", encoding="utf-8") as f:
         new_content = f.read()
@@ -1468,6 +1488,9 @@ def main():
     # advance the preflight state, same "don't let a bad run become the new
     # normal" rule BaselineCheck's own write already follows.
     _write_preflight_state(preflight_etag, preflight_last_modified)
+{{~ end ~}}
+{{~ if dedup.enabled ~}}
+    _dedup_save_state(_dedup_collect_keys(root))
 {{~ end ~}}
 {{~ if proxy.enabled ~}}
     if _PROXY_ENV_MISSING:
