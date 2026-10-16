@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.17.8](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.7...v1.17.8) (2026-10-16)
+
+
+### Features
+
+* deduplicate output rows by key field(s), with optional incremental output ([#225](https://github.com/Aventinis/Scraping-Factory/issues/225)) ([4941585](https://github.com/Aventinis/Scraping-Factory/commit/494158559de45d8101ebb91650177f0b6c506133))
+* **deduplication:** add Deduplication settings section to the popup ([75ffd68](https://github.com/Aventinis/Scraping-Factory/commit/75ffd6840720819c4453629f4e57a628950b8225))
+* **deduplication:** add DeduplicationConfig IR, validation and Python runtime helpers ([4d90b68](https://github.com/Aventinis/Scraping-Factory/commit/4d90b68869dc55bcd0756f5e33c5049ee903c157))
+
 ## [1.17.7](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.6...v1.17.7) (2026-10-16)
 
 
