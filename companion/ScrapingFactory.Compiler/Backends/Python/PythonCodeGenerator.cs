@@ -40,12 +40,11 @@ public sealed class PythonCodeGenerator : ICodeGenerator
         // The template only knows a flat url + fields shape — derive that
         // view from the canonical Steps IR here rather than changing the
         // template, which has no need for per-step composition (unlike the
-        // Browser engine's Playwright template). Unlike every other
-        // template here, scraper.py.j2 expects everything namespaced under
-        // `config` rather than reading its own keys at the top level —
-        // PythonScrapingContextBuilder.BuildFlatModeContext returns the same
-        // shared dictionary either way, nested here to match.
+        // Browser engine's Playwright template). Like every other template
+        // here it reads its keys at the top level (it used to be the one
+        // template that expected them namespaced under `config`), which is
+        // also what lets the shared fragments (`#@include`) work in it.
         var template = EmbeddedScribanTemplate.Load(assembly, "scraper.py.j2");
-        return template.Render(new { config = PythonScrapingContextBuilder.BuildFlatModeContext(plan) });
+        return template.Render(PythonScrapingContextBuilder.BuildFlatModeContext(plan));
     }
 }
