@@ -897,3 +897,9 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
 .output-settings-row.request-delay-row span, .output-settings-row.retry-row span { font-size: 11px; color: var(--color-text-muted); }
 /* Issue #223: attempts/wait only ever hold short numbers. */
 .output-settings-row.retry-row input[type="text"] { flex-basis: 44px; width: 44px; }
+
+/* ── API mode: cursor/token-based pagination (Issue #224) ────────────────── */
+.api-cursor-config { display: flex; flex-direction: column; gap: 6px; padding: 8px; margin-top: 4px; background: var(--color-surface-subtle); border-radius: var(--radius-md); }
+.api-cursor-config input[type="text"], .api-cursor-config input[type="number"], .api-cursor-config select { font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); min-width: 0; }
+.api-cursor-target-row { display: flex; gap: 6px; }
+.api-cursor-target-row input { flex: 1; }

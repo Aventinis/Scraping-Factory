@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <title>Cursor-Paginierung (Issue #224)</title>
+</head>
+<body>
+  <h1>Shop mit Cursor-Paginierung</h1>
+  <p>
+    "Laden" holt Seite 1 per <code>GET /api/items</code>, "Mehr laden" die jeweils nächste Seite mit
+    <code>?cursor=…</code> aus der vorherigen Antwort. Zwei Artikel pro Seite, sieben insgesamt.
+  </p>
+  <button id="btn-load" type="button">Laden</button>
+  <button id="btn-more" type="button" disabled>Mehr laden</button>
+  <ul id="items"></ul>
+  <script>
+    let nextCursor = null;
+    async function loadPage(cursor) {
+      const url = cursor ? `/api/items?cursor=${encodeURIComponent(cursor)}` : '/api/items';
+      const body = await (await fetch(url)).json();
+      const list = document.getElementById('items');
+      body.data.items.forEach((item) => {
+        const li = document.createElement('li');
+        li.innerHTML = '<span class="title"></span> — <span class="price"></span>';
+        li.querySelector('.title').textContent = item.title;
+        li.querySelector('.price').textContent = item.price;
+        list.appendChild(li);
+      });
+      nextCursor = body.pageInfo.endCursor;
+      document.getElementById('btn-more').disabled = !body.pageInfo.hasNextPage;
+    }
+    document.getElementById('btn-load').addEventListener('click', () => {
+      document.getElementById('items').innerHTML = '';
+      loadPage(null);
+    });
+    document.getElementById('btn-more').addEventListener('click', () => loadPage(nextCursor));
+  </script>
+</body>
+</html>

@@ -248,6 +248,17 @@ declare namespace SFWire {
     body?: ApiBodyNode;
     embeddedJsonSource?: EmbeddedJsonSource;
     bootstrap?: ApiBootstrap;
+    cursorPagination?: ApiCursorPagination;
+  }
+
+  // Issue #224: see ApiConfig.CursorPagination in IR/ApiConfig.cs.
+  interface ApiCursorPagination {
+    nextCursorPath: string;
+    hasNextPagePath?: string;
+    target: 'Query' | 'Body';
+    queryParameterName?: string;
+    bodyPath?: string;
+    maxPages: number;
   }
 
   // Issue #220: see ApiConfig.Bootstrap in IR/ApiConfig.cs.

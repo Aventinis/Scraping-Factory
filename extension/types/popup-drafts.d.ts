@@ -197,6 +197,17 @@ declare namespace SFDraft {
     bodyFields: ApiBootstrapPair[];
   }
 
+  // ── API mode: cursor/token pagination (api-cursor-pagination.js, Issue #224) ─
+
+  interface ApiCursorPagination {
+    nextCursorPath: string;
+    hasNextPagePath: string;
+    target: 'Query' | 'Body';
+    queryParameterName: string;
+    bodyPath: string;
+    maxPages: number;
+  }
+
   // One GET_API_CAPTURE_ENTRIES entry (content/api-capture.js's buildEntry).
   interface ApiCaptureEntry {
     id: number;

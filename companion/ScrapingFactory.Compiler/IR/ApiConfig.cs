@@ -83,7 +83,51 @@ public sealed class ApiConfig
     // in "Skipped (404)" lines, and a live credential must never end up in
     // either. Null = no bootstrap, byte-for-byte today's behavior.
     public ApiBootstrap? Bootstrap { get; init; }
+
+    // Cursor/token-based pagination (Issue #224): for APIs that only reveal
+    // the *next* page's identifier inside the current page's own response
+    // (a Relay-style pageInfo.endCursor, a next_page_token field). Unlike an
+    // ApiParameter, this is not a value list to combine cartesian-product
+    // style with the others, but a sequential fetch loop: every parameter
+    // combination runs its own independent cursor chain. Null = a single
+    // request per combination, today's exact behavior. Works for both the
+    // flat and the tree response shape, since the cursor is resolved
+    // against the raw response body just like ItemsPath/Groups.
+    public ApiCursorPagination? CursorPagination { get; init; }
 }
+
+// See ApiConfig.CursorPagination. The first page is sent exactly as
+// configured (UrlTemplate/Body untouched); from page 2 on, the cursor the
+// previous page returned is placed at Target — deliberately not an implicit
+// UrlTemplate placeholder, which would need a made-up value for page 1, and
+// couldn't reach a GraphQL "variables.after" at all.
+public sealed class ApiCursorPagination
+{
+    // JSON path (same minimal dot/[*]/[n] DSL as ItemsPath/ApiField.Path) to
+    // the next page's cursor within the response body. Missing, null or
+    // empty ends the chain.
+    public required string NextCursorPath { get; init; }
+
+    // Optional JSON path to a "has more pages" flag (e.g. a Relay
+    // "pageInfo.hasNextPage"): false/0/"false" ends the chain even if a
+    // cursor is present — some APIs keep returning the last cursor.
+    public string? HasNextPagePath { get; init; }
+
+    public ApiCursorTarget Target { get; init; } = ApiCursorTarget.Query;
+
+    // Target == Query: the query parameter replaced/appended on the request URL.
+    public string? QueryParameterName { get; init; }
+
+    // Target == Body: dot-separated object path within the JSON request
+    // body, e.g. "variables.after". Requires Method == "POST".
+    public string? BodyPath { get; init; }
+
+    // Safety cap on pages per parameter combination, always active — same
+    // convention as PaginationConfig.MaxPages.
+    public int MaxPages { get; init; } = 50;
+}
+
+public enum ApiCursorTarget { Query, Body }
 
 // See ApiConfig.Bootstrap. A narrower, purpose-built shape than ApiConfig
 // itself (Issue #220's own open question): a token endpoint needs no

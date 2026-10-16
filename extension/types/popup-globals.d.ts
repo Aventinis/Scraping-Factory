@@ -34,6 +34,7 @@ declare global {
     SFGlobalSettings: any;
     SFApiConfig: any;
     SFApiBootstrap: any;
+    SFApiCursorPagination: any;
     SFTransformPresets: any;
     SFContainerTree: any;
     SFFieldTransforms: any;
