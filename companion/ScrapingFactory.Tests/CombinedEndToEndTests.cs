@@ -165,6 +165,28 @@ public class CombinedEndToEndTests(WebApplicationFactory<Program> factory)
         Assert.Contains("Proxy", await response.Content.ReadAsStringAsync());
     }
 
+    // Issue #225: deduplication is component-level only, like Proxy above.
+    [Fact]
+    public async Task Generate_CombinedWithOuterDeduplication_Returns400()
+    {
+        using var server = new LocalTestServer("<html><body><h1>Titel</h1></body></html>");
+        var config = new ScrapingConfig
+        {
+            Url = server.BaseUrl,
+            Deduplication = new DeduplicationConfig { KeyFields = ["Titel"] },
+            Combined =
+            [
+                new CombinedComponentConfig { Name = "a", Config = SimpleFieldsConfig(server.BaseUrl) },
+                new CombinedComponentConfig { Name = "b", Config = SimpleFieldsConfig(server.BaseUrl) },
+            ],
+        };
+
+        var response = await _client.PostAsync("/generate", JsonBody(config));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Deduplication", await response.Content.ReadAsStringAsync());
+    }
+
     [Fact]
     public async Task Generate_CombinedHappyPath_MergesComponentsIntoOneJsonObjectKeyedByName()
     {

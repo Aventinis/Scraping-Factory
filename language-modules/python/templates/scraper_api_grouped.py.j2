@@ -1478,8 +1478,8 @@ def _extract_embedded_json(response):
 def _extract_api_group(scope, node, siblings=None):
     if "children" in node:
         instances = _resolve_items(scope, node["path"])
-{{~ if hardening.enabled ~}}
-        # Issue #204: ApiGroup has no explicit "repeating" flag (see its own
+{{~ if hardening.enabled || dedup.enabled ~}}
+        # Issue #204 (and #225's deduplication): ApiGroup has no explicit "repeating" flag (see its own
         # doc comment) — whether this node's Path resolved to a JSON array
         # (N droppable, row-like instances) or an object/scalar (at most
         # one, structurally-expected instance) is re-derived here the same
