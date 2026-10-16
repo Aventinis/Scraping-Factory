@@ -1108,11 +1108,12 @@ repeating group instance that owns every key field.
   `ScrapingPlan.Deduplication`), validation in
   `ScrapingPlanValidator.ValidateDeduplication`, Combined-outer/Blocks
   rejection in `Program.cs`
-- `Backends/Python/PythonDeduplicationLiteral` (`dedup.*` — renders the whole
-  runtime helper block in C# and hands it to the templates as one string),
-  wired in `PythonScrapingContextBuilder` and `PythonApiCodeGenerator`
-- Templates: the six non-Blocks templates (`{{ dedup.code }}` before
-  `main()`, `_dedup_filter_rows`/`_dedup_new_rows` for the flat shapes,
+- `Backends/Python/PythonDeduplicationLiteral` (`dedup.*` — the flags and the
+  configuration as Python literals), wired in `PythonScrapingContextBuilder`
+  and `PythonApiCodeGenerator`
+- Templates: the six non-Blocks templates include the runtime helpers from
+  `fragments/dedup_{common,flat,tree}.py.j2` right before `main()`
+  (`_dedup_filter_rows`/`_dedup_new_rows` for the flat shapes,
   `_dedup_register_instance`/`_dedup_delta_tree` for the tree shapes)
 - Extension: `dedup-config.js` (pure) + `dedup-config-ui.js`
   (`renderDedupSection`/`wireDedupEvents`), `scraping-config-builder.js`
@@ -1123,6 +1124,27 @@ repeating group instance that owns every key field.
   `ScrapingPlanValidatorTests.cs`, `extension/popup/dedup-config.test.js`,
   fixture `test-pages/dedup-listing` +
   `e2e/examples/issue-225-deduplication-check.js`
+
+### 2.21d Shared template fragments (Issue #326)
+
+Scriban has no cross-template includes, so every shared runtime helper used
+to be copy-pasted into each Python template. The compiler now does the
+include as a text substitution before Scriban parses: a line
+`#@include <name>` in a template (or in another fragment) is replaced by
+`language-modules/python/templates/fragments/<name>.py.j2`, re-indented to
+the directive. Fragments are Scriban text rendered with the including
+template's own context, so every template reads its context keys at the top
+level. Each helper now exists once per genuine variant (engine-independent,
+per engine, per shape) instead of once per template.
+
+- `Backends/EmbeddedScribanTemplate` (`ExpandIncludes`, recursion/cycle
+  guard, re-indentation), `ScrapingFactory.Compiler.csproj` (wildcard
+  `EmbeddedResource` for `fragments/*.py.j2`)
+- `language-modules/python/templates/fragments/` (the fragments),
+  `scraper.py.j2` & co. (the templates, now mostly the parts that really
+  differ per template)
+- Tests: `TemplateIncludeTests.cs`; the existing end-to-end tests run the
+  generated scripts unchanged
 
 ### 2.22 Persistent session/cookie handling (Issue #175)
 

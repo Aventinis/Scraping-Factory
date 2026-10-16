@@ -101,4 +101,49 @@ public class TemplateIncludeTests
         foreach (var name in assembly.GetManifestResourceNames().Where(n => n.EndsWith(".py.j2") && !n.StartsWith("fragments/")))
             Assert.NotNull(EmbeddedScribanTemplate.Load(assembly, name));
     }
+
+    // A fragment nobody includes is dead weight (typically left over after a
+    // template stopped using it) — fail instead of letting it rot.
+    [Fact]
+    public void EveryFragmentIsIncludedSomewhere()
+    {
+        var assembly = typeof(EmbeddedScribanTemplate).Assembly;
+        string Read(string resource)
+        {
+            using var reader = new StreamReader(assembly.GetManifestResourceStream(resource)!);
+            return reader.ReadToEnd();
+        }
+
+        var resources = assembly.GetManifestResourceNames().Where(n => n.EndsWith(".py.j2")).ToList();
+        var included = resources
+            .SelectMany(r => System.Text.RegularExpressions.Regex.Matches(Read(r), @"^[ \t]*#@include[ \t]+(\S+)", System.Text.RegularExpressions.RegexOptions.Multiline).Select(m => m.Groups[1].Value))
+            .ToHashSet();
+        var fragments = resources.Where(n => n.StartsWith("fragments/")).Select(n => n["fragments/".Length..^".py.j2".Length]).ToList();
+
+        Assert.NotEmpty(fragments);
+        Assert.Empty(fragments.Where(f => !included.Contains(f)));
+    }
+
+    // Includes are resolved before Scriban parses, so a fragment must never
+    // reach the generated script as a literal directive.
+    [Fact]
+    public void NoGeneratedScriptContainsAnUnexpandedDirective()
+    {
+        var plan = new ScrapingFactory.Compiler.IR.ScrapingPlan
+        {
+            Steps =
+            [
+                new ScrapingFactory.Compiler.IR.NavigateStep { Urls = ["https://example.com"] },
+                new ScrapingFactory.Compiler.IR.ExtractStep { Name = "Titel", Selector = "h1" },
+            ],
+            Retry = new ScrapingFactory.Compiler.IR.RetryConfig(),
+            Deduplication = new ScrapingFactory.Compiler.IR.DeduplicationConfig { KeyFields = ["Titel"], Incremental = true },
+        };
+
+        var script = new ScrapingFactory.Compiler.Backends.Python.PythonCodeGenerator().Generate(plan);
+
+        Assert.DoesNotContain("#@include", script);
+        Assert.Contains("def _send_with_retry", script); // proof the fragments really were spliced in
+        Assert.Contains("def _dedup_filter_rows", script);
+    }
 }
