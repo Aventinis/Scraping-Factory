@@ -160,20 +160,7 @@ for _param in PARAMETERS:
         _param["source"]["values"] = _override
 {{~ end ~}}
 
-{{~ if change_detection.enabled ~}}
-# Issue #87 (change detection): every *_ENV_VAR below is an environment-
-# variable *name* (never the actual credential/target value) — read via
-# os.environ[...] at runtime, exactly like FillStep already does for login
-# credentials.
-CHANGE_DETECTION_NOTIFY = {{ change_detection.notify_literal }}
-SMTP_HOST_ENV_VAR = {{ change_detection.smtp_host_env_var_literal }}
-SMTP_PORT_ENV_VAR = {{ change_detection.smtp_port_env_var_literal }}
-SMTP_USERNAME_ENV_VAR = {{ change_detection.smtp_username_env_var_literal }}
-SMTP_PASSWORD_ENV_VAR = {{ change_detection.smtp_password_env_var_literal }}
-NOTIFY_EMAIL_FROM_ENV_VAR = {{ change_detection.from_env_var_literal }}
-NOTIFY_EMAIL_TO_ENV_VAR = {{ change_detection.to_env_var_literal }}
-WEBHOOK_URL_ENV_VAR = {{ change_detection.webhook_url_env_var_literal }}
-{{~ end ~}}
+#@include change_detection_constants
 
 {{~ if proxy.enabled || needs_require_env_helper ~}}
 # Issue #88 (proxy support)/#216 (browser discovery's own Fill actions): a
@@ -1031,64 +1018,7 @@ def _extract_row(record, combo):
     return row
 
 
-{{~ if change_detection.enabled ~}}
-def _read_previous_output(path):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    except FileNotFoundError:
-        return None
-
-
-def _notify_email(diff_text):
-    host = os.environ[SMTP_HOST_ENV_VAR]
-    port = int(os.environ[SMTP_PORT_ENV_VAR]) if SMTP_PORT_ENV_VAR else 587
-    username = os.environ.get(SMTP_USERNAME_ENV_VAR) if SMTP_USERNAME_ENV_VAR else None
-    password = os.environ.get(SMTP_PASSWORD_ENV_VAR) if SMTP_PASSWORD_ENV_VAR else None
-    sender = os.environ[NOTIFY_EMAIL_FROM_ENV_VAR]
-    recipient = os.environ[NOTIFY_EMAIL_TO_ENV_VAR]
-
-    msg = MIMEText(diff_text)
-    msg["Subject"] = "Scraping Factory: changes detected"
-    msg["From"] = sender
-    msg["To"] = recipient
-
-    # EHLO first so has_extn() actually knows what the server advertises —
-    # opportunistic STARTTLS (upgrade only if offered) works against both a
-    # real provider and an unauthenticated local/internal relay that never
-    # advertises it, without needing the caller to say which kind it is.
-    with smtplib.SMTP(host, port, timeout=10) as server:
-        server.ehlo()
-        if server.has_extn("starttls"):
-            server.starttls()
-            server.ehlo()
-        if username and password:
-            server.login(username, password)
-        server.sendmail(sender, [recipient], msg.as_string())
-
-
-def _notify_webhook(diff_text):
-    url = os.environ[WEBHOOK_URL_ENV_VAR]
-    payload = json.dumps({"subject": "Scraping Factory: changes detected", "diff": diff_text}).encode("utf-8")
-    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
-    urllib.request.urlopen(req, timeout=10)
-
-
-# Best-effort: by the time this runs, the current run's own output has
-# already been written successfully — a notification failure (unreachable
-# SMTP host, webhook down, ...) is reported but never fails the overall run.
-def _notify_change(old_content, new_content):
-    diff_text = "\n".join(difflib.unified_diff(
-        old_content.splitlines(), new_content.splitlines(), fromfile="previous", tofile="current", lineterm="",
-    ))
-    try:
-        if CHANGE_DETECTION_NOTIFY == "Email":
-            _notify_email(diff_text)
-        else:
-            _notify_webhook(diff_text)
-    except Exception as e:
-        print(f"Warning: change notification failed: {e}")
-{{~ end ~}}
+#@include change_detection_helpers
 
 
 {{~ if cursor_pagination_enabled ~}}

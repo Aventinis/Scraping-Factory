@@ -343,59 +343,7 @@ def _xml_to_dict(element):
 {{~ end ~}}
 
 
-{{~ if change_detection_any ~}}
-def _read_previous_output(path):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    except FileNotFoundError:
-        return None
-
-
-def _notify_email(block, diff_text):
-    cd = block["change_detection"]
-    host = os.environ[cd["smtp_host_env_var"]]
-    port = int(os.environ[cd["smtp_port_env_var"]]) if cd["smtp_port_env_var"] else 587
-    username = os.environ.get(cd["smtp_username_env_var"]) if cd["smtp_username_env_var"] else None
-    password = os.environ.get(cd["smtp_password_env_var"]) if cd["smtp_password_env_var"] else None
-    sender = os.environ[cd["from_env_var"]]
-    recipient = os.environ[cd["to_env_var"]]
-
-    msg = MIMEText(diff_text)
-    msg["Subject"] = f"Scraping Factory: changes detected ({block['name']})"
-    msg["From"] = sender
-    msg["To"] = recipient
-
-    with smtplib.SMTP(host, port, timeout=10) as server:
-        server.ehlo()
-        if server.has_extn("starttls"):
-            server.starttls()
-            server.ehlo()
-        if username and password:
-            server.login(username, password)
-        server.sendmail(sender, [recipient], msg.as_string())
-
-
-def _notify_webhook(block, diff_text):
-    cd = block["change_detection"]
-    url = os.environ[cd["webhook_url_env_var"]]
-    payload = json.dumps({"subject": f"Scraping Factory: changes detected ({block['name']})", "diff": diff_text}).encode("utf-8")
-    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
-    urllib.request.urlopen(req, timeout=10)
-
-
-def _notify_change(block, old_content, new_content):
-    diff_text = "\n".join(difflib.unified_diff(
-        old_content.splitlines(), new_content.splitlines(), fromfile="previous", tofile="current", lineterm="",
-    ))
-    try:
-        if block["change_detection"]["notify"] == "Email":
-            _notify_email(block, diff_text)
-        else:
-            _notify_webhook(block, diff_text)
-    except Exception as e:
-        print(f"Warning: [{block['name']}] change notification failed: {e}")
-{{~ end ~}}
+#@include change_detection_helpers_blocks
 
 
 def scrape(url):
