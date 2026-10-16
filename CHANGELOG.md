@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.17.7](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.6...v1.17.7) (2026-10-16)
+
+
+### Features
+
+* **api-cursor-pagination:** add ApiConfig.CursorPagination and runtime page loop ([15d5517](https://github.com/Aventinis/Scraping-Factory/commit/15d5517b1a3414f36793cebf54cffb4649e79931))
+* **api-cursor-pagination:** add cursor pagination section to the API_CONFIG screen ([b89cbdd](https://github.com/Aventinis/Scraping-Factory/commit/b89cbdd6b19eebccfb501098476eab50b0f0ecc3))
+* **api-cursor-pagination:** detect the cursor query parameter from other recorded pages ([b1d3a3d](https://github.com/Aventinis/Scraping-Factory/commit/b1d3a3db05ca52ad4017193b024d391918f27426))
+* **api:** cursor/token-based pagination for API mode ([4f47e63](https://github.com/Aventinis/Scraping-Factory/commit/4f47e631a57a89bffaa83c87aaeef1acf8fccb38))
+
 ## [1.17.6](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.5...v1.17.6) (2026-10-04)
 
 
