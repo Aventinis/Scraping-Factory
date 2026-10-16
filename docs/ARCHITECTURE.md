@@ -1093,6 +1093,37 @@ extends its deadline by the wait plus an allowance for the retried request.
 - Tests: `RetryTests.cs`, `extension/popup/retry.test.js`, fixture
   `test-pages/flaky-server` + `e2e/examples/issue-223-retry-check.js`
 
+### 2.21c Deduplication by key field(s) (Issue #225)
+
+An opt-in, mode- and engine-independent deduplication of the generated
+script's output by one or more key field(s): a later row/element whose key
+already appeared in the same run is dropped (overlapping pagination, an item
+reachable from several start URLs), and — separately opt-in — the keys seen
+in earlier runs are remembered in a sidecar file so only genuinely new
+rows/elements are written (as just the delta, or appended to the previous
+file for flat output). For tree output the deduplicated unit is the nearest
+repeating group instance that owns every key field.
+
+- IR: `IR/DeduplicationConfig.cs` (`ScrapingConfig.Deduplication`/
+  `ScrapingPlan.Deduplication`), validation in
+  `ScrapingPlanValidator.ValidateDeduplication`, Combined-outer/Blocks
+  rejection in `Program.cs`
+- `Backends/Python/PythonDeduplicationLiteral` (`dedup.*` — renders the whole
+  runtime helper block in C# and hands it to the templates as one string),
+  wired in `PythonScrapingContextBuilder` and `PythonApiCodeGenerator`
+- Templates: the six non-Blocks templates (`{{ dedup.code }}` before
+  `main()`, `_dedup_filter_rows`/`_dedup_new_rows` for the flat shapes,
+  `_dedup_register_instance`/`_dedup_delta_tree` for the tree shapes)
+- Extension: `dedup-config.js` (pure) + `dedup-config-ui.js`
+  (`renderDedupSection`/`wireDedupEvents`), `scraping-config-builder.js`
+  (trailing `deduplication` parameter), `config-import.js`,
+  `session-restore.js`, `#toggle-dedup`/`#dedup-config` in
+  `screens/idle.html`
+- Tests: `DeduplicationEndToEndTests.cs`, `DeduplicationConfigJsonTests.cs`,
+  `ScrapingPlanValidatorTests.cs`, `extension/popup/dedup-config.test.js`,
+  fixture `test-pages/dedup-listing` +
+  `e2e/examples/issue-225-deduplication-check.js`
+
 ### 2.22 Persistent session/cookie handling (Issue #175)
 
 Browser-engine only (rejected server-side for Static/Api, same as
