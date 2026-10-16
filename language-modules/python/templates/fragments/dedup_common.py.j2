@@ -1,0 +1,72 @@
+# Issue #225 (deduplication): see IR/DeduplicationConfig.cs. KEY_FIELDS is
+# the (composite) identity of a row/element. Within a run, a later row with
+# an already-seen key is dropped. With INCREMENTAL, keys seen in earlier
+# runs are remembered in a sidecar file next to the output
+# (OUTPUT_PATH + ".dedup-seen.json", key -> unix timestamp of the last time
+# it was seen) and only genuinely new rows/elements are written. A row whose
+# key fields are all empty has no identity: it is never dropped and never
+# remembered (so in incremental mode it is written on every run).
+import json as _dd_json
+import os as _dd_os
+import sys as _dd_sys
+import time as _dd_time
+import csv as _dd_csv
+
+DEDUP_KEY_FIELDS = {{ dedup.key_fields_literal }}
+DEDUP_INCREMENTAL = {{ dedup.incremental_literal }}
+DEDUP_APPEND = {{ dedup.append_literal }}
+DEDUP_RETENTION_KIND = {{ dedup.retention_kind_literal }}
+DEDUP_RETENTION_VALUE = {{ dedup.retention_value }}
+DEDUP_STATE_PATH = OUTPUT_PATH + ".dedup-seen.json"
+_dedup_dropped_count = 0
+
+
+# Bounds the sidecar file: MaxAge forgets keys not seen for N days (they
+# count as new again), MaxCount keeps the N most recently seen keys.
+def _dedup_prune(seen, now):
+    if DEDUP_RETENTION_KIND == "MaxAge":
+        cutoff = now - DEDUP_RETENTION_VALUE * 86400
+        return {key: stamp for key, stamp in seen.items() if stamp >= cutoff}
+    if len(seen) > DEDUP_RETENTION_VALUE:
+        newest = sorted(seen.items(), key=lambda item: item[1], reverse=True)[:DEDUP_RETENTION_VALUE]
+        return dict(newest)
+    return seen
+
+
+# A missing or unreadable sidecar (first run ever, or it was deleted) simply
+# means "nothing seen yet" — never an error.
+def _dedup_load_state():
+    if not DEDUP_INCREMENTAL:
+        return {}
+    try:
+        with open(DEDUP_STATE_PATH, "r", encoding="utf-8") as f:
+            raw = _dd_json.load(f).get("seen", {})
+        seen = {str(key): float(stamp) for key, stamp in raw.items()}
+    except (OSError, ValueError, AttributeError, TypeError):
+        return {}
+    return _dedup_prune(seen, _dd_time.time())
+
+
+_DEDUP_SEEN = _dedup_load_state()
+
+
+# Records every key of this run as seen "now" and writes the sidecar. Called
+# from main() only once the run is otherwise done (after hardening's own
+# pass/fail decision), so a run that is about to be flagged as failed never
+# marks its rows as seen — the next run would otherwise silently skip them.
+def _dedup_save_state(current_keys):
+    if not DEDUP_INCREMENTAL:
+        return
+    now = _dd_time.time()
+    seen = dict(_DEDUP_SEEN)
+    for key in current_keys:
+        seen[key] = now
+    seen = _dedup_prune(seen, now)
+    with open(DEDUP_STATE_PATH, "w", encoding="utf-8") as f:
+        _dd_json.dump({"seen": seen}, f, ensure_ascii=False)
+
+
+def _dedup_key(values):
+    if all(not value for value in values):
+        return None
+    return _dd_json.dumps(values, ensure_ascii=False)

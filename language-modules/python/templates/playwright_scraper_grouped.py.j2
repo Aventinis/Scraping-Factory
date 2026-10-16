@@ -1372,7 +1372,7 @@ def _send_with_retry(send, url):
 
 {{~ end ~}}
 {{ if dedup.enabled }}
-{{ dedup.code }}
+#@include dedup_tree
 {{ end }}
 
 
