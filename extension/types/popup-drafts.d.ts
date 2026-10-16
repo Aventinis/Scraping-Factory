@@ -111,6 +111,16 @@ declare namespace SFDraft {
     statusCodesText: string;
   }
 
+  // Issue #225: see dedup-config.js. retentionValueText is kept as typed.
+  interface DeduplicationState {
+    enabled: boolean;
+    keyFields: string[];
+    incremental: boolean;
+    appendOutput: boolean;
+    retentionKind: 'MaxCount' | 'MaxAge';
+    retentionValueText: string;
+  }
+
   // Issue #222: seconds as typed (decimal comma or point); blank max = fixed.
   interface RequestDelayState {
     enabled: boolean;
