@@ -50,14 +50,7 @@ import urllib.request
 # Issue #83: one or more start URLs — the same extraction runs against each,
 # and results are combined into a single output file.
 URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
-{{~ if discovered_urls.enabled ~}}
-# Issue #218: a lightweight pre-run pass harvesting additional start URLs
-# from a navigation/listing page, combined with URLS above (additive, not a
-# replacement) — see _discover_additional_urls().
-DISCOVERED_URLS_PAGE_URL = {{ discovered_urls.page_url_literal }}
-DISCOVERED_URLS_LINK_SELECTOR = {{ discovered_urls.link_selector_literal }}
-DISCOVERED_URLS_MAX = {{ discovered_urls.max_urls_literal }}
-{{~ end ~}}
+#@include discovered_urls_constants
 
 # Many sites (Wikipedia among them) reject the bare "python-requests/x.y"
 # default User-Agent with 403 Forbidden — an honest, identifying UA (not a
@@ -120,122 +113,9 @@ def _download_resource(url, base_url, max_size=None, allowed_types=None):
     return local_path
 {{~ end ~}}
 
-{{~ if external_config.enabled ~}}
-# Issue #178: an opt-in sidecar XML file next to the *script* itself (not the
-# scraped output — see the baseline hardening check's own separate sidecar
-# for that) lets a non-technical user tweak the start URL(s), output
-# filename, and field names without touching this .py file or reopening the
-# extension. Resolved from the script's own current location/name (not a
-# name baked in at generate time), so a renamed .py file still finds its own
-# config. A missing file (never run yet, or accidentally deleted) is not an
-# error — a fresh one is written with this script's own current defaults,
-# and that run proceeds using those same defaults. A file that exists but is
-# broken (bad XML, a missing required attribute, or a stale reference to a
-# field that no longer exists) is a hard, clearly-named failure instead of a
-# raw Python traceback.
-EXIT_EXTERNAL_CONFIG_INVALID = 3
-EXTERNAL_CONFIG_PATH = os.path.splitext(os.path.abspath(__file__))[0] + ".config.xml"
-_EXTERNAL_CONFIG_KNOWN_FIELDS = [
-{{- for field in fields }}
-    "{{ field.name }}",
-{{- end }}
-]
+#@include external_config_flat
 
-
-def _external_config_error(message):
-    print(f"ERROR: The external config file '{EXTERNAL_CONFIG_PATH}' {message}", file=sys.stderr)
-    sys.exit(EXIT_EXTERNAL_CONFIG_INVALID)
-
-
-def _write_default_external_config():
-    root = ET.Element("ScrapingFactoryConfig")
-    ET.SubElement(root, "OutputFileName").text = "{{ output_filename }}"
-    urls_el = ET.SubElement(root, "Urls")
-    for u in URLS:
-        ET.SubElement(urls_el, "Url").text = u
-    fields_el = ET.SubElement(root, "Fields")
-    for name in _EXTERNAL_CONFIG_KNOWN_FIELDS:
-        field_el = ET.SubElement(fields_el, "Field")
-        field_el.set("original", name)
-        field_el.text = name
-    try:
-        tree = ET.ElementTree(root)
-        ET.indent(tree)
-        tree.write(EXTERNAL_CONFIG_PATH, encoding="utf-8", xml_declaration=True)
-    except OSError as e:
-        print(f"Warning: could not create default external config file '{EXTERNAL_CONFIG_PATH}': {e}", file=sys.stderr)
-
-
-def _load_external_config():
-    if not os.path.exists(EXTERNAL_CONFIG_PATH):
-        _write_default_external_config()
-        return {}
-    try:
-        root = ET.parse(EXTERNAL_CONFIG_PATH).getroot()
-    except ET.ParseError as e:
-        _external_config_error(f"is not valid XML: {e}")
-    if root.tag != "ScrapingFactoryConfig":
-        _external_config_error(f"has an unexpected root element '<{root.tag}>' (expected '<ScrapingFactoryConfig>').")
-
-    result = {}
-
-    output_el = root.find("OutputFileName")
-    if output_el is not None:
-        name = (output_el.text or "").strip()
-        if not name:
-            _external_config_error("has an empty <OutputFileName> element.")
-        result["output_file_name"] = name
-
-    urls_el = root.find("Urls")
-    if urls_el is not None:
-        urls = [(u.text or "").strip() for u in urls_el.findall("Url")]
-        urls = [u for u in urls if u]
-        if not urls:
-            _external_config_error("has a <Urls> element with no non-empty <Url> entries.")
-        result["urls"] = urls
-
-    renames = {}
-    for field_el in root.findall("./Fields/Field"):
-        original = field_el.get("original")
-        if not original:
-            _external_config_error("has a <Field> element missing its required 'original' attribute.")
-        if original not in _EXTERNAL_CONFIG_KNOWN_FIELDS:
-            _external_config_error(
-                f"has a <Field original=\"{original}\"> that doesn't match any known field — "
-                "was the scraper regenerated with different fields since this file was created?"
-            )
-        new_name = (field_el.text or "").strip()
-        if not new_name:
-            _external_config_error(f"has a <Field original=\"{original}\"> with an empty name.")
-        renames[original] = new_name
-    result["field_names"] = renames
-
-    return result
-
-
-_EXTERNAL_CONFIG = _load_external_config()
-if _EXTERNAL_CONFIG.get("output_file_name"):
-    OUTPUT_PATH = _EXTERNAL_CONFIG["output_file_name"] + OUTPUT_PATH[OUTPUT_PATH.rindex("."):]
-if _EXTERNAL_CONFIG.get("urls"):
-    URLS = _EXTERNAL_CONFIG["urls"]
-FIELD_OUTPUT_NAMES = _EXTERNAL_CONFIG.get("field_names", {})
-{{~ else ~}}
-FIELD_OUTPUT_NAMES = {}
-{{~ end ~}}
-
-{{~ if pagination.enabled ~}}
-# Issue #174 (pagination): follows either a "next page" link's href
-# (resolved against the current page's own URL) or a {page}-templated URL,
-# starting from a start URL as page 1, until a page yields no rows, this
-# safety cap is reached, or (next-link kind only) the selector no longer
-# matches on a page.
-PAGINATION_MAX_PAGES = {{ pagination.max_pages_literal }}
-{{~ if pagination.kind == "nextLink" ~}}
-PAGINATION_NEXT_LINK_SELECTOR = {{ pagination.next_link_selector_literal }}
-{{~ else ~}}
-PAGINATION_URL_TEMPLATE = {{ pagination.url_template_literal }}
-{{~ end ~}}
-{{~ end ~}}
+#@include pagination_constants
 
 #@include change_detection_constants
 
@@ -508,107 +388,10 @@ def _extract_page_rows(soup, base_url):
     return rows
 
 
-{{~ if preflight.enabled ~}}
-# Issue #219: a single cheap HEAD request against the primary start URL, run
-# before the main extraction phase even starts — a target that hasn't
-# changed since the last successful run (same ETag/Last-Modified) or isn't
-# reachable at all doesn't need the full cost of a real scrape. Not every
-# target reliably sends useful ETag/Last-Modified headers — when neither is
-# present (or they differ from the stored value, or there's no stored value
-# yet), the check can't tell "changed" from "unchanged" at all, so it
-# conservatively falls through to a normal run rather than risk silently
-# never updating stale data. Missing/corrupt sidecar (first run ever, or the
-# file was deleted) is treated the same as "no previous state yet".
-PREFLIGHT_STATE_PATH = OUTPUT_PATH + ".preflight-state.json"
-EXIT_PREFLIGHT_UNCHANGED = 4
-EXIT_PREFLIGHT_UNREACHABLE = 5
+#@include preflight_static
 
 
-def _read_preflight_state():
-    try:
-        with open(PREFLIGHT_STATE_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, ValueError, OSError):
-        return {}
-
-
-def _write_preflight_state(etag, last_modified):
-    with open(PREFLIGHT_STATE_PATH, "w", encoding="utf-8") as f:
-        json.dump({"etag": etag, "lastModified": last_modified}, f)
-
-
-# Returns (status, etag, last_modified) — status is "unreachable" (the
-# request itself failed or came back with an error status), "unchanged" (a
-# response header matches the value stored from the last successful run),
-# or "proceed" (no comparable header, no previous state yet, or the value
-# differs — the main run should go ahead as normal).
-def _run_preflight_check(url):
-    try:
-{{~ if request_delay.enabled ~}}
-        _pace_request()
-{{~ end ~}}
-{{~ if retry.enabled ~}}
-        response = _send_with_retry(lambda _u=url: requests.head(_u, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10, allow_redirects=True), url)
-{{~ else ~}}
-        response = requests.head(url, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10, allow_redirects=True)
-{{~ end ~}}
-        response.raise_for_status()
-    except Exception as e:
-        print(f"ERROR: Preflight check failed — target is unreachable: {url} ({e})", file=sys.stderr)
-        return "unreachable", None, None
-
-    etag = response.headers.get("ETag")
-    last_modified = response.headers.get("Last-Modified")
-    previous = _read_preflight_state()
-    if etag and previous.get("etag") == etag:
-        return "unchanged", etag, last_modified
-    if not etag and last_modified and previous.get("lastModified") == last_modified:
-        return "unchanged", etag, last_modified
-    return "proceed", etag, last_modified
-{{~ end ~}}
-
-
-{{~ if discovered_urls.enabled ~}}
-# Issue #218: fetches DISCOVERED_URLS_PAGE_URL and harvests every distinct
-# href matching DISCOVERED_URLS_LINK_SELECTOR, resolved to an absolute URL
-# via urljoin against the page it was found on, capped at DISCOVERED_URLS_MAX
-# (order of appearance, not sorted) — a misconfigured selector matching an
-# entire sitemap/nav tree shouldn't silently balloon a run to thousands of
-# pages. Deliberately plain requests+BeautifulSoup, never whatever engine the
-# main scrape itself uses — the same "discovery doesn't need the full
-# machinery of the main run" precedent DiscoverySource/BrowserDiscoverySource
-# already established for API mode. A failed fetch/parse is a warning, not a
-# crash — the main run still proceeds with URLS/AdditionalUrls as already
-# configured, the same "degrade, don't crash" treatment a failed Download
-# already gets.
-def _discover_additional_urls():
-    try:
-{{~ if request_delay.enabled ~}}
-        _pace_request()
-{{~ end ~}}
-{{~ if retry.enabled ~}}
-        response = _send_with_retry(lambda _u=DISCOVERED_URLS_PAGE_URL: requests.get(_u, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10), DISCOVERED_URLS_PAGE_URL)
-{{~ else ~}}
-        response = requests.get(DISCOVERED_URLS_PAGE_URL, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
-{{~ end ~}}
-        response.raise_for_status()
-        soup = BeautifulSoup(response.content, "html.parser")
-    except Exception as e:
-        print(f"WARNING: Could not discover additional URLs from {DISCOVERED_URLS_PAGE_URL}: {e}")
-        return []
-
-    discovered = []
-    for el in soup.select(DISCOVERED_URLS_LINK_SELECTOR):
-        href = el.get("href")
-        if not href:
-            continue
-        absolute_url = urljoin(DISCOVERED_URLS_PAGE_URL, href)
-        if absolute_url not in discovered:
-            discovered.append(absolute_url)
-        if len(discovered) >= DISCOVERED_URLS_MAX:
-            break
-    return discovered
-{{~ end ~}}
+#@include discovered_urls_static
 
 
 def scrape(url):
@@ -656,124 +439,8 @@ def scrape(url):
     return rows
 
 
-{{~ if request_delay.enabled ~}}
-# Issue #222: optional pause between outbound requests — a minimum gap
-# between the starts of two consecutive requests, drawn uniformly from
-# [REQUEST_DELAY_MIN_S, REQUEST_DELAY_MAX_S] each time. Only the part of the
-# pause that hasn't already elapsed (e.g. while parsing the previous page) is
-# actually slept, and the very first request of a run starts immediately.
-# Each pause is announced on stdout — so a long run visibly isn't hanging,
-# and so the companion's trial run can tell waiting apart from a stuck
-# script (PythonScriptVerifier extends its own deadline by exactly the
-# announced pause).
-import random
-import time
-
-REQUEST_DELAY_MIN_S = {{ request_delay.min_s_literal }}
-REQUEST_DELAY_MAX_S = {{ request_delay.max_s_literal }}
-_last_request_started_at = None
-
-
-def _pace_request():
-    global _last_request_started_at
-    if _last_request_started_at is not None:
-        remaining = random.uniform(REQUEST_DELAY_MIN_S, REQUEST_DELAY_MAX_S) - (time.monotonic() - _last_request_started_at)
-        if remaining > 0:
-            print(f"Pausing {remaining:.2f} s before the next request (request delay)...", flush=True)
-            time.sleep(remaining)
-    _last_request_started_at = time.monotonic()
-
-
-{{~ end ~}}
-{{~ if retry.enabled ~}}
-# Issue #223: optional retry with backoff on transient request failures — a
-# connection error/timeout, or one of RETRY_ON_STATUS_CODES. Between attempts
-# the script waits RETRY_DELAY_S (doubled after every retry when
-# RETRY_EXPONENTIAL), or exactly what a 429/503's Retry-After header asks
-# for; every wait is capped at RETRY_MAX_WAIT_S. Each retry is announced on
-# stdout, so a scheduled run never degrades silently (and so the companion's
-# trial run can tell the wait apart from a stuck script). Any other status
-# (404/401/403, ...) is returned immediately, and once every attempt has
-# failed, the last response is returned / the last error re-raised — exactly
-# what the caller would have seen without retries.
-import time
-
-RETRY_MAX_ATTEMPTS = {{ retry.max_attempts }}
-RETRY_DELAY_S = {{ retry.delay_s_literal }}
-RETRY_EXPONENTIAL = {{ retry.exponential_literal }}
-RETRY_MAX_WAIT_S = {{ retry.max_wait_s_literal }}
-RETRY_ON_STATUS_CODES = {{ retry.status_codes_literal }}
-
-
-# Connection errors/timeouts of whichever HTTP stacks this script uses:
-# requests' own, and Playwright's (navigations and page.context.request).
-def _retryable_exceptions():
-    found = []
-    try:
-        import requests as _requests
-        found.append(_requests.RequestException)
-    except ImportError:
-        pass
-    try:
-        from playwright.sync_api import Error as _PlaywrightError
-        found.append(_PlaywrightError)
-    except ImportError:
-        pass
-    return tuple(found)
-
-
-_RETRYABLE_EXCEPTIONS = _retryable_exceptions()
-
-
-# Retry-After is either a number of seconds or an HTTP date; anything
-# unparseable is ignored in favour of the configured delay.
-def _retry_after_seconds(response):
-    try:
-        headers = {str(k).lower(): v for k, v in dict(getattr(response, "headers", None) or {}).items()}
-    except (TypeError, ValueError):
-        return None
-    value = str(headers.get("retry-after") or "").strip()
-    if not value:
-        return None
-    if value.isdigit():
-        return float(value)
-    try:
-        from datetime import datetime, timezone
-        from email.utils import parsedate_to_datetime
-        return max(0.0, (parsedate_to_datetime(value) - datetime.now(timezone.utc)).total_seconds())
-    except (TypeError, ValueError, IndexError):
-        return None
-
-
-def _send_with_retry(send, url):
-    attempt = 1
-    while True:
-        try:
-            response = send()
-            # requests: status_code; Playwright: status (page.goto may also return None)
-            status = getattr(response, "status_code", None)
-            if status is None:
-                status = getattr(response, "status", None)
-            if status not in RETRY_ON_STATUS_CODES or attempt >= RETRY_MAX_ATTEMPTS:
-                return response
-            reason = f"HTTP {status}"
-            retry_after = _retry_after_seconds(response) if status in (429, 503) else None
-        except _RETRYABLE_EXCEPTIONS as e:
-            if attempt >= RETRY_MAX_ATTEMPTS:
-                raise
-            reason = e.__class__.__name__
-            retry_after = None
-        wait = retry_after if retry_after is not None else RETRY_DELAY_S * (2 ** (attempt - 1) if RETRY_EXPONENTIAL else 1)
-        wait = min(wait, RETRY_MAX_WAIT_S)
-        attempt += 1
-        print(f"Retrying in {wait:.1f} s (attempt {attempt} of {RETRY_MAX_ATTEMPTS}) after {reason}: {url}", flush=True)
-        time.sleep(wait)
-{{~ if request_delay.enabled ~}}
-        _pace_request()
-{{~ end ~}}
-
-
-{{~ end ~}}
+#@include request_delay
+#@include retry
 {{ if dedup.enabled }}
 #@include dedup_flat
 {{ end }}

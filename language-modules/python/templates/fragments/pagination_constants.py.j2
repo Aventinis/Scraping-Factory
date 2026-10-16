@@ -1,0 +1,13 @@
+{{~ if pagination.enabled ~}}
+# Issue #174 (pagination): follows either a "next page" link's href
+# (resolved against the current page's own URL) or a {page}-templated URL,
+# starting from a start URL as page 1, until a page yields no elements, this
+# safety cap is reached, or (next-link kind only) the selector no longer
+# matches on a page.
+PAGINATION_MAX_PAGES = {{ pagination.max_pages_literal }}
+{{~ if pagination.kind == "nextLink" ~}}
+PAGINATION_NEXT_LINK_SELECTOR = {{ pagination.next_link_selector_literal }}
+{{~ else ~}}
+PAGINATION_URL_TEMPLATE = {{ pagination.url_template_literal }}
+{{~ end ~}}
+{{~ end ~}}
