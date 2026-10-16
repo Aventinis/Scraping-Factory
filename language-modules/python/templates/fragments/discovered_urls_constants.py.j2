@@ -1,0 +1,8 @@
+{{~ if discovered_urls.enabled ~}}
+# Issue #218: a lightweight pre-run pass harvesting additional start URLs
+# from a navigation/listing page, combined with URLS above (additive, not a
+# replacement) — see _discover_additional_urls().
+DISCOVERED_URLS_PAGE_URL = {{ discovered_urls.page_url_literal }}
+DISCOVERED_URLS_LINK_SELECTOR = {{ discovered_urls.link_selector_literal }}
+DISCOVERED_URLS_MAX = {{ discovered_urls.max_urls_literal }}
+{{~ end ~}}

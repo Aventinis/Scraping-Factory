@@ -1,0 +1,89 @@
+#@include dedup_common
+
+# Tree shape: ids of every repeating group instance that made it into the
+# tree (so a parent's own-scope key lookup can skip them), the key of every
+# keyed instance, and the keys seen so far in this run. The elements are also
+# kept alive in a list: an instance dropped later (e.g. by the required-fields
+# check) could otherwise be garbage collected and have its id reused by a new
+# element, which would then be mistaken for a registered instance.
+_DEDUP_REPEATING_IDS = set()
+_DEDUP_KEY_BY_ID = {}
+_DEDUP_RUN_KEYS = set()
+_DEDUP_KEEPALIVE = []
+_dedup_keyed_instances = 0
+
+
+def _dedup_own_scope_value(el, name):
+    for child in el:
+        if id(child) in _DEDUP_REPEATING_IDS:
+            continue
+        if child.tag == name:
+            return (child.text or "").strip()
+        found = _dedup_own_scope_value(child, name)
+        if found is not None:
+            return found
+    return None
+
+
+# Called from the group walker right after one *repeating* instance is fully
+# built. Returns False when the instance is a within-run duplicate and must
+# be dropped.
+def _dedup_register_instance(el):
+    global _dedup_dropped_count, _dedup_keyed_instances
+    values = []
+    for name in DEDUP_KEY_FIELDS:
+        value = _dedup_own_scope_value(el, name)
+        if value is None:
+            values = None
+            break
+        values.append(value)
+    key = _dedup_key(values) if values is not None else None
+    if key is not None:
+        _dedup_keyed_instances += 1
+        if key in _DEDUP_RUN_KEYS:
+            _dedup_dropped_count += 1
+            return False
+        _DEDUP_RUN_KEYS.add(key)
+        _DEDUP_KEY_BY_ID[id(el)] = key
+    _DEDUP_REPEATING_IDS.add(id(el))
+    _DEDUP_KEEPALIVE.append(el)
+    return True
+
+
+# Every key of an instance that is actually part of the final tree.
+def _dedup_collect_keys(el, keys=None):
+    if keys is None:
+        keys = []
+    for child in el:
+        key = _DEDUP_KEY_BY_ID.get(id(child))
+        if key is not None:
+            keys.append(key)
+        _dedup_collect_keys(child, keys)
+    return keys
+
+
+# Incremental mode: a fresh copy of the tree without the instances seen in an
+# earlier run — never mutates `el`, since hardening and the key collection
+# still need the full tree. Without incremental mode `el` itself is returned.
+def _dedup_delta_tree(el):
+    if not DEDUP_INCREMENTAL:
+        return el
+    clone = ET.Element(el.tag, el.attrib)
+    clone.text = el.text
+    for child in el:
+        key = _DEDUP_KEY_BY_ID.get(id(child))
+        if key is not None and key in _DEDUP_SEEN:
+            continue
+        clone.append(_dedup_delta_tree(child))
+    return clone
+
+
+def _dedup_report():
+    if _dedup_dropped_count:
+        print(f"Deduplication: dropped {_dedup_dropped_count} duplicate element(s).")
+    if _dedup_keyed_instances == 0:
+        print(
+            "WARNING: Deduplication is configured, but no repeating group contains all key fields "
+            f"({', '.join(DEDUP_KEY_FIELDS)}) — nothing was deduplicated.",
+            file=_dd_sys.stderr,
+        )

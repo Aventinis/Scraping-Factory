@@ -1,0 +1,31 @@
+#@include external_config_api
+
+#@include change_detection_constants
+
+{{~ if proxy.enabled || needs_require_env_helper ~}}
+# Issue #88 (proxy support)/#216 (browser discovery's own Fill actions): a
+# missing required environment variable flags the run via this exit code
+# rather than a raw, unhandled KeyError — EXIT_MISSING_ENV_VAR is shared by
+# both features (hoisted out of the Proxy-only block below so a
+# browser-discovery Fill action can use it without Proxy itself being
+# enabled), the same sentinel the Playwright shell templates already use for
+# FillStep's identical credential.
+EXIT_MISSING_ENV_VAR = 78
+{{~ end ~}}
+{{~ if needs_require_env_helper ~}}
+
+
+def _require_env(name):
+    value = os.environ.get(name)
+    if not value:
+        print(f"ERROR: required environment variable '{name}' is not set.", file=sys.stderr)
+        sys.exit(EXIT_MISSING_ENV_VAR)
+    return value
+{{~ end ~}}
+
+{{~ if proxy.enabled ~}}
+#@include proxy_pool
+
+
+#@include proxy_requests
+{{~ end ~}}

@@ -1,0 +1,8 @@
+# ElementHandle (from query_selector_all) and Locator (from a FrameLocator
+# chain) expose the same .text_content()/.get_attribute() methods, so the
+# extraction loop below doesn't need to know or care which one it got — only
+# resolving "selector string" -> "list of element-like objects" differs.
+def _resolve_elements(page, selector, frame_path):
+    if not frame_path:
+        return page.query_selector_all(selector)
+    return _resolve_frame_locator(page, frame_path).locator(selector).all()

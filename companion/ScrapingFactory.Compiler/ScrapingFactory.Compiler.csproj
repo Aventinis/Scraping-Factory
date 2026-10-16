@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="ScrapingFactory.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Scriban" Version="7.2.6" />
   </ItemGroup>
 
@@ -25,6 +29,8 @@
     <EmbeddedResource Include="..\..\language-modules\python\templates\playwright_fill_step.py.j2" LogicalName="playwright_fill_step.py.j2" />
     <EmbeddedResource Include="..\..\language-modules\python\templates\playwright_click_step.py.j2" LogicalName="playwright_click_step.py.j2" />
     <EmbeddedResource Include="..\..\language-modules\python\templates\playwright_scroll_step.py.j2" LogicalName="playwright_scroll_step.py.j2" />
+    <!-- Shared runtime helpers, spliced into the templates above by EmbeddedScribanTemplate (`#@include <name>`). -->
+    <EmbeddedResource Include="..\..\language-modules\python\templates\fragments\*.py.j2" LogicalName="fragments/%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>
