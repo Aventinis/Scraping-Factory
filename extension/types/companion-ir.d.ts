@@ -45,6 +45,7 @@ declare namespace SFWire {
     proxy?: ProxyConfig;
     requestDelay?: RequestDelayConfig;
     retry?: RetryConfig;
+    deduplication?: DeduplicationConfig;
     hardening?: HardeningCheck[];
     pagination?: PaginationConfig;
     discoveredUrls?: DiscoveredUrlsConfig;
@@ -177,6 +178,14 @@ declare namespace SFWire {
     delayMs?: number;
     exponential?: boolean;
     retryOnStatusCodes?: number[] | null;
+  }
+
+  // Issue #225: see IR/DeduplicationConfig.cs.
+  interface DeduplicationConfig {
+    keyFields: string[];
+    incremental?: boolean;
+    incrementalOutput?: 'Delta' | 'Append';
+    retention?: { kind: 'MaxCount' | 'MaxAge'; value: number };
   }
 
   // Issue #222: see IR/RequestDelayConfig.cs.

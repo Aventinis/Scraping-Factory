@@ -156,6 +156,10 @@ const {
 
 const { wireSettingsPanelEvents } =
   typeof require !== 'undefined' ? require('./settings-panel-ui') : self.SFSettingsPanelUI;
+const { createDefaultDeduplication } =
+  typeof require !== 'undefined' ? require('./dedup-config') : self.SFDedupConfig;
+const { wireDedupEvents } =
+  typeof require !== 'undefined' ? require('./dedup-config-ui') : self.SFDedupConfigUI;
 
 const {
   fetchOutputBlueprints, selectOutputBlueprint,
@@ -245,6 +249,10 @@ let _state = {
   // Issue #223: opt-in retry with backoff — persisted like proxy, see
   // buildRetryConfig for how the text inputs are read.
   retry: { enabled: false, maxAttemptsText: '3', delaySecondsText: '2', exponential: true, statusCodesText: '429, 502, 503, 504' },
+  // Issue #225: opt-in deduplication by key field(s) and, optionally,
+  // incremental "only new items" output — persisted like retry (real
+  // scrape-target configuration), see dedup-config.js.
+  deduplication: createDefaultDeduplication(),
   // Issue #174: opt-in classic multi-page pagination — mode-independent
   // like additionalStartUrls/changeDetection/proxy above (Fields/Groups
   // only; hidden entirely for API mode, which already has its own page-
@@ -637,6 +645,7 @@ function persistState() {
       proxy: _state.proxy,
       requestDelay: _state.requestDelay,
       retry: _state.retry,
+      deduplication: _state.deduplication,
       pagination: _state.pagination,
       discoveredUrls: _state.discoveredUrls,
       persistentSession: _state.persistentSession,
@@ -1123,6 +1132,7 @@ function wireEvents() {
   wireCompanionErrorEvents(bridge);
 
   wireSettingsPanelEvents(bridge);
+  wireDedupEvents(bridge);
 
   wireApiConfigEvents(bridge);
 
@@ -1273,7 +1283,7 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'requestDelay', 'retry', 'hardening', 'pagination', 'persistentSession', 'preflight', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'requestDelay', 'retry', 'deduplication', 'hardening', 'pagination', 'persistentSession', 'preflight', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'pendingApiDiscoveryPartId', 'pendingApiDiscoveryActionIndex', 'pendingApiDiscoveryActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',

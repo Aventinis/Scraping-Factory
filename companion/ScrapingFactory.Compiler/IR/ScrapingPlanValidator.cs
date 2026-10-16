@@ -242,6 +242,13 @@ public static class ScrapingPlanValidator
                 }
             }
 
+            if (plan.Deduplication is { } containerDedup)
+            {
+                var containerDedupError = ValidateDeduplication(containerDedup, CollectContainerFieldNames(extractGroupStep.Roots), isTreeShape: true, plan.OutputBlueprint is not null);
+                if (containerDedupError is not null)
+                    return Invalid(containerDedupError);
+            }
+
             return new PlanValidationResult { Success = true };
         }
 
@@ -305,6 +312,22 @@ public static class ScrapingPlanValidator
                 }
             }
 
+            if (plan.Deduplication is { } apiDedup)
+            {
+                var apiDedupHasGroups = apiCallStep.Config.Groups is { Count: > 0 };
+                // Api-flat rows also carry each parameter's value as a column
+                // (see scraper_api.py.j2), so a parameter name is a valid key
+                // field there (e.g. week + id); the tree shape only knows its
+                // leaf fields.
+                var apiDedupFields = apiDedupHasGroups
+                    ? CollectApiFieldNames(apiCallStep.Config.Groups!)
+                    : (apiCallStep.Config.Fields ?? []).Select(field => field.Name)
+                        .Concat((apiCallStep.Config.Parameters ?? []).Select(parameter => parameter.Name)).ToList();
+                var apiDedupError = ValidateDeduplication(apiDedup, apiDedupFields, apiDedupHasGroups, plan.OutputBlueprint is not null);
+                if (apiDedupError is not null)
+                    return Invalid(apiDedupError);
+            }
+
             return new PlanValidationResult { Success = true };
         }
 
@@ -363,7 +386,49 @@ public static class ScrapingPlanValidator
                 return Invalid(blueprintError);
         }
 
+        if (plan.Deduplication is { } flatDedup)
+        {
+            var flatDedupError = ValidateDeduplication(flatDedup, extractSteps.Select(step => step.Name).ToList(), isTreeShape: false, plan.OutputBlueprint is not null);
+            if (flatDedupError is not null)
+                return Invalid(flatDedupError);
+        }
+
         return new PlanValidationResult { Success = true };
+    }
+
+    // Issue #225. Key fields must be real fields of the current shape (leaf
+    // fields for the tree shapes, flat field names — plus Api parameter names
+    // — otherwise), the same "reference something that exists" rule the
+    // hardening field pickers' wire values get elsewhere. Two shape-specific
+    // restrictions, both "reject rather than silently do something else":
+    //  - Append needs a flat output file (CSV / JSON array) — an XML or
+    //    nested-JSON document has no meaningful "append".
+    //  - a tree-shaped source combined with an OutputBlueprint mapping is
+    //    not designed yet: the blueprint walkers re-read the source tree on
+    //    their own and never see the deduplicated instances.
+    private static string? ValidateDeduplication(DeduplicationConfig dedup, IReadOnlyCollection<string> availableFieldNames, bool isTreeShape, bool hasOutputBlueprint)
+    {
+        if (dedup.KeyFields.Count == 0)
+            return "Deduplication needs at least one key field.";
+        if (dedup.KeyFields.Any(string.IsNullOrWhiteSpace))
+            return "Deduplication: key field names must not be blank.";
+        var duplicateKey = FindDuplicates(dedup.KeyFields, name => name).FirstOrDefault();
+        if (duplicateKey is not null)
+            return $"Deduplication: duplicate key field '{duplicateKey}'.";
+        var unknownKey = dedup.KeyFields.FirstOrDefault(name => !availableFieldNames.Contains(name));
+        if (unknownKey is not null)
+            return $"Deduplication: key field '{unknownKey}' does not match any field of this configuration.";
+
+        if (dedup.Retention.Value <= 0)
+            return "Deduplication: the retention value must be positive.";
+
+        if (dedup.Incremental && dedup.IncrementalOutput == IncrementalOutputMode.Append && isTreeShape)
+            return "Deduplication: appending to the previous output is only supported for flat output (CSV/JSON list) — use the delta mode for tree-shaped output.";
+
+        if (isTreeShape && hasOutputBlueprint)
+            return "Deduplication is not supported together with an Output Blueprint on tree-shaped (container / API tree) output.";
+
+        return null;
     }
 
     // Issue #206: CombineFieldsTransform/SplitFieldTransform reference

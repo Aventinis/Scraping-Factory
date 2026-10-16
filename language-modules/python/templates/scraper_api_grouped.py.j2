@@ -1478,8 +1478,8 @@ def _extract_embedded_json(response):
 def _extract_api_group(scope, node, siblings=None):
     if "children" in node:
         instances = _resolve_items(scope, node["path"])
-{{~ if hardening.enabled ~}}
-        # Issue #204: ApiGroup has no explicit "repeating" flag (see its own
+{{~ if hardening.enabled || dedup.enabled ~}}
+        # Issue #204 (and #225's deduplication): ApiGroup has no explicit "repeating" flag (see its own
         # doc comment) — whether this node's Path resolved to a JSON array
         # (N droppable, row-like instances) or an object/scalar (at most
         # one, structurally-expected instance) is re-derived here the same
@@ -1505,6 +1505,10 @@ def _extract_api_group(scope, node, siblings=None):
                     el.append(result)
 {{~ if hardening.enabled ~}}
             if _is_repeating_instance and not _passes_required_fields(el):
+                continue
+{{~ end ~}}
+{{~ if dedup.enabled ~}}
+            if _is_repeating_instance and not _dedup_register_instance(el):
                 continue
 {{~ end ~}}
             elements.append(el)
@@ -1908,6 +1912,11 @@ def _send_with_retry(send, url):
 
 
 {{~ end ~}}
+{{ if dedup.enabled }}
+{{ dedup.code }}
+{{ end }}
+
+
 def main():
 {{~ if change_detection.enabled ~}}
     previous_content = _read_previous_output(OUTPUT_PATH)
@@ -1947,7 +1956,15 @@ def main():
 {{~ end ~}}
     count = len(blueprint_tree_root.findall(".//*"))
 {{~ else ~}}
+{{~ if dedup.enabled ~}}
+    # Issue #225: incremental mode writes a copy without the instances seen in
+    # an earlier run; `root` itself (hardening, baseline count, the key
+    # collection for the state file) stays the full tree.
+    output_root = _tree_without_hidden_fields(_dedup_delta_tree(root))
+    written_count = len(output_root.findall(".//*"))
+{{~ else ~}}
     output_root = _tree_without_hidden_fields(root)
+{{~ end ~}}
 {{~ if output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(_xml_to_dict(output_root), f, ensure_ascii=False, indent=2)
@@ -1959,7 +1976,10 @@ def main():
     count = len(root.findall(".//*"))
 {{~ end ~}}
 {{~ end ~}}
-    print(f"Done — {count} {{ if blueprint_mapping_enabled }}row(s){{ else }}elements{{ end }} written to {OUTPUT_PATH}")
+    print(f"Done — {{ if dedup.enabled }}{written_count}{{ else }}{count}{{ end }} {{ if blueprint_mapping_enabled }}row(s){{ else }}elements{{ end }} written to {OUTPUT_PATH}")
+{{~ if dedup.enabled ~}}
+    _dedup_report()
+{{~ end ~}}
 {{~ if change_detection.enabled ~}}
     with open(OUTPUT_PATH, "r", encoding="utf-8") as f:
         new_content = f.read()
@@ -1974,6 +1994,9 @@ def main():
 {{~ end ~}}
     if hardening_failed:
         sys.exit(EXIT_HARDENING_FAILED)
+{{~ end ~}}
+{{~ if dedup.enabled ~}}
+    _dedup_save_state(_dedup_collect_keys(root))
 {{~ end ~}}
 {{~ if proxy.enabled ~}}
     if _PROXY_ENV_MISSING:

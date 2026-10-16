@@ -36,6 +36,9 @@ const { serializeGroupTree } =
 const { buildOutputBlueprintMapping } =
   typeof require !== 'undefined' ? require('./output-blueprints') : self.SFOutputBlueprints;
 
+const { buildDeduplicationConfig } =
+  typeof require !== 'undefined' ? require('./dedup-config') : self.SFDedupConfig;
+
 // ── Pure functions (exported for testing) ────────────────────────────────────
 
 // Mirrors the companion's FileNameSanitizer (ScrapingFactory.Compiler/IR/
@@ -487,6 +490,7 @@ function collectFieldNames(mode, fields, groups, apiConfig) {
  * @param {boolean} [preflight]
  * @param {SFDraft.RequestDelayState | null} [requestDelay]
  * @param {SFDraft.RetryState | null} [retry]
+ * @param {SFDraft.DeduplicationState | null} [deduplication]
  * @returns {object}
  */
 function buildScrapingConfig(
@@ -511,11 +515,20 @@ function buildScrapingConfig(
   requestDelay = null,
   // Issue #223: same "append at the end" rule.
   retry = null,
+  // Issue #225: same "append at the end" rule.
+  deduplication = null,
 ) {
   const requestDelayConfig = buildRequestDelayConfig(requestDelay);
   const requestDelayFields = requestDelayConfig ? { requestDelay: requestDelayConfig } : {};
   const retryConfig = buildRetryConfig(retry);
   const retryFields = retryConfig ? { retry: retryConfig } : {};
+  // Issue #225: the Append output needs a flat output file, so container
+  // mode and API mode's tree response shape fall back to Delta — see
+  // buildDeduplicationConfig. Key fields no longer in the field list are
+  // dropped. Blocks/Combined return before this is used (not supported there).
+  const isTreeShape = mode === 'container' || (mode === 'api' && (apiConfig?.groups?.length ?? 0) > 0);
+  const deduplicationConfig = buildDeduplicationConfig(deduplication, isTreeShape, collectFieldNames(mode, fields, groups, apiConfig));
+  const deduplicationFields = deduplicationConfig ? { deduplication: deduplicationConfig } : {};
   // Issue #182: Blocks mode has no ad-hoc fields/groups/apiConfig of its own
   // either — each block is a fully independent {name, outputFileName,
   // fields|groups} sent verbatim, sharing this one request's Url/engine/
@@ -636,7 +649,7 @@ function buildScrapingConfig(
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...requestDelayFields, ...retryFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...proxyFields, ...requestDelayFields, ...retryFields, ...deduplicationFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
       ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
@@ -645,7 +658,7 @@ function buildScrapingConfig(
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...requestDelayFields, ...retryFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...proxyFields, ...requestDelayFields, ...retryFields, ...deduplicationFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
       ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
@@ -667,7 +680,7 @@ function buildScrapingConfig(
     outputFormat: useJsonOutput ? 'Json' : 'Csv',
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
-    ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields, ...requestDelayFields, ...retryFields,
+    ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields, ...requestDelayFields, ...retryFields, ...deduplicationFields,
     ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
     ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
   };
@@ -711,6 +724,7 @@ function buildScrapingConfig(
  * @param {boolean} [preflight]
  * @param {SFDraft.RequestDelayState | null} [requestDelay]
  * @param {SFDraft.RetryState | null} [retry]
+ * @param {SFDraft.DeduplicationState | null} [deduplication]
  * @returns {{exportedAt: string, extensionVersion: string, config: object}}
  */
 function buildConfigExport(
@@ -729,6 +743,8 @@ function buildConfigExport(
   requestDelay = null,
   // Issue #223: same "append at the end" rule.
   retry = null,
+  // Issue #225: same "append at the end" rule.
+  deduplication = null,
 ) {
   return {
     exportedAt: new Date().toISOString(),
@@ -739,6 +755,7 @@ function buildConfigExport(
       includeOutputFile, externalConfig, combinedComponents, blocks,
       outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping,
       outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping, discoveredUrls, preflight, requestDelay, retry,
+      deduplication,
     ),
   };
 }

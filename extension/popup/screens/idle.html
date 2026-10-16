@@ -287,6 +287,45 @@
             </div>
             <p class="preview-summary" data-i18n="idle.retryHint"></p>
           </div>
+          <!-- Issue #225: opt-in deduplication by key field(s) — drops a
+               later row/element whose key was already seen in the same run
+               and, optionally, remembers seen keys across runs so only new
+               items are written. Hidden for Combined/Blocks (see
+               renderDedupSection). -->
+          <div id="dedup-section">
+            <label class="output-settings-toggle">
+              <input type="checkbox" id="toggle-dedup" />
+              <span data-i18n="idle.dedupToggle"></span>
+            </label>
+            <div id="dedup-config" class="hidden">
+              <p class="preview-summary" data-i18n="idle.dedupKeyFieldsHint"></p>
+              <div id="dedup-key-fields-list"></div>
+              <div class="hardening-required-field-add-row">
+                <select id="select-dedup-key-field"></select>
+                <button type="button" id="btn-add-dedup-key-field" class="btn-secondary btn-tiny" data-i18n="idle.dedupAddKeyFieldBtn"></button>
+              </div>
+              <label class="output-settings-toggle">
+                <input type="checkbox" id="toggle-dedup-incremental" />
+                <span data-i18n="idle.dedupIncrementalToggle"></span>
+              </label>
+              <div id="dedup-incremental-config" class="hidden">
+                <div class="mode-toggle" style="margin: 6px 0 8px;">
+                  <div class="mode-toggle-thumb"></div>
+                  <button id="btn-dedup-output-delta" class="mode-btn active" type="button" data-i18n="idle.dedupOutputDelta" data-i18n-title="idle.dedupOutputDeltaTitle"></button>
+                  <button id="btn-dedup-output-append" class="mode-btn" type="button" data-i18n="idle.dedupOutputAppend" data-i18n-title="idle.dedupOutputAppendTitle"></button>
+                </div>
+                <div class="output-settings-row">
+                  <label for="select-dedup-retention-kind" data-i18n="idle.dedupRetentionLabel"></label>
+                  <select id="select-dedup-retention-kind">
+                    <option value="MaxCount" data-i18n="idle.dedupRetentionMaxCount"></option>
+                    <option value="MaxAge" data-i18n="idle.dedupRetentionMaxAge"></option>
+                  </select>
+                  <input type="text" inputmode="numeric" id="input-dedup-retention-value" autocomplete="off" />
+                </div>
+                <p class="preview-summary" data-i18n="idle.dedupIncrementalHint"></p>
+              </div>
+            </div>
+          </div>
           <!-- Issue #174: opt-in classic multi-page pagination — follows
                either a "next page" link (CSS selector, href resolved
                relative to the current page) or a {page}-templated URL,

@@ -106,6 +106,12 @@ public sealed class ScrapingConfig
     // behavior (a failed request is never retried).
     public RetryConfig? Retry { get; init; }
 
+    // Issue #225: opt-in deduplication of the output by key field(s) (and,
+    // optionally, incremental "only new items since the last run" output),
+    // mode-independent — see IR/DeduplicationConfig.cs. Null is today's exact
+    // behavior (no deduplication, byte-for-byte the same script).
+    public DeduplicationConfig? Deduplication { get; init; }
+
     // Issue #129: opt-in script hardening checks, mode-independent
     // (Fields/Groups/Api alike) — see IR/HardeningCheck.cs. Null/empty is
     // today's exact behavior (the generated script never re-checks its own

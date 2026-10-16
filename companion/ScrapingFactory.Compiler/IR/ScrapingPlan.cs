@@ -35,6 +35,11 @@ public sealed class ScrapingPlan
     // ScrapingConfig.Retry by ScrapingPlanBuilder — see IR/RetryConfig.cs.
     public RetryConfig? Retry { get; init; }
 
+    // Issue #225: mode-independent, carried through unchanged from
+    // ScrapingConfig.Deduplication by ScrapingPlanBuilder — see
+    // IR/DeduplicationConfig.cs.
+    public DeduplicationConfig? Deduplication { get; init; }
+
     // Issue #129: mode-independent, carried through unchanged from
     // ScrapingConfig.Hardening by ScrapingPlanBuilder — see
     // IR/HardeningCheck.cs.
@@ -94,6 +99,7 @@ public sealed class ScrapingPlan
         Proxy = Proxy,
         RequestDelay = RequestDelay,
         Retry = Retry,
+        Deduplication = Deduplication,
         Hardening = Hardening,
         Pagination = Pagination,
         DiscoveredUrls = DiscoveredUrls,

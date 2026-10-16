@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <title>Stellenmarkt mit doppelten Einträgen (Issue #225)</title>
+</head>
+<body>
+  <h1>Stellenmarkt</h1>
+  <p>
+    Fünf Einträge, aber nur drei verschiedene Stellen: "Entwickler" und "Tester" kommen ein zweites Mal vor
+    (wie bei überlappenden Seiten oder einer Stelle, die in zwei Kategorien gelistet ist).
+    Schlüsselfeld für die Deduplizierung: <b>Titel</b>.
+  </p>
+  <ul id="jobs">
+    <li class="job"><span class="title">Entwickler</span> — <span class="city">Berlin</span></li>
+    <li class="job"><span class="title">Tester</span> — <span class="city">Hamburg</span></li>
+    <li class="job"><span class="title">Entwickler</span> — <span class="city">Berlin</span></li>
+    <li class="job"><span class="title">Admin</span> — <span class="city">Köln</span></li>
+    <li class="job"><span class="title">Tester</span> — <span class="city">Hamburg</span></li>
+  </ul>
+</body>
+</html>

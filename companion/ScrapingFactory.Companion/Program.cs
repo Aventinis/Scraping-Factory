@@ -579,6 +579,8 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
             return Results.BadRequest(new { error = "Retry is not supported on a Combined request — set it on each component's own config instead." });
         if (config.Hardening is { Count: > 0 })
             return Results.BadRequest(new { error = "Hardening is not supported on a Combined request — set it on each component's own config instead." });
+        if (config.Deduplication is not null)
+            return Results.BadRequest(new { error = "Deduplication is not supported on a Combined request — set it on each component's own config instead." });
         if (config.PersistentSession == true)
             return Results.BadRequest(new { error = "PersistentSession is not supported on a Combined request — set it on each component's own config instead." });
         if (config.ExternalConfig == true)
@@ -714,6 +716,10 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
         // ExternalConfig/OutputBlueprint above.
         if (config.Preflight == true)
             return Results.BadRequest(new { error = "Preflight is not supported together with Blocks." });
+        // Issue #225: not designed for Blocks' multi-output shape yet — same
+        // precedent as Preflight/DiscoveredUrls above.
+        if (config.Deduplication is not null)
+            return Results.BadRequest(new { error = "Deduplication is not supported together with Blocks." });
 
         for (var i = 0; i < blocks.Count; i++)
         {

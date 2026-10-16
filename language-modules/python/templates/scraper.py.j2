@@ -1016,6 +1016,11 @@ def _send_with_retry(send, url):
 
 
 {{~ end ~}}
+{{ if config.dedup.enabled }}
+{{ config.dedup.code }}
+{{ end }}
+
+
 def main():
 {{~ if config.preflight.enabled ~}}
     preflight_status, preflight_etag, preflight_last_modified = _run_preflight_check(URLS[0])
@@ -1042,6 +1047,12 @@ def main():
 {{~ if config.hardening.enabled ~}}
     data, required_fields_failed = _filter_required_fields(data)
 {{~ end ~}}
+{{~ if config.dedup.enabled ~}}
+    data, dedup_keys = _dedup_filter_rows(data)
+    written_data = _dedup_new_rows(data, dedup_keys)
+{{~ else ~}}
+    written_data = data
+{{~ end ~}}
     # Issue #191: BLUEPRINT_MAPPING, when set, takes over the write-time
     # remap entirely instead of FIELD_OUTPUT_NAMES — it already fully
     # determines the output's column names *and* order, and any source
@@ -1052,7 +1063,7 @@ def main():
     # either way, since hardening/change detection below still need to look
     # fields up by those original names.
     if BLUEPRINT_MAPPING:
-        output_rows = [{m["target"]: row.get(m["source"], "") for m in BLUEPRINT_MAPPING} for row in data]
+        output_rows = [{m["target"]: row.get(m["source"], "") for m in BLUEPRINT_MAPPING} for row in written_data]
         output_fieldnames = [m["target"] for m in BLUEPRINT_MAPPING]
     else:
         # Issue #206 follow-up: a HiddenFromOutput field is dropped here —
@@ -1062,9 +1073,12 @@ def main():
         # to see under its real name.
         output_rows = [
             {FIELD_OUTPUT_NAMES.get(k, k): v for k, v in row.items() if k not in HIDDEN_FIELD_NAMES}
-            for row in data
+            for row in written_data
         ]
         output_fieldnames = [FIELD_OUTPUT_NAMES.get(name, name) for name in SELECTORS.keys() if name not in HIDDEN_FIELD_NAMES]
+{{~ if config.dedup.append ~}}
+    output_rows = _dedup_with_previous_output(output_rows, output_fieldnames)
+{{~ end ~}}
 {{~ if config.output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(output_rows, f, ensure_ascii=False, indent=2)
@@ -1074,7 +1088,7 @@ def main():
         writer.writeheader()
         writer.writerows(output_rows)
 {{~ end ~}}
-    print(f"Done — {len(data)} rows written to {OUTPUT_PATH}")
+    print(f"Done — {{ if config.dedup.enabled }}{len(output_rows)}{{ else }}{len(data)}{{ end }} rows written to {OUTPUT_PATH}")
 {{~ if config.change_detection.enabled ~}}
     with open(OUTPUT_PATH, "r", encoding="utf-8") as f:
         new_content = f.read()
@@ -1096,6 +1110,9 @@ def main():
     # advance the preflight state, same "don't let a bad run become the new
     # normal" rule BaselineCheck's own write already follows.
     _write_preflight_state(preflight_etag, preflight_last_modified)
+{{~ end ~}}
+{{~ if config.dedup.enabled ~}}
+    _dedup_save_state([key for key in dedup_keys if key is not None])
 {{~ end ~}}
 {{~ if config.proxy.enabled ~}}
     if _PROXY_ENV_MISSING:
