@@ -1,0 +1,14 @@
+def _next_playwright_proxy():
+    proxy = _next_proxy()
+    if not proxy:
+        return None
+    parsed = urllib.parse.urlsplit(proxy)
+    server = f"{parsed.scheme}://{parsed.hostname}"
+    if parsed.port:
+        server += f":{parsed.port}"
+    result = {"server": server}
+    if parsed.username:
+        result["username"] = parsed.username
+    if parsed.password:
+        result["password"] = parsed.password
+    return result

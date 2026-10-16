@@ -168,41 +168,10 @@ def _require_env(name):
 {{~ end ~}}
 
 {{~ if proxy.enabled ~}}
-# Issue #88 (proxy support): PROXY_ENV_VAR is an environment-variable
-# *name* holding a comma-separated list of proxy URLs — never a literal
-# proxy address baked into the script, same as FillStep credentials. If
-# more than one is present, browser launches rotate through them
-# round-robin. A missing (not just empty) env var doesn't abort the run —
-# it's treated as "no proxy configured", with a warning printed and the
-# run flagged via EXIT_MISSING_ENV_VAR at the very end, once the script has
-# otherwise completed successfully.
-PROXY_ENV_VAR = {{ proxy.env_var_literal }}
-_PROXY_ENV_VALUE = os.environ.get(PROXY_ENV_VAR)
-_PROXY_ENV_MISSING = _PROXY_ENV_VALUE is None
-if _PROXY_ENV_MISSING:
-    print(f"Warning: environment variable '{PROXY_ENV_VAR}' is not set — connecting without a proxy.", file=sys.stderr)
-_PROXY_LIST = [p.strip() for p in (_PROXY_ENV_VALUE or "").split(",") if p.strip()]
-_proxy_cycle = itertools.cycle(_PROXY_LIST) if _PROXY_LIST else None
+#@include proxy_pool
 
 
-def _next_proxy():
-    return next(_proxy_cycle) if _proxy_cycle else None
-
-
-def _next_playwright_proxy():
-    proxy = _next_proxy()
-    if not proxy:
-        return None
-    parsed = urllib.parse.urlsplit(proxy)
-    server = f"{parsed.scheme}://{parsed.hostname}"
-    if parsed.port:
-        server += f":{parsed.port}"
-    result = {"server": server}
-    if parsed.username:
-        result["username"] = parsed.username
-    if parsed.password:
-        result["password"] = parsed.password
-    return result
+#@include proxy_playwright
 {{~ end ~}}
 
 #@include hardening_tree
@@ -214,15 +183,7 @@ GROUPS = {{ groups_literal }}
 HIDDEN_FIELD_NAMES = set({{ hidden_field_names_literal }})
 
 
-def _tree_without_hidden_fields(el):
-    if not HIDDEN_FIELD_NAMES:
-        return el
-    clone = ET.Element(el.tag, el.attrib)
-    clone.text = el.text
-    for child in el:
-        if child.tag not in HIDDEN_FIELD_NAMES:
-            clone.append(_tree_without_hidden_fields(child))
-    return clone
+#@include tree_without_hidden_fields
 
 
 # Issue #192: optional Output Blueprint field mapping — see
@@ -402,29 +363,7 @@ def _build_blueprint_tree(page, target_roots):
 #@include transforms
 
 
-# A node's own "frame_path" (Issue #42, Phase 3) is always resolved fresh
-# from `page` — an absolute top-to-target chain, independent of how deeply
-# nested the node is in the tree or whether any ancestor also has a
-# frame_path. Locator (what a FrameLocator chain returns) has no
-# query_selector/query_selector_all of its own, only ElementHandle does — so
-# a resolved group match is converted via .element_handle() right away,
-# letting every recursive call below keep using query_selector/
-# query_selector_all exactly as before this existed, regardless of whether
-# *this* node was framed.
-def _resolve_frame_locator(page, frame_path):
-    scope = page
-    for frame_selector in frame_path:
-        scope = scope.frame_locator(frame_selector)
-    return scope
-
-
-# Used by the WaitFor/Fill/Click/Scroll action fragments rendered into the
-# scrape() body below (one per playwright_*_step.py.j2 template) — same
-# helper as playwright_scraper.py.j2's, duplicated rather than shared since
-# the two shell templates don't share any Python source, only the same
-# Scriban fragment templates rendered into both.
-def _resolve_locator(page, selector, frame_path):
-    return _resolve_frame_locator(page, frame_path or []).locator(selector)
+#@include playwright_locators
 
 
 def _resolve_group_matches(page, scope, node):
@@ -524,27 +463,7 @@ def extract_group(page, scope, node, siblings=None):
 
 
 {{~ if output_is_json ~}}
-# Converts the group tree (already extracted into ET.Element form by
-# extract_group above) into nested dicts/lists for JSON output — reusing the
-# same extraction walk instead of a second, JSON-specific one. A tag that
-# occurs more than once among one element's children — several matches of a
-# repeating group, or same-named sibling fields/groups, which Container-Mode
-# explicitly allows — becomes a JSON list; a tag occurring exactly once stays
-# a plain nested value.
-def _xml_to_dict(element):
-    children = list(element)
-    if not children:
-        return element.text or ""
-    result = {}
-    for child in children:
-        value = _xml_to_dict(child)
-        if child.tag not in result:
-            result[child.tag] = value
-        elif isinstance(result[child.tag], list):
-            result[child.tag].append(value)
-        else:
-            result[child.tag] = [result[child.tag], value]
-    return result
+#@include xml_to_dict
 {{~ end ~}}
 
 

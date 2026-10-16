@@ -1,0 +1,14 @@
+# Returns a fresh tree with every HIDDEN_FIELD_NAMES-tagged element removed
+# (recursively) — never mutates `el` in place, since hardening/change-
+# detection (and, mid-construction, a combine/split transform's own sibling
+# lookup) still need to see the full, unstripped tree. A no-op fast path
+# when nothing is hidden — the common case — returns `el` itself unchanged.
+def _tree_without_hidden_fields(el):
+    if not HIDDEN_FIELD_NAMES:
+        return el
+    clone = ET.Element(el.tag, el.attrib)
+    clone.text = el.text
+    for child in el:
+        if child.tag not in HIDDEN_FIELD_NAMES:
+            clone.append(_tree_without_hidden_fields(child))
+    return clone

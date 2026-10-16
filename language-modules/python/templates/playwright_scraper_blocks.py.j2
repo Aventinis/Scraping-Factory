@@ -76,27 +76,10 @@ PAGINATION_URL_TEMPLATE = {{ pagination.url_template_literal }}
 {{~ end ~}}
 
 {{~ if proxy.enabled ~}}
-PROXY_ENV_VAR = {{ proxy.env_var_literal }}
-_PROXY_ENV_VALUE = os.environ.get(PROXY_ENV_VAR)
-_PROXY_ENV_MISSING = _PROXY_ENV_VALUE is None
-if _PROXY_ENV_MISSING:
-    print(f"Warning: environment variable '{PROXY_ENV_VAR}' is not set — connecting without a proxy.", file=sys.stderr)
-_PROXY_LIST = [p.strip() for p in (_PROXY_ENV_VALUE or "").split(",") if p.strip()]
-_proxy_cycle = itertools.cycle(_PROXY_LIST) if _PROXY_LIST else None
+#@include proxy_pool
 
 
-def _next_playwright_proxy():
-    proxy = next(_proxy_cycle) if _proxy_cycle else None
-    if not proxy:
-        return None
-    parsed = urllib.parse.urlsplit(proxy)
-    server = f"{parsed.scheme}://{parsed.hostname}:{parsed.port}" if parsed.port else f"{parsed.scheme}://{parsed.hostname}"
-    result = {"server": server}
-    if parsed.username:
-        result["username"] = parsed.username
-    if parsed.password:
-        result["password"] = parsed.password
-    return result
+#@include proxy_playwright
 {{~ end ~}}
 
 {{~ if hardening_any ~}}
@@ -210,21 +193,10 @@ def _report_required_fields_drops(block):
 #@include transforms
 
 
-def _resolve_frame_locator(page, frame_path):
-    scope = page
-    for frame_selector in frame_path:
-        scope = scope.frame_locator(frame_selector)
-    return scope
+#@include playwright_locators
 
 
-def _resolve_elements(page, selector, frame_path):
-    if not frame_path:
-        return page.query_selector_all(selector)
-    return _resolve_frame_locator(page, frame_path).locator(selector).all()
-
-
-def _resolve_locator(page, selector, frame_path):
-    return _resolve_frame_locator(page, frame_path or []).locator(selector)
+#@include playwright_resolve_elements
 
 
 def _extract_flat_block(block, page):
@@ -326,20 +298,7 @@ def extract_group(page, scope, node, required_field_names, block_name, siblings=
 
 
 {{~ if any_json_output ~}}
-def _xml_to_dict(element):
-    children = list(element)
-    if not children:
-        return element.text or ""
-    result = {}
-    for child in children:
-        value = _xml_to_dict(child)
-        if child.tag not in result:
-            result[child.tag] = value
-        elif isinstance(result[child.tag], list):
-            result[child.tag].append(value)
-        else:
-            result[child.tag] = [result[child.tag], value]
-    return result
+#@include xml_to_dict
 {{~ end ~}}
 
 

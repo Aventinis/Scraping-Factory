@@ -58,15 +58,7 @@ GROUPS = {{ groups_literal }}
 HIDDEN_FIELD_NAMES = set({{ hidden_field_names_literal }})
 
 
-def _tree_without_hidden_fields(el):
-    if not HIDDEN_FIELD_NAMES:
-        return el
-    clone = ET.Element(el.tag, el.attrib)
-    clone.text = el.text
-    for child in el:
-        if child.tag not in HIDDEN_FIELD_NAMES:
-            clone.append(_tree_without_hidden_fields(child))
-    return clone
+#@include tree_without_hidden_fields
 
 
 PARAMETERS = {{ parameters_literal }}
@@ -405,26 +397,7 @@ def _extract_api_group(scope, node, siblings=None):
 
 
 {{~ if output_is_json ~}}
-# Converts the group tree (already extracted into ET.Element form by
-# _extract_api_group above) into nested dicts/lists for JSON output — same
-# helper/reasoning as scraper_grouped.py.j2's own _xml_to_dict (Container-
-# Mode). A tag occurring more than once among one element's children
-# becomes a JSON list; a tag occurring exactly once stays a plain nested
-# value.
-def _xml_to_dict(element):
-    children = list(element)
-    if not children:
-        return element.text or ""
-    result = {}
-    for child in children:
-        value = _xml_to_dict(child)
-        if child.tag not in result:
-            result[child.tag] = value
-        elif isinstance(result[child.tag], list):
-            result[child.tag].append(value)
-        else:
-            result[child.tag] = [result[child.tag], value]
-    return result
+#@include xml_to_dict
 {{~ end ~}}
 
 
