@@ -124,7 +124,7 @@ def _run_hardening_checks(block, result_count, field_values):
     for check in block["hardening"]["checks"]:
         if check["kind"] == "noResult":
             if result_count == 0:
-                message = prefix + "No data was extracted — at least one selector likely matched nothing."
+                message = prefix + "No data was extracted — a selector, path or request likely matched nothing."
                 if check["severity"] == "Error":
                     print(f"ERROR: {message}", file=sys.stderr)
                     has_error = True
