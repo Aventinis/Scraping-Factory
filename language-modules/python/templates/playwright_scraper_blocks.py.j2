@@ -54,17 +54,7 @@ _REQUIRED_FIELDS_DROPPED = {block["name"]: 0 for block in BLOCKS}
 SESSION_STATE_PATH = "{{ script_filename }}.session-state.json"
 {{~ end ~}}
 
-{{~ if needs_exit_helper ~}}
-EXIT_MISSING_ENV_VAR = 78
-
-
-def _require_env(name):
-    value = os.environ.get(name)
-    if value is None:
-        print(f"ERROR: required environment variable '{name}' is not set.", file=sys.stderr)
-        sys.exit(EXIT_MISSING_ENV_VAR)
-    return value
-{{~ end ~}}
+#@include require_env_playwright
 
 {{~ if pagination.enabled ~}}
 PAGINATION_MAX_PAGES = {{ pagination.max_pages_literal }}

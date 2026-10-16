@@ -1,0 +1,55 @@
+{{~ if download_enabled ~}}
+# Issue #213: see scraper_grouped.py.j2's own identical doc comment on
+# DOWNLOADS_DIR/_download_resource for the full rationale (hash-named,
+# idempotent, non-fatal on failure). The one real difference here: this
+# engine uses page.context.request instead of a bare `requests` import —
+# Playwright's own APIRequestContext shares cookies/auth with the browser
+# session that already navigated the page, which a fresh unauthenticated
+# requests.get() call would not (e.g. a resource behind a login the
+# browser's own session already passed).
+DOWNLOADS_DIR = OUTPUT_PATH + ".downloads"
+
+
+# Issue #214: max_size/allowed_types are an optional safety net — None/[]
+# (the default) means no restriction, today's exact Issue #213 behavior.
+# Unlike the static engine's own streamed version, page.context.request.get()
+# has no incremental-read API — the response is already fully in memory by
+# the time .body() is called, so a size check here can only reject an
+# already-downloaded response, not abort mid-transfer.
+def _download_resource(page, url, max_size=None, allowed_types=None):
+    allowed_types = [t.lower() for t in (allowed_types or [])]
+    absolute_url = urllib.parse.urljoin(page.url, url)
+    os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+    digest = hashlib.sha1(absolute_url.encode("utf-8")).hexdigest()[:16]
+    path_only = absolute_url.split("?", 1)[0].split("#", 1)[0]
+    ext = os.path.splitext(path_only)[1]
+    if not re.fullmatch(r"\.[A-Za-z0-9]{1,8}", ext):
+        ext = ""
+    local_path = os.path.join(DOWNLOADS_DIR, digest + ext)
+    if not os.path.exists(local_path):
+        try:
+{{~ if request_delay.enabled ~}}
+            _pace_request()
+{{~ end ~}}
+{{~ if retry.enabled ~}}
+            response = _send_with_retry(lambda _u=absolute_url: page.context.request.get(_u), absolute_url)
+{{~ else ~}}
+            response = page.context.request.get(absolute_url)
+{{~ end ~}}
+            if not response.ok:
+                raise RuntimeError(f"HTTP {response.status}")
+            content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+            if allowed_types and content_type not in allowed_types:
+                print(f"WARNING: skipped download of '{absolute_url}': content type '{content_type}' is not in the allowed list.", file=sys.stderr)
+                return ""
+            body = response.body()
+            if max_size is not None and len(body) > max_size:
+                print(f"WARNING: skipped download of '{absolute_url}': size ({len(body)} bytes) exceeds the {max_size}-byte limit.", file=sys.stderr)
+                return ""
+            with open(local_path, "wb") as f:
+                f.write(body)
+        except Exception as exc:
+            print(f"WARNING: failed to download resource '{absolute_url}': {exc}", file=sys.stderr)
+            return ""
+    return local_path
+{{~ end ~}}
