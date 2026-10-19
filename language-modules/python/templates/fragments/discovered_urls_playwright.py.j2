@@ -13,6 +13,11 @@
 # already gets.
 def _discover_additional_urls():
     headers = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"}
+{{~ if request_headers.enabled ~}}
+    headers.update(EXTRA_HTTP_HEADERS)
+    if _USER_AGENT:
+        headers["User-Agent"] = _USER_AGENT
+{{~ end ~}}
     try:
 {{~ if proxy.enabled ~}}
         proxy = _next_proxy()

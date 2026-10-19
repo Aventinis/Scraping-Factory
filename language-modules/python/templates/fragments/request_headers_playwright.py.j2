@@ -1,0 +1,21 @@
+{{~ if request_headers.enabled ~}}
+# Issue #226: custom request headers — each a fixed value or the *name* of an
+# environment variable holding it (read at startup, never written into this
+# script). Playwright's extra_http_headers is sent with every request the
+# browser makes for the page (including subresources); a User-Agent can't be
+# changed reliably that way, so it goes through the dedicated user_agent
+# option instead. The requests-based helpers (preflight, URL discovery) send
+# the same headers.
+REQUEST_HEADERS = {{ request_headers.headers_literal }}
+EXTRA_HTTP_HEADERS = {}
+_USER_AGENT = None
+for _header in REQUEST_HEADERS:
+    _value = _header["value"] if "value" in _header else _require_env(_header["envVar"])
+    if _header["name"].lower() == "user-agent":
+        _USER_AGENT = _value
+    else:
+        EXTRA_HTTP_HEADERS[_header["name"]] = _value
+_BROWSER_CONTEXT_OPTIONS = {"extra_http_headers": EXTRA_HTTP_HEADERS}
+if _USER_AGENT:
+    _BROWSER_CONTEXT_OPTIONS["user_agent"] = _USER_AGENT
+{{~ end ~}}

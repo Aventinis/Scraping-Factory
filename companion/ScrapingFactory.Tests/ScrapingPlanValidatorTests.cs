@@ -3805,4 +3805,80 @@ public class ScrapingPlanValidatorTests
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.True(result.Success, result.Error);
     }
+
+    // ---- Issue #226: custom request headers --------------------------------
+
+    private static ScrapingPlan PlanWithHeaders(params ApiHeader[] headers)
+    {
+        var plan = ValidPlan();
+        return new ScrapingPlan { Steps = plan.Steps, Headers = [.. headers] };
+    }
+
+    [Fact]
+    public void Validate_RequestHeaders_LiteralAndEnvironmentVariable_Succeed()
+    {
+        var result = ScrapingPlanValidator.Validate(PlanWithHeaders(
+            new ApiHeader { Name = "Accept-Language", Value = "de-CH" },
+            new ApiHeader { Name = "X-Api-Key", EnvironmentVariableName = "SF_API_KEY" }));
+
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("Bad Name")]
+    [InlineData("Bad:Name")]
+    [InlineData("Ümlaut")]
+    public void Validate_RequestHeaders_InvalidName_Fails(string name)
+    {
+        var result = ScrapingPlanValidator.Validate(PlanWithHeaders(new ApiHeader { Name = name, Value = "x" }));
+
+        Assert.False(result.Success);
+        Assert.Contains("request header", result.Error);
+    }
+
+    [Fact]
+    public void Validate_RequestHeaders_NeedsExactlyOneOfValueAndEnvironmentVariable()
+    {
+        Assert.Contains("exactly one", ScrapingPlanValidator.Validate(PlanWithHeaders(new ApiHeader { Name = "X-A" })).Error);
+        Assert.Contains("exactly one", ScrapingPlanValidator.Validate(PlanWithHeaders(new ApiHeader { Name = "X-A", Value = "v", EnvironmentVariableName = "SF_A" })).Error);
+    }
+
+    [Fact]
+    public void Validate_RequestHeaders_TemplateIsRejected()
+    {
+        var result = ScrapingPlanValidator.Validate(PlanWithHeaders(new ApiHeader { Name = "Authorization", Template = "Bearer {token}" }));
+
+        Assert.False(result.Success);
+        Assert.Contains("template", result.Error);
+    }
+
+    [Fact]
+    public void Validate_RequestHeaders_LineBreakInValue_Fails()
+    {
+        var result = ScrapingPlanValidator.Validate(PlanWithHeaders(new ApiHeader { Name = "X-A", Value = "ok\r\nX-Injected: 1" }));
+
+        Assert.False(result.Success);
+        Assert.Contains("line break", result.Error);
+    }
+
+    [Fact]
+    public void Validate_RequestHeaders_InvalidEnvironmentVariableName_Fails()
+    {
+        var result = ScrapingPlanValidator.Validate(PlanWithHeaders(new ApiHeader { Name = "X-A", EnvironmentVariableName = "1BAD-NAME" }));
+
+        Assert.False(result.Success);
+        Assert.Contains("environment variable", result.Error);
+    }
+
+    [Fact]
+    public void Validate_RequestHeaders_DuplicateNameIgnoringCase_Fails()
+    {
+        var result = ScrapingPlanValidator.Validate(PlanWithHeaders(
+            new ApiHeader { Name = "Accept-Language", Value = "de" },
+            new ApiHeader { Name = "accept-language", Value = "en" }));
+
+        Assert.False(result.Success);
+        Assert.Contains("Duplicate request header", result.Error);
+    }
 }

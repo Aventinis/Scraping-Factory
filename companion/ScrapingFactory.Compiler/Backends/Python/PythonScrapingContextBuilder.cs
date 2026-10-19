@@ -57,6 +57,7 @@ internal static class PythonScrapingContextBuilder
             ["proxy"] = PythonProxyLiteral.BuildContext(plan.Proxy),
             ["request_delay"] = PythonRequestDelayLiteral.BuildContext(plan.RequestDelay),
             ["retry"] = PythonRetryLiteral.BuildContext(plan.Retry),
+            ["request_headers"] = PythonRequestHeadersLiteral.BuildContext(plan.Headers),
             ["dedup"] = PythonDeduplicationLiteral.BuildContext(plan.Deduplication),
             ["hardening"] = PythonHardeningLiteral.BuildContext(plan.Hardening),
             ["pagination"] = PythonPaginationLiteral.BuildContext(plan.Pagination),
@@ -124,6 +125,7 @@ internal static class PythonScrapingContextBuilder
             ["proxy"] = PythonProxyLiteral.BuildContext(plan.Proxy),
             ["request_delay"] = PythonRequestDelayLiteral.BuildContext(plan.RequestDelay),
             ["retry"] = PythonRetryLiteral.BuildContext(plan.Retry),
+            ["request_headers"] = PythonRequestHeadersLiteral.BuildContext(plan.Headers),
             ["dedup"] = PythonDeduplicationLiteral.BuildContext(plan.Deduplication),
             ["hardening"] = PythonHardeningLiteral.BuildContext(plan.Hardening),
             ["pagination"] = PythonPaginationLiteral.BuildContext(plan.Pagination),
@@ -158,6 +160,7 @@ internal static class PythonScrapingContextBuilder
             ["proxy"] = PythonProxyLiteral.BuildContext(plan.Proxy),
             ["request_delay"] = PythonRequestDelayLiteral.BuildContext(plan.RequestDelay),
             ["retry"] = PythonRetryLiteral.BuildContext(plan.Retry),
+            ["request_headers"] = PythonRequestHeadersLiteral.BuildContext(plan.Headers),
             ["pagination"] = PythonPaginationLiteral.BuildContext(plan.Pagination),
             ["script_filename"] = plan.ScriptFileName,
         };

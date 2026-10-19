@@ -106,6 +106,13 @@ public sealed class ScrapingConfig
     // behavior (a failed request is never retried).
     public RetryConfig? Retry { get; init; }
 
+    // Issue #226: custom request headers for flat/container/Blocks mode (API
+    // mode keeps ApiConfig.Headers) — each a fixed literal or backed by an
+    // environment variable, same shape as ApiHeader (whose Template variant
+    // is meaningless here and rejected by ScrapingPlanValidator). Null/empty
+    // is today's exact behavior (only the default User-Agent is sent).
+    public List<ApiHeader>? Headers { get; init; }
+
     // Issue #225: opt-in deduplication of the output by key field(s) (and,
     // optionally, incremental "only new items since the last run" output),
     // mode-independent — see IR/DeduplicationConfig.cs. Null is today's exact

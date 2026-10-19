@@ -91,4 +91,21 @@ public class FillVerificationValuesTests
 
         Assert.Equal(new Dictionary<string, string> { ["API_PASS"] = "s3cret", ["API_CLIENT"] = "c1" }, result);
     }
+
+    // Issue #226: the env vars of DOM-mode request headers are legitimate
+    // targets for a one-time test value too.
+    [Fact]
+    public void Filter_KeepsValuesMatchingARequestHeaderEnvironmentVariable_AndDropsTheRest()
+    {
+        var headers = new List<ApiHeader>
+        {
+            new() { Name = "X-Api-Key", EnvironmentVariableName = "SF_API_KEY" },
+            new() { Name = "Accept-Language", Value = "de-CH" },
+        };
+        var values = new Dictionary<string, string> { ["SF_API_KEY"] = "k", ["SF_UNRELATED"] = "x", ["Accept-Language"] = "nope" };
+
+        var result = FillVerificationValues.Filter(null, values, requestHeaders: headers);
+
+        Assert.Equal(new Dictionary<string, string> { ["SF_API_KEY"] = "k" }, result);
+    }
 }

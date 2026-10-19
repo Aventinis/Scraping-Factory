@@ -1,0 +1,27 @@
+{{~ if proxy.enabled || request_headers.has_env ~}}
+# A required environment variable (a request header's value, Proxy's URL
+# list) that's missing is flagged with this dedicated exit code instead of
+# a raw, unhandled KeyError traceback.
+EXIT_MISSING_ENV_VAR = 78
+
+{{~ end ~}}
+{{~ if request_headers.has_env ~}}
+#@include require_env_function
+
+{{~ end ~}}
+# Many sites (Wikipedia among them) reject the bare "python-requests/x.y"
+# default User-Agent with 403 Forbidden — an honest, identifying UA (not a
+# spoofed browser) is enough to pass that check on most sites.
+HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"}
+{{~ if request_headers.enabled ~}}
+
+# Issue #226: custom request headers — each a fixed value or the *name* of an
+# environment variable holding it (read at startup, never written into this
+# script), applied on top of the default above in the configured order. A
+# header of the same name (any casing) replaces the default User-Agent.
+REQUEST_HEADERS = {{ request_headers.headers_literal }}
+for _header in REQUEST_HEADERS:
+    for _existing in [name for name in HEADERS if name.lower() == _header["name"].lower()]:
+        del HEADERS[_existing]
+    HEADERS[_header["name"]] = _header["value"] if "value" in _header else _require_env(_header["envVar"])
+{{~ end ~}}

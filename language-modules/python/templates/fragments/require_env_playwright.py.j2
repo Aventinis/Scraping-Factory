@@ -6,10 +6,5 @@
 EXIT_MISSING_ENV_VAR = 78
 
 
-def _require_env(name):
-    value = os.environ.get(name)
-    if value is None:
-        print(f"ERROR: required environment variable '{name}' is not set.", file=sys.stderr)
-        sys.exit(EXIT_MISSING_ENV_VAR)
-    return value
+#@include require_env_function
 {{~ end ~}}

@@ -15,13 +15,13 @@ from datetime import date
 import requests
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
-{{~ if change_detection.enabled || proxy.enabled || external_config.enabled || download_enabled ~}}
+{{~ if change_detection.enabled || proxy.enabled || external_config.enabled || download_enabled || request_headers.has_env ~}}
 import os
 {{~ end ~}}
 {{~ if proxy.enabled ~}}
 import itertools
 {{~ end ~}}
-{{~ if proxy.enabled || hardening.enabled || external_config.enabled || download_enabled || preflight.enabled ~}}
+{{~ if proxy.enabled || hardening.enabled || external_config.enabled || download_enabled || preflight.enabled || request_headers.has_env ~}}
 import sys
 {{~ end ~}}
 {{~ if hardening.has_baseline || preflight.enabled ~}}
@@ -52,10 +52,7 @@ import urllib.request
 URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 #@include discovered_urls_constants
 
-# Many sites (Wikipedia among them) reject the bare "python-requests/x.y"
-# default User-Agent with 403 Forbidden — an honest, identifying UA (not a
-# spoofed browser) is enough to pass that check on most sites.
-HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"}
+#@include request_headers_static
 
 # Issue #192: an active FLAT-schema Output Blueprint mapping flattens this
 # mode's normally-nested output into denormalized rows (see BLUEPRINT_MAPPING
@@ -76,8 +73,6 @@ OUTPUT_PATH = "{{ output_filename }}.{{ if blueprint_mapping_enabled }}{{ if out
 #@include change_detection_constants
 
 {{~ if proxy.enabled ~}}
-EXIT_MISSING_ENV_VAR = 78
-
 #@include proxy_pool
 
 

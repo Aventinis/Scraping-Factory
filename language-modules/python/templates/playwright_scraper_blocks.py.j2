@@ -55,6 +55,7 @@ SESSION_STATE_PATH = "{{ script_filename }}.session-state.json"
 {{~ end ~}}
 
 #@include require_env_playwright
+#@include request_headers_playwright
 
 {{~ if pagination.enabled ~}}
 PAGINATION_MAX_PAGES = {{ pagination.max_pages_literal }}
@@ -195,7 +196,7 @@ def scrape(url):
         browser = p.chromium.launch({{ if proxy.enabled }}proxy=_next_playwright_proxy(){{ end }})
 {{~ if persistent_session_enabled ~}}
         _session_exists = os.path.exists(SESSION_STATE_PATH)
-        context = browser.new_context(storage_state=SESSION_STATE_PATH if _session_exists else None)
+        context = browser.new_context(storage_state=SESSION_STATE_PATH if _session_exists else None{{ if request_headers.enabled }}, **_BROWSER_CONTEXT_OPTIONS{{ end }})
         page = context.new_page()
 {{~ if request_delay.enabled ~}}
         _pace_request()
@@ -206,7 +207,7 @@ def scrape(url):
 {{ login_actions }}
 {{~ end ~}}
 {{~ else ~}}
-        page = browser.new_page()
+        page = browser.new_page({{ if request_headers.enabled }}**_BROWSER_CONTEXT_OPTIONS{{ end }})
 {{~ if request_delay.enabled ~}}
         _pace_request()
 {{~ end ~}}

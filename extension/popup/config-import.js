@@ -26,6 +26,8 @@
 const SFConfigImport = (function () {
   const { applyDeduplicationConfig } =
     typeof require !== 'undefined' ? require('./dedup-config') : self.SFDedupConfig;
+  const { applyRequestHeadersConfig } =
+    typeof require !== 'undefined' ? require('./request-headers') : self.SFRequestHeaders;
 
   // Inverse of container-tree.js's FIELD_MODE_WIRE_NAMES — kept as its own
   // copy rather than importing that module, the same "small, hand-kept
@@ -361,6 +363,7 @@ const SFConfigImport = (function () {
         requestDelay: applyRequestDelayConfig(null),
         retry: applyRetryConfig(null),
         deduplication: applyDeduplicationConfig(null),
+        requestHeaders: applyRequestHeadersConfig(null),
         pagination: applyPaginationConfig(null),
         discoveredUrls: applyDiscoveredUrlsConfig(null),
         hardening: applyHardeningConfig(null),
@@ -408,6 +411,8 @@ const SFConfigImport = (function () {
         retry: applyRetryConfig(config.retry),
         // Issue #225: never present on a Blocks wire config (rejected server-side).
         deduplication: applyDeduplicationConfig(null),
+        // Issue #226: the shared request headers do apply to Blocks.
+        requestHeaders: applyRequestHeadersConfig(config.headers),
         pagination: applyPaginationConfig(config.pagination),
         // Issue #218: never present on a Blocks wire config (rejected
         // server-side, not designed for this mode's multi-output shape yet).
@@ -451,6 +456,8 @@ const SFConfigImport = (function () {
       requestDelay: applyRequestDelayConfig(config.requestDelay),
       retry: applyRetryConfig(config.retry),
       deduplication: applyDeduplicationConfig(config.deduplication),
+      // Issue #226: an Api config never carries these (it has its own headers).
+      requestHeaders: applyRequestHeadersConfig(config.api ? null : config.headers),
       pagination: applyPaginationConfig(config.pagination),
       discoveredUrls: applyDiscoveredUrlsConfig(config.discoveredUrls),
       hardening: applyHardeningConfig(config.hardening),
