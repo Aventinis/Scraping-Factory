@@ -176,7 +176,7 @@
     "paginationKindNextLink": "Enlace \"Siguiente\"",
     "paginationKindPageNumber": "URL con número de página",
     "paginationNextLinkSelectorLabel": "Selector del enlace \"Página siguiente\"",
-    "paginationNextLinkSelectorPlaceholder": "p. ej. a.next, .pagination__next",
+    "paginationNextLinkSelectorPlaceholder": "p. ej. a.next, a:contains(\"Siguiente\")",
     "paginationUrlTemplateLabel": "Plantilla de URL de página",
     "paginationUrlTemplatePlaceholder": "p. ej. {url}?page={page}",
     "paginationUrlTemplateHint": "Debe contener tanto {url} (la página de inicio, sin cambios) como {page} (el número de página, empezando en 2 — la página 1 es siempre la página de inicio tal cual).",
@@ -186,7 +186,7 @@
     "discoveredUrlsPageUrlPlaceholder": "p. ej. https://example.com/categorias",
     "discoveredUrlsLinkSelectorLabel": "Selector de enlaces",
     "discoveredUrlsLinkSelectorPlaceholder": "p. ej. nav.categorias a",
-    "discoveredUrlsHint": "Carga esta página una vez y añade cada enlace que coincida con el selector, además de la URL de arriba y cualquier URL de inicio adicional.",
+    "discoveredUrlsHint": "Carga esta página una vez y añade cada enlace que coincida con el selector, además de la URL de arriba y cualquier URL de inicio adicional. Un enlace también se puede elegir por su texto, p. ej. a:contains(\"Verduras\").",
     "discoveredUrlsMaxUrlsLabel": "Núm. máx. de URLs descubiertas (límite de seguridad)",
     "monitoringSectionToggle": "Monitorización",
     "settingsSectionToggle": "Configuración",
@@ -513,6 +513,12 @@
       "noConfigsHint": "Todavía no hay una configuración guardada para este sitio — indica un nombre abajo y se creará y vinculará con esta salida.",
       "configNameLabel": "Nombre de la configuración (p. ej. \"Listado de productos\")",
       "configNamePlaceholder": "Nombre"
+    },
+    "textFilter": {
+      "label": "Solo el elemento cuyo texto contiene (opcional)",
+      "placeholder": "p. ej. Añadir al carrito",
+      "useElementText": "Usar el texto de este elemento",
+      "hint": "Úsalo cuando varios elementos parecidos (botones, enlaces) solo se distinguen por su etiqueta. Las mayúsculas y los espacios de más no importan. Déjalo vacío para mantener la selección tal cual."
     },
     "matchCount": {
       "found": "{count} elemento(s) encontrado(s)"

@@ -18,6 +18,10 @@ const SFFlatModeUI = (function () {
     typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
   const { transformsAreValid, addTransform } =
     typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
+  const { appendTextFilter } =
+    typeof require !== 'undefined' ? require('./selector-text-filter') : self.SFSelectorTextFilter;
+  const { resetTextFilter, effectiveMatchCount, wireTextFilter } =
+    typeof require !== 'undefined' ? require('./selector-text-filter-ui') : self.SFSelectorTextFilterUI;
   const { renderTransformList, renderTransformPreview, wireTransformList } =
     typeof require !== 'undefined' ? require('./field-transforms-ui') : self.SFFieldTransformsUI;
   // Issue #214: guessUrlAttribute/parseAllowedContentTypes/megabytesToBytes
@@ -152,8 +156,9 @@ const SFFlatModeUI = (function () {
       if (maxSizeInput) maxSizeInput.value = '';
       const allowedTypesInput = document.getElementById('input-field-name-download-allowed-types');
       if (allowedTypesInput) allowedTypesInput.value = '';
+      resetTextFilter('input-field-name-text-filter', 'btn-field-name-use-text', state.pendingRawText);
     }
-    renderMatchCountHint('field-name-match-count', state.pendingMatchCount);
+    renderMatchCountHint('field-name-match-count', effectiveMatchCount('input-field-name-text-filter', state.pendingMatchCount));
     renderTransformList('field-transform-list', state.pendingTransforms);
     refreshFlatTransformPreview(bridge);
   }
@@ -169,10 +174,13 @@ const SFFlatModeUI = (function () {
     const maxDownloadSizeBytes = megabytesToBytes(document.getElementById('input-field-name-download-max-size')?.value);
     const allowedContentTypes = parseAllowedContentTypes(document.getElementById('input-field-name-download-allowed-types')?.value);
     if (!transformsAreValid(state.pendingTransforms)) return;
-    log('FIELD_ADD', { name, selector: state.pendingSelector, framePath: state.pendingFramePath, transforms: state.pendingTransforms });
+    // Issue #227: an optional text the element must contain — appended as a
+    // :contains("…") suffix; blank leaves the pick's selector untouched.
+    const selector = appendTextFilter(state.pendingSelector, document.getElementById('input-field-name-text-filter')?.value);
+    log('FIELD_ADD', { name, selector, framePath: state.pendingFramePath, transforms: state.pendingTransforms });
     bridge.setState(STATES.IDLE, {
       fields: addField(
-        state.fields, name, state.pendingSelector, state.pendingFramePath, state.pendingTransforms,
+        state.fields, name, selector, state.pendingFramePath, state.pendingTransforms,
         mode === 'attribute' ? attribute : null, download, maxDownloadSizeBytes, allowedContentTypes,
       ),
       pendingSelector:   null,
@@ -219,6 +227,14 @@ const SFFlatModeUI = (function () {
     () => bridge.getState().pendingTransforms,
     (transforms) => bridge.patchState({ pendingTransforms: transforms }),
   );
+  // Issue #227: re-rendering the modal lets the match-count hint follow the
+  // typed text (renderFlatFieldModal reads effectiveMatchCount each time).
+  wireTextFilter({
+    inputId: 'input-field-name-text-filter',
+    useButtonId: 'btn-field-name-use-text',
+    rerender: () => bridge.patchState({}),
+    getRawText: () => bridge.getState().pendingRawText,
+  });
   document.getElementById('btn-field-confirm')?.addEventListener('click', () => confirmField(bridge));
 
   document.getElementById('input-field-name')?.addEventListener('keydown', (e) => {

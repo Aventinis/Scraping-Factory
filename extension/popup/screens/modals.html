@@ -30,6 +30,15 @@
           </div>
         </div>
       </div>
+      <!-- Issue #227: optional text the element must contain — for a button
+           that only its label tells apart from its siblings. Left empty, the
+           pick's selector is used as is; see selector-text-filter-ui.js. -->
+      <div class="text-filter-row">
+        <label for="input-field-name-text-filter" data-i18n="modals.textFilter.label"></label>
+        <input id="input-field-name-text-filter" type="text" data-i18n-placeholder="modals.textFilter.placeholder" autocomplete="off" />
+        <button type="button" id="btn-field-name-use-text" class="btn-secondary btn-tiny hidden" data-i18n="modals.textFilter.useElementText"></button>
+        <p class="preview-summary" data-i18n="modals.textFilter.hint"></p>
+      </div>
       <!-- Issue #85: live match count for the just-picked selector -->
       <p id="field-name-match-count" class="match-count-hint hidden"></p>
       <!-- Issue #84: optional per-field transform chain -->
@@ -156,6 +165,15 @@
           <label for="input-field-download-allowed-types" data-i18n="modals.download.allowedTypesLabel"></label>
           <input id="input-field-download-allowed-types" type="text" data-i18n-placeholder="modals.download.allowedTypesPlaceholder" autocomplete="off" />
         </div>
+      </div>
+      <!-- Issue #227: optional text the element must contain — for a button
+           that only its label tells apart from its siblings. Left empty, the
+           pick's selector is used as is; see selector-text-filter-ui.js. -->
+      <div class="text-filter-row">
+        <label for="input-field-text-filter" data-i18n="modals.textFilter.label"></label>
+        <input id="input-field-text-filter" type="text" data-i18n-placeholder="modals.textFilter.placeholder" autocomplete="off" />
+        <button type="button" id="btn-field-use-text" class="btn-secondary btn-tiny hidden" data-i18n="modals.textFilter.useElementText"></button>
+        <p class="preview-summary" data-i18n="modals.textFilter.hint"></p>
       </div>
       <!-- Issue #85: live match count for the just-picked selector -->
       <p id="field-extended-match-count" class="match-count-hint hidden"></p>
