@@ -1,1 +1,1 @@
-        _resolve_locator(page, "{{ step.selector }}", {{ if step.frame_path }}[{{ for sel in step.frame_path }}"{{ sel }}"{{ if !for.last }}, {{ end }}{{ end }}]{{ else }}None{{ end }}).wait_for(timeout={{ step.timeout_ms }})
+        _resolve_locator(page, "{{ step.selector | string.escape }}", {{ if step.frame_path }}[{{ for sel in step.frame_path }}"{{ sel | string.escape }}"{{ if !for.last }}, {{ end }}{{ end }}]{{ else }}None{{ end }}).wait_for(timeout={{ step.timeout_ms }})

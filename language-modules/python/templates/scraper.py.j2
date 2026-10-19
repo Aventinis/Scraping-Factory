@@ -53,6 +53,11 @@ URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 #@include discovered_urls_constants
 
 #@include request_headers_static
+{{~ if text_selector.enabled ~}}
+#@include text_selector_common
+
+#@include text_selector_bs4
+{{~ end ~}}
 
 OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else }}csv{{ end }}"
 
@@ -75,7 +80,7 @@ OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else }}csv{{ 
 
 SELECTORS = {
 {{- for field in fields }}
-    "{{ field.name }}": "{{ field.selector }}",
+    "{{ field.name }}": "{{ field.selector | string.escape }}",
 {{- end }}
 }
 

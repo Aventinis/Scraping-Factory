@@ -56,6 +56,15 @@ SESSION_STATE_PATH = "{{ script_filename }}.session-state.json"
 
 #@include require_env_playwright
 #@include request_headers_playwright
+{{~ if text_selector.enabled ~}}
+#@include text_selector_common
+
+#@include text_selector_playwright
+{{~ if discovered_urls.enabled ~}}
+
+#@include text_selector_bs4
+{{~ end ~}}
+{{~ end ~}}
 
 {{~ if pagination.enabled ~}}
 PAGINATION_MAX_PAGES = {{ pagination.max_pages_literal }}

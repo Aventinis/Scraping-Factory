@@ -1,0 +1,28 @@
+# Teaches BeautifulSoup's select()/select_one() the :contains("text") suffix
+# (see above) — every selector lookup in this script then understands it
+# without any special-casing at the call sites.
+from bs4.element import Tag as _BsTag
+
+_bs_select = _BsTag.select
+_bs_select_one = _BsTag.select_one
+
+
+def _select_with_text_filter(self, selector, namespaces=None, limit=None, **kwargs):
+    base, text = _split_text_filter(selector)
+    if text is None:
+        return _bs_select(self, base, namespaces, limit, **kwargs)
+    wanted = _normalize_text(text)
+    matches = [el for el in _bs_select(self, base, namespaces, None, **kwargs) if wanted in _normalize_text(el.get_text())]
+    return matches[:limit] if limit else matches
+
+
+def _select_one_with_text_filter(self, selector, namespaces=None, **kwargs):
+    base, text = _split_text_filter(selector)
+    if text is None:
+        return _bs_select_one(self, base, namespaces, **kwargs)
+    matches = _select_with_text_filter(self, selector, namespaces, 1, **kwargs)
+    return matches[0] if matches else None
+
+
+_BsTag.select = _select_with_text_filter
+_BsTag.select_one = _select_one_with_text_filter

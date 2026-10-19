@@ -1,6 +1,6 @@
-        _scroll_frame_path = {{ if step.frame_path }}[{{ for sel in step.frame_path }}"{{ sel }}"{{ if !for.last }}, {{ end }}{{ end }}]{{ else }}None{{ end }}
-        _scroll_container_selector = {{ if step.container_selector }}"{{ step.container_selector }}"{{ else }}None{{ end }}
-        _scroll_load_more_selector = {{ if step.load_more_button_selector }}"{{ step.load_more_button_selector }}"{{ else }}None{{ end }}
+        _scroll_frame_path = {{ if step.frame_path }}[{{ for sel in step.frame_path }}"{{ sel | string.escape }}"{{ if !for.last }}, {{ end }}{{ end }}]{{ else }}None{{ end }}
+        _scroll_container_selector = {{ if step.container_selector }}"{{ step.container_selector | string.escape }}"{{ else }}None{{ end }}
+        _scroll_load_more_selector = {{ if step.load_more_button_selector }}"{{ step.load_more_button_selector | string.escape }}"{{ else }}None{{ end }}
         _scroll_prev_height = None
         for _ in range({{ step.max_iterations }}):
             if _scroll_container_selector:

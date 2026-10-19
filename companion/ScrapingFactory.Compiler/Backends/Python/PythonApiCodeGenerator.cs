@@ -82,6 +82,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
                 request_delay = requestDelay,
                 retry,
                 dedup = PythonDeduplicationLiteral.BuildContext(plan.Deduplication),
+                text_selector = PythonTextSelectorLiteral.BuildContext(plan),
                 hardening,
                 external_config = externalConfig,
                 // Issue #192: unlike Container-Mode, the row-scope group
@@ -136,6 +137,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
             request_delay = requestDelay,
             retry,
             dedup = PythonDeduplicationLiteral.BuildContext(plan.Deduplication),
+            text_selector = PythonTextSelectorLiteral.BuildContext(plan),
             hardening,
             external_config = externalConfig,
             blueprint_mapping_literal = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),
