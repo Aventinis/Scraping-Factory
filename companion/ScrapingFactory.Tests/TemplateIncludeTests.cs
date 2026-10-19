@@ -121,7 +121,7 @@ public class TemplateIncludeTests
         var fragments = resources.Where(n => n.StartsWith("fragments/")).Select(n => n["fragments/".Length..^".py.j2".Length]).ToList();
 
         Assert.NotEmpty(fragments);
-        Assert.Empty(fragments.Where(f => !included.Contains(f)));
+        Assert.All(fragments, fragment => Assert.Contains(fragment, included));
     }
 
     // Includes are resolved before Scriban parses, so a fragment must never
