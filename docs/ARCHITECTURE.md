@@ -1146,6 +1146,37 @@ per engine, per shape) instead of once per template.
 - Tests: `TemplateIncludeTests.cs`; the existing end-to-end tests run the
   generated scripts unchanged
 
+### 2.21e Custom request headers for flat/container/Blocks mode (Issue #226)
+
+An opt-in, engine-independent list of extra request headers for the DOM
+shapes — each a fixed value or the name of an environment variable (never a
+secret literal in the script), with a one-time test value for the trial run.
+The default identifying User-Agent stays unless a header of that name
+replaces it. Static engine: `requests`' `headers`; Browser engine:
+Playwright's `extra_http_headers` (every request of the page) and
+`user_agent`. A missing variable stops the run with exit code 78.
+
+- IR: `ScrapingConfig.Headers`/`ScrapingPlan.Headers` (reusing `ApiHeader`),
+  validation in `ScrapingPlanValidator.ValidateRequestHeaders`,
+  Api/Combined-outer rejection in `Program.cs`,
+  `FillVerificationValues.Filter` (`requestHeaders`)
+- `Backends/Python/PythonRequestHeadersLiteral` (`request_headers.*`), wired in
+  `PythonScrapingContextBuilder` and `PythonPlaywrightCodeGenerator`
+- Fragments: `request_headers_static`, `request_headers_playwright`,
+  `require_env_function`; the static/Browser templates and the Browser-engine
+  `preflight_playwright`/`discovered_urls_playwright` fragments use them
+- Extension: `request-headers.js` (pure) + `request-headers-ui.js`
+  (`renderRequestHeadersSection`/`wireRequestHeadersEvents`),
+  `scraping-config-builder.js` (trailing `requestHeaders` parameter),
+  `companion-client.js` (test values → `verificationValues`),
+  `config-import.js`, `session-restore.js`, `#toggle-request-headers`/
+  `#request-headers-config` in `screens/idle.html`
+- Tests: `RequestHeadersEndToEndTests.cs`, `RequestHeadersEndpointTests.cs`,
+  `ScrapingPlanValidatorTests.cs`, `FillVerificationValuesTests.cs`,
+  `extension/popup/request-headers.test.js`, fixture
+  `test-pages/request-headers` +
+  `e2e/examples/issue-226-request-headers-check.js`
+
 ### 2.22 Persistent session/cookie handling (Issue #175)
 
 Browser-engine only (rejected server-side for Static/Api, same as
