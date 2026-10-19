@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <title>Buttons, die nur der Text unterscheidet (Issue #227)</title>
+  <style>.btn { margin-right: 8px; } .product { margin-bottom: 12px; }</style>
+</head>
+<body>
+  <h1>Produkte</h1>
+  <p>
+    Jedes Produkt hat dieselben drei Links mit identischem Aufbau (<code>a.btn</code>) —
+    nur ihre Beschriftung unterscheidet sie. Ein reiner CSS-Selektor trifft immer alle drei.
+  </p>
+  <ul>
+    <li class="product">
+      <span class="name">Kaffee</span>
+      <a class="btn" href="/cart/kaffee">In den Warenkorb</a>
+      <a class="btn" href="/wish/kaffee"><span>Mer</span>ken</a>
+      <a class="btn" href="/compare/kaffee">Vergleichen</a>
+    </li>
+    <li class="product">
+      <span class="name">Tee</span>
+      <a class="btn" href="/cart/tee">In den  Warenkorb</a>
+      <a class="btn" href="/wish/tee">Merken</a>
+      <a class="btn" href="/compare/tee">Vergleichen</a>
+    </li>
+  </ul>
+</body>
+</html>
