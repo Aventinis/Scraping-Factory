@@ -1177,6 +1177,36 @@ Playwright's `extra_http_headers` (every request of the page) and
   `test-pages/request-headers` +
   `e2e/examples/issue-226-request-headers-check.js`
 
+### 2.21f Text-content selector suffix `:contains("text")` (Issue #227)
+
+A selector may end in `:contains("text")` to pick, among otherwise identical
+elements (buttons/links that differ only by their label), those whose whole
+text contains `text` — case-insensitive, whitespace-collapsed. Only as the last
+part of a selector, at most once, quoted with `'` or `"` (escapes `\"`, `\'`,
+`\\`), non-empty; not allowed in FramePath segments or
+`EmbeddedJsonSource.ScriptSelector`. Three mirrored implementations share test
+vectors: C# `SelectorTextFilter` (validation only), the Python runtime
+fragments, and JS (`content-script.js`, `popup/selector-text-filter.js`).
+
+- IR: `IR/SelectorTextFilter.cs`, called from `ScrapingPlanValidator` for every
+  selector-bearing step/field/pagination/discovery/browser-discovery action
+- `Backends/Python/PythonTextSelectorLiteral` (`text_selector.enabled`, only
+  when some selector actually uses the suffix, so unrelated scripts stay
+  byte-identical)
+- Fragments: `text_selector_common` (split/normalize), `text_selector_bs4`
+  (patches `bs4.element.Tag.select/select_one`), `text_selector_playwright`
+  (patches `query_selector(_all)` and `locator` → `.filter(has_text=...)`)
+- Templates now escape selectors with `string.escape` when rendering them into
+  Python string literals
+- Extension: `content-script.js` (`querySelectorAllWithText`,
+  `COUNT_PICK_WITH_TEXT`), `popup/selector-text-filter.js` +
+  `selector-text-filter-ui.js`, text filter row in `modal-field-name` /
+  `modal-field-extended`, live match count
+- Tests: `SelectorTextFilterTests.cs`, `TextSelectorEndToEndTests.cs`,
+  `ScrapingPlanValidatorTests.cs`, `extension/popup/selector-text-filter.test.js`,
+  `content-script.test.js`, fixture `test-pages/text-selector` +
+  `e2e/examples/issue-227-text-selector-check.js`
+
 ### 2.22 Persistent session/cookie handling (Issue #175)
 
 Browser-engine only (rejected server-side for Static/Api, same as
