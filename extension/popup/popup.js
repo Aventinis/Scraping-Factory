@@ -158,6 +158,10 @@ const { wireSettingsPanelEvents } =
   typeof require !== 'undefined' ? require('./settings-panel-ui') : self.SFSettingsPanelUI;
 const { createDefaultDeduplication } =
   typeof require !== 'undefined' ? require('./dedup-config') : self.SFDedupConfig;
+const { createDefaultRequestHeaders } =
+  typeof require !== 'undefined' ? require('./request-headers') : self.SFRequestHeaders;
+const { wireRequestHeadersEvents } =
+  typeof require !== 'undefined' ? require('./request-headers-ui') : self.SFRequestHeadersUI;
 const { wireDedupEvents } =
   typeof require !== 'undefined' ? require('./dedup-config-ui') : self.SFDedupConfigUI;
 
@@ -253,6 +257,13 @@ let _state = {
   // incremental "only new items" output — persisted like retry (real
   // scrape-target configuration), see dedup-config.js.
   deduplication: createDefaultDeduplication(),
+  // Issue #226: custom request headers for flat/container/Blocks mode —
+  // persisted like retry (real scrape-target configuration), see
+  // request-headers.js. The one-time test values for env-var-backed rows
+  // live in requestHeaderTestValues instead: memory only, never persisted —
+  // like fillTestValues (see buildHeaderVerificationValues).
+  requestHeaders: createDefaultRequestHeaders(),
+  requestHeaderTestValues: {},
   // Issue #174: opt-in classic multi-page pagination — mode-independent
   // like additionalStartUrls/changeDetection/proxy above (Fields/Groups
   // only; hidden entirely for API mode, which already has its own page-
@@ -646,6 +657,7 @@ function persistState() {
       requestDelay: _state.requestDelay,
       retry: _state.retry,
       deduplication: _state.deduplication,
+      requestHeaders: _state.requestHeaders,
       pagination: _state.pagination,
       discoveredUrls: _state.discoveredUrls,
       persistentSession: _state.persistentSession,
@@ -1133,6 +1145,7 @@ function wireEvents() {
 
   wireSettingsPanelEvents(bridge);
   wireDedupEvents(bridge);
+  wireRequestHeadersEvents(bridge);
 
   wireApiConfigEvents(bridge);
 
@@ -1283,7 +1296,7 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'requestDelay', 'retry', 'deduplication', 'hardening', 'pagination', 'persistentSession', 'preflight', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'requestDelay', 'retry', 'deduplication', 'requestHeaders', 'hardening', 'pagination', 'persistentSession', 'preflight', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'pendingApiDiscoveryPartId', 'pendingApiDiscoveryActionIndex', 'pendingApiDiscoveryActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',

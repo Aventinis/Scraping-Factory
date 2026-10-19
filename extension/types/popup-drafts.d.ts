@@ -121,6 +121,19 @@ declare namespace SFDraft {
     retentionValueText: string;
   }
 
+  // Issue #226: see request-headers.js. `value` is the literal for kind
+  // 'value', the environment variable's *name* for kind 'env'.
+  interface RequestHeaderRow {
+    name: string;
+    kind: 'value' | 'env';
+    value: string;
+  }
+
+  interface RequestHeadersState {
+    enabled: boolean;
+    rows: RequestHeaderRow[];
+  }
+
   // Issue #222: seconds as typed (decimal comma or point); blank max = fixed.
   interface RequestDelayState {
     enabled: boolean;

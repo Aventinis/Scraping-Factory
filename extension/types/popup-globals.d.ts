@@ -36,6 +36,8 @@ declare global {
     SFApiBootstrap: any;
     SFApiCursorPagination: any;
     SFDedupConfig: any;
+    SFRequestHeaders: any;
+    SFRequestHeadersUI: any;
     SFDedupConfigUI: any;
     SFTransformPresets: any;
     SFContainerTree: any;

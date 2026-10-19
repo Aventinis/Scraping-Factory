@@ -25,6 +25,8 @@ const { showToast, setLastError } =
 const { buildScrapingConfig, buildVerificationValues, computeScriptFileNamePatch } =
   typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
 
+const { buildHeaderVerificationValues } =
+  typeof require !== 'undefined' ? require('./request-headers') : self.SFRequestHeaders;
 const { buildBootstrapVerificationValues } =
   typeof require !== 'undefined' ? require('./api-bootstrap') : self.SFApiBootstrap;
 
@@ -189,7 +191,7 @@ async function generate(bridge) {
     state.pagination, state.persistentSession, globalSettings.includeOutputFile, globalSettings.externalConfig, combinedComponents,
     state.blocks, state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
     state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
-    state.discoveredUrls, state.preflight, state.requestDelay, state.retry, state.deduplication,
+    state.discoveredUrls, state.preflight, state.requestDelay, state.retry, state.deduplication, state.requestHeaders,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
@@ -197,11 +199,14 @@ async function generate(bridge) {
   // those are meant to ever see them. See fillTestValues/buildVerificationValues.
   // Issue #220: Api mode's bootstrap credentials get the same one-time
   // test-value treatment, from the API_CONFIG screen's own inputs.
+  // Issue #226: the DOM modes' env-var-backed request headers get the same
+  // one-time test-value treatment.
   const verificationValues = state.mode === 'api'
     ? buildBootstrapVerificationValues(state.apiConfig, state.apiBootstrapTestValues || {})
-    : state.engine === 'Browser'
-      ? buildVerificationValues(state.browserActions, state.fillTestValues)
-      : {};
+    : {
+        ...(state.engine === 'Browser' ? buildVerificationValues(state.browserActions, state.fillTestValues) : {}),
+        ...buildHeaderVerificationValues(state.requestHeaders, state.requestHeaderTestValues),
+      };
   log('GENERATE request', config);
   try {
     const res = await fetch(`${companionUrl}/generate`, {

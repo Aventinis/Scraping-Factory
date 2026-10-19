@@ -46,6 +46,7 @@ declare namespace SFWire {
     requestDelay?: RequestDelayConfig;
     retry?: RetryConfig;
     deduplication?: DeduplicationConfig;
+    headers?: ApiHeader[];
     hardening?: HardeningCheck[];
     pagination?: PaginationConfig;
     discoveredUrls?: DiscoveredUrlsConfig;

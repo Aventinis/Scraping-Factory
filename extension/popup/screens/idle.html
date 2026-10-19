@@ -287,6 +287,21 @@
             </div>
             <p class="preview-summary" data-i18n="idle.retryHint"></p>
           </div>
+          <!-- Issue #226: custom request headers for flat/container/Blocks
+               mode (API mode has its own header editor; hidden for it and for
+               Combined, see renderRequestHeadersSection). Each header is a
+               fixed value or the *name* of an environment variable. -->
+          <div id="request-headers-section">
+            <label class="output-settings-toggle">
+              <input type="checkbox" id="toggle-request-headers" />
+              <span data-i18n="idle.requestHeadersToggle"></span>
+            </label>
+            <div id="request-headers-config" class="hidden">
+              <div id="request-headers-list"></div>
+              <button type="button" id="btn-add-request-header" class="btn-secondary btn-tiny" data-i18n="idle.requestHeadersAddBtn"></button>
+              <p class="preview-summary" data-i18n="idle.requestHeadersHint"></p>
+            </div>
+          </div>
           <!-- Issue #225: opt-in deduplication by key field(s) — drops a
                later row/element whose key was already seen in the same run
                and, optionally, remembers seen keys across runs so only new
