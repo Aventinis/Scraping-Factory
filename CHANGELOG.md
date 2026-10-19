@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.17.9](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.8...v1.17.9) (2026-10-19)
+
+
+### Features
+
+* custom request headers for flat, container and Blocks mode ([#226](https://github.com/Aventinis/Scraping-Factory/issues/226)) ([b5ece73](https://github.com/Aventinis/Scraping-Factory/commit/b5ece73fe62c1cc20d90d8bc2e9f7af14029165a))
+* **request-headers:** add custom request headers for flat, container and Blocks mode (compiler and templates) ([40752d1](https://github.com/Aventinis/Scraping-Factory/commit/40752d194b9610269e9288269179907a0fc8ea2d)), closes [#226](https://github.com/Aventinis/Scraping-Factory/issues/226)
+* **request-headers:** add the Request headers section to the popup ([50d52a1](https://github.com/Aventinis/Scraping-Factory/commit/50d52a13ad355a4d57dd6e71aa66ca0cb38d40e9)), closes [#226](https://github.com/Aventinis/Scraping-Factory/issues/226)
+
 ## [1.17.8](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.7...v1.17.8) (2026-10-16)
 
 
