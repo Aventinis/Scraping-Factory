@@ -214,6 +214,18 @@ describe('Request headers settings in the real popup', () => {
     expect(testInput.value).toBe('super-secret');
   });
 
+  // Real regression found by the real-browser check: committing the name as
+  // focus moves on (name → Tab → value) re-rendered the list and replaced the
+  // value input the user had just moved into.
+  test('committing a name keeps the neighbouring inputs in the DOM', () => {
+    commit(document.getElementById('toggle-request-headers'), { checked: true });
+    const valueInput = rows()[0].querySelector('.request-header-value');
+
+    commit(rows()[0].querySelector('.request-header-name'), { value: 'Accept-Language' });
+
+    expect(rows()[0].querySelector('.request-header-value')).toBe(valueInput);
+  });
+
   test('"+ Header" appends a row and "Remove" deletes one', () => {
     commit(document.getElementById('toggle-request-headers'), { checked: true });
     document.getElementById('btn-add-request-header').click();

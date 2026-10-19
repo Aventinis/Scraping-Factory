@@ -903,3 +903,25 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
 .api-cursor-config input[type="text"], .api-cursor-config input[type="number"], .api-cursor-config select { font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); min-width: 0; }
 .api-cursor-target-row { display: flex; gap: 6px; }
 .api-cursor-target-row input { flex: 1; }
+
+/* Issue #226: one custom request header per row — name, fixed-value/env-var
+   switch and value share a wrapping line; the one-time test value (env-var
+   rows only) and "Remove" follow on narrow panels instead of overflowing. */
+.request-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.request-header-row input,
+.request-header-row select {
+  margin: 0;
+  min-width: 0;
+  width: auto;
+}
+.request-header-name,
+.request-header-value { flex: 1 1 110px; }
+.request-header-kind { flex: 0 1 auto; }
+.request-header-test-value { flex: 1 1 100%; }
+.request-header-row .btn-remove-request-header { margin-left: auto; }

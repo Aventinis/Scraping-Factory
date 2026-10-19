@@ -56,17 +56,48 @@ const SFRequestHeadersUI = (function () {
     if (toggle) toggle.checked = headers.enabled;
     document.getElementById('request-headers-config')?.classList.toggle('hidden', !headers.enabled);
 
-    // Rebuilt only when what it shows actually changed: typing in a test-value
-    // box goes through patchState → a full render pass, and tearing the row
-    // down on every keystroke would drop the cursor out of the input.
+    // Rebuilt only when the *structure* changes (rows added/removed, a row's
+    // kind switched); otherwise the existing inputs are updated in place, and
+    // never the focused one. Committing one input (a `change` fires as the
+    // focus moves on, e.g. name → Tab → value) goes through a full render
+    // pass, and tearing the row down then would destroy the very input the
+    // user just moved into — and so would a test-value keystroke.
     const list = document.getElementById('request-headers-list');
     if (!list) return;
     const testValues = state.requestHeaderTestValues || {};
-    const signature = JSON.stringify(headers.rows);
-    if (list.dataset.signature !== signature) {
-      list.dataset.signature = signature;
+    const structure = headers.rows.map((row) => row.kind).join(',');
+    if (list.dataset.structure !== structure || list.children.length !== headers.rows.length) {
+      list.dataset.structure = structure;
       list.innerHTML = headers.rows.map((row, i) => rowHtml(row, i, testValues)).join('');
+      return;
     }
+    headers.rows.forEach((row, i) => syncRow(list.children[i], row, testValues));
+  }
+
+  function setIfIdle(input, value) {
+    if (input && document.activeElement !== input && input.value !== value) input.value = value;
+  }
+
+  // The test-value box depends on the variable name (it is keyed by it), so it
+  // appears/disappears here when that name goes from empty to set and back —
+  // as a plain element insert/remove, not a row rebuild.
+  function syncRow(rowEl, row, testValues) {
+    setIfIdle(rowEl.querySelector('.request-header-name'), row.name);
+    setIfIdle(rowEl.querySelector('.request-header-value'), row.value);
+    const needsTestInput = row.kind === 'env' && Boolean(row.value.trim());
+    let testInput = rowEl.querySelector('.request-header-test-value');
+    if (needsTestInput && !testInput) {
+      testInput = document.createElement('input');
+      testInput.type = 'password';
+      testInput.className = 'request-header-test-value';
+      testInput.placeholder = t('idle.requestHeaderTestValuePlaceholder');
+      testInput.autocomplete = 'off';
+      rowEl.insertBefore(testInput, rowEl.querySelector('.btn-remove-request-header'));
+    } else if (!needsTestInput && testInput) {
+      testInput.remove();
+      testInput = null;
+    }
+    if (testInput) setIfIdle(testInput, testValues[row.value.trim()] || '');
   }
 
   function wireRequestHeadersEvents(bridge) {
