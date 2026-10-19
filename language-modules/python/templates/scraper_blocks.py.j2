@@ -16,13 +16,13 @@ import requests
 import xml.etree.ElementTree as ET
 {{~ end ~}}
 from bs4 import BeautifulSoup
-{{~ if change_detection_any || proxy.enabled ~}}
+{{~ if change_detection_any || proxy.enabled || request_headers.has_env ~}}
 import os
 {{~ end ~}}
 {{~ if proxy.enabled ~}}
 import itertools
 {{~ end ~}}
-{{~ if proxy.enabled || hardening_any ~}}
+{{~ if proxy.enabled || hardening_any || request_headers.has_env ~}}
 import sys
 {{~ end ~}}
 {{~ if hardening_any ~}}
@@ -44,10 +44,7 @@ import urllib.request
 # URLs, pagination, proxy) instead of each fetching the page separately.
 URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 
-# Many sites (Wikipedia among them) reject the bare "python-requests/x.y"
-# default User-Agent with 403 Forbidden — an honest, identifying UA (not a
-# spoofed browser) is enough to pass that check on most sites.
-HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"}
+#@include request_headers_static
 
 BLOCKS = {{ blocks_literal }}
 
@@ -72,8 +69,6 @@ PAGINATION_URL_TEMPLATE = {{ pagination.url_template_literal }}
 {{~ end ~}}
 
 {{~ if proxy.enabled ~}}
-EXIT_MISSING_ENV_VAR = 78
-
 #@include proxy_pool
 
 

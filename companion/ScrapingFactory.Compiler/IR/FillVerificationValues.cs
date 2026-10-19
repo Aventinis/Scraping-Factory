@@ -10,8 +10,12 @@ public static class FillVerificationValues
     // FillAction login flow, so the env vars its own credential body
     // fields/headers declare are just as legitimate a target for a one-time
     // test value — see BootstrapEnvironmentVariableNames.
+    // Issue #226: the env vars of DOM-mode request headers (ScrapingConfig.
+    // Headers) are legitimate targets too — a "protected" page's API key or
+    // cookie can then be verified without being set in the OS environment.
     public static Dictionary<string, string> Filter(
-        List<BrowserAction>? browserActions, Dictionary<string, string>? verificationValues, ApiConfig? apiConfig = null)
+        List<BrowserAction>? browserActions, Dictionary<string, string>? verificationValues, ApiConfig? apiConfig = null,
+        List<ApiHeader>? requestHeaders = null)
     {
         if (verificationValues is null || verificationValues.Count == 0)
             return [];
@@ -20,6 +24,7 @@ public static class FillVerificationValues
             .OfType<FillAction>()
             .Select(a => a.EnvironmentVariableName)
             .Concat(BootstrapEnvironmentVariableNames(apiConfig))
+            .Concat((requestHeaders ?? []).Select(header => header.EnvironmentVariableName).Where(name => !string.IsNullOrEmpty(name)).Select(name => name!))
             .ToHashSet();
 
         return verificationValues

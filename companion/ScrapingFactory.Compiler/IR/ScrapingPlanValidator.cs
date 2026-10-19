@@ -82,6 +82,15 @@ public static class ScrapingPlanValidator
             }
         }
 
+        // Issue #226: custom request headers (DOM shapes only — an Api plan
+        // never carries them, see ScrapingPlanBuilder).
+        if (plan.Headers is { Count: > 0 } requestHeaders)
+        {
+            var headersError = ValidateRequestHeaders(requestHeaders);
+            if (headersError is not null)
+                return Invalid(headersError);
+        }
+
         // Issue #129: mode-independent, same placement as ChangeDetection/
         // Proxy above.
         if (plan.Hardening is { Count: > 0 } hardening)
@@ -1252,6 +1261,45 @@ public static class ScrapingPlanValidator
             if (actionError is not null)
                 return actionError;
         }
+
+        return null;
+    }
+
+    // RFC 9110 token characters — what an HTTP header field name may consist of.
+    private static readonly Regex HeaderNamePattern = new("^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+$");
+
+    // Issue #226: the DOM-mode counterpart of ValidateApiHeaders. Reuses the
+    // ApiHeader shape, but there is no bootstrap value to splice in, so a
+    // Template is rejected; a name must be a valid header token and a literal
+    // value must not contain a line break (header injection), since both end
+    // up verbatim in the request. Duplicates are compared case-insensitively
+    // — header names are, and the runtime builds a dict keyed by name.
+    private static string? ValidateRequestHeaders(List<ApiHeader> headers)
+    {
+        foreach (var header in headers)
+        {
+            if (string.IsNullOrWhiteSpace(header.Name))
+                return "Name of a request header must not be empty.";
+            if (!HeaderNamePattern.IsMatch(header.Name))
+                return $"Invalid request header name '{header.Name}' — use only letters, digits and the characters !#$%&'*+-.^_`|~.";
+
+            if (!string.IsNullOrWhiteSpace(header.Template))
+                return $"Request header '{header.Name}' must not use a template — templates only exist for an API-mode auth bootstrap.";
+
+            var hasValue = !string.IsNullOrWhiteSpace(header.Value);
+            var hasEnvironmentVariable = !string.IsNullOrWhiteSpace(header.EnvironmentVariableName);
+            if (hasValue == hasEnvironmentVariable)
+                return $"Request header '{header.Name}' needs exactly one of Value/EnvironmentVariableName.";
+
+            if (hasValue && header.Value!.IndexOfAny(['\r', '\n']) >= 0)
+                return $"Value of request header '{header.Name}' must not contain a line break.";
+            if (hasEnvironmentVariable && !EnvironmentVariableNamePattern.IsMatch(header.EnvironmentVariableName!))
+                return $"Invalid environment variable name '{header.EnvironmentVariableName}' in request header '{header.Name}'.";
+        }
+
+        var duplicates = headers.GroupBy(header => header.Name.ToLowerInvariant()).Where(group => group.Count() > 1).Select(group => group.Key).ToList();
+        if (duplicates.Count > 0)
+            return $"Duplicate request header names: {string.Join(", ", duplicates)}.";
 
         return null;
     }

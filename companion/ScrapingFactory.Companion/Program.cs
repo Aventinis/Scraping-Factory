@@ -426,6 +426,12 @@ static string? ValidateModeExclusivity(ScrapingConfig config)
     if (hasApi && config.Preflight == true)
         return "Preflight and Api are mutually exclusive.";
 
+    // Issue #226: API mode has its own header list (ApiConfig.Headers, with
+    // the bootstrap-template variant) — the DOM-mode Headers would silently
+    // do nothing there.
+    if (hasApi && config.Headers is { Count: > 0 })
+        return "Headers and Api are mutually exclusive — set ApiConfig.Headers instead.";
+
     return null;
 }
 
@@ -567,6 +573,8 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
             return Results.BadRequest(new { error = "DiscoveredUrls is not supported on a Combined request — set it on each component's own config instead." });
         if (config.Preflight == true)
             return Results.BadRequest(new { error = "Preflight is not supported on a Combined request — set it on each component's own config instead." });
+        if (config.Headers is { Count: > 0 })
+            return Results.BadRequest(new { error = "Headers is not supported on a Combined request — set it on each component's own config instead." });
         if (config.BrowserActions is { Count: > 0 })
             return Results.BadRequest(new { error = "BrowserActions is not supported on a Combined request — set it on each component's own config instead." });
         if (config.ChangeDetection is not null)
@@ -631,7 +639,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
             // combined script itself); each inner per-component subprocess
             // it spawns in turn inherits that one process's environment
             // automatically, with no extra plumbing needed.
-            foreach (var (name, value) in FillVerificationValues.Filter(component.Config.BrowserActions, component.VerificationValues))
+            foreach (var (name, value) in FillVerificationValues.Filter(component.Config.BrowserActions, component.VerificationValues, requestHeaders: component.Config.Headers))
                 mergedVerificationValues[name] = value;
         }
 
@@ -757,7 +765,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
             .Select(b => new BlockOutputSpec(b.Name, b.OutputFormat, b.OutputFileBaseName))
             .ToList();
         var blockExtraTimeoutMs = EstimateExtraVerificationTimeoutMs(blockPlan);
-        var blockVerificationEnv = FillVerificationValues.Filter(config.BrowserActions, config.VerificationValues);
+        var blockVerificationEnv = FillVerificationValues.Filter(config.BrowserActions, config.VerificationValues, requestHeaders: config.Headers);
 
         ScriptVerificationResult blockVerification;
         var blockSkipReason = CheckVerificationTimeoutCap(blockExtraTimeoutMs);
@@ -832,7 +840,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     // only to this trial subprocess — never persisted, never reaches the
     // generator/generated script (see IR/FillVerificationValues.cs). Also
     // covers Api mode's bootstrap credentials (Issue #220).
-    var verificationEnv = FillVerificationValues.Filter(config.BrowserActions, config.VerificationValues, config.Api);
+    var verificationEnv = FillVerificationValues.Filter(config.BrowserActions, config.VerificationValues, config.Api, config.Headers);
 
     ScriptVerificationResult verification;
     var skipReason = CheckVerificationTimeoutCap(extraTimeoutMs);

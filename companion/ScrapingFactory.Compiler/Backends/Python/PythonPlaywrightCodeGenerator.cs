@@ -85,13 +85,15 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         // vars at runtime (SMTP/webhook credentials, proxy URL list), same
         // reason FillStep already needs `import os`. Issue #175: persistent
         // session checks os.path.exists(SESSION_STATE_PATH).
-        var needsOsImport = plan.Steps.OfType<FillStep>().Any() || plan.ChangeDetection is not null || plan.Proxy is not null || plan.PersistentSession;
+        var needsOsImport = plan.Steps.OfType<FillStep>().Any() || plan.ChangeDetection is not null || plan.Proxy is not null || plan.PersistentSession
+            || PythonRequestHeadersLiteral.UsesEnvironmentVariables(plan.Headers);
         // A FillStep's credential or Proxy's URL list must come from an
         // environment variable that's actually set at runtime — both share
         // the `_require_env`/`EXIT_MISSING_ENV_VAR` helper (see the shell
         // templates) instead of a raw, unhandled KeyError. Change detection
         // isn't included: its own env-var reads are unaffected by this.
-        var needsExitHelper = plan.Steps.OfType<FillStep>().Any() || plan.Proxy is not null;
+        var needsExitHelper = plan.Steps.OfType<FillStep>().Any() || plan.Proxy is not null
+            || PythonRequestHeadersLiteral.UsesEnvironmentVariables(plan.Headers);
         // change_detection/proxy/hardening/pagination/external_config are no
         // longer computed here — PythonScrapingContextBuilder's own methods
         // below each derive them straight from `plan` internally, exactly

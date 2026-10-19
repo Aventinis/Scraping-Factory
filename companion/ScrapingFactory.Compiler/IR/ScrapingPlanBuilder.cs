@@ -62,7 +62,7 @@ public static class ScrapingPlanBuilder
             {
                 Steps = steps, OutputFormat = groupsOutputFormat, Engine = config.Engine,
                 ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
-                ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, RequestDelay = config.RequestDelay, Retry = config.Retry, Deduplication = config.Deduplication, Hardening = config.Hardening,
+                ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, RequestDelay = config.RequestDelay, Retry = config.Retry, Headers = config.Headers, Deduplication = config.Deduplication, Hardening = config.Hardening,
                 Pagination = config.Pagination, DiscoveredUrls = config.DiscoveredUrls,
                 Preflight = config.Preflight ?? false,
                 PersistentSession = config.PersistentSession ?? false,
@@ -116,7 +116,7 @@ public static class ScrapingPlanBuilder
             {
                 Steps = steps, Engine = config.Engine,
                 ScriptFileName = scriptFileName,
-                Proxy = config.Proxy, RequestDelay = config.RequestDelay, Retry = config.Retry, Pagination = config.Pagination,
+                Proxy = config.Proxy, RequestDelay = config.RequestDelay, Retry = config.Retry, Headers = config.Headers, Pagination = config.Pagination,
                 PersistentSession = config.PersistentSession ?? false,
             };
         }
@@ -171,7 +171,7 @@ public static class ScrapingPlanBuilder
         {
             Steps = steps, OutputFormat = config.OutputFormat, Engine = config.Engine,
             ScriptFileName = scriptFileName, OutputFileBaseName = outputFileBaseName,
-            ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, RequestDelay = config.RequestDelay, Retry = config.Retry, Deduplication = config.Deduplication, Hardening = config.Hardening,
+            ChangeDetection = config.ChangeDetection, Proxy = config.Proxy, RequestDelay = config.RequestDelay, Retry = config.Retry, Headers = config.Headers, Deduplication = config.Deduplication, Hardening = config.Hardening,
             Pagination = config.Pagination, DiscoveredUrls = config.DiscoveredUrls,
             Preflight = config.Preflight ?? false,
             PersistentSession = config.PersistentSession ?? false,
