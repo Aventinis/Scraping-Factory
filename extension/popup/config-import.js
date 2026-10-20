@@ -95,7 +95,11 @@ const SFConfigImport = (function () {
           maxIterations: a.maxIterations ?? 10, waitAfterMs: a.waitAfterMs ?? 1000, framePath,
         };
       }
-      return { kind: 'click', selector: a.selector || '', framePath };
+      return {
+        kind: 'click', selector: a.selector || '', framePath,
+        target: String(a.target || 'first').toLowerCase() === 'all' ? 'all' : String(a.target || '').toLowerCase() === 'last' ? 'last' : 'first',
+        waitAfterMs: a.waitAfterMs ?? 250,
+      };
     });
   }
 

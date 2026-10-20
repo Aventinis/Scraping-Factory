@@ -204,7 +204,9 @@ internal static class PythonApiConfigLiteral
     {
         WaitForAction a => $$"""{"kind": "waitFor", "selector": {{PythonLiteral.Str(a.Selector)}}, "timeoutMs": {{a.TimeoutMs}}{{FramePathSuffix(a.FramePath)}}}""",
         FillAction a => $$"""{"kind": "fill", "selector": {{PythonLiteral.Str(a.Selector)}}, "environmentVariableName": {{PythonLiteral.Str(a.EnvironmentVariableName)}}{{FramePathSuffix(a.FramePath)}}}""",
-        ClickAction a => $$"""{"kind": "click", "selector": {{PythonLiteral.Str(a.Selector)}}{{FramePathSuffix(a.FramePath)}}}""",
+        // Issue #267: "target" is always emitted ("first"/"last"/"all"), plus
+        // "waitAfterMs" for "all" only (the one target that uses it).
+        ClickAction a => $$"""{"kind": "click", "selector": {{PythonLiteral.Str(a.Selector)}}, "target": "{{a.Target.ToString().ToLowerInvariant()}}"{{(a.Target == ClickTarget.All ? $", \"waitAfterMs\": {a.WaitAfterMs}" : "")}}{{FramePathSuffix(a.FramePath)}}}""",
         // Issue #289: "scrollStepPx" omitted entirely when unset — None is
         // the runtime's own "jump straight to the bottom" default (see
         // _run_scroll_action in scraper_api.py.j2), same "absent key = no

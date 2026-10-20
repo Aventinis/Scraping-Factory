@@ -221,7 +221,7 @@ public class PythonPlaywrightCodeGeneratorTests
     public void Generate_WithClickStep_ContainsPageClick()
     {
         var script = _generator.Generate(LoginPlan());
-        Assert.Contains("_resolve_locator(page, \"#submit\", None).click()", script);
+        Assert.Contains("_resolve_locator(page, \"#submit\", None).first.click()", script);
     }
 
     // ── ScrollStep ───────────────────────────────────────────────────────
@@ -459,7 +459,7 @@ public class PythonPlaywrightCodeGeneratorTests
     {
         var script = _generator.Generate(GroupPlanWithLogin());
         Assert.Contains("_resolve_locator(page, \"#user\", None).fill(_require_env(\"SF_USERNAME\"))", script);
-        Assert.Contains("_resolve_locator(page, \"#submit\", None).click()", script);
+        Assert.Contains("_resolve_locator(page, \"#submit\", None).first.click()", script);
 
         // Textual order inside scrape() is execution order: the rendered
         // actions (fill/click) sit before the "for node in GROUPS" loop that
@@ -597,7 +597,7 @@ public class PythonPlaywrightCodeGeneratorTests
     public void Generate_FramedClickStep_ChainsResolveLocatorWithFramePath()
     {
         var script = _generator.Generate(FramedActionStepsPlan());
-        Assert.Contains("_resolve_locator(page, \"#submit\", [\"iframe#sso\"]).click()", script);
+        Assert.Contains("_resolve_locator(page, \"#submit\", [\"iframe#sso\"]).first.click()", script);
     }
 
     [Fact]

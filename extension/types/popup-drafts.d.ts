@@ -78,6 +78,8 @@ declare namespace SFDraft {
     waitAfterMs?: number;
     /** Issue #289 — null/unset keeps the default "jump straight to the current bottom" behavior. */
     scrollStepPx?: number | null;
+    /** Issue #267 — which match a click action clicks; waitAfterMs (above) is the pause after each click for 'all'. */
+    target?: 'first' | 'last' | 'all';
     framePath?: string[] | null;
   }
 

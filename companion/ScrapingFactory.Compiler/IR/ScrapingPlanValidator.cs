@@ -175,6 +175,8 @@ public static class ScrapingPlanValidator
             var clickFrameError = ValidateFramePath(clickStep.FramePath, "ClickStep", plan.Engine);
             if (clickFrameError is not null)
                 return Invalid(clickFrameError);
+            if (clickStep.WaitAfterMs < 0)
+                return Invalid("WaitAfterMs of a ClickStep must not be negative.");
         }
 
         foreach (var scrollStep in plan.Steps.OfType<ScrollStep>())
@@ -1269,7 +1271,9 @@ public static class ScrapingPlanValidator
                         : ValidateFramePath(fill.FramePath, "FillAction", ScrapingEngine.Browser),
                 ClickAction click => string.IsNullOrWhiteSpace(click.Selector)
                     ? $"Selector of a ClickAction in browser discovery for parameter '{parameterName}' must not be empty."
-                    : ValidateFramePath(click.FramePath, "ClickAction", ScrapingEngine.Browser),
+                    : click.WaitAfterMs < 0
+                        ? $"WaitAfterMs of a ClickAction in browser discovery for parameter '{parameterName}' must not be negative."
+                        : ValidateFramePath(click.FramePath, "ClickAction", ScrapingEngine.Browser),
                 ScrollAction scroll => (scroll.ContainerSelector is not null && string.IsNullOrWhiteSpace(scroll.ContainerSelector))
                     ? $"ContainerSelector of a ScrollAction in browser discovery for parameter '{parameterName}' must not be empty when set."
                     : (scroll.LoadMoreButtonSelector is not null && string.IsNullOrWhiteSpace(scroll.LoadMoreButtonSelector))

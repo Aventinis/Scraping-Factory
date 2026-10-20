@@ -611,6 +611,8 @@
     "loadMoreButtonSelectorLabel": "„Mehr laden“-Button (optional)",
     "maxIterationsLabel": "Max. Durchläufe",
     "waitAfterMsLabel": "Wartezeit (ms)",
+    "clickTargetLabel": "Welcher Treffer wird geklickt",
+    "clickTarget": { "first": "Erster Treffer", "last": "Letzter Treffer", "all": "Alle Treffer, der Reihe nach" },
     "scrollStepPxLabel": "Scroll-Schrittweite (px)",
     "scrollStepPxPlaceholder": "leer = ans Ende springen",
     "persistentSessionToggle": "Sitzung zwischen Läufen wiederverwenden",

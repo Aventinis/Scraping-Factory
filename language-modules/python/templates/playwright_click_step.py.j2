@@ -1,1 +1,9 @@
-        _resolve_locator(page, "{{ step.selector | string.escape }}", {{ if step.frame_path }}[{{ for sel in step.frame_path }}"{{ sel | string.escape }}"{{ if !for.last }}, {{ end }}{{ end }}]{{ else }}None{{ end }}).click()
+{{~ if step.target == "all" ~}}
+        _click_targets = _resolve_locator(page, "{{ step.selector | string.escape }}", {{ if step.frame_path }}[{{ for sel in step.frame_path }}"{{ sel | string.escape }}"{{ if !for.last }}, {{ end }}{{ end }}]{{ else }}None{{ end }})
+        _click_targets.first.wait_for()
+        for _click_index in range(_click_targets.count()):
+            _click_targets.nth(_click_index).click()
+            page.wait_for_timeout({{ step.wait_after_ms }})
+{{~ else ~}}
+        _resolve_locator(page, "{{ step.selector | string.escape }}", {{ if step.frame_path }}[{{ for sel in step.frame_path }}"{{ sel | string.escape }}"{{ if !for.last }}, {{ end }}{{ end }}]{{ else }}None{{ end }}).{{ step.target }}.click()
+{{~ end ~}}

@@ -40,6 +40,12 @@ public sealed class ClickAction : BrowserAction
 {
     public required string Selector { get; init; }
     public List<string>? FramePath { get; init; }
+
+    // Issue #267: which of several matches to click (see ClickTarget).
+    public ClickTarget Target { get; init; } = ClickTarget.First;
+
+    // Only used for ClickTarget.All: pause after each click before the next one.
+    public int WaitAfterMs { get; init; } = ClickStep.DefaultWaitAfterMs;
 }
 
 public sealed class ScrollAction : BrowserAction

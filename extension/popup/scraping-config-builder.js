@@ -856,7 +856,8 @@ function addBrowserAction(actions, kind) {
   const defaults = {
     waitFor: { kind: 'waitFor', selector: '', timeoutMs: 5000 },
     fill:    { kind: 'fill', selector: '', environmentVariableName: '' },
-    click:   { kind: 'click', selector: '' },
+    // Issue #267: first match by default (the companion's own default too).
+    click:   { kind: 'click', selector: '', target: 'first', waitAfterMs: 250 },
     // Issue #289: scrollStepPx stays null (keeping today's "jump straight
     // to the bottom" default) until the user explicitly types a value.
     scroll:  { kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000, scrollStepPx: null },
@@ -918,7 +919,15 @@ function serializeBrowserActions(actions) {
         ...framePath,
       };
     }
-    return { kind: 'click', selector, ...framePath };
+    // Issue #267: target/waitAfterMs only when they differ from the
+    // companion's defaults (First / only used for All).
+    const target = a.target === 'last' ? 'Last' : a.target === 'all' ? 'All' : null;
+    return {
+      kind: 'click', selector,
+      ...(target ? { target } : {}),
+      ...(target === 'All' ? { waitAfterMs: a.waitAfterMs ?? 250 } : {}),
+      ...framePath,
+    };
   });
 }
 
