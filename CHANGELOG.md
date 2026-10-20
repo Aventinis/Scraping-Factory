@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.18.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.18.2...v1.18.3) (2026-10-20)
+
+
+### Features
+
+* MySQL storage backend for the companion ([#277](https://github.com/Aventinis/Scraping-Factory/issues/277)) ([5f4cb8a](https://github.com/Aventinis/Scraping-Factory/commit/5f4cb8aa3e2124fbff4c6a3a11231be21ff1f2ac))
+* **storage:** MySQL backend for saved configurations, outputs, blueprints and presets ([d198998](https://github.com/Aventinis/Scraping-Factory/commit/d1989982025fb963e141023e269456e8711df6e7))
+
 ## [1.18.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.18.1...v1.18.2) (2026-10-20)
 
 
