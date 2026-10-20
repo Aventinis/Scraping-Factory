@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.17.11](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.10...v1.17.11) (2026-10-20)
+
+
+### Features
+
+* honor robots.txt Crawl-delay/Request-rate at script runtime ([#228](https://github.com/Aventinis/Scraping-Factory/issues/228)) ([ff09c01](https://github.com/Aventinis/Scraping-Factory/commit/ff09c0112165b421302bc02ccb867e43131f5e46))
+* **robots-delay:** extension setting to respect robots.txt Crawl-delay ([d407004](https://github.com/Aventinis/Scraping-Factory/commit/d407004fd3134b4cf66b8561f6056f91c12432e6))
+* **robots-delay:** honor robots.txt Crawl-delay/Request-rate in generated scripts ([c4b1965](https://github.com/Aventinis/Scraping-Factory/commit/c4b19652bbe5990e686a172ae24a74fa745dd395))
+
 ## [1.17.10](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.9...v1.17.10) (2026-10-20)
 
 
