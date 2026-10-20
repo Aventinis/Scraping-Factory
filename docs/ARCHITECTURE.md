@@ -1228,6 +1228,26 @@ fragments, and JS (`content-script.js`, `popup/selector-text-filter.js`).
   `content-script.test.js`, fixture `test-pages/text-selector` +
   `e2e/examples/issue-227-text-selector-check.js`
 
+### 2.21ab Click target: first/last/all matches (Issue #267)
+
+A Click browser action whose selector matches several elements no longer
+aborts on Playwright's strict-mode error: it clicks the first match (default),
+the last, or every match in order (with a pause after each click).
+
+- IR: `ClickAction`/`ClickStep` `Target` (`ClickTarget`) + `WaitAfterMs`,
+  validation in `ScrapingPlanValidator` (plan steps and browser-discovery
+  actions), `ScrapingPlanBuilder`
+- `Backends/Python/PythonApiConfigLiteral.RenderBrowserAction` (`target`,
+  `waitAfterMs`), `PythonPlaywrightCodeGenerator`
+- Templates: `playwright_click_step.py.j2`, `fragments/api_common.py.j2`
+  (`_run_browser_action`)
+- Extension: `scraping-config-builder.js` (`addBrowserAction`,
+  `serializeBrowserActions`), `config-import.js`, `browser-actions-ui.js`,
+  `api-config-ui.js`
+- Tests: `ClickTargetTests.cs`, `extension/popup/click-target.test.js`,
+  fixture `test-pages/click-targets` +
+  `e2e/examples/issue-267-click-target-check.js`
+
 ### 2.22 Persistent session/cookie handling (Issue #175)
 
 Browser-engine only (rejected server-side for Static/Api, same as
