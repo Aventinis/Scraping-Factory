@@ -8,6 +8,7 @@
 # Run it from the unpacked bundle:
 #   powershell -ExecutionPolicy Bypass -File .\install.ps1 [-Autostart] [-BrowserEngine] [-NoExcel] [-NoStart] [-Port N]
 #                                                          [-MySql CONNECTION_STRING | -Sqlite]
+#                                                          [-EnableAuth | -DisableAuth]
 #   -BrowserEngine  also install Playwright and download Chromium (~150 MB)
 #   -NoExcel        skip openpyxl (only needed for the Excel output format)
 #   -Autostart      start the companion automatically at login
@@ -20,6 +21,10 @@
 #                   (the environment variable SF_MYSQL_CONNECTION_STRING works
 #                   too and keeps the password out of the process list)
 #   -Sqlite         switch an existing installation back to local SQLite
+#   -EnableAuth     require a personal access key for every request (for a
+#                   companion several people share); create the users afterwards
+#                   with:  <installed companion> user add <name>
+#   -DisableAuth    switch authentication off again (the default)
 # Safe to run again: it updates an existing installation in place.
 param(
     [switch]$BrowserEngine,
@@ -28,7 +33,9 @@ param(
     [switch]$NoStart,
     [int]$Port = 5000,
     [string]$MySql = $env:SF_MYSQL_CONNECTION_STRING,
-    [switch]$Sqlite
+    [switch]$Sqlite,
+    [switch]$EnableAuth,
+    [switch]$DisableAuth
 )
 $ErrorActionPreference = 'Stop'
 
@@ -103,6 +110,7 @@ $WriteSettings = @'
 import json, os, sys
 path, python, port = sys.argv[1], sys.argv[2], int(sys.argv[3])
 mysql, back_to_sqlite = os.environ.get("SF_MYSQL", ""), os.environ.get("SF_SQLITE") == "1"
+auth = os.environ.get("SF_AUTH", "")
 data = {}
 if os.path.exists(path):
     try:
@@ -121,13 +129,19 @@ if mysql:
     data["Companion"]["Storage"] = {"Provider": "MySql", "MySql": {"ConnectionString": mysql}}
 elif back_to_sqlite:
     data["Companion"].pop("Storage", None)
+# Issue #278: per-user authentication - likewise only touched when asked for.
+if auth == "on":
+    data["Companion"]["Auth"] = {"Enabled": True}
+elif auth == "off":
+    data["Companion"].pop("Auth", None)
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2)
 '@
 $env:SF_MYSQL = if ($MySql) { $MySql } else { '' }
 $env:SF_SQLITE = if ($Sqlite) { '1' } else { '0' }
+$env:SF_AUTH = if ($EnableAuth) { 'on' } elseif ($DisableAuth) { 'off' } else { '' }
 $WriteSettings | & $VenvPython - $Settings $VenvPython $Port
-Remove-Item Env:\SF_MYSQL, Env:\SF_SQLITE -ErrorAction SilentlyContinue
+Remove-Item Env:\SF_MYSQL, Env:\SF_SQLITE, Env:\SF_AUTH -ErrorAction SilentlyContinue
 
 # ── Autostart / start ─────────────────────────────────────────────────────
 if ($Autostart) {
@@ -147,6 +161,13 @@ if (-not $NoStart) {
     }
     if ($up) { Write-Host "The companion is running on http://localhost:$Port" }
     else { Write-Warning "The companion did not answer on port $Port within 30 s." }
+}
+
+if ($EnableAuth) {
+    Write-Host ""
+    Write-Host "Authentication is ON. Create a user (prints their access key once) with:"
+    Write-Host "  $Bin user add <name>"
+    Write-Host "and give existing data to someone with:  $Bin user adopt <name>"
 }
 
 Write-Host @"

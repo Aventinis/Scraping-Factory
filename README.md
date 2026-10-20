@@ -122,7 +122,21 @@ environment variables (`Companion__Storage__Provider=MySql`,
 or via the installer (`./install.sh --mysql "<connection string>"`). The
 database must already exist; the tables are created on first use. Existing
 local data is not migrated, and all users of one companion share the same data
-(separate per-user data would need authentication, which is not implemented).
+(unless you switch on per-user authentication, see below).
+
+**Sharing one companion between several people.** Set
+`Companion:Auth:Enabled` to `true` (or install with `--enable-auth`) and create a
+user for everyone on the machine that runs the companion:
+`ScrapingFactory.Companion user add alice` prints that user's access key once.
+They enter it in the extension under **Settings → Access key**; from then on
+every request carries it, and each user only ever sees their own saved
+configurations, outputs, Output Blueprints and transform presets. Other
+commands: `user list`, `user rotate <name>`, `user remove <name>`, and
+`user adopt <name>` (hands everything saved before authentication was switched
+on to that user). Authentication is off by default — a companion on your own
+machine needs no login. Note that the companion speaks plain HTTP: when it is
+reachable from other machines, put it behind a TLS-terminating reverse proxy so
+the keys don't travel in clear text.
 
 ### 2. Load the browser extension
 

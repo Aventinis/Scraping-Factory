@@ -50,6 +50,23 @@
   <p class="preview-summary" data-i18n="settings.scriptNameHostnameHint" id="script-name-hostname-hint"></p>
 </div>
 
+<!-- Issue #278: access key for a shared companion with per-user
+     authentication — a device preference (chrome.storage.local via
+     shared/companion-config.js), sent as a Bearer header with every request. -->
+<div id="settings-access-key-section">
+  <p class="row-label" data-i18n="settings.accessKeyTitle"></p>
+  <div class="output-settings-row">
+    <label for="input-access-key" data-i18n="settings.accessKeyLabel"></label>
+    <input type="password" id="input-access-key" data-i18n-placeholder="settings.accessKeyPlaceholder" autocomplete="off" />
+  </div>
+  <div class="output-settings-row">
+    <button id="btn-access-key-save" class="btn-secondary btn-tiny" type="button" data-i18n="settings.accessKeySave"></button>
+    <button id="btn-access-key-clear" class="btn-secondary btn-tiny" type="button" data-i18n="settings.accessKeyClear"></button>
+  </div>
+  <p id="access-key-status" class="preview-summary hidden"></p>
+  <p class="preview-summary" data-i18n="settings.accessKeyHint"></p>
+</div>
+
 <!-- Output Blueprint management — moved here from modal-manage-blueprints
      (the per-scrape mapping *picker* stays in the idle screen's own
      Settings section; only create/edit/delete moves, since a blueprint is

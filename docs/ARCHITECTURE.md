@@ -1322,6 +1322,27 @@ answers `503`. The installer can write the settings (`--mysql`).
 - CI: `mysql:8.4` service container + `SF_TEST_MYSQL`
 - Tests: `StorageContractTests.cs` (SQLite + MySQL), `StorageProviderTests.cs`
 
+### 2.21ag Per-user authentication (Issue #278)
+
+Optional (`Companion:Auth:Enabled`, off by default). Users are created on the
+companion's machine (`ScrapingFactory.Companion user add <name>` prints an
+access key once; only its hash is stored). With authentication on, every
+request except `/health` and CORS preflights needs `Authorization: Bearer
+<key>`; the resolved user is the owner every store call is scoped to
+(`ownerId`, 0 = no authentication). The extension keeps the key in
+`chrome.storage.local` (Settings → Access key) and sends it through
+`companionFetch`.
+
+- Companion: `Auth/` (`ApiKeys`, `IUserStore`, `SqliteUserStore`,
+  `MySqlUserStore`, `CurrentUser`, `AuthOptions`, `UserCommands`), middleware,
+  `/health` (`authRequired`) and `/whoami` in `Program.cs`; `ownerId` on the
+  three store interfaces and both implementations (`OwnerId` columns)
+- Extension: `shared/companion-config.js` (access key), `companionFetch` in
+  `popup/companion-client.js`, `global-settings-ui.js` + `screens/settings.html`
+- Installer: `--enable-auth` / `-EnableAuth`
+- Tests: `AuthenticationTests.cs`, `extension/popup/access-key.test.js`,
+  `e2e/examples/issue-278-access-key-check.js`
+
 ### 2.22 Persistent session/cookie handling (Issue #175)
 
 Browser-engine only (rejected server-side for Static/Api, same as

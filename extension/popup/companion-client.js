@@ -13,7 +13,7 @@ const log = createLogger('SF:Popup');
 const { t } =
   typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
 
-const { getCompanionUrl, setCompanionUrlOverride, resetCompanionUrlOverride, normalizeUrl, DEFAULT_COMPANION_URL } =
+const { getCompanionUrl, setCompanionUrlOverride, resetCompanionUrlOverride, normalizeUrl, DEFAULT_COMPANION_URL, loadAccessKey, getAccessKey } =
   typeof require !== 'undefined' ? require('../shared/companion-config') : self.SFCompanionConfig;
 
 const { STATES } =
@@ -44,13 +44,43 @@ function getResolvedCompanionUrl() {
   return companionUrl;
 }
 
+// Issue #278: every request to the companion goes through here so the access
+// key (when one is set — Settings screen) is sent as `Authorization: Bearer
+// <key>`. Without a key the call is exactly the plain `fetch(url[, init])` it
+// always was, so a companion without authentication sees no difference.
+function companionFetch(url, init) {
+  const key = getAccessKey();
+  if (!key) return init === undefined ? fetch(url) : fetch(url, init);
+  return fetch(url, { ...init, headers: { ...init?.headers, Authorization: `Bearer ${key}` } });
+}
+
+// Issue #278: /health tells whether this companion has authentication switched
+// on; if so (and only then) the key is checked right away via /whoami so a
+// missing or wrong key is explained up front instead of as a puzzling failure
+// of the first saved-config request. Anything unexpected here (an older
+// companion, a mock without a body) is silently ignored.
+async function warnAboutAccessKey(healthResponse) {
+  try {
+    const body = await healthResponse.json();
+    if (body?.authRequired !== true) return;
+    const whoami = await companionFetch(`${companionUrl}/whoami`);
+    if (whoami.status === 401) {
+      showToast(t(getAccessKey() ? 'toast.accessKeyRejected' : 'toast.accessKeyRequired'), null, 'warn');
+    }
+  } catch {
+    // not an authentication-aware companion
+  }
+}
+
 async function checkCompanion(bridge) {
   companionUrl = await getCompanionUrl();
+  await loadAccessKey();
   log('HEALTH_CHECK start', companionUrl);
   try {
     const res = await fetch(`${companionUrl}/health`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     log('HEALTH_CHECK OK');
+    await warnAboutAccessKey(res);
 
     const tabs = await new Promise(resolve =>
       chrome.tabs.query({ active: true, currentWindow: true }, resolve)
@@ -155,7 +185,7 @@ function buildVerificationErrorMessage(data) {
 async function resolveCombinedComponents(components) {
   const resolved = [];
   for (const component of components) {
-    const res = await fetch(`${getResolvedCompanionUrl()}/configs/${component.savedConfigId}`);
+    const res = await companionFetch(`${getResolvedCompanionUrl()}/configs/${component.savedConfigId}`);
     if (!res.ok) throw new Error(t('toast.combinedComponentUnresolvable', { name: component.name }));
     const record = await res.json();
     resolved.push({ name: component.name, config: record.config, savedConfigId: component.savedConfigId });
@@ -209,7 +239,7 @@ async function generate(bridge) {
       };
   log('GENERATE request', config);
   try {
-    const res = await fetch(`${companionUrl}/generate`, {
+    const res = await companionFetch(`${companionUrl}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(
@@ -324,7 +354,7 @@ function wireCompanionErrorEvents(bridge) {
   });
 }
 
-  return {getResolvedCompanionUrl, checkCompanion, useCustomCompanionUrl, resetCustomCompanionUrl,
+  return {getResolvedCompanionUrl, companionFetch, checkCompanion, useCustomCompanionUrl, resetCustomCompanionUrl,
     checkRobotsTxt, buildVerificationErrorMessage, generate, resolveCombinedComponents,
     renderCompanionErrorScreen, wireCompanionErrorEvents,};
 })();

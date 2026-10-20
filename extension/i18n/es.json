@@ -450,7 +450,18 @@
     "outputFormatJson": "JSON",
     "outputFormatSqlite": "Base de datos SQLite",
     "outputFormatXlsx": "Excel (.xlsx)",
-    "outputFormatHint": "El archivo que escribe el script generado. SQLite y Excel contienen una tabla / hoja; los resultados anidados (contenedores, datos de API anidados) se aplanan en ella. Excel necesita el paquete de Python «openpyxl» (pip install openpyxl) en el equipo donde se ejecutan el script y el companion. No disponible para el modo Blocks ni Combined; no se puede combinar con la detección de cambios."
+    "outputFormatHint": "El archivo que escribe el script generado. SQLite y Excel contienen una tabla / hoja; los resultados anidados (contenedores, datos de API anidados) se aplanan en ella. Excel necesita el paquete de Python «openpyxl» (pip install openpyxl) en el equipo donde se ejecutan el script y el companion. No disponible para el modo Blocks ni Combined; no se puede combinar con la detección de cambios.",
+    "accessKeyTitle": "Clave de acceso (companion compartido)",
+    "accessKeyLabel": "Clave de acceso",
+    "accessKeyPlaceholder": "sf_…",
+    "accessKeySave": "Guardar y probar",
+    "accessKeyClear": "Quitar",
+    "accessKeyHint": "Solo es necesaria si el companion al que te conectas exige una clave de acceso personal (varias personas comparten un companion). Quien administra el companion la crea para ti. Se guarda en este navegador y se envía con cada solicitud al companion.",
+    "accessKeyOk": "Conectado como {name}.",
+    "accessKeyNotNeeded": "Este companion no usa claves de acceso.",
+    "accessKeyMissing": "Este companion exige una clave de acceso.",
+    "accessKeyRejected": "La clave de acceso no es válida.",
+    "accessKeyUnreachable": "No se pudo alcanzar el companion."
   },
   "modals": {
     "fieldName": {
@@ -588,7 +599,9 @@
     "blueprintSaveFailed": "No se pudo guardar la plantilla de salida: {message}",
     "blueprintImportEmpty": "No se encontraron nombres de campo en la muestra pegada.",
     "blueprintImportParsed": "Se importaron {count} campo(s) de la muestra.",
-    "blueprintImportFileReadFailed": "No se pudo leer el archivo seleccionado: {message}"
+    "blueprintImportFileReadFailed": "No se pudo leer el archivo seleccionado: {message}",
+    "accessKeyRequired": "Este companion exige una clave de acceso — introdúcela en Ajustes.",
+    "accessKeyRejected": "El companion rechazó la clave de acceso — compruébala en Ajustes."
   },
   "frame": {
     "badge": "iframe",

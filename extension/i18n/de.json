@@ -450,7 +450,18 @@
     "outputFormatJson": "JSON",
     "outputFormatSqlite": "SQLite-Datenbank",
     "outputFormatXlsx": "Excel (.xlsx)",
-    "outputFormatHint": "Die Datei, die das generierte Skript schreibt. SQLite und Excel enthalten eine Tabelle bzw. ein Blatt; verschachtelte Ergebnisse (Container, verschachtelte API-Daten) werden darin flachgezogen. Excel braucht das Python-Paket „openpyxl“ (pip install openpyxl) auf dem Rechner, auf dem Skript und Companion laufen. Nicht für Blocks- oder Combined-Modus verfügbar; nicht mit Änderungserkennung kombinierbar."
+    "outputFormatHint": "Die Datei, die das generierte Skript schreibt. SQLite und Excel enthalten eine Tabelle bzw. ein Blatt; verschachtelte Ergebnisse (Container, verschachtelte API-Daten) werden darin flachgezogen. Excel braucht das Python-Paket „openpyxl“ (pip install openpyxl) auf dem Rechner, auf dem Skript und Companion laufen. Nicht für Blocks- oder Combined-Modus verfügbar; nicht mit Änderungserkennung kombinierbar.",
+    "accessKeyTitle": "Zugangsschlüssel (gemeinsamer Companion)",
+    "accessKeyLabel": "Zugangsschlüssel",
+    "accessKeyPlaceholder": "sf_…",
+    "accessKeySave": "Speichern und testen",
+    "accessKeyClear": "Entfernen",
+    "accessKeyHint": "Nur nötig, wenn der Companion, mit dem du dich verbindest, einen persönlichen Zugangsschlüssel verlangt (mehrere Personen teilen sich einen Companion). Wer den Companion betreibt, legt ihn für dich an. Er wird in diesem Browser gespeichert und bei jeder Anfrage an den Companion mitgeschickt.",
+    "accessKeyOk": "Verbunden als {name}.",
+    "accessKeyNotNeeded": "Dieser Companion verwendet keine Zugangsschlüssel.",
+    "accessKeyMissing": "Dieser Companion verlangt einen Zugangsschlüssel.",
+    "accessKeyRejected": "Der Zugangsschlüssel ist nicht gültig.",
+    "accessKeyUnreachable": "Der Companion ist nicht erreichbar."
   },
   "modals": {
     "fieldName": {
@@ -588,7 +599,9 @@
     "blueprintSaveFailed": "Output-Blueprint konnte nicht gespeichert werden: {message}",
     "blueprintImportEmpty": "In der eingefügten Beispieldatei wurden keine Feldnamen gefunden.",
     "blueprintImportParsed": "{count} Feld(er) aus der Beispieldatei importiert.",
-    "blueprintImportFileReadFailed": "Die ausgewählte Datei konnte nicht gelesen werden: {message}"
+    "blueprintImportFileReadFailed": "Die ausgewählte Datei konnte nicht gelesen werden: {message}",
+    "accessKeyRequired": "Dieser Companion verlangt einen Zugangsschlüssel — trage ihn unter Einstellungen ein.",
+    "accessKeyRejected": "Der Companion hat den Zugangsschlüssel abgelehnt — prüfe ihn unter Einstellungen."
   },
   "frame": {
     "badge": "iframe",
