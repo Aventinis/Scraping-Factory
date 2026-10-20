@@ -1,3 +1,7 @@
+using System.Net;
+using System.Text;
+using System.Text.Json;
+using Microsoft.AspNetCore.Mvc.Testing;
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
 using Xunit;
@@ -325,5 +329,51 @@ public class TabularOutputTests
         var result = await new PythonScriptVerifier().VerifyAsync(new PythonCodeGenerator().Generate(plan), OutputFormat.Sqlite);
 
         Assert.False(result.Success);
+    }
+}
+
+// Issue #229: the /generate response for a table format — a JSON envelope
+// whose outputFile content is base64 (flagged via "encoding").
+public class TabularOutputEndpointTests(WebApplicationFactory<Program> factory)
+    : IClassFixture<WebApplicationFactory<Program>>
+{
+    private readonly HttpClient _client = factory.CreateClient();
+
+    private static StringContent Json(string payload) => new(payload, Encoding.UTF8, "application/json");
+
+    [Fact]
+    public async Task Generate_Sqlite_ReturnsTheDatabaseAsBase64()
+    {
+        using var server = new LocalTestServer("<html><body><li class='n'>Kaffee</li></body></html>");
+        var payload = $$"""
+            { "url": "{{server.BaseUrl}}", "outputFormat": "Sqlite", "includeOutputFile": true,
+              "fields": [ { "name": "Name", "selector": "li.n" } ] }
+            """;
+
+        var response = await _client.PostAsync("/generate", Json(payload));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var file = doc.RootElement.GetProperty("outputFile");
+        Assert.Equal("output.sqlite", file.GetProperty("fileName").GetString());
+        Assert.Equal("base64", file.GetProperty("encoding").GetString());
+        var bytes = Convert.FromBase64String(file.GetProperty("content").GetString()!);
+        Assert.StartsWith("SQLite format 3", Encoding.Latin1.GetString(bytes.Take(15).ToArray()));
+    }
+
+    [Fact]
+    public async Task Generate_SqliteWithChangeDetection_IsRejectedWithAReadableMessage()
+    {
+        var payload = """
+            { "url": "https://example.com", "outputFormat": "Sqlite",
+              "fields": [ { "name": "Name", "selector": "li.n" } ],
+              "changeDetection": { "notify": "Webhook", "webhook": { "urlEnvVar": "HOOK" } } }
+            """;
+
+        var response = await _client.PostAsync("/generate", Json(payload));
+
+        Assert.True(response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("change detection", doc.RootElement.GetProperty("error").GetString());
     }
 }

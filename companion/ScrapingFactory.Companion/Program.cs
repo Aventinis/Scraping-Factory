@@ -216,7 +216,10 @@ app.MapPost("/configs/{configId:long}/outputs/{id:long}/replay-hardening",
         if (previous is not null)
         {
             var previousRecord = store.GetOutput(previous.Id)!;
-            previousResultCount = HardeningReplayEvaluator.GetResultCount(previousRecord.FileName, previousRecord.Content);
+            if (HardeningReplayEvaluator.IsReplayable(previousRecord.FileName))
+                previousResultCount = HardeningReplayEvaluator.GetResultCount(previousRecord.FileName, previousRecord.Content);
+            else
+                previousUnavailableReason = "The earlier saved output is a SQLite/Excel file, which can't be read for a comparison.";
         }
         else
         {
