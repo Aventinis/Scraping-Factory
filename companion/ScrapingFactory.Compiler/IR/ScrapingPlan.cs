@@ -31,6 +31,10 @@ public sealed class ScrapingPlan
     // IR/RequestDelayConfig.cs.
     public RequestDelayConfig? RequestDelay { get; init; }
 
+    // Issue #228: carried through unchanged (as a plain bool) from
+    // ScrapingConfig.RespectRobotsDelay by ScrapingPlanBuilder.
+    public bool RespectRobotsDelay { get; init; }
+
     // Issue #223: mode-independent, carried through unchanged from
     // ScrapingConfig.Retry by ScrapingPlanBuilder — see IR/RetryConfig.cs.
     public RetryConfig? Retry { get; init; }
@@ -103,6 +107,7 @@ public sealed class ScrapingPlan
         ChangeDetection = ChangeDetection,
         Proxy = Proxy,
         RequestDelay = RequestDelay,
+        RespectRobotsDelay = RespectRobotsDelay,
         Retry = Retry,
         Headers = Headers,
         Deduplication = Deduplication,

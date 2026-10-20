@@ -263,6 +263,14 @@
             </div>
             <p class="preview-summary" data-i18n="idle.requestDelayHint"></p>
           </div>
+          <!-- Issue #228: independent of the pause above — the script reads
+               Crawl-delay/Request-rate from the site's own robots.txt and
+               uses it as the minimum gap (the larger of the two wins). -->
+          <label class="output-settings-toggle">
+            <input type="checkbox" id="toggle-respect-robots-delay" />
+            <span data-i18n="idle.respectRobotsDelayToggle"></span>
+          </label>
+          <p class="preview-summary" data-i18n="idle.respectRobotsDelayHint"></p>
           <!-- Issue #223: opt-in retry with backoff on transient request
                failures (connection errors/timeouts, 429/502/503/504 by
                default) — mode- and engine-independent. -->

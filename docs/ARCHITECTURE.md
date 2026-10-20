@@ -1068,6 +1068,27 @@ minutes of pauses).
 - Tests: `RequestDelayTests.cs`, `extension/popup/request-delay.test.js`,
   real-browser check `e2e/examples/issue-222-request-delay-check.js`
 
+### 2.21aa Respect robots.txt Crawl-delay (Issue #228)
+
+An opt-in, independent setting making the generated script read the target's
+robots.txt once and use its `Crawl-delay` / `Request-rate` as a minimum gap
+between requests — one more source for the pacing mechanism of 2.21a (the
+larger of this and a configured pause wins). A site without such a directive
+is unaffected. Disallow re-checking is a separate issue (#333).
+
+- IR: `ScrapingConfig.RespectRobotsDelay`/`ScrapingPlan.RespectRobotsDelay`,
+  Combined-mode outer-config rejection in `Program.cs`
+- `Backends/Python/PythonRequestDelayLiteral` (now takes the plan:
+  `respect_robots`, `robots_urls_literal`)
+- Fragment `request_delay.py.j2` (`_robots_delay`, `_fetch_robots_delay`,
+  `urllib.robotparser`)
+- Extension: `scraping-config-builder.js` (trailing `respectRobotsDelay`
+  parameter), `config-import.js`, `session-restore.js`,
+  `settings-panel-ui.js`, `#toggle-respect-robots-delay` in `screens/idle.html`
+- Tests: `RobotsCrawlDelayTests.cs`, `extension/popup/robots-crawl-delay.test.js`,
+  fixture `test-pages/crawl-delay` +
+  `e2e/examples/issue-228-robots-crawl-delay-check.js`
+
 ### 2.21b Retry on transient errors (Issue #223)
 
 An opt-in, mode- and engine-independent retry of any outbound request or

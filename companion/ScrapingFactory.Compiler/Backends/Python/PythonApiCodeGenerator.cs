@@ -30,7 +30,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
         // runtime walk (_extract_api_group) consumes it.
         var changeDetection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection);
         var proxy = PythonProxyLiteral.BuildContext(plan.Proxy);
-        var requestDelay = PythonRequestDelayLiteral.BuildContext(plan.RequestDelay);
+        var requestDelay = PythonRequestDelayLiteral.BuildContext(plan);
         var retry = PythonRetryLiteral.BuildContext(plan.Retry);
         var hardening = PythonHardeningLiteral.BuildContext(plan.Hardening);
         var externalConfig = PythonExternalConfigLiteral.BuildContext(plan.ExternalConfig);

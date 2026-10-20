@@ -141,6 +141,8 @@
     "requestDelayToPlaceholder": "(fija)",
     "requestDelaySecondsUnit": "segundos",
     "requestDelayHint": "El script espera entre dos solicitudes al sitio — de forma fija o aleatoria dentro de un rango (p. ej. 1 a 3). Protege contra bloqueos y límites de frecuencia, pero alarga la ejecución en proporción (p. ej. 50 páginas × 2 s ≈ 1,5 minutos más). La ejecución de prueba al generar no cuenta las pausas en su límite de tiempo.",
+    "respectRobotsDelayToggle": "Respetar el robots.txt del sitio (Crawl-delay)",
+    "respectRobotsDelayHint": "Si el robots.txt del sitio pide un ritmo (Crawl-delay o Request-rate), el script espera al menos ese tiempo entre dos solicitudes. Los sitios que no publican nada no se ven afectados. Combinado con «Pausa entre solicitudes», se aplica el intervalo mayor. El robots.txt se lee una vez por ejecución.",
     "retryToggle": "Reintentar ante errores transitorios",
     "retryAttemptsLabel": "Intentos",
     "retryDelayLabel": "Espera (s)",

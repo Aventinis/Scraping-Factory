@@ -298,6 +298,11 @@ let _state = {
   // — which ETag/Last-Modified value counts as "changed" is tracked
   // entirely by the generated script's own sidecar file, never here.
   preflight: false,
+  // Issue #228: opt-in — the generated script honors the target's robots.txt
+  // Crawl-delay/Request-rate as a minimum gap between requests. A plain
+  // boolean like persistentSession/preflight, persisted the same way,
+  // independent of requestDelay (the larger gap wins).
+  respectRobotsDelay: false,
   // Issue #129: opt-in script hardening checks — mode-independent like
   // engine/changeDetection/proxy above, persisted the same way (real
   // scrape-target configuration, not a per-generate toggle). Nested one
@@ -662,6 +667,7 @@ function persistState() {
       discoveredUrls: _state.discoveredUrls,
       persistentSession: _state.persistentSession,
       preflight: _state.preflight,
+      respectRobotsDelay: _state.respectRobotsDelay,
       hardening: _state.hardening,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
@@ -1296,7 +1302,7 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'requestDelay', 'retry', 'deduplication', 'requestHeaders', 'hardening', 'pagination', 'persistentSession', 'preflight', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'requestDelay', 'retry', 'deduplication', 'requestHeaders', 'hardening', 'pagination', 'persistentSession', 'preflight', 'respectRobotsDelay', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'pendingApiDiscoveryPartId', 'pendingApiDiscoveryActionIndex', 'pendingApiDiscoveryActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
