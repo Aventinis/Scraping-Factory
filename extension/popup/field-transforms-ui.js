@@ -14,8 +14,12 @@
 const SFFieldTransformsUI = (function () {
   const { t } = typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
   const {
-    removeTransform, updateTransform, changeTransformKind, moveTransform, applyTransformsPreview,
+    removeTransform, updateTransform, changeTransformKind, moveTransform, applyTransformsPreview, CURRENCY_FORMAT_IDS,
   } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
+
+  // Issue #234: i18n key suffix per currency-format preset (see
+  // transforms.currencyFormat.* in i18n/*.json).
+  const CURRENCY_FORMAT_LABEL_KEYS = { '1.234,56': 'commaDecimal', '1,234.56': 'dotDecimal', '1 234,56': 'spaceGrouped', "1'234.56": 'apostropheGrouped' };
 
   // Long raw values (a whole paragraph clicked in Text mode) would otherwise
   // stretch the modal — same defensive-cap spirit as api-capture.js's own
@@ -39,6 +43,7 @@ const SFFieldTransformsUI = (function () {
     ['toInteger', 'transforms.toIntegerOption'],
     ['toBoolean', 'transforms.toBooleanOption'],
     ['toDate', 'transforms.toDateOption'],
+    ['toCurrency', 'transforms.toCurrencyOption'],
   ];
 
   // Issue #205: shared by all three type-conversion kinds — an onError
@@ -122,6 +127,20 @@ const SFFieldTransformsUI = (function () {
       sourceFormatInput.placeholder = t('transforms.sourceFormatPlaceholder');
       sourceFormatInput.value = transform.sourceFormat;
       li.appendChild(sourceFormatInput);
+      appendTypeConversionInputs(li, transform);
+    } else if (transform.kind === 'toCurrency') {
+      // Issue #234: each preset's option text is its own example amount plus
+      // a short hint naming the decimal separator.
+      const formatSelect = document.createElement('select');
+      formatSelect.className = 'transform-currency-format-select';
+      CURRENCY_FORMAT_IDS.forEach((format) => {
+        const option = document.createElement('option');
+        option.value = format;
+        option.textContent = t(`transforms.currencyFormat.${CURRENCY_FORMAT_LABEL_KEYS[format]}`);
+        if (format === transform.format) option.selected = true;
+        formatSelect.appendChild(option);
+      });
+      li.appendChild(formatSelect);
       appendTypeConversionInputs(li, transform);
     } else if (transform.kind === 'toInteger' || transform.kind === 'toBoolean') {
       appendTypeConversionInputs(li, transform);
@@ -211,6 +230,8 @@ const SFFieldTransformsUI = (function () {
         setTransforms(updateTransform(transforms, index, { replacement: e.target.value }));
       } else if (e.target.classList.contains('transform-source-format-input')) {
         setTransforms(updateTransform(transforms, index, { sourceFormat: e.target.value }));
+      } else if (e.target.classList.contains('transform-currency-format-select')) {
+        setTransforms(updateTransform(transforms, index, { format: e.target.value }));
       } else if (e.target.classList.contains('transform-onerror-select')) {
         setTransforms(updateTransform(transforms, index, { onError: e.target.value }));
       } else if (e.target.classList.contains('transform-default-value-input')) {

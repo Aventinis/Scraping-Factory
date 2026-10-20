@@ -135,6 +135,24 @@ public class BlocksEndToEndTests(WebApplicationFactory<Program> factory)
         Assert.Contains("ChangeDetection", await response.Content.ReadAsStringAsync());
     }
 
+    // Issue #225: not designed for Blocks' multi-output shape yet.
+    [Fact]
+    public async Task Generate_BlocksWithDeduplication_Returns400()
+    {
+        using var server = new LocalTestServer(MixedShapePage);
+        var config = new ScrapingConfig
+        {
+            Url = server.BaseUrl,
+            Deduplication = new DeduplicationConfig { KeyFields = ["Deal"] },
+            Blocks = [FlatBlock("a", "Deal", ".deal"), FlatBlock("b", "Deal", ".deal")],
+        };
+
+        var response = await _client.PostAsync("/generate", JsonBody(config));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Deduplication", await response.Content.ReadAsStringAsync());
+    }
+
     [Fact]
     public async Task Generate_BlocksWithOuterHardening_Returns400()
     {

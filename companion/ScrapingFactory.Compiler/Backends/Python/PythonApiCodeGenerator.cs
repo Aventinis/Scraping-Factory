@@ -30,6 +30,8 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
         // runtime walk (_extract_api_group) consumes it.
         var changeDetection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection);
         var proxy = PythonProxyLiteral.BuildContext(plan.Proxy);
+        var requestDelay = PythonRequestDelayLiteral.BuildContext(plan);
+        var retry = PythonRetryLiteral.BuildContext(plan.Retry);
         var hardening = PythonHardeningLiteral.BuildContext(plan.Hardening);
         var externalConfig = PythonExternalConfigLiteral.BuildContext(plan.ExternalConfig);
 
@@ -70,11 +72,17 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
                 embedded_json_source_literal = PythonApiConfigLiteral.RenderEmbeddedJsonSource(api.EmbeddedJsonSource),
                 has_bootstrap = hasBootstrap,
                 bootstrap_literal = PythonApiConfigLiteral.RenderBootstrap(api.Bootstrap),
+                cursor_pagination_enabled = api.CursorPagination is not null,
+                cursor_pagination_literal = PythonApiConfigLiteral.RenderCursorPagination(api.CursorPagination),
                 script_filename = plan.ScriptFileName,
                 output_filename = plan.OutputFileBaseName,
                 output_is_json = plan.OutputFormat == OutputFormat.Json,
                 change_detection = changeDetection,
                 proxy,
+                request_delay = requestDelay,
+                retry,
+                dedup = PythonDeduplicationLiteral.BuildContext(plan.Deduplication),
+                text_selector = PythonTextSelectorLiteral.BuildContext(plan),
                 hardening,
                 external_config = externalConfig,
                 // Issue #192: unlike Container-Mode, the row-scope group
@@ -119,11 +127,17 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
             embedded_json_source_literal = PythonApiConfigLiteral.RenderEmbeddedJsonSource(api.EmbeddedJsonSource),
             has_bootstrap = hasBootstrap,
             bootstrap_literal = PythonApiConfigLiteral.RenderBootstrap(api.Bootstrap),
+            cursor_pagination_enabled = api.CursorPagination is not null,
+            cursor_pagination_literal = PythonApiConfigLiteral.RenderCursorPagination(api.CursorPagination),
             script_filename = plan.ScriptFileName,
             output_filename = plan.OutputFileBaseName,
             output_is_json = plan.OutputFormat == OutputFormat.Json,
             change_detection = changeDetection,
             proxy,
+            request_delay = requestDelay,
+            retry,
+            dedup = PythonDeduplicationLiteral.BuildContext(plan.Deduplication),
+            text_selector = PythonTextSelectorLiteral.BuildContext(plan),
             hardening,
             external_config = externalConfig,
             blueprint_mapping_literal = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),

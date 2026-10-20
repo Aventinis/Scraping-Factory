@@ -43,11 +43,16 @@ declare namespace SFWire {
     includeOutputFile?: boolean;
     changeDetection?: ChangeDetectionConfig;
     proxy?: ProxyConfig;
+    requestDelay?: RequestDelayConfig;
+    retry?: RetryConfig;
+    deduplication?: DeduplicationConfig;
+    headers?: ApiHeader[];
     hardening?: HardeningCheck[];
     pagination?: PaginationConfig;
     discoveredUrls?: DiscoveredUrlsConfig;
     persistentSession?: boolean;
     preflight?: boolean;
+    respectRobotsDelay?: boolean;
     externalConfig?: boolean;
     combined?: CombinedComponentConfig[];
     blocks?: ExtractionBlockConfig[];
@@ -107,6 +112,7 @@ declare namespace SFWire {
     | ToIntegerTransform
     | ToBooleanTransform
     | ToDateTransform
+    | ToCurrencyTransform
     | CombineFieldsTransform
     | SplitFieldTransform;
 
@@ -119,6 +125,7 @@ declare namespace SFWire {
   interface ToIntegerTransform { kind: 'toInteger'; onError?: TransformErrorMode; defaultValue?: string | null; }
   interface ToBooleanTransform { kind: 'toBoolean'; onError?: TransformErrorMode; defaultValue?: string | null; }
   interface ToDateTransform { kind: 'toDate'; sourceFormat?: string | null; onError?: TransformErrorMode; defaultValue?: string | null; }
+  interface ToCurrencyTransform { kind: 'toCurrency'; format?: "1.234,56" | "1,234.56" | "1 234,56" | "1'234.56"; onError?: TransformErrorMode; defaultValue?: string | null; }
   interface CombineFieldsTransform { kind: 'combineFields'; sourceFieldNames: string[]; separator?: string; }
   interface SplitFieldTransform { kind: 'splitField'; sourceFieldName: string; separator?: string; index?: number; }
 
@@ -128,7 +135,7 @@ declare namespace SFWire {
 
   interface WaitForAction { kind: 'waitFor'; selector: string; timeoutMs?: number; framePath?: string[] | null; }
   interface FillAction { kind: 'fill'; selector: string; environmentVariableName: string; framePath?: string[] | null; }
-  interface ClickAction { kind: 'click'; selector: string; framePath?: string[] | null; }
+  interface ClickAction { kind: 'click'; selector: string; target?: 'First' | 'Last' | 'All'; waitAfterMs?: number; framePath?: string[] | null; }
   interface ScrollAction {
     kind: 'scroll';
     containerSelector?: string | null;
@@ -165,6 +172,28 @@ declare namespace SFWire {
 
   interface ProxyConfig {
     environmentVariableName: string;
+  }
+
+  // Issue #223: see IR/RetryConfig.cs.
+  interface RetryConfig {
+    maxAttempts?: number;
+    delayMs?: number;
+    exponential?: boolean;
+    retryOnStatusCodes?: number[] | null;
+  }
+
+  // Issue #225: see IR/DeduplicationConfig.cs.
+  interface DeduplicationConfig {
+    keyFields: string[];
+    incremental?: boolean;
+    incrementalOutput?: 'Delta' | 'Append';
+    retention?: { kind: 'MaxCount' | 'MaxAge'; value: number };
+  }
+
+  // Issue #222: see IR/RequestDelayConfig.cs.
+  interface RequestDelayConfig {
+    minMs: number;
+    maxMs: number;
   }
 
   // ── Pagination (PaginationConfig.cs) ─────────────────────────────────────
@@ -230,6 +259,17 @@ declare namespace SFWire {
     body?: ApiBodyNode;
     embeddedJsonSource?: EmbeddedJsonSource;
     bootstrap?: ApiBootstrap;
+    cursorPagination?: ApiCursorPagination;
+  }
+
+  // Issue #224: see ApiConfig.CursorPagination in IR/ApiConfig.cs.
+  interface ApiCursorPagination {
+    nextCursorPath: string;
+    hasNextPagePath?: string;
+    target: 'Query' | 'Body';
+    queryParameterName?: string;
+    bodyPath?: string;
+    maxPages: number;
   }
 
   // Issue #220: see ApiConfig.Bootstrap in IR/ApiConfig.cs.

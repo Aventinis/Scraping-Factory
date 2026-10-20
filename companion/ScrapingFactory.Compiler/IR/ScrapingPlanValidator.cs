@@ -55,6 +55,42 @@ public static class ScrapingPlanValidator
                 return Invalid(proxyError);
         }
 
+        // Issue #222: mode-independent, same placement as Proxy above.
+        if (plan.RequestDelay is { } requestDelay)
+        {
+            if (requestDelay.MinMs < 0)
+                return Invalid("RequestDelay.MinMs must not be negative.");
+            if (requestDelay.MaxMs < requestDelay.MinMs)
+                return Invalid("RequestDelay.MaxMs must not be smaller than RequestDelay.MinMs.");
+            if (requestDelay.MaxMs > RequestDelayConfig.MaxAllowedMs)
+                return Invalid($"RequestDelay.MaxMs must not exceed {RequestDelayConfig.MaxAllowedMs} ms (one minute per pause).");
+        }
+
+        // Issue #223: mode-independent, same placement as RequestDelay above.
+        if (plan.Retry is { } retry)
+        {
+            if (retry.MaxAttempts is < RetryConfig.MinAllowedAttempts or > RetryConfig.MaxAllowedAttempts)
+                return Invalid($"Retry.MaxAttempts must be between {RetryConfig.MinAllowedAttempts} and {RetryConfig.MaxAllowedAttempts}.");
+            if (retry.DelayMs is < 0 or > RetryConfig.MaxWaitMs)
+                return Invalid($"Retry.DelayMs must be between 0 and {RetryConfig.MaxWaitMs} ms.");
+            if (retry.RetryOnStatusCodes is { } codes)
+            {
+                if (codes.Any(code => code is < 400 or > 599))
+                    return Invalid("Retry.RetryOnStatusCodes may only contain HTTP error status codes (400-599).");
+                if (codes.Distinct().Count() != codes.Count)
+                    return Invalid("Retry.RetryOnStatusCodes must not contain duplicates.");
+            }
+        }
+
+        // Issue #226: custom request headers (DOM shapes only — an Api plan
+        // never carries them, see ScrapingPlanBuilder).
+        if (plan.Headers is { Count: > 0 } requestHeaders)
+        {
+            var headersError = ValidateRequestHeaders(requestHeaders);
+            if (headersError is not null)
+                return Invalid(headersError);
+        }
+
         // Issue #129: mode-independent, same placement as ChangeDetection/
         // Proxy above.
         if (plan.Hardening is { Count: > 0 } hardening)
@@ -105,6 +141,9 @@ public static class ScrapingPlanValidator
         {
             if (string.IsNullOrWhiteSpace(waitStep.Selector))
                 return Invalid("Selector of a WaitForStep must not be empty.");
+            var waitSelectorError = SelectorTextFilter.Validate(waitStep.Selector, "Selector of a WaitForStep");
+            if (waitSelectorError is not null)
+                return Invalid(waitSelectorError);
             if (waitStep.TimeoutMs <= 0)
                 return Invalid("Timeout of a WaitForStep must be positive.");
             var waitFrameError = ValidateFramePath(waitStep.FramePath, "WaitForStep", plan.Engine);
@@ -116,6 +155,9 @@ public static class ScrapingPlanValidator
         {
             if (string.IsNullOrWhiteSpace(fillStep.Selector))
                 return Invalid("Selector of a FillStep must not be empty.");
+            var fillSelectorError = SelectorTextFilter.Validate(fillStep.Selector, "Selector of a FillStep");
+            if (fillSelectorError is not null)
+                return Invalid(fillSelectorError);
             if (!EnvironmentVariableNamePattern.IsMatch(fillStep.EnvironmentVariableName))
                 return Invalid($"Invalid environment variable name '{fillStep.EnvironmentVariableName}' in FillStep.");
             var fillFrameError = ValidateFramePath(fillStep.FramePath, "FillStep", plan.Engine);
@@ -127,9 +169,14 @@ public static class ScrapingPlanValidator
         {
             if (string.IsNullOrWhiteSpace(clickStep.Selector))
                 return Invalid("Selector of a ClickStep must not be empty.");
+            var clickSelectorError = SelectorTextFilter.Validate(clickStep.Selector, "Selector of a ClickStep");
+            if (clickSelectorError is not null)
+                return Invalid(clickSelectorError);
             var clickFrameError = ValidateFramePath(clickStep.FramePath, "ClickStep", plan.Engine);
             if (clickFrameError is not null)
                 return Invalid(clickFrameError);
+            if (clickStep.WaitAfterMs < 0)
+                return Invalid("WaitAfterMs of a ClickStep must not be negative.");
         }
 
         foreach (var scrollStep in plan.Steps.OfType<ScrollStep>())
@@ -138,6 +185,10 @@ public static class ScrapingPlanValidator
                 return Invalid("ContainerSelector of a ScrollStep must not be empty when set.");
             if (scrollStep.LoadMoreButtonSelector is not null && string.IsNullOrWhiteSpace(scrollStep.LoadMoreButtonSelector))
                 return Invalid("LoadMoreButtonSelector of a ScrollStep must not be empty when set.");
+            var scrollSelectorError = SelectorTextFilter.Validate(scrollStep.ContainerSelector, "ContainerSelector of a ScrollStep")
+                ?? SelectorTextFilter.Validate(scrollStep.LoadMoreButtonSelector, "LoadMoreButtonSelector of a ScrollStep");
+            if (scrollSelectorError is not null)
+                return Invalid(scrollSelectorError);
             if (scrollStep.MaxIterations <= 0)
                 return Invalid("MaxIterations of a ScrollStep must be positive.");
             if (scrollStep.WaitAfterMs < 0)
@@ -215,6 +266,13 @@ public static class ScrapingPlanValidator
                 }
             }
 
+            if (plan.Deduplication is { } containerDedup)
+            {
+                var containerDedupError = ValidateDeduplication(containerDedup, CollectContainerFieldNames(extractGroupStep.Roots), isTreeShape: true, plan.OutputBlueprint is not null);
+                if (containerDedupError is not null)
+                    return Invalid(containerDedupError);
+            }
+
             return new PlanValidationResult { Success = true };
         }
 
@@ -278,6 +336,22 @@ public static class ScrapingPlanValidator
                 }
             }
 
+            if (plan.Deduplication is { } apiDedup)
+            {
+                var apiDedupHasGroups = apiCallStep.Config.Groups is { Count: > 0 };
+                // Api-flat rows also carry each parameter's value as a column
+                // (see scraper_api.py.j2), so a parameter name is a valid key
+                // field there (e.g. week + id); the tree shape only knows its
+                // leaf fields.
+                var apiDedupFields = apiDedupHasGroups
+                    ? CollectApiFieldNames(apiCallStep.Config.Groups!)
+                    : (apiCallStep.Config.Fields ?? []).Select(field => field.Name)
+                        .Concat((apiCallStep.Config.Parameters ?? []).Select(parameter => parameter.Name)).ToList();
+                var apiDedupError = ValidateDeduplication(apiDedup, apiDedupFields, apiDedupHasGroups, plan.OutputBlueprint is not null);
+                if (apiDedupError is not null)
+                    return Invalid(apiDedupError);
+            }
+
             return new PlanValidationResult { Success = true };
         }
 
@@ -292,6 +366,9 @@ public static class ScrapingPlanValidator
                 return Invalid("Field name must not be empty.");
             if (string.IsNullOrWhiteSpace(step.Selector) && !IsDerivedField(step.Transforms))
                 return Invalid($"Selector for field '{step.Name}' must not be empty.");
+            var fieldSelectorError = SelectorTextFilter.Validate(step.Selector, $"Selector for field '{step.Name}'");
+            if (fieldSelectorError is not null)
+                return Invalid(fieldSelectorError);
 
             // FramePath is Browser-engine-only, unlike ExtractStep itself
             // (used by both engines) — so this can't join browserOnlySteps
@@ -336,7 +413,49 @@ public static class ScrapingPlanValidator
                 return Invalid(blueprintError);
         }
 
+        if (plan.Deduplication is { } flatDedup)
+        {
+            var flatDedupError = ValidateDeduplication(flatDedup, extractSteps.Select(step => step.Name).ToList(), isTreeShape: false, plan.OutputBlueprint is not null);
+            if (flatDedupError is not null)
+                return Invalid(flatDedupError);
+        }
+
         return new PlanValidationResult { Success = true };
+    }
+
+    // Issue #225. Key fields must be real fields of the current shape (leaf
+    // fields for the tree shapes, flat field names — plus Api parameter names
+    // — otherwise), the same "reference something that exists" rule the
+    // hardening field pickers' wire values get elsewhere. Two shape-specific
+    // restrictions, both "reject rather than silently do something else":
+    //  - Append needs a flat output file (CSV / JSON array) — an XML or
+    //    nested-JSON document has no meaningful "append".
+    //  - a tree-shaped source combined with an OutputBlueprint mapping is
+    //    not designed yet: the blueprint walkers re-read the source tree on
+    //    their own and never see the deduplicated instances.
+    private static string? ValidateDeduplication(DeduplicationConfig dedup, IReadOnlyCollection<string> availableFieldNames, bool isTreeShape, bool hasOutputBlueprint)
+    {
+        if (dedup.KeyFields.Count == 0)
+            return "Deduplication needs at least one key field.";
+        if (dedup.KeyFields.Any(string.IsNullOrWhiteSpace))
+            return "Deduplication: key field names must not be blank.";
+        var duplicateKey = FindDuplicates(dedup.KeyFields, name => name).FirstOrDefault();
+        if (duplicateKey is not null)
+            return $"Deduplication: duplicate key field '{duplicateKey}'.";
+        var unknownKey = dedup.KeyFields.FirstOrDefault(name => !availableFieldNames.Contains(name));
+        if (unknownKey is not null)
+            return $"Deduplication: key field '{unknownKey}' does not match any field of this configuration.";
+
+        if (dedup.Retention.Value <= 0)
+            return "Deduplication: the retention value must be positive.";
+
+        if (dedup.Incremental && dedup.IncrementalOutput == IncrementalOutputMode.Append && isTreeShape)
+            return "Deduplication: appending to the previous output is only supported for flat output (CSV/JSON list) — use the delta mode for tree-shaped output.";
+
+        if (isTreeShape && hasOutputBlueprint)
+            return "Deduplication is not supported together with an Output Blueprint on tree-shaped (container / API tree) output.";
+
+        return null;
     }
 
     // Issue #206: CombineFieldsTransform/SplitFieldTransform reference
@@ -557,6 +676,9 @@ public static class ScrapingPlanValidator
                 case GroupNode group:
                     if (string.IsNullOrWhiteSpace(group.Selector))
                         return $"Selector of group '{group.Name}' must not be empty.";
+                    var groupSelectorError = SelectorTextFilter.Validate(group.Selector, $"Selector of group '{group.Name}'");
+                    if (groupSelectorError is not null)
+                        return groupSelectorError;
                     var groupFrameError = ValidateFramePath(group.FramePath, $"group '{group.Name}'", engine);
                     if (groupFrameError is not null)
                         return groupFrameError;
@@ -568,6 +690,9 @@ public static class ScrapingPlanValidator
                 case DataFieldNode field:
                     if (string.IsNullOrWhiteSpace(field.Selector) && !IsDerivedField(field.Transforms))
                         return $"Selector of data field '{field.Name}' must not be empty.";
+                    var dataFieldSelectorError = SelectorTextFilter.Validate(field.Selector, $"Selector of data field '{field.Name}'");
+                    if (dataFieldSelectorError is not null)
+                        return dataFieldSelectorError;
                     if (field.Mode == ExtractMode.Attribute && string.IsNullOrWhiteSpace(field.Attribute))
                         return $"Data field '{field.Name}' with mode 'Attribute' needs an attribute.";
                     if (field.Download && field.Mode != ExtractMode.Attribute)
@@ -716,7 +841,7 @@ public static class ScrapingPlanValidator
             return $"FramePath for {context} must not be empty when set.";
         if (framePath.Any(string.IsNullOrWhiteSpace))
             return $"FramePath for {context} must not contain empty segments.";
-        return null;
+        return framePath.Select(segment => SelectorTextFilter.ValidateNotAllowed(segment, $"FramePath for {context}")).FirstOrDefault(error => error is not null);
     }
 
     private static readonly Regex UrlTemplatePlaceholderPattern = new(@"\{([^{}]+)\}");
@@ -750,6 +875,9 @@ public static class ScrapingPlanValidator
                 return "EmbeddedJsonSource requires method 'GET'.";
             if (string.IsNullOrWhiteSpace(embeddedJsonSource.ScriptSelector))
                 return "EmbeddedJsonSource needs a ScriptSelector.";
+            var scriptSelectorError = SelectorTextFilter.ValidateNotAllowed(embeddedJsonSource.ScriptSelector, "EmbeddedJsonSource.ScriptSelector");
+            if (scriptSelectorError is not null)
+                return scriptSelectorError;
         }
 
         // Two mutually exclusive response shapes (Issue #54): the original
@@ -921,7 +1049,46 @@ public static class ScrapingPlanValidator
             declaredSoFar.Add(parameter.Name);
         }
 
+        if (api.CursorPagination is { } cursorPagination)
+        {
+            var cursorError = ValidateApiCursorPagination(api, cursorPagination);
+            if (cursorError is not null)
+                return cursorError;
+        }
+
         return api.Headers is { } headers ? ValidateApiHeaders(headers, bootstrapName) : null;
+    }
+
+    // Issue #224: see ApiCursorPagination's own doc comment.
+    private static string? ValidateApiCursorPagination(ApiConfig api, ApiCursorPagination cursor)
+    {
+        if (string.IsNullOrWhiteSpace(cursor.NextCursorPath))
+            return "Cursor pagination needs a NextCursorPath.";
+        if (cursor.HasNextPagePath is not null && string.IsNullOrWhiteSpace(cursor.HasNextPagePath))
+            return "Cursor pagination's HasNextPagePath must not be blank when set.";
+        if (cursor.MaxPages <= 0)
+            return "Cursor pagination's MaxPages must be greater than 0.";
+        if (api.EmbeddedJsonSource is not null)
+            return "Cursor pagination can't be combined with an embedded JSON source — a page load has no cursor to follow.";
+
+        switch (cursor.Target)
+        {
+            case ApiCursorTarget.Query:
+                if (string.IsNullOrWhiteSpace(cursor.QueryParameterName))
+                    return "Cursor pagination with target 'Query' needs a QueryParameterName.";
+                if (cursor.QueryParameterName.Any(c => char.IsWhiteSpace(c) || c is '&' or '=' or '#' or '?'))
+                    return $"Invalid cursor query parameter name '{cursor.QueryParameterName}'.";
+                break;
+            case ApiCursorTarget.Body:
+                if (api.Method != "POST" || api.Body is null)
+                    return "Cursor pagination with target 'Body' requires method 'POST' with a request body.";
+                if (string.IsNullOrWhiteSpace(cursor.BodyPath))
+                    return "Cursor pagination with target 'Body' needs a BodyPath.";
+                if (cursor.BodyPath.Split('.').Any(string.IsNullOrWhiteSpace) || cursor.BodyPath.Contains('['))
+                    return $"Invalid cursor BodyPath '{cursor.BodyPath}': use dot-separated object keys only.";
+                break;
+        }
+        return null;
     }
 
     // Issue #220: see ApiBootstrap's own doc comment. The value name itself
@@ -1104,7 +1271,9 @@ public static class ScrapingPlanValidator
                         : ValidateFramePath(fill.FramePath, "FillAction", ScrapingEngine.Browser),
                 ClickAction click => string.IsNullOrWhiteSpace(click.Selector)
                     ? $"Selector of a ClickAction in browser discovery for parameter '{parameterName}' must not be empty."
-                    : ValidateFramePath(click.FramePath, "ClickAction", ScrapingEngine.Browser),
+                    : click.WaitAfterMs < 0
+                        ? $"WaitAfterMs of a ClickAction in browser discovery for parameter '{parameterName}' must not be negative."
+                        : ValidateFramePath(click.FramePath, "ClickAction", ScrapingEngine.Browser),
                 ScrollAction scroll => (scroll.ContainerSelector is not null && string.IsNullOrWhiteSpace(scroll.ContainerSelector))
                     ? $"ContainerSelector of a ScrollAction in browser discovery for parameter '{parameterName}' must not be empty when set."
                     : (scroll.LoadMoreButtonSelector is not null && string.IsNullOrWhiteSpace(scroll.LoadMoreButtonSelector))
@@ -1120,7 +1289,57 @@ public static class ScrapingPlanValidator
             };
             if (actionError is not null)
                 return actionError;
+            var actionSelectorError = action switch
+            {
+                WaitForAction wait => SelectorTextFilter.Validate(wait.Selector, $"Selector of a WaitForAction in browser discovery for parameter '{parameterName}'"),
+                FillAction fill => SelectorTextFilter.Validate(fill.Selector, $"Selector of a FillAction in browser discovery for parameter '{parameterName}'"),
+                ClickAction click => SelectorTextFilter.Validate(click.Selector, $"Selector of a ClickAction in browser discovery for parameter '{parameterName}'"),
+                ScrollAction scroll => SelectorTextFilter.Validate(scroll.ContainerSelector, $"ContainerSelector of a ScrollAction in browser discovery for parameter '{parameterName}'")
+                    ?? SelectorTextFilter.Validate(scroll.LoadMoreButtonSelector, $"LoadMoreButtonSelector of a ScrollAction in browser discovery for parameter '{parameterName}'"),
+                _ => null,
+            };
+            if (actionSelectorError is not null)
+                return actionSelectorError;
         }
+
+        return null;
+    }
+
+    // RFC 9110 token characters — what an HTTP header field name may consist of.
+    private static readonly Regex HeaderNamePattern = new("^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+$");
+
+    // Issue #226: the DOM-mode counterpart of ValidateApiHeaders. Reuses the
+    // ApiHeader shape, but there is no bootstrap value to splice in, so a
+    // Template is rejected; a name must be a valid header token and a literal
+    // value must not contain a line break (header injection), since both end
+    // up verbatim in the request. Duplicates are compared case-insensitively
+    // — header names are, and the runtime builds a dict keyed by name.
+    private static string? ValidateRequestHeaders(List<ApiHeader> headers)
+    {
+        foreach (var header in headers)
+        {
+            if (string.IsNullOrWhiteSpace(header.Name))
+                return "Name of a request header must not be empty.";
+            if (!HeaderNamePattern.IsMatch(header.Name))
+                return $"Invalid request header name '{header.Name}' — use only letters, digits and the characters !#$%&'*+-.^_`|~.";
+
+            if (!string.IsNullOrWhiteSpace(header.Template))
+                return $"Request header '{header.Name}' must not use a template — templates only exist for an API-mode auth bootstrap.";
+
+            var hasValue = !string.IsNullOrWhiteSpace(header.Value);
+            var hasEnvironmentVariable = !string.IsNullOrWhiteSpace(header.EnvironmentVariableName);
+            if (hasValue == hasEnvironmentVariable)
+                return $"Request header '{header.Name}' needs exactly one of Value/EnvironmentVariableName.";
+
+            if (hasValue && header.Value!.IndexOfAny(['\r', '\n']) >= 0)
+                return $"Value of request header '{header.Name}' must not contain a line break.";
+            if (hasEnvironmentVariable && !EnvironmentVariableNamePattern.IsMatch(header.EnvironmentVariableName!))
+                return $"Invalid environment variable name '{header.EnvironmentVariableName}' in request header '{header.Name}'.";
+        }
+
+        var duplicates = headers.GroupBy(header => header.Name.ToLowerInvariant()).Where(group => group.Count() > 1).Select(group => group.Key).ToList();
+        if (duplicates.Count > 0)
+            return $"Duplicate request header names: {string.Join(", ", duplicates)}.";
 
         return null;
     }
@@ -1241,7 +1460,7 @@ public static class ScrapingPlanValidator
         {
             NextLinkPagination nextLink => string.IsNullOrWhiteSpace(nextLink.NextLinkSelector)
                 ? "NextLinkPagination.NextLinkSelector must not be empty."
-                : null,
+                : SelectorTextFilter.Validate(nextLink.NextLinkSelector, "NextLinkPagination.NextLinkSelector"),
             PageNumberPagination pageNumber => ValidatePageNumberUrlTemplate(pageNumber.UrlTemplate),
             _ => throw new InvalidOperationException($"Unknown PaginationConfig type: {pagination.GetType()}"),
         };
@@ -1278,6 +1497,9 @@ public static class ScrapingPlanValidator
         }
         if (string.IsNullOrWhiteSpace(discoveredUrls.LinkSelector))
             return "DiscoveredUrls.LinkSelector must not be empty.";
+        var linkSelectorError = SelectorTextFilter.Validate(discoveredUrls.LinkSelector, "DiscoveredUrls.LinkSelector");
+        if (linkSelectorError is not null)
+            return linkSelectorError;
         if (discoveredUrls.MaxUrls <= 0)
             return $"DiscoveredUrls.MaxUrls must be positive (was {discoveredUrls.MaxUrls}).";
         return null;
@@ -1320,6 +1542,9 @@ public static class ScrapingPlanValidator
                         return $"Block '{block.Name}': field name must not be empty.";
                     if (string.IsNullOrWhiteSpace(step.Selector))
                         return $"Block '{block.Name}': selector for field '{step.Name}' must not be empty.";
+                    var blockSelectorError = SelectorTextFilter.Validate(step.Selector, $"Block '{block.Name}': selector for field '{step.Name}'");
+                    if (blockSelectorError is not null)
+                        return blockSelectorError;
                     var frameError = ValidateFramePath(step.FramePath, $"field '{step.Name}' in block '{block.Name}'", engine);
                     if (frameError is not null)
                         return frameError;

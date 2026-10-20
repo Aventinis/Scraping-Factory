@@ -154,6 +154,13 @@ internal static class PythonApiConfigLiteral
         ? "None"
         : $$"""{"name": {{PythonLiteral.Str(bootstrap.Name)}}, "method": {{PythonLiteral.Str(bootstrap.Method)}}, "url": {{PythonLiteral.Str(bootstrap.Url)}}, "headers": {{RenderHeaders(bootstrap.Headers)}}, "bodyFields": {{RenderBootstrapBodyFields(bootstrap.BodyFields)}}, "bodyEncoding": {{PythonLiteral.Str(bootstrap.BodyEncoding.ToString())}}, "valuePath": {{PythonLiteral.Str(bootstrap.ValuePath)}}}""";
 
+    // Issue #224: same "None when absent" convention as RenderBootstrap.
+    // Only the key belonging to the chosen Target is meaningful at runtime
+    // (_apply_cursor), the other is rendered as None.
+    public static string RenderCursorPagination(ApiCursorPagination? cursor) => cursor is null
+        ? "None"
+        : $$"""{"nextCursorPath": {{PythonLiteral.Str(cursor.NextCursorPath)}}, "hasNextPagePath": {{(cursor.HasNextPagePath is null ? "None" : PythonLiteral.Str(cursor.HasNextPagePath))}}, "target": {{PythonLiteral.Str(cursor.Target.ToString())}}, "queryParameterName": {{(cursor.Target == ApiCursorTarget.Query ? PythonLiteral.Str(cursor.QueryParameterName!) : "None")}}, "bodyPath": {{(cursor.Target == ApiCursorTarget.Body ? PythonLiteral.Str(cursor.BodyPath!) : "None")}}, "maxPages": {{cursor.MaxPages}}}""";
+
     private static string RenderBootstrapBodyFields(List<ApiBootstrapBodyField>? fields) =>
         fields is null ? "[]" : RenderList(fields, field => !string.IsNullOrWhiteSpace(field.EnvironmentVariableName)
             ? $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "envVar": {{PythonLiteral.Str(field.EnvironmentVariableName)}}}"""
@@ -197,7 +204,9 @@ internal static class PythonApiConfigLiteral
     {
         WaitForAction a => $$"""{"kind": "waitFor", "selector": {{PythonLiteral.Str(a.Selector)}}, "timeoutMs": {{a.TimeoutMs}}{{FramePathSuffix(a.FramePath)}}}""",
         FillAction a => $$"""{"kind": "fill", "selector": {{PythonLiteral.Str(a.Selector)}}, "environmentVariableName": {{PythonLiteral.Str(a.EnvironmentVariableName)}}{{FramePathSuffix(a.FramePath)}}}""",
-        ClickAction a => $$"""{"kind": "click", "selector": {{PythonLiteral.Str(a.Selector)}}{{FramePathSuffix(a.FramePath)}}}""",
+        // Issue #267: "target" is always emitted ("first"/"last"/"all"), plus
+        // "waitAfterMs" for "all" only (the one target that uses it).
+        ClickAction a => $$"""{"kind": "click", "selector": {{PythonLiteral.Str(a.Selector)}}, "target": "{{a.Target.ToString().ToLowerInvariant()}}"{{(a.Target == ClickTarget.All ? $", \"waitAfterMs\": {a.WaitAfterMs}" : "")}}{{FramePathSuffix(a.FramePath)}}}""",
         // Issue #289: "scrollStepPx" omitted entirely when unset — None is
         // the runtime's own "jump straight to the bottom" default (see
         // _run_scroll_action in scraper_api.py.j2), same "absent key = no

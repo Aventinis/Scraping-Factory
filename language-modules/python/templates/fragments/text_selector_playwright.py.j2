@@ -1,0 +1,47 @@
+# Teaches Playwright's selector entry points the :contains("text") suffix
+# (see above): query_selector(_all) on pages and element handles filter the
+# matches by text; locator() on pages, locators and frame locators applies
+# Locator.filter(has_text=...), which matches the same way (case-insensitive
+# substring of the whitespace-normalized text). Every selector lookup in this
+# script then understands the suffix without special-casing at the call sites.
+from playwright.sync_api import ElementHandle as _PwElementHandle, FrameLocator as _PwFrameLocator, Locator as _PwLocator, Page as _PwPage
+
+
+def _patch_handle_queries(cls):
+    original_all = cls.query_selector_all
+    original_one = cls.query_selector
+
+    def query_selector_all(self, selector, *args, **kwargs):
+        base, text = _split_text_filter(selector)
+        elements = original_all(self, base, *args, **kwargs)
+        if text is None:
+            return elements
+        wanted = _normalize_text(text)
+        return [el for el in elements if wanted in _normalize_text(el.text_content())]
+
+    def query_selector(self, selector, *args, **kwargs):
+        base, text = _split_text_filter(selector)
+        if text is None:
+            return original_one(self, base, *args, **kwargs)
+        matches = query_selector_all(self, selector, *args, **kwargs)
+        return matches[0] if matches else None
+
+    cls.query_selector_all = query_selector_all
+    cls.query_selector = query_selector
+
+
+def _patch_locator_factory(cls):
+    original = cls.locator
+
+    def locator(self, selector_or_locator, *args, **kwargs):
+        base, text = _split_text_filter(selector_or_locator)
+        found = original(self, base, *args, **kwargs)
+        return found if text is None else found.filter(has_text=text)
+
+    cls.locator = locator
+
+
+_patch_handle_queries(_PwPage)
+_patch_handle_queries(_PwElementHandle)
+for _cls in (_PwPage, _PwLocator, _PwFrameLocator):
+    _patch_locator_factory(_cls)

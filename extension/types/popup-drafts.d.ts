@@ -78,6 +78,8 @@ declare namespace SFDraft {
     waitAfterMs?: number;
     /** Issue #289 — null/unset keeps the default "jump straight to the current bottom" behavior. */
     scrollStepPx?: number | null;
+    /** Issue #267 — which match a click action clicks; waitAfterMs (above) is the pause after each click for 'all'. */
+    target?: 'first' | 'last' | 'all';
     framePath?: string[] | null;
   }
 
@@ -100,6 +102,45 @@ declare namespace SFDraft {
   interface ProxyState {
     enabled: boolean;
     envVar: string;
+  }
+
+  // Issue #223: inputs as typed — see buildRetryConfig.
+  interface RetryState {
+    enabled: boolean;
+    maxAttemptsText: string;
+    delaySecondsText: string;
+    exponential: boolean;
+    statusCodesText: string;
+  }
+
+  // Issue #225: see dedup-config.js. retentionValueText is kept as typed.
+  interface DeduplicationState {
+    enabled: boolean;
+    keyFields: string[];
+    incremental: boolean;
+    appendOutput: boolean;
+    retentionKind: 'MaxCount' | 'MaxAge';
+    retentionValueText: string;
+  }
+
+  // Issue #226: see request-headers.js. `value` is the literal for kind
+  // 'value', the environment variable's *name* for kind 'env'.
+  interface RequestHeaderRow {
+    name: string;
+    kind: 'value' | 'env';
+    value: string;
+  }
+
+  interface RequestHeadersState {
+    enabled: boolean;
+    rows: RequestHeaderRow[];
+  }
+
+  // Issue #222: seconds as typed (decimal comma or point); blank max = fixed.
+  interface RequestDelayState {
+    enabled: boolean;
+    minSecondsText: string;
+    maxSecondsText: string;
   }
 
   interface PaginationState {
@@ -179,6 +220,17 @@ declare namespace SFDraft {
     bodyEncoding: 'Json' | 'Form';
     headers: ApiBootstrapPair[];
     bodyFields: ApiBootstrapPair[];
+  }
+
+  // ── API mode: cursor/token pagination (api-cursor-pagination.js, Issue #224) ─
+
+  interface ApiCursorPagination {
+    nextCursorPath: string;
+    hasNextPagePath: string;
+    target: 'Query' | 'Body';
+    queryParameterName: string;
+    bodyPath: string;
+    maxPages: number;
   }
 
   // One GET_API_CAPTURE_ENTRIES entry (content/api-capture.js's buildEntry).

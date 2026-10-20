@@ -1,0 +1,14 @@
+{{~ if change_detection.enabled ~}}
+# Issue #87 (change detection): every *_ENV_VAR below is an environment-
+# variable *name* (never the actual credential/target value) — read via
+# os.environ[...] at runtime, exactly like FillStep already does for login
+# credentials.
+CHANGE_DETECTION_NOTIFY = {{ change_detection.notify_literal }}
+SMTP_HOST_ENV_VAR = {{ change_detection.smtp_host_env_var_literal }}
+SMTP_PORT_ENV_VAR = {{ change_detection.smtp_port_env_var_literal }}
+SMTP_USERNAME_ENV_VAR = {{ change_detection.smtp_username_env_var_literal }}
+SMTP_PASSWORD_ENV_VAR = {{ change_detection.smtp_password_env_var_literal }}
+NOTIFY_EMAIL_FROM_ENV_VAR = {{ change_detection.from_env_var_literal }}
+NOTIFY_EMAIL_TO_ENV_VAR = {{ change_detection.to_env_var_literal }}
+WEBHOOK_URL_ENV_VAR = {{ change_detection.webhook_url_env_var_literal }}
+{{~ end ~}}

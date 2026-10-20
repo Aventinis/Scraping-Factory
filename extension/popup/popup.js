@@ -53,8 +53,17 @@ const {
 } = typeof require !== 'undefined' ? require('./api-config-ui') : self.SFApiConfigUI;
 
 const {
+  fetchTransformPresets, renderTransformPresetControls, wireTransformPresetControls,
+  renderTransformPresetsSettings, wireTransformPresetsSettings,
+} = typeof require !== 'undefined' ? require('./transform-presets-ui') : self.SFTransformPresetsUI;
+
+const {
   renderApiBootstrapSection, wireApiBootstrapEvents,
 } = typeof require !== 'undefined' ? require('./api-bootstrap-ui') : self.SFApiBootstrapUI;
+
+const {
+  renderApiCursorPaginationSection, wireApiCursorPaginationEvents,
+} = typeof require !== 'undefined' ? require('./api-cursor-pagination-ui') : self.SFApiCursorPaginationUI;
 
 const {
   renderGroupTree,
@@ -147,6 +156,14 @@ const {
 
 const { wireSettingsPanelEvents } =
   typeof require !== 'undefined' ? require('./settings-panel-ui') : self.SFSettingsPanelUI;
+const { createDefaultDeduplication } =
+  typeof require !== 'undefined' ? require('./dedup-config') : self.SFDedupConfig;
+const { createDefaultRequestHeaders } =
+  typeof require !== 'undefined' ? require('./request-headers') : self.SFRequestHeaders;
+const { wireRequestHeadersEvents } =
+  typeof require !== 'undefined' ? require('./request-headers-ui') : self.SFRequestHeadersUI;
+const { wireDedupEvents } =
+  typeof require !== 'undefined' ? require('./dedup-config-ui') : self.SFDedupConfigUI;
 
 const {
   fetchOutputBlueprints, selectOutputBlueprint,
@@ -230,6 +247,23 @@ let _state = {
   // list, never a literal address — same environmentVariableName pattern as
   // FillAction/ChangeDetection (see buildProxyConfig).
   proxy: { enabled: false, envVar: '' },
+  // Issue #222: opt-in pause between outbound requests, in seconds as typed
+  // (see buildRequestDelayConfig) — persisted like proxy.
+  requestDelay: { enabled: false, minSecondsText: '1', maxSecondsText: '' },
+  // Issue #223: opt-in retry with backoff — persisted like proxy, see
+  // buildRetryConfig for how the text inputs are read.
+  retry: { enabled: false, maxAttemptsText: '3', delaySecondsText: '2', exponential: true, statusCodesText: '429, 502, 503, 504' },
+  // Issue #225: opt-in deduplication by key field(s) and, optionally,
+  // incremental "only new items" output — persisted like retry (real
+  // scrape-target configuration), see dedup-config.js.
+  deduplication: createDefaultDeduplication(),
+  // Issue #226: custom request headers for flat/container/Blocks mode —
+  // persisted like retry (real scrape-target configuration), see
+  // request-headers.js. The one-time test values for env-var-backed rows
+  // live in requestHeaderTestValues instead: memory only, never persisted —
+  // like fillTestValues (see buildHeaderVerificationValues).
+  requestHeaders: createDefaultRequestHeaders(),
+  requestHeaderTestValues: {},
   // Issue #174: opt-in classic multi-page pagination — mode-independent
   // like additionalStartUrls/changeDetection/proxy above (Fields/Groups
   // only; hidden entirely for API mode, which already has its own page-
@@ -264,6 +298,11 @@ let _state = {
   // — which ETag/Last-Modified value counts as "changed" is tracked
   // entirely by the generated script's own sidecar file, never here.
   preflight: false,
+  // Issue #228: opt-in — the generated script honors the target's robots.txt
+  // Crawl-delay/Request-rate as a minimum gap between requests. A plain
+  // boolean like persistentSession/preflight, persisted the same way,
+  // independent of requestDelay (the larger gap wins).
+  respectRobotsDelay: false,
   // Issue #129: opt-in script hardening checks — mode-independent like
   // engine/changeDetection/proxy above, persisted the same way (real
   // scrape-target configuration, not a per-generate toggle). Nested one
@@ -574,6 +613,14 @@ let _state = {
   // after any create/edit/delete in modal-manage-blueprints. Not persisted,
   // same pull-based tradeoff savedConfigs/allSavedConfigs already accept.
   outputBlueprints:            null,
+  // Issue #279: reusable transform-chain presets — see transform-presets-ui.js
+  // for what each of these means. Not persisted (re-fetched from the
+  // companion on every health check, like outputBlueprints).
+  transformPresets:             null,
+  transformPresetsAvailable:    false,
+  transformPresetSaveOpen:      false,
+  transformPresetRenameId:      null,
+  transformPresetDeletePendingId: null,
   outputBlueprintsLoading:     false,
   blueprintEditModalOpen:      false,
   blueprintEditingId:          null, // null = creating a new blueprint, else editing this id
@@ -612,10 +659,15 @@ function persistState() {
       additionalStartUrls: _state.additionalStartUrls,
       changeDetection: _state.changeDetection,
       proxy: _state.proxy,
+      requestDelay: _state.requestDelay,
+      retry: _state.retry,
+      deduplication: _state.deduplication,
+      requestHeaders: _state.requestHeaders,
       pagination: _state.pagination,
       discoveredUrls: _state.discoveredUrls,
       persistentSession: _state.persistentSession,
       preflight: _state.preflight,
+      respectRobotsDelay: _state.respectRobotsDelay,
       hardening: _state.hardening,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
@@ -813,7 +865,14 @@ function render() {
   // visual state has to be driven from here rather than from
   // renderSettingsScreen, which only ever runs while that screen is current.
   document.getElementById('btn-open-settings')?.classList.toggle('active', _state.current === STATES.SETTINGS);
-  if (_state.current === STATES.SETTINGS) renderSettingsScreen(bridge);
+  if (_state.current === STATES.SETTINGS) {
+    renderSettingsScreen(bridge);
+    renderTransformPresetsSettings(bridge);
+  }
+  // Issue #279: the preset controls live inside all three transform editors'
+  // modals; only one is ever visible, and the controls' own signature check
+  // keeps this a no-op unless something they show actually changed.
+  renderTransformPresetControls(bridge);
 
   // modal-save-config is a global overlay, not scoped to the IDLE screen's
   // own render block below — Issue #202's "save configuration first"
@@ -846,6 +905,7 @@ function render() {
   if (_state.current === STATES.API_CONFIG && _state.apiConfigDraft) {
     renderApiConfigModals(bridge);
     renderApiBootstrapSection(bridge);
+    renderApiCursorPaginationSection(bridge);
   }
 
   if (_state.current === STATES.DONE) {
@@ -1059,6 +1119,7 @@ const bridge = {
   fetchSavedConfigs: (url) => fetchSavedConfigs(bridge, url),
   fetchAllSavedConfigs: () => fetchAllSavedConfigs(bridge),
   fetchOutputBlueprints: () => fetchOutputBlueprints(bridge),
+  fetchTransformPresets: () => fetchTransformPresets(bridge),
 };
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
@@ -1089,10 +1150,17 @@ function wireEvents() {
   wireCompanionErrorEvents(bridge);
 
   wireSettingsPanelEvents(bridge);
+  wireDedupEvents(bridge);
+  wireRequestHeadersEvents(bridge);
 
   wireApiConfigEvents(bridge);
 
   wireApiBootstrapEvents(bridge);
+
+  wireApiCursorPaginationEvents(bridge);
+
+  wireTransformPresetControls(bridge);
+  wireTransformPresetsSettings(bridge);
 
   wireFlatModeEvents(bridge);
 
@@ -1234,7 +1302,7 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'hardening', 'pagination', 'persistentSession', 'preflight', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'requestDelay', 'retry', 'deduplication', 'requestHeaders', 'hardening', 'pagination', 'persistentSession', 'preflight', 'respectRobotsDelay', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'pendingApiDiscoveryPartId', 'pendingApiDiscoveryActionIndex', 'pendingApiDiscoveryActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',

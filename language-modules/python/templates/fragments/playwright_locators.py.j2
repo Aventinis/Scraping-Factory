@@ -1,0 +1,15 @@
+def _resolve_frame_locator(page, frame_path):
+    scope = page
+    for frame_selector in frame_path:
+        scope = scope.frame_locator(frame_selector)
+    return scope
+
+
+# Used by the WaitFor/Fill/Click/Scroll action fragments rendered into the
+# scrape() body below (one per playwright_*_step.py.j2 template) — a plain
+# page.locator(selector) when frame_path is unset, a frame-scoped Locator
+# otherwise. Page has .locator() too, so _resolve_frame_locator(page, [])
+# returning page unchanged already makes this uniform without a separate
+# branch here.
+def _resolve_locator(page, selector, frame_path):
+    return _resolve_frame_locator(page, frame_path or []).locator(selector)

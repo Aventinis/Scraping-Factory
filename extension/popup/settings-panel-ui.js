@@ -48,6 +48,30 @@ function renderSettingsPanel(bridge) {
     }
 
     // Issue #88: opt-in proxy support.
+    // Issue #228: opt-in robots.txt Crawl-delay/Request-rate.
+    const respectRobotsToggle = /** @type {HTMLInputElement | null} */ (document.getElementById('toggle-respect-robots-delay'));
+    if (respectRobotsToggle) respectRobotsToggle.checked = state.respectRobotsDelay;
+
+    // Issue #222: opt-in pause between requests.
+    const requestDelayToggle = document.getElementById('toggle-request-delay');
+    if (requestDelayToggle) requestDelayToggle.checked = state.requestDelay.enabled;
+    document.getElementById('request-delay-config')?.classList.toggle('hidden', !state.requestDelay.enabled);
+    [['input-request-delay-min', 'minSecondsText'], ['input-request-delay-max', 'maxSecondsText']].forEach(([id, key]) => {
+      const input = /** @type {HTMLInputElement | null} */ (document.getElementById(id));
+      if (input && document.activeElement !== input) input.value = state.requestDelay[key];
+    });
+
+    // Issue #223: opt-in retry with backoff.
+    const retryToggle = document.getElementById('toggle-retry');
+    if (retryToggle) retryToggle.checked = state.retry.enabled;
+    document.getElementById('retry-config')?.classList.toggle('hidden', !state.retry.enabled);
+    const retryExponential = document.getElementById('toggle-retry-exponential');
+    if (retryExponential) retryExponential.checked = state.retry.exponential;
+    [['input-retry-attempts', 'maxAttemptsText'], ['input-retry-delay', 'delaySecondsText'], ['input-retry-status-codes', 'statusCodesText']].forEach(([id, key]) => {
+      const input = /** @type {HTMLInputElement | null} */ (document.getElementById(id));
+      if (input && document.activeElement !== input) input.value = state.retry[key];
+    });
+
     const proxyToggle = document.getElementById('toggle-proxy');
     if (proxyToggle) proxyToggle.checked = state.proxy.enabled;
     document.getElementById('proxy-config')?.classList.toggle('hidden', !state.proxy.enabled);
@@ -297,6 +321,30 @@ function wireSettingsPanelEvents(bridge) {
   document.getElementById('toggle-preflight')?.addEventListener('change', (e) => {
     bridge.setState(bridge.getState().current, { preflight: e.target.checked });
   });
+
+  // Issue #228: opt-in robots.txt Crawl-delay/Request-rate — plain boolean.
+  document.getElementById('toggle-respect-robots-delay')?.addEventListener('change', (e) => {
+    bridge.setState(bridge.getState().current, { respectRobotsDelay: e.target.checked });
+  });
+
+  // Issue #222: opt-in pause between requests.
+  document.getElementById('toggle-request-delay')?.addEventListener('change', (e) => {
+    bridge.setState(bridge.getState().current, { requestDelay: { ...bridge.getState().requestDelay, enabled: e.target.checked } });
+  });
+  document.getElementById('input-request-delay-min')?.addEventListener('input', (e) => {
+    bridge.setState(bridge.getState().current, { requestDelay: { ...bridge.getState().requestDelay, minSecondsText: e.target.value } });
+  });
+  document.getElementById('input-request-delay-max')?.addEventListener('input', (e) => {
+    bridge.setState(bridge.getState().current, { requestDelay: { ...bridge.getState().requestDelay, maxSecondsText: e.target.value } });
+  });
+
+  // Issue #223: opt-in retry with backoff.
+  const patchRetry = (patch) => bridge.setState(bridge.getState().current, { retry: { ...bridge.getState().retry, ...patch } });
+  document.getElementById('toggle-retry')?.addEventListener('change', (e) => patchRetry({ enabled: e.target.checked }));
+  document.getElementById('toggle-retry-exponential')?.addEventListener('change', (e) => patchRetry({ exponential: e.target.checked }));
+  document.getElementById('input-retry-attempts')?.addEventListener('input', (e) => patchRetry({ maxAttemptsText: e.target.value }));
+  document.getElementById('input-retry-delay')?.addEventListener('input', (e) => patchRetry({ delaySecondsText: e.target.value }));
+  document.getElementById('input-retry-status-codes')?.addEventListener('input', (e) => patchRetry({ statusCodesText: e.target.value }));
 
   // Issue #88: opt-in proxy support.
   document.getElementById('toggle-proxy')?.addEventListener('change', (e) => {

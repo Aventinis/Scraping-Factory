@@ -1,0 +1,21 @@
+# Converts the group tree (already extracted into ET.Element form by
+# extract_group above) into nested dicts/lists for JSON output — reusing the
+# same extraction walk instead of a second, JSON-specific one. A tag that
+# occurs more than once among one element's children — several matches of a
+# repeating group, or same-named sibling fields/groups, which Container-Mode
+# explicitly allows — becomes a JSON list; a tag occurring exactly once stays
+# a plain nested value.
+def _xml_to_dict(element):
+    children = list(element)
+    if not children:
+        return element.text or ""
+    result = {}
+    for child in children:
+        value = _xml_to_dict(child)
+        if child.tag not in result:
+            result[child.tag] = value
+        elif isinstance(result[child.tag], list):
+            result[child.tag].append(value)
+        else:
+            result[child.tag] = [result[child.tag], value]
+    return result

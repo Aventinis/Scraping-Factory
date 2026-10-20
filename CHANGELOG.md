@@ -1,5 +1,122 @@
 # Changelog
 
+## [1.18.0](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.12...v1.18.0) (2026-10-20)
+
+
+### Miscellaneous Chores
+
+* **release:** promote to 1.18.0 ([ada1e63](https://github.com/Aventinis/Scraping-Factory/commit/ada1e63c2d5e9186e8a901ebdb6f33cf1c046b0f))
+
+## [1.17.12](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.11...v1.17.12) (2026-10-20)
+
+
+### Features
+
+* Click browser action — choose first/last/all matches ([#267](https://github.com/Aventinis/Scraping-Factory/issues/267)) ([ae502b5](https://github.com/Aventinis/Scraping-Factory/commit/ae502b578d8c0b4a4b0eff7bcfe5b333885e007d))
+* **click-target:** first/last/all choice in the Click action editors ([e7b370c](https://github.com/Aventinis/Scraping-Factory/commit/e7b370cc4fc043b7d3bbd3a16511a89796a711b7))
+
+## [1.17.11](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.10...v1.17.11) (2026-10-20)
+
+
+### Features
+
+* honor robots.txt Crawl-delay/Request-rate at script runtime ([#228](https://github.com/Aventinis/Scraping-Factory/issues/228)) ([ff09c01](https://github.com/Aventinis/Scraping-Factory/commit/ff09c0112165b421302bc02ccb867e43131f5e46))
+* **robots-delay:** extension setting to respect robots.txt Crawl-delay ([d407004](https://github.com/Aventinis/Scraping-Factory/commit/d407004fd3134b4cf66b8561f6056f91c12432e6))
+* **robots-delay:** honor robots.txt Crawl-delay/Request-rate in generated scripts ([c4b1965](https://github.com/Aventinis/Scraping-Factory/commit/c4b19652bbe5990e686a172ae24a74fa745dd395))
+
+## [1.17.10](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.9...v1.17.10) (2026-10-20)
+
+
+### Features
+
+* text-content selector suffix :contains("text") ([#227](https://github.com/Aventinis/Scraping-Factory/issues/227)) ([d5f6a20](https://github.com/Aventinis/Scraping-Factory/commit/d5f6a20df33544ef70acd0a19366938fdcc64c95))
+* **text-selector:** extension support — content-script matcher, text filter input in the field modals, live match count ([8ff9242](https://github.com/Aventinis/Scraping-Factory/commit/8ff924262c656f280803696257753533ac6c15b8)), closes [#227](https://github.com/Aventinis/Scraping-Factory/issues/227)
+* **text-selector:** runtime support for the :contains("text") selector suffix ([d93c624](https://github.com/Aventinis/Scraping-Factory/commit/d93c6242ba788b359271bd7d41d2a87c377fa2e8)), closes [#227](https://github.com/Aventinis/Scraping-Factory/issues/227)
+* **text-selector:** validate the :contains("text") selector suffix in the compiler ([1dadf60](https://github.com/Aventinis/Scraping-Factory/commit/1dadf60ef348e7165989326713b75504fd7c5ece)), closes [#227](https://github.com/Aventinis/Scraping-Factory/issues/227)
+
+## [1.17.9](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.8...v1.17.9) (2026-10-19)
+
+
+### Features
+
+* custom request headers for flat, container and Blocks mode ([#226](https://github.com/Aventinis/Scraping-Factory/issues/226)) ([b5ece73](https://github.com/Aventinis/Scraping-Factory/commit/b5ece73fe62c1cc20d90d8bc2e9f7af14029165a))
+* **request-headers:** add custom request headers for flat, container and Blocks mode (compiler and templates) ([40752d1](https://github.com/Aventinis/Scraping-Factory/commit/40752d194b9610269e9288269179907a0fc8ea2d)), closes [#226](https://github.com/Aventinis/Scraping-Factory/issues/226)
+* **request-headers:** add the Request headers section to the popup ([50d52a1](https://github.com/Aventinis/Scraping-Factory/commit/50d52a13ad355a4d57dd6e71aa66ca0cb38d40e9)), closes [#226](https://github.com/Aventinis/Scraping-Factory/issues/226)
+
+## [1.17.8](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.7...v1.17.8) (2026-10-16)
+
+
+### Features
+
+* deduplicate output rows by key field(s), with optional incremental output ([#225](https://github.com/Aventinis/Scraping-Factory/issues/225)) ([4941585](https://github.com/Aventinis/Scraping-Factory/commit/494158559de45d8101ebb91650177f0b6c506133))
+* **deduplication:** add Deduplication settings section to the popup ([75ffd68](https://github.com/Aventinis/Scraping-Factory/commit/75ffd6840720819c4453629f4e57a628950b8225))
+* **deduplication:** add DeduplicationConfig IR, validation and Python runtime helpers ([4d90b68](https://github.com/Aventinis/Scraping-Factory/commit/4d90b68869dc55bcd0756f5e33c5049ee903c157))
+
+## [1.17.7](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.6...v1.17.7) (2026-10-16)
+
+
+### Features
+
+* **api-cursor-pagination:** add ApiConfig.CursorPagination and runtime page loop ([15d5517](https://github.com/Aventinis/Scraping-Factory/commit/15d5517b1a3414f36793cebf54cffb4649e79931))
+* **api-cursor-pagination:** add cursor pagination section to the API_CONFIG screen ([b89cbdd](https://github.com/Aventinis/Scraping-Factory/commit/b89cbdd6b19eebccfb501098476eab50b0f0ecc3))
+* **api-cursor-pagination:** detect the cursor query parameter from other recorded pages ([b1d3a3d](https://github.com/Aventinis/Scraping-Factory/commit/b1d3a3db05ca52ad4017193b024d391918f27426))
+* **api:** cursor/token-based pagination for API mode ([4f47e63](https://github.com/Aventinis/Scraping-Factory/commit/4f47e631a57a89bffaa83c87aaeef1acf8fccb38))
+
+## [1.17.6](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.5...v1.17.6) (2026-10-04)
+
+
+### Features
+
+* retry with backoff on transient request failures (Issue [#223](https://github.com/Aventinis/Scraping-Factory/issues/223)) ([630dda3](https://github.com/Aventinis/Scraping-Factory/commit/630dda3bf68c41cafdafabbe450724d85d033bae))
+* **retry:** add Retry on transient errors setting to the extension ([06f0469](https://github.com/Aventinis/Scraping-Factory/commit/06f046906802298eb81eaa9b2d61f50ab67e6ca7))
+* **retry:** add RetryConfig IR, validation and Scriban context ([3ad09a0](https://github.com/Aventinis/Scraping-Factory/commit/3ad09a035defedfcbb6f3686f1bd4d1ddd32f526))
+* **retry:** extend the trial run's deadline by announced retries ([83a9662](https://github.com/Aventinis/Scraping-Factory/commit/83a9662a612fd80eeba437a2f539bbcb048d2b94))
+* **retry:** retry every outbound request/navigation on transient failures in all request-making templates ([f51b5c2](https://github.com/Aventinis/Scraping-Factory/commit/f51b5c201a4454c7c53844065147f2dffa2406ec))
+
+## [1.17.5](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.4...v1.17.5) (2026-10-04)
+
+
+### Features
+
+* configurable pause (with optional jitter) between requests (Issue [#222](https://github.com/Aventinis/Scraping-Factory/issues/222)) ([b67058e](https://github.com/Aventinis/Scraping-Factory/commit/b67058e9470ac8bb3bd451429cee1ff06baa0664))
+* **request-delay:** add Pause between requests setting to the extension ([07e9ded](https://github.com/Aventinis/Scraping-Factory/commit/07e9dedd393a2cc39590353df2c771777723d881))
+* **request-delay:** add RequestDelayConfig IR, validation and Scriban context ([a1c05b9](https://github.com/Aventinis/Scraping-Factory/commit/a1c05b9e181ae9f3dd61c238821e3d86de4d55f6))
+* **request-delay:** extend the trial run's deadline by every announced request-delay pause ([67db179](https://github.com/Aventinis/Scraping-Factory/commit/67db1796df54b790dc8c2b23c78986a03f7637d3))
+* **request-delay:** pace every outbound request in all request-making templates ([4644c2d](https://github.com/Aventinis/Scraping-Factory/commit/4644c2d88eba9b657919cb17515926b5aadfaa52))
+
+
+### Bug Fixes
+
+* **request-delay:** keep the pause inputs within the side panel's width ([d03e47c](https://github.com/Aventinis/Scraping-Factory/commit/d03e47c5c8c86625c5649fa66e806c8febb27321))
+
+## [1.17.4](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.3...v1.17.4) (2026-10-04)
+
+
+### Features
+
+* reusable, named transform-chain presets (Issue [#279](https://github.com/Aventinis/Scraping-Factory/issues/279)) ([e40adfc](https://github.com/Aventinis/Scraping-Factory/commit/e40adfc6dd146c49e5428a10b7d2ac94736dc203))
+* **transform-presets:** add TransformPresetStore and /transform-presets endpoints ([8073bfa](https://github.com/Aventinis/Scraping-Factory/commit/8073bfae8ad6ccf23b48ae0f1a334582c018691a))
+* **transform-presets:** apply/save presets in every transform editor and manage them in Settings ([fa96fca](https://github.com/Aventinis/Scraping-Factory/commit/fa96fca87868b5333643436c102fce46f7dea527))
+
+## [1.17.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.2...v1.17.3) (2026-10-04)
+
+
+### Features
+
+* dedicated "Convert price/currency to number" transform (Issue [#234](https://github.com/Aventinis/Scraping-Factory/issues/234)) ([9d9ece4](https://github.com/Aventinis/Scraping-Factory/commit/9d9ece42aae3e46ed61d7d87a59449666af848ee))
+* **to-currency:** add _to_currency runtime helper to every transform-capable template ([61f75c8](https://github.com/Aventinis/Scraping-Factory/commit/61f75c8b4d804354cd62520b2ea9818ce05201ed))
+* **to-currency:** add Convert price/currency to number to the transform editor with live preview ([032685a](https://github.com/Aventinis/Scraping-Factory/commit/032685af6613c96aeb02efcea68e96803dd27b09))
+* **to-currency:** add ToCurrencyTransform IR, validation and Python literal ([dee7184](https://github.com/Aventinis/Scraping-Factory/commit/dee71842c8324288e908e6c65d79182e587e6de0))
+
+## [1.17.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.1...v1.17.2) (2026-10-04)
+
+
+### Features
+
+* highlight the hovered field/container row on the live page (Issue [#233](https://github.com/Aventinis/Scraping-Factory/issues/233)) ([d34499b](https://github.com/Aventinis/Scraping-Factory/commit/d34499bf4c2cd3fe3481b17505fbfabb62e659c2))
+* **hover-highlight:** highlight a single row's elements on the live page ([d1cb8d3](https://github.com/Aventinis/Scraping-Factory/commit/d1cb8d31609521b750c1809f475cf13c4719731e))
+* **hover-highlight:** highlight hovered flat field / container tree rows on the page ([4622b99](https://github.com/Aventinis/Scraping-Factory/commit/4622b99e25f618d3b9ee7867d6ea4cd1e232ced9))
+
 ## [1.17.1](https://github.com/Aventinis/Scraping-Factory/compare/v1.16.7...v1.17.1) (2026-10-04)
 
 Stable release consolidating the 1.16.2–1.16.7 prereleases below. Highlights:

@@ -1,0 +1,22 @@
+{{~ if hardening.has_baseline ~}}
+# Issue #131 (baseline check): a small sidecar file next to the script's own
+# output records the result count from the last run that passed cleanly
+# (see main()'s own "only write when not hardening_failed" call site) — a
+# bad run must never become the new normal for the next comparison. Missing/
+# corrupt sidecar (first run ever, or the file was deleted) is treated the
+# same as "no baseline yet", not an error.
+BASELINE_PATH = OUTPUT_PATH + ".hardening-baseline.json"
+
+
+def _read_baseline():
+    try:
+        with open(BASELINE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f).get("count")
+    except (FileNotFoundError, ValueError, OSError):
+        return None
+
+
+def _write_baseline(count):
+    with open(BASELINE_PATH, "w", encoding="utf-8") as f:
+        json.dump({"count": count}, f)
+{{~ end ~}}

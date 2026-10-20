@@ -1,0 +1,60 @@
+{{~ if discovered_urls.enabled ~}}
+# Issue #218: fetches DISCOVERED_URLS_PAGE_URL and harvests every distinct
+# href matching DISCOVERED_URLS_LINK_SELECTOR, resolved to an absolute URL
+# via urljoin against the page it was found on, capped at DISCOVERED_URLS_MAX
+# (order of appearance, not sorted) — a misconfigured selector matching an
+# entire sitemap/nav tree shouldn't silently balloon a run to thousands of
+# pages. Deliberately plain requests+BeautifulSoup even on this Browser-
+# engine script — it runs before any navigation happens, so there's no live
+# Playwright page yet, and the common case doesn't need one at all (see
+# IR/DiscoveredUrlsConfig.cs). A failed fetch/parse is a warning, not a
+# crash — the main run still proceeds with URLS/AdditionalUrls as already
+# configured, the same "degrade, don't crash" treatment a failed Download
+# already gets.
+def _discover_additional_urls():
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"}
+{{~ if request_headers.enabled ~}}
+    headers.update(EXTRA_HTTP_HEADERS)
+    if _USER_AGENT:
+        headers["User-Agent"] = _USER_AGENT
+{{~ end ~}}
+    try:
+{{~ if proxy.enabled ~}}
+        proxy = _next_proxy()
+        proxies = {"http": proxy, "https": proxy} if proxy else None
+{{~ if request_delay.enabled ~}}
+        _pace_request()
+{{~ end ~}}
+{{~ if retry.enabled ~}}
+        response = _send_with_retry(lambda _u=DISCOVERED_URLS_PAGE_URL: requests.get(_u, headers=headers, proxies=proxies, timeout=10), DISCOVERED_URLS_PAGE_URL)
+{{~ else ~}}
+        response = requests.get(DISCOVERED_URLS_PAGE_URL, headers=headers, proxies=proxies, timeout=10)
+{{~ end ~}}
+{{~ else ~}}
+{{~ if request_delay.enabled ~}}
+        _pace_request()
+{{~ end ~}}
+{{~ if retry.enabled ~}}
+        response = _send_with_retry(lambda _u=DISCOVERED_URLS_PAGE_URL: requests.get(_u, headers=headers, timeout=10), DISCOVERED_URLS_PAGE_URL)
+{{~ else ~}}
+        response = requests.get(DISCOVERED_URLS_PAGE_URL, headers=headers, timeout=10)
+{{~ end ~}}
+{{~ end ~}}
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, "html.parser")
+    except Exception as e:
+        print(f"WARNING: Could not discover additional URLs from {DISCOVERED_URLS_PAGE_URL}: {e}")
+        return []
+
+    discovered = []
+    for el in soup.select(DISCOVERED_URLS_LINK_SELECTOR):
+        href = el.get("href")
+        if not href:
+            continue
+        absolute_url = urllib.parse.urljoin(DISCOVERED_URLS_PAGE_URL, href)
+        if absolute_url not in discovered:
+            discovered.append(absolute_url)
+        if len(discovered) >= DISCOVERED_URLS_MAX:
+            break
+    return discovered
+{{~ end ~}}

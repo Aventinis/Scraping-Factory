@@ -32,7 +32,10 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         // — it comes from scrape()'s own `url` parameter at runtime, since
         // the same action sequence now runs once per start URL. See
         // playwright_navigate_step.py.j2.
-        var navigateFragment = navigateTemplate.Render(new { }).TrimEnd();
+        // Issue #223: with retries on, the navigation itself is wrapped in
+        // _send_with_retry (the shell defines it) — only the navigation, never
+        // a half-run login action sequence.
+        var navigateFragment = navigateTemplate.Render(new { retry_enabled = plan.Retry is not null }).TrimEnd();
 
         var actionLines = plan.Steps
             .Select(step => step switch
@@ -46,7 +49,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
                 {
                     step = new { selector = s.Selector, env_var = s.EnvironmentVariableName, frame_path = s.FramePath },
                 }).TrimEnd(),
-                ClickStep s => clickTemplate.Render(new { step = new { selector = s.Selector, frame_path = s.FramePath } }).TrimEnd(),
+                ClickStep s => clickTemplate.Render(new { step = new { selector = s.Selector, frame_path = s.FramePath, target = s.Target.ToString().ToLowerInvariant(), wait_after_ms = s.WaitAfterMs } }).TrimEnd(),
                 ScrollStep s => scrollTemplate.Render(new
                 {
                     step = new
@@ -82,13 +85,15 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         // vars at runtime (SMTP/webhook credentials, proxy URL list), same
         // reason FillStep already needs `import os`. Issue #175: persistent
         // session checks os.path.exists(SESSION_STATE_PATH).
-        var needsOsImport = plan.Steps.OfType<FillStep>().Any() || plan.ChangeDetection is not null || plan.Proxy is not null || plan.PersistentSession;
+        var needsOsImport = plan.Steps.OfType<FillStep>().Any() || plan.ChangeDetection is not null || plan.Proxy is not null || plan.PersistentSession
+            || PythonRequestHeadersLiteral.UsesEnvironmentVariables(plan.Headers);
         // A FillStep's credential or Proxy's URL list must come from an
         // environment variable that's actually set at runtime — both share
         // the `_require_env`/`EXIT_MISSING_ENV_VAR` helper (see the shell
         // templates) instead of a raw, unhandled KeyError. Change detection
         // isn't included: its own env-var reads are unaffected by this.
-        var needsExitHelper = plan.Steps.OfType<FillStep>().Any() || plan.Proxy is not null;
+        var needsExitHelper = plan.Steps.OfType<FillStep>().Any() || plan.Proxy is not null
+            || PythonRequestHeadersLiteral.UsesEnvironmentVariables(plan.Headers);
         // change_detection/proxy/hardening/pagination/external_config are no
         // longer computed here — PythonScrapingContextBuilder's own methods
         // below each derive them straight from `plan` internally, exactly

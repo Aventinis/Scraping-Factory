@@ -49,6 +49,57 @@ function buildSelector(element, scopeRoot, avoidId) {
   return segments.join(' > ');
 }
 
+// ── :contains("text") selector suffix (Issue #227) ───────────────────────────
+// A selector may end in :contains("text") — not standard CSS, so
+// querySelectorAll rejects it. Every element lookup below goes through the
+// two helpers here instead, which split that suffix off, query the CSS part
+// as usual and keep the matches whose text contains the wanted text. The
+// rule is the same one the generated scripts apply (the text_selector_*
+// fragments in language-modules/python/templates/fragments): the element's
+// whole text (descendants included) is reduced to single spaces and
+// lower-cased on both sides, and the wanted text only has to occur in it.
+// popup/selector-text-filter.js and the companion's SelectorTextFilter hold
+// the other copies of the syntax — the test vectors are shared.
+const TEXT_FILTER_PATTERN = /:contains\(\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')\s*\)\s*$/i;
+
+function splitTextFilter(selector) {
+  const match = typeof selector === 'string' ? TEXT_FILTER_PATTERN.exec(selector) : null;
+  if (!match) return { base: selector, text: null };
+  const text = match[1] !== undefined ? match[1] : match[2];
+  return { base: selector.slice(0, match.index).trimEnd() || '*', text: text.replace(/\\(.)/g, '$1') };
+}
+
+function normalizeText(text) {
+  return String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function querySelectorAllWithText(scope, selector) {
+  const { base, text } = splitTextFilter(selector);
+  const matches = Array.from(scope.querySelectorAll(base));
+  if (text === null) return matches;
+  const wanted = normalizeText(text);
+  return matches.filter((el) => normalizeText(el.textContent).includes(wanted));
+}
+
+function querySelectorWithText(scope, selector) {
+  const { base, text } = splitTextFilter(selector);
+  if (text === null) return scope.querySelector(base);
+  return querySelectorAllWithText(scope, selector)[0] || null;
+}
+
+// The last picked element's selector and the instance it was relative to —
+// kept so the popup can ask how many elements the selector would match with
+// a text filter added (COUNT_PICK_WITH_TEXT), the same live feedback the
+// plain match count gives at click time. Reset at the start of every
+// selection round in every frame, so only the frame where the latest pick
+// actually happened answers.
+let lastPick = null;
+
+function appendTextFilterToSelector(selector, text) {
+  const wanted = String(text || '').replace(/\s+/g, ' ').trim();
+  return wanted ? `${selector}:contains("${wanted.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")` : selector;
+}
+
 // Existence/quantity feedback the instant a selector is built (Issue #85) —
 // purely a client-side UX nicety, no companion round-trip needed. Scoped to
 // scopeRoot the same way buildSelector's own boundary already is, so a
@@ -60,7 +111,7 @@ function buildSelector(element, scopeRoot, avoidId) {
 // SyntaxError break the whole click handler.
 function countSelectorMatches(selector, scopeRoot) {
   try {
-    return (scopeRoot || document).querySelectorAll(selector).length;
+    return querySelectorAllWithText(scopeRoot || document, selector).length;
   } catch (err) {
     log('countSelectorMatches failed', err.message);
     return null;
@@ -153,7 +204,7 @@ function serializeDomTree() {
 
 function safeQueryAll(scope, selector) {
   try {
-    return Array.from(scope.querySelectorAll(selector));
+    return querySelectorAllWithText(scope, selector);
   } catch (err) {
     log('PREVIEW invalid selector', selector, err.message);
     return [];
@@ -162,7 +213,7 @@ function safeQueryAll(scope, selector) {
 
 function safeQueryOne(scope, selector) {
   try {
-    return scope.querySelector(selector);
+    return querySelectorWithText(scope, selector);
   } catch (err) {
     log('PREVIEW invalid selector', selector, err.message);
     return null;
@@ -207,6 +258,36 @@ function computePreviewMatches(mode, fields, groups) {
     return { matches, empty };
   }
   return matchFlatFields(fields || []);
+}
+
+// ── Hover highlight (Issue #233) ─────────────────────────────────────────────
+// Resolves the one field/container row the user is hovering in the side
+// panel to its element(s) on the live page. `steps` is the selector chain
+// from the root down to the hovered row ([{selector, all}], built by
+// popup/hover-highlight.js), applied with exactly matchGroupTree's own
+// semantics: each step is resolved inside every scope the previous step
+// produced, `all: true` (a repeating group, or a flat field) keeping every
+// match and `all: false` (a non-repeating group, or a container field) only
+// the first — so a nested field is highlighted once per enclosing instance,
+// the same set of elements the full "Vorschau" would draw for that row.
+//
+// A non-empty `framePath` means the row's element lives inside an iframe,
+// which this top-frame-only overlay can't reach (the full preview has the
+// same limitation) — the outermost <iframe> itself (framePath[0]) is
+// highlighted instead, so the user still sees *where* on the page it is.
+function matchHoverHighlight(steps, framePath) {
+  if (framePath && framePath.length > 0) {
+    return { elements: safeQueryAll(document, framePath[0]), inIframe: true };
+  }
+  let scopes = [document];
+  for (const step of steps || []) {
+    if (!step || !step.selector) return { elements: [], inIframe: false };
+    scopes = scopes.flatMap(scope => (step.all
+      ? safeQueryAll(scope, step.selector)
+      : [safeQueryOne(scope, step.selector)].filter(Boolean)));
+    if (scopes.length === 0) break;
+  }
+  return { elements: steps && steps.length > 0 ? scopes : [], inIframe: false };
 }
 
 // ── API-Mode candidate correlation (Issue #53 Phase 4) ──────────────────────
@@ -767,8 +848,9 @@ if (typeof window !== 'undefined') {
 
 if (typeof module !== 'undefined') {
   module.exports = {
-    buildSelector, countSelectorMatches, collectElementAttributes, collectOwnText, elementPath, serializeDomTree,
-    matchFlatFields, matchGroupTree, computePreviewMatches,
+    buildSelector, countSelectorMatches, splitTextFilter, normalizeText, querySelectorAllWithText, querySelectorWithText,
+    appendTextFilterToSelector, collectElementAttributes, collectOwnText, elementPath, serializeDomTree,
+    matchFlatFields, matchGroupTree, computePreviewMatches, matchHoverHighlight,
     findValueInJson, siblingFields, siblingFieldsAt, findApiCandidates,
     deriveItemsAndValuePath, deriveApiTreeSkeleton,
     scriptTagSelector, findEmbeddedJsonCandidates,
@@ -875,6 +957,15 @@ const PREVIEW_MAX_BOXES = 300; // caps drawn boxes on pathological pages; the re
 let previewBoxes = [];
 
 function createPreviewBox(element, name) {
+  previewBoxes.push(createHighlightBox(element, name, PREVIEW_BOX_COLORS));
+}
+
+const PREVIEW_BOX_COLORS = { border: '#3b82f6', fill: 'rgba(59,130,246,0.15)' };
+
+// Shared by the full preview (blue, above) and Issue #233's hover highlight
+// (green, below) — one box + name label, appended to <body> and returned so
+// each caller can track/clear its own boxes independently.
+function createHighlightBox(element, name, colors) {
   const rect = element.getBoundingClientRect();
   const box = document.createElement('div');
   box.className = 'sf-preview-box';
@@ -884,8 +975,8 @@ function createPreviewBox(element, name) {
     left:          `${rect.left + window.scrollX}px`,
     width:         `${rect.width}px`,
     height:        `${rect.height}px`,
-    border:        '2px solid #3b82f6',
-    background:    'rgba(59,130,246,0.15)',
+    border:        `2px solid ${colors.border}`,
+    background:    colors.fill,
     boxSizing:     'border-box',
     pointerEvents: 'none',
     zIndex:        '2147483646',
@@ -897,7 +988,7 @@ function createPreviewBox(element, name) {
     position:      'absolute',
     top:           '-18px',
     left:          '0',
-    background:    '#3b82f6',
+    background:    colors.border,
     color:         '#fff',
     font:          '11px sans-serif',
     padding:       '1px 4px',
@@ -908,7 +999,7 @@ function createPreviewBox(element, name) {
   box.appendChild(label);
 
   document.body.appendChild(box);
-  previewBoxes.push(box);
+  return box;
 }
 
 function clearPreviewBoxes() {
@@ -929,6 +1020,29 @@ function startPreview(mode, fields, groups) {
 function stopPreview() {
   log('PREVIEW stop');
   clearPreviewBoxes();
+}
+
+// ── Hover highlight overlay (Issue #233) ─────────────────────────────────────
+// A separate box layer from the full preview's, in green, so the two never
+// get confused and can be active at the same time — hovering a row while
+// "Vorschau" is on simply adds a green box on top of that row's blue ones.
+// Only ever one row at a time: every HOVER_HIGHLIGHT replaces the previous
+// highlight, HOVER_HIGHLIGHT_CLEAR removes it.
+
+const HOVER_HIGHLIGHT_COLORS = { border: '#16a34a', fill: 'rgba(22,163,74,0.18)' };
+
+let hoverHighlightBoxes = [];
+
+function clearHoverHighlight() {
+  hoverHighlightBoxes.forEach(box => box.remove());
+  hoverHighlightBoxes = [];
+}
+
+function showHoverHighlight(name, steps, framePath) {
+  clearHoverHighlight();
+  const { elements, inIframe } = matchHoverHighlight(steps, framePath);
+  const label = `${name}${inIframe ? ' (iframe)' : ''}${elements.length > 1 ? ` ×${elements.length}` : ''}`;
+  hoverHighlightBoxes = elements.slice(0, PREVIEW_MAX_BOXES).map(element => createHighlightBox(element, label, HOVER_HIGHLIGHT_COLORS));
 }
 
 // ── Selection mode ────────────────────────────────────────────────────────────
@@ -1088,6 +1202,7 @@ function onClick(e) {
   const clickScopeRoot = scopeRootFor(target);
   const selector = buildSelector(target, clickScopeRoot, avoidIdInSelector);
   const matchCount = countSelectorMatches(selector, clickScopeRoot);
+  lastPick = { selector, scopeRoot: clickScopeRoot };
   const wasApiSearch = apiSearchActive; // read before stopSelection() clears it
   const apiScopePathForSearch = apiScopePathActive; // read before stopSelection() clears it
   const wasEmbeddedJsonSearch = embeddedJsonSearchActive; // read before stopSelection() clears it
@@ -1176,6 +1291,7 @@ function onClick(e) {
 function startSelection(scopeSelector, avoidId, apiSearch, apiScopePath, embeddedJsonSearch, embeddedJsonScopePath, embeddedJsonScriptSelector) {
   log('SELECTION start', { scopeSelector, avoidId, apiSearch, apiScopePath, embeddedJsonSearch, embeddedJsonScopePath, embeddedJsonScriptSelector });
   const generation = ++selectionGeneration;
+  lastPick = null;
   avoidIdInSelector = !!avoidId;
   apiSearchActive = !!apiSearch;
   apiScopePathActive = apiSearch ? (apiScopePath || null) : null;
@@ -1191,7 +1307,7 @@ function startSelection(scopeSelector, avoidId, apiSearch, apiScopePath, embedde
 
   // Issue #167: every matching instance, not just document.querySelector's
   // implicit first one — see scopeRootEls' own doc comment for why.
-  const roots = Array.from(document.querySelectorAll(scopeSelector));
+  const roots = safeQueryAll(document, scopeSelector);
   if (roots.length > 0) {
     scopeRootEls = roots;
     armSelection();
@@ -1228,7 +1344,7 @@ function retryScopeSelector(scopeSelector, generation, deadline) {
   setTimeout(() => {
     if (generation !== selectionGeneration) return; // superseded or cancelled meanwhile
 
-    const roots = Array.from(document.querySelectorAll(scopeSelector));
+    const roots = safeQueryAll(document, scopeSelector);
     if (roots.length > 0) {
       scopeRootEls = roots;
       armSelection();
@@ -1368,6 +1484,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     if (message.type === 'DISABLE_DOM_VIEW' && isTopFrame()) disableDomView();
     if (message.type === 'PREVIEW_START' && isTopFrame()) startPreview(message.mode, message.fields, message.groups);
     if (message.type === 'PREVIEW_STOP' && isTopFrame()) stopPreview();
+    if (message.type === 'HOVER_HIGHLIGHT' && isTopFrame()) showHoverHighlight(message.name, message.steps, message.framePath);
+    if (message.type === 'HOVER_HIGHLIGHT_CLEAR' && isTopFrame()) clearHoverHighlight();
     if (message.type === 'API_CAPTURE_START' || message.type === 'API_CAPTURE_STOP') {
       log('API_CAPTURE forward to MAIN world', message.type);
       if (message.type === 'API_CAPTURE_START') capturedApiEntries = [];
@@ -1387,6 +1505,15 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     if (message.type === 'GET_API_CAPTURE_ENTRIES') {
       if (!isTopFrame()) return;
       sendResponse(capturedApiEntries);
+    }
+    // Issue #227: how many elements the last pick would match with a text
+    // filter added. Answered by the frame the pick happened in only (lastPick
+    // is reset at every selection start in every frame) — no isTopFrame gate,
+    // since a pick inside an iframe lives in that iframe's own script.
+    if (message.type === 'COUNT_PICK_WITH_TEXT') {
+      if (!lastPick) return;
+      sendResponse({ count: countSelectorMatches(appendTextFilterToSelector(lastPick.selector, message.text), lastPick.scopeRoot) });
+      return;
     }
     if (message.type === 'CHECK_ROBOTS_TXT') {
       if (!isTopFrame()) return;

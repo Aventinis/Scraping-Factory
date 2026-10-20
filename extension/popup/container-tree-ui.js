@@ -18,6 +18,8 @@
 // functions before the split and still are.
 const SFContainerTreeUI = (function () {
   const { createLogger } = typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+  const { buildGroupNodeHighlight, wireHoverHighlight } =
+    typeof require !== 'undefined' ? require('./hover-highlight') : self.SFHoverHighlight;
   const log = createLogger('SF:ContainerTreeUI');
   const { t } = typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
   const { STATES, escapeHtml } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
@@ -27,6 +29,10 @@ const SFContainerTreeUI = (function () {
     parseAllowedContentTypes, megabytesToBytes, collectSiblingFieldNames,
   } = typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
   const { transformsAreValid, addTransform } = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
+  const { appendTextFilter } =
+    typeof require !== 'undefined' ? require('./selector-text-filter') : self.SFSelectorTextFilter;
+  const { resetTextFilter, effectiveMatchCount, wireTextFilter } =
+    typeof require !== 'undefined' ? require('./selector-text-filter-ui') : self.SFSelectorTextFilterUI;
   const { renderTransformList, renderTransformPreview, wireTransformList } =
     typeof require !== 'undefined' ? require('./field-transforms-ui') : self.SFFieldTransformsUI;
   const { openCombineFieldModal, openSplitFieldModal } =
@@ -253,8 +259,11 @@ const SFContainerTreeUI = (function () {
 
     const state = bridge.getState();
     if (!transformsAreValid(state.pendingTransforms)) return;
+    // Issue #227: an optional text the element must contain — appended as a
+    // :contains("…") suffix; blank leaves the pick's selector untouched.
+    const selector = appendTextFilter(state.pendingSelector, document.getElementById('input-field-text-filter')?.value);
     const node = buildFieldNode(
-      name, state.pendingSelector, mode, attribute, state.pendingFramePath, state.pendingTransforms, download,
+      name, selector, mode, attribute, state.pendingFramePath, state.pendingTransforms, download,
       maxDownloadSizeBytes, allowedContentTypes,
     );
     log('FIELD_ADD(container) confirm', node);
@@ -371,13 +380,19 @@ const SFContainerTreeUI = (function () {
       if (maxSizeInput) maxSizeInput.value = '';
       const allowedTypesInput = document.getElementById('input-field-download-allowed-types');
       if (allowedTypesInput) allowedTypesInput.value = '';
+      resetTextFilter('input-field-text-filter', 'btn-field-use-text', state.pendingRawText);
     }
-    renderMatchCountHint('field-extended-match-count', state.pendingMatchCount);
+    renderMatchCountHint('field-extended-match-count', effectiveMatchCount('input-field-text-filter', state.pendingMatchCount));
     renderTransformList('field-extended-transform-list', state.pendingTransforms);
     refreshExtendedTransformPreview(bridge);
   }
 
   function wireContainerModeEvents(bridge) {
+  // Issue #233: hovering a tree row (group or field) highlights that node's
+  // element(s) on the page — in every instance of its repeating ancestors.
+  wireHoverHighlight(document.getElementById('group-tree-root'), '.group-tree-row',
+    row => buildGroupNodeHighlight(bridge.getState().groups, JSON.parse(row.closest('.group-tree-node').dataset.path)));
+
   document.getElementById('btn-add-root-container')?.addEventListener('click', () => openContainerModal(bridge, null));
 
   // Event delegation for the container tree's per-row add/remove/move buttons
@@ -437,6 +452,14 @@ const SFContainerTreeUI = (function () {
     if (e.key === 'Enter') confirmContainerModal(bridge);
   });
   document.getElementById('btn-container-cancel')?.addEventListener('click', () => cancelContainerModal(bridge));
+  // Issue #227: re-rendering the modal lets the match-count hint follow the
+  // typed text (renderContainerFieldModal reads effectiveMatchCount each time).
+  wireTextFilter({
+    inputId: 'input-field-text-filter',
+    useButtonId: 'btn-field-use-text',
+    rerender: () => bridge.patchState({}),
+    getRawText: () => bridge.getState().pendingRawText,
+  });
   document.getElementById('btn-field-extended-confirm')?.addEventListener('click', () => confirmExtendedField(bridge));
   document.getElementById('input-field-extended-name')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') confirmExtendedField(bridge);

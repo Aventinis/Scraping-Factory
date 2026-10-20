@@ -51,6 +51,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep the message channel open for the async sendResponse above
   }
 
+  // Issue #227: live match count for a text filter on the last picked element
+  // — same request/response relay as GET_API_CAPTURE_ENTRIES. Whichever frame
+  // made the pick answers; if none does (or the tab has no content script),
+  // the popup simply gets { count: null } and shows no live count.
+  if (message.type === 'COUNT_PICK_WITH_TEXT') {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs.length === 0) {
+        sendResponse({ count: null });
+        return;
+      }
+      chrome.tabs.sendMessage(tabs[0].id, { type: 'COUNT_PICK_WITH_TEXT', text: message.text })
+        .then((result) => sendResponse(result || { count: null }))
+        .catch(() => sendResponse({ count: null }));
+    });
+    return true; // keep the message channel open for the async sendResponse above
+  }
+
   if (message.type === 'CHECK_ROBOTS_TXT') {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs.length === 0) {
@@ -64,7 +81,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep the message channel open for the async sendResponse above
   }
 
-  const FORWARD_TO_TAB = ['START_SELECTION', 'STOP_SELECTION', 'ENABLE_DOM_VIEW', 'DISABLE_DOM_VIEW', 'PREVIEW_START', 'PREVIEW_STOP', 'API_CAPTURE_START', 'API_CAPTURE_STOP'];
+  const FORWARD_TO_TAB = ['START_SELECTION', 'STOP_SELECTION', 'ENABLE_DOM_VIEW', 'DISABLE_DOM_VIEW', 'PREVIEW_START', 'PREVIEW_STOP', 'HOVER_HIGHLIGHT', 'HOVER_HIGHLIGHT_CLEAR', 'API_CAPTURE_START', 'API_CAPTURE_STOP'];
   if (FORWARD_TO_TAB.includes(message.type)) {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs.length === 0) {

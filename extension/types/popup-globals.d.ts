@@ -34,6 +34,14 @@ declare global {
     SFGlobalSettings: any;
     SFApiConfig: any;
     SFApiBootstrap: any;
+    SFApiCursorPagination: any;
+    SFDedupConfig: any;
+    SFRequestHeaders: any;
+    SFSelectorTextFilter: any;
+    SFSelectorTextFilterUI: any;
+    SFRequestHeadersUI: any;
+    SFDedupConfigUI: any;
+    SFTransformPresets: any;
     SFContainerTree: any;
     SFFieldTransforms: any;
     SFConfigImport: any;

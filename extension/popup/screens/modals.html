@@ -30,6 +30,15 @@
           </div>
         </div>
       </div>
+      <!-- Issue #227: optional text the element must contain — for a button
+           that only its label tells apart from its siblings. Left empty, the
+           pick's selector is used as is; see selector-text-filter-ui.js. -->
+      <div class="text-filter-row">
+        <label for="input-field-name-text-filter" data-i18n="modals.textFilter.label"></label>
+        <input id="input-field-name-text-filter" type="text" data-i18n-placeholder="modals.textFilter.placeholder" autocomplete="off" />
+        <button type="button" id="btn-field-name-use-text" class="btn-secondary btn-tiny hidden" data-i18n="modals.textFilter.useElementText"></button>
+        <p class="preview-summary" data-i18n="modals.textFilter.hint"></p>
+      </div>
       <!-- Issue #85: live match count for the just-picked selector -->
       <p id="field-name-match-count" class="match-count-hint hidden"></p>
       <!-- Issue #84: optional per-field transform chain -->
@@ -37,6 +46,8 @@
         <label data-i18n="transforms.sectionLabel"></label>
         <ul id="field-transform-list" class="field-transform-list"></ul>
         <button type="button" id="btn-field-transform-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
+        <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.js -->
+        <div class="transform-preset-controls" data-preset-target="flat"></div>
         <!-- Issue #143: live preview of the chain's output against the picked element's raw value -->
         <p id="field-transform-preview" class="transform-preview hidden"></p>
       </div>
@@ -155,6 +166,15 @@
           <input id="input-field-download-allowed-types" type="text" data-i18n-placeholder="modals.download.allowedTypesPlaceholder" autocomplete="off" />
         </div>
       </div>
+      <!-- Issue #227: optional text the element must contain — for a button
+           that only its label tells apart from its siblings. Left empty, the
+           pick's selector is used as is; see selector-text-filter-ui.js. -->
+      <div class="text-filter-row">
+        <label for="input-field-text-filter" data-i18n="modals.textFilter.label"></label>
+        <input id="input-field-text-filter" type="text" data-i18n-placeholder="modals.textFilter.placeholder" autocomplete="off" />
+        <button type="button" id="btn-field-use-text" class="btn-secondary btn-tiny hidden" data-i18n="modals.textFilter.useElementText"></button>
+        <p class="preview-summary" data-i18n="modals.textFilter.hint"></p>
+      </div>
       <!-- Issue #85: live match count for the just-picked selector -->
       <p id="field-extended-match-count" class="match-count-hint hidden"></p>
       <!-- Issue #84: optional per-field transform chain — hidden for
@@ -164,6 +184,8 @@
         <label data-i18n="transforms.sectionLabel"></label>
         <ul id="field-extended-transform-list" class="field-transform-list"></ul>
         <button type="button" id="btn-field-extended-transform-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
+        <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.js -->
+        <div class="transform-preset-controls" data-preset-target="container"></div>
         <!-- Issue #143: live preview of the chain's output against the picked element's raw value -->
         <p id="field-extended-transform-preview" class="transform-preview hidden"></p>
       </div>
@@ -219,6 +241,8 @@
         <label data-i18n="transforms.sectionLabel"></label>
         <ul id="api-field-transform-list" class="field-transform-list"></ul>
         <button type="button" id="btn-api-field-transforms-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
+        <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.js -->
+        <div class="transform-preset-controls" data-preset-target="api"></div>
         <!-- Issue #147: live preview against the field's captured sample value -->
         <p id="api-field-transform-preview" class="transform-preview hidden"></p>
       </div>

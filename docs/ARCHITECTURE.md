@@ -391,6 +391,42 @@ request actually sends.
   `e2e/examples/issue-220-api-token-bootstrap-check.js` against the
   `test-pages/api-token-bootstrap` fixture
 
+### 2.5c API mode — cursor/token-based pagination (Issue #224)
+
+For JSON APIs whose next page's identifier only appears in the *current*
+page's response (Relay's `pageInfo.endCursor`, a `next_page_token`). A
+sequential fetch loop inside each parameter combination — deliberately not an
+`ApiParameter`, whose values are enumerated up front and become output
+columns. Page 1 is sent exactly as configured; from page 2 on the previous
+page's cursor goes to a fixed target: a query parameter, or a dot path inside
+the POST body (`variables.after` for GraphQL). The chain ends when no cursor
+is returned, an optional has-more flag is falsy, a cursor repeats, or
+`MaxPages` is reached. Works for the flat and the tree response shape. The
+"Detect from recording" button reads the recorded response/request for
+cursor-looking keys. Sibling follow-up: `Link`-header pagination (#321).
+
+- Extension: `popup/api-cursor-pagination.js` (pure draft/wire logic:
+  `cursorDraftIsComplete`, `buildApiCursorPagination`,
+  `detectCursorSuggestion`), `popup/api-cursor-pagination-ui.js` (the
+  section's render/wiring), `popup/api-config.js` (`buildApiConfig`'s
+  `cursorPagination` param, the Apply gate), `popup/api-config-ui.js`
+  (`confirmApiConfig`, `sourceEntryId` on the draft),
+  `popup/screens/api-config.html` (`#api-cursor-section`)
+- Companion: `IR/ApiConfig.cs` (`ApiConfig.CursorPagination`,
+  `ApiCursorPagination`, `ApiCursorTarget`), `ScrapingPlanValidator.cs`
+  (`ValidateApiCursorPagination`), `Backends/Python/PythonApiConfigLiteral.cs`
+  (`RenderCursorPagination`), `PythonApiCodeGenerator.cs`
+  (`cursor_pagination_enabled`/`cursor_pagination_literal`)
+- Templates: `scraper_api.py.j2` and `scraper_api_grouped.py.j2`
+  (`_fetch_page_data`, `_fetch_pages`, `CURSOR_PAGINATION`, `_apply_cursor`,
+  `_next_cursor`)
+- Tests: `ApiCursorPaginationValidatorTests.cs`,
+  `ApiCursorPaginationEndToEndTests.cs`, `api-cursor-pagination.test.js`,
+  `api-cursor-pagination-ui.test.js`; real-browser check
+  `e2e/examples/issue-224-api-cursor-pagination-check.js` against the
+  `test-pages/api-cursor-pagination` fixture (REST `?cursor=` and GraphQL
+  `variables.after`, 7 items over 4 pages, port 9000)
+
 ### 2.6 Browser engine, browser actions & login flows (Issues #41/#42/#43)
 
 Adds an optional Playwright-based rendering engine (real Chromium, executes the
@@ -523,6 +559,14 @@ scraped values after a real `/generate` trial run, not live DOM matches.
   `highlightHover`/`highlightSelected`, `startPreview`/`stopPreview`/`togglePreview`),
   `content/content-script.js` (`serializeDomTree`, `computePreviewMatches`,
   `matchFlatFields`/`matchGroupTree`, the preview-overlay drawing functions)
+- Single-row hover highlight (Issue #233): hovering one flat field row or
+  container tree row highlights just that row's element(s) on the page, in
+  green, with no toggle — `popup/hover-highlight.js` (`buildFlatFieldHighlight`,
+  `buildGroupNodeHighlight`, `wireHoverHighlight`, wired from
+  `flat-mode-ui.js`/`container-tree-ui.js`), `HOVER_HIGHLIGHT`/
+  `HOVER_HIGHLIGHT_CLEAR` in `background/service-worker.js`'s
+  `FORWARD_TO_TAB`, `content/content-script.js` (`matchHoverHighlight`,
+  `showHoverHighlight`/`clearHoverHighlight`, the shared `createHighlightBox`)
 
 ### 2.14 Configuration export ("Konfiguration exportieren")
 
@@ -763,6 +807,55 @@ for a hardening check that runs once at the very end, not per-transform).
   `PythonScriptVerifier` can't see per-cell values" reasoning
   `HardeningNullRateEndToEndTests` already documents).
 
+### 2.18b Price/currency-to-number transform (Issue #234)
+
+A fourth strict conversion next to §2.18a's three: "Convert price/currency to
+number" (`toCurrency`) turns a scraped amount like "Preis: 1.234,56 €",
+"£51.77" or "CHF 1'234.50" into a plain decimal string ("1234.56"). Unlike
+`toNumber`'s heuristic (which reads a lone "1.234" as 1.234), the user picks
+one of four format presets — each written as its own example amount
+(`1.234,56`, `1,234.56`, `1 234,56`, `1'234.56`) — so the decimal vs.
+thousands separator is never guessed. The first number in the value must
+match the preset strictly; fraction digits are kept exactly as scraped (no
+float rounding); a mismatch goes through the shared `onError` contract.
+
+- IR: `IR/FieldTransform.cs` (`ToCurrencyTransform`, `"kind": "toCurrency"`,
+  `Format`/`OnError`/`DefaultValue`, `SupportedFormats`)
+- `Backends/Python/FieldTransformValidator` (preset whitelist, shared
+  `UseDefault`-needs-a-value rule), `PythonFieldTransformLiteral`
+- Every template carrying `_apply_transforms` (all eight): `_CURRENCY_FORMATS`
+  table + `_to_currency`
+- Extension: `field-transforms.js` (`toCurrencyPreview` — hand-kept JS mirror
+  of `_to_currency` — plus `CURRENCY_FORMAT_IDS`), `field-transforms-ui.js`
+  (format `<select>`), i18n `transforms.toCurrencyOption`/`transforms.currencyFormat.*`
+- Tests: `CurrencyTransformTests.cs` (wire format, validation, real
+  generated-script runs for every preset across flat/container/API),
+  `extension/popup/to-currency.test.js` (the same cases against the JS
+  mirror, plus the editor row), real-browser check
+  `e2e/examples/issue-234-to-currency-check.js`
+
+### 2.18c Reusable transform-chain presets (Issue #279)
+
+A transform chain built once can be saved under a name and applied to any
+field of any scrape, instead of re-adding each step. Two read-only built-in
+presets ("Clean up price", trim + §2.18b's conversion, in two formats) ship
+with the extension; the user's own presets live in a small cross-site
+companion store, the same way Output Blueprints do (§2.23). Applying appends
+a copy of the steps (an existing chain is never replaced).
+
+- Extension: `popup/transform-presets.js` (`BUILTIN_TRANSFORM_PRESETS`,
+  `allTransformPresets`, `applyTransformPreset`, `transformChainIsSaveable`),
+  `popup/transform-presets-ui.js` (fetch wrappers, the "Apply preset … / Save
+  as preset" controls under all three transform editors, the Settings
+  section), `.transform-preset-controls` in `screens/modals.html`,
+  `#settings-transform-presets-section` in `screens/settings.html`,
+  `bridge.fetchTransformPresets` called from `companion-client.js`'s health
+  check
+- Companion: `TransformPresetStore.cs` (`transform-presets.db`), `/transform-presets`
+  POST/GET/PUT(rename)/DELETE and `ValidateTransformPresetChain` in `Program.cs`
+- Tests: `TransformPresetsEndpointTests.cs`, `extension/popup/transform-presets.test.js`,
+  real-browser check `e2e/examples/issue-279-transform-presets-check.js`
+
 ### 2.19 Multiple start URLs (Issue #83)
 
 Lets the same Fields/Groups extraction config run against a static,
@@ -949,6 +1042,211 @@ already keeps credentials env-var-name-only.
   configured proxy (the real target's content never reaches the output) and
   that round-robin rotation picks a different proxy per request across
   multiple start URLs.
+
+### 2.21a Pause between requests (Issue #222)
+
+An opt-in, mode- and engine-independent pause before every outbound request
+of the generated script (fixed, or random within a range), as protection
+against rate limits and blocks. Measured as a minimum gap between request
+starts; the first request isn't delayed. Each pause is announced on stdout,
+which the trial-run verifier uses to extend its deadline by exactly that
+pause — so many requests never make `/generate` time out (capped at 10
+minutes of pauses).
+
+- IR: `IR/RequestDelayConfig.cs` (`ScrapingConfig.RequestDelay`/
+  `ScrapingPlan.RequestDelay`), validation in `ScrapingPlanValidator`,
+  Combined-mode outer-config rejection in `Program.cs`
+- `Backends/Python/PythonRequestDelayLiteral` (`request_delay.*`), wired in
+  `PythonScrapingContextBuilder` and `PythonApiCodeGenerator`
+- Templates: all eight request-making templates — `_pace_request()` before
+  every request / page navigation
+- `Backends/Python/PythonScriptVerifier.RunScriptAsync`
+  (`PauseAnnouncementPattern`, `MaxRequestDelayExtension`, moving deadline)
+- Extension: `scraping-config-builder.js` (`buildRequestDelayConfig`),
+  `config-import.js` (`applyRequestDelayConfig`), `settings-panel-ui.js`,
+  `#toggle-request-delay`/`#request-delay-config` in `screens/idle.html`
+- Tests: `RequestDelayTests.cs`, `extension/popup/request-delay.test.js`,
+  real-browser check `e2e/examples/issue-222-request-delay-check.js`
+
+### 2.21aa Respect robots.txt Crawl-delay (Issue #228)
+
+An opt-in, independent setting making the generated script read the target's
+robots.txt once and use its `Crawl-delay` / `Request-rate` as a minimum gap
+between requests — one more source for the pacing mechanism of 2.21a (the
+larger of this and a configured pause wins). A site without such a directive
+is unaffected. Disallow re-checking is a separate issue (#333).
+
+- IR: `ScrapingConfig.RespectRobotsDelay`/`ScrapingPlan.RespectRobotsDelay`,
+  Combined-mode outer-config rejection in `Program.cs`
+- `Backends/Python/PythonRequestDelayLiteral` (now takes the plan:
+  `respect_robots`, `robots_urls_literal`)
+- Fragment `request_delay.py.j2` (`_robots_delay`, `_fetch_robots_delay`,
+  `urllib.robotparser`)
+- Extension: `scraping-config-builder.js` (trailing `respectRobotsDelay`
+  parameter), `config-import.js`, `session-restore.js`,
+  `settings-panel-ui.js`, `#toggle-respect-robots-delay` in `screens/idle.html`
+- Tests: `RobotsCrawlDelayTests.cs`, `extension/popup/robots-crawl-delay.test.js`,
+  fixture `test-pages/crawl-delay` +
+  `e2e/examples/issue-228-robots-crawl-delay-check.js`
+
+### 2.21b Retry on transient errors (Issue #223)
+
+An opt-in, mode- and engine-independent retry of any outbound request or
+page navigation that failed transiently (connection error/timeout, or a
+configurable status code — 429/502/503/504 by default), with a fixed or
+doubling wait or a 429/503's Retry-After. Exhausted retries behave exactly
+like no retries. Every retry is announced on stdout; the trial-run verifier
+extends its deadline by the wait plus an allowance for the retried request.
+
+- IR: `IR/RetryConfig.cs` (`ScrapingConfig.Retry`/`ScrapingPlan.Retry`),
+  validation in `ScrapingPlanValidator`, Combined outer-config rejection in
+  `Program.cs`
+- `Backends/Python/PythonRetryLiteral` (`retry.*`), wired in
+  `PythonScrapingContextBuilder`, `PythonApiCodeGenerator` and (for the
+  navigate fragment) `PythonPlaywrightCodeGenerator`
+- Templates: all eight request-making templates (`_send_with_retry`) plus
+  `playwright_navigate_step.py.j2`
+- `Backends/Python/PythonScriptVerifier` (`RetryAnnouncementPattern`,
+  `RetryAttemptAllowance`)
+- Extension: `scraping-config-builder.js` (`buildRetryConfig`),
+  `config-import.js` (`applyRetryConfig`), `settings-panel-ui.js`,
+  `#toggle-retry`/`#retry-config` in `screens/idle.html`
+- Tests: `RetryTests.cs`, `extension/popup/retry.test.js`, fixture
+  `test-pages/flaky-server` + `e2e/examples/issue-223-retry-check.js`
+
+### 2.21c Deduplication by key field(s) (Issue #225)
+
+An opt-in, mode- and engine-independent deduplication of the generated
+script's output by one or more key field(s): a later row/element whose key
+already appeared in the same run is dropped (overlapping pagination, an item
+reachable from several start URLs), and — separately opt-in — the keys seen
+in earlier runs are remembered in a sidecar file so only genuinely new
+rows/elements are written (as just the delta, or appended to the previous
+file for flat output). For tree output the deduplicated unit is the nearest
+repeating group instance that owns every key field.
+
+- IR: `IR/DeduplicationConfig.cs` (`ScrapingConfig.Deduplication`/
+  `ScrapingPlan.Deduplication`), validation in
+  `ScrapingPlanValidator.ValidateDeduplication`, Combined-outer/Blocks
+  rejection in `Program.cs`
+- `Backends/Python/PythonDeduplicationLiteral` (`dedup.*` — the flags and the
+  configuration as Python literals), wired in `PythonScrapingContextBuilder`
+  and `PythonApiCodeGenerator`
+- Templates: the six non-Blocks templates include the runtime helpers from
+  `fragments/dedup_{common,flat,tree}.py.j2` right before `main()`
+  (`_dedup_filter_rows`/`_dedup_new_rows` for the flat shapes,
+  `_dedup_register_instance`/`_dedup_delta_tree` for the tree shapes)
+- Extension: `dedup-config.js` (pure) + `dedup-config-ui.js`
+  (`renderDedupSection`/`wireDedupEvents`), `scraping-config-builder.js`
+  (trailing `deduplication` parameter), `config-import.js`,
+  `session-restore.js`, `#toggle-dedup`/`#dedup-config` in
+  `screens/idle.html`
+- Tests: `DeduplicationEndToEndTests.cs`, `DeduplicationConfigJsonTests.cs`,
+  `ScrapingPlanValidatorTests.cs`, `extension/popup/dedup-config.test.js`,
+  fixture `test-pages/dedup-listing` +
+  `e2e/examples/issue-225-deduplication-check.js`
+
+### 2.21d Shared template fragments (Issue #326)
+
+Scriban has no cross-template includes, so every shared runtime helper used
+to be copy-pasted into each Python template. The compiler now does the
+include as a text substitution before Scriban parses: a line
+`#@include <name>` in a template (or in another fragment) is replaced by
+`language-modules/python/templates/fragments/<name>.py.j2`, re-indented to
+the directive. Fragments are Scriban text rendered with the including
+template's own context, so every template reads its context keys at the top
+level. Each helper now exists once per genuine variant (engine-independent,
+per engine, per shape) instead of once per template.
+
+- `Backends/EmbeddedScribanTemplate` (`ExpandIncludes`, recursion/cycle
+  guard, re-indentation), `ScrapingFactory.Compiler.csproj` (wildcard
+  `EmbeddedResource` for `fragments/*.py.j2`)
+- `language-modules/python/templates/fragments/` (the fragments),
+  `scraper.py.j2` & co. (the templates, now mostly the parts that really
+  differ per template)
+- Tests: `TemplateIncludeTests.cs`; the existing end-to-end tests run the
+  generated scripts unchanged
+
+### 2.21e Custom request headers for flat/container/Blocks mode (Issue #226)
+
+An opt-in, engine-independent list of extra request headers for the DOM
+shapes — each a fixed value or the name of an environment variable (never a
+secret literal in the script), with a one-time test value for the trial run.
+The default identifying User-Agent stays unless a header of that name
+replaces it. Static engine: `requests`' `headers`; Browser engine:
+Playwright's `extra_http_headers` (every request of the page) and
+`user_agent`. A missing variable stops the run with exit code 78.
+
+- IR: `ScrapingConfig.Headers`/`ScrapingPlan.Headers` (reusing `ApiHeader`),
+  validation in `ScrapingPlanValidator.ValidateRequestHeaders`,
+  Api/Combined-outer rejection in `Program.cs`,
+  `FillVerificationValues.Filter` (`requestHeaders`)
+- `Backends/Python/PythonRequestHeadersLiteral` (`request_headers.*`), wired in
+  `PythonScrapingContextBuilder` and `PythonPlaywrightCodeGenerator`
+- Fragments: `request_headers_static`, `request_headers_playwright`,
+  `require_env_function`; the static/Browser templates and the Browser-engine
+  `preflight_playwright`/`discovered_urls_playwright` fragments use them
+- Extension: `request-headers.js` (pure) + `request-headers-ui.js`
+  (`renderRequestHeadersSection`/`wireRequestHeadersEvents`),
+  `scraping-config-builder.js` (trailing `requestHeaders` parameter),
+  `companion-client.js` (test values → `verificationValues`),
+  `config-import.js`, `session-restore.js`, `#toggle-request-headers`/
+  `#request-headers-config` in `screens/idle.html`
+- Tests: `RequestHeadersEndToEndTests.cs`, `RequestHeadersEndpointTests.cs`,
+  `ScrapingPlanValidatorTests.cs`, `FillVerificationValuesTests.cs`,
+  `extension/popup/request-headers.test.js`, fixture
+  `test-pages/request-headers` +
+  `e2e/examples/issue-226-request-headers-check.js`
+
+### 2.21f Text-content selector suffix `:contains("text")` (Issue #227)
+
+A selector may end in `:contains("text")` to pick, among otherwise identical
+elements (buttons/links that differ only by their label), those whose whole
+text contains `text` — case-insensitive, whitespace-collapsed. Only as the last
+part of a selector, at most once, quoted with `'` or `"` (escapes `\"`, `\'`,
+`\\`), non-empty; not allowed in FramePath segments or
+`EmbeddedJsonSource.ScriptSelector`. Three mirrored implementations share test
+vectors: C# `SelectorTextFilter` (validation only), the Python runtime
+fragments, and JS (`content-script.js`, `popup/selector-text-filter.js`).
+
+- IR: `IR/SelectorTextFilter.cs`, called from `ScrapingPlanValidator` for every
+  selector-bearing step/field/pagination/discovery/browser-discovery action
+- `Backends/Python/PythonTextSelectorLiteral` (`text_selector.enabled`, only
+  when some selector actually uses the suffix, so unrelated scripts stay
+  byte-identical)
+- Fragments: `text_selector_common` (split/normalize), `text_selector_bs4`
+  (patches `bs4.element.Tag.select/select_one`), `text_selector_playwright`
+  (patches `query_selector(_all)` and `locator` → `.filter(has_text=...)`)
+- Templates now escape selectors with `string.escape` when rendering them into
+  Python string literals
+- Extension: `content-script.js` (`querySelectorAllWithText`,
+  `COUNT_PICK_WITH_TEXT`), `popup/selector-text-filter.js` +
+  `selector-text-filter-ui.js`, text filter row in `modal-field-name` /
+  `modal-field-extended`, live match count
+- Tests: `SelectorTextFilterTests.cs`, `TextSelectorEndToEndTests.cs`,
+  `ScrapingPlanValidatorTests.cs`, `extension/popup/selector-text-filter.test.js`,
+  `content-script.test.js`, fixture `test-pages/text-selector` +
+  `e2e/examples/issue-227-text-selector-check.js`
+
+### 2.21ab Click target: first/last/all matches (Issue #267)
+
+A Click browser action whose selector matches several elements no longer
+aborts on Playwright's strict-mode error: it clicks the first match (default),
+the last, or every match in order (with a pause after each click).
+
+- IR: `ClickAction`/`ClickStep` `Target` (`ClickTarget`) + `WaitAfterMs`,
+  validation in `ScrapingPlanValidator` (plan steps and browser-discovery
+  actions), `ScrapingPlanBuilder`
+- `Backends/Python/PythonApiConfigLiteral.RenderBrowserAction` (`target`,
+  `waitAfterMs`), `PythonPlaywrightCodeGenerator`
+- Templates: `playwright_click_step.py.j2`, `fragments/api_common.py.j2`
+  (`_run_browser_action`)
+- Extension: `scraping-config-builder.js` (`addBrowserAction`,
+  `serializeBrowserActions`), `config-import.js`, `browser-actions-ui.js`,
+  `api-config-ui.js`
+- Tests: `ClickTargetTests.cs`, `extension/popup/click-target.test.js`,
+  fixture `test-pages/click-targets` +
+  `e2e/examples/issue-267-click-target-check.js`
 
 ### 2.22 Persistent session/cookie handling (Issue #175)
 
@@ -1453,6 +1751,7 @@ compile time anywhere.
 | API parameter source | `api-config.js`: `buildStaticListSource`/`buildDiscoverySource`/`buildRangeSource` | `{kind:"staticList"\|"discovery"\|"range", ...}` | `IR/ApiConfig.cs`: `ApiParameterSource` (`[JsonPolymorphic]`) |
 | API embedded JSON source (Issue #136) | `api-config-ui.js`: `confirmEmbeddedJsonFieldCandidate()` (`{scriptSelector}`, stamped from `content-script.js`'s `scriptTagSelector`) | `{scriptSelector}` | `IR/ApiConfig.cs`: `EmbeddedJsonSource` (plain optional object, no converter) |
 | API token/auth bootstrap (Issue #220) | `api-bootstrap.js`: `buildApiBootstrap()` (draft `{name,method,url,valuePath,bodyEncoding,headers,bodyFields}`) | `{name, method?, url, headers?, bodyFields?, bodyEncoding?, valuePath}` | `IR/ApiConfig.cs`: `ApiBootstrap` (plain optional object, no converter) |
+| API cursor/token pagination (Issue #224) | `api-cursor-pagination.js`: `buildApiCursorPagination()` (draft `{nextCursorPath,hasNextPagePath,target,queryParameterName,bodyPath,maxPages}`) | `{nextCursorPath, hasNextPagePath?, target: 'Query'\|'Body', queryParameterName?, bodyPath?, maxPages}` | `IR/ApiConfig.cs`: `ApiCursorPagination` (plain optional object, no converter) |
 | API response tree node | `api-config.js`: `buildApiGroupDraft`/`buildApiFieldDraft`, `serializeApiTree` | `{name,path,children:[...]}` or `{name,path}` | `IR/ApiConfig.cs`: `ApiGroup`/`ApiField` (via `ApiNodeJsonConverter`) |
 | API request body node | `api-config.js`: `jsonValueToBodyDraft`/`serializeBodyTree` | `{properties:{...}}` / `{items:[...]}` / `{kind,stringValue\|numberValue\|boolValue}` / `{parameterName, coerceTo?}` | `IR/ApiBodyNode.cs`: `ApiBodyObject`/`Array`/`Literal`/`Variable` (via `ApiBodyNodeJsonConverter`) |
 | Browser action | `popup.js`: `addBrowserAction`/`serializeBrowserActions` | `{kind:"waitFor"\|"fill"\|"click"\|"scroll", selector, ...}` | `IR/BrowserAction.cs`: `WaitForAction`/`FillAction`/`ClickAction`/`ScrollAction` (`[JsonPolymorphic]`) |

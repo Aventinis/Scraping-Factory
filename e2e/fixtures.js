@@ -20,9 +20,16 @@ const FIXTURES = {
   'infinite-scroll': { dir: path.join(REPO_ROOT, 'test-pages/infinite-scroll'), port: 8502, kind: 'static' },
   'login-flow': { dir: path.join(REPO_ROOT, 'test-pages/login-flow'), port: 8503, kind: 'static' },
   'speisekarte': { dir: path.join(REPO_ROOT, 'test-pages/speisekarte'), port: 8504, kind: 'static' },
+  'dedup-listing': { dir: path.join(REPO_ROOT, 'test-pages/dedup-listing'), port: 8505, kind: 'static' },
+  'click-targets': { dir: path.join(REPO_ROOT, 'test-pages/click-targets'), port: 8509, kind: 'static' },
+  'text-selector': { dir: path.join(REPO_ROOT, 'test-pages/text-selector'), port: 8507, kind: 'static' },
   'api-nested-and-post': { dir: path.join(REPO_ROOT, 'test-pages/api-nested-and-post'), port: 8600, kind: 'script', script: 'server.py' },
   'embedded-json-menu': { dir: path.join(REPO_ROOT, 'test-pages/embedded-json-menu'), port: 8700, kind: 'script', script: 'server.py' },
   'api-token-bootstrap': { dir: path.join(REPO_ROOT, 'test-pages/api-token-bootstrap'), port: 8800, kind: 'script', script: 'server.py' },
+  'api-cursor-pagination': { dir: path.join(REPO_ROOT, 'test-pages/api-cursor-pagination'), port: 9000, kind: 'script', script: 'server.py' },
+  'crawl-delay': { dir: path.join(REPO_ROOT, 'test-pages/crawl-delay'), port: 8508, kind: 'script', script: 'server.py' },
+  'flaky-server': { dir: path.join(REPO_ROOT, 'test-pages/flaky-server'), port: 8900, kind: 'script', script: 'server.py' },
+  'request-headers': { dir: path.join(REPO_ROOT, 'test-pages/request-headers'), port: 8506, kind: 'script', script: 'server.py' },
 };
 
 function resolveFixture(name) {

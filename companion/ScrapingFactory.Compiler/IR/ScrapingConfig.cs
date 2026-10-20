@@ -96,6 +96,37 @@ public sealed class ScrapingConfig
     // connection, no proxying).
     public ProxyConfig? Proxy { get; init; }
 
+    // Issue #222: opt-in pause between outbound requests, mode-independent
+    // (Fields/Groups/Api/Blocks alike) — see IR/RequestDelayConfig.cs. Null
+    // is today's exact behavior (no pacing at all).
+    public RequestDelayConfig? RequestDelay { get; init; }
+
+    // Issue #228: opt-in — the generated script reads Crawl-delay /
+    // Request-rate from the target's robots.txt at startup and uses it as a
+    // minimum gap between requests (see IR/RequestDelayConfig.cs for the
+    // pacing itself; this is one more, automatically derived source for the
+    // same mechanism). Independent of RequestDelay: either, both or neither
+    // may be set, the larger gap wins. Null/false is today's exact behavior.
+    public bool? RespectRobotsDelay { get; init; }
+
+    // Issue #223: opt-in retry with backoff on transient request failures,
+    // mode-independent — see IR/RetryConfig.cs. Null is today's exact
+    // behavior (a failed request is never retried).
+    public RetryConfig? Retry { get; init; }
+
+    // Issue #226: custom request headers for flat/container/Blocks mode (API
+    // mode keeps ApiConfig.Headers) — each a fixed literal or backed by an
+    // environment variable, same shape as ApiHeader (whose Template variant
+    // is meaningless here and rejected by ScrapingPlanValidator). Null/empty
+    // is today's exact behavior (only the default User-Agent is sent).
+    public List<ApiHeader>? Headers { get; init; }
+
+    // Issue #225: opt-in deduplication of the output by key field(s) (and,
+    // optionally, incremental "only new items since the last run" output),
+    // mode-independent — see IR/DeduplicationConfig.cs. Null is today's exact
+    // behavior (no deduplication, byte-for-byte the same script).
+    public DeduplicationConfig? Deduplication { get; init; }
+
     // Issue #129: opt-in script hardening checks, mode-independent
     // (Fields/Groups/Api alike) — see IR/HardeningCheck.cs. Null/empty is
     // today's exact behavior (the generated script never re-checks its own

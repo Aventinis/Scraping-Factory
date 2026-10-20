@@ -89,6 +89,29 @@ const SFBrowserActionsUI = (function () {
 
       card.appendChild(buildSelectorRow(i, 'selector', action.selector, null));
 
+      if (action.kind === 'click') {
+        // Issue #267: which of several matches to click (Playwright would
+        // otherwise abort on more than one) — "all" additionally paces the
+        // clicks with a wait after each.
+        const target = action.target || 'first';
+        const row = document.createElement('div');
+        row.className = 'browser-action-field-row';
+        row.innerHTML =
+          `<label>${escapeHtml(t('browserActions.clickTargetLabel'))}</label>` +
+          `<select class="browser-action-click-target" data-index="${i}">` +
+          ['first', 'last', 'all'].map(v => `<option value="${v}"${v === target ? ' selected' : ''}>${escapeHtml(t('browserActions.clickTarget.' + v))}</option>`).join('') +
+          `</select>`;
+        card.appendChild(row);
+        if (target === 'all') {
+          const waitRow = document.createElement('div');
+          waitRow.className = 'browser-action-field-row';
+          waitRow.innerHTML =
+            `<label>${escapeHtml(t('browserActions.waitAfterMsLabel'))}</label>` +
+            `<input type="number" min="0" class="browser-action-click-wait-after-ms" data-index="${i}" value="${action.waitAfterMs ?? 250}" />`;
+          card.appendChild(waitRow);
+        }
+      }
+
       if (action.kind === 'waitFor') {
         const row = document.createElement('div');
         row.className = 'browser-action-field-row';
@@ -227,6 +250,25 @@ const SFBrowserActionsUI = (function () {
         // persistState()/chrome.storage.session — see its _state comment.
         const envName = testValueInput.dataset.envName;
         bridge.patchState({ fillTestValues: { ...bridge.getState().fillTestValues, [envName]: testValueInput.value } });
+        return;
+      }
+      const clickTargetSelect = e.target.closest('.browser-action-click-target');
+      if (clickTargetSelect) {
+        const index = parseInt(clickTargetSelect.dataset.index, 10);
+        bridge.setState(bridge.getState().current, {
+          browserActions: updateBrowserAction(bridge.getState().browserActions, index, { target: clickTargetSelect.value }),
+        });
+        return;
+      }
+      const clickWaitInput = e.target.closest('.browser-action-click-wait-after-ms');
+      if (clickWaitInput) {
+        const index = parseInt(clickWaitInput.dataset.index, 10);
+        const waitAfterMs = parseInt(clickWaitInput.value, 10);
+        bridge.setState(bridge.getState().current, {
+          browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
+            waitAfterMs: Number.isFinite(waitAfterMs) && waitAfterMs >= 0 ? waitAfterMs : 250,
+          }),
+        });
         return;
       }
       const maxIterationsInput = e.target.closest('.browser-action-max-iterations');

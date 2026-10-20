@@ -3668,4 +3668,353 @@ public class ScrapingPlanValidatorTests
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.True(result.Success, result.Error);
     }
+
+    // ---- Issue #225: deduplication ---------------------------------------
+
+    private static ScrapingPlan DedupFlatPlan(DeduplicationConfig dedup, OutputBlueprintMapping? blueprint = null) => new()
+    {
+        Steps =
+        [
+            new NavigateStep { Urls = ["https://example.com"] },
+            new ExtractStep { Name = "Titel", Selector = "h1" },
+            new ExtractStep { Name = "Preis", Selector = ".price" },
+        ],
+        Deduplication = dedup,
+        OutputBlueprint = blueprint,
+    };
+
+    private static ScrapingPlan DedupGroupPlan(DeduplicationConfig dedup, OutputBlueprintMapping? blueprint = null) => new()
+    {
+        Steps =
+        [
+            new NavigateStep { Urls = ["https://example.com"] },
+            new ExtractGroupStep
+            {
+                Roots =
+                [
+                    new GroupNode
+                    {
+                        Name = "Gericht", Selector = ".item", Repeating = true,
+                        Children = [new DataFieldNode { Name = "Name", Selector = "h3" }],
+                    },
+                ],
+            },
+        ],
+        OutputFormat = OutputFormat.Xml,
+        Deduplication = dedup,
+        OutputBlueprint = blueprint,
+    };
+
+    [Fact]
+    public void Validate_Deduplication_ValidFlatCompositeKey_Succeeds()
+    {
+        var result = ScrapingPlanValidator.Validate(DedupFlatPlan(new DeduplicationConfig { KeyFields = ["Titel", "Preis"], Incremental = true }));
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_Deduplication_NoKeyFields_Fails()
+    {
+        var result = ScrapingPlanValidator.Validate(DedupFlatPlan(new DeduplicationConfig()));
+        Assert.False(result.Success);
+        Assert.Contains("at least one key field", result.Error);
+    }
+
+    [Fact]
+    public void Validate_Deduplication_BlankDuplicateOrUnknownKeyField_Fails()
+    {
+        Assert.Contains("blank", ScrapingPlanValidator.Validate(DedupFlatPlan(new DeduplicationConfig { KeyFields = ["Titel", " "] })).Error);
+        Assert.Contains("duplicate key field 'Titel'", ScrapingPlanValidator.Validate(DedupFlatPlan(new DeduplicationConfig { KeyFields = ["Titel", "Titel"] })).Error);
+        Assert.Contains("'Nope' does not match", ScrapingPlanValidator.Validate(DedupFlatPlan(new DeduplicationConfig { KeyFields = ["Nope"] })).Error);
+    }
+
+    [Fact]
+    public void Validate_Deduplication_NonPositiveRetention_Fails()
+    {
+        var dedup = new DeduplicationConfig { KeyFields = ["Titel"], Incremental = true, Retention = new DeduplicationRetention { Value = 0 } };
+        var result = ScrapingPlanValidator.Validate(DedupFlatPlan(dedup));
+        Assert.False(result.Success);
+        Assert.Contains("retention", result.Error);
+    }
+
+    [Fact]
+    public void Validate_Deduplication_AppendOnFlatShape_Succeeds()
+    {
+        var dedup = new DeduplicationConfig { KeyFields = ["Titel"], Incremental = true, IncrementalOutput = IncrementalOutputMode.Append };
+        Assert.True(ScrapingPlanValidator.Validate(DedupFlatPlan(dedup)).Success);
+    }
+
+    [Fact]
+    public void Validate_Deduplication_AppendOnTreeShape_Fails()
+    {
+        var dedup = new DeduplicationConfig { KeyFields = ["Name"], Incremental = true, IncrementalOutput = IncrementalOutputMode.Append };
+        var result = ScrapingPlanValidator.Validate(DedupGroupPlan(dedup));
+        Assert.False(result.Success);
+        Assert.Contains("flat output", result.Error);
+    }
+
+    [Fact]
+    public void Validate_Deduplication_ContainerKeyMustBeALeafField()
+    {
+        Assert.True(ScrapingPlanValidator.Validate(DedupGroupPlan(new DeduplicationConfig { KeyFields = ["Name"] })).Success);
+        // a group's own name is not a field
+        Assert.False(ScrapingPlanValidator.Validate(DedupGroupPlan(new DeduplicationConfig { KeyFields = ["Gericht"] })).Success);
+    }
+
+    [Fact]
+    public void Validate_Deduplication_TreeShapeWithOutputBlueprint_Fails()
+    {
+        var blueprint = new OutputBlueprintMapping
+        {
+            SchemaKind = OutputBlueprintSchemaKind.Flat,
+            Fields = [new OutputBlueprintFieldMapping { TargetField = "T", SourceField = "Name" }],
+        };
+        var result = ScrapingPlanValidator.Validate(DedupGroupPlan(new DeduplicationConfig { KeyFields = ["Name"] }, blueprint));
+        Assert.False(result.Success);
+        Assert.Contains("Output Blueprint", result.Error);
+    }
+
+    [Fact]
+    public void Validate_Deduplication_FlatShapeWithOutputBlueprint_Succeeds()
+    {
+        var blueprint = new OutputBlueprintMapping
+        {
+            SchemaKind = OutputBlueprintSchemaKind.Flat,
+            Fields = [new OutputBlueprintFieldMapping { TargetField = "T", SourceField = "Titel" }],
+        };
+        var result = ScrapingPlanValidator.Validate(DedupFlatPlan(new DeduplicationConfig { KeyFields = ["Titel"] }, blueprint));
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Fact]
+    public void Validate_Deduplication_ApiFlat_ParameterNameIsAValidKeyField()
+    {
+        var api = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/items/{week}",
+            ItemsPath = "items",
+            Fields = [new ApiField { Name = "Id", Path = "id" }],
+            Parameters = [new ApiParameter { Name = "week", Source = new StaticListSource { Values = ["1", "2"] } }],
+        };
+        var plan = new ScrapingPlan
+        {
+            Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = api }],
+            Engine = ScrapingEngine.Api,
+            Deduplication = new DeduplicationConfig { KeyFields = ["week", "Id"] },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.True(result.Success, result.Error);
+    }
+
+    // ---- Issue #226: custom request headers --------------------------------
+
+    private static ScrapingPlan PlanWithHeaders(params ApiHeader[] headers)
+    {
+        var plan = ValidPlan();
+        return new ScrapingPlan { Steps = plan.Steps, Headers = [.. headers] };
+    }
+
+    [Fact]
+    public void Validate_RequestHeaders_LiteralAndEnvironmentVariable_Succeed()
+    {
+        var result = ScrapingPlanValidator.Validate(PlanWithHeaders(
+            new ApiHeader { Name = "Accept-Language", Value = "de-CH" },
+            new ApiHeader { Name = "X-Api-Key", EnvironmentVariableName = "SF_API_KEY" }));
+
+        Assert.True(result.Success, result.Error);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("Bad Name")]
+    [InlineData("Bad:Name")]
+    [InlineData("Ümlaut")]
+    public void Validate_RequestHeaders_InvalidName_Fails(string name)
+    {
+        var result = ScrapingPlanValidator.Validate(PlanWithHeaders(new ApiHeader { Name = name, Value = "x" }));
+
+        Assert.False(result.Success);
+        Assert.Contains("request header", result.Error);
+    }
+
+    [Fact]
+    public void Validate_RequestHeaders_NeedsExactlyOneOfValueAndEnvironmentVariable()
+    {
+        Assert.Contains("exactly one", ScrapingPlanValidator.Validate(PlanWithHeaders(new ApiHeader { Name = "X-A" })).Error);
+        Assert.Contains("exactly one", ScrapingPlanValidator.Validate(PlanWithHeaders(new ApiHeader { Name = "X-A", Value = "v", EnvironmentVariableName = "SF_A" })).Error);
+    }
+
+    [Fact]
+    public void Validate_RequestHeaders_TemplateIsRejected()
+    {
+        var result = ScrapingPlanValidator.Validate(PlanWithHeaders(new ApiHeader { Name = "Authorization", Template = "Bearer {token}" }));
+
+        Assert.False(result.Success);
+        Assert.Contains("template", result.Error);
+    }
+
+    [Fact]
+    public void Validate_RequestHeaders_LineBreakInValue_Fails()
+    {
+        var result = ScrapingPlanValidator.Validate(PlanWithHeaders(new ApiHeader { Name = "X-A", Value = "ok\r\nX-Injected: 1" }));
+
+        Assert.False(result.Success);
+        Assert.Contains("line break", result.Error);
+    }
+
+    [Fact]
+    public void Validate_RequestHeaders_InvalidEnvironmentVariableName_Fails()
+    {
+        var result = ScrapingPlanValidator.Validate(PlanWithHeaders(new ApiHeader { Name = "X-A", EnvironmentVariableName = "1BAD-NAME" }));
+
+        Assert.False(result.Success);
+        Assert.Contains("environment variable", result.Error);
+    }
+
+    [Fact]
+    public void Validate_RequestHeaders_DuplicateNameIgnoringCase_Fails()
+    {
+        var result = ScrapingPlanValidator.Validate(PlanWithHeaders(
+            new ApiHeader { Name = "Accept-Language", Value = "de" },
+            new ApiHeader { Name = "accept-language", Value = "en" }));
+
+        Assert.False(result.Success);
+        Assert.Contains("Duplicate request header", result.Error);
+    }
+
+    // ---- Issue #227: :contains("text") selector suffix ---------------------
+
+    private static ScrapingPlan FlatPlanWithSelector(string selector) => new()
+    {
+        Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ExtractStep { Name = "F", Selector = selector }],
+    };
+
+    [Fact]
+    public void Validate_TextFilter_ValidOnFlatFieldGroupAndDataField()
+    {
+        Assert.True(ScrapingPlanValidator.Validate(FlatPlanWithSelector(".btn:contains(\"Merken\")")).Success);
+
+        var groups = new ScrapingPlan
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ExtractGroupStep
+                {
+                    Roots =
+                    [
+                        new GroupNode
+                        {
+                            Name = "G", Selector = ".card:contains(\"Angebot\")", Repeating = true,
+                            Children = [new DataFieldNode { Name = "N", Selector = "a:contains('Mehr')" }],
+                        },
+                    ],
+                },
+            ],
+            OutputFormat = OutputFormat.Xml,
+        };
+        Assert.True(ScrapingPlanValidator.Validate(groups).Success);
+    }
+
+    [Theory]
+    [InlineData("a:contains(x)")]
+    [InlineData("a:contains(\"x\") b")]
+    public void Validate_TextFilter_MalformedOnFlatField_FailsNamingTheField(string selector)
+    {
+        var result = ScrapingPlanValidator.Validate(FlatPlanWithSelector(selector));
+
+        Assert.False(result.Success);
+        Assert.Contains("Selector for field 'F'", result.Error);
+    }
+
+    [Fact]
+    public void Validate_TextFilter_MalformedOnGroupAndDataField_Fails()
+    {
+        ScrapingPlan Plan(string groupSelector, string fieldSelector) => new()
+        {
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ExtractGroupStep
+                {
+                    Roots = [new GroupNode { Name = "G", Selector = groupSelector, Repeating = true, Children = [new DataFieldNode { Name = "N", Selector = fieldSelector }] }],
+                },
+            ],
+            OutputFormat = OutputFormat.Xml,
+        };
+
+        Assert.Contains("group 'G'", ScrapingPlanValidator.Validate(Plan("div:contains(x)", "a")).Error);
+        Assert.Contains("data field 'N'", ScrapingPlanValidator.Validate(Plan("div", "a:contains(x)")).Error);
+    }
+
+    [Fact]
+    public void Validate_TextFilter_PaginationAndDiscoveredLinkSelectors()
+    {
+        var ok = new ScrapingPlan
+        {
+            Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ExtractStep { Name = "F", Selector = "h1" }],
+            Pagination = new NextLinkPagination { NextLinkSelector = "a:contains(\"Weiter\")" },
+            DiscoveredUrls = new DiscoveredUrlsConfig { PageUrl = "https://example.com/nav", LinkSelector = "a:contains(\"Kategorie\")" },
+        };
+        Assert.True(ScrapingPlanValidator.Validate(ok).Success);
+
+        var badNext = new ScrapingPlan { Steps = ok.Steps, Pagination = new NextLinkPagination { NextLinkSelector = "a:contains(Weiter)" } };
+        Assert.Contains("NextLinkPagination.NextLinkSelector", ScrapingPlanValidator.Validate(badNext).Error);
+
+        var badDiscovered = new ScrapingPlan { Steps = ok.Steps, DiscoveredUrls = new DiscoveredUrlsConfig { PageUrl = "https://example.com/nav", LinkSelector = "a:contains(x)" } };
+        Assert.Contains("DiscoveredUrls.LinkSelector", ScrapingPlanValidator.Validate(badDiscovered).Error);
+    }
+
+    [Fact]
+    public void Validate_TextFilter_BrowserActionSelectors()
+    {
+        ScrapingPlan Plan(string clickSelector, string? loadMore = null) => new()
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ClickStep { Selector = clickSelector },
+                new ScrollStep { LoadMoreButtonSelector = loadMore },
+                new ExtractStep { Name = "F", Selector = "h1" },
+            ],
+        };
+
+        Assert.True(ScrapingPlanValidator.Validate(Plan("button:contains(\"In den Warenkorb\")", "button:contains('Mehr laden')")).Success);
+        Assert.Contains("ClickStep", ScrapingPlanValidator.Validate(Plan("button:contains(x)")).Error);
+        Assert.Contains("LoadMoreButtonSelector", ScrapingPlanValidator.Validate(Plan("button", "button:contains(x)")).Error);
+    }
+
+    [Fact]
+    public void Validate_TextFilter_IsRejectedInFramePathsAndTheEmbeddedScriptSelector()
+    {
+        var framed = new ScrapingPlan
+        {
+            Engine = ScrapingEngine.Browser,
+            Steps =
+            [
+                new NavigateStep { Urls = ["https://example.com"] },
+                new ExtractStep { Name = "F", Selector = "h1", FramePath = ["iframe:contains(\"x\")"] },
+            ],
+        };
+        var frameResult = ScrapingPlanValidator.Validate(framed);
+        Assert.False(frameResult.Success);
+        Assert.Contains("not supported here", frameResult.Error);
+
+        var api = new ApiConfig
+        {
+            UrlTemplate = "https://example.com/page",
+            EmbeddedJsonSource = new EmbeddedJsonSource { ScriptSelector = "script:contains(\"state\")" },
+            ItemsPath = "items",
+            Fields = [new ApiField { Name = "Id", Path = "id" }],
+        };
+        var apiPlan = new ScrapingPlan
+        {
+            Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = api }],
+            Engine = ScrapingEngine.Api,
+        };
+        var apiResult = ScrapingPlanValidator.Validate(apiPlan);
+        Assert.False(apiResult.Success);
+        Assert.Contains("EmbeddedJsonSource.ScriptSelector", apiResult.Error);
+    }
 }

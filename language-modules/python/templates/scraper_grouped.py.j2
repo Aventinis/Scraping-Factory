@@ -15,13 +15,13 @@ from datetime import date
 import requests
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
-{{~ if change_detection.enabled || proxy.enabled || external_config.enabled || download_enabled ~}}
+{{~ if change_detection.enabled || proxy.enabled || external_config.enabled || download_enabled || request_headers.has_env ~}}
 import os
 {{~ end ~}}
 {{~ if proxy.enabled ~}}
 import itertools
 {{~ end ~}}
-{{~ if proxy.enabled || hardening.enabled || external_config.enabled || download_enabled || preflight.enabled ~}}
+{{~ if proxy.enabled || hardening.enabled || external_config.enabled || download_enabled || preflight.enabled || request_headers.has_env ~}}
 import sys
 {{~ end ~}}
 {{~ if hardening.has_baseline || preflight.enabled ~}}
@@ -50,19 +50,14 @@ import urllib.request
 # Issue #83: one or more start URLs — the same extraction runs against each,
 # and results are combined into a single output file.
 URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
-{{~ if discovered_urls.enabled ~}}
-# Issue #218: a lightweight pre-run pass harvesting additional start URLs
-# from a navigation/listing page, combined with URLS above (additive, not a
-# replacement) — see _discover_additional_urls().
-DISCOVERED_URLS_PAGE_URL = {{ discovered_urls.page_url_literal }}
-DISCOVERED_URLS_LINK_SELECTOR = {{ discovered_urls.link_selector_literal }}
-DISCOVERED_URLS_MAX = {{ discovered_urls.max_urls_literal }}
-{{~ end ~}}
+#@include discovered_urls_constants
 
-# Many sites (Wikipedia among them) reject the bare "python-requests/x.y"
-# default User-Agent with 403 Forbidden — an honest, identifying UA (not a
-# spoofed browser) is enough to pass that check on most sites.
-HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"}
+#@include request_headers_static
+{{~ if text_selector.enabled ~}}
+#@include text_selector_common
+
+#@include text_selector_bs4
+{{~ end ~}}
 
 # Issue #192: an active FLAT-schema Output Blueprint mapping flattens this
 # mode's normally-nested output into denormalized rows (see BLUEPRINT_MAPPING
@@ -74,358 +69,22 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https:/
 # output would.
 OUTPUT_PATH = "{{ output_filename }}.{{ if blueprint_mapping_enabled }}{{ if output_is_json }}json{{ else }}csv{{ end }}{{ else }}{{ if output_is_json }}json{{ else }}xml{{ end }}{{ end }}"
 
-{{~ if download_enabled ~}}
-# Issue #213: sibling directory next to OUTPUT_PATH, same "append a suffix to
-# the full OUTPUT_PATH string, extension included" convention BASELINE_PATH
-# already establishes for its own sidecar file below.
-DOWNLOADS_DIR = OUTPUT_PATH + ".downloads"
+#@include download_static
 
+#@include external_config_grouped
 
-# Downloads one embedded resource (e.g. an <img>'s src) referenced by an
-# Attribute-mode field with Download enabled, and returns its own local file
-# path — never the bare URL — for the caller to use as that field's value.
-# The local filename is a SHA-1 hash of the (already-resolved-to-absolute)
-# URL, not the URL's own basename: two different pages could otherwise
-# reference two entirely different images both named e.g. "thumb.jpg",
-# silently overwriting one with the other. The hash also makes downloads
-# idempotent across repeated runs of the same script — a file that already
-# exists on disk is trusted as-is and never re-fetched, so scraping the same
-# page again doesn't grow DOWNLOADS_DIR without bound. A failed download
-# (network error, non-2xx status, disallowed content type, over the size
-# limit, ...) is never fatal to the row/run — it's printed as a warning and
-# the caller gets "" back, exactly like any other field whose selector
-# simply found nothing.
-# Issue #214: max_size/allowed_types are an optional safety net — None/[]
-# (the default) means no restriction, today's exact Issue #213 behavior.
-# Streamed (stream=True) so an oversized response is aborted mid-download
-# instead of always being pulled fully into memory first.
-def _download_resource(url, base_url, max_size=None, allowed_types=None):
-    allowed_types = [t.lower() for t in (allowed_types or [])]
-    absolute_url = urljoin(base_url, url)
-    os.makedirs(DOWNLOADS_DIR, exist_ok=True)
-    digest = hashlib.sha1(absolute_url.encode("utf-8")).hexdigest()[:16]
-    # A query string/fragment on the URL shouldn't leak into the local
-    # filename's own extension — split them off before inspecting the path.
-    path_only = absolute_url.split("?", 1)[0].split("#", 1)[0]
-    ext = os.path.splitext(path_only)[1]
-    if not re.fullmatch(r"\.[A-Za-z0-9]{1,8}", ext):
-        ext = ""
-    local_path = os.path.join(DOWNLOADS_DIR, digest + ext)
-    if not os.path.exists(local_path):
-        try:
-            response = requests.get(absolute_url, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10, stream=True)
-            response.raise_for_status()
-            content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
-            if allowed_types and content_type not in allowed_types:
-                response.close()
-                print(f"WARNING: skipped download of '{absolute_url}': content type '{content_type}' is not in the allowed list.", file=sys.stderr)
-                return ""
-            content_length = response.headers.get("Content-Length")
-            if max_size is not None and content_length is not None and int(content_length) > max_size:
-                response.close()
-                print(f"WARNING: skipped download of '{absolute_url}': size ({content_length} bytes) exceeds the {max_size}-byte limit.", file=sys.stderr)
-                return ""
-            data = bytearray()
-            for chunk in response.iter_content(chunk_size=65536):
-                data += chunk
-                if max_size is not None and len(data) > max_size:
-                    print(f"WARNING: skipped download of '{absolute_url}': exceeded the {max_size}-byte limit while downloading.", file=sys.stderr)
-                    return ""
-            with open(local_path, "wb") as f:
-                f.write(data)
-        except Exception as exc:
-            print(f"WARNING: failed to download resource '{absolute_url}': {exc}", file=sys.stderr)
-            return ""
-    return local_path
-{{~ end ~}}
+#@include pagination_constants
 
-{{~ if external_config.enabled ~}}
-# Issue #178: see scraper.py.j2's own doc comment for the full rationale — an
-# opt-in sidecar XML file next to the *script* itself lets a non-technical
-# user tweak the start URL(s)/output filename without touching this .py file
-# or reopening the extension. Container-mode's own group/field names aren't
-# editable this way yet (see the issue's own open question on mapping a
-# nested tree onto a flat-ish XML structure) — only the two mode-independent
-# values below are.
-EXIT_EXTERNAL_CONFIG_INVALID = 3
-EXTERNAL_CONFIG_PATH = os.path.splitext(os.path.abspath(__file__))[0] + ".config.xml"
-
-
-def _external_config_error(message):
-    print(f"ERROR: The external config file '{EXTERNAL_CONFIG_PATH}' {message}", file=sys.stderr)
-    sys.exit(EXIT_EXTERNAL_CONFIG_INVALID)
-
-
-def _write_default_external_config():
-    root = ET.Element("ScrapingFactoryConfig")
-    ET.SubElement(root, "OutputFileName").text = "{{ output_filename }}"
-    urls_el = ET.SubElement(root, "Urls")
-    for u in URLS:
-        ET.SubElement(urls_el, "Url").text = u
-    try:
-        tree = ET.ElementTree(root)
-        ET.indent(tree)
-        tree.write(EXTERNAL_CONFIG_PATH, encoding="utf-8", xml_declaration=True)
-    except OSError as e:
-        print(f"Warning: could not create default external config file '{EXTERNAL_CONFIG_PATH}': {e}", file=sys.stderr)
-
-
-def _load_external_config():
-    if not os.path.exists(EXTERNAL_CONFIG_PATH):
-        _write_default_external_config()
-        return {}
-    try:
-        root = ET.parse(EXTERNAL_CONFIG_PATH).getroot()
-    except ET.ParseError as e:
-        _external_config_error(f"is not valid XML: {e}")
-    if root.tag != "ScrapingFactoryConfig":
-        _external_config_error(f"has an unexpected root element '<{root.tag}>' (expected '<ScrapingFactoryConfig>').")
-
-    result = {}
-
-    output_el = root.find("OutputFileName")
-    if output_el is not None:
-        name = (output_el.text or "").strip()
-        if not name:
-            _external_config_error("has an empty <OutputFileName> element.")
-        result["output_file_name"] = name
-
-    urls_el = root.find("Urls")
-    if urls_el is not None:
-        urls = [(u.text or "").strip() for u in urls_el.findall("Url")]
-        urls = [u for u in urls if u]
-        if not urls:
-            _external_config_error("has a <Urls> element with no non-empty <Url> entries.")
-        result["urls"] = urls
-
-    return result
-
-
-_EXTERNAL_CONFIG = _load_external_config()
-if _EXTERNAL_CONFIG.get("output_file_name"):
-    OUTPUT_PATH = _EXTERNAL_CONFIG["output_file_name"] + OUTPUT_PATH[OUTPUT_PATH.rindex("."):]
-if _EXTERNAL_CONFIG.get("urls"):
-    URLS = _EXTERNAL_CONFIG["urls"]
-{{~ end ~}}
-
-{{~ if pagination.enabled ~}}
-# Issue #174 (pagination): follows either a "next page" link's href
-# (resolved against the current page's own URL) or a {page}-templated URL,
-# starting from a start URL as page 1, until a page yields no elements, this
-# safety cap is reached, or (next-link kind only) the selector no longer
-# matches on a page.
-PAGINATION_MAX_PAGES = {{ pagination.max_pages_literal }}
-{{~ if pagination.kind == "nextLink" ~}}
-PAGINATION_NEXT_LINK_SELECTOR = {{ pagination.next_link_selector_literal }}
-{{~ else ~}}
-PAGINATION_URL_TEMPLATE = {{ pagination.url_template_literal }}
-{{~ end ~}}
-{{~ end ~}}
-
-{{~ if change_detection.enabled ~}}
-# Issue #87 (change detection): every *_ENV_VAR below is an environment-
-# variable *name* (never the actual credential/target value) — read via
-# os.environ[...] at runtime, exactly like FillStep already does for login
-# credentials.
-CHANGE_DETECTION_NOTIFY = {{ change_detection.notify_literal }}
-SMTP_HOST_ENV_VAR = {{ change_detection.smtp_host_env_var_literal }}
-SMTP_PORT_ENV_VAR = {{ change_detection.smtp_port_env_var_literal }}
-SMTP_USERNAME_ENV_VAR = {{ change_detection.smtp_username_env_var_literal }}
-SMTP_PASSWORD_ENV_VAR = {{ change_detection.smtp_password_env_var_literal }}
-NOTIFY_EMAIL_FROM_ENV_VAR = {{ change_detection.from_env_var_literal }}
-NOTIFY_EMAIL_TO_ENV_VAR = {{ change_detection.to_env_var_literal }}
-WEBHOOK_URL_ENV_VAR = {{ change_detection.webhook_url_env_var_literal }}
-{{~ end ~}}
+#@include change_detection_constants
 
 {{~ if proxy.enabled ~}}
-# Issue #88 (proxy support): PROXY_ENV_VAR is an environment-variable
-# *name* holding a comma-separated list of proxy URLs — never a literal
-# proxy address baked into the script, same as FillStep credentials. If
-# more than one is present, requests rotate through them round-robin. A
-# missing (not just empty) env var doesn't abort the run — it's treated as
-# "no proxy configured", with a warning printed and the run flagged via
-# EXIT_MISSING_ENV_VAR at the very end, once the script has otherwise
-# completed successfully.
-EXIT_MISSING_ENV_VAR = 78
-
-PROXY_ENV_VAR = {{ proxy.env_var_literal }}
-_PROXY_ENV_VALUE = os.environ.get(PROXY_ENV_VAR)
-_PROXY_ENV_MISSING = _PROXY_ENV_VALUE is None
-if _PROXY_ENV_MISSING:
-    print(f"Warning: environment variable '{PROXY_ENV_VAR}' is not set — connecting without a proxy.", file=sys.stderr)
-_PROXY_LIST = [p.strip() for p in (_PROXY_ENV_VALUE or "").split(",") if p.strip()]
-_proxy_cycle = itertools.cycle(_PROXY_LIST) if _PROXY_LIST else None
+#@include proxy_pool
 
 
-def _next_proxy():
-    return next(_proxy_cycle) if _proxy_cycle else None
-
-
-def _proxies_for_requests():
-    proxy = _next_proxy()
-    return {"http": proxy, "https": proxy} if proxy else None
+#@include proxy_requests
 {{~ end ~}}
 
-{{~ if hardening.enabled ~}}
-# Issue #129 (script hardening): each configured check independently prints
-# a warning (script still exits 0) or an error (script exits
-# EXIT_HARDENING_FAILED) once scraping is done — lets a script re-run later
-# (e.g. via cron, weeks after generation) detect that it silently stopped
-# finding anything, instead of writing an empty output file and exiting 0
-# as if nothing were wrong.
-EXIT_HARDENING_FAILED = 2
-
-HARDENING = {{ hardening.checks_literal }}
-
-# Issue #132 (blocking-detection check): a snapshot of each request's raw
-# response (final URL, body length, body text) is captured in scrape()
-# below, independently of the already-extracted data — a blocked response
-# can still produce a non-empty (but garbage) result that passes
-# noResult/nullRate. Populated even when no "blocking" check is configured;
-# the runtime cost of appending an already-in-memory string is negligible.
-_BLOCKING_RESPONSES = []
-
-# Issue #133 (required-fields check, container mode): matched globally by
-# tag name anywhere in the built tree (same convention the nullRate check
-# already established for this exact ambiguity) — REQUIRED_FIELD_NAMES is
-# the plain list of names to check, empty when no "requiredFields" check is
-# configured, in which case extract_group()'s own call site below is a
-# guaranteed no-op.
-_REQUIRED_FIELDS_CHECK = next((c for c in HARDENING if c["kind"] == "requiredFields"), None)
-REQUIRED_FIELD_NAMES = _REQUIRED_FIELDS_CHECK["fieldNames"] if _REQUIRED_FIELDS_CHECK else []
-_required_fields_dropped_count = 0
-
-# Called from extract_group() right after a *repeating* group's one
-# instance is fully built (never for a non-repeating group, which has no
-# "instance" to drop) — checks whether any required field anywhere in this
-# instance's own subtree is empty, dropping the whole instance if so.
-# extract_group() already recurses bottom-up, so this naturally drops the
-# nearest enclosing repeating instance, whichever nesting level actually
-# contains the problem — an inner repeating group's own bad instance is
-# dropped without disturbing its outer container. A required field name
-# matching nothing in this subtree is a silent no-op (typo/renamed field),
-# the same "skip rather than error" convention the nullRate check's own
-# zero-match case already uses.
-def _passes_required_fields(el):
-    global _required_fields_dropped_count
-    for name in REQUIRED_FIELD_NAMES:
-        for match in el.iter(name):
-            if not (match.text or "").strip():
-                _required_fields_dropped_count += 1
-                return False
-    return True
-
-
-# Unlike flat mode's "N of M rows" message, dropping can happen at more
-# than one nesting level in one run, so there's no single well-defined "of
-# M" denominator here — a plain count is reported instead.
-def _report_required_fields_drops():
-    if _REQUIRED_FIELDS_CHECK is None or _required_fields_dropped_count == 0:
-        return False
-    message = f"Dropped {_required_fields_dropped_count} element(s) missing a required field."
-    if _REQUIRED_FIELDS_CHECK["severity"] == "Error":
-        print(f"ERROR: {message}", file=sys.stderr)
-        return True
-    print(f"WARNING: {message}", file=sys.stderr)
-    return False
-
-{{~ if hardening.has_baseline ~}}
-# Issue #131 (baseline check): a small sidecar file next to the script's own
-# output records the result count from the last run that passed cleanly
-# (see main()'s own "only write when not hardening_failed" call site) — a
-# bad run must never become the new normal for the next comparison. Missing/
-# corrupt sidecar (first run ever, or the file was deleted) is treated the
-# same as "no baseline yet", not an error.
-BASELINE_PATH = OUTPUT_PATH + ".hardening-baseline.json"
-
-
-def _read_baseline():
-    try:
-        with open(BASELINE_PATH, "r", encoding="utf-8") as f:
-            return json.load(f).get("count")
-    except (FileNotFoundError, ValueError, OSError):
-        return None
-
-
-def _write_baseline(count):
-    with open(BASELINE_PATH, "w", encoding="utf-8") as f:
-        json.dump({"count": count}, f)
-{{~ end ~}}
-
-
-def _run_hardening_checks(root):
-    has_error = False
-    result_count = len(root.findall(".//*"))
-    for check in HARDENING:
-        if check["kind"] == "noResult":
-            if result_count == 0:
-                message = "No data was extracted — at least one selector likely matched nothing."
-                if check["severity"] == "Error":
-                    print(f"ERROR: {message}", file=sys.stderr)
-                    has_error = True
-                else:
-                    print(f"WARNING: {message}", file=sys.stderr)
-        elif check["kind"] == "nullRate":
-            # Issue #130: matched globally by tag name across the whole
-            # output tree, not scoped to whichever parent group the field is
-            # nested under (see NullRateCheck's own doc comment) — catches a
-            # field whose selector quietly starts matching the wrong thing
-            # (still returns a value, always empty) even though the overall
-            # element count stays healthy.
-            field = check["field"]
-            elements = list(root.iter(check["field"]))
-            total = len(elements)
-            if total == 0:
-                continue
-            empty = sum(1 for el in elements if not (el.text or "").strip())
-            rate = empty / total
-            if rate > check["threshold"]:
-                message = f"Field '{field}': {rate:.0%} of occurrences are empty (threshold: {check['threshold']:.0%})."
-                if check["severity"] == "Error":
-                    print(f"ERROR: {message}", file=sys.stderr)
-                    has_error = True
-                else:
-                    print(f"WARNING: {message}", file=sys.stderr)
-        elif check["kind"] == "baseline":
-            # Issue #131: catches a gradual drop in result volume that
-            # neither noResult (only fires at exactly zero) nor nullRate
-            # (only watches one field) would ever trip — e.g. a paginated
-            # list quietly losing entries. No baseline yet (first run, or
-            # the sidecar file was deleted) simply has nothing to compare
-            # against.
-            baseline = _read_baseline()
-            if baseline:
-                drop = (baseline - result_count) / baseline
-                if drop > check["dropThreshold"]:
-                    message = f"Result count dropped from {baseline} to {result_count} (more than the {check['dropThreshold']:.0%} threshold)."
-                    if check["severity"] == "Error":
-                        print(f"ERROR: {message}", file=sys.stderr)
-                        has_error = True
-                    else:
-                        print(f"WARNING: {message}", file=sys.stderr)
-        elif check["kind"] == "blocking":
-            # Issue #132: three signals, all evaluated per captured response
-            # — a redirect to a different host (always checked), a body
-            # shorter than minBodyLength (skipped when None), and a
-            # case-insensitive match against blockPhrases.
-            for entry in _BLOCKING_RESPONSES:
-                reasons = []
-                if urlsplit(entry["url"]).netloc != urlsplit(entry["final_url"]).netloc:
-                    reasons.append(f"redirected to a different host ({entry['final_url']})")
-                if check["minBodyLength"] is not None and entry["length"] < check["minBodyLength"]:
-                    reasons.append(f"response body is only {entry['length']} bytes (minimum: {check['minBodyLength']})")
-                matched_phrases = [p for p in check["blockPhrases"] if p.lower() in entry["text"].lower()]
-                if matched_phrases:
-                    reasons.append(f"matched block phrase(s): {', '.join(matched_phrases)}")
-                if reasons:
-                    message = f"Possible blocking detected for {entry['url']}: {'; '.join(reasons)}."
-                    if check["severity"] == "Error":
-                        print(f"ERROR: {message}", file=sys.stderr)
-                        has_error = True
-                    else:
-                        print(f"WARNING: {message}", file=sys.stderr)
-    return has_error
-{{~ end ~}}
+#@include hardening_tree
 
 GROUPS = {{ groups_literal }}
 
@@ -440,20 +99,7 @@ GROUPS = {{ groups_literal }}
 HIDDEN_FIELD_NAMES = set({{ hidden_field_names_literal }})
 
 
-# Returns a fresh tree with every HIDDEN_FIELD_NAMES-tagged element removed
-# (recursively) — never mutates `el` in place, since hardening/change-
-# detection (and, mid-construction, a combine/split transform's own sibling
-# lookup) still need to see the full, unstripped tree. A no-op fast path
-# when nothing is hidden — the common case — returns `el` itself unchanged.
-def _tree_without_hidden_fields(el):
-    if not HIDDEN_FIELD_NAMES:
-        return el
-    clone = ET.Element(el.tag, el.attrib)
-    clone.text = el.text
-    for child in el:
-        if child.tag not in HIDDEN_FIELD_NAMES:
-            clone.append(_tree_without_hidden_fields(child))
-    return clone
+#@include tree_without_hidden_fields
 
 
 # Issue #192: optional Output Blueprint field mapping (see scraper.py.j2's
@@ -722,134 +368,7 @@ def _build_blueprint_tree(top_scope, target_roots):
     return elements
 
 
-# Issue #84: best-effort numeric normalization for a "toNumber" transform —
-# finds the first numeric-looking substring and normalizes its decimal
-# separator to '.', stripping thousands separators/currency symbols. When
-# both '.' and ',' appear, the rightmost one is treated as the decimal point
-# (handles both "1.234,56" and "1,234.56"); a single separator appearing more
-# than once is treated as a thousands separator and stripped; a single
-# separator appearing exactly once is treated as the decimal point (so
-# "12,99"/"12.99" both work, at the cost of a genuinely ambiguous
-# single-occurrence case like "1.234" always being read as 1.234, never as
-# 1234 — chain a regex-extract transform first if that's not what's wanted).
-# Empty string if nothing numeric is found.
-def _to_number(value):
-    match = re.search(r"-?\d[\d.,]*", value)
-    if not match:
-        return ""
-    raw = match.group(0)
-    last_dot = raw.rfind(".")
-    last_comma = raw.rfind(",")
-    if last_dot != -1 and last_comma != -1:
-        decimal_pos = max(last_dot, last_comma)
-        integer_part = raw[:decimal_pos].replace(".", "").replace(",", "")
-        fractional_part = raw[decimal_pos + 1:]
-        normalized = f"{integer_part}.{fractional_part}"
-    elif raw.count(",") > 1 or raw.count(".") > 1:
-        normalized = raw.replace(",", "").replace(".", "")
-    else:
-        normalized = raw.replace(",", ".")
-    try:
-        numeric = float(normalized)
-    except ValueError:
-        return ""
-    return str(int(numeric)) if numeric.is_integer() else str(numeric)
-
-
-# Issue #205: safe, explicit type-conversion transforms -- unlike toNumber's
-# best-effort heuristic extraction, these either produce a well-formed value
-# or fall back to their own clearly defined "onError" behavior
-# ("KeepOriginal" leaves the pre-conversion value untouched, "UseDefault"
-# substitutes the transform's own configured "defaultValue") rather than
-# silently guessing.
-_DATE_FORMAT_TOKEN_PATTERNS = {"yyyy": r"(?P<yyyy>\d{4})", "mm": r"(?P<mm>\d{1,2})", "dd": r"(?P<dd>\d{1,2})"}
-
-
-def _type_conversion_fallback(value, on_error, default_value):
-    return default_value if on_error == "UseDefault" else value
-
-
-def _to_integer(value, on_error, default_value):
-    stripped = value.strip()
-    if re.fullmatch(r"[+-]?\d+", stripped):
-        return str(int(stripped))
-    return _type_conversion_fallback(value, on_error, default_value)
-
-
-def _to_boolean(value, on_error, default_value):
-    normalized = value.strip().lower()
-    if normalized in ("true", "1", "yes", "y"):
-        return "True"
-    if normalized in ("false", "0", "no", "n"):
-        return "False"
-    return _type_conversion_fallback(value, on_error, default_value)
-
-
-# source_format is the same "{yyyy}"/"{mm}"/"{dd}" mini-template
-# RangeSource.Format (RangeFormat.cs) already uses for ISO week/date
-# parameters, compiled into a regex the same way (escape the literal
-# template, then substitute each placeholder for its own capture group) so a
-# format string valid on the companion side parses identically here. Also
-# rejects a structurally-matching but non-existent calendar date (e.g.
-# "2026-02-30") via date()'s own ValueError, not just a pattern match.
-def _to_date(value, source_format, on_error, default_value):
-    pattern = re.escape(source_format)
-    for token, token_pattern in _DATE_FORMAT_TOKEN_PATTERNS.items():
-        pattern = pattern.replace(re.escape("{" + token + "}"), token_pattern)
-    match = re.fullmatch(pattern, value.strip())
-    if match:
-        try:
-            return date(int(match.group("yyyy")), int(match.group("mm")), int(match.group("dd"))).isoformat()
-        except ValueError:
-            pass
-    return _type_conversion_fallback(value, on_error, default_value)
-
-
-# Applies a field's ordered transform chain (node["transform"], built by
-# PythonFieldTransformLiteral) — each step's output feeds the next step's
-# input, in the order the user configured them in. Not called for
-# node["mode"] == "exists" (a boolean-ish presence check, not a string
-# pipeline) — see extract_group below.
-def _resolve_transform_sibling(siblings, name):
-    if siblings is None:
-        return ""
-    if isinstance(siblings, dict):
-        return siblings.get(name, "")
-    found = siblings.find(name)
-    return (found.text or "") if found is not None else ""
-
-
-def _apply_transforms(value, transforms, siblings=None):
-    for t in transforms:
-        kind = t["kind"]
-        if kind == "trim":
-            value = value.strip()
-        elif kind == "regexExtract":
-            match = re.search(t["pattern"], value)
-            if match:
-                try:
-                    value = match.group(t.get("group", 0)) or ""
-                except (IndexError, re.error):
-                    value = ""
-            else:
-                value = ""
-        elif kind == "replace":
-            value = value.replace(t["find"], t["replacement"])
-        elif kind == "toNumber":
-            value = _to_number(value)
-        elif kind == "toInteger":
-            value = _to_integer(value, t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
-        elif kind == "toBoolean":
-            value = _to_boolean(value, t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
-        elif kind == "toDate":
-            value = _to_date(value, t.get("sourceFormat", "{yyyy}-{mm}-{dd}"), t.get("onError", "KeepOriginal"), t.get("defaultValue", ""))
-        elif kind == "combineFields":
-            value = t.get("separator", " ").join(_resolve_transform_sibling(siblings, n) for n in t.get("sourceFieldNames", []))
-        elif kind == "splitField":
-            parts = _resolve_transform_sibling(siblings, t.get("sourceFieldName", "")).split(t.get("separator", " "))
-            idx = t.get("index", 0)
-            value = parts[idx] if 0 <= idx < len(parts) else ""
-    return value
+#@include transforms
 
 
 # Walks the container tree at runtime: a group node ("children" in node)
@@ -886,6 +405,10 @@ def extract_group(scope, node, base_url, siblings=None):
                     el.append(result)
 {{~ if hardening.enabled ~}}
             if node["repeating"] and not _passes_required_fields(el):
+                continue
+{{~ end ~}}
+{{~ if dedup.enabled ~}}
+            if node["repeating"] and not _dedup_register_instance(el):
                 continue
 {{~ end ~}}
             elements.append(el)
@@ -930,177 +453,17 @@ def extract_group(scope, node, base_url, siblings=None):
 
 
 {{~ if output_is_json ~}}
-# Converts the group tree (already extracted into ET.Element form by
-# extract_group above) into nested dicts/lists for JSON output — reusing the
-# same extraction walk instead of a second, JSON-specific one. A tag that
-# occurs more than once among one element's children — several matches of a
-# repeating group, or same-named sibling fields/groups, which Container-Mode
-# explicitly allows — becomes a JSON list; a tag occurring exactly once stays
-# a plain nested value.
-def _xml_to_dict(element):
-    children = list(element)
-    if not children:
-        return element.text or ""
-    result = {}
-    for child in children:
-        value = _xml_to_dict(child)
-        if child.tag not in result:
-            result[child.tag] = value
-        elif isinstance(result[child.tag], list):
-            result[child.tag].append(value)
-        else:
-            result[child.tag] = [result[child.tag], value]
-    return result
+#@include xml_to_dict
 {{~ end ~}}
 
 
-{{~ if change_detection.enabled ~}}
-def _read_previous_output(path):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    except FileNotFoundError:
-        return None
+#@include change_detection_helpers
 
 
-def _notify_email(diff_text):
-    host = os.environ[SMTP_HOST_ENV_VAR]
-    port = int(os.environ[SMTP_PORT_ENV_VAR]) if SMTP_PORT_ENV_VAR else 587
-    username = os.environ.get(SMTP_USERNAME_ENV_VAR) if SMTP_USERNAME_ENV_VAR else None
-    password = os.environ.get(SMTP_PASSWORD_ENV_VAR) if SMTP_PASSWORD_ENV_VAR else None
-    sender = os.environ[NOTIFY_EMAIL_FROM_ENV_VAR]
-    recipient = os.environ[NOTIFY_EMAIL_TO_ENV_VAR]
-
-    msg = MIMEText(diff_text)
-    msg["Subject"] = "Scraping Factory: changes detected"
-    msg["From"] = sender
-    msg["To"] = recipient
-
-    # EHLO first so has_extn() actually knows what the server advertises —
-    # opportunistic STARTTLS (upgrade only if offered) works against both a
-    # real provider and an unauthenticated local/internal relay that never
-    # advertises it, without needing the caller to say which kind it is.
-    with smtplib.SMTP(host, port, timeout=10) as server:
-        server.ehlo()
-        if server.has_extn("starttls"):
-            server.starttls()
-            server.ehlo()
-        if username and password:
-            server.login(username, password)
-        server.sendmail(sender, [recipient], msg.as_string())
+#@include preflight_static
 
 
-def _notify_webhook(diff_text):
-    url = os.environ[WEBHOOK_URL_ENV_VAR]
-    payload = json.dumps({"subject": "Scraping Factory: changes detected", "diff": diff_text}).encode("utf-8")
-    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
-    urllib.request.urlopen(req, timeout=10)
-
-
-# Best-effort: by the time this runs, the current run's own output has
-# already been written successfully — a notification failure (unreachable
-# SMTP host, webhook down, ...) is reported but never fails the overall run.
-def _notify_change(old_content, new_content):
-    diff_text = "\n".join(difflib.unified_diff(
-        old_content.splitlines(), new_content.splitlines(), fromfile="previous", tofile="current", lineterm="",
-    ))
-    try:
-        if CHANGE_DETECTION_NOTIFY == "Email":
-            _notify_email(diff_text)
-        else:
-            _notify_webhook(diff_text)
-    except Exception as e:
-        print(f"Warning: change notification failed: {e}")
-{{~ end ~}}
-
-
-{{~ if preflight.enabled ~}}
-# Issue #219: a single cheap HEAD request against the primary start URL, run
-# before the main extraction phase even starts — a target that hasn't
-# changed since the last successful run (same ETag/Last-Modified) or isn't
-# reachable at all doesn't need the full cost of a real scrape. Not every
-# target reliably sends useful ETag/Last-Modified headers — when neither is
-# present (or they differ from the stored value, or there's no stored value
-# yet), the check can't tell "changed" from "unchanged" at all, so it
-# conservatively falls through to a normal run rather than risk silently
-# never updating stale data. Missing/corrupt sidecar (first run ever, or the
-# file was deleted) is treated the same as "no previous state yet".
-PREFLIGHT_STATE_PATH = OUTPUT_PATH + ".preflight-state.json"
-EXIT_PREFLIGHT_UNCHANGED = 4
-EXIT_PREFLIGHT_UNREACHABLE = 5
-
-
-def _read_preflight_state():
-    try:
-        with open(PREFLIGHT_STATE_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, ValueError, OSError):
-        return {}
-
-
-def _write_preflight_state(etag, last_modified):
-    with open(PREFLIGHT_STATE_PATH, "w", encoding="utf-8") as f:
-        json.dump({"etag": etag, "lastModified": last_modified}, f)
-
-
-# Returns (status, etag, last_modified) — status is "unreachable" (the
-# request itself failed or came back with an error status), "unchanged" (a
-# response header matches the value stored from the last successful run),
-# or "proceed" (no comparable header, no previous state yet, or the value
-# differs — the main run should go ahead as normal).
-def _run_preflight_check(url):
-    try:
-        response = requests.head(url, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10, allow_redirects=True)
-        response.raise_for_status()
-    except Exception as e:
-        print(f"ERROR: Preflight check failed — target is unreachable: {url} ({e})", file=sys.stderr)
-        return "unreachable", None, None
-
-    etag = response.headers.get("ETag")
-    last_modified = response.headers.get("Last-Modified")
-    previous = _read_preflight_state()
-    if etag and previous.get("etag") == etag:
-        return "unchanged", etag, last_modified
-    if not etag and last_modified and previous.get("lastModified") == last_modified:
-        return "unchanged", etag, last_modified
-    return "proceed", etag, last_modified
-{{~ end ~}}
-
-
-{{~ if discovered_urls.enabled ~}}
-# Issue #218: fetches DISCOVERED_URLS_PAGE_URL and harvests every distinct
-# href matching DISCOVERED_URLS_LINK_SELECTOR, resolved to an absolute URL
-# via urljoin against the page it was found on, capped at DISCOVERED_URLS_MAX
-# (order of appearance, not sorted) — a misconfigured selector matching an
-# entire sitemap/nav tree shouldn't silently balloon a run to thousands of
-# pages. Deliberately plain requests+BeautifulSoup, never whatever engine the
-# main scrape itself uses — the same "discovery doesn't need the full
-# machinery of the main run" precedent DiscoverySource/BrowserDiscoverySource
-# already established for API mode. A failed fetch/parse is a warning, not a
-# crash — the main run still proceeds with URLS/AdditionalUrls as already
-# configured, the same "degrade, don't crash" treatment a failed Download
-# already gets.
-def _discover_additional_urls():
-    try:
-        response = requests.get(DISCOVERED_URLS_PAGE_URL, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.content, "html.parser")
-    except Exception as e:
-        print(f"WARNING: Could not discover additional URLs from {DISCOVERED_URLS_PAGE_URL}: {e}")
-        return []
-
-    discovered = []
-    for el in soup.select(DISCOVERED_URLS_LINK_SELECTOR):
-        href = el.get("href")
-        if not href:
-            continue
-        absolute_url = urljoin(DISCOVERED_URLS_PAGE_URL, href)
-        if absolute_url not in discovered:
-            discovered.append(absolute_url)
-        if len(discovered) >= DISCOVERED_URLS_MAX:
-            break
-    return discovered
-{{~ end ~}}
+#@include discovered_urls_static
 
 
 def scrape(url):
@@ -1114,7 +477,14 @@ def scrape(url):
     page_number = 1
     page_url = url
     while page_url:
+{{~ if request_delay.enabled ~}}
+        _pace_request()
+{{~ end ~}}
+{{~ if retry.enabled ~}}
+        response = _send_with_retry(lambda _u=page_url: requests.get(_u, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10), page_url)
+{{~ else ~}}
         response = requests.get(page_url, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
+{{~ end ~}}
         response.raise_for_status()
 {{~ if hardening.enabled ~}}
         _BLOCKING_RESPONSES.append({"url": page_url, "final_url": response.url, "length": len(response.content), "text": response.text})
@@ -1158,115 +528,14 @@ def scrape(url):
     return root, blueprint_rows, blueprint_tree_elements
 
 
-def main():
-{{~ if preflight.enabled ~}}
-    preflight_status, preflight_etag, preflight_last_modified = _run_preflight_check(URLS[0])
-    if preflight_status == "unreachable":
-        sys.exit(EXIT_PREFLIGHT_UNREACHABLE)
-    if preflight_status == "unchanged":
-        print("Preflight check: no change detected since the last run — skipping.")
-        sys.exit(EXIT_PREFLIGHT_UNCHANGED)
-{{~ end ~}}
-{{~ if change_detection.enabled ~}}
-    previous_content = _read_previous_output(OUTPUT_PATH)
-{{~ end ~}}
-    # Issue #83: each URL's own scrape() already wraps its matches in an
-    # <Ergebnis> element (see above) — combine every URL's children into one
-    # final <Ergebnis>, the same sibling-merging pattern already used for
-    # multiple root groups from a single URL.
-    root = ET.Element("Ergebnis")
-    blueprint_rows = []
-    blueprint_tree_elements = []
-{{~ if discovered_urls.enabled ~}}
-    all_urls = list(URLS)
-    for discovered_url in _discover_additional_urls():
-        if discovered_url not in all_urls:
-            all_urls.append(discovered_url)
-{{~ else ~}}
-    all_urls = URLS
-{{~ end ~}}
-    for url in all_urls:
-        page_root, page_blueprint_rows, page_blueprint_tree_elements = scrape(url)
-        for el in page_root:
-            root.append(el)
-        blueprint_rows.extend(page_blueprint_rows)
-        blueprint_tree_elements.extend(page_blueprint_tree_elements)
-{{~ if blueprint_mapping_enabled ~}}
-    # Issue #192: BLUEPRINT_MAPPING flattens the tree into rows instead of
-    # writing it out nested — `root` itself (used for hardening/change-
-    # detection below) is unaffected, still the full, unflattened tree.
-    output_fieldnames = [m["target"] for m in BLUEPRINT_MAPPING]
-    output_rows = [{m["target"]: row.get(m["source"], "") for m in BLUEPRINT_MAPPING} for row in blueprint_rows]
-{{~ if output_is_json ~}}
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(output_rows, f, ensure_ascii=False, indent=2)
-{{~ else ~}}
-    with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=output_fieldnames)
-        writer.writeheader()
-        writer.writerows(output_rows)
-{{~ end ~}}
-    count = len(output_rows)
-{{~ else if blueprint_tree_mapping_enabled ~}}
-    # Issue #244: BLUEPRINT_TREE_MAPPING builds a real nested output tree of
-    # its own instead of denormalizing into rows — `root` itself (used for
-    # hardening/change-detection below) is unaffected, still the full,
-    # unmapped source tree.
-    blueprint_tree_root = ET.Element("Ergebnis")
-    for el in blueprint_tree_elements:
-        blueprint_tree_root.append(el)
-{{~ if output_is_json ~}}
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(_xml_to_dict(blueprint_tree_root), f, ensure_ascii=False, indent=2)
-{{~ else ~}}
-    tree = ET.ElementTree(blueprint_tree_root)
-    ET.indent(tree)
-    tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
-{{~ end ~}}
-    count = len(blueprint_tree_root.findall(".//*"))
-{{~ else ~}}
-    # Issue #206 follow-up: writes a HIDDEN_FIELD_NAMES-stripped copy — count
-    # and every use of `root` below (hardening, change detection) still see
-    # the full, unstripped tree.
-    output_root = _tree_without_hidden_fields(root)
-{{~ if output_is_json ~}}
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(_xml_to_dict(output_root), f, ensure_ascii=False, indent=2)
-    count = len(root.findall(".//*"))
-{{~ else ~}}
-    tree = ET.ElementTree(output_root)
-    ET.indent(tree)
-    tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
-    count = len(root.findall(".//*"))
-{{~ end ~}}
-{{~ end ~}}
-    print(f"Done — {count} {{ if blueprint_mapping_enabled }}row(s){{ else }}elements{{ end }} written to {OUTPUT_PATH}")
-{{~ if change_detection.enabled ~}}
-    with open(OUTPUT_PATH, "r", encoding="utf-8") as f:
-        new_content = f.read()
-    if previous_content is not None and previous_content != new_content:
-        _notify_change(previous_content, new_content)
-{{~ end ~}}
-{{~ if hardening.enabled ~}}
-    hardening_failed = _run_hardening_checks(root) or _report_required_fields_drops()
-{{~ if hardening.has_baseline ~}}
-    if not hardening_failed:
-        _write_baseline(count)
-{{~ end ~}}
-    if hardening_failed:
-        sys.exit(EXIT_HARDENING_FAILED)
-{{~ end ~}}
-{{~ if preflight.enabled ~}}
-    # Only reached if hardening (when enabled) didn't just sys.exit() above —
-    # a run that's about to be flagged as hardening-failed must never
-    # advance the preflight state, same "don't let a bad run become the new
-    # normal" rule BaselineCheck's own write already follows.
-    _write_preflight_state(preflight_etag, preflight_last_modified)
-{{~ end ~}}
-{{~ if proxy.enabled ~}}
-    if _PROXY_ENV_MISSING:
-        sys.exit(EXIT_MISSING_ENV_VAR)
-{{~ end ~}}
+#@include request_delay
+#@include retry
+{{ if dedup.enabled }}
+#@include dedup_tree
+{{ end }}
+
+
+#@include main_grouped
 
 
 if __name__ == "__main__":

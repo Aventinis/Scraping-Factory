@@ -26,6 +26,29 @@ public sealed class ScrapingPlan
     // ScrapingConfig.Proxy by ScrapingPlanBuilder — see IR/ProxyConfig.cs.
     public ProxyConfig? Proxy { get; init; }
 
+    // Issue #222: mode-independent, carried through unchanged from
+    // ScrapingConfig.RequestDelay by ScrapingPlanBuilder — see
+    // IR/RequestDelayConfig.cs.
+    public RequestDelayConfig? RequestDelay { get; init; }
+
+    // Issue #228: carried through unchanged (as a plain bool) from
+    // ScrapingConfig.RespectRobotsDelay by ScrapingPlanBuilder.
+    public bool RespectRobotsDelay { get; init; }
+
+    // Issue #223: mode-independent, carried through unchanged from
+    // ScrapingConfig.Retry by ScrapingPlanBuilder — see IR/RetryConfig.cs.
+    public RetryConfig? Retry { get; init; }
+
+    // Issue #226: mode-independent for the DOM shapes, carried through
+    // unchanged from ScrapingConfig.Headers by ScrapingPlanBuilder (never for
+    // an Api plan, which has ApiConfig.Headers of its own).
+    public List<ApiHeader>? Headers { get; init; }
+
+    // Issue #225: mode-independent, carried through unchanged from
+    // ScrapingConfig.Deduplication by ScrapingPlanBuilder — see
+    // IR/DeduplicationConfig.cs.
+    public DeduplicationConfig? Deduplication { get; init; }
+
     // Issue #129: mode-independent, carried through unchanged from
     // ScrapingConfig.Hardening by ScrapingPlanBuilder — see
     // IR/HardeningCheck.cs.
@@ -83,6 +106,11 @@ public sealed class ScrapingPlan
         OutputFileBaseName = outputFileBaseName,
         ChangeDetection = ChangeDetection,
         Proxy = Proxy,
+        RequestDelay = RequestDelay,
+        RespectRobotsDelay = RespectRobotsDelay,
+        Retry = Retry,
+        Headers = Headers,
+        Deduplication = Deduplication,
         Hardening = Hardening,
         Pagination = Pagination,
         DiscoveredUrls = DiscoveredUrls,

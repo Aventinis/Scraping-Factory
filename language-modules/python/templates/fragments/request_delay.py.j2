@@ -1,0 +1,112 @@
+{{~ if request_delay.enabled ~}}
+# Issue #222: optional pause between outbound requests — a minimum gap
+# between the starts of two consecutive requests, drawn uniformly from
+# [REQUEST_DELAY_MIN_S, REQUEST_DELAY_MAX_S] each time. Only the part of the
+# pause that hasn't already elapsed (e.g. while parsing the previous page) is
+# actually slept, and the very first request of a run starts immediately.
+# Each pause is announced on stdout — so a long run visibly isn't hanging,
+# and so the companion's trial run can tell waiting apart from a stuck
+# script (PythonScriptVerifier extends its own deadline by exactly the
+# announced pause).
+import random
+import time
+
+REQUEST_DELAY_MIN_S = {{ request_delay.min_s_literal }}
+REQUEST_DELAY_MAX_S = {{ request_delay.max_s_literal }}
+_last_request_started_at = None
+
+{{~ if request_delay.respect_robots ~}}
+# Issue #228: the target's own robots.txt can ask for a pace too — a
+# `Crawl-delay: N` (seconds between requests) and/or a `Request-rate: R/S`
+# (R requests per S seconds, i.e. S/R seconds between requests) directive.
+# It is read once, lazily, right before the first pause is computed (for each
+# distinct origin of the start URL(s)/API URL), and the larger of that and
+# the configured pause above wins. A site that publishes neither is a no-op;
+# an unreachable robots.txt only prints a warning, it never stops the run.
+# The delay is capped at ROBOTS_DELAY_MAX_S (a typo-sized value would
+# otherwise stall the script for hours). Only the generic and the
+# "ScrapingFactory" user-agent groups are consulted. When a proxy is
+# configured, robots.txt is fetched through it as well — a direct request
+# would otherwise reveal the machine's own address to the target.
+import urllib.error
+import urllib.parse
+import urllib.request
+import urllib.robotparser
+
+ROBOTS_URLS = {{ request_delay.robots_urls_literal }}
+ROBOTS_USER_AGENT = "ScrapingFactory"
+ROBOTS_FETCH_USER_AGENT = "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"
+ROBOTS_DELAY_MAX_S = 60.0
+_robots_delay_s = None
+
+
+def _robots_origins():
+    origins = []
+    for raw in ROBOTS_URLS:
+        parts = urllib.parse.urlsplit(raw)
+        if not parts.scheme or not parts.netloc or "{" in parts.netloc:
+            continue
+        origin = f"{parts.scheme}://{parts.netloc}"
+        if origin not in origins:
+            origins.append(origin)
+    return origins
+
+
+def _fetch_robots_delay(origin):
+    robots_url = origin + "/robots.txt"
+{{~ if proxy.enabled ~}}
+    proxy = _next_proxy()
+    handlers = [urllib.request.ProxyHandler({"http": proxy, "https": proxy})] if proxy else []
+    opener = urllib.request.build_opener(*handlers)
+{{~ else ~}}
+    opener = urllib.request.build_opener()
+{{~ end ~}}
+    request = urllib.request.Request(robots_url, headers={"User-Agent": ROBOTS_FETCH_USER_AGENT})
+    try:
+        with opener.open(request, timeout=10) as response:
+            text = response.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as error:
+        if error.code not in (401, 403, 404, 410):
+            print(f"Warning: could not read {robots_url} (HTTP {error.code}) — no robots.txt delay applied.", file=sys.stderr)
+        return 0.0
+    except Exception as error:
+        print(f"Warning: could not read {robots_url} ({type(error).__name__}) — no robots.txt delay applied.", file=sys.stderr)
+        return 0.0
+    parser = urllib.robotparser.RobotFileParser()
+    parser.parse(text.splitlines())
+    delay = float(parser.crawl_delay(ROBOTS_USER_AGENT) or 0)
+    rate = parser.request_rate(ROBOTS_USER_AGENT)
+    if rate is not None and rate.requests > 0:
+        delay = max(delay, rate.seconds / rate.requests)
+    if delay > 0:
+        if delay > ROBOTS_DELAY_MAX_S:
+            print(f"Warning: {robots_url} asks for {delay:g} s between requests — capped at {ROBOTS_DELAY_MAX_S:g} s.", file=sys.stderr)
+            delay = ROBOTS_DELAY_MAX_S
+        print(f"{robots_url} asks for {delay:g} s between requests (Crawl-delay/Request-rate) — honoring it.", flush=True)
+    return delay
+
+
+def _robots_delay():
+    global _robots_delay_s
+    if _robots_delay_s is None:
+        _robots_delay_s = max([_fetch_robots_delay(origin) for origin in _robots_origins()] or [0.0])
+    return _robots_delay_s
+{{~ end ~}}
+
+
+def _pace_request():
+    global _last_request_started_at
+    if _last_request_started_at is not None:
+{{~ if request_delay.respect_robots ~}}
+        gap = max(random.uniform(REQUEST_DELAY_MIN_S, REQUEST_DELAY_MAX_S), _robots_delay())
+        remaining = gap - (time.monotonic() - _last_request_started_at)
+{{~ else ~}}
+        remaining = random.uniform(REQUEST_DELAY_MIN_S, REQUEST_DELAY_MAX_S) - (time.monotonic() - _last_request_started_at)
+{{~ end ~}}
+        if remaining > 0:
+            print(f"Pausing {remaining:.2f} s before the next request (request delay)...", flush=True)
+            time.sleep(remaining)
+    _last_request_started_at = time.monotonic()
+
+
+{{~ end ~}}

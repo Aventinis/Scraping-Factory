@@ -1536,3 +1536,146 @@ describe('API_CAPTURE bridge (message-listener wiring)', () => {
     expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
   });
 });
+
+// ── Issue #227: the :contains("text") selector suffix ────────────────────────
+// The same cases (and expectations) run in popup/selector-text-filter.test.js
+// and the companion's SelectorTextFilterTests.cs — three implementations of
+// one syntax, checked against identical vectors.
+const { splitTextFilter, normalizeText, querySelectorAllWithText, querySelectorWithText } = require('./content-script');
+
+describe('splitTextFilter (shared vectors)', () => {
+  test.each([
+    ['.btn:contains("Add to cart")', '.btn', 'Add to cart'],
+    [".card .btn:contains('Merken')", '.card .btn', 'Merken'],
+    ['a:contains(  "x"  )   ', 'a', 'x'],
+    [':contains("only")', '*', 'only'],
+    ['.a > .b:contains("say \\"hi\\"")', '.a > .b', 'say "hi"'],
+    [".b:contains('it\\'s')", '.b', "it's"],
+    ['A:CONTAINS("x")', 'A', 'x'],
+    ['div', 'div', null],
+  ])('%s → base %j, text %j', (selector, base, text) => {
+    expect(splitTextFilter(selector)).toEqual({ base, text });
+  });
+
+  test.each([
+    ['a:contains(x)'],
+    ['a:contains("x"'],
+    ['a:contains("x") b'],
+  ])('a malformed filter (%s) is left untouched for the browser to reject', (selector) => {
+    expect(splitTextFilter(selector)).toEqual({ base: selector, text: null });
+  });
+});
+
+describe('querySelectorAllWithText', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div class="card" id="c1">
+        <a class="btn" href="/cart">In den  Warenkorb</a>
+        <a class="btn" href="/wish"><span>Mer</span>ken</a>
+        <a class="btn" href="/cmp">Vergleichen</a>
+      </div>
+      <div class="card" id="c2"><a class="btn" href="/other">Merken</a></div>
+    `;
+  });
+
+  const hrefs = (els) => els.map((e) => e.getAttribute('href'));
+
+  test('normalizeText collapses whitespace and lower-cases', () => {
+    expect(normalizeText('  In den \n  WARENKORB ')).toBe('in den warenkorb');
+  });
+
+  test('matches case-insensitively, across repeated whitespace and child elements', () => {
+    expect(hrefs(querySelectorAllWithText(document, '.btn:contains("in den warenkorb")'))).toEqual(['/cart']);
+    expect(hrefs(querySelectorAllWithText(document, '.btn:contains("MERKEN")'))).toEqual(['/wish', '/other']);
+  });
+
+  test('is a substring match', () => {
+    expect(hrefs(querySelectorAllWithText(document, '.btn:contains("gleich")'))).toEqual(['/cmp']);
+  });
+
+  test('works with a descendant combinator before the filter and inside a scope root', () => {
+    expect(hrefs(querySelectorAllWithText(document, '.card .btn:contains("merken")'))).toEqual(['/wish', '/other']);
+    expect(hrefs(querySelectorAllWithText(document.getElementById('c2'), '.btn:contains("merken")'))).toEqual(['/other']);
+  });
+
+  test('a filter on a container selects the instances that contain the text anywhere inside', () => {
+    expect(querySelectorAllWithText(document, '.card:contains("vergleichen")').map((e) => e.id)).toEqual(['c1']);
+  });
+
+  test('without a filter it is plain querySelectorAll; querySelectorWithText returns the first match or null', () => {
+    expect(querySelectorAllWithText(document, '.btn')).toHaveLength(4);
+    expect(querySelectorWithText(document, '.btn:contains("merken")').getAttribute('href')).toBe('/wish');
+    expect(querySelectorWithText(document, '.btn:contains("gibt es nicht")')).toBeNull();
+  });
+
+  test('countSelectorMatches, the flat/group preview matchers and the iframe-free hover path all understand the suffix', () => {
+    expect(countSelectorMatches('.btn:contains("merken")')).toBe(2);
+    expect(countSelectorMatches('.btn:contains("merken")', document.getElementById('c1'))).toBe(1);
+
+    const flat = matchFlatFields([{ name: 'Link', selector: '.btn:contains("warenkorb")' }, { name: 'Fehlt', selector: '.btn:contains("nein")' }]);
+    expect(flat.matches.map((m) => m.element.getAttribute('href'))).toEqual(['/cart']);
+    expect(flat.empty).toEqual(['Fehlt']);
+
+    const treeMatches = [];
+    const treeEmpty = [];
+    matchGroupTree(document, [{ name: 'Karte', selector: '.card:contains("vergleichen")', repeating: true, children: [{ name: 'Wunsch', selector: 'a:contains("merken")' }] }], treeMatches, treeEmpty);
+    expect(treeMatches.map((m) => m.element.getAttribute('href') || m.element.id)).toEqual(['c1', '/wish']);
+    expect(treeEmpty).toEqual([]);
+  });
+});
+
+describe('COUNT_PICK_WITH_TEXT (live match count for a text filter on the last pick)', () => {
+  let capturedListener;
+
+  beforeEach(() => {
+    jest.resetModules();
+    document.body.innerHTML = `
+      <div class="card"><a class="btn" href="/a">Merken</a><a class="btn" href="/b">Vergleichen</a></div>
+      <div class="card"><a class="btn" href="/c">Merken</a></div>
+    `;
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: (fn) => { capturedListener = fn; } },
+        sendMessage: jest.fn(),
+      },
+    };
+    require('./content-script');
+  });
+
+  afterEach(() => { delete global.chrome; });
+
+  const ask = (text) => {
+    const sendResponse = jest.fn();
+    capturedListener({ type: 'COUNT_PICK_WITH_TEXT', text }, {}, sendResponse);
+    return sendResponse;
+  };
+
+  test('does not answer before anything was picked', () => {
+    expect(ask('Merken')).not.toHaveBeenCalled();
+  });
+
+  test('counts the matches of the last pick with the text appended, within the clicked instance', () => {
+    capturedListener({ type: 'START_SELECTION', scopeSelector: '.card' });
+    document.querySelector('.card .btn').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(ask('merken')).toHaveBeenCalledWith({ count: 1 });   // only this card's own "Merken" button
+    expect(ask('vergleichen')).toHaveBeenCalledWith({ count: 1 }); // the pick's selector (a.btn) also matches the sibling button
+    expect(ask('gibt es nicht')).toHaveBeenCalledWith({ count: 0 });
+    expect(ask('  MERKEN ')).toHaveBeenCalledWith({ count: 1 });
+  });
+
+  test('quotes and backslashes in the typed text do not break the selector', () => {
+    capturedListener({ type: 'START_SELECTION' });
+    document.querySelector('.btn').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(ask('say "hi" \\ there')).toHaveBeenCalledWith({ count: 0 });
+  });
+
+  test('a new selection round forgets the previous pick', () => {
+    capturedListener({ type: 'START_SELECTION' });
+    document.querySelector('.btn').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    capturedListener({ type: 'START_SELECTION' });
+
+    expect(ask('merken')).not.toHaveBeenCalled();
+  });
+});

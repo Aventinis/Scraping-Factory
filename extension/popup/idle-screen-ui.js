@@ -19,6 +19,8 @@ const SFIdleScreenUI = (function () {
   const { renderBrowserActionsSection } = typeof require !== 'undefined' ? require('./browser-actions-ui') : self.SFBrowserActionsUI;
   const { parseAdditionalUrls } = typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
   const { renderSettingsPanel } = typeof require !== 'undefined' ? require('./settings-panel-ui') : self.SFSettingsPanelUI;
+  const { renderDedupSection } = typeof require !== 'undefined' ? require('./dedup-config-ui') : self.SFDedupConfigUI;
+  const { renderRequestHeadersSection } = typeof require !== 'undefined' ? require('./request-headers-ui') : self.SFRequestHeadersUI;
   const { renderSavedConfigsList, fetchAllSavedConfigs } =
     typeof require !== 'undefined' ? require('./saved-configs-ui') : self.SFSavedConfigsUI;
   const { checkRobotsTxt } = typeof require !== 'undefined' ? require('./companion-client') : self.SFCompanionClient;
@@ -338,6 +340,8 @@ const SFIdleScreenUI = (function () {
     }
 
     renderSettingsPanel(bridge);
+    renderDedupSection(bridge);
+    renderRequestHeadersSection(bridge);
 
     // Issue #141: saved-configs-section is scoped to the current page's
     // hostname (fetchSavedConfigs, kicked off from checkCompanion) —

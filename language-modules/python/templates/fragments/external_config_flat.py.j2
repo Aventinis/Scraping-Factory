@@ -1,0 +1,102 @@
+{{~ if external_config.enabled ~}}
+# Issue #178: an opt-in sidecar XML file next to the *script* itself (not the
+# scraped output — see the baseline hardening check's own separate sidecar
+# for that) lets a non-technical user tweak the start URL(s), output
+# filename, and field names without touching this .py file or reopening the
+# extension. Resolved from the script's own current location/name (not a
+# name baked in at generate time), so a renamed .py file still finds its own
+# config. A missing file (never run yet, or accidentally deleted) is not an
+# error — a fresh one is written with this script's own current defaults,
+# and that run proceeds using those same defaults. A file that exists but is
+# broken (bad XML, a missing required attribute, or a stale reference to a
+# field that no longer exists) is a hard, clearly-named failure instead of a
+# raw Python traceback.
+EXIT_EXTERNAL_CONFIG_INVALID = 3
+EXTERNAL_CONFIG_PATH = os.path.splitext(os.path.abspath(__file__))[0] + ".config.xml"
+_EXTERNAL_CONFIG_KNOWN_FIELDS = [
+{{- for field in fields }}
+    "{{ field.name }}",
+{{- end }}
+]
+
+
+def _external_config_error(message):
+    print(f"ERROR: The external config file '{EXTERNAL_CONFIG_PATH}' {message}", file=sys.stderr)
+    sys.exit(EXIT_EXTERNAL_CONFIG_INVALID)
+
+
+def _write_default_external_config():
+    root = ET.Element("ScrapingFactoryConfig")
+    ET.SubElement(root, "OutputFileName").text = "{{ output_filename }}"
+    urls_el = ET.SubElement(root, "Urls")
+    for u in URLS:
+        ET.SubElement(urls_el, "Url").text = u
+    fields_el = ET.SubElement(root, "Fields")
+    for name in _EXTERNAL_CONFIG_KNOWN_FIELDS:
+        field_el = ET.SubElement(fields_el, "Field")
+        field_el.set("original", name)
+        field_el.text = name
+    try:
+        tree = ET.ElementTree(root)
+        ET.indent(tree)
+        tree.write(EXTERNAL_CONFIG_PATH, encoding="utf-8", xml_declaration=True)
+    except OSError as e:
+        print(f"Warning: could not create default external config file '{EXTERNAL_CONFIG_PATH}': {e}", file=sys.stderr)
+
+
+def _load_external_config():
+    if not os.path.exists(EXTERNAL_CONFIG_PATH):
+        _write_default_external_config()
+        return {}
+    try:
+        root = ET.parse(EXTERNAL_CONFIG_PATH).getroot()
+    except ET.ParseError as e:
+        _external_config_error(f"is not valid XML: {e}")
+    if root.tag != "ScrapingFactoryConfig":
+        _external_config_error(f"has an unexpected root element '<{root.tag}>' (expected '<ScrapingFactoryConfig>').")
+
+    result = {}
+
+    output_el = root.find("OutputFileName")
+    if output_el is not None:
+        name = (output_el.text or "").strip()
+        if not name:
+            _external_config_error("has an empty <OutputFileName> element.")
+        result["output_file_name"] = name
+
+    urls_el = root.find("Urls")
+    if urls_el is not None:
+        urls = [(u.text or "").strip() for u in urls_el.findall("Url")]
+        urls = [u for u in urls if u]
+        if not urls:
+            _external_config_error("has a <Urls> element with no non-empty <Url> entries.")
+        result["urls"] = urls
+
+    renames = {}
+    for field_el in root.findall("./Fields/Field"):
+        original = field_el.get("original")
+        if not original:
+            _external_config_error("has a <Field> element missing its required 'original' attribute.")
+        if original not in _EXTERNAL_CONFIG_KNOWN_FIELDS:
+            _external_config_error(
+                f"has a <Field original=\"{original}\"> that doesn't match any known field — "
+                "was the scraper regenerated with different fields since this file was created?"
+            )
+        new_name = (field_el.text or "").strip()
+        if not new_name:
+            _external_config_error(f"has a <Field original=\"{original}\"> with an empty name.")
+        renames[original] = new_name
+    result["field_names"] = renames
+
+    return result
+
+
+_EXTERNAL_CONFIG = _load_external_config()
+if _EXTERNAL_CONFIG.get("output_file_name"):
+    OUTPUT_PATH = _EXTERNAL_CONFIG["output_file_name"] + OUTPUT_PATH[OUTPUT_PATH.rindex("."):]
+if _EXTERNAL_CONFIG.get("urls"):
+    URLS = _EXTERNAL_CONFIG["urls"]
+FIELD_OUTPUT_NAMES = _EXTERNAL_CONFIG.get("field_names", {})
+{{~ else ~}}
+FIELD_OUTPUT_NAMES = {}
+{{~ end ~}}

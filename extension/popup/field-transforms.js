@@ -30,6 +30,7 @@ const SFFieldTransforms = (function () {
       case 'toInteger': return { kind: 'toInteger', onError: 'KeepOriginal', defaultValue: '' };
       case 'toBoolean': return { kind: 'toBoolean', onError: 'KeepOriginal', defaultValue: '' };
       case 'toDate': return { kind: 'toDate', sourceFormat: '{yyyy}-{mm}-{dd}', onError: 'KeepOriginal', defaultValue: '' };
+      case 'toCurrency': return { kind: 'toCurrency', format: '1.234,56', onError: 'KeepOriginal', defaultValue: '' };
       case 'combineFields': return { kind: 'combineFields', sourceFieldNames: [], separator: ' ' };
       case 'splitField': return { kind: 'splitField', sourceFieldName: '', separator: ' ', index: 0 };
       case 'trim':
@@ -234,6 +235,52 @@ const SFFieldTransforms = (function () {
     return `${yyyy}-${pad(mm)}-${pad(dd)}`;
   }
 
+  // Issue #234: decimal separator and accepted thousands separator(s) per
+  // ToCurrencyTransform.SupportedFormats preset — must stay in sync with the
+  // companion's list and the templates' own _CURRENCY_FORMATS table.
+  /** @type {Record<string, {decimal: string, thousands: string}>} */
+  const CURRENCY_FORMATS = {
+    '1.234,56': { decimal: ',', thousands: '.' },
+    '1,234.56': { decimal: '.', thousands: ',' },
+    '1 234,56': { decimal: ',', thousands: ' \u00a0\u202f' },
+    "1'234.56": { decimal: '.', thousands: "'\u2019" },
+  };
+  const CURRENCY_FORMAT_IDS = Object.keys(CURRENCY_FORMATS);
+
+  /**
+   * @param {string} chars
+   * @returns {string}
+   */
+  function escapeCharClass(chars) {
+    return chars.replace(/[\]\\^-]/g, '\\$&');
+  }
+
+  // Hand-kept mirror of the templates' _to_currency (same "both sides must
+  // reach the same result" relationship toNumberPreview has to _to_number):
+  // the first number in the value — a separator only counts when a digit
+  // follows — must match the chosen format strictly (thousands groups of
+  // exactly three digits, at most one decimal separator); the fraction is
+  // kept exactly as scraped. [0-9] rather than \d on both sides, since
+  // Python's \d also matches non-ASCII digits and JS's doesn't.
+  /**
+   * @param {string} value
+   * @param {string} format
+   * @returns {string | null}
+   */
+  function toCurrencyPreview(value, format) {
+    const { decimal, thousands } = CURRENCY_FORMATS[format] || CURRENCY_FORMATS['1.234,56'];
+    const candidate = new RegExp(`[+-]?[0-9](?:[0-9]|[${escapeCharClass(decimal + thousands)}](?=[0-9]))*`).exec(value);
+    if (!candidate) return null;
+    const thousandsClass = `[${escapeCharClass(thousands)}]`;
+    const match = new RegExp(`^([+-]?)([0-9]{1,3}(?:${thousandsClass}[0-9]{3})+|[0-9]+)(?:${decimal === '.' ? '\\.' : decimal}([0-9]+))?$`)
+      .exec(candidate[0]);
+    if (!match) return null;
+    // Leading zeros stripped textually (not via parseInt, which loses
+    // precision on very long amounts) — same result as Python's str(int(...)).
+    const integer = match[2].replace(new RegExp(thousandsClass, 'g'), '').replace(/^0+(?=[0-9])/, '');
+    return `${match[1] === '-' ? '-' : ''}${integer}${match[3] ? `.${match[3]}` : ''}`;
+  }
+
   // converted is the conversion's own result: a converted string on
   // success, or null on failure (see toIntegerPreview/toBooleanPreview/
   // toDatePreview above). On failure this applies the transform's own
@@ -243,7 +290,7 @@ const SFFieldTransforms = (function () {
   // unavailable"), "UseDefault" substitutes defaultValue.
   /**
    * @param {string} currentValue
-   * @param {SFWire.ToIntegerTransform | SFWire.ToBooleanTransform | SFWire.ToDateTransform} t
+   * @param {SFWire.ToIntegerTransform | SFWire.ToBooleanTransform | SFWire.ToDateTransform | SFWire.ToCurrencyTransform} t
    * @param {string | null} converted
    * @returns {string}
    */
@@ -301,6 +348,9 @@ const SFFieldTransforms = (function () {
         case 'toDate':
           value = typeConversionFallback(value, t, toDatePreview(value, t.sourceFormat || ''));
           break;
+        case 'toCurrency':
+          value = typeConversionFallback(value, t, toCurrencyPreview(value, t.format || '1.234,56'));
+          break;
         case 'combineFields':
         case 'splitField':
           // Issue #206: no sibling field's own value is available client-side
@@ -319,7 +369,7 @@ const SFFieldTransforms = (function () {
   return {
     createDefaultTransform, addTransform, removeTransform, updateTransform,
     changeTransformKind, moveTransform, transformsAreValid,
-    toNumberPreview, toIntegerPreview, toBooleanPreview, toDatePreview,
+    toNumberPreview, toIntegerPreview, toBooleanPreview, toDatePreview, toCurrencyPreview, CURRENCY_FORMAT_IDS,
     applyTransformsPreview,
   };
 })();

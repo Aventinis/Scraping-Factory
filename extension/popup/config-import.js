@@ -24,6 +24,11 @@
 // each typed precisely instead, which is where a real shape mismatch would
 // actually get caught.
 const SFConfigImport = (function () {
+  const { applyDeduplicationConfig } =
+    typeof require !== 'undefined' ? require('./dedup-config') : self.SFDedupConfig;
+  const { applyRequestHeadersConfig } =
+    typeof require !== 'undefined' ? require('./request-headers') : self.SFRequestHeaders;
+
   // Inverse of container-tree.js's FIELD_MODE_WIRE_NAMES — kept as its own
   // copy rather than importing that module, the same "small, hand-kept
   // mirror" tradeoff already made elsewhere in this codebase (e.g.
@@ -90,7 +95,11 @@ const SFConfigImport = (function () {
           maxIterations: a.maxIterations ?? 10, waitAfterMs: a.waitAfterMs ?? 1000, framePath,
         };
       }
-      return { kind: 'click', selector: a.selector || '', framePath };
+      return {
+        kind: 'click', selector: a.selector || '', framePath,
+        target: String(a.target || 'first').toLowerCase() === 'all' ? 'all' : String(a.target || '').toLowerCase() === 'last' ? 'last' : 'first',
+        waitAfterMs: a.waitAfterMs ?? 250,
+      };
     });
   }
 
@@ -125,6 +134,39 @@ const SFConfigImport = (function () {
    */
   function applyProxyConfig(wire) {
     return wire ? { enabled: true, envVar: wire.environmentVariableName || '' } : { enabled: false, envVar: '' };
+  }
+
+  // Issue #222: reverse of buildRequestDelayConfig — milliseconds back into
+  // the popup's two "seconds" text inputs (a fixed pause leaves "to" blank).
+  /**
+   * @param {SFWire.RequestDelayConfig | null | undefined} wire
+   * @returns {SFDraft.RequestDelayState}
+   */
+  function applyRequestDelayConfig(wire) {
+    if (!wire) return { enabled: false, minSecondsText: '1', maxSecondsText: '' };
+    const seconds = (/** @type {number} */ ms) => String(Math.round(ms) / 1000);
+    return {
+      enabled: true,
+      minSecondsText: seconds(wire.minMs ?? 0),
+      maxSecondsText: (wire.maxMs ?? wire.minMs) === wire.minMs ? '' : seconds(wire.maxMs ?? 0),
+    };
+  }
+
+  // Issue #223: reverse of buildRetryConfig.
+  /**
+   * @param {SFWire.RetryConfig | null | undefined} wire
+   * @returns {SFDraft.RetryState}
+   */
+  function applyRetryConfig(wire) {
+    const defaults = { enabled: false, maxAttemptsText: '3', delaySecondsText: '2', exponential: true, statusCodesText: '429, 502, 503, 504' };
+    if (!wire) return defaults;
+    return {
+      enabled: true,
+      maxAttemptsText: String(wire.maxAttempts ?? 3),
+      delaySecondsText: String((wire.delayMs ?? 2000) / 1000),
+      exponential: wire.exponential !== false,
+      statusCodesText: wire.retryOnStatusCodes?.length ? wire.retryOnStatusCodes.join(', ') : defaults.statusCodesText,
+    };
   }
 
   // Reverse of buildPaginationConfig.
@@ -322,6 +364,10 @@ const SFConfigImport = (function () {
         additionalStartUrls: [],
         changeDetection: applyChangeDetectionConfig(null),
         proxy: applyProxyConfig(null),
+        requestDelay: applyRequestDelayConfig(null),
+        retry: applyRetryConfig(null),
+        deduplication: applyDeduplicationConfig(null),
+        requestHeaders: applyRequestHeadersConfig(null),
         pagination: applyPaginationConfig(null),
         discoveredUrls: applyDiscoveredUrlsConfig(null),
         hardening: applyHardeningConfig(null),
@@ -329,6 +375,7 @@ const SFConfigImport = (function () {
         // Issue #219: never present on a Combined wire config either (same
         // outer-level rejection as discoveredUrls above).
         preflight: false,
+        respectRobotsDelay: false,
         ...applyOutputBlueprintConfig(null),
       };
     }
@@ -365,6 +412,12 @@ const SFConfigImport = (function () {
         additionalStartUrls: config.additionalUrls || [],
         changeDetection: applyChangeDetectionConfig(null),
         proxy: applyProxyConfig(config.proxy),
+        requestDelay: applyRequestDelayConfig(config.requestDelay),
+        retry: applyRetryConfig(config.retry),
+        // Issue #225: never present on a Blocks wire config (rejected server-side).
+        deduplication: applyDeduplicationConfig(null),
+        // Issue #226: the shared request headers do apply to Blocks.
+        requestHeaders: applyRequestHeadersConfig(config.headers),
         pagination: applyPaginationConfig(config.pagination),
         // Issue #218: never present on a Blocks wire config (rejected
         // server-side, not designed for this mode's multi-output shape yet).
@@ -375,6 +428,8 @@ const SFConfigImport = (function () {
         // server-side, not designed for this mode's multi-output shape yet —
         // same reasoning as discoveredUrls above).
         preflight: false,
+        // Issue #228: allowed on a Blocks request (one shared navigation).
+        respectRobotsDelay: config.respectRobotsDelay === true,
         ...applyOutputBlueprintConfig(null),
       };
     }
@@ -405,6 +460,11 @@ const SFConfigImport = (function () {
       additionalStartUrls: config.additionalUrls || [],
       changeDetection: applyChangeDetectionConfig(config.changeDetection),
       proxy: applyProxyConfig(config.proxy),
+      requestDelay: applyRequestDelayConfig(config.requestDelay),
+      retry: applyRetryConfig(config.retry),
+      deduplication: applyDeduplicationConfig(config.deduplication),
+      // Issue #226: an Api config never carries these (it has its own headers).
+      requestHeaders: applyRequestHeadersConfig(config.api ? null : config.headers),
       pagination: applyPaginationConfig(config.pagination),
       discoveredUrls: applyDiscoveredUrlsConfig(config.discoveredUrls),
       hardening: applyHardeningConfig(config.hardening),
@@ -412,6 +472,8 @@ const SFConfigImport = (function () {
       // Issue #219: plain bool, same convention as persistentSession above —
       // absent on the wire (an older companion/export, or Api mode) = false.
       preflight: config.preflight === true,
+      // Issue #228: plain bool, same convention as preflight above.
+      respectRobotsDelay: config.respectRobotsDelay === true,
       // Issue #191: only ever present on the wire for flat mode/Api's flat
       // shape — applyOutputBlueprintConfig(undefined) already resets to
       // "none" for every other mode, so no per-mode branching is needed here.

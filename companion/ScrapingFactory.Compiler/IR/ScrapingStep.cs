@@ -87,7 +87,19 @@ public sealed class FillStep : ScrapingStep
 // (e.g. waiting for the resulting page) is a separate WaitForStep.
 public sealed class ClickStep : ScrapingStep
 {
+    public const int DefaultWaitAfterMs = 250;
+
     public required string Selector { get; init; }
+
+    // Issue #267: Playwright's Locator.click() runs in strict mode and aborts
+    // with a "strict mode violation" when the selector matches more than one
+    // element — unusable for e.g. one "Assets" toggle per listed release.
+    // First (the default, so a config that never sets this at least stops
+    // hard-failing) and Last click that single match; All clicks every match
+    // in document order, pausing WaitAfterMs after each so the page can react
+    // before the next click (same idea as ScrollStep.WaitAfterMs).
+    public ClickTarget Target { get; init; } = ClickTarget.First;
+    public int WaitAfterMs { get; init; } = DefaultWaitAfterMs;
 
     // See ExtractStep.FramePath (Issue #42, Phase 4) — e.g. a cookie-consent
     // button that lives inside an iframe.
@@ -174,3 +186,6 @@ public sealed class PlanExtractionBlock
     public ChangeDetectionConfig? ChangeDetection { get; init; }
     public List<HardeningCheck>? Hardening { get; init; }
 }
+
+// Issue #267: see ClickStep.Target.
+public enum ClickTarget { First, Last, All }

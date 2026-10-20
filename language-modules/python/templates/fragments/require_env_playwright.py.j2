@@ -1,0 +1,10 @@
+{{~ if needs_exit_helper ~}}
+# A FillStep's credential or Proxy's URL list must come from an environment
+# variable that's actually set — this distinguishes "expected configuration
+# gap" from an arbitrary script bug via a dedicated exit code instead of a
+# raw, unhandled KeyError traceback.
+EXIT_MISSING_ENV_VAR = 78
+
+
+#@include require_env_function
+{{~ end ~}}

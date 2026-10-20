@@ -36,6 +36,11 @@ const { serializeGroupTree } =
 const { buildOutputBlueprintMapping } =
   typeof require !== 'undefined' ? require('./output-blueprints') : self.SFOutputBlueprints;
 
+const { buildDeduplicationConfig } =
+  typeof require !== 'undefined' ? require('./dedup-config') : self.SFDedupConfig;
+const { buildRequestHeadersConfig } =
+  typeof require !== 'undefined' ? require('./request-headers') : self.SFRequestHeaders;
+
 // ── Pure functions (exported for testing) ────────────────────────────────────
 
 // Mirrors the companion's FileNameSanitizer (ScrapingFactory.Compiler/IR/
@@ -175,6 +180,65 @@ function buildProxyConfig(proxy) {
   if (!proxy?.enabled) return null;
   const environmentVariableName = (proxy.envVar || '').trim();
   return environmentVariableName ? { environmentVariableName } : null;
+}
+
+// Issue #222: converts _state.requestDelay's editable draft (two free-text
+// second inputs, so "1,5" and "1.5" both work) into the wire
+// RequestDelayConfig in milliseconds, or null when disabled or the "from"
+// value isn't a usable number — the same "incomplete draft treated as
+// toggle-off" convention buildProxyConfig uses. A blank "to" means a fixed
+// pause; a "to" below "from" is raised to it; both are clamped to
+// RequestDelayConfig.MaxAllowedMs (60 s) the way buildPaginationConfig
+// clamps maxPages, so a stray value never turns into a 400 from /generate.
+const REQUEST_DELAY_MAX_MS = 60000;
+/**
+ * @param {string | null | undefined} text
+ * @returns {number | null}
+ */
+function parseSecondsToMs(text) {
+  const normalized = String(text ?? '').trim().replace(',', '.');
+  if (normalized === '') return null;
+  const seconds = Number(normalized);
+  return Number.isFinite(seconds) && seconds >= 0 ? Math.min(Math.round(seconds * 1000), REQUEST_DELAY_MAX_MS) : null;
+}
+/**
+ * @param {SFDraft.RequestDelayState | null | undefined} requestDelay
+ * @returns {SFWire.RequestDelayConfig | null}
+ */
+function buildRequestDelayConfig(requestDelay) {
+  if (!requestDelay?.enabled) return null;
+  const minMs = parseSecondsToMs(requestDelay.minSecondsText);
+  if (minMs === null) return null;
+  const maxMs = parseSecondsToMs(requestDelay.maxSecondsText);
+  return { minMs, maxMs: maxMs === null ? minMs : Math.max(minMs, maxMs) };
+}
+
+// Issue #223: converts _state.retry's editable draft into the wire
+// RetryConfig, or null when disabled. Unlike buildRequestDelayConfig there's
+// no "incomplete = off" case: every input falls back to its default when
+// blank or unusable (3 attempts, 2 s, the companion's default status-code
+// list), and attempts/delay are clamped to RetryConfig's own bounds (2-10
+// attempts, 0-60 s) — so a stray value never turns into a 400 from /generate.
+// Status codes accept any separator ("429, 503" / "429 503"); only 400-599
+// are kept, deduplicated, and an empty result is omitted so the companion's
+// own default list applies.
+const RETRY_DEFAULT_ATTEMPTS = 3;
+const RETRY_DEFAULT_DELAY_MS = 2000;
+/**
+ * @param {SFDraft.RetryState | null | undefined} retry
+ * @returns {SFWire.RetryConfig | null}
+ */
+function buildRetryConfig(retry) {
+  if (!retry?.enabled) return null;
+  const attempts = parseInt(String(retry.maxAttemptsText ?? '').trim(), 10);
+  const maxAttempts = Number.isFinite(attempts) ? Math.min(Math.max(attempts, 2), 10) : RETRY_DEFAULT_ATTEMPTS;
+  const delayMs = parseSecondsToMs(retry.delaySecondsText) ?? RETRY_DEFAULT_DELAY_MS;
+  const codes = [...new Set(String(retry.statusCodesText ?? '').split(/[^0-9]+/).filter(Boolean).map(Number))]
+    .filter(code => code >= 400 && code <= 599);
+  return {
+    maxAttempts, delayMs, exponential: retry.exponential !== false,
+    ...(codes.length > 0 ? { retryOnStatusCodes: codes } : {}),
+  };
 }
 
 // Issue #174: converts _state.pagination's editable draft shape into the
@@ -424,6 +488,13 @@ function collectFieldNames(mode, fields, groups, apiConfig) {
  * @param {SFWire.OutputBlueprintSchemaKind} [outputBlueprintSchemaKind]
  * @param {SFDraft.OutputBlueprintTreeNode[]} [outputBlueprintTree]
  * @param {Record<string, string>} [outputBlueprintTreeMapping]
+ * @param {SFDraft.DiscoveredUrlsState | null} [discoveredUrls]
+ * @param {boolean} [preflight]
+ * @param {SFDraft.RequestDelayState | null} [requestDelay]
+ * @param {SFDraft.RetryState | null} [retry]
+ * @param {SFDraft.DeduplicationState | null} [deduplication]
+ * @param {SFDraft.RequestHeadersState | null} [requestHeaders]
+ * @param {boolean} [respectRobotsDelay]
  * @returns {object}
  */
 function buildScrapingConfig(
@@ -444,7 +515,42 @@ function buildScrapingConfig(
   // Issue #219: same "append at the end, never insert in the middle" rule as
   // discoveredUrls just above.
   preflight = false,
+  // Issue #222: same "append at the end" rule.
+  requestDelay = null,
+  // Issue #223: same "append at the end" rule.
+  retry = null,
+  // Issue #225: same "append at the end" rule.
+  deduplication = null,
+  // Issue #226: same "append at the end" rule.
+  requestHeaders = null,
+  // Issue #228: same "append at the end" rule.
+  respectRobotsDelay = false,
 ) {
+  // Issue #228: a plain on/off switch, independent of requestDelay (the
+  // companion uses the larger of the two gaps) — omitted when off.
+  const respectRobotsFields = respectRobotsDelay ? { respectRobotsDelay: true } : {};
+  const requestDelayConfig = buildRequestDelayConfig(requestDelay);
+  const requestDelayFields = requestDelayConfig ? { requestDelay: requestDelayConfig } : {};
+  // Both pacing settings in one spread — the object literals below are
+  // already at TypeScript's union-complexity limit.
+  /** @type {Record<string, unknown>} */
+  const pacingFields = { ...requestDelayFields, ...respectRobotsFields };
+  const retryConfig = buildRetryConfig(retry);
+  const retryFields = retryConfig ? { retry: retryConfig } : {};
+  // Issue #225: the Append output needs a flat output file, so container
+  // mode and API mode's tree response shape fall back to Delta — see
+  // buildDeduplicationConfig. Key fields no longer in the field list are
+  // dropped. Blocks/Combined return before this is used (not supported there).
+  const isTreeShape = mode === 'container' || (mode === 'api' && (apiConfig?.groups?.length ?? 0) > 0);
+  const deduplicationConfig = buildDeduplicationConfig(deduplication, isTreeShape, collectFieldNames(mode, fields, groups, apiConfig));
+  const deduplicationFields = deduplicationConfig ? { deduplication: deduplicationConfig } : {};
+  // Issue #226: DOM shapes only (flat/container/Blocks) — API mode has its
+  // own header list inside apiConfig, and Combined components carry theirs.
+  const requestHeadersConfig = buildRequestHeadersConfig(requestHeaders);
+  // Typed as a plain record: with this many optional spread groups, TypeScript
+  // otherwise gives up on the object literals' union type (TS2590).
+  /** @type {Record<string, unknown>} */
+  const requestHeadersFields = requestHeadersConfig ? { headers: requestHeadersConfig } : {};
   // Issue #182: Blocks mode has no ad-hoc fields/groups/apiConfig of its own
   // either — each block is a fully independent {name, outputFileName,
   // fields|groups} sent verbatim, sharing this one request's Url/engine/
@@ -483,7 +589,7 @@ function buildScrapingConfig(
       })),
       scriptFileName: scriptFileName || null,
       ...engineFields, ...previewFields, ...additionalUrlsFields,
-      ...proxyFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
+      ...proxyFields, ...pacingFields, ...retryFields, ...requestHeadersFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
     };
   }
   // Combined mode (Issue #239): no ad-hoc fields/groups/apiConfig of its own
@@ -565,7 +671,7 @@ function buildScrapingConfig(
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...proxyFields, ...pacingFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
       ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
@@ -574,7 +680,7 @@ function buildScrapingConfig(
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...proxyFields, ...pacingFields, ...retryFields, ...deduplicationFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
       ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
@@ -596,7 +702,7 @@ function buildScrapingConfig(
     outputFormat: useJsonOutput ? 'Json' : 'Csv',
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
-    ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields,
+    ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields, ...pacingFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields,
     ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
     ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
   };
@@ -638,6 +744,11 @@ function buildScrapingConfig(
  * @param {SFDraft.OutputBlueprintTreeNode[]} [outputBlueprintTree]
  * @param {Record<string, string>} [outputBlueprintTreeMapping]
  * @param {boolean} [preflight]
+ * @param {SFDraft.RequestDelayState | null} [requestDelay]
+ * @param {SFDraft.RetryState | null} [retry]
+ * @param {SFDraft.DeduplicationState | null} [deduplication]
+ * @param {SFDraft.RequestHeadersState | null} [requestHeaders]
+ * @param {boolean} [respectRobotsDelay]
  * @returns {{exportedAt: string, extensionVersion: string, config: object}}
  */
 function buildConfigExport(
@@ -652,6 +763,16 @@ function buildConfigExport(
   discoveredUrls = null,
   // Issue #219: same "append at the end" rule as discoveredUrls just above.
   preflight = false,
+  // Issue #222: same "append at the end" rule.
+  requestDelay = null,
+  // Issue #223: same "append at the end" rule.
+  retry = null,
+  // Issue #225: same "append at the end" rule.
+  deduplication = null,
+  // Issue #226: same "append at the end" rule.
+  requestHeaders = null,
+  // Issue #228: same "append at the end" rule.
+  respectRobotsDelay = false,
 ) {
   return {
     exportedAt: new Date().toISOString(),
@@ -661,7 +782,8 @@ function buildConfigExport(
       useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession,
       includeOutputFile, externalConfig, combinedComponents, blocks,
       outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping,
-      outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping, discoveredUrls, preflight,
+      outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping, discoveredUrls, preflight, requestDelay, retry,
+      deduplication, requestHeaders, respectRobotsDelay,
     ),
   };
 }
@@ -734,7 +856,8 @@ function addBrowserAction(actions, kind) {
   const defaults = {
     waitFor: { kind: 'waitFor', selector: '', timeoutMs: 5000 },
     fill:    { kind: 'fill', selector: '', environmentVariableName: '' },
-    click:   { kind: 'click', selector: '' },
+    // Issue #267: first match by default (the companion's own default too).
+    click:   { kind: 'click', selector: '', target: 'first', waitAfterMs: 250 },
     // Issue #289: scrollStepPx stays null (keeping today's "jump straight
     // to the bottom" default) until the user explicitly types a value.
     scroll:  { kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000, scrollStepPx: null },
@@ -796,7 +919,15 @@ function serializeBrowserActions(actions) {
         ...framePath,
       };
     }
-    return { kind: 'click', selector, ...framePath };
+    // Issue #267: target/waitAfterMs only when they differ from the
+    // companion's defaults (First / only used for All).
+    const target = a.target === 'last' ? 'Last' : a.target === 'all' ? 'All' : null;
+    return {
+      kind: 'click', selector,
+      ...(target ? { target } : {}),
+      ...(target === 'All' ? { waitAfterMs: a.waitAfterMs ?? 250 } : {}),
+      ...framePath,
+    };
   });
 }
 
@@ -907,7 +1038,7 @@ function frameBadgeHtml(framePath) {
 }
 
   return {sanitizeFileNameBase, deriveScriptFileNameFromHostname, computeScriptFileNamePatch, parseAdditionalUrls,
-    buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildDiscoveredUrlsConfig, buildHardeningConfig,
+    buildChangeDetectionConfig, buildProxyConfig, buildRequestDelayConfig, buildRetryConfig, buildPaginationConfig, buildDiscoveredUrlsConfig, buildHardeningConfig,
     computeInitialMonitoringSectionOpen, collectFieldNames,
     buildScrapingConfig, buildConfigExport,
     addField, removeField, updateField,

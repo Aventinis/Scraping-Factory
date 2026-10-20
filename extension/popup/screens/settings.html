@@ -58,6 +58,16 @@
   </div>
 </div>
 
+<!-- Issue #279: reusable transform-chain presets — built-ins (read-only)
+     plus the user's own, saved from any field's transform editor via "Save
+     as preset"; renamed/deleted here. Rendered by transform-presets-ui.js. -->
+<div id="settings-transform-presets-section">
+  <p class="row-label" data-i18n="transformPresets.settingsTitle"></p>
+  <p class="preview-summary" data-i18n="transformPresets.settingsHint"></p>
+  <div id="transform-presets-list"></div>
+  <p id="transform-presets-unavailable" class="preview-summary hidden" data-i18n="transformPresets.unavailableHint"></p>
+</div>
+
 <!-- Cross-site saved configurations/outputs — the per-site "Saved
      configurations" panel on the idle screen (scoped to the currently open
      tab's hostname, with its own "Laden" action) is unaffected; this is a

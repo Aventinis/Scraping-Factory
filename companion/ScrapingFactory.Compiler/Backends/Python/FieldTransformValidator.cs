@@ -64,13 +64,19 @@ internal static class FieldTransformValidator
             // DefaultValue is ambiguous (there's no sensible implicit
             // fallback value), so it's rejected the same structural way an
             // empty regex pattern already is above.
-            if (transform is ToIntegerTransform or ToBooleanTransform or ToDateTransform)
+            // Issue #234: only the fixed presets — the runtime's own format
+            // table (_to_currency) knows nothing else.
+            if (transform is ToCurrencyTransform toCurrency && !ToCurrencyTransform.SupportedFormats.Contains(toCurrency.Format))
+                return $"Currency format '{toCurrency.Format}' for {fieldLabel} is not supported (expected one of: {string.Join(", ", ToCurrencyTransform.SupportedFormats)}).";
+
+            if (transform is ToIntegerTransform or ToBooleanTransform or ToDateTransform or ToCurrencyTransform)
             {
                 var (onError, defaultValue) = transform switch
                 {
                     ToIntegerTransform t => (t.OnError, t.DefaultValue),
                     ToBooleanTransform t => (t.OnError, t.DefaultValue),
                     ToDateTransform t => (t.OnError, t.DefaultValue),
+                    ToCurrencyTransform t => (t.OnError, t.DefaultValue),
                     _ => throw new InvalidOperationException("Unreachable."),
                 };
 
