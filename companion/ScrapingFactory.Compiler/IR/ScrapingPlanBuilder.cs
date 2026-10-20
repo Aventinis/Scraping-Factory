@@ -187,7 +187,7 @@ public static class ScrapingPlanBuilder
         {
             Selector = a.Selector, EnvironmentVariableName = a.EnvironmentVariableName, FramePath = a.FramePath,
         },
-        ClickAction a => new ClickStep { Selector = a.Selector, FramePath = a.FramePath },
+        ClickAction a => new ClickStep { Selector = a.Selector, FramePath = a.FramePath, Target = a.Target, WaitAfterMs = a.WaitAfterMs },
         ScrollAction a => new ScrollStep
         {
             ContainerSelector = a.ContainerSelector,

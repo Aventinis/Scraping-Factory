@@ -49,7 +49,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
                 {
                     step = new { selector = s.Selector, env_var = s.EnvironmentVariableName, frame_path = s.FramePath },
                 }).TrimEnd(),
-                ClickStep s => clickTemplate.Render(new { step = new { selector = s.Selector, frame_path = s.FramePath } }).TrimEnd(),
+                ClickStep s => clickTemplate.Render(new { step = new { selector = s.Selector, frame_path = s.FramePath, target = s.Target.ToString().ToLowerInvariant(), wait_after_ms = s.WaitAfterMs } }).TrimEnd(),
                 ScrollStep s => scrollTemplate.Render(new
                 {
                     step = new

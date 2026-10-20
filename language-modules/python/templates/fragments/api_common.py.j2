@@ -343,7 +343,19 @@ def _run_browser_action(page, action):
     elif kind == "fill":
         _resolve_locator(page, action["selector"], frame_path).fill(_require_env(action["environmentVariableName"]))
     elif kind == "click":
-        _resolve_locator(page, action["selector"], frame_path).click()
+        # Issue #267: "first" (default)/"last" click that match; "all" clicks
+        # every match in document order, pausing waitAfterMs after each.
+        click_target = action.get("target", "first")
+        click_locator = _resolve_locator(page, action["selector"], frame_path)
+        if click_target == "all":
+            click_locator.first.wait_for()
+            for click_index in range(click_locator.count()):
+                click_locator.nth(click_index).click()
+                page.wait_for_timeout(action.get("waitAfterMs", 250))
+        elif click_target == "last":
+            click_locator.last.click()
+        else:
+            click_locator.first.click()
     elif kind == "scroll":
         _run_scroll_action(page, action)
 
