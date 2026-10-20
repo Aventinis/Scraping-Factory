@@ -55,6 +55,34 @@ deploy.
 > expected to work**, but neither has actually been verified yet — if you try
 > it there, feedback (or a bug report) via GitHub issues is very welcome.
 
+### Quick install (release bundle)
+
+Every [GitHub Release](../../releases) carries a bundle per platform
+(`scraping-factory-<version>-win-x64.zip`, `-linux-x64.tar.gz`, `-osx-arm64.tar.gz`,
+`-osx-x64.tar.gz`) with a ready-to-run companion (no .NET SDK needed), the
+unpacked extension and an installer. You only need **Python 3.9+** on your
+machine. Unpack the bundle and run:
+
+```bash
+./install.sh --autostart          # Linux / macOS
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Autostart   # Windows
+```
+
+The installer creates its own Python environment (requests, beautifulsoup4,
+openpyxl; `--browser-engine` adds Playwright + Chromium), starts the companion
+and, with `--autostart`, starts it at every login. It then prints the folder to
+choose under **Load unpacked** on your browser's extensions page — a browser
+doesn't let an installer add an extension silently, so that one step stays
+manual. See `INSTALL.md` inside the bundle for all options and
+`uninstall.sh` / `uninstall.ps1` to remove it again. (The programs are not
+code-signed; macOS/Windows may ask for confirmation on the first start. The
+Windows installer has not been tested yet.)
+
+The steps below are the manual route, e.g. for development.
+
 ### 1. Run the companion app
 
 Requirements:

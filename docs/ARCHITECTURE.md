@@ -1288,6 +1288,23 @@ registration. Pure refactor — SQLite specifics stay in the implementations.
 - Tests: `StoreAbstractionTests.cs` (fakes registered in DI), plus the
   existing store and endpoint tests against real SQLite
 
+### 2.21ae Release bundles and installer (Issue #346)
+
+Per-platform release bundles (self-contained single-file companion + unpacked
+extension + installer scripts) are built by `install/build-bundle.sh` and
+attached to every GitHub Release by `.github/workflows/release-bundles.yml`.
+The installers create a dedicated Python venv, write the interpreter into the
+per-user `companion.settings.json` (an optional configuration source:
+appsettings.json < settings file < environment < command line) and optionally
+register autostart. The extension is still loaded manually ("Load unpacked").
+
+- Tooling: `install/build-bundle.sh`, `install.sh`/`uninstall.sh`,
+  `install.ps1`/`uninstall.ps1`, `install/INSTALL.md` (shipped in the bundle)
+- Companion: `CompanionUserSettings.cs`, wired in `Program.cs`
+- Workflow: `.github/workflows/release-bundles.yml`
+- Tests: `CompanionUserSettingsTests.cs`; the Linux installer was verified by
+  hand end to end (see CLAUDE.md), Windows/macOS/systemd paths are untested
+
 ### 2.22 Persistent session/cookie handling (Issue #175)
 
 Browser-engine only (rejected server-side for Static/Api, same as
