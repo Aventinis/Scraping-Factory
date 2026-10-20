@@ -925,3 +925,12 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
 .request-header-kind { flex: 0 1 auto; }
 .request-header-test-value { flex: 1 1 100%; }
 .request-header-row .btn-remove-request-header { margin-left: auto; }
+
+/* Issue #227: the field modals' optional "text contains" input and its
+   "use this element's text" shortcut. The match-count hint that follows it
+   normally tucks up under the previous input (negative top margin) — here a
+   hint paragraph sits in between, so that pull-up is cancelled. */
+.text-filter-row { margin: 8px 0 6px; }
+.text-filter-row .btn-tiny { margin-top: 6px; }
+.text-filter-row .preview-summary { text-align: left; margin: 6px 0 4px; }
+.text-filter-row + .match-count-hint { margin-top: 0; }

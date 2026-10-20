@@ -58,6 +58,7 @@ internal static class PythonScrapingContextBuilder
             ["request_delay"] = PythonRequestDelayLiteral.BuildContext(plan.RequestDelay),
             ["retry"] = PythonRetryLiteral.BuildContext(plan.Retry),
             ["request_headers"] = PythonRequestHeadersLiteral.BuildContext(plan.Headers),
+            ["text_selector"] = PythonTextSelectorLiteral.BuildContext(plan),
             ["dedup"] = PythonDeduplicationLiteral.BuildContext(plan.Deduplication),
             ["hardening"] = PythonHardeningLiteral.BuildContext(plan.Hardening),
             ["pagination"] = PythonPaginationLiteral.BuildContext(plan.Pagination),
@@ -126,6 +127,7 @@ internal static class PythonScrapingContextBuilder
             ["request_delay"] = PythonRequestDelayLiteral.BuildContext(plan.RequestDelay),
             ["retry"] = PythonRetryLiteral.BuildContext(plan.Retry),
             ["request_headers"] = PythonRequestHeadersLiteral.BuildContext(plan.Headers),
+            ["text_selector"] = PythonTextSelectorLiteral.BuildContext(plan),
             ["dedup"] = PythonDeduplicationLiteral.BuildContext(plan.Deduplication),
             ["hardening"] = PythonHardeningLiteral.BuildContext(plan.Hardening),
             ["pagination"] = PythonPaginationLiteral.BuildContext(plan.Pagination),
@@ -161,6 +163,7 @@ internal static class PythonScrapingContextBuilder
             ["request_delay"] = PythonRequestDelayLiteral.BuildContext(plan.RequestDelay),
             ["retry"] = PythonRetryLiteral.BuildContext(plan.Retry),
             ["request_headers"] = PythonRequestHeadersLiteral.BuildContext(plan.Headers),
+            ["text_selector"] = PythonTextSelectorLiteral.BuildContext(plan),
             ["pagination"] = PythonPaginationLiteral.BuildContext(plan.Pagination),
             ["script_filename"] = plan.ScriptFileName,
         };

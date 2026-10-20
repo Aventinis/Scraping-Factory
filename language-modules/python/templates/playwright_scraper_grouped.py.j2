@@ -84,6 +84,15 @@ OUTPUT_PATH = "{{ output_filename }}.{{ if blueprint_mapping_enabled }}{{ if out
 
 #@include require_env_playwright
 #@include request_headers_playwright
+{{~ if text_selector.enabled ~}}
+#@include text_selector_common
+
+#@include text_selector_playwright
+{{~ if discovered_urls.enabled ~}}
+
+#@include text_selector_bs4
+{{~ end ~}}
+{{~ end ~}}
 
 {{~ if proxy.enabled ~}}
 #@include proxy_pool

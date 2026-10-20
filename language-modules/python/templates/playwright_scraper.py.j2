@@ -82,6 +82,15 @@ OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else }}csv{{ 
 
 #@include require_env_playwright
 #@include request_headers_playwright
+{{~ if text_selector.enabled ~}}
+#@include text_selector_common
+
+#@include text_selector_playwright
+{{~ if discovered_urls.enabled ~}}
+
+#@include text_selector_bs4
+{{~ end ~}}
+{{~ end ~}}
 
 {{~ if proxy.enabled ~}}
 #@include proxy_pool
@@ -94,7 +103,7 @@ OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else }}csv{{ 
 
 SELECTORS = {
 {{- for field in fields }}
-    "{{ field.name }}": "{{ field.selector }}",
+    "{{ field.name }}": "{{ field.selector | string.escape }}",
 {{- end }}
 }
 
@@ -151,7 +160,7 @@ BLUEPRINT_MAPPING = {{ blueprint_mapping_literal }}
 # pierces open shadow roots automatically for a plain CSS selector.
 FRAME_PATHS = {
 {{- for field in fields }}{{- if field.frame_path }}
-    "{{ field.name }}": [{{ for sel in field.frame_path }}"{{ sel }}"{{ if !for.last }}, {{ end }}{{ end }}],
+    "{{ field.name }}": [{{ for sel in field.frame_path }}"{{ sel | string.escape }}"{{ if !for.last }}, {{ end }}{{ end }}],
 {{- end }}{{- end }}
 }
 

@@ -45,6 +45,11 @@ import urllib.request
 URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 
 #@include request_headers_static
+{{~ if text_selector.enabled ~}}
+#@include text_selector_common
+
+#@include text_selector_bs4
+{{~ end ~}}
 
 BLOCKS = {{ blocks_literal }}
 

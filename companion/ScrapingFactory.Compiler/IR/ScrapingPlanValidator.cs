@@ -141,6 +141,9 @@ public static class ScrapingPlanValidator
         {
             if (string.IsNullOrWhiteSpace(waitStep.Selector))
                 return Invalid("Selector of a WaitForStep must not be empty.");
+            var waitSelectorError = SelectorTextFilter.Validate(waitStep.Selector, "Selector of a WaitForStep");
+            if (waitSelectorError is not null)
+                return Invalid(waitSelectorError);
             if (waitStep.TimeoutMs <= 0)
                 return Invalid("Timeout of a WaitForStep must be positive.");
             var waitFrameError = ValidateFramePath(waitStep.FramePath, "WaitForStep", plan.Engine);
@@ -152,6 +155,9 @@ public static class ScrapingPlanValidator
         {
             if (string.IsNullOrWhiteSpace(fillStep.Selector))
                 return Invalid("Selector of a FillStep must not be empty.");
+            var fillSelectorError = SelectorTextFilter.Validate(fillStep.Selector, "Selector of a FillStep");
+            if (fillSelectorError is not null)
+                return Invalid(fillSelectorError);
             if (!EnvironmentVariableNamePattern.IsMatch(fillStep.EnvironmentVariableName))
                 return Invalid($"Invalid environment variable name '{fillStep.EnvironmentVariableName}' in FillStep.");
             var fillFrameError = ValidateFramePath(fillStep.FramePath, "FillStep", plan.Engine);
@@ -163,6 +169,9 @@ public static class ScrapingPlanValidator
         {
             if (string.IsNullOrWhiteSpace(clickStep.Selector))
                 return Invalid("Selector of a ClickStep must not be empty.");
+            var clickSelectorError = SelectorTextFilter.Validate(clickStep.Selector, "Selector of a ClickStep");
+            if (clickSelectorError is not null)
+                return Invalid(clickSelectorError);
             var clickFrameError = ValidateFramePath(clickStep.FramePath, "ClickStep", plan.Engine);
             if (clickFrameError is not null)
                 return Invalid(clickFrameError);
@@ -174,6 +183,10 @@ public static class ScrapingPlanValidator
                 return Invalid("ContainerSelector of a ScrollStep must not be empty when set.");
             if (scrollStep.LoadMoreButtonSelector is not null && string.IsNullOrWhiteSpace(scrollStep.LoadMoreButtonSelector))
                 return Invalid("LoadMoreButtonSelector of a ScrollStep must not be empty when set.");
+            var scrollSelectorError = SelectorTextFilter.Validate(scrollStep.ContainerSelector, "ContainerSelector of a ScrollStep")
+                ?? SelectorTextFilter.Validate(scrollStep.LoadMoreButtonSelector, "LoadMoreButtonSelector of a ScrollStep");
+            if (scrollSelectorError is not null)
+                return Invalid(scrollSelectorError);
             if (scrollStep.MaxIterations <= 0)
                 return Invalid("MaxIterations of a ScrollStep must be positive.");
             if (scrollStep.WaitAfterMs < 0)
@@ -351,6 +364,9 @@ public static class ScrapingPlanValidator
                 return Invalid("Field name must not be empty.");
             if (string.IsNullOrWhiteSpace(step.Selector) && !IsDerivedField(step.Transforms))
                 return Invalid($"Selector for field '{step.Name}' must not be empty.");
+            var fieldSelectorError = SelectorTextFilter.Validate(step.Selector, $"Selector for field '{step.Name}'");
+            if (fieldSelectorError is not null)
+                return Invalid(fieldSelectorError);
 
             // FramePath is Browser-engine-only, unlike ExtractStep itself
             // (used by both engines) — so this can't join browserOnlySteps
@@ -658,6 +674,9 @@ public static class ScrapingPlanValidator
                 case GroupNode group:
                     if (string.IsNullOrWhiteSpace(group.Selector))
                         return $"Selector of group '{group.Name}' must not be empty.";
+                    var groupSelectorError = SelectorTextFilter.Validate(group.Selector, $"Selector of group '{group.Name}'");
+                    if (groupSelectorError is not null)
+                        return groupSelectorError;
                     var groupFrameError = ValidateFramePath(group.FramePath, $"group '{group.Name}'", engine);
                     if (groupFrameError is not null)
                         return groupFrameError;
@@ -669,6 +688,9 @@ public static class ScrapingPlanValidator
                 case DataFieldNode field:
                     if (string.IsNullOrWhiteSpace(field.Selector) && !IsDerivedField(field.Transforms))
                         return $"Selector of data field '{field.Name}' must not be empty.";
+                    var dataFieldSelectorError = SelectorTextFilter.Validate(field.Selector, $"Selector of data field '{field.Name}'");
+                    if (dataFieldSelectorError is not null)
+                        return dataFieldSelectorError;
                     if (field.Mode == ExtractMode.Attribute && string.IsNullOrWhiteSpace(field.Attribute))
                         return $"Data field '{field.Name}' with mode 'Attribute' needs an attribute.";
                     if (field.Download && field.Mode != ExtractMode.Attribute)
@@ -817,7 +839,7 @@ public static class ScrapingPlanValidator
             return $"FramePath for {context} must not be empty when set.";
         if (framePath.Any(string.IsNullOrWhiteSpace))
             return $"FramePath for {context} must not contain empty segments.";
-        return null;
+        return framePath.Select(segment => SelectorTextFilter.ValidateNotAllowed(segment, $"FramePath for {context}")).FirstOrDefault(error => error is not null);
     }
 
     private static readonly Regex UrlTemplatePlaceholderPattern = new(@"\{([^{}]+)\}");
@@ -851,6 +873,9 @@ public static class ScrapingPlanValidator
                 return "EmbeddedJsonSource requires method 'GET'.";
             if (string.IsNullOrWhiteSpace(embeddedJsonSource.ScriptSelector))
                 return "EmbeddedJsonSource needs a ScriptSelector.";
+            var scriptSelectorError = SelectorTextFilter.ValidateNotAllowed(embeddedJsonSource.ScriptSelector, "EmbeddedJsonSource.ScriptSelector");
+            if (scriptSelectorError is not null)
+                return scriptSelectorError;
         }
 
         // Two mutually exclusive response shapes (Issue #54): the original
@@ -1260,6 +1285,17 @@ public static class ScrapingPlanValidator
             };
             if (actionError is not null)
                 return actionError;
+            var actionSelectorError = action switch
+            {
+                WaitForAction wait => SelectorTextFilter.Validate(wait.Selector, $"Selector of a WaitForAction in browser discovery for parameter '{parameterName}'"),
+                FillAction fill => SelectorTextFilter.Validate(fill.Selector, $"Selector of a FillAction in browser discovery for parameter '{parameterName}'"),
+                ClickAction click => SelectorTextFilter.Validate(click.Selector, $"Selector of a ClickAction in browser discovery for parameter '{parameterName}'"),
+                ScrollAction scroll => SelectorTextFilter.Validate(scroll.ContainerSelector, $"ContainerSelector of a ScrollAction in browser discovery for parameter '{parameterName}'")
+                    ?? SelectorTextFilter.Validate(scroll.LoadMoreButtonSelector, $"LoadMoreButtonSelector of a ScrollAction in browser discovery for parameter '{parameterName}'"),
+                _ => null,
+            };
+            if (actionSelectorError is not null)
+                return actionSelectorError;
         }
 
         return null;
@@ -1420,7 +1456,7 @@ public static class ScrapingPlanValidator
         {
             NextLinkPagination nextLink => string.IsNullOrWhiteSpace(nextLink.NextLinkSelector)
                 ? "NextLinkPagination.NextLinkSelector must not be empty."
-                : null,
+                : SelectorTextFilter.Validate(nextLink.NextLinkSelector, "NextLinkPagination.NextLinkSelector"),
             PageNumberPagination pageNumber => ValidatePageNumberUrlTemplate(pageNumber.UrlTemplate),
             _ => throw new InvalidOperationException($"Unknown PaginationConfig type: {pagination.GetType()}"),
         };
@@ -1457,6 +1493,9 @@ public static class ScrapingPlanValidator
         }
         if (string.IsNullOrWhiteSpace(discoveredUrls.LinkSelector))
             return "DiscoveredUrls.LinkSelector must not be empty.";
+        var linkSelectorError = SelectorTextFilter.Validate(discoveredUrls.LinkSelector, "DiscoveredUrls.LinkSelector");
+        if (linkSelectorError is not null)
+            return linkSelectorError;
         if (discoveredUrls.MaxUrls <= 0)
             return $"DiscoveredUrls.MaxUrls must be positive (was {discoveredUrls.MaxUrls}).";
         return null;
@@ -1499,6 +1538,9 @@ public static class ScrapingPlanValidator
                         return $"Block '{block.Name}': field name must not be empty.";
                     if (string.IsNullOrWhiteSpace(step.Selector))
                         return $"Block '{block.Name}': selector for field '{step.Name}' must not be empty.";
+                    var blockSelectorError = SelectorTextFilter.Validate(step.Selector, $"Block '{block.Name}': selector for field '{step.Name}'");
+                    if (blockSelectorError is not null)
+                        return blockSelectorError;
                     var frameError = ValidateFramePath(step.FramePath, $"field '{step.Name}' in block '{block.Name}'", engine);
                     if (frameError is not null)
                         return frameError;

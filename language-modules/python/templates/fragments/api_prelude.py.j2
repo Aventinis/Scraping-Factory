@@ -29,3 +29,9 @@ def _require_env(name):
 
 #@include proxy_requests
 {{~ end ~}}
+{{~ if text_selector.enabled && needs_browser_discovery ~}}
+
+#@include text_selector_common
+
+#@include text_selector_playwright
+{{~ end ~}}

@@ -176,7 +176,7 @@
     "paginationKindNextLink": "\"Next\" link",
     "paginationKindPageNumber": "Page-number URL",
     "paginationNextLinkSelectorLabel": "\"Next page\" link selector",
-    "paginationNextLinkSelectorPlaceholder": "e.g. a.next, .pagination__next",
+    "paginationNextLinkSelectorPlaceholder": "e.g. a.next, a:contains(\"Next\")",
     "paginationUrlTemplateLabel": "Page URL template",
     "paginationUrlTemplatePlaceholder": "e.g. {url}?page={page}",
     "paginationUrlTemplateHint": "Must contain both {url} (the start page, unchanged) and {page} (the page number, starting at 2 — page 1 is always the start page as-is).",
@@ -186,7 +186,7 @@
     "discoveredUrlsPageUrlPlaceholder": "e.g. https://example.com/categories",
     "discoveredUrlsLinkSelectorLabel": "Link selector",
     "discoveredUrlsLinkSelectorPlaceholder": "e.g. nav.categories a",
-    "discoveredUrlsHint": "Loads this page once and adds every link matching the selector, in addition to the URL above and any additional start URLs.",
+    "discoveredUrlsHint": "Loads this page once and adds every link matching the selector, in addition to the URL above and any additional start URLs. A link can also be picked by its text, e.g. a:contains(\"Vegetables\").",
     "discoveredUrlsMaxUrlsLabel": "Max. number of discovered URLs (safety limit)",
     "monitoringSectionToggle": "Monitoring",
     "settingsSectionToggle": "Settings",
@@ -513,6 +513,12 @@
       "noConfigsHint": "No saved configuration for this site yet — name one below and it will be created and linked to this output.",
       "configNameLabel": "Configuration name (e.g. \"Product listing\")",
       "configNamePlaceholder": "Name"
+    },
+    "textFilter": {
+      "label": "Only the element whose text contains (optional)",
+      "placeholder": "e.g. Add to cart",
+      "useElementText": "Use this element's text",
+      "hint": "Use this when several similar elements (buttons, links) can only be told apart by their label. Capitals and extra spaces don't matter. Leave empty to keep the selection as it is."
     },
     "matchCount": {
       "found": "{count} element(s) found"

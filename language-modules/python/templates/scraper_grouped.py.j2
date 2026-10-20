@@ -53,6 +53,11 @@ URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 #@include discovered_urls_constants
 
 #@include request_headers_static
+{{~ if text_selector.enabled ~}}
+#@include text_selector_common
+
+#@include text_selector_bs4
+{{~ end ~}}
 
 # Issue #192: an active FLAT-schema Output Blueprint mapping flattens this
 # mode's normally-nested output into denormalized rows (see BLUEPRINT_MAPPING

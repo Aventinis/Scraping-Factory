@@ -21,6 +21,7 @@ const FIXTURES = {
   'login-flow': { dir: path.join(REPO_ROOT, 'test-pages/login-flow'), port: 8503, kind: 'static' },
   'speisekarte': { dir: path.join(REPO_ROOT, 'test-pages/speisekarte'), port: 8504, kind: 'static' },
   'dedup-listing': { dir: path.join(REPO_ROOT, 'test-pages/dedup-listing'), port: 8505, kind: 'static' },
+  'text-selector': { dir: path.join(REPO_ROOT, 'test-pages/text-selector'), port: 8507, kind: 'static' },
   'api-nested-and-post': { dir: path.join(REPO_ROOT, 'test-pages/api-nested-and-post'), port: 8600, kind: 'script', script: 'server.py' },
   'embedded-json-menu': { dir: path.join(REPO_ROOT, 'test-pages/embedded-json-menu'), port: 8700, kind: 'script', script: 'server.py' },
   'api-token-bootstrap': { dir: path.join(REPO_ROOT, 'test-pages/api-token-bootstrap'), port: 8800, kind: 'script', script: 'server.py' },

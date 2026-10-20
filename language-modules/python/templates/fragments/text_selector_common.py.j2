@@ -1,0 +1,22 @@
+# Issue #227: a selector may end in :contains("text") — not standard CSS, so
+# neither soupsieve nor Playwright understands it. The two patches below
+# (see the next block) split that suffix off, let the engine match the CSS
+# part as usual, and keep only the matches whose text contains the wanted
+# text. The whole text of the element (descendants included) is reduced to
+# single spaces and lower-cased on both sides, so "in den warenkorb" finds
+# "In den  Warenkorb". The suffix must be the last part of the selector.
+_TEXT_FILTER_PATTERN = re.compile(r""":contains\(\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')\s*\)\s*$""", re.IGNORECASE)
+
+
+def _split_text_filter(selector):
+    if not isinstance(selector, str):
+        return selector, None
+    match = _TEXT_FILTER_PATTERN.search(selector)
+    if not match:
+        return selector, None
+    text = match.group(1) if match.group(1) is not None else match.group(2)
+    return selector[:match.start()].rstrip() or "*", re.sub(r"\\(.)", r"\1", text)
+
+
+def _normalize_text(text):
+    return " ".join((text or "").split()).lower()

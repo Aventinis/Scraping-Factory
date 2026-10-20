@@ -176,7 +176,7 @@
     "paginationKindNextLink": "\"Weiter\"-Link",
     "paginationKindPageNumber": "Seiten-Nummer-URL",
     "paginationNextLinkSelectorLabel": "Selektor für \"Nächste Seite\"-Link",
-    "paginationNextLinkSelectorPlaceholder": "z. B. a.next, .pagination__next",
+    "paginationNextLinkSelectorPlaceholder": "z. B. a.next, a:contains(\"Weiter\")",
     "paginationUrlTemplateLabel": "Seiten-URL-Vorlage",
     "paginationUrlTemplatePlaceholder": "z. B. {url}?page={page}",
     "paginationUrlTemplateHint": "Muss sowohl {url} (die unveränderte Start-URL) als auch {page} (die Seitenzahl, beginnend bei 2 — Seite 1 ist immer die unveränderte Start-URL) enthalten.",
@@ -186,7 +186,7 @@
     "discoveredUrlsPageUrlPlaceholder": "z. B. https://example.com/kategorien",
     "discoveredUrlsLinkSelectorLabel": "Link-Selektor",
     "discoveredUrlsLinkSelectorPlaceholder": "z. B. nav.kategorien a",
-    "discoveredUrlsHint": "Lädt diese Seite einmalig und übernimmt jeden Link, der zum Selektor passt, zusätzlich zur URL oben und den weiteren Start-URLs.",
+    "discoveredUrlsHint": "Lädt diese Seite einmalig und übernimmt jeden Link, der zum Selektor passt, zusätzlich zur URL oben und den weiteren Start-URLs. Ein Link lässt sich auch über seinen Text wählen, z. B. a:contains(\"Gemüse\").",
     "discoveredUrlsMaxUrlsLabel": "Max. Anzahl gefundener URLs (Sicherheitsgrenze)",
     "monitoringSectionToggle": "Überwachung",
     "settingsSectionToggle": "Einstellungen",
@@ -513,6 +513,12 @@
       "noConfigsHint": "Für diese Seite gibt es noch keine gespeicherte Konfiguration — gib unten einen Namen an, sie wird dann erstellt und mit diesem Output verknüpft.",
       "configNameLabel": "Name der Konfiguration (z. B. \"Produktliste\")",
       "configNamePlaceholder": "Name"
+    },
+    "textFilter": {
+      "label": "Nur das Element, dessen Text enthält (optional)",
+      "placeholder": "z. B. In den Warenkorb",
+      "useElementText": "Text dieses Elements übernehmen",
+      "hint": "Nutze das, wenn sich mehrere ähnliche Elemente (Buttons, Links) nur durch ihre Beschriftung unterscheiden. Groß-/Kleinschreibung und zusätzliche Leerzeichen spielen keine Rolle. Leer lassen, um die Auswahl unverändert zu lassen."
     },
     "matchCount": {
       "found": "{count} Element(e) gefunden"
