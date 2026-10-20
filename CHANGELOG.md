@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.17.12](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.11...v1.17.12) (2026-10-20)
+
+
+### Features
+
+* Click browser action — choose first/last/all matches ([#267](https://github.com/Aventinis/Scraping-Factory/issues/267)) ([ae502b5](https://github.com/Aventinis/Scraping-Factory/commit/ae502b578d8c0b4a4b0eff7bcfe5b333885e007d))
+* **click-target:** first/last/all choice in the Click action editors ([e7b370c](https://github.com/Aventinis/Scraping-Factory/commit/e7b370cc4fc043b7d3bbd3a16511a89796a711b7))
+
 ## [1.17.11](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.10...v1.17.11) (2026-10-20)
 
 
