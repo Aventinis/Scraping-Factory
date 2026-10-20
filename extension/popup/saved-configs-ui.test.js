@@ -780,7 +780,7 @@ describe('global Settings tab: cross-site saved configurations', () => {
     <section id="screen-generating" class="hidden"></section>
     <section id="screen-settings" class="hidden">
       <button id="btn-close-settings"></button>
-      <input type="checkbox" id="toggle-output-json" />
+      <select id="select-output-format"><option value="default"></option><option value="json"></option><option value="sqlite"></option><option value="xlsx"></option></select>
       <input type="checkbox" id="toggle-include-data-preview" />
       <input type="checkbox" id="toggle-include-output-file" />
       <input type="checkbox" id="toggle-external-config" />
