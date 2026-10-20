@@ -70,7 +70,7 @@ URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 
 # Issue #192: see scraper_grouped.py.j2's own identical doc comment on this
 # same line — an active blueprint mapping flattens this mode's output.
-OUTPUT_PATH = "{{ output_filename }}.{{ if blueprint_mapping_enabled }}{{ if output_is_json }}json{{ else }}csv{{ end }}{{ else }}{{ if output_is_json }}json{{ else }}xml{{ end }}{{ end }}"
+OUTPUT_PATH = "{{ output_filename }}.{{ if blueprint_mapping_enabled }}{{ if output_is_json }}json{{ else if output_is_sqlite }}sqlite{{ else if output_is_xlsx }}xlsx{{ else }}csv{{ end }}{{ else }}{{ if output_is_json }}json{{ else }}xml{{ end }}{{ end }}"
 
 #@include download_playwright
 
@@ -503,6 +503,9 @@ def scrape(url):
 {{ end }}
 
 
+{{~ if output_is_sqlite || output_is_xlsx ~}}
+#@include output_tabular
+{{~ end ~}}
 #@include main_grouped
 
 

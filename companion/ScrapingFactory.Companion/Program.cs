@@ -878,7 +878,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
         script,
         preview = verification.Preview,
         outputFile = verification.OutputFileContent is not null
-            ? new { fileName = verification.OutputFileName, content = verification.OutputFileContent }
+            ? new { fileName = verification.OutputFileName, content = verification.OutputFileContent, encoding = verification.OutputFileEncoding }
             : null,
     });
 });
