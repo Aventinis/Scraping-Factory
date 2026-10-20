@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.18.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.18.1...v1.18.2) (2026-10-20)
+
+
+### Features
+
+* installable release bundles — self-contained companion, installer, autostart ([#346](https://github.com/Aventinis/Scraping-Factory/issues/346)) ([43d567f](https://github.com/Aventinis/Scraping-Factory/commit/43d567fc3453aff4fd741ec5f5297e9105612bb3))
+* **installer:** optional per-user companion settings file as a configuration source ([7e7355a](https://github.com/Aventinis/Scraping-Factory/commit/7e7355a7427ad426d2776e4b9482c77fc939e758))
+* **installer:** release bundles with installer scripts and a workflow attaching them to releases ([5f50ce6](https://github.com/Aventinis/Scraping-Factory/commit/5f50ce6ba2aac88785bf4e053a0bdc3a20ad833d))
+
 ## [1.18.1](https://github.com/Aventinis/Scraping-Factory/compare/v1.18.0...v1.18.1) (2026-10-20)
 
 
