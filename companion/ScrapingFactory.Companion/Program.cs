@@ -7,6 +7,9 @@ using ScrapingFactory.Compiler.IR;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Issue #346: optional per-user settings file (written by the installer).
+CompanionUserSettings.Apply(builder.Configuration, args);
+
 builder.WebHost.UseUrls(CompanionHostOptions.BuildListenUrl(builder.Configuration));
 
 builder.Services.AddCors(options =>
