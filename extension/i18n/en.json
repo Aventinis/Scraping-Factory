@@ -611,6 +611,8 @@
     "loadMoreButtonSelectorLabel": "\"Load more\" button (optional)",
     "maxIterationsLabel": "Max. rounds",
     "waitAfterMsLabel": "Wait time (ms)",
+    "clickTargetLabel": "Click which match",
+    "clickTarget": { "first": "First match", "last": "Last match", "all": "All matches, in order" },
     "scrollStepPxLabel": "Scroll step (px)",
     "scrollStepPxPlaceholder": "blank = jump to bottom",
     "persistentSessionToggle": "Reuse session between runs",

@@ -700,6 +700,20 @@ const SFApiConfigUI = (function () {
         </div>`);
       } else if (action.kind === 'click') {
         card.appendChild(pickRow(i, 'selector', action.selector, null));
+        // Issue #267: same first/last/all choice as the top-level click action.
+        const clickTarget = action.target || 'first';
+        card.insertAdjacentHTML('beforeend', `<div class="browser-action-field-row">
+          <label>${escapeHtml(t('browserActions.clickTargetLabel'))}</label>
+          <select class="discovery-action-click-target" data-part-id="${safePartId}" data-index="${i}">${
+            ['first', 'last', 'all'].map(v => `<option value="${v}"${v === clickTarget ? ' selected' : ''}>${escapeHtml(t('browserActions.clickTarget.' + v))}</option>`).join('')
+          }</select>
+        </div>`);
+        if (clickTarget === 'all') {
+          card.insertAdjacentHTML('beforeend', `<div class="browser-action-field-row">
+            <label>${escapeHtml(t('browserActions.waitAfterMsLabel'))}</label>
+            <input type="number" class="discovery-action-click-wait-after-ms" data-part-id="${safePartId}" data-index="${i}" value="${action.waitAfterMs ?? 250}" min="0" />
+          </div>`);
+        }
       } else if (action.kind === 'scroll') {
         card.appendChild(pickRow(i, 'containerSelector', action.containerSelector, t('browserActions.containerSelectorLabel')));
         card.appendChild(pickRow(i, 'loadMoreButtonSelector', action.loadMoreButtonSelector, t('browserActions.loadMoreButtonSelectorLabel')));
@@ -1795,6 +1809,19 @@ function wireApiConfigEvents(bridge) {
     if (actionEnvName) {
       updateDiscoveryAction(bridge, actionEnvName.dataset.partId, parseInt(actionEnvName.dataset.index, 10), {
         environmentVariableName: actionEnvName.value.trim(),
+      });
+      return;
+    }
+    const actionClickTarget = e.target.closest('.discovery-action-click-target');
+    if (actionClickTarget) {
+      updateDiscoveryAction(bridge, actionClickTarget.dataset.partId, parseInt(actionClickTarget.dataset.index, 10), { target: actionClickTarget.value });
+      return;
+    }
+    const actionClickWait = e.target.closest('.discovery-action-click-wait-after-ms');
+    if (actionClickWait) {
+      const waitAfterMs = parseInt(actionClickWait.value, 10);
+      updateDiscoveryAction(bridge, actionClickWait.dataset.partId, parseInt(actionClickWait.dataset.index, 10), {
+        waitAfterMs: Number.isFinite(waitAfterMs) && waitAfterMs >= 0 ? waitAfterMs : 250,
       });
       return;
     }

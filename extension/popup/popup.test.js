@@ -156,7 +156,7 @@ describe('applyConfigToState', () => {
     const browserActions = [
       { kind: 'waitFor', selector: '.ready', timeoutMs: 3000, framePath: ['#frame1'] },
       { kind: 'fill', selector: '#user', environmentVariableName: 'SF_USER', framePath: null },
-      { kind: 'click', selector: '#submit', framePath: null },
+      { kind: 'click', selector: '#submit', framePath: null, target: 'first', waitAfterMs: 250 },
       { kind: 'scroll', containerSelector: '.list', loadMoreButtonSelector: '.more', maxIterations: 5, waitAfterMs: 500, framePath: null },
     ];
     const config = buildScrapingConfig(

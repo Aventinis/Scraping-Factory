@@ -1552,7 +1552,7 @@ describe('addBrowserAction', () => {
   });
 
   test('appends a click action with defaults', () => {
-    expect(addBrowserAction([], 'click')).toEqual([{ kind: 'click', selector: '' }]);
+    expect(addBrowserAction([], 'click')).toEqual([{ kind: 'click', selector: '', target: 'first', waitAfterMs: 250 }]);
   });
 
   test('appends a scroll action with defaults (Issue #41, Phase 6)', () => {

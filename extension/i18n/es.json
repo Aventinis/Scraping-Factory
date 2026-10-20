@@ -611,6 +611,8 @@
     "loadMoreButtonSelectorLabel": "Botón \"Cargar más\" (opcional)",
     "maxIterationsLabel": "Rondas máx.",
     "waitAfterMsLabel": "Tiempo de espera (ms)",
+    "clickTargetLabel": "Qué coincidencia se hace clic",
+    "clickTarget": { "first": "Primera coincidencia", "last": "Última coincidencia", "all": "Todas las coincidencias, en orden" },
     "scrollStepPxLabel": "Paso de scroll (px)",
     "scrollStepPxPlaceholder": "vacío = saltar al final",
     "persistentSessionToggle": "Reutilizar sesión entre ejecuciones",

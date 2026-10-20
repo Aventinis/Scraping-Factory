@@ -135,7 +135,7 @@ declare namespace SFWire {
 
   interface WaitForAction { kind: 'waitFor'; selector: string; timeoutMs?: number; framePath?: string[] | null; }
   interface FillAction { kind: 'fill'; selector: string; environmentVariableName: string; framePath?: string[] | null; }
-  interface ClickAction { kind: 'click'; selector: string; framePath?: string[] | null; }
+  interface ClickAction { kind: 'click'; selector: string; target?: 'First' | 'Last' | 'All'; waitAfterMs?: number; framePath?: string[] | null; }
   interface ScrollAction {
     kind: 'scroll';
     containerSelector?: string | null;
