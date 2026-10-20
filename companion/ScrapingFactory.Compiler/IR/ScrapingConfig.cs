@@ -101,6 +101,14 @@ public sealed class ScrapingConfig
     // is today's exact behavior (no pacing at all).
     public RequestDelayConfig? RequestDelay { get; init; }
 
+    // Issue #228: opt-in — the generated script reads Crawl-delay /
+    // Request-rate from the target's robots.txt at startup and uses it as a
+    // minimum gap between requests (see IR/RequestDelayConfig.cs for the
+    // pacing itself; this is one more, automatically derived source for the
+    // same mechanism). Independent of RequestDelay: either, both or neither
+    // may be set, the larger gap wins. Null/false is today's exact behavior.
+    public bool? RespectRobotsDelay { get; init; }
+
     // Issue #223: opt-in retry with backoff on transient request failures,
     // mode-independent — see IR/RetryConfig.cs. Null is today's exact
     // behavior (a failed request is never retried).
