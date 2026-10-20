@@ -1274,6 +1274,20 @@ needed for Excel only. Appending to an existing file is Issue #342.
 - Tests: `TabularOutputTests.cs`, `HardeningReplayEvaluatorTests.cs`,
   `extension/popup/tabular-output.test.js`, `e2e/examples/issue-229-tabular-output-check.js`
 
+### 2.21ad Storage behind interfaces (Issue #276)
+
+The companion's three local SQLite stores sit behind `ISavedConfigStore`,
+`IOutputBlueprintStore` and `ITransformPresetStore`; `Program.cs` registers
+and injects the interfaces, so another backend only needs a different
+registration. Pure refactor — SQLite specifics stay in the implementations.
+
+- Interfaces: `companion/ScrapingFactory.Companion/ISavedConfigStore.cs`,
+  `IOutputBlueprintStore.cs`, `ITransformPresetStore.cs`
+- Implementations: `SavedConfigStore`, `OutputBlueprintStore`,
+  `TransformPresetStore` (unchanged apart from `: I…Store`)
+- Tests: `StoreAbstractionTests.cs` (fakes registered in DI), plus the
+  existing store and endpoint tests against real SQLite
+
 ### 2.22 Persistent session/cookie handling (Issue #175)
 
 Browser-engine only (rejected server-side for Static/Api, same as
