@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.18.1](https://github.com/Aventinis/Scraping-Factory/compare/v1.18.0...v1.18.1) (2026-10-20)
+
+
+### Features
+
+* SQLite and Excel output formats ([#229](https://github.com/Aventinis/Scraping-Factory/issues/229)) ([6d80ee2](https://github.com/Aventinis/Scraping-Factory/commit/6d80ee238a7c0bed0afccc36dab67e9859398629))
+* **tabular-output:** Output format setting with SQLite and Excel, base64 file download ([ee106c4](https://github.com/Aventinis/Scraping-Factory/commit/ee106c43c96bb0758a8ee36a4d5abcae1e1fe56e))
+* **tabular-output:** saved SQLite/Excel outputs are not replayable; endpoint tests ([4ec6a9d](https://github.com/Aventinis/Scraping-Factory/commit/4ec6a9dbd8bc8dc1e5a5bf7acfc03e917f1636c2))
+* **tabular-output:** write SQLite and Excel files from flat and flattened tree results ([fca424f](https://github.com/Aventinis/Scraping-Factory/commit/fca424f028d17fd4e9095f0ecd0873f5b7034a86))
+
 ## [1.18.0](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.12...v1.18.0) (2026-10-20)
 
 
