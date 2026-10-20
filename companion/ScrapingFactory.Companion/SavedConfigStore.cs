@@ -25,7 +25,7 @@ public sealed record SavedOutputSummary(long Id, long SavedConfigId, string Name
 public sealed record SavedOutputRecord(
     long Id, long SavedConfigId, string Name, string FileName, string SavedAt, string Content);
 
-public sealed class SavedConfigStore
+public sealed class SavedConfigStore : ISavedConfigStore
 {
     private readonly string _connectionString;
 

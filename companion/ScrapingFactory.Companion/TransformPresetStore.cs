@@ -19,7 +19,7 @@ namespace ScrapingFactory.Companion;
 // into a field's own transform list.
 public sealed record TransformPresetSummary(long Id, string Name, string SavedAt, List<FieldTransform> Transforms);
 
-public sealed class TransformPresetStore
+public sealed class TransformPresetStore : ITransformPresetStore
 {
     private static readonly JsonSerializerOptions TransformsJsonOptions = new(JsonSerializerDefaults.Web)
     {

@@ -38,7 +38,7 @@ public sealed record OutputBlueprintSummary(long Id, string Name, string SavedAt
 public sealed record OutputBlueprintRecord(
     long Id, string Name, string SavedAt, List<string> FieldNames, string SchemaKind, List<OutputBlueprintTreeSchemaNode>? Tree);
 
-public sealed class OutputBlueprintStore
+public sealed class OutputBlueprintStore : IOutputBlueprintStore
 {
     private readonly string _connectionString;
 

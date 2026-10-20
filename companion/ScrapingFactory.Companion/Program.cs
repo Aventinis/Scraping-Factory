@@ -40,17 +40,20 @@ builder.Services.AddSingleton(new LanguageModuleRegistry(CompanionBackendOverrid
 // Issue #141: registered as a type (not a pre-built instance like
 // LanguageModuleRegistry above) so DI only constructs it — and only then
 // resolves/creates the SQLite file — on the first actual /configs request;
-// /health and /generate never touch it.
-builder.Services.AddSingleton<SavedConfigStore>();
+// /health and /generate never touch it. Issue #276: all three stores are
+// registered and injected by interface (ISavedConfigStore/IOutputBlueprintStore/
+// ITransformPresetStore) — the SQLite classes are just the current
+// implementations, so another backend only needs a different registration here.
+builder.Services.AddSingleton<ISavedConfigStore, SavedConfigStore>();
 
 // Issue #191: same lazy-construction reasoning as SavedConfigStore above,
 // its own independent store/SQLite file — see OutputBlueprintStore's own
 // doc comment for why this isn't just a third table there.
-builder.Services.AddSingleton<OutputBlueprintStore>();
+builder.Services.AddSingleton<IOutputBlueprintStore, OutputBlueprintStore>();
 
 // Issue #279: same lazy-construction reasoning, its own SQLite file — see
 // TransformPresetStore's own doc comment.
-builder.Services.AddSingleton<TransformPresetStore>();
+builder.Services.AddSingleton<ITransformPresetStore, TransformPresetStore>();
 
 var app = builder.Build();
 
@@ -64,7 +67,7 @@ app.MapGet("/health", () => Results.Ok());
 // buildConfigExport on the extension side) every time. Purely local/
 // additive: no data ever leaves the user's machine, same trust boundary as
 // the rest of the companion<->extension communication.
-app.MapPost("/configs", (SaveConfigRequest? request, SavedConfigStore store) =>
+app.MapPost("/configs", (SaveConfigRequest? request, ISavedConfigStore store) =>
 {
     var url = request?.Url?.Trim();
     var name = request?.Name?.Trim();
@@ -95,10 +98,10 @@ app.MapPost("/configs", (SaveConfigRequest? request, SavedConfigStore store) =>
 // component picker (a component can come from any previously-scraped site,
 // not just the current tab's hostname). Passing url keeps today's exact
 // hostname-scoped behavior, fully backward compatible.
-app.MapGet("/configs", (string? url, SavedConfigStore store) =>
+app.MapGet("/configs", (string? url, ISavedConfigStore store) =>
     Results.Ok(string.IsNullOrWhiteSpace(url) ? store.ListAll() : store.ListByUrl(url)));
 
-app.MapGet("/configs/{id:long}", (long id, SavedConfigStore store) =>
+app.MapGet("/configs/{id:long}", (long id, ISavedConfigStore store) =>
 {
     var record = store.Get(id);
     if (record is null)
@@ -115,7 +118,7 @@ app.MapGet("/configs/{id:long}", (long id, SavedConfigStore store) =>
     });
 });
 
-app.MapDelete("/configs/{id:long}", (long id, SavedConfigStore store) =>
+app.MapDelete("/configs/{id:long}", (long id, ISavedConfigStore store) =>
     store.Delete(id) ? Results.NoContent() : Results.NotFound(new { error = "Saved configuration not found." }));
 
 // Issue #202: a saved run's actual output data, linked to an already-saved
@@ -126,7 +129,7 @@ app.MapDelete("/configs/{id:long}", (long id, SavedConfigStore store) =>
 // the user's machine. Replaying hardening checks against a saved output
 // (once its own separate issue, #207) is its own endpoint further down —
 // see /configs/{configId}/outputs/{id}/replay-hardening below.
-app.MapPost("/configs/{configId:long}/outputs", (long configId, SaveOutputRequest? request, SavedConfigStore store) =>
+app.MapPost("/configs/{configId:long}/outputs", (long configId, SaveOutputRequest? request, ISavedConfigStore store) =>
 {
     if (store.Get(configId) is null)
         return Results.NotFound(new { error = "Saved configuration not found." });
@@ -141,7 +144,7 @@ app.MapPost("/configs/{configId:long}/outputs", (long configId, SaveOutputReques
     return Results.Created($"/configs/{configId}/outputs/{saved.Id}", saved);
 });
 
-app.MapGet("/configs/{configId:long}/outputs", (long configId, SavedConfigStore store) =>
+app.MapGet("/configs/{configId:long}/outputs", (long configId, ISavedConfigStore store) =>
 {
     if (store.Get(configId) is null)
         return Results.NotFound(new { error = "Saved configuration not found." });
@@ -149,7 +152,7 @@ app.MapGet("/configs/{configId:long}/outputs", (long configId, SavedConfigStore 
     return Results.Ok(store.ListOutputsByConfigId(configId));
 });
 
-app.MapGet("/configs/{configId:long}/outputs/{id:long}", (long configId, long id, SavedConfigStore store) =>
+app.MapGet("/configs/{configId:long}/outputs/{id:long}", (long configId, long id, ISavedConfigStore store) =>
 {
     var record = store.GetOutput(id);
     if (record is null || record.SavedConfigId != configId)
@@ -158,7 +161,7 @@ app.MapGet("/configs/{configId:long}/outputs/{id:long}", (long configId, long id
     return Results.Ok(record);
 });
 
-app.MapDelete("/configs/{configId:long}/outputs/{id:long}", (long configId, long id, SavedConfigStore store) =>
+app.MapDelete("/configs/{configId:long}/outputs/{id:long}", (long configId, long id, ISavedConfigStore store) =>
 {
     var record = store.GetOutput(id);
     if (record is null || record.SavedConfigId != configId)
@@ -179,7 +182,7 @@ app.MapDelete("/configs/{configId:long}/outputs/{id:long}", (long configId, long
 // output originally, per the issue's own "what would today's checks report"
 // framing.
 app.MapPost("/configs/{configId:long}/outputs/{id:long}/replay-hardening",
-    (long configId, long id, ReplayHardeningRequest? request, SavedConfigStore store) =>
+    (long configId, long id, ReplayHardeningRequest? request, ISavedConfigStore store) =>
 {
     var output = store.GetOutput(id);
     if (output is null || output.SavedConfigId != configId)
@@ -289,7 +292,7 @@ static (string? Name, string SchemaKind, List<string>? FieldNames, List<OutputBl
     return (name, schemaKind, fieldNames, null, null);
 }
 
-app.MapPost("/blueprints", (SaveBlueprintRequest? request, OutputBlueprintStore store) =>
+app.MapPost("/blueprints", (SaveBlueprintRequest? request, IOutputBlueprintStore store) =>
 {
     var (name, schemaKind, fieldNames, tree, error) = ValidateBlueprintRequest(request);
     if (error is not null)
@@ -299,15 +302,15 @@ app.MapPost("/blueprints", (SaveBlueprintRequest? request, OutputBlueprintStore 
     return Results.Created($"/blueprints/{saved.Id}", saved);
 });
 
-app.MapGet("/blueprints", (OutputBlueprintStore store) => Results.Ok(store.ListAll()));
+app.MapGet("/blueprints", (IOutputBlueprintStore store) => Results.Ok(store.ListAll()));
 
-app.MapGet("/blueprints/{id:long}", (long id, OutputBlueprintStore store) =>
+app.MapGet("/blueprints/{id:long}", (long id, IOutputBlueprintStore store) =>
 {
     var record = store.Get(id);
     return record is null ? Results.NotFound(new { error = "Output blueprint not found." }) : Results.Ok(record);
 });
 
-app.MapPut("/blueprints/{id:long}", (long id, SaveBlueprintRequest? request, OutputBlueprintStore store) =>
+app.MapPut("/blueprints/{id:long}", (long id, SaveBlueprintRequest? request, IOutputBlueprintStore store) =>
 {
     if (store.Get(id) is null)
         return Results.NotFound(new { error = "Output blueprint not found." });
@@ -320,7 +323,7 @@ app.MapPut("/blueprints/{id:long}", (long id, SaveBlueprintRequest? request, Out
     return Results.Ok(new { id, name, schemaKind, fieldNames, tree });
 });
 
-app.MapDelete("/blueprints/{id:long}", (long id, OutputBlueprintStore store) =>
+app.MapDelete("/blueprints/{id:long}", (long id, IOutputBlueprintStore store) =>
     store.Delete(id) ? Results.NoContent() : Results.NotFound(new { error = "Output blueprint not found." }));
 
 // Issue #279: reusable, named transform-chain presets — see
@@ -355,7 +358,7 @@ static string? ValidateTransformPresetChain(List<FieldTransform>? transforms)
     return result.Success ? null : result.Error?.Replace($"field '{PresetFieldName}'", "this preset");
 }
 
-app.MapPost("/transform-presets", (SaveTransformPresetRequest? request, TransformPresetStore store) =>
+app.MapPost("/transform-presets", (SaveTransformPresetRequest? request, ITransformPresetStore store) =>
 {
     var name = request?.Name?.Trim();
     if (string.IsNullOrWhiteSpace(name))
@@ -370,9 +373,9 @@ app.MapPost("/transform-presets", (SaveTransformPresetRequest? request, Transfor
     return Results.Created($"/transform-presets/{saved.Id}", saved);
 });
 
-app.MapGet("/transform-presets", (TransformPresetStore store) => Results.Ok(store.ListAll()));
+app.MapGet("/transform-presets", (ITransformPresetStore store) => Results.Ok(store.ListAll()));
 
-app.MapPut("/transform-presets/{id:long}", (long id, RenameTransformPresetRequest? request, TransformPresetStore store) =>
+app.MapPut("/transform-presets/{id:long}", (long id, RenameTransformPresetRequest? request, ITransformPresetStore store) =>
 {
     if (!store.Exists(id))
         return Results.NotFound(new { error = "Transform preset not found." });
@@ -386,7 +389,7 @@ app.MapPut("/transform-presets/{id:long}", (long id, RenameTransformPresetReques
     return Results.Ok(new { id, name });
 });
 
-app.MapDelete("/transform-presets/{id:long}", (long id, TransformPresetStore store) =>
+app.MapDelete("/transform-presets/{id:long}", (long id, ITransformPresetStore store) =>
     store.Delete(id) ? Results.NoContent() : Results.NotFound(new { error = "Transform preset not found." }));
 
 // Flat-Mode (Fields → Csv), Container-Mode (Groups → Xml) and API-Mode
