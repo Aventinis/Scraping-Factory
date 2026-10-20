@@ -112,6 +112,18 @@ taken, or the companion runs on a different machine than the browser, see
 environment variable) — the extension has a matching "point me at a different
 address" screen if the default isn't reachable.
 
+**Where your saved data lives.** Saved configurations, saved outputs, Output
+Blueprints and transform presets are kept in local SQLite files in your user
+folder by default. To use a MySQL/MariaDB database instead (e.g. a shared
+server), set `Companion:Storage:Provider` to `MySql` and
+`Companion:Storage:MySql:ConnectionString` — in `appsettings.json`, as
+environment variables (`Companion__Storage__Provider=MySql`,
+`Companion__Storage__MySql__ConnectionString=Server=…;Database=…;User ID=…;Password=…`)
+or via the installer (`./install.sh --mysql "<connection string>"`). The
+database must already exist; the tables are created on first use. Existing
+local data is not migrated, and all users of one companion share the same data
+(separate per-user data would need authentication, which is not implemented).
+
 ### 2. Load the browser extension
 
 1. Open your browser's extension management page

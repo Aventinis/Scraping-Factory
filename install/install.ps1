@@ -7,19 +7,28 @@
 #
 # Run it from the unpacked bundle:
 #   powershell -ExecutionPolicy Bypass -File .\install.ps1 [-Autostart] [-BrowserEngine] [-NoExcel] [-NoStart] [-Port N]
+#                                                          [-MySql CONNECTION_STRING | -Sqlite]
 #   -BrowserEngine  also install Playwright and download Chromium (~150 MB)
 #   -NoExcel        skip openpyxl (only needed for the Excel output format)
 #   -Autostart      start the companion automatically at login
 #   -NoStart        don't start the companion now
 #   -Port N         listen on port N instead of 5000 (then enter the address
 #                   http://localhost:N once in the extension's error screen)
+#   -MySql STRING   keep saved configurations, outputs, blueprints and presets
+#                   in a MySQL/MariaDB database instead of local SQLite files,
+#                   e.g. "Server=db;Database=scrapingfactory;User ID=sf;Password=..."
+#                   (the environment variable SF_MYSQL_CONNECTION_STRING works
+#                   too and keeps the password out of the process list)
+#   -Sqlite         switch an existing installation back to local SQLite
 # Safe to run again: it updates an existing installation in place.
 param(
     [switch]$BrowserEngine,
     [switch]$NoExcel,
     [switch]$Autostart,
     [switch]$NoStart,
-    [int]$Port = 5000
+    [int]$Port = 5000,
+    [string]$MySql = $env:SF_MYSQL_CONNECTION_STRING,
+    [switch]$Sqlite
 )
 $ErrorActionPreference = 'Stop'
 
@@ -93,6 +102,7 @@ Say "Writing $Settings"
 $WriteSettings = @'
 import json, os, sys
 path, python, port = sys.argv[1], sys.argv[2], int(sys.argv[3])
+mysql, back_to_sqlite = os.environ.get("SF_MYSQL", ""), os.environ.get("SF_SQLITE") == "1"
 data = {}
 if os.path.exists(path):
     try:
@@ -105,10 +115,19 @@ if port != 5000:
     data["Companion"]["Port"] = port
 else:
     data["Companion"].pop("Port", None)
+# Issue #277: storage backend - only touched when asked for, so re-running the
+# installer keeps an earlier -MySql choice.
+if mysql:
+    data["Companion"]["Storage"] = {"Provider": "MySql", "MySql": {"ConnectionString": mysql}}
+elif back_to_sqlite:
+    data["Companion"].pop("Storage", None)
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2)
 '@
+$env:SF_MYSQL = if ($MySql) { $MySql } else { '' }
+$env:SF_SQLITE = if ($Sqlite) { '1' } else { '0' }
 $WriteSettings | & $VenvPython - $Settings $VenvPython $Port
+Remove-Item Env:\SF_MYSQL, Env:\SF_SQLITE -ErrorAction SilentlyContinue
 
 # ── Autostart / start ─────────────────────────────────────────────────────
 if ($Autostart) {

@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using ScrapingFactory.Companion;
+using ScrapingFactory.Companion.Storage;
 using ScrapingFactory.Compiler.Backends;
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
@@ -45,22 +46,43 @@ builder.Services.AddSingleton(new LanguageModuleRegistry(CompanionBackendOverrid
 // resolves/creates the SQLite file — on the first actual /configs request;
 // /health and /generate never touch it. Issue #276: all three stores are
 // registered and injected by interface (ISavedConfigStore/IOutputBlueprintStore/
-// ITransformPresetStore) — the SQLite classes are just the current
-// implementations, so another backend only needs a different registration here.
-builder.Services.AddSingleton<ISavedConfigStore, SavedConfigStore>();
+// ITransformPresetStore). Issue #277: which implementation backs them (SQLite,
+// the default, or MySQL) is picked from Companion:Storage:* by StorageOptions.
+builder.Services.AddSingleton<ISavedConfigStore>(sp => StorageOptions.CreateSavedConfigStore(sp.GetRequiredService<IConfiguration>()));
 
 // Issue #191: same lazy-construction reasoning as SavedConfigStore above,
 // its own independent store/SQLite file — see OutputBlueprintStore's own
 // doc comment for why this isn't just a third table there.
-builder.Services.AddSingleton<IOutputBlueprintStore, OutputBlueprintStore>();
+builder.Services.AddSingleton<IOutputBlueprintStore>(sp => StorageOptions.CreateOutputBlueprintStore(sp.GetRequiredService<IConfiguration>()));
 
 // Issue #279: same lazy-construction reasoning, its own SQLite file — see
 // TransformPresetStore's own doc comment.
-builder.Services.AddSingleton<ITransformPresetStore, TransformPresetStore>();
+builder.Services.AddSingleton<ITransformPresetStore>(sp => StorageOptions.CreateTransformPresetStore(sp.GetRequiredService<IConfiguration>()));
 
 var app = builder.Build();
 
+// Issue #277: fail fast on an unknown storage provider / missing MySQL
+// connection string (no connection is opened here).
+StorageOptions.Validate(app.Configuration);
+
 app.UseCors();
+
+// Issue #277: an unreachable or misconfigured MySQL database only shows up
+// when a store is first used (the stores are created lazily, so /health and
+// /generate never need the database) — answer 503 with the driver's message
+// instead of an anonymous 500.
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (MySqlConnector.MySqlException exception) when (!context.Response.HasStarted)
+    {
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        await context.Response.WriteAsJsonAsync(new { error = $"The storage database is not available: {exception.Message}" });
+    }
+});
 
 app.MapGet("/health", () => Results.Ok());
 

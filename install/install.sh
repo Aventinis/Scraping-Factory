@@ -9,25 +9,35 @@
 #   - optionally starts the companion at every login, and starts it now.
 #
 # Usage: ./install.sh [--browser-engine] [--no-excel] [--autostart] [--no-start] [--port N]
+#                     [--mysql CONNECTION_STRING | --sqlite]
 #   --browser-engine  also install Playwright and download Chromium (~150 MB)
 #   --no-excel        skip openpyxl (only needed for the Excel output format)
 #   --autostart       start the companion automatically at login
 #   --no-start        don't start the companion now
 #   --port N          listen on port N instead of 5000 (then enter the address
 #                     http://localhost:N once in the extension's error screen)
+#   --mysql STRING    keep saved configurations, outputs, blueprints and
+#                     presets in a MySQL/MariaDB database instead of local
+#                     SQLite files, e.g. "Server=db;Database=scrapingfactory;
+#                     User ID=sf;Password=..." (the environment variable
+#                     SF_MYSQL_CONNECTION_STRING works too and keeps the
+#                     password out of the process list)
+#   --sqlite          switch an existing installation back to local SQLite
 # Safe to run again: it updates an existing installation in place.
 set -euo pipefail
 
-BROWSER_ENGINE=0; EXCEL=1; AUTOSTART=0; START=1; PORT=5000
+BROWSER_ENGINE=0; EXCEL=1; AUTOSTART=0; START=1; PORT=5000; MYSQL="${SF_MYSQL_CONNECTION_STRING:-}"; SQLITE=0
 while [ $# -gt 0 ]; do
   arg="$1"; shift
   case "$arg" in
     --port) PORT="${1:?--port needs a number}"; shift ;;
+    --mysql) MYSQL="${1:?--mysql needs a connection string}"; shift ;;
+    --sqlite) SQLITE=1 ;;
     --browser-engine) BROWSER_ENGINE=1 ;;
     --no-excel) EXCEL=0 ;;
     --autostart) AUTOSTART=1 ;;
     --no-start) START=0 ;;
-    -h|--help) sed -n 2,21p "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n 2,30p "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $arg (see --help)" >&2; exit 2 ;;
   esac
 done
@@ -104,9 +114,10 @@ fi
 
 # ── Settings file ─────────────────────────────────────────────────────────
 say "Writing $SETTINGS"
-"$VENV_PYTHON" - "$SETTINGS" "$VENV_PYTHON" "$PORT" <<'PY'
+SF_MYSQL="$MYSQL" SF_SQLITE="$SQLITE" "$VENV_PYTHON" - "$SETTINGS" "$VENV_PYTHON" "$PORT" <<'PY'
 import json, os, sys
 path, python, port = sys.argv[1], sys.argv[2], int(sys.argv[3])
+mysql, back_to_sqlite = os.environ.get("SF_MYSQL", ""), os.environ.get("SF_SQLITE") == "1"
 data = {}
 if os.path.exists(path):
     try:
@@ -119,9 +130,16 @@ if port != 5000:
     data["Companion"]["Port"] = port
 else:
     data["Companion"].pop("Port", None)
+# Issue #277: storage backend — only touched when asked for, so re-running the
+# installer keeps an earlier --mysql choice.
+if mysql:
+    data["Companion"]["Storage"] = {"Provider": "MySql", "MySql": {"ConnectionString": mysql}}
+elif back_to_sqlite:
+    data["Companion"].pop("Storage", None)
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2)
 PY
+chmod 600 "$SETTINGS"
 
 # ── Autostart / start ─────────────────────────────────────────────────────
 if [ "$AUTOSTART" = 1 ]; then

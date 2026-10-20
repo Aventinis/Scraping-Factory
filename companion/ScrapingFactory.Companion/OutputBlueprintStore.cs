@@ -123,10 +123,10 @@ public sealed class OutputBlueprintStore : IOutputBlueprintStore
         alterCommand.ExecuteNonQuery();
     }
 
-    private static string SerializeFieldNames(IReadOnlyList<string> fieldNames) =>
+    internal static string SerializeFieldNames(IReadOnlyList<string> fieldNames) =>
         JsonSerializer.Serialize(fieldNames);
 
-    private static List<string> DeserializeFieldNames(string json) =>
+    internal static List<string> DeserializeFieldNames(string json) =>
         JsonSerializer.Deserialize<List<string>>(json)!;
 
     private static readonly JsonSerializerOptions TreeJsonOptions = new()
@@ -134,13 +134,13 @@ public sealed class OutputBlueprintStore : IOutputBlueprintStore
         Converters = { new OutputBlueprintTreeSchemaNodeJsonConverter() },
     };
 
-    private static string SerializeTree(List<OutputBlueprintTreeSchemaNode> tree) =>
+    internal static string SerializeTree(List<OutputBlueprintTreeSchemaNode> tree) =>
         JsonSerializer.Serialize(tree, TreeJsonOptions);
 
-    private static List<OutputBlueprintTreeSchemaNode> DeserializeTree(string json) =>
+    internal static List<OutputBlueprintTreeSchemaNode> DeserializeTree(string json) =>
         JsonSerializer.Deserialize<List<OutputBlueprintTreeSchemaNode>>(json, TreeJsonOptions)!;
 
-    private static int CountLeaves(IReadOnlyList<OutputBlueprintTreeSchemaNode> nodes) =>
+    internal static int CountLeaves(IReadOnlyList<OutputBlueprintTreeSchemaNode> nodes) =>
         nodes.Sum(node => node is OutputBlueprintTreeSchemaGroup group ? CountLeaves(group.Children) : 1);
 
     public OutputBlueprintSummary Save(string name, string schemaKind, List<string>? fieldNames, List<OutputBlueprintTreeSchemaNode>? tree)
