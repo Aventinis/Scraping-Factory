@@ -63,7 +63,7 @@ public sealed class SavedConfigStore : ISavedConfigStore
     // A saved url isn't always a well-formed absolute URI (a hand-edited
     // export could carry anything) — falls back to the raw string so lookups
     // still work consistently for that same raw value, rather than throwing.
-    private static string ComputeHost(string url) =>
+    internal static string ComputeHost(string url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : url;
 
     // Every connection goes through here so that PRAGMA foreign_keys is

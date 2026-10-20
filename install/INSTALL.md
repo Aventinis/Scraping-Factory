@@ -31,6 +31,23 @@ and Chromium (needed only for pages that must be rendered in a real browser,
 the extension's error screen); `--no-start` / `-NoStart` doesn't start the
 companion now. Running the installer again updates an existing installation.
 
+### Optional: store your data in MySQL/MariaDB
+
+By default saved configurations, outputs, Output Blueprints and transform presets
+live in local files next to the installation. To keep them in a MySQL or MariaDB
+database instead (for example on a shared server several people use), pass the
+connection string:
+
+```bash
+SF_MYSQL_CONNECTION_STRING="Server=db.example.com;Database=scrapingfactory;User ID=sf;Password=..." ./install.sh
+```
+
+(`--mysql "<connection string>"` / `-MySql "<connection string>"` do the same; the
+environment variable keeps the password out of the process list.) The tables are
+created automatically in the given, already existing database. It is stored in
+the companion's settings file (readable only by you); `--sqlite` / `-Sqlite`
+switches back. Existing local data is not copied over.
+
 ## 2. Load the extension
 
 The browser does not allow an installer to add an extension silently, so this

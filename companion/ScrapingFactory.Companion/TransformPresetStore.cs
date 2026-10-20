@@ -78,9 +78,9 @@ public sealed class TransformPresetStore : ITransformPresetStore
         command.ExecuteNonQuery();
     }
 
-    private static string Serialize(List<FieldTransform> transforms) => JsonSerializer.Serialize(transforms, TransformsJsonOptions);
+    internal static string Serialize(List<FieldTransform> transforms) => JsonSerializer.Serialize(transforms, TransformsJsonOptions);
 
-    private static List<FieldTransform> Deserialize(string json) => JsonSerializer.Deserialize<List<FieldTransform>>(json, TransformsJsonOptions)!;
+    internal static List<FieldTransform> Deserialize(string json) => JsonSerializer.Deserialize<List<FieldTransform>>(json, TransformsJsonOptions)!;
 
     public TransformPresetSummary Save(string name, List<FieldTransform> transforms)
     {

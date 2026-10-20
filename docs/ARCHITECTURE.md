@@ -1305,6 +1305,23 @@ register autostart. The extension is still loaded manually ("Load unpacked").
 - Tests: `CompanionUserSettingsTests.cs`; the Linux installer was verified by
   hand end to end (see CLAUDE.md), Windows/macOS/systemd paths are untested
 
+### 2.21af MySQL storage backend (Issue #277)
+
+`Companion:Storage:Provider` (`Sqlite` default | `MySql`) and
+`Companion:Storage:MySql:ConnectionString` choose which implementation of the
+three store interfaces (2.21ad) the companion registers. MySQL keeps all three
+stores in one database (tables created on first use, later columns by
+idempotent `information_schema`-checked migrations); an unreachable database
+answers `503`. The installer can write the settings (`--mysql`).
+
+- Companion: `Storage/StorageOptions.cs`, `MySqlSchema.cs`,
+  `MySqlSavedConfigStore.cs`, `MySqlOutputBlueprintStore.cs`,
+  `MySqlTransformPresetStore.cs`; DI + startup validation + 503 middleware in
+  `Program.cs`; dependency `MySqlConnector`
+- Installer: `install.sh`/`install.ps1` (`--mysql`, `--sqlite`)
+- CI: `mysql:8.4` service container + `SF_TEST_MYSQL`
+- Tests: `StorageContractTests.cs` (SQLite + MySQL), `StorageProviderTests.cs`
+
 ### 2.22 Persistent session/cookie handling (Issue #175)
 
 Browser-engine only (rejected server-side for Static/Api, same as
