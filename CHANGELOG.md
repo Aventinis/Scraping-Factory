@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.17.10](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.9...v1.17.10) (2026-10-20)
+
+
+### Features
+
+* text-content selector suffix :contains("text") ([#227](https://github.com/Aventinis/Scraping-Factory/issues/227)) ([d5f6a20](https://github.com/Aventinis/Scraping-Factory/commit/d5f6a20df33544ef70acd0a19366938fdcc64c95))
+* **text-selector:** extension support — content-script matcher, text filter input in the field modals, live match count ([8ff9242](https://github.com/Aventinis/Scraping-Factory/commit/8ff924262c656f280803696257753533ac6c15b8)), closes [#227](https://github.com/Aventinis/Scraping-Factory/issues/227)
+* **text-selector:** runtime support for the :contains("text") selector suffix ([d93c624](https://github.com/Aventinis/Scraping-Factory/commit/d93c6242ba788b359271bd7d41d2a87c377fa2e8)), closes [#227](https://github.com/Aventinis/Scraping-Factory/issues/227)
+* **text-selector:** validate the :contains("text") selector suffix in the compiler ([1dadf60](https://github.com/Aventinis/Scraping-Factory/commit/1dadf60ef348e7165989326713b75504fd7c5ece)), closes [#227](https://github.com/Aventinis/Scraping-Factory/issues/227)
+
 ## [1.17.9](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.8...v1.17.9) (2026-10-19)
 
 
