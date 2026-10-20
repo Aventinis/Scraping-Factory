@@ -67,6 +67,9 @@ Requirements:
 - Optional, only if you plan to use the **browser engine** (for dynamically
   rendered pages or login flows): `pip install playwright` followed by
   `playwright install chromium`
+- Optional, only if you plan to write the result as an **Excel** file
+  (output format "Excel"): `pip install openpyxl`. The SQLite format needs
+  nothing beyond Python itself.
 
 Then, from the repository root:
 

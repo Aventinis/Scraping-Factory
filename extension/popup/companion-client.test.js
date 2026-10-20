@@ -509,7 +509,7 @@ describe('generate() reads the global Settings tab\'s preferences, not per-scrap
       <section id="screen-generating" class="hidden"></section>
       <section id="screen-settings" class="hidden">
         <button id="btn-close-settings"></button>
-        <input type="checkbox" id="toggle-output-json" />
+        <select id="select-output-format"><option value="default"></option><option value="json"></option><option value="sqlite"></option><option value="xlsx"></option></select>
         <input type="checkbox" id="toggle-include-data-preview" />
         <input type="checkbox" id="toggle-include-output-file" />
         <input type="checkbox" id="toggle-external-config" />
@@ -562,12 +562,12 @@ describe('generate() reads the global Settings tab\'s preferences, not per-scrap
     await flushMicrotasks(); // → STATES.IDLE, fields restored from storage
   });
 
-  test('flipping "Output as JSON" on the Settings screen is reflected in the next /generate request', async () => {
+  test('choosing the JSON output format on the Settings screen is reflected in the next /generate request', async () => {
     document.getElementById('btn-open-settings').click();
-    const toggle = document.getElementById('toggle-output-json');
-    toggle.checked = true;
-    toggle.dispatchEvent(new Event('change'));
-    expect(storedGlobalSettings.outputAsJson).toBe(true);
+    const select = document.getElementById('select-output-format');
+    select.value = 'json';
+    select.dispatchEvent(new Event('change'));
+    expect(storedGlobalSettings.outputFormat).toBe('json');
 
     document.getElementById('btn-close-settings').click();
     document.getElementById('btn-generate').click();

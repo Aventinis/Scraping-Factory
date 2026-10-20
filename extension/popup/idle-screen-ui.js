@@ -327,7 +327,12 @@ const SFIdleScreenUI = (function () {
       || (state.mode === 'api' && !!state.apiConfig?.groups?.length);
     const outputExtEl = document.getElementById('output-filename-ext');
     if (outputExtEl) {
-      outputExtEl.textContent = getGlobalSettings().outputAsJson ? '.json' : (isTreeShapedMode ? '.xml' : '.csv');
+      const chosenFormat = getGlobalSettings().outputFormat;
+      const tableFormat = chosenFormat === 'sqlite' || chosenFormat === 'xlsx';
+      outputExtEl.textContent = chosenFormat === 'json' ? '.json'
+        : tableFormat ? `.${chosenFormat}` : (isTreeShapedMode ? '.xml' : '.csv');
+      // Issue #229: a nested result written as a table is flattened.
+      document.getElementById('output-format-hint')?.classList.toggle('hidden', !(tableFormat && isTreeShapedMode));
     }
 
     // Issue #83: hidden for API mode — Api builds its own request URL from

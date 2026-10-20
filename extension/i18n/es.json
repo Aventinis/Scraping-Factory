@@ -228,7 +228,8 @@
     "outputBlueprintNoneOption": "Ninguna",
     "manageBlueprintsBtn": "Gestionar",
     "outputBlueprintMappingHint": "Asigna a cada campo de destino uno de los campos de origen propios de esta configuración — cada campo de destino necesita un origen antes de poder generar el script.",
-    "outputBlueprintTreeMappingHint": "Asigna a cada campo de destino uno de los campos de origen propios de esta configuración — la posición de un grupo de destino en la salida se infiere automáticamente a partir de sus campos asignados. Cada campo de destino necesita un origen antes de poder generar el script."
+    "outputBlueprintTreeMappingHint": "Asigna a cada campo de destino uno de los campos de origen propios de esta configuración — la posición de un grupo de destino en la salida se infiere automáticamente a partir de sus campos asignados. Cada campo de destino necesita un origen antes de poder generar el script.",
+    "outputFormatFlattenHint": "Los resultados anidados se aplanan en una tabla: una fila por cada elemento repetido más interno; los valores de niveles superiores se repiten en cada fila (o elige un Output Blueprint para definir las columnas). Cada campo de datos necesita un nombre único."
   },
   "robots": {
     "checkFailed": "No se pudo comprobar el robots.txt ({error}).",
@@ -443,7 +444,13 @@
     "scriptNameFixedLabel": "Nombre de script fijo",
     "scriptNameHostnameHint": "El nombre del script siempre se deriva del nombre de host del sitio web actual.",
     "allConfigsTitle": "Todas las configuraciones guardadas",
-    "allConfigsEmpty": "Todavía no hay configuraciones guardadas."
+    "allConfigsEmpty": "Todavía no hay configuraciones guardadas.",
+    "outputFormatLabel": "Formato de salida",
+    "outputFormatDefault": "Predeterminado (CSV, XML para resultados anidados)",
+    "outputFormatJson": "JSON",
+    "outputFormatSqlite": "Base de datos SQLite",
+    "outputFormatXlsx": "Excel (.xlsx)",
+    "outputFormatHint": "El archivo que escribe el script generado. SQLite y Excel contienen una tabla / hoja; los resultados anidados (contenedores, datos de API anidados) se aplanan en ella. Excel necesita el paquete de Python «openpyxl» (pip install openpyxl) en el equipo donde se ejecutan el script y el companion. No disponible para el modo Blocks ni Combined; no se puede combinar con la detección de cambios."
   },
   "modals": {
     "fieldName": {
@@ -612,7 +619,11 @@
     "maxIterationsLabel": "Rondas máx.",
     "waitAfterMsLabel": "Tiempo de espera (ms)",
     "clickTargetLabel": "Qué coincidencia se hace clic",
-    "clickTarget": { "first": "Primera coincidencia", "last": "Última coincidencia", "all": "Todas las coincidencias, en orden" },
+    "clickTarget": {
+      "first": "Primera coincidencia",
+      "last": "Última coincidencia",
+      "all": "Todas las coincidencias, en orden"
+    },
     "scrollStepPxLabel": "Paso de scroll (px)",
     "scrollStepPxPlaceholder": "vacío = saltar al final",
     "persistentSessionToggle": "Reutilizar sesión entre ejecuciones",

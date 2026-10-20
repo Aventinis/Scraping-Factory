@@ -34,7 +34,7 @@ jobs:
       - name: Install Python runtime dependencies
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install requests beautifulsoup4 playwright
+          python3 -m pip install requests beautifulsoup4 playwright openpyxl
           python3 -m playwright install --with-deps chromium
 
       - name: Restore

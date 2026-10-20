@@ -25,8 +25,8 @@ const SFGlobalSettingsUI = (function () {
   function renderSettingsScreen(bridge) {
     const settings = getGlobalSettings();
 
-    const jsonToggle = document.getElementById('toggle-output-json');
-    if (jsonToggle) jsonToggle.checked = settings.outputAsJson;
+    const formatSelect = /** @type {HTMLSelectElement | null} */ (document.getElementById('select-output-format'));
+    if (formatSelect) formatSelect.value = settings.outputFormat;
     const previewToggle = document.getElementById('toggle-include-data-preview');
     if (previewToggle) previewToggle.checked = settings.includeDataPreview;
     const outputFileToggle = document.getElementById('toggle-include-output-file');
@@ -71,8 +71,8 @@ const SFGlobalSettingsUI = (function () {
       bridge.setState(STATES.IDLE);
     });
 
-    document.getElementById('toggle-output-json')?.addEventListener('change', (e) => {
-      updateAndRerender(bridge, { outputAsJson: e.target.checked });
+    document.getElementById('select-output-format')?.addEventListener('change', (e) => {
+      updateAndRerender(bridge, { outputFormat: e.target.value });
     });
     document.getElementById('toggle-include-data-preview')?.addEventListener('change', (e) => {
       updateAndRerender(bridge, { includeDataPreview: e.target.checked });

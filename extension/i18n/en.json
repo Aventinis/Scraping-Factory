@@ -228,7 +228,8 @@
     "outputBlueprintNoneOption": "None",
     "manageBlueprintsBtn": "Manage",
     "outputBlueprintMappingHint": "Map each target field to one of this configuration's own source fields — every target field needs a source before the script can be generated.",
-    "outputBlueprintTreeMappingHint": "Map each target field to one of this configuration's own source fields — a target group's own position in the output is inferred automatically from its mapped fields. Every target field needs a source before the script can be generated."
+    "outputBlueprintTreeMappingHint": "Map each target field to one of this configuration's own source fields — a target group's own position in the output is inferred automatically from its mapped fields. Every target field needs a source before the script can be generated.",
+    "outputFormatFlattenHint": "Nested results are flattened into one table: one row per innermost repeating item, with values from higher levels repeated in every row (or pick an Output Blueprint to choose the columns yourself). Every data field needs a unique name."
   },
   "robots": {
     "checkFailed": "robots.txt could not be checked ({error}).",
@@ -443,7 +444,13 @@
     "scriptNameFixedLabel": "Fixed script name",
     "scriptNameHostnameHint": "The script name is always derived from the current website's hostname.",
     "allConfigsTitle": "All saved configurations",
-    "allConfigsEmpty": "No saved configurations yet."
+    "allConfigsEmpty": "No saved configurations yet.",
+    "outputFormatLabel": "Output format",
+    "outputFormatDefault": "Default (CSV, XML for nested results)",
+    "outputFormatJson": "JSON",
+    "outputFormatSqlite": "SQLite database",
+    "outputFormatXlsx": "Excel (.xlsx)",
+    "outputFormatHint": "The file the generated script writes. SQLite and Excel contain one table / sheet; nested results (containers, nested API data) are flattened into it. Excel needs the Python package \"openpyxl\" (pip install openpyxl) on the machine running the script and the companion. Not available for blocks or combined mode; cannot be combined with change detection."
   },
   "modals": {
     "fieldName": {
@@ -612,7 +619,11 @@
     "maxIterationsLabel": "Max. rounds",
     "waitAfterMsLabel": "Wait time (ms)",
     "clickTargetLabel": "Click which match",
-    "clickTarget": { "first": "First match", "last": "Last match", "all": "All matches, in order" },
+    "clickTarget": {
+      "first": "First match",
+      "last": "Last match",
+      "all": "All matches, in order"
+    },
     "scrollStepPxLabel": "Scroll step (px)",
     "scrollStepPxPlaceholder": "blank = jump to bottom",
     "persistentSessionToggle": "Reuse session between runs",

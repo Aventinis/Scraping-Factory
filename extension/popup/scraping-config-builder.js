@@ -471,7 +471,7 @@ function collectFieldNames(mode, fields, groups, apiConfig) {
  * @param {SFWire.ScrapingEngine} [engine]
  * @param {SFDraft.BrowserAction[]} [browserActions]
  * @param {boolean} [includePreview]
- * @param {boolean} [useJsonOutput]
+ * @param {boolean | string | null} [useJsonOutput] true / 'json' → Json, 'sqlite' → Sqlite, 'xlsx' → Xlsx (Issue #229)
  * @param {string[]} [additionalUrls]
  * @param {SFDraft.ChangeDetectionState | null} [changeDetection]
  * @param {SFDraft.ProxyState | null} [proxy]
@@ -529,6 +529,11 @@ function buildScrapingConfig(
   // Issue #228: a plain on/off switch, independent of requestDelay (the
   // companion uses the larger of the two gaps) — omitted when off.
   const respectRobotsFields = respectRobotsDelay ? { respectRobotsDelay: true } : {};
+  // Issue #229: the output-format preference — the legacy boolean (true =
+  // Json) or one of 'json' | 'sqlite' | 'xlsx'; anything else (false,
+  // 'default') leaves the companion's own per-shape default in charge.
+  const tableOrJsonFormat = useJsonOutput === true || useJsonOutput === 'json' ? 'Json'
+    : useJsonOutput === 'sqlite' ? 'Sqlite' : useJsonOutput === 'xlsx' ? 'Xlsx' : null;
   const requestDelayConfig = buildRequestDelayConfig(requestDelay);
   const requestDelayFields = requestDelayConfig ? { requestDelay: requestDelayConfig } : {};
   // Both pacing settings in one spread — the object literals below are
@@ -619,7 +624,7 @@ function buildScrapingConfig(
     ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
     : {};
   const previewFields = includePreview ? { includePreview: true } : {};
-  const outputFormatFields = useJsonOutput ? { outputFormat: 'Json' } : {};
+  const outputFormatFields = tableOrJsonFormat ? { outputFormat: tableOrJsonFormat } : {};
   const additionalUrlsFields = additionalUrls.length > 0 ? { additionalUrls } : {};
   const changeDetectionConfig = buildChangeDetectionConfig(changeDetection);
   const changeDetectionFields = changeDetectionConfig ? { changeDetection: changeDetectionConfig } : {};
@@ -699,7 +704,7 @@ function buildScrapingConfig(
       // Issue #206 follow-up: same "incomplete/off = key omitted" convention.
       ...(f.hiddenFromOutput ? { hiddenFromOutput: true } : {}),
     })),
-    outputFormat: useJsonOutput ? 'Json' : 'Csv',
+    outputFormat: tableOrJsonFormat ?? 'Csv',
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
     ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields, ...pacingFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields,
@@ -726,7 +731,7 @@ function buildScrapingConfig(
  * @param {SFWire.ScrapingEngine} [engine]
  * @param {SFDraft.BrowserAction[]} [browserActions]
  * @param {boolean} [includePreview]
- * @param {boolean} [useJsonOutput]
+ * @param {boolean | string | null} [useJsonOutput] true / 'json' → Json, 'sqlite' → Sqlite, 'xlsx' → Xlsx (Issue #229)
  * @param {string[]} [additionalUrls]
  * @param {SFDraft.ChangeDetectionState | null} [changeDetection]
  * @param {SFDraft.ProxyState | null} [proxy]

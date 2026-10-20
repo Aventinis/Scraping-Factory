@@ -287,4 +287,7 @@ public sealed class ScrapingField
 // object mirroring the group/API tree for Groups/API-tree. See
 // ScrapingPlanBuilder for exactly when each mode honors it vs. still forcing
 // its own default.
-public enum OutputFormat { Csv, Xml, Json }
+// Issue #229: Sqlite/Xlsx are tabular, binary alternatives to Csv for flat-shaped
+// output — one table "data" / one sheet "Data". A tree-shaped source (container
+// mode, API tree) is flattened into rows for them (see ScrapingPlanBuilder).
+public enum OutputFormat { Csv, Xml, Json, Sqlite, Xlsx }

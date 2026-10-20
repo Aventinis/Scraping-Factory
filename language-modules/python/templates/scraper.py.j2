@@ -59,7 +59,7 @@ URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 #@include text_selector_bs4
 {{~ end ~}}
 
-OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else }}csv{{ end }}"
+OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else if output_is_sqlite }}sqlite{{ else if output_is_xlsx }}xlsx{{ else }}csv{{ end }}"
 
 #@include download_static
 
@@ -240,6 +240,9 @@ def scrape(url):
 {{ end }}
 
 
+{{~ if output_is_sqlite || output_is_xlsx ~}}
+#@include output_tabular
+{{~ end ~}}
 #@include main_flat
 
 

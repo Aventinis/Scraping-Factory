@@ -31,7 +31,7 @@ describe('global Settings tab: preferences', () => {
     <section id="screen-generating" class="hidden"></section>
     <section id="screen-settings" class="hidden">
       <button id="btn-close-settings"></button>
-      <input type="checkbox" id="toggle-output-json" />
+      <select id="select-output-format"><option value="default"></option><option value="json"></option><option value="sqlite"></option><option value="xlsx"></option></select>
       <input type="checkbox" id="toggle-include-data-preview" />
       <input type="checkbox" id="toggle-include-output-file" />
       <input type="checkbox" id="toggle-external-config" />
@@ -96,7 +96,7 @@ describe('global Settings tab: preferences', () => {
   test('opening Settings shows the screen and pre-fills the defaults', () => {
     openSettings();
     expect(document.getElementById('screen-settings').classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('toggle-output-json').checked).toBe(false);
+    expect(document.getElementById('select-output-format').value).toBe('default');
     expect(document.getElementById('toggle-include-data-preview').checked).toBe(false);
     expect(document.getElementById('toggle-include-output-file').checked).toBe(false);
     expect(document.getElementById('toggle-external-config').checked).toBe(false);
@@ -116,15 +116,18 @@ describe('global Settings tab: preferences', () => {
     expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(false);
   });
 
-  test('toggling each of the four preferences persists it via chrome.storage.local', () => {
+  test('changing each of the four preferences persists it via chrome.storage.local', () => {
     openSettings();
-    for (const id of ['toggle-output-json', 'toggle-include-data-preview', 'toggle-include-output-file', 'toggle-external-config']) {
+    const format = document.getElementById('select-output-format');
+    format.value = 'sqlite';
+    format.dispatchEvent(new Event('change'));
+    for (const id of ['toggle-include-data-preview', 'toggle-include-output-file', 'toggle-external-config']) {
       const el = document.getElementById(id);
       el.checked = true;
       el.dispatchEvent(new Event('change'));
     }
     expect(storedGlobalSettings).toEqual({
-      outputAsJson: true, includeDataPreview: true, includeOutputFile: true, externalConfig: true,
+      outputFormat: 'sqlite', includeDataPreview: true, includeOutputFile: true, externalConfig: true,
       scriptNameMode: 'fixed', scriptNameFixed: 'scraper',
     });
   });
@@ -151,10 +154,10 @@ describe('global Settings tab: preferences', () => {
 
   test('preferences survive a popup reload (chrome.storage.local round trip)', async () => {
     openSettings();
-    const toggle = document.getElementById('toggle-output-json');
-    toggle.checked = true;
-    toggle.dispatchEvent(new Event('change'));
-    expect(storedGlobalSettings.outputAsJson).toBe(true);
+    const select = document.getElementById('select-output-format');
+    select.value = 'xlsx';
+    select.dispatchEvent(new Event('change'));
+    expect(storedGlobalSettings.outputFormat).toBe('xlsx');
 
     // Simulate the popup closing and reopening — a fresh require('./popup')
     // re-runs init()'s loadGlobalSettings() against the same (now populated)
@@ -165,6 +168,6 @@ describe('global Settings tab: preferences', () => {
     await flushMicrotasks();
 
     openSettings();
-    expect(document.getElementById('toggle-output-json').checked).toBe(true);
+    expect(document.getElementById('select-output-format').value).toBe('xlsx');
   });
 });

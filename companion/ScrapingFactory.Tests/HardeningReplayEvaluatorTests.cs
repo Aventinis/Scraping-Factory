@@ -180,6 +180,24 @@ public class HardeningReplayEvaluatorTests
         Assert.Equal("blocking", results[1].Kind);
     }
 
+    // Issue #229: a saved SQLite/Excel output is binary — nothing is evaluable.
+    [Theory]
+    [InlineData("output.sqlite")]
+    [InlineData("output.xlsx")]
+    public void BinaryTableOutputs_AreNotEvaluable(string fileName)
+    {
+        var checks = new HardeningCheck[]
+        {
+            new NoResultCheck { Severity = HardeningSeverity.Error },
+            new NullRateCheck { Severity = HardeningSeverity.Warning, FieldName = "x", Threshold = 0.5 },
+        };
+        var results = HardeningReplayEvaluator.Evaluate(checks, fileName, "UEsDBA==", null, null);
+        Assert.All(results, result => Assert.Equal(HardeningReplayOutcome.NotEvaluable, result.Outcome));
+        Assert.Equal(["noResult", "nullRate"], results.Select(r => r.Kind));
+        Assert.False(HardeningReplayEvaluator.IsReplayable(fileName));
+        Assert.True(HardeningReplayEvaluator.IsReplayable("output.csv"));
+    }
+
     [Fact]
     public void GetResultCount_Csv_ReturnsRowCount()
     {
