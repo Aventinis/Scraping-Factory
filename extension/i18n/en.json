@@ -141,6 +141,8 @@
     "requestDelayToPlaceholder": "(fixed)",
     "requestDelaySecondsUnit": "seconds",
     "requestDelayHint": "The script waits between two requests to the site — fixed, or randomly within a range (e.g. 1 to 3). Protects against blocks and rate limits, but makes the run correspondingly longer (e.g. 50 pages × 2 s ≈ 1.5 minutes more). The trial run when generating doesn't count the pauses against its time limit.",
+    "respectRobotsDelayToggle": "Respect the site's robots.txt (Crawl-delay)",
+    "respectRobotsDelayHint": "If the site's robots.txt asks for a pace (Crawl-delay or Request-rate), the script waits at least that long between two requests. Sites that publish nothing are unaffected. Combined with \"Pause between requests\", the larger gap wins. The robots.txt is read once per run.",
     "retryToggle": "Retry on transient errors",
     "retryAttemptsLabel": "Attempts",
     "retryDelayLabel": "Wait (s)",

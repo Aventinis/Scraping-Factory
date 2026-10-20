@@ -141,6 +141,8 @@
     "requestDelayToPlaceholder": "(fest)",
     "requestDelaySecondsUnit": "Sekunden",
     "requestDelayHint": "Das Skript wartet zwischen zwei Anfragen an die Seite – fest oder zufällig im Bereich (z. B. 1 bis 3). Schützt vor Sperren und Rate-Limits, macht den Lauf aber entsprechend länger (z. B. 50 Seiten × 2 s ≈ 1,5 Minuten mehr). Der Probelauf beim Generieren zählt die Pausen nicht gegen sein Zeitlimit.",
+    "respectRobotsDelayToggle": "robots.txt der Seite beachten (Crawl-delay)",
+    "respectRobotsDelayHint": "Wenn die robots.txt der Seite ein Tempo vorgibt (Crawl-delay oder Request-rate), wartet das Skript mindestens so lange zwischen zwei Anfragen. Seiten ohne Angabe sind nicht betroffen. Zusammen mit „Pause zwischen Anfragen“ gilt der größere Abstand. Die robots.txt wird einmal pro Lauf gelesen.",
     "retryToggle": "Bei vorübergehenden Fehlern erneut versuchen",
     "retryAttemptsLabel": "Versuche",
     "retryDelayLabel": "Wartezeit (s)",

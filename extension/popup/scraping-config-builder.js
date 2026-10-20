@@ -494,6 +494,7 @@ function collectFieldNames(mode, fields, groups, apiConfig) {
  * @param {SFDraft.RetryState | null} [retry]
  * @param {SFDraft.DeduplicationState | null} [deduplication]
  * @param {SFDraft.RequestHeadersState | null} [requestHeaders]
+ * @param {boolean} [respectRobotsDelay]
  * @returns {object}
  */
 function buildScrapingConfig(
@@ -522,9 +523,18 @@ function buildScrapingConfig(
   deduplication = null,
   // Issue #226: same "append at the end" rule.
   requestHeaders = null,
+  // Issue #228: same "append at the end" rule.
+  respectRobotsDelay = false,
 ) {
+  // Issue #228: a plain on/off switch, independent of requestDelay (the
+  // companion uses the larger of the two gaps) — omitted when off.
+  const respectRobotsFields = respectRobotsDelay ? { respectRobotsDelay: true } : {};
   const requestDelayConfig = buildRequestDelayConfig(requestDelay);
   const requestDelayFields = requestDelayConfig ? { requestDelay: requestDelayConfig } : {};
+  // Both pacing settings in one spread — the object literals below are
+  // already at TypeScript's union-complexity limit.
+  /** @type {Record<string, unknown>} */
+  const pacingFields = { ...requestDelayFields, ...respectRobotsFields };
   const retryConfig = buildRetryConfig(retry);
   const retryFields = retryConfig ? { retry: retryConfig } : {};
   // Issue #225: the Append output needs a flat output file, so container
@@ -579,7 +589,7 @@ function buildScrapingConfig(
       })),
       scriptFileName: scriptFileName || null,
       ...engineFields, ...previewFields, ...additionalUrlsFields,
-      ...proxyFields, ...requestDelayFields, ...retryFields, ...requestHeadersFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
+      ...proxyFields, ...pacingFields, ...retryFields, ...requestHeadersFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
     };
   }
   // Combined mode (Issue #239): no ad-hoc fields/groups/apiConfig of its own
@@ -661,7 +671,7 @@ function buildScrapingConfig(
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...requestDelayFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...proxyFields, ...pacingFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
       ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
@@ -670,7 +680,7 @@ function buildScrapingConfig(
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...requestDelayFields, ...retryFields, ...deduplicationFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...proxyFields, ...pacingFields, ...retryFields, ...deduplicationFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
       ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
@@ -692,7 +702,7 @@ function buildScrapingConfig(
     outputFormat: useJsonOutput ? 'Json' : 'Csv',
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
-    ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields, ...requestDelayFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields,
+    ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields, ...pacingFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields,
     ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
     ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
   };
@@ -738,6 +748,7 @@ function buildScrapingConfig(
  * @param {SFDraft.RetryState | null} [retry]
  * @param {SFDraft.DeduplicationState | null} [deduplication]
  * @param {SFDraft.RequestHeadersState | null} [requestHeaders]
+ * @param {boolean} [respectRobotsDelay]
  * @returns {{exportedAt: string, extensionVersion: string, config: object}}
  */
 function buildConfigExport(
@@ -760,6 +771,8 @@ function buildConfigExport(
   deduplication = null,
   // Issue #226: same "append at the end" rule.
   requestHeaders = null,
+  // Issue #228: same "append at the end" rule.
+  respectRobotsDelay = false,
 ) {
   return {
     exportedAt: new Date().toISOString(),
@@ -770,7 +783,7 @@ function buildConfigExport(
       includeOutputFile, externalConfig, combinedComponents, blocks,
       outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping,
       outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping, discoveredUrls, preflight, requestDelay, retry,
-      deduplication, requestHeaders,
+      deduplication, requestHeaders, respectRobotsDelay,
     ),
   };
 }

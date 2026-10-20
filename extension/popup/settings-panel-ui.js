@@ -48,6 +48,10 @@ function renderSettingsPanel(bridge) {
     }
 
     // Issue #88: opt-in proxy support.
+    // Issue #228: opt-in robots.txt Crawl-delay/Request-rate.
+    const respectRobotsToggle = /** @type {HTMLInputElement | null} */ (document.getElementById('toggle-respect-robots-delay'));
+    if (respectRobotsToggle) respectRobotsToggle.checked = state.respectRobotsDelay;
+
     // Issue #222: opt-in pause between requests.
     const requestDelayToggle = document.getElementById('toggle-request-delay');
     if (requestDelayToggle) requestDelayToggle.checked = state.requestDelay.enabled;
@@ -316,6 +320,11 @@ function wireSettingsPanelEvents(bridge) {
   // persistentSession above.
   document.getElementById('toggle-preflight')?.addEventListener('change', (e) => {
     bridge.setState(bridge.getState().current, { preflight: e.target.checked });
+  });
+
+  // Issue #228: opt-in robots.txt Crawl-delay/Request-rate — plain boolean.
+  document.getElementById('toggle-respect-robots-delay')?.addEventListener('change', (e) => {
+    bridge.setState(bridge.getState().current, { respectRobotsDelay: e.target.checked });
   });
 
   // Issue #222: opt-in pause between requests.

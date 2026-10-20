@@ -52,6 +52,7 @@ declare namespace SFWire {
     discoveredUrls?: DiscoveredUrlsConfig;
     persistentSession?: boolean;
     preflight?: boolean;
+    respectRobotsDelay?: boolean;
     externalConfig?: boolean;
     combined?: CombinedComponentConfig[];
     blocks?: ExtractionBlockConfig[];

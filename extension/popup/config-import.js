@@ -371,6 +371,7 @@ const SFConfigImport = (function () {
         // Issue #219: never present on a Combined wire config either (same
         // outer-level rejection as discoveredUrls above).
         preflight: false,
+        respectRobotsDelay: false,
         ...applyOutputBlueprintConfig(null),
       };
     }
@@ -423,6 +424,8 @@ const SFConfigImport = (function () {
         // server-side, not designed for this mode's multi-output shape yet —
         // same reasoning as discoveredUrls above).
         preflight: false,
+        // Issue #228: allowed on a Blocks request (one shared navigation).
+        respectRobotsDelay: config.respectRobotsDelay === true,
         ...applyOutputBlueprintConfig(null),
       };
     }
@@ -465,6 +468,8 @@ const SFConfigImport = (function () {
       // Issue #219: plain bool, same convention as persistentSession above —
       // absent on the wire (an older companion/export, or Api mode) = false.
       preflight: config.preflight === true,
+      // Issue #228: plain bool, same convention as preflight above.
+      respectRobotsDelay: config.respectRobotsDelay === true,
       // Issue #191: only ever present on the wire for flat mode/Api's flat
       // shape — applyOutputBlueprintConfig(undefined) already resets to
       // "none" for every other mode, so no per-mode branching is needed here.
