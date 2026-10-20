@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Click targets (Issue #267)</title>
+</head>
+<body>
+  <h1>Releases</h1>
+  <p>Jede Release hat einen eigenen "Assets"-Schalter — ein Selektor wie <code>button.toggle</code>
+     trifft dreimal. Ein Klick darauf trägt die Nummer der Release unten in <code>#opened</code> ein.</p>
+  <ul>
+    <li class="release"><span>v1.0</span> <button class="toggle" data-n="1">Assets</button></li>
+    <li class="release"><span>v1.1</span> <button class="toggle" data-n="2">Assets</button></li>
+    <li class="release"><span>v1.2</span> <button class="toggle" data-n="3">Assets</button></li>
+  </ul>
+  <p id="opened">opened:</p>
+  <script>
+    const opened = [];
+    document.querySelectorAll('button.toggle').forEach((button) => {
+      button.addEventListener('click', () => {
+        opened.push(button.dataset.n);
+        document.getElementById('opened').textContent = 'opened: ' + opened.join(',');
+      });
+    });
+  </script>
+</body>
+</html>
