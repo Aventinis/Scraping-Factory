@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using MySqlConnector;
+using ScrapingFactory.Companion.Auth;
 
 namespace ScrapingFactory.Companion.Storage;
 
@@ -71,4 +72,10 @@ public static class StorageOptions
         ResolveProvider(configuration) == Provider.MySql
             ? new MySqlTransformPresetStore(BuildMySqlConnectionString(configuration))
             : new TransformPresetStore(configuration);
+
+    // Issue #278: the users live in the same backend as the data they own.
+    public static IUserStore CreateUserStore(IConfiguration configuration) =>
+        ResolveProvider(configuration) == Provider.MySql
+            ? new MySqlUserStore(BuildMySqlConnectionString(configuration))
+            : new SqliteUserStore(configuration);
 }
