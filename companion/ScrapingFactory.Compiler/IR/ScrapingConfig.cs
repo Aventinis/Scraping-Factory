@@ -123,6 +123,13 @@ public sealed class ScrapingConfig
     // may be set, the larger gap wins. Null/false is today's exact behavior.
     public bool? RespectRobotsDelay { get; init; }
 
+    // Issue #333: opt-in — the script checks every request against the
+    // target's robots.txt Disallow/Allow rules at run time (see
+    // IR/RobotsDisallowConfig.cs). Independent of RespectRobotsDelay (they
+    // share the one robots.txt fetch per origin). Null is today's exact
+    // behavior.
+    public RobotsDisallowConfig? RobotsDisallow { get; init; }
+
     // Issue #223: opt-in retry with backoff on transient request failures,
     // mode-independent — see IR/RetryConfig.cs. Null is today's exact
     // behavior (a failed request is never retried).

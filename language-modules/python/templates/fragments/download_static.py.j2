@@ -36,6 +36,10 @@ def _download_resource(url, base_url, max_size=None, allowed_types=None):
         ext = ""
     local_path = os.path.join(DOWNLOADS_DIR, digest + ext)
     if not os.path.exists(local_path):
+{{~ if robots_check.enabled ~}}
+        if not _robots_gate(absolute_url):
+            return ""
+{{~ end ~}}
         try:
 {{~ if request_delay.enabled ~}}
             _pace_request()

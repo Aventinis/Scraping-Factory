@@ -20,6 +20,10 @@ def main():
 {{~ end ~}}
     data = []
     for url in all_urls:
+{{~ if robots_check.enabled ~}}
+        if not _robots_gate(url):
+            continue
+{{~ end ~}}
         data.extend(scrape(url))
 {{~ if hardening.enabled ~}}
     data, required_fields_failed = _filter_required_fields(data)

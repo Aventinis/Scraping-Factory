@@ -106,6 +106,10 @@ def _next_link_url(response, requested_url):
 # every page of a cursor/Link-header chain; the response is handed back for
 # the Link header (Issue #321).
 def _fetch_page_data(url, body, headers):
+{{~ if robots_check.enabled ~}}
+    if not _robots_gate(url):
+        return None, None
+{{~ end ~}}
     if METHOD == "POST":
 {{~ if request_delay.enabled ~}}
         _pace_request()

@@ -1100,20 +1100,49 @@ An opt-in, independent setting making the generated script read the target's
 robots.txt once and use its `Crawl-delay` / `Request-rate` as a minimum gap
 between requests — one more source for the pacing mechanism of 2.21a (the
 larger of this and a configured pause wins). A site without such a directive
-is unaffected. Disallow re-checking is a separate issue (#333).
+is unaffected. Disallow re-checking is the separate option of 2.21ab2 below.
 
 - IR: `ScrapingConfig.RespectRobotsDelay`/`ScrapingPlan.RespectRobotsDelay`,
   Combined-mode outer-config rejection in `Program.cs`
 - `Backends/Python/PythonRequestDelayLiteral` (now takes the plan:
   `respect_robots`, `robots_urls_literal`)
 - Fragment `request_delay.py.j2` (`_robots_delay`, `_fetch_robots_delay`,
-  `urllib.robotparser`)
+  `urllib.robotparser`); the fetch itself is `fragments/robots_fetch.py.j2`,
+  shared with 2.21ab2
 - Extension: `scraping-config-builder.js` (trailing `respectRobotsDelay`
   parameter), `config-import.js`, `session-restore.js`,
   `settings-panel-ui.js`, `#toggle-respect-robots-delay` in `screens/idle.html`
 - Tests: `RobotsCrawlDelayTests.cs`, `extension/popup/robots-crawl-delay.test.js`,
   fixture `test-pages/crawl-delay` +
   `e2e/examples/issue-228-robots-crawl-delay-check.js`
+
+### 2.21ab2 Check robots.txt Disallow at run time (Issue #333)
+
+An opt-in setting making the generated script evaluate every request it is
+about to make against the target's robots.txt at run time — the extension's
+"Check robots.txt" is advisory and runs once. A disallowed request is
+skipped (default), warned about, or stops the run (exit code 9). RFC 9309
+matching (own evaluator: group of the `ScrapingFactory` agent else `*`,
+longest pattern wins, ties Allow, `*`/`$`), robots.txt fetched once per origin
+and shared with 2.21aa. Covers start URLs, further pages, discovered URLs,
+downloads, the preflight HEAD and API/discovery requests; not browser
+subresources, the auth bootstrap or browser-discovery sessions.
+
+- IR: `IR/RobotsDisallowConfig.cs` (`ScrapingConfig.RobotsDisallow`/
+  `ScrapingPlan.RobotsDisallow`), Combined-mode outer-config rejection in
+  `Program.cs`
+- `Backends/Python/PythonRobotsDisallowLiteral` (`robots_check.*`), wired in
+  `PythonScrapingContextBuilder` and `PythonApiCodeGenerator`
+- Fragments: `robots_fetch.py.j2`, `robots_disallow.py.j2` (included from
+  `request_delay.py.j2`); `_robots_gate` guards in the `main_*` fragments, the
+  static page loops, the Browser pagination, preflight/discovery/download
+  fragments and `api_fetch.py.j2`/`api_common.py.j2`
+- Extension: `scraping-config-builder.js` (trailing `robotsDisallow`),
+  `config-import.js` (`applyRobotsDisallowConfig`), `session-restore.js`,
+  `settings-panel-ui.js`, `#toggle-robots-disallow` in `screens/idle.html`
+- Tests: `RobotsDisallowTests.cs`, `RobotsDisallowEndpointTests.cs`,
+  `extension/popup/robots-disallow.test.js`, fixture
+  `test-pages/robots-disallow` + `e2e/examples/issue-333-robots-disallow-check.js`
 
 ### 2.21b Retry on transient errors (Issue #223)
 

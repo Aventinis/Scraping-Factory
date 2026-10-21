@@ -1,0 +1,41 @@
+{{~ if request_delay.respect_robots || robots_check.enabled ~}}
+# Issues #228/#333: the one place robots.txt is fetched. Both "honor the
+# Crawl-delay" and "check Disallow at run time" read it, so each origin's
+# file is requested at most once per run (cached, failures included) — and,
+# when a proxy is configured, through it, since a direct request would reveal
+# the machine's own address to the target.
+import urllib.error
+import urllib.parse
+import urllib.request
+
+ROBOTS_USER_AGENT = "ScrapingFactory"
+ROBOTS_FETCH_USER_AGENT = "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"
+_robots_texts = {}
+
+
+# Returns (text, problem): (str, None) = the file's content; (None, None) =
+# the site has no (readable-by-us) robots.txt — 401/403/404/410, which
+# RFC 9309 treats as "no restrictions"; (None, "HTTP 503" | "<ErrorName>") =
+# it could not be read, which callers only warn about, never stop on.
+def _robots_text(origin):
+    if origin in _robots_texts:
+        return _robots_texts[origin]
+    robots_url = origin + "/robots.txt"
+{{~ if proxy.enabled ~}}
+    proxy = _next_proxy()
+    handlers = [urllib.request.ProxyHandler({"http": proxy, "https": proxy})] if proxy else []
+    opener = urllib.request.build_opener(*handlers)
+{{~ else ~}}
+    opener = urllib.request.build_opener()
+{{~ end ~}}
+    request = urllib.request.Request(robots_url, headers={"User-Agent": ROBOTS_FETCH_USER_AGENT})
+    try:
+        with opener.open(request, timeout=10) as response:
+            result = (response.read().decode("utf-8", errors="replace"), None)
+    except urllib.error.HTTPError as error:
+        result = (None, None) if error.code in (401, 403, 404, 410) else (None, f"HTTP {error.code}")
+    except Exception as error:
+        result = (None, type(error).__name__)
+    _robots_texts[origin] = result
+    return result
+{{~ end ~}}

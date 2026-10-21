@@ -31,6 +31,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
         var changeDetection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection);
         var proxy = PythonProxyLiteral.BuildContext(plan.Proxy);
         var requestDelay = PythonRequestDelayLiteral.BuildContext(plan);
+        var robotsCheck = PythonRobotsDisallowLiteral.BuildContext(plan);
         var retry = PythonRetryLiteral.BuildContext(plan.Retry);
         var hardening = PythonHardeningLiteral.BuildContext(plan.Hardening);
         var externalConfig = PythonExternalConfigLiteral.BuildContext(plan.ExternalConfig);
@@ -84,6 +85,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
                 change_detection = changeDetection,
                 proxy,
                 request_delay = requestDelay,
+                robots_check = robotsCheck,
                 retry,
                 dedup = PythonDeduplicationLiteral.BuildContext(plan.Deduplication),
                 text_selector = PythonTextSelectorLiteral.BuildContext(plan),
@@ -143,6 +145,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
             change_detection = changeDetection,
             proxy,
             request_delay = requestDelay,
+                robots_check = robotsCheck,
             retry,
             dedup = PythonDeduplicationLiteral.BuildContext(plan.Deduplication),
             text_selector = PythonTextSelectorLiteral.BuildContext(plan),

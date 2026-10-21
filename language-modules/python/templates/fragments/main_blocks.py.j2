@@ -8,6 +8,10 @@ def main():
     per_block_data = {block["name"]: [] for block in BLOCKS if block["shape"] == "flat"}
     per_block_roots = {block["name"]: ET.Element("Ergebnis") for block in BLOCKS if block["shape"] == "group"}
     for url in URLS:
+{{~ if robots_check.enabled ~}}
+        if not _robots_gate(url):
+            continue
+{{~ end ~}}
         page_results = scrape(url)
         for block in BLOCKS:
             if block["shape"] == "flat":

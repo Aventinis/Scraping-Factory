@@ -33,6 +33,10 @@ def _write_preflight_state(etag, last_modified):
 # or "proceed" (no comparable header, no previous state yet, or the value
 # differs — the main run should go ahead as normal).
 def _run_preflight_check(url):
+{{~ if robots_check.enabled ~}}
+    if not _robots_gate(url):
+        return "proceed", None, None
+{{~ end ~}}
     try:
 {{~ if request_delay.enabled ~}}
         _pace_request()

@@ -35,6 +35,10 @@ public sealed class ScrapingPlan
     // ScrapingConfig.RespectRobotsDelay by ScrapingPlanBuilder.
     public bool RespectRobotsDelay { get; init; }
 
+    // Issue #333: carried through unchanged from ScrapingConfig.RobotsDisallow
+    // by ScrapingPlanBuilder — see IR/RobotsDisallowConfig.cs.
+    public RobotsDisallowConfig? RobotsDisallow { get; init; }
+
     // Issue #223: mode-independent, carried through unchanged from
     // ScrapingConfig.Retry by ScrapingPlanBuilder — see IR/RetryConfig.cs.
     public RetryConfig? Retry { get; init; }
@@ -114,6 +118,7 @@ public sealed class ScrapingPlan
         Proxy = Proxy,
         RequestDelay = RequestDelay,
         RespectRobotsDelay = RespectRobotsDelay,
+        RobotsDisallow = RobotsDisallow,
         Retry = Retry,
         Headers = Headers,
         Deduplication = Deduplication,

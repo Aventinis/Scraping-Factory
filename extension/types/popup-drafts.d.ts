@@ -143,6 +143,12 @@ declare namespace SFDraft {
     maxSecondsText: string;
   }
 
+  // Issue #333: the robots.txt Disallow check — action as sent on the wire.
+  interface RobotsDisallowState {
+    enabled: boolean;
+    action: 'Warn' | 'Skip' | 'Abort';
+  }
+
   interface PaginationState {
     enabled: boolean;
     kind: 'nextLink' | 'pageNumber';

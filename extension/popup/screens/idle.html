@@ -271,6 +271,21 @@
             <span data-i18n="idle.respectRobotsDelayToggle"></span>
           </label>
           <p class="preview-summary" data-i18n="idle.respectRobotsDelayHint"></p>
+          <!-- Issue #333: the script re-checks robots.txt Disallow at run time
+               and handles a disallowed request per the chosen action. -->
+          <label class="output-settings-toggle">
+            <input type="checkbox" id="toggle-robots-disallow" />
+            <span data-i18n="idle.robotsDisallowToggle"></span>
+          </label>
+          <div id="robots-disallow-config" class="output-settings-row hidden">
+            <label for="select-robots-disallow-action" data-i18n="idle.robotsDisallowActionLabel"></label>
+            <select id="select-robots-disallow-action">
+              <option value="Skip" data-i18n="idle.robotsDisallowActionSkip"></option>
+              <option value="Warn" data-i18n="idle.robotsDisallowActionWarn"></option>
+              <option value="Abort" data-i18n="idle.robotsDisallowActionAbort"></option>
+            </select>
+          </div>
+          <p class="preview-summary" data-i18n="idle.robotsDisallowHint"></p>
           <!-- Issue #223: opt-in retry with backoff on transient request
                failures (connection errors/timeouts, 429/502/503/504 by
                default) — mode- and engine-independent. -->

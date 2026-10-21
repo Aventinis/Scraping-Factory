@@ -258,11 +258,19 @@ def scrape(url):
             next_href = next_el.get_attribute("href") if next_el else None
             if not next_href:
                 break
+{{~ if robots_check.enabled ~}}
+            if not _robots_gate(urllib.parse.urljoin(page.url, next_href)):
+                break
+{{~ end ~}}
 {{~ if request_delay.enabled ~}}
             _pace_request()
 {{~ end ~}}
             _goto_checked(page, urllib.parse.urljoin(page.url, next_href))
 {{~ else ~}}
+{{~ if robots_check.enabled ~}}
+            if not _robots_gate(PAGINATION_URL_TEMPLATE.format(url=url, page=page_number)):
+                break
+{{~ end ~}}
 {{~ if request_delay.enabled ~}}
             _pace_request()
 {{~ end ~}}
