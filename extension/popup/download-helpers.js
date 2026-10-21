@@ -45,7 +45,15 @@ function triggerDownload(bridge) {
 // the full dataset, not the capped preview sample. MIME type is picked from
 // the file's own extension purely for a nicer browser "open with" hint;
 // the `download` attribute forces a save regardless.
-const OUTPUT_FILE_MIME_TYPES = { csv: 'text/csv', xml: 'application/xml', json: 'application/json' };
+const OUTPUT_FILE_MIME_TYPES = {
+  csv: 'text/csv', xml: 'application/xml', json: 'application/json',
+  sqlite: 'application/vnd.sqlite3',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
+// Issue #229: the binary table formats travel as base64 text (in the
+// /generate response and in a saved output's stored content alike); the file
+// extension tells which content needs decoding back into bytes.
+const BINARY_OUTPUT_EXTENSIONS = ['sqlite', 'xlsx'];
 
 // Extracted so Issue #202's "download a saved output" action (a fetched
 // SavedOutputRecord, not _state.outputFile) can reuse the exact same
@@ -53,7 +61,10 @@ const OUTPUT_FILE_MIME_TYPES = { csv: 'text/csv', xml: 'application/xml', json: 
 function downloadFile(fileName, content) {
   log('DOWNLOAD_OUTPUT', fileName);
   const extension = fileName.split('.').pop()?.toLowerCase();
-  const blob = new Blob([content], { type: OUTPUT_FILE_MIME_TYPES[extension] || 'text/plain' });
+  const part = BINARY_OUTPUT_EXTENSIONS.includes(extension)
+    ? Uint8Array.from(atob(content), (c) => c.charCodeAt(0))
+    : content;
+  const blob = new Blob([part], { type: OUTPUT_FILE_MIME_TYPES[extension] || 'text/plain' });
   const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = objectUrl;
@@ -98,7 +109,7 @@ async function downloadConfigExport(bridge) {
   const exportObj = buildConfigExport(
     state.url, state.mode, state.fields, state.groups, manifest, state.apiConfig,
     state.scriptFileName, state.outputFileName, state.engine, state.browserActions, globalSettings.includeDataPreview,
-    globalSettings.outputAsJson, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
+    globalSettings.outputFormat, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
     state.pagination, state.persistentSession, false, globalSettings.externalConfig, combinedComponents, state.blocks,
     state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
     state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,

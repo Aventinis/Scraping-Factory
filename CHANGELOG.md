@@ -1,5 +1,48 @@
 # Changelog
 
+## [1.19.0](https://github.com/Aventinis/Scraping-Factory/compare/v1.18.4...v1.19.0) (2026-10-21)
+
+
+### Miscellaneous Chores
+
+* **release:** promote to 1.19.0 ([ed2e088](https://github.com/Aventinis/Scraping-Factory/commit/ed2e088be368467d3d4b6be9bee75a5fbf70c9c7))
+
+## [1.18.4](https://github.com/Aventinis/Scraping-Factory/compare/v1.18.3...v1.18.4) (2026-10-21)
+
+
+### Features
+
+* **auth:** access key in the extension, installer flags, docs and real-browser check ([946bb6a](https://github.com/Aventinis/Scraping-Factory/commit/946bb6a52b21826047b66b41e495b97547017e29))
+* **auth:** optional per-user authentication — access keys, owner-scoped stores, user commands ([a87980d](https://github.com/Aventinis/Scraping-Factory/commit/a87980dc0c78a5775e2b972acff79f005bb4ddc2))
+* optional per-user authentication for a shared companion ([#278](https://github.com/Aventinis/Scraping-Factory/issues/278)) ([908585f](https://github.com/Aventinis/Scraping-Factory/commit/908585ff761ef27a8b4e2c728452c2602d5fdce2))
+
+## [1.18.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.18.2...v1.18.3) (2026-10-20)
+
+
+### Features
+
+* MySQL storage backend for the companion ([#277](https://github.com/Aventinis/Scraping-Factory/issues/277)) ([5f4cb8a](https://github.com/Aventinis/Scraping-Factory/commit/5f4cb8aa3e2124fbff4c6a3a11231be21ff1f2ac))
+* **storage:** MySQL backend for saved configurations, outputs, blueprints and presets ([d198998](https://github.com/Aventinis/Scraping-Factory/commit/d1989982025fb963e141023e269456e8711df6e7))
+
+## [1.18.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.18.1...v1.18.2) (2026-10-20)
+
+
+### Features
+
+* installable release bundles — self-contained companion, installer, autostart ([#346](https://github.com/Aventinis/Scraping-Factory/issues/346)) ([43d567f](https://github.com/Aventinis/Scraping-Factory/commit/43d567fc3453aff4fd741ec5f5297e9105612bb3))
+* **installer:** optional per-user companion settings file as a configuration source ([7e7355a](https://github.com/Aventinis/Scraping-Factory/commit/7e7355a7427ad426d2776e4b9482c77fc939e758))
+* **installer:** release bundles with installer scripts and a workflow attaching them to releases ([5f50ce6](https://github.com/Aventinis/Scraping-Factory/commit/5f50ce6ba2aac88785bf4e053a0bdc3a20ad833d))
+
+## [1.18.1](https://github.com/Aventinis/Scraping-Factory/compare/v1.18.0...v1.18.1) (2026-10-20)
+
+
+### Features
+
+* SQLite and Excel output formats ([#229](https://github.com/Aventinis/Scraping-Factory/issues/229)) ([6d80ee2](https://github.com/Aventinis/Scraping-Factory/commit/6d80ee238a7c0bed0afccc36dab67e9859398629))
+* **tabular-output:** Output format setting with SQLite and Excel, base64 file download ([ee106c4](https://github.com/Aventinis/Scraping-Factory/commit/ee106c43c96bb0758a8ee36a4d5abcae1e1fe56e))
+* **tabular-output:** saved SQLite/Excel outputs are not replayable; endpoint tests ([4ec6a9d](https://github.com/Aventinis/Scraping-Factory/commit/4ec6a9dbd8bc8dc1e5a5bf7acfc03e917f1636c2))
+* **tabular-output:** write SQLite and Excel files from flat and flattened tree results ([fca424f](https://github.com/Aventinis/Scraping-Factory/commit/fca424f028d17fd4e9095f0ecd0873f5b7034a86))
+
 ## [1.18.0](https://github.com/Aventinis/Scraping-Factory/compare/v1.17.12...v1.18.0) (2026-10-20)
 
 

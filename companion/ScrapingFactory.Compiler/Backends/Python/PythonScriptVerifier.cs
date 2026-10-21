@@ -91,6 +91,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
             {
                 OutputFormat.Xml => VerifyXmlOutput(workDir, outputFileBaseName, includePreview, includeOutputFile),
                 OutputFormat.Json => VerifyJsonOutput(workDir, outputFileBaseName, includePreview, includeOutputFile),
+                OutputFormat.Sqlite or OutputFormat.Xlsx => await VerifyTabularOutputAsync(workDir, outputFormat, outputFileBaseName, includePreview, includeOutputFile, ct),
                 _ => await VerifyCsvOutput(workDir, outputFileBaseName, includePreview, includeOutputFile, ct),
             };
         }
@@ -167,6 +168,8 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
     {
         OutputFormat.Xml => $"{baseName}.xml",
         OutputFormat.Json => $"{baseName}.json",
+        OutputFormat.Sqlite => $"{baseName}.sqlite",
+        OutputFormat.Xlsx => $"{baseName}.xlsx",
         _ => $"{baseName}.csv",
     };
 
@@ -341,6 +344,94 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
             OutputFileContent = includeOutputFile ? await File.ReadAllTextAsync(csvPath, ct) : null,
             OutputFileName = includeOutputFile ? csvFileName : null,
         };
+    }
+
+    // Issue #229: the same "at least one data row" check for the binary table
+    // formats. The file is read back by a tiny Python helper (sqlite3 from the
+    // stdlib; openpyxl for .xlsx, which the script itself needed anyway) so
+    // the companion needs no extra .NET dependency for it. The raw bytes are
+    // returned base64-encoded for the download (OutputFileEncoding).
+    private const string ReadTableScript = """
+import json, sys
+path, fmt, cap = sys.argv[1], sys.argv[2], int(sys.argv[3])
+if fmt == "sqlite":
+    import sqlite3
+    connection = sqlite3.connect(path)
+    cursor = connection.execute('SELECT * FROM "data"')
+    columns = [d[0] for d in cursor.description]
+    rows = cursor.fetchall()
+else:
+    from openpyxl import load_workbook
+    sheet = load_workbook(path, read_only=True).active
+    table = list(sheet.iter_rows(values_only=True))
+    columns = [str(c) for c in table[0]] if table else []
+    rows = table[1:]
+text = lambda v: "" if v is None else str(v)
+print(json.dumps({"columns": columns, "count": len(rows), "rows": [[text(v) for v in r] for r in rows[:cap]]}))
+""";
+
+    private async Task<ScriptVerificationResult> VerifyTabularOutputAsync(
+        string workDir, OutputFormat format, string outputFileBaseName, bool includePreview, bool includeOutputFile, CancellationToken ct)
+    {
+        var fileName = ExpectedFileName(format, outputFileBaseName);
+        var path = Path.Combine(workDir, fileName);
+        if (!File.Exists(path))
+            return new ScriptVerificationResult { Success = false, Error = $"Script did not produce {fileName}." };
+
+        var helperPath = Path.Combine(workDir, "read_output.py");
+        await File.WriteAllTextAsync(helperPath, ReadTableScript, ct);
+        var (process, _) = StartProcess(helperPath, workDir, null, path, format == OutputFormat.Sqlite ? "sqlite" : "xlsx", PreviewSampleCap.ToString(CultureInfo.InvariantCulture));
+        if (process is null)
+            return new ScriptVerificationResult { Success = false, Error = "No Python interpreter found to read the output file back." };
+
+        using (process)
+        {
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
+            var stderrTask = process.StandardError.ReadToEndAsync(ct);
+            await process.WaitForExitAsync(ct);
+            var stdout = await stdoutTask;
+            if (process.ExitCode != 0)
+                return new ScriptVerificationResult { Success = false, Error = $"Could not read {fileName} back: {Truncate(await stderrTask)}" };
+
+            using var document = JsonDocument.Parse(stdout);
+            var count = document.RootElement.GetProperty("count").GetInt32();
+            if (count == 0)
+            {
+                return new ScriptVerificationResult
+                {
+                    Success = false,
+                    Error = "Script ran without errors but returned no data " +
+                            $"({fileName} contains only the header row) — at least one selector or request likely found nothing.",
+                };
+            }
+
+            ScriptPreviewData? preview = null;
+            if (includePreview)
+            {
+                var columns = document.RootElement.GetProperty("columns").EnumerateArray().Select(c => c.GetString() ?? "").ToList();
+                var rows = document.RootElement.GetProperty("rows").EnumerateArray().Select(r =>
+                {
+                    var values = r.EnumerateArray().Select(v => v.GetString() ?? "").ToList();
+                    var row = new Dictionary<string, string>();
+                    for (var i = 0; i < columns.Count; i++)
+                        row[columns[i]] = i < values.Count ? values[i] : "";
+                    return (IReadOnlyDictionary<string, string>)row;
+                }).ToList();
+                preview = new ScriptPreviewData
+                {
+                    OutputFormat = format.ToString(), TotalCount = count, Truncated = count > PreviewSampleCap,
+                    Columns = columns, Rows = rows,
+                };
+            }
+
+            return new ScriptVerificationResult
+            {
+                Success = true, RowCount = count, Preview = preview,
+                OutputFileContent = includeOutputFile ? Convert.ToBase64String(await File.ReadAllBytesAsync(path, ct)) : null,
+                OutputFileEncoding = includeOutputFile ? "base64" : null,
+                OutputFileName = includeOutputFile ? fileName : null,
+            };
+        }
     }
 
     // XML analog of the CSV "at least one data row" check above: output.xml
@@ -598,7 +689,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
     }
 
     private (Process? Process, string? Executable) StartProcess(
-        string scriptPath, string workDir, IReadOnlyDictionary<string, string>? extraEnv)
+        string scriptPath, string workDir, IReadOnlyDictionary<string, string>? extraEnv, params string[] arguments)
     {
         foreach (var candidate in _candidates)
         {
@@ -612,6 +703,8 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
                 CreateNoWindow = true,
             };
             psi.ArgumentList.Add(scriptPath);
+            foreach (var argument in arguments)
+                psi.ArgumentList.Add(argument);
             if (extraEnv is not null)
             {
                 foreach (var (key, value) in extraEnv)

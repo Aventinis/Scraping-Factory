@@ -67,7 +67,7 @@ URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
 # mapping (BLUEPRINT_TREE_MAPPING) produces a real nested structure of its
 # own instead, so it keeps the ordinary tree extensions like an unmapped tree
 # output would.
-OUTPUT_PATH = "{{ output_filename }}.{{ if blueprint_mapping_enabled }}{{ if output_is_json }}json{{ else }}csv{{ end }}{{ else }}{{ if output_is_json }}json{{ else }}xml{{ end }}{{ end }}"
+OUTPUT_PATH = "{{ output_filename }}.{{ if blueprint_mapping_enabled }}{{ if output_is_json }}json{{ else if output_is_sqlite }}sqlite{{ else if output_is_xlsx }}xlsx{{ else }}csv{{ end }}{{ else }}{{ if output_is_json }}json{{ else }}xml{{ end }}{{ end }}"
 
 #@include download_static
 
@@ -535,6 +535,9 @@ def scrape(url):
 {{ end }}
 
 
+{{~ if output_is_sqlite || output_is_xlsx ~}}
+#@include output_tabular
+{{~ end ~}}
 #@include main_grouped
 
 

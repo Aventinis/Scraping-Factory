@@ -71,7 +71,7 @@ EMBEDDED_JSON_SOURCE = {{ embedded_json_source_literal }}
 
 # Issue #192: see scraper_grouped.py.j2's own identical doc comment on this
 # same line — an active blueprint mapping flattens this mode's output.
-OUTPUT_PATH = "{{ output_filename }}.{{ if blueprint_mapping_enabled }}{{ if output_is_json }}json{{ else }}csv{{ end }}{{ else }}{{ if output_is_json }}json{{ else }}xml{{ end }}{{ end }}"
+OUTPUT_PATH = "{{ output_filename }}.{{ if blueprint_mapping_enabled }}{{ if output_is_json }}json{{ else if output_is_sqlite }}sqlite{{ else if output_is_xlsx }}xlsx{{ else }}csv{{ end }}{{ else }}{{ if output_is_json }}json{{ else }}xml{{ end }}{{ end }}"
 
 # Issue #192: optional Output Blueprint field mapping. Unlike Container-Mode
 # (scraper_grouped.py.j2), there's no OutputBlueprintFlattening call on the
@@ -450,6 +450,10 @@ def scrape():
 #@include dedup_tree
 {{ end }}
 
+{{~ if output_is_sqlite || output_is_xlsx ~}}
+#@include output_tabular
+{{~ end ~}}
+
 
 def main():
 {{~ if change_detection.enabled ~}}
@@ -465,6 +469,10 @@ def main():
 {{~ if output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(output_rows, f, ensure_ascii=False, indent=2)
+{{~ else if output_is_sqlite ~}}
+    _write_rows_sqlite(OUTPUT_PATH, output_fieldnames, output_rows)
+{{~ else if output_is_xlsx ~}}
+    _write_rows_xlsx(OUTPUT_PATH, output_fieldnames, output_rows)
 {{~ else ~}}
     with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=output_fieldnames)

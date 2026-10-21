@@ -13,10 +13,10 @@ describe('loadGlobalSettings / getGlobalSettings', () => {
 
   test('a stored value takes precedence, merged over the defaults', async () => {
     global.chrome = {
-      storage: { local: { get: jest.fn().mockResolvedValue({ globalSettings: { outputAsJson: true, scriptNameMode: 'hostname' } }) } },
+      storage: { local: { get: jest.fn().mockResolvedValue({ globalSettings: { outputFormat: 'sqlite', scriptNameMode: 'hostname' } }) } },
     };
     const result = await loadGlobalSettings();
-    expect(result.outputAsJson).toBe(true);
+    expect(result.outputFormat).toBe('sqlite');
     expect(result.scriptNameMode).toBe('hostname');
     // Untouched keys still fall back to the defaults.
     expect(result.includeDataPreview).toBe(false);

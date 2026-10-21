@@ -1,0 +1,45 @@
+name: release-bundles
+
+# Issue #346: attaches the installable bundles (self-contained companion for
+# Windows/Linux/macOS + the unpacked extension + installer scripts, built by
+# install/build-bundle.sh) to a GitHub Release. Runs whenever a Release is
+# published — release-please creates one per version (see release-please.yml)
+# — and can be started by hand for an existing tag (e.g. to rebuild or to
+# backfill a release that predates this workflow).
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build and attach the bundles to (e.g. v1.18.1)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  bundles:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build one bundle per platform
+        run: |
+          version="${TAG#v}"
+          for rid in win-x64 linux-x64 osx-arm64 osx-x64; do
+            install/build-bundle.sh "$rid" "$version" dist
+          done
+          ls -lh dist
+
+      - name: Attach the bundles to the release
+        run: gh release upload "$TAG" dist/* --clobber --repo "${{ github.repository }}"

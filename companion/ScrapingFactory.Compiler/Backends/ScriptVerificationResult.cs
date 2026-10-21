@@ -27,6 +27,11 @@ public sealed class ScriptVerificationResult
     // the user without re-deriving the extension itself.
     public string? OutputFileName { get; init; }
 
+    // Issue #229: null for the text formats (the content is the file's own
+    // text); "base64" for the binary table formats (.sqlite/.xlsx), whose
+    // bytes cannot travel as a JSON string otherwise.
+    public string? OutputFileEncoding { get; init; }
+
     // Issue #182: only set by VerifyBlocksAsync (never by VerifyAsync) when
     // Success is true — one entry per block, in the same order the caller's
     // own block list was given in. RowCount/Preview/OutputFileContent/

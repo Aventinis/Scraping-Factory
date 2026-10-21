@@ -25,7 +25,7 @@ public sealed record SavedOutputSummary(long Id, long SavedConfigId, string Name
 public sealed record SavedOutputRecord(
     long Id, long SavedConfigId, string Name, string FileName, string SavedAt, string Content);
 
-public sealed class SavedConfigStore
+public sealed class SavedConfigStore : ISavedConfigStore
 {
     private readonly string _connectionString;
 
@@ -63,7 +63,7 @@ public sealed class SavedConfigStore
     // A saved url isn't always a well-formed absolute URI (a hand-edited
     // export could carry anything) — falls back to the raw string so lookups
     // still work consistently for that same raw value, rather than throwing.
-    private static string ComputeHost(string url) =>
+    internal static string ComputeHost(string url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : url;
 
     // Every connection goes through here so that PRAGMA foreign_keys is
@@ -123,6 +123,13 @@ public sealed class SavedConfigStore
         // established for its own SchemaKind/TreeJson columns, so an
         // existing saved-configs.db keeps working unchanged.
         AddColumnIfMissing(connection, "SavedConfigs", "BlueprintId", "INTEGER NULL");
+
+        // Issue #278: which user a configuration belongs to — 0 is "nobody in
+        // particular", i.e. a companion without authentication (every
+        // pre-existing row defaults to it, so an existing database keeps
+        // working unchanged). Saved outputs have no owner column of their own:
+        // they are scoped through their configuration.
+        AddColumnIfMissing(connection, "SavedConfigs", "OwnerId", "INTEGER NOT NULL DEFAULT 0");
     }
 
     private static void AddColumnIfMissing(SqliteConnection connection, string tableName, string columnName, string columnDefinition)
@@ -147,14 +154,14 @@ public sealed class SavedConfigStore
     // configuration hardening-comparison feature scoped by blueprint" —
     // this is that feature). Null when the config has no Output Blueprint
     // mapping set, same as the wire field itself.
-    public SavedConfigSummary Save(string url, string name, string configJson, long? blueprintId = null)
+    public SavedConfigSummary Save(string url, string name, string configJson, long? blueprintId = null, long ownerId = 0)
     {
         var savedAt = DateTimeOffset.UtcNow.ToString("O");
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO SavedConfigs (Url, Host, Name, SavedAt, ConfigJson, BlueprintId)
-            VALUES (@url, @host, @name, @savedAt, @configJson, @blueprintId);
+            INSERT INTO SavedConfigs (Url, Host, Name, SavedAt, ConfigJson, BlueprintId, OwnerId)
+            VALUES (@url, @host, @name, @savedAt, @configJson, @blueprintId, @ownerId);
             SELECT last_insert_rowid();
             """;
         command.Parameters.AddWithValue("@url", url);
@@ -163,20 +170,22 @@ public sealed class SavedConfigStore
         command.Parameters.AddWithValue("@savedAt", savedAt);
         command.Parameters.AddWithValue("@configJson", configJson);
         command.Parameters.AddWithValue("@blueprintId", (object?)blueprintId ?? DBNull.Value);
+        command.Parameters.AddWithValue("@ownerId", ownerId);
         var id = (long)command.ExecuteScalar()!;
         return new SavedConfigSummary(id, url, name, savedAt, blueprintId);
     }
 
-    public IReadOnlyList<SavedConfigSummary> ListByUrl(string url)
+    public IReadOnlyList<SavedConfigSummary> ListByUrl(string url, long ownerId = 0)
     {
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT Id, Url, Name, SavedAt, BlueprintId FROM SavedConfigs
-            WHERE Host = @host
+            WHERE Host = @host AND OwnerId = @ownerId
             ORDER BY SavedAt DESC;
             """;
         command.Parameters.AddWithValue("@host", ComputeHost(url));
+        command.Parameters.AddWithValue("@ownerId", ownerId);
 
         var results = new List<SavedConfigSummary>();
         using var reader = command.ExecuteReader();
@@ -192,11 +201,12 @@ public sealed class SavedConfigStore
     // Issue #239: unscoped counterpart to ListByUrl — every saved config
     // regardless of host, needed by Combined mode's component picker (a
     // component can come from any previously-scraped site).
-    public IReadOnlyList<SavedConfigSummary> ListAll()
+    public IReadOnlyList<SavedConfigSummary> ListAll(long ownerId = 0)
     {
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT Id, Url, Name, SavedAt, BlueprintId FROM SavedConfigs ORDER BY SavedAt DESC;";
+        command.CommandText = "SELECT Id, Url, Name, SavedAt, BlueprintId FROM SavedConfigs WHERE OwnerId = @ownerId ORDER BY SavedAt DESC;";
+        command.Parameters.AddWithValue("@ownerId", ownerId);
 
         var results = new List<SavedConfigSummary>();
         using var reader = command.ExecuteReader();
@@ -209,12 +219,13 @@ public sealed class SavedConfigStore
         return results;
     }
 
-    public SavedConfigRecord? Get(long id)
+    public SavedConfigRecord? Get(long id, long ownerId = 0)
     {
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT Id, Url, Name, SavedAt, ConfigJson, BlueprintId FROM SavedConfigs WHERE Id = @id;";
+        command.CommandText = "SELECT Id, Url, Name, SavedAt, ConfigJson, BlueprintId FROM SavedConfigs WHERE Id = @id AND OwnerId = @ownerId;";
         command.Parameters.AddWithValue("@id", id);
+        command.Parameters.AddWithValue("@ownerId", ownerId);
 
         using var reader = command.ExecuteReader();
         if (!reader.Read()) return null;
@@ -223,12 +234,13 @@ public sealed class SavedConfigStore
             reader.IsDBNull(5) ? null : reader.GetInt64(5));
     }
 
-    public bool Delete(long id)
+    public bool Delete(long id, long ownerId = 0)
     {
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
-        command.CommandText = "DELETE FROM SavedConfigs WHERE Id = @id;";
+        command.CommandText = "DELETE FROM SavedConfigs WHERE Id = @id AND OwnerId = @ownerId;";
         command.Parameters.AddWithValue("@id", id);
+        command.Parameters.AddWithValue("@ownerId", ownerId);
         return command.ExecuteNonQuery() > 0;
     }
 
@@ -240,35 +252,48 @@ public sealed class SavedConfigStore
     // being deleted *after* an output was linked to it, not against linking
     // to a nonexistent id in the first place (SQLite only enforces that at
     // insert time via the same PRAGMA, which OpenConnection already sets).
-    public SavedOutputSummary SaveOutput(long savedConfigId, string name, string fileName, string content)
+    public SavedOutputSummary SaveOutput(long savedConfigId, string name, string fileName, string content, long ownerId = 0)
     {
         var savedAt = DateTimeOffset.UtcNow.ToString("O");
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = """
             INSERT INTO SavedOutputs (SavedConfigId, Name, FileName, SavedAt, Content)
-            VALUES (@savedConfigId, @name, @fileName, @savedAt, @content);
+            SELECT Id, @name, @fileName, @savedAt, @content FROM SavedConfigs WHERE Id = @savedConfigId AND OwnerId = @ownerId;
             SELECT last_insert_rowid();
             """;
         command.Parameters.AddWithValue("@savedConfigId", savedConfigId);
+        command.Parameters.AddWithValue("@ownerId", ownerId);
         command.Parameters.AddWithValue("@name", name);
         command.Parameters.AddWithValue("@fileName", fileName);
         command.Parameters.AddWithValue("@savedAt", savedAt);
         command.Parameters.AddWithValue("@content", content);
+        // The INSERT ... SELECT only inserts for a configuration this owner
+        // owns; last_insert_rowid() would otherwise report a stale value.
+        using (var exists = connection.CreateCommand())
+        {
+            exists.CommandText = "SELECT COUNT(*) FROM SavedConfigs WHERE Id = @savedConfigId AND OwnerId = @ownerId;";
+            exists.Parameters.AddWithValue("@savedConfigId", savedConfigId);
+            exists.Parameters.AddWithValue("@ownerId", ownerId);
+            if ((long)exists.ExecuteScalar()! == 0)
+                throw new KeyNotFoundException($"Saved configuration {savedConfigId} does not exist.");
+        }
         var id = (long)command.ExecuteScalar()!;
         return new SavedOutputSummary(id, savedConfigId, name, fileName, savedAt);
     }
 
-    public IReadOnlyList<SavedOutputSummary> ListOutputsByConfigId(long savedConfigId)
+    public IReadOnlyList<SavedOutputSummary> ListOutputsByConfigId(long savedConfigId, long ownerId = 0)
     {
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT Id, SavedConfigId, Name, FileName, SavedAt FROM SavedOutputs
-            WHERE SavedConfigId = @savedConfigId
-            ORDER BY SavedAt DESC;
+            SELECT o.Id, o.SavedConfigId, o.Name, o.FileName, o.SavedAt FROM SavedOutputs o
+            JOIN SavedConfigs c ON c.Id = o.SavedConfigId
+            WHERE o.SavedConfigId = @savedConfigId AND c.OwnerId = @ownerId
+            ORDER BY o.SavedAt DESC;
             """;
         command.Parameters.AddWithValue("@savedConfigId", savedConfigId);
+        command.Parameters.AddWithValue("@ownerId", ownerId);
 
         var results = new List<SavedOutputSummary>();
         using var reader = command.ExecuteReader();
@@ -280,13 +305,17 @@ public sealed class SavedConfigStore
         return results;
     }
 
-    public SavedOutputRecord? GetOutput(long id)
+    public SavedOutputRecord? GetOutput(long id, long ownerId = 0)
     {
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
-        command.CommandText =
-            "SELECT Id, SavedConfigId, Name, FileName, SavedAt, Content FROM SavedOutputs WHERE Id = @id;";
+        command.CommandText = """
+            SELECT o.Id, o.SavedConfigId, o.Name, o.FileName, o.SavedAt, o.Content FROM SavedOutputs o
+            JOIN SavedConfigs c ON c.Id = o.SavedConfigId
+            WHERE o.Id = @id AND c.OwnerId = @ownerId;
+            """;
         command.Parameters.AddWithValue("@id", id);
+        command.Parameters.AddWithValue("@ownerId", ownerId);
 
         using var reader = command.ExecuteReader();
         if (!reader.Read()) return null;
@@ -295,12 +324,13 @@ public sealed class SavedConfigStore
             reader.GetString(4), reader.GetString(5));
     }
 
-    public bool DeleteOutput(long id)
+    public bool DeleteOutput(long id, long ownerId = 0)
     {
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
-        command.CommandText = "DELETE FROM SavedOutputs WHERE Id = @id;";
+        command.CommandText = "DELETE FROM SavedOutputs WHERE Id = @id AND SavedConfigId IN (SELECT Id FROM SavedConfigs WHERE OwnerId = @ownerId);";
         command.Parameters.AddWithValue("@id", id);
+        command.Parameters.AddWithValue("@ownerId", ownerId);
         return command.ExecuteNonQuery() > 0;
     }
 
@@ -311,18 +341,20 @@ public sealed class SavedConfigStore
     // "no drop"). Closest in spirit to the live runtime's own Baseline
     // check, just sourced from this SQLite history instead of a script-local
     // sidecar file.
-    public SavedOutputSummary? GetMostRecentOutputForConfig(long savedConfigId, long excludeOutputId)
+    public SavedOutputSummary? GetMostRecentOutputForConfig(long savedConfigId, long excludeOutputId, long ownerId = 0)
     {
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT Id, SavedConfigId, Name, FileName, SavedAt FROM SavedOutputs
-            WHERE SavedConfigId = @savedConfigId AND Id != @excludeOutputId
-            ORDER BY SavedAt DESC
+            SELECT o.Id, o.SavedConfigId, o.Name, o.FileName, o.SavedAt FROM SavedOutputs o
+            JOIN SavedConfigs c ON c.Id = o.SavedConfigId
+            WHERE o.SavedConfigId = @savedConfigId AND o.Id != @excludeOutputId AND c.OwnerId = @ownerId
+            ORDER BY o.SavedAt DESC
             LIMIT 1;
             """;
         command.Parameters.AddWithValue("@savedConfigId", savedConfigId);
         command.Parameters.AddWithValue("@excludeOutputId", excludeOutputId);
+        command.Parameters.AddWithValue("@ownerId", ownerId);
 
         using var reader = command.ExecuteReader();
         if (!reader.Read()) return null;
@@ -336,7 +368,7 @@ public sealed class SavedConfigStore
     // excluding the output currently being evaluated. One join against the
     // BlueprintId column EnsureCreated adds above, rather than a full-table
     // scan parsing every config's own ConfigJson.
-    public SavedOutputSummary? GetMostRecentOutputForBlueprint(long blueprintId, long excludeOutputId)
+    public SavedOutputSummary? GetMostRecentOutputForBlueprint(long blueprintId, long excludeOutputId, long ownerId = 0)
     {
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
@@ -344,16 +376,28 @@ public sealed class SavedConfigStore
             SELECT o.Id, o.SavedConfigId, o.Name, o.FileName, o.SavedAt
             FROM SavedOutputs o
             JOIN SavedConfigs c ON c.Id = o.SavedConfigId
-            WHERE c.BlueprintId = @blueprintId AND o.Id != @excludeOutputId
+            WHERE c.BlueprintId = @blueprintId AND o.Id != @excludeOutputId AND c.OwnerId = @ownerId
             ORDER BY o.SavedAt DESC
             LIMIT 1;
             """;
         command.Parameters.AddWithValue("@blueprintId", blueprintId);
         command.Parameters.AddWithValue("@excludeOutputId", excludeOutputId);
+        command.Parameters.AddWithValue("@ownerId", ownerId);
 
         using var reader = command.ExecuteReader();
         if (!reader.Read()) return null;
         return new SavedOutputSummary(
             reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2), reader.GetString(3), reader.GetString(4));
+    }
+
+    // Issue #278: hands every configuration saved while the companion had no
+    // authentication (owner 0) to a user — what `user adopt` calls.
+    public int ClaimUnowned(long ownerId)
+    {
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE SavedConfigs SET OwnerId = @ownerId WHERE OwnerId = 0;";
+        command.Parameters.AddWithValue("@ownerId", ownerId);
+        return command.ExecuteNonQuery();
     }
 }

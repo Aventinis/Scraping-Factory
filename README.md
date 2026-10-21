@@ -55,6 +55,34 @@ deploy.
 > expected to work**, but neither has actually been verified yet — if you try
 > it there, feedback (or a bug report) via GitHub issues is very welcome.
 
+### Quick install (release bundle)
+
+Every [GitHub Release](../../releases) carries a bundle per platform
+(`scraping-factory-<version>-win-x64.zip`, `-linux-x64.tar.gz`, `-osx-arm64.tar.gz`,
+`-osx-x64.tar.gz`) with a ready-to-run companion (no .NET SDK needed), the
+unpacked extension and an installer. You only need **Python 3.9+** on your
+machine. Unpack the bundle and run:
+
+```bash
+./install.sh --autostart          # Linux / macOS
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Autostart   # Windows
+```
+
+The installer creates its own Python environment (requests, beautifulsoup4,
+openpyxl; `--browser-engine` adds Playwright + Chromium), starts the companion
+and, with `--autostart`, starts it at every login. It then prints the folder to
+choose under **Load unpacked** on your browser's extensions page — a browser
+doesn't let an installer add an extension silently, so that one step stays
+manual. See `INSTALL.md` inside the bundle for all options and
+`uninstall.sh` / `uninstall.ps1` to remove it again. (The programs are not
+code-signed; macOS/Windows may ask for confirmation on the first start. The
+Windows installer has not been tested yet.)
+
+The steps below are the manual route, e.g. for development.
+
 ### 1. Run the companion app
 
 Requirements:
@@ -67,6 +95,9 @@ Requirements:
 - Optional, only if you plan to use the **browser engine** (for dynamically
   rendered pages or login flows): `pip install playwright` followed by
   `playwright install chromium`
+- Optional, only if you plan to write the result as an **Excel** file
+  (output format "Excel"): `pip install openpyxl`. The SQLite format needs
+  nothing beyond Python itself.
 
 Then, from the repository root:
 
@@ -80,6 +111,32 @@ taken, or the companion runs on a different machine than the browser, see
 `Companion:Port`, also overridable via e.g. a `Companion__Port=5050`
 environment variable) — the extension has a matching "point me at a different
 address" screen if the default isn't reachable.
+
+**Where your saved data lives.** Saved configurations, saved outputs, Output
+Blueprints and transform presets are kept in local SQLite files in your user
+folder by default. To use a MySQL/MariaDB database instead (e.g. a shared
+server), set `Companion:Storage:Provider` to `MySql` and
+`Companion:Storage:MySql:ConnectionString` — in `appsettings.json`, as
+environment variables (`Companion__Storage__Provider=MySql`,
+`Companion__Storage__MySql__ConnectionString=Server=…;Database=…;User ID=…;Password=…`)
+or via the installer (`./install.sh --mysql "<connection string>"`). The
+database must already exist; the tables are created on first use. Existing
+local data is not migrated, and all users of one companion share the same data
+(unless you switch on per-user authentication, see below).
+
+**Sharing one companion between several people.** Set
+`Companion:Auth:Enabled` to `true` (or install with `--enable-auth`) and create a
+user for everyone on the machine that runs the companion:
+`ScrapingFactory.Companion user add alice` prints that user's access key once.
+They enter it in the extension under **Settings → Access key**; from then on
+every request carries it, and each user only ever sees their own saved
+configurations, outputs, Output Blueprints and transform presets. Other
+commands: `user list`, `user rotate <name>`, `user remove <name>`, and
+`user adopt <name>` (hands everything saved before authentication was switched
+on to that user). Authentication is off by default — a companion on your own
+machine needs no login. Note that the companion speaks plain HTTP: when it is
+reachable from other machines, put it behind a TLS-terminating reverse proxy so
+the keys don't travel in clear text.
 
 ### 2. Load the browser extension
 

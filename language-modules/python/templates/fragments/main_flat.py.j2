@@ -59,6 +59,10 @@ def main():
 {{~ if output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(output_rows, f, ensure_ascii=False, indent=2)
+{{~ else if output_is_sqlite ~}}
+    _write_rows_sqlite(OUTPUT_PATH, output_fieldnames, output_rows)
+{{~ else if output_is_xlsx ~}}
+    _write_rows_xlsx(OUTPUT_PATH, output_fieldnames, output_rows)
 {{~ else ~}}
     with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=output_fieldnames)

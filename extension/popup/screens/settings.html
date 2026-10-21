@@ -10,10 +10,16 @@
      (shared/global-settings.js) instead of the per-scrape _state. -->
 <div id="settings-preferences-section">
   <p class="row-label" data-i18n="settings.preferencesTitle"></p>
-  <label class="output-settings-toggle">
-    <input type="checkbox" id="toggle-output-json" />
-    <span data-i18n="idle.outputJsonToggle"></span>
-  </label>
+  <div class="output-settings-row">
+    <label for="select-output-format" data-i18n="settings.outputFormatLabel"></label>
+    <select id="select-output-format">
+      <option value="default" data-i18n="settings.outputFormatDefault"></option>
+      <option value="json" data-i18n="settings.outputFormatJson"></option>
+      <option value="sqlite" data-i18n="settings.outputFormatSqlite"></option>
+      <option value="xlsx" data-i18n="settings.outputFormatXlsx"></option>
+    </select>
+  </div>
+  <p class="preview-summary" data-i18n="settings.outputFormatHint"></p>
   <label class="output-settings-toggle">
     <input type="checkbox" id="toggle-include-data-preview" />
     <span data-i18n="idle.dataPreviewToggle"></span>
@@ -42,6 +48,23 @@
     <input type="text" id="input-script-name-fixed" data-i18n-placeholder="idle.scriptFilenamePlaceholder" autocomplete="off" />
   </div>
   <p class="preview-summary" data-i18n="settings.scriptNameHostnameHint" id="script-name-hostname-hint"></p>
+</div>
+
+<!-- Issue #278: access key for a shared companion with per-user
+     authentication — a device preference (chrome.storage.local via
+     shared/companion-config.js), sent as a Bearer header with every request. -->
+<div id="settings-access-key-section">
+  <p class="row-label" data-i18n="settings.accessKeyTitle"></p>
+  <div class="output-settings-row">
+    <label for="input-access-key" data-i18n="settings.accessKeyLabel"></label>
+    <input type="password" id="input-access-key" data-i18n-placeholder="settings.accessKeyPlaceholder" autocomplete="off" />
+  </div>
+  <div class="output-settings-row">
+    <button id="btn-access-key-save" class="btn-secondary btn-tiny" type="button" data-i18n="settings.accessKeySave"></button>
+    <button id="btn-access-key-clear" class="btn-secondary btn-tiny" type="button" data-i18n="settings.accessKeyClear"></button>
+  </div>
+  <p id="access-key-status" class="preview-summary hidden"></p>
+  <p class="preview-summary" data-i18n="settings.accessKeyHint"></p>
 </div>
 
 <!-- Output Blueprint management — moved here from modal-manage-blueprints

@@ -73,7 +73,7 @@ HIDDEN_FIELD_NAMES = {{ hidden_field_names_literal }}
 # the HTTP response body itself — see _extract_embedded_json below.
 EMBEDDED_JSON_SOURCE = {{ embedded_json_source_literal }}
 
-OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else }}csv{{ end }}"
+OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else if output_is_sqlite }}sqlite{{ else if output_is_xlsx }}xlsx{{ else }}csv{{ end }}"
 
 #@include api_prelude
 
@@ -134,6 +134,10 @@ def scrape():
 #@include dedup_flat
 {{ end }}
 
+{{~ if output_is_sqlite || output_is_xlsx ~}}
+#@include output_tabular
+{{~ end ~}}
+
 
 def main():
 {{~ if change_detection.enabled ~}}
@@ -177,10 +181,16 @@ def main():
 {{~ if dedup.append ~}}
     output_rows = _dedup_with_previous_output(output_rows, fieldnames)
 {{~ end ~}}
+{{~ if output_is_sqlite ~}}
+    _write_rows_sqlite(OUTPUT_PATH, fieldnames, output_rows)
+{{~ else if output_is_xlsx ~}}
+    _write_rows_xlsx(OUTPUT_PATH, fieldnames, output_rows)
+{{~ else ~}}
     with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(output_rows)
+{{~ end ~}}
 {{~ end ~}}
     print(f"Done — {{ if dedup.enabled }}{len(output_rows)}{{ else }}{len(data)}{{ end }} rows written to {OUTPUT_PATH}")
 {{~ if change_detection.enabled ~}}

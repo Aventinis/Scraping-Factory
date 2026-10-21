@@ -228,7 +228,8 @@
     "outputBlueprintNoneOption": "Keiner",
     "manageBlueprintsBtn": "Verwalten",
     "outputBlueprintMappingHint": "Ordne jedem Zielfeld eines der eigenen Quellfelder dieser Konfiguration zu — jedes Zielfeld braucht eine Quelle, bevor das Skript erzeugt werden kann.",
-    "outputBlueprintTreeMappingHint": "Ordne jedem Zielfeld eines der eigenen Quellfelder dieser Konfiguration zu — die Position einer Zielgruppe in der Ausgabe wird automatisch aus ihren zugeordneten Feldern abgeleitet. Jedes Zielfeld braucht eine Quelle, bevor das Skript erzeugt werden kann."
+    "outputBlueprintTreeMappingHint": "Ordne jedem Zielfeld eines der eigenen Quellfelder dieser Konfiguration zu — die Position einer Zielgruppe in der Ausgabe wird automatisch aus ihren zugeordneten Feldern abgeleitet. Jedes Zielfeld braucht eine Quelle, bevor das Skript erzeugt werden kann.",
+    "outputFormatFlattenHint": "Verschachtelte Ergebnisse werden in eine Tabelle flachgezogen: eine Zeile pro innerstem wiederholten Element, Werte höherer Ebenen werden in jeder Zeile wiederholt (oder wähle einen Output Blueprint, um die Spalten selbst festzulegen). Jedes Datenfeld braucht einen eindeutigen Namen."
   },
   "robots": {
     "checkFailed": "robots.txt konnte nicht geprüft werden ({error}).",
@@ -443,7 +444,24 @@
     "scriptNameFixedLabel": "Fester Skriptname",
     "scriptNameHostnameHint": "Der Skriptname wird immer vom Hostnamen der aktuellen Webseite abgeleitet.",
     "allConfigsTitle": "Alle gespeicherten Konfigurationen",
-    "allConfigsEmpty": "Noch keine gespeicherten Konfigurationen."
+    "allConfigsEmpty": "Noch keine gespeicherten Konfigurationen.",
+    "outputFormatLabel": "Ausgabeformat",
+    "outputFormatDefault": "Standard (CSV, XML bei verschachtelten Ergebnissen)",
+    "outputFormatJson": "JSON",
+    "outputFormatSqlite": "SQLite-Datenbank",
+    "outputFormatXlsx": "Excel (.xlsx)",
+    "outputFormatHint": "Die Datei, die das generierte Skript schreibt. SQLite und Excel enthalten eine Tabelle bzw. ein Blatt; verschachtelte Ergebnisse (Container, verschachtelte API-Daten) werden darin flachgezogen. Excel braucht das Python-Paket „openpyxl“ (pip install openpyxl) auf dem Rechner, auf dem Skript und Companion laufen. Nicht für Blocks- oder Combined-Modus verfügbar; nicht mit Änderungserkennung kombinierbar.",
+    "accessKeyTitle": "Zugangsschlüssel (gemeinsamer Companion)",
+    "accessKeyLabel": "Zugangsschlüssel",
+    "accessKeyPlaceholder": "sf_…",
+    "accessKeySave": "Speichern und testen",
+    "accessKeyClear": "Entfernen",
+    "accessKeyHint": "Nur nötig, wenn der Companion, mit dem du dich verbindest, einen persönlichen Zugangsschlüssel verlangt (mehrere Personen teilen sich einen Companion). Wer den Companion betreibt, legt ihn für dich an. Er wird in diesem Browser gespeichert und bei jeder Anfrage an den Companion mitgeschickt.",
+    "accessKeyOk": "Verbunden als {name}.",
+    "accessKeyNotNeeded": "Dieser Companion verwendet keine Zugangsschlüssel.",
+    "accessKeyMissing": "Dieser Companion verlangt einen Zugangsschlüssel.",
+    "accessKeyRejected": "Der Zugangsschlüssel ist nicht gültig.",
+    "accessKeyUnreachable": "Der Companion ist nicht erreichbar."
   },
   "modals": {
     "fieldName": {
@@ -581,7 +599,9 @@
     "blueprintSaveFailed": "Output-Blueprint konnte nicht gespeichert werden: {message}",
     "blueprintImportEmpty": "In der eingefügten Beispieldatei wurden keine Feldnamen gefunden.",
     "blueprintImportParsed": "{count} Feld(er) aus der Beispieldatei importiert.",
-    "blueprintImportFileReadFailed": "Die ausgewählte Datei konnte nicht gelesen werden: {message}"
+    "blueprintImportFileReadFailed": "Die ausgewählte Datei konnte nicht gelesen werden: {message}",
+    "accessKeyRequired": "Dieser Companion verlangt einen Zugangsschlüssel — trage ihn unter Einstellungen ein.",
+    "accessKeyRejected": "Der Companion hat den Zugangsschlüssel abgelehnt — prüfe ihn unter Einstellungen."
   },
   "frame": {
     "badge": "iframe",
@@ -612,7 +632,11 @@
     "maxIterationsLabel": "Max. Durchläufe",
     "waitAfterMsLabel": "Wartezeit (ms)",
     "clickTargetLabel": "Welcher Treffer wird geklickt",
-    "clickTarget": { "first": "Erster Treffer", "last": "Letzter Treffer", "all": "Alle Treffer, der Reihe nach" },
+    "clickTarget": {
+      "first": "Erster Treffer",
+      "last": "Letzter Treffer",
+      "all": "Alle Treffer, der Reihe nach"
+    },
     "scrollStepPxLabel": "Scroll-Schrittweite (px)",
     "scrollStepPxPlaceholder": "leer = ans Ende springen",
     "persistentSessionToggle": "Sitzung zwischen Läufen wiederverwenden",

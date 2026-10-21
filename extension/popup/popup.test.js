@@ -4379,7 +4379,7 @@ describe('output settings (script/output filename)', () => {
   // the current mode would otherwise show (Architecture Decision, Issue #86).
   test('the output extension hint shows .json when the global "Output as JSON" preference is on', async () => {
     const { updateGlobalSettings } = require('../shared/global-settings');
-    await updateGlobalSettings({ outputAsJson: true });
+    await updateGlobalSettings({ outputFormat: 'json' });
     // Any re-render picks the new preference up — switching modes is a
     // convenient one already exercised by the test above.
     document.getElementById('btn-mode-container').click();

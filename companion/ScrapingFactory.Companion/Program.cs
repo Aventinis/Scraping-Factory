@@ -1,11 +1,24 @@
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using ScrapingFactory.Companion;
+using ScrapingFactory.Companion.Auth;
+using ScrapingFactory.Companion.Storage;
 using ScrapingFactory.Compiler.Backends;
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Issue #346: optional per-user settings file (written by the installer).
+CompanionUserSettings.Apply(builder.Configuration, args);
+
+// Issue #278: `ScrapingFactory.Companion user add <name>` etc. — user
+// administration on the machine running the companion, no web host started.
+if (UserCommands.IsUserCommand(args))
+{
+    Environment.ExitCode = UserCommands.Run(args, builder.Configuration);
+    return;
+}
 
 builder.WebHost.UseUrls(CompanionHostOptions.BuildListenUrl(builder.Configuration));
 
@@ -40,23 +53,87 @@ builder.Services.AddSingleton(new LanguageModuleRegistry(CompanionBackendOverrid
 // Issue #141: registered as a type (not a pre-built instance like
 // LanguageModuleRegistry above) so DI only constructs it — and only then
 // resolves/creates the SQLite file — on the first actual /configs request;
-// /health and /generate never touch it.
-builder.Services.AddSingleton<SavedConfigStore>();
+// /health and /generate never touch it. Issue #276: all three stores are
+// registered and injected by interface (ISavedConfigStore/IOutputBlueprintStore/
+// ITransformPresetStore). Issue #277: which implementation backs them (SQLite,
+// the default, or MySQL) is picked from Companion:Storage:* by StorageOptions.
+builder.Services.AddSingleton<ISavedConfigStore>(sp => StorageOptions.CreateSavedConfigStore(sp.GetRequiredService<IConfiguration>()));
 
 // Issue #191: same lazy-construction reasoning as SavedConfigStore above,
 // its own independent store/SQLite file — see OutputBlueprintStore's own
 // doc comment for why this isn't just a third table there.
-builder.Services.AddSingleton<OutputBlueprintStore>();
+builder.Services.AddSingleton<IOutputBlueprintStore>(sp => StorageOptions.CreateOutputBlueprintStore(sp.GetRequiredService<IConfiguration>()));
 
 // Issue #279: same lazy-construction reasoning, its own SQLite file — see
 // TransformPresetStore's own doc comment.
-builder.Services.AddSingleton<TransformPresetStore>();
+builder.Services.AddSingleton<ITransformPresetStore>(sp => StorageOptions.CreateTransformPresetStore(sp.GetRequiredService<IConfiguration>()));
+
+// Issue #278: the users behind the access keys, in the same backend as the data.
+builder.Services.AddSingleton<IUserStore>(sp => StorageOptions.CreateUserStore(sp.GetRequiredService<IConfiguration>()));
 
 var app = builder.Build();
 
+// Issue #277: fail fast on an unknown storage provider / missing MySQL
+// connection string (no connection is opened here).
+StorageOptions.Validate(app.Configuration);
+
 app.UseCors();
 
-app.MapGet("/health", () => Results.Ok());
+// Issue #277: an unreachable or misconfigured MySQL database only shows up
+// when a store is first used (the stores are created lazily, so /health and
+// /generate never need the database) — answer 503 with the driver's message
+// instead of an anonymous 500.
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (MySqlConnector.MySqlException exception) when (!context.Response.HasStarted)
+    {
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        await context.Response.WriteAsJsonAsync(new { error = $"The storage database is not available: {exception.Message}" });
+    }
+});
+
+// Issue #278: optional per-user authentication (Companion:Auth:Enabled, off by
+// default — a local single-user companion keeps today's "no login" behavior).
+// When on, every request except /health (and CORS preflights) must carry
+// `Authorization: Bearer <access key>`; the key resolves to the user whose data
+// every store call is then scoped to (CurrentUser). Without it everything runs
+// as the anonymous owner 0, exactly as before.
+var authEnabled = AuthOptions.IsEnabled(app.Configuration);
+app.Use(async (context, next) =>
+{
+    if (!authEnabled || HttpMethods.IsOptions(context.Request.Method) || context.Request.Path == "/health")
+    {
+        CurrentUser.Set(context, CurrentUser.Anonymous);
+        await next();
+        return;
+    }
+
+    var header = context.Request.Headers.Authorization.ToString();
+    var key = header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? header["Bearer ".Length..].Trim() : "";
+    var user = key.Length > 0 ? context.RequestServices.GetRequiredService<IUserStore>().FindByKey(key) : null;
+    if (user is null)
+    {
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        context.Response.Headers.WWWAuthenticate = "Bearer";
+        await context.Response.WriteAsJsonAsync(new { error = key.Length == 0
+            ? "This companion requires an access key — enter it in the extension's Settings."
+            : "The access key is not valid." });
+        return;
+    }
+    CurrentUser.Set(context, new CurrentUser(user.Id, user.Name));
+    await next();
+});
+
+// authRequired lets the extension know whether to ask for / validate a key.
+app.MapGet("/health", () => Results.Ok(new { authRequired = authEnabled }));
+
+// Issue #278: "who am I" — the extension's Settings screen uses it to check a
+// key (401 when the key is missing/wrong while authentication is on).
+app.MapGet("/whoami", (CurrentUser user) => Results.Ok(new { name = user.Name, authRequired = authEnabled }));
 
 // Issue #141: local SQLite-backed configuration history — save/list/load/
 // delete past per-site configs, so a repeatedly-scraped site's setup doesn't
@@ -64,7 +141,7 @@ app.MapGet("/health", () => Results.Ok());
 // buildConfigExport on the extension side) every time. Purely local/
 // additive: no data ever leaves the user's machine, same trust boundary as
 // the rest of the companion<->extension communication.
-app.MapPost("/configs", (SaveConfigRequest? request, SavedConfigStore store) =>
+app.MapPost("/configs", (SaveConfigRequest? request, ISavedConfigStore store, CurrentUser user) =>
 {
     var url = request?.Url?.Trim();
     var name = request?.Name?.Trim();
@@ -86,7 +163,7 @@ app.MapPost("/configs", (SaveConfigRequest? request, SavedConfigStore store) =>
         ? blueprintIdProp.GetInt64()
         : null;
 
-    var saved = store.Save(url, name, request.Config.GetRawText(), blueprintId);
+    var saved = store.Save(url, name, request.Config.GetRawText(), blueprintId, ownerId: user.Id);
     return Results.Created($"/configs/{saved.Id}", saved);
 });
 
@@ -95,12 +172,12 @@ app.MapPost("/configs", (SaveConfigRequest? request, SavedConfigStore store) =>
 // component picker (a component can come from any previously-scraped site,
 // not just the current tab's hostname). Passing url keeps today's exact
 // hostname-scoped behavior, fully backward compatible.
-app.MapGet("/configs", (string? url, SavedConfigStore store) =>
-    Results.Ok(string.IsNullOrWhiteSpace(url) ? store.ListAll() : store.ListByUrl(url)));
+app.MapGet("/configs", (string? url, ISavedConfigStore store, CurrentUser user) =>
+    Results.Ok(string.IsNullOrWhiteSpace(url) ? store.ListAll(ownerId: user.Id) : store.ListByUrl(url, ownerId: user.Id)));
 
-app.MapGet("/configs/{id:long}", (long id, SavedConfigStore store) =>
+app.MapGet("/configs/{id:long}", (long id, ISavedConfigStore store, CurrentUser user) =>
 {
-    var record = store.Get(id);
+    var record = store.Get(id, ownerId: user.Id);
     if (record is null)
         return Results.NotFound(new { error = "Saved configuration not found." });
 
@@ -115,8 +192,8 @@ app.MapGet("/configs/{id:long}", (long id, SavedConfigStore store) =>
     });
 });
 
-app.MapDelete("/configs/{id:long}", (long id, SavedConfigStore store) =>
-    store.Delete(id) ? Results.NoContent() : Results.NotFound(new { error = "Saved configuration not found." }));
+app.MapDelete("/configs/{id:long}", (long id, ISavedConfigStore store, CurrentUser user) =>
+    store.Delete(id, ownerId: user.Id) ? Results.NoContent() : Results.NotFound(new { error = "Saved configuration not found." }));
 
 // Issue #202: a saved run's actual output data, linked to an already-saved
 // configuration — the "what did a previous run actually return" counterpart
@@ -126,9 +203,9 @@ app.MapDelete("/configs/{id:long}", (long id, SavedConfigStore store) =>
 // the user's machine. Replaying hardening checks against a saved output
 // (once its own separate issue, #207) is its own endpoint further down —
 // see /configs/{configId}/outputs/{id}/replay-hardening below.
-app.MapPost("/configs/{configId:long}/outputs", (long configId, SaveOutputRequest? request, SavedConfigStore store) =>
+app.MapPost("/configs/{configId:long}/outputs", (long configId, SaveOutputRequest? request, ISavedConfigStore store, CurrentUser user) =>
 {
-    if (store.Get(configId) is null)
+    if (store.Get(configId, ownerId: user.Id) is null)
         return Results.NotFound(new { error = "Saved configuration not found." });
 
     var name = request?.Name?.Trim();
@@ -137,34 +214,34 @@ app.MapPost("/configs/{configId:long}/outputs", (long configId, SaveOutputReques
     if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(fileName) || string.IsNullOrEmpty(content))
         return Results.BadRequest(new { error = "Name, FileName and Content are required." });
 
-    var saved = store.SaveOutput(configId, name, fileName, content);
+    var saved = store.SaveOutput(configId, name, fileName, content, ownerId: user.Id);
     return Results.Created($"/configs/{configId}/outputs/{saved.Id}", saved);
 });
 
-app.MapGet("/configs/{configId:long}/outputs", (long configId, SavedConfigStore store) =>
+app.MapGet("/configs/{configId:long}/outputs", (long configId, ISavedConfigStore store, CurrentUser user) =>
 {
-    if (store.Get(configId) is null)
+    if (store.Get(configId, ownerId: user.Id) is null)
         return Results.NotFound(new { error = "Saved configuration not found." });
 
-    return Results.Ok(store.ListOutputsByConfigId(configId));
+    return Results.Ok(store.ListOutputsByConfigId(configId, ownerId: user.Id));
 });
 
-app.MapGet("/configs/{configId:long}/outputs/{id:long}", (long configId, long id, SavedConfigStore store) =>
+app.MapGet("/configs/{configId:long}/outputs/{id:long}", (long configId, long id, ISavedConfigStore store, CurrentUser user) =>
 {
-    var record = store.GetOutput(id);
+    var record = store.GetOutput(id, ownerId: user.Id);
     if (record is null || record.SavedConfigId != configId)
         return Results.NotFound(new { error = "Saved output not found." });
 
     return Results.Ok(record);
 });
 
-app.MapDelete("/configs/{configId:long}/outputs/{id:long}", (long configId, long id, SavedConfigStore store) =>
+app.MapDelete("/configs/{configId:long}/outputs/{id:long}", (long configId, long id, ISavedConfigStore store, CurrentUser user) =>
 {
-    var record = store.GetOutput(id);
+    var record = store.GetOutput(id, ownerId: user.Id);
     if (record is null || record.SavedConfigId != configId)
         return Results.NotFound(new { error = "Saved output not found." });
 
-    return store.DeleteOutput(id) ? Results.NoContent() : Results.NotFound();
+    return store.DeleteOutput(id, ownerId: user.Id) ? Results.NoContent() : Results.NotFound();
 });
 
 // Issue #207: replays hardening checks against this already-saved output —
@@ -179,9 +256,9 @@ app.MapDelete("/configs/{configId:long}/outputs/{id:long}", (long configId, long
 // output originally, per the issue's own "what would today's checks report"
 // framing.
 app.MapPost("/configs/{configId:long}/outputs/{id:long}/replay-hardening",
-    (long configId, long id, ReplayHardeningRequest? request, SavedConfigStore store) =>
+    (long configId, long id, ReplayHardeningRequest? request, ISavedConfigStore store, CurrentUser user) =>
 {
-    var output = store.GetOutput(id);
+    var output = store.GetOutput(id, ownerId: user.Id);
     if (output is null || output.SavedConfigId != configId)
         return Results.NotFound(new { error = "Saved output not found." });
 
@@ -197,10 +274,10 @@ app.MapPost("/configs/{configId:long}/outputs/{id:long}/replay-hardening",
         SavedOutputSummary? previous;
         if (request.CompareBasis == "blueprint")
         {
-            var config = store.Get(configId);
+            var config = store.Get(configId, ownerId: user.Id);
             if (config?.BlueprintId is { } blueprintId)
             {
-                previous = store.GetMostRecentOutputForBlueprint(blueprintId, excludeOutputId: id);
+                previous = store.GetMostRecentOutputForBlueprint(blueprintId, excludeOutputId: id, ownerId: user.Id);
             }
             else
             {
@@ -210,13 +287,16 @@ app.MapPost("/configs/{configId:long}/outputs/{id:long}/replay-hardening",
         }
         else
         {
-            previous = store.GetMostRecentOutputForConfig(configId, excludeOutputId: id);
+            previous = store.GetMostRecentOutputForConfig(configId, excludeOutputId: id, ownerId: user.Id);
         }
 
         if (previous is not null)
         {
-            var previousRecord = store.GetOutput(previous.Id)!;
-            previousResultCount = HardeningReplayEvaluator.GetResultCount(previousRecord.FileName, previousRecord.Content);
+            var previousRecord = store.GetOutput(previous.Id, ownerId: user.Id)!;
+            if (HardeningReplayEvaluator.IsReplayable(previousRecord.FileName))
+                previousResultCount = HardeningReplayEvaluator.GetResultCount(previousRecord.FileName, previousRecord.Content);
+            else
+                previousUnavailableReason = "The earlier saved output is a SQLite/Excel file, which can't be read for a comparison.";
         }
         else
         {
@@ -286,39 +366,39 @@ static (string? Name, string SchemaKind, List<string>? FieldNames, List<OutputBl
     return (name, schemaKind, fieldNames, null, null);
 }
 
-app.MapPost("/blueprints", (SaveBlueprintRequest? request, OutputBlueprintStore store) =>
+app.MapPost("/blueprints", (SaveBlueprintRequest? request, IOutputBlueprintStore store, CurrentUser user) =>
 {
     var (name, schemaKind, fieldNames, tree, error) = ValidateBlueprintRequest(request);
     if (error is not null)
         return Results.BadRequest(new { error });
 
-    var saved = store.Save(name!, schemaKind, fieldNames, tree);
+    var saved = store.Save(name!, schemaKind, fieldNames, tree, ownerId: user.Id);
     return Results.Created($"/blueprints/{saved.Id}", saved);
 });
 
-app.MapGet("/blueprints", (OutputBlueprintStore store) => Results.Ok(store.ListAll()));
+app.MapGet("/blueprints", (IOutputBlueprintStore store, CurrentUser user) => Results.Ok(store.ListAll(ownerId: user.Id)));
 
-app.MapGet("/blueprints/{id:long}", (long id, OutputBlueprintStore store) =>
+app.MapGet("/blueprints/{id:long}", (long id, IOutputBlueprintStore store, CurrentUser user) =>
 {
-    var record = store.Get(id);
+    var record = store.Get(id, ownerId: user.Id);
     return record is null ? Results.NotFound(new { error = "Output blueprint not found." }) : Results.Ok(record);
 });
 
-app.MapPut("/blueprints/{id:long}", (long id, SaveBlueprintRequest? request, OutputBlueprintStore store) =>
+app.MapPut("/blueprints/{id:long}", (long id, SaveBlueprintRequest? request, IOutputBlueprintStore store, CurrentUser user) =>
 {
-    if (store.Get(id) is null)
+    if (store.Get(id, ownerId: user.Id) is null)
         return Results.NotFound(new { error = "Output blueprint not found." });
 
     var (name, schemaKind, fieldNames, tree, error) = ValidateBlueprintRequest(request);
     if (error is not null)
         return Results.BadRequest(new { error });
 
-    store.Update(id, name!, schemaKind, fieldNames, tree);
+    store.Update(id, name!, schemaKind, fieldNames, tree, ownerId: user.Id);
     return Results.Ok(new { id, name, schemaKind, fieldNames, tree });
 });
 
-app.MapDelete("/blueprints/{id:long}", (long id, OutputBlueprintStore store) =>
-    store.Delete(id) ? Results.NoContent() : Results.NotFound(new { error = "Output blueprint not found." }));
+app.MapDelete("/blueprints/{id:long}", (long id, IOutputBlueprintStore store, CurrentUser user) =>
+    store.Delete(id, ownerId: user.Id) ? Results.NoContent() : Results.NotFound(new { error = "Output blueprint not found." }));
 
 // Issue #279: reusable, named transform-chain presets — see
 // TransformPresetStore. A preset is validated with the exact same rules a
@@ -352,7 +432,7 @@ static string? ValidateTransformPresetChain(List<FieldTransform>? transforms)
     return result.Success ? null : result.Error?.Replace($"field '{PresetFieldName}'", "this preset");
 }
 
-app.MapPost("/transform-presets", (SaveTransformPresetRequest? request, TransformPresetStore store) =>
+app.MapPost("/transform-presets", (SaveTransformPresetRequest? request, ITransformPresetStore store, CurrentUser user) =>
 {
     var name = request?.Name?.Trim();
     if (string.IsNullOrWhiteSpace(name))
@@ -360,31 +440,31 @@ app.MapPost("/transform-presets", (SaveTransformPresetRequest? request, Transfor
     var chainError = ValidateTransformPresetChain(request!.Transforms);
     if (chainError is not null)
         return Results.BadRequest(new { error = chainError });
-    if (store.NameTaken(name))
+    if (store.NameTaken(name, ownerId: user.Id))
         return Results.Conflict(new { error = $"A preset named '{name}' already exists." });
 
-    var saved = store.Save(name, request.Transforms!);
+    var saved = store.Save(name, request.Transforms!, ownerId: user.Id);
     return Results.Created($"/transform-presets/{saved.Id}", saved);
 });
 
-app.MapGet("/transform-presets", (TransformPresetStore store) => Results.Ok(store.ListAll()));
+app.MapGet("/transform-presets", (ITransformPresetStore store, CurrentUser user) => Results.Ok(store.ListAll(ownerId: user.Id)));
 
-app.MapPut("/transform-presets/{id:long}", (long id, RenameTransformPresetRequest? request, TransformPresetStore store) =>
+app.MapPut("/transform-presets/{id:long}", (long id, RenameTransformPresetRequest? request, ITransformPresetStore store, CurrentUser user) =>
 {
-    if (!store.Exists(id))
+    if (!store.Exists(id, ownerId: user.Id))
         return Results.NotFound(new { error = "Transform preset not found." });
     var name = request?.Name?.Trim();
     if (string.IsNullOrWhiteSpace(name))
         return Results.BadRequest(new { error = "Name is required." });
-    if (store.NameTaken(name, id))
+    if (store.NameTaken(name, id, ownerId: user.Id))
         return Results.Conflict(new { error = $"A preset named '{name}' already exists." });
 
-    store.Rename(id, name);
+    store.Rename(id, name, ownerId: user.Id);
     return Results.Ok(new { id, name });
 });
 
-app.MapDelete("/transform-presets/{id:long}", (long id, TransformPresetStore store) =>
-    store.Delete(id) ? Results.NoContent() : Results.NotFound(new { error = "Transform preset not found." }));
+app.MapDelete("/transform-presets/{id:long}", (long id, ITransformPresetStore store, CurrentUser user) =>
+    store.Delete(id, ownerId: user.Id) ? Results.NoContent() : Results.NotFound(new { error = "Transform preset not found." }));
 
 // Flat-Mode (Fields → Csv), Container-Mode (Groups → Xml) and API-Mode
 // (Api → Csv) are strictly separate — mixing any two in one request would
@@ -878,7 +958,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
         script,
         preview = verification.Preview,
         outputFile = verification.OutputFileContent is not null
-            ? new { fileName = verification.OutputFileName, content = verification.OutputFileContent }
+            ? new { fileName = verification.OutputFileName, content = verification.OutputFileContent, encoding = verification.OutputFileEncoding }
             : null,
     });
 });

@@ -14,6 +14,19 @@ jobs:
   companion:
     name: Companion (.NET + Python trial-run verification)
     runs-on: ubuntu-latest
+    # Issue #277: a real MySQL server for the MySQL storage tests (the same
+    # contract tests that run against SQLite; each test gets its own throwaway
+    # database). Without SF_TEST_MYSQL those tests are reported as skipped.
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: sf
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -psf"
+          --health-interval=5s --health-timeout=5s --health-retries=20
     steps:
       - uses: actions/checkout@v7
 
@@ -34,7 +47,7 @@ jobs:
       - name: Install Python runtime dependencies
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install requests beautifulsoup4 playwright
+          python3 -m pip install requests beautifulsoup4 playwright openpyxl
           python3 -m playwright install --with-deps chromium
 
       - name: Restore
@@ -44,6 +57,8 @@ jobs:
         run: dotnet build companion/ScrapingFactory.sln --no-restore --configuration Release
 
       - name: Test
+        env:
+          SF_TEST_MYSQL: Server=127.0.0.1;Port=3306;User ID=root;Password=sf
         run: dotnet test companion/ScrapingFactory.sln --no-build --configuration Release --verbosity normal
 
   extension:

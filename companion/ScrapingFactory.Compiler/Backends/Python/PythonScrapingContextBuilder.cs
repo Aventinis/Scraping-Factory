@@ -44,6 +44,8 @@ internal static class PythonScrapingContextBuilder
             ["script_filename"] = plan.ScriptFileName,
             ["output_filename"] = plan.OutputFileBaseName,
             ["output_is_json"] = plan.OutputFormat == OutputFormat.Json,
+            ["output_is_sqlite"] = plan.OutputFormat == OutputFormat.Sqlite,
+            ["output_is_xlsx"] = plan.OutputFormat == OutputFormat.Xlsx,
             // Issue #213: gates the download helper's own conditional
             // imports (os/sys/hashlib/urljoin) — see
             // PythonGroupTreeLiteral.AnyDownloadEnabled's own doc comment.
@@ -117,6 +119,8 @@ internal static class PythonScrapingContextBuilder
             ["script_filename"] = plan.ScriptFileName,
             ["output_filename"] = plan.OutputFileBaseName,
             ["output_is_json"] = plan.OutputFormat == OutputFormat.Json,
+            ["output_is_sqlite"] = plan.OutputFormat == OutputFormat.Sqlite,
+            ["output_is_xlsx"] = plan.OutputFormat == OutputFormat.Xlsx,
             // Issue #214: gates the download helper's own conditional
             // imports (os/sys/hashlib/urljoin) — see PythonGroupTreeLiteral.
             // AnyDownloadEnabled's own doc comment for the Container-Mode

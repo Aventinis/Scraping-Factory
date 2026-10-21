@@ -16,6 +16,14 @@ const SFGlobalSettingsUI = (function () {
 
   const { STATES } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
 
+  const { getAccessKey, setAccessKey } =
+    typeof require !== 'undefined' ? require('../shared/companion-config') : self.SFCompanionConfig;
+
+  const { t } = typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
+
+  const { getResolvedCompanionUrl, companionFetch } =
+    typeof require !== 'undefined' ? require('./companion-client') : self.SFCompanionClient;
+
   const { renderManageBlueprintsModal } =
     typeof require !== 'undefined' ? require('./output-blueprints-ui') : self.SFOutputBlueprintsUI;
 
@@ -25,8 +33,8 @@ const SFGlobalSettingsUI = (function () {
   function renderSettingsScreen(bridge) {
     const settings = getGlobalSettings();
 
-    const jsonToggle = document.getElementById('toggle-output-json');
-    if (jsonToggle) jsonToggle.checked = settings.outputAsJson;
+    const formatSelect = /** @type {HTMLSelectElement | null} */ (document.getElementById('select-output-format'));
+    if (formatSelect) formatSelect.value = settings.outputFormat;
     const previewToggle = document.getElementById('toggle-include-data-preview');
     if (previewToggle) previewToggle.checked = settings.includeDataPreview;
     const outputFileToggle = document.getElementById('toggle-include-output-file');
@@ -42,8 +50,33 @@ const SFGlobalSettingsUI = (function () {
     const fixedNameInput = document.getElementById('input-script-name-fixed');
     if (fixedNameInput && document.activeElement !== fixedNameInput) fixedNameInput.value = settings.scriptNameFixed;
 
+    // Issue #278: the access key input (never overwritten while being typed in).
+    const accessKeyInput = /** @type {HTMLInputElement | null} */ (document.getElementById('input-access-key'));
+    if (accessKeyInput && document.activeElement !== accessKeyInput) accessKeyInput.value = getAccessKey();
+
     renderManageBlueprintsModal(bridge);
     renderAllSavedConfigsList(bridge);
+  }
+
+  // Issue #278: asks the companion who the saved key belongs to (/whoami) and
+  // reports it next to the input.
+  async function testAccessKey() {
+    const status = document.getElementById('access-key-status');
+    if (!status) return;
+    const show = (text, warn) => {
+      status.textContent = text;
+      status.classList.remove('hidden');
+      status.classList.toggle('warn', warn);
+    };
+    try {
+      const response = await companionFetch(`${getResolvedCompanionUrl()}/whoami`);
+      if (response.status === 401) { show(t(getAccessKey() ? 'settings.accessKeyRejected' : 'settings.accessKeyMissing'), true); return; }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const body = await response.json();
+      show(body.authRequired ? t('settings.accessKeyOk', { name: body.name }) : t('settings.accessKeyNotNeeded'), false);
+    } catch {
+      show(t('settings.accessKeyUnreachable'), true);
+    }
   }
 
   // updateGlobalSettings's own cache update happens synchronously (before
@@ -71,8 +104,8 @@ const SFGlobalSettingsUI = (function () {
       bridge.setState(STATES.IDLE);
     });
 
-    document.getElementById('toggle-output-json')?.addEventListener('change', (e) => {
-      updateAndRerender(bridge, { outputAsJson: e.target.checked });
+    document.getElementById('select-output-format')?.addEventListener('change', (e) => {
+      updateAndRerender(bridge, { outputFormat: e.target.value });
     });
     document.getElementById('toggle-include-data-preview')?.addEventListener('change', (e) => {
       updateAndRerender(bridge, { includeDataPreview: e.target.checked });
@@ -89,6 +122,18 @@ const SFGlobalSettingsUI = (function () {
     });
     document.getElementById('btn-script-name-mode-hostname')?.addEventListener('click', () => {
       updateAndRerender(bridge, { scriptNameMode: 'hostname' });
+    });
+    document.getElementById('btn-access-key-save')?.addEventListener('click', async () => {
+      log('BTN access-key-save');
+      await setAccessKey(document.getElementById('input-access-key')?.value);
+      await testAccessKey();
+    });
+    document.getElementById('btn-access-key-clear')?.addEventListener('click', async () => {
+      log('BTN access-key-clear');
+      await setAccessKey('');
+      const input = /** @type {HTMLInputElement | null} */ (document.getElementById('input-access-key'));
+      if (input) input.value = '';
+      document.getElementById('access-key-status')?.classList.add('hidden');
     });
     document.getElementById('input-script-name-fixed')?.addEventListener('change', (e) => {
       updateAndRerender(bridge, { scriptNameFixed: e.target.value });

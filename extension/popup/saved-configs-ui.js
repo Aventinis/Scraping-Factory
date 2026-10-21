@@ -26,7 +26,7 @@ const { buildScrapingConfig, buildHardeningConfig } =
 const { downloadFile } =
   typeof require !== 'undefined' ? require('./download-helpers') : self.SFDownloadHelpers;
 
-const { getResolvedCompanionUrl, resolveCombinedComponents } =
+const { getResolvedCompanionUrl, resolveCombinedComponents, companionFetch } =
   typeof require !== 'undefined' ? require('./companion-client') : self.SFCompanionClient;
 
 const { applyConfigToState } =
@@ -199,7 +199,7 @@ function buildHardeningReplayPanelEl(bridge, outputEntry) {
 async function fetchSavedConfigs(bridge, url) {
   bridge.patchState({ savedConfigsLoading: true });
   try {
-    const res = await fetch(`${getResolvedCompanionUrl()}/configs?url=${encodeURIComponent(url)}`);
+    const res = await companionFetch(`${getResolvedCompanionUrl()}/configs?url=${encodeURIComponent(url)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const savedConfigs = await res.json();
     log('SAVED_CONFIGS_LIST', savedConfigs.length);
@@ -222,7 +222,7 @@ async function fetchSavedConfigs(bridge, url) {
 async function fetchAllSavedConfigs(bridge) {
   bridge.patchState({ allSavedConfigsLoading: true });
   try {
-    const res = await fetch(`${getResolvedCompanionUrl()}/configs`);
+    const res = await companionFetch(`${getResolvedCompanionUrl()}/configs`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const allSavedConfigs = await res.json();
     log('ALL_SAVED_CONFIGS_LIST', allSavedConfigs.length);
@@ -258,13 +258,13 @@ async function createSavedConfig(bridge, name) {
   const config = buildScrapingConfig(
     state.url, state.mode, state.fields, state.groups, state.apiConfig,
     state.scriptFileName, state.outputFileName, state.engine, state.browserActions, globalSettings.includeDataPreview,
-    globalSettings.outputAsJson, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
+    globalSettings.outputFormat, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
     state.pagination, state.persistentSession, false, globalSettings.externalConfig, combinedComponents, state.blocks,
     state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
     state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
     state.discoveredUrls, state.preflight, state.requestDelay, state.retry, state.deduplication, state.requestHeaders, state.respectRobotsDelay,
   );
-  const res = await fetch(`${getResolvedCompanionUrl()}/configs`, {
+  const res = await companionFetch(`${getResolvedCompanionUrl()}/configs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url: state.url, name, config }),
@@ -295,7 +295,7 @@ async function saveCurrentConfig(bridge, name) {
 async function loadSavedConfig(bridge, id) {
   log('LOAD_SAVED_CONFIG', id);
   try {
-    const res = await fetch(`${getResolvedCompanionUrl()}/configs/${id}`);
+    const res = await companionFetch(`${getResolvedCompanionUrl()}/configs/${id}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const record = await res.json();
     bridge.setState(STATES.IDLE, applyConfigToState(record.config));
@@ -317,7 +317,7 @@ function cancelDeleteSavedConfig(bridge) {
 async function deleteSavedConfig(bridge, id) {
   log('DELETE_SAVED_CONFIG', id);
   try {
-    const res = await fetch(`${getResolvedCompanionUrl()}/configs/${id}`, { method: 'DELETE' });
+    const res = await companionFetch(`${getResolvedCompanionUrl()}/configs/${id}`, { method: 'DELETE' });
     if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
     log('DELETE_SAVED_CONFIG OK');
     bridge.patchState({ savedConfigsPendingDeleteId: null });
@@ -360,7 +360,7 @@ async function saveCurrentOutput(bridge, configId, name) {
   const { fileName, content } = state.outputFile;
   log('SAVE_OUTPUT', configId, name);
   try {
-    const res = await fetch(`${getResolvedCompanionUrl()}/configs/${configId}/outputs`, {
+    const res = await companionFetch(`${getResolvedCompanionUrl()}/configs/${configId}/outputs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, fileName, content }),
@@ -409,7 +409,7 @@ async function createConfigAndSaveOutput(bridge, configName, outputName) {
 async function fetchSavedOutputs(bridge, configId) {
   bridge.patchState({ savedOutputsLoading: true });
   try {
-    const res = await fetch(`${getResolvedCompanionUrl()}/configs/${configId}/outputs`);
+    const res = await companionFetch(`${getResolvedCompanionUrl()}/configs/${configId}/outputs`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const savedOutputs = await res.json();
     log('SAVED_OUTPUTS_LIST', configId, savedOutputs.length);
@@ -437,7 +437,7 @@ function toggleSavedConfigOutputs(bridge, configId) {
 async function downloadSavedOutput(configId, id) {
   log('DOWNLOAD_SAVED_OUTPUT', configId, id);
   try {
-    const res = await fetch(`${getResolvedCompanionUrl()}/configs/${configId}/outputs/${id}`);
+    const res = await companionFetch(`${getResolvedCompanionUrl()}/configs/${configId}/outputs/${id}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const record = await res.json();
     downloadFile(record.fileName, record.content);
@@ -491,7 +491,7 @@ async function runHardeningReplay(bridge) {
   bridge.patchState({ hardeningReplay: { ...replay, needsCompareBasisChoice: false, loading: true, error: null } });
 
   try {
-    const res = await fetch(`${getResolvedCompanionUrl()}/configs/${replay.configId}/outputs/${replay.outputId}/replay-hardening`, {
+    const res = await companionFetch(`${getResolvedCompanionUrl()}/configs/${replay.configId}/outputs/${replay.outputId}/replay-hardening`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ checks: replay.checks, compareBasis: replay.compareBasis }),
@@ -520,7 +520,7 @@ function cancelDeleteSavedOutput(bridge) {
 async function deleteSavedOutput(bridge, configId, id) {
   log('DELETE_SAVED_OUTPUT', configId, id);
   try {
-    const res = await fetch(`${getResolvedCompanionUrl()}/configs/${configId}/outputs/${id}`, { method: 'DELETE' });
+    const res = await companionFetch(`${getResolvedCompanionUrl()}/configs/${configId}/outputs/${id}`, { method: 'DELETE' });
     if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
     log('DELETE_SAVED_OUTPUT OK');
     bridge.patchState({ savedOutputsPendingDeleteId: null });
@@ -645,7 +645,7 @@ function cancelDeleteAllSavedConfig(bridge) {
 async function deleteAllSavedConfigsEntry(bridge, id) {
   log('DELETE_ALL_SAVED_CONFIGS_ENTRY', id);
   try {
-    const res = await fetch(`${getResolvedCompanionUrl()}/configs/${id}`, { method: 'DELETE' });
+    const res = await companionFetch(`${getResolvedCompanionUrl()}/configs/${id}`, { method: 'DELETE' });
     if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
     log('DELETE_ALL_SAVED_CONFIGS_ENTRY OK');
     bridge.patchState({ allSavedConfigsPendingDeleteId: null });

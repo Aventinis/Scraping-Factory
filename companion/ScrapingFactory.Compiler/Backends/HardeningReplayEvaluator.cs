@@ -35,6 +35,20 @@ public static class HardeningReplayEvaluator
         IReadOnlyList<HardeningCheck> checks, string fileName, string content,
         int? previousResultCount, string? previousUnavailableReason)
     {
+        // Issue #229: a saved SQLite/Excel output is binary (stored as base64
+        // text) — nothing here can parse it, so no check is evaluable.
+        if (!IsReplayable(fileName))
+        {
+            return checks.Select(check => new HardeningReplayCheckResult(
+                check.GetType().Name switch
+                {
+                    nameof(NoResultCheck) => "noResult", nameof(NullRateCheck) => "nullRate", nameof(RequiredFieldsCheck) => "requiredFields",
+                    nameof(BaselineCheck) => "baseline", nameof(BlockingCheck) => "blocking", _ => "unknown",
+                },
+                check.Severity, HardeningReplayOutcome.NotEvaluable,
+                "Saved SQLite/Excel outputs can't be replayed — only CSV, JSON and XML outputs can.")).ToList();
+        }
+
         var dataset = ParsedDataset.Parse(fileName, content);
         var results = new List<HardeningReplayCheckResult>();
         foreach (var check in checks)
@@ -161,6 +175,10 @@ public static class HardeningReplayEvaluator
     // exposed separately so Program.cs can parse a *previous* saved output
     // just far enough to get its own ResultCount, without needing a second,
     // ad-hoc parsing code path.
+    // Issue #229: CSV/JSON/XML only (see Evaluate).
+    public static bool IsReplayable(string fileName) =>
+        Path.GetExtension(fileName).TrimStart('.').ToLowerInvariant() is "csv" or "json" or "xml";
+
     public static int GetResultCount(string fileName, string content) => ParsedDataset.Parse(fileName, content).ResultCount;
 
     // Flat (CSV/JSON) rows are a list of string-keyed dicts, matching the

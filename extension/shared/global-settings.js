@@ -24,7 +24,9 @@ const SFGlobalSettings = (function () {
   // see companion-client.js's checkCompanion/message-router.js's stale-URL
   // correction).
   const DEFAULTS = {
-    outputAsJson: false,
+    // Issue #229: 'default' (CSV, or XML for a tree) | 'json' | 'sqlite' | 'xlsx'.
+    // Replaces the earlier boolean `outputAsJson` (migrated on load).
+    outputFormat: 'default',
     includeDataPreview: false,
     includeOutputFile: false,
     externalConfig: false,
@@ -41,7 +43,11 @@ const SFGlobalSettings = (function () {
     }
     try {
       const stored = await chrome.storage.local.get(STORAGE_KEY);
-      cached = { ...DEFAULTS, ...(stored[STORAGE_KEY] || {}) };
+      const saved = stored[STORAGE_KEY] || {};
+      cached = { ...DEFAULTS, ...saved };
+      // Migrate the pre-#229 boolean "Output as JSON" preference.
+      if (saved.outputFormat === undefined && saved.outputAsJson === true) cached.outputFormat = 'json';
+      delete cached.outputAsJson;
     } catch {
       cached = { ...DEFAULTS };
     }
