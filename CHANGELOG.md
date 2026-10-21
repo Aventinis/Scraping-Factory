@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.19.9](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.8...v1.19.9) (2026-10-21)
+
+
+### Features
+
+* **companion:** self-service accounts and HTTPS (store, endpoints, TLS) ([64c3363](https://github.com/Aventinis/Scraping-Factory/commit/64c33636cdda43a9f7af3d54e249e2ba5d236d5e))
+* **extension:** account section, https policy and development-only options ([44b6966](https://github.com/Aventinis/Scraping-Factory/commit/44b69664ac8c710b065f584194265a41703adb9c))
+* **install:** release channel for the bundled extension, registration and HTTPS flags ([d0613b7](https://github.com/Aventinis/Scraping-Factory/commit/d0613b77bbef7db8c9b6fbbdb068fe22f3dc1b6b))
+* self-service accounts, per-device tokens and HTTPS ([#352](https://github.com/Aventinis/Scraping-Factory/issues/352)) ([b71c800](https://github.com/Aventinis/Scraping-Factory/commit/b71c800b257ca3bd44d0e8ef4fc8bf23f332a0ba))
+
 ## [1.19.8](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.7...v1.19.8) (2026-10-21)
 
 
