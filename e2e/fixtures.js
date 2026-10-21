@@ -28,6 +28,7 @@ const FIXTURES = {
   'api-token-bootstrap': { dir: path.join(REPO_ROOT, 'test-pages/api-token-bootstrap'), port: 8800, kind: 'script', script: 'server.py' },
   'api-cursor-pagination': { dir: path.join(REPO_ROOT, 'test-pages/api-cursor-pagination'), port: 9000, kind: 'script', script: 'server.py' },
   'api-link-pagination': { dir: path.join(REPO_ROOT, 'test-pages/api-link-pagination'), port: 9100, kind: 'script', script: 'server.py' },
+  'robots-disallow': { dir: path.join(REPO_ROOT, 'test-pages/robots-disallow'), port: 8510, kind: 'script', script: 'server.py' },
   'crawl-delay': { dir: path.join(REPO_ROOT, 'test-pages/crawl-delay'), port: 8508, kind: 'script', script: 'server.py' },
   'flaky-server': { dir: path.join(REPO_ROOT, 'test-pages/flaky-server'), port: 8900, kind: 'script', script: 'server.py' },
   'request-headers': { dir: path.join(REPO_ROOT, 'test-pages/request-headers'), port: 8506, kind: 'script', script: 'server.py' },
