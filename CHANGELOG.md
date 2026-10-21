@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.11](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.10...v1.19.11) (2026-10-21)
+
+
+### Features
+
+* **docs:** add screenshot generator for the user documentation ([#354](https://github.com/Aventinis/Scraping-Factory/issues/354)) ([b000203](https://github.com/Aventinis/Scraping-Factory/commit/b0002038683b148312592c35fb5d8eb64a47e94c))
+
 ## [1.19.10](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.9...v1.19.10) (2026-10-21)
 
 
