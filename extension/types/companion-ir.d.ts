@@ -54,6 +54,7 @@ declare namespace SFWire {
     preflight?: boolean;
     respectRobotsDelay?: boolean;
     robotsDisallow?: RobotsDisallowConfig;
+    appendOutput?: boolean;
     externalConfig?: boolean;
     combined?: CombinedComponentConfig[];
     blocks?: ExtractionBlockConfig[];

@@ -388,6 +388,7 @@ const SFConfigImport = (function () {
         preflight: false,
         respectRobotsDelay: false,
         robotsDisallow: applyRobotsDisallowConfig(null),
+        appendOutput: false,
         ...applyOutputBlueprintConfig(null),
       };
     }
@@ -443,6 +444,7 @@ const SFConfigImport = (function () {
         // Issue #228: allowed on a Blocks request (one shared navigation).
         respectRobotsDelay: config.respectRobotsDelay === true,
         robotsDisallow: applyRobotsDisallowConfig(config.robotsDisallow),
+        appendOutput: config.appendOutput === true,
         ...applyOutputBlueprintConfig(null),
       };
     }
@@ -488,6 +490,7 @@ const SFConfigImport = (function () {
       // Issue #228: plain bool, same convention as preflight above.
       respectRobotsDelay: config.respectRobotsDelay === true,
       robotsDisallow: applyRobotsDisallowConfig(config.robotsDisallow),
+      appendOutput: config.appendOutput === true,
       // Issue #191: only ever present on the wire for flat mode/Api's flat
       // shape — applyOutputBlueprintConfig(undefined) already resets to
       // "none" for every other mode, so no per-mode branching is needed here.

@@ -46,9 +46,8 @@ public static class ScrapingPlanValidator
                 return Invalid(changeDetectionError);
         }
 
-        // Issue #229: Sqlite/Xlsx are binary files written fresh each run —
-        // reject the combinations that read the output back as text or need
-        // a format-specific merge (see the issue for Append across formats).
+        // Issue #229: Sqlite/Xlsx are binary files — reject the combinations
+        // that read the output back as text.
         var tabularError = ValidateTabularOutput(plan);
         if (tabularError is not null)
             return Invalid(tabularError);
@@ -434,9 +433,8 @@ public static class ScrapingPlanValidator
     // fields for the tree shapes, flat field names — plus Api parameter names
     // — otherwise), the same "reference something that exists" rule the
     // hardening field pickers' wire values get elsewhere. Two shape-specific
-    // restrictions, both "reject rather than silently do something else":
-    //  - Append needs a flat output file (CSV / JSON array) — an XML or
-    //    nested-JSON document has no meaningful "append".
+    // restriction, "reject rather than silently do something else" (appending
+    // — Issue #342 — works for every format, trees included):
     //  - a tree-shaped source combined with an OutputBlueprint mapping is
     //    not designed yet: the blueprint walkers re-read the source tree on
     //    their own and never see the deduplicated instances.
@@ -459,8 +457,6 @@ public static class ScrapingPlanValidator
         var format = plan.OutputFormat == OutputFormat.Sqlite ? "SQLite" : "Excel";
         if (plan.ChangeDetection is not null)
             return $"{format} output cannot be combined with change detection (it compares the output as text) — use CSV or JSON.";
-        if (plan.Deduplication is { Incremental: true, IncrementalOutput: IncrementalOutputMode.Append })
-            return $"{format} output always replaces the file — deduplication's \"append\" mode is only available for CSV/JSON; use the delta mode.";
         if (plan.OutputBlueprint is { SchemaKind: OutputBlueprintSchemaKind.Tree })
             return $"{format} output needs a flat Output Blueprint (one table) — a nested (tree) blueprint cannot be written as a table.";
 
@@ -493,9 +489,6 @@ public static class ScrapingPlanValidator
 
         if (dedup.Retention.Value <= 0)
             return "Deduplication: the retention value must be positive.";
-
-        if (dedup.Incremental && dedup.IncrementalOutput == IncrementalOutputMode.Append && isTreeShape)
-            return "Deduplication: appending to the previous output is only supported for flat output (CSV/JSON list) — use the delta mode for tree-shaped output.";
 
         if (isTreeShape && hasOutputBlueprint)
             return "Deduplication is not supported together with an Output Blueprint on tree-shaped (container / API tree) output — writing a tree as SQLite/Excel flattens it the same way, so that counts too.";

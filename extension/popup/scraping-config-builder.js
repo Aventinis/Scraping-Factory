@@ -497,6 +497,7 @@ function collectFieldNames(mode, fields, groups, apiConfig) {
  * @param {boolean} [respectRobotsDelay]
  * @param {boolean} [skipVerification]
  * @param {SFDraft.RobotsDisallowState | null} [robotsDisallow]
+ * @param {boolean} [appendOutput]
  * @returns {object}
  */
 function buildScrapingConfig(
@@ -531,6 +532,8 @@ function buildScrapingConfig(
   skipVerification = false,
   // Issue #333: same "append at the end" rule.
   robotsDisallow = null,
+  // Issue #342: same "append at the end" rule.
+  appendOutput = false,
 ) {
   // Issue #292: a plain on/off switch (the Global Settings preference),
   // mode-independent — sent for every mode, omitted when off.
@@ -549,18 +552,18 @@ function buildScrapingConfig(
   // Issue #333: the run-time robots.txt Disallow check (flat/container/api/
   // blocks; Combined returns before this is used — rejected on the outer request).
   const robotsDisallowFields = robotsDisallow?.enabled ? { robotsDisallow: { action: robotsDisallow.action } } : {};
-  // The pacing/robots settings in one spread — the object literals below are
+  // Issue #342: append to the previous output file instead of replacing it
+  // (flat/container/api/blocks; Combined returns before this is used).
+  const appendOutputFields = appendOutput ? { appendOutput: true } : {};
+  // The pacing/robots/append settings in one spread — the object literals below are
   // already at TypeScript's union-complexity limit.
   /** @type {Record<string, unknown>} */
-  const pacingFields = { ...requestDelayFields, ...respectRobotsFields, ...robotsDisallowFields };
+  const settingFields = { ...requestDelayFields, ...respectRobotsFields, ...robotsDisallowFields, ...appendOutputFields };
   const retryConfig = buildRetryConfig(retry);
   const retryFields = retryConfig ? { retry: retryConfig } : {};
-  // Issue #225: the Append output needs a flat output file, so container
-  // mode and API mode's tree response shape fall back to Delta — see
-  // buildDeduplicationConfig. Key fields no longer in the field list are
-  // dropped. Blocks/Combined return before this is used (not supported there).
-  const isTreeShape = mode === 'container' || (mode === 'api' && (apiConfig?.groups?.length ?? 0) > 0);
-  const deduplicationConfig = buildDeduplicationConfig(deduplication, isTreeShape, collectFieldNames(mode, fields, groups, apiConfig));
+  // Issue #225: key fields no longer in the field list are dropped.
+  // Blocks/Combined return before this is used (not supported there).
+  const deduplicationConfig = buildDeduplicationConfig(deduplication, collectFieldNames(mode, fields, groups, apiConfig));
   const deduplicationFields = deduplicationConfig ? { deduplication: deduplicationConfig } : {};
   // Issue #226: DOM shapes only (flat/container/Blocks) — API mode has its
   // own header list inside apiConfig, and Combined components carry theirs.
@@ -607,7 +610,7 @@ function buildScrapingConfig(
       })),
       scriptFileName: scriptFileName || null,
       ...engineFields, ...previewFields, ...additionalUrlsFields,
-      ...proxyFields, ...pacingFields, ...retryFields, ...requestHeadersFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields, ...skipVerificationFields,
+      ...proxyFields, ...settingFields, ...retryFields, ...requestHeadersFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields, ...skipVerificationFields,
     };
   }
   // Combined mode (Issue #239): no ad-hoc fields/groups/apiConfig of its own
@@ -689,7 +692,7 @@ function buildScrapingConfig(
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...pacingFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...proxyFields, ...settingFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
       ...preflightFields, ...outputFileFields, ...skipVerificationFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
@@ -698,7 +701,7 @@ function buildScrapingConfig(
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...pacingFields, ...retryFields, ...deduplicationFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...proxyFields, ...settingFields, ...retryFields, ...deduplicationFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
       ...preflightFields, ...outputFileFields, ...skipVerificationFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
@@ -720,7 +723,7 @@ function buildScrapingConfig(
     outputFormat: tableOrJsonFormat ?? 'Csv',
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
-    ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields, ...pacingFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields,
+    ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields, ...settingFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields,
     ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
     ...preflightFields, ...outputFileFields, ...skipVerificationFields, ...externalConfigFields, ...outputBlueprintFields,
   };
@@ -769,6 +772,7 @@ function buildScrapingConfig(
  * @param {boolean} [respectRobotsDelay]
  * @param {boolean} [skipVerification]
  * @param {SFDraft.RobotsDisallowState | null} [robotsDisallow]
+ * @param {boolean} [appendOutput]
  * @returns {{exportedAt: string, extensionVersion: string, config: object}}
  */
 function buildConfigExport(
@@ -797,6 +801,8 @@ function buildConfigExport(
   skipVerification = false,
   // Issue #333: same "append at the end" rule.
   robotsDisallow = null,
+  // Issue #342: same "append at the end" rule.
+  appendOutput = false,
 ) {
   return {
     exportedAt: new Date().toISOString(),
@@ -807,7 +813,7 @@ function buildConfigExport(
       includeOutputFile, externalConfig, combinedComponents, blocks,
       outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping,
       outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping, discoveredUrls, preflight, requestDelay, retry,
-      deduplication, requestHeaders, respectRobotsDelay, skipVerification, robotsDisallow,
+      deduplication, requestHeaders, respectRobotsDelay, skipVerification, robotsDisallow, appendOutput,
     ),
   };
 }

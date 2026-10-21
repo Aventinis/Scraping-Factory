@@ -130,6 +130,16 @@ public sealed class ScrapingConfig
     // behavior.
     public RobotsDisallowConfig? RobotsDisallow { get; init; }
 
+    // Issue #342: opt-in — instead of replacing the previous output file, the
+    // script appends this run's result to it, for every output format (CSV,
+    // JSON, XML, SQLite, Excel; flat or tree). Schema drift between runs is
+    // handled by one rule in all formats: columns/fields the file already
+    // has are kept, new ones are added, missing values are empty. It is also
+    // what deduplication's incremental "Append" output now means (see
+    // ScrapingPlanBuilder). Mode-independent (Fields/Groups/Api/Blocks
+    // alike); null/false is today's exact behavior (a fresh file).
+    public bool? AppendOutput { get; init; }
+
     // Issue #223: opt-in retry with backoff on transient request failures,
     // mode-independent — see IR/RetryConfig.cs. Null is today's exact
     // behavior (a failed request is never retried).

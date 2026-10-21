@@ -330,6 +330,16 @@
                and, optionally, remembers seen keys across runs so only new
                items are written. Hidden for Combined/Blocks (see
                renderDedupSection). -->
+          <!-- Issue #342: append this run's result to the existing output file
+               instead of replacing it (every output format). Inert for
+               Combined (each component carries its own). -->
+          <div id="append-output-row">
+            <label class="output-settings-toggle">
+              <input type="checkbox" id="toggle-append-output" />
+              <span data-i18n="idle.appendOutputToggle"></span>
+            </label>
+            <p class="preview-summary" data-i18n="idle.appendOutputHint"></p>
+          </div>
           <div id="dedup-section">
             <label class="output-settings-toggle">
               <input type="checkbox" id="toggle-dedup" />

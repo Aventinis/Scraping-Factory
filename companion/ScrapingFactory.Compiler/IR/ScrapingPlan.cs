@@ -39,6 +39,15 @@ public sealed class ScrapingPlan
     // by ScrapingPlanBuilder — see IR/RobotsDisallowConfig.cs.
     public RobotsDisallowConfig? RobotsDisallow { get; init; }
 
+    // Issue #342: carried through unchanged from ScrapingConfig.AppendOutput.
+    public bool AppendOutput { get; init; }
+
+    // What the code generators act on: deduplication's incremental "Append"
+    // output is one case of the general append mechanism (the delta it writes
+    // is appended like any other run's result).
+    public bool AppendsOutput =>
+        AppendOutput || Deduplication is { Incremental: true, IncrementalOutput: IncrementalOutputMode.Append };
+
     // Issue #223: mode-independent, carried through unchanged from
     // ScrapingConfig.Retry by ScrapingPlanBuilder — see IR/RetryConfig.cs.
     public RetryConfig? Retry { get; init; }
@@ -119,6 +128,7 @@ public sealed class ScrapingPlan
         RequestDelay = RequestDelay,
         RespectRobotsDelay = RespectRobotsDelay,
         RobotsDisallow = RobotsDisallow,
+        AppendOutput = AppendOutput,
         Retry = Retry,
         Headers = Headers,
         Deduplication = Deduplication,

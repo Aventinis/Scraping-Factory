@@ -1,3 +1,4 @@
+#@include output_append
 def main():
 {{~ if preflight.enabled ~}}
     preflight_status, preflight_etag, preflight_last_modified = _run_preflight_check(URLS[0])
@@ -41,6 +42,12 @@ def main():
     # detection below) is unaffected, still the full, unflattened tree.
     output_fieldnames = [m["target"] for m in BLUEPRINT_MAPPING]
     output_rows = [{m["target"]: row.get(m["source"], "") for m in BLUEPRINT_MAPPING} for row in blueprint_rows]
+{{~ if append_output ~}}
+    appended_count = len(output_rows)
+{{~ end ~}}
+{{~ if append_output && !output_is_sqlite && !output_is_xlsx ~}}
+    output_fieldnames, output_rows = _append_previous_rows(OUTPUT_PATH, output_fieldnames, output_rows)
+{{~ end ~}}
 {{~ if output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(output_rows, f, ensure_ascii=False, indent=2)
@@ -54,7 +61,7 @@ def main():
         writer.writeheader()
         writer.writerows(output_rows)
 {{~ end ~}}
-    count = len(output_rows)
+    count = {{ if append_output }}appended_count{{ else }}len(output_rows){{ end }}
 {{~ else if blueprint_tree_mapping_enabled ~}}
     # Issue #244: BLUEPRINT_TREE_MAPPING builds a real nested output tree of
     # its own instead of denormalizing into rows — `root` itself (used for
@@ -64,10 +71,13 @@ def main():
     for el in blueprint_tree_elements:
         blueprint_tree_root.append(el)
 {{~ if output_is_json ~}}
+{{~ if append_output ~}}
+    json_tree = _append_previous_json_tree(OUTPUT_PATH, _xml_to_dict(blueprint_tree_root))
+{{~ end ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(_xml_to_dict(blueprint_tree_root), f, ensure_ascii=False, indent=2)
+        json.dump({{ if append_output }}json_tree{{ else }}_xml_to_dict(blueprint_tree_root){{ end }}, f, ensure_ascii=False, indent=2)
 {{~ else ~}}
-    tree = ET.ElementTree(blueprint_tree_root)
+    tree = ET.ElementTree({{ if append_output }}_append_previous_xml(OUTPUT_PATH, blueprint_tree_root){{ else }}blueprint_tree_root{{ end }})
     _strip_illegal_xml_chars(tree.getroot())
     ET.indent(tree)
     tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
@@ -87,18 +97,21 @@ def main():
     output_root = _tree_without_hidden_fields(root)
 {{~ end ~}}
 {{~ if output_is_json ~}}
+{{~ if append_output ~}}
+    json_tree = _append_previous_json_tree(OUTPUT_PATH, _xml_to_dict(output_root))
+{{~ end ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(_xml_to_dict(output_root), f, ensure_ascii=False, indent=2)
+        json.dump({{ if append_output }}json_tree{{ else }}_xml_to_dict(output_root){{ end }}, f, ensure_ascii=False, indent=2)
     count = len(root.findall(".//*"))
 {{~ else ~}}
-    tree = ET.ElementTree(output_root)
+    tree = ET.ElementTree({{ if append_output }}_append_previous_xml(OUTPUT_PATH, output_root){{ else }}output_root{{ end }})
     _strip_illegal_xml_chars(tree.getroot())
     ET.indent(tree)
     tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
     count = len(root.findall(".//*"))
 {{~ end ~}}
 {{~ end ~}}
-    print(f"Done — {{ if dedup.enabled }}{written_count}{{ else }}{count}{{ end }} {{ if blueprint_mapping_enabled }}row(s){{ else }}elements{{ end }} written to {OUTPUT_PATH}")
+    print(f"Done — {{ if dedup.enabled }}{written_count}{{ else }}{count}{{ end }} {{ if blueprint_mapping_enabled }}row(s){{ else }}elements{{ end }} {{ if append_output }}appended to{{ else }}written to{{ end }} {OUTPUT_PATH}")
 {{~ if dedup.enabled ~}}
     _dedup_report()
 {{~ end ~}}

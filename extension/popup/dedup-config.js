@@ -82,16 +82,11 @@ const SFDedupConfig = (function () {
    * list (renamed/removed since being picked) are dropped here rather than
    * sent to be rejected by the companion — the same silent-skip convention
    * the null-rate/required-fields hardening rows follow.
-   * `isTreeShape` (container mode, or API mode's tree response) forbids the
-   * Append output (an XML/nested-JSON document has no meaningful "append"),
-   * so it falls back to Delta there instead of producing a request the
-   * companion rejects.
    * @param {SFDraft.DeduplicationState | null | undefined} dedup
-   * @param {boolean} isTreeShape
    * @param {string[]} [availableFieldNames] when given, key fields not in it are dropped
    * @returns {SFWire.DeduplicationConfig | null}
    */
-  function buildDeduplicationConfig(dedup, isTreeShape, availableFieldNames) {
+  function buildDeduplicationConfig(dedup, availableFieldNames) {
     if (!dedup?.enabled) return null;
     const keyFields = (dedup.keyFields || []).filter(
       name => name && (!availableFieldNames || availableFieldNames.includes(name)),
@@ -102,7 +97,7 @@ const SFDedupConfig = (function () {
     const wire = { keyFields };
     if (dedup.incremental) {
       wire.incremental = true;
-      wire.incrementalOutput = dedup.appendOutput && !isTreeShape ? 'Append' : 'Delta';
+      wire.incrementalOutput = dedup.appendOutput ? 'Append' : 'Delta';
       wire.retention = { kind: dedup.retentionKind, value: parseRetentionValue(dedup.retentionValueText, dedup.retentionKind) };
     }
     return wire;

@@ -29,23 +29,3 @@ def _dedup_new_rows(rows, keys):
     new_rows = [row for row, key in zip(rows, keys) if key is None or key not in _DEDUP_SEEN]
     print(f"Deduplication: {len(new_rows)} of {len(rows)} row(s) are new since the last run.")
     return new_rows
-
-
-# Append mode: keeps the previous output file's rows in front of the new
-# ones. Must be called before the output file is overwritten. `fieldnames`
-# is only used for CSV (a previous column that is no longer written is
-# dropped, a missing one is filled with an empty value).
-def _dedup_with_previous_output(new_rows, fieldnames):
-    if not (DEDUP_INCREMENTAL and DEDUP_APPEND) or not _dd_os.path.exists(OUTPUT_PATH):
-        return new_rows
-    try:
-        with open(OUTPUT_PATH, "r", encoding="utf-8", newline="") as f:
-            if OUTPUT_PATH.lower().endswith(".json"):
-                previous = _dd_json.load(f)
-                if not isinstance(previous, list):
-                    return new_rows
-            else:
-                previous = [{name: (row.get(name) or "") for name in fieldnames} for row in _dd_csv.DictReader(f)]
-    except (OSError, ValueError):
-        return new_rows
-    return previous + new_rows
