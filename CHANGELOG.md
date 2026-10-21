@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.19.8](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.7...v1.19.8) (2026-10-21)
+
+
+### Features
+
+* append to an existing output file for every output format ([4d26cda](https://github.com/Aventinis/Scraping-Factory/commit/4d26cdac24776f938e9b7cd73e241b14253c4f24))
+* **companion:** append to an existing output file in every format (AppendOutput) ([5fc98c8](https://github.com/Aventinis/Scraping-Factory/commit/5fc98c8f491c788c4c02d474132b55346b81b34e))
+* **extension:** setting to append to the existing output file ([6f9a49d](https://github.com/Aventinis/Scraping-Factory/commit/6f9a49d699398305174f1de906f2bd3d26bb46cc))
+
 ## [1.19.7](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.6...v1.19.7) (2026-10-21)
 
 
