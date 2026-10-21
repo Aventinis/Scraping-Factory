@@ -451,6 +451,8 @@
     "outputFormatSqlite": "Base de datos SQLite",
     "outputFormatXlsx": "Excel (.xlsx)",
     "outputFormatHint": "El archivo que escribe el script generado. SQLite y Excel contienen una tabla / hoja; los resultados anidados (contenedores, datos de API anidados) se aplanan en ella. Excel necesita el paquete de Python «openpyxl» (pip install openpyxl) en el equipo donde se ejecutan el script y el companion. No disponible para el modo Blocks ni Combined; no se puede combinar con la detección de cambios.",
+    "skipVerificationToggle": "Omitir la ejecución de prueba (devolver el script de inmediato)",
+    "skipVerificationHint": "Normalmente el companion ejecuta una vez el script generado contra la página real antes de entregarlo, lo que demuestra que funciona pero tarda. Con esto activado, el script se devuelve de inmediato sin ejecutarse: sigue comprobándose que no tenga problemas estructurales (URL rota, nombres de campo duplicados o vacíos), pero un selector erróneo o una petición bloqueada solo se nota al ejecutarlo tú mismo. La vista previa de datos y el archivo de salida completo no están disponibles mientras tanto.",
     "accessKeyTitle": "Clave de acceso (companion compartido)",
     "accessKeyLabel": "Clave de acceso",
     "accessKeyPlaceholder": "sf_…",

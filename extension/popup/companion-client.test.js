@@ -513,6 +513,7 @@ describe('generate() reads the global Settings tab\'s preferences, not per-scrap
         <input type="checkbox" id="toggle-include-data-preview" />
         <input type="checkbox" id="toggle-include-output-file" />
         <input type="checkbox" id="toggle-external-config" />
+        <input type="checkbox" id="toggle-skip-verification" />
         <div id="manage-blueprints-list"></div>
         <p id="manage-blueprints-empty" class="hidden"></p>
         <div id="all-saved-configs-list"></div>
@@ -578,6 +579,22 @@ describe('generate() reads the global Settings tab\'s preferences, not per-scrap
     expect(body.outputFormat).toBe('Json');
   });
 
+  // Issue #292: the companion skips its trial run when this is set.
+  test('ticking "Skip the trial run" on the Settings screen sends skipVerification with the next /generate request', async () => {
+    document.getElementById('btn-open-settings').click();
+    const toggle = document.getElementById('toggle-skip-verification');
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+    expect(storedGlobalSettings.skipVerification).toBe(true);
+
+    document.getElementById('btn-close-settings').click();
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const generateCall = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/generate'));
+    expect(JSON.parse(generateCall[1].body).skipVerification).toBe(true);
+  });
+
   test('leaving every preference off sends today\'s exact byte shape — no outputFormat key for flat mode\'s default Csv', async () => {
     document.getElementById('btn-generate').click();
     await flushMicrotasks();
@@ -588,5 +605,6 @@ describe('generate() reads the global Settings tab\'s preferences, not per-scrap
     expect(body).not.toHaveProperty('includePreview');
     expect(body).not.toHaveProperty('includeOutputFile');
     expect(body).not.toHaveProperty('externalConfig');
+    expect(body).not.toHaveProperty('skipVerification');
   });
 });

@@ -248,6 +248,12 @@ row (or XML element). This is the core guarantee of the whole tool: what you
 download is proven to work right now, not just generated code that looks
 plausible.
 
+If you'd rather not wait for it (a slow login flow, or while iterating on a
+selector), the Settings screen has a "Skip the trial run" preference: the
+script is then returned immediately, still checked for structural problems but
+not run against the live page — you verify it by running it yourself. A data
+preview and a full output file aren't available while it is on.
+
 ### Trial-run data preview
 
 An opt-in checkbox that lets you see a capped sample (up to 50 rows/elements)

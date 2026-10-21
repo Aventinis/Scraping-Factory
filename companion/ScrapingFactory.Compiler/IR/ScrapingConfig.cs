@@ -86,6 +86,20 @@ public sealed class ScrapingConfig
     // either, both, or neither may be requested in the same call.
     public bool? IncludeOutputFile { get; init; }
 
+    // Issue #292: opt out of the trial run entirely — /generate still runs
+    // every structural check (ScrapingPlanValidator, 400 on failure) but
+    // never spawns the script, and returns it straight away with the
+    // X-ScrapingFactory-Verification-Skipped header explaining that it was
+    // not run against the live page. Trades the Consistency Rule's safety
+    // net for speed as an explicit opt-in. Mode-independent (single-mode,
+    // Combined and Blocks alike — read from the outer request only; a
+    // Combined component's own nested value is ignored, since the single
+    // verification run belongs to the combined script). A preview/output
+    // file requested alongside comes back empty, there being nothing to
+    // read them from. Additive, wire-compatible: null/false is today's
+    // exact behavior.
+    public bool? SkipVerification { get; init; }
+
     // Issue #87: opt-in change-detection + notification, mode-independent
     // (Fields/Groups/Api alike) — see IR/ChangeDetectionConfig.cs. Null is
     // today's exact behavior (no previous-run comparison, no notification).

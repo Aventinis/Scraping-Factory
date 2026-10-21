@@ -451,6 +451,8 @@
     "outputFormatSqlite": "SQLite-Datenbank",
     "outputFormatXlsx": "Excel (.xlsx)",
     "outputFormatHint": "Die Datei, die das generierte Skript schreibt. SQLite und Excel enthalten eine Tabelle bzw. ein Blatt; verschachtelte Ergebnisse (Container, verschachtelte API-Daten) werden darin flachgezogen. Excel braucht das Python-Paket „openpyxl“ (pip install openpyxl) auf dem Rechner, auf dem Skript und Companion laufen. Nicht für Blocks- oder Combined-Modus verfügbar; nicht mit Änderungserkennung kombinierbar.",
+    "skipVerificationToggle": "Testlauf überspringen (Skript sofort ausgeben)",
+    "skipVerificationHint": "Normalerweise führt der Companion das erzeugte Skript einmal gegen die echte Seite aus, bevor er es herausgibt — das beweist, dass es funktioniert, dauert aber. Ist dies aktiv, wird das Skript sofort zurückgegeben, ohne ausgeführt zu werden. Es wird weiterhin auf strukturelle Fehler geprüft (ungültige URL, doppelte oder leere Feldnamen), ein falscher Selektor oder eine blockierte Anfrage zeigt sich aber erst, wenn du es selbst ausführst. Datenvorschau und vollständige Ausgabedatei sind dabei nicht verfügbar.",
     "accessKeyTitle": "Zugangsschlüssel (gemeinsamer Companion)",
     "accessKeyLabel": "Zugangsschlüssel",
     "accessKeyPlaceholder": "sf_…",

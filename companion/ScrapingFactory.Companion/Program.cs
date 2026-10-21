@@ -583,7 +583,24 @@ static TimeSpan VerificationTimeoutCap() => TimeSpan.FromMinutes(10);
 // VerificationTimeoutCap. Value is a plain English reason, same "companion
 // error text is always English, never part of the extension's i18n system"
 // convention CLAUDE.md already documents for /generate's 400/422 bodies.
+// The reason texts are deliberately plain ASCII: Kestrel refuses to send a
+// header value with any other character (an em dash once turned the
+// timeout-cap skip into a 500 on a real host, while the in-memory test server
+// accepted it — SkipVerificationEndpointTests pins this).
 const string VerificationSkippedHeader = "X-ScrapingFactory-Verification-Skipped";
+
+// Issue #292: the caller can switch the trial run off outright (a Global
+// Settings preference in the extension). Same response mechanics as the
+// timeout-cap skip above — no subprocess, a synthetic "success, nothing
+// populated" result, and the header carrying the reason — so the structural
+// validation (ScrapingPlanValidator, a 400 on failure) has already happened
+// by the time this is consulted. A setting the user chose gets checked
+// before the automatic cap, so the message says what actually happened.
+static string? VerificationSkipReason(ScrapingConfig config, long extraTimeoutMs) =>
+    config.SkipVerification == true
+        ? "Verification was skipped because it is disabled in Settings - the generated script was not run against the live page. " +
+          "Run it yourself to check that it works."
+        : CheckVerificationTimeoutCap(extraTimeoutMs);
 
 static string? CheckVerificationTimeoutCap(long extraTimeoutMs)
 {
@@ -592,7 +609,7 @@ static string? CheckVerificationTimeoutCap(long extraTimeoutMs)
     if (extra <= cap)
         return null;
     return $"Estimated extra verification time ({extra:hh\\:mm\\:ss}) exceeds the {cap:hh\\:mm\\:ss} cap for a " +
-           "/generate trial run — the generated script was returned without being run against the live page first. Test it " +
+           "/generate trial run - the generated script was returned without being run against the live page first. Test it " +
            "manually before relying on it.";
 }
 
@@ -713,7 +730,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
         // (see CompanionBackendOverrides) on top of that, for the baseline
         // itself.
         ScriptVerificationResult combinedVerification;
-        var combinedSkipReason = CheckVerificationTimeoutCap(componentExtraTimeoutMs);
+        var combinedSkipReason = VerificationSkipReason(config, componentExtraTimeoutMs);
         if (combinedSkipReason is not null)
         {
             httpContext.Response.Headers[VerificationSkippedHeader] = combinedSkipReason;
@@ -826,7 +843,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
         var blockVerificationEnv = FillVerificationValues.Filter(config.BrowserActions, config.VerificationValues, requestHeaders: config.Headers);
 
         ScriptVerificationResult blockVerification;
-        var blockSkipReason = CheckVerificationTimeoutCap(blockExtraTimeoutMs);
+        var blockSkipReason = VerificationSkipReason(config, blockExtraTimeoutMs);
         if (blockSkipReason is not null)
         {
             httpContext.Response.Headers[VerificationSkippedHeader] = blockSkipReason;
@@ -901,7 +918,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     var verificationEnv = FillVerificationValues.Filter(config.BrowserActions, config.VerificationValues, config.Api, config.Headers);
 
     ScriptVerificationResult verification;
-    var skipReason = CheckVerificationTimeoutCap(extraTimeoutMs);
+    var skipReason = VerificationSkipReason(config, extraTimeoutMs);
     if (skipReason is not null)
     {
         httpContext.Response.Headers[VerificationSkippedHeader] = skipReason;

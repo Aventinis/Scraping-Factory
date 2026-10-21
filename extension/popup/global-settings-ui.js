@@ -41,6 +41,8 @@ const SFGlobalSettingsUI = (function () {
     if (outputFileToggle) outputFileToggle.checked = settings.includeOutputFile;
     const externalConfigToggle = document.getElementById('toggle-external-config');
     if (externalConfigToggle) externalConfigToggle.checked = settings.externalConfig;
+    const skipVerificationToggle = document.getElementById('toggle-skip-verification');
+    if (skipVerificationToggle) skipVerificationToggle.checked = settings.skipVerification;
 
     const isHostnameMode = settings.scriptNameMode === 'hostname';
     document.getElementById('btn-script-name-mode-fixed')?.classList.toggle('active', !isHostnameMode);
@@ -115,6 +117,9 @@ const SFGlobalSettingsUI = (function () {
     });
     document.getElementById('toggle-external-config')?.addEventListener('change', (e) => {
       updateAndRerender(bridge, { externalConfig: e.target.checked });
+    });
+    document.getElementById('toggle-skip-verification')?.addEventListener('change', (e) => {
+      updateAndRerender(bridge, { skipVerification: e.target.checked });
     });
 
     document.getElementById('btn-script-name-mode-fixed')?.addEventListener('click', () => {
