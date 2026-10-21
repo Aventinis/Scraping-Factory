@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.19.12](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.11...v1.19.12) (2026-10-21)
+
+
+### Features
+
+* **help:** add reusable help popover and Advanced disclosure ([#396](https://github.com/Aventinis/Scraping-Factory/issues/396)) ([d2c3506](https://github.com/Aventinis/Scraping-Factory/commit/d2c35066c9d46db20a0b1c6c36f1959fe71afc8d))
+* **ui:** reusable help popover, Advanced disclosure and help-text conventions ([#396](https://github.com/Aventinis/Scraping-Factory/issues/396)) ([c859ac7](https://github.com/Aventinis/Scraping-Factory/commit/c859ac7c5906f8b3a49954796d88265ba6c52aeb))
+
 ## [1.19.11](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.10...v1.19.11) (2026-10-21)
 
 
