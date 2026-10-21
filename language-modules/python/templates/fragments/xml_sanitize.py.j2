@@ -1,0 +1,19 @@
+# Issue #291: the XML 1.0 spec only allows tab, LF, CR and characters from
+# U+0020 on (minus the surrogate range and U+FFFE/U+FFFF) — a control character
+# such as the BEL (U+0007) is illegal even as a character reference, so there
+# is no way to write it. Python's xml.etree.ElementTree does not check that and
+# would serialize it raw, producing a file no conforming XML parser accepts
+# (the companion's own trial-run check included). Such characters are removed
+# from every element's text right before the tree is written as XML; JSON and
+# CSV output don't need this (json.dump escapes them, CSV has no restriction).
+_ILLEGAL_XML_CHARS_RE = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff￾￿]")
+
+
+def _strip_illegal_xml_chars(root):
+    for element in root.iter():
+        if element.text:
+            element.text = _ILLEGAL_XML_CHARS_RE.sub("", element.text)
+        if element.tail:
+            element.tail = _ILLEGAL_XML_CHARS_RE.sub("", element.tail)
+
+
