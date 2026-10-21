@@ -98,13 +98,13 @@ const PASSWORD = 'correct horse battery';
     await popupPage.fill('#input-account-password', 'wrong password here');
     await popupPage.click('#btn-account-login');
     await popupPage.waitForSelector('#account-status:not(.hidden)');
-    const wrongPassword = await popupPage.locator('#account-status').textContent();
+    const messageForWrongCredentials = await popupPage.locator('#account-status').textContent();
     await popupPage.fill('#input-account-name', 'nobody-by-that-name');
     await popupPage.click('#btn-account-login');
     await popupPage.waitForFunction((previous) => document.getElementById('account-status').textContent !== '' , null);
-    const unknownName = await popupPage.locator('#account-status').textContent();
-    console.log('Wrong password →', wrongPassword, '| unknown name →', unknownName);
-    if (wrongPassword !== unknownName) throw new Error('the two failures must look the same');
+    const messageForUnknownUser = await popupPage.locator('#account-status').textContent();
+    if (messageForWrongCredentials !== messageForUnknownUser) throw new Error('the two failures must look the same');
+    console.log('Wrong password and unknown name show the same message.');
 
     // 7) The right password brings the account — and its data — back.
     await popupPage.fill('#input-account-name', 'carol');
