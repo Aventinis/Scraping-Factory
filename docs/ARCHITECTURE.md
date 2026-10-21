@@ -1359,6 +1359,11 @@ minutes skips the trial run (response header
 - Tests: `VerificationTimeEstimatorTests.cs`,
   `ApiCombinationTimeoutEndToEndTests.cs`, `CompanionEndpointTests.cs`
 
+The caller can also switch the trial run off (`ScrapingConfig.SkipVerification`,
+Issue #292, the extension's Settings screen): same response mechanics as the
+cap skip, `VerificationSkipReason` in `Program.cs`. Tests:
+`SkipVerificationEndpointTests.cs`, `e2e/examples/issue-292-skip-verification-check.js`.
+
 ### 2.21ai Clean page-request errors (Issue #319)
 
 A failed page request in flat/container/Blocks mode ends in one
