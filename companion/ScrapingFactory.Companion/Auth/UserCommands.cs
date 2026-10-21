@@ -14,11 +14,36 @@ namespace ScrapingFactory.Companion.Auth;
 //   ScrapingFactory.Companion user remove <name>   delete the user (their data stays, unreachable)
 //   ScrapingFactory.Companion user adopt <name>    give the user all data saved before
 //                                                  authentication was switched on
+//   ScrapingFactory.Companion user set-password <name>   set or reset a password (read from
+//                                                  the terminal, or one line of stdin);
+//                                                  signs the user out on every device
+//   ScrapingFactory.Companion user disable <name>  the user's key and logins stop working
+//   ScrapingFactory.Companion user enable <name>   undo that
+// (Issue #352: set-password/disable/enable.)
 public static class UserCommands
 {
+    // One line from the given reader (tests, a pipe), otherwise typed on the
+    // terminal without echo.
+    private static string? ReadPassword(TextReader? input, TextWriter output, string prompt)
+    {
+        if (input is not null)
+            return input.ReadLine();
+        if (Console.IsInputRedirected)
+            return Console.In.ReadLine();
+        output.Write(prompt);
+        var typed = new System.Text.StringBuilder();
+        while (Console.ReadKey(intercept: true) is var key && key.Key != ConsoleKey.Enter)
+        {
+            if (key.Key == ConsoleKey.Backspace && typed.Length > 0) typed.Length--;
+            else if (!char.IsControl(key.KeyChar)) typed.Append(key.KeyChar);
+        }
+        output.WriteLine();
+        return typed.ToString();
+    }
+
     public static bool IsUserCommand(string[] args) => args.Length > 0 && args[0].Equals("user", StringComparison.OrdinalIgnoreCase);
 
-    public static int Run(string[] args, IConfiguration configuration, TextWriter? output = null, TextWriter? error = null)
+    public static int Run(string[] args, IConfiguration configuration, TextWriter? output = null, TextWriter? error = null, TextReader? input = null)
     {
         output ??= Console.Out;
         error ??= Console.Error;
@@ -26,15 +51,17 @@ public static class UserCommands
         var command = positional.FirstOrDefault()?.ToLowerInvariant();
         var name = positional.Skip(1).FirstOrDefault();
 
-        if (command is null or "help" || command is not ("add" or "list" or "rotate" or "remove" or "adopt"))
+        if (command is null or "help" || command is not ("add" or "list" or "rotate" or "remove" or "adopt" or "set-password" or "disable" or "enable"))
         {
             (command is null or "help" ? output : error).WriteLine(
-                "Usage: ScrapingFactory.Companion user <add|list|rotate|remove|adopt> [name]\n" +
+                "Usage: ScrapingFactory.Companion user <add|list|rotate|remove|adopt|set-password|disable|enable> [name]\n" +
                 "  add <name>     create a user and print their access key (shown only once)\n" +
                 "  list           list the users\n" +
                 "  rotate <name>  issue a new access key (the old one stops working)\n" +
                 "  remove <name>  delete a user (their data stays in the database, unreachable)\n" +
-                "  adopt <name>   give a user all data saved before authentication was switched on");
+                "  adopt <name>   give a user all data saved before authentication was switched on\n" +
+                "  set-password <name>  set or reset a password (asked on the terminal, or one line on stdin); signs the user out everywhere\n" +
+                "  disable <name> / enable <name>  switch a user's access off / on again");
             return command is null or "help" ? 0 : 2;
         }
         if (command != "list" && string.IsNullOrWhiteSpace(name))
@@ -68,7 +95,8 @@ public static class UserCommands
                 {
                     var all = users.List();
                     if (all.Count == 0) output.WriteLine("No users yet — create one with: user add <name>");
-                    foreach (var user in all) output.WriteLine($"{user.Name}\t(created {user.CreatedAt})");
+                    foreach (var user in all)
+                        output.WriteLine($"{user.Name}\t(created {user.CreatedAt}){(user.HasPassword ? "  [password]" : "")}{(user.Disabled ? "  [disabled]" : "")}");
                     return 0;
                 }
                 case "rotate":
@@ -84,6 +112,26 @@ public static class UserCommands
                 {
                     if (!users.Remove(name!)) { error.WriteLine($"No user named '{name}'."); return 1; }
                     output.WriteLine($"Removed user '{name}'. Their saved data stays in the database but can no longer be reached.");
+                    return 0;
+                }
+                case "set-password":
+                {
+                    var user = users.FindByName(name!);
+                    if (user is null) { error.WriteLine($"No user named '{name}'."); return 1; }
+                    var password = ReadPassword(input, output, $"New password for '{user.Name}': ");
+                    if (PasswordHasher.CheckPolicy(password, user.Name) is { } problem) { error.WriteLine(problem); return 2; }
+                    users.SetPassword(user.Name, PasswordHasher.Hash(password!));
+                    var signedOut = users.RevokeTokens(user.Id);
+                    output.WriteLine($"Password for '{user.Name}' set; {signedOut} signed-in device(s) were signed out.");
+                    return 0;
+                }
+                case "disable":
+                case "enable":
+                {
+                    if (!users.SetDisabled(name!, command == "disable")) { error.WriteLine($"No user named '{name}'."); return 1; }
+                    output.WriteLine(command == "disable"
+                        ? $"User '{name}' is disabled: their key and logins no longer work (their data stays)."
+                        : $"User '{name}' is enabled again.");
                     return 0;
                 }
                 default: // adopt

@@ -67,6 +67,29 @@ and `user adopt <name>` (hands everything saved before authentication was
 switched on to that user). `--disable-auth` / `-DisableAuth` switches it off
 again.
 
+### Optional: self-service accounts and HTTPS
+
+Instead of handing out keys, let people register themselves — the extension then
+shows a **Settings → Account** section with Sign in / Register:
+
+```bash
+./install.sh --registration open      # Windows: -Registration open (implies authentication)
+```
+
+Passwords must travel encrypted, so a companion that is reachable from other
+machines needs a real certificate (the companion refuses to start with plain HTTP
+beyond `localhost`):
+
+```bash
+SF_TLS_CERT_PASSWORD=... ./install.sh --host 0.0.0.0 --tls-cert /path/cert.pfx
+# PEM instead of .pfx:   --tls-cert fullchain.pem --tls-key privkey.pem
+```
+
+Users enter `https://your-host:5000` once in the extension's error screen (the
+extension only accepts `https://` addresses or `localhost`). Operator commands:
+`user set-password <name>` (reset a password), `user disable <name>` /
+`user enable <name>`. `--no-tls` / `-NoTls` switches HTTPS off again.
+
 ## 2. Load the extension
 
 The browser does not allow an installer to add an extension silently, so this

@@ -35,6 +35,16 @@ rm -f "$BUNDLE/companion/"*.staticwebassets.endpoints.json
   --exclude=tsconfig.json --exclude=package.json --exclude=package-lock.json --exclude=coverage .) \
   | tar -xf - -C "$BUNDLE/extension"
 
+# Issue #352: the shipped extension is the release channel — it cannot be
+# switched into the development behaviours (plain http to another machine).
+# Fails loudly if the line this rewrites ever changes, instead of silently
+# shipping a development build.
+BUILD_CONFIG="$BUNDLE/extension/shared/build-config.js"
+sed -i.bak "s/^  const CHANNEL = 'development';/  const CHANNEL = 'release';/" "$BUILD_CONFIG"
+rm -f "$BUILD_CONFIG.bak"
+grep -q "^  const CHANNEL = 'release';" "$BUILD_CONFIG" \
+  || { echo "build-bundle.sh: could not set the release channel in $BUILD_CONFIG" >&2; exit 1; }
+
 case "$RID" in
   win-*) cp "$ROOT/install/install.ps1" "$ROOT/install/uninstall.ps1" "$BUNDLE/" ;;
   *)     cp "$ROOT/install/install.sh" "$ROOT/install/uninstall.sh" "$BUNDLE/"; chmod +x "$BUNDLE/install.sh" "$BUNDLE/uninstall.sh" ;;

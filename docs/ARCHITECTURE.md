@@ -1424,6 +1424,33 @@ request except `/health` and CORS preflights needs `Authorization: Bearer
 - Tests: `AuthenticationTests.cs`, `extension/popup/access-key.test.js`,
   `e2e/examples/issue-278-access-key-check.js`
 
+### 2.21ag2 Self-service accounts and HTTPS (Issue #352)
+
+Builds on 2.21ag. `Companion:Auth:Registration=Open` lets people register from
+the extension; a successful register/login hands out a per-device token (the same
+`Authorization: Bearer` mechanism as a key from `user add`, but individually
+revocable). Passwords are PBKDF2-SHA256 hashes; login errors never reveal whether
+a name exists and a throttle slows guessing. The companion speaks HTTPS when
+`Companion:Tls` is configured and refuses to start with plain HTTP beyond the
+local machine. A self-signed certificate and plain remote HTTP exist only in
+development builds: compile-time in the companion (`CompanionBuild`), a rewritten
+channel constant in the extension (`shared/build-config.js`, set to `release` by
+`install/build-bundle.sh`), so a user can't switch either on.
+
+- Companion: `Auth/` (`PasswordHasher`, `LoginThrottle`, `AuthEndpoints`; `IUserStore`
+  extended in `SqliteUserStore`/`MySqlUserStore`; `UserCommands` `set-password`,
+  `disable`, `enable`), `CompanionTls.cs`, `CompanionBuild.cs`,
+  `CompanionHostOptions.cs`, `Program.cs` (transport validation, Kestrel HTTPS,
+  anonymous paths, `/health` `registration`)
+- Extension: `shared/build-config.js`, `shared/companion-config.js` (address policy,
+  developer flag), `popup/account.js` + `popup/account-ui.js`,
+  `popup/screens/settings.html` (Account, Developer options),
+  `popup/companion-client.js` (`getCompanionInfo`, `useCustomCompanionUrl`)
+- Installer: `--registration`, `--host`, `--tls-cert`/`--tls-key`, `--no-tls`;
+  `install/build-bundle.sh` (release channel)
+- Tests: `AccountTests.cs`, `CompanionTlsTests.cs`, `shared/companion-url-policy.test.js`,
+  `popup/account.test.js`, `popup/account-ui.test.js`
+
 ### 2.21ah Trial-run timeout estimate (Issues #289, #295)
 
 `/generate` runs the generated script once as a trial. Its timeout is the

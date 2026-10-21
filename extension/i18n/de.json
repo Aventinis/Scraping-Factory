@@ -478,7 +478,37 @@
     "accessKeyNotNeeded": "Dieser Companion verwendet keine Zugangsschlüssel.",
     "accessKeyMissing": "Dieser Companion verlangt einen Zugangsschlüssel.",
     "accessKeyRejected": "Der Zugangsschlüssel ist nicht gültig.",
-    "accessKeyUnreachable": "Der Companion ist nicht erreichbar."
+    "accessKeyUnreachable": "Der Companion ist nicht erreichbar.",
+    "account": {
+      "title": "Konto",
+      "nameLabel": "Benutzername",
+      "passwordLabel": "Passwort",
+      "repeatLabel": "Passwort wiederholen",
+      "login": "Anmelden",
+      "register": "Registrieren",
+      "logout": "Abmelden",
+      "logoutAll": "Überall abmelden",
+      "signedInAs": "Angemeldet als {name}.",
+      "currentPasswordLabel": "Aktuelles Passwort",
+      "newPasswordLabel": "Neues Passwort",
+      "changePassword": "Passwort ändern",
+      "passwordChanged": "Passwort geändert. Andere Geräte müssen sich neu anmelden.",
+      "noRegistration": "Dieser Companion erlaubt keine Selbstregistrierung — bitte bei der Person, die ihn betreibt, ein Konto oder einen Zugangsschlüssel anfragen.",
+      "hint": "Das Passwort geht nur an deinen Companion und wird in diesem Browser nie gespeichert — nur ein widerrufbarer Token für dieses Gerät. Nutze einen Companion über https:// (oder auf diesem Computer), damit das Passwort unterwegs nicht mitgelesen werden kann.",
+      "nameMissing": "Bitte einen Benutzernamen eingeben.",
+      "passwordMissing": "Bitte ein Passwort eingeben.",
+      "passwordMismatch": "Die beiden Passwörter stimmen nicht überein.",
+      "unreachable": "Der Companion ist nicht erreichbar.",
+      "throttled": "Zu viele Versuche — bitte in {seconds} Sekunden erneut versuchen.",
+      "failed": "Der Companion hat mit einem Fehler geantwortet (HTTP {status})."
+    },
+    "developer": {
+      "title": "Entwickleroptionen (Entwicklungs-Build)",
+      "insecureHttp": "Unverschlüsseltes http:// zu einem Companion auf einem anderen Rechner erlauben",
+      "openCompanion": "Companion-Adresse in einem Tab öffnen",
+      "hint": "Gibt es nur in einem Entwicklungs-Build — die Extension aus einem Release kann das nicht. Für ein selbstsigniertes Entwicklungszertifikat: die Companion-Adresse einmal in einem Browser-Tab öffnen (Button oben), die Warnung akzeptieren und dieses Panel neu laden.",
+      "reloadHint": "Gespeichert — Panel neu laden (oder die Verbindung erneut versuchen), damit es wirkt."
+    }
   },
   "modals": {
     "fieldName": {
@@ -618,7 +648,8 @@
     "blueprintImportParsed": "{count} Feld(er) aus der Beispieldatei importiert.",
     "blueprintImportFileReadFailed": "Die ausgewählte Datei konnte nicht gelesen werden: {message}",
     "accessKeyRequired": "Dieser Companion verlangt einen Zugangsschlüssel — trage ihn unter Einstellungen ein.",
-    "accessKeyRejected": "Der Companion hat den Zugangsschlüssel abgelehnt — prüfe ihn unter Einstellungen."
+    "accessKeyRejected": "Der Companion hat den Zugangsschlüssel abgelehnt — prüfe ihn unter Einstellungen.",
+    "insecureCompanionUrl": "Diese Adresse würde Passwörter und Schlüssel unverschlüsselt an einen anderen Computer senden. Bitte eine https://-Adresse verwenden."
   },
   "frame": {
     "badge": "iframe",

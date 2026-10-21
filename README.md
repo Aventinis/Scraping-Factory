@@ -134,9 +134,25 @@ configurations, outputs, Output Blueprints and transform presets. Other
 commands: `user list`, `user rotate <name>`, `user remove <name>`, and
 `user adopt <name>` (hands everything saved before authentication was switched
 on to that user). Authentication is off by default — a companion on your own
-machine needs no login. Note that the companion speaks plain HTTP: when it is
-reachable from other machines, put it behind a TLS-terminating reverse proxy so
-the keys don't travel in clear text.
+machine needs no login.
+
+**Accounts instead of handed-out keys.** With `Companion:Auth:Registration` set to
+`Open` (installer: `--registration open`), people create their own account in the
+extension under **Settings → Account** (user name + password, at least 10
+characters); the extension stores a revocable per-device token, never the
+password. The operator can reset a password with `user set-password <name>` and
+lock someone out with `user disable <name>`.
+
+**HTTPS.** Passwords and keys must not travel in clear text, so a companion that
+listens beyond this computer has to speak HTTPS: set `Companion:Tls:Mode` to
+`Certificate` with `CertificatePath` (a `.pfx` plus `CertificatePassword`, or a
+PEM file plus `CertificateKeyPath`) — installer: `--host 0.0.0.0 --tls-cert FILE`
+— and enter the `https://` address in the extension's error screen. The companion
+refuses to start with plain HTTP on a non-local address. The extension itself
+only talks to `https://` addresses or to this computer. Self-signed certificates
+and plain HTTP to another machine exist only in development builds (running from
+source, "Load unpacked" from a checkout); the release bundles cannot be switched
+into that mode.
 
 ### 2. Load the browser extension
 

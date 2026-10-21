@@ -24,6 +24,9 @@ const SFGlobalSettingsUI = (function () {
   const { getResolvedCompanionUrl, companionFetch } =
     typeof require !== 'undefined' ? require('./companion-client') : self.SFCompanionClient;
 
+  const { renderAccountAndDeveloperSections, wireAccountAndDeveloperEvents } =
+    typeof require !== 'undefined' ? require('./account-ui') : self.SFAccountUI;
+
   const { renderManageBlueprintsModal } =
     typeof require !== 'undefined' ? require('./output-blueprints-ui') : self.SFOutputBlueprintsUI;
 
@@ -56,6 +59,7 @@ const SFGlobalSettingsUI = (function () {
     const accessKeyInput = /** @type {HTMLInputElement | null} */ (document.getElementById('input-access-key'));
     if (accessKeyInput && document.activeElement !== accessKeyInput) accessKeyInput.value = getAccessKey();
 
+    renderAccountAndDeveloperSections();
     renderManageBlueprintsModal(bridge);
     renderAllSavedConfigsList(bridge);
   }
@@ -144,6 +148,7 @@ const SFGlobalSettingsUI = (function () {
       updateAndRerender(bridge, { scriptNameFixed: e.target.value });
     });
 
+    wireAccountAndDeveloperEvents(bridge);
     wireAllSavedConfigsEvents(bridge);
   }
 

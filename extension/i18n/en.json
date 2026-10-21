@@ -478,7 +478,37 @@
     "accessKeyNotNeeded": "This companion does not use access keys.",
     "accessKeyMissing": "This companion requires an access key.",
     "accessKeyRejected": "The access key is not valid.",
-    "accessKeyUnreachable": "The companion could not be reached."
+    "accessKeyUnreachable": "The companion could not be reached.",
+    "account": {
+      "title": "Account",
+      "nameLabel": "User name",
+      "passwordLabel": "Password",
+      "repeatLabel": "Repeat password",
+      "login": "Sign in",
+      "register": "Register",
+      "logout": "Sign out",
+      "logoutAll": "Sign out everywhere",
+      "signedInAs": "Signed in as {name}.",
+      "currentPasswordLabel": "Current password",
+      "newPasswordLabel": "New password",
+      "changePassword": "Change password",
+      "passwordChanged": "Password changed. Other devices have to sign in again.",
+      "noRegistration": "This companion does not allow self-registration — ask whoever runs it for an account or an access key.",
+      "hint": "The password is only sent to your companion, never stored in this browser — only a revocable token for this device is. Use a companion reached via https:// (or on this computer) so the password cannot be read on the way.",
+      "nameMissing": "Enter a user name.",
+      "passwordMissing": "Enter a password.",
+      "passwordMismatch": "The two passwords are not the same.",
+      "unreachable": "The companion could not be reached.",
+      "throttled": "Too many attempts — try again in {seconds} seconds.",
+      "failed": "The companion answered with an error (HTTP {status})."
+    },
+    "developer": {
+      "title": "Developer options (development build)",
+      "insecureHttp": "Allow plain http:// to a companion on another machine",
+      "openCompanion": "Open companion address in a tab",
+      "hint": "Only exists in a development build — the extension you install from a release cannot do this. For a self-signed development certificate: open the companion address once in a browser tab (button above) and accept the warning, then reload this panel.",
+      "reloadHint": "Saved — reload the panel (or retry the connection) to apply it."
+    }
   },
   "modals": {
     "fieldName": {
@@ -618,7 +648,8 @@
     "blueprintImportParsed": "Imported {count} field(s) from the sample.",
     "blueprintImportFileReadFailed": "Could not read the selected file: {message}",
     "accessKeyRequired": "This companion requires an access key — enter it under Settings.",
-    "accessKeyRejected": "The companion rejected the access key — check it under Settings."
+    "accessKeyRejected": "The companion rejected the access key — check it under Settings.",
+    "insecureCompanionUrl": "This address would send passwords and keys over an unencrypted connection to another computer. Use an https:// address."
   },
   "frame": {
     "badge": "iframe",
