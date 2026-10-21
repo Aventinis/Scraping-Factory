@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.19.7](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.6...v1.19.7) (2026-10-21)
+
+
+### Features
+
+* check robots.txt Disallow at script runtime ([8b7015b](https://github.com/Aventinis/Scraping-Factory/commit/8b7015b593739c95b0d94b05ce5239efaf23089e))
+* **companion:** check robots.txt Disallow at script runtime (RobotsDisallow) ([c0be3f4](https://github.com/Aventinis/Scraping-Factory/commit/c0be3f4e3793d5062d111f7bd37dfa277c67684c))
+* **extension:** setting to check robots.txt Disallow at script runtime ([7591393](https://github.com/Aventinis/Scraping-Factory/commit/7591393794d4746d8d9f34f7ca4400ffaa8a7408))
+
 ## [1.19.6](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.5...v1.19.6) (2026-10-21)
 
 
