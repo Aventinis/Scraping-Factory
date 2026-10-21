@@ -47,7 +47,7 @@ from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 {{~ end ~}}
 import requests
-from urllib.parse import quote, urlsplit{{ if needs_browser_discovery }}, parse_qsl{{ end }}
+from urllib.parse import quote, urlsplit{{ if needs_browser_discovery }}, parse_qsl{{ end }}{{ if link_pagination_enabled }}, urljoin{{ end }}
 
 URL_TEMPLATE = {{ url_template_literal }}
 METHOD = {{ method_literal }}

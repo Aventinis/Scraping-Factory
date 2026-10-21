@@ -1101,7 +1101,28 @@ public static class ScrapingPlanValidator
                 return cursorError;
         }
 
+        if (api.LinkHeaderPagination is { } linkPagination)
+        {
+            var linkError = ValidateApiLinkHeaderPagination(api, linkPagination);
+            if (linkError is not null)
+                return linkError;
+        }
+
         return api.Headers is { } headers ? ValidateApiHeaders(headers, bootstrapName) : null;
+    }
+
+    // Issue #321: see ApiLinkHeaderPagination's own doc comment.
+    private static string? ValidateApiLinkHeaderPagination(ApiConfig api, ApiLinkHeaderPagination linkPagination)
+    {
+        if (linkPagination.MaxPages <= 0)
+            return "Link-header pagination's MaxPages must be greater than 0.";
+        if (api.CursorPagination is not null)
+            return "Link-header pagination can't be combined with cursor pagination — pick one way of finding the next page.";
+        if (api.EmbeddedJsonSource is not null)
+            return "Link-header pagination can't be combined with an embedded JSON source — a page load has no Link header to follow.";
+        if (api.Method != "GET")
+            return "Link-header pagination requires method 'GET' — the next page is requested by URL alone.";
+        return null;
     }
 
     // Issue #224: see ApiCursorPagination's own doc comment.
