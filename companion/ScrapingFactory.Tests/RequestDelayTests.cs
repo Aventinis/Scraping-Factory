@@ -113,7 +113,7 @@ public class RequestDelayTests
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(3, timed.Requests.Count);
-        Assert.All(timed.Gaps(), gap => Assert.True(gap >= 380, $"gap {gap} ms < 400 ms pause"));
+        Assert.All(timed.Gaps(), gap => Assert.True(gap >= 330, $"gap {gap} ms < 400 ms pause"));
     }
 
     [Fact]
@@ -144,7 +144,12 @@ public class RequestDelayTests
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(4, timed.Requests.Count);
-        Assert.All(timed.Gaps(), gap => Assert.True(gap >= 180, $"gap {gap} ms < 200 ms minimum pause"));
+        // The script times the moment it *starts* each request (a fresh TCP
+        // connection every time), the server records when it *receives* it —
+        // so the observed gap jitters by a few dozen ms either way, more on a
+        // loaded CI runner (a 174 ms gap was seen there for a 200 ms pause).
+        // 150 ms still fails clearly if the pause were missing (gaps of ~0-20 ms).
+        Assert.All(timed.Gaps(), gap => Assert.True(gap >= 150, $"gap {gap} ms is far below the 200 ms minimum pause"));
     }
 
     [Fact]

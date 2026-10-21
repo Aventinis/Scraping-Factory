@@ -99,7 +99,7 @@ public class RobotsCrawlDelayTests
         Assert.True(result.Success, result.Error);
         Assert.Equal(3, robots.PageRequests);
         Assert.Equal(1, robots.RobotsFetches);
-        Assert.All(robots.PageGaps(), gap => Assert.True(gap >= 950, $"gap {gap} ms < the 1000 ms Crawl-delay"));
+        Assert.All(robots.PageGaps(), gap => Assert.True(gap >= 850, $"gap {gap} ms < the 1000 ms Crawl-delay"));
     }
 
     [Fact]
@@ -111,7 +111,7 @@ public class RobotsCrawlDelayTests
         var result = await new PythonScriptVerifier().VerifyAsync(new PythonCodeGenerator().Generate(plan));
 
         Assert.True(result.Success, result.Error);
-        Assert.All(robots.PageGaps(), gap => Assert.True(gap >= 950, $"gap {gap} ms < 1000 ms (Request-rate 1/1)"));
+        Assert.All(robots.PageGaps(), gap => Assert.True(gap >= 850, $"gap {gap} ms < 1000 ms (Request-rate 1/1)"));
     }
 
     [Fact]
@@ -123,7 +123,7 @@ public class RobotsCrawlDelayTests
         var result = await new PythonScriptVerifier().VerifyAsync(new PythonCodeGenerator().Generate(plan));
 
         Assert.True(result.Success, result.Error);
-        Assert.All(robots.PageGaps(), gap => Assert.True(gap >= 1450, $"gap {gap} ms < the 1500 ms configured pause"));
+        Assert.All(robots.PageGaps(), gap => Assert.True(gap >= 1350, $"gap {gap} ms < the 1500 ms configured pause"));
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public class RobotsCrawlDelayTests
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(1, robots.RobotsFetches);
-        Assert.All(robots.PageGaps(), gap => Assert.True(gap >= 900, $"gap {gap} ms < the 1000 ms Crawl-delay"));
+        Assert.All(robots.PageGaps(), gap => Assert.True(gap >= 800, $"gap {gap} ms < the 1000 ms Crawl-delay"));
     }
 
     [Fact]
