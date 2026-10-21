@@ -147,12 +147,18 @@
         var list = document.createElement('ul');
         list.className = 'menu-list';
         category.items.forEach(function (item) {
+          // Built from DOM nodes + textContent (not innerHTML) so data from the
+          // JSON blob can never be interpreted as markup.
           var li = document.createElement('li');
           li.className = 'menu-item';
-          li.innerHTML =
-            '<h3 class="item-name">' + item.name + '</h3>' +
-            '<span class="item-price">' + item.price.toFixed(2).replace('.', ',') + ' €</span>' +
-            '<p class="item-description">' + item.description + '</p>';
+          [['h3', 'item-name', item.name],
+           ['span', 'item-price', item.price.toFixed(2).replace('.', ',') + ' €'],
+           ['p', 'item-description', item.description]].forEach(function (part) {
+            var element = document.createElement(part[0]);
+            element.className = part[1];
+            element.textContent = part[2];
+            li.appendChild(element);
+          });
           list.appendChild(li);
         });
         section.appendChild(list);
