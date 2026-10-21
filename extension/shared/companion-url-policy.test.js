@@ -98,16 +98,11 @@ describe('getCompanionUrl with a stored address the policy no longer allows', ()
 });
 
 describe('build-config.js', () => {
-  test('the repository itself is the development channel (the release bundle rewrites it)', () => {
+  test('unbundled (Jest, a checkout) it is the development channel; a release build sets it at compile time (see build.test.js)', () => {
     jest.resetModules();
     jest.dontMock('./build-config');
     const buildConfig = require('./build-config');
     expect(buildConfig.CHANNEL).toBe('development');
     expect(buildConfig.isDevelopmentBuild()).toBe(true);
-  });
-
-  test("keeps the exact line install/build-bundle.sh rewrites to 'release'", () => {
-    const source = require('fs').readFileSync(require('path').join(__dirname, 'build-config.js'), 'utf8');
-    expect(source).toContain("const CHANNEL = 'development';");
   });
 });

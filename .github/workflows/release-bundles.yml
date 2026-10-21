@@ -33,6 +33,14 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # Issue #389: the shipped extension is the esbuild output, built by
+      # install/build-bundle.sh.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: extension/package-lock.json
+
       - name: Build one bundle per platform
         run: |
           version="${TAG#v}"

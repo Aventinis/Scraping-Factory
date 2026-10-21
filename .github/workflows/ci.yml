@@ -67,7 +67,7 @@ jobs:
         run: dotnet test companion/ScrapingFactory.sln --no-build --configuration Release --verbosity normal
 
   extension:
-    name: Extension (Jest)
+    name: Extension (Jest, typecheck, build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -89,3 +89,14 @@ jobs:
       - name: Typecheck JSDoc-annotated modules
         working-directory: extension
         run: npm run typecheck
+
+      # Issue #389: the loadable extension is the esbuild output — make sure
+      # it still builds and has every file the manifest points at.
+      - name: Build the extension
+        working-directory: extension
+        run: |
+          npm run build
+          for f in manifest.json popup/popup.html popup/popup.js popup/popup.css popup/screens/idle.html \
+                   content/content-script.js content/api-capture.js background/service-worker.js; do
+            test -s "dist/$f" || { echo "missing dist/$f"; exit 1; }
+          done

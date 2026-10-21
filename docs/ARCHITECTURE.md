@@ -122,18 +122,20 @@ flowchart TB
     ccfg --> popup
 ```
 
-Every file uses the same "IIFE assigned to one `self.SFXxx` global, dual-exported
-via `module.exports` for Jest" pattern (see any of these files' own top-of-file
-comment) — classic `<script>` tags loaded into one document share one global scope,
-so this is what keeps `t`, `createLogger`, `STATES`, etc. from colliding across
-files. `popup.js` pulls every function it needs off these globals at its own
-top-of-file `const { ... } = require(...) : self.SFXxx`.
+Every file is a plain CommonJS module (`const { ... } = require('./x')`,
+`module.exports = { ... }`). Since Issue #389 `extension/build.js` (esbuild) bundles
+the popup — `popup/popup.js` is the entry point and `popup.html` has a single
+`<script src="popup.js">` — together with the other three contexts (content
+script, MAIN-world recorder, service worker) into `extension/dist/`, which is what
+"Load unpacked" points at; Jest runs the same sources directly. Module-level names
+never collide, so there is no load order to maintain.
 
 `api-config-ui.js` and `container-tree-ui.js`'s handler functions take a `bridge`
 object (`{ getState, setState, patchState, stopPreviewIfActive, requestDomTree,
 showToast }`) as their first parameter instead of closing over `popup.js`'s
-`_state` — necessary because `popup.js` loads *after* them, and because each file
-is a separate, isolated Jest module with no shared closure. `api-config.js` and
+`_state` — necessary because `_state` is private to `popup.js` (importing it back
+would make a dependency cycle), and because each file is a separate, isolated Jest
+module with no shared closure. `api-config.js` and
 `container-tree.js` need no such bridge: they're pure, DOM-free functions
 (build/resolve/insert/remove/serialize tree drafts, no state or DOM access).
 
