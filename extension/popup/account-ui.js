@@ -16,9 +16,15 @@ const SFAccountUI = (function () {
   const { getResolvedCompanionUrl, getCompanionInfo, companionFetch } =
     typeof require !== 'undefined' ? require('./companion-client') : self.SFCompanionClient;
   const account = typeof require !== 'undefined' ? require('./account') : self.SFAccount;
+  const { looksLikeEmail } = typeof require !== 'undefined' ? require('./email-account') : self.SFEmailAccount;
 
-  // Who the companion says we are right now ('' = nobody / not asked yet).
-  let signedInName = '';
+  // Who the companion says we are right now (name '' = nobody / not asked yet),
+  // and — Issue #353 — the state of that account's email address. Shared with
+  // email-account-ui.js through getAccountState()/setAccountState().
+  let acct = { name: '', email: null, emailVerified: false };
+
+  const getAccountState = () => acct;
+  const setAccountState = (patch) => { acct = { ...acct, ...patch }; };
 
   const byId = (id) => document.getElementById(id);
   const value = (id) => /** @type {HTMLInputElement | null} */ (byId(id))?.value ?? '';
@@ -27,7 +33,7 @@ const SFAccountUI = (function () {
     if (input) input.value = '';
   });
 
-  function showStatus(text, warn) {
+  function showAccountStatus(text, warn) {
     const status = byId('account-status');
     if (!status) return;
     status.textContent = text;
@@ -38,7 +44,7 @@ const SFAccountUI = (function () {
   // The message for a failed request: the companion's own text where it gave
   // one (its wording is the same plain English as every companion error), a
   // throttle hint for 429, "could not be reached" for status 0.
-  function describeFailure(result) {
+  function describeAccountFailure(result) {
     if (result.status === 0) return t('settings.account.unreachable');
     if (result.status === 429) return t('settings.account.throttled', { seconds: result.retryAfter || 60 });
     return result.error || t('settings.account.failed', { status: result.status });
@@ -47,13 +53,16 @@ const SFAccountUI = (function () {
   // Asks /whoami whether the stored key/token is good; only a successful answer
   // that names a user counts as signed in.
   async function refreshSignedInName() {
-    signedInName = '';
+    acct = { name: '', email: null, emailVerified: false };
     if (!getCompanionInfo().authRequired || !getAccessKey()) return;
     try {
       const response = await companionFetch(`${getResolvedCompanionUrl()}/whoami`);
-      if (response.ok) signedInName = (await response.json())?.name || '';
+      if (response.ok) {
+        const body = await response.json();
+        acct = { name: body?.name || '', email: body?.email || null, emailVerified: body?.emailVerified === true };
+      }
     } catch {
-      signedInName = '';
+      acct = { name: '', email: null, emailVerified: false };
     }
   }
 
@@ -64,11 +73,11 @@ const SFAccountUI = (function () {
     section.classList.toggle('hidden', !info.authRequired);
     if (!info.authRequired) return;
 
-    const signedIn = signedInName !== '';
+    const signedIn = acct.name !== '';
     byId('account-signed-out')?.classList.toggle('hidden', signedIn);
     byId('account-signed-in')?.classList.toggle('hidden', !signedIn);
     const who = byId('account-signed-in-as');
-    if (who) who.textContent = t('settings.account.signedInAs', { name: signedInName });
+    if (who) who.textContent = t('settings.account.signedInAs', { name: acct.name });
     // Register needs the operator to have opened registration, and a repeat box.
     byId('btn-account-register')?.classList.toggle('hidden', !info.registration);
     byId('account-repeat-row')?.classList.toggle('hidden', !info.registration);
@@ -109,19 +118,35 @@ const SFAccountUI = (function () {
     if (mode === 'register') {
       const problem = account.checkRegistrationInput(name, password, value('input-account-password-repeat'));
       if (problem !== 'ok') {
-        showStatus(t(`settings.account.${problem}`), true);
+        showAccountStatus(t(`settings.account.${problem}`), true);
         return;
       }
     }
-    const result = await account.authenticate(companionFetch, getResolvedCompanionUrl(), mode, name, password);
+    const email = value('input-account-email');
+    const emailMode = getCompanionInfo().email;
+    if (mode === 'register' && emailMode === 'required' && !email.trim()) {
+      showAccountStatus(t('settings.account.emailMissing'), true);
+      return;
+    }
+    if (mode === 'register' && email.trim() && !looksLikeEmail(email)) {
+      showAccountStatus(t('settings.account.emailInvalid'), true);
+      return;
+    }
+    const result = await account.authenticate(companionFetch, getResolvedCompanionUrl(), mode, name, password, email);
     if (!result.ok) {
-      showStatus(describeFailure(result), true);
+      showAccountStatus(describeAccountFailure(result), true);
       return;
     }
     await setAccessKey(result.token);
     clear('input-account-password', 'input-account-password-repeat');
-    signedInName = result.name;
-    showStatus('', false);
+    acct = { name: result.name, email: result.email, emailVerified: result.emailVerified };
+    clear('input-account-email');
+    // A fresh address has to be confirmed: say where the code went.
+    showAccountStatus(
+      mode === 'register' && result.email
+        ? t(result.verificationSent ? 'settings.account.registeredCodeSent' : 'settings.account.registeredNoCode', { email: result.email })
+        : '',
+      mode === 'register' && Boolean(result.email) && !result.verificationSent);
     bridge.patchState({});
     refreshCompanionData(bridge);
   }
@@ -134,11 +159,11 @@ const SFAccountUI = (function () {
     // out must work even when the companion can't be reached or already
     // revoked it.
     await setAccessKey('');
-    signedInName = '';
+    acct = { name: '', email: null, emailVerified: false };
     // A failed "everywhere" matters (other devices stay signed in); a failed
     // plain sign-out doesn't (the token only lives on, unused, on the companion).
     const everywhereFailed = everywhere && !result.ok;
-    showStatus(everywhereFailed ? describeFailure(result) : '', everywhereFailed);
+    showAccountStatus(everywhereFailed ? describeAccountFailure(result) : '', everywhereFailed);
     bridge.patchState({});
     refreshCompanionData(bridge);
   }
@@ -147,11 +172,11 @@ const SFAccountUI = (function () {
     const result = await account.changePassword(
       companionFetch, getResolvedCompanionUrl(), value('input-account-current-password'), value('input-account-new-password'));
     if (!result.ok) {
-      showStatus(describeFailure(result), true);
+      showAccountStatus(describeAccountFailure(result), true);
       return;
     }
     clear('input-account-current-password', 'input-account-new-password');
-    showStatus(t('settings.account.passwordChanged'), false);
+    showAccountStatus(t('settings.account.passwordChanged'), false);
   }
 
   function wireAccountAndDeveloperEvents(bridge) {
@@ -181,7 +206,10 @@ const SFAccountUI = (function () {
     });
   }
 
-  return { renderAccountAndDeveloperSections, wireAccountAndDeveloperEvents };
+  return {
+    renderAccountAndDeveloperSections, wireAccountAndDeveloperEvents,
+    getAccountState, setAccountState, showAccountStatus, describeAccountFailure, refreshSignedInName, refreshCompanionData,
+  };
 })();
 
 if (typeof module !== 'undefined') module.exports = SFAccountUI;

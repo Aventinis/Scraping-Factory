@@ -500,7 +500,32 @@
       "passwordMismatch": "Die beiden Passwörter stimmen nicht überein.",
       "unreachable": "Der Companion ist nicht erreichbar.",
       "throttled": "Zu viele Versuche — bitte in {seconds} Sekunden erneut versuchen.",
-      "failed": "Der Companion hat mit einem Fehler geantwortet (HTTP {status})."
+      "failed": "Der Companion hat mit einem Fehler geantwortet (HTTP {status}).",
+      "emailLabelOptional": "E-Mail (optional)",
+      "emailLabelRequired": "E-Mail",
+      "emailMissing": "Bitte die E-Mail-Adresse eingeben.",
+      "emailInvalid": "Das sieht nicht nach einer E-Mail-Adresse aus.",
+      "forgot": "Passwort vergessen?",
+      "forgotHint": "Gib deinen Benutzernamen oder die bestätigte E-Mail-Adresse deines Kontos ein. Hat das Konto eine, wird dorthin ein Code geschickt; gib ihn unten mit einem neuen Passwort ein.",
+      "forgotAccountLabel": "Benutzername oder E-Mail",
+      "forgotSend": "Code senden",
+      "forgotSent": "Wenn das Konto eine bestätigte E-Mail-Adresse hat, ist ein Code unterwegs.",
+      "forgotAccountMissing": "Bitte Benutzernamen oder E-Mail-Adresse eingeben.",
+      "codeLabel": "Code aus der E-Mail",
+      "codeInvalid": "Bitte den {digits}-stelligen Code aus der E-Mail eingeben.",
+      "resetConfirm": "Passwort zurücksetzen",
+      "resetDone": "Passwort zurückgesetzt. Melde dich mit dem neuen Passwort an.",
+      "registeredCodeSent": "Ein Code wurde an {email} gesendet — gib ihn unten ein, um die Adresse zu bestätigen.",
+      "registeredNoCode": "Der Code an {email} konnte nicht gesendet werden — nutze unten „Code erneut senden\".",
+      "noEmail": "Dieses Konto hat keine E-Mail-Adresse.",
+      "emailVerifiedState": "E-Mail: {email} (bestätigt)",
+      "emailUnverifiedState": "E-Mail: {email} — noch nicht bestätigt. Gib den Code ein, den wir dir geschickt haben.",
+      "verify": "Bestätigen",
+      "resend": "Code erneut senden",
+      "emailVerifiedNow": "E-Mail-Adresse bestätigt.",
+      "codeResent": "Ein neuer Code wurde gesendet.",
+      "newEmailLabel": "Neue E-Mail-Adresse",
+      "setEmail": "E-Mail-Adresse speichern"
     },
     "developer": {
       "title": "Entwickleroptionen (Entwicklungs-Build)",
@@ -649,7 +674,8 @@
     "blueprintImportFileReadFailed": "Die ausgewählte Datei konnte nicht gelesen werden: {message}",
     "accessKeyRequired": "Dieser Companion verlangt einen Zugangsschlüssel — trage ihn unter Einstellungen ein.",
     "accessKeyRejected": "Der Companion hat den Zugangsschlüssel abgelehnt — prüfe ihn unter Einstellungen.",
-    "insecureCompanionUrl": "Diese Adresse würde Passwörter und Schlüssel unverschlüsselt an einen anderen Computer senden. Bitte eine https://-Adresse verwenden."
+    "insecureCompanionUrl": "Diese Adresse würde Passwörter und Schlüssel unverschlüsselt an einen anderen Computer senden. Bitte eine https://-Adresse verwenden.",
+    "emailUnverified": "Dieser Companion braucht eine bestätigte E-Mail-Adresse, bevor er deine Daten ausliefert — bestätige sie unter Einstellungen → Konto."
   },
   "frame": {
     "badge": "iframe",

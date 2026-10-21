@@ -27,6 +27,9 @@ const SFGlobalSettingsUI = (function () {
   const { renderAccountAndDeveloperSections, wireAccountAndDeveloperEvents } =
     typeof require !== 'undefined' ? require('./account-ui') : self.SFAccountUI;
 
+  const { renderEmailAccountSection, wireEmailAccountEvents } =
+    typeof require !== 'undefined' ? require('./email-account-ui') : self.SFEmailAccountUI;
+
   const { renderManageBlueprintsModal } =
     typeof require !== 'undefined' ? require('./output-blueprints-ui') : self.SFOutputBlueprintsUI;
 
@@ -60,6 +63,7 @@ const SFGlobalSettingsUI = (function () {
     if (accessKeyInput && document.activeElement !== accessKeyInput) accessKeyInput.value = getAccessKey();
 
     renderAccountAndDeveloperSections();
+    renderEmailAccountSection();
     renderManageBlueprintsModal(bridge);
     renderAllSavedConfigsList(bridge);
   }
@@ -149,6 +153,7 @@ const SFGlobalSettingsUI = (function () {
     });
 
     wireAccountAndDeveloperEvents(bridge);
+    wireEmailAccountEvents(bridge);
     wireAllSavedConfigsEvents(bridge);
   }
 

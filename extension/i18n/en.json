@@ -500,7 +500,32 @@
       "passwordMismatch": "The two passwords are not the same.",
       "unreachable": "The companion could not be reached.",
       "throttled": "Too many attempts — try again in {seconds} seconds.",
-      "failed": "The companion answered with an error (HTTP {status})."
+      "failed": "The companion answered with an error (HTTP {status}).",
+      "emailLabelOptional": "Email (optional)",
+      "emailLabelRequired": "Email",
+      "emailMissing": "Enter your email address.",
+      "emailInvalid": "That does not look like an email address.",
+      "forgot": "Forgot password?",
+      "forgotHint": "Enter your user name or the verified email address of your account. If it has one, a code is sent there; enter it below with a new password.",
+      "forgotAccountLabel": "User name or email",
+      "forgotSend": "Send code",
+      "forgotSent": "If that account has a verified email address, a code is on its way.",
+      "forgotAccountMissing": "Enter your user name or email address.",
+      "codeLabel": "Code from the email",
+      "codeInvalid": "Enter the {digits}-digit code from the email.",
+      "resetConfirm": "Reset password",
+      "resetDone": "Password reset. Sign in with the new password.",
+      "registeredCodeSent": "A code was sent to {email} — enter it below to confirm the address.",
+      "registeredNoCode": "The code to {email} could not be sent — use \"Send the code again\" below.",
+      "noEmail": "No email address on this account.",
+      "emailVerifiedState": "Email: {email} (verified)",
+      "emailUnverifiedState": "Email: {email} — not verified yet. Enter the code we sent you.",
+      "verify": "Verify",
+      "resend": "Send the code again",
+      "emailVerifiedNow": "Email address confirmed.",
+      "codeResent": "A new code was sent.",
+      "newEmailLabel": "New email address",
+      "setEmail": "Save email address"
     },
     "developer": {
       "title": "Developer options (development build)",
@@ -649,7 +674,8 @@
     "blueprintImportFileReadFailed": "Could not read the selected file: {message}",
     "accessKeyRequired": "This companion requires an access key — enter it under Settings.",
     "accessKeyRejected": "The companion rejected the access key — check it under Settings.",
-    "insecureCompanionUrl": "This address would send passwords and keys over an unencrypted connection to another computer. Use an https:// address."
+    "insecureCompanionUrl": "This address would send passwords and keys over an unencrypted connection to another computer. Use an https:// address.",
+    "emailUnverified": "This companion needs a verified email address before it serves your data — confirm it under Settings → Account."
   },
   "frame": {
     "badge": "iframe",

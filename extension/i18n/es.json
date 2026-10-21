@@ -500,7 +500,32 @@
       "passwordMismatch": "Las dos contraseñas no coinciden.",
       "unreachable": "No se pudo alcanzar el companion.",
       "throttled": "Demasiados intentos — inténtalo de nuevo en {seconds} segundos.",
-      "failed": "El companion respondió con un error (HTTP {status})."
+      "failed": "El companion respondió con un error (HTTP {status}).",
+      "emailLabelOptional": "Correo (opcional)",
+      "emailLabelRequired": "Correo",
+      "emailMissing": "Introduce tu dirección de correo.",
+      "emailInvalid": "Eso no parece una dirección de correo.",
+      "forgot": "¿Olvidaste la contraseña?",
+      "forgotHint": "Introduce tu nombre de usuario o la dirección de correo verificada de tu cuenta. Si tiene una, se envía un código allí; introdúcelo abajo con una contraseña nueva.",
+      "forgotAccountLabel": "Usuario o correo",
+      "forgotSend": "Enviar código",
+      "forgotSent": "Si esa cuenta tiene una dirección de correo verificada, un código está en camino.",
+      "forgotAccountMissing": "Introduce tu usuario o dirección de correo.",
+      "codeLabel": "Código del correo",
+      "codeInvalid": "Introduce el código de {digits} dígitos del correo.",
+      "resetConfirm": "Restablecer contraseña",
+      "resetDone": "Contraseña restablecida. Inicia sesión con la nueva contraseña.",
+      "registeredCodeSent": "Se envió un código a {email} — introdúcelo abajo para confirmar la dirección.",
+      "registeredNoCode": "No se pudo enviar el código a {email} — usa «Enviar el código de nuevo» abajo.",
+      "noEmail": "Esta cuenta no tiene dirección de correo.",
+      "emailVerifiedState": "Correo: {email} (verificado)",
+      "emailUnverifiedState": "Correo: {email} — aún sin verificar. Introduce el código que te enviamos.",
+      "verify": "Verificar",
+      "resend": "Enviar el código de nuevo",
+      "emailVerifiedNow": "Dirección de correo confirmada.",
+      "codeResent": "Se envió un código nuevo.",
+      "newEmailLabel": "Nueva dirección de correo",
+      "setEmail": "Guardar dirección de correo"
     },
     "developer": {
       "title": "Opciones de desarrollo (build de desarrollo)",
@@ -649,7 +674,8 @@
     "blueprintImportFileReadFailed": "No se pudo leer el archivo seleccionado: {message}",
     "accessKeyRequired": "Este companion exige una clave de acceso — introdúcela en Ajustes.",
     "accessKeyRejected": "El companion rechazó la clave de acceso — compruébala en Ajustes.",
-    "insecureCompanionUrl": "Esta dirección enviaría contraseñas y claves sin cifrar a otro equipo. Usa una dirección https://."
+    "insecureCompanionUrl": "Esta dirección enviaría contraseñas y claves sin cifrar a otro equipo. Usa una dirección https://.",
+    "emailUnverified": "Este companion necesita una dirección de correo verificada antes de servir tus datos — confírmala en Ajustes → Cuenta."
   },
   "frame": {
     "badge": "iframe",

@@ -13,11 +13,23 @@ describe('authenticate', () => {
   test('posts name/password/device to /auth/login and returns the token', async () => {
     const fetchFn = jest.fn(async () => response({ body: { name: 'alice', token: 'sf_tok' } }));
     const result = await account.authenticate(fetchFn, 'https://c', 'login', ' alice ', 'pw');
-    expect(result).toEqual({ ok: true, name: 'alice', token: 'sf_tok' });
+    expect(result).toEqual({ ok: true, name: 'alice', token: 'sf_tok', email: null, emailVerified: false, verificationSent: false });
     const [url, init] = fetchFn.mock.calls[0];
     expect(url).toBe('https://c/auth/login');
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body)).toEqual({ name: 'alice', password: 'pw', device: 'Browser extension' });
+  });
+
+  test('register sends a given email (never on login) and returns the email state', async () => {
+    const fetchFn = jest.fn(async () => response({ status: 201, body: { name: 'bob', token: 't', email: 'bob@example.com', emailVerified: false, verificationSent: true } }));
+    const result = await account.authenticate(fetchFn, 'https://c', 'register', 'bob', 'pw', ' bob@example.com ');
+    expect(JSON.parse(fetchFn.mock.calls[0][1].body).email).toBe('bob@example.com');
+    expect(result).toMatchObject({ email: 'bob@example.com', emailVerified: false, verificationSent: true });
+
+    await account.authenticate(fetchFn, 'https://c', 'login', 'bob', 'pw', 'bob@example.com');
+    expect(JSON.parse(fetchFn.mock.calls[1][1].body).email).toBeUndefined();
+    await account.authenticate(fetchFn, 'https://c', 'register', 'bob', 'pw', '   ');
+    expect(JSON.parse(fetchFn.mock.calls[2][1].body).email).toBeUndefined();
   });
 
   test('register uses /auth/register', async () => {

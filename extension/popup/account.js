@@ -45,16 +45,26 @@ const SFAccount = (function () {
 
   // mode: 'login' | 'register'. On success `token` is the per-device token to
   // store as the access key.
-  async function authenticate(fetchFn, baseUrl, mode, name, password) {
-    const result = await post(fetchFn, `${baseUrl}/auth/${mode === 'register' ? 'register' : 'login'}`, {
+  // `email` is only sent when registering (Issue #353) and only if given.
+  async function authenticate(fetchFn, baseUrl, mode, name, password, email) {
+    const body = {
       name: String(name || '').trim(),
       password: String(password || ''),
       device: DEVICE_LABEL,
-    });
+    };
+    if (mode === 'register' && String(email || '').trim()) body.email = String(email).trim();
+    const result = await post(fetchFn, `${baseUrl}/auth/${mode === 'register' ? 'register' : 'login'}`, body);
     if (!result.ok) return result;
     const token = typeof result.data?.token === 'string' ? result.data.token : '';
     if (!token) return { ok: false, status: result.status, error: null, retryAfter: 0 };
-    return { ok: true, name: result.data.name, token };
+    return {
+      ok: true,
+      name: result.data.name,
+      token,
+      email: typeof result.data.email === 'string' ? result.data.email : null,
+      emailVerified: result.data.emailVerified === true,
+      verificationSent: result.data.verificationSent === true,
+    };
   }
 
   function signOut(fetchFn, baseUrl) {
@@ -81,7 +91,7 @@ const SFAccount = (function () {
     return 'ok';
   }
 
-  return { authenticate, signOut, signOutEverywhere, changePassword, checkRegistrationInput };
+  return { request: post, authenticate, signOut, signOutEverywhere, changePassword, checkRegistrationInput };
 })();
 
 if (typeof module !== 'undefined') module.exports = SFAccount;

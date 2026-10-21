@@ -75,14 +75,67 @@
       <label for="input-account-password-repeat" data-i18n="settings.account.repeatLabel"></label>
       <input type="password" id="input-account-password-repeat" autocomplete="new-password" />
     </div>
+    <!-- Issue #353: only when the companion collects email addresses and registration is open. -->
+    <div class="output-settings-row hidden" id="account-email-row">
+      <label for="input-account-email" id="label-account-email"></label>
+      <input type="email" id="input-account-email" autocomplete="email" />
+    </div>
     <div class="output-settings-row">
       <button id="btn-account-login" class="btn-secondary btn-tiny" type="button" data-i18n="settings.account.login"></button>
       <button id="btn-account-register" class="btn-secondary btn-tiny hidden" type="button" data-i18n="settings.account.register"></button>
+      <button id="btn-account-forgot" class="btn-secondary btn-tiny hidden" type="button" data-i18n="settings.account.forgot"></button>
     </div>
     <p id="account-no-registration" class="preview-summary hidden" data-i18n="settings.account.noRegistration"></p>
+    <!-- Issue #353: reset a forgotten password with a code mailed to the verified address. -->
+    <div id="account-forgot-panel" class="hidden">
+      <p class="preview-summary" data-i18n="settings.account.forgotHint"></p>
+      <div class="output-settings-row">
+        <label for="input-account-forgot-account" data-i18n="settings.account.forgotAccountLabel"></label>
+        <input type="text" id="input-account-forgot-account" autocomplete="username" />
+      </div>
+      <div class="output-settings-row">
+        <button id="btn-account-forgot-send" class="btn-secondary btn-tiny" type="button" data-i18n="settings.account.forgotSend"></button>
+      </div>
+      <div class="output-settings-row">
+        <label for="input-account-reset-code" data-i18n="settings.account.codeLabel"></label>
+        <input type="text" id="input-account-reset-code" inputmode="numeric" autocomplete="one-time-code" />
+      </div>
+      <div class="output-settings-row">
+        <label for="input-account-reset-password" data-i18n="settings.account.newPasswordLabel"></label>
+        <input type="password" id="input-account-reset-password" autocomplete="new-password" />
+      </div>
+      <div class="output-settings-row">
+        <button id="btn-account-reset-confirm" class="btn-secondary btn-tiny" type="button" data-i18n="settings.account.resetConfirm"></button>
+      </div>
+    </div>
   </div>
   <div id="account-signed-in" class="hidden">
     <p id="account-signed-in-as" class="preview-summary"></p>
+    <!-- Issue #353: the account's email address, its verification and changing it. -->
+    <div id="account-email-section" class="hidden">
+      <p id="account-email-state" class="preview-summary"></p>
+      <div id="account-verify-row" class="hidden">
+        <div class="output-settings-row">
+          <label for="input-account-verify-code" data-i18n="settings.account.codeLabel"></label>
+          <input type="text" id="input-account-verify-code" inputmode="numeric" autocomplete="one-time-code" />
+        </div>
+        <div class="output-settings-row">
+          <button id="btn-account-verify" class="btn-secondary btn-tiny" type="button" data-i18n="settings.account.verify"></button>
+          <button id="btn-account-resend" class="btn-secondary btn-tiny" type="button" data-i18n="settings.account.resend"></button>
+        </div>
+      </div>
+      <div class="output-settings-row">
+        <label for="input-account-new-email" data-i18n="settings.account.newEmailLabel"></label>
+        <input type="email" id="input-account-new-email" autocomplete="email" />
+      </div>
+      <div class="output-settings-row">
+        <label for="input-account-email-password" data-i18n="settings.account.passwordLabel"></label>
+        <input type="password" id="input-account-email-password" autocomplete="current-password" />
+      </div>
+      <div class="output-settings-row">
+        <button id="btn-account-set-email" class="btn-secondary btn-tiny" type="button" data-i18n="settings.account.setEmail"></button>
+      </div>
+    </div>
     <div class="output-settings-row">
       <button id="btn-account-logout" class="btn-secondary btn-tiny" type="button" data-i18n="settings.account.logout"></button>
       <button id="btn-account-logout-all" class="btn-secondary btn-tiny" type="button" data-i18n="settings.account.logoutAll"></button>
