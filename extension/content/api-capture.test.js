@@ -3,7 +3,7 @@
 // startRecording/stopRecording) is plain JS with no chrome/DOM dependency —
 // exported for testing the same way content-script.js exports its pure
 // functions. The actual fetch/XHR monkey-patching is skipped under Jest
-// (guarded by `typeof module === 'undefined'`, see the file) so these tests
+// (guarded by `process.env.NODE_ENV !== 'test'`, see the file) so these tests
 // exercise the buffer/cap behavior directly instead.
 
 let capture;

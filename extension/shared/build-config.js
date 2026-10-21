@@ -5,17 +5,12 @@
 // security risk in the hands of an ordinary user (talking plain HTTP to a
 // companion on another machine, see shared/companion-config.js) exist only in
 // the development channel; nothing in the extension's UI or storage can turn
-// them on in a release build. Same IIFE-wrapped-single-global pattern as the
-// other shared/ modules.
-const SFBuildConfig = (function () {
-  const CHANNEL = 'development';
+// them on in a release build.
+const CHANNEL = 'development';
 
-  function isDevelopmentBuild() {
-    return CHANNEL === 'development';
-  }
+function isDevelopmentBuild() {
+  return CHANNEL === 'development';
+}
 
-  return { CHANNEL, isDevelopmentBuild };
-})();
+module.exports = { CHANNEL, isDevelopmentBuild };
 
-if (typeof module !== 'undefined') module.exports = SFBuildConfig;
-if (typeof self !== 'undefined') self.SFBuildConfig = SFBuildConfig;
