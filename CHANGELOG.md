@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.19.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.2...v1.19.3) (2026-10-21)
+
+
+### Bug Fixes
+
+* **companion:** scale trial-run timeout estimate with API parameter combination count ([c376a9b](https://github.com/Aventinis/Scraping-Factory/commit/c376a9bf25674042b88105d298e7cef6486c1fd2))
+* **companion:** scale trial-run timeout estimate with API parameter combination count ([2d1c3c4](https://github.com/Aventinis/Scraping-Factory/commit/2d1c3c4f8f1c58bb40c130f3e30bfa2981b979f4))
+
 ## [1.19.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.1...v1.19.2) (2026-10-21)
 
 
