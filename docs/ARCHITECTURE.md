@@ -558,6 +558,27 @@ is tied to browser language and can't be switched from inside the extension.
 - Extension: `i18n/i18n.js`, `i18n/de.json`/`en.json`/`es.json`, every popup
   module's `t(...)` calls, `popup.js`'s `applyStaticTranslations`
 
+### 2.11a Help popover and "Advanced" disclosure (Issue #396)
+
+Reusable UI building blocks for explaining an option *at the option* (a short
+"?" popover with an optional example, text under `help.<area>.<field>` in the
+three dictionaries) and for tucking rarely needed options into a collapsed,
+per-section-remembered `<details>`. See CLAUDE.md (Browser Extension section)
+for the conventions and the sync test that enforces them.
+
+- Extension: `popup/help-popover.js` (pure) + `popup/help-popover-ui.js`
+  (`initHelpPopovers`, `wireHelpPopoverEvents`; hosts declared as
+  `<span class="help-host" data-help="help.…">` in `screens/*.html`),
+  `popup/advanced-disclosure.js` + `popup/advanced-disclosure-ui.js`
+  (`<details data-advanced="…">`, `chrome.storage.local` key `advancedSections`),
+  `popup/popup.css` (`.help-btn`, `.help-popover`, `.advanced-disclosure`),
+  `help.*`/`common.helpBtn`/`common.advanced` in `i18n/*.json`, wired from
+  `popup.js` (`applyStaticTranslations`, `wireEvents`, `init`)
+- Tests: `popup/help-popover.test.js`, `popup/help-popover-ui.test.js`,
+  `popup/advanced-disclosure.test.js`, `i18n/help-i18n.test.js` (key sync across
+  de/en/es and HTML), real-browser check
+  `e2e/examples/issue-396-help-popover-check.js`
+
 ### 2.12 Bug reporting / structured logging
 
 Collects the ring-buffered recent activity log kept by all three extension
