@@ -138,7 +138,9 @@ app.Use(async (context, next) =>
     // /health and, for self-service accounts (Issue #352), the two endpoints a
     // person without a key has to be able to reach.
     var anonymous = context.Request.Path == "/health"
-        || context.Request.Path == "/auth/register" || context.Request.Path == "/auth/login";
+        || context.Request.Path == "/auth/register" || context.Request.Path == "/auth/login"
+        // Issue #353: a person who forgot the password has no key.
+        || context.Request.Path == "/auth/forgot-password" || context.Request.Path == "/auth/reset-password";
     if (!authEnabled || HttpMethods.IsOptions(context.Request.Method) || anonymous)
     {
         CurrentUser.Set(context, CurrentUser.Anonymous);
