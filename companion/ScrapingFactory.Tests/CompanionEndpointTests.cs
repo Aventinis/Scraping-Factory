@@ -433,6 +433,41 @@ public class CompanionEndpointTests(WebApplicationFactory<Program> factory)
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(30), $"Expected verification to be skipped quickly, took {stopwatch.Elapsed}.");
     }
 
+    // Issue #295: a plain RangeSource x StaticListSource product — no
+    // browser action anywhere — now counts too. 1000 x 2 combinations at the
+    // assumed 1 s per request is far beyond the 10-minute cap, so /generate
+    // skips the real run (the host doesn't exist, so a real attempt would
+    // fail with a 422 instead of returning the script).
+    [Fact]
+    public async Task Generate_ApiCombinationCountExceedingTimeoutCap_SkipsVerificationAndReturnsWarningHeader()
+    {
+        var payload = """
+            {
+              "url": "https://example.invalid/",
+              "api": {
+                "urlTemplate": "https://example.invalid/api?n={n}&g={g}",
+                "itemsPath": "data.items",
+                "fields": [ { "name": "Titel", "path": "title" } ],
+                "parameters": [
+                  { "name": "n", "source": { "kind": "range", "type": "Number", "from": "1", "to": "1000" } },
+                  { "name": "g", "source": { "kind": "staticList", "values": ["a", "b"] } }
+                ]
+              }
+            }
+            """;
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var stopwatch = Stopwatch.StartNew();
+        var response = await _client.PostAsync("/generate", content);
+        stopwatch.Stop();
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(HttpStatusCode.OK == response.StatusCode, body);
+        Assert.True(response.Headers.TryGetValues("X-ScrapingFactory-Verification-Skipped", out var reasons), body);
+        Assert.Contains("exceeds the 00:10:00 cap", reasons!.Single());
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(30), $"Expected verification to be skipped quickly, took {stopwatch.Elapsed}.");
+    }
+
     // Issue #289 follow-up: Blocks mode shares the same cap check, applied
     // to the whole plan's BrowserActions (shared across every block) — the
     // skipped verification's own per-block envelope shape must still match

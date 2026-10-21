@@ -1343,6 +1343,22 @@ request except `/health` and CORS preflights needs `Authorization: Bearer
 - Tests: `AuthenticationTests.cs`, `extension/popup/access-key.test.js`,
   `e2e/examples/issue-278-access-key-check.js`
 
+### 2.21ah Trial-run timeout estimate (Issues #289, #295)
+
+`/generate` runs the generated script once as a trial. Its timeout is the
+verifier's base 45 s plus an estimate of extra time the configuration
+legitimately needs: browser-action durations (Scroll/WaitFor, including a
+`BrowserDiscoverySource`'s nested actions) and, for API mode, one assumed
+second per parameter combination beyond the first. An estimate above 10
+minutes skips the trial run (response header
+`X-ScrapingFactory-Verification-Skipped`, warning toast in the popup).
+
+- Companion: `Compiler/Backends/VerificationTimeEstimator.cs`,
+  `RangeFormat.CountValues` (`Backends/Python/RangeFormat.cs`), the cap and
+  header in `Program.cs`
+- Tests: `VerificationTimeEstimatorTests.cs`,
+  `ApiCombinationTimeoutEndToEndTests.cs`, `CompanionEndpointTests.cs`
+
 ### 2.22 Persistent session/cookie handling (Issue #175)
 
 Browser-engine only (rejected server-side for Static/Api, same as

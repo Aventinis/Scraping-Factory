@@ -560,34 +560,10 @@ static (ScrapingPlan? Plan, string? Script, string? ValidationError, string? Gen
 }
 
 // Issue #289 follow-up: a ScrollStep/WaitForStep's own configured cost can
-// make the verifier's trial run legitimately take a long time — summed
-// across every such step in the plan AND every BrowserDiscoverySource
-// parameter's own nested Actions (Issue #216), since those run as their own
-// separate, sequential Playwright sessions during parameter resolution,
-// before the main request loop even starts, and never go through
-// ScrapingPlanBuilder's own step translation (see BrowserDiscoverySource's
-// own doc comment) — invisible to a plain plan.Steps.OfType<ScrollStep>()
-// scan on its own, which is exactly the gap that let a long-running
-// discovery configuration always fail verification with a generic timeout.
-static long EstimateExtraVerificationTimeoutMs(ScrapingPlan plan)
-{
-    var ms = plan.Steps.OfType<ScrollStep>().Sum(step => (long)step.MaxIterations * step.WaitAfterMs)
-        + plan.Steps.OfType<WaitForStep>().Sum(step => (long)step.TimeoutMs);
-
-    var apiCallStep = plan.Steps.OfType<ApiCallStep>().SingleOrDefault();
-    if (apiCallStep is not null)
-    {
-        foreach (var parameter in apiCallStep.Config.Parameters)
-        {
-            if (parameter.Source is not BrowserDiscoverySource { Actions: { } actions })
-                continue;
-            ms += actions.OfType<ScrollAction>().Sum(action => (long)action.MaxIterations * action.WaitAfterMs)
-                + actions.OfType<WaitForAction>().Sum(action => (long)action.TimeoutMs);
-        }
-    }
-
-    return ms;
-}
+// make the verifier's trial run legitimately take a long time, as can API
+// mode's sheer parameter combination count (Issue #295) — see
+// VerificationTimeEstimator for the details of what is summed.
+static long EstimateExtraVerificationTimeoutMs(ScrapingPlan plan) => VerificationTimeEstimator.EstimateExtraMs(plan);
 
 // A trial run exists to prove the artifact works, not to accommodate an
 // unboundedly slow configuration — once EstimateExtraVerificationTimeoutMs
