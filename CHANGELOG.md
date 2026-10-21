@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.19.5](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.4...v1.19.5) (2026-10-21)
+
+
+### Features
+
+* **companion:** let a request skip the trial run (ScrapingConfig.SkipVerification) ([c019401](https://github.com/Aventinis/Scraping-Factory/commit/c019401233d6418f2b4afbfc5e63d12e8b427ff6))
+* optional Settings preference to skip the trial run ([f3bde26](https://github.com/Aventinis/Scraping-Factory/commit/f3bde26e305d7b2eb4819a0226c5b136e2df4e0d))
+
 ## [1.19.4](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.3...v1.19.4) (2026-10-21)
 
 
