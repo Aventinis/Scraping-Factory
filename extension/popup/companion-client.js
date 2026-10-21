@@ -13,7 +13,7 @@ const log = createLogger('SF:Popup');
 const { t } =
   typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
 
-const { getCompanionUrl, setCompanionUrlOverride, resetCompanionUrlOverride, normalizeUrl, DEFAULT_COMPANION_URL, loadAccessKey, getAccessKey } =
+const { getCompanionUrl, setCompanionUrlOverride, resetCompanionUrlOverride, normalizeUrl, DEFAULT_COMPANION_URL, loadAccessKey, getAccessKey, checkCompanionUrl, loadDeveloperOptions } =
   typeof require !== 'undefined' ? require('../shared/companion-config') : self.SFCompanionConfig;
 
 const { STATES } =
@@ -44,6 +44,15 @@ function getResolvedCompanionUrl() {
   return companionUrl;
 }
 
+// What /health last said about this companion (Issue #352): whether it wants
+// an access key at all and whether it offers self-registration — the Settings
+// screen's Account section follows it. Both false until a health check answers.
+let companionInfo = { authRequired: false, registration: false };
+
+function getCompanionInfo() {
+  return companionInfo;
+}
+
 // Issue #278: every request to the companion goes through here so the access
 // key (when one is set — Settings screen) is sent as `Authorization: Bearer
 // <key>`. Without a key the call is exactly the plain `fetch(url[, init])` it
@@ -62,6 +71,7 @@ function companionFetch(url, init) {
 async function warnAboutAccessKey(healthResponse) {
   try {
     const body = await healthResponse.json();
+    companionInfo = { authRequired: body?.authRequired === true, registration: body?.registration === true };
     if (body?.authRequired !== true) return;
     const whoami = await companionFetch(`${companionUrl}/whoami`);
     if (whoami.status === 401) {
@@ -73,6 +83,8 @@ async function warnAboutAccessKey(healthResponse) {
 }
 
 async function checkCompanion(bridge) {
+  // Developer options first: whether a stored http:// address is still allowed depends on them.
+  await loadDeveloperOptions();
   companionUrl = await getCompanionUrl();
   await loadAccessKey();
   log('HEALTH_CHECK start', companionUrl);
@@ -123,17 +135,15 @@ async function checkCompanion(bridge) {
 // the next session (see shared/companion-config.js), then re-runs the same
 // health check a plain retry would.
 async function useCustomCompanionUrl(bridge, rawUrl) {
-  const normalized = normalizeUrl(rawUrl);
-  let parsed = null;
-  try {
-    parsed = new URL(normalized);
-  } catch {
-    // parsed stays null — reported as invalid below, same as an empty input.
-  }
-  if (!parsed || !['http:', 'https:'].includes(parsed.protocol)) {
-    showToast(t('toast.invalidCompanionUrl'));
+  // Issue #352: https always, plain http only for this computer (and, in a
+  // development build with the developer option on, anywhere) — see
+  // shared/companion-config.js's checkCompanionUrl.
+  const checked = checkCompanionUrl(rawUrl);
+  if (!checked.ok) {
+    showToast(t(checked.reason === 'insecure' ? 'toast.insecureCompanionUrl' : 'toast.invalidCompanionUrl'));
     return;
   }
+  const normalized = checked.url;
   log('COMPANION_URL_OVERRIDE set', normalized);
   await setCompanionUrlOverride(normalized);
   bridge.setState(STATES.CHECKING_COMPANION);
@@ -354,7 +364,7 @@ function wireCompanionErrorEvents(bridge) {
   });
 }
 
-  return {getResolvedCompanionUrl, companionFetch, checkCompanion, useCustomCompanionUrl, resetCustomCompanionUrl,
+  return {getResolvedCompanionUrl, getCompanionInfo, companionFetch, checkCompanion, useCustomCompanionUrl, resetCustomCompanionUrl,
     checkRobotsTxt, buildVerificationErrorMessage, generate, resolveCombinedComponents,
     renderCompanionErrorScreen, wireCompanionErrorEvents,};
 })();

@@ -478,7 +478,37 @@
     "accessKeyNotNeeded": "Este companion no usa claves de acceso.",
     "accessKeyMissing": "Este companion exige una clave de acceso.",
     "accessKeyRejected": "La clave de acceso no es válida.",
-    "accessKeyUnreachable": "No se pudo alcanzar el companion."
+    "accessKeyUnreachable": "No se pudo alcanzar el companion.",
+    "account": {
+      "title": "Cuenta",
+      "nameLabel": "Nombre de usuario",
+      "passwordLabel": "Contraseña",
+      "repeatLabel": "Repetir contraseña",
+      "login": "Iniciar sesión",
+      "register": "Registrarse",
+      "logout": "Cerrar sesión",
+      "logoutAll": "Cerrar sesión en todas partes",
+      "signedInAs": "Sesión iniciada como {name}.",
+      "currentPasswordLabel": "Contraseña actual",
+      "newPasswordLabel": "Contraseña nueva",
+      "changePassword": "Cambiar contraseña",
+      "passwordChanged": "Contraseña cambiada. Los demás dispositivos deben iniciar sesión de nuevo.",
+      "noRegistration": "Este companion no permite el autorregistro — pide una cuenta o una clave de acceso a quien lo gestiona.",
+      "hint": "La contraseña solo se envía a tu companion y nunca se guarda en este navegador — solo un token revocable para este dispositivo. Usa un companion mediante https:// (o en este equipo) para que nadie pueda leer la contraseña por el camino.",
+      "nameMissing": "Introduce un nombre de usuario.",
+      "passwordMissing": "Introduce una contraseña.",
+      "passwordMismatch": "Las dos contraseñas no coinciden.",
+      "unreachable": "No se pudo alcanzar el companion.",
+      "throttled": "Demasiados intentos — inténtalo de nuevo en {seconds} segundos.",
+      "failed": "El companion respondió con un error (HTTP {status})."
+    },
+    "developer": {
+      "title": "Opciones de desarrollo (build de desarrollo)",
+      "insecureHttp": "Permitir http:// sin cifrar hacia un companion en otro equipo",
+      "openCompanion": "Abrir la dirección del companion en una pestaña",
+      "hint": "Solo existe en un build de desarrollo — la extensión instalada desde una release no puede hacerlo. Para un certificado de desarrollo autofirmado: abre la dirección del companion una vez en una pestaña (botón de arriba), acepta la advertencia y recarga este panel.",
+      "reloadHint": "Guardado — recarga el panel (o reintenta la conexión) para aplicarlo."
+    }
   },
   "modals": {
     "fieldName": {
@@ -618,7 +648,8 @@
     "blueprintImportParsed": "Se importaron {count} campo(s) de la muestra.",
     "blueprintImportFileReadFailed": "No se pudo leer el archivo seleccionado: {message}",
     "accessKeyRequired": "Este companion exige una clave de acceso — introdúcela en Ajustes.",
-    "accessKeyRejected": "El companion rechazó la clave de acceso — compruébala en Ajustes."
+    "accessKeyRejected": "El companion rechazó la clave de acceso — compruébala en Ajustes.",
+    "insecureCompanionUrl": "Esta dirección enviaría contraseñas y claves sin cifrar a otro equipo. Usa una dirección https://."
   },
   "frame": {
     "badge": "iframe",

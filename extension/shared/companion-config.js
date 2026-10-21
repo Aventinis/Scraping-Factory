@@ -6,6 +6,9 @@
 // loads this as a classic <script> alongside those, so a bare top-level
 // `const` here would collide with popup.js's own declarations.
 const SFCompanionConfig = (function () {
+  const { isDevelopmentBuild } =
+    typeof require !== 'undefined' ? require('./build-config') : self.SFBuildConfig;
+
   // Mirrors CompanionHostOptions' own default in the companion app
   // (companion/ScrapingFactory.Companion/CompanionHostOptions.cs) — the two
   // are independent hardcoded values (different languages, no shared config
@@ -28,9 +31,74 @@ const SFCompanionConfig = (function () {
     }
   }
 
+  // Issue #352: which companion addresses the extension will talk to. Passwords
+  // and access keys travel over this connection, so:
+  //   - https:// is always fine;
+  //   - plain http:// only for a companion on this computer (localhost, 127.x,
+  //     ::1) — traffic never leaves the machine;
+  //   - plain http:// to any other host only in a development build with the
+  //     developer option switched on (see below). A release build has no such
+  //     option, and a stored value can't enable it.
+  // A certificate the browser doesn't trust (a self-signed development
+  // certificate) is the browser's decision, not the extension's — in
+  // development, open the companion URL once in a tab and accept it.
+  function isLoopbackHostname(hostname) {
+    const host = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+    return host === 'localhost' || host === '::1' || /^127(\.\d{1,3}){3}$/.test(host);
+  }
+
+  const DEV_ALLOW_INSECURE_KEY = 'devAllowInsecureHttp';
+  let cachedAllowInsecure = false;
+
+  // Always false in a release build, whatever is stored.
+  function isInsecureHttpAllowed() {
+    return isDevelopmentBuild() && cachedAllowInsecure;
+  }
+
+  async function loadDeveloperOptions() {
+    if (!isDevelopmentBuild() || typeof chrome === 'undefined' || !chrome.storage?.local) {
+      cachedAllowInsecure = false;
+      return;
+    }
+    try {
+      const stored = await chrome.storage.local.get(DEV_ALLOW_INSECURE_KEY);
+      cachedAllowInsecure = stored[DEV_ALLOW_INSECURE_KEY] === true;
+    } catch {
+      cachedAllowInsecure = false;
+    }
+  }
+
+  // Ignored (stays off) in a release build.
+  async function setInsecureHttpAllowed(allowed) {
+    cachedAllowInsecure = isDevelopmentBuild() && allowed === true;
+    if (!isDevelopmentBuild() || typeof chrome === 'undefined' || !chrome.storage?.local) return;
+    try {
+      await chrome.storage.local.set({ [DEV_ALLOW_INSECURE_KEY]: cachedAllowInsecure });
+    } catch {
+      // Best-effort, like the other preferences.
+    }
+  }
+
+  // { ok: true, url } or { ok: false, reason: 'invalid' | 'insecure' }.
+  function checkCompanionUrl(raw) {
+    const normalized = normalizeUrl(raw);
+    let parsed;
+    try {
+      parsed = new URL(normalized);
+    } catch {
+      return { ok: false, reason: 'invalid' };
+    }
+    if (parsed.protocol === 'https:') return { ok: true, url: normalized };
+    if (parsed.protocol !== 'http:') return { ok: false, reason: 'invalid' };
+    if (isLoopbackHostname(parsed.hostname) || isInsecureHttpAllowed()) return { ok: true, url: normalized };
+    return { ok: false, reason: 'insecure' };
+  }
+
   async function getCompanionUrl() {
     const override = await getStoredOverride();
-    return override || DEFAULT_COMPANION_URL;
+    // A stored address that the current policy no longer allows (e.g. saved by
+    // a development build) falls back to the default instead of being used.
+    return override && checkCompanionUrl(override).ok ? normalizeUrl(override) : DEFAULT_COMPANION_URL;
   }
 
   // Strips a trailing slash so callers can always append "/health"/"/generate"
@@ -99,6 +167,11 @@ const SFCompanionConfig = (function () {
 
   return {
     DEFAULT_COMPANION_URL,
+    isLoopbackHostname,
+    checkCompanionUrl,
+    isInsecureHttpAllowed,
+    loadDeveloperOptions,
+    setInsecureHttpAllowed,
     loadAccessKey,
     getAccessKey,
     setAccessKey,

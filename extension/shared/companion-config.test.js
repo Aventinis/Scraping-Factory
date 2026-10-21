@@ -87,7 +87,7 @@ describe('setCompanionUrlOverride / resetCompanionUrlOverride', () => {
       },
     };
 
-    await setCompanionUrlOverride('http://192.168.1.5:5000');
-    expect(await getCompanionUrl()).toBe('http://192.168.1.5:5000');
+    await setCompanionUrlOverride('https://192.168.1.5:5000');
+    expect(await getCompanionUrl()).toBe('https://192.168.1.5:5000');
   });
 });

@@ -49,6 +49,7 @@ test('shared/logger.js + i18n/i18n.js + popup/popup.js load together without a r
   // this test, not full runtime behavior (that's what popup.test.js covers).
   expect(() => runClassicScripts([
     'shared/logger.js',
+    'shared/build-config.js',
     'shared/companion-config.js',
     'shared/theme.js',
     'shared/global-settings.js',
@@ -80,6 +81,7 @@ test('shared/logger.js + i18n/i18n.js + popup/popup.js load together without a r
     'popup/api-link-pagination-ui.js',
     'popup/dom-tree-ui.js',
     'popup/preview.js',
+    'popup/account.js',
     'popup/companion-client.js',
     'popup/transform-presets-ui.js',
     'popup/download-helpers.js',
@@ -94,6 +96,7 @@ test('shared/logger.js + i18n/i18n.js + popup/popup.js load together without a r
     'popup/blocks-config.js',
     'popup/blocks-config-ui.js',
     'popup/output-blueprints-ui.js',
+    'popup/account-ui.js',
     'popup/global-settings-ui.js',
     'popup/idle-screen-ui.js',
     'popup/message-router.js',

@@ -57,6 +57,52 @@
   <p class="preview-summary" data-i18n="settings.scriptNameHostnameHint" id="script-name-hostname-hint"></p>
 </div>
 
+<!-- Issue #352: self-service account on a companion that requires login —
+     sign in / register / sign out / change password (account-ui.js). The
+     token the companion hands out is stored as the access key below. -->
+<div id="settings-account-section" class="hidden">
+  <p class="row-label" data-i18n="settings.account.title"></p>
+  <div id="account-signed-out">
+    <div class="output-settings-row">
+      <label for="input-account-name" data-i18n="settings.account.nameLabel"></label>
+      <input type="text" id="input-account-name" autocomplete="username" />
+    </div>
+    <div class="output-settings-row">
+      <label for="input-account-password" data-i18n="settings.account.passwordLabel"></label>
+      <input type="password" id="input-account-password" autocomplete="current-password" />
+    </div>
+    <div class="output-settings-row hidden" id="account-repeat-row">
+      <label for="input-account-password-repeat" data-i18n="settings.account.repeatLabel"></label>
+      <input type="password" id="input-account-password-repeat" autocomplete="new-password" />
+    </div>
+    <div class="output-settings-row">
+      <button id="btn-account-login" class="btn-secondary btn-tiny" type="button" data-i18n="settings.account.login"></button>
+      <button id="btn-account-register" class="btn-secondary btn-tiny hidden" type="button" data-i18n="settings.account.register"></button>
+    </div>
+    <p id="account-no-registration" class="preview-summary hidden" data-i18n="settings.account.noRegistration"></p>
+  </div>
+  <div id="account-signed-in" class="hidden">
+    <p id="account-signed-in-as" class="preview-summary"></p>
+    <div class="output-settings-row">
+      <button id="btn-account-logout" class="btn-secondary btn-tiny" type="button" data-i18n="settings.account.logout"></button>
+      <button id="btn-account-logout-all" class="btn-secondary btn-tiny" type="button" data-i18n="settings.account.logoutAll"></button>
+    </div>
+    <div class="output-settings-row">
+      <label for="input-account-current-password" data-i18n="settings.account.currentPasswordLabel"></label>
+      <input type="password" id="input-account-current-password" autocomplete="current-password" />
+    </div>
+    <div class="output-settings-row">
+      <label for="input-account-new-password" data-i18n="settings.account.newPasswordLabel"></label>
+      <input type="password" id="input-account-new-password" autocomplete="new-password" />
+    </div>
+    <div class="output-settings-row">
+      <button id="btn-account-change-password" class="btn-secondary btn-tiny" type="button" data-i18n="settings.account.changePassword"></button>
+    </div>
+  </div>
+  <p id="account-status" class="preview-summary hidden"></p>
+  <p class="preview-summary" data-i18n="settings.account.hint"></p>
+</div>
+
 <!-- Issue #278: access key for a shared companion with per-user
      authentication — a device preference (chrome.storage.local via
      shared/companion-config.js), sent as a Bearer header with every request. -->
@@ -72,6 +118,21 @@
   </div>
   <p id="access-key-status" class="preview-summary hidden"></p>
   <p class="preview-summary" data-i18n="settings.accessKeyHint"></p>
+</div>
+
+<!-- Issue #352: development builds only — account-ui.js removes this whole
+     section when the extension is a release build (shared/build-config.js),
+     so an ordinary user's extension cannot switch any of it on. -->
+<div id="settings-developer-section">
+  <p class="row-label" data-i18n="settings.developer.title"></p>
+  <label class="output-settings-toggle">
+    <input type="checkbox" id="toggle-dev-insecure-http" />
+    <span data-i18n="settings.developer.insecureHttp"></span>
+  </label>
+  <div class="output-settings-row">
+    <button id="btn-dev-open-companion" class="btn-secondary btn-tiny" type="button" data-i18n="settings.developer.openCompanion"></button>
+  </div>
+  <p class="preview-summary" data-i18n="settings.developer.hint"></p>
 </div>
 
 <!-- Output Blueprint management — moved here from modal-manage-blueprints
