@@ -22,7 +22,8 @@ if (UserCommands.IsUserCommand(args))
 
 // Issue #352: refuse configurations that would send passwords/keys in clear
 // text beyond this machine, and set up HTTPS when it is configured.
-var transportError = CompanionTls.Validate(builder.Configuration) ?? AuthOptions.Validate(builder.Configuration);
+var transportError = CompanionTls.Validate(builder.Configuration) ?? AuthOptions.Validate(builder.Configuration)
+    ?? EmailOptions.Validate(builder.Configuration);
 if (transportError is not null)
 {
     Console.Error.WriteLine($"ERROR: {transportError}");
@@ -90,6 +91,14 @@ builder.Services.AddSingleton<IUserStore>(sp => StorageOptions.CreateUserStore(s
 // Issue #352: abuse protection for /auth/login and /auth/register.
 builder.Services.AddSingleton<LoginThrottle>();
 
+// Issue #353: email addresses, verification and password reset — the sender
+// (SMTP when configured), the throttle for mail-sending endpoints and the
+// service that issues codes.
+builder.Services.AddSingleton<IEmailSender>(sp =>
+    EmailOptions.ReadSmtp(sp.GetRequiredService<IConfiguration>()) is { } smtp ? new SmtpEmailSender(smtp) : new NoEmailSender());
+builder.Services.AddSingleton<EmailThrottle>();
+builder.Services.AddSingleton<EmailService>();
+
 var app = builder.Build();
 
 // Issue #277: fail fast on an unknown storage provider / missing MySQL
@@ -123,6 +132,7 @@ app.Use(async (context, next) =>
 // as the anonymous owner 0, exactly as before.
 var authEnabled = AuthOptions.IsEnabled(app.Configuration);
 var registrationOpen = AuthOptions.IsRegistrationOpen(app.Configuration);
+var emailPolicy = EmailOptions.Read(app.Configuration);
 app.Use(async (context, next) =>
 {
     // /health and, for self-service accounts (Issue #352), the two endpoints a
@@ -148,19 +158,54 @@ app.Use(async (context, next) =>
         return;
     }
     CurrentUser.Set(context, new CurrentUser(user.Id, user.Name));
+
+    // Issue #353: with RequireVerified, an account without a confirmed email
+    // address can sign in and see who it is, and use the account endpoints to
+    // confirm one — but not the companion's data. (A 403 with a code the
+    // extension recognizes, not a 401: the key itself is fine.)
+    if (emailPolicy.RequireVerified && !user.EmailVerified
+        && !(context.Request.Path == "/whoami" || context.Request.Path.StartsWithSegments("/auth")))
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            error = user.Email is null
+                ? "This companion requires a verified email address - add one in the extension's Settings > Account."
+                : "This companion requires a verified email address - enter the code from the email in the extension's Settings > Account.",
+            code = "email_unverified",
+        });
+        return;
+    }
     await next();
 });
 
 // authRequired lets the extension know whether to ask for / validate a key.
 // registration tells the extension whether to offer "Register" (Issue #352).
-app.MapGet("/health", () => Results.Ok(new { authRequired = authEnabled, registration = registrationOpen }));
+// Issue #353: email = whether the extension should ask for an address
+// ("off" | "optional" | "required"), passwordReset = whether a forgotten
+// password can be reset by email, verifiedEmailRequired = the operator's rule.
+app.MapGet("/health", () => Results.Ok(new
+{
+    authRequired = authEnabled,
+    registration = registrationOpen,
+    email = authEnabled ? emailPolicy.Mode : "off",
+    passwordReset = authEnabled && emailPolicy.SmtpConfigured,
+    verifiedEmailRequired = authEnabled && emailPolicy.RequireVerified,
+}));
 
 if (authEnabled)
     AuthEndpoints.Map(app, registrationOpen);
 
 // Issue #278: "who am I" — the extension's Settings screen uses it to check a
 // key (401 when the key is missing/wrong while authentication is on).
-app.MapGet("/whoami", (CurrentUser user) => Results.Ok(new { name = user.Name, authRequired = authEnabled }));
+app.MapGet("/whoami", (CurrentUser user, HttpContext context) =>
+{
+    // Issue #353: the account's email state (when there is an account). The
+    // user store is only touched when authentication is on, so a companion
+    // without it never creates users.db.
+    var account = authEnabled && user.Id != 0 ? context.RequestServices.GetRequiredService<IUserStore>().FindByName(user.Name) : null;
+    return Results.Ok(new { name = user.Name, authRequired = authEnabled, email = account?.Email, emailVerified = account?.EmailVerified ?? false });
+});
 
 // Issue #141: local SQLite-backed configuration history — save/list/load/
 // delete past per-site configs, so a repeatedly-scraped site's setup doesn't
