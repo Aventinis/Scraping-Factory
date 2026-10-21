@@ -38,7 +38,12 @@ const { launchBrowser, openPopup, focusFixture, waitForIdleScreen, startCompanio
     await focusFixture(fixturePage);
     await popupPage.click('#btn-generate');
     await popupPage.waitForSelector('#error-toast:not(.hidden)', { timeout: 60000 });
-    console.log('Without retries →', (await popupPage.locator('#error-toast-message').textContent()).slice(0, 120));
+    const withoutRetries = await popupPage.locator('#error-toast-message').textContent();
+    console.log('Without retries →', withoutRetries.slice(0, 160));
+    // Issue #319: one actionable line, never a raw Python traceback.
+    if (withoutRetries.includes('Traceback') || !withoutRetries.includes('HTTP 503') || !withoutRetries.includes('Retry on transient errors')) {
+      throw new Error(`Expected a clean "HTTP 503 … Retry on transient errors" message, got: ${withoutRetries}`);
+    }
     await waitForIdleScreen(popupPage);
 
     // 2) With retries: the same configuration passes.

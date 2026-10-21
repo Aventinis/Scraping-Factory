@@ -35,7 +35,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         // Issue #223: with retries on, the navigation itself is wrapped in
         // _send_with_retry (the shell defines it) — only the navigation, never
         // a half-run login action sequence.
-        var navigateFragment = navigateTemplate.Render(new { retry_enabled = plan.Retry is not null }).TrimEnd();
+        var navigateFragment = navigateTemplate.Render().TrimEnd();
 
         var actionLines = plan.Steps
             .Select(step => step switch

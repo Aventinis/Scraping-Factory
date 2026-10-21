@@ -1359,6 +1359,20 @@ minutes skips the trial run (response header
 - Tests: `VerificationTimeEstimatorTests.cs`,
   `ApiCombinationTimeoutEndToEndTests.cs`, `CompanionEndpointTests.cs`
 
+### 2.21ai Clean page-request errors (Issue #319)
+
+A failed page request in flat/container/Blocks mode ends in one
+`ERROR: <what> to <url> failed: <hint>` line and exit code 7 instead of a
+Python traceback (Static: connection error / HTTP status; Browser: navigation
+error / HTTP status ≥ 400). `PythonScriptVerifier.CleanScriptError` shows that
+line as `/generate`'s error. API mode has its own equivalent (Issue #220).
+
+- Templates: `fragments/request_errors_common.py.j2`, `_static.py.j2`,
+  `_playwright.py.j2`; used by the three Static and three Browser flat/grouped/
+  Blocks templates
+- Tests: `PageRequestErrorEndToEndTests.cs`,
+  `e2e/examples/issue-223-retry-check.js`
+
 ### 2.22 Persistent session/cookie handling (Issue #175)
 
 Browser-engine only (rejected server-side for Static/Api, same as
