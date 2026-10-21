@@ -8,7 +8,8 @@
 # Run it from the unpacked bundle:
 #   powershell -ExecutionPolicy Bypass -File .\install.ps1 [-Autostart] [-BrowserEngine] [-NoExcel] [-NoStart] [-Port N]
 #                                                          [-MySql CONNECTION_STRING | -Sqlite]
-#                                                          [-EnableAuth | -DisableAuth]
+#                                                          [-EnableAuth | -DisableAuth] [-Registration open|disabled]
+#                                                          [-HostName HOST] [-TlsCert FILE [-TlsKey FILE]] [-NoTls]
 #   -BrowserEngine  also install Playwright and download Chromium (~150 MB)
 #   -NoExcel        skip openpyxl (only needed for the Excel output format)
 #   -Autostart      start the companion automatically at login
@@ -25,6 +26,16 @@
 #                   companion several people share); create the users afterwards
 #                   with:  <installed companion> user add <name>
 #   -DisableAuth    switch authentication off again (the default)
+#   -Registration open|disabled
+#                   let people create their own account from the extension
+#                   (open - implies -EnableAuth) or not (disabled, the default)
+#   -HostName HOST  listen on HOST instead of localhost (e.g. 0.0.0.0). The
+#                   companion refuses to listen beyond this computer without
+#                   HTTPS, because passwords and keys would travel in clear text
+#   -TlsCert FILE   serve HTTPS with this certificate (a .pfx, with the password
+#                   in SF_TLS_CERT_PASSWORD; or a PEM file plus -TlsKey FILE).
+#                   Users then enter https://HOST:PORT in the extension's error screen
+#   -NoTls          switch HTTPS off again (the default)
 # Safe to run again: it updates an existing installation in place.
 param(
     [switch]$BrowserEngine,
@@ -35,7 +46,12 @@ param(
     [string]$MySql = $env:SF_MYSQL_CONNECTION_STRING,
     [switch]$Sqlite,
     [switch]$EnableAuth,
-    [switch]$DisableAuth
+    [switch]$DisableAuth,
+    [string]$Registration = '',
+    [string]$HostName = '',
+    [string]$TlsCert = '',
+    [string]$TlsKey = '',
+    [switch]$NoTls
 )
 $ErrorActionPreference = 'Stop'
 
@@ -111,6 +127,13 @@ import json, os, sys
 path, python, port = sys.argv[1], sys.argv[2], int(sys.argv[3])
 mysql, back_to_sqlite = os.environ.get("SF_MYSQL", ""), os.environ.get("SF_SQLITE") == "1"
 auth = os.environ.get("SF_AUTH", "")
+registration = os.environ.get("SF_REGISTRATION", "").lower()
+host, tls_cert, tls_key = os.environ.get("SF_HOST", ""), os.environ.get("SF_TLS_CERT", ""), os.environ.get("SF_TLS_KEY", "")
+no_tls, tls_password = os.environ.get("SF_NO_TLS") == "1", os.environ.get("SF_TLS_CERT_PASSWORD", "")
+if registration not in ("", "open", "disabled"):
+    sys.exit("-Registration must be open or disabled")
+if registration == "open" and auth == "off":
+    sys.exit("-Registration open needs authentication; drop -DisableAuth")
 data = {}
 if os.path.exists(path):
     try:
@@ -134,14 +157,35 @@ if auth == "on":
     data["Companion"]["Auth"] = {"Enabled": True}
 elif auth == "off":
     data["Companion"].pop("Auth", None)
+# Issue #352: self-service accounts (needs authentication on) and HTTPS.
+if registration == "open":
+    data["Companion"]["Auth"] = {**data["Companion"].get("Auth", {}), "Enabled": True, "Registration": "Open"}
+elif registration == "disabled" and "Auth" in data["Companion"]:
+    data["Companion"]["Auth"].pop("Registration", None)
+if host:
+    data["Companion"]["Host"] = host
+if tls_cert:
+    tls = {"Mode": "Certificate", "CertificatePath": tls_cert}
+    if tls_key:
+        tls["CertificateKeyPath"] = tls_key
+    if tls_password:
+        tls["CertificatePassword"] = tls_password
+    data["Companion"]["Tls"] = tls
+elif no_tls:
+    data["Companion"].pop("Tls", None)
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2)
 '@
 $env:SF_MYSQL = if ($MySql) { $MySql } else { '' }
 $env:SF_SQLITE = if ($Sqlite) { '1' } else { '0' }
 $env:SF_AUTH = if ($EnableAuth) { 'on' } elseif ($DisableAuth) { 'off' } else { '' }
+$env:SF_REGISTRATION = $Registration
+$env:SF_HOST = $HostName
+$env:SF_TLS_CERT = $TlsCert
+$env:SF_TLS_KEY = $TlsKey
+$env:SF_NO_TLS = if ($NoTls) { '1' } else { '0' }
 $WriteSettings | & $VenvPython - $Settings $VenvPython $Port
-Remove-Item Env:\SF_MYSQL, Env:\SF_SQLITE, Env:\SF_AUTH -ErrorAction SilentlyContinue
+Remove-Item Env:\SF_MYSQL, Env:\SF_SQLITE, Env:\SF_AUTH, Env:\SF_REGISTRATION, Env:\SF_HOST, Env:\SF_TLS_CERT, Env:\SF_TLS_KEY, Env:\SF_NO_TLS -ErrorAction SilentlyContinue
 
 # ── Autostart / start ─────────────────────────────────────────────────────
 if ($Autostart) {
@@ -156,10 +200,15 @@ if (-not $NoStart) {
     Say 'Starting the companion'
     if ($Autostart) { Start-ScheduledTask -TaskName $TaskName } else { Start-Process -FilePath $Bin -WindowStyle Hidden }
     $up = $false
+    # HTTPS when the settings file now has a certificate (it is made for the
+    # public name, not "localhost", hence the certificate check is skipped here).
+    $Scheme = if ((Test-Path $Settings) -and (Select-String -Path $Settings -Pattern '"Certificate"' -Quiet)) { 'https' } else { 'http' }
+    $Probe = @{ UseBasicParsing = $true }
+    if ($Scheme -eq 'https' -and (Get-Command Invoke-WebRequest).Parameters.ContainsKey('SkipCertificateCheck')) { $Probe.SkipCertificateCheck = $true }
     for ($i = 0; $i -lt 30 -and -not $up; $i++) {
-        try { Invoke-WebRequest -UseBasicParsing "http://localhost:$Port/health" | Out-Null; $up = $true } catch { Start-Sleep -Seconds 1 }
+        try { Invoke-WebRequest @Probe "${Scheme}://localhost:$Port/health" | Out-Null; $up = $true } catch { Start-Sleep -Seconds 1 }
     }
-    if ($up) { Write-Host "The companion is running on http://localhost:$Port" }
+    if ($up) { Write-Host "The companion is running on ${Scheme}://localhost:$Port" }
     else { Write-Warning "The companion did not answer on port $Port within 30 s." }
 }
 
