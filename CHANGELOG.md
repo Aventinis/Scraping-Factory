@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.19.6](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.5...v1.19.6) (2026-10-21)
+
+
+### Features
+
+* API mode Link-header pagination (rel="next") ([5198211](https://github.com/Aventinis/Scraping-Factory/commit/519821160cc2312101f752f9aaa587ab850542f5))
+* **extension:** Link-header pagination for API mode (recorder, draft, API_CONFIG section) ([9960096](https://github.com/Aventinis/Scraping-Factory/commit/9960096b7e5dd58f56e2403bf4547968c6cda33b))
+
 ## [1.19.5](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.4...v1.19.5) (2026-10-21)
 
 
