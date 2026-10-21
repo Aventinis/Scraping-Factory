@@ -38,6 +38,10 @@ declare global {
     SFApiLinkPagination: any;
     SFDedupConfig: any;
     SFRequestHeaders: any;
+    SFHelpPopover: any;
+    SFHelpPopoverUI: any;
+    SFAdvancedDisclosure: any;
+    SFAdvancedDisclosureUI: any;
     SFSelectorTextFilter: any;
     SFSelectorTextFilterUI: any;
     SFRequestHeadersUI: any;

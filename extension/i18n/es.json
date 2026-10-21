@@ -16,7 +16,9 @@
     "attributePlaceholder": "Atributo",
     "noMatches": "Sin coincidencias en la grabación.",
     "noRecordArray": "No se encontró ningún array de registros — no se puede usar como fuente.",
-    "edit": "Editar"
+    "edit": "Editar",
+    "helpBtn": "Ayuda",
+    "advanced": "Avanzado"
   },
   "language": {
     "label": "Idioma"
@@ -150,7 +152,6 @@
     "robotsDisallowActionWarn": "Avisar, pero hacerla igualmente",
     "robotsDisallowActionAbort": "Detener la ejecución",
     "appendOutputToggle": "Añadir al archivo de salida existente en lugar de reemplazarlo",
-    "appendOutputHint": "Cada ejecución añade su resultado al archivo de salida de las ejecuciones anteriores (filas CSV, entradas JSON, elementos XML, filas SQLite, filas Excel), de modo que el archivo crece como un archivo histórico. Si los campos de los datos cambian entre ejecuciones, se conservan las columnas del archivo y se añaden las nuevas; los valores que faltan quedan vacíos. Si el archivo existente no se puede leer o tiene otra forma, la ejecución se detiene sin tocarlo. En la primera ejecución (aún sin archivo) simplemente se crea. No para el modo combinado.",
     "retryToggle": "Reintentar ante errores transitorios",
     "retryAttemptsLabel": "Intentos",
     "retryDelayLabel": "Espera (s)",
@@ -178,7 +179,6 @@
     "requestHeaderValuePlaceholder": "Valor (p. ej. de-CH)",
     "requestHeaderEnvPlaceholder": "Nombre de la variable (p. ej. API_KEY)",
     "requestHeaderTestValuePlaceholder": "Valor de prueba para la ejecución de prueba (no se guarda)",
-    "requestHeadersHint": "Se envía con cada solicitud del script: útil para un idioma (Accept-Language), un Referer, una clave de API o una cookie. Guarda los secretos en una variable de entorno e indica aquí solo su nombre; el valor de prueba puntual se usa solo en la ejecución de prueba y nunca se guarda ni se escribe en el script. Una cabecera llamada User-Agent sustituye a la predeterminada. Con el motor de navegador, las cabeceras van en cada solicitud que hace la página.",
     "externalConfigToggle": "Archivo de configuración editable (XML)",
     "externalConfigHint": "Permite ajustar después la(s) URL(s) de inicio, el nombre del archivo de salida, el nombre de salida de un campo o los valores de un parámetro de API de lista fija, editando un pequeño archivo XML — sin tocar el archivo .py ni volver a abrir la extensión. El archivo aún no existe; el script lo crea junto a sí mismo la primera vez que se ejecuta de verdad.",
     "paginationToggle": "Activar paginación",
@@ -715,5 +715,19 @@
     "scrollStepPxPlaceholder": "vacío = saltar al final",
     "persistentSessionToggle": "Reutilizar sesión entre ejecuciones",
     "persistentSessionHint": "Guarda las cookies/el estado de inicio de sesión después de cada ejecución y omite las acciones de inicio de sesión anteriores en la siguiente. Advertencia: el archivo guardado contiene cookies de sesión reales — trátalo como una contraseña y nunca lo compartas ni lo subas a un repositorio. Si la sesión llega a caducar, la ejecución simplemente falla; no hay reinicio de sesión automático."
+  },
+  "help": {
+    "requestHeaders": {
+      "headers": {
+        "text": "Cabeceras adicionales que el script envía con cada solicitud, p. ej. un idioma, un Referer o una clave de API. Para un secreto elige «Variable de entorno» e indica solo su nombre; el valor de prueba se usa solo en la ejecución de prueba y nunca se guarda. Una cabecera llamada User-Agent sustituye a la predeterminada.",
+        "example": "Accept-Language: de-CH"
+      }
+    },
+    "appendOutput": {
+      "append": {
+        "text": "Cada ejecución añade sus filas al archivo de salida de las anteriores, de modo que el archivo crece como un histórico. Si cambian los campos, el archivo conserva sus columnas y se añaden las nuevas; un archivo ilegible detiene la ejecución sin tocarlo. No disponible en el modo combinado.",
+        "example": "Ejecución 1: 120 filas → ejecución 2: 240 filas"
+      }
+    }
   }
 }

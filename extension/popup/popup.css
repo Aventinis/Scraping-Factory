@@ -934,3 +934,43 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
 .text-filter-row .btn-tiny { margin-top: 6px; }
 .text-filter-row .preview-summary { text-align: left; margin: 6px 0 4px; }
 .text-filter-row + .match-count-hint { margin-top: 0; }
+
+/* Issue #396: reusable help popover (help-popover-ui.js). The "?" button
+   sits inline next to a label; its explanation is an in-flow block right
+   after the label's row, so it can never run off a narrow side panel. All
+   colors come from the theme tokens, so light/dark need no rules of their
+   own. */
+.help-host { display: inline-flex; align-items: center; vertical-align: middle; }
+.help-btn {
+  width: 18px; height: 18px; padding: 0; margin-left: 2px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--color-border-input); border-radius: var(--radius-pill);
+  background: var(--color-surface); color: var(--color-text-muted);
+  font-size: 11px; font-weight: 600; line-height: 1;
+}
+.help-btn:hover { background: var(--color-surface-muted); color: var(--color-text); }
+.help-btn:focus-visible, .help-btn[aria-expanded="true"] {
+  outline: none; border-color: var(--color-primary); color: var(--color-primary); box-shadow: var(--focus-ring);
+}
+.help-popover {
+  margin: 6px 0 4px; padding: 8px 10px;
+  background: var(--color-primary-soft); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); color: var(--color-text-secondary);
+  font-size: 12px; line-height: 1.45; text-align: left;
+  overflow-wrap: anywhere;
+}
+.help-popover-text { margin: 0; }
+.help-popover-example {
+  display: block; margin-top: 6px; padding: 4px 6px;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  color: var(--color-text); font-size: 11px; white-space: pre-wrap; user-select: all;
+}
+
+/* Issue #396: "Advanced" disclosure (advanced-disclosure-ui.js) */
+.advanced-disclosure { margin-top: 8px; }
+.advanced-disclosure > summary {
+  cursor: pointer; font-size: 12px; font-weight: 600; color: var(--color-text-secondary);
+  padding: 4px 0; border-radius: var(--radius-sm);
+}
+.advanced-disclosure > summary:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.advanced-disclosure-body { padding-top: 4px; }

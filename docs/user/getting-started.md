@@ -99,6 +99,12 @@ python scraper.py
 
 It writes `output.csv` next to itself, one row per dish.
 
+## Help right where you need it
+
+Options with a small **?** button next to them have a short explanation and an
+example. Click it (or press Enter on it) to open it, press Escape or click
+elsewhere to close it. These pages go into more depth.
+
 ## What next
 
 - Items that contain further lists (categories with dishes)? Use

@@ -16,7 +16,9 @@
     "attributePlaceholder": "Attribute",
     "noMatches": "No matches in the recording.",
     "noRecordArray": "No record array found — can't be used as a source.",
-    "edit": "Edit"
+    "edit": "Edit",
+    "helpBtn": "Help",
+    "advanced": "Advanced"
   },
   "language": {
     "label": "Language"
@@ -150,7 +152,6 @@
     "robotsDisallowActionWarn": "Warn, but request it anyway",
     "robotsDisallowActionAbort": "Stop the run",
     "appendOutputToggle": "Append to the existing output file instead of replacing it",
-    "appendOutputHint": "Every run adds its result to the output file left by the previous runs (CSV rows, JSON entries, XML elements, SQLite rows, Excel rows), so the file grows into an archive. If the data's fields change between runs, the file's columns stay and new ones are added; missing values stay empty. If the existing file can't be read or has a different shape, the run stops without touching it. The first run (no file yet) simply creates it. Not for combined mode.",
     "retryToggle": "Retry on transient errors",
     "retryAttemptsLabel": "Attempts",
     "retryDelayLabel": "Wait (s)",
@@ -178,7 +179,6 @@
     "requestHeaderValuePlaceholder": "Value (e.g. de-CH)",
     "requestHeaderEnvPlaceholder": "Variable name (e.g. API_KEY)",
     "requestHeaderTestValuePlaceholder": "Test value for the trial run (not saved)",
-    "requestHeadersHint": "Sent with every request of the script — useful for a language (Accept-Language), a Referer, an API key or a Cookie. Put secrets in an environment variable and enter only its name here; the one-time test value is used for the trial run only and is never saved or written into the script. A header named User-Agent replaces the default one. With the browser engine, the headers go to every request the page makes.",
     "externalConfigToggle": "Editable config file (XML)",
     "externalConfigHint": "Lets you tweak the start URL(s), the output filename, a field's output name, or a fixed-value-list API parameter's values later, by editing a small XML file — without touching the .py file or reopening the extension. The file doesn't exist yet; the script creates it next to itself the first time it actually runs.",
     "paginationToggle": "Enable pagination",
@@ -715,5 +715,19 @@
     "scrollStepPxPlaceholder": "blank = jump to bottom",
     "persistentSessionToggle": "Reuse session between runs",
     "persistentSessionHint": "Saves cookies/login state after each run and skips the login actions above on the next run. Warning: the saved file contains live session cookies — treat it like a password and never share or commit it. If the session ever expires, the run simply fails; there is no automatic re-login."
+  },
+  "help": {
+    "requestHeaders": {
+      "headers": {
+        "text": "Extra headers the script sends with every request, e.g. a language, a Referer or an API key. For a secret, choose \"Environment variable\" and enter only its name; the test value is used for the trial run only and is never saved. A header named User-Agent replaces the default one.",
+        "example": "Accept-Language: de-CH"
+      }
+    },
+    "appendOutput": {
+      "append": {
+        "text": "Each run adds its rows to the output file the earlier runs left, so the file grows into an archive. If the fields change, the file keeps its columns and new ones are added; a file that cannot be read stops the run without being touched. Not available in combined mode.",
+        "example": "Run 1: 120 rows → run 2: 240 rows"
+      }
+    }
   }
 }

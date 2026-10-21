@@ -57,6 +57,11 @@ const {
   renderTransformPresetsSettings, wireTransformPresetsSettings,
 } = typeof require !== 'undefined' ? require('./transform-presets-ui') : self.SFTransformPresetsUI;
 
+const { initHelpPopovers, wireHelpPopoverEvents } =
+  typeof require !== 'undefined' ? require('./help-popover-ui') : self.SFHelpPopoverUI;
+const { initAdvancedDisclosures, wireAdvancedDisclosureEvents } =
+  typeof require !== 'undefined' ? require('./advanced-disclosure-ui') : self.SFAdvancedDisclosureUI;
+
 const {
   renderApiBootstrapSection, wireApiBootstrapEvents,
 } = typeof require !== 'undefined' ? require('./api-bootstrap-ui') : self.SFApiBootstrapUI;
@@ -753,6 +758,7 @@ function applyStaticTranslations() {
   if (langSelect) langSelect.value = getLanguage();
   if (typeof document !== 'undefined' && document.documentElement) document.documentElement.lang = getLanguage();
   renderThemeToggle();
+  initHelpPopovers(); // Issue #396: (re)builds and translates every [data-help] host
 }
 
 // Issue #206 follow-up: the mode-dispatch glue for the shared combine/split
@@ -1161,6 +1167,9 @@ function wireEvents() {
 
   wireCompanionErrorEvents(bridge);
 
+  wireHelpPopoverEvents();
+  wireAdvancedDisclosureEvents();
+
   wireSettingsPanelEvents(bridge);
   wireDedupEvents(bridge);
   wireRequestHeadersEvents(bridge);
@@ -1311,6 +1320,7 @@ async function init() {
   applyStaticTranslations();
 
   wireEvents();
+  await initAdvancedDisclosures(); // Issue #396: restore each section's remembered open state
 
   log('INIT reading session storage');
   const stored = await chrome.storage.session.get([
