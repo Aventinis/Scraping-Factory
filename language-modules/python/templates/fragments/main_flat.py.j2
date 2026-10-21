@@ -1,3 +1,4 @@
+#@include output_append
 def main():
 {{~ if preflight.enabled ~}}
     preflight_status, preflight_etag, preflight_last_modified = _run_preflight_check(URLS[0])
@@ -57,8 +58,11 @@ def main():
             for row in written_data
         ]
         output_fieldnames = [FIELD_OUTPUT_NAMES.get(name, name) for name in SELECTORS.keys() if name not in HIDDEN_FIELD_NAMES]
-{{~ if dedup.append ~}}
-    output_rows = _dedup_with_previous_output(output_rows, output_fieldnames)
+{{~ if append_output ~}}
+    appended_count = len(output_rows)
+{{~ end ~}}
+{{~ if append_output && !output_is_sqlite && !output_is_xlsx ~}}
+    output_fieldnames, output_rows = _append_previous_rows(OUTPUT_PATH, output_fieldnames, output_rows)
 {{~ end ~}}
 {{~ if output_is_json ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
@@ -73,7 +77,7 @@ def main():
         writer.writeheader()
         writer.writerows(output_rows)
 {{~ end ~}}
-    print(f"Done — {{ if dedup.enabled }}{len(output_rows)}{{ else }}{len(data)}{{ end }} rows written to {OUTPUT_PATH}")
+    print(f"Done — {{ if append_output }}{appended_count}{{ else if dedup.enabled }}{len(output_rows)}{{ else }}{len(data)}{{ end }} rows {{ if append_output }}appended to{{ else }}written to{{ end }} {OUTPUT_PATH}")
 {{~ if change_detection.enabled ~}}
     with open(OUTPUT_PATH, "r", encoding="utf-8") as f:
         new_content = f.read()

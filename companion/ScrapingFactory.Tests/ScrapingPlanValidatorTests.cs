@@ -3745,12 +3745,11 @@ public class ScrapingPlanValidatorTests
     }
 
     [Fact]
-    public void Validate_Deduplication_AppendOnTreeShape_Fails()
+    public void Validate_Deduplication_AppendOnTreeShape_Succeeds()
     {
+        // Issue #342: appending works for every output format, trees included.
         var dedup = new DeduplicationConfig { KeyFields = ["Name"], Incremental = true, IncrementalOutput = IncrementalOutputMode.Append };
-        var result = ScrapingPlanValidator.Validate(DedupGroupPlan(dedup));
-        Assert.False(result.Success);
-        Assert.Contains("flat output", result.Error);
+        Assert.True(ScrapingPlanValidator.Validate(DedupGroupPlan(dedup)).Success);
     }
 
     [Fact]

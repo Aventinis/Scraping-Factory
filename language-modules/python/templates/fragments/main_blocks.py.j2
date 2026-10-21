@@ -1,5 +1,6 @@
 #@include request_delay
 #@include retry
+#@include output_append
 def main():
 {{~ if change_detection_any ~}}
     previous_contents = {block["name"]: (_read_previous_output(block["output_path"]) if block["change_detection"]["enabled"] else None) for block in BLOCKS}
@@ -28,6 +29,20 @@ def main():
 {{~ if hardening_any ~}}
             data, required_fields_failed = _filter_required_fields(block, data)
 {{~ end ~}}
+{{~ if append_output ~}}
+            count = len(data)
+            if block["output_is_json"]:
+                _, written = _append_previous_rows(block["output_path"], [], data)
+                with open(block["output_path"], "w", encoding="utf-8") as f:
+                    json.dump(written, f, ensure_ascii=False, indent=2)
+            else:
+                field_order, written = _append_previous_rows(block["output_path"], block["field_order"], data)
+                with open(block["output_path"], "w", newline="", encoding="utf-8") as f:
+                    writer = csv.DictWriter(f, fieldnames=field_order)
+                    writer.writeheader()
+                    writer.writerows(written)
+            print(f"Done — [{name}] {count} rows appended to {block['output_path']}")
+{{~ else ~}}
             if block["output_is_json"]:
                 with open(block["output_path"], "w", encoding="utf-8") as f:
                     json.dump(data, f, ensure_ascii=False, indent=2)
@@ -38,21 +53,25 @@ def main():
                     writer.writerows(data)
             count = len(data)
             print(f"Done — [{name}] {count} rows written to {block['output_path']}")
+{{~ end ~}}
 {{~ if hardening_any ~}}
             block_failed = _run_hardening_checks(block, count, lambda field, data=data: [str(row.get(field, "")) for row in data]) or required_fields_failed
 {{~ end ~}}
         else:
             root = per_block_roots[name]
             if block["output_is_json"]:
+{{~ if append_output ~}}
+                json_tree = _append_previous_json_tree(block["output_path"], _xml_to_dict(root))
+{{~ end ~}}
                 with open(block["output_path"], "w", encoding="utf-8") as f:
-                    json.dump(_xml_to_dict(root), f, ensure_ascii=False, indent=2)
+                    json.dump({{ if append_output }}json_tree{{ else }}_xml_to_dict(root){{ end }}, f, ensure_ascii=False, indent=2)
             else:
-                tree = ET.ElementTree(root)
+                tree = ET.ElementTree({{ if append_output }}_append_previous_xml(block["output_path"], root){{ else }}root{{ end }})
                 _strip_illegal_xml_chars(tree.getroot())
                 ET.indent(tree)
                 tree.write(block["output_path"], encoding="utf-8", xml_declaration=True)
             count = len(root.findall(".//*"))
-            print(f"Done — [{name}] {count} elements written to {block['output_path']}")
+            print(f"Done — [{name}] {count} elements {{ if append_output }}appended to{{ else }}written to{{ end }} {block['output_path']}")
 {{~ if hardening_any ~}}
             required_fields_failed = _report_required_fields_drops(block)
             block_failed = _run_hardening_checks(block, count, lambda field, root=root: [(el.text or "") for el in root.iter(field)]) or required_fields_failed
