@@ -22,9 +22,7 @@ import os
 {{~ if proxy.enabled ~}}
 import itertools
 {{~ end ~}}
-{{~ if proxy.enabled || hardening_any || request_headers.has_env ~}}
 import sys
-{{~ end ~}}
 {{~ if hardening_any ~}}
 from urllib.parse import urlsplit
 {{~ end ~}}
@@ -182,11 +180,11 @@ def scrape(url):
         _pace_request()
 {{~ end ~}}
 {{~ if retry.enabled ~}}
-        response = _send_with_retry(lambda _u=page_url: requests.get(_u, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10), page_url)
+        response = _checked_request("Request", page_url, lambda: _send_with_retry(lambda _u=page_url: requests.get(_u, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10), page_url))
 {{~ else ~}}
-        response = requests.get(page_url, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
+        response = _checked_request("Request", page_url, lambda: requests.get(page_url, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10))
 {{~ end ~}}
-        response.raise_for_status()
+        _require_ok("Request", page_url, response)
 {{~ if hardening_any ~}}
         _BLOCKING_RESPONSES.append({"url": page_url, "final_url": response.url, "length": len(response.content), "text": response.text})
 {{~ end ~}}
@@ -229,6 +227,7 @@ def scrape(url):
 
 
 #@include xml_sanitize
+#@include request_errors_static
 #@include main_blocks
 
 

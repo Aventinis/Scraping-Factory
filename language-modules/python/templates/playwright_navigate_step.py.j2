@@ -1,5 +1,1 @@
-{{~ if retry_enabled ~}}
-        _send_with_retry(lambda: page.goto(url, wait_until="load", timeout=30000), url)
-{{~ else ~}}
-        page.goto(url, wait_until="load", timeout=30000)
-{{~ end ~}}
+        _goto_checked(page, url)

@@ -1,0 +1,29 @@
+# Issue #319: a failed page request ends in one clean, actionable
+# "ERROR: <what> to <url> failed: <detail>" line on stderr and a dedicated
+# exit code instead of a raw requests/Playwright traceback — the same shape
+# API mode has had since Issue #220 (PythonScriptVerifier.CleanScriptError
+# turns such a line into /generate's error text). The hints say what to do
+# about the status instead of only repeating it.
+EXIT_REQUEST_FAILED = 7
+
+
+def _request_failed(what, url, detail):
+    print(f"ERROR: {what} to {url} failed: {detail}", file=sys.stderr)
+    sys.exit(EXIT_REQUEST_FAILED)
+
+
+def _http_error_detail(status_code):
+    if status_code in (401, 403):
+        reason = "Unauthorized" if status_code == 401 else "Forbidden"
+        return (f"HTTP {status_code} ({reason}). The site refuses this script — it either requires a login "
+                f"or blocks automated requests. If a login is needed, use the Browser engine with a login flow "
+                f"or send a custom request header (e.g. Cookie or Authorization).")
+    if status_code == 404:
+        return "HTTP 404 (Not Found). The page doesn't exist (any more) — check the start URL."
+    if status_code == 429:
+        return ("HTTP 429 (Too Many Requests). The site is rate-limiting this script — enable "
+                "\"Pause between requests\" or try again later.")
+    if status_code >= 500:
+        return (f"HTTP {status_code}. The site's server reported an error — this is usually temporary; "
+                f"try again later or enable \"Retry on transient errors\".")
+    return f"HTTP {status_code}."
