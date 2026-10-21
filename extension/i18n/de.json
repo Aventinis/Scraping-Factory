@@ -16,7 +16,9 @@
     "attributePlaceholder": "Attribut",
     "noMatches": "Keine Treffer in der Aufzeichnung.",
     "noRecordArray": "Kein Datensatz-Array gefunden — als Quelle nicht verwendbar.",
-    "edit": "Bearbeiten"
+    "edit": "Bearbeiten",
+    "helpBtn": "Hilfe",
+    "advanced": "Erweitert"
   },
   "language": {
     "label": "Sprache"
@@ -150,7 +152,6 @@
     "robotsDisallowActionWarn": "Warnen, aber trotzdem anfragen",
     "robotsDisallowActionAbort": "Lauf abbrechen",
     "appendOutputToggle": "An die vorhandene Ausgabedatei anhängen statt sie zu ersetzen",
-    "appendOutputHint": "Jeder Lauf fügt sein Ergebnis der Ausgabedatei der vorherigen Läufe hinzu (CSV-Zeilen, JSON-Einträge, XML-Elemente, SQLite-Zeilen, Excel-Zeilen), die Datei wächst also zu einem Archiv. Ändern sich die Felder der Daten zwischen den Läufen, bleiben die Spalten der Datei erhalten und neue werden ergänzt; fehlende Werte bleiben leer. Lässt sich die vorhandene Datei nicht lesen oder hat sie eine andere Form, stoppt der Lauf, ohne sie anzufassen. Beim ersten Lauf (noch keine Datei) wird sie einfach angelegt. Nicht für den Kombiniert-Modus.",
     "retryToggle": "Bei vorübergehenden Fehlern erneut versuchen",
     "retryAttemptsLabel": "Versuche",
     "retryDelayLabel": "Wartezeit (s)",
@@ -178,7 +179,6 @@
     "requestHeaderValuePlaceholder": "Wert (z. B. de-CH)",
     "requestHeaderEnvPlaceholder": "Variablenname (z. B. API_KEY)",
     "requestHeaderTestValuePlaceholder": "Testwert für den Probelauf (wird nicht gespeichert)",
-    "requestHeadersHint": "Wird bei jeder Anfrage des Skripts mitgeschickt — nützlich für eine Sprache (Accept-Language), einen Referer, einen API-Key oder ein Cookie. Geheimnisse gehören in eine Umgebungsvariable, hier trägst du nur deren Namen ein; der einmalige Testwert gilt nur für den Probelauf und wird weder gespeichert noch ins Skript geschrieben. Ein Header namens User-Agent ersetzt den Standard-User-Agent. Mit der Browser-Engine gehen die Header an jede Anfrage, die die Seite stellt.",
     "externalConfigToggle": "Bearbeitbare Konfigurationsdatei (XML)",
     "externalConfigHint": "Ermöglicht es, die Start-URL(s), den Namen der Ausgabedatei, den Ausgabenamen eines Feldes oder die Werteliste eines API-Parameters später über eine kleine XML-Datei anzupassen — ohne die .py-Datei zu bearbeiten oder die Erweiterung erneut zu öffnen. Die Datei existiert noch nicht; das Skript legt sie beim ersten echten Lauf neben sich selbst an.",
     "paginationToggle": "Pagination aktivieren",
@@ -715,5 +715,19 @@
     "scrollStepPxPlaceholder": "leer = ans Ende springen",
     "persistentSessionToggle": "Sitzung zwischen Läufen wiederverwenden",
     "persistentSessionHint": "Speichert Cookies/Login-Status nach jedem Lauf und überspringt beim nächsten Mal die obigen Login-Aktionen. Achtung: Die gespeicherte Datei enthält echte Sitzungs-Cookies — wie ein Passwort behandeln, niemals teilen oder committen. Läuft die Sitzung ab, schlägt der Lauf einfach fehl; es gibt keinen automatischen erneuten Login."
+  },
+  "help": {
+    "requestHeaders": {
+      "headers": {
+        "text": "Zusätzliche Header, die das Skript bei jeder Anfrage mitschickt, z. B. eine Sprache, ein Referer oder ein API-Key. Für ein Geheimnis wähle „Umgebungsvariable“ und trage nur deren Namen ein; der Testwert gilt nur für den Probelauf und wird nie gespeichert. Ein Header namens User-Agent ersetzt den Standard-User-Agent.",
+        "example": "Accept-Language: de-CH"
+      }
+    },
+    "appendOutput": {
+      "append": {
+        "text": "Jeder Lauf hängt seine Zeilen an die Ausgabedatei der früheren Läufe an, die Datei wächst also zu einem Archiv. Ändern sich die Felder, bleiben die Spalten der Datei erhalten und neue kommen dazu; eine nicht lesbare Datei stoppt den Lauf, ohne angefasst zu werden. Nicht im Kombiniert-Modus.",
+        "example": "Lauf 1: 120 Zeilen → Lauf 2: 240 Zeilen"
+      }
+    }
   }
 }
