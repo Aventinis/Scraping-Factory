@@ -19,7 +19,12 @@ namespace ScrapingFactory.Companion.Auth;
 //                                                  signs the user out on every device
 //   ScrapingFactory.Companion user disable <name>  the user's key and logins stop working
 //   ScrapingFactory.Companion user enable <name>   undo that
-// (Issue #352: set-password/disable/enable.)
+//   ScrapingFactory.Companion user set-email <name> <email> [--verified]
+//                                                  set a user's email address (unverified
+//                                                  unless --verified); an operator's change
+//                                                  needs no mailed code
+//   ScrapingFactory.Companion user verify <name>   mark the user's email address as verified
+// (Issue #352: set-password/disable/enable. Issue #353: set-email/verify.)
 public static class UserCommands
 {
     // One line from the given reader (tests, a pipe), otherwise typed on the
@@ -51,17 +56,19 @@ public static class UserCommands
         var command = positional.FirstOrDefault()?.ToLowerInvariant();
         var name = positional.Skip(1).FirstOrDefault();
 
-        if (command is null or "help" || command is not ("add" or "list" or "rotate" or "remove" or "adopt" or "set-password" or "disable" or "enable"))
+        if (command is null or "help" || command is not ("add" or "list" or "rotate" or "remove" or "adopt" or "set-password" or "disable" or "enable" or "set-email" or "verify"))
         {
             (command is null or "help" ? output : error).WriteLine(
-                "Usage: ScrapingFactory.Companion user <add|list|rotate|remove|adopt|set-password|disable|enable> [name]\n" +
+                "Usage: ScrapingFactory.Companion user <add|list|rotate|remove|adopt|set-password|disable|enable|set-email|verify> [name]\n" +
                 "  add <name>     create a user and print their access key (shown only once)\n" +
                 "  list           list the users\n" +
                 "  rotate <name>  issue a new access key (the old one stops working)\n" +
                 "  remove <name>  delete a user (their data stays in the database, unreachable)\n" +
                 "  adopt <name>   give a user all data saved before authentication was switched on\n" +
                 "  set-password <name>  set or reset a password (asked on the terminal, or one line on stdin); signs the user out everywhere\n" +
-                "  disable <name> / enable <name>  switch a user's access off / on again");
+                "  disable <name> / enable <name>  switch a user's access off / on again\n" +
+                "  set-email <name> <email> [--verified]  set a user's email address (unverified unless --verified)\n" +
+                "  verify <name>  mark a user's email address as verified");
             return command is null or "help" ? 0 : 2;
         }
         if (command != "list" && string.IsNullOrWhiteSpace(name))
@@ -96,7 +103,8 @@ public static class UserCommands
                     var all = users.List();
                     if (all.Count == 0) output.WriteLine("No users yet — create one with: user add <name>");
                     foreach (var user in all)
-                        output.WriteLine($"{user.Name}\t(created {user.CreatedAt}){(user.HasPassword ? "  [password]" : "")}{(user.Disabled ? "  [disabled]" : "")}");
+                        output.WriteLine($"{user.Name}\t(created {user.CreatedAt}){(user.HasPassword ? "  [password]" : "")}{(user.Disabled ? "  [disabled]" : "")}" +
+                            (user.Email is null ? "" : $"  {user.Email}{(user.EmailVerified ? " [verified]" : " [unverified]")}"));
                     return 0;
                 }
                 case "rotate":
@@ -123,6 +131,28 @@ public static class UserCommands
                     users.SetPassword(user.Name, PasswordHasher.Hash(password!));
                     var signedOut = users.RevokeTokens(user.Id);
                     output.WriteLine($"Password for '{user.Name}' set; {signedOut} signed-in device(s) were signed out.");
+                    return 0;
+                }
+                case "set-email":
+                {
+                    var typed = positional.Skip(2).FirstOrDefault();
+                    var email = EmailOptions.Normalize(typed);
+                    if (email is null) { error.WriteLine($"'{typed}' is not a valid email address."); return 2; }
+                    var user = users.FindByName(name!);
+                    if (user is null) { error.WriteLine($"No user named '{name}'."); return 1; }
+                    var verified = args.Contains("--verified", StringComparer.Ordinal);
+                    try { users.SetEmail(user.Id, email, verified); }
+                    catch (EmailInUseException) { error.WriteLine($"The address '{email}' belongs to another user."); return 1; }
+                    output.WriteLine($"Email address of '{user.Name}' set to {email} ({(verified ? "verified" : "not verified yet")}).");
+                    return 0;
+                }
+                case "verify":
+                {
+                    var user = users.FindByName(name!);
+                    if (user is null) { error.WriteLine($"No user named '{name}'."); return 1; }
+                    if (user.Email is null) { error.WriteLine($"'{user.Name}' has no email address - set one with: user set-email {user.Name} <email>"); return 1; }
+                    users.SetEmailVerified(user.Id, true);
+                    output.WriteLine($"The email address of '{user.Name}' ({user.Email}) is now verified.");
                     return 0;
                 }
                 case "disable":

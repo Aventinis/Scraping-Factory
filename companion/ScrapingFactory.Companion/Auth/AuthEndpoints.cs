@@ -6,6 +6,8 @@ public sealed class CredentialsRequest
     public string? Password { get; set; }
     // Free text shown in a future "signed-in devices" list, e.g. "Browser extension".
     public string? Device { get; set; }
+    // Issue #353: optional (or required, see EmailPolicy) at registration.
+    public string? Email { get; set; }
 }
 
 public sealed class ChangePasswordRequest
@@ -26,7 +28,10 @@ public static class AuthEndpoints
 
     public static void Map(WebApplication app, bool registrationOpen)
     {
-        app.MapPost("/auth/register", (CredentialsRequest? request, HttpContext context, IUserStore users, LoginThrottle throttle) =>
+        var emailPolicy = EmailOptions.Read(app.Configuration);
+        EmailEndpoints.Map(app, emailPolicy);
+
+        app.MapPost("/auth/register", async (CredentialsRequest? request, HttpContext context, IUserStore users, LoginThrottle throttle, EmailService emails) =>
         {
             if (!registrationOpen)
                 return Results.Json(new { error = "Registration is not enabled on this companion." }, statusCode: StatusCodes.Status403Forbidden);
@@ -42,17 +47,31 @@ public static class AuthEndpoints
             if (PasswordHasher.CheckPolicy(request!.Password, name!) is { } problem)
                 return Results.BadRequest(new { error = problem });
 
+            var (email, emailProblem) = CheckEmail(emailPolicy, request.Email);
+            if (emailProblem is not null)
+                return Results.BadRequest(new { error = emailProblem });
+
             UserRecord user;
             try
             {
-                user = users.CreateWithPassword(name!, PasswordHasher.Hash(request.Password!));
+                user = users.CreateWithPassword(name!, PasswordHasher.Hash(request.Password!), email);
+            }
+            catch (EmailInUseException)
+            {
+                return Results.Conflict(new { error = "That email address is already registered." });
             }
             catch (InvalidOperationException)
             {
                 return Results.Conflict(new { error = "That user name is already taken." });
             }
             var token = users.CreateToken(user.Id, DeviceLabel(request.Device));
-            return Results.Created("/whoami", new { name = user.Name, token });
+
+            // A new address is unverified: mail the code right away (the account
+            // exists either way; "Send the code again" is in the extension).
+            var verificationSent = false;
+            if (email is not null && emailPolicy.SmtpConfigured)
+                verificationSent = (await emails.IssueCodeAsync(user, EmailCodePurpose.Verify, address, inBackground: false)).Outcome == IssueOutcome.Sent;
+            return Results.Created("/whoami", Payload(user, token, verificationSent));
         });
 
         app.MapPost("/auth/login", (CredentialsRequest? request, HttpContext context, IUserStore users, LoginThrottle throttle) =>
@@ -76,7 +95,7 @@ public static class AuthEndpoints
             }
 
             throttle.ClearFailures(name);
-            return Results.Ok(new { name = user.Name, token = users.CreateToken(user.Id, DeviceLabel(request?.Device)) });
+            return Results.Ok(Payload(user, users.CreateToken(user.Id, DeviceLabel(request?.Device)), null));
         });
 
         app.MapPost("/auth/logout", (HttpContext context, IUserStore users) =>
@@ -119,14 +138,41 @@ public static class AuthEndpoints
         });
     }
 
+    // What register/login hand back: who, the device token, and the email state.
+    internal static object Payload(UserRecord user, string? token, bool? verificationSent) => new
+    {
+        name = user.Name,
+        token,
+        email = user.Email,
+        emailVerified = user.EmailVerified,
+        verificationSent,
+    };
+
+    // The normalized address (or null) and, when it isn't acceptable, why. Shared
+    // by registration and "set email".
+    internal static (string? Email, string? Problem) CheckEmail(EmailPolicy policy, string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return policy.Required ? (null, "An email address is required.") : (null, null);
+        if (!policy.AcceptsEmail)
+            return (null, "This companion does not collect email addresses.");
+        var email = EmailOptions.Normalize(raw);
+        if (email is null)
+            return (null, "That is not a valid email address.");
+        if (!EmailOptions.DomainAllowed(policy, email))
+            return (null, $"Email addresses of this domain are not accepted (allowed: {string.Join(", ", policy.AllowedDomains)}).");
+        return (email, null);
+    }
+
     private static IResult? Throttled(LoginThrottle throttle, string address, string? name)
     {
         var wait = throttle.RetryAfterSeconds(address, name);
-        if (wait <= 0)
-            return null;
-        return new RetryAfterResult(
-            Results.Json(new { error = $"Too many attempts — try again in {wait} seconds." }, statusCode: StatusCodes.Status429TooManyRequests), wait);
+        return wait <= 0 ? null : RateLimited(wait);
     }
+
+    internal static IResult RateLimited(int wait, string? message = null) =>
+        new RetryAfterResult(
+            Results.Json(new { error = message ?? $"Too many attempts — try again in {wait} seconds." }, statusCode: StatusCodes.Status429TooManyRequests), wait);
 
     private sealed class RetryAfterResult(IResult inner, int seconds) : IResult
     {
@@ -137,7 +183,7 @@ public static class AuthEndpoints
         }
     }
 
-    private static string AddressOf(HttpContext context) => context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+    internal static string AddressOf(HttpContext context) => context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
     private static string DeviceLabel(string? device) =>
         string.IsNullOrWhiteSpace(device) ? "extension" : device.Trim()[..Math.Min(device.Trim().Length, 100)];

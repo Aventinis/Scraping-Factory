@@ -143,6 +143,19 @@ characters); the extension stores a revocable per-device token, never the
 password. The operator can reset a password with `user set-password <name>` and
 lock someone out with `user disable <name>`.
 
+**Email addresses, verification and password reset.** Configure an SMTP server
+(`Companion:Email:Smtp:Host`, `From`, optionally `Port`, `Security`, `Username`,
+`Password` — installer: `--smtp-host …`, the password in `SF_SMTP_PASSWORD`) and
+accounts can have an email address: it is confirmed with an 8-digit code mailed to
+it and typed into the extension, and a forgotten password is reset the same way
+(**Settings → Account → Forgot password?**; only a *verified* address receives a
+code, and a reset signs every device out). Optional rules:
+`Companion:Auth:Email:Required` (ask for an address at registration),
+`RequireVerified` (an account can only use the companion once its address is
+confirmed) and `AllowedDomains`. Operator commands: `user set-email <name> <email>
+[--verified]` and `user verify <name>`. Without an SMTP server none of this is
+offered.
+
 **HTTPS.** Passwords and keys must not travel in clear text, so a companion that
 listens beyond this computer has to speak HTTPS: set `Companion:Tls:Mode` to
 `Certificate` with `CertificatePath` (a `.pfx` plus `CertificatePassword`, or a

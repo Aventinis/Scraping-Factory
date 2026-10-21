@@ -37,4 +37,20 @@ internal static class MySqlSchema
 
         Execute(connection, $"ALTER TABLE {table} ADD COLUMN {column} {definition};");
     }
+
+    // Adds an index (given as its full `UNIQUE KEY name (cols)` / `KEY name (cols)` definition) unless it exists.
+    public static void EnsureIndex(MySqlConnection connection, string table, string indexName, string definition)
+    {
+        using (var check = connection.CreateCommand())
+        {
+            check.CommandText =
+                "SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = @table AND index_name = @index;";
+            check.Parameters.AddWithValue("@table", table);
+            check.Parameters.AddWithValue("@index", indexName);
+            if (Convert.ToInt64(check.ExecuteScalar()) > 0)
+                return;
+        }
+
+        Execute(connection, $"ALTER TABLE {table} ADD {definition};");
+    }
 }

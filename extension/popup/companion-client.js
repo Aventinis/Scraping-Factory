@@ -47,7 +47,7 @@ function getResolvedCompanionUrl() {
 // What /health last said about this companion (Issue #352): whether it wants
 // an access key at all and whether it offers self-registration — the Settings
 // screen's Account section follows it. Both false until a health check answers.
-let companionInfo = { authRequired: false, registration: false };
+let companionInfo = { authRequired: false, registration: false, email: 'off', passwordReset: false, verifiedEmailRequired: false };
 
 function getCompanionInfo() {
   return companionInfo;
@@ -71,11 +71,23 @@ function companionFetch(url, init) {
 async function warnAboutAccessKey(healthResponse) {
   try {
     const body = await healthResponse.json();
-    companionInfo = { authRequired: body?.authRequired === true, registration: body?.registration === true };
+    companionInfo = {
+      authRequired: body?.authRequired === true,
+      registration: body?.registration === true,
+      // Issue #353: whether an email address is asked for ('off' | 'optional' | 'required'),
+      // whether a forgotten password can be reset by mail, and the operator's verified-email rule.
+      email: ['optional', 'required'].includes(body?.email) ? body.email : 'off',
+      passwordReset: body?.passwordReset === true,
+      verifiedEmailRequired: body?.verifiedEmailRequired === true,
+    };
     if (body?.authRequired !== true) return;
     const whoami = await companionFetch(`${companionUrl}/whoami`);
     if (whoami.status === 401) {
       showToast(t(getAccessKey() ? 'toast.accessKeyRejected' : 'toast.accessKeyRequired'), null, 'warn');
+    } else if (whoami.ok && companionInfo.verifiedEmailRequired) {
+      // Issue #353: signed in, but the companion won't serve data before the address is confirmed.
+      const who = await whoami.json();
+      if (who?.emailVerified !== true) showToast(t('toast.emailUnverified'), null, 'warn');
     }
   } catch {
     // not an authentication-aware companion
