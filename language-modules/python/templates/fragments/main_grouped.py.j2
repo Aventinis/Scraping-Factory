@@ -64,6 +64,7 @@ def main():
         json.dump(_xml_to_dict(blueprint_tree_root), f, ensure_ascii=False, indent=2)
 {{~ else ~}}
     tree = ET.ElementTree(blueprint_tree_root)
+    _strip_illegal_xml_chars(tree.getroot())
     ET.indent(tree)
     tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
 {{~ end ~}}
@@ -87,6 +88,7 @@ def main():
     count = len(root.findall(".//*"))
 {{~ else ~}}
     tree = ET.ElementTree(output_root)
+    _strip_illegal_xml_chars(tree.getroot())
     ET.indent(tree)
     tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
     count = len(root.findall(".//*"))

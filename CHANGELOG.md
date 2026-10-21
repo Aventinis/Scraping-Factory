@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.19.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.1...v1.19.2) (2026-10-21)
+
+
+### Bug Fixes
+
+* **security:** resolve the open Dependabot and CodeQL alerts ([d1753a1](https://github.com/Aventinis/Scraping-Factory/commit/d1753a1d16cb39bd5d37e13bf1342b73d991628b))
+* **security:** resolve the open Dependabot and CodeQL alerts ([2224913](https://github.com/Aventinis/Scraping-Factory/commit/22249139cd92773f5e4f6edb9fb1dd5fb00ef704))
+
+## [1.19.1](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.0...v1.19.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* strip XML-illegal control characters from XML output ([#291](https://github.com/Aventinis/Scraping-Factory/issues/291)) ([94f6a7e](https://github.com/Aventinis/Scraping-Factory/commit/94f6a7e0111d175e7b5b0fb7ee1e964b2e81af84))
+* **templates:** strip XML-illegal control characters before writing XML output ([acabbd4](https://github.com/Aventinis/Scraping-Factory/commit/acabbd4869cb51017db4fff2971581e9e1437dd0))
+
 ## [1.19.0](https://github.com/Aventinis/Scraping-Factory/compare/v1.18.4...v1.19.0) (2026-10-21)
 
 
