@@ -310,6 +310,8 @@ let _state = {
   // Issue #333: opt-in run-time robots.txt Disallow check — { enabled, action }
   // with action Warn | Skip | Abort, persisted like respectRobotsDelay.
   robotsDisallow: { enabled: false, action: 'Skip' },
+  // Issue #342: opt-in — append to the previous output file instead of replacing it.
+  appendOutput: false,
   // Issue #129: opt-in script hardening checks — mode-independent like
   // engine/changeDetection/proxy above, persisted the same way (real
   // scrape-target configuration, not a per-generate toggle). Nested one
@@ -676,6 +678,7 @@ function persistState() {
       preflight: _state.preflight,
       respectRobotsDelay: _state.respectRobotsDelay,
       robotsDisallow: _state.robotsDisallow,
+      appendOutput: _state.appendOutput,
       hardening: _state.hardening,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
@@ -1313,7 +1316,7 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'requestDelay', 'retry', 'deduplication', 'requestHeaders', 'hardening', 'pagination', 'persistentSession', 'preflight', 'respectRobotsDelay', 'robotsDisallow', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'requestDelay', 'retry', 'deduplication', 'requestHeaders', 'hardening', 'pagination', 'persistentSession', 'preflight', 'respectRobotsDelay', 'robotsDisallow', 'appendOutput', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'pendingApiDiscoveryPartId', 'pendingApiDiscoveryActionIndex', 'pendingApiDiscoveryActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',

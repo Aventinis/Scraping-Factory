@@ -51,6 +51,11 @@ function renderSettingsPanel(bridge) {
     // Issue #228: opt-in robots.txt Crawl-delay/Request-rate.
     const respectRobotsToggle = /** @type {HTMLInputElement | null} */ (document.getElementById('toggle-respect-robots-delay'));
     if (respectRobotsToggle) respectRobotsToggle.checked = state.respectRobotsDelay;
+    // Issue #342: opt-in — append to the existing output file.
+    const appendOutputToggle = /** @type {HTMLInputElement | null} */ (document.getElementById('toggle-append-output'));
+    if (appendOutputToggle) appendOutputToggle.checked = state.appendOutput;
+    document.getElementById('append-output-row')?.classList.toggle('hidden', state.mode === 'combined');
+
     // Issue #333: opt-in run-time robots.txt Disallow check.
     const robotsDisallowToggle = /** @type {HTMLInputElement | null} */ (document.getElementById('toggle-robots-disallow'));
     if (robotsDisallowToggle) robotsDisallowToggle.checked = state.robotsDisallow.enabled;
@@ -331,6 +336,11 @@ function wireSettingsPanelEvents(bridge) {
   // Issue #228: opt-in robots.txt Crawl-delay/Request-rate — plain boolean.
   document.getElementById('toggle-respect-robots-delay')?.addEventListener('change', (e) => {
     bridge.setState(bridge.getState().current, { respectRobotsDelay: e.target.checked });
+  });
+
+  // Issue #342: opt-in append to the existing output file — plain boolean.
+  document.getElementById('toggle-append-output')?.addEventListener('change', (e) => {
+    bridge.setState(bridge.getState().current, { appendOutput: e.target.checked });
   });
 
   // Issue #333: opt-in run-time robots.txt Disallow check — an on/off switch

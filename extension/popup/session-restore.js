@@ -46,6 +46,7 @@ const SFSessionRestore = (function () {
     if (stored.preflight !== undefined) next = { ...next, preflight: stored.preflight };
     if (stored.respectRobotsDelay !== undefined) next = { ...next, respectRobotsDelay: stored.respectRobotsDelay };
     if (stored.robotsDisallow)        next = { ...next, robotsDisallow: stored.robotsDisallow };
+    if (stored.appendOutput !== undefined) next = { ...next, appendOutput: stored.appendOutput };
     if (stored.hardening)             next = { ...next, hardening: stored.hardening };
     if (stored.scriptFileName)        next = { ...next, scriptFileName: stored.scriptFileName };
     if (stored.outputFileName)        next = { ...next, outputFileName: stored.outputFileName };

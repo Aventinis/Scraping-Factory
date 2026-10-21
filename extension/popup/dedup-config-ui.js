@@ -28,14 +28,6 @@ const SFDedupConfigUI = (function () {
     bridge.setState(state.current, { deduplication: { ...state.deduplication, ...patch } });
   }
 
-  // Container mode and API mode's tree response shape write an XML /
-  // nested-JSON document, which has no meaningful "append" — the Append
-  // choice is disabled there (and buildDeduplicationConfig falls back to
-  // Delta regardless of what the draft says).
-  function isTreeShape(state) {
-    return state.mode === 'container' || (state.mode === 'api' && (state.apiConfig?.groups?.length ?? 0) > 0);
-  }
-
   function renderDedupSection(bridge) {
     const state = bridge.getState();
     const dedup = state.deduplication;
@@ -56,15 +48,8 @@ const SFDedupConfigUI = (function () {
     if (incremental) incremental.checked = dedup.incremental;
     document.getElementById('dedup-incremental-config')?.classList.toggle('hidden', !dedup.incremental);
 
-    const tree = isTreeShape(state);
-    const appendActive = dedup.appendOutput && !tree;
-    document.getElementById('btn-dedup-output-delta')?.classList.toggle('active', !appendActive);
-    const appendBtn = /** @type {HTMLButtonElement | null} */ (document.getElementById('btn-dedup-output-append'));
-    if (appendBtn) {
-      appendBtn.classList.toggle('active', appendActive);
-      appendBtn.disabled = tree;
-      appendBtn.title = tree ? t('idle.dedupAppendUnavailableTitle') : '';
-    }
+    document.getElementById('btn-dedup-output-delta')?.classList.toggle('active', !dedup.appendOutput);
+    document.getElementById('btn-dedup-output-append')?.classList.toggle('active', dedup.appendOutput);
 
     const kindSelect = /** @type {HTMLSelectElement | null} */ (document.getElementById('select-dedup-retention-kind'));
     if (kindSelect && document.activeElement !== kindSelect) kindSelect.value = dedup.retentionKind;
