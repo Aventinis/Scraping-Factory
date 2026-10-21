@@ -20,7 +20,23 @@ if (UserCommands.IsUserCommand(args))
     return;
 }
 
+// Issue #352: refuse configurations that would send passwords/keys in clear
+// text beyond this machine, and set up HTTPS when it is configured.
+var transportError = CompanionTls.Validate(builder.Configuration) ?? AuthOptions.Validate(builder.Configuration);
+if (transportError is not null)
+{
+    Console.Error.WriteLine($"ERROR: {transportError}");
+    Environment.ExitCode = 1;
+    return;
+}
+
 builder.WebHost.UseUrls(CompanionHostOptions.BuildListenUrl(builder.Configuration));
+if (CompanionTls.IsEnabled(builder.Configuration))
+{
+    var certificate = CompanionTls.LoadCertificate(builder.Configuration, out var certificateDescription);
+    builder.WebHost.ConfigureKestrel(kestrel => kestrel.ConfigureHttpsDefaults(https => https.ServerCertificate = certificate));
+    Console.WriteLine($"HTTPS enabled with {certificateDescription}.");
+}
 
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy => policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
@@ -71,6 +87,9 @@ builder.Services.AddSingleton<ITransformPresetStore>(sp => StorageOptions.Create
 // Issue #278: the users behind the access keys, in the same backend as the data.
 builder.Services.AddSingleton<IUserStore>(sp => StorageOptions.CreateUserStore(sp.GetRequiredService<IConfiguration>()));
 
+// Issue #352: abuse protection for /auth/login and /auth/register.
+builder.Services.AddSingleton<LoginThrottle>();
+
 var app = builder.Build();
 
 // Issue #277: fail fast on an unknown storage provider / missing MySQL
@@ -103,17 +122,21 @@ app.Use(async (context, next) =>
 // every store call is then scoped to (CurrentUser). Without it everything runs
 // as the anonymous owner 0, exactly as before.
 var authEnabled = AuthOptions.IsEnabled(app.Configuration);
+var registrationOpen = AuthOptions.IsRegistrationOpen(app.Configuration);
 app.Use(async (context, next) =>
 {
-    if (!authEnabled || HttpMethods.IsOptions(context.Request.Method) || context.Request.Path == "/health")
+    // /health and, for self-service accounts (Issue #352), the two endpoints a
+    // person without a key has to be able to reach.
+    var anonymous = context.Request.Path == "/health"
+        || context.Request.Path == "/auth/register" || context.Request.Path == "/auth/login";
+    if (!authEnabled || HttpMethods.IsOptions(context.Request.Method) || anonymous)
     {
         CurrentUser.Set(context, CurrentUser.Anonymous);
         await next();
         return;
     }
 
-    var header = context.Request.Headers.Authorization.ToString();
-    var key = header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? header["Bearer ".Length..].Trim() : "";
+    var key = AuthEndpoints.BearerToken(context);
     var user = key.Length > 0 ? context.RequestServices.GetRequiredService<IUserStore>().FindByKey(key) : null;
     if (user is null)
     {
@@ -129,7 +152,11 @@ app.Use(async (context, next) =>
 });
 
 // authRequired lets the extension know whether to ask for / validate a key.
-app.MapGet("/health", () => Results.Ok(new { authRequired = authEnabled }));
+// registration tells the extension whether to offer "Register" (Issue #352).
+app.MapGet("/health", () => Results.Ok(new { authRequired = authEnabled, registration = registrationOpen }));
+
+if (authEnabled)
+    AuthEndpoints.Map(app, registrationOpen);
 
 // Issue #278: "who am I" — the extension's Settings screen uses it to check a
 // key (401 when the key is missing/wrong while authentication is on).
