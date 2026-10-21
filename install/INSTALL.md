@@ -90,6 +90,26 @@ extension only accepts `https://` addresses or `localhost`). Operator commands:
 `user set-password <name>` (reset a password), `user disable <name>` /
 `user enable <name>`. `--no-tls` / `-NoTls` switches HTTPS off again.
 
+### Optional: email addresses, verification and password reset
+
+With an SMTP server the companion can mail one-time codes, so accounts can have a
+verified email address and people can reset a forgotten password themselves:
+
+```bash
+SF_SMTP_PASSWORD=... ./install.sh --smtp-host smtp.example.com --smtp-from noreply@example.com \
+    --smtp-user noreply@example.com        # Windows: -SmtpHost, -SmtpFrom, -SmtpUser
+# optional rules (they need authentication, e.g. together with --registration open):
+./install.sh --require-email --require-verified-email --email-domains example.com
+```
+
+The SMTP password is read from the environment and stored only in the companion's
+settings file (readable only by you). The default is STARTTLS on port 587;
+`--smtp-security SslOnConnect` uses implicit TLS (port 465). Unencrypted SMTP is
+only accepted for `localhost`. With `--require-verified-email` an account can sign
+in but only uses the companion after confirming its address; for accounts created
+by the operator, `user set-email <name> <email> [--verified]` and `user verify <name>`
+do it from the command line. `--no-email` / `-NoEmail` removes the settings again.
+
 ## 2. Load the extension
 
 The browser does not allow an installer to add an extension silently, so this

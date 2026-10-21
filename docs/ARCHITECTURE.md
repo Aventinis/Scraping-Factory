@@ -1451,6 +1451,30 @@ channel constant in the extension (`shared/build-config.js`, set to `release` by
 - Tests: `AccountTests.cs`, `CompanionTlsTests.cs`, `shared/companion-url-policy.test.js`,
   `popup/account.test.js`, `popup/account-ui.test.js`
 
+### 2.21ag3 Email address, verification and password reset (Issue #353)
+
+Optional on top of 2.21ag2 and off until an SMTP server is configured
+(`Companion:Email:Smtp:*`). An account may carry an email address; a one-time
+8-digit code mailed to it (hashed in `EmailCodes`, single-use, 5 attempts) confirms it
+or authorizes a password reset, typed into the extension. Operator rules under
+`Companion:Auth:Email:*` (`Required`, `RequireVerified`, `AllowedDomains`).
+`forgot-password` never reveals whether an account exists and only mails a
+verified address; a successful reset revokes every token.
+
+- Companion: `Auth/EmailOptions.cs`, `EmailCodes.cs`, `EmailSender.cs` (MailKit),
+  `EmailService.cs` (`EmailThrottle`), `EmailEndpoints.cs`; `IUserStore` +
+  `SqliteUserStore`/`MySqlUserStore` (`Email`, `EmailVerified`, `EmailCodes`),
+  `Storage/MySqlSchema.EnsureIndex`; `UserCommands` (`set-email`, `verify`);
+  `Program.cs` (validation, anonymous reset endpoints, `RequireVerified` gate,
+  `/health` + `/whoami` fields)
+- Extension: `popup/email-account.js`, `popup/email-account-ui.js`,
+  `popup/account-ui.js` (shared state), `popup/screens/settings.html`,
+  `popup/companion-client.js` (`getCompanionInfo`)
+- Installer: `--smtp-*`, `--require-email`, `--require-verified-email`,
+  `--email-domains`, `--no-email`
+- Tests: `EmailAccountTests.cs`, `popup/email-account*.test.js`,
+  `e2e/examples/issue-353-email-check.js`
+
 ### 2.21ah Trial-run timeout estimate (Issues #289, #295)
 
 `/generate` runs the generated script once as a trial. Its timeout is the
