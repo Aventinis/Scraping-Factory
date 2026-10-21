@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.19.4](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.3...v1.19.4) (2026-10-21)
+
+
+### Bug Fixes
+
+* **templates:** clean error message for failed page requests in flat/container/Blocks mode ([db5396f](https://github.com/Aventinis/Scraping-Factory/commit/db5396f9f79cd6ab4f02bcb960aac9a1f582cda0))
+* **templates:** report failed page requests as one clean error line instead of a traceback ([87672f6](https://github.com/Aventinis/Scraping-Factory/commit/87672f62887823487a0db984ddf244e4fade8905))
+
 ## [1.19.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.2...v1.19.3) (2026-10-21)
 
 
