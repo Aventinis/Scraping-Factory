@@ -10,6 +10,9 @@
 #                                                          [-MySql CONNECTION_STRING | -Sqlite]
 #                                                          [-EnableAuth | -DisableAuth] [-Registration open|disabled]
 #                                                          [-HostName HOST] [-TlsCert FILE [-TlsKey FILE]] [-NoTls]
+#                                                          [-SmtpHost HOST [-SmtpPort N] [-SmtpFrom ADDR] [-SmtpUser NAME]
+#                                                           [-SmtpSecurity StartTls|SslOnConnect|None]] [-NoEmail]
+#                                                          [-RequireEmail] [-RequireVerifiedEmail] [-EmailDomains a.com,b.org]
 #   -BrowserEngine  also install Playwright and download Chromium (~150 MB)
 #   -NoExcel        skip openpyxl (only needed for the Excel output format)
 #   -Autostart      start the companion automatically at login
@@ -36,6 +39,16 @@
 #                   in SF_TLS_CERT_PASSWORD; or a PEM file plus -TlsKey FILE).
 #                   Users then enter https://HOST:PORT in the extension's error screen
 #   -NoTls          switch HTTPS off again (the default)
+#   -SmtpHost HOST  send mail through this SMTP server, so accounts can have an email
+#                   address that is verified with a mailed code and a forgotten
+#                   password can be reset by email. Needs -SmtpFrom (the sender
+#                   address); the SMTP password goes in SF_SMTP_PASSWORD, never on
+#                   the command line. Default security StartTls on port 587.
+#   -RequireEmail   people must give an email address when they register
+#   -RequireVerifiedEmail
+#                   an account can only use the companion once its address is confirmed
+#   -EmailDomains   accept only addresses of these domains (comma-separated)
+#   -NoEmail        remove the SMTP settings and the email rules again
 # Safe to run again: it updates an existing installation in place.
 param(
     [switch]$BrowserEngine,
@@ -51,7 +64,16 @@ param(
     [string]$HostName = '',
     [string]$TlsCert = '',
     [string]$TlsKey = '',
-    [switch]$NoTls
+    [switch]$NoTls,
+    [string]$SmtpHost = '',
+    [int]$SmtpPort = 0,
+    [string]$SmtpFrom = '',
+    [string]$SmtpUser = '',
+    [string]$SmtpSecurity = '',
+    [switch]$RequireEmail,
+    [switch]$RequireVerifiedEmail,
+    [string]$EmailDomains = '',
+    [switch]$NoEmail
 )
 $ErrorActionPreference = 'Stop'
 
@@ -132,6 +154,14 @@ host, tls_cert, tls_key = os.environ.get("SF_HOST", ""), os.environ.get("SF_TLS_
 no_tls, tls_password = os.environ.get("SF_NO_TLS") == "1", os.environ.get("SF_TLS_CERT_PASSWORD", "")
 if registration not in ("", "open", "disabled"):
     sys.exit("-Registration must be open or disabled")
+# Issue #353: email addresses, verification and password reset by mail.
+smtp_host, smtp_from = os.environ.get("SF_SMTP_HOST", ""), os.environ.get("SF_SMTP_FROM", "")
+smtp_port, smtp_user = os.environ.get("SF_SMTP_PORT", ""), os.environ.get("SF_SMTP_USER", "")
+smtp_security, smtp_password = os.environ.get("SF_SMTP_SECURITY", ""), os.environ.get("SF_SMTP_PASSWORD", "")
+require_email, require_verified = os.environ.get("SF_REQUIRE_EMAIL") == "1", os.environ.get("SF_REQUIRE_VERIFIED") == "1"
+email_domains, no_email = os.environ.get("SF_EMAIL_DOMAINS", ""), os.environ.get("SF_NO_EMAIL") == "1"
+if smtp_security and smtp_security.lower() not in ("starttls", "sslonconnect", "none"):
+    sys.exit("-SmtpSecurity must be StartTls, SslOnConnect or None")
 if registration == "open" and auth == "off":
     sys.exit("-Registration open needs authentication; drop -DisableAuth")
 data = {}
@@ -173,6 +203,29 @@ if tls_cert:
     data["Companion"]["Tls"] = tls
 elif no_tls:
     data["Companion"].pop("Tls", None)
+if smtp_host:
+    smtp = data["Companion"].setdefault("Email", {}).setdefault("Smtp", {})
+    smtp["Host"] = smtp_host
+    if smtp_from: smtp["From"] = smtp_from
+    if smtp_port: smtp["Port"] = int(smtp_port)
+    if smtp_user: smtp["Username"] = smtp_user
+    if smtp_password: smtp["Password"] = smtp_password
+    if smtp_security: smtp["Security"] = smtp_security
+rules = data["Companion"].setdefault("Auth", {}).setdefault("Email", {})
+if require_email: rules["Required"] = True
+if require_verified: rules["RequireVerified"] = True
+if email_domains: rules["AllowedDomains"] = [d.strip() for d in email_domains.split(",") if d.strip()]
+if not rules: data["Companion"]["Auth"].pop("Email")
+if not data["Companion"]["Auth"]: data["Companion"].pop("Auth")
+if no_email:
+    data["Companion"].pop("Email", None)
+    if "Auth" in data["Companion"]:
+        data["Companion"]["Auth"].pop("Email", None)
+        if not data["Companion"]["Auth"]: data["Companion"].pop("Auth")
+if (require_email or require_verified or email_domains) and not data["Companion"].get("Auth", {}).get("Enabled"):
+    sys.exit("-RequireEmail/-RequireVerifiedEmail/-EmailDomains need authentication: add -EnableAuth or -Registration open")
+if require_verified and not data["Companion"].get("Email", {}).get("Smtp", {}).get("Host"):
+    sys.exit("-RequireVerifiedEmail needs an SMTP server: add -SmtpHost")
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2)
 '@
@@ -184,8 +237,17 @@ $env:SF_HOST = $HostName
 $env:SF_TLS_CERT = $TlsCert
 $env:SF_TLS_KEY = $TlsKey
 $env:SF_NO_TLS = if ($NoTls) { '1' } else { '0' }
+$env:SF_SMTP_HOST = $SmtpHost
+$env:SF_SMTP_PORT = if ($SmtpPort -gt 0) { "$SmtpPort" } else { '' }
+$env:SF_SMTP_FROM = $SmtpFrom
+$env:SF_SMTP_USER = $SmtpUser
+$env:SF_SMTP_SECURITY = $SmtpSecurity
+$env:SF_REQUIRE_EMAIL = if ($RequireEmail) { '1' } else { '0' }
+$env:SF_REQUIRE_VERIFIED = if ($RequireVerifiedEmail) { '1' } else { '0' }
+$env:SF_EMAIL_DOMAINS = $EmailDomains
+$env:SF_NO_EMAIL = if ($NoEmail) { '1' } else { '0' }
 $WriteSettings | & $VenvPython - $Settings $VenvPython $Port
-Remove-Item Env:\SF_MYSQL, Env:\SF_SQLITE, Env:\SF_AUTH, Env:\SF_REGISTRATION, Env:\SF_HOST, Env:\SF_TLS_CERT, Env:\SF_TLS_KEY, Env:\SF_NO_TLS -ErrorAction SilentlyContinue
+Remove-Item Env:\SF_MYSQL, Env:\SF_SQLITE, Env:\SF_AUTH, Env:\SF_REGISTRATION, Env:\SF_HOST, Env:\SF_TLS_CERT, Env:\SF_TLS_KEY, Env:\SF_NO_TLS, Env:\SF_SMTP_HOST, Env:\SF_SMTP_PORT, Env:\SF_SMTP_FROM, Env:\SF_SMTP_USER, Env:\SF_SMTP_SECURITY, Env:\SF_REQUIRE_EMAIL, Env:\SF_REQUIRE_VERIFIED, Env:\SF_EMAIL_DOMAINS, Env:\SF_NO_EMAIL -ErrorAction SilentlyContinue
 
 # ── Autostart / start ─────────────────────────────────────────────────────
 if ($Autostart) {
