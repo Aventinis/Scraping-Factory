@@ -31,7 +31,7 @@ const SFOutputBlueprintsUI = (function () {
   const { collectFieldNames } =
     typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
 
-  const { getResolvedCompanionUrl } =
+  const { getResolvedCompanionUrl, companionFetch } =
     typeof require !== 'undefined' ? require('./companion-client') : self.SFCompanionClient;
 
   const {
@@ -61,7 +61,7 @@ const SFOutputBlueprintsUI = (function () {
   async function fetchOutputBlueprints(bridge) {
     bridge.patchState({ outputBlueprintsLoading: true });
     try {
-      const res = await fetch(`${getResolvedCompanionUrl()}/blueprints`);
+      const res = await companionFetch(`${getResolvedCompanionUrl()}/blueprints`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const outputBlueprints = await res.json();
       log('OUTPUT_BLUEPRINTS_LIST', outputBlueprints.length);
@@ -76,7 +76,7 @@ const SFOutputBlueprintsUI = (function () {
   }
 
   async function fetchOutputBlueprint(id) {
-    const res = await fetch(`${getResolvedCompanionUrl()}/blueprints/${id}`);
+    const res = await companionFetch(`${getResolvedCompanionUrl()}/blueprints/${id}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
   }
@@ -290,7 +290,7 @@ const SFOutputBlueprintsUI = (function () {
   async function deleteBlueprint(bridge, id) {
     log('DELETE_BLUEPRINT', id);
     try {
-      const res = await fetch(`${getResolvedCompanionUrl()}/blueprints/${id}`, { method: 'DELETE' });
+      const res = await companionFetch(`${getResolvedCompanionUrl()}/blueprints/${id}`, { method: 'DELETE' });
       if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
       log('DELETE_BLUEPRINT OK');
       bridge.patchState({ blueprintDeletePendingId: null });
@@ -441,7 +441,7 @@ const SFOutputBlueprintsUI = (function () {
       const body = isTree
         ? { name: trimmedName, schemaKind: 'Tree', tree: serializeBlueprintSchemaTree(tree) }
         : { name: trimmedName, schemaKind: 'Flat', fieldNames: fieldNames.map(n => n.trim()) };
-      const res = await fetch(url, {
+      const res = await companionFetch(url, {
         method: editingId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

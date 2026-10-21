@@ -75,35 +75,38 @@ public class StoreAbstractionTests
 
     private sealed class FakeSavedConfigStore : ISavedConfigStore
     {
-        public SavedConfigSummary Save(string url, string name, string configJson, long? blueprintId = null) => throw new NotSupportedException();
-        public IReadOnlyList<SavedConfigSummary> ListByUrl(string url) => [new SavedConfigSummary(7, url, "from the fake store", "2026-01-01T00:00:00Z")];
-        public IReadOnlyList<SavedConfigSummary> ListAll() => ListByUrl("https://example.com");
-        public SavedConfigRecord? Get(long id) => id == 7 ? new SavedConfigRecord(7, "https://example.com", "from the fake store", "2026-01-01T00:00:00Z", "{}") : null;
-        public bool Delete(long id) => false;
-        public SavedOutputSummary SaveOutput(long savedConfigId, string name, string fileName, string content) => throw new NotSupportedException();
-        public IReadOnlyList<SavedOutputSummary> ListOutputsByConfigId(long savedConfigId) => [];
-        public SavedOutputRecord? GetOutput(long id) => null;
-        public bool DeleteOutput(long id) => false;
-        public SavedOutputSummary? GetMostRecentOutputForConfig(long savedConfigId, long excludeOutputId) => null;
-        public SavedOutputSummary? GetMostRecentOutputForBlueprint(long blueprintId, long excludeOutputId) => null;
+        public SavedConfigSummary Save(string url, string name, string configJson, long? blueprintId = null, long ownerId = 0) => throw new NotSupportedException();
+        public IReadOnlyList<SavedConfigSummary> ListByUrl(string url, long ownerId = 0) => [new SavedConfigSummary(7, url, "from the fake store", "2026-01-01T00:00:00Z")];
+        public IReadOnlyList<SavedConfigSummary> ListAll(long ownerId = 0) => ListByUrl("https://example.com");
+        public SavedConfigRecord? Get(long id, long ownerId = 0) => id == 7 ? new SavedConfigRecord(7, "https://example.com", "from the fake store", "2026-01-01T00:00:00Z", "{}") : null;
+        public bool Delete(long id, long ownerId = 0) => false;
+        public SavedOutputSummary SaveOutput(long savedConfigId, string name, string fileName, string content, long ownerId = 0) => throw new NotSupportedException();
+        public IReadOnlyList<SavedOutputSummary> ListOutputsByConfigId(long savedConfigId, long ownerId = 0) => [];
+        public SavedOutputRecord? GetOutput(long id, long ownerId = 0) => null;
+        public bool DeleteOutput(long id, long ownerId = 0) => false;
+        public SavedOutputSummary? GetMostRecentOutputForConfig(long savedConfigId, long excludeOutputId, long ownerId = 0) => null;
+        public int ClaimUnowned(long ownerId) => 0;
+        public SavedOutputSummary? GetMostRecentOutputForBlueprint(long blueprintId, long excludeOutputId, long ownerId = 0) => null;
     }
 
     private sealed class FakeOutputBlueprintStore : IOutputBlueprintStore
     {
-        public OutputBlueprintSummary Save(string name, string schemaKind, List<string>? fieldNames, List<OutputBlueprintTreeSchemaNode>? tree) => throw new NotSupportedException();
-        public IReadOnlyList<OutputBlueprintSummary> ListAll() => [new OutputBlueprintSummary(1, "fake blueprint", "2026-01-01T00:00:00Z", 2, "Flat")];
-        public OutputBlueprintRecord? Get(long id) => null;
-        public bool Update(long id, string name, string schemaKind, List<string>? fieldNames, List<OutputBlueprintTreeSchemaNode>? tree) => false;
-        public bool Delete(long id) => false;
+        public OutputBlueprintSummary Save(string name, string schemaKind, List<string>? fieldNames, List<OutputBlueprintTreeSchemaNode>? tree, long ownerId = 0) => throw new NotSupportedException();
+        public IReadOnlyList<OutputBlueprintSummary> ListAll(long ownerId = 0) => [new OutputBlueprintSummary(1, "fake blueprint", "2026-01-01T00:00:00Z", 2, "Flat")];
+        public OutputBlueprintRecord? Get(long id, long ownerId = 0) => null;
+        public bool Update(long id, string name, string schemaKind, List<string>? fieldNames, List<OutputBlueprintTreeSchemaNode>? tree, long ownerId = 0) => false;
+        public bool Delete(long id, long ownerId = 0) => false;
+        public int ClaimUnowned(long ownerId) => 0;
     }
 
     private sealed class FakeTransformPresetStore : ITransformPresetStore
     {
-        public TransformPresetSummary Save(string name, List<FieldTransform> transforms) => throw new NotSupportedException();
-        public IReadOnlyList<TransformPresetSummary> ListAll() => [new TransformPresetSummary(1, "fake preset", "2026-01-01T00:00:00Z", [new TrimTransform()])];
-        public bool Exists(long id) => false;
-        public bool NameTaken(string name, long? exceptId = null) => false;
-        public bool Rename(long id, string name) => false;
-        public bool Delete(long id) => false;
+        public TransformPresetSummary Save(string name, List<FieldTransform> transforms, long ownerId = 0) => throw new NotSupportedException();
+        public IReadOnlyList<TransformPresetSummary> ListAll(long ownerId = 0) => [new TransformPresetSummary(1, "fake preset", "2026-01-01T00:00:00Z", [new TrimTransform()])];
+        public bool Exists(long id, long ownerId = 0) => false;
+        public bool NameTaken(string name, long? exceptId = null, long ownerId = 0) => false;
+        public bool Rename(long id, string name, long ownerId = 0) => false;
+        public bool Delete(long id, long ownerId = 0) => false;
+        public int ClaimUnowned(long ownerId) => 0;
     }
 }

@@ -30,16 +30,18 @@ public sealed class MySqlOutputBlueprintStore : IOutputBlueprintStore
         // Issue #244's columns, added the same idempotent way the SQLite store does.
         MySqlSchema.EnsureColumn(connection, "OutputBlueprints", "SchemaKind", "VARCHAR(16) NOT NULL DEFAULT 'Flat'");
         MySqlSchema.EnsureColumn(connection, "OutputBlueprints", "TreeJson", "LONGTEXT NULL");
+        // Issue #278: the owning user (0 = a companion without authentication).
+        MySqlSchema.EnsureColumn(connection, "OutputBlueprints", "OwnerId", "BIGINT NOT NULL DEFAULT 0");
     }
 
-    public OutputBlueprintSummary Save(string name, string schemaKind, List<string>? fieldNames, List<OutputBlueprintTreeSchemaNode>? tree)
+    public OutputBlueprintSummary Save(string name, string schemaKind, List<string>? fieldNames, List<OutputBlueprintTreeSchemaNode>? tree, long ownerId = 0)
     {
         var savedAt = DateTimeOffset.UtcNow.ToString("O");
         using var connection = MySqlSchema.Open(_connectionString);
         using var command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO OutputBlueprints (Name, SavedAt, FieldNamesJson, SchemaKind, TreeJson)
-            VALUES (@name, @savedAt, @fieldNamesJson, @schemaKind, @treeJson);
+            INSERT INTO OutputBlueprints (Name, SavedAt, FieldNamesJson, SchemaKind, TreeJson, OwnerId)
+            VALUES (@name, @savedAt, @fieldNamesJson, @schemaKind, @treeJson, @ownerId);
             SELECT LAST_INSERT_ID();
             """;
         command.Parameters.AddWithValue("@name", name);
@@ -47,16 +49,18 @@ public sealed class MySqlOutputBlueprintStore : IOutputBlueprintStore
         command.Parameters.AddWithValue("@fieldNamesJson", OutputBlueprintStore.SerializeFieldNames(fieldNames ?? []));
         command.Parameters.AddWithValue("@schemaKind", schemaKind);
         command.Parameters.AddWithValue("@treeJson", tree is { Count: > 0 } ? OutputBlueprintStore.SerializeTree(tree) : DBNull.Value);
+        command.Parameters.AddWithValue("@ownerId", ownerId);
         var id = Convert.ToInt64(command.ExecuteScalar());
         var fieldCount = tree is { Count: > 0 } ? OutputBlueprintStore.CountLeaves(tree) : (fieldNames?.Count ?? 0);
         return new OutputBlueprintSummary(id, name, savedAt, fieldCount, schemaKind);
     }
 
-    public IReadOnlyList<OutputBlueprintSummary> ListAll()
+    public IReadOnlyList<OutputBlueprintSummary> ListAll(long ownerId = 0)
     {
         using var connection = MySqlSchema.Open(_connectionString);
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT Id, Name, SavedAt, FieldNamesJson, SchemaKind, TreeJson FROM OutputBlueprints ORDER BY Name;";
+        command.CommandText = "SELECT Id, Name, SavedAt, FieldNamesJson, SchemaKind, TreeJson FROM OutputBlueprints WHERE OwnerId = @ownerId ORDER BY Name;";
+        command.Parameters.AddWithValue("@ownerId", ownerId);
 
         var results = new List<OutputBlueprintSummary>();
         using var reader = command.ExecuteReader();
@@ -70,12 +74,13 @@ public sealed class MySqlOutputBlueprintStore : IOutputBlueprintStore
         return results;
     }
 
-    public OutputBlueprintRecord? Get(long id)
+    public OutputBlueprintRecord? Get(long id, long ownerId = 0)
     {
         using var connection = MySqlSchema.Open(_connectionString);
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT Id, Name, SavedAt, FieldNamesJson, SchemaKind, TreeJson FROM OutputBlueprints WHERE Id = @id;";
+        command.CommandText = "SELECT Id, Name, SavedAt, FieldNamesJson, SchemaKind, TreeJson FROM OutputBlueprints WHERE Id = @id AND OwnerId = @ownerId;";
         command.Parameters.AddWithValue("@id", id);
+        command.Parameters.AddWithValue("@ownerId", ownerId);
 
         using var reader = command.ExecuteReader();
         if (!reader.Read()) return null;
@@ -85,16 +90,17 @@ public sealed class MySqlOutputBlueprintStore : IOutputBlueprintStore
             OutputBlueprintStore.DeserializeFieldNames(reader.GetString(3)), reader.GetString(4), tree);
     }
 
-    public bool Update(long id, string name, string schemaKind, List<string>? fieldNames, List<OutputBlueprintTreeSchemaNode>? tree)
+    public bool Update(long id, string name, string schemaKind, List<string>? fieldNames, List<OutputBlueprintTreeSchemaNode>? tree, long ownerId = 0)
     {
         using var connection = MySqlSchema.Open(_connectionString);
         using var command = connection.CreateCommand();
         command.CommandText = """
             UPDATE OutputBlueprints
             SET Name = @name, FieldNamesJson = @fieldNamesJson, SchemaKind = @schemaKind, TreeJson = @treeJson
-            WHERE Id = @id;
+            WHERE Id = @id AND OwnerId = @ownerId;
             """;
         command.Parameters.AddWithValue("@id", id);
+        command.Parameters.AddWithValue("@ownerId", ownerId);
         command.Parameters.AddWithValue("@name", name);
         command.Parameters.AddWithValue("@fieldNamesJson", OutputBlueprintStore.SerializeFieldNames(fieldNames ?? []));
         command.Parameters.AddWithValue("@schemaKind", schemaKind);
@@ -106,12 +112,22 @@ public sealed class MySqlOutputBlueprintStore : IOutputBlueprintStore
         return command.ExecuteNonQuery() > 0;
     }
 
-    public bool Delete(long id)
+    public bool Delete(long id, long ownerId = 0)
     {
         using var connection = MySqlSchema.Open(_connectionString);
         using var command = connection.CreateCommand();
-        command.CommandText = "DELETE FROM OutputBlueprints WHERE Id = @id;";
+        command.CommandText = "DELETE FROM OutputBlueprints WHERE Id = @id AND OwnerId = @ownerId;";
         command.Parameters.AddWithValue("@id", id);
+        command.Parameters.AddWithValue("@ownerId", ownerId);
         return command.ExecuteNonQuery() > 0;
+    }
+
+    public int ClaimUnowned(long ownerId)
+    {
+        using var connection = MySqlSchema.Open(_connectionString);
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE OutputBlueprints SET OwnerId = @ownerId WHERE OwnerId = 0;";
+        command.Parameters.AddWithValue("@ownerId", ownerId);
+        return command.ExecuteNonQuery();
     }
 }

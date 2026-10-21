@@ -23,7 +23,7 @@ const SFTransformPresetsUI = (function () {
   const { createLogger } = typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
   const log = createLogger('SF:TransformPresets');
   const { t } = typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
-  const { getResolvedCompanionUrl } = typeof require !== 'undefined' ? require('./companion-client') : self.SFCompanionClient;
+  const { getResolvedCompanionUrl, companionFetch } = typeof require !== 'undefined' ? require('./companion-client') : self.SFCompanionClient;
   const { allTransformPresets, applyTransformPreset, transformChainIsSaveable } =
     typeof require !== 'undefined' ? require('./transform-presets') : self.SFTransformPresets;
 
@@ -48,7 +48,7 @@ const SFTransformPresetsUI = (function () {
 
   async function fetchTransformPresets(bridge) {
     try {
-      const res = await fetch(`${getResolvedCompanionUrl()}/transform-presets`);
+      const res = await companionFetch(`${getResolvedCompanionUrl()}/transform-presets`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const transformPresets = await res.json();
       log('TRANSFORM_PRESETS_LIST', transformPresets.length);
@@ -72,7 +72,7 @@ const SFTransformPresetsUI = (function () {
   async function saveTransformPreset(bridge, name, transforms) {
     log('TRANSFORM_PRESET_SAVE', { name, steps: transforms.length });
     try {
-      const res = await fetch(`${getResolvedCompanionUrl()}/transform-presets`, {
+      const res = await companionFetch(`${getResolvedCompanionUrl()}/transform-presets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, transforms }),
@@ -94,7 +94,7 @@ const SFTransformPresetsUI = (function () {
   async function renameTransformPreset(bridge, id, name) {
     log('TRANSFORM_PRESET_RENAME', { id, name });
     try {
-      const res = await fetch(`${getResolvedCompanionUrl()}/transform-presets/${id}`, {
+      const res = await companionFetch(`${getResolvedCompanionUrl()}/transform-presets/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
@@ -113,7 +113,7 @@ const SFTransformPresetsUI = (function () {
   async function deleteTransformPreset(bridge, id) {
     log('TRANSFORM_PRESET_DELETE', id);
     try {
-      const res = await fetch(`${getResolvedCompanionUrl()}/transform-presets/${id}`, { method: 'DELETE' });
+      const res = await companionFetch(`${getResolvedCompanionUrl()}/transform-presets/${id}`, { method: 'DELETE' });
       if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
       bridge.patchState({ transformPresetDeletePendingId: null });
       await fetchTransformPresets(bridge);

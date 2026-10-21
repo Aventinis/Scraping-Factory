@@ -106,6 +106,10 @@ public sealed class OutputBlueprintStore : IOutputBlueprintStore
         // blueprint either way.
         AddColumnIfMissing(connection, "SchemaKind", "TEXT NOT NULL DEFAULT 'Flat'");
         AddColumnIfMissing(connection, "TreeJson", "TEXT NULL");
+
+        // Issue #278: the owning user (0 = a companion without authentication,
+        // the default for every pre-existing row).
+        AddColumnIfMissing(connection, "OwnerId", "INTEGER NOT NULL DEFAULT 0");
     }
 
     private static void AddColumnIfMissing(SqliteConnection connection, string columnName, string columnDefinition)
@@ -143,14 +147,14 @@ public sealed class OutputBlueprintStore : IOutputBlueprintStore
     internal static int CountLeaves(IReadOnlyList<OutputBlueprintTreeSchemaNode> nodes) =>
         nodes.Sum(node => node is OutputBlueprintTreeSchemaGroup group ? CountLeaves(group.Children) : 1);
 
-    public OutputBlueprintSummary Save(string name, string schemaKind, List<string>? fieldNames, List<OutputBlueprintTreeSchemaNode>? tree)
+    public OutputBlueprintSummary Save(string name, string schemaKind, List<string>? fieldNames, List<OutputBlueprintTreeSchemaNode>? tree, long ownerId = 0)
     {
         var savedAt = DateTimeOffset.UtcNow.ToString("O");
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO OutputBlueprints (Name, SavedAt, FieldNamesJson, SchemaKind, TreeJson)
-            VALUES (@name, @savedAt, @fieldNamesJson, @schemaKind, @treeJson);
+            INSERT INTO OutputBlueprints (Name, SavedAt, FieldNamesJson, SchemaKind, TreeJson, OwnerId)
+            VALUES (@name, @savedAt, @fieldNamesJson, @schemaKind, @treeJson, @ownerId);
             SELECT last_insert_rowid();
             """;
         command.Parameters.AddWithValue("@name", name);
@@ -158,6 +162,7 @@ public sealed class OutputBlueprintStore : IOutputBlueprintStore
         command.Parameters.AddWithValue("@fieldNamesJson", SerializeFieldNames(fieldNames ?? []));
         command.Parameters.AddWithValue("@schemaKind", schemaKind);
         command.Parameters.AddWithValue("@treeJson", tree is { Count: > 0 } ? SerializeTree(tree) : DBNull.Value);
+        command.Parameters.AddWithValue("@ownerId", ownerId);
         var id = (long)command.ExecuteScalar()!;
         var fieldCount = tree is { Count: > 0 } ? CountLeaves(tree) : (fieldNames?.Count ?? 0);
         return new OutputBlueprintSummary(id, name, savedAt, fieldCount, schemaKind);
@@ -169,11 +174,12 @@ public sealed class OutputBlueprintStore : IOutputBlueprintStore
     // SavedAt (unlike saved configs/outputs, which list newest-first) since
     // a blueprint picker is a small, stable set the user picks *from* by
     // name, not a history to scroll chronologically.
-    public IReadOnlyList<OutputBlueprintSummary> ListAll()
+    public IReadOnlyList<OutputBlueprintSummary> ListAll(long ownerId = 0)
     {
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT Id, Name, SavedAt, FieldNamesJson, SchemaKind, TreeJson FROM OutputBlueprints ORDER BY Name COLLATE NOCASE;";
+        command.CommandText = "SELECT Id, Name, SavedAt, FieldNamesJson, SchemaKind, TreeJson FROM OutputBlueprints WHERE OwnerId = @ownerId ORDER BY Name COLLATE NOCASE;";
+        command.Parameters.AddWithValue("@ownerId", ownerId);
 
         var results = new List<OutputBlueprintSummary>();
         using var reader = command.ExecuteReader();
@@ -188,12 +194,13 @@ public sealed class OutputBlueprintStore : IOutputBlueprintStore
         return results;
     }
 
-    public OutputBlueprintRecord? Get(long id)
+    public OutputBlueprintRecord? Get(long id, long ownerId = 0)
     {
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT Id, Name, SavedAt, FieldNamesJson, SchemaKind, TreeJson FROM OutputBlueprints WHERE Id = @id;";
+        command.CommandText = "SELECT Id, Name, SavedAt, FieldNamesJson, SchemaKind, TreeJson FROM OutputBlueprints WHERE Id = @id AND OwnerId = @ownerId;";
         command.Parameters.AddWithValue("@id", id);
+        command.Parameters.AddWithValue("@ownerId", ownerId);
 
         using var reader = command.ExecuteReader();
         if (!reader.Read()) return null;
@@ -214,16 +221,17 @@ public sealed class OutputBlueprintStore : IOutputBlueprintStore
     // SchemaKind can be changed on edit too, same as everything else —
     // there's no lifecycle reason to forbid switching an existing
     // blueprint from flat to tree or back.
-    public bool Update(long id, string name, string schemaKind, List<string>? fieldNames, List<OutputBlueprintTreeSchemaNode>? tree)
+    public bool Update(long id, string name, string schemaKind, List<string>? fieldNames, List<OutputBlueprintTreeSchemaNode>? tree, long ownerId = 0)
     {
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = """
             UPDATE OutputBlueprints
             SET Name = @name, FieldNamesJson = @fieldNamesJson, SchemaKind = @schemaKind, TreeJson = @treeJson
-            WHERE Id = @id;
+            WHERE Id = @id AND OwnerId = @ownerId;
             """;
         command.Parameters.AddWithValue("@id", id);
+        command.Parameters.AddWithValue("@ownerId", ownerId);
         command.Parameters.AddWithValue("@name", name);
         command.Parameters.AddWithValue("@fieldNamesJson", SerializeFieldNames(fieldNames ?? []));
         command.Parameters.AddWithValue("@schemaKind", schemaKind);
@@ -231,12 +239,23 @@ public sealed class OutputBlueprintStore : IOutputBlueprintStore
         return command.ExecuteNonQuery() > 0;
     }
 
-    public bool Delete(long id)
+    public bool Delete(long id, long ownerId = 0)
     {
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
-        command.CommandText = "DELETE FROM OutputBlueprints WHERE Id = @id;";
+        command.CommandText = "DELETE FROM OutputBlueprints WHERE Id = @id AND OwnerId = @ownerId;";
         command.Parameters.AddWithValue("@id", id);
+        command.Parameters.AddWithValue("@ownerId", ownerId);
         return command.ExecuteNonQuery() > 0;
+    }
+
+    // Issue #278: see SavedConfigStore.ClaimUnowned.
+    public int ClaimUnowned(long ownerId)
+    {
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE OutputBlueprints SET OwnerId = @ownerId WHERE OwnerId = 0;";
+        command.Parameters.AddWithValue("@ownerId", ownerId);
+        return command.ExecuteNonQuery();
     }
 }

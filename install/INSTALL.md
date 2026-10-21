@@ -48,6 +48,25 @@ created automatically in the given, already existing database. It is stored in
 the companion's settings file (readable only by you); `--sqlite` / `-Sqlite`
 switches back. Existing local data is not copied over.
 
+### Optional: personal access keys (several people on one companion)
+
+By default the companion has no login — it is meant for one person on one
+machine. When several people share a companion (typically together with the
+MySQL option above), switch on authentication so everybody only ever sees their
+own saved configurations, outputs, blueprints and presets:
+
+```bash
+./install.sh --enable-auth            # Windows: -EnableAuth
+~/.config/ScrapingFactory/app/companion/ScrapingFactory.Companion user add alice
+```
+
+`user add` prints the user's access key **once**; they enter it in the
+extension under **Settings → Access key**. Further commands: `user list`,
+`user rotate <name>` (new key, the old one stops working), `user remove <name>`,
+and `user adopt <name>` (hands everything saved before authentication was
+switched on to that user). `--disable-auth` / `-DisableAuth` switches it off
+again.
+
 ## 2. Load the extension
 
 The browser does not allow an installer to add an extension silently, so this

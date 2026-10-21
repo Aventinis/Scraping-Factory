@@ -10,6 +10,7 @@
 #
 # Usage: ./install.sh [--browser-engine] [--no-excel] [--autostart] [--no-start] [--port N]
 #                     [--mysql CONNECTION_STRING | --sqlite]
+#                     [--enable-auth | --disable-auth]
 #   --browser-engine  also install Playwright and download Chromium (~150 MB)
 #   --no-excel        skip openpyxl (only needed for the Excel output format)
 #   --autostart       start the companion automatically at login
@@ -23,21 +24,27 @@
 #                     SF_MYSQL_CONNECTION_STRING works too and keeps the
 #                     password out of the process list)
 #   --sqlite          switch an existing installation back to local SQLite
+#   --enable-auth     require a personal access key for every request (for a
+#                     companion several people share); create the users
+#                     afterwards with:  <installed companion> user add <name>
+#   --disable-auth    switch authentication off again (the default)
 # Safe to run again: it updates an existing installation in place.
 set -euo pipefail
 
-BROWSER_ENGINE=0; EXCEL=1; AUTOSTART=0; START=1; PORT=5000; MYSQL="${SF_MYSQL_CONNECTION_STRING:-}"; SQLITE=0
+BROWSER_ENGINE=0; EXCEL=1; AUTOSTART=0; START=1; PORT=5000; MYSQL="${SF_MYSQL_CONNECTION_STRING:-}"; SQLITE=0; AUTH=""
 while [ $# -gt 0 ]; do
   arg="$1"; shift
   case "$arg" in
     --port) PORT="${1:?--port needs a number}"; shift ;;
     --mysql) MYSQL="${1:?--mysql needs a connection string}"; shift ;;
     --sqlite) SQLITE=1 ;;
+    --enable-auth) AUTH=on ;;
+    --disable-auth) AUTH=off ;;
     --browser-engine) BROWSER_ENGINE=1 ;;
     --no-excel) EXCEL=0 ;;
     --autostart) AUTOSTART=1 ;;
     --no-start) START=0 ;;
-    -h|--help) sed -n 2,30p "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n 2,34p "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $arg (see --help)" >&2; exit 2 ;;
   esac
 done
@@ -114,10 +121,11 @@ fi
 
 # ── Settings file ─────────────────────────────────────────────────────────
 say "Writing $SETTINGS"
-SF_MYSQL="$MYSQL" SF_SQLITE="$SQLITE" "$VENV_PYTHON" - "$SETTINGS" "$VENV_PYTHON" "$PORT" <<'PY'
+SF_MYSQL="$MYSQL" SF_SQLITE="$SQLITE" SF_AUTH="$AUTH" "$VENV_PYTHON" - "$SETTINGS" "$VENV_PYTHON" "$PORT" <<'PY'
 import json, os, sys
 path, python, port = sys.argv[1], sys.argv[2], int(sys.argv[3])
 mysql, back_to_sqlite = os.environ.get("SF_MYSQL", ""), os.environ.get("SF_SQLITE") == "1"
+auth = os.environ.get("SF_AUTH", "")
 data = {}
 if os.path.exists(path):
     try:
@@ -136,6 +144,11 @@ if mysql:
     data["Companion"]["Storage"] = {"Provider": "MySql", "MySql": {"ConnectionString": mysql}}
 elif back_to_sqlite:
     data["Companion"].pop("Storage", None)
+# Issue #278: per-user authentication — likewise only touched when asked for.
+if auth == "on":
+    data["Companion"]["Auth"] = {"Enabled": True}
+elif auth == "off":
+    data["Companion"].pop("Auth", None)
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2)
 PY
@@ -198,6 +211,10 @@ if [ "$START" = 1 ]; then
   done
   [ "${UP:-0}" = 1 ] && echo "The companion is running on http://localhost:$PORT" \
                      || echo "The companion did not answer on port $PORT within 30 s — see $LOG" >&2
+fi
+
+if [ "$AUTH" = on ]; then
+  printf '\nAuthentication is ON. Create a user (prints their access key once) with:\n  %s user add <name>\nand give existing data to someone with:  %s user adopt <name>\n' "$BIN" "$BIN"
 fi
 
 cat <<DONE

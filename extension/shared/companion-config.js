@@ -59,8 +59,49 @@ const SFCompanionConfig = (function () {
     }
   }
 
+  // Issue #278: the access key for a companion that has per-user
+  // authentication switched on — a long-lived device preference like the URL
+  // override above, so chrome.storage.local too. Read synchronously from a
+  // module-level cache (filled once by loadAccessKey(), refreshed by
+  // setAccessKey()) because every companion request needs it, not just
+  // startup; sent as `Authorization: Bearer <key>` (see companionFetch in
+  // popup/companion-client.js). Never logged.
+  const ACCESS_KEY_STORAGE_KEY = 'companionAccessKey';
+  let cachedAccessKey = '';
+
+  async function loadAccessKey() {
+    if (typeof chrome === 'undefined' || !chrome.storage?.local) return cachedAccessKey;
+    try {
+      const stored = await chrome.storage.local.get(ACCESS_KEY_STORAGE_KEY);
+      cachedAccessKey = typeof stored[ACCESS_KEY_STORAGE_KEY] === 'string' ? stored[ACCESS_KEY_STORAGE_KEY] : '';
+    } catch {
+      cachedAccessKey = '';
+    }
+    return cachedAccessKey;
+  }
+
+  function getAccessKey() {
+    return cachedAccessKey;
+  }
+
+  // An empty key clears it.
+  async function setAccessKey(key) {
+    cachedAccessKey = String(key || '').trim();
+    if (typeof chrome === 'undefined' || !chrome.storage?.local) return cachedAccessKey;
+    try {
+      if (cachedAccessKey) await chrome.storage.local.set({ [ACCESS_KEY_STORAGE_KEY]: cachedAccessKey });
+      else await chrome.storage.local.remove(ACCESS_KEY_STORAGE_KEY);
+    } catch {
+      // Best-effort — a failed write just means the key won't survive a restart.
+    }
+    return cachedAccessKey;
+  }
+
   return {
     DEFAULT_COMPANION_URL,
+    loadAccessKey,
+    getAccessKey,
+    setAccessKey,
     getCompanionUrl,
     setCompanionUrlOverride,
     resetCompanionUrlOverride,
