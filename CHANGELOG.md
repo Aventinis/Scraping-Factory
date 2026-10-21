@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.18.4](https://github.com/Aventinis/Scraping-Factory/compare/v1.18.3...v1.18.4) (2026-10-21)
+
+
+### Features
+
+* **auth:** access key in the extension, installer flags, docs and real-browser check ([946bb6a](https://github.com/Aventinis/Scraping-Factory/commit/946bb6a52b21826047b66b41e495b97547017e29))
+* **auth:** optional per-user authentication — access keys, owner-scoped stores, user commands ([a87980d](https://github.com/Aventinis/Scraping-Factory/commit/a87980dc0c78a5775e2b972acff79f005bb4ddc2))
+* optional per-user authentication for a shared companion ([#278](https://github.com/Aventinis/Scraping-Factory/issues/278)) ([908585f](https://github.com/Aventinis/Scraping-Factory/commit/908585ff761ef27a8b4e2c728452c2602d5fdce2))
+
 ## [1.18.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.18.2...v1.18.3) (2026-10-20)
 
 
