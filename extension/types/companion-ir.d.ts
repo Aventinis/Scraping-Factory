@@ -260,6 +260,12 @@ declare namespace SFWire {
     embeddedJsonSource?: EmbeddedJsonSource;
     bootstrap?: ApiBootstrap;
     cursorPagination?: ApiCursorPagination;
+    linkHeaderPagination?: ApiLinkHeaderPagination;
+  }
+
+  // Issue #321: see ApiConfig.LinkHeaderPagination in IR/ApiConfig.cs.
+  interface ApiLinkHeaderPagination {
+    maxPages: number;
   }
 
   // Issue #224: see ApiConfig.CursorPagination in IR/ApiConfig.cs.

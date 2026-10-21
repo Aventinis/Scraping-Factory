@@ -977,6 +977,8 @@ const SFApiConfigUI = (function () {
         // Issue #224: lets the cursor-pagination section find this request's
         // own recorded response again ("Detect from recording").
         sourceEntryId: candidate.entryId,
+        // Issue #321: the recorded response announced a rel="next" Link header.
+        sourceHasNextLink: !!candidate.hasNextLink,
       },
     });
     loadInitialBodyTreeForCandidate(bridge, candidate);
@@ -1500,6 +1502,7 @@ const SFApiConfigUI = (function () {
       embeddedJsonSource: draft.embeddedJsonSource,
       bootstrap: draft.bootstrap,
       cursorPagination: draft.cursorPagination,
+      linkHeaderPagination: draft.linkHeaderPagination,
     });
 
     log('API_CONFIG confirm', apiConfig);

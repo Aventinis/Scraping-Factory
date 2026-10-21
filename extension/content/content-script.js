@@ -448,6 +448,8 @@ function findApiCandidates(entries, targetText, scopePath = null) {
         valuePath: derived ? derived.valuePath : null,
         treeSkeleton: deriveApiTreeSkeleton(path),
         requestHeaders: entry.requestHeaders || [],
+        // Issue #321: the recorded response announced a rel="next" Link header.
+        hasNextLink: !!entry.hasNextLink,
         isJsonContentType,
         matchCountInBody: matches.length,
       });

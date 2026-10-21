@@ -316,6 +316,14 @@
     "maxPagesLabel": "Maximum pages per request combination",
     "firstPageHint": "Page 1 is sent exactly as recorded — make sure the recorded request is the first page, without a cursor."
   },
+  "apiLink": {
+    "toggleLabel": "Follow the Link header (rel=\"next\" pagination)",
+    "hint": "For APIs (GitHub, GitLab, WordPress, ...) that announce the next page in the HTTP Link response header instead of in the body. The script requests that URL page after page for every parameter combination until no next link is left. Not for POST requests.",
+    "detectedHint": "A recorded response announced a next page via a Link header — this option probably fits.",
+    "needsGet": "Link-header pagination needs a GET request.",
+    "maxPagesLabel": "Maximum pages per request combination",
+    "firstPageHint": "Page 1 is sent exactly as recorded — make sure the recorded request is the first page. Next-page links to another host are never followed."
+  },
   "apiBootstrap": {
     "toggleLabel": "Fetch a fresh token before every run (auth bootstrap)",
     "hint": "For APIs that need a short-lived token from a login/token request first. The script sends that request at the start of every run and uses the extracted value in the headers/URL below — credentials only ever come from environment variables.",
