@@ -85,7 +85,10 @@ const SFApiCursorPaginationUI = (function () {
 
   function setCursorEnabled(bridge, enabled) {
     log('API_CURSOR toggle', enabled);
-    patchDraft(bridge, { cursorPagination: enabled ? createDefaultCursorDraft() : null });
+    // Issue #321: exclusive with Link-header pagination — enabling this one drops the other.
+    patchDraft(bridge, enabled
+      ? { cursorPagination: createDefaultCursorDraft(), linkHeaderPagination: null }
+      : { cursorPagination: null });
   }
 
   function setCursorField(bridge, field, value) {

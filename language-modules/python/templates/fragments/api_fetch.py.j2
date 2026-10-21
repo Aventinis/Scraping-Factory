@@ -72,10 +72,39 @@ def _next_cursor(data):
 {{~ end ~}}
 
 
-# Sends ONE request (page) and returns its parsed JSON, or None when the
-# endpoint answers 404 (see below). Factored out of scrape() (Issue #224) so
-# the same code serves a plain single request and every page of a cursor
-# chain.
+{{~ if link_pagination_enabled ~}}
+# Issue #321: Link-header pagination. Many REST APIs (GitHub, GitLab,
+# WordPress, ...) announce the next page in the `Link: <url>; rel="next"`
+# response header (RFC 8288) rather than in the body. Page 1 is sent exactly
+# as configured; every further page is the URL the previous response named
+# (requests parses the header into response.links; a relative URL is
+# resolved against the URL that was requested), requested with the same
+# headers/authentication. The chain ends when no rel="next" link is present,
+# when it would leave the original host (the request's own headers — often
+# credentials — must not be sent anywhere the user never configured), when a
+# URL repeats (an API handing back the same link forever would loop), or at
+# LINK_PAGINATION_MAX_PAGES.
+LINK_PAGINATION_MAX_PAGES = {{ link_pagination_max_pages }}
+
+
+def _origin_of(url):
+    parts = urlsplit(url)
+    return (parts.scheme.lower(), parts.netloc.lower())
+
+
+def _next_link_url(response, requested_url):
+    link = response.links.get("next")
+    if not link or not link.get("url"):
+        return None
+    return urljoin(requested_url, link["url"])
+
+
+{{~ end ~}}
+# Sends ONE request (page) and returns (parsed JSON, response), or
+# (None, None) when the endpoint answers 404 (see below). Factored out of
+# scrape() (Issue #224) so the same code serves a plain single request and
+# every page of a cursor/Link-header chain; the response is handed back for
+# the Link header (Issue #321).
 def _fetch_page_data(url, body, headers):
     if METHOD == "POST":
 {{~ if request_delay.enabled ~}}
@@ -110,7 +139,7 @@ def _fetch_page_data(url, body, headers):
     # still catches that — this doesn't need to track failures itself.
     if response.status_code == 404:
         print(f"Skipped (404 Not Found): {{ if has_bootstrap }}{_redact_bootstrap(url)}{{ else }}{url}{{ end }}")
-        return None
+        return None, None
     _require_ok("Request", url, response)
 {{~ if hardening.enabled ~}}
     _BLOCKING_RESPONSES.append({"url": {{ if has_bootstrap }}_redact_bootstrap(url){{ else }}url{{ end }}, "final_url": {{ if has_bootstrap }}_redact_bootstrap(response.url){{ else }}response.url{{ end }}, "length": len(response.content), "text": response.text})
@@ -120,7 +149,7 @@ def _fetch_page_data(url, body, headers):
 {{~ else ~}}
     data = _json_or_fail("Request", url, response)
 {{~ end ~}}
-    return data
+    return data, response
 
 
 {{~ if cursor_pagination_enabled ~}}
@@ -129,7 +158,7 @@ def _fetch_pages(url, body, headers):
     seen_cursors = set()
     for page_number in range(1, CURSOR_PAGINATION["maxPages"] + 1):
         page_url, page_body = (url, body) if cursor is None else _apply_cursor(url, body, cursor)
-        data = _fetch_page_data(page_url, page_body, headers)
+        data, _ = _fetch_page_data(page_url, page_body, headers)
         if data is None:
             # A 404 on page 1 means "this combination doesn't exist"; on a
             # later page it simply ends the chain.
@@ -143,9 +172,33 @@ def _fetch_pages(url, body, headers):
             return
         seen_cursors.add(str(cursor))
     print(f"Stopped after {CURSOR_PAGINATION['maxPages']} page(s) (maxPages) although the API reported more.")
+{{~ else if link_pagination_enabled ~}}
+def _fetch_pages(url, body, headers):
+    origin = _origin_of(url)
+    seen_urls = {url}
+    page_url = url
+    for page_number in range(1, LINK_PAGINATION_MAX_PAGES + 1):
+        data, response = _fetch_page_data(page_url, body, headers)
+        if data is None:
+            # A 404 on page 1 means "this combination doesn't exist"; on a
+            # later page it simply ends the chain.
+            return
+        yield data
+        next_url = _next_link_url(response, page_url)
+        if next_url is None:
+            return
+        if _origin_of(next_url) != origin:
+            print(f"WARNING: the next-page link '{_display_url(next_url)}' points to a different host - stopping pagination.", file=sys.stderr)
+            return
+        if next_url in seen_urls:
+            print(f"WARNING: the next-page link '{_display_url(next_url)}' was returned twice - stopping pagination to avoid an endless loop.", file=sys.stderr)
+            return
+        seen_urls.add(next_url)
+        page_url = next_url
+    print(f"Stopped after {LINK_PAGINATION_MAX_PAGES} page(s) (maxPages) although the API announced more.")
 {{~ else ~}}
 def _fetch_pages(url, body, headers):
-    data = _fetch_page_data(url, body, headers)
+    data, _ = _fetch_page_data(url, body, headers)
     if data is not None:
         yield data
 {{~ end ~}}

@@ -66,6 +66,10 @@ const {
 } = typeof require !== 'undefined' ? require('./api-cursor-pagination-ui') : self.SFApiCursorPaginationUI;
 
 const {
+  renderApiLinkPaginationSection, wireApiLinkPaginationEvents,
+} = typeof require !== 'undefined' ? require('./api-link-pagination-ui') : self.SFApiLinkPaginationUI;
+
+const {
   renderGroupTree,
   renderContainerFieldModal, wireContainerModeEvents,
 } = typeof require !== 'undefined' ? require('./container-tree-ui') : self.SFContainerTreeUI;
@@ -906,6 +910,7 @@ function render() {
     renderApiConfigModals(bridge);
     renderApiBootstrapSection(bridge);
     renderApiCursorPaginationSection(bridge);
+    renderApiLinkPaginationSection(bridge);
   }
 
   if (_state.current === STATES.DONE) {
@@ -1158,6 +1163,8 @@ function wireEvents() {
   wireApiBootstrapEvents(bridge);
 
   wireApiCursorPaginationEvents(bridge);
+
+  wireApiLinkPaginationEvents(bridge);
 
   wireTransformPresetControls(bridge);
   wireTransformPresetsSettings(bridge);

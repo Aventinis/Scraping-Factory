@@ -35,6 +35,7 @@ declare global {
     SFApiConfig: any;
     SFApiBootstrap: any;
     SFApiCursorPagination: any;
+    SFApiLinkPagination: any;
     SFDedupConfig: any;
     SFRequestHeaders: any;
     SFSelectorTextFilter: any;

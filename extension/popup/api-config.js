@@ -110,6 +110,8 @@
  * @property {ParameterPart[]} [bodyParameters]
  * @property {SFDraft.ApiBootstrap | null} [bootstrap]
  * @property {SFDraft.ApiCursorPagination | null} [cursorPagination]
+ * @property {SFDraft.ApiLinkHeaderPagination | null} [linkHeaderPagination]
+ * @property {boolean} [sourceHasNextLink]
  * @property {string} [sourceEntryId]
  */
 const SFApiConfig = (function () {
@@ -123,6 +125,9 @@ const SFApiConfig = (function () {
   // lives in api-cursor-pagination.js (loaded before this file).
   const { buildApiCursorPagination, cursorDraftIsComplete } =
     typeof require !== 'undefined' ? require('./api-cursor-pagination') : self.SFApiCursorPagination;
+  // Issue #321: same split for Link-header pagination (api-link-pagination.js).
+  const { buildApiLinkHeaderPagination, linkDraftIsComplete } =
+    typeof require !== 'undefined' ? require('./api-link-pagination') : self.SFApiLinkPagination;
   const { t } = typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
 
   // Popup screen names. Lives here (rather than in popup.js, which loads
@@ -523,7 +528,7 @@ const SFApiConfig = (function () {
   function buildApiConfig({
     urlParts, itemsPath, fields, groups, parameterSources, capturedHeaders, headerDecisions,
     method, bodyTree, bodyParameterNames = [], parameterIdToName = {}, embeddedJsonSource = null, bootstrap = null,
-    cursorPagination = null,
+    cursorPagination = null, linkHeaderPagination = null,
   }) {
     const urlTemplate = buildUrlTemplate(urlParts);
     // Issue #220: a variable URL part carrying the bootstrap value (already
@@ -531,6 +536,7 @@ const SFApiConfig = (function () {
     // placeholder, not a declared parameter — see api-bootstrap.js.
     const bootstrapWire = buildApiBootstrap(bootstrap);
     const cursorWire = buildApiCursorPagination(cursorPagination);
+    const linkWire = buildApiLinkHeaderPagination(linkHeaderPagination);
     const variableParts = [...urlParts.pathSegments, ...urlParts.queryParams]
       .filter(p => p.variable && !(bootstrapWire && p.name === bootstrapWire.name));
     const parameterNames = [...variableParts.map(p => p.name), ...bodyParameterNames];
@@ -553,6 +559,7 @@ const SFApiConfig = (function () {
       ...(embeddedJsonSource ? { embeddedJsonSource } : {}),
       ...(bootstrapWire ? { bootstrap: bootstrapWire } : {}),
       ...(cursorWire ? { cursorPagination: cursorWire } : {}),
+      ...(linkWire ? { linkHeaderPagination: linkWire } : {}),
     };
   }
 
@@ -1104,6 +1111,9 @@ const SFApiConfig = (function () {
       (!!draft.bootstrap && (decision.template || '').includes(`{${draft.bootstrap.name.trim()}}`)));
     if (!bootstrapHeadersOk) return false;
     if (!cursorDraftIsComplete(draft.cursorPagination, { method: draft.method, hasBodyTree: !!draft.bodyTree })) return false;
+    if (!linkDraftIsComplete(draft.linkHeaderPagination, {
+      method: draft.method, embeddedJsonSource: draft.embeddedJsonSource, cursorPagination: draft.cursorPagination,
+    })) return false;
     return draft.bodyTree ? bodyTreeLeavesAreBound(draft.bodyTree) : true;
   }
 

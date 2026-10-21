@@ -316,6 +316,14 @@
     "maxPagesLabel": "Maximale Seiten pro Anfrage-Kombination",
     "firstPageHint": "Seite 1 wird genau wie aufgezeichnet gesendet – die aufgezeichnete Anfrage sollte also die erste Seite ohne Cursor sein."
   },
+  "apiLink": {
+    "toggleLabel": "Link-Header folgen (rel=\"next\"-Paginierung)",
+    "hint": "Für APIs (GitHub, GitLab, WordPress, ...), die die nächste Seite im HTTP-Antwort-Header Link statt im Body ankündigen. Das Skript ruft diese URL Seite für Seite für jede Parameterkombination ab, bis kein Next-Link mehr kommt. Nicht für POST-Anfragen.",
+    "detectedHint": "Eine aufgezeichnete Antwort hat eine nächste Seite per Link-Header angekündigt — diese Option passt vermutlich.",
+    "needsGet": "Die Link-Header-Paginierung braucht eine GET-Anfrage.",
+    "maxPagesLabel": "Maximale Seitenzahl pro Anfragekombination",
+    "firstPageHint": "Seite 1 wird genau wie aufgezeichnet gesendet — die aufgezeichnete Anfrage sollte also die erste Seite sein. Next-Links auf einen anderen Host werden nie verfolgt."
+  },
   "apiBootstrap": {
     "toggleLabel": "Vor jedem Lauf frisches Token holen (Auth-Bootstrap)",
     "hint": "Für APIs, die zuerst ein kurzlebiges Token aus einer Login-/Token-Anfrage brauchen. Das Skript sendet diese Anfrage zu Beginn jedes Laufs und nutzt den ausgelesenen Wert in den Headern/der URL unten — Zugangsdaten kommen ausschließlich aus Umgebungsvariablen.",

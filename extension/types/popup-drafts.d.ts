@@ -233,6 +233,12 @@ declare namespace SFDraft {
     maxPages: number;
   }
 
+  // ── API mode: Link-header pagination (api-link-pagination.js, Issue #321) ──
+
+  interface ApiLinkHeaderPagination {
+    maxPages: number;
+  }
+
   // One GET_API_CAPTURE_ENTRIES entry (content/api-capture.js's buildEntry).
   interface ApiCaptureEntry {
     id: number;
@@ -243,6 +249,7 @@ declare namespace SFDraft {
     body: string;
     requestHeaders?: Array<{ name: string; value: string }>;
     requestBody?: string;
+    hasNextLink?: boolean;
     requestBodySkipped?: boolean;
   }
 }

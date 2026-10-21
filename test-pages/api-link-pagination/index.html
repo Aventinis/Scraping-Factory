@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <title>Link-Header-Paginierung (Issue #321)</title>
+</head>
+<body>
+  <h1>Shop mit Link-Header-Paginierung</h1>
+  <p>
+    "Laden" holt Seite 1 per <code>GET /api/items</code>, "Mehr laden" die URL aus dem
+    <code>Link: &lt;…&gt;; rel="next"</code>-Header der vorherigen Antwort. Zwei Artikel pro Seite, sieben insgesamt —
+    der Body enthält weder Cursor noch Seitenzahl.
+  </p>
+  <button id="btn-load" type="button">Laden</button>
+  <button id="btn-more" type="button" disabled>Mehr laden</button>
+  <ul id="items"></ul>
+  <script>
+    let nextUrl = null;
+    function parseNext(linkHeader) {
+      const match = /<([^>]+)>\s*;\s*rel="next"/.exec(linkHeader || '');
+      return match ? match[1] : null;
+    }
+    async function loadPage(url) {
+      const response = await fetch(url);
+      const body = await response.json();
+      const list = document.getElementById('items');
+      body.items.forEach((item) => {
+        const li = document.createElement('li');
+        const title = document.createElement('span');
+        title.className = 'title';
+        title.textContent = item.title;
+        const price = document.createElement('span');
+        price.className = 'price';
+        price.textContent = item.price;
+        li.append(title, ' — ', price);
+        list.appendChild(li);
+      });
+      nextUrl = parseNext(response.headers.get('link'));
+      document.getElementById('btn-more').disabled = !nextUrl;
+    }
+    document.getElementById('btn-load').addEventListener('click', () => {
+      document.getElementById('items').innerHTML = '';
+      loadPage('/api/items?page=1');
+    });
+    document.getElementById('btn-more').addEventListener('click', () => loadPage(nextUrl));
+  </script>
+</body>
+</html>

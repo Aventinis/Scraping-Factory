@@ -65,6 +65,25 @@
       <div id="api-cursor-config" class="api-cursor-config hidden"></div>
     </div>
 
+    <!-- Link-header pagination (Issue #321): follow the rel="next" URL the
+         API names in its `Link` response header, rendered by
+         api-link-pagination-ui.js's renderApiLinkPaginationSection. Hidden
+         for an embedded-JSON source; exclusive with the cursor section. -->
+    <div id="api-link-section" class="api-link-section">
+      <label class="output-settings-toggle" style="margin-top: 10px;">
+        <input type="checkbox" id="toggle-api-link" />
+        <span data-i18n="apiLink.toggleLabel"></span>
+      </label>
+      <p class="browser-actions-hint" data-i18n="apiLink.hint"></p>
+      <p id="api-link-detected-hint" class="browser-actions-hint hidden" data-i18n="apiLink.detectedHint"></p>
+      <p id="api-link-post-hint" class="browser-actions-hint hidden" data-i18n="apiLink.needsGet"></p>
+      <div id="api-link-config" class="api-cursor-config hidden">
+        <div class="row-label" data-i18n="apiLink.maxPagesLabel"></div>
+        <input type="number" min="1" step="1" id="input-api-link-max-pages" value="50" />
+        <p class="browser-actions-hint" data-i18n="apiLink.firstPageHint"></p>
+      </div>
+    </div>
+
     <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.headersLabel"></div>
     <ul id="api-config-headers" class="api-config-headers"></ul>
 

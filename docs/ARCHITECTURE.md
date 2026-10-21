@@ -403,7 +403,7 @@ the POST body (`variables.after` for GraphQL). The chain ends when no cursor
 is returned, an optional has-more flag is falsy, a cursor repeats, or
 `MaxPages` is reached. Works for the flat and the tree response shape. The
 "Detect from recording" button reads the recorded response/request for
-cursor-looking keys. Sibling follow-up: `Link`-header pagination (#321).
+cursor-looking keys. The `Link`-header sibling is §2.5d.
 
 - Extension: `popup/api-cursor-pagination.js` (pure draft/wire logic:
   `cursorDraftIsComplete`, `buildApiCursorPagination`,
@@ -426,6 +426,32 @@ cursor-looking keys. Sibling follow-up: `Link`-header pagination (#321).
   `e2e/examples/issue-224-api-cursor-pagination-check.js` against the
   `test-pages/api-cursor-pagination` fixture (REST `?cursor=` and GraphQL
   `variables.after`, 7 items over 4 pages, port 9000)
+
+### 2.5d API mode — Link-header pagination (Issue #321)
+
+For REST APIs that announce the next page in the HTTP
+`Link: <url>; rel="next"` response header (GitHub, GitLab, WordPress) instead
+of the body. A sibling of §2.5c, not a kind of it, and mutually exclusive with
+it. Page 1 is sent as configured; every further page is the URL the previous
+response's `Link` header names, requested with the same headers. The chain
+ends when no next link is left, a link repeats, a link points to another host
+(never followed — the headers may carry credentials), or `MaxPages` is
+reached. GET only; flat and tree shapes. The recorder keeps only a
+`hasNextLink` boolean per entry, so the API_CONFIG screen can suggest the
+option.
+
+- Extension: `content/api-capture.js` (`hasNextLinkRel`), `content/content-script.js`
+  (`hasNextLink` on candidates), `popup/api-link-pagination.js` (pure),
+  `popup/api-link-pagination-ui.js`, `popup/api-config.js`,
+  `popup/screens/api-config.html` (`#api-link-section`)
+- Companion: `IR/ApiConfig.cs` (`ApiConfig.LinkHeaderPagination`,
+  `ApiLinkHeaderPagination`), `ScrapingPlanValidator.cs`
+  (`ValidateApiLinkHeaderPagination`), `PythonApiCodeGenerator.cs`
+  (`link_pagination_enabled`/`link_pagination_max_pages`)
+- Templates: `fragments/api_fetch.py.j2` (`_fetch_pages` variant,
+  `_next_link_url`, `_origin_of`)
+- Tests: `ApiLinkHeaderPaginationTests.cs`, `api-link-pagination*.test.js`,
+  `e2e/examples/issue-321-api-link-pagination-check.js`
 
 ### 2.6 Browser engine, browser actions & login flows (Issues #41/#42/#43)
 
