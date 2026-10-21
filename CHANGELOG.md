@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.19.10](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.9...v1.19.10) (2026-10-21)
+
+
+### Features
+
+* **companion:** email address, verified flag and one-time codes in the user stores (SQLite + MySQL) ([a0cc7ff](https://github.com/Aventinis/Scraping-Factory/commit/a0cc7ffd9fa22322e5c4c5ddc2f1eccfbd68999c))
+* **companion:** email codes, verification, password reset endpoints, rules and CLI ([#353](https://github.com/Aventinis/Scraping-Factory/issues/353)) ([3eee3cf](https://github.com/Aventinis/Scraping-Factory/commit/3eee3cf5fc093f4c147fec749ad36f3b54e4545f))
+* email addresses, verification and password reset by mailed code ([#353](https://github.com/Aventinis/Scraping-Factory/issues/353)) ([08cbb98](https://github.com/Aventinis/Scraping-Factory/commit/08cbb982174d752f7e3bc4817016008b796ce766))
+* **extension:** email address, code verification and password reset in the Account section ([#353](https://github.com/Aventinis/Scraping-Factory/issues/353)) ([8df7bf4](https://github.com/Aventinis/Scraping-Factory/commit/8df7bf45f7b9ef82ab658d50f119cc4b698be28b))
+* **install:** SMTP, email rules and --no-email flags for the installers ([#353](https://github.com/Aventinis/Scraping-Factory/issues/353)) ([bb4c117](https://github.com/Aventinis/Scraping-Factory/commit/bb4c1174ac14acb128d9c4fdfb16dffe14b279c8))
+
 ## [1.19.9](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.8...v1.19.9) (2026-10-21)
 
 
