@@ -649,7 +649,7 @@ public class PythonPlaywrightCodeGeneratorTests
         Assert.Contains("def _extract_page_rows(page):", script);
         Assert.Contains("next_el = page.query_selector(PAGINATION_NEXT_LINK_SELECTOR)", script);
         // Reuses the same page/browser session (page.goto), never relaunches.
-        Assert.Contains("page.goto(urllib.parse.urljoin(page.url, next_href), wait_until=\"load\", timeout=30000)", script);
+        Assert.Contains("_goto_checked(page, urllib.parse.urljoin(page.url, next_href))", script);
         Assert.DoesNotContain("PAGINATION_URL_TEMPLATE", script);
     }
 
@@ -695,7 +695,7 @@ public class PythonPlaywrightCodeGeneratorTests
         // skip-on-reuse guard; Navigate itself runs unconditionally, outside
         // of it.
         Assert.Contains("if not _session_exists:", script);
-        var gotoIndex = script.IndexOf("page.goto(url,", StringComparison.Ordinal);
+        var gotoIndex = script.IndexOf("_goto_checked(page, url)", StringComparison.Ordinal);
         var guardIndex = script.IndexOf("if not _session_exists:", StringComparison.Ordinal);
         var fillIndex = script.IndexOf(".fill(_require_env(\"SF_USERNAME\"))", StringComparison.Ordinal);
         Assert.True(gotoIndex < guardIndex);

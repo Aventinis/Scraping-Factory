@@ -64,7 +64,7 @@ public class RetryTests
         Assert.Contains("RETRY_DELAY_S = 1.5", script);
         Assert.Contains("RETRY_EXPONENTIAL = False", script);
         Assert.Contains("RETRY_ON_STATUS_CODES = {500, 503}", script);
-        Assert.Contains("response = _send_with_retry(lambda _u=page_url: requests.get(_u,", script);
+        Assert.Contains("_send_with_retry(lambda _u=page_url: requests.get(_u,", script);
     }
 
     [Fact]
