@@ -12,6 +12,10 @@
 # configured, the same "degrade, don't crash" treatment a failed Download
 # already gets.
 def _discover_additional_urls():
+{{~ if robots_check.enabled ~}}
+    if not _robots_gate(DISCOVERED_URLS_PAGE_URL):
+        return []
+{{~ end ~}}
     try:
 {{~ if request_delay.enabled ~}}
         _pace_request()

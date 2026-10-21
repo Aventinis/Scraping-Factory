@@ -18,6 +18,10 @@ def _discover_additional_urls():
     if _USER_AGENT:
         headers["User-Agent"] = _USER_AGENT
 {{~ end ~}}
+{{~ if robots_check.enabled ~}}
+    if not _robots_gate(DISCOVERED_URLS_PAGE_URL):
+        return []
+{{~ end ~}}
     try:
 {{~ if proxy.enabled ~}}
         proxy = _next_proxy()

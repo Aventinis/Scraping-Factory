@@ -26,6 +26,10 @@ def main():
     all_urls = URLS
 {{~ end ~}}
     for url in all_urls:
+{{~ if robots_check.enabled ~}}
+        if not _robots_gate(url):
+            continue
+{{~ end ~}}
         page_root, page_blueprint_rows, page_blueprint_tree_elements = scrape(url)
         for el in page_root:
             root.append(el)

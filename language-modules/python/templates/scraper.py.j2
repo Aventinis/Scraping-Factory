@@ -191,6 +191,10 @@ def scrape(url):
     page_number = 1
     page_url = url
     while page_url:
+{{~ if robots_check.enabled ~}}
+        if page_number > 1 and not _robots_gate(page_url):
+            break
+{{~ end ~}}
 {{~ if request_delay.enabled ~}}
         _pace_request()
 {{~ end ~}}

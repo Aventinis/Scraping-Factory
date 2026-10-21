@@ -595,6 +595,10 @@ def _resolve_parameter_values(source, headers, parameter_name, combo):
         return _number_range(source["from"], source["to"])
     if kind == "discovery":
         url_template = _substitute_known_parameters(source["urlTemplate"], combo)
+{{~ if robots_check.enabled ~}}
+        if not _robots_gate(url_template):
+            return []
+{{~ end ~}}
 {{~ if request_delay.enabled ~}}
         _pace_request()
 {{~ end ~}}

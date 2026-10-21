@@ -1,0 +1,95 @@
+{{~ if robots_check.enabled ~}}
+# Issue #333: checks every request the script is about to make against the
+# target's robots.txt Disallow/Allow rules, evaluated at run time — a site may
+# have changed its file since the script was generated (and the extension's
+# "Check robots.txt" is advisory and runs once). What happens to a disallowed
+# request is ROBOTS_ACTION: "Warn" (report, request it anyway), "Skip" (report,
+# don't request it, carry on) or "Abort" (report, exit EXIT_ROBOTS_DISALLOWED).
+#
+# Matching follows RFC 9309, like the extension's own check: the group of the
+# "ScrapingFactory" user agent (else "*") applies, the longest matching
+# pattern wins, a tie goes to Allow, `*` is a wildcard, a trailing `$` anchors
+# the end, and no matching rule means allowed. An unreadable robots.txt (5xx,
+# network error) is a warning and never blocks anything; a missing one (4xx)
+# means no restrictions.
+EXIT_ROBOTS_DISALLOWED = 9
+ROBOTS_ACTION = {{ robots_check.action_literal }}
+_robots_rules = {}
+_robots_reported = set()
+
+
+def _robots_pattern_regex(pattern):
+    anchored = pattern.endswith("$")
+    core = pattern[:-1] if anchored else pattern
+    return re.compile(".*".join(re.escape(part) for part in core.split("*")) + ("$" if anchored else ""))
+
+
+def _parse_robots_rules(text):
+    groups = []
+    agents = []
+    rules = []
+    in_rules = False
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].strip()
+        field, separator, value = line.partition(":")
+        if not separator:
+            continue
+        field = field.strip().lower()
+        value = value.strip()
+        if field == "user-agent":
+            if in_rules:
+                groups.append((agents, rules))
+                agents, rules, in_rules = [], [], False
+            agents.append(value.split("/")[0].strip().lower())
+        elif field in ("allow", "disallow") and agents:
+            in_rules = True
+            if value:  # an empty Disallow/Allow says nothing
+                rules.append((field == "allow", value))
+    if agents:
+        groups.append((agents, rules))
+    own = ROBOTS_USER_AGENT.lower()
+    chosen = [group_rules for group_agents, group_rules in groups if own in group_agents]
+    if not chosen:
+        chosen = [group_rules for group_agents, group_rules in groups if "*" in group_agents]
+    return [(allow, _robots_pattern_regex(pattern), len(pattern)) for group_rules in chosen for allow, pattern in group_rules]
+
+
+def _robots_rules_for(origin):
+    if origin not in _robots_rules:
+        text, problem = _robots_text(origin)
+        if problem:
+            print(f"WARNING: could not read {origin}/robots.txt ({problem}) - not enforced for this site.", file=sys.stderr)
+        _robots_rules[origin] = _parse_robots_rules(text) if text else []
+    return _robots_rules[origin]
+
+
+def _robots_allowed(url):
+    parts = urllib.parse.urlsplit(url)
+    if not parts.scheme or not parts.netloc or parts.path == "/robots.txt":
+        return True
+    target = (parts.path or "/") + ("?" + parts.query if parts.query else "")
+    best = None  # (pattern length, allow)
+    for allow, regex, length in _robots_rules_for(f"{parts.scheme}://{parts.netloc}"):
+        if regex.match(target) and (best is None or length > best[0] or (length == best[0] and allow and not best[1])):
+            best = (length, allow)
+    return best is None or best[1]
+
+
+# True = go ahead with this request. Reported once per URL.
+def _robots_gate(url):
+    if _robots_allowed(url):
+        return True
+    shown = {{ if has_bootstrap }}_display_url(url){{ else }}url{{ end }}
+    first_time = shown not in _robots_reported
+    _robots_reported.add(shown)
+    if ROBOTS_ACTION == "Warn":
+        if first_time:
+            print(f"WARNING: robots.txt disallows {shown} - requesting it anyway (action: Warn).", file=sys.stderr)
+        return True
+    if ROBOTS_ACTION == "Skip":
+        if first_time:
+            print(f"Skipped (disallowed by robots.txt): {shown}")
+        return False
+    print(f"ERROR: robots.txt disallows {shown} - stopping (action: Abort).", file=sys.stderr)
+    sys.exit(EXIT_ROBOTS_DISALLOWED)
+{{~ end ~}}
