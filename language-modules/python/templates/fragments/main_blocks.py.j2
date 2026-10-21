@@ -44,6 +44,7 @@ def main():
                     json.dump(_xml_to_dict(root), f, ensure_ascii=False, indent=2)
             else:
                 tree = ET.ElementTree(root)
+                _strip_illegal_xml_chars(tree.getroot())
                 ET.indent(tree)
                 tree.write(block["output_path"], encoding="utf-8", xml_declaration=True)
             count = len(root.findall(".//*"))

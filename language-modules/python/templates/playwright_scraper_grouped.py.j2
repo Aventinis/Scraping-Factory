@@ -506,6 +506,7 @@ def scrape(url):
 {{~ if output_is_sqlite || output_is_xlsx ~}}
 #@include output_tabular
 {{~ end ~}}
+#@include xml_sanitize
 #@include main_grouped
 
 
