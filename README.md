@@ -15,6 +15,7 @@ services, no data collection.
 
 - [What it does](#what-it-does)
 - [Getting started](#getting-started)
+- [User documentation](#user-documentation)
 - [Architecture, in brief](#architecture-in-brief)
 - [Features](#features)
 - [Build & test](#build--test)
@@ -183,6 +184,12 @@ Firefox was evaluated as a target but isn't currently supported (its
 content-script injection and network-recording model didn't work as expected
 for this extension's needs) — Chrome, Edge, and Opera are the supported
 browsers.
+
+## User documentation
+
+Step-by-step guides with worked examples and screenshots are in
+[`docs/user/`](docs/user/README.md): getting started, one page per feature area,
+and a troubleshooting/FAQ page.
 
 ## Architecture, in brief
 

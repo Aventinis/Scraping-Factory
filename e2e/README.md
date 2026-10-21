@@ -54,3 +54,17 @@ A real Chrome side panel doesn't occupy a tab slot, so `chrome.tabs.query({activ
 - **Companion process management**: a fixed default port (`5000`, matching the extension's own default), health-polled before use. If something's already answering `/health` there (e.g. a human's own companion running from their IDE), it's left completely alone — `startCompanion()` returns `{ alreadyRunning: true }` and `stop()` becomes a no-op, so this harness never kills a process it didn't start.
 - **Verification style**: both. DOM-state assertions (`popupPage.locator(...).textContent()`, element counts) are the cheap, precise default for "did this actually work"; `page.screenshot()` is available any time a visual/manual check (or a bug-report attachment) is more useful than an assertion.
 - **Fixtures**: the existing five `test-pages/*` fixtures are enough to start with (see `fixtures.js` for the full registry, including the fixed port each one is served on). New fixtures can be added there as specific features/bugs need scenarios the existing five don't cover.
+
+## Screenshots for the user documentation (Issue #354)
+
+`screenshots/run.js` regenerates the images in `docs/user/images/` from the real extension and the fixtures above (fixed viewport, `en`, `light` theme):
+
+```bash
+node e2e/screenshots/run.js                    # every scenario
+node e2e/screenshots/run.js --only modes       # scenarios whose id contains "modes"
+node e2e/screenshots/run.js --theme dark
+node e2e/screenshots/run.js --list
+node e2e/screenshots/check-docs.js             # links, anchors and images in docs/user/ all resolve
+```
+
+It starts its own companion on port 5056, so a companion on the default port is left alone. Scenarios live in `screenshots/scenarios/` — one file per documentation page; each names a fixture and the clicks that reach the screen, then calls `shot('<name>')` (optionally with a selector to crop to). A failing scenario prints the popup's toast and saves a screenshot of where it got stuck to the OS temp directory. See `docs/user/README.md` for how this fits the documentation workflow.

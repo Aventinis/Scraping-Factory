@@ -18,9 +18,17 @@ decisions).
 
 ## Language
 
-Code comments, commit messages, pull requests, issue descriptions, and all documentation (this file, `README.md`, `.claude/skills/**`) are written in **English**, regardless of what language a task request came in — conversations with the assistant (and the underlying issues/requests) are frequently in German, and that's fine; German task descriptions do not need to be pre-translated before work starts. When a PR/issue names a specific UI element, name it by its English UI string (the `en.json` value, e.g. "Export configuration", not "Konfiguration exportieren") even if the conversation that produced it was in German — English is the one label guaranteed to be stable across the extension's UI languages (see below), unlike any one specific translation.
+Code comments, commit messages, pull requests, issue descriptions, and all documentation (this file, `README.md`, `docs/**`, `.claude/skills/**`) are written in **English**, regardless of what language a task request came in — conversations with the assistant (and the underlying issues/requests) are frequently in German, and that's fine; German task descriptions do not need to be pre-translated before work starts. When a PR/issue names a specific UI element, name it by its English UI string (the `en.json` value, e.g. "Export configuration", not "Konfiguration exportieren") even if the conversation that produced it was in German — English is the one label guaranteed to be stable across the extension's UI languages (see below), unlike any one specific translation.
 
 The extension's own end-user-facing UI (button labels, screen text) is the one place actual runtime *language choice* exists: `extension/i18n/{de,en,es}.json` hold three parallel dictionaries (loaded by `extension/i18n/i18n.js`), picked via an in-popup language selector and persisted like any other setting (`chrome.storage.local`) — adding or changing a user-facing string means updating all three files, not just one, to keep them in sync. Error messages returned by the companion (`/generate`'s `400`/`422` response bodies, thrown exceptions) and the generated scripts' own runtime console output (hardening/proxy/login warnings, etc.) are plain English like the rest of the codebase — neither is part of the extension's i18n system, and unlike the popup UI, neither has a per-language variant.
+
+## User documentation
+
+`docs/user/` (Issue #354, Part A) is the documentation for people *using* the extension, as opposed to this file and `docs/ARCHITECTURE.md`, which are for developers: a getting-started page, one page per feature area with a worked example (modes, browser engine, pagination, transforms and presets, hardening/monitoring, saved configurations, output formats and blueprints, network settings, accounts), and a troubleshooting/FAQ page. English is the source language; a German version follows later, and the extension's own help stays de/en/es. Pages use stable headings, since the extension is meant to link to them (Part B of the issue: shortening the long `*Hint` strings in the popup and shipping the docs bundled with the extension — not done yet).
+
+**Screenshots are generated, not hand-made.** `e2e/screenshots/run.js` drives the real unpacked extension (via `e2e/harness.js`) against the `test-pages/` fixtures with a fixed viewport (420×900, side-panel-like), language (`en`) and theme (`light`, `--theme dark` available), and writes `docs/user/images/<name>.png`; `--only <text>` runs just the scenarios whose id contains the text, `--list` prints them. A scenario (`e2e/screenshots/scenarios/<page>.js`) names a fixture and the clicks that reach a screen; `lib.js`'s `openScenario` wipes `chrome.storage` first so scenarios never depend on each other. It runs its own companion on port 5056 and never touches one on the default port; a failing scenario saves a picture of the popup's state to the OS temp directory. `e2e/screenshots/check-docs.js` verifies every relative link, `#anchor` and image in `docs/user/` resolves and that no image is unused. The images are committed (GitHub renders them from the repository) but regenerated on demand, like the rest of `e2e/`, so they are not part of any CI step.
+
+**Maintenance rule** (in `.claude/skills/feature-workflow/SKILL.md`, step 7): a pull request that changes something user-visible updates its `docs/user/` page and screenshots in the same PR, like it updates this file and `docs/ARCHITECTURE.md`.
 
 ## Directory Structure
 
@@ -42,6 +50,10 @@ language-modules/
 install/                    Release bundle tooling (Issue #346): build-bundle.sh, install/uninstall scripts for Linux/macOS (.sh) and Windows (.ps1), bundle INSTALL.md
 test-pages/                  Fixture pages for manually exercising extension features (no server.py = plain static HTML)
 e2e/                         Playwright harness for driving the real extension in a real browser (Issue #180, manual/on-demand — see e2e/README.md)
+  screenshots/               Generator for the user-documentation screenshots (Issue #354) — see "User documentation" below
+docs/
+  ARCHITECTURE.md            Developer-facing structural map
+  user/                      User documentation (English, Issue #354) with generated screenshots in images/
 ```
 
 ## Components
