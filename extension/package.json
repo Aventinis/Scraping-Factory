@@ -1,6 +1,6 @@
 {
   "name": "extension",
-  "version": "1.19.1",
+  "version": "1.19.2",
   "description": "Scraping Factory browser extension — visual scraper builder UI.",
   "main": "index.js",
   "scripts": {

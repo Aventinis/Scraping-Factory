@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.19.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.1...v1.19.2) (2026-10-21)
+
+
+### Bug Fixes
+
+* **security:** resolve the open Dependabot and CodeQL alerts ([d1753a1](https://github.com/Aventinis/Scraping-Factory/commit/d1753a1d16cb39bd5d37e13bf1342b73d991628b))
+* **security:** resolve the open Dependabot and CodeQL alerts ([2224913](https://github.com/Aventinis/Scraping-Factory/commit/22249139cd92773f5e4f6edb9fb1dd5fb00ef704))
+
 ## [1.19.1](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.0...v1.19.1) (2026-10-21)
 
 
