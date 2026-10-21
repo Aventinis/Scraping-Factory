@@ -307,6 +307,9 @@ let _state = {
   // boolean like persistentSession/preflight, persisted the same way,
   // independent of requestDelay (the larger gap wins).
   respectRobotsDelay: false,
+  // Issue #333: opt-in run-time robots.txt Disallow check — { enabled, action }
+  // with action Warn | Skip | Abort, persisted like respectRobotsDelay.
+  robotsDisallow: { enabled: false, action: 'Skip' },
   // Issue #129: opt-in script hardening checks — mode-independent like
   // engine/changeDetection/proxy above, persisted the same way (real
   // scrape-target configuration, not a per-generate toggle). Nested one
@@ -672,6 +675,7 @@ function persistState() {
       persistentSession: _state.persistentSession,
       preflight: _state.preflight,
       respectRobotsDelay: _state.respectRobotsDelay,
+      robotsDisallow: _state.robotsDisallow,
       hardening: _state.hardening,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
@@ -1309,7 +1313,7 @@ async function init() {
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'requestDelay', 'retry', 'deduplication', 'requestHeaders', 'hardening', 'pagination', 'persistentSession', 'preflight', 'respectRobotsDelay', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'requestDelay', 'retry', 'deduplication', 'requestHeaders', 'hardening', 'pagination', 'persistentSession', 'preflight', 'respectRobotsDelay', 'robotsDisallow', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'pendingApiDiscoveryPartId', 'pendingApiDiscoveryActionIndex', 'pendingApiDiscoveryActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',

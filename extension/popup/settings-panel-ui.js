@@ -51,6 +51,12 @@ function renderSettingsPanel(bridge) {
     // Issue #228: opt-in robots.txt Crawl-delay/Request-rate.
     const respectRobotsToggle = /** @type {HTMLInputElement | null} */ (document.getElementById('toggle-respect-robots-delay'));
     if (respectRobotsToggle) respectRobotsToggle.checked = state.respectRobotsDelay;
+    // Issue #333: opt-in run-time robots.txt Disallow check.
+    const robotsDisallowToggle = /** @type {HTMLInputElement | null} */ (document.getElementById('toggle-robots-disallow'));
+    if (robotsDisallowToggle) robotsDisallowToggle.checked = state.robotsDisallow.enabled;
+    document.getElementById('robots-disallow-config')?.classList.toggle('hidden', !state.robotsDisallow.enabled);
+    const robotsActionSelect = /** @type {HTMLSelectElement | null} */ (document.getElementById('select-robots-disallow-action'));
+    if (robotsActionSelect) robotsActionSelect.value = state.robotsDisallow.action;
 
     // Issue #222: opt-in pause between requests.
     const requestDelayToggle = document.getElementById('toggle-request-delay');
@@ -325,6 +331,15 @@ function wireSettingsPanelEvents(bridge) {
   // Issue #228: opt-in robots.txt Crawl-delay/Request-rate — plain boolean.
   document.getElementById('toggle-respect-robots-delay')?.addEventListener('change', (e) => {
     bridge.setState(bridge.getState().current, { respectRobotsDelay: e.target.checked });
+  });
+
+  // Issue #333: opt-in run-time robots.txt Disallow check — an on/off switch
+  // plus what to do with a disallowed request.
+  document.getElementById('toggle-robots-disallow')?.addEventListener('change', (e) => {
+    bridge.setState(bridge.getState().current, { robotsDisallow: { ...bridge.getState().robotsDisallow, enabled: e.target.checked } });
+  });
+  document.getElementById('select-robots-disallow-action')?.addEventListener('change', (e) => {
+    bridge.setState(bridge.getState().current, { robotsDisallow: { ...bridge.getState().robotsDisallow, action: e.target.value } });
   });
 
   // Issue #222: opt-in pause between requests.

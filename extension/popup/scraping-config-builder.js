@@ -496,6 +496,7 @@ function collectFieldNames(mode, fields, groups, apiConfig) {
  * @param {SFDraft.RequestHeadersState | null} [requestHeaders]
  * @param {boolean} [respectRobotsDelay]
  * @param {boolean} [skipVerification]
+ * @param {SFDraft.RobotsDisallowState | null} [robotsDisallow]
  * @returns {object}
  */
 function buildScrapingConfig(
@@ -528,6 +529,8 @@ function buildScrapingConfig(
   respectRobotsDelay = false,
   // Issue #292: same "append at the end" rule.
   skipVerification = false,
+  // Issue #333: same "append at the end" rule.
+  robotsDisallow = null,
 ) {
   // Issue #292: a plain on/off switch (the Global Settings preference),
   // mode-independent — sent for every mode, omitted when off.
@@ -543,10 +546,13 @@ function buildScrapingConfig(
     : useJsonOutput === 'sqlite' ? 'Sqlite' : useJsonOutput === 'xlsx' ? 'Xlsx' : null;
   const requestDelayConfig = buildRequestDelayConfig(requestDelay);
   const requestDelayFields = requestDelayConfig ? { requestDelay: requestDelayConfig } : {};
-  // Both pacing settings in one spread — the object literals below are
+  // Issue #333: the run-time robots.txt Disallow check (flat/container/api/
+  // blocks; Combined returns before this is used — rejected on the outer request).
+  const robotsDisallowFields = robotsDisallow?.enabled ? { robotsDisallow: { action: robotsDisallow.action } } : {};
+  // The pacing/robots settings in one spread — the object literals below are
   // already at TypeScript's union-complexity limit.
   /** @type {Record<string, unknown>} */
-  const pacingFields = { ...requestDelayFields, ...respectRobotsFields };
+  const pacingFields = { ...requestDelayFields, ...respectRobotsFields, ...robotsDisallowFields };
   const retryConfig = buildRetryConfig(retry);
   const retryFields = retryConfig ? { retry: retryConfig } : {};
   // Issue #225: the Append output needs a flat output file, so container
@@ -762,6 +768,7 @@ function buildScrapingConfig(
  * @param {SFDraft.RequestHeadersState | null} [requestHeaders]
  * @param {boolean} [respectRobotsDelay]
  * @param {boolean} [skipVerification]
+ * @param {SFDraft.RobotsDisallowState | null} [robotsDisallow]
  * @returns {{exportedAt: string, extensionVersion: string, config: object}}
  */
 function buildConfigExport(
@@ -788,6 +795,8 @@ function buildConfigExport(
   respectRobotsDelay = false,
   // Issue #292: same "append at the end" rule.
   skipVerification = false,
+  // Issue #333: same "append at the end" rule.
+  robotsDisallow = null,
 ) {
   return {
     exportedAt: new Date().toISOString(),
@@ -798,7 +807,7 @@ function buildConfigExport(
       includeOutputFile, externalConfig, combinedComponents, blocks,
       outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping,
       outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping, discoveredUrls, preflight, requestDelay, retry,
-      deduplication, requestHeaders, respectRobotsDelay, skipVerification,
+      deduplication, requestHeaders, respectRobotsDelay, skipVerification, robotsDisallow,
     ),
   };
 }

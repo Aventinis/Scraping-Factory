@@ -53,6 +53,7 @@ declare namespace SFWire {
     persistentSession?: boolean;
     preflight?: boolean;
     respectRobotsDelay?: boolean;
+    robotsDisallow?: RobotsDisallowConfig;
     externalConfig?: boolean;
     combined?: CombinedComponentConfig[];
     blocks?: ExtractionBlockConfig[];
@@ -188,6 +189,11 @@ declare namespace SFWire {
     incremental?: boolean;
     incrementalOutput?: 'Delta' | 'Append';
     retention?: { kind: 'MaxCount' | 'MaxAge'; value: number };
+  }
+
+  // Issue #333: see IR/RobotsDisallowConfig.cs.
+  interface RobotsDisallowConfig {
+    action?: 'Warn' | 'Skip' | 'Abort';
   }
 
   // Issue #222: see IR/RequestDelayConfig.cs.
