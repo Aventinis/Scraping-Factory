@@ -30,6 +30,8 @@ const SFGlobalSettings = (function () {
     includeDataPreview: false,
     includeOutputFile: false,
     externalConfig: false,
+    // Issue #292: skip /generate's trial run — see ScrapingConfig.SkipVerification.
+    skipVerification: false,
     scriptNameMode: 'fixed',
     scriptNameFixed: 'scraper',
   };

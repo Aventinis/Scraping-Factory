@@ -33,6 +33,13 @@
     <span data-i18n="idle.externalConfigToggle"></span>
   </label>
   <p class="preview-summary" data-i18n="idle.externalConfigHint"></p>
+  <!-- Issue #292: skip the companion's trial run — the script is returned
+       right away, without having been run against the live page. -->
+  <label class="output-settings-toggle">
+    <input type="checkbox" id="toggle-skip-verification" />
+    <span data-i18n="settings.skipVerificationToggle"></span>
+  </label>
+  <p class="preview-summary" data-i18n="settings.skipVerificationHint"></p>
 
   <!-- Default script name — pre-fills the per-scrape "Skriptname" input
        whenever a new site is detected (checkCompanion/the stale-URL

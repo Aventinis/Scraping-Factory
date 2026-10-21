@@ -495,6 +495,7 @@ function collectFieldNames(mode, fields, groups, apiConfig) {
  * @param {SFDraft.DeduplicationState | null} [deduplication]
  * @param {SFDraft.RequestHeadersState | null} [requestHeaders]
  * @param {boolean} [respectRobotsDelay]
+ * @param {boolean} [skipVerification]
  * @returns {object}
  */
 function buildScrapingConfig(
@@ -525,7 +526,13 @@ function buildScrapingConfig(
   requestHeaders = null,
   // Issue #228: same "append at the end" rule.
   respectRobotsDelay = false,
+  // Issue #292: same "append at the end" rule.
+  skipVerification = false,
 ) {
+  // Issue #292: a plain on/off switch (the Global Settings preference),
+  // mode-independent — sent for every mode, omitted when off.
+  /** @type {Record<string, unknown>} */
+  const skipVerificationFields = skipVerification ? { skipVerification: true } : {};
   // Issue #228: a plain on/off switch, independent of requestDelay (the
   // companion uses the larger of the two gaps) — omitted when off.
   const respectRobotsFields = respectRobotsDelay ? { respectRobotsDelay: true } : {};
@@ -594,7 +601,7 @@ function buildScrapingConfig(
       })),
       scriptFileName: scriptFileName || null,
       ...engineFields, ...previewFields, ...additionalUrlsFields,
-      ...proxyFields, ...pacingFields, ...retryFields, ...requestHeadersFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
+      ...proxyFields, ...pacingFields, ...retryFields, ...requestHeadersFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields, ...skipVerificationFields,
     };
   }
   // Combined mode (Issue #239): no ad-hoc fields/groups/apiConfig of its own
@@ -616,7 +623,7 @@ function buildScrapingConfig(
         ...(c.savedConfigId ? { savedConfigId: c.savedConfigId } : {}),
       })),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
-      ...previewFields, ...outputFileFields,
+      ...previewFields, ...outputFileFields, ...skipVerificationFields,
     };
   }
 
@@ -677,7 +684,7 @@ function buildScrapingConfig(
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
       ...proxyFields, ...pacingFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
-      ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
+      ...preflightFields, ...outputFileFields, ...skipVerificationFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
   if (mode === 'api') {
@@ -686,7 +693,7 @@ function buildScrapingConfig(
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
       ...proxyFields, ...pacingFields, ...retryFields, ...deduplicationFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
-      ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
+      ...preflightFields, ...outputFileFields, ...skipVerificationFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
   return {
@@ -709,7 +716,7 @@ function buildScrapingConfig(
     outputFileName: outputFileName || null,
     ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields, ...pacingFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields,
     ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
-    ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
+    ...preflightFields, ...outputFileFields, ...skipVerificationFields, ...externalConfigFields, ...outputBlueprintFields,
   };
 }
 
@@ -754,6 +761,7 @@ function buildScrapingConfig(
  * @param {SFDraft.DeduplicationState | null} [deduplication]
  * @param {SFDraft.RequestHeadersState | null} [requestHeaders]
  * @param {boolean} [respectRobotsDelay]
+ * @param {boolean} [skipVerification]
  * @returns {{exportedAt: string, extensionVersion: string, config: object}}
  */
 function buildConfigExport(
@@ -778,6 +786,8 @@ function buildConfigExport(
   requestHeaders = null,
   // Issue #228: same "append at the end" rule.
   respectRobotsDelay = false,
+  // Issue #292: same "append at the end" rule.
+  skipVerification = false,
 ) {
   return {
     exportedAt: new Date().toISOString(),
@@ -788,7 +798,7 @@ function buildConfigExport(
       includeOutputFile, externalConfig, combinedComponents, blocks,
       outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping,
       outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping, discoveredUrls, preflight, requestDelay, retry,
-      deduplication, requestHeaders, respectRobotsDelay,
+      deduplication, requestHeaders, respectRobotsDelay, skipVerification,
     ),
   };
 }

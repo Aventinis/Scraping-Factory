@@ -451,6 +451,8 @@
     "outputFormatSqlite": "SQLite database",
     "outputFormatXlsx": "Excel (.xlsx)",
     "outputFormatHint": "The file the generated script writes. SQLite and Excel contain one table / sheet; nested results (containers, nested API data) are flattened into it. Excel needs the Python package \"openpyxl\" (pip install openpyxl) on the machine running the script and the companion. Not available for blocks or combined mode; cannot be combined with change detection.",
+    "skipVerificationToggle": "Skip the trial run (return the script immediately)",
+    "skipVerificationHint": "The companion normally runs the generated script once against the live page before handing it out, which proves it works but takes time. With this on, the script is returned right away without being run — it is still checked for structural problems (broken URL, duplicate or empty field names), but a wrong selector or a blocked request only shows up when you run it yourself. A data preview or a full output file isn't available while this is on.",
     "accessKeyTitle": "Access key (shared companion)",
     "accessKeyLabel": "Access key",
     "accessKeyPlaceholder": "sf_…",
