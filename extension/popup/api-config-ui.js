@@ -24,6 +24,7 @@ const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:ApiConfigUI');
 const { t } = require('../i18n/i18n');
 const { envVarNoteHtml } = require('./env-var-ui');
+const { msToSecondsText, secondsTextToMs } = require('./login-flow');
 const {
   STATES, escapeHtml,
   parseUrlTemplateParts, findUrlTemplateMatches, mergeValueListValues,
@@ -682,8 +683,8 @@ function renderBrowserDiscoverySourceFields(draft, part, source) {
     if (action.kind === 'waitFor') {
       card.appendChild(pickRow(i, 'selector', action.selector, null));
       card.insertAdjacentHTML('beforeend', `<div class="browser-action-field-row">
-          <label>${escapeHtml(t('browserActions.timeoutLabel'))}</label>
-          <input type="number" class="discovery-action-timeout" data-part-id="${safePartId}" data-index="${i}" value="${action.timeoutMs}" min="1" />
+          <label>${escapeHtml(t('browserActions.timeoutSecondsLabel'))}</label>
+          <input type="number" class="discovery-action-timeout" data-part-id="${safePartId}" data-index="${i}" placeholder="5" value="${escapeHtml(msToSecondsText(action.timeoutMs))}" min="0" step="any" />
         </div>`);
     } else if (action.kind === 'fill') {
       card.appendChild(pickRow(i, 'selector', action.selector, null));
@@ -703,8 +704,8 @@ function renderBrowserDiscoverySourceFields(draft, part, source) {
         </div>`);
       if (clickTarget === 'all') {
         card.insertAdjacentHTML('beforeend', `<div class="browser-action-field-row">
-            <label>${escapeHtml(t('browserActions.waitAfterMsLabel'))}</label>
-            <input type="number" class="discovery-action-click-wait-after-ms" data-part-id="${safePartId}" data-index="${i}" value="${action.waitAfterMs ?? 250}" min="0" />
+            <label>${escapeHtml(t('browserActions.waitAfterClickSecondsLabel'))}</label>
+            <input type="number" class="discovery-action-click-wait-after-ms" data-part-id="${safePartId}" data-index="${i}" placeholder="0.25" value="${escapeHtml(msToSecondsText(action.waitAfterMs ?? 250))}" min="0" step="any" />
           </div>`);
       }
     } else if (action.kind === 'scroll') {
@@ -713,8 +714,8 @@ function renderBrowserDiscoverySourceFields(draft, part, source) {
       card.insertAdjacentHTML('beforeend', `<div class="browser-action-field-row">
           <label>${escapeHtml(t('browserActions.maxIterationsLabel'))}</label>
           <input type="number" class="discovery-action-max-iterations" data-part-id="${safePartId}" data-index="${i}" value="${action.maxIterations}" min="1" />
-          <label>${escapeHtml(t('browserActions.waitAfterMsLabel'))}</label>
-          <input type="number" class="discovery-action-wait-after-ms" data-part-id="${safePartId}" data-index="${i}" value="${action.waitAfterMs}" min="0" />
+          <label>${escapeHtml(t('browserActions.waitAfterRoundSecondsLabel'))}</label>
+          <input type="number" class="discovery-action-wait-after-ms" data-part-id="${safePartId}" data-index="${i}" placeholder="1" value="${escapeHtml(msToSecondsText(action.waitAfterMs))}" min="0" step="any" />
         </div>
         <div class="browser-action-field-row">
           <label>${escapeHtml(t('browserActions.scrollStepPxLabel'))}</label>
@@ -1796,9 +1797,8 @@ function wireApiConfigEvents(bridge) {
     if (paramPlaceholderSelect) { insertParameterPlaceholder(bridge, paramPlaceholderSelect); return; }
     const actionTimeout = e.target.closest('.discovery-action-timeout');
     if (actionTimeout) {
-      const timeoutMs = parseInt(actionTimeout.value, 10);
       updateDiscoveryAction(bridge, actionTimeout.dataset.partId, parseInt(actionTimeout.dataset.index, 10), {
-        timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 5000,
+        timeoutMs: secondsTextToMs(actionTimeout.value, 5000),
       });
       return;
     }
@@ -1816,9 +1816,8 @@ function wireApiConfigEvents(bridge) {
     }
     const actionClickWait = e.target.closest('.discovery-action-click-wait-after-ms');
     if (actionClickWait) {
-      const waitAfterMs = parseInt(actionClickWait.value, 10);
       updateDiscoveryAction(bridge, actionClickWait.dataset.partId, parseInt(actionClickWait.dataset.index, 10), {
-        waitAfterMs: Number.isFinite(waitAfterMs) && waitAfterMs >= 0 ? waitAfterMs : 250,
+        waitAfterMs: secondsTextToMs(actionClickWait.value, 250, { allowZero: true }),
       });
       return;
     }
@@ -1832,9 +1831,8 @@ function wireApiConfigEvents(bridge) {
     }
     const actionWaitAfterMs = e.target.closest('.discovery-action-wait-after-ms');
     if (actionWaitAfterMs) {
-      const waitAfterMs = parseInt(actionWaitAfterMs.value, 10);
       updateDiscoveryAction(bridge, actionWaitAfterMs.dataset.partId, parseInt(actionWaitAfterMs.dataset.index, 10), {
-        waitAfterMs: Number.isFinite(waitAfterMs) && waitAfterMs >= 0 ? waitAfterMs : 1000,
+        waitAfterMs: secondsTextToMs(actionWaitAfterMs.value, 1000, { allowZero: true }),
       });
       return;
     }

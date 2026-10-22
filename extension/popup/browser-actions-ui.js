@@ -12,6 +12,9 @@ const log = createLogger('SF:Popup');
 const { t } = require('../i18n/i18n');
 const { STATES, escapeHtml } = require('./api-config');
 const { envVarNoteHtml } = require('./env-var-ui');
+const { helpHostHtml } = require('./help-popover');
+const { createAdvancedDisclosure } = require('./advanced-disclosure-ui');
+const { addLoginFlow, msToSecondsText, secondsTextToMs } = require('./login-flow');
 const { addBrowserAction, removeBrowserAction, updateBrowserAction, frameBadgeHtml } =
   require('./scraping-config-builder');
 
@@ -19,6 +22,11 @@ const { addBrowserAction, removeBrowserAction, updateBrowserAction, frameBadgeHt
 // (via btn-add-action-wait/-fill/-click/-scroll) — unlike the API-config
 // parameter cards, there's no "change the kind afterward" control, since an
 // action is created from scratch by the user rather than pre-existing.
+//
+// Issue #403: a card made by the "Login form" starter carries a UI-only
+// `role` (user/password/submit/loggedIn) that only changes its wording; times
+// are shown in seconds (stored/sent as milliseconds, see login-flow.js), and
+// the rarely needed options sit under a remembered "Advanced" disclosure.
 function renderBrowserActions(actions, testValues) {
   const container = document.getElementById('browser-actions-list');
   if (!container) return;
@@ -35,7 +43,7 @@ function renderBrowserActions(actions, testValues) {
   // (data-field) — every kind but 'scroll' has exactly one such row
   // (property 'selector'); 'scroll' has two (containerSelector/
   // loadMoreButtonSelector), both optional, see buildSelectorRow's callers.
-  function buildSelectorRow(index, field, value, label) {
+  function buildSelectorRow(index, field, value, label, pickLabel) {
     const row = document.createElement('div');
     row.className = 'browser-action-selector-row';
     const selectorText = value || t('browserActions.noSelector');
@@ -43,35 +51,55 @@ function renderBrowserActions(actions, testValues) {
     row.innerHTML =
       labelHtml +
       `<span class="field-selector" title="${escapeHtml(selectorText)}">${escapeHtml(selectorText)}</span>` +
-      `<button type="button" class="btn-secondary btn-tiny btn-pick-action-selector" data-index="${index}" data-field="${field}">${escapeHtml(t('browserActions.pickSelectorBtn'))}</button>`;
+      `<button type="button" class="btn-secondary btn-tiny btn-pick-action-selector" data-index="${index}" data-field="${field}">${escapeHtml(pickLabel || t('browserActions.pickSelectorBtn'))}</button>`;
     return row;
   }
 
+  // A labelled number input in seconds: shows the default as a placeholder.
+  function secondsRow(labelKey, cls, index, ms, defaultMs, helpKey) {
+    const row = document.createElement('div');
+    row.className = 'browser-action-field-row';
+    row.innerHTML =
+      `<label>${escapeHtml(t(labelKey))}</label>` +
+      (helpKey ? helpHostHtml(helpKey) : '') +
+      `<input type="number" min="0" step="any" class="${cls}" data-index="${index}" placeholder="${escapeHtml(msToSecondsText(defaultMs))}" value="${escapeHtml(msToSecondsText(ms))}" />`;
+    return row;
+  }
+
+  // Rarely needed options, collapsed by default and remembered per kind.
+  function advancedBlock(id) {
+    const details = createAdvancedDisclosure(id);
+    return { details, body: details.querySelector('.advanced-disclosure-body') };
+  }
+
   actions.forEach((action, i) => {
+    const role = action.role;
     const card = document.createElement('div');
     card.className = 'browser-action-card';
     card.dataset.index = i;
 
     const header = document.createElement('div');
     header.className = 'browser-action-header';
+    const headerLabel = role ? t('browserActions.role.' + role) : (kindLabels[action.kind] || action.kind);
     header.innerHTML =
-      `<span class="row-label">${escapeHtml(kindLabels[action.kind] || action.kind)}</span>` +
+      `<span class="row-label">${escapeHtml(headerLabel)}</span>` +
       frameBadgeHtml(action.framePath) +
       `<button type="button" class="btn-danger btn-remove-action" data-index="${i}">${escapeHtml(t('common.remove'))}</button>`;
     card.appendChild(header);
 
     if (action.kind === 'scroll') {
-      card.appendChild(buildSelectorRow(i, 'containerSelector', action.containerSelector, t('browserActions.containerSelectorLabel')));
-      card.appendChild(buildSelectorRow(i, 'loadMoreButtonSelector', action.loadMoreButtonSelector, t('browserActions.loadMoreButtonSelectorLabel')));
-
-      const row = document.createElement('div');
-      row.className = 'browser-action-field-row';
-      row.innerHTML =
+      const rounds = document.createElement('div');
+      rounds.className = 'browser-action-field-row';
+      rounds.innerHTML =
         `<label>${escapeHtml(t('browserActions.maxIterationsLabel'))}</label>` +
-        `<input type="number" min="1" class="browser-action-max-iterations" data-index="${i}" value="${action.maxIterations}" />` +
-        `<label>${escapeHtml(t('browserActions.waitAfterMsLabel'))}</label>` +
-        `<input type="number" min="0" class="browser-action-wait-after-ms" data-index="${i}" value="${action.waitAfterMs}" />`;
-      card.appendChild(row);
+        helpHostHtml('help.browserActions.maxRounds') +
+        `<input type="number" min="1" class="browser-action-max-iterations" data-index="${i}" placeholder="10" value="${action.maxIterations}" />`;
+      card.appendChild(rounds);
+      card.appendChild(secondsRow('browserActions.waitAfterRoundSecondsLabel', 'browser-action-wait-after-ms', i, action.waitAfterMs, 1000));
+
+      const { details, body } = advancedBlock('browser-action-scroll');
+      body.appendChild(buildSelectorRow(i, 'containerSelector', action.containerSelector, t('browserActions.containerSelectorLabel')));
+      body.appendChild(buildSelectorRow(i, 'loadMoreButtonSelector', action.loadMoreButtonSelector, t('browserActions.loadMoreButtonSelectorLabel')));
 
       // Issue #289: empty = null = today's "jump straight to the bottom"
       // default — only a site whose sections lazy-load per scrolled-through
@@ -81,19 +109,22 @@ function renderBrowserActions(actions, testValues) {
       stepRow.innerHTML =
         `<label>${escapeHtml(t('browserActions.scrollStepPxLabel'))}</label>` +
         `<input type="number" min="1" class="browser-action-scroll-step-px" data-index="${i}" placeholder="${escapeHtml(t('browserActions.scrollStepPxPlaceholder'))}" value="${action.scrollStepPx || ''}" />`;
-      card.appendChild(stepRow);
+      body.appendChild(stepRow);
+      card.appendChild(details);
 
       container.appendChild(card);
       return;
     }
 
-    card.appendChild(buildSelectorRow(i, 'selector', action.selector, null));
+    card.appendChild(buildSelectorRow(i, 'selector', action.selector, null, role ? t('browserActions.pickRole.' + role) : null));
 
     if (action.kind === 'click') {
       // Issue #267: which of several matches to click (Playwright would
       // otherwise abort on more than one) — "all" additionally paces the
-      // clicks with a wait after each.
+      // clicks with a wait after each. A plain login button needs neither,
+      // so both sit under "Advanced".
       const target = action.target || 'first';
+      const { details, body } = advancedBlock('browser-action-click');
       const row = document.createElement('div');
       row.className = 'browser-action-field-row';
       row.innerHTML =
@@ -101,29 +132,21 @@ function renderBrowserActions(actions, testValues) {
         `<select class="browser-action-click-target" data-index="${i}">` +
         ['first', 'last', 'all'].map(v => `<option value="${v}"${v === target ? ' selected' : ''}>${escapeHtml(t('browserActions.clickTarget.' + v))}</option>`).join('') +
         `</select>`;
-      card.appendChild(row);
+      body.appendChild(row);
       if (target === 'all') {
-        const waitRow = document.createElement('div');
-        waitRow.className = 'browser-action-field-row';
-        waitRow.innerHTML =
-          `<label>${escapeHtml(t('browserActions.waitAfterMsLabel'))}</label>` +
-          `<input type="number" min="0" class="browser-action-click-wait-after-ms" data-index="${i}" value="${action.waitAfterMs ?? 250}" />`;
-        card.appendChild(waitRow);
+        body.appendChild(secondsRow('browserActions.waitAfterClickSecondsLabel', 'browser-action-click-wait-after-ms', i, action.waitAfterMs ?? 250, 250));
       }
+      card.appendChild(details);
     }
 
     if (action.kind === 'waitFor') {
-      const row = document.createElement('div');
-      row.className = 'browser-action-field-row';
-      row.innerHTML =
-        `<label>${escapeHtml(t('browserActions.timeoutLabel'))}</label>` +
-        `<input type="number" min="1" class="browser-action-timeout" data-index="${i}" value="${action.timeoutMs}" />`;
-      card.appendChild(row);
+      card.appendChild(secondsRow('browserActions.timeoutSecondsLabel', 'browser-action-timeout', i, action.timeoutMs, 5000));
     } else if (action.kind === 'fill') {
+      const envLabelKey = role === 'user' ? 'browserActions.envVarLabelUser' : role === 'password' ? 'browserActions.envVarLabelPassword' : 'browserActions.envVarLabel';
       const row = document.createElement('div');
       row.className = 'browser-action-field-row';
       row.innerHTML =
-        `<label>${escapeHtml(t('browserActions.envVarLabel'))}</label>` +
+        `<label>${escapeHtml(t(envLabelKey))}</label>` +
         `<input type="text" class="browser-action-env-name" data-env-var data-index="${i}" placeholder="${escapeHtml(t('envVar.placeholder.fill'))}" value="${escapeHtml(action.environmentVariableName || '')}" />`;
       card.appendChild(row);
       card.insertAdjacentHTML('beforeend', envVarNoteHtml()); // Issue #397: the shared explanation + popover
@@ -139,10 +162,11 @@ function renderBrowserActions(actions, testValues) {
       // once the env var name is actually set, since that's the join key.
       const envName = (action.environmentVariableName || '').trim();
       if (envName) {
+        const testLabelKey = role === 'user' ? 'browserActions.testValueLabelUser' : role === 'password' ? 'browserActions.testValueLabelPassword' : 'browserActions.testValueLabel';
         const testValueRow = document.createElement('div');
         testValueRow.className = 'browser-action-field-row';
         testValueRow.innerHTML =
-          `<label>${escapeHtml(t('browserActions.testValueLabel'))}</label>` +
+          `<label>${escapeHtml(t(testLabelKey))}</label>` +
           `<input type="password" class="browser-action-test-value" data-env-name="${escapeHtml(envName)}" ` +
           `placeholder="${escapeHtml(t('envVar.testValuePlaceholder'))}" value="${escapeHtml(testValues[envName] || '')}" />`;
         card.appendChild(testValueRow);
@@ -169,6 +193,10 @@ function renderBrowserActionsSection(bridge) {
   document.getElementById('btn-engine-browser')?.classList.toggle('active', state.engine === 'Browser');
   document.getElementById('browser-actions-section')?.classList.toggle('hidden', state.engine !== 'Browser');
   if (state.engine === 'Browser') renderBrowserActions(state.browserActions, state.fillTestValues);
+  // Issue #403: while a starter action still has no element, say what to do next.
+  document.getElementById('login-flow-hint')?.classList.toggle(
+    'hidden', !state.browserActions.some((a) => a.role && !a.selector),
+  );
 
   const persistentSessionToggle = document.getElementById('toggle-persistent-session');
   if (persistentSessionToggle) persistentSessionToggle.checked = state.persistentSession;
@@ -184,6 +212,10 @@ function wireBrowserActionsEvents(bridge) {
     bridge.setState(bridge.getState().current, { engine: 'Browser' });
   });
 
+  document.getElementById('btn-add-login-flow')?.addEventListener('click', () => {
+    log('BTN add-login-flow');
+    bridge.setState(bridge.getState().current, { browserActions: addLoginFlow(bridge.getState().browserActions) });
+  });
   document.getElementById('btn-add-action-wait')?.addEventListener('click', () => {
     log('BTN add-action-wait');
     bridge.setState(bridge.getState().current, { browserActions: addBrowserAction(bridge.getState().browserActions, 'waitFor') });
@@ -229,10 +261,9 @@ function wireBrowserActionsEvents(bridge) {
     const timeoutInput = e.target.closest('.browser-action-timeout');
     if (timeoutInput) {
       const index = parseInt(timeoutInput.dataset.index, 10);
-      const timeoutMs = parseInt(timeoutInput.value, 10);
       bridge.setState(bridge.getState().current, {
         browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
-          timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 5000,
+          timeoutMs: secondsTextToMs(timeoutInput.value, 5000),
         }),
       });
       return;
@@ -264,10 +295,9 @@ function wireBrowserActionsEvents(bridge) {
     const clickWaitInput = e.target.closest('.browser-action-click-wait-after-ms');
     if (clickWaitInput) {
       const index = parseInt(clickWaitInput.dataset.index, 10);
-      const waitAfterMs = parseInt(clickWaitInput.value, 10);
       bridge.setState(bridge.getState().current, {
         browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
-          waitAfterMs: Number.isFinite(waitAfterMs) && waitAfterMs >= 0 ? waitAfterMs : 250,
+          waitAfterMs: secondsTextToMs(clickWaitInput.value, 250, { allowZero: true }),
         }),
       });
       return;
@@ -286,10 +316,9 @@ function wireBrowserActionsEvents(bridge) {
     const waitAfterMsInput = e.target.closest('.browser-action-wait-after-ms');
     if (waitAfterMsInput) {
       const index = parseInt(waitAfterMsInput.dataset.index, 10);
-      const waitAfterMs = parseInt(waitAfterMsInput.value, 10);
       bridge.setState(bridge.getState().current, {
         browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
-          waitAfterMs: Number.isFinite(waitAfterMs) && waitAfterMs >= 0 ? waitAfterMs : 1000,
+          waitAfterMs: secondsTextToMs(waitAfterMsInput.value, 1000, { allowZero: true }),
         }),
       });
       return;

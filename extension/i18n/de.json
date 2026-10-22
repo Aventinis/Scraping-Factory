@@ -764,7 +764,7 @@
   },
   "browserActions": {
     "title": "Browser-Aktionen",
-    "hint": "Werden der Reihe nach vor der Extraktion ausgeführt, z. B. für einen Login-Flow.",
+    "hint": "Schritte, die das Skript der Reihe nach ausführt, bevor es Daten liest — typischerweise ein Login. Beginnen Sie mit „Login-Formular“.",
     "addWaitBtn": "+ Warten",
     "addFillBtn": "+ Ausfüllen",
     "addClickBtn": "+ Klicken",
@@ -775,7 +775,6 @@
     "kindScroll": "Scrollen",
     "noSelector": "Kein Element ausgewählt",
     "pickSelectorBtn": "Element auswählen",
-    "timeoutLabel": "Timeout (ms)",
     "envVarLabel": "Variable mit dem einzugebenden Text",
     "envVarHint": "Der Wert wird zur Laufzeit aus dieser Umgebungsvariable gelesen, nie im Skript gespeichert.",
     "testValueLabel": "Testwert",
@@ -783,17 +782,37 @@
     "containerSelectorLabel": "Container (optional)",
     "loadMoreButtonSelectorLabel": "„Mehr laden“-Button (optional)",
     "maxIterationsLabel": "Max. Durchläufe",
-    "waitAfterMsLabel": "Wartezeit (ms)",
     "clickTargetLabel": "Welcher Treffer wird geklickt",
     "clickTarget": {
       "first": "Erster Treffer",
       "last": "Letzter Treffer",
       "all": "Alle Treffer, der Reihe nach"
     },
-    "scrollStepPxLabel": "Scroll-Schrittweite (px)",
-    "scrollStepPxPlaceholder": "leer = ans Ende springen",
+    "scrollStepPxLabel": "Scroll-Schritt (Pixel)",
+    "scrollStepPxPlaceholder": "leer = ganz nach unten springen",
     "persistentSessionToggle": "Sitzung zwischen Läufen wiederverwenden",
-    "persistentSessionHint": "Speichert Cookies/Login-Status nach jedem Lauf und überspringt beim nächsten Mal die obigen Login-Aktionen. Achtung: Die gespeicherte Datei enthält echte Sitzungs-Cookies — wie ein Passwort behandeln, niemals teilen oder committen. Läuft die Sitzung ab, schlägt der Lauf einfach fehl; es gibt keinen automatischen erneuten Login."
+    "persistentSessionHint": "Merkt sich den Login zwischen den Läufen, die Login-Schritte entfallen dann. Achtung: Die gespeicherte Sitzungsdatei enthält gültige Cookies — behandeln Sie sie wie ein Passwort.",
+    "addLoginFlowBtn": "+ Login-Formular (4 Schritte)",
+    "loginFlowHint": "Klicken Sie jetzt die vier Elemente auf der Seite an: das Benutzernamen-Feld, das Passwort-Feld, den Login-Button und etwas, das erst nach dem Login erscheint.",
+    "role": {
+      "user": "Benutzernamen eintragen",
+      "password": "Passwort eintragen",
+      "submit": "Login-Button klicken",
+      "loggedIn": "Warten, bis Sie eingeloggt sind"
+    },
+    "pickRole": {
+      "user": "Benutzernamen-Feld auswählen",
+      "password": "Passwort-Feld auswählen",
+      "submit": "Login-Button auswählen",
+      "loggedIn": "Element nach dem Login auswählen"
+    },
+    "envVarLabelUser": "Variable mit dem Benutzernamen",
+    "envVarLabelPassword": "Variable mit dem Passwort",
+    "testValueLabelUser": "Test-Benutzername",
+    "testValueLabelPassword": "Test-Passwort",
+    "timeoutSecondsLabel": "Höchstens warten (Sekunden)",
+    "waitAfterRoundSecondsLabel": "Pause nach jeder Runde (Sekunden)",
+    "waitAfterClickSecondsLabel": "Pause nach jedem Klick (Sekunden)"
   },
   "help": {
     "requestHeaders": {
@@ -887,6 +906,19 @@
       "requiredFields": {
         "text": "Lässt jede Zeile weg, die für die gewählten Felder keinen Wert hat, damit unvollständige Zeilen nie in der Datei landen. Der restliche Lauf geht weiter.",
         "example": "Ein Datenbank-Import, der einen nicht leeren Preis braucht."
+      }
+    },
+    "browserActions": {
+      "overview": {
+        "text": "Ein Login besteht aus vier Schritten: Benutzernamen eintragen, Passwort eintragen, Login-Button klicken und warten, bis die eingeloggte Seite erscheint. Die Schritte laufen in der angezeigten Reihenfolge, bevor Daten gelesen werden. „Login-Formular“ fügt alle vier auf einmal hinzu — Sie klicken nur noch die Elemente auf der Seite an.",
+        "example": "Benutzernamen eintragen → Passwort eintragen → „Anmelden“ klicken → auf „Willkommen zurück“ warten"
+      },
+      "maxRounds": {
+        "text": "Wie oft das Skript nach unten scrollt oder auf „Mehr laden“ klickt, bevor es aufhört. Eine höhere Zahl lädt mehr Einträge, dauert aber länger; es stoppt auch früher, sobald nichts Neues mehr erscheint.",
+        "example": "10"
+      },
+      "persistentSession": {
+        "text": "Nach einem Lauf speichert das Skript Ihre Cookies und den Login-Zustand in einer Datei neben seiner Ausgabe und überspringt beim nächsten Mal die Login-Schritte oben. Die Datei enthält gültige Sitzungs-Cookies: Behandeln Sie sie wie ein Passwort und geben Sie sie nie weiter und checken Sie sie nie ein. Läuft die Sitzung ab, schlägt der Lauf einfach fehl — es gibt kein automatisches Neu-Einloggen; löschen Sie die Datei, um sich neu anzumelden."
       }
     }
   },

@@ -764,7 +764,7 @@
   },
   "browserActions": {
     "title": "Acciones del navegador",
-    "hint": "Se ejecutan en orden antes de la extracción, p. ej. para un flujo de inicio de sesión.",
+    "hint": "Pasos que el script ejecuta en orden antes de leer datos — normalmente un inicio de sesión. Empieza con «Formulario de inicio de sesión».",
     "addWaitBtn": "+ Esperar",
     "addFillBtn": "+ Rellenar",
     "addClickBtn": "+ Clic",
@@ -775,7 +775,6 @@
     "kindScroll": "Desplazar",
     "noSelector": "Ningún elemento seleccionado",
     "pickSelectorBtn": "Seleccionar elemento",
-    "timeoutLabel": "Tiempo de espera (ms)",
     "envVarLabel": "Variable con el texto a escribir",
     "envVarHint": "El valor se lee de esta variable de entorno en tiempo de ejecución, nunca se guarda en el script.",
     "testValueLabel": "Valor de prueba",
@@ -783,17 +782,37 @@
     "containerSelectorLabel": "Contenedor (opcional)",
     "loadMoreButtonSelectorLabel": "Botón \"Cargar más\" (opcional)",
     "maxIterationsLabel": "Rondas máx.",
-    "waitAfterMsLabel": "Tiempo de espera (ms)",
     "clickTargetLabel": "Qué coincidencia se hace clic",
     "clickTarget": {
       "first": "Primera coincidencia",
       "last": "Última coincidencia",
       "all": "Todas las coincidencias, en orden"
     },
-    "scrollStepPxLabel": "Paso de scroll (px)",
+    "scrollStepPxLabel": "Paso de desplazamiento (píxeles)",
     "scrollStepPxPlaceholder": "vacío = saltar al final",
     "persistentSessionToggle": "Reutilizar sesión entre ejecuciones",
-    "persistentSessionHint": "Guarda las cookies/el estado de inicio de sesión después de cada ejecución y omite las acciones de inicio de sesión anteriores en la siguiente. Advertencia: el archivo guardado contiene cookies de sesión reales — trátalo como una contraseña y nunca lo compartas ni lo subas a un repositorio. Si la sesión llega a caducar, la ejecución simplemente falla; no hay reinicio de sesión automático."
+    "persistentSessionHint": "Recuerda el inicio de sesión entre ejecuciones, así que los pasos de inicio de sesión se omiten la próxima vez. Atención: el archivo de sesión guardado contiene cookies activas — trátalo como una contraseña.",
+    "addLoginFlowBtn": "+ Formulario de inicio de sesión (4 pasos)",
+    "loginFlowHint": "Ahora haz clic en los cuatro elementos de la página: el campo de usuario, el campo de contraseña, el botón de inicio de sesión y algo que solo aparece una vez iniciada la sesión.",
+    "role": {
+      "user": "Escribir el usuario",
+      "password": "Escribir la contraseña",
+      "submit": "Hacer clic en el botón de inicio de sesión",
+      "loggedIn": "Esperar a haber iniciado sesión"
+    },
+    "pickRole": {
+      "user": "Seleccionar el campo de usuario",
+      "password": "Seleccionar el campo de contraseña",
+      "submit": "Seleccionar el botón de inicio de sesión",
+      "loggedIn": "Seleccionar un elemento visible tras iniciar sesión"
+    },
+    "envVarLabelUser": "Variable con el usuario",
+    "envVarLabelPassword": "Variable con la contraseña",
+    "testValueLabelUser": "Usuario de prueba",
+    "testValueLabelPassword": "Contraseña de prueba",
+    "timeoutSecondsLabel": "Esperar como máximo (segundos)",
+    "waitAfterRoundSecondsLabel": "Pausa tras cada ronda (segundos)",
+    "waitAfterClickSecondsLabel": "Pausa tras cada clic (segundos)"
   },
   "help": {
     "requestHeaders": {
@@ -887,6 +906,19 @@
       "requiredFields": {
         "text": "Omite cada fila sin valor en los campos elegidos, para que las filas incompletas nunca lleguen al archivo. El resto de la ejecución continúa.",
         "example": "Una importación a base de datos que necesita un Precio no vacío."
+      }
+    },
+    "browserActions": {
+      "overview": {
+        "text": "Un inicio de sesión son cuatro pasos: escribir el usuario, escribir la contraseña, hacer clic en el botón y esperar a que aparezca la página ya identificada. Los pasos se ejecutan en el orden indicado, antes de leer datos. «Formulario de inicio de sesión» añade los cuatro de una vez: solo tienes que hacer clic en los elementos de la página.",
+        "example": "Escribir usuario → Escribir contraseña → Clic en «Entrar» → Esperar «Bienvenido de nuevo»"
+      },
+      "maxRounds": {
+        "text": "Cuántas veces el script se desplaza hacia abajo o pulsa «Cargar más» antes de parar. Un número mayor carga más elementos pero tarda más; también se detiene antes si no aparece nada nuevo.",
+        "example": "10"
+      },
+      "persistentSession": {
+        "text": "Tras una ejecución el script guarda tus cookies y el estado de sesión en un archivo junto a su salida y, la próxima vez, omite los pasos de inicio de sesión. El archivo contiene cookies de sesión activas: trátalo como una contraseña y nunca lo compartas ni lo subas a un repositorio. Si la sesión caduca, la ejecución simplemente falla — no hay reinicio de sesión automático; borra el archivo para iniciar sesión de nuevo."
       }
     }
   },
