@@ -30,7 +30,7 @@ const {
   parseUrlTemplateParts, findUrlTemplateMatches, mergeValueListValues,
   buildStaticListSource, buildDiscoverySource, buildRangeSource, buildBrowserDiscoverySource, RANGE_FORMAT_PRESETS,
   detectRangeFormat, findUrlPartValue, rangeFormatExample,
-  buildApiConfig, buildApiGroupDraft, insertApiTreeNode, updateApiTreeNode, resolveApiTreeNode,
+  buildApiConfig, buildApiGroupDraft, insertApiTreeNode, updateApiTreeNode, removeApiTreeNode, resolveApiTreeNode,
   collectPrecedingApiFieldSiblingNames,
   jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
   buildApiSubtreeFromCandidate, resolveApiGroupScopePath, allParameterParts, earlierParameterNames, apiConfigDraftHasAllSourcesChosen,
