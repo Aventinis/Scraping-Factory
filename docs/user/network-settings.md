@@ -59,8 +59,22 @@ the variable is not set the script warns, connects directly and exits with code
 
 ## Environment variables, in practice
 
-Several options ask for an environment variable *name*. Set it in the place
-where the script runs:
+Several options ask for an environment variable *name* — change detection (email
+host, user, password, sender, recipient, webhook), the proxy list, a login **Fill**
+action, custom request headers, API headers and the API token request. Wherever
+one is asked, the **?** next to **What is an environment variable?** explains it in
+a few lines. The short version: it is a named value on the computer that *runs the
+script* (not the browser), a safe place for passwords and keys. You type only its
+**name** (for example `SMTP_PASSWORD`) in the extension; the script reads the value
+when it runs.
+
+A name may contain letters, digits and underscores, and must not start with a digit
+(`API_KEY` and `PROXY_LIST` are typical). A name that doesn't fit is flagged right
+under the input, and **Generate script** is stopped with a note until it is fixed.
+Where a one-time **test value** box exists (Fill, headers, the token request), the
+value is only used for the trial run and never saved.
+
+Set the variable in the place where the script runs:
 
 ```bash
 export API_KEY='…'          # Linux / macOS

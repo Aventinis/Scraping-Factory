@@ -249,9 +249,13 @@
             <span data-i18n="idle.proxyToggle"></span>
           </label>
           <div id="proxy-config" class="hidden">
+            <!-- Issue #397: the shared "What is an environment variable?" line + popover
+                 (help.envVar.what) and the shared inline name validation (data-env-var,
+                 see env-var-ui.js) — same on every input that takes a variable name. -->
+            <p class="env-var-note" data-help-anchor><span data-i18n="envVar.whatLabel"></span><span class="help-host" data-help="help.envVar.what"></span></p>
             <div class="output-settings-row">
               <label for="input-proxy-env-var" data-i18n="idle.proxyEnvVarLabel"></label>
-              <input type="text" id="input-proxy-env-var" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+              <input type="text" id="input-proxy-env-var" data-env-var data-i18n-placeholder="envVar.placeholder.proxy" autocomplete="off" />
             </div>
             <p class="preview-summary" data-i18n="idle.proxyHint"></p>
           </div>
@@ -331,6 +335,7 @@
               <span class="help-host" data-help="help.requestHeaders.headers"></span>
             </label>
             <div id="request-headers-config" class="hidden">
+              <p class="env-var-note" data-help-anchor><span data-i18n="envVar.whatLabel"></span><span class="help-host" data-help="help.envVar.what"></span></p>
               <div id="request-headers-list"></div>
               <button type="button" id="btn-add-request-header" class="btn-secondary btn-tiny" data-i18n="idle.requestHeadersAddBtn"></button>
             </div>
@@ -536,6 +541,7 @@
             <span data-i18n="idle.changeDetectionToggle"></span>
           </label>
           <div id="change-detection-config" class="hidden">
+            <p class="env-var-note" data-help-anchor><span data-i18n="envVar.whatLabel"></span><span class="help-host" data-help="help.envVar.what"></span></p>
             <div class="mode-toggle" style="margin-bottom: 8px;">
               <div class="mode-toggle-thumb"></div>
               <button id="btn-notify-email" class="mode-btn active" type="button" data-i18n="idle.notifyEmail"></button>
@@ -544,33 +550,33 @@
             <div id="notify-email-fields">
               <div class="output-settings-row">
                 <label for="input-cd-smtp-host" data-i18n="idle.smtpHostEnvVarLabel"></label>
-                <input type="text" id="input-cd-smtp-host" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+                <input type="text" id="input-cd-smtp-host" data-env-var data-i18n-placeholder="envVar.placeholder.smtpHost" autocomplete="off" />
               </div>
               <div class="output-settings-row">
                 <label for="input-cd-smtp-port" data-i18n="idle.smtpPortEnvVarLabel"></label>
-                <input type="text" id="input-cd-smtp-port" data-i18n-placeholder="idle.envVarPlaceholderOptional" autocomplete="off" />
+                <input type="text" id="input-cd-smtp-port" data-env-var data-i18n-placeholder="envVar.placeholder.smtpPort" autocomplete="off" />
               </div>
               <div class="output-settings-row">
                 <label for="input-cd-smtp-username" data-i18n="idle.smtpUsernameEnvVarLabel"></label>
-                <input type="text" id="input-cd-smtp-username" data-i18n-placeholder="idle.envVarPlaceholderOptional" autocomplete="off" />
+                <input type="text" id="input-cd-smtp-username" data-env-var data-i18n-placeholder="envVar.placeholder.smtpUser" autocomplete="off" />
               </div>
               <div class="output-settings-row">
                 <label for="input-cd-smtp-password" data-i18n="idle.smtpPasswordEnvVarLabel"></label>
-                <input type="text" id="input-cd-smtp-password" data-i18n-placeholder="idle.envVarPlaceholderOptional" autocomplete="off" />
+                <input type="text" id="input-cd-smtp-password" data-env-var data-i18n-placeholder="envVar.placeholder.smtpPassword" autocomplete="off" />
               </div>
               <div class="output-settings-row">
                 <label for="input-cd-email-from" data-i18n="idle.notifyEmailFromEnvVarLabel"></label>
-                <input type="text" id="input-cd-email-from" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+                <input type="text" id="input-cd-email-from" data-env-var data-i18n-placeholder="envVar.placeholder.mailFrom" autocomplete="off" />
               </div>
               <div class="output-settings-row">
                 <label for="input-cd-email-to" data-i18n="idle.notifyEmailToEnvVarLabel"></label>
-                <input type="text" id="input-cd-email-to" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+                <input type="text" id="input-cd-email-to" data-env-var data-i18n-placeholder="envVar.placeholder.mailTo" autocomplete="off" />
               </div>
             </div>
             <div id="notify-webhook-fields" class="hidden">
               <div class="output-settings-row">
                 <label for="input-cd-webhook-url" data-i18n="idle.webhookUrlEnvVarLabel"></label>
-                <input type="text" id="input-cd-webhook-url" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+                <input type="text" id="input-cd-webhook-url" data-env-var data-i18n-placeholder="envVar.placeholder.webhookUrl" autocomplete="off" />
               </div>
             </div>
             <p class="preview-summary" data-i18n="idle.changeDetectionHint"></p>

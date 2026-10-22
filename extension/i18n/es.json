@@ -138,18 +138,16 @@
     "changeDetectionToggle": "Activar detección de cambios (notificar ante cambios)",
     "notifyEmail": "Correo electrónico",
     "notifyWebhook": "Webhook",
-    "smtpHostEnvVarLabel": "Host SMTP (var. de entorno)",
-    "smtpPortEnvVarLabel": "Puerto SMTP (var. de entorno)",
-    "smtpUsernameEnvVarLabel": "Usuario SMTP (var. de entorno)",
-    "smtpPasswordEnvVarLabel": "Contraseña SMTP (var. de entorno)",
-    "notifyEmailFromEnvVarLabel": "Remitente (var. de entorno)",
-    "notifyEmailToEnvVarLabel": "Destinatario (var. de entorno)",
-    "webhookUrlEnvVarLabel": "URL del webhook (var. de entorno)",
-    "envVarPlaceholder": "Nombre de la variable de entorno",
-    "envVarPlaceholderOptional": "Nombre de la variable de entorno (opcional)",
+    "smtpHostEnvVarLabel": "Variable con el host SMTP",
+    "smtpPortEnvVarLabel": "Variable con el puerto SMTP (opcional)",
+    "smtpUsernameEnvVarLabel": "Variable con el usuario SMTP (opcional)",
+    "smtpPasswordEnvVarLabel": "Variable con la contraseña SMTP (opcional)",
+    "notifyEmailFromEnvVarLabel": "Variable con la dirección del remitente",
+    "notifyEmailToEnvVarLabel": "Variable con la dirección del destinatario",
+    "webhookUrlEnvVarLabel": "Variable con la URL del webhook",
     "changeDetectionHint": "Cada campo es el nombre de una variable de entorno, no el valor en sí — el valor real se lee del entorno en la ejecución real, nunca se escribe en el script.",
     "proxyToggle": "Usar un proxy",
-    "proxyEnvVarLabel": "Lista de proxies (variable de entorno)",
+    "proxyEnvVarLabel": "Variable con la lista de proxies",
     "proxyHint": "El nombre de una variable de entorno con una lista de URLs de proxy separadas por comas (p. ej. \"http://usuario:contraseña@host:puerto\"), no las direcciones en sí — con más de una, el script rota entre ellas en cada solicitud.",
     "requestDelayToggle": "Pausa entre solicitudes",
     "requestDelayFromLabel": "de",
@@ -191,8 +189,6 @@
     "requestHeaderKindValue": "Valor fijo",
     "requestHeaderKindEnv": "Variable de entorno",
     "requestHeaderValuePlaceholder": "Valor (p. ej. de-CH)",
-    "requestHeaderEnvPlaceholder": "Nombre de la variable (p. ej. API_KEY)",
-    "requestHeaderTestValuePlaceholder": "Valor de prueba para la ejecución de prueba (no se guarda)",
     "externalConfigToggle": "Archivo de configuración editable (XML)",
     "externalConfigHint": "Permite ajustar después la(s) URL(s) de inicio, el nombre del archivo de salida, el nombre de salida de un campo o los valores de un parámetro de API de lista fija, editando un pequeño archivo XML — sin tocar el archivo .py ni volver a abrir la extensión. El archivo aún no existe; el script lo crea junto a sí mismo la primera vez que se ejecuta de verdad.",
     "paginationToggle": "Activar paginación",
@@ -314,7 +310,6 @@
     "noHeadersRecorded": "No se registraron cabeceras de solicitud.",
     "headerModeValue": "Valor",
     "headerModeEnv": "Variable de entorno",
-    "envNamePlaceholder": "ENV_NAME",
     "bodyLabel": "Cuerpo de la solicitud",
     "bodyRootLabel": "Cuerpo",
     "bodyToVariableBtn": "→ Variable",
@@ -363,7 +358,6 @@
     "nameLabel": "Nombre del marcador",
     "usageHint": "Usa {placeholder} en un encabezado (modo \"Desde token\", p. ej. Bearer {placeholder}) o elige \"Valor del token\" como fuente de valores de una parte de la URL. Las solicitudes de descubrimiento reutilizan los encabezados.",
     "valuePlaceholder": "Valor",
-    "testValuePlaceholder": "Valor de prueba (solo ejecución de prueba)",
     "addRow": "+ Fila",
     "sourceKind": "Valor del token",
     "sourceKindNote": "Se rellena con el token recién obtenido ({placeholder}) en cada ejecución.",
@@ -714,11 +708,9 @@
     "noSelector": "Ningún elemento seleccionado",
     "pickSelectorBtn": "Seleccionar elemento",
     "timeoutLabel": "Tiempo de espera (ms)",
-    "envVarLabel": "Variable de entorno",
-    "envNamePlaceholder": "ENV_NAME",
+    "envVarLabel": "Variable con el texto a escribir",
     "envVarHint": "El valor se lee de esta variable de entorno en tiempo de ejecución, nunca se guarda en el script.",
     "testValueLabel": "Valor de prueba",
-    "testValuePlaceholder": "Solo para la verificación",
     "testValueHint": "Se usa solo para la ejecución de prueba única al generar — nunca se guarda, nunca se incluye en el script.",
     "containerSelectorLabel": "Contenedor (opcional)",
     "loadMoreButtonSelectorLabel": "Botón \"Cargar más\" (opcional)",
@@ -775,6 +767,12 @@
     "engine": {
       "choice": {
         "text": "Estático — rápido; lee la página tal como la envía el servidor.\nNavegador — un navegador real; para páginas creadas con JavaScript, con inicio de sesión o que necesitan desplazarse.\nSi Estático no encuentra nada, suele bastar con Navegador."
+      }
+    },
+    "envVar": {
+      "what": {
+        "text": "Un valor con nombre guardado en el equipo que ejecuta el script — un lugar seguro para contraseñas y claves, para que nunca acaben en el script. Introduce aquí solo su nombre (p. ej. SMTP_PASSWORD); el script lee el valor al ejecutarse, en ese equipo, no en el navegador.",
+        "example": "Windows:  setx SMTP_PASSWORD \"secreto\"\nmacOS/Linux:  export SMTP_PASSWORD=\"secreto\""
       }
     }
   },
@@ -888,6 +886,26 @@
     "invalidEnvVarName": {
       "title": "«{name}» no es un nombre de variable válido",
       "hint": "Usa solo letras, dígitos y guiones bajos, y no empieces con un dígito."
+    }
+  },
+  "envVar": {
+    "whatLabel": "¿Qué es una variable de entorno?",
+    "startsWithDigit": "«{name}» no puede empezar por un dígito — usa un nombre como SMTP_PASSWORD.",
+    "invalidChars": "«{name}» tiene caracteres que un nombre de variable no admite — usa solo letras, dígitos y guiones bajos (sin espacios ni guiones).",
+    "generateBlocked": "Corrige primero el nombre de la variable de entorno: {message}",
+    "testValuePlaceholder": "Valor de prueba (solo para la ejecución de prueba, nunca se guarda)",
+    "placeholder": {
+      "smtpHost": "p. ej. SMTP_HOST",
+      "smtpPort": "p. ej. SMTP_PORT",
+      "smtpUser": "p. ej. SMTP_USER",
+      "smtpPassword": "p. ej. SMTP_PASSWORD",
+      "mailFrom": "p. ej. MAIL_FROM",
+      "mailTo": "p. ej. MAIL_TO",
+      "webhookUrl": "p. ej. WEBHOOK_URL",
+      "proxy": "p. ej. PROXY_LIST",
+      "header": "p. ej. API_KEY",
+      "fill": "p. ej. SITE_PASSWORD",
+      "apiHeader": "p. ej. API_KEY"
     }
   }
 }

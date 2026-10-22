@@ -599,6 +599,23 @@ in `popup/error-messages.js`; unknown errors keep the old wording. See CLAUDE.md
 - Tests: `popup/error-messages.test.js`, real-browser check
   `e2e/examples/issue-401-plain-errors-check.js`
 
+### 2.10d Environment-variable name help and validation (Issue #397)
+
+Every input that takes the *name* of an environment variable (change detection,
+proxy, login Fill actions, custom request headers, API headers, the API auth
+bootstrap, an API discovery Fill action) shares one explanation popover
+(`help.envVar.what`), one inline name validation and one pre-flight check in
+`generate()`. See CLAUDE.md for the conventions (`data-env-var`, `envVarNoteHtml()`).
+
+- Extension: `popup/env-var.js` (pure: `validateEnvVarName`, `findInvalidEnvVarNames`),
+  `popup/env-var-ui.js` (`envVarNoteHtml`, `applyEnvVarValidation`,
+  `refreshEnvVarValidation`, `wireEnvVarValidation`), `popup/popup.js` (`render()`),
+  `popup/companion-client.js` (`generate()` guard), the inputs in `popup/screens/idle.html`,
+  `api-config.html`, `browser-actions-ui.js`, `request-headers-ui.js`, `api-config-ui.js`,
+  `api-bootstrap-ui.js`, `envVar.*`/`help.envVar.*` in `i18n/*.json`
+- Tests: `popup/env-var.test.js`, real-browser check
+  `e2e/examples/issue-397-env-var-help-check.js`
+
 ### 2.11 i18n (extension UI language)
 
 Lets the user pick the popup's own display language (German/English/Spanish)

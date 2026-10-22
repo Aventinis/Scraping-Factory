@@ -27,6 +27,7 @@ const { getGlobalSettings } = require('../shared/global-settings');
 
 const { loadCompanionReached, markCompanionReached } = require('./companion-guidance');
 const { describeError } = require('./error-messages');
+const { findInvalidEnvVarNames } = require('./env-var');
 
 // Resolved fresh in checkCompanion() (default or the user's persisted
 // override, see shared/companion-config.js) and reused by generate()/the
@@ -278,6 +279,16 @@ async function generate(bridge) {
   // test-value treatment, from the API_CONFIG screen's own inputs.
   // Issue #226: the DOM modes' env-var-backed request headers get the same
   // one-time test-value treatment.
+  // Issue #397: a bad environment-variable name would only be rejected by the
+  // companion after the round trip — say so up front, naming the variable.
+  const invalidEnvVars = findInvalidEnvVarNames(config);
+  if (invalidEnvVars.length > 0) {
+    const { name, reason } = invalidEnvVars[0];
+    log('GENERATE BLOCKED invalid env var name', invalidEnvVars);
+    bridge.setState(STATES.IDLE);
+    showToast(t('envVar.generateBlocked', { message: t(`envVar.${reason}`, { name }) }), null, 'warn');
+    return;
+  }
   const verificationValues = state.mode === 'api'
     ? buildBootstrapVerificationValues(state.apiConfig, state.apiBootstrapTestValues || {})
     : {

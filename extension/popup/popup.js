@@ -54,6 +54,7 @@ const {
 
 const { renderCompanionGuidance } = require('./companion-guidance-ui');
 const { initHelpPopovers, wireHelpPopoverEvents } = require('./help-popover-ui');
+const { refreshEnvVarValidation, wireEnvVarValidation } = require('./env-var-ui');
 const { initAdvancedDisclosures, wireAdvancedDisclosureEvents } = require('./advanced-disclosure-ui');
 
 const {
@@ -963,6 +964,10 @@ function render() {
   }
 
   syncModeToggleThumbs();
+  // Issue #397: rows built by this render (and the explanation lines with their help
+  // hosts) are new — give them the shared env-var validation and popover.
+  initHelpPopovers();
+  refreshEnvVarValidation();
 }
 
 // Issue #140 modernization: positions every .mode-toggle-thumb behind its
@@ -1151,6 +1156,7 @@ function wireEvents() {
 
   wireHelpPopoverEvents();
   wireErrorToastEvents(); // Issue #401
+  wireEnvVarValidation(); // Issue #397
   wireAdvancedDisclosureEvents();
 
   wireSettingsPanelEvents(bridge);
