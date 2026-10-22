@@ -184,78 +184,78 @@ function confirmField(bridge) {
 }
 
 function wireFlatModeEvents(bridge) {
-// Issue #233: hovering a field row highlights its element(s) on the page.
-wireHoverHighlight(document.getElementById('fields-list'), '.field-row',
-  row => buildFlatFieldHighlight(bridge.getState().fields[parseInt(row.dataset.index, 10)]));
+  // Issue #233: hovering a field row highlights its element(s) on the page.
+  wireHoverHighlight(document.getElementById('fields-list'), '.field-row',
+    row => buildFlatFieldHighlight(bridge.getState().fields[parseInt(row.dataset.index, 10)]));
 
-document.getElementById('btn-add-field')?.addEventListener('click', () => {
-  log('BTN add-field → START_SELECTION');
-  bridge.stopPreviewIfActive();
-  chrome.runtime.sendMessage({ type: 'START_SELECTION' });
-  bridge.setState(STATES.SELECTING, {
-    pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
-    domTree: null, domTreeTruncated: false, domTreeError: null,
+  document.getElementById('btn-add-field')?.addEventListener('click', () => {
+    log('BTN add-field → START_SELECTION');
+    bridge.stopPreviewIfActive();
+    chrome.runtime.sendMessage({ type: 'START_SELECTION' });
+    bridge.setState(STATES.SELECTING, {
+      pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
+      domTree: null, domTreeTruncated: false, domTreeError: null,
+    });
+    if (bridge.getState().domViewEnabled) {
+      log('DOM view was enabled → re-requesting tree');
+      bridge.requestDomTree();
+    }
   });
-  if (bridge.getState().domViewEnabled) {
-    log('DOM view was enabled → re-requesting tree');
-    bridge.requestDomTree();
-  }
-});
-// Issue #206 follow-up: no click-based selection at all — opens the
-// shared combine/split creation modal directly (combine-split-fields-ui.js).
-document.getElementById('btn-add-combine-field')?.addEventListener('click', () => {
-  openCombineFieldModal(bridge, { mode: 'flat' });
-});
-document.getElementById('btn-add-split-field')?.addEventListener('click', () => {
-  openSplitFieldModal(bridge, { mode: 'flat' });
-});
-document.getElementById('btn-field-transform-add')?.addEventListener('click', () => {
-  bridge.patchState({ pendingTransforms: addTransform(bridge.getState().pendingTransforms) });
-});
-wireTransformList(
-  'field-transform-list',
-  () => bridge.getState().pendingTransforms,
-  (transforms) => bridge.patchState({ pendingTransforms: transforms }),
-);
-// Issue #227: re-rendering the modal lets the match-count hint follow the
-// typed text (renderFlatFieldModal reads effectiveMatchCount each time).
-wireTextFilter({
-  inputId: 'input-field-name-text-filter',
-  useButtonId: 'btn-field-name-use-text',
-  rerender: () => bridge.patchState({}),
-  getRawText: () => bridge.getState().pendingRawText,
-});
-document.getElementById('btn-field-confirm')?.addEventListener('click', () => confirmField(bridge));
+  // Issue #206 follow-up: no click-based selection at all — opens the
+  // shared combine/split creation modal directly (combine-split-fields-ui.js).
+  document.getElementById('btn-add-combine-field')?.addEventListener('click', () => {
+    openCombineFieldModal(bridge, { mode: 'flat' });
+  });
+  document.getElementById('btn-add-split-field')?.addEventListener('click', () => {
+    openSplitFieldModal(bridge, { mode: 'flat' });
+  });
+  document.getElementById('btn-field-transform-add')?.addEventListener('click', () => {
+    bridge.patchState({ pendingTransforms: addTransform(bridge.getState().pendingTransforms) });
+  });
+  wireTransformList(
+    'field-transform-list',
+    () => bridge.getState().pendingTransforms,
+    (transforms) => bridge.patchState({ pendingTransforms: transforms }),
+  );
+  // Issue #227: re-rendering the modal lets the match-count hint follow the
+  // typed text (renderFlatFieldModal reads effectiveMatchCount each time).
+  wireTextFilter({
+    inputId: 'input-field-name-text-filter',
+    useButtonId: 'btn-field-name-use-text',
+    rerender: () => bridge.patchState({}),
+    getRawText: () => bridge.getState().pendingRawText,
+  });
+  document.getElementById('btn-field-confirm')?.addEventListener('click', () => confirmField(bridge));
 
-document.getElementById('input-field-name')?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') confirmField(bridge);
-});
+  document.getElementById('input-field-name')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') confirmField(bridge);
+  });
 
-// Issue #214: same show/hide-on-change wiring container-tree-ui.js's
-// wireContainerModeEvents already establishes for its own identical mode
-// select/download checkbox.
-document.getElementById('select-field-name-mode')?.addEventListener('change', (e) => {
-  document.getElementById('field-name-attribute-row')?.classList.toggle('hidden', e.target.value !== 'attribute');
-  refreshFlatTransformPreview(bridge);
-});
-document.getElementById('select-field-name-attribute')?.addEventListener('change', () => refreshFlatTransformPreview(bridge));
-document.getElementById('toggle-field-name-download')?.addEventListener('change', (e) => {
-  document.getElementById('field-name-download-options')?.classList.toggle('hidden', !e.target.checked);
-});
+  // Issue #214: same show/hide-on-change wiring container-tree-ui.js's
+  // wireContainerModeEvents already establishes for its own identical mode
+  // select/download checkbox.
+  document.getElementById('select-field-name-mode')?.addEventListener('change', (e) => {
+    document.getElementById('field-name-attribute-row')?.classList.toggle('hidden', e.target.value !== 'attribute');
+    refreshFlatTransformPreview(bridge);
+  });
+  document.getElementById('select-field-name-attribute')?.addEventListener('change', () => refreshFlatTransformPreview(bridge));
+  document.getElementById('toggle-field-name-download')?.addEventListener('change', (e) => {
+    document.getElementById('field-name-download-options')?.classList.toggle('hidden', !e.target.checked);
+  });
 
-document.getElementById('btn-field-cancel')?.addEventListener('click', () => {
-  log('BTN field-cancel');
-  bridge.setState(STATES.IDLE, { pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [] });
-});
-// Event delegation for "Remove" buttons in the field list
-document.getElementById('fields-list')?.addEventListener('click', (e) => {
-  const btn = e.target.closest('.btn-remove-field');
-  if (!btn) return;
-  const index = parseInt(btn.dataset.index, 10);
-  log('FIELD_REMOVE', { index, name: bridge.getState().fields[index]?.name });
-  bridge.stopPreviewIfActive();
-  bridge.setState(bridge.getState().current, { fields: removeField(bridge.getState().fields, index) });
-});
+  document.getElementById('btn-field-cancel')?.addEventListener('click', () => {
+    log('BTN field-cancel');
+    bridge.setState(STATES.IDLE, { pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [] });
+  });
+  // Event delegation for "Remove" buttons in the field list
+  document.getElementById('fields-list')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-remove-field');
+    if (!btn) return;
+    const index = parseInt(btn.dataset.index, 10);
+    log('FIELD_REMOVE', { index, name: bridge.getState().fields[index]?.name });
+    bridge.stopPreviewIfActive();
+    bridge.setState(bridge.getState().current, { fields: removeField(bridge.getState().fields, index) });
+  });
 }
 
 module.exports = {

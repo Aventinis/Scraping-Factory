@@ -19,18 +19,18 @@ const { showToast } = require('./toast');
 const { getGlobalSettings } = require('../shared/global-settings');
 
 function triggerDownload(bridge) {
-const state = bridge.getState();
-const fileName = `${sanitizeFileNameBase(state.scriptFileName, 'scraper')}.py`;
-log('DOWNLOAD', fileName);
-const blob = new Blob([state.scriptText], { type: 'text/plain' });
-const objectUrl = URL.createObjectURL(blob);
-const a = document.createElement('a');
-a.href = objectUrl;
-a.download = fileName;
-document.body.appendChild(a);
-a.click();
-document.body.removeChild(a);
-URL.revokeObjectURL(objectUrl);
+  const state = bridge.getState();
+  const fileName = `${sanitizeFileNameBase(state.scriptFileName, 'scraper')}.py`;
+  log('DOWNLOAD', fileName);
+  const blob = new Blob([state.scriptText], { type: 'text/plain' });
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(objectUrl);
 }
 
 // Issue #161: downloads the companion's actual, complete trial-run output
@@ -39,9 +39,9 @@ URL.revokeObjectURL(objectUrl);
 // the file's own extension purely for a nicer browser "open with" hint;
 // the `download` attribute forces a save regardless.
 const OUTPUT_FILE_MIME_TYPES = {
-csv: 'text/csv', xml: 'application/xml', json: 'application/json',
-sqlite: 'application/vnd.sqlite3',
-xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  csv: 'text/csv', xml: 'application/xml', json: 'application/json',
+  sqlite: 'application/vnd.sqlite3',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
 // Issue #229: the binary table formats travel as base64 text (in the
 // /generate response and in a saved output's stored content alike); the file
@@ -52,26 +52,26 @@ const BINARY_OUTPUT_EXTENSIONS = ['sqlite', 'xlsx'];
 // SavedOutputRecord, not _state.outputFile) can reuse the exact same
 // MIME-guessing/anchor-click mechanics.
 function downloadFile(fileName, content) {
-log('DOWNLOAD_OUTPUT', fileName);
-const extension = fileName.split('.').pop()?.toLowerCase();
-const part = BINARY_OUTPUT_EXTENSIONS.includes(extension)
-  ? Uint8Array.from(atob(content), (c) => c.charCodeAt(0))
-  : content;
-const blob = new Blob([part], { type: OUTPUT_FILE_MIME_TYPES[extension] || 'text/plain' });
-const objectUrl = URL.createObjectURL(blob);
-const a = document.createElement('a');
-a.href = objectUrl;
-a.download = fileName;
-document.body.appendChild(a);
-a.click();
-document.body.removeChild(a);
-URL.revokeObjectURL(objectUrl);
+  log('DOWNLOAD_OUTPUT', fileName);
+  const extension = fileName.split('.').pop()?.toLowerCase();
+  const part = BINARY_OUTPUT_EXTENSIONS.includes(extension)
+    ? Uint8Array.from(atob(content), (c) => c.charCodeAt(0))
+    : content;
+  const blob = new Blob([part], { type: OUTPUT_FILE_MIME_TYPES[extension] || 'text/plain' });
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(objectUrl);
 }
 
 function triggerOutputFileDownload(bridge) {
-const state = bridge.getState();
-if (!state.outputFile) return;
-downloadFile(state.outputFile.fileName, state.outputFile.content);
+  const state = bridge.getState();
+  if (!state.outputFile) return;
+  downloadFile(state.outputFile.fileName, state.outputFile.content);
 }
 
 // Lets a user hand over the current Fields/Groups configuration when
@@ -81,44 +81,44 @@ downloadFile(state.outputFile.fileName, state.outputFile.content);
 // full config live (GET /configs/{id}) before it can be exported — every
 // other mode resolves synchronously and awaits nothing extra.
 async function downloadConfigExport(bridge) {
-const state = bridge.getState();
-const manifest = typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest() : {};
+  const state = bridge.getState();
+  const manifest = typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest() : {};
 
-let combinedComponents = null;
-if (state.mode === 'combined') {
-  try {
-    combinedComponents = await resolveCombinedComponents(state.combinedComponents || []);
-  } catch (err) {
-    log('DOWNLOAD scraping-config.json COMBINED RESOLVE FAIL', err.message);
-    showToast(t('toast.generationError', { message: err.message }), 'Export configuration');
-    return;
+  let combinedComponents = null;
+  if (state.mode === 'combined') {
+    try {
+      combinedComponents = await resolveCombinedComponents(state.combinedComponents || []);
+    } catch (err) {
+      log('DOWNLOAD scraping-config.json COMBINED RESOLVE FAIL', err.message);
+      showToast(t('toast.generationError', { message: err.message }), 'Export configuration');
+      return;
+    }
   }
-}
 
-// Issue-driven follow-up: outputAsJson/includeDataPreview/externalConfig
-// moved from per-scrape _state to the cross-session global Settings tab
-// (shared/global-settings.js) — read from there now, same as generate().
-const globalSettings = getGlobalSettings();
-const exportObj = buildConfigExport(
-  state.url, state.mode, state.fields, state.groups, manifest, state.apiConfig,
-  state.scriptFileName, state.outputFileName, state.engine, state.browserActions, globalSettings.includeDataPreview,
-  globalSettings.outputFormat, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
-  state.pagination, state.persistentSession, false, globalSettings.externalConfig, combinedComponents, state.blocks,
-  state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
-  state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
-  state.discoveredUrls, state.preflight, state.requestDelay, state.retry, state.deduplication, state.requestHeaders, state.respectRobotsDelay, globalSettings.skipVerification, state.robotsDisallow, state.appendOutput,
-);
-log('DOWNLOAD scraping-config.json', exportObj);
+  // Issue-driven follow-up: outputAsJson/includeDataPreview/externalConfig
+  // moved from per-scrape _state to the cross-session global Settings tab
+  // (shared/global-settings.js) — read from there now, same as generate().
+  const globalSettings = getGlobalSettings();
+  const exportObj = buildConfigExport(
+    state.url, state.mode, state.fields, state.groups, manifest, state.apiConfig,
+    state.scriptFileName, state.outputFileName, state.engine, state.browserActions, globalSettings.includeDataPreview,
+    globalSettings.outputFormat, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
+    state.pagination, state.persistentSession, false, globalSettings.externalConfig, combinedComponents, state.blocks,
+    state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
+    state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
+    state.discoveredUrls, state.preflight, state.requestDelay, state.retry, state.deduplication, state.requestHeaders, state.respectRobotsDelay, globalSettings.skipVerification, state.robotsDisallow, state.appendOutput,
+  );
+  log('DOWNLOAD scraping-config.json', exportObj);
 
-const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
-const objectUrl = URL.createObjectURL(blob);
-const a = document.createElement('a');
-a.href = objectUrl;
-a.download = `scraping-config-${Date.now()}.json`;
-document.body.appendChild(a);
-a.click();
-document.body.removeChild(a);
-URL.revokeObjectURL(objectUrl);
+  const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = `scraping-config-${Date.now()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(objectUrl);
 }
 
 module.exports = {triggerDownload, downloadFile, triggerOutputFileDownload, downloadConfigExport};

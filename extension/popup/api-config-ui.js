@@ -1569,378 +1569,378 @@ async function fillStaticListFromPool(bridge, partId) {
 // and its three small modals (add group, add body parameter, edit a leaf
 // field's transform chain).
 function renderApiConfigModals(bridge) {
-const state = bridge.getState();
-renderApiConfigScreen(state.apiConfigDraft, state.apiDiscoveryCandidates, state.discoveryTemplateEditingPartId);
+  const state = bridge.getState();
+  renderApiConfigScreen(state.apiConfigDraft, state.apiDiscoveryCandidates, state.discoveryTemplateEditingPartId);
 
-const apiTreeSearchPanel = document.getElementById('api-tree-search-panel');
-if (apiTreeSearchPanel) {
-  if (state.apiTreeSearchResult) {
-    renderApiCandidates(state.apiTreeSearchResult, { targetEl: 'api-tree-search-target', listEl: 'api-tree-search-list' });
-    apiTreeSearchPanel.classList.remove('hidden');
-  } else {
-    apiTreeSearchPanel.classList.add('hidden');
+  const apiTreeSearchPanel = document.getElementById('api-tree-search-panel');
+  if (apiTreeSearchPanel) {
+    if (state.apiTreeSearchResult) {
+      renderApiCandidates(state.apiTreeSearchResult, { targetEl: 'api-tree-search-target', listEl: 'api-tree-search-list' });
+      apiTreeSearchPanel.classList.remove('hidden');
+    } else {
+      apiTreeSearchPanel.classList.add('hidden');
+    }
   }
-}
 
-if (state.apiGroupModalOpen) {
-  document.getElementById('modal-api-group-new')?.classList.remove('hidden');
-  const nameInput = document.getElementById('input-api-group-name');
-  if (nameInput) { nameInput.value = ''; nameInput.focus(); }
-  const pathInput = document.getElementById('input-api-group-path');
-  if (pathInput) pathInput.value = '';
-}
+  if (state.apiGroupModalOpen) {
+    document.getElementById('modal-api-group-new')?.classList.remove('hidden');
+    const nameInput = document.getElementById('input-api-group-name');
+    if (nameInput) { nameInput.value = ''; nameInput.focus(); }
+    const pathInput = document.getElementById('input-api-group-path');
+    if (pathInput) pathInput.value = '';
+  }
 
-if (state.bodyParameterModalOpen) {
-  document.getElementById('modal-api-body-parameter-new')?.classList.remove('hidden');
-  const nameInput = document.getElementById('input-api-body-parameter-name');
-  if (nameInput) { nameInput.value = ''; nameInput.focus(); }
-}
+  if (state.bodyParameterModalOpen) {
+    document.getElementById('modal-api-body-parameter-new')?.classList.remove('hidden');
+    const nameInput = document.getElementById('input-api-body-parameter-name');
+    if (nameInput) { nameInput.value = ''; nameInput.focus(); }
+  }
 
-if (state.apiFieldTransformModalOpen) {
-  document.getElementById('modal-api-field-transforms')?.classList.remove('hidden');
-  renderTransformList('api-field-transform-list', state.pendingTransforms);
-  // Issue #147: live preview against the node's own sampleValue, threaded
-  // through as pendingRawText by openApiFieldTransformsModal — reuses the
-  // same renderTransformPreview flat mode's own preview already calls.
-  renderTransformPreview('api-field-transform-preview', state.pendingRawText, state.pendingTransforms);
-}
+  if (state.apiFieldTransformModalOpen) {
+    document.getElementById('modal-api-field-transforms')?.classList.remove('hidden');
+    renderTransformList('api-field-transform-list', state.pendingTransforms);
+    // Issue #147: live preview against the node's own sampleValue, threaded
+    // through as pendingRawText by openApiFieldTransformsModal — reuses the
+    // same renderTransformPreview flat mode's own preview already calls.
+    renderTransformPreview('api-field-transform-preview', state.pendingRawText, state.pendingTransforms);
+  }
 }
 
 function wireApiConfigEvents(bridge) {
-document.getElementById('btn-api-search')?.addEventListener('click', () => {
-  log('BTN api-search');
-  startApiFieldSearch(bridge);
-});
+  document.getElementById('btn-api-search')?.addEventListener('click', () => {
+    log('BTN api-search');
+    startApiFieldSearch(bridge);
+  });
 
-document.getElementById('btn-embedded-json-search')?.addEventListener('click', () => {
-  log('BTN embedded-json-search');
-  startEmbeddedJsonFieldSearch(bridge);
-});
+  document.getElementById('btn-embedded-json-search')?.addEventListener('click', () => {
+    log('BTN embedded-json-search');
+    startEmbeddedJsonFieldSearch(bridge);
+  });
 
-document.getElementById('btn-api-entries-toggle')?.addEventListener('click', () => {
-  log('BTN api-entries-toggle');
-  toggleApiEntriesPanel(bridge);
-});
+  document.getElementById('btn-api-entries-toggle')?.addEventListener('click', () => {
+    log('BTN api-entries-toggle');
+    toggleApiEntriesPanel(bridge);
+  });
 
-// Event delegation for the sibling-field suggestion chips and the "Use"
-// row — shared by both candidate-search panels (the primary/root search's
-// #api-candidates-list and Phase A5's "add root group"/"add sub-field"
-// search's #api-tree-search-list, see renderApiCandidates' own `ids` doc
-// comment): identical markup and interaction, only getCandidates/onConfirm
-// differ per caller.
-function wireApiCandidateListEvents(listElId, getCandidates, onConfirm) {
-  document.getElementById(listElId)?.addEventListener('click', (e) => {
-    const chip = e.target.closest('.api-sibling-chip');
-    if (chip) {
-      chip.classList.toggle('picked');
-      log('API_CANDIDATE sibling toggled', chip.dataset.siblingName);
+  // Event delegation for the sibling-field suggestion chips and the "Use"
+  // row — shared by both candidate-search panels (the primary/root search's
+  // #api-candidates-list and Phase A5's "add root group"/"add sub-field"
+  // search's #api-tree-search-list, see renderApiCandidates' own `ids` doc
+  // comment): identical markup and interaction, only getCandidates/onConfirm
+  // differ per caller.
+  function wireApiCandidateListEvents(listElId, getCandidates, onConfirm) {
+    document.getElementById(listElId)?.addEventListener('click', (e) => {
+      const chip = e.target.closest('.api-sibling-chip');
+      if (chip) {
+        chip.classList.toggle('picked');
+        log('API_CANDIDATE sibling toggled', chip.dataset.siblingName);
+        return;
+      }
+
+      const selectAllBtn = e.target.closest('.api-sibling-select-all');
+      if (selectAllBtn) {
+        const chips = selectAllBtn.closest('.api-candidate-siblings').querySelectorAll('.api-sibling-chip');
+        const allPicked = Array.from(chips).every(c => c.classList.contains('picked'));
+        chips.forEach(c => c.classList.toggle('picked', !allPicked));
+        selectAllBtn.textContent = t(allPicked ? 'apiCandidates.selectAllChips' : 'apiCandidates.deselectAllChips');
+        log('API_CANDIDATE siblings select-all', { toggledTo: !allPicked });
+        return;
+      }
+
+      const confirmBtn = e.target.closest('.api-candidate-confirm');
+      if (confirmBtn) {
+        const index = parseInt(confirmBtn.dataset.candidateIndex, 10);
+        const candidate = getCandidates()?.[index];
+        if (!candidate) return;
+        const li = confirmBtn.closest('.api-candidate');
+        const fieldName = li.querySelector('.api-candidate-field-name')?.value.trim();
+        if (!fieldName) return;
+        const siblingNames = Array.from(li.querySelectorAll('.api-sibling-chip.picked')).map(c => c.dataset.siblingName);
+        onConfirm(candidate, fieldName, siblingNames);
+      }
+    });
+
+    // Enables "Use" once a field name has been typed for that row.
+    document.getElementById(listElId)?.addEventListener('input', (e) => {
+      const input = e.target.closest('.api-candidate-field-name');
+      if (!input) return;
+      const li = input.closest('.api-candidate');
+      const confirmBtn = li?.querySelector('.api-candidate-confirm');
+      if (confirmBtn) confirmBtn.disabled = input.value.trim() === '';
+    });
+  }
+
+  // Issue #136: the same #api-candidates-list serves both a network search
+  // (startApiFieldSearch) and an embedded-JSON search (startEmbeddedJsonField
+  // Search) — dispatch to the matching confirm function purely by candidate
+  // shape (only an embedded-JSON candidate ever carries scriptSelector, see
+  // content-script.js's findEmbeddedJsonCandidates vs. findApiCandidates).
+  wireApiCandidateListEvents(
+    'api-candidates-list', () => bridge.getState().apiCandidates?.candidates,
+    (candidate, fieldName, siblingNames) => (candidate.scriptSelector
+      ? confirmEmbeddedJsonFieldCandidate(bridge, candidate, fieldName, siblingNames)
+      : confirmApiFieldCandidate(bridge, candidate, fieldName, siblingNames)),
+  );
+  wireApiCandidateListEvents(
+    'api-tree-search-list', () => bridge.getState().apiTreeSearchResult?.candidates,
+    (candidate, fieldName, siblingNames) => confirmApiTreeFieldCandidate(bridge, candidate, fieldName, siblingNames),
+  );
+
+  document.getElementById('btn-api-tree-add-root')?.addEventListener('click', () => startApiTreeFieldSearch(bridge, null));
+
+  // Event delegation for the API-tree's per-row add/remove buttons and name
+  // input — mirrors the Container-tree's own delegation below.
+  document.getElementById('api-tree-root')?.addEventListener('click', (e) => {
+    const li = e.target.closest('.api-tree-node');
+    if (!li) return;
+    const path = JSON.parse(li.dataset.path);
+
+    if (e.target.closest('.btn-add-api-subgroup')) { openApiGroupModal(bridge, path); return; }
+    if (e.target.closest('.btn-add-api-subfield')) { startApiTreeFieldSearch(bridge, path); return; }
+    // Issue #206 follow-up: no click-based/JSON-path search at all — opens
+    // the shared combine/split creation modal directly, scoped to this
+    // group's own children (same `path` .btn-add-api-subfield already
+    // targets).
+    if (e.target.closest('.btn-add-api-combine-field')) { openCombineFieldModal(bridge, { mode: 'api', groupPath: path }); return; }
+    if (e.target.closest('.btn-add-api-split-field')) { openSplitFieldModal(bridge, { mode: 'api', groupPath: path }); return; }
+    if (e.target.closest('.btn-api-field-transforms')) { openApiFieldTransformsModal(bridge, path); return; }
+    if (e.target.closest('.btn-remove-api-node')) {
+      log('API_TREE_NODE_REMOVE', { path });
+      bridge.setState(bridge.getState().current, { apiConfigDraft: { ...bridge.getState().apiConfigDraft, groups: removeApiTreeNode(bridge.getState().apiConfigDraft.groups, path) } });
+    }
+  });
+
+  document.getElementById('api-tree-root')?.addEventListener('change', (e) => {
+    const nameInput = e.target.closest('.api-tree-name');
+    if (nameInput) setApiTreeNodeName(bridge, JSON.parse(nameInput.dataset.path), nameInput.value.trim());
+  });
+
+  document.getElementById('btn-api-group-confirm')?.addEventListener('click', () => confirmApiGroupModal(bridge));
+  document.getElementById('input-api-group-path')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') confirmApiGroupModal(bridge);
+  });
+  document.getElementById('btn-api-group-cancel')?.addEventListener('click', () => cancelApiGroupModal(bridge));
+
+  // Issue #84 follow-up: API-mode field transforms modal — reuses the same
+  // transform-chain editor (field-transforms.js/field-transforms-ui.js) the
+  // flat/container field modals already wire up above.
+  document.getElementById('btn-api-field-transforms-add')?.addEventListener('click', () => {
+    bridge.patchState({ pendingTransforms: addTransform(bridge.getState().pendingTransforms) });
+  });
+  wireTransformList(
+    'api-field-transform-list',
+    () => bridge.getState().pendingTransforms,
+    (transforms) => bridge.patchState({ pendingTransforms: transforms }),
+  );
+  document.getElementById('btn-api-field-transforms-confirm')?.addEventListener('click', () => confirmApiFieldTransformsModal(bridge));
+  document.getElementById('btn-api-field-transforms-cancel')?.addEventListener('click', () => cancelApiFieldTransformsModal(bridge));
+
+  // ── API-Mode config screen (Issue #53 Phase 5) ─────────────────────────────
+  // Delegated `change` listeners (not `input`) so typing in a text field
+  // doesn't trigger a re-render — and thus lose focus — on every keystroke;
+  // see renderApiConfigScreen's doc comment for the trade-off this implies.
+
+  const handleUrlPartControlChange = (e) => {
+    const toggle = e.target.closest('.api-config-part-toggle');
+    if (toggle) { toggleApiConfigPartVariable(bridge, toggle.dataset.partId); return; }
+    const nameInput = e.target.closest('.api-config-part-name');
+    if (nameInput) setApiConfigPartName(bridge, nameInput.dataset.partId, nameInput.value.trim());
+  };
+  document.getElementById('api-config-segments')?.addEventListener('change', handleUrlPartControlChange);
+  document.getElementById('api-config-query-params')?.addEventListener('change', handleUrlPartControlChange);
+
+  document.getElementById('api-config-parameters')?.addEventListener('change', (e) => {
+    const kindRadio = e.target.closest('.api-config-source-kind-radio');
+    if (kindRadio) {
+      setApiConfigSourceKind(bridge, kindRadio.dataset.partId, kindRadio.value);
+      // Best-effort, automatic first pass — picking "Werteliste" is exactly
+      // the moment a user would otherwise go hunting through DevTools for
+      // sibling requests, so try the pool first and let them refine/refresh
+      // via the button rendered alongside the textarea (see
+      // fillStaticListFromPool's own doc comment).
+      if (kindRadio.value === 'staticList') fillStaticListFromPool(bridge, kindRadio.dataset.partId);
       return;
     }
-
-    const selectAllBtn = e.target.closest('.api-sibling-select-all');
-    if (selectAllBtn) {
-      const chips = selectAllBtn.closest('.api-candidate-siblings').querySelectorAll('.api-sibling-chip');
-      const allPicked = Array.from(chips).every(c => c.classList.contains('picked'));
-      chips.forEach(c => c.classList.toggle('picked', !allPicked));
-      selectAllBtn.textContent = t(allPicked ? 'apiCandidates.selectAllChips' : 'apiCandidates.deselectAllChips');
-      log('API_CANDIDATE siblings select-all', { toggledTo: !allPicked });
+    const staticList = e.target.closest('.api-config-static-list');
+    if (staticList) { patchApiConfigSource(bridge, staticList.dataset.partId, { valuesText: staticList.value }); return; }
+    const rangeType = e.target.closest('.api-config-range-type');
+    if (rangeType) {
+      const partId = rangeType.dataset.partId;
+      // Re-detect on every Type change, not just the initial "Range" pick
+      // — switching e.g. IsoWeek → Date should re-match the same captured
+      // raw value against Date's own presets instead of keeping a format
+      // string that no longer means anything for the new Type.
+      const rawValue = findUrlPartValue(bridge.getState().apiConfigDraft.urlParts, partId);
+      patchApiConfigSource(bridge, partId, { type: rangeType.value, format: detectRangeFormat(rangeType.value, rawValue) });
       return;
     }
+    const rangeFrom = e.target.closest('.api-config-range-from');
+    if (rangeFrom) { patchApiConfigSource(bridge, rangeFrom.dataset.partId, { from: rangeFrom.value.trim() }); return; }
+    const rangeTo = e.target.closest('.api-config-range-to');
+    if (rangeTo) { patchApiConfigSource(bridge, rangeTo.dataset.partId, { to: rangeTo.value.trim() }); return; }
+    const formatPreset = e.target.closest('.api-config-range-format-preset');
+    if (formatPreset) { patchApiConfigSource(bridge, formatPreset.dataset.partId, { format: formatPreset.value === 'custom' ? '' : formatPreset.value }); return; }
+    const formatCustom = e.target.closest('.api-config-range-format-custom');
+    if (formatCustom) { patchApiConfigSource(bridge, formatCustom.dataset.partId, { format: formatCustom.value.trim() }); return; }
 
-    const confirmBtn = e.target.closest('.api-candidate-confirm');
+    // ── BrowserDiscoverySource (Issue #216) ───────────────────────────────
+    const discoveryUrl = e.target.closest('.api-discovery-url');
+    if (discoveryUrl) { patchApiConfigSource(bridge, discoveryUrl.dataset.partId, { discoveryUrl: discoveryUrl.value.trim() }); return; }
+
+    // ── Chained parameter discovery (Issue #217) ──────────────────────────
+    const discoveryUrlTemplate = e.target.closest('.api-discovery-url-template');
+    if (discoveryUrlTemplate) { patchApiConfigSource(bridge, discoveryUrlTemplate.dataset.partId, { urlTemplate: discoveryUrlTemplate.value.trim() }); return; }
+    const paramPlaceholderSelect = e.target.closest('.api-param-placeholder-select');
+    if (paramPlaceholderSelect) { insertParameterPlaceholder(bridge, paramPlaceholderSelect); return; }
+    const actionTimeout = e.target.closest('.discovery-action-timeout');
+    if (actionTimeout) {
+      const timeoutMs = parseInt(actionTimeout.value, 10);
+      updateDiscoveryAction(bridge, actionTimeout.dataset.partId, parseInt(actionTimeout.dataset.index, 10), {
+        timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 5000,
+      });
+      return;
+    }
+    const actionEnvName = e.target.closest('.discovery-action-env-name');
+    if (actionEnvName) {
+      updateDiscoveryAction(bridge, actionEnvName.dataset.partId, parseInt(actionEnvName.dataset.index, 10), {
+        environmentVariableName: actionEnvName.value.trim(),
+      });
+      return;
+    }
+    const actionClickTarget = e.target.closest('.discovery-action-click-target');
+    if (actionClickTarget) {
+      updateDiscoveryAction(bridge, actionClickTarget.dataset.partId, parseInt(actionClickTarget.dataset.index, 10), { target: actionClickTarget.value });
+      return;
+    }
+    const actionClickWait = e.target.closest('.discovery-action-click-wait-after-ms');
+    if (actionClickWait) {
+      const waitAfterMs = parseInt(actionClickWait.value, 10);
+      updateDiscoveryAction(bridge, actionClickWait.dataset.partId, parseInt(actionClickWait.dataset.index, 10), {
+        waitAfterMs: Number.isFinite(waitAfterMs) && waitAfterMs >= 0 ? waitAfterMs : 250,
+      });
+      return;
+    }
+    const actionMaxIterations = e.target.closest('.discovery-action-max-iterations');
+    if (actionMaxIterations) {
+      const maxIterations = parseInt(actionMaxIterations.value, 10);
+      updateDiscoveryAction(bridge, actionMaxIterations.dataset.partId, parseInt(actionMaxIterations.dataset.index, 10), {
+        maxIterations: Number.isFinite(maxIterations) && maxIterations > 0 ? maxIterations : 10,
+      });
+      return;
+    }
+    const actionWaitAfterMs = e.target.closest('.discovery-action-wait-after-ms');
+    if (actionWaitAfterMs) {
+      const waitAfterMs = parseInt(actionWaitAfterMs.value, 10);
+      updateDiscoveryAction(bridge, actionWaitAfterMs.dataset.partId, parseInt(actionWaitAfterMs.dataset.index, 10), {
+        waitAfterMs: Number.isFinite(waitAfterMs) && waitAfterMs >= 0 ? waitAfterMs : 1000,
+      });
+      return;
+    }
+    // Issue #289: a blank input deliberately resets to null (today's
+    // jump-to-bottom default), not a clamped fallback number.
+    const actionScrollStepPx = e.target.closest('.discovery-action-scroll-step-px');
+    if (actionScrollStepPx) {
+      const scrollStepPx = parseInt(actionScrollStepPx.value, 10);
+      updateDiscoveryAction(bridge, actionScrollStepPx.dataset.partId, parseInt(actionScrollStepPx.dataset.index, 10), {
+        scrollStepPx: Number.isFinite(scrollStepPx) && scrollStepPx > 0 ? scrollStepPx : null,
+      });
+    }
+  });
+
+  document.getElementById('api-config-parameters')?.addEventListener('click', (e) => {
+    const searchBtn = e.target.closest('.api-config-discovery-search');
+    if (searchBtn) { startDiscoverySearch(bridge, searchBtn.dataset.partId); return; }
+    const confirmBtn = e.target.closest('.api-config-discovery-confirm');
     if (confirmBtn) {
       const index = parseInt(confirmBtn.dataset.candidateIndex, 10);
-      const candidate = getCandidates()?.[index];
-      if (!candidate) return;
-      const li = confirmBtn.closest('.api-candidate');
-      const fieldName = li.querySelector('.api-candidate-field-name')?.value.trim();
-      if (!fieldName) return;
-      const siblingNames = Array.from(li.querySelectorAll('.api-sibling-chip.picked')).map(c => c.dataset.siblingName);
-      onConfirm(candidate, fieldName, siblingNames);
+      const candidate = bridge.getState().apiDiscoveryCandidates?.candidates?.[index];
+      if (candidate) confirmDiscoveryCandidate(bridge, confirmBtn.dataset.partId, candidate);
+      return;
+    }
+    const autofillBtn = e.target.closest('.api-config-autofill-pool');
+    if (autofillBtn) { fillStaticListFromPool(bridge, autofillBtn.dataset.partId); return; }
+
+    // ── Chained parameter discovery (Issue #217) ──────────────────────────
+    const editTemplateBtn = e.target.closest('.btn-discovery-template-edit');
+    if (editTemplateBtn) { bridge.patchState({ discoveryTemplateEditingPartId: editTemplateBtn.dataset.partId }); return; }
+    const doneTemplateBtn = e.target.closest('.btn-discovery-template-done');
+    if (doneTemplateBtn) { bridge.patchState({ discoveryTemplateEditingPartId: null }); return; }
+
+    // ── BrowserDiscoverySource (Issue #216) ───────────────────────────────
+    const addActionBtn = e.target.closest('.btn-add-discovery-action');
+    if (addActionBtn) { addDiscoveryAction(bridge, addActionBtn.dataset.partId, addActionBtn.dataset.kind); return; }
+    const removeActionBtn = e.target.closest('.btn-remove-discovery-action');
+    if (removeActionBtn) { removeDiscoveryAction(bridge, removeActionBtn.dataset.partId, parseInt(removeActionBtn.dataset.index, 10)); return; }
+    const pickActionBtn = e.target.closest('.btn-pick-discovery-action-selector');
+    if (pickActionBtn) {
+      const partId = pickActionBtn.dataset.partId;
+      const index = parseInt(pickActionBtn.dataset.index, 10);
+      const field = pickActionBtn.dataset.field;
+      log('BTN pick-discovery-action-selector → START_SELECTION', { partId, index, field });
+      bridge.stopPreviewIfActive();
+      chrome.runtime.sendMessage({ type: 'START_SELECTION' });
+      bridge.setState(STATES.SELECTING, {
+        pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
+        selectionKind: 'apiDiscoveryAction', pendingApiDiscoveryPartId: partId, pendingApiDiscoveryActionIndex: index, pendingApiDiscoveryActionField: field,
+        domTree: null, domTreeTruncated: false, domTreeError: null,
+      });
     }
   });
 
-  // Enables "Use" once a field name has been typed for that row.
-  document.getElementById(listElId)?.addEventListener('input', (e) => {
-    const input = e.target.closest('.api-candidate-field-name');
-    if (!input) return;
-    const li = input.closest('.api-candidate');
-    const confirmBtn = li?.querySelector('.api-candidate-confirm');
-    if (confirmBtn) confirmBtn.disabled = input.value.trim() === '';
+  document.getElementById('api-config-headers')?.addEventListener('change', (e) => {
+    const include = e.target.closest('.api-config-header-include');
+    if (include) { setApiConfigHeaderDecision(bridge, include.dataset.headerName, { include: include.checked }); return; }
+    const modeRadio = e.target.closest('.api-config-header-mode-radio');
+    if (modeRadio) { setApiConfigHeaderDecision(bridge, modeRadio.dataset.headerName, { mode: modeRadio.value }); return; }
+    const envName = e.target.closest('.api-config-env-name');
+    if (envName) { setApiConfigHeaderDecision(bridge, envName.dataset.headerName, { envName: envName.value.trim() }); return; }
+    const template = e.target.closest('.api-config-header-template');
+    if (template) setApiConfigHeaderDecision(bridge, template.dataset.headerName, { template: template.value });
   });
-}
 
-// Issue #136: the same #api-candidates-list serves both a network search
-// (startApiFieldSearch) and an embedded-JSON search (startEmbeddedJsonField
-// Search) — dispatch to the matching confirm function purely by candidate
-// shape (only an embedded-JSON candidate ever carries scriptSelector, see
-// content-script.js's findEmbeddedJsonCandidates vs. findApiCandidates).
-wireApiCandidateListEvents(
-  'api-candidates-list', () => bridge.getState().apiCandidates?.candidates,
-  (candidate, fieldName, siblingNames) => (candidate.scriptSelector
-    ? confirmEmbeddedJsonFieldCandidate(bridge, candidate, fieldName, siblingNames)
-    : confirmApiFieldCandidate(bridge, candidate, fieldName, siblingNames)),
-);
-wireApiCandidateListEvents(
-  'api-tree-search-list', () => bridge.getState().apiTreeSearchResult?.candidates,
-  (candidate, fieldName, siblingNames) => confirmApiTreeFieldCandidate(bridge, candidate, fieldName, siblingNames),
-);
+  // ── API-Mode request-body tree (Issue #55, Phase B4) ─────────────────────
+  document.getElementById('body-tree-root')?.addEventListener('click', (e) => {
+    const toVariableBtn = e.target.closest('.btn-body-to-variable');
+    if (toVariableBtn) {
+      toggleBodyLeafToVariable(bridge, JSON.parse(toVariableBtn.closest('.body-tree-node').dataset.path));
+      return;
+    }
+    const toFixedBtn = e.target.closest('.btn-body-to-fixed');
+    if (toFixedBtn) toggleBodyLeafToFixed(bridge, JSON.parse(toFixedBtn.closest('.body-tree-node').dataset.path));
+  });
 
-document.getElementById('btn-api-tree-add-root')?.addEventListener('click', () => startApiTreeFieldSearch(bridge, null));
+  document.getElementById('body-tree-root')?.addEventListener('change', (e) => {
+    const picker = e.target.closest('.body-tree-parameter-picker');
+    if (picker) {
+      const path = JSON.parse(picker.closest('.body-tree-node').dataset.path);
+      if (picker.value === '__new__') { openBodyParameterModal(bridge, path); return; }
+      setBodyLeafParameter(bridge, path, picker.value);
+      return;
+    }
+    const coerceTo = e.target.closest('.body-tree-coerce-to');
+    if (coerceTo) setBodyLeafCoerceTo(bridge, JSON.parse(coerceTo.closest('.body-tree-node').dataset.path), coerceTo.value);
+  });
 
-// Event delegation for the API-tree's per-row add/remove buttons and name
-// input — mirrors the Container-tree's own delegation below.
-document.getElementById('api-tree-root')?.addEventListener('click', (e) => {
-  const li = e.target.closest('.api-tree-node');
-  if (!li) return;
-  const path = JSON.parse(li.dataset.path);
+  document.getElementById('btn-api-body-parameter-confirm')?.addEventListener('click', () => confirmBodyParameterModal(bridge));
+  document.getElementById('input-api-body-parameter-name')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') confirmBodyParameterModal(bridge);
+  });
+  document.getElementById('btn-api-body-parameter-cancel')?.addEventListener('click', () => cancelBodyParameterModal(bridge));
 
-  if (e.target.closest('.btn-add-api-subgroup')) { openApiGroupModal(bridge, path); return; }
-  if (e.target.closest('.btn-add-api-subfield')) { startApiTreeFieldSearch(bridge, path); return; }
-  // Issue #206 follow-up: no click-based/JSON-path search at all — opens
-  // the shared combine/split creation modal directly, scoped to this
-  // group's own children (same `path` .btn-add-api-subfield already
-  // targets).
-  if (e.target.closest('.btn-add-api-combine-field')) { openCombineFieldModal(bridge, { mode: 'api', groupPath: path }); return; }
-  if (e.target.closest('.btn-add-api-split-field')) { openSplitFieldModal(bridge, { mode: 'api', groupPath: path }); return; }
-  if (e.target.closest('.btn-api-field-transforms')) { openApiFieldTransformsModal(bridge, path); return; }
-  if (e.target.closest('.btn-remove-api-node')) {
-    log('API_TREE_NODE_REMOVE', { path });
-    bridge.setState(bridge.getState().current, { apiConfigDraft: { ...bridge.getState().apiConfigDraft, groups: removeApiTreeNode(bridge.getState().apiConfigDraft.groups, path) } });
-  }
-});
+  document.getElementById('btn-api-config-cancel')?.addEventListener('click', () => {
+    log('BTN api-config-cancel');
+    cancelApiConfig(bridge);
+  });
 
-document.getElementById('api-tree-root')?.addEventListener('change', (e) => {
-  const nameInput = e.target.closest('.api-tree-name');
-  if (nameInput) setApiTreeNodeName(bridge, JSON.parse(nameInput.dataset.path), nameInput.value.trim());
-});
+  document.getElementById('btn-api-config-confirm')?.addEventListener('click', () => {
+    log('BTN api-config-confirm');
+    confirmApiConfig(bridge);
+  });
 
-document.getElementById('btn-api-group-confirm')?.addEventListener('click', () => confirmApiGroupModal(bridge));
-document.getElementById('input-api-group-path')?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') confirmApiGroupModal(bridge);
-});
-document.getElementById('btn-api-group-cancel')?.addEventListener('click', () => cancelApiGroupModal(bridge));
-
-// Issue #84 follow-up: API-mode field transforms modal — reuses the same
-// transform-chain editor (field-transforms.js/field-transforms-ui.js) the
-// flat/container field modals already wire up above.
-document.getElementById('btn-api-field-transforms-add')?.addEventListener('click', () => {
-  bridge.patchState({ pendingTransforms: addTransform(bridge.getState().pendingTransforms) });
-});
-wireTransformList(
-  'api-field-transform-list',
-  () => bridge.getState().pendingTransforms,
-  (transforms) => bridge.patchState({ pendingTransforms: transforms }),
-);
-document.getElementById('btn-api-field-transforms-confirm')?.addEventListener('click', () => confirmApiFieldTransformsModal(bridge));
-document.getElementById('btn-api-field-transforms-cancel')?.addEventListener('click', () => cancelApiFieldTransformsModal(bridge));
-
-// ── API-Mode config screen (Issue #53 Phase 5) ─────────────────────────────
-// Delegated `change` listeners (not `input`) so typing in a text field
-// doesn't trigger a re-render — and thus lose focus — on every keystroke;
-// see renderApiConfigScreen's doc comment for the trade-off this implies.
-
-const handleUrlPartControlChange = (e) => {
-  const toggle = e.target.closest('.api-config-part-toggle');
-  if (toggle) { toggleApiConfigPartVariable(bridge, toggle.dataset.partId); return; }
-  const nameInput = e.target.closest('.api-config-part-name');
-  if (nameInput) setApiConfigPartName(bridge, nameInput.dataset.partId, nameInput.value.trim());
-};
-document.getElementById('api-config-segments')?.addEventListener('change', handleUrlPartControlChange);
-document.getElementById('api-config-query-params')?.addEventListener('change', handleUrlPartControlChange);
-
-document.getElementById('api-config-parameters')?.addEventListener('change', (e) => {
-  const kindRadio = e.target.closest('.api-config-source-kind-radio');
-  if (kindRadio) {
-    setApiConfigSourceKind(bridge, kindRadio.dataset.partId, kindRadio.value);
-    // Best-effort, automatic first pass — picking "Werteliste" is exactly
-    // the moment a user would otherwise go hunting through DevTools for
-    // sibling requests, so try the pool first and let them refine/refresh
-    // via the button rendered alongside the textarea (see
-    // fillStaticListFromPool's own doc comment).
-    if (kindRadio.value === 'staticList') fillStaticListFromPool(bridge, kindRadio.dataset.partId);
-    return;
-  }
-  const staticList = e.target.closest('.api-config-static-list');
-  if (staticList) { patchApiConfigSource(bridge, staticList.dataset.partId, { valuesText: staticList.value }); return; }
-  const rangeType = e.target.closest('.api-config-range-type');
-  if (rangeType) {
-    const partId = rangeType.dataset.partId;
-    // Re-detect on every Type change, not just the initial "Range" pick
-    // — switching e.g. IsoWeek → Date should re-match the same captured
-    // raw value against Date's own presets instead of keeping a format
-    // string that no longer means anything for the new Type.
-    const rawValue = findUrlPartValue(bridge.getState().apiConfigDraft.urlParts, partId);
-    patchApiConfigSource(bridge, partId, { type: rangeType.value, format: detectRangeFormat(rangeType.value, rawValue) });
-    return;
-  }
-  const rangeFrom = e.target.closest('.api-config-range-from');
-  if (rangeFrom) { patchApiConfigSource(bridge, rangeFrom.dataset.partId, { from: rangeFrom.value.trim() }); return; }
-  const rangeTo = e.target.closest('.api-config-range-to');
-  if (rangeTo) { patchApiConfigSource(bridge, rangeTo.dataset.partId, { to: rangeTo.value.trim() }); return; }
-  const formatPreset = e.target.closest('.api-config-range-format-preset');
-  if (formatPreset) { patchApiConfigSource(bridge, formatPreset.dataset.partId, { format: formatPreset.value === 'custom' ? '' : formatPreset.value }); return; }
-  const formatCustom = e.target.closest('.api-config-range-format-custom');
-  if (formatCustom) { patchApiConfigSource(bridge, formatCustom.dataset.partId, { format: formatCustom.value.trim() }); return; }
-
-  // ── BrowserDiscoverySource (Issue #216) ───────────────────────────────
-  const discoveryUrl = e.target.closest('.api-discovery-url');
-  if (discoveryUrl) { patchApiConfigSource(bridge, discoveryUrl.dataset.partId, { discoveryUrl: discoveryUrl.value.trim() }); return; }
-
-  // ── Chained parameter discovery (Issue #217) ──────────────────────────
-  const discoveryUrlTemplate = e.target.closest('.api-discovery-url-template');
-  if (discoveryUrlTemplate) { patchApiConfigSource(bridge, discoveryUrlTemplate.dataset.partId, { urlTemplate: discoveryUrlTemplate.value.trim() }); return; }
-  const paramPlaceholderSelect = e.target.closest('.api-param-placeholder-select');
-  if (paramPlaceholderSelect) { insertParameterPlaceholder(bridge, paramPlaceholderSelect); return; }
-  const actionTimeout = e.target.closest('.discovery-action-timeout');
-  if (actionTimeout) {
-    const timeoutMs = parseInt(actionTimeout.value, 10);
-    updateDiscoveryAction(bridge, actionTimeout.dataset.partId, parseInt(actionTimeout.dataset.index, 10), {
-      timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 5000,
-    });
-    return;
-  }
-  const actionEnvName = e.target.closest('.discovery-action-env-name');
-  if (actionEnvName) {
-    updateDiscoveryAction(bridge, actionEnvName.dataset.partId, parseInt(actionEnvName.dataset.index, 10), {
-      environmentVariableName: actionEnvName.value.trim(),
-    });
-    return;
-  }
-  const actionClickTarget = e.target.closest('.discovery-action-click-target');
-  if (actionClickTarget) {
-    updateDiscoveryAction(bridge, actionClickTarget.dataset.partId, parseInt(actionClickTarget.dataset.index, 10), { target: actionClickTarget.value });
-    return;
-  }
-  const actionClickWait = e.target.closest('.discovery-action-click-wait-after-ms');
-  if (actionClickWait) {
-    const waitAfterMs = parseInt(actionClickWait.value, 10);
-    updateDiscoveryAction(bridge, actionClickWait.dataset.partId, parseInt(actionClickWait.dataset.index, 10), {
-      waitAfterMs: Number.isFinite(waitAfterMs) && waitAfterMs >= 0 ? waitAfterMs : 250,
-    });
-    return;
-  }
-  const actionMaxIterations = e.target.closest('.discovery-action-max-iterations');
-  if (actionMaxIterations) {
-    const maxIterations = parseInt(actionMaxIterations.value, 10);
-    updateDiscoveryAction(bridge, actionMaxIterations.dataset.partId, parseInt(actionMaxIterations.dataset.index, 10), {
-      maxIterations: Number.isFinite(maxIterations) && maxIterations > 0 ? maxIterations : 10,
-    });
-    return;
-  }
-  const actionWaitAfterMs = e.target.closest('.discovery-action-wait-after-ms');
-  if (actionWaitAfterMs) {
-    const waitAfterMs = parseInt(actionWaitAfterMs.value, 10);
-    updateDiscoveryAction(bridge, actionWaitAfterMs.dataset.partId, parseInt(actionWaitAfterMs.dataset.index, 10), {
-      waitAfterMs: Number.isFinite(waitAfterMs) && waitAfterMs >= 0 ? waitAfterMs : 1000,
-    });
-    return;
-  }
-  // Issue #289: a blank input deliberately resets to null (today's
-  // jump-to-bottom default), not a clamped fallback number.
-  const actionScrollStepPx = e.target.closest('.discovery-action-scroll-step-px');
-  if (actionScrollStepPx) {
-    const scrollStepPx = parseInt(actionScrollStepPx.value, 10);
-    updateDiscoveryAction(bridge, actionScrollStepPx.dataset.partId, parseInt(actionScrollStepPx.dataset.index, 10), {
-      scrollStepPx: Number.isFinite(scrollStepPx) && scrollStepPx > 0 ? scrollStepPx : null,
-    });
-  }
-});
-
-document.getElementById('api-config-parameters')?.addEventListener('click', (e) => {
-  const searchBtn = e.target.closest('.api-config-discovery-search');
-  if (searchBtn) { startDiscoverySearch(bridge, searchBtn.dataset.partId); return; }
-  const confirmBtn = e.target.closest('.api-config-discovery-confirm');
-  if (confirmBtn) {
-    const index = parseInt(confirmBtn.dataset.candidateIndex, 10);
-    const candidate = bridge.getState().apiDiscoveryCandidates?.candidates?.[index];
-    if (candidate) confirmDiscoveryCandidate(bridge, confirmBtn.dataset.partId, candidate);
-    return;
-  }
-  const autofillBtn = e.target.closest('.api-config-autofill-pool');
-  if (autofillBtn) { fillStaticListFromPool(bridge, autofillBtn.dataset.partId); return; }
-
-  // ── Chained parameter discovery (Issue #217) ──────────────────────────
-  const editTemplateBtn = e.target.closest('.btn-discovery-template-edit');
-  if (editTemplateBtn) { bridge.patchState({ discoveryTemplateEditingPartId: editTemplateBtn.dataset.partId }); return; }
-  const doneTemplateBtn = e.target.closest('.btn-discovery-template-done');
-  if (doneTemplateBtn) { bridge.patchState({ discoveryTemplateEditingPartId: null }); return; }
-
-  // ── BrowserDiscoverySource (Issue #216) ───────────────────────────────
-  const addActionBtn = e.target.closest('.btn-add-discovery-action');
-  if (addActionBtn) { addDiscoveryAction(bridge, addActionBtn.dataset.partId, addActionBtn.dataset.kind); return; }
-  const removeActionBtn = e.target.closest('.btn-remove-discovery-action');
-  if (removeActionBtn) { removeDiscoveryAction(bridge, removeActionBtn.dataset.partId, parseInt(removeActionBtn.dataset.index, 10)); return; }
-  const pickActionBtn = e.target.closest('.btn-pick-discovery-action-selector');
-  if (pickActionBtn) {
-    const partId = pickActionBtn.dataset.partId;
-    const index = parseInt(pickActionBtn.dataset.index, 10);
-    const field = pickActionBtn.dataset.field;
-    log('BTN pick-discovery-action-selector → START_SELECTION', { partId, index, field });
-    bridge.stopPreviewIfActive();
-    chrome.runtime.sendMessage({ type: 'START_SELECTION' });
-    bridge.setState(STATES.SELECTING, {
-      pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
-      selectionKind: 'apiDiscoveryAction', pendingApiDiscoveryPartId: partId, pendingApiDiscoveryActionIndex: index, pendingApiDiscoveryActionField: field,
-      domTree: null, domTreeTruncated: false, domTreeError: null,
-    });
-  }
-});
-
-document.getElementById('api-config-headers')?.addEventListener('change', (e) => {
-  const include = e.target.closest('.api-config-header-include');
-  if (include) { setApiConfigHeaderDecision(bridge, include.dataset.headerName, { include: include.checked }); return; }
-  const modeRadio = e.target.closest('.api-config-header-mode-radio');
-  if (modeRadio) { setApiConfigHeaderDecision(bridge, modeRadio.dataset.headerName, { mode: modeRadio.value }); return; }
-  const envName = e.target.closest('.api-config-env-name');
-  if (envName) { setApiConfigHeaderDecision(bridge, envName.dataset.headerName, { envName: envName.value.trim() }); return; }
-  const template = e.target.closest('.api-config-header-template');
-  if (template) setApiConfigHeaderDecision(bridge, template.dataset.headerName, { template: template.value });
-});
-
-// ── API-Mode request-body tree (Issue #55, Phase B4) ─────────────────────
-document.getElementById('body-tree-root')?.addEventListener('click', (e) => {
-  const toVariableBtn = e.target.closest('.btn-body-to-variable');
-  if (toVariableBtn) {
-    toggleBodyLeafToVariable(bridge, JSON.parse(toVariableBtn.closest('.body-tree-node').dataset.path));
-    return;
-  }
-  const toFixedBtn = e.target.closest('.btn-body-to-fixed');
-  if (toFixedBtn) toggleBodyLeafToFixed(bridge, JSON.parse(toFixedBtn.closest('.body-tree-node').dataset.path));
-});
-
-document.getElementById('body-tree-root')?.addEventListener('change', (e) => {
-  const picker = e.target.closest('.body-tree-parameter-picker');
-  if (picker) {
-    const path = JSON.parse(picker.closest('.body-tree-node').dataset.path);
-    if (picker.value === '__new__') { openBodyParameterModal(bridge, path); return; }
-    setBodyLeafParameter(bridge, path, picker.value);
-    return;
-  }
-  const coerceTo = e.target.closest('.body-tree-coerce-to');
-  if (coerceTo) setBodyLeafCoerceTo(bridge, JSON.parse(coerceTo.closest('.body-tree-node').dataset.path), coerceTo.value);
-});
-
-document.getElementById('btn-api-body-parameter-confirm')?.addEventListener('click', () => confirmBodyParameterModal(bridge));
-document.getElementById('input-api-body-parameter-name')?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') confirmBodyParameterModal(bridge);
-});
-document.getElementById('btn-api-body-parameter-cancel')?.addEventListener('click', () => cancelBodyParameterModal(bridge));
-
-document.getElementById('btn-api-config-cancel')?.addEventListener('click', () => {
-  log('BTN api-config-cancel');
-  cancelApiConfig(bridge);
-});
-
-document.getElementById('btn-api-config-confirm')?.addEventListener('click', () => {
-  log('BTN api-config-confirm');
-  confirmApiConfig(bridge);
-});
-
-document.getElementById('btn-api-config-discard')?.addEventListener('click', () => {
-  log('BTN api-config-discard');
-  bridge.setState(STATES.IDLE, { apiConfig: null });
-});
+  document.getElementById('btn-api-config-discard')?.addEventListener('click', () => {
+    log('BTN api-config-discard');
+    bridge.setState(STATES.IDLE, { apiConfig: null });
+  });
 }
 
 module.exports = {

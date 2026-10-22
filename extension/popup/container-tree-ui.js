@@ -378,112 +378,112 @@ function renderContainerFieldModal(bridge, isNewPick) {
 }
 
 function wireContainerModeEvents(bridge) {
-// Issue #233: hovering a tree row (group or field) highlights that node's
-// element(s) on the page — in every instance of its repeating ancestors.
-wireHoverHighlight(document.getElementById('group-tree-root'), '.group-tree-row',
-  row => buildGroupNodeHighlight(bridge.getState().groups, JSON.parse(row.closest('.group-tree-node').dataset.path)));
+  // Issue #233: hovering a tree row (group or field) highlights that node's
+  // element(s) on the page — in every instance of its repeating ancestors.
+  wireHoverHighlight(document.getElementById('group-tree-root'), '.group-tree-row',
+    row => buildGroupNodeHighlight(bridge.getState().groups, JSON.parse(row.closest('.group-tree-node').dataset.path)));
 
-document.getElementById('btn-add-root-container')?.addEventListener('click', () => openContainerModal(bridge, null));
+  document.getElementById('btn-add-root-container')?.addEventListener('click', () => openContainerModal(bridge, null));
 
-// Event delegation for the container tree's per-row add/remove/move buttons
-document.getElementById('group-tree-root')?.addEventListener('click', (e) => {
-  const li = e.target.closest('.group-tree-node');
-  if (!li) return;
-  const path = JSON.parse(li.dataset.path);
+  // Event delegation for the container tree's per-row add/remove/move buttons
+  document.getElementById('group-tree-root')?.addEventListener('click', (e) => {
+    const li = e.target.closest('.group-tree-node');
+    if (!li) return;
+    const path = JSON.parse(li.dataset.path);
 
-  if (e.target.closest('.btn-add-subcontainer')) { openContainerModal(bridge, path); return; }
-  if (e.target.closest('.btn-add-subfield')) { startFieldSelection(bridge, path); return; }
-  // Issue #206 follow-up: no click-based selection — opens the shared
-  // combine/split creation modal directly, scoped to this group's own
-  // children (same `path` .btn-add-subfield already targets).
-  if (e.target.closest('.btn-add-combine-field')) { openCombineFieldModal(bridge, { mode: 'container', parentPath: path }); return; }
-  if (e.target.closest('.btn-add-split-field')) { openSplitFieldModal(bridge, { mode: 'container', parentPath: path }); return; }
-  if (e.target.closest('.btn-remove-group-node')) {
-    log('GROUP_NODE_REMOVE', { path });
-    bridge.stopPreviewIfActive();
-    bridge.setState(bridge.getState().current, { groups: removeGroupTreeNode(bridge.getState().groups, path) });
-    return;
-  }
-  // Issue #177: reorder among direct siblings — no-ops past either
-  // boundary (moveGroupTreeNode's own guard), so the disabled attribute on
-  // the boundary buttons is purely a visual affordance, not load-bearing.
-  if (e.target.closest('.btn-group-move-up')) {
-    log('GROUP_NODE_MOVE', { path, direction: -1 });
-    bridge.setState(bridge.getState().current, { groups: moveGroupTreeNode(bridge.getState().groups, path, -1) });
-    return;
-  }
-  if (e.target.closest('.btn-group-move-down')) {
-    log('GROUP_NODE_MOVE', { path, direction: 1 });
-    bridge.setState(bridge.getState().current, { groups: moveGroupTreeNode(bridge.getState().groups, path, 1) });
-  }
-});
-
-// Issue #177: rename a tree node in place, committed on change (like the
-// API tree's own nameInput) — a blank value reverts the input to the
-// node's current name instead of saving an empty one, since Container
-// mode's own field-name inputs elsewhere never allow blank either.
-document.getElementById('group-tree-root')?.addEventListener('change', (e) => {
-  const nameInput = e.target.closest('.group-tree-name');
-  if (!nameInput) return;
-  const path = JSON.parse(nameInput.dataset.path);
-  const name = nameInput.value.trim();
-  if (!name) {
-    nameInput.value = resolveGroupNode(bridge.getState().groups, path)?.name ?? '';
-    return;
-  }
-  log('GROUP_NODE_RENAME', { path, name });
-  bridge.setState(bridge.getState().current, {
-    groups: updateGroupTreeNode(bridge.getState().groups, path, (node) => ({ ...node, name })),
+    if (e.target.closest('.btn-add-subcontainer')) { openContainerModal(bridge, path); return; }
+    if (e.target.closest('.btn-add-subfield')) { startFieldSelection(bridge, path); return; }
+    // Issue #206 follow-up: no click-based selection — opens the shared
+    // combine/split creation modal directly, scoped to this group's own
+    // children (same `path` .btn-add-subfield already targets).
+    if (e.target.closest('.btn-add-combine-field')) { openCombineFieldModal(bridge, { mode: 'container', parentPath: path }); return; }
+    if (e.target.closest('.btn-add-split-field')) { openSplitFieldModal(bridge, { mode: 'container', parentPath: path }); return; }
+    if (e.target.closest('.btn-remove-group-node')) {
+      log('GROUP_NODE_REMOVE', { path });
+      bridge.stopPreviewIfActive();
+      bridge.setState(bridge.getState().current, { groups: removeGroupTreeNode(bridge.getState().groups, path) });
+      return;
+    }
+    // Issue #177: reorder among direct siblings — no-ops past either
+    // boundary (moveGroupTreeNode's own guard), so the disabled attribute on
+    // the boundary buttons is purely a visual affordance, not load-bearing.
+    if (e.target.closest('.btn-group-move-up')) {
+      log('GROUP_NODE_MOVE', { path, direction: -1 });
+      bridge.setState(bridge.getState().current, { groups: moveGroupTreeNode(bridge.getState().groups, path, -1) });
+      return;
+    }
+    if (e.target.closest('.btn-group-move-down')) {
+      log('GROUP_NODE_MOVE', { path, direction: 1 });
+      bridge.setState(bridge.getState().current, { groups: moveGroupTreeNode(bridge.getState().groups, path, 1) });
+    }
   });
-});
 
-document.getElementById('btn-container-confirm')?.addEventListener('click', () => confirmContainerModal(bridge));
-document.getElementById('input-container-name')?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') confirmContainerModal(bridge);
-});
-document.getElementById('btn-container-cancel')?.addEventListener('click', () => cancelContainerModal(bridge));
-// Issue #227: re-rendering the modal lets the match-count hint follow the
-// typed text (renderContainerFieldModal reads effectiveMatchCount each time).
-wireTextFilter({
-  inputId: 'input-field-text-filter',
-  useButtonId: 'btn-field-use-text',
-  rerender: () => bridge.patchState({}),
-  getRawText: () => bridge.getState().pendingRawText,
-});
-document.getElementById('btn-field-extended-confirm')?.addEventListener('click', () => confirmExtendedField(bridge));
-document.getElementById('input-field-extended-name')?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') confirmExtendedField(bridge);
-});
-document.getElementById('btn-field-extended-cancel')?.addEventListener('click', () => cancelExtendedField(bridge));
-// Issue #214: the safety-net inputs only make sense once Download itself
-// is actually checked — same "hide until relevant" treatment the
-// attribute row already gets from the mode select just below.
-document.getElementById('toggle-field-download')?.addEventListener('change', (e) => {
-  document.getElementById('field-download-options')?.classList.toggle('hidden', !e.target.checked);
-});
+  // Issue #177: rename a tree node in place, committed on change (like the
+  // API tree's own nameInput) — a blank value reverts the input to the
+  // node's current name instead of saving an empty one, since Container
+  // mode's own field-name inputs elsewhere never allow blank either.
+  document.getElementById('group-tree-root')?.addEventListener('change', (e) => {
+    const nameInput = e.target.closest('.group-tree-name');
+    if (!nameInput) return;
+    const path = JSON.parse(nameInput.dataset.path);
+    const name = nameInput.value.trim();
+    if (!name) {
+      nameInput.value = resolveGroupNode(bridge.getState().groups, path)?.name ?? '';
+      return;
+    }
+    log('GROUP_NODE_RENAME', { path, name });
+    bridge.setState(bridge.getState().current, {
+      groups: updateGroupTreeNode(bridge.getState().groups, path, (node) => ({ ...node, name })),
+    });
+  });
 
-document.getElementById('select-field-mode')?.addEventListener('change', (e) => {
-  document.getElementById('field-attribute-row')?.classList.toggle('hidden', e.target.value !== 'attribute');
-  // Issue #84: transforms are a string post-processing pipeline — not
-  // meaningful for "Vorhanden?" (a boolean-ish presence check).
-  document.getElementById('field-extended-transforms-section')?.classList.toggle('hidden', e.target.value === 'exists');
-  // Issue #143: the raw value the preview runs against depends on the mode.
-  refreshExtendedTransformPreview(bridge);
-});
-// Issue #143: typing an attribute name updates the preview live, without
-// requiring a transform edit first.
-// Issue #213 follow-up: now a <select> (was a free-text <input>) — 'change'
-// matches select-field-mode's own listener convention, fired once a pick
-// is actually made rather than per-keystroke.
-document.getElementById('select-field-attribute')?.addEventListener('change', () => refreshExtendedTransformPreview(bridge));
-document.getElementById('btn-field-extended-transform-add')?.addEventListener('click', () => {
-  bridge.patchState({ pendingTransforms: addTransform(bridge.getState().pendingTransforms) });
-});
-wireTransformList(
-  'field-extended-transform-list',
-  () => bridge.getState().pendingTransforms,
-  (transforms) => bridge.patchState({ pendingTransforms: transforms }),
-);
+  document.getElementById('btn-container-confirm')?.addEventListener('click', () => confirmContainerModal(bridge));
+  document.getElementById('input-container-name')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') confirmContainerModal(bridge);
+  });
+  document.getElementById('btn-container-cancel')?.addEventListener('click', () => cancelContainerModal(bridge));
+  // Issue #227: re-rendering the modal lets the match-count hint follow the
+  // typed text (renderContainerFieldModal reads effectiveMatchCount each time).
+  wireTextFilter({
+    inputId: 'input-field-text-filter',
+    useButtonId: 'btn-field-use-text',
+    rerender: () => bridge.patchState({}),
+    getRawText: () => bridge.getState().pendingRawText,
+  });
+  document.getElementById('btn-field-extended-confirm')?.addEventListener('click', () => confirmExtendedField(bridge));
+  document.getElementById('input-field-extended-name')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') confirmExtendedField(bridge);
+  });
+  document.getElementById('btn-field-extended-cancel')?.addEventListener('click', () => cancelExtendedField(bridge));
+  // Issue #214: the safety-net inputs only make sense once Download itself
+  // is actually checked — same "hide until relevant" treatment the
+  // attribute row already gets from the mode select just below.
+  document.getElementById('toggle-field-download')?.addEventListener('change', (e) => {
+    document.getElementById('field-download-options')?.classList.toggle('hidden', !e.target.checked);
+  });
+
+  document.getElementById('select-field-mode')?.addEventListener('change', (e) => {
+    document.getElementById('field-attribute-row')?.classList.toggle('hidden', e.target.value !== 'attribute');
+    // Issue #84: transforms are a string post-processing pipeline — not
+    // meaningful for "Vorhanden?" (a boolean-ish presence check).
+    document.getElementById('field-extended-transforms-section')?.classList.toggle('hidden', e.target.value === 'exists');
+    // Issue #143: the raw value the preview runs against depends on the mode.
+    refreshExtendedTransformPreview(bridge);
+  });
+  // Issue #143: typing an attribute name updates the preview live, without
+  // requiring a transform edit first.
+  // Issue #213 follow-up: now a <select> (was a free-text <input>) — 'change'
+  // matches select-field-mode's own listener convention, fired once a pick
+  // is actually made rather than per-keystroke.
+  document.getElementById('select-field-attribute')?.addEventListener('change', () => refreshExtendedTransformPreview(bridge));
+  document.getElementById('btn-field-extended-transform-add')?.addEventListener('click', () => {
+    bridge.patchState({ pendingTransforms: addTransform(bridge.getState().pendingTransforms) });
+  });
+  wireTransformList(
+    'field-extended-transform-list',
+    () => bridge.getState().pendingTransforms,
+    (transforms) => bridge.patchState({ pendingTransforms: transforms }),
+  );
 }
 
 module.exports = {
