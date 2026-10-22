@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.19.16](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.15...v1.19.16) (2026-10-22)
+
+
+### Features
+
+* **ui:** explain environment variables once and validate their names everywhere ([#397](https://github.com/Aventinis/Scraping-Factory/issues/397)) ([98392f8](https://github.com/Aventinis/Scraping-Factory/commit/98392f8d5be2fc3c27ac88bd8f5e86c6cab065ef))
+* **ui:** explain environment variables once and validate their names everywhere ([#397](https://github.com/Aventinis/Scraping-Factory/issues/397)) ([107173f](https://github.com/Aventinis/Scraping-Factory/commit/107173fb06759a93dbd710b577081594cba4b574))
+
 ## [1.19.15](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.14...v1.19.15) (2026-10-22)
 
 
