@@ -690,6 +690,10 @@ body {
   flex: 1; min-width: 0; border: 1px solid var(--color-border-input); border-radius: var(--radius-md);
   padding: 5px 8px; font-size: 12px; font-family: inherit; outline: none;
 }
+.output-settings-row input[type="number"] {
+  flex: 1 1 60px; min-width: 0; max-width: 120px; border: 1px solid var(--color-border-input); border-radius: var(--radius-md);
+  padding: 5px 8px; font-size: 12px; font-family: inherit; outline: none;
+}
 .output-settings-row input[type="text"]:focus { border-color: var(--color-primary); box-shadow: var(--focus-ring); }
 .output-settings-row textarea {
   flex: 1; min-width: 0; border: 1px solid var(--color-border-input); border-radius: var(--radius-md);
@@ -1060,3 +1064,17 @@ input.env-var-invalid, input.env-var-invalid:focus { border-color: var(--color-d
 .hardening-sentence input { width: 64px; font-size: 12px; }
 .hardening-null-rate-row { flex-wrap: wrap; }
 .hardening-sentence-text { flex: none; }
+
+/* Issue #405: the page-number pattern proposal above the pagination kind toggle. */
+.pagination-suggestion {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.pagination-suggestion p { margin: 0 0 4px; }
+.pagination-suggestion code { word-break: break-all; }
+.pagination-suggestion-example { color: var(--color-text-muted); word-break: break-all; }

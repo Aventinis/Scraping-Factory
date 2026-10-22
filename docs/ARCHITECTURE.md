@@ -649,6 +649,24 @@ CLAUDE.md for the details.
 - Tests: `popup/hardening-presets.test.js`, `popup/hardening-presets-ui.test.js`,
   real-browser check `e2e/examples/issue-399-hardening-plain-language-check.js`
 
+### 2.10i Pagination helpers (Issue #405)
+
+A page-number URL template proposed from a clicked "next"/"page 2" link or a start URL
+that already says page 1, the typed "next" selector and the whole "Discover start URLs"
+option under "Advanced", and "?" popovers for the pattern and the max-pages limit. The
+companion's page-number template now needs only `{page}` for a single start page. See
+CLAUDE.md for the details.
+
+- Extension: `popup/pagination-template.js` (pure derivation), `popup/pagination-ui.js`
+  (banner, pickers, Advanced placement), `popup/message-router.js`/`session-restore.js`
+  (the clicked link's address), `popup/screens/idle.html`, `idle.pagination*`/
+  `help.pagination.*`/`help.discoveredUrls.*` in `i18n/*.json`
+- Companion: `IR/ScrapingPlanValidator.cs` (`ValidatePageNumberUrlTemplate`),
+  `IR/PaginationConfig.cs` (doc comment)
+- Tests: `popup/pagination-template.test.js`, `popup/pagination-ui.test.js`,
+  `ScrapingPlanValidatorTests`, `PaginationEndToEndTests`, fixture
+  `test-pages/paginated-listing` + `e2e/examples/issue-405-pagination-helpers-check.js`
+
 ### 2.10h Login flow guidance for the browser actions (Issue #403)
 
 A "Login form (4 steps)" starter, role-named cards, times in seconds, an overview and

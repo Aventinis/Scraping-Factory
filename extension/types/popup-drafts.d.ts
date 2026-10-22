@@ -158,6 +158,8 @@ declare namespace SFDraft {
     nextLinkSelector: string;
     urlTemplate: string;
     maxPages: number;
+    /** Issue #405 — UI-only: absolute href of the last "next" / "page 2" link the user clicked; never sent. */
+    linkHref?: string;
   }
 
   // Issue #218.

@@ -68,6 +68,33 @@ public class PaginationEndToEndTests
         Assert.Equal(3, result.RowCount);
     }
 
+    // Issue #405: a start URL that already says "?page=1" can't be expressed
+    // with "{url}" — the template is written out in full instead, and page 1
+    // stays the start URL exactly as given.
+    [Fact]
+    public async Task Flat_PageNumber_TemplateWithoutStartUrlPlaceholder_FollowsPagesFromTheStartPageOn()
+    {
+        using var server = new LocalTestServer(request =>
+        {
+            var page = request.QueryString["page"] is { } raw ? int.Parse(raw) : 1;
+            var html = page > 3 ? "<html><body></body></html>" : $"<html><body><h1>Item {page}</h1></body></html>";
+            return new LocalTestServerResponse(html, "text/html");
+        });
+
+        var plan = new ScrapingPlan
+        {
+            Steps = [new NavigateStep { Urls = [server.BaseUrl + "?page=1"] }, new ExtractStep { Name = "Titel", Selector = "h1" }],
+            Pagination = new PageNumberPagination { UrlTemplate = server.BaseUrl + "?page={page}", MaxPages = 10 },
+        };
+
+        Assert.True(ScrapingPlanValidator.Validate(plan).Success);
+        var result = await new PythonScriptVerifier().VerifyAsync(GenerateFlatScript(plan), includeOutputFile: true);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(3, result.RowCount);
+        Assert.Contains("Item 3", result.OutputFileContent);
+    }
+
     [Fact]
     public async Task Flat_PageNumber_StopsAtMaxPagesEvenIfMorePagesWouldExist()
     {

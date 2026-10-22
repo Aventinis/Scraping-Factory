@@ -414,34 +414,53 @@
             <span data-i18n="idle.paginationToggle"></span>
           </label>
           <div id="pagination-config" class="hidden">
+            <!-- Issue #405: a page-number template proposed from the tracked
+                 URL / a clicked link; only ever applied by the button. -->
+            <div id="pagination-suggestion" class="pagination-suggestion hidden" role="status">
+              <p><span id="pagination-suggestion-text"></span></p>
+              <p><code id="pagination-suggestion-template"></code></p>
+              <p class="pagination-suggestion-example" id="pagination-suggestion-example"></p>
+              <button id="btn-pagination-use-template" class="btn-secondary btn-tiny" type="button" data-i18n="idle.paginationSuggestionUse"></button>
+            </div>
             <div class="mode-toggle" style="margin-bottom: 8px;">
               <div class="mode-toggle-thumb"></div>
               <button id="btn-pagination-next-link" class="mode-btn active" type="button" data-i18n="idle.paginationKindNextLink"></button>
               <button id="btn-pagination-page-number" class="mode-btn" type="button" data-i18n="idle.paginationKindPageNumber"></button>
             </div>
             <div id="pagination-next-link-fields">
-              <div class="output-settings-row">
-                <label for="input-pagination-next-link-selector" data-i18n="idle.paginationNextLinkSelectorLabel"></label>
-                <input type="text" id="input-pagination-next-link-selector" data-i18n-placeholder="idle.paginationNextLinkSelectorPlaceholder" autocomplete="off" />
-              </div>
               <!-- Issue #174 follow-up: lets a non-developer pick the "next
-                   page" link by clicking it on the page instead of having to
-                   know/type a CSS selector by hand — same click-based
-                   selection flow browser actions' own pick button already
-                   uses (see .btn-pick-action-selector). -->
-              <div class="actions">
-                <button id="btn-pick-pagination-next-link" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.pickSelectorBtn"></button>
+                   page" link by clicking it instead of having to know/type a
+                   CSS selector by hand — same click-based selection flow
+                   browser actions' own pick button already uses. Issue #405:
+                   the typed selector is an editable detail under Advanced. -->
+              <div class="browser-action-selector-row">
+                <span class="field-selector" id="pagination-next-link-selected"></span>
+                <button id="btn-pick-pagination-next-link" class="btn-secondary btn-tiny" type="button" data-i18n="idle.paginationPickNextLink"></button>
               </div>
+              <details class="advanced-disclosure" data-advanced="pagination-next-link">
+                <summary data-i18n="common.advanced"></summary>
+                <div class="advanced-disclosure-body">
+                  <div class="output-settings-row">
+                    <label for="input-pagination-next-link-selector" data-i18n="idle.paginationNextLinkSelectorLabel"></label>
+                    <input type="text" id="input-pagination-next-link-selector" data-i18n-placeholder="idle.paginationNextLinkSelectorPlaceholder" autocomplete="off" />
+                  </div>
+                </div>
+              </details>
             </div>
             <div id="pagination-page-number-fields" class="hidden">
-              <div class="output-settings-row">
+              <div class="output-settings-row" data-help-anchor>
                 <label for="input-pagination-url-template" data-i18n="idle.paginationUrlTemplateLabel"></label>
+                <span class="help-host" data-help="help.pagination.urlTemplate"></span>
                 <input type="text" id="input-pagination-url-template" data-i18n-placeholder="idle.paginationUrlTemplatePlaceholder" autocomplete="off" />
+              </div>
+              <div class="actions">
+                <button id="btn-pick-pagination-page-link" class="btn-secondary btn-tiny" type="button" data-i18n="idle.paginationPickPageLink"></button>
               </div>
               <p class="preview-summary" data-i18n="idle.paginationUrlTemplateHint"></p>
             </div>
-            <div class="output-settings-row">
+            <div class="output-settings-row" data-help-anchor>
               <label for="input-pagination-max-pages" data-i18n="idle.paginationMaxPagesLabel"></label>
+              <span class="help-host" data-help="help.pagination.maxPages"></span>
               <input type="number" id="input-pagination-max-pages" min="1" step="1" />
             </div>
           </div>
@@ -453,34 +472,43 @@
                entirely for API mode (see render()'s own
                #discovered-urls-toggle-row toggle), same reasoning as
                #additional-urls-row/#pagination-toggle-row above. -->
-          <label class="output-settings-toggle" id="discovered-urls-toggle-row">
-            <input type="checkbox" id="toggle-discovered-urls" />
-            <span data-i18n="idle.discoveredUrlsToggle"></span>
-          </label>
-          <div id="discovered-urls-config" class="hidden">
-            <div class="output-settings-row">
-              <label for="input-discovered-urls-page-url" data-i18n="idle.discoveredUrlsPageUrlLabel"></label>
-              <input type="text" id="input-discovered-urls-page-url" data-i18n-placeholder="idle.discoveredUrlsPageUrlPlaceholder" autocomplete="off" />
+          <!-- Issue #405: the whole discovery option is rarely needed, so it
+               sits under a remembered "Advanced" disclosure (opened by
+               renderPaginationHelpers once the option is switched on). -->
+          <details class="advanced-disclosure" id="discovered-urls-advanced" data-advanced="discovered-urls">
+            <summary data-i18n="idle.discoveredUrlsAdvanced"></summary>
+            <div class="advanced-disclosure-body">
+              <label class="output-settings-toggle" id="discovered-urls-toggle-row">
+                <input type="checkbox" id="toggle-discovered-urls" />
+                <span data-i18n="idle.discoveredUrlsToggle"></span>
+                <span class="help-host" data-help="help.discoveredUrls.overview"></span>
+              </label>
+              <div id="discovered-urls-config" class="hidden">
+                <div class="output-settings-row">
+                  <label for="input-discovered-urls-page-url" data-i18n="idle.discoveredUrlsPageUrlLabel"></label>
+                  <input type="text" id="input-discovered-urls-page-url" data-i18n-placeholder="idle.discoveredUrlsPageUrlPlaceholder" autocomplete="off" />
+                </div>
+                <div class="output-settings-row">
+                  <label for="input-discovered-urls-link-selector" data-i18n="idle.discoveredUrlsLinkSelectorLabel"></label>
+                  <input type="text" id="input-discovered-urls-link-selector" data-i18n-placeholder="idle.discoveredUrlsLinkSelectorPlaceholder" autocomplete="off" />
+                </div>
+                <!-- Issue #218 follow-up: lets a non-developer pick a navigation
+                     link by clicking it on the live page, writing both the
+                     clicked page's own URL (Page-URL) and a generalized selector
+                     (Link-selector) at once — no need to know/type either by
+                     hand. Same click-based selection flow browser actions'/
+                     pagination's own pick button already use. -->
+                <div class="actions">
+                  <button id="btn-pick-discovered-urls-link" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.pickSelectorBtn"></button>
+                </div>
+                <p class="preview-summary" data-i18n="idle.discoveredUrlsHint"></p>
+                <div class="output-settings-row">
+                  <label for="input-discovered-urls-max-urls" data-i18n="idle.discoveredUrlsMaxUrlsLabel"></label>
+                  <input type="number" id="input-discovered-urls-max-urls" min="1" step="1" />
+                </div>
+              </div>
             </div>
-            <div class="output-settings-row">
-              <label for="input-discovered-urls-link-selector" data-i18n="idle.discoveredUrlsLinkSelectorLabel"></label>
-              <input type="text" id="input-discovered-urls-link-selector" data-i18n-placeholder="idle.discoveredUrlsLinkSelectorPlaceholder" autocomplete="off" />
-            </div>
-            <!-- Issue #218 follow-up: lets a non-developer pick a navigation
-                 link by clicking it on the live page, writing both the
-                 clicked page's own URL (Page-URL) and a generalized selector
-                 (Link-selector) at once — no need to know/type either by
-                 hand. Same click-based selection flow browser actions'/
-                 pagination's own pick button already use. -->
-            <div class="actions">
-              <button id="btn-pick-discovered-urls-link" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.pickSelectorBtn"></button>
-            </div>
-            <p class="preview-summary" data-i18n="idle.discoveredUrlsHint"></p>
-            <div class="output-settings-row">
-              <label for="input-discovered-urls-max-urls" data-i18n="idle.discoveredUrlsMaxUrlsLabel"></label>
-              <input type="number" id="input-discovered-urls-max-urls" min="1" step="1" />
-            </div>
-          </div>
+          </details>
           <!-- Issue #191/#192: opt-in output blueprint field mapping —
                reachable for flat mode, container mode, and both of API
                mode's shapes (hidden only for Combined/Blocks, which have no

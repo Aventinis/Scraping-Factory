@@ -45,11 +45,14 @@ public sealed class NextLinkPagination : PaginationConfig
 // Page 1 is always the start URL exactly as given (Url or one AdditionalUrls
 // entry) — UrlTemplate only ever generates page 2 onward, by substituting
 // "{url}" (that same start URL, unchanged) and "{page}" (2, 3, 4, …) into it,
-// e.g. "{url}?page={page}". Both placeholders are required (enforced in
+// e.g. "{url}?page={page}". "{page}" is always required (enforced in
 // ScrapingPlanValidator) — a template with no "{page}" would just refetch
-// the same URL forever until MaxPages, and one with no "{url}" couldn't
-// express "the same listing, page N" for more than one start URL at once,
-// defeating the whole point of composing with AdditionalUrls.
+// the same URL forever until MaxPages. "{url}" is required whenever there is
+// more than one start page (Url + AdditionalUrls, or discovered ones): a
+// template with no "{url}" couldn't express "the same listing, page N" for
+// each of them, defeating the whole point of composing with AdditionalUrls.
+// With a single start page it is optional (Issue #405), so a start URL that
+// already carries "?page=1" can use "https://site/list?page={page}".
 public sealed class PageNumberPagination : PaginationConfig
 {
     public required string UrlTemplate { get; init; }
