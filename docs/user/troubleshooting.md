@@ -30,17 +30,29 @@ paste your key under **Access key** and **Save and test**. See
 
 ## Generate fails
 
-The companion runs your script once before giving it to you, so a failure message
-is the real script's. Common ones:
+The companion runs your script once before giving it to you, so a failure comes
+from the real script. The panel shows a plain-language **title** and a **hint**
+for what to try — and keeps the original text behind **Details** (with a **Copy**
+button). The message stays until you close it with **×**; **Report bug** sends the
+original text. The common ones:
 
-| Message says | Usually means | Try |
+| The panel says | Usually means | Try |
 | --- | --- | --- |
-| The script produced no data | A selector matches nothing on the page the script fetches | Use **Show preview** and the *N element(s) found* hint; for JavaScript pages switch to the [Browser engine](browser-engine.md) |
-| Request … failed: HTTP 401 / 403 | The site needs a login or blocks scripts | A [login flow](browser-engine.md#a-login-flow), or a [custom header](network-settings.md#custom-request-headers) such as a cookie |
-| … HTTP 429 | Rate limited | [Pause between requests](network-settings.md#pause-between-requests) and [retries](network-settings.md#retry-on-transient-errors) |
-| … HTTP 404 | Wrong start URL | Check the address at the top of the panel |
-| required environment variable … is not set | A **Fill** action, header or other option reads a variable | Set it where the script runs; type a **Test value** for the trial run |
-| exceeded the timeout | The trial run took too long | Fewer pages/requests, or **Skip the trial run** in Settings |
+| No data was found | A selector matches nothing on the page the script fetches | Use **Show preview**; for pages that build their content with JavaScript, switch to the [Browser engine](browser-engine.md) |
+| The site refuses the script (HTTP 401 / 403) | The site needs a login or blocks scripts | A [login flow](browser-engine.md#a-login-flow), or a [custom header](network-settings.md#custom-request-headers) such as a cookie |
+| The site says: too many requests (HTTP 429) | Rate limited | [Pause between requests](network-settings.md#pause-between-requests) and [retries](network-settings.md#retry-on-transient-errors) |
+| The page was not found (HTTP 404) | Wrong start URL | Check the address at the top of the panel |
+| The site reported an error (HTTP 5xx) | Usually temporary | Try again, or turn on [retries](network-settings.md#retry-on-transient-errors) |
+| The site can't be reached / the page took too long to load | No connection, a wrong address, or a slow page | Check the address and your connection (and proxy) |
+| The script needs the variable … | A **Fill** action or header reads an environment variable | Type a **Test value** for the trial run and set the variable where the script runs |
+| The trial run took too long | Too many pages or requests | Fewer pages/requests, or **Skip the trial run** in Settings |
+| The site's robots.txt forbids this request | The run-time robots.txt check is on | Choose **Skip it and carry on** or **Warn** in Settings |
+| Python was not found / A Python package is missing | The companion's machine lacks Python 3.9+ or a package | Install it (or run the installer again); the message names the package |
+| The page address isn't valid, A field has no name, Two fields have the same name, An element has no selector, … | The configuration has a mistake the panel names | Fix what the hint says — no bug report needed |
+| The companion app can't be reached | It stopped running | Start it again, then **Try again** |
+
+An error the panel doesn't recognise is shown as "Error: …" with the original
+text, and **Report bug** is offered.
 
 A **warning toast** that verification was skipped means the estimated trial run
 was too long (over ten minutes) or you chose to skip it. The script was

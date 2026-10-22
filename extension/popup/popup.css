@@ -840,6 +840,7 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
 /* Issue #401: plain-language error toast — title, hint, original text behind "Details" */
 .toast-body { flex: 1; min-width: 0; }
 .toast-hint { margin: 4px 0 0; font-size: 12px; opacity: .95; }
+.toast-body:has(> .toast-hint:not(.hidden)) > #error-toast-message { font-weight: 600; }
 .toast-details { margin-top: 6px; font-size: 12px; }
 .toast-details summary { cursor: pointer; }
 .toast-details pre {
