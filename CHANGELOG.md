@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.19.14](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.13...v1.19.14) (2026-10-22)
+
+
+### Features
+
+* **ui:** guidance for choosing the mode, container type, field type and engine ([#398](https://github.com/Aventinis/Scraping-Factory/issues/398)) ([b294ad1](https://github.com/Aventinis/Scraping-Factory/commit/b294ad1ee8a1a49342f086deb5305e131c625099))
+
+
+### Bug Fixes
+
+* **i18n:** keep the mode help text within the length guideline ([#398](https://github.com/Aventinis/Scraping-Factory/issues/398)) ([d78de77](https://github.com/Aventinis/Scraping-Factory/commit/d78de77f7cfa28f0edf3a71d7ee51dec3437c35b))
+
 ## [1.19.13](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.12...v1.19.13) (2026-10-22)
 
 
