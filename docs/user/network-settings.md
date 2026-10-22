@@ -11,7 +11,9 @@ time, or random within a range (**from … to … seconds**, e.g. 1 to 3). A pau
 applies before every page of pagination, every start URL, every API call and
 every download — but not between reads on a page that is already loaded.
 
-The trial run doesn't count these pauses against its time limit, so a long,
+A pause protects you against blocks and rate limits, but the run takes
+correspondingly longer: 50 pages with a 2-second pause add about a minute and a
+half. The trial run doesn't count these pauses against its time limit, so a long,
 polite scrape can still be verified.
 
 ## Retry on transient errors
@@ -26,13 +28,19 @@ clear message.
 
 ## robots.txt
 
-- **Respect the site's robots.txt (Crawl-delay)**: the script waits at least the
-  `Crawl-delay` the site asks for, in addition to your own pause (the longer wait
-  wins).
-- **Check the site's robots.txt before every request**: the script checks each
-  request against the site's `Disallow` rules and, when one is disallowed,
-  **Skip it and carry on**, **Warn, but request it anyway**, or **Stop the run**.
-  A missing robots.txt means everything is allowed.
+- **Respect the site's robots.txt (Crawl-delay)**: if the robots.txt asks for a
+  pace (`Crawl-delay` or `Request-rate`), the script waits at least that long
+  between two requests, in addition to your own pause (the longer wait wins).
+  Sites that publish nothing are unaffected.
+- **Check the site's robots.txt before every request**: while it runs, the script
+  checks each request — pages, further pages, downloads and API calls — against
+  the site's `Disallow` rules, in case the site changed them after you created the
+  script. When a request is disallowed it can **Skip it and carry on**, **Warn,
+  but request it anyway**, or **Stop the run**. A missing robots.txt means
+  everything is allowed, and a robots.txt that can't be read never blocks
+  anything.
+
+The robots.txt is read once per run.
 
 The **Check robots.txt** button next to the page address is a separate, one-off
 look at whether the current page is allowed.

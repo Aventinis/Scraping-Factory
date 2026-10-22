@@ -33,6 +33,13 @@ Two extras sit next to **+ Add field**: **Combine fields** (join several fields
 into one value) and **Split field** (take one part of a field). They work on
 fields you already have, and have no page click.
 
+## Elements that look alike
+
+When several similar elements — buttons, links — can only be told apart by their
+label, fill in **Only the element whose text contains** in the field dialog, or
+click **Use this element's text**. Capitals and extra spaces don't matter; leave
+it empty to keep the selection as it is.
+
 ## Containers (nested)
 
 Use this when the page is a *tree*: categories that contain dishes, products
