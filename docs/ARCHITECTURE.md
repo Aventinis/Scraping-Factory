@@ -100,7 +100,7 @@ flowchart TB
     ccfg["shared/companion-config.js"]
     apiCfg["popup/api-config.js\n(pure builders/validators, API mode)"]
     ctree["popup/container-tree.js\n(pure builders/validators, Container mode)"]
-    apiUi["popup/api-config-ui.js\n(DOM rendering + handlers, API mode)"]
+    apiUi["popup/api-config-ui.js + api-*-ui.js\n(DOM rendering + handlers, API mode)"]
     ctreeUi["popup/container-tree-ui.js\n(DOM rendering + handlers, Container mode)"]
     popup["popup/popup.js\n(orchestrator: _state, render(), wireEvents())"]
 
@@ -138,6 +138,24 @@ would make a dependency cycle), and because each file is a separate, isolated Je
 module with no shared closure. `api-config.js` and
 `container-tree.js` need no such bridge: they're pure, DOM-free functions
 (build/resolve/insert/remove/serialize tree drafts, no state or DOM access).
+
+**API mode's UI is several modules** (Issue #390: `api-config-ui.js` had grown to
+1,967 lines). `api-config-ui.js` stays the orchestrator — the API_CONFIG screen's
+own render/confirm/cancel, the modals' render and `wireApiConfigEvents`, which calls
+each module's `wire…Events(bridge)` in turn — and re-exports every name it used to
+export (`api-config-ui-exports.test.js` pins that surface), so `popup.js` and
+`idle-screen-ui.js` import unchanged. The focused modules, none importing
+`api-config-ui.js` (no cycles; `api-config-shared-ui.js` holds the helpers two of
+them share):
+
+| Module | Owns |
+| --- | --- |
+| `api-capture-ui.js` | recording toggle, the click-based searches (network, embedded JSON), candidate and recorded-request lists, confirming a candidate |
+| `api-response-tree-ui.js` | response-tree rows, the group and leaf-transforms modals, the JSON-scoped tree search |
+| `api-parameters-ui.js` | URL parts and parameter-source cards (value list, discovery endpoint, range) |
+| `api-browser-discovery-ui.js` | the BrowserDiscoverySource action editor (its listener branches are called by `api-parameters-ui.js`) |
+| `api-request-ui.js` | captured-header table, POST body tree and its "new parameter" modal |
+| `api-config-shared-ui.js` | `patchApiConfigDraft`/`patchApiConfigSource`, the parameter-placeholder picker |
 
 These DOM-free `<feature>.js` modules are also exactly the ones opted into
 JSDoc type checking (Issue #238, see CLAUDE.md's own entry on this) — a
@@ -292,7 +310,7 @@ mode's own tree editor. Output becomes XML instead of CSV once a tree is used, f
 the same reason Container mode's tree output is XML.
 
 - Extension: `popup/api-config.js` (`ApiGroup`/`ApiField` draft
-  build/insert/remove/serialize), `popup/api-config-ui.js` (`renderApiTree`,
+  build/insert/remove/serialize), `popup/api-response-tree-ui.js` (`renderApiTree`,
   `buildApiTreeNodeEl`, sub-group/sub-field search flows), `content/content-script.js`
   (`deriveApiTreeSkeleton`, `resolveApiGroupScopePath`-adjacent `pathStartsWithScope`)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig.Groups`, `ApiNode`/`ApiGroup`/`ApiField`),
@@ -312,7 +330,7 @@ already uses). GraphQL needs no special handling of its own — its `query`/
 covers.
 
 - Extension: `popup/api-config.js` (`jsonValueToBodyDraft`, body-tree
-  update/reference/serialize helpers), `popup/api-config-ui.js`
+  update/reference/serialize helpers), `popup/api-request-ui.js`
   (`buildBodyTreeNodeEl`/`renderBodyTree`, body-parameter modal wiring),
   `content/api-capture.js` (`requestBody`/`requestBodySkipped` capture)
 - Companion: `IR/ApiBodyNode.cs` (`ApiBodyObject`/`Array`/`Literal`/`Variable`),
@@ -339,7 +357,7 @@ companion fetches the page via `requests` and extracts the identified
 API-mode request (fetch-mechanism-agnostic by design).
 
 - Extension: `content/content-script.js` (`findEmbeddedJsonCandidates`,
-  `scriptTagSelector`), `popup/api-config-ui.js`
+  `scriptTagSelector`), `popup/api-capture-ui.js`
   (`startEmbeddedJsonFieldSearch`, `confirmEmbeddedJsonFieldCandidate`,
   `renderApiCandidates`'s `candidate.scriptSelector` branch), `popup/api-config.js`
   (`buildApiConfig`'s `embeddedJsonSource` param)
@@ -375,8 +393,9 @@ request actually sends.
   `buildBootstrapVerificationValues`), `popup/api-bootstrap-ui.js` (the
   section's render/wiring, recording picker), `popup/api-config.js`
   (`buildApiConfig`'s `bootstrap` param, `buildApiHeaders`'s `'bootstrap'`
-  mode, the Apply gate), `popup/api-config-ui.js` (header "From token" mode,
-  the "Token value" URL-part source, `confirmApiConfig`),
+  mode, the Apply gate), `popup/api-request-ui.js` (header "From token" mode),
+  `popup/api-parameters-ui.js` (the "Token value" URL-part source),
+  `popup/api-config-ui.js` (`confirmApiConfig`),
   `popup/companion-client.js` (bootstrap test values → `verificationValues`),
   `popup/screens/api-config.html` (`#api-bootstrap-section`)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig.Bootstrap`, `ApiBootstrap`,
@@ -676,7 +695,7 @@ leaves the draft). See CLAUDE.md for the details.
 
 - Extension: `popup/login-flow.js` (pure: `addLoginFlow`, `msToSecondsText`,
   `secondsTextToMs`), `popup/browser-actions-ui.js` (cards, starter wiring),
-  `popup/api-config-ui.js` (the discovery action editor shares the seconds inputs),
+  `popup/api-browser-discovery-ui.js` (the discovery action editor shares the seconds inputs),
   `popup/advanced-disclosure-ui.js` (open state applied synchronously),
   `popup/screens/idle.html`, `browserActions.*`/`help.browserActions.*` in `i18n/*.json`
 - Tests: `popup/login-flow.test.js`, real-browser check
@@ -929,7 +948,7 @@ shapes (flat/container/API) since none of them share a common leaf type.
   throwing.
 - **API mode follow-up:** the same editor is also reachable from the
   `API_CONFIG` tree screen (§2.16), via a "Transformieren" button rendered
-  next to every leaf `ApiField` row in `popup/api-config-ui.js`'s
+  next to every leaf `ApiField` row in `popup/api-response-tree-ui.js`'s
   `buildApiTreeNodeEl` (never for a group node — only a leaf actually
   extracts a value, matching `ApiGroup` having no `Transforms` property on
   the companion side). Opens `modal-api-field-transforms`, reusing the exact
@@ -2184,7 +2203,7 @@ compile time anywhere.
 | Container tree node | `container-tree.js`: `buildGroupNode`/`buildFieldNode`, `serializeGroupTree` | `{name,selector,repeating,children:[...],framePath?}` or `{name,selector,mode,attribute?,framePath?}` | `IR/ContainerNode.cs`: `GroupNode`/`DataFieldNode` (via `ContainerNodeJsonConverter`) |
 | API config (top level) | `api-config.js`: `buildApiConfig()` | `{urlTemplate, method?, parameters:[...], headers?, itemsPath+fields \| groups, body?, embeddedJsonSource?, bootstrap?}` | `IR/ApiConfig.cs`: `ApiConfig` |
 | API parameter source | `api-config.js`: `buildStaticListSource`/`buildDiscoverySource`/`buildRangeSource` | `{kind:"staticList"\|"discovery"\|"range", ...}` | `IR/ApiConfig.cs`: `ApiParameterSource` (`[JsonPolymorphic]`) |
-| API embedded JSON source (Issue #136) | `api-config-ui.js`: `confirmEmbeddedJsonFieldCandidate()` (`{scriptSelector}`, stamped from `content-script.js`'s `scriptTagSelector`) | `{scriptSelector}` | `IR/ApiConfig.cs`: `EmbeddedJsonSource` (plain optional object, no converter) |
+| API embedded JSON source (Issue #136) | `api-capture-ui.js`: `confirmEmbeddedJsonFieldCandidate()` (`{scriptSelector}`, stamped from `content-script.js`'s `scriptTagSelector`) | `{scriptSelector}` | `IR/ApiConfig.cs`: `EmbeddedJsonSource` (plain optional object, no converter) |
 | API token/auth bootstrap (Issue #220) | `api-bootstrap.js`: `buildApiBootstrap()` (draft `{name,method,url,valuePath,bodyEncoding,headers,bodyFields}`) | `{name, method?, url, headers?, bodyFields?, bodyEncoding?, valuePath}` | `IR/ApiConfig.cs`: `ApiBootstrap` (plain optional object, no converter) |
 | API cursor/token pagination (Issue #224) | `api-cursor-pagination.js`: `buildApiCursorPagination()` (draft `{nextCursorPath,hasNextPagePath,target,queryParameterName,bodyPath,maxPages}`) | `{nextCursorPath, hasNextPagePath?, target: 'Query'\|'Body', queryParameterName?, bodyPath?, maxPages}` | `IR/ApiConfig.cs`: `ApiCursorPagination` (plain optional object, no converter) |
 | API response tree node | `api-config.js`: `buildApiGroupDraft`/`buildApiFieldDraft`, `serializeApiTree` | `{name,path,children:[...]}` or `{name,path}` | `IR/ApiConfig.cs`: `ApiGroup`/`ApiField` (via `ApiNodeJsonConverter`) |
@@ -2269,7 +2288,7 @@ checks + browser-only gating) → each Playwright template (`playwright_scraper.
 `ScrapingPlanValidator.ValidateApiConfig` (per-source validation) →
 `PythonApiConfigLiteral.RenderSource` → `scraper_api.py.j2`'s
 `_resolve_parameter_values` runtime → `api-config.js` (a new `buildXxxSource`
-builder) → `api-config-ui.js` (`renderApiConfigParameters`'s per-kind branch,
+builder) → `api-parameters-ui.js` (`renderApiConfigParameters`'s per-kind branch,
 `API_CONFIG_SOURCE_DEFAULTS`).
 
 **Add a new field extracted from the page/response** (extending an existing shape,
