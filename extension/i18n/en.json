@@ -402,8 +402,8 @@
     "toBooleanOption": "Convert to boolean",
     "toDateOption": "Convert to date",
     "toCurrencyOption": "Convert price/currency to number",
-    "patternPlaceholder": "Regex pattern (e.g. \"\\d+\")",
-    "groupPlaceholder": "Group (0 = whole match)",
+    "patternPlaceholder": "Pattern (advanced)",
+    "groupPlaceholder": "Part to keep (0 = whole match)",
     "findPlaceholder": "Find",
     "replacementPlaceholder": "Replace with",
     "sourceFormatPlaceholder": "Source format (e.g. \"{dd}.{mm}.{yyyy}\")",
@@ -421,6 +421,32 @@
       "dotDecimal": "1,234.56 (EN/US/UK …)",
       "spaceGrouped": "1 234,56 (FR/Nordics …)",
       "apostropheGrouped": "1'234.56 (CH)"
+    },
+    "helper": {
+      "button": "Pattern helper",
+      "recipePlaceholder": "Choose what to extract…",
+      "use": "Use this pattern",
+      "bracketsLabel": "Kind of brackets",
+      "needsText": "Enter the text first.",
+      "noValue": "Pick an element with a value first to see the result.",
+      "noMatch": "No match on your value — adjust the text.",
+      "result": "Result on your value: {value}",
+      "afterPlaceholder": "after this text, e.g. Price:",
+      "beforePlaceholder": "before this text, e.g. €",
+      "betweenStartPlaceholder": "between this text…",
+      "betweenEndPlaceholder": "…and this text",
+      "recipe": {
+        "firstNumber": "First number",
+        "digits": "First run of digits",
+        "textAfter": "Text after …",
+        "textBefore": "Text before …",
+        "textBetween": "Text between … and …",
+        "brackets": "Text inside brackets"
+      },
+      "dateDetected": "Format detected from your value: {format}",
+      "dateDetectedAmbiguous": "Format detected from your value: {format} (could also be {alternative})",
+      "dateLooksLike": "Your value looks like {format}.",
+      "dateNoGuess": "Couldn't guess the format — write it like your value, e.g. {dd}.{mm}.{yyyy} for 28.08.2026."
     }
   },
   "transformPresets": {
@@ -773,6 +799,16 @@
       "what": {
         "text": "A named value stored on the computer that runs the script — a safe place for passwords and keys, so they never end up in the script. Enter only its name here (e.g. SMTP_PASSWORD); the script reads the value when it runs, on that computer — not in the browser.",
         "example": "Windows:  setx SMTP_PASSWORD \"secret\"\nmacOS/Linux:  export SMTP_PASSWORD=\"secret\""
+      }
+    },
+    "transforms": {
+      "regex": {
+        "text": "Pick a recipe and the pattern is written for you — your text is taken literally, so symbols like . or ( are fine. The pattern stays editable; “Part to keep” is which bracketed part of it becomes the value (0 = the whole match).",
+        "example": "Price: 12,99 € → “Text after … Price:” → 12,99 €"
+      },
+      "dateFormat": {
+        "text": "Describe how the date is written: {dd} is the day, {mm} the month, {yyyy} the year, everything else exactly as it appears. Only numeric dates work — month names like “Aug” don't.",
+        "example": "28.08.2026 → {dd}.{mm}.{yyyy}"
       }
     }
   },

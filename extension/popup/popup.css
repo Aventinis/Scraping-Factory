@@ -1016,3 +1016,15 @@ input.env-var-invalid, input.env-var-invalid:focus { border-color: var(--color-d
    .output-settings-row label gives a short name — let them wrap into the space. */
 .output-settings-row:has(> input[data-env-var]) label { width: 150px; }
 @media (max-width: 340px) { .output-settings-row:has(> input[data-env-var]) label { width: 110px; } }
+
+/* Issue #400: regex "Pattern helper" panel and the date-format hint (transform-helpers-ui.js) */
+.transform-helper-panel {
+  list-style: none; margin: 0 0 8px; padding: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  background: var(--color-primary-soft); border: 1px solid var(--color-border); border-radius: var(--radius-md);
+}
+.transform-helper-panel select, .transform-helper-panel input { flex: 1 1 120px; min-width: 0; }
+.transform-recipe-args { display: contents; }
+.transform-recipe-preview { flex: 1 1 100%; margin: 0; font-size: 12px; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.transform-recipe-preview.warn { color: var(--color-warning); }
+.transform-recipe-actions { flex: 1 1 100%; display: flex; gap: 6px; justify-content: flex-end; }
+.transform-date-hint { flex: 1 1 100%; margin: 0; font-size: 11px; color: var(--color-text-muted); }

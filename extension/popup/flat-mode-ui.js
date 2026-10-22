@@ -85,15 +85,22 @@ function renderMatchCountHint(elId, count) {
 // the live select-field-name-mode/select-field-name-attribute DOM values
 // directly, not _state (neither is state-managed), mirroring container
 // mode's own refreshExtendedTransformPreview exactly.
-function refreshFlatTransformPreview(bridge) {
-  const state = bridge.getState();
+// The value the modal's transform chain would run on right now: the picked
+// element's text, or (Attribute type) its chosen attribute — null until one is
+// chosen. Read for the live preview and, lazily, by the transform editor's
+// helpers (Issue #400: the date-format guess and the regex recipe preview).
+function resolveFlatRawValue(state) {
   const mode = document.getElementById('select-field-name-mode')?.value ?? 'text';
-  let rawValue = state.pendingRawText;
   if (mode === 'attribute') {
     const attrName = document.getElementById('select-field-name-attribute')?.value.trim();
-    rawValue = attrName ? (state.pendingElementAttributes?.[attrName] ?? '').trim() : null;
+    return attrName ? (state.pendingElementAttributes?.[attrName] ?? '').trim() : null;
   }
-  renderTransformPreview('field-transform-preview', rawValue, state.pendingTransforms);
+  return state.pendingRawText;
+}
+
+function refreshFlatTransformPreview(bridge) {
+  const state = bridge.getState();
+  renderTransformPreview('field-transform-preview', resolveFlatRawValue(state), state.pendingTransforms);
 }
 
 // Issue #214: same "clicked element's own actual attributes, pre-guessed
@@ -149,7 +156,7 @@ function renderFlatFieldModal(bridge, isNewPick) {
     resetTextFilter('input-field-name-text-filter', 'btn-field-name-use-text', state.pendingRawText);
   }
   renderMatchCountHint('field-name-match-count', effectiveMatchCount('input-field-name-text-filter', state.pendingMatchCount));
-  renderTransformList('field-transform-list', state.pendingTransforms);
+  renderTransformList('field-transform-list', state.pendingTransforms, () => resolveFlatRawValue(bridge.getState()));
   refreshFlatTransformPreview(bridge);
 }
 
@@ -216,6 +223,7 @@ function wireFlatModeEvents(bridge) {
     'field-transform-list',
     () => bridge.getState().pendingTransforms,
     (transforms) => bridge.patchState({ pendingTransforms: transforms }),
+    () => resolveFlatRawValue(bridge.getState()),
   );
   // Issue #227: re-rendering the modal lets the match-count hint follow the
   // typed text (renderFlatFieldModal reads effectiveMatchCount each time).

@@ -402,8 +402,8 @@
     "toBooleanOption": "In Wahrheitswert umwandeln",
     "toDateOption": "In Datum umwandeln",
     "toCurrencyOption": "Preis/Währung in Zahl umwandeln",
-    "patternPlaceholder": "Regex-Muster (z. B. \"\\d+\")",
-    "groupPlaceholder": "Gruppe (0 = ganzer Treffer)",
+    "patternPlaceholder": "Muster (fortgeschritten)",
+    "groupPlaceholder": "Zu behaltender Teil (0 = ganzer Treffer)",
     "findPlaceholder": "Suchen",
     "replacementPlaceholder": "Ersetzen durch",
     "sourceFormatPlaceholder": "Quellformat (z. B. \"{dd}.{mm}.{yyyy}\")",
@@ -421,6 +421,32 @@
       "dotDecimal": "1,234.56 (EN/US/UK …)",
       "spaceGrouped": "1 234,56 (FR/Skandinavien …)",
       "apostropheGrouped": "1'234.56 (CH)"
+    },
+    "helper": {
+      "button": "Muster-Assistent",
+      "recipePlaceholder": "Was soll extrahiert werden?",
+      "use": "Dieses Muster verwenden",
+      "bracketsLabel": "Art der Klammern",
+      "needsText": "Gib zuerst den Text ein.",
+      "noValue": "Wähle zuerst ein Element mit einem Wert, um das Ergebnis zu sehen.",
+      "noMatch": "Kein Treffer auf deinem Wert — passe den Text an.",
+      "result": "Ergebnis auf deinem Wert: {value}",
+      "afterPlaceholder": "nach diesem Text, z. B. Preis:",
+      "beforePlaceholder": "vor diesem Text, z. B. €",
+      "betweenStartPlaceholder": "zwischen diesem Text …",
+      "betweenEndPlaceholder": "… und diesem Text",
+      "recipe": {
+        "firstNumber": "Erste Zahl",
+        "digits": "Erste Ziffernfolge",
+        "textAfter": "Text nach …",
+        "textBefore": "Text vor …",
+        "textBetween": "Text zwischen … und …",
+        "brackets": "Text in Klammern"
+      },
+      "dateDetected": "Aus deinem Wert erkanntes Format: {format}",
+      "dateDetectedAmbiguous": "Aus deinem Wert erkanntes Format: {format} (könnte auch {alternative} sein)",
+      "dateLooksLike": "Dein Wert sieht aus wie {format}.",
+      "dateNoGuess": "Das Format konnte nicht erraten werden — schreibe es wie deinen Wert, z. B. {dd}.{mm}.{yyyy} für 28.08.2026."
     }
   },
   "transformPresets": {
@@ -773,6 +799,16 @@
       "what": {
         "text": "Ein benannter Wert auf dem Rechner, der das Skript ausführt — ein sicherer Ort für Passwörter und Schlüssel, damit sie nie im Skript landen. Trage hier nur den Namen ein (z. B. SMTP_PASSWORD); das Skript liest den Wert beim Lauf auf diesem Rechner — nicht im Browser.",
         "example": "Windows:  setx SMTP_PASSWORD \"geheim\"\nmacOS/Linux:  export SMTP_PASSWORD=\"geheim\""
+      }
+    },
+    "transforms": {
+      "regex": {
+        "text": "Wähle ein Rezept, dann wird das Muster für dich geschrieben — dein Text gilt wörtlich, Zeichen wie . oder ( sind kein Problem. Das Muster bleibt änderbar; „Zu behaltender Teil“ ist, welcher geklammerte Teil davon zum Wert wird (0 = der ganze Treffer).",
+        "example": "Preis: 12,99 € → „Text nach … Preis:“ → 12,99 €"
+      },
+      "dateFormat": {
+        "text": "Beschreibe, wie das Datum geschrieben ist: {dd} ist der Tag, {mm} der Monat, {yyyy} das Jahr, alles andere genau so, wie es dasteht. Nur Zahlen-Datumsangaben funktionieren — Monatsnamen wie „Aug“ nicht.",
+        "example": "28.08.2026 → {dd}.{mm}.{yyyy}"
       }
     }
   },

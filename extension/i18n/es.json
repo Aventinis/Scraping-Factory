@@ -402,8 +402,8 @@
     "toBooleanOption": "Convertir a booleano",
     "toDateOption": "Convertir a fecha",
     "toCurrencyOption": "Convertir precio/moneda a número",
-    "patternPlaceholder": "Patrón regex (p. ej. \"\\d+\")",
-    "groupPlaceholder": "Grupo (0 = coincidencia completa)",
+    "patternPlaceholder": "Patrón (avanzado)",
+    "groupPlaceholder": "Parte a conservar (0 = coincidencia completa)",
     "findPlaceholder": "Buscar",
     "replacementPlaceholder": "Reemplazar con",
     "sourceFormatPlaceholder": "Formato de origen (p. ej. \"{dd}.{mm}.{yyyy}\")",
@@ -421,6 +421,32 @@
       "dotDecimal": "1,234.56 (EN/US/MX …)",
       "spaceGrouped": "1 234,56 (FR/países nórdicos …)",
       "apostropheGrouped": "1'234.56 (CH)"
+    },
+    "helper": {
+      "button": "Asistente de patrón",
+      "recipePlaceholder": "¿Qué quieres extraer?",
+      "use": "Usar este patrón",
+      "bracketsLabel": "Tipo de corchetes",
+      "needsText": "Introduce primero el texto.",
+      "noValue": "Elige primero un elemento con valor para ver el resultado.",
+      "noMatch": "Sin coincidencia en tu valor — ajusta el texto.",
+      "result": "Resultado con tu valor: {value}",
+      "afterPlaceholder": "después de este texto, p. ej. Precio:",
+      "beforePlaceholder": "antes de este texto, p. ej. €",
+      "betweenStartPlaceholder": "entre este texto…",
+      "betweenEndPlaceholder": "…y este texto",
+      "recipe": {
+        "firstNumber": "Primer número",
+        "digits": "Primera serie de dígitos",
+        "textAfter": "Texto después de …",
+        "textBefore": "Texto antes de …",
+        "textBetween": "Texto entre … y …",
+        "brackets": "Texto entre paréntesis"
+      },
+      "dateDetected": "Formato detectado en tu valor: {format}",
+      "dateDetectedAmbiguous": "Formato detectado en tu valor: {format} (también podría ser {alternative})",
+      "dateLooksLike": "Tu valor parece {format}.",
+      "dateNoGuess": "No se pudo adivinar el formato — escríbelo como tu valor, p. ej. {dd}.{mm}.{yyyy} para 28.08.2026."
     }
   },
   "transformPresets": {
@@ -773,6 +799,16 @@
       "what": {
         "text": "Un valor con nombre guardado en el equipo que ejecuta el script — un lugar seguro para contraseñas y claves, para que nunca acaben en el script. Introduce aquí solo su nombre (p. ej. SMTP_PASSWORD); el script lee el valor al ejecutarse, en ese equipo, no en el navegador.",
         "example": "Windows:  setx SMTP_PASSWORD \"secreto\"\nmacOS/Linux:  export SMTP_PASSWORD=\"secreto\""
+      }
+    },
+    "transforms": {
+      "regex": {
+        "text": "Elige una receta y el patrón se escribe por ti — tu texto se toma literalmente, así que símbolos como . o ( no dan problema. El patrón sigue siendo editable; «Parte a conservar» indica qué parte entre paréntesis pasa a ser el valor (0 = la coincidencia completa).",
+        "example": "Precio: 12,99 € → «Texto después de … Precio:» → 12,99 €"
+      },
+      "dateFormat": {
+        "text": "Describe cómo está escrita la fecha: {dd} es el día, {mm} el mes, {yyyy} el año, todo lo demás tal como aparece. Solo funcionan fechas numéricas — nombres de mes como «ago» no.",
+        "example": "28.08.2026 → {dd}.{mm}.{yyyy}"
       }
     }
   },

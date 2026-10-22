@@ -66,7 +66,9 @@ function buildHost(host, key) {
   button.setAttribute('aria-describedby', panelId);
   host.appendChild(button);
 
-  const panel = document.createElement('div');
+  // Inside a list the panel is a list item too (e.g. the transform editor's rows).
+  const anchor = host.closest('[data-help-anchor]') || host.closest('label') || host;
+  const panel = document.createElement(anchor.parentElement && /^(UL|OL)$/.test(anchor.parentElement.tagName) ? 'li' : 'div');
   panel.id = panelId;
   panel.className = 'help-popover hidden';
   panel.setAttribute('role', 'note');
@@ -76,7 +78,6 @@ function buildHost(host, key) {
   example.className = 'help-popover-example hidden';
   panel.append(text, example);
 
-  const anchor = host.closest('[data-help-anchor]') || host.closest('label') || host;
   anchor.insertAdjacentElement('afterend', panel);
   return { button, panel };
 }
