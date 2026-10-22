@@ -184,11 +184,13 @@
     "dedupRetentionMaxAge": "días desde la última vez visto",
     "dedupIncrementalHint": "El script recuerda las claves vistas en un pequeño archivo junto a su salida (nombre del archivo de salida + .dedup-seen.json). Bórralo para empezar de cero. Las claves recordadas están limitadas: por cantidad (se conservan las más recientes) o por antigüedad. El archivo solo se actualiza tras una ejecución que no incumplió ninguna comprobación de robustez.",
     "requestHeadersToggle": "Enviar cabeceras de solicitud personalizadas",
-    "requestHeadersAddBtn": "+ Cabecera",
     "requestHeaderNamePlaceholder": "Nombre de la cabecera (p. ej. Accept-Language)",
     "requestHeaderKindValue": "Valor fijo",
     "requestHeaderKindEnv": "Variable de entorno",
     "requestHeaderValuePlaceholder": "Valor (p. ej. de-CH)",
+    "requestHeaderPickerPlaceholder": "Añadir una cabecera…",
+    "requestHeaderSecretWarning": "Esto parece un secreto. Como valor fijo se escribiría en el script en texto plano.",
+    "requestHeaderSwitchToEnv": "Usar variable de entorno",
     "externalConfigToggle": "Archivo de configuración editable (XML)",
     "externalConfigHint": "Permite ajustar después la(s) URL(s) de inicio, el nombre del archivo de salida, el nombre de salida de un campo o los valores de un parámetro de API de lista fija, editando un pequeño archivo XML — sin tocar el archivo .py ni volver a abrir la extensión. El archivo aún no existe; el script lo crea junto a sí mismo la primera vez que se ejecuta de verdad.",
     "paginationToggle": "Activar paginación",
@@ -259,6 +261,35 @@
     "hardeningBaselineAfter": "% menos de filas que en la última ejecución",
     "hardeningBlockingAdvanced": "Avanzado: páginas cortas y frases de bloqueo",
     "hardeningBlockingMinBodyLengthUnit": "bytes (opcional)"
+  },
+  "requestHeaderPresets": {
+    "acceptLanguage": {
+      "label": "Accept-Language — idioma preferido",
+      "desc": "Pide al sitio sus páginas en este idioma, p. ej. es-ES o en-US."
+    },
+    "referer": {
+      "label": "Referer — la página de la que vienes",
+      "desc": "Indica al sitio desde qué página seguiste un enlace. Algunos sitios solo responden si está definido."
+    },
+    "userAgent": {
+      "label": "User-Agent — quién dice ser el script",
+      "desc": "Sustituye el identificador por defecto del script. Úsalo solo si el sitio rechaza el predeterminado."
+    },
+    "cookie": {
+      "label": "Cookie — mantener la sesión",
+      "desc": "Una cookie de sesión copiada de tu navegador. Es un secreto, por eso solo se guarda el nombre de su variable."
+    },
+    "authorization": {
+      "label": "Authorization — token de acceso",
+      "desc": "Un token o contraseña que el sitio exige para sus datos (p. ej. «Bearer …»). Es un secreto, por eso solo se guarda el nombre de su variable."
+    },
+    "apiKey": {
+      "label": "X-Api-Key — clave de API",
+      "desc": "La clave que algunos sitios exigen para sus datos. Es un secreto, por eso solo se guarda el nombre de su variable."
+    },
+    "other": {
+      "label": "Otra cabecera (escribe el nombre)…"
+    }
   },
   "robots": {
     "checkFailed": "No se pudo comprobar el robots.txt ({error}).",
@@ -769,6 +800,10 @@
       "headers": {
         "text": "Cabeceras adicionales que el script envía con cada solicitud, p. ej. un idioma, un Referer o una clave de API. Para un secreto elige «Variable de entorno» e indica solo su nombre; el valor de prueba se usa solo en la ejecución de prueba y nunca se guarda. Una cabecera llamada User-Agent sustituye a la predeterminada.",
         "example": "Accept-Language: de-CH"
+      },
+      "picker": {
+        "text": "Elige para qué sirve la cabecera: el nombre y una sugerencia se rellenan por ti. Los secretos (Cookie, Authorization, clave de API) empiezan como variable de entorno, así nunca acaban en el script. Con «Otra» escribes cualquier nombre de cabecera.",
+        "example": "Authorization → Variable de entorno → AUTH_TOKEN"
       }
     },
     "appendOutput": {

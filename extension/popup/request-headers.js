@@ -27,6 +27,16 @@ function addHeaderRow(state) {
 }
 
 /**
+ * Appends a ready-made row (a picked preset, Issue #402).
+ * @param {SFDraft.RequestHeadersState} state
+ * @param {SFDraft.RequestHeaderRow} row
+ * @returns {SFDraft.RequestHeadersState}
+ */
+function appendHeaderRow(state, row) {
+  return { ...state, rows: [...state.rows, { ...row }] };
+}
+
+/**
  * @param {SFDraft.RequestHeadersState} state
  * @param {number} index
  * @returns {SFDraft.RequestHeadersState}
@@ -114,7 +124,7 @@ function buildHeaderVerificationValues(state, testValues) {
 }
 
 module.exports = {
-  createDefaultRequestHeaders, addHeaderRow, removeHeaderRow, updateHeaderRow, rowIsComplete,
+  createDefaultRequestHeaders, addHeaderRow, appendHeaderRow, removeHeaderRow, updateHeaderRow, rowIsComplete,
   buildRequestHeadersConfig, applyRequestHeadersConfig, buildHeaderVerificationValues,
 };
 

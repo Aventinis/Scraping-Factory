@@ -184,11 +184,13 @@
     "dedupRetentionMaxAge": "Tage seit zuletzt gesehen",
     "dedupIncrementalHint": "Das Skript merkt sich die gesehenen Schlüssel in einer kleinen Datei neben seiner Ausgabe (Ausgabedateiname + .dedup-seen.json). Lösche diese Datei, um von vorn zu beginnen. Die gemerkten Schlüssel sind begrenzt: entweder nach Anzahl (die neuesten bleiben) oder nach Alter. Die Datei wird nur nach einem Lauf aktualisiert, der keine Härtungsprüfung verletzt hat.",
     "requestHeadersToggle": "Eigene Request-Header senden",
-    "requestHeadersAddBtn": "+ Header",
     "requestHeaderNamePlaceholder": "Header-Name (z. B. Accept-Language)",
     "requestHeaderKindValue": "Fester Wert",
     "requestHeaderKindEnv": "Umgebungsvariable",
     "requestHeaderValuePlaceholder": "Wert (z. B. de-CH)",
+    "requestHeaderPickerPlaceholder": "Header hinzufügen…",
+    "requestHeaderSecretWarning": "Das sieht nach einem Geheimnis aus. Als fester Wert würde es im Klartext ins Skript geschrieben.",
+    "requestHeaderSwitchToEnv": "Umgebungsvariable verwenden",
     "externalConfigToggle": "Bearbeitbare Konfigurationsdatei (XML)",
     "externalConfigHint": "Ermöglicht es, die Start-URL(s), den Namen der Ausgabedatei, den Ausgabenamen eines Feldes oder die Werteliste eines API-Parameters später über eine kleine XML-Datei anzupassen — ohne die .py-Datei zu bearbeiten oder die Erweiterung erneut zu öffnen. Die Datei existiert noch nicht; das Skript legt sie beim ersten echten Lauf neben sich selbst an.",
     "paginationToggle": "Pagination aktivieren",
@@ -259,6 +261,35 @@
     "hardeningBaselineAfter": "% weniger Zeilen als im letzten Lauf",
     "hardeningBlockingAdvanced": "Erweitert: kurze Seiten und Sperr-Phrasen",
     "hardeningBlockingMinBodyLengthUnit": "Bytes (optional)"
+  },
+  "requestHeaderPresets": {
+    "acceptLanguage": {
+      "label": "Accept-Language — bevorzugte Sprache",
+      "desc": "Bittet die Seite, ihre Inhalte in dieser Sprache zu liefern, z. B. de-CH oder en-US."
+    },
+    "referer": {
+      "label": "Referer — die Seite, von der Sie kommen",
+      "desc": "Teilt der Seite mit, über welche Seite Sie einem Link gefolgt sind. Manche Seiten antworten nur, wenn er gesetzt ist."
+    },
+    "userAgent": {
+      "label": "User-Agent — als wer sich das Skript ausgibt",
+      "desc": "Ersetzt die Standardkennung des Skripts. Nur nötig, wenn die Seite die Standardkennung ablehnt."
+    },
+    "cookie": {
+      "label": "Cookie — angemeldet bleiben",
+      "desc": "Ein Login-Cookie aus Ihrem Browser. Es ist ein Geheimnis, deshalb wird nur der Name seiner Variable gespeichert."
+    },
+    "authorization": {
+      "label": "Authorization — Zugangstoken",
+      "desc": "Ein Token oder Passwort, das die Seite für ihre Daten verlangt (z. B. „Bearer …“). Es ist ein Geheimnis, deshalb wird nur der Name seiner Variable gespeichert."
+    },
+    "apiKey": {
+      "label": "X-Api-Key — API-Schlüssel",
+      "desc": "Der Schlüssel, den manche Seiten für ihre Daten verlangen. Er ist ein Geheimnis, deshalb wird nur der Name seiner Variable gespeichert."
+    },
+    "other": {
+      "label": "Anderer Header (Namen eintippen)…"
+    }
   },
   "robots": {
     "checkFailed": "robots.txt konnte nicht geprüft werden ({error}).",
@@ -769,6 +800,10 @@
       "headers": {
         "text": "Zusätzliche Header, die das Skript bei jeder Anfrage mitschickt, z. B. eine Sprache, ein Referer oder ein API-Key. Für ein Geheimnis wähle „Umgebungsvariable“ und trage nur deren Namen ein; der Testwert gilt nur für den Probelauf und wird nie gespeichert. Ein Header namens User-Agent ersetzt den Standard-User-Agent.",
         "example": "Accept-Language: de-CH"
+      },
+      "picker": {
+        "text": "Wählen Sie, wofür der Header gedacht ist: Name und ein Vorschlag werden für Sie eingetragen. Geheimnisse (Cookie, Authorization, API-Schlüssel) starten als Umgebungsvariable und landen so nie im Skript. Mit „Anderer“ tippen Sie einen beliebigen Header-Namen ein.",
+        "example": "Authorization → Umgebungsvariable → AUTH_TOKEN"
       }
     },
     "appendOutput": {

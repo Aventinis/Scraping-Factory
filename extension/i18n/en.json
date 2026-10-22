@@ -184,11 +184,13 @@
     "dedupRetentionMaxAge": "days since last seen",
     "dedupIncrementalHint": "The script remembers the keys it has seen in a small file next to its output (output file name + .dedup-seen.json). Delete that file to start over. The remembered keys are bounded: either by number (the newest ones are kept) or by age. The file is only updated after a run that did not fail a hardening check.",
     "requestHeadersToggle": "Send custom request headers",
-    "requestHeadersAddBtn": "+ Header",
     "requestHeaderNamePlaceholder": "Header name (e.g. Accept-Language)",
     "requestHeaderKindValue": "Fixed value",
     "requestHeaderKindEnv": "Environment variable",
     "requestHeaderValuePlaceholder": "Value (e.g. de-CH)",
+    "requestHeaderPickerPlaceholder": "Add a header…",
+    "requestHeaderSecretWarning": "This looks like a secret. As a fixed value it would be written into the script in plain text.",
+    "requestHeaderSwitchToEnv": "Use environment variable",
     "externalConfigToggle": "Editable config file (XML)",
     "externalConfigHint": "Lets you tweak the start URL(s), the output filename, a field's output name, or a fixed-value-list API parameter's values later, by editing a small XML file — without touching the .py file or reopening the extension. The file doesn't exist yet; the script creates it next to itself the first time it actually runs.",
     "paginationToggle": "Enable pagination",
@@ -259,6 +261,35 @@
     "hardeningBaselineAfter": "% fewer rows than in the last run",
     "hardeningBlockingAdvanced": "Advanced: short pages and block phrases",
     "hardeningBlockingMinBodyLengthUnit": "bytes (optional)"
+  },
+  "requestHeaderPresets": {
+    "acceptLanguage": {
+      "label": "Accept-Language — preferred language",
+      "desc": "Asks the site for its pages in this language, e.g. en-US or de-CH."
+    },
+    "referer": {
+      "label": "Referer — the page you came from",
+      "desc": "Tells the site which page you followed a link from. Some sites only answer when it is set."
+    },
+    "userAgent": {
+      "label": "User-Agent — who the script says it is",
+      "desc": "Replaces the script's default identifier. Use it only if the site refuses the default."
+    },
+    "cookie": {
+      "label": "Cookie — stay logged in",
+      "desc": "A login cookie copied from your browser. It is a secret, so only the name of its variable is stored."
+    },
+    "authorization": {
+      "label": "Authorization — access token",
+      "desc": "A token or password the site wants for its data (e.g. \"Bearer …\"). It is a secret, so only the name of its variable is stored."
+    },
+    "apiKey": {
+      "label": "X-Api-Key — API key",
+      "desc": "The key some sites require for their data. It is a secret, so only the name of its variable is stored."
+    },
+    "other": {
+      "label": "Other header (type the name)…"
+    }
   },
   "robots": {
     "checkFailed": "robots.txt could not be checked ({error}).",
@@ -769,6 +800,10 @@
       "headers": {
         "text": "Extra headers the script sends with every request, e.g. a language, a Referer or an API key. For a secret, choose \"Environment variable\" and enter only its name; the test value is used for the trial run only and is never saved. A header named User-Agent replaces the default one.",
         "example": "Accept-Language: de-CH"
+      },
+      "picker": {
+        "text": "Pick what the header is for: the name and a suggestion are filled in for you. Secrets (Cookie, Authorization, API key) start as an environment variable, so they never end up in the script. \"Other\" lets you type any header name.",
+        "example": "Authorization → Environment variable → AUTH_TOKEN"
       }
     },
     "appendOutput": {

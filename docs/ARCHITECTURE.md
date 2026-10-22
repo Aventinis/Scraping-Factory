@@ -649,6 +649,24 @@ CLAUDE.md for the details.
 - Tests: `popup/hardening-presets.test.js`, `popup/hardening-presets-ui.test.js`,
   real-browser check `e2e/examples/issue-399-hardening-plain-language-check.js`
 
+### 2.10g Request-header picker (Issue #402)
+
+"Send custom request headers" starts from an "Add a header…" picker (Accept-Language,
+Referer, User-Agent, Cookie, Authorization, X-Api-Key, Other) instead of an empty
+free-text row. Secrets default to an environment variable, a recognised header shows a
+plain-language description, and a credential-looking header kept as a fixed value gets a
+warning with a one-click switch. No wire-format or companion change. See CLAUDE.md for
+the details.
+
+- Extension: `popup/request-header-presets.js` (pure: presets, `isSecretHeaderName`,
+  `suggestHeaderEnvName`), `popup/request-headers.js` (`appendHeaderRow`),
+  `popup/request-headers-ui.js` (picker, notes, warning wiring),
+  `popup/screens/idle.html` (`#select-add-request-header`), `popup/popup.css`
+  (`.request-header-picker`/`-notes`), `requestHeaderPresets.*`/`help.requestHeaders.picker`
+  in `i18n/*.json`
+- Tests: `popup/request-header-presets.test.js`, `popup/request-headers.test.js`,
+  real-browser check `e2e/examples/issue-402-request-headers-picker-check.js`
+
 ### 2.11 i18n (extension UI language)
 
 Lets the user pick the popup's own display language (German/English/Spanish)

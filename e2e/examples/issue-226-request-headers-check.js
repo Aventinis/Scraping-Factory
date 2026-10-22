@@ -51,13 +51,13 @@ const { launchBrowser, openPopup, focusFixture, waitForIdleScreen, startCompanio
     await popupPage.click('#settings-section-toggle');
     await popupPage.check('#toggle-request-headers');
     const rowCount = async () => (await popupPage.$$('#request-headers-list .request-header-row')).length;
-    if ((await rowCount()) !== 1) throw new Error('Enabling the section should offer one empty row');
+    if ((await rowCount()) !== 0) throw new Error('Enabling the section should wait for the user to pick a header (Issue #402)');
 
     const row = (i) => popupPage.locator('#request-headers-list .request-header-row').nth(i);
-    await row(0).locator('.request-header-name').fill('Accept-Language');
+    await popupPage.selectOption('#select-add-request-header', 'acceptLanguage');
     await row(0).locator('.request-header-value').fill('de-CH');
     await row(0).locator('.request-header-value').blur();
-    await popupPage.click('#btn-add-request-header');
+    await popupPage.selectOption('#select-add-request-header', 'other');
     await row(1).locator('.request-header-name').fill('X-Api-Key');
     await row(1).locator('.request-header-name').blur();
     await row(1).locator('.request-header-kind').selectOption('env');

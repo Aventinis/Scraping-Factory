@@ -39,11 +39,31 @@ look at whether the current page is allowed.
 
 ## Custom request headers
 
-**Send custom request headers** adds headers such as `Accept-Language`,
-`Referer` or an API key. Each is a **Fixed value** or an **Environment
-variable** (the variable's *name* — the secret itself never enters the script).
-For an environment-variable header, type a **Test value for the trial run** (not
-saved) so the companion can verify a protected page.
+**Send custom request headers** adds headers the script sends with its requests,
+such as a preferred language, the page you came from or an API key. You don't have
+to know header names: open **Add a header…** and pick what you need.
+
+![Request headers picked from the list, with the warning for a secret kept as a fixed value](images/network-request-headers.png)
+
+| Pick | What it is for |
+| --- | --- |
+| **Accept-Language** | Asks the site for its pages in a language, e.g. `de-CH` |
+| **Referer** | The page you came from; some sites only answer when it is set |
+| **User-Agent** | Who the script says it is — replaces the default one; only needed if the site refuses it |
+| **Cookie** | A login cookie copied from your browser |
+| **Authorization** | A token or password the site wants (e.g. `Bearer …`) |
+| **X-Api-Key** | The API key some sites require |
+| **Other header** | Any header — you type the name |
+
+Picking a header fills in its name and a suggestion, and a short description sits
+under the row. Each header is a **Fixed value** or an **Environment variable** (the
+variable's *name* — the secret itself never enters the script). **Cookie,
+Authorization and X-Api-Key start as an environment variable**, because they are
+secrets. If you type a header that looks like a secret (a name with `token`,
+`secret`, `auth`, `key`, …) and keep it as a fixed value, you get a warning that the
+value would be written into the script in plain text; **Use environment variable**
+fixes it in one click. For an environment-variable header, type a **Test value for
+the trial run** (not saved) so the companion can verify a protected page.
 
 With the Browser engine, the headers go to every request the page makes,
 including images and scripts. The script's default `User-Agent` is replaced if
