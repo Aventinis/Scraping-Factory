@@ -210,19 +210,16 @@
     "monitoringSectionToggle": "Monitorización",
     "settingsSectionToggle": "Configuración",
     "hardeningNoResultToggle": "Comprobar resultado vacío",
-    "hardeningSeverityWarning": "Advertencia",
-    "hardeningSeverityWarningTitle": "El script imprime una advertencia, pero sigue terminando con código de salida 0.",
-    "hardeningSeverityError": "Error",
-    "hardeningSeverityErrorTitle": "El script imprime un error y termina con su propio código (2), distinguible de un fallo (1).",
+    "hardeningSeverityWarning": "Avisarme",
+    "hardeningSeverityError": "Detener la ejecución",
     "hardeningNullRateSectionLabel": "Comprobar valores vacíos por campo",
     "hardeningNullRateFieldPlaceholder": "-- elegir campo --",
     "hardeningNullRateAddBtn": "+ Añadir campo",
-    "hardeningBaselineToggle": "Comprobar descenso frente a la última ejecución",
-    "hardeningBaselineThresholdLabel": "Umbral (descenso)",
-    "hardeningBlockingToggle": "Comprobar bloqueo (redirección, respuesta corta, frases de bloqueo)",
-    "hardeningBlockingMinBodyLengthLabel": "Longitud mín. de respuesta (bytes)",
-    "hardeningBlockingMinBodyLengthPlaceholder": "opcional",
-    "hardeningBlockingPhrasesLabel": "Frases de bloqueo (una por línea)",
+    "hardeningBaselineToggle": "Comprobar una caída respecto a la última ejecución",
+    "hardeningBlockingToggle": "Comprobar si el sitio bloquea el script",
+    "hardeningBlockingMinBodyLengthLabel": "Página más corta de",
+    "hardeningBlockingMinBodyLengthPlaceholder": "p. ej. 1000",
+    "hardeningBlockingPhrasesLabel": "Frases que delatan una página de bloqueo (una por línea)",
     "hardeningBlockingPhrasesPlaceholder": "p. ej. \"Access Denied\", \"Por favor verifica que eres humano\"",
     "hardeningRequiredFieldsToggle": "Exigir campos (descartar filas incompletas)",
     "hardeningRequiredFieldsAddBtn": "+ Añadir campo",
@@ -247,7 +244,21 @@
     "outputBlueprintMappingHint": "Asigna a cada campo de destino uno de los campos de origen propios de esta configuración — cada campo de destino necesita un origen antes de poder generar el script.",
     "outputBlueprintTreeMappingHint": "Asigna a cada campo de destino uno de los campos de origen propios de esta configuración — la posición de un grupo de destino en la salida se infiere automáticamente a partir de sus campos asignados. Cada campo de destino necesita un origen antes de poder generar el script.",
     "outputFormatFlattenHint": "Los resultados anidados se aplanan en una tabla: una fila por cada elemento repetido más interno; los valores de niveles superiores se repiten en cada fila (o elige un Output Blueprint para definir las columnas). Cada campo de datos necesita un nombre único.",
-    "modeLabel": "Modo"
+    "modeLabel": "Modo",
+    "monitoringIntro": "Solo es útil si ejecutas el script una y otra vez, p. ej. cada noche: te avisa cuando la web ha cambiado y tu script ha dejado de funcionar.",
+    "hardeningSectionLabel": "Comprobaciones tras cada ejecución",
+    "hardeningRecommendedBtn": "Comprobaciones recomendadas",
+    "hardeningRecommendedApplied": "Activadas: {checks}.",
+    "hardeningRecommendedNoResult": "resultado vacío (avisarme)",
+    "hardeningRecommendedRequired": "campo obligatorio «{field}» (avisarme)",
+    "hardeningRecommendedNothingNew": "Las comprobaciones recomendadas ya están activadas.",
+    "hardeningRecommendedNeedFields": "Añade primero campos para obtener también la sugerencia de campo obligatorio.",
+    "hardeningNullRateMiddle": "está vacío en más del",
+    "hardeningNullRateAfter": "% de las filas",
+    "hardeningBaselineBefore": "Activar si hay un",
+    "hardeningBaselineAfter": "% menos de filas que en la última ejecución",
+    "hardeningBlockingAdvanced": "Avanzado: páginas cortas y frases de bloqueo",
+    "hardeningBlockingMinBodyLengthUnit": "bytes (opcional)"
   },
   "robots": {
     "checkFailed": "No se pudo comprobar el robots.txt ({error}).",
@@ -809,6 +820,38 @@
       "dateFormat": {
         "text": "Describe cómo está escrita la fecha: {dd} es el día, {mm} el mes, {yyyy} el año, todo lo demás tal como aparece. Solo funcionan fechas numéricas — nombres de mes como «ago» no.",
         "example": "28.08.2026 → {dd}.{mm}.{yyyy}"
+      }
+    },
+    "hardening": {
+      "severity": {
+        "text": "Las comprobaciones se ejecutan al final de cada ejecución del script. «Avisarme»: la ejecución termina con normalidad y se imprime un mensaje. «Detener la ejecución»: se marca como fallida para que un programador de tareas o un monitor lo note — código de salida 2 (un fallo inesperado es el código 1)."
+      },
+      "recommended": {
+        "text": "Activa un comienzo sensato: un aviso si no se encontró nada y un aviso para las filas sin su primer campo (esas filas no aparecen en el archivo). Las comprobaciones que ya configuraste no se tocan."
+      },
+      "noResult": {
+        "text": "Avisa cuando el script no encontró nada — normalmente porque la web cambió su diseño.",
+        "example": "El selector de «Precio» de repente no encuentra ningún elemento."
+      },
+      "nullRate": {
+        "text": "Avisa cuando demasiadas filas no tienen valor en un campo: el selector aún encuentra algo, pero no lo correcto.",
+        "example": "Avisar si más del 50 % de las filas no tienen Precio."
+      },
+      "baseline": {
+        "text": "Avisa cuando esta ejecución encontró mucho menos que la anterior — un botón «cargar más» o una paginación rotos suelen verse así.",
+        "example": "Un 20 % menos de filas que ayer."
+      },
+      "blocking": {
+        "text": "Avisa cuando el sitio empieza a bloquear el script pero responde con normalidad: te lleva a otra web, envía una página muy corta o muestra un mensaje de bloqueo.",
+        "example": "«Access Denied», «No soy un robot»"
+      },
+      "blockingAdvanced": {
+        "text": "Una página de bloqueo suele ser diminuta: 1000 bytes son más o menos un párrafo de texto. Las frases se buscan en la página, una por línea; cualquier coincidencia cuenta como bloqueo.",
+        "example": "Access Denied\nConfirma que eres una persona"
+      },
+      "requiredFields": {
+        "text": "Omite cada fila sin valor en los campos elegidos, para que las filas incompletas nunca lleguen al archivo. El resto de la ejecución continúa.",
+        "example": "Una importación a base de datos que necesita un Precio no vacío."
       }
     }
   },

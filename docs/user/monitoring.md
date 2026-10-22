@@ -5,20 +5,34 @@ class name, and the script keeps "succeeding" with an empty file. The
 **Monitoring** section of the idle screen (collapsed by default) makes the
 *generated script itself* notice — on every run, not just during the trial.
 
+This only matters if you run the script **again and again** (for example every
+night): it tells you when the website changed and your script stopped working.
+Every check has a **?** with a one-line purpose and an example.
+
+## Recommended checks
+
+Not sure where to start? **Recommended checks** switches on two things in one click:
+a warning when the run found **nothing at all**, and a warning for rows missing their
+**first field** (usually the name or ID that makes a row meaningful — those rows are
+then left out of the file). Checks you already set up are left alone, and clicking
+again changes nothing.
+
+![The Monitoring checks after one click on Recommended checks](images/monitoring-recommended.png)
+
 ## Hardening checks
 
-Each check is switched on independently and has a severity:
+Each check is switched on independently, and you choose what happens when it fails:
 
-- **Warning** — the script prints a warning and still exits with code 0.
-- **Error** — the script prints an error and exits with its own code, **2**, so
-  a scheduler can tell it from a crash (code 1).
+- **Warn me** — the run finishes normally and a message is printed.
+- **Stop the run** — the run is marked as failed, so a scheduler or monitoring tool
+  notices: the script exits with its own code, **2** (an unexpected crash is code 1).
 
 | Check | Catches |
 | --- | --- |
 | **Check for empty result** | The run produced no rows at all |
-| **Check for empty values per field** | A field's selector still matches *something*, but the value is empty too often (set a percentage per field) |
-| **Check for a drop vs. the last run** | The result count fell by more than a threshold compared with the previous run (e.g. a broken "load more") |
-| **Check for blocking** | The site started blocking you but answers 200: a redirect to another host, a response shorter than a minimum, or one of your **Block phrases** (`Access Denied`, …) |
+| **Check for empty values per field** | A field's selector still matches *something*, but the value is empty too often — "*Price* is empty in more than **50** % of the rows" |
+| **Check for a drop vs. the last run** | The result count fell compared with the previous run — "trigger if there are **20** % fewer rows than in the last run" (e.g. a broken "load more") |
+| **Check whether the site blocks the script** | The site started blocking you but answers normally: a redirect to another host, or — under **Advanced** — a page shorter than a number of bytes (a block page is tiny: 1000 bytes is about a paragraph) or one of your phrases (`Access Denied`, …) |
 | **Require fields (drop incomplete rows)** | Rows missing a required value are *removed* from the output, e.g. so a database import never meets an empty `NOT NULL` value |
 
 Details worth knowing:

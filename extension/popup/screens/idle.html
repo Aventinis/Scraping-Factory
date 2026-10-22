@@ -531,6 +531,8 @@
           <span data-i18n="idle.monitoringSectionToggle"></span>
         </div>
         <div id="monitoring-section-content" class="hidden">
+          <!-- Issue #399: when this section matters, in one sentence. -->
+          <p class="monitoring-intro" data-i18n="idle.monitoringIntro"></p>
           <!-- Issue #87: opt-in change detection + notification — every
                credential/target field below is the *name* of an
                environment variable, never a literal value (mirrors
@@ -591,14 +593,27 @@
                four can add its own row below without restructuring
                #hardening-config. -->
           <div id="hardening-config">
+            <!-- Issue #399: what "checks" are, what happens when one fails (Warn me /
+                 Stop the run — one shared popover instead of exit-code tooltips), and a
+                 one-click "Recommended checks" for people who don't want to read on. -->
+            <div class="row-label hardening-heading" data-help-anchor>
+              <span data-i18n="idle.hardeningSectionLabel"></span>
+              <span class="help-host" data-help="help.hardening.severity"></span>
+            </div>
+            <div class="hardening-recommended-row" data-help-anchor>
+              <button type="button" id="btn-hardening-recommended" class="btn-secondary btn-tiny" data-i18n="idle.hardeningRecommendedBtn"></button>
+              <span class="help-host" data-help="help.hardening.recommended"></span>
+            </div>
+            <p id="hardening-recommended-note" class="preview-summary hardening-recommended-note hidden"></p>
             <label class="output-settings-toggle">
               <input type="checkbox" id="toggle-hardening-no-result" />
               <span data-i18n="idle.hardeningNoResultToggle"></span>
+              <span class="help-host" data-help="help.hardening.noResult"></span>
             </label>
             <div id="hardening-no-result-severity" class="mode-toggle hidden" style="margin: 6px 0 8px;">
               <div class="mode-toggle-thumb"></div>
-              <button id="btn-hardening-no-result-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning" data-i18n-title="idle.hardeningSeverityWarningTitle"></button>
-              <button id="btn-hardening-no-result-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError" data-i18n-title="idle.hardeningSeverityErrorTitle"></button>
+              <button id="btn-hardening-no-result-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning"></button>
+              <button id="btn-hardening-no-result-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError"></button>
             </div>
             <!-- Issue #130: per-field empty-value-rate check — catches a
                  field whose selector silently starts matching the wrong
@@ -610,8 +625,9 @@
                  input. Rows are entirely JS-rendered
                  (renderHardeningNullRateList) — this div is just the mount
                  point. -->
-            <div class="output-settings-toggle" style="margin-top: 10px;">
+            <div class="output-settings-toggle" style="margin-top: 10px;" data-help-anchor>
               <span data-i18n="idle.hardeningNullRateSectionLabel"></span>
+              <span class="help-host" data-help="help.hardening.nullRate"></span>
             </div>
             <div id="hardening-null-rate-list"></div>
             <button type="button" id="btn-add-null-rate-check" class="btn-secondary btn-tiny" data-i18n="idle.hardeningNullRateAddBtn"></button>
@@ -627,16 +643,18 @@
             <label class="output-settings-toggle" style="margin-top: 10px;">
               <input type="checkbox" id="toggle-hardening-baseline" />
               <span data-i18n="idle.hardeningBaselineToggle"></span>
+              <span class="help-host" data-help="help.hardening.baseline"></span>
             </label>
             <div id="hardening-baseline-config" class="hidden">
               <div id="hardening-baseline-severity" class="mode-toggle" style="margin: 6px 0 8px;">
                 <div class="mode-toggle-thumb"></div>
-                <button id="btn-hardening-baseline-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning" data-i18n-title="idle.hardeningSeverityWarningTitle"></button>
-                <button id="btn-hardening-baseline-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError" data-i18n-title="idle.hardeningSeverityErrorTitle"></button>
+                <button id="btn-hardening-baseline-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning"></button>
+                <button id="btn-hardening-baseline-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError"></button>
               </div>
-              <label class="browser-action-field-row">
-                <span data-i18n="idle.hardeningBaselineThresholdLabel"></span>
-                <input type="number" min="0" max="100" id="input-hardening-baseline-threshold" />%
+              <label class="browser-action-field-row hardening-sentence">
+                <span data-i18n="idle.hardeningBaselineBefore"></span>
+                <input type="number" min="0" max="100" id="input-hardening-baseline-threshold" />
+                <span data-i18n="idle.hardeningBaselineAfter"></span>
               </label>
             </div>
             <!-- Issue #132: blocking-detection check — catches a site that
@@ -651,21 +669,31 @@
             <label class="output-settings-toggle" style="margin-top: 10px;">
               <input type="checkbox" id="toggle-hardening-blocking" />
               <span data-i18n="idle.hardeningBlockingToggle"></span>
+              <span class="help-host" data-help="help.hardening.blocking"></span>
             </label>
             <div id="hardening-blocking-config" class="hidden">
               <div id="hardening-blocking-severity" class="mode-toggle" style="margin: 6px 0 8px;">
                 <div class="mode-toggle-thumb"></div>
-                <button id="btn-hardening-blocking-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning" data-i18n-title="idle.hardeningSeverityWarningTitle"></button>
-                <button id="btn-hardening-blocking-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError" data-i18n-title="idle.hardeningSeverityErrorTitle"></button>
+                <button id="btn-hardening-blocking-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning"></button>
+                <button id="btn-hardening-blocking-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError"></button>
               </div>
-              <label class="browser-action-field-row">
-                <span data-i18n="idle.hardeningBlockingMinBodyLengthLabel"></span>
-                <input type="number" min="1" id="input-hardening-blocking-min-body-length" data-i18n-placeholder="idle.hardeningBlockingMinBodyLengthPlaceholder" />
-              </label>
-              <div class="output-settings-row" style="align-items: flex-start; margin-top: 6px;">
-                <label for="input-hardening-blocking-phrases" data-i18n="idle.hardeningBlockingPhrasesLabel"></label>
-                <textarea id="input-hardening-blocking-phrases" rows="2" data-i18n-placeholder="idle.hardeningBlockingPhrasesPlaceholder"></textarea>
-              </div>
+              <!-- Issue #399: the two rarely needed signals, tucked away (state remembered
+                   per section, see advanced-disclosure-ui.js) -->
+              <details class="advanced-disclosure" data-advanced="hardening-blocking">
+                <summary data-i18n="idle.hardeningBlockingAdvanced"></summary>
+                <div class="advanced-disclosure-body">
+                  <label class="browser-action-field-row hardening-sentence" data-help-anchor>
+                    <span data-i18n="idle.hardeningBlockingMinBodyLengthLabel"></span>
+                    <input type="number" min="1" id="input-hardening-blocking-min-body-length" data-i18n-placeholder="idle.hardeningBlockingMinBodyLengthPlaceholder" />
+                    <span data-i18n="idle.hardeningBlockingMinBodyLengthUnit"></span>
+                    <span class="help-host" data-help="help.hardening.blockingAdvanced"></span>
+                  </label>
+                  <div class="output-settings-row" style="align-items: flex-start; margin-top: 6px;">
+                    <label for="input-hardening-blocking-phrases" data-i18n="idle.hardeningBlockingPhrasesLabel"></label>
+                    <textarea id="input-hardening-blocking-phrases" rows="2" data-i18n-placeholder="idle.hardeningBlockingPhrasesPlaceholder"></textarea>
+                  </div>
+                </div>
+              </details>
             </div>
             <!-- Issue #133 (+ container-mode and, since #204, Api-mode-tree
                  follow-ups): required-fields check — a row (flat/Api-flat
@@ -683,12 +711,13 @@
               <label class="output-settings-toggle" style="margin-top: 10px;">
                 <input type="checkbox" id="toggle-hardening-required-fields" />
                 <span data-i18n="idle.hardeningRequiredFieldsToggle"></span>
+                <span class="help-host" data-help="help.hardening.requiredFields"></span>
               </label>
               <div id="hardening-required-fields-config" class="hidden">
                 <div id="hardening-required-fields-severity" class="mode-toggle" style="margin: 6px 0 8px;">
                   <div class="mode-toggle-thumb"></div>
-                  <button id="btn-hardening-required-fields-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning" data-i18n-title="idle.hardeningSeverityWarningTitle"></button>
-                  <button id="btn-hardening-required-fields-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError" data-i18n-title="idle.hardeningSeverityErrorTitle"></button>
+                  <button id="btn-hardening-required-fields-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning"></button>
+                  <button id="btn-hardening-required-fields-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError"></button>
                 </div>
                 <div id="hardening-required-fields-list"></div>
                 <div class="hardening-required-field-add-row">

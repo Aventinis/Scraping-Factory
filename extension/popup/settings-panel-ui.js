@@ -11,6 +11,7 @@ const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');
 
 const { t } = require('../i18n/i18n');
+const { applyRecommendedHardening } = require('./hardening-presets');
 
 const { STATES, escapeHtml } = require('./api-config');
 
@@ -241,7 +242,9 @@ function renderHardeningNullRateList(
       `<option value="">${escapeHtml(t('idle.hardeningNullRateFieldPlaceholder'))}</option>` +
       options.map(name => `<option value="${escapeHtml(name)}"${name === row.fieldName ? ' selected' : ''}>${escapeHtml(name)}</option>`).join('') +
       `</select>` +
-      `<input type="number" min="0" max="100" class="hardening-null-rate-threshold" data-index="${i}" value="${row.threshold}" />%` +
+      `<span class="hardening-sentence-text">${escapeHtml(t('idle.hardeningNullRateMiddle'))}</span>` +
+      `<input type="number" min="0" max="100" class="hardening-null-rate-threshold" data-index="${i}" value="${row.threshold}" />` +
+      `<span class="hardening-sentence-text">${escapeHtml(t('idle.hardeningNullRateAfter'))}</span>` +
       `<div class="mode-toggle hardening-null-rate-severity">` +
       `<div class="mode-toggle-thumb"></div>` +
       `<button type="button" class="mode-btn btn-null-rate-warning${row.severity === 'Warning' ? ' active' : ''}" data-index="${i}">${escapeHtml(t('idle.hardeningSeverityWarning'))}</button>` +
@@ -436,6 +439,25 @@ function wireSettingsPanelEvents(bridge) {
       pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [], selectionKind: 'discoveredUrls',
       domTree: null, domTreeTruncated: false, domTreeError: null,
     });
+  });
+
+  // Issue #399: "Recommended checks" — one click for the sensible starting set.
+  document.getElementById('btn-hardening-recommended')?.addEventListener('click', () => {
+    const state = bridge.getState();
+    const fieldNames = collectFieldNames(state.mode, state.fields, state.groups, state.apiConfig);
+    const { hardening, applied, needsFields } = applyRecommendedHardening(state.hardening, fieldNames);
+    bridge.setState(state.current, { hardening });
+    const parts = [];
+    if (applied.noResult) parts.push(t('idle.hardeningRecommendedNoResult'));
+    if (applied.requiredField) parts.push(t('idle.hardeningRecommendedRequired', { field: applied.requiredField }));
+    const note = document.getElementById('hardening-recommended-note');
+    if (note) {
+      note.textContent = [
+        parts.length ? t('idle.hardeningRecommendedApplied', { checks: parts.join(', ') }) : t('idle.hardeningRecommendedNothingNew'),
+        needsFields ? t('idle.hardeningRecommendedNeedFields') : '',
+      ].filter(Boolean).join(' ');
+      note.classList.remove('hidden');
+    }
   });
 
   // Issue #129: opt-in script hardening — the "no result" check.

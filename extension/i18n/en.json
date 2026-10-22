@@ -210,19 +210,16 @@
     "monitoringSectionToggle": "Monitoring",
     "settingsSectionToggle": "Settings",
     "hardeningNoResultToggle": "Check for empty result",
-    "hardeningSeverityWarning": "Warning",
-    "hardeningSeverityWarningTitle": "The script prints a warning but still exits with code 0.",
-    "hardeningSeverityError": "Error",
-    "hardeningSeverityErrorTitle": "The script prints an error and exits with its own code (2), distinguishable from a crash (1).",
+    "hardeningSeverityWarning": "Warn me",
+    "hardeningSeverityError": "Stop the run",
     "hardeningNullRateSectionLabel": "Check for empty values per field",
     "hardeningNullRateFieldPlaceholder": "-- choose field --",
     "hardeningNullRateAddBtn": "+ Add field",
     "hardeningBaselineToggle": "Check for a drop vs. the last run",
-    "hardeningBaselineThresholdLabel": "Threshold (drop)",
-    "hardeningBlockingToggle": "Check for blocking (redirect, short response, block phrases)",
-    "hardeningBlockingMinBodyLengthLabel": "Min. response length (bytes)",
-    "hardeningBlockingMinBodyLengthPlaceholder": "optional",
-    "hardeningBlockingPhrasesLabel": "Block phrases (one per line)",
+    "hardeningBlockingToggle": "Check whether the site blocks the script",
+    "hardeningBlockingMinBodyLengthLabel": "Page shorter than",
+    "hardeningBlockingMinBodyLengthPlaceholder": "e.g. 1000",
+    "hardeningBlockingPhrasesLabel": "Phrases that show a block page (one per line)",
     "hardeningBlockingPhrasesPlaceholder": "e.g. \"Access Denied\", \"Please verify you are human\"",
     "hardeningRequiredFieldsToggle": "Require fields (drop incomplete rows)",
     "hardeningRequiredFieldsAddBtn": "+ Add field",
@@ -247,7 +244,21 @@
     "outputBlueprintMappingHint": "Map each target field to one of this configuration's own source fields — every target field needs a source before the script can be generated.",
     "outputBlueprintTreeMappingHint": "Map each target field to one of this configuration's own source fields — a target group's own position in the output is inferred automatically from its mapped fields. Every target field needs a source before the script can be generated.",
     "outputFormatFlattenHint": "Nested results are flattened into one table: one row per innermost repeating item, with values from higher levels repeated in every row (or pick an Output Blueprint to choose the columns yourself). Every data field needs a unique name.",
-    "modeLabel": "Mode"
+    "modeLabel": "Mode",
+    "monitoringIntro": "Only useful if you run the script again and again, e.g. every night: it tells you when the website changed and your script stopped working.",
+    "hardeningSectionLabel": "Checks after every run",
+    "hardeningRecommendedBtn": "Recommended checks",
+    "hardeningRecommendedApplied": "Switched on: {checks}.",
+    "hardeningRecommendedNoResult": "empty result (warn me)",
+    "hardeningRecommendedRequired": "required field “{field}” (warn me)",
+    "hardeningRecommendedNothingNew": "The recommended checks are already on.",
+    "hardeningRecommendedNeedFields": "Add fields first to also get the required-field suggestion.",
+    "hardeningNullRateMiddle": "is empty in more than",
+    "hardeningNullRateAfter": "% of the rows",
+    "hardeningBaselineBefore": "Trigger if there are",
+    "hardeningBaselineAfter": "% fewer rows than in the last run",
+    "hardeningBlockingAdvanced": "Advanced: short pages and block phrases",
+    "hardeningBlockingMinBodyLengthUnit": "bytes (optional)"
   },
   "robots": {
     "checkFailed": "robots.txt could not be checked ({error}).",
@@ -809,6 +820,38 @@
       "dateFormat": {
         "text": "Describe how the date is written: {dd} is the day, {mm} the month, {yyyy} the year, everything else exactly as it appears. Only numeric dates work — month names like “Aug” don't.",
         "example": "28.08.2026 → {dd}.{mm}.{yyyy}"
+      }
+    },
+    "hardening": {
+      "severity": {
+        "text": "Checks run at the end of every run of the script. “Warn me”: the run finishes normally and a message is printed. “Stop the run”: the run is marked as failed, so a scheduler or monitoring tool notices — exit code 2 (an unexpected crash is code 1)."
+      },
+      "recommended": {
+        "text": "Switches on a sensible start: a warning when nothing was found at all, and a warning for rows missing their first field (those rows are left out of the file). Checks you already set are left alone."
+      },
+      "noResult": {
+        "text": "Warns when the script found nothing at all — usually because the website changed its layout.",
+        "example": "The selector for “Price” suddenly matches no element."
+      },
+      "nullRate": {
+        "text": "Warns when too many rows have no value in one field: the selector still finds something, but not the right thing.",
+        "example": "Warn when more than 50 % of the rows have no Price."
+      },
+      "baseline": {
+        "text": "Warns when this run found much less than the last run — a broken “load more” button or pagination often looks like this.",
+        "example": "20 % fewer rows than yesterday."
+      },
+      "blocking": {
+        "text": "Warns when the site starts blocking the script but still answers normally: it sends you to another website, sends a very short page, or shows a block message.",
+        "example": "“Access Denied”, “I'm not a robot”"
+      },
+      "blockingAdvanced": {
+        "text": "A block page is usually tiny: 1000 bytes is about one paragraph of text. Phrases are searched in the page, one per line; any hit counts as blocked.",
+        "example": "Access Denied\nPlease verify you are human"
+      },
+      "requiredFields": {
+        "text": "Leaves out every row that has no value for the chosen fields, so incomplete rows never reach the file. The rest of the run carries on.",
+        "example": "A database import that needs a non-empty Price."
       }
     }
   },
