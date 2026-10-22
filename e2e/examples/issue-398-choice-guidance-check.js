@@ -168,9 +168,12 @@ function assert(condition, message) {
     await focusFixture(fixturePage);
     await popup.click('#btn-generate');
     await popup.waitForSelector('#error-toast:not(.hidden)', { timeout: 90000 });
-    const failure = await toastText();
-    assert(/returned no data/.test(failure), `expected the trial run to find no data on Static, got: ${failure}`);
-    assert(/try the Browser engine/.test(failure), `the error should suggest the Browser engine, got: ${failure}`);
+    // Issue #401: the failure is now a plain-language title and hint (the Browser-engine suggestion
+    // is part of the "no data" hint on the Static engine), the original text sits behind "Details".
+    const failure = await popup.locator('#error-toast').textContent();
+    assert(/No data was found/.test(failure), `expected the plain "no data" message on Static, got: ${failure}`);
+    assert(/returned no data/.test(failure), `the original text should still be available, got: ${failure}`);
+    assert(/try the Browser engine/.test(await popup.locator('#error-toast-hint').textContent()), 'the hint should suggest the Browser engine');
     await popup.screenshot({ path: path.join(__dirname, 'issue-398-static-no-data.png') });
     console.log('static + JavaScript-built page: "no data" error suggests the Browser engine');
 

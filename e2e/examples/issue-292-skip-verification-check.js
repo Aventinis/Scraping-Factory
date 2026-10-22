@@ -37,7 +37,7 @@ const { launchBrowser, openPopup, focusFixture, waitForIdleScreen, startCompanio
     await focusFixture(fixturePage);
     await popupPage.click('#btn-generate');
     await popupPage.waitForSelector('#error-toast:not(.hidden)', { timeout: 60000 });
-    const failure = await popupPage.locator('#error-toast-message').textContent();
+    const failure = await popupPage.locator('#error-toast').textContent(); // title + hint + original text (Issue #401)
     console.log('With trial run →', failure.slice(0, 120));
     if (!failure.includes('HTTP 503')) throw new Error(`Expected the trial run to fail with the 503, got: ${failure}`);
     await waitForIdleScreen(popupPage);
