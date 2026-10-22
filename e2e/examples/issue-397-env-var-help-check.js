@@ -61,10 +61,7 @@ function assert(condition, message) {
       ['Fill action', popup.locator('.browser-action-env-name').first()],
     ];
     // custom header: a row with the "Environment variable" kind
-    const headerRow = popup.locator('#request-headers-list .request-header-row').first();
-    await headerRow.locator('.request-header-name').fill('X-Api-Key');
-    await headerRow.locator('.request-header-name').blur();
-    await headerRow.locator('.request-header-kind').selectOption('env');
+    await popup.selectOption('#select-add-request-header', 'apiKey'); // Issue #402: picks an env-var row named X-Api-Key
     places.push(['request header', popup.locator('#request-headers-list .request-header-value').first()]);
 
     // 1) The same explanation + popover everywhere.

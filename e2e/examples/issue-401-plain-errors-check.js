@@ -128,10 +128,8 @@ function assert(condition, message) {
     await waitForIdleScreen(popup);
     await popup.click('#settings-section-toggle');
     await popup.check('#toggle-request-headers');
+    await popup.selectOption('#select-add-request-header', 'apiKey'); // Issue #402: an env-var row, named X-Api-Key
     const row = popup.locator('#request-headers-list .request-header-row').first();
-    await row.locator('.request-header-name').fill('X-Api-Key');
-    await row.locator('.request-header-name').blur();
-    await row.locator('.request-header-kind').selectOption('env');
     await row.locator('.request-header-value').fill('SF_E2E_MISSING_VARIABLE');
     await row.locator('.request-header-value').blur();
     await generate();

@@ -42,7 +42,7 @@ function assert(condition, message) {
     await waitForIdleScreen(popup);
 
     await popup.click('#settings-section-toggle');
-    const headersBtn = popup.locator('#request-headers-section .help-btn');
+    const headersBtn = popup.locator('#request-headers-section label .help-btn');
     const appendBtn = popup.locator('#append-output-row .help-btn');
     const isOpen = async (btn) => (await btn.getAttribute('aria-expanded')) === 'true'
       && await popup.locator(`#${await btn.getAttribute('aria-controls')}`).isVisible();
