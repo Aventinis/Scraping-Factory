@@ -21,7 +21,7 @@
          the help host); data-help-anchor puts the popover panel after this row. -->
     <div class="row-label" data-help-anchor>
       <span data-i18n="idle.modeLabel"></span>
-      <span class="help-host" data-help="help.mode.choice"></span>
+      <span class="help-host" data-help="help.mode.choice" data-doc="modes"></span>
     </div>
     <div class="mode-toggle">
       <div class="mode-toggle-thumb"></div>
@@ -40,7 +40,7 @@
     <div id="engine-section" class="engine-section">
       <div class="row-label" data-help-anchor>
         <span data-i18n="idle.engineLabel"></span>
-        <span class="help-host" data-help="help.engine.choice"></span>
+        <span class="help-host" data-help="help.engine.choice" data-doc="browserEngine"></span>
       </div>
       <div class="mode-toggle" style="margin-bottom: 8px;">
         <div class="mode-toggle-thumb"></div>
@@ -49,13 +49,13 @@
       </div>
 
       <div id="browser-actions-section" class="hidden">
-        <div class="row-label" data-help-anchor><span data-i18n="browserActions.title"></span><span class="help-host" data-help="help.browserActions.overview"></span></div>
+        <div class="row-label" data-help-anchor><span data-i18n="browserActions.title"></span><span class="help-host" data-help="help.browserActions.overview" data-doc="browserActions"></span></div>
         <p class="browser-actions-hint" data-i18n="browserActions.hint"></p>
         <!-- Issue #403: one click adds the four steps of a typical login. -->
         <div class="actions">
           <button id="btn-add-login-flow" class="btn-secondary" type="button" data-i18n="browserActions.addLoginFlowBtn"></button>
         </div>
-        <p id="login-flow-hint" class="browser-actions-hint hidden" data-i18n="browserActions.loginFlowHint"></p>
+        <p id="login-flow-hint" class="browser-actions-hint hidden"><span data-i18n="browserActions.loginFlowHint"></span> <a class="learn-more" data-doc="loginFlow" href="#" data-i18n="common.learnMore"></a></p>
         <div id="browser-actions-list"></div>
         <div class="actions">
           <button id="btn-add-action-wait" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.addWaitBtn"></button>
@@ -78,7 +78,7 @@
               <span data-i18n="browserActions.persistentSessionToggle"></span>
               <span class="help-host" data-help="help.browserActions.persistentSession"></span>
             </label>
-            <p class="preview-summary" data-i18n="browserActions.persistentSessionHint"></p>
+            <p class="preview-summary"><span data-i18n="browserActions.persistentSessionHint"></span> <a class="learn-more" data-doc="persistentSession" href="#" data-i18n="common.learnMore"></a></p>
           </div>
         </details>
       </div>
@@ -156,7 +156,7 @@
          (fetchAllSavedConfigs), not just the current page's, since a
          component doesn't have to match the page currently open. -->
     <div id="combined-mode-section" class="hidden">
-      <p class="preview-summary" data-i18n="idle.combinedHint"></p>
+      <p class="preview-summary"><span data-i18n="idle.combinedHint"></span> <a class="learn-more" data-doc="modesCombined" href="#" data-i18n="common.learnMore"></a></p>
       <ul id="combined-components-list" class="group-tree"></ul>
       <div class="actions">
         <select id="select-combined-add-component"></select>
@@ -175,7 +175,7 @@
          snapshotted into the list below via "+ Add block", starting the
          next block fresh. -->
     <div id="blocks-mode-section" class="hidden">
-      <p class="preview-summary" data-i18n="idle.blocksHint"></p>
+      <p class="preview-summary"><span data-i18n="idle.blocksHint"></span> <a class="learn-more" data-doc="modesBlocks" href="#" data-i18n="common.learnMore"></a></p>
 
       <div id="blocks-draft-editor">
         <div class="mode-toggle" style="margin-bottom: 8px;">
@@ -263,12 +263,12 @@
             <!-- Issue #397: the shared "What is an environment variable?" line + popover
                  (help.envVar.what) and the shared inline name validation (data-env-var,
                  see env-var-ui.js) — same on every input that takes a variable name. -->
-            <p class="env-var-note" data-help-anchor><span data-i18n="envVar.whatLabel"></span><span class="help-host" data-help="help.envVar.what"></span></p>
+            <p class="env-var-note" data-help-anchor><span data-i18n="envVar.whatLabel"></span><span class="help-host" data-help="help.envVar.what" data-doc="envVars"></span></p>
             <div class="output-settings-row">
               <label for="input-proxy-env-var" data-i18n="idle.proxyEnvVarLabel"></label>
               <input type="text" id="input-proxy-env-var" data-env-var data-i18n-placeholder="envVar.placeholder.proxy" autocomplete="off" />
             </div>
-            <p class="preview-summary" data-i18n="idle.proxyHint"></p>
+            <p class="preview-summary"><span data-i18n="idle.proxyHint"></span> <a class="learn-more" data-doc="proxy" href="#" data-i18n="common.learnMore"></a></p>
           </div>
           <!-- Issue #222: opt-in pause between outbound requests (a minimum
                gap between two requests, fixed or randomized within a
@@ -286,7 +286,7 @@
               <input type="text" inputmode="decimal" id="input-request-delay-max" data-i18n-placeholder="idle.requestDelayToPlaceholder" autocomplete="off" />
               <span data-i18n="idle.requestDelaySecondsUnit"></span>
             </div>
-            <p class="preview-summary" data-i18n="idle.requestDelayHint"></p>
+            <p class="preview-summary"><span data-i18n="idle.requestDelayHint"></span> <a class="learn-more" data-doc="pause" href="#" data-i18n="common.learnMore"></a></p>
           </div>
           <!-- Issue #228: independent of the pause above — the script reads
                Crawl-delay/Request-rate from the site's own robots.txt and
@@ -295,7 +295,7 @@
             <input type="checkbox" id="toggle-respect-robots-delay" />
             <span data-i18n="idle.respectRobotsDelayToggle"></span>
           </label>
-          <p class="preview-summary" data-i18n="idle.respectRobotsDelayHint"></p>
+          <p class="preview-summary"><span data-i18n="idle.respectRobotsDelayHint"></span> <a class="learn-more" data-doc="robots" href="#" data-i18n="common.learnMore"></a></p>
           <!-- Issue #333: the script re-checks robots.txt Disallow at run time
                and handles a disallowed request per the chosen action. -->
           <label class="output-settings-toggle">
@@ -310,7 +310,7 @@
               <option value="Abort" data-i18n="idle.robotsDisallowActionAbort"></option>
             </select>
           </div>
-          <p class="preview-summary" data-i18n="idle.robotsDisallowHint"></p>
+          <p class="preview-summary"><span data-i18n="idle.robotsDisallowHint"></span> <a class="learn-more" data-doc="robots" href="#" data-i18n="common.learnMore"></a></p>
           <!-- Issue #223: opt-in retry with backoff on transient request
                failures (connection errors/timeouts, 429/502/503/504 by
                default) — mode- and engine-independent. -->
@@ -339,7 +339,7 @@
                 </div>
               </div>
             </details>
-            <p class="preview-summary" data-i18n="idle.retryHint"></p>
+            <p class="preview-summary"><span data-i18n="idle.retryHint"></span> <a class="learn-more" data-doc="retry" href="#" data-i18n="common.learnMore"></a></p>
           </div>
           <!-- Issue #226: custom request headers for flat/container/Blocks
                mode (API mode has its own header editor; hidden for it and for
@@ -349,10 +349,10 @@
             <label class="output-settings-toggle">
               <input type="checkbox" id="toggle-request-headers" />
               <span data-i18n="idle.requestHeadersToggle"></span>
-              <span class="help-host" data-help="help.requestHeaders.headers"></span>
+              <span class="help-host" data-help="help.requestHeaders.headers" data-doc="headers"></span>
             </label>
             <div id="request-headers-config" class="hidden">
-              <p class="env-var-note" data-help-anchor><span data-i18n="envVar.whatLabel"></span><span class="help-host" data-help="help.envVar.what"></span></p>
+              <p class="env-var-note" data-help-anchor><span data-i18n="envVar.whatLabel"></span><span class="help-host" data-help="help.envVar.what" data-doc="envVars"></span></p>
               <div id="request-headers-list"></div>
               <!-- Issue #402: pick what the header is for instead of typing an
                    empty row; secrets start as an environment variable. -->
@@ -374,7 +374,7 @@
             <label class="output-settings-toggle">
               <input type="checkbox" id="toggle-append-output" />
               <span data-i18n="idle.appendOutputToggle"></span>
-              <span class="help-host" data-help="help.appendOutput.append"></span>
+              <span class="help-host" data-help="help.appendOutput.append" data-doc="appendOutput"></span>
             </label>
           </div>
           <div id="dedup-section">
@@ -384,7 +384,7 @@
               <span class="help-host" data-help="help.dedup.overview"></span>
             </label>
             <div id="dedup-config" class="hidden">
-              <p class="preview-summary" data-i18n="idle.dedupKeyFieldsHint"></p>
+              <p class="preview-summary"><span data-i18n="idle.dedupKeyFieldsHint"></span> <a class="learn-more" data-doc="dedup" href="#" data-i18n="common.learnMore"></a></p>
               <div id="dedup-key-fields-list"></div>
               <div class="hardening-required-field-add-row">
                 <select id="select-dedup-key-field"></select>
@@ -414,7 +414,7 @@
                     </div>
                   </div>
                 </details>
-                <p class="preview-summary" data-i18n="idle.dedupIncrementalHint"></p>
+                <p class="preview-summary"><span data-i18n="idle.dedupIncrementalHint"></span> <a class="learn-more" data-doc="dedup" href="#" data-i18n="common.learnMore"></a></p>
               </div>
             </div>
           </div>
@@ -474,7 +474,7 @@
               <div class="actions">
                 <button id="btn-pick-pagination-page-link" class="btn-secondary btn-tiny" type="button" data-i18n="idle.paginationPickPageLink"></button>
               </div>
-              <p class="preview-summary" data-i18n="idle.paginationUrlTemplateHint"></p>
+              <p class="preview-summary"><span data-i18n="idle.paginationUrlTemplateHint"></span> <a class="learn-more" data-doc="pagination" href="#" data-i18n="common.learnMore"></a></p>
             </div>
             <div class="output-settings-row" data-help-anchor>
               <label for="input-pagination-max-pages" data-i18n="idle.paginationMaxPagesLabel"></label>
@@ -519,7 +519,7 @@
                 <div class="actions">
                   <button id="btn-pick-discovered-urls-link" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.pickSelectorBtn"></button>
                 </div>
-                <p class="preview-summary" data-i18n="idle.discoveredUrlsHint"></p>
+                <p class="preview-summary"><span data-i18n="idle.discoveredUrlsHint"></span> <a class="learn-more" data-doc="pagination" href="#" data-i18n="common.learnMore"></a></p>
                 <div class="output-settings-row">
                   <label for="input-discovered-urls-max-urls" data-i18n="idle.discoveredUrlsMaxUrlsLabel"></label>
                   <input type="number" id="input-discovered-urls-max-urls" min="1" step="1" />
@@ -545,7 +545,7 @@
             <button type="button" id="btn-manage-blueprints" class="btn-secondary btn-tiny" data-i18n="idle.manageBlueprintsBtn"></button>
           </div>
           <div id="output-blueprint-mapping" class="hidden">
-            <p class="preview-summary" data-i18n="idle.outputBlueprintMappingHint"></p>
+            <p class="preview-summary"><span data-i18n="idle.outputBlueprintMappingHint"></span> <a class="learn-more" data-doc="outputLayouts" href="#" data-i18n="common.learnMore"></a></p>
             <ul id="output-blueprint-mapping-list"></ul>
           </div>
           <!-- Issue #244: a Tree-schema blueprint's own mapping view — shown
@@ -555,7 +555,7 @@
                each leaf row getting a source-field <select> exactly like the
                flat mapping's own per-row <select>. -->
           <div id="output-blueprint-tree-mapping" class="hidden">
-            <p class="preview-summary" data-i18n="idle.outputBlueprintTreeMappingHint"></p>
+            <p class="preview-summary"><span data-i18n="idle.outputBlueprintTreeMappingHint"></span> <a class="learn-more" data-doc="outputLayouts" href="#" data-i18n="common.learnMore"></a></p>
             <ul id="output-blueprint-tree-mapping-list" class="group-tree-root"></ul>
           </div>
         </div>
@@ -589,7 +589,7 @@
         </div>
         <div id="monitoring-section-content" class="hidden">
           <!-- Issue #399: when this section matters, in one sentence. -->
-          <p class="monitoring-intro" data-i18n="idle.monitoringIntro"></p>
+          <p class="monitoring-intro"><span data-i18n="idle.monitoringIntro"></span> <a class="learn-more" data-doc="monitoring" href="#" data-i18n="common.learnMore"></a></p>
           <!-- Issue #87: opt-in change detection + notification — every
                credential/target field below is the *name* of an
                environment variable, never a literal value (mirrors
@@ -600,7 +600,7 @@
             <span data-i18n="idle.changeDetectionToggle"></span>
           </label>
           <div id="change-detection-config" class="hidden">
-            <p class="env-var-note" data-help-anchor><span data-i18n="envVar.whatLabel"></span><span class="help-host" data-help="help.envVar.what"></span></p>
+            <p class="env-var-note" data-help-anchor><span data-i18n="envVar.whatLabel"></span><span class="help-host" data-help="help.envVar.what" data-doc="envVars"></span></p>
             <div class="mode-toggle" style="margin-bottom: 8px;">
               <div class="mode-toggle-thumb"></div>
               <button id="btn-notify-email" class="mode-btn active" type="button" data-i18n="idle.notifyEmail"></button>
@@ -638,7 +638,7 @@
                 <input type="text" id="input-cd-webhook-url" data-env-var data-i18n-placeholder="envVar.placeholder.webhookUrl" autocomplete="off" />
               </div>
             </div>
-            <p class="preview-summary" data-i18n="idle.changeDetectionHint"></p>
+            <p class="preview-summary"><span data-i18n="idle.changeDetectionHint"></span> <a class="learn-more" data-doc="changeDetection" href="#" data-i18n="common.learnMore"></a></p>
           </div>
           <!-- Issue #129: opt-in script hardening — the generated script
                re-checks its own result after scraping (e.g. before a
@@ -655,11 +655,11 @@
                  one-click "Recommended checks" for people who don't want to read on. -->
             <div class="row-label hardening-heading" data-help-anchor>
               <span data-i18n="idle.hardeningSectionLabel"></span>
-              <span class="help-host" data-help="help.hardening.severity"></span>
+              <span class="help-host" data-help="help.hardening.severity" data-doc="safetyChecks"></span>
             </div>
             <div class="hardening-recommended-row" data-help-anchor>
               <button type="button" id="btn-hardening-recommended" class="btn-secondary btn-tiny" data-i18n="idle.hardeningRecommendedBtn"></button>
-              <span class="help-host" data-help="help.hardening.recommended"></span>
+              <span class="help-host" data-help="help.hardening.recommended" data-doc="safetyChecks"></span>
             </div>
             <p id="hardening-recommended-note" class="preview-summary hardening-recommended-note hidden"></p>
             <label class="output-settings-toggle">
@@ -800,7 +800,7 @@
             <span data-i18n="idle.preflightToggle"></span>
             <span class="help-host" data-help="help.preflight.overview"></span>
           </label>
-          <p class="preview-summary" data-i18n="idle.preflightHint"></p>
+          <p class="preview-summary"><span data-i18n="idle.preflightHint"></span> <a class="learn-more" data-doc="skipIfUnchanged" href="#" data-i18n="common.learnMore"></a></p>
         </div>
       </div>
       <!-- Filenames last: a final naming step right before Export/Generate,
@@ -819,7 +819,7 @@
         <input type="text" id="input-output-filename" data-i18n-placeholder="idle.outputFilenamePlaceholder" autocomplete="off" />
         <span id="output-filename-ext" class="output-settings-ext">.csv</span>
       </div>
-      <p id="output-format-hint" class="preview-summary hidden" data-i18n="idle.outputFormatFlattenHint"></p>
+      <p id="output-format-hint" class="preview-summary hidden"><span data-i18n="idle.outputFormatFlattenHint"></span> <a class="learn-more" data-doc="outputFormat" href="#" data-i18n="common.learnMore"></a></p>
     </div>
     </div>
 
@@ -832,7 +832,7 @@
          `url` itself, which always stays whatever the live browser tab
          shows (see config-import.js's applyConfigToState doc comment). -->
     <div id="saved-configs-section">
-      <p class="preview-summary" data-i18n="idle.savedConfigsTitle"></p>
+      <p class="preview-summary"><span data-i18n="idle.savedConfigsTitle"></span> <a class="learn-more" data-doc="savedConfigs" href="#" data-i18n="common.learnMore"></a></p>
       <div id="saved-configs-list"></div>
       <p id="saved-configs-empty" class="preview-summary hidden" data-i18n="idle.savedConfigsEmpty"></p>
     </div>

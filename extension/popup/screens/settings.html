@@ -19,7 +19,7 @@
       <option value="xlsx" data-i18n="settings.outputFormatXlsx"></option>
     </select>
   </div>
-  <p class="preview-summary" data-i18n="settings.outputFormatHint"></p>
+  <p class="preview-summary"><span data-i18n="settings.outputFormatHint"></span> <a class="learn-more" data-doc="outputFormat" href="#" data-i18n="common.learnMore"></a></p>
   <label class="output-settings-toggle">
     <input type="checkbox" id="toggle-include-data-preview" />
     <span data-i18n="idle.dataPreviewToggle"></span>
@@ -35,7 +35,7 @@
         <input type="checkbox" id="toggle-external-config" />
         <span data-i18n="idle.externalConfigToggle"></span>
       </label>
-      <p class="preview-summary" data-i18n="idle.externalConfigHint"></p>
+      <p class="preview-summary"><span data-i18n="idle.externalConfigHint"></span> <a class="learn-more" data-doc="editableConfig" href="#" data-i18n="common.learnMore"></a></p>
     </div>
   </details>
   <!-- Issue #292: skip the companion's trial run — the script is returned
@@ -44,7 +44,7 @@
     <input type="checkbox" id="toggle-skip-verification" />
     <span data-i18n="settings.skipVerificationToggle"></span>
   </label>
-  <p class="preview-summary" data-i18n="settings.skipVerificationHint"></p>
+  <p class="preview-summary"><span data-i18n="settings.skipVerificationHint"></span> <a class="learn-more" data-doc="skipTrialRun" href="#" data-i18n="common.learnMore"></a></p>
 
   <!-- Default script name — pre-fills the per-scrape "Skriptname" input
        whenever a new site is detected (checkCompanion/the stale-URL
@@ -93,7 +93,7 @@
     <p id="account-no-registration" class="preview-summary hidden" data-i18n="settings.account.noRegistration"></p>
     <!-- Issue #353: reset a forgotten password with a code mailed to the verified address. -->
     <div id="account-forgot-panel" class="hidden">
-      <p class="preview-summary" data-i18n="settings.account.forgotHint"></p>
+      <p class="preview-summary"><span data-i18n="settings.account.forgotHint"></span> <a class="learn-more" data-doc="accounts" href="#" data-i18n="common.learnMore"></a></p>
       <div class="output-settings-row">
         <label for="input-account-forgot-account" data-i18n="settings.account.forgotAccountLabel"></label>
         <input type="text" id="input-account-forgot-account" autocomplete="username" />
@@ -175,7 +175,7 @@
     <button id="btn-access-key-clear" class="btn-secondary btn-tiny" type="button" data-i18n="settings.accessKeyClear"></button>
   </div>
   <p id="access-key-status" class="preview-summary hidden"></p>
-  <p class="preview-summary" data-i18n="settings.accessKeyHint"></p>
+  <p class="preview-summary"><span data-i18n="settings.accessKeyHint"></span> <a class="learn-more" data-doc="accessKey" href="#" data-i18n="common.learnMore"></a></p>
 </div>
 
 <!-- Issue #352: development builds only — account-ui.js removes this whole
@@ -207,7 +207,7 @@
 </details>
 
 <div id="settings-blueprints-section">
-  <p class="row-label" data-i18n="modals.manageBlueprints.title"></p>
+  <p class="row-label"><span data-i18n="modals.manageBlueprints.title"></span> <a class="learn-more" data-doc="outputLayouts" href="#" data-i18n="common.learnMore"></a></p>
   <div id="manage-blueprints-list"></div>
   <p id="manage-blueprints-empty" class="preview-summary hidden" data-i18n="modals.manageBlueprints.empty"></p>
   <div class="actions">
@@ -220,7 +220,7 @@
      as preset"; renamed/deleted here. Rendered by transform-presets-ui.js. -->
 <div id="settings-transform-presets-section">
   <p class="row-label" data-i18n="transformPresets.settingsTitle"></p>
-  <p class="preview-summary" data-i18n="transformPresets.settingsHint"></p>
+  <p class="preview-summary"><span data-i18n="transformPresets.settingsHint"></span> <a class="learn-more" data-doc="presets" href="#" data-i18n="common.learnMore"></a></p>
   <div id="transform-presets-list"></div>
   <p id="transform-presets-unavailable" class="preview-summary hidden" data-i18n="transformPresets.unavailableHint"></p>
 </div>
@@ -232,7 +232,7 @@
      saved for any site, with no "Laden" — loading only makes sense in the
      context of that site's own currently-open tab. -->
 <div id="settings-all-configs-section">
-  <p class="row-label" data-i18n="settings.allConfigsTitle"></p>
+  <p class="row-label"><span data-i18n="settings.allConfigsTitle"></span> <a class="learn-more" data-doc="savedConfigs" href="#" data-i18n="common.learnMore"></a></p>
   <div id="all-saved-configs-list"></div>
   <p id="all-saved-configs-empty" class="preview-summary hidden" data-i18n="settings.allConfigsEmpty"></p>
 </div>

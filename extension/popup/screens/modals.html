@@ -42,13 +42,13 @@
         <label for="input-field-name-text-filter" data-i18n="modals.textFilter.label"></label>
         <input id="input-field-name-text-filter" type="text" data-i18n-placeholder="modals.textFilter.placeholder" autocomplete="off" />
         <button type="button" id="btn-field-name-use-text" class="btn-secondary btn-tiny hidden" data-i18n="modals.textFilter.useElementText"></button>
-        <p class="preview-summary" data-i18n="modals.textFilter.hint"></p>
+        <p class="preview-summary"><span data-i18n="modals.textFilter.hint"></span> <a class="learn-more" data-doc="textFilter" href="#" data-i18n="common.learnMore"></a></p>
       </div>
       <!-- Issue #85: live match count for the just-picked selector -->
       <p id="field-name-match-count" class="match-count-hint hidden"></p>
       <!-- Issue #84: optional per-field transform chain -->
       <div class="field-transforms-section">
-        <label data-i18n="transforms.sectionLabel"></label>
+        <label><span data-i18n="transforms.sectionLabel"></span> <a class="learn-more" data-doc="transforms" href="#" data-i18n="common.learnMore"></a></label>
         <ul id="field-transform-list" class="field-transform-list"></ul>
         <button type="button" id="btn-field-transform-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
         <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.js -->
@@ -183,7 +183,7 @@
         <label for="input-field-text-filter" data-i18n="modals.textFilter.label"></label>
         <input id="input-field-text-filter" type="text" data-i18n-placeholder="modals.textFilter.placeholder" autocomplete="off" />
         <button type="button" id="btn-field-use-text" class="btn-secondary btn-tiny hidden" data-i18n="modals.textFilter.useElementText"></button>
-        <p class="preview-summary" data-i18n="modals.textFilter.hint"></p>
+        <p class="preview-summary"><span data-i18n="modals.textFilter.hint"></span> <a class="learn-more" data-doc="textFilter" href="#" data-i18n="common.learnMore"></a></p>
       </div>
       <!-- Issue #85: live match count for the just-picked selector -->
       <p id="field-extended-match-count" class="match-count-hint hidden"></p>
@@ -191,7 +191,7 @@
            "Vorhanden?" (mode === 'exists'), a boolean-ish presence check
            rather than a string pipeline. -->
       <div id="field-extended-transforms-section" class="field-transforms-section">
-        <label data-i18n="transforms.sectionLabel"></label>
+        <label><span data-i18n="transforms.sectionLabel"></span> <a class="learn-more" data-doc="transforms" href="#" data-i18n="common.learnMore"></a></label>
         <ul id="field-extended-transform-list" class="field-transform-list"></ul>
         <button type="button" id="btn-field-extended-transform-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
         <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.js -->
@@ -251,7 +251,7 @@
   <div id="modal-api-field-transforms" class="modal hidden">
     <div class="modal-inner">
       <div class="field-transforms-section">
-        <label data-i18n="transforms.sectionLabel"></label>
+        <label><span data-i18n="transforms.sectionLabel"></span> <a class="learn-more" data-doc="transforms" href="#" data-i18n="common.learnMore"></a></label>
         <ul id="api-field-transform-list" class="field-transform-list"></ul>
         <button type="button" id="btn-api-field-transforms-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
         <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.js -->
@@ -275,7 +275,7 @@
     <div class="modal-inner">
       <label for="input-combine-field-name" data-i18n="modals.combineField.nameLabel"></label>
       <input id="input-combine-field-name" type="text" data-i18n-placeholder="modals.combineField.namePlaceholder" autocomplete="off" />
-      <label data-i18n="modals.combineField.sourcesLabel"></label>
+      <label><span data-i18n="modals.combineField.sourcesLabel"></span> <a class="learn-more" data-doc="combineSplit" href="#" data-i18n="common.learnMore"></a></label>
       <ul id="combine-field-source-list" class="combine-field-source-list"></ul>
       <label for="input-combine-field-separator" data-i18n="modals.combineField.separatorLabel"></label>
       <input id="input-combine-field-separator" type="text" data-i18n-placeholder="transforms.separatorPlaceholder" autocomplete="off" />
@@ -298,7 +298,7 @@
     <div class="modal-inner">
       <label for="input-split-field-name" data-i18n="modals.splitField.nameLabel"></label>
       <input id="input-split-field-name" type="text" data-i18n-placeholder="modals.splitField.namePlaceholder" autocomplete="off" />
-      <label for="select-split-field-source" data-i18n="modals.splitField.sourceLabel"></label>
+      <label for="select-split-field-source"><span data-i18n="modals.splitField.sourceLabel"></span> <a class="learn-more" data-doc="combineSplit" href="#" data-i18n="common.learnMore"></a></label>
       <select id="select-split-field-source"></select>
       <label for="input-split-field-separator" data-i18n="modals.splitField.separatorLabel"></label>
       <input id="input-split-field-separator" type="text" data-i18n-placeholder="transforms.separatorPlaceholder" autocomplete="off" />

@@ -8,7 +8,7 @@
          list entirely (Phase A5): a single top-level match renders as a
          one-node-deep tree, visually almost identical to the old list but
          wrapped in the same tree-editor chrome every deeper level reuses. -->
-    <div class="row-label" data-i18n="common.fields"></div>
+    <div class="row-label"><span data-i18n="common.fields"></span> <a class="learn-more" data-doc="modesApi" href="#" data-i18n="common.learnMore"></a></div>
     <ul id="api-tree-root" class="api-tree"></ul>
     <div class="actions">
       <button id="btn-api-tree-add-root" class="btn-secondary btn-tiny" type="button" data-i18n="apiTree.addRootGroupBtn"></button>
@@ -96,14 +96,14 @@
       <div id="api-link-config" class="api-cursor-config hidden">
         <div class="row-label" data-i18n="apiLink.maxPagesLabel"></div>
         <input type="number" min="1" step="1" id="input-api-link-max-pages" value="50" />
-        <p class="browser-actions-hint" data-i18n="apiLink.firstPageHint"></p>
+        <p class="browser-actions-hint"><span data-i18n="apiLink.firstPageHint"></span> <a class="learn-more" data-doc="modesApi" href="#" data-i18n="common.learnMore"></a></p>
       </div>
     </div>
       </div>
     </details>
 
     <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.headersLabel"></div>
-    <p class="env-var-note" data-help-anchor><span data-i18n="envVar.whatLabel"></span><span class="help-host" data-help="help.envVar.what"></span></p>
+    <p class="env-var-note" data-help-anchor><span data-i18n="envVar.whatLabel"></span><span class="help-host" data-help="help.envVar.what" data-doc="envVars"></span></p>
     <ul id="api-config-headers" class="api-config-headers"></ul>
 
     <div class="actions" style="margin-top: 12px;">
