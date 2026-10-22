@@ -198,16 +198,16 @@
     "paginationKindPageNumber": "Seiten-Nummer-URL",
     "paginationNextLinkSelectorLabel": "Selektor für \"Nächste Seite\"-Link",
     "paginationNextLinkSelectorPlaceholder": "z. B. a.next, a:contains(\"Weiter\")",
-    "paginationUrlTemplateLabel": "Seiten-URL-Vorlage",
+    "paginationUrlTemplateLabel": "Muster für die Seiten-URL",
     "paginationUrlTemplatePlaceholder": "z. B. {url}?page={page}",
-    "paginationUrlTemplateHint": "Muss sowohl {url} (die unveränderte Start-URL) als auch {page} (die Seitenzahl, beginnend bei 2 — Seite 1 ist immer die unveränderte Start-URL) enthalten.",
-    "paginationMaxPagesLabel": "Max. Seitenzahl (Sicherheitsgrenze)",
+    "paginationUrlTemplateHint": "{page} zählt 2, 3, … — Seite 1 ist immer die Startseite.",
+    "paginationMaxPagesLabel": "Max. Seiten",
     "discoveredUrlsToggle": "Weitere Start-URLs automatisch ermitteln",
     "discoveredUrlsPageUrlLabel": "Seite mit den Links",
     "discoveredUrlsPageUrlPlaceholder": "z. B. https://example.com/kategorien",
     "discoveredUrlsLinkSelectorLabel": "Link-Selektor",
     "discoveredUrlsLinkSelectorPlaceholder": "z. B. nav.kategorien a",
-    "discoveredUrlsHint": "Lädt diese Seite einmalig und übernimmt jeden Link, der zum Selektor passt, zusätzlich zur URL oben und den weiteren Start-URLs. Ein Link lässt sich auch über seinen Text wählen, z. B. a:contains(\"Gemüse\").",
+    "discoveredUrlsHint": "Lädt diese Seite einmal und fügt jeden passenden Link als zusätzliche Startseite hinzu.",
     "discoveredUrlsMaxUrlsLabel": "Max. Anzahl gefundener URLs (Sicherheitsgrenze)",
     "monitoringSectionToggle": "Überwachung",
     "settingsSectionToggle": "Einstellungen",
@@ -260,7 +260,13 @@
     "hardeningBaselineBefore": "Auslösen bei",
     "hardeningBaselineAfter": "% weniger Zeilen als im letzten Lauf",
     "hardeningBlockingAdvanced": "Erweitert: kurze Seiten und Sperr-Phrasen",
-    "hardeningBlockingMinBodyLengthUnit": "Bytes (optional)"
+    "hardeningBlockingMinBodyLengthUnit": "Bytes (optional)",
+    "paginationSuggestion": "Sieht aus, als stünde die Seitenzahl in der URL. Dieses Muster verwenden?",
+    "paginationSuggestionExample": "Seite 2 wäre: {example}",
+    "paginationSuggestionUse": "Muster verwenden",
+    "paginationPickNextLink": "„Weiter“-Link auswählen",
+    "paginationPickPageLink": "Link zu Seite 2 anklicken, um das Muster zu erkennen",
+    "discoveredUrlsAdvanced": "Erweitert: Startseiten automatisch finden"
   },
   "requestHeaderPresets": {
     "acceptLanguage": {
@@ -756,7 +762,8 @@
     "insecureCompanionUrl": "Diese Adresse würde Passwörter und Schlüssel unverschlüsselt an einen anderen Computer senden. Bitte eine https://-Adresse verwenden.",
     "emailUnverified": "Dieser Companion braucht eine bestätigte E-Mail-Adresse, bevor er deine Daten ausliefert — bestätige sie unter Einstellungen → Konto.",
     "containerSingleMany": "Container „{name}“ hinzugefügt — {count} Elemente gefunden, er steht aber auf „einzeln“, deshalb wird nur das erste verwendet. Klicke im Baum auf „(einzeln)“, um ihn wiederholend zu machen.",
-    "containerRepeatingOne": "Container „{name}“ hinzugefügt — nur 1 Element gefunden. Ein wiederholender Container ist für mehrere gedacht; klicke im Baum auf „(wiederholend)“, um ihn einzeln zu machen."
+    "containerRepeatingOne": "Container „{name}“ hinzugefügt — nur 1 Element gefunden. Ein wiederholender Container ist für mehrere gedacht; klicke im Baum auf „(wiederholend)“, um ihn einzeln zu machen.",
+    "paginationNotALink": "Dieses Element ist kein Link mit Adresse — klicken Sie den Link „2“ oder „Weiter“ selbst an."
   },
   "frame": {
     "badge": "iframe",
@@ -919,6 +926,22 @@
       },
       "persistentSession": {
         "text": "Nach einem Lauf speichert das Skript Ihre Cookies und den Login-Zustand in einer Datei neben seiner Ausgabe und überspringt beim nächsten Mal die Login-Schritte oben. Die Datei enthält gültige Sitzungs-Cookies: Behandeln Sie sie wie ein Passwort und geben Sie sie nie weiter und checken Sie sie nie ein. Läuft die Sitzung ab, schlägt der Lauf einfach fehl — es gibt kein automatisches Neu-Einloggen; löschen Sie die Datei, um sich neu anzumelden."
+      }
+    },
+    "pagination": {
+      "urlTemplate": {
+        "text": "Das Adressmuster für die Seiten 2, 3, …: {page} wird durch die Seitenzahl ersetzt, {url} (optional) durch die Startseite, genau wie sie ist. Seite 1 ist immer die Startseite selbst. Bei mehreren Startseiten ist {url} Pflicht.",
+        "example": "{url}?page={page}"
+      },
+      "maxPages": {
+        "text": "Eine Sicherheitsgrenze: Das Skript hört nach so vielen Seiten auf, auch wenn es mehr gibt. Es stoppt früher, sobald eine Seite keine Ergebnisse hat oder der „Weiter“-Link fehlt.",
+        "example": "50"
+      }
+    },
+    "discoveredUrls": {
+      "overview": {
+        "text": "Für Seiten, deren Liste sich ändert, z. B. ein Kategorie-Menü: Das Skript öffnet diese Seite einmal, sammelt jeden Link, der zum Selektor passt, und liest jede verlinkte Seite als zusätzliche Startseite. Wählen Sie einen Link im Menü — der Selektor passt dann auf alle ähnlichen Links. Ein Link lässt sich auch über seinen Text wählen.",
+        "example": "a:contains(\"Gemüse\")"
       }
     }
   },

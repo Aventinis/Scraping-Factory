@@ -198,16 +198,16 @@
     "paginationKindPageNumber": "URL con número de página",
     "paginationNextLinkSelectorLabel": "Selector del enlace \"Página siguiente\"",
     "paginationNextLinkSelectorPlaceholder": "p. ej. a.next, a:contains(\"Siguiente\")",
-    "paginationUrlTemplateLabel": "Plantilla de URL de página",
+    "paginationUrlTemplateLabel": "Patrón de la URL de página",
     "paginationUrlTemplatePlaceholder": "p. ej. {url}?page={page}",
-    "paginationUrlTemplateHint": "Debe contener tanto {url} (la página de inicio, sin cambios) como {page} (el número de página, empezando en 2 — la página 1 es siempre la página de inicio tal cual).",
-    "paginationMaxPagesLabel": "Máx. de páginas (límite de seguridad)",
+    "paginationUrlTemplateHint": "{page} cuenta 2, 3, … — la página 1 es siempre la página de inicio.",
+    "paginationMaxPagesLabel": "Máx. páginas",
     "discoveredUrlsToggle": "Descubrir URLs de inicio adicionales automáticamente",
     "discoveredUrlsPageUrlLabel": "Página con los enlaces",
     "discoveredUrlsPageUrlPlaceholder": "p. ej. https://example.com/categorias",
     "discoveredUrlsLinkSelectorLabel": "Selector de enlaces",
     "discoveredUrlsLinkSelectorPlaceholder": "p. ej. nav.categorias a",
-    "discoveredUrlsHint": "Carga esta página una vez y añade cada enlace que coincida con el selector, además de la URL de arriba y cualquier URL de inicio adicional. Un enlace también se puede elegir por su texto, p. ej. a:contains(\"Verduras\").",
+    "discoveredUrlsHint": "Carga esta página una vez y añade cada enlace coincidente como página de inicio adicional.",
     "discoveredUrlsMaxUrlsLabel": "Núm. máx. de URLs descubiertas (límite de seguridad)",
     "monitoringSectionToggle": "Monitorización",
     "settingsSectionToggle": "Configuración",
@@ -260,7 +260,13 @@
     "hardeningBaselineBefore": "Activar si hay un",
     "hardeningBaselineAfter": "% menos de filas que en la última ejecución",
     "hardeningBlockingAdvanced": "Avanzado: páginas cortas y frases de bloqueo",
-    "hardeningBlockingMinBodyLengthUnit": "bytes (opcional)"
+    "hardeningBlockingMinBodyLengthUnit": "bytes (opcional)",
+    "paginationSuggestion": "Parece que el número de página está en la URL. ¿Usar este patrón?",
+    "paginationSuggestionExample": "La página 2 sería: {example}",
+    "paginationSuggestionUse": "Usar este patrón",
+    "paginationPickNextLink": "Seleccionar el enlace «Siguiente»",
+    "paginationPickPageLink": "Haz clic en un enlace a la página 2 para aprender el patrón",
+    "discoveredUrlsAdvanced": "Avanzado: encontrar páginas de inicio automáticamente"
   },
   "requestHeaderPresets": {
     "acceptLanguage": {
@@ -756,7 +762,8 @@
     "insecureCompanionUrl": "Esta dirección enviaría contraseñas y claves sin cifrar a otro equipo. Usa una dirección https://.",
     "emailUnverified": "Este companion necesita una dirección de correo verificada antes de servir tus datos — confírmala en Ajustes → Cuenta.",
     "containerSingleMany": "Contenedor «{name}» añadido — {count} elementos encontrados, pero está en «único», así que solo se usa el primero. Pulsa «(único)» en el árbol para hacerlo repetitivo.",
-    "containerRepeatingOne": "Contenedor «{name}» añadido — solo 1 elemento encontrado. Un contenedor repetitivo es para varios; pulsa «(repetitivo)» en el árbol para hacerlo único."
+    "containerRepeatingOne": "Contenedor «{name}» añadido — solo 1 elemento encontrado. Un contenedor repetitivo es para varios; pulsa «(repetitivo)» en el árbol para hacerlo único.",
+    "paginationNotALink": "Ese elemento no es un enlace con dirección — haz clic en el propio enlace «2» o «Siguiente»."
   },
   "frame": {
     "badge": "iframe",
@@ -919,6 +926,22 @@
       },
       "persistentSession": {
         "text": "Tras una ejecución el script guarda tus cookies y el estado de sesión en un archivo junto a su salida y, la próxima vez, omite los pasos de inicio de sesión. El archivo contiene cookies de sesión activas: trátalo como una contraseña y nunca lo compartas ni lo subas a un repositorio. Si la sesión caduca, la ejecución simplemente falla — no hay reinicio de sesión automático; borra el archivo para iniciar sesión de nuevo."
+      }
+    },
+    "pagination": {
+      "urlTemplate": {
+        "text": "El patrón de dirección para las páginas 2, 3, …: {page} se sustituye por el número de página, {url} (opcional) por la página de inicio tal cual. La página 1 es siempre la propia página de inicio. Con varias páginas de inicio {url} es obligatorio.",
+        "example": "{url}?page={page}"
+      },
+      "maxPages": {
+        "text": "Un límite de seguridad: el script se detiene tras tantas páginas aunque haya más. También se detiene antes si una página no tiene resultados o desaparece el enlace «Siguiente».",
+        "example": "50"
+      }
+    },
+    "discoveredUrls": {
+      "overview": {
+        "text": "Para sitios cuya lista de páginas cambia, p. ej. un menú de categorías: el script abre esta página una vez, recoge cada enlace que coincide con el selector y lee cada página enlazada como página de inicio adicional. Elige un enlace del menú — el selector sirve entonces para todos los similares. También se puede elegir un enlace por su texto.",
+        "example": "a:contains(\"Verduras\")"
       }
     }
   },

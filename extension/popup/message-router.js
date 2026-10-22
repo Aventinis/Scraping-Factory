@@ -17,6 +17,7 @@ const { STATES } = require('./api-config');
 const { buildGroupNode, insertContainerNode } = require('./container-tree');
 const { updateBrowserAction, computeScriptFileNamePatch } = require('./scraping-config-builder');
 const { getGlobalSettings } = require('../shared/global-settings');
+const { resolveLinkHref } = require('./pagination-template');
 const { showToast, showMatchCountToast, setLastError } = require('./toast');
 const { cancelPendingDomTreeRequest, renderDomTree, highlightHover, highlightSelected } = require('./dom-tree-ui');
 
@@ -155,6 +156,15 @@ function wireMessageListener(bridge) {
           selectionKind: null, pendingApiDiscoveryPartId: null, pendingApiDiscoveryActionIndex: null, pendingApiDiscoveryActionField: 'selector',
           pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
         });
+      } else if (state.selectionKind === 'paginationPageLink') {
+        // Issue #405: a link to page 2 — only its address is wanted (the
+        // page-number template is derived from it, see pagination-template.js).
+        const linkHref = resolveLinkHref(message.attributes?.href || '', message.url || state.url || '');
+        if (!linkHref) showToast(t('toast.paginationNotALink'), null, 'warn');
+        bridge.setState(STATES.IDLE, {
+          pagination: { ...state.pagination, linkHref },
+          selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
+        });
       } else if (state.selectionKind === 'pagination') {
         // Issue #174 follow-up: lets a non-developer pick the "next page"
         // link by clicking it instead of having to know/type a CSS
@@ -162,7 +172,8 @@ function wireMessageListener(bridge) {
         // modal needed" shape as the browserAction branch above, just with
         // no index (there's only ever one nextLinkSelector).
         bridge.setState(STATES.IDLE, {
-          pagination: { ...state.pagination, nextLinkSelector: message.selector },
+          // Issue #405: the clicked link's own address feeds the page-number proposal.
+          pagination: { ...state.pagination, nextLinkSelector: message.selector, linkHref: resolveLinkHref(message.attributes?.href || '', message.url || state.url || '') },
           selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
         });
       } else if (state.selectionKind === 'discoveredUrls') {

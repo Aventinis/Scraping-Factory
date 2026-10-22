@@ -151,6 +151,7 @@ const {
 } = require('./saved-configs-ui');
 
 const { wireSettingsPanelEvents } = require('./settings-panel-ui');
+const { wirePaginationHelperEvents } = require('./pagination-ui');
 const { createDefaultDeduplication } = require('./dedup-config');
 const { createDefaultRequestHeaders } = require('./request-headers');
 const { wireRequestHeadersEvents } = require('./request-headers-ui');
@@ -381,7 +382,7 @@ let _state = {
   // itself already gets). Written onto the resulting field/node once
   // confirmed (see confirmField/confirmExtendedField).
   pendingTransforms:   [],
-  selectionKind:       null,  // 'field' | 'container' | 'browserAction' | 'pagination' | 'apiDiscoveryAction' | null — which kind the current SELECTING round is for
+  selectionKind:       null,  // 'field' | 'container' | 'browserAction' | 'pagination' | 'paginationPageLink' | 'apiDiscoveryAction' | null — which kind the current SELECTING round is for
   pendingParentPath:   null,  // number[] | null — where the next inserted group-tree node goes; null = root level
   pendingNewContainer: null,  // {name, repeating} captured by modal-container-new before element-selection starts
   pendingBrowserActionIndex: null, // number | null — which browserActions entry the current SELECTING round's result is written into (selectionKind === 'browserAction')
@@ -1160,6 +1161,7 @@ function wireEvents() {
   wireAdvancedDisclosureEvents();
 
   wireSettingsPanelEvents(bridge);
+  wirePaginationHelperEvents(bridge);
   wireDedupEvents(bridge);
   wireRequestHeadersEvents(bridge);
 

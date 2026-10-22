@@ -16,6 +16,7 @@ const { STATES } = require('./api-config');
 const { buildGroupNode, insertContainerNode } = require('./container-tree');
 const { updateBrowserAction, computeInitialMonitoringSectionOpen } = require('./scraping-config-builder');
 const { showToast, showMatchCountToast } = require('./toast');
+const { resolveLinkHref } = require('./pagination-template');
 
 // Pure: folds chrome.storage.session's restored values onto a fresh
 // _state, the same "only overwrite what was actually persisted" shape
@@ -176,11 +177,26 @@ async function restorePendingSelection(bridge, stored) {
     return true;
   }
 
+  if (stored.selectionKind === 'paginationPageLink' && stored.pendingSelector) {
+    // Issue #405: same as the live path — only the clicked link's address is kept.
+    log('INIT pending pagination page link found → updating pagination');
+    const pagination = { ...state.pagination, linkHref: resolveLinkHref(stored.pendingElementAttributes?.href || '', state.url || '') };
+    await chrome.storage.session.set({ pagination });
+    bridge.setState(STATES.IDLE, {
+      pagination, selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
+    });
+    return true;
+  }
+
   if (stored.selectionKind === 'pagination' && stored.pendingSelector) {
     // Same as the live ELEMENT_SELECTED path: write the picked selector
     // straight into pagination.nextLinkSelector, no naming modal needed.
     log('INIT pending pagination selector found → updating pagination', stored.pendingSelector);
-    const pagination = { ...state.pagination, nextLinkSelector: stored.pendingSelector };
+    const pagination = {
+      ...state.pagination,
+      nextLinkSelector: stored.pendingSelector,
+      linkHref: resolveLinkHref(stored.pendingElementAttributes?.href || '', state.url || ''), // Issue #405
+    };
     await chrome.storage.session.set({ pagination });
     bridge.setState(STATES.IDLE, {
       pagination, selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],

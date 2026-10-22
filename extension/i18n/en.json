@@ -198,16 +198,16 @@
     "paginationKindPageNumber": "Page-number URL",
     "paginationNextLinkSelectorLabel": "\"Next page\" link selector",
     "paginationNextLinkSelectorPlaceholder": "e.g. a.next, a:contains(\"Next\")",
-    "paginationUrlTemplateLabel": "Page URL template",
+    "paginationUrlTemplateLabel": "Page URL pattern",
     "paginationUrlTemplatePlaceholder": "e.g. {url}?page={page}",
-    "paginationUrlTemplateHint": "Must contain both {url} (the start page, unchanged) and {page} (the page number, starting at 2 — page 1 is always the start page as-is).",
-    "paginationMaxPagesLabel": "Max. pages (safety limit)",
+    "paginationUrlTemplateHint": "{page} counts 2, 3, … — page 1 is always the start page.",
+    "paginationMaxPagesLabel": "Max. pages",
     "discoveredUrlsToggle": "Discover additional start URLs automatically",
     "discoveredUrlsPageUrlLabel": "Page with the links",
     "discoveredUrlsPageUrlPlaceholder": "e.g. https://example.com/categories",
     "discoveredUrlsLinkSelectorLabel": "Link selector",
     "discoveredUrlsLinkSelectorPlaceholder": "e.g. nav.categories a",
-    "discoveredUrlsHint": "Loads this page once and adds every link matching the selector, in addition to the URL above and any additional start URLs. A link can also be picked by its text, e.g. a:contains(\"Vegetables\").",
+    "discoveredUrlsHint": "Loads this page once and adds every matching link as an extra start page.",
     "discoveredUrlsMaxUrlsLabel": "Max. number of discovered URLs (safety limit)",
     "monitoringSectionToggle": "Monitoring",
     "settingsSectionToggle": "Settings",
@@ -260,7 +260,13 @@
     "hardeningBaselineBefore": "Trigger if there are",
     "hardeningBaselineAfter": "% fewer rows than in the last run",
     "hardeningBlockingAdvanced": "Advanced: short pages and block phrases",
-    "hardeningBlockingMinBodyLengthUnit": "bytes (optional)"
+    "hardeningBlockingMinBodyLengthUnit": "bytes (optional)",
+    "paginationSuggestion": "Looks like page numbers are in the URL. Use this pattern?",
+    "paginationSuggestionExample": "Page 2 would be: {example}",
+    "paginationSuggestionUse": "Use this pattern",
+    "paginationPickNextLink": "Select the “Next” link",
+    "paginationPickPageLink": "Click a link to page 2 to learn the pattern",
+    "discoveredUrlsAdvanced": "Advanced: find start pages automatically"
   },
   "requestHeaderPresets": {
     "acceptLanguage": {
@@ -756,7 +762,8 @@
     "insecureCompanionUrl": "This address would send passwords and keys over an unencrypted connection to another computer. Use an https:// address.",
     "emailUnverified": "This companion needs a verified email address before it serves your data — confirm it under Settings → Account.",
     "containerSingleMany": "Container \"{name}\" added — {count} elements found, but it is set to \"single\", so only the first is used. Click \"(single)\" in the tree to make it repeating.",
-    "containerRepeatingOne": "Container \"{name}\" added — only 1 element found. A repeating container is meant for several; click \"(repeating)\" in the tree to make it single."
+    "containerRepeatingOne": "Container \"{name}\" added — only 1 element found. A repeating container is meant for several; click \"(repeating)\" in the tree to make it single.",
+    "paginationNotALink": "That element is not a link with an address — click the “2” or “Next” link itself."
   },
   "frame": {
     "badge": "iframe",
@@ -919,6 +926,22 @@
       },
       "persistentSession": {
         "text": "After a run the script saves your cookies and login state in a file next to its output and, next time, skips the login steps above. The file holds live session cookies: treat it like a password and never share or commit it. If the session expires the run simply fails — there is no automatic re-login; delete the file to log in again."
+      }
+    },
+    "pagination": {
+      "urlTemplate": {
+        "text": "The address pattern for pages 2, 3, …: {page} is replaced by the page number, {url} (optional) by the start page exactly as it is. Page 1 is always the start page itself. With several start pages {url} is required.",
+        "example": "{url}?page={page}"
+      },
+      "maxPages": {
+        "text": "A safety limit: the script stops after this many pages even if there are more. It also stops earlier as soon as a page has no results or the “Next” link is gone.",
+        "example": "50"
+      }
+    },
+    "discoveredUrls": {
+      "overview": {
+        "text": "For sites whose list of pages changes, e.g. a category menu: the script opens this page once, collects every link that matches the selector and scrapes each linked page as an extra start page. Pick one link in the menu — the selector then fits all similar links. A link can also be chosen by its text.",
+        "example": "a:contains(\"Vegetables\")"
       }
     }
   },

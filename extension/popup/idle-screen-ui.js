@@ -17,6 +17,7 @@ const { renderFields } = require('./flat-mode-ui');
 const { renderBrowserActionsSection } = require('./browser-actions-ui');
 const { parseAdditionalUrls } = require('./scraping-config-builder');
 const { renderSettingsPanel } = require('./settings-panel-ui');
+const { renderPaginationHelpers } = require('./pagination-ui');
 const { renderDedupSection } = require('./dedup-config-ui');
 const { renderRequestHeadersSection } = require('./request-headers-ui');
 const { renderSavedConfigsList, fetchAllSavedConfigs } = require('./saved-configs-ui');
@@ -339,6 +340,7 @@ function renderIdleScreen(bridge) {
   }
 
   renderSettingsPanel(bridge);
+  renderPaginationHelpers(bridge);
   renderDedupSection(bridge);
   renderRequestHeadersSection(bridge);
 

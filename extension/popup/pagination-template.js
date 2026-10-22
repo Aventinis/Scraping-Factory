@@ -110,6 +110,7 @@ function fromQueryLink(current, link) {
       : isInteger(currentValue) && Number(value) === Number(currentValue) + 1;
     if (!next) continue;
     // Everything else must be identical, or this link is something else (a filter, a sort, …).
+    /** @param {URLSearchParams} params */
     const others = (params) => [...params].filter(([k]) => k !== key).map(([k, v]) => `${k}=${v}`).sort().join('&');
     if (others(current.searchParams) !== others(link.searchParams)) continue;
     candidates.push(key);
