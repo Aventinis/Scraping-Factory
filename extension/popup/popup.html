@@ -187,8 +187,22 @@
   <div id="modals-mount"></div>
   <!-- Error toast -->
   <div id="error-toast" class="toast hidden">
-    <span id="error-toast-message"></span>
-    <button id="btn-report-bug-toast" class="toast-report-btn hidden" data-i18n="common.reportBug"></button>
+    <div class="toast-body">
+      <span id="error-toast-message"></span>
+      <!-- Issue #401: a recognised failure shows a plain-language title + hint and
+           keeps the original text behind "Details" (copyable); such a toast stays
+           until closed (see showErrorToast in toast.js). -->
+      <p id="error-toast-hint" class="toast-hint hidden"></p>
+      <details id="error-toast-details" class="toast-details hidden">
+        <summary data-i18n="errors.detailsLabel"></summary>
+        <pre id="error-toast-details-text"></pre>
+        <button id="btn-toast-copy-details" class="toast-report-btn" type="button" data-i18n="errors.copyDetails"></button>
+      </details>
+    </div>
+    <div class="toast-actions">
+      <button id="btn-report-bug-toast" class="toast-report-btn hidden" data-i18n="common.reportBug"></button>
+      <button id="btn-toast-close" class="toast-close-btn hidden" type="button" data-i18n-title="errors.close" aria-label="Close">×</button>
+    </div>
   </div>
 
   <script src="popup.js"></script>

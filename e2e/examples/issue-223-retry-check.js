@@ -38,7 +38,8 @@ const { launchBrowser, openPopup, focusFixture, waitForIdleScreen, startCompanio
     await focusFixture(fixturePage);
     await popupPage.click('#btn-generate');
     await popupPage.waitForSelector('#error-toast:not(.hidden)', { timeout: 60000 });
-    const withoutRetries = await popupPage.locator('#error-toast-message').textContent();
+    // Issue #401: title + hint + the original text behind "Details" (closed <details> still has its textContent)
+    const withoutRetries = await popupPage.locator('#error-toast').textContent();
     console.log('Without retries →', withoutRetries.slice(0, 160));
     // Issue #319: one actionable line, never a raw Python traceback.
     if (withoutRetries.includes('Traceback') || !withoutRetries.includes('HTTP 503') || !withoutRetries.includes('Retry on transient errors')) {

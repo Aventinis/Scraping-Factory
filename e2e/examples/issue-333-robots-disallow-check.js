@@ -75,7 +75,7 @@ const requestedPaths = async (fixture) => (await fetch(`${fixture.url}__log`)).j
     await popupPage.selectOption('#select-robots-disallow-action', 'Abort');
     await generate();
     await popupPage.waitForSelector('#error-toast:not(.hidden)', { timeout: 120000 });
-    const message = await popupPage.locator('#error-toast-message').textContent();
+    const message = await popupPage.locator('#error-toast').textContent(); // title + hint + original text (Issue #401)
     console.log('With Abort →', message.slice(0, 140));
     if (!message.includes('robots.txt disallows') || message.includes('Traceback')) throw new Error(`Unexpected Abort message: ${message}`);
 

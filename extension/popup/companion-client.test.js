@@ -52,7 +52,10 @@ describe('generate() surfaces companion verification failures', () => {
       <section id="screen-generating" class="hidden"></section>
       <div id="error-toast" class="hidden">
         <span id="error-toast-message"></span>
+        <p id="error-toast-hint" class="hidden"></p>
+        <details id="error-toast-details" class="hidden"><pre id="error-toast-details-text"></pre></details>
         <button id="btn-report-bug-toast" class="hidden"></button>
+        <button id="btn-toast-close" class="hidden"></button>
       </div>
     `;
 
@@ -98,8 +101,13 @@ describe('generate() surfaces companion verification failures', () => {
 
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('error-toast-message').textContent).toContain('returned no data');
+    // Issue #401: a plain-language title and hint, the companion's text behind "Details"
+    expect(document.getElementById('error-toast-message').textContent).toBe('Es wurden keine Daten gefunden');
+    expect(document.getElementById('error-toast-hint').textContent).toContain('Vorschau anzeigen');
+    expect(document.getElementById('error-toast-details-text').textContent).toContain('returned no data');
     expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
+    // ... and "Report bug" still carries the raw text
+    expect(require('./toast').getLastError().message).toContain('returned no data');
   });
 });
 

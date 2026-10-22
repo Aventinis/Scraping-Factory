@@ -585,6 +585,20 @@ suggestion when a Static trial run returns no data. See CLAUDE.md for details.
 - Tests: `popup/choice-guidance.test.js`, real-browser check
   `e2e/examples/issue-398-choice-guidance-check.js`
 
+### 2.10c Plain-language error messages (Issue #401)
+
+A failed Generate shows a translated title and hint (what happened, what to try)
+instead of the companion's or script's raw text; the raw text stays behind a
+"Details" disclosure (copyable) and is what "Report bug" sends. Recognised by pattern
+in `popup/error-messages.js`; unknown errors keep the old wording. See CLAUDE.md.
+
+- Extension: `popup/error-messages.js` (pure: `classifyError`, `describeError`),
+  `popup/toast.js` (`showErrorToast`, `hideToast`, `wireErrorToastEvents`; sticky toast
+  with hint/details/close/copy), `popup/companion-client.js` (`showGenerateFailure`),
+  the toast markup in `popup/popup.html`, `errors.*` in `i18n/*.json`
+- Tests: `popup/error-messages.test.js`, real-browser check
+  `e2e/examples/issue-401-plain-errors-check.js`
+
 ### 2.11 i18n (extension UI language)
 
 Lets the user pick the popup's own display language (German/English/Spanish)

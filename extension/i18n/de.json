@@ -694,8 +694,7 @@
     "insecureCompanionUrl": "Diese Adresse würde Passwörter und Schlüssel unverschlüsselt an einen anderen Computer senden. Bitte eine https://-Adresse verwenden.",
     "emailUnverified": "Dieser Companion braucht eine bestätigte E-Mail-Adresse, bevor er deine Daten ausliefert — bestätige sie unter Einstellungen → Konto.",
     "containerSingleMany": "Container „{name}“ hinzugefügt — {count} Elemente gefunden, er steht aber auf „einzeln“, deshalb wird nur das erste verwendet. Klicke im Baum auf „(einzeln)“, um ihn wiederholend zu machen.",
-    "containerRepeatingOne": "Container „{name}“ hinzugefügt — nur 1 Element gefunden. Ein wiederholender Container ist für mehrere gedacht; klicke im Baum auf „(wiederholend)“, um ihn einzeln zu machen.",
-    "noDataTryBrowser": "Die statische Engine sieht den Inhalt dieser Seite vielleicht nicht (er wird per JavaScript aufgebaut) — probier die Browser-Engine."
+    "containerRepeatingOne": "Container „{name}“ hinzugefügt — nur 1 Element gefunden. Ein wiederholender Container ist für mehrere gedacht; klicke im Baum auf „(wiederholend)“, um ihn einzeln zu machen."
   },
   "frame": {
     "badge": "iframe",
@@ -777,6 +776,118 @@
       "choice": {
         "text": "Statisch — schnell; liest die Seite so, wie der Server sie schickt.\nBrowser — ein echter Browser; für Seiten, die per JavaScript aufgebaut werden, mit Login oder die Scrollen brauchen.\nFindet Statisch nichts, hilft meist Browser."
       }
+    }
+  },
+  "errors": {
+    "detailsLabel": "Details",
+    "copyDetails": "Kopieren",
+    "copied": "Kopiert",
+    "close": "Schließen",
+    "noData": {
+      "title": "Es wurden keine Daten gefunden",
+      "hint": "Die Selektoren haben nichts getroffen, was das Skript lesen konnte. Prüfe die markierten Elemente mit „Vorschau anzeigen“.",
+      "hintStatic": "Die Selektoren haben nichts getroffen, was das Skript lesen konnte. Prüfe die markierten Elemente mit „Vorschau anzeigen“. Baut die Seite ihren Inhalt mit JavaScript auf, probier die Browser-Engine."
+    },
+    "noOutput": {
+      "title": "Das Skript hat keine Ergebnisdatei erzeugt",
+      "hint": "Es ist abgebrochen, bevor es Daten geschrieben hat. Unter Details steht, was passiert ist."
+    },
+    "siteUnreachable": {
+      "title": "Die Seite ist nicht erreichbar",
+      "hint": "Prüfe die Seitenadresse und deine Internetverbindung (und den Proxy, falls du einen nutzt)."
+    },
+    "siteForbidden": {
+      "title": "Die Seite weist das Skript ab",
+      "hint": "Sie verlangt einen Login oder blockt automatisierte Anfragen. Nutze die Browser-Engine mit einem Login-Ablauf oder sende einen Request-Header wie ein Cookie."
+    },
+    "pageNotFound": {
+      "title": "Die Seite wurde nicht gefunden",
+      "hint": "Prüfe die Seitenadresse oben im Panel."
+    },
+    "rateLimited": {
+      "title": "Die Seite meldet: zu viele Anfragen",
+      "hint": "Schalte in den Einstellungen „Pause zwischen Anfragen“ ein oder versuche es später erneut."
+    },
+    "siteError": {
+      "title": "Die Seite meldet einen Fehler",
+      "hint": "Das ist meist vorübergehend. Versuche es später erneut oder schalte in den Einstellungen „Bei vorübergehenden Fehlern erneut versuchen“ ein."
+    },
+    "httpError": {
+      "title": "Die Seite antwortet mit einem Fehler (HTTP {status})",
+      "hint": "Unter Details steht die genaue Antwort. Prüfe die Seitenadresse und versuche es erneut."
+    },
+    "requestFailed": {
+      "title": "Eine Anfrage ist fehlgeschlagen",
+      "hint": "Unter Details steht der Grund."
+    },
+    "pageLoadTimeout": {
+      "title": "Die Seite hat zu lange zum Laden gebraucht",
+      "hint": "Versuche es erneut. Läuft die Seite in deinem Browser, ist sie vielleicht nur langsam."
+    },
+    "pageLoadFailed": {
+      "title": "Die Seite konnte nicht geladen werden",
+      "hint": "Prüfe die Seitenadresse und deine Verbindung und versuche es erneut."
+    },
+    "missingEnvVar": {
+      "title": "Das Skript braucht die Variable {name}",
+      "hint": "Trage neben dem Feld, das sie verwendet, einen Testwert ein, damit der Testlauf weitergeht, und setze die Variable auf dem Rechner, auf dem du das Skript ausführst."
+    },
+    "trialTimeout": {
+      "title": "Der Testlauf hat zu lange gedauert",
+      "hint": "Nutze weniger Seiten oder Anfragen oder schalte in den Einstellungen „Testlauf überspringen“ ein."
+    },
+    "robotsDisallowed": {
+      "title": "Die robots.txt der Seite verbietet diese Anfrage",
+      "hint": "Wähle in den Einstellungen „Überspringen und weitermachen“ oder „Warnen, aber trotzdem anfragen“, oder lass diese Seite weg."
+    },
+    "pythonMissing": {
+      "title": "Python wurde nicht gefunden",
+      "hint": "Der Companion braucht Python 3.9 oder neuer, um dein Skript zu testen. Installiere es (oder führe den Installer erneut aus) und versuche es dann noch einmal."
+    },
+    "packageMissing": {
+      "title": "Ein Python-Paket fehlt",
+      "hint": "Installiere es mit „pip install {name}“ auf dem Rechner, auf dem der Companion läuft (der Installer erledigt das für dich)."
+    },
+    "scriptCrash": {
+      "title": "Das Skript ist mit einem Fehler abgebrochen",
+      "hint": "Unter Details steht die technische Meldung. Sieht es nach einem Fehler im Programm aus, nutze „Fehler melden“."
+    },
+    "companionUnreachable": {
+      "title": "Die Companion-App ist nicht erreichbar",
+      "hint": "Prüfe, ob sie noch läuft, und versuche es dann erneut."
+    },
+    "companionError": {
+      "title": "Die Companion-App hatte ein Problem",
+      "hint": "Versuche es erneut. Passiert es weiter, nutze „Fehler melden“."
+    },
+    "invalidStartUrl": {
+      "title": "Die Seitenadresse ist ungültig",
+      "hint": "Start-URL Nr. {index} („{url}“) muss eine vollständige Adresse sein, die mit http:// oder https:// beginnt."
+    },
+    "noFields": {
+      "title": "Noch nichts zu scrapen",
+      "hint": "Öffne eine Seite und füge mindestens ein Feld oder einen Container hinzu."
+    },
+    "emptySelector": {
+      "title": "Ein Element hat keinen Selektor",
+      "hint": "Wähle es auf der Seite erneut aus oder entferne es.",
+      "hintNamed": "Wähle „{name}“ auf der Seite erneut aus oder entferne es."
+    },
+    "duplicateFieldNames": {
+      "title": "Zwei Felder heißen gleich",
+      "hint": "Gib jedem Feld einen eigenen Namen: {names}."
+    },
+    "emptyFieldName": {
+      "title": "Ein Feld hat keinen Namen",
+      "hint": "Gib jedem Feld einen Namen."
+    },
+    "invalidRegex": {
+      "title": "Das Muster einer Transformation ist ungültig",
+      "hint": "Prüfe das Muster des Schritts „Regex-Extraktion“ bei {field}."
+    },
+    "invalidEnvVarName": {
+      "title": "„{name}“ ist kein gültiger Variablenname",
+      "hint": "Nutze nur Buchstaben, Ziffern und Unterstriche, und beginne nicht mit einer Ziffer."
     }
   }
 }

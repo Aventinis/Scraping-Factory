@@ -103,7 +103,7 @@ const { renderTransformList, renderTransformPreview } = require('./field-transfo
 
 const { applyConfigToState } = require('./config-import');
 
-const { showToast, setLastError } = require('./toast');
+const { showToast, setLastError, wireErrorToastEvents } = require('./toast');
 
 const {
   formatLogSection, buildGithubIssueUrl, reportBug,
@@ -1150,6 +1150,7 @@ function wireEvents() {
   wireCompanionErrorEvents(bridge);
 
   wireHelpPopoverEvents();
+  wireErrorToastEvents(); // Issue #401
   wireAdvancedDisclosureEvents();
 
   wireSettingsPanelEvents(bridge);
