@@ -130,7 +130,6 @@
     "engineLabel": "Motor",
     "engineStatic": "Estático",
     "engineBrowser": "Navegador",
-    "engineBrowserTitle": "Renderiza JavaScript antes de la extracción — para páginas cargadas dinámicamente o flujos de inicio de sesión. Más lento que el motor estático.",
     "outputJsonToggle": "Salida como JSON (en lugar de CSV/XML)",
     "dataPreviewToggle": "Mostrar vista previa de los datos de la prueba",
     "outputFileToggle": "Descargar el archivo de datos completo",
@@ -251,7 +250,8 @@
     "manageBlueprintsBtn": "Gestionar",
     "outputBlueprintMappingHint": "Asigna a cada campo de destino uno de los campos de origen propios de esta configuración — cada campo de destino necesita un origen antes de poder generar el script.",
     "outputBlueprintTreeMappingHint": "Asigna a cada campo de destino uno de los campos de origen propios de esta configuración — la posición de un grupo de destino en la salida se infiere automáticamente a partir de sus campos asignados. Cada campo de destino necesita un origen antes de poder generar el script.",
-    "outputFormatFlattenHint": "Los resultados anidados se aplanan en una tabla: una fila por cada elemento repetido más interno; los valores de niveles superiores se repiten en cada fila (o elige un Output Blueprint para definir las columnas). Cada campo de datos necesita un nombre único."
+    "outputFormatFlattenHint": "Los resultados anidados se aplanan en una tabla: una fila por cada elemento repetido más interno; los valores de niveles superiores se repiten en cada fila (o elige un Output Blueprint para definir las columnas). Cada campo de datos necesita un nombre único.",
+    "modeLabel": "Modo"
   },
   "robots": {
     "checkFailed": "No se pudo comprobar el robots.txt ({error}).",
@@ -383,7 +383,9 @@
     "splitFieldBtn": "+ Dividir campo",
     "combinedFieldMode": "Combinado de: {sources}",
     "splitFieldMode": "Dividido de: {source}",
-    "hiddenFromOutputBadge": "oculto"
+    "hiddenFromOutputBadge": "oculto",
+    "toggleToRepeatingTitle": "Pulsa para hacer repetitivo este contenedor (un resultado por coincidencia)",
+    "toggleToSingleTitle": "Pulsa para hacer único este contenedor (solo la primera coincidencia)"
   },
   "apiTree": {
     "addSubgroupBtn": "+ Grupo",
@@ -690,7 +692,10 @@
     "accessKeyRequired": "Este companion exige una clave de acceso — introdúcela en Ajustes.",
     "accessKeyRejected": "El companion rechazó la clave de acceso — compruébala en Ajustes.",
     "insecureCompanionUrl": "Esta dirección enviaría contraseñas y claves sin cifrar a otro equipo. Usa una dirección https://.",
-    "emailUnverified": "Este companion necesita una dirección de correo verificada antes de servir tus datos — confírmala en Ajustes → Cuenta."
+    "emailUnverified": "Este companion necesita una dirección de correo verificada antes de servir tus datos — confírmala en Ajustes → Cuenta.",
+    "containerSingleMany": "Contenedor «{name}» añadido — {count} elementos encontrados, pero está en «único», así que solo se usa el primero. Pulsa «(único)» en el árbol para hacerlo repetitivo.",
+    "containerRepeatingOne": "Contenedor «{name}» añadido — solo 1 elemento encontrado. Un contenedor repetitivo es para varios; pulsa «(repetitivo)» en el árbol para hacerlo único.",
+    "noDataTryBrowser": "Puede que el motor estático no vea el contenido de esta página (se crea con JavaScript) — prueba el motor del navegador."
   },
   "frame": {
     "badge": "iframe",
@@ -747,6 +752,30 @@
     "companionError": {
       "causes": {
         "text": "No iniciado → iníciala y pulsa «Reintentar».\nOtro puerto u ordenador → introduce su dirección abajo.\nOtro ordenador → la dirección debe empezar por https://.\nCompanion compartido → puede requerir una clave de acceso (Configuración)."
+      }
+    },
+    "mode": {
+      "choice": {
+        "text": "Campos — lista sencilla, los mismos valores por elemento (productos).\nContenedores — elementos con subelementos (carta: categorías → platos).\nAPI — la página carga datos con una petición oculta; pruébala si Campos no halla nada.\nCombinado, Bloques — varios scrapers en un script, o varios archivos de una página."
+      }
+    },
+    "containerType": {
+      "type": {
+        "text": "Elemento único — existe una sola vez en la página (p. ej. la cabecera).\nRepetitivo — aparece muchas veces (p. ej. cada plato de una carta); obtienes un resultado por coincidencia.",
+        "example": "Carta con 12 platos → Repetitivo"
+      }
+    },
+    "fieldType": {
+      "container": {
+        "text": "Texto — el texto visible (un precio).\nAtributo — un valor de la etiqueta (la dirección de un enlace o el origen de una imagen).\n¿Existe? — solo si el elemento está (una insignia «oferta»).\nSolo texto propio — el texto del propio elemento sin elementos anidados (un nombre sin su insignia)."
+      },
+      "flat": {
+        "text": "Texto — el texto visible (un precio).\nAtributo — un valor de la etiqueta (la dirección de un enlace o el origen de una imagen, p. ej. para descargarla)."
+      }
+    },
+    "engine": {
+      "choice": {
+        "text": "Estático — rápido; lee la página tal como la envía el servidor.\nNavegador — un navegador real; para páginas creadas con JavaScript, con inicio de sesión o que necesitan desplazarse.\nSi Estático no encuentra nada, suele bastar con Navegador."
       }
     }
   }

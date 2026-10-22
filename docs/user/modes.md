@@ -17,6 +17,13 @@ others, so pick one per scraper.
 Any mode can be switched to JSON, SQLite or Excel output; see
 [Output formats](output.md).
 
+Not sure which one fits? Click the **?** next to **Mode** — it gives a one-line
+"which fits?" with an example for each. The same kind of **?** sits next to
+**Engine**, the container **Type** and the **Field type**, so the decision is
+explained where you make it.
+
+![The mode help popover](images/modes-help.png)
+
 ## Fields (flat)
 
 The simplest mode, covered step by step in [Getting started](getting-started.md).
@@ -49,6 +56,12 @@ The result is a tree. Field clicks inside a container are limited to that
 container, and the selector works for whichever dish you clicked in:
 
 ![A container with two fields](images/modes-container-tree.png)
+
+You choose **Single element** or **Repeating** before clicking, so the extension
+checks your choice against what the click matched: several matches for a *single*
+container, or just one for a *repeating* one, show a notice right after the pick.
+The "(single)" / "(repeating)" label in the tree is a button — click it to switch
+the type later.
 
 Every row can be renamed in place and reordered with the arrow buttons. A field
 has a type: **Text**, **Attribute** (for example a link's address or an image's

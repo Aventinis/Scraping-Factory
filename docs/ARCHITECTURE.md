@@ -568,6 +568,23 @@ OS — in full until a companion has answered once on this browser
 - Tests: `popup/companion-guidance.test.js`, `popup/companion-guidance-ui.test.js`,
   real-browser check `e2e/examples/issue-406-companion-guidance-check.js`
 
+### 2.10b Guidance for choosing mode, container type, field type and engine (Issue #398)
+
+#396 help popovers (`help.mode.choice`, `help.engine.choice`, `help.containerType.type`,
+`help.fieldType.container|flat`) next to the first decisions of a scrape, a match-count
+check after a container pick against the type chosen beforehand, a clickable
+"(single)"/"(repeating)" suffix in the container tree, and a "try the Browser engine"
+suggestion when a Static trial run returns no data. See CLAUDE.md for details.
+
+- Extension: `popup/choice-guidance.js` (pure: `containerCountAdvice`,
+  `shouldSuggestBrowserEngine`), `popup/toast.js` (`showMatchCountToast`),
+  `popup/message-router.js`/`popup/session-restore.js` (pass the chosen type),
+  `popup/container-tree-ui.js` (`.group-tree-type` toggle), `popup/companion-client.js`
+  (`generate()` suggestion), help hosts in `popup/screens/idle.html`/`modals.html`,
+  `help.*`/`toast.*`/`group.*` in `i18n/*.json`
+- Tests: `popup/choice-guidance.test.js`, real-browser check
+  `e2e/examples/issue-398-choice-guidance-check.js`
+
 ### 2.11 i18n (extension UI language)
 
 Lets the user pick the popup's own display language (German/English/Spanish)

@@ -8,7 +8,10 @@ drives a real Chromium through Playwright.
 
 ## Switching engine
 
-In the idle screen, the **Engine** row has **Static** and **Browser**. Choosing
+In the idle screen, the **Engine** row has **Static** and **Browser** (the **?**
+next to it says which fits). When a trial run on **Static** finds no data, the
+error suggests trying **Browser** — a very common cause is a page that builds its
+content with JavaScript. Choosing
 **Browser** reveals the **Browser actions** list.
 
 The Browser engine needs extra software on the machine that runs the script

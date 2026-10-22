@@ -130,7 +130,6 @@
     "engineLabel": "Engine",
     "engineStatic": "Static",
     "engineBrowser": "Browser",
-    "engineBrowserTitle": "Renders JavaScript before extraction — for dynamically loaded pages or login flows. Slower than the static engine.",
     "outputJsonToggle": "Output as JSON (instead of CSV/XML)",
     "dataPreviewToggle": "Show trial-run data preview",
     "outputFileToggle": "Download the full scraped data file",
@@ -251,7 +250,8 @@
     "manageBlueprintsBtn": "Manage",
     "outputBlueprintMappingHint": "Map each target field to one of this configuration's own source fields — every target field needs a source before the script can be generated.",
     "outputBlueprintTreeMappingHint": "Map each target field to one of this configuration's own source fields — a target group's own position in the output is inferred automatically from its mapped fields. Every target field needs a source before the script can be generated.",
-    "outputFormatFlattenHint": "Nested results are flattened into one table: one row per innermost repeating item, with values from higher levels repeated in every row (or pick an Output Blueprint to choose the columns yourself). Every data field needs a unique name."
+    "outputFormatFlattenHint": "Nested results are flattened into one table: one row per innermost repeating item, with values from higher levels repeated in every row (or pick an Output Blueprint to choose the columns yourself). Every data field needs a unique name.",
+    "modeLabel": "Mode"
   },
   "robots": {
     "checkFailed": "robots.txt could not be checked ({error}).",
@@ -383,7 +383,9 @@
     "splitFieldBtn": "+ Split field",
     "combinedFieldMode": "Combined from: {sources}",
     "splitFieldMode": "Split from: {source}",
-    "hiddenFromOutputBadge": "hidden"
+    "hiddenFromOutputBadge": "hidden",
+    "toggleToRepeatingTitle": "Click to make this container repeating (one result per match)",
+    "toggleToSingleTitle": "Click to make this container single (only the first match)"
   },
   "apiTree": {
     "addSubgroupBtn": "+ Group",
@@ -690,7 +692,10 @@
     "accessKeyRequired": "This companion requires an access key — enter it under Settings.",
     "accessKeyRejected": "The companion rejected the access key — check it under Settings.",
     "insecureCompanionUrl": "This address would send passwords and keys over an unencrypted connection to another computer. Use an https:// address.",
-    "emailUnverified": "This companion needs a verified email address before it serves your data — confirm it under Settings → Account."
+    "emailUnverified": "This companion needs a verified email address before it serves your data — confirm it under Settings → Account.",
+    "containerSingleMany": "Container \"{name}\" added — {count} elements found, but it is set to \"single\", so only the first is used. Click \"(single)\" in the tree to make it repeating.",
+    "containerRepeatingOne": "Container \"{name}\" added — only 1 element found. A repeating container is meant for several; click \"(repeating)\" in the tree to make it single.",
+    "noDataTryBrowser": "The Static engine may not see this page's content (it is built by JavaScript) — try the Browser engine."
   },
   "frame": {
     "badge": "iframe",
@@ -747,6 +752,30 @@
     "companionError": {
       "causes": {
         "text": "Not started → start it, then press \"Try again\".\nOther port or computer → enter its address below.\nAnother computer → the address must start with https://.\nShared companion → it may need an access key (Settings)."
+      }
+    },
+    "mode": {
+      "choice": {
+        "text": "Fields — a plain list, the same few values per item (a product list).\nContainers — items with sub-items (a menu: categories → dishes).\nAPI — the page loads its data from a hidden request; try it when Fields find nothing.\nCombined, Blocks — several saved scrapers in one script, or several files from one page."
+      }
+    },
+    "containerType": {
+      "type": {
+        "text": "Single element — it exists once on the page (e.g. the page header).\nRepeating — it appears many times (e.g. every dish of a menu); you get one result per match.",
+        "example": "Menu with 12 dishes → Repeating"
+      }
+    },
+    "fieldType": {
+      "container": {
+        "text": "Text — the visible text (a price).\nAttribute — a value from the tag (a link's address or an image's source).\nExists? — only whether the element is there (a \"sale\" badge).\nOwn text only — the element's own text without nested elements (a name without its badge)."
+      },
+      "flat": {
+        "text": "Text — the visible text (a price).\nAttribute — a value from the tag (a link's address or an image's source, e.g. to download it)."
+      }
+    },
+    "engine": {
+      "choice": {
+        "text": "Static — fast; reads the page as the server sends it.\nBrowser — a real browser; for pages built by JavaScript, with a login, or that need scrolling.\nWhen Static finds nothing, Browser is usually the fix."
       }
     }
   }

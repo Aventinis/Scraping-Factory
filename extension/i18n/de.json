@@ -130,7 +130,6 @@
     "engineLabel": "Engine",
     "engineStatic": "Statisch",
     "engineBrowser": "Browser",
-    "engineBrowserTitle": "Rendert JavaScript vor der Extraktion — für dynamisch geladene Seiten oder Login-Flows. Langsamer als die statische Engine.",
     "outputJsonToggle": "Ausgabe als JSON (statt CSV/XML)",
     "dataPreviewToggle": "Testlauf-Datenvorschau anzeigen",
     "outputFileToggle": "Vollständige Scraping-Datei herunterladen",
@@ -251,7 +250,8 @@
     "manageBlueprintsBtn": "Verwalten",
     "outputBlueprintMappingHint": "Ordne jedem Zielfeld eines der eigenen Quellfelder dieser Konfiguration zu — jedes Zielfeld braucht eine Quelle, bevor das Skript erzeugt werden kann.",
     "outputBlueprintTreeMappingHint": "Ordne jedem Zielfeld eines der eigenen Quellfelder dieser Konfiguration zu — die Position einer Zielgruppe in der Ausgabe wird automatisch aus ihren zugeordneten Feldern abgeleitet. Jedes Zielfeld braucht eine Quelle, bevor das Skript erzeugt werden kann.",
-    "outputFormatFlattenHint": "Verschachtelte Ergebnisse werden in eine Tabelle flachgezogen: eine Zeile pro innerstem wiederholten Element, Werte höherer Ebenen werden in jeder Zeile wiederholt (oder wähle einen Output Blueprint, um die Spalten selbst festzulegen). Jedes Datenfeld braucht einen eindeutigen Namen."
+    "outputFormatFlattenHint": "Verschachtelte Ergebnisse werden in eine Tabelle flachgezogen: eine Zeile pro innerstem wiederholten Element, Werte höherer Ebenen werden in jeder Zeile wiederholt (oder wähle einen Output Blueprint, um die Spalten selbst festzulegen). Jedes Datenfeld braucht einen eindeutigen Namen.",
+    "modeLabel": "Modus"
   },
   "robots": {
     "checkFailed": "robots.txt konnte nicht geprüft werden ({error}).",
@@ -383,7 +383,9 @@
     "splitFieldBtn": "+ Feld aufteilen",
     "combinedFieldMode": "Kombiniert aus: {sources}",
     "splitFieldMode": "Aufgeteilt aus: {source}",
-    "hiddenFromOutputBadge": "versteckt"
+    "hiddenFromOutputBadge": "versteckt",
+    "toggleToRepeatingTitle": "Klicken, um diesen Container wiederholend zu machen (ein Ergebnis pro Treffer)",
+    "toggleToSingleTitle": "Klicken, um diesen Container einzeln zu machen (nur der erste Treffer)"
   },
   "apiTree": {
     "addSubgroupBtn": "+ Gruppe",
@@ -690,7 +692,10 @@
     "accessKeyRequired": "Dieser Companion verlangt einen Zugangsschlüssel — trage ihn unter Einstellungen ein.",
     "accessKeyRejected": "Der Companion hat den Zugangsschlüssel abgelehnt — prüfe ihn unter Einstellungen.",
     "insecureCompanionUrl": "Diese Adresse würde Passwörter und Schlüssel unverschlüsselt an einen anderen Computer senden. Bitte eine https://-Adresse verwenden.",
-    "emailUnverified": "Dieser Companion braucht eine bestätigte E-Mail-Adresse, bevor er deine Daten ausliefert — bestätige sie unter Einstellungen → Konto."
+    "emailUnverified": "Dieser Companion braucht eine bestätigte E-Mail-Adresse, bevor er deine Daten ausliefert — bestätige sie unter Einstellungen → Konto.",
+    "containerSingleMany": "Container „{name}“ hinzugefügt — {count} Elemente gefunden, er steht aber auf „einzeln“, deshalb wird nur das erste verwendet. Klicke im Baum auf „(einzeln)“, um ihn wiederholend zu machen.",
+    "containerRepeatingOne": "Container „{name}“ hinzugefügt — nur 1 Element gefunden. Ein wiederholender Container ist für mehrere gedacht; klicke im Baum auf „(wiederholend)“, um ihn einzeln zu machen.",
+    "noDataTryBrowser": "Die statische Engine sieht den Inhalt dieser Seite vielleicht nicht (er wird per JavaScript aufgebaut) — probier die Browser-Engine."
   },
   "frame": {
     "badge": "iframe",
@@ -747,6 +752,30 @@
     "companionError": {
       "causes": {
         "text": "Nicht gestartet → starten, dann „Erneut versuchen“.\nAnderer Port oder Rechner → unten die Adresse eintragen.\nAnderer Rechner → die Adresse muss mit https:// beginnen.\nGeteilter Companion → er verlangt evtl. einen Zugangsschlüssel (Einstellungen)."
+      }
+    },
+    "mode": {
+      "choice": {
+        "text": "Felder — eine einfache Liste, pro Eintrag dieselben Werte (Produktliste).\nContainer — Einträge mit Unterpunkten (Speisekarte: Kategorien → Gerichte).\nAPI — die Seite lädt Daten per versteckter Anfrage; falls Felder nichts finden.\nKombiniert, Blöcke — mehrere Scraper in einem Skript, oder mehrere Dateien pro Seite."
+      }
+    },
+    "containerType": {
+      "type": {
+        "text": "Einzelnes Element — es gibt es nur einmal auf der Seite (z. B. der Seitenkopf).\nWiederholend — es kommt oft vor (z. B. jedes Gericht einer Speisekarte); du bekommst pro Treffer ein Ergebnis.",
+        "example": "Speisekarte mit 12 Gerichten → Wiederholend"
+      }
+    },
+    "fieldType": {
+      "container": {
+        "text": "Text — der sichtbare Text (ein Preis).\nAttribut — ein Wert aus dem Tag (Link-Adresse oder Bildquelle).\nVorhanden? — nur, ob das Element da ist (ein „Sale“-Badge).\nNur eigener Text — der eigene Text ohne verschachtelte Elemente (ein Name ohne sein Badge)."
+      },
+      "flat": {
+        "text": "Text — der sichtbare Text (ein Preis).\nAttribut — ein Wert aus dem Tag (Link-Adresse oder Bildquelle, z. B. zum Herunterladen)."
+      }
+    },
+    "engine": {
+      "choice": {
+        "text": "Statisch — schnell; liest die Seite so, wie der Server sie schickt.\nBrowser — ein echter Browser; für Seiten, die per JavaScript aufgebaut werden, mit Login oder die Scrollen brauchen.\nFindet Statisch nichts, hilft meist Browser."
       }
     }
   }

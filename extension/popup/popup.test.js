@@ -3373,6 +3373,7 @@ describe('Live selector match-count preview (Issue #85)', () => {
     document.getElementById('btn-mode-container').click();
     document.getElementById('btn-add-root-container').click();
     document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('radio-container-repeating').checked = true; // 7 matches fit "repeating" (Issue #398 would warn for "single")
     document.getElementById('btn-container-confirm').click();
 
     capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category', matchCount: 7 });

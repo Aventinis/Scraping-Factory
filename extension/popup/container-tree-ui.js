@@ -75,10 +75,19 @@ function buildGroupTreeNodeEl(node, path, depth, siblingCount) {
   nameInput.title = node.selector || '';
   row.appendChild(nameInput);
 
-  const suffix = document.createElement('span');
+  // Issue #398: a group's "(single)"/"(repeating)" suffix is a button that
+  // switches the type — it can't be changed anywhere else once the container
+  // exists, and the match-count toast right after the pick points at it.
+  const suffix = document.createElement(node.kind === 'group' ? 'button' : 'span');
   suffix.className = 'group-tree-label';
   suffix.textContent = groupNodeSuffix(node);
-  suffix.title = node.selector || '';
+  if (node.kind === 'group') {
+    suffix.type = 'button';
+    suffix.classList.add('group-tree-type');
+    suffix.title = t(node.repeating ? 'group.toggleToSingleTitle' : 'group.toggleToRepeatingTitle');
+  } else {
+    suffix.title = node.selector || '';
+  }
   row.appendChild(suffix);
 
   if (node.kind === 'field' && node.hiddenFromOutput) {
@@ -398,6 +407,16 @@ function wireContainerModeEvents(bridge) {
     // children (same `path` .btn-add-subfield already targets).
     if (e.target.closest('.btn-add-combine-field')) { openCombineFieldModal(bridge, { mode: 'container', parentPath: path }); return; }
     if (e.target.closest('.btn-add-split-field')) { openSplitFieldModal(bridge, { mode: 'container', parentPath: path }); return; }
+    if (e.target.closest('.group-tree-type')) {
+      const group = resolveGroupNode(bridge.getState().groups, path);
+      if (!group || group.kind !== 'group') return;
+      log('GROUP_NODE_TOGGLE_REPEATING', { path, repeating: !group.repeating });
+      bridge.stopPreviewIfActive();
+      bridge.setState(bridge.getState().current, {
+        groups: updateGroupTreeNode(bridge.getState().groups, path, (node) => ({ ...node, repeating: !group.repeating })),
+      });
+      return;
+    }
     if (e.target.closest('.btn-remove-group-node')) {
       log('GROUP_NODE_REMOVE', { path });
       bridge.stopPreviewIfActive();
