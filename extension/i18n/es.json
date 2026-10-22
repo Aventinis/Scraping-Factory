@@ -1101,7 +1101,8 @@
       "scopeMissing": "No se encontró el grupo superior en esta respuesta — elige otra respuesta grabada o escribe la ruta.",
       "nothingToPick": "Aquí no hay nada que elegir — esta respuesta no tiene un valor adecuado.",
       "embeddedMissing": "Ya no se encontró el JSON incrustado de la página — recarga la página o escribe la ruta.",
-      "noEntry": "No hay nada grabado de donde elegir."
+      "noEntry": "No hay nada grabado de donde elegir.",
+      "noBody": "No se grabó ningún cuerpo para esta petición — escribe la ruta."
     },
     "reason": {
       "badKey": "Esta clave contiene un punto o un corchete, que una ruta no puede expresar.",

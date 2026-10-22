@@ -184,6 +184,7 @@ describe('finding the recorded JSON', () => {
     expect(parseEntryJson(entries[2], 'request').json).toEqual({ variables: { after: null } });
     expect(parseEntryJson(entries[3], 'response').reason).toBe('truncated');
     expect(parseEntryJson(entries[4], 'response').reason).toBe('notJson');
+    expect(parseEntryJson(entries[0], 'request').reason).toBe('noBody'); // recorded, but no request body
     expect(parseEntryJson({ method: 'POST', requestBodySkipped: true }, 'request').reason).toBe('skipped');
     expect(parseEntryJson(null, 'response').reason).toBe('noEntry');
     expect(parseEntryJson({ body: '42' }, 'response').reason).toBe('notJson'); // a bare scalar has nothing to pick

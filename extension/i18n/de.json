@@ -1101,7 +1101,8 @@
       "scopeMissing": "Die übergeordnete Gruppe wurde in dieser Antwort nicht gefunden — wählen Sie eine andere aufgezeichnete Antwort oder tippen Sie den Pfad.",
       "nothingToPick": "Hier gibt es nichts zu wählen — diese Antwort hat keinen passenden Wert.",
       "embeddedMissing": "Das eingebettete JSON der Seite wurde nicht mehr gefunden — laden Sie die Seite neu oder tippen Sie den Pfad.",
-      "noEntry": "Nichts aufgezeichnet, woraus man wählen könnte."
+      "noEntry": "Nichts aufgezeichnet, woraus man wählen könnte.",
+      "noBody": "Für diese Anfrage wurde kein Request-Body aufgezeichnet — tippen Sie den Pfad."
     },
     "reason": {
       "badKey": "Dieser Schlüssel enthält einen Punkt oder eine Klammer, die ein Pfad nicht ausdrücken kann.",

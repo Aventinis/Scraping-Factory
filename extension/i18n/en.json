@@ -1101,7 +1101,8 @@
       "scopeMissing": "The parent group was not found in this response — pick another recorded response or type the path.",
       "nothingToPick": "Nothing to pick here — this response has no matching value.",
       "embeddedMissing": "The page's embedded JSON was not found any more — reload the page, or type the path.",
-      "noEntry": "Nothing recorded to pick from."
+      "noEntry": "Nothing recorded to pick from.",
+      "noBody": "No request body was recorded for this request — type the path instead."
     },
     "reason": {
       "badKey": "This key contains a dot or a bracket, which a path can't express.",

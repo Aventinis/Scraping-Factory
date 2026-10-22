@@ -20,7 +20,7 @@ const log = createLogger('SF:JsonPathPickerUI');
 const { t } = require('../i18n/i18n');
 const { escapeHtml, resolveApiGroupScopePath } = require('./api-config');
 const {
-  buildJsonPathTree, parseEntryJson, findSourceEntry, jsonResponseEntries,
+  buildJsonPathTree, selectablePaths, parseEntryJson, findSourceEntry, jsonResponseEntries,
 } = require('./json-path-picker');
 
 /**
@@ -76,7 +76,7 @@ function treeStateFor(state, field, json) {
   const scopePath = spec.mode === 'group' ? groupScopePath(state) : '';
   const tree = buildJsonPathTree(json, { mode: spec.mode, scopePath });
   if (!tree.scopeFound) return { status: 'message', message: 'scopeMissing' };
-  if (tree.nodes.length === 0) return { status: 'message', message: 'nothingToPick' };
+  if (selectablePaths(tree.nodes).length === 0) return { status: 'message', message: 'nothingToPick' };
   return { status: 'tree', tree };
 }
 

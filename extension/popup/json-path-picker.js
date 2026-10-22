@@ -214,14 +214,14 @@ function selectablePaths(nodes) {
  * JSON, saying plainly why it can't be offered otherwise.
  * @param {CaptureEntryLike | null | undefined} entry
  * @param {'response' | 'request'} which
- * @returns {{ json: * , reason: '' } | { json: null, reason: 'noEntry' | 'truncated' | 'skipped' | 'notJson' }}
+ * @returns {{ json: * , reason: '' } | { json: null, reason: 'noEntry' | 'truncated' | 'skipped' | 'notJson' | 'noBody' }}
  */
 function parseEntryJson(entry, which) {
   if (!entry) return { json: null, reason: 'noEntry' };
   const text = which === 'response' ? entry.body : entry.requestBody;
   if (which === 'request' && entry.requestBodySkipped) return { json: null, reason: 'skipped' };
   if (which === 'response' ? entry.bodyTruncated : entry.requestBodyTruncated) return { json: null, reason: 'truncated' };
-  if (!text) return { json: null, reason: 'notJson' };
+  if (!text) return { json: null, reason: which === 'request' ? 'noBody' : 'notJson' };
   try {
     const json = JSON.parse(text);
     return json !== null && typeof json === 'object' ? { json, reason: '' } : { json: null, reason: 'notJson' };
