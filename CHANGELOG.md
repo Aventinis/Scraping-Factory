@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.19.19](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.18...v1.19.19) (2026-10-22)
+
+
+### Features
+
+* **request-headers:** add common-header presets and appendHeaderRow ([#402](https://github.com/Aventinis/Scraping-Factory/issues/402)) ([06d35e8](https://github.com/Aventinis/Scraping-Factory/commit/06d35e8a8974d3f1a7da9cd7ea49936e1c934c22))
+* **request-headers:** pick common headers instead of typing an empty row ([#402](https://github.com/Aventinis/Scraping-Factory/issues/402)) ([b9971a2](https://github.com/Aventinis/Scraping-Factory/commit/b9971a2e19ba0cfb52d234158e2a51ee40c2d743))
+
 ## [1.19.18](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.17...v1.19.18) (2026-10-22)
 
 
