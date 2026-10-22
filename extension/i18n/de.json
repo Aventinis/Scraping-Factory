@@ -756,7 +756,7 @@
     },
     "mode": {
       "choice": {
-        "text": "Felder (flach) — eine einfache Liste, pro Eintrag dieselben wenigen Werte (Produktliste).\nContainer (verschachtelt) — Einträge mit Unterpunkten (Speisekarte: Kategorien → Gerichte).\nAPI — die Seite lädt ihre Daten per versteckter Anfrage; probier es, wenn Felder nichts finden.\nKombiniert, Blöcke — mehrere gespeicherte Scraper in einem Skript oder mehrere Dateien von einer Seite."
+        "text": "Felder — eine einfache Liste, pro Eintrag dieselben Werte (Produktliste).\nContainer — Einträge mit Unterpunkten (Speisekarte: Kategorien → Gerichte).\nAPI — die Seite lädt Daten per versteckter Anfrage; falls Felder nichts finden.\nKombiniert, Blöcke — mehrere Scraper in einem Skript, oder mehrere Dateien pro Seite."
       }
     },
     "containerType": {

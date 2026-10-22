@@ -756,7 +756,7 @@
     },
     "mode": {
       "choice": {
-        "text": "Campos (plano) — una lista sencilla, los mismos pocos valores por elemento (lista de productos).\nContenedores (anidado) — elementos con subelementos (una carta: categorías → platos).\nAPI — la página carga sus datos con una petición oculta; pruébala si Campos no encuentra nada.\nCombinado, Bloques — varios scrapers guardados en un script, o varios archivos de una página."
+        "text": "Campos — lista sencilla, los mismos valores por elemento (productos).\nContenedores — elementos con subelementos (carta: categorías → platos).\nAPI — la página carga datos con una petición oculta; pruébala si Campos no halla nada.\nCombinado, Bloques — varios scrapers en un script, o varios archivos de una página."
       }
     },
     "containerType": {
