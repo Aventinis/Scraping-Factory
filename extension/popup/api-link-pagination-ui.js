@@ -11,6 +11,7 @@
 //   apiConfigDraft.sourceHasNextLink — the recorded response carried a
 //   rel="next" Link header, so the option is highlighted as a suggestion.
 const { createLogger } = require('../shared/logger');
+const { autoOpenAdvanced } = require('./api-config-shared-ui');
 const log = createLogger('SF:ApiLinkPaginationUI');
 const { createDefaultLinkDraft, DEFAULT_MAX_PAGES } = require('./api-link-pagination');
 
@@ -27,9 +28,11 @@ function renderApiLinkPaginationSection(bridge) {
   const draft = bridge.getState().apiConfigDraft;
   const section = document.getElementById('api-link-section');
   if (!section) return;
-  section.classList.toggle('hidden', !!draft?.embeddedJsonSource);
+  // The section sits inside its "Advanced" disclosure — hide that whole block for an embedded source.
+  (section.closest('details') || section).classList.toggle('hidden', !!draft?.embeddedJsonSource);
   const link = draft?.linkHeaderPagination || null;
   const isPost = (draft?.method || 'GET') !== 'GET';
+  autoOpenAdvanced(section, !!link || (!!draft?.sourceHasNextLink && !isPost));
 
   const toggle = /** @type {HTMLInputElement | null} */ (document.getElementById('toggle-api-link'));
   if (toggle) {

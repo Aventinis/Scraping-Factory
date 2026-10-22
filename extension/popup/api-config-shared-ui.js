@@ -81,7 +81,24 @@ function insertParameterPlaceholder(bridge, selectEl) {
 // routing the result back into this one parameter's own source object
 // instead of _state.browserActions.
 
+// Issue #404: the rarely needed API options (auth bootstrap, cursor and Link
+// pagination) sit under a remembered "Advanced". When the option is already on
+// — or, for Link pagination, when the recording suggests it — its disclosure
+// opens once by itself, so a returning user's setting is never tucked away.
+// `section` is any element inside the disclosure; a screen without one (the
+// unit-test fixtures) is left alone.
+function autoOpenAdvanced(section, shouldOpen) {
+  const details = section && section.closest('details.advanced-disclosure');
+  if (!details) return;
+  if (!shouldOpen) { delete details.dataset.autoOpened; return; }
+  if (!details.open && !details.dataset.autoOpened) {
+    details.dataset.autoOpened = '1';
+    details.open = true;
+  }
+}
+
 module.exports = {
+  autoOpenAdvanced,
   patchApiConfigDraft,
   patchApiConfigSource,
   renderParameterPlaceholderPicker,

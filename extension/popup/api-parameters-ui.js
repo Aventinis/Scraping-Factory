@@ -12,6 +12,8 @@ const {
 // Issue #220: a variable URL part can take the bootstrap value as its
 // source, and a captured header can be built from it ("Bearer {token}").
 const { BOOTSTRAP_SOURCE_KIND } = require('./api-bootstrap');
+const { helpHostHtml } = require('./help-popover');
+const { createAdvancedDisclosure } = require('./advanced-disclosure-ui');
 const { renderParameterPlaceholderPicker, patchApiConfigDraft, patchApiConfigSource, insertParameterPlaceholder } = require('./api-config-shared-ui');
 const { fetchApiCaptureEntries } = require('./api-capture-ui');
 const { renderBrowserDiscoverySourceFields, handleBrowserDiscoveryChange, handleBrowserDiscoveryClick } = require('./api-browser-discovery-ui');
@@ -54,6 +56,12 @@ function renderApiConfigUrlParts(urlParts) {
   }
 }
 
+// help.apiConfig.sourceStaticList / sourceDiscovery / sourceRange / sourceBrowserDiscovery / sourceBootstrap
+function sourceHelpSuffix(kind) {
+  const name = kind === BOOTSTRAP_SOURCE_KIND ? 'bootstrap' : kind;
+  return name[0].toUpperCase() + name.slice(1);
+}
+
 function renderApiConfigParameters(draft, discoveryCandidates, discoveryTemplateEditingPartId) {
   const container = document.getElementById('api-config-parameters');
   if (!container) return;
@@ -86,15 +94,26 @@ function renderApiConfigParameters(draft, discoveryCandidates, discoveryTemplate
     // body-only parameter — the body references the bootstrap by name
     // directly on the wire) and only while a bootstrap is configured.
     const isUrlPart = part.id.startsWith('path:') || part.id.startsWith('query:');
-    const sourceKinds = ['staticList', 'discovery', 'range', 'browserDiscovery'];
-    if (isUrlPart && (draft.bootstrap || source?.kind === BOOTSTRAP_SOURCE_KIND)) sourceKinds.push(BOOTSTRAP_SOURCE_KIND);
-    kindRow.innerHTML = sourceKinds.map(kind => `
+    // Issue #404: the three everyday sources are shown; browser discovery and
+    // the bootstrap token value are rarely needed and sit under "Advanced",
+    // which opens by itself while one of them is the chosen source.
+    const basicKinds = ['staticList', 'discovery', 'range'];
+    const advancedKinds = ['browserDiscovery'];
+    if (isUrlPart && (draft.bootstrap || source?.kind === BOOTSTRAP_SOURCE_KIND)) advancedKinds.push(BOOTSTRAP_SOURCE_KIND);
+    const radioHtml = kind => `
         <label>
           <input type="radio" name="source-kind-${safePartId}" class="api-config-source-kind-radio"
             data-part-id="${safePartId}" value="${kind}" ${source?.kind === kind ? 'checked' : ''} />
           ${escapeHtml(sourceKindLabels[kind])}
+          ${helpHostHtml(`help.apiConfig.source${sourceHelpSuffix(kind)}`)}
         </label>
-      `).join('');
+      `;
+    kindRow.setAttribute('data-help-anchor', '');
+    kindRow.innerHTML = basicKinds.map(radioHtml).join('');
+    const advancedSources = createAdvancedDisclosure('api-source-advanced', 'apiConfig.sourceAdvancedSummary');
+    advancedSources.querySelector('.advanced-disclosure-body').innerHTML = advancedKinds.map(radioHtml).join('');
+    if (advancedKinds.includes(source?.kind)) advancedSources.open = true;
+    kindRow.appendChild(advancedSources);
     card.appendChild(kindRow);
 
     const fieldsEl = document.createElement('div');

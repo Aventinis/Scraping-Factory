@@ -11,6 +11,7 @@ const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:ApiCursorPaginationUI');
 const { t } = require('../i18n/i18n');
 const { createDefaultCursorDraft, detectCursorSuggestion, DEFAULT_MAX_PAGES } = require('./api-cursor-pagination');
+const { autoOpenAdvanced } = require('./api-config-shared-ui');
 const { pathPickerButtonHtml, pathPickerPanelHtml, wirePathPickerEvents } = require('./json-path-picker-ui');
 
 // Duplicated from api-bootstrap-ui.js's own copy rather than imported — the
@@ -72,8 +73,10 @@ function renderApiCursorPaginationSection(bridge) {
   const draft = state.apiConfigDraft;
   const section = document.getElementById('api-cursor-section');
   if (!section) return;
-  section.classList.toggle('hidden', !!draft?.embeddedJsonSource);
+  // The section sits inside its "Advanced" disclosure — hide that whole block for an embedded source.
+  (section.closest('details') || section).classList.toggle('hidden', !!draft?.embeddedJsonSource);
   const cursor = draft?.cursorPagination || null;
+  autoOpenAdvanced(section, !!cursor);
   const toggle = /** @type {HTMLInputElement | null} */ (document.getElementById('toggle-api-cursor'));
   if (toggle) toggle.checked = !!cursor;
   const configEl = document.getElementById('api-cursor-config');

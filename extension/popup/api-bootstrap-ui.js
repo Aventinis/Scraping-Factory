@@ -19,6 +19,7 @@ const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:ApiBootstrapUI');
 const { t } = require('../i18n/i18n');
 const { envVarNoteHtml } = require('./env-var-ui');
+const { autoOpenAdvanced } = require('./api-config-shared-ui');
 const { pathPickerButtonHtml, pathPickerPanelHtml, wirePathPickerEvents } = require('./json-path-picker-ui');
 const {
   createDefaultBootstrapDraft, createBootstrapPair, detectTokenInResponse, bootstrapDraftFromCaptureEntry,
@@ -122,6 +123,7 @@ function renderApiBootstrapSection(bridge) {
   const bootstrap = state.apiConfigDraft?.bootstrap || null;
   const toggle = /** @type {HTMLInputElement | null} */ (document.getElementById('toggle-api-bootstrap'));
   if (toggle) toggle.checked = !!bootstrap;
+  autoOpenAdvanced(document.getElementById('api-bootstrap-section'), !!bootstrap);
   const configEl = document.getElementById('api-bootstrap-config');
   if (!configEl) return;
   configEl.classList.toggle('hidden', !bootstrap);

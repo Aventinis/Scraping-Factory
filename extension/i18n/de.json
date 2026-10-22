@@ -330,7 +330,7 @@
     "variableLabel": "variabel",
     "unnamedPart": "(noch unbenannt)",
     "sourceKindStaticList": "Werteliste",
-    "sourceKindDiscovery": "Discovery-Endpunkt",
+    "sourceKindDiscovery": "Liste aus anderer Anfrage",
     "sourceKindRange": "Bereich",
     "sourceKindBrowserDiscovery": "Browser-Erkennung",
     "discoveryUrlLabel": "Erkennungs-URL",
@@ -364,11 +364,13 @@
     "bodyToFixedBtn": "→ Fest",
     "bodyPickParameterPlaceholder": "-- Parameter wählen --",
     "bodyNewParameterOption": "+ Neuer Parameter…",
-    "bodyCoerceToTitle": "Werttyp für die Übernahme in den Body (Standard: Text)"
+    "bodyCoerceToTitle": "Werttyp für die Übernahme in den Body (Standard: Text)",
+    "sourceAdvancedSummary": "Erweiterte Quellen",
+    "bodyValueTypeAdvanced": "Erweitert: Werttyp",
+    "bodyValueTypeLabel": "Werttyp"
   },
   "apiCursor": {
     "toggleLabel": "Cursor der nächsten Seite verfolgen (Cursor-/Token-Paginierung)",
-    "hint": "Für APIs, die den Cursor der nächsten Seite nur in der aktuellen Antwort verraten (z. B. pageInfo.endCursor oder next_page_token). Das Skript holt für jede Parameterkombination Seite für Seite, bis kein Cursor mehr zurückkommt.",
     "detectBtn": "Aus Aufzeichnung erkennen",
     "detectNone": "In der aufgezeichneten Anfrage/Antwort wurde nichts Cursor-Ähnliches gefunden. Bitte die Pfade manuell eintragen.",
     "detectApplied": "Cursor-Einstellungen aus der Aufzeichnung übernommen – bitte prüfen.",
@@ -379,19 +381,19 @@
     "targetBody": "Feld im Request-Body",
     "bodyNeedsPost": "Ein Body-Ziel braucht eine POST-Anfrage mit aufgezeichnetem Request-Body.",
     "maxPagesLabel": "Maximale Seiten pro Anfrage-Kombination",
-    "firstPageHint": "Seite 1 wird genau wie aufgezeichnet gesendet – die aufgezeichnete Anfrage sollte also die erste Seite ohne Cursor sein."
+    "firstPageHint": "Seite 1 wird genau wie aufgezeichnet gesendet – die aufgezeichnete Anfrage sollte also die erste Seite ohne Cursor sein.",
+    "advancedSummary": "Erweitert: Der Cursor der nächsten Seite steckt in der Antwort"
   },
   "apiLink": {
     "toggleLabel": "Link-Header folgen (rel=\"next\"-Paginierung)",
-    "hint": "Für APIs (GitHub, GitLab, WordPress, ...), die die nächste Seite im HTTP-Antwort-Header Link statt im Body ankündigen. Das Skript ruft diese URL Seite für Seite für jede Parameterkombination ab, bis kein Next-Link mehr kommt. Nicht für POST-Anfragen.",
     "detectedHint": "Eine aufgezeichnete Antwort hat eine nächste Seite per Link-Header angekündigt — diese Option passt vermutlich.",
     "needsGet": "Die Link-Header-Paginierung braucht eine GET-Anfrage.",
     "maxPagesLabel": "Maximale Seitenzahl pro Anfragekombination",
-    "firstPageHint": "Seite 1 wird genau wie aufgezeichnet gesendet — die aufgezeichnete Anfrage sollte also die erste Seite sein. Next-Links auf einen anderen Host werden nie verfolgt."
+    "firstPageHint": "Seite 1 wird genau wie aufgezeichnet gesendet — die aufgezeichnete Anfrage sollte also die erste Seite sein. Next-Links auf einen anderen Host werden nie verfolgt.",
+    "advancedSummary": "Erweitert: Die nächste Seite steht im Link-Header"
   },
   "apiBootstrap": {
     "toggleLabel": "Vor jedem Lauf frisches Token holen (Auth-Bootstrap)",
-    "hint": "Für APIs, die zuerst ein kurzlebiges Token aus einer Login-/Token-Anfrage brauchen. Das Skript sendet diese Anfrage zu Beginn jedes Laufs und nutzt den ausgelesenen Wert in den Headern/der URL unten — Zugangsdaten kommen ausschließlich aus Umgebungsvariablen.",
     "fromRecordingBtn": "Aus Aufzeichnung übernehmen",
     "recordingHint": "Wähle die Login-/Token-Anfrage. Nicht dabei? Aufzeichnung laufen lassen, Seite neu laden (oder erneut einloggen) und die Liste neu öffnen.",
     "recordingEmpty": "Keine aufgezeichnete Anfrage mit JSON-Antwort gefunden.",
@@ -410,7 +412,8 @@
     "sourceKind": "Token-Wert",
     "sourceKindNote": "Wird bei jedem Lauf mit dem frisch geholten Token ({placeholder}) befüllt.",
     "sourceKindMissing": "Kein Auth-Bootstrap konfiguriert — oben aktivieren oder eine andere Wertquelle wählen.",
-    "headerMode": "Aus Token"
+    "headerMode": "Aus Token",
+    "advancedSummary": "Erweitert: Die API braucht zuerst ein Login-Token"
   },
   "group": {
     "repeating": "wiederholend",
@@ -942,6 +945,58 @@
       "overview": {
         "text": "Für Seiten, deren Liste sich ändert, z. B. ein Kategorie-Menü: Das Skript öffnet diese Seite einmal, sammelt jeden Link, der zum Selektor passt, und liest jede verlinkte Seite als zusätzliche Startseite. Wählen Sie einen Link im Menü — der Selektor passt dann auf alle ähnlichen Links. Ein Link lässt sich auch über seinen Text wählen.",
         "example": "a:contains(\"Gemüse\")"
+      }
+    },
+    "apiConfig": {
+      "urlParts": {
+        "text": "Jeder Teil der Adresse bleibt entweder fest oder ändert sich von Anfrage zu Anfrage. Haken Sie „variabel“ bei einem Teil, der unterschiedliche Werte annimmt — eine Woche, eine Kategorie, eine Seite — und geben Sie ihm einen Namen; unten legen Sie fest, woher seine Werte kommen. Feste Teile werden genau wie aufgezeichnet gesendet.",
+        "example": "/api/weeks/2026-W35  →  „variabel“ ankreuzen, „woche“ nennen"
+      },
+      "bodyVariable": {
+        "text": "Ein Wert im Request-Body ist fest oder ändert sich von Anfrage zu Anfrage. „→ Variable“ lässt ihn die Werte eines Parameters annehmen (eines neuen oder bestehenden), z. B. die Kategorie einer Suchanfrage.",
+        "example": "category: \"electronics\"  →  Variable „category“"
+      },
+      "valueType": {
+        "text": "Wie der Wert in den Body geschrieben wird. Text passt für die meisten APIs; wählen Sie Zahl oder Boolean, wenn der Server eine Zahl oder true/false erwartet — ein in Anführungszeichen gesetztes „10“ würde abgelehnt.",
+        "example": "\"pageSize\": 10  →  Number"
+      },
+      "sourceStaticList": {
+        "text": "Sie tippen die Werte selbst ein oder sammeln sie aus der Aufzeichnung; das Skript ruft jeden davon ab.",
+        "example": "elektronik, buecher"
+      },
+      "sourceDiscovery": {
+        "text": "Die Werte stammen aus einer anderen Anfrage der Seite, z. B. einer Kategorienliste. Klicken Sie einen dieser Werte auf der Seite an, dann wird die passende Anfrage für Sie gefunden.",
+        "example": "GET /api/categories  →  jede ID der Liste"
+      },
+      "sourceRange": {
+        "text": "Zählt durch einen Bereich: ISO-Wochen, einfache Zahlen oder Daten.",
+        "example": "2026-W30 … 2026-W35"
+      },
+      "sourceBrowserDiscovery": {
+        "text": "Für Werte, die erst beim Benutzen der Seite auftauchen: Das Skript öffnet einen Browser, führt Ihre Klicks und Scrolls aus und merkt sich, welche Werte die Seite anfragt.",
+        "example": "Angebotsseite scrollen, jeden Kategorienamen sammeln"
+      },
+      "sourceBootstrap": {
+        "text": "Dieser Teil der Adresse nimmt das frisch geholte Login-Token (siehe „Die API braucht zuerst ein Login-Token“).",
+        "example": "?access_token={token}"
+      }
+    },
+    "apiBootstrap": {
+      "overview": {
+        "text": "Für APIs, die zuerst ein kurzlebiges Token aus einer Login-/Token-Anfrage brauchen. Das Skript sendet diese Anfrage zu Beginn jedes Laufs und nutzt den ausgelesenen Wert in den Headern/der URL unten — Zugangsdaten kommen ausschließlich aus Umgebungsvariablen.",
+        "example": "POST /auth/token  →  access_token"
+      }
+    },
+    "apiCursor": {
+      "overview": {
+        "text": "Für APIs, die den Cursor der nächsten Seite nur in der aktuellen Antwort verraten (z. B. pageInfo.endCursor oder next_page_token). Das Skript holt für jede Parameterkombination Seite für Seite, bis kein Cursor mehr zurückkommt.",
+        "example": "pageInfo.endCursor"
+      }
+    },
+    "apiLink": {
+      "overview": {
+        "text": "Für APIs (GitHub, GitLab, WordPress, ...), die die nächste Seite im HTTP-Antwort-Header Link statt im Body ankündigen. Das Skript ruft diese URL Seite für Seite für jede Parameterkombination ab, bis kein Next-Link mehr kommt. Nicht für POST-Anfragen.",
+        "example": "Link: <…?page=2>; rel=\"next\""
       }
     }
   },
