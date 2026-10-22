@@ -20,9 +20,9 @@ This documentation is for people *using* the extension. (Developers: see
 | Scrape pages that need JavaScript, a login or scrolling | [Browser engine and actions](browser-engine.md) |
 | Follow "next page" links or numbered pages | [Pagination](pagination.md) |
 | Clean up values (prices, whitespace, dates) | [Transforms and presets](transforms.md) |
-| Get warned when a scheduled scraper breaks | [Hardening and monitoring](monitoring.md) |
+| Get warned when a scheduled scraper breaks | [Safety checks and alerts](monitoring.md) |
 | Reuse a setup for a site you scrape repeatedly | [Saved configurations](saved-configurations.md) |
-| Choose CSV, JSON, SQLite or Excel, or fix column names | [Output formats and blueprints](output.md) |
+| Choose CSV, JSON, SQLite or Excel, or fix column names | [Output formats and output layouts](output.md) |
 | Be polite to a site: pauses, retries, headers, proxies, robots.txt | [Network settings](network-settings.md) |
 | Share one companion between several people | [Accounts and access keys](authentication.md) |
 | Fix a problem | [Troubleshooting and FAQ](troubleshooting.md) |

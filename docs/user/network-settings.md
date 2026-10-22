@@ -18,7 +18,7 @@ polite scrape can still be verified.
 
 **Retry on transient errors** retries a request that failed with a connection
 error, a timeout, or one of the **status codes** you list (default 429, 502,
-503, 504). Choose **Attempts** (default 3), the **Wait (s)** (default 2) and
+503, 504; the list is under **Advanced**). Choose **Attempts** (default 3), the **Wait (s)** (default 2) and
 whether to **Double the wait after every retry**. If the site sends
 `Retry-After`, that wait is used instead (at most 60 seconds). Errors such as
 404, 401 or 403 are not retried. If every attempt fails the run stops with a

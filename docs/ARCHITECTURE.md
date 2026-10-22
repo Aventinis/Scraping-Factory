@@ -668,6 +668,22 @@ CLAUDE.md for the details.
 - Tests: `popup/hardening-presets.test.js`, `popup/hardening-presets-ui.test.js`,
   real-browser check `e2e/examples/issue-399-hardening-plain-language-check.js`
 
+### 2.10k Terminology pass, Advanced groups and glossary (Issue #407)
+
+Plainer names for the jargon terms (output layout, safety checks, "Alerts & safety checks",
+skip-if-unchanged, "Collect from the page", "Remove duplicates"), rarely used options under
+remembered "Advanced" groups that open themselves when the option is in use, a 1-based
+"Part" in Split field, and a glossary on the Settings screen. Labels and grouping only: no
+wire-format, companion or generated-script change. See CLAUDE.md for the details.
+
+- Extension: `i18n/{de,en,es}.json` (renamed values; keys unchanged), `popup/advanced-defaults.js`
+  (pure: does a retry code list / dedup retention differ from its default?),
+  `popup/advanced-disclosure-ui.js` (`autoOpenAdvanced`), `popup/combine-split-fields.js`
+  (`partNumberToIndex`/`indexToPartNumber`), `popup/glossary.js` + `glossary-ui.js`,
+  `popup/screens/{idle,settings,modals}.html`, `help.outputLayout|safetyChecks|preflight|dedup.overview`
+- Tests: `popup/advanced-defaults.test.js`, `advanced-groups-ui.test.js`, `glossary.test.js`,
+  `combine-split-fields.test.js`, real-browser check `e2e/examples/issue-407-terminology-advanced-check.js`
+
 ### 2.10j API mode guidance and JSON-path pickers (Issue #404)
 
 "Pick from the recording" for every JSON-path input (group path, cursor and "has more"
@@ -679,7 +695,7 @@ companion change. See CLAUDE.md for the details.
 - Extension: `popup/json-path-picker.js` (pure tree model + path derivation),
   `popup/json-path-picker-ui.js` (state-driven panel, loading, wiring),
   `popup/api-cursor-pagination-ui.js`/`api-bootstrap-ui.js`/`api-response-tree-ui.js`
-  (buttons and panels), `popup/api-config-shared-ui.js` (`autoOpenAdvanced`),
+  (buttons and panels), `popup/advanced-disclosure-ui.js` (`autoOpenAdvanced`),
   `popup/screens/api-config.html`/`modals.html`, `jsonPathPicker.*`/`help.api*` in `i18n/*.json`;
   `content/content-script.js` (`readEmbeddedJson`) + `background/service-worker.js`
   (`GET_EMBEDDED_JSON`)

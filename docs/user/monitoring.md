@@ -1,8 +1,8 @@
-# Hardening and monitoring
+# Safety checks and alerts
 
 A scraper you run on a schedule can break quietly: a site redesign changes a
 class name, and the script keeps "succeeding" with an empty file. The
-**Monitoring** section of the idle screen (collapsed by default) makes the
+**Alerts & safety checks** section of the idle screen (collapsed by default) makes the
 *generated script itself* notice — on every run, not just during the trial.
 
 This only matters if you run the script **again and again** (for example every
@@ -17,9 +17,9 @@ a warning when the run found **nothing at all**, and a warning for rows missing 
 then left out of the file). Checks you already set up are left alone, and clicking
 again changes nothing.
 
-![The Monitoring checks after one click on Recommended checks](images/monitoring-recommended.png)
+![The safety checks after one click on Recommended checks](images/monitoring-recommended.png)
 
-## Hardening checks
+## Safety checks
 
 Each check is switched on independently, and you choose what happens when it fails:
 
@@ -43,7 +43,7 @@ Details worth knowing:
   result; in nested output, an incomplete group instance is dropped.
 - Blocking detection only *reports*. It never tries to get around a block.
 - A saved output can be re-checked with the current settings from the
-  [saved configurations](saved-configurations.md) panel (**Test hardening**).
+  [saved configurations](saved-configurations.md) panel (**Test safety checks**).
 
 ## Change detection
 
@@ -56,9 +56,9 @@ set where the script runs (for email: the SMTP host, port, user, password, from
 and to; for a webhook: its URL). Nothing secret is stored in the script. A
 failed notification only prints a warning; it doesn't fail the run.
 
-## Check beforehand whether the page has changed
+## Skip if the page hasn't changed
 
-**Check beforehand whether the page has changed, and skip the run if not**
+**Skip if the page hasn't changed**
 makes the script send one cheap request first and compare the page's `ETag` /
 `Last-Modified` with the last successful run. If unchanged, it exits with code
 **4** before doing any real work (and, for the Browser engine, before starting a
@@ -73,7 +73,7 @@ scheduler what happened:
 | Code | Meaning |
 | --- | --- |
 | 0 | Success (possibly with warnings) |
-| 2 | A hardening check with severity Error failed |
-| 4 | Preflight: page unchanged, run skipped |
-| 5 | Preflight: page not reachable |
+| 2 | A safety check with severity Error failed |
+| 4 | Skip if the page hasn't changed: page unchanged, run skipped |
+| 5 | Skip if the page hasn't changed: page not reachable |
 | 78 | A required environment variable was not set |

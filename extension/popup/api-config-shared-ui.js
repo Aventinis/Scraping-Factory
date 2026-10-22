@@ -5,6 +5,7 @@
 // See api-config-ui.js for the `bridge` convention.
 const { t } = require('../i18n/i18n');
 const { escapeHtml } = require('./api-config');
+const { autoOpenAdvanced } = require('./advanced-disclosure-ui');
 
 // Issue #217: a small "insert parameter" picker next to a free-text
 // UrlTemplate/DiscoveryUrl input, listing every already-declared parameter
@@ -80,22 +81,6 @@ function insertParameterPlaceholder(bridge, selectEl) {
 // "some actions array", so no new mutation logic is needed here, only
 // routing the result back into this one parameter's own source object
 // instead of _state.browserActions.
-
-// Issue #404: the rarely needed API options (auth bootstrap, cursor and Link
-// pagination) sit under a remembered "Advanced". When the option is already on
-// — or, for Link pagination, when the recording suggests it — its disclosure
-// opens once by itself, so a returning user's setting is never tucked away.
-// `section` is any element inside the disclosure; a screen without one (the
-// unit-test fixtures) is left alone.
-function autoOpenAdvanced(section, shouldOpen) {
-  const details = section && section.closest('details.advanced-disclosure');
-  if (!details) return;
-  if (!shouldOpen) { delete details.dataset.autoOpened; return; }
-  if (!details.open && !details.dataset.autoOpened) {
-    details.dataset.autoOpened = '1';
-    details.open = true;
-  }
-}
 
 module.exports = {
   autoOpenAdvanced,

@@ -13,6 +13,7 @@ const log = createLogger('SF:Popup');
 const { getGlobalSettings, updateGlobalSettings } = require('../shared/global-settings');
 
 const { STATES } = require('./api-config');
+const { autoOpenAdvanced } = require('./advanced-disclosure-ui');
 
 const { getAccessKey, setAccessKey } = require('../shared/companion-config');
 
@@ -25,6 +26,7 @@ const { renderAccountAndDeveloperSections, wireAccountAndDeveloperEvents } = req
 const { renderEmailAccountSection, wireEmailAccountEvents } = require('./email-account-ui');
 
 const { renderManageBlueprintsModal } = require('./output-blueprints-ui');
+const { renderGlossary } = require('./glossary-ui');
 
 const { renderAllSavedConfigsList, wireAllSavedConfigsEvents } = require('./saved-configs-ui');
 
@@ -39,8 +41,11 @@ function renderSettingsScreen(bridge) {
   if (outputFileToggle) outputFileToggle.checked = settings.includeOutputFile;
   const externalConfigToggle = document.getElementById('toggle-external-config');
   if (externalConfigToggle) externalConfigToggle.checked = settings.externalConfig;
+  autoOpenAdvanced(externalConfigToggle, !!settings.externalConfig); // Issue #407
   const skipVerificationToggle = document.getElementById('toggle-skip-verification');
   if (skipVerificationToggle) skipVerificationToggle.checked = settings.skipVerification;
+
+  renderGlossary(); // Issue #407
 
   const isHostnameMode = settings.scriptNameMode === 'hostname';
   document.getElementById('btn-script-name-mode-fixed')?.classList.toggle('active', !isHostnameMode);

@@ -1106,3 +1106,9 @@ input.env-var-invalid, input.env-var-invalid:focus { border-color: var(--color-d
 .json-path-type { flex: none; font-size: 10px; color: var(--color-text-muted); }
 .json-path-preview { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 11px; color: var(--color-text-secondary); }
 .json-path-message { color: var(--color-warning-strong); }
+
+/* Issue #407: Settings glossary — term / one-sentence explanation pairs */
+.glossary-list { margin: 0; }
+.glossary-list dt { font-weight: 600; margin-top: 8px; }
+.glossary-list dd { margin: 2px 0 0; color: var(--color-text-muted); font-size: 12px; line-height: 1.4; }
+.glossary-example { display: block; margin-top: 2px; }

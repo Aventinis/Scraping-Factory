@@ -109,15 +109,15 @@
     "savedOutputsEmpty": "No saved outputs for this configuration yet.",
     "savedOutputsLoading": "Loading…",
     "savedOutputsDownloadBtn": "Download",
-    "savedOutputsReplayHardeningBtn": "Test hardening",
+    "savedOutputsReplayHardeningBtn": "Test safety checks",
     "savedOutputsDeleteConfirm": "Delete this saved output?",
-    "hardeningReplayNoChecks": "No hardening checks are currently configured — set one up in the Monitoring section first.",
+    "hardeningReplayNoChecks": "No safety checks are currently configured — set one up in the Alerts & safety checks section first.",
     "hardeningReplayCompareBasisLabel": "This check needs a previous result to compare against:",
     "hardeningReplayCompareBasisConfig": "Same configuration",
-    "hardeningReplayCompareBasisBlueprint": "Blueprint \"{name}\"",
+    "hardeningReplayCompareBasisBlueprint": "Layout \"{name}\"",
     "hardeningReplayRunBtn": "Run",
     "hardeningReplayLoading": "Testing…",
-    "hardeningReplayError": "Could not test hardening: {message}",
+    "hardeningReplayError": "Could not test the safety checks: {message}",
     "hardeningReplayOutcomePassed": "Passed",
     "hardeningReplayOutcomeTriggered": "Triggered",
     "hardeningReplayOutcomeInconclusive": "Inconclusive",
@@ -170,7 +170,7 @@
     "retryExponentialToggle": "Double the wait after every retry",
     "retryStatusCodesLabel": "On status codes",
     "retryHint": "If a request fails with a connection error, a timeout or one of the status codes, the script tries it again after the wait (for 429/503 as long as the server asks via Retry-After; at most 60 s per wait). Other errors such as 404 or 403 fail immediately. If every attempt fails, the run stops as before.",
-    "dedupToggle": "Remove duplicates by key field(s)",
+    "dedupToggle": "Remove duplicates",
     "dedupKeyFieldsHint": "Pick the field(s) that identify an item (together they form its key). A later row/element with a key that already appeared in this run is dropped — useful for overlapping pages or items reachable from several start URLs. Items whose key fields are all empty are never removed.",
     "dedupAddKeyFieldBtn": "Add key field",
     "dedupKeyFieldMissing": "no longer exists",
@@ -209,7 +209,7 @@
     "discoveredUrlsLinkSelectorPlaceholder": "e.g. nav.categories a",
     "discoveredUrlsHint": "Loads this page once and adds every matching link as an extra start page.",
     "discoveredUrlsMaxUrlsLabel": "Max. number of discovered URLs (safety limit)",
-    "monitoringSectionToggle": "Monitoring",
+    "monitoringSectionToggle": "Alerts & safety checks",
     "settingsSectionToggle": "Settings",
     "hardeningNoResultToggle": "Check for empty result",
     "hardeningSeverityWarning": "Warn me",
@@ -225,7 +225,7 @@
     "hardeningBlockingPhrasesPlaceholder": "e.g. \"Access Denied\", \"Please verify you are human\"",
     "hardeningRequiredFieldsToggle": "Require fields (drop incomplete rows)",
     "hardeningRequiredFieldsAddBtn": "+ Add field",
-    "preflightToggle": "Check beforehand whether the page has changed, and skip the run if not",
+    "preflightToggle": "Skip if the page hasn't changed",
     "preflightHint": "Sends a quick request to the page before the real scrape starts. If nothing has changed since the last run, or the page isn't reachable right now, the run is skipped without the cost of a full scrape.",
     "modeBlocks": "Blocks",
     "blocksHint": "Builds several independent extraction blocks (flat or container, freely mixed) sharing this page’s navigation — each writes its own output file in one script run.",
@@ -240,12 +240,12 @@
     "blocksSummaryFlat": "{count} field(s)",
     "blocksSummaryGroup": "{count} group(s)",
     "blocksUnnamed": "(unnamed)",
-    "outputBlueprintLabel": "Output blueprint",
+    "outputBlueprintLabel": "Output layout",
     "outputBlueprintNoneOption": "None",
     "manageBlueprintsBtn": "Manage",
     "outputBlueprintMappingHint": "Map each target field to one of this configuration's own source fields — every target field needs a source before the script can be generated.",
     "outputBlueprintTreeMappingHint": "Map each target field to one of this configuration's own source fields — a target group's own position in the output is inferred automatically from its mapped fields. Every target field needs a source before the script can be generated.",
-    "outputFormatFlattenHint": "Nested results are flattened into one table: one row per innermost repeating item, with values from higher levels repeated in every row (or pick an Output Blueprint to choose the columns yourself). Every data field needs a unique name.",
+    "outputFormatFlattenHint": "Nested results are flattened into one table: one row per innermost repeating item, with values from higher levels repeated in every row (or pick an Output layout to choose the columns yourself). Every data field needs a unique name.",
     "modeLabel": "Mode",
     "monitoringIntro": "Only useful if you run the script again and again, e.g. every night: it tells you when the website changed and your script stopped working.",
     "hardeningSectionLabel": "Checks after every run",
@@ -266,7 +266,9 @@
     "paginationSuggestionUse": "Use this pattern",
     "paginationPickNextLink": "Select the “Next” link",
     "paginationPickPageLink": "Click a link to page 2 to learn the pattern",
-    "discoveredUrlsAdvanced": "Advanced: find start pages automatically"
+    "discoveredUrlsAdvanced": "Advanced: find start pages automatically",
+    "retryAdvanced": "Advanced: which errors to retry",
+    "dedupRetentionAdvanced": "Advanced: how long to remember items"
   },
   "requestHeaderPresets": {
     "acceptLanguage": {
@@ -332,8 +334,8 @@
     "sourceKindStaticList": "Value list",
     "sourceKindDiscovery": "List from another request",
     "sourceKindRange": "Range",
-    "sourceKindBrowserDiscovery": "Browser discovery",
-    "discoveryUrlLabel": "Discovery URL",
+    "sourceKindBrowserDiscovery": "Collect from the page (browser)",
+    "discoveryUrlLabel": "Page to open",
     "insertParameterPlaceholder": "+ Insert parameter…",
     "insertParameterHint": "Inserts the placeholder at the end (or at the cursor position if you just clicked into the field) — move it yourself to the right spot in the path afterward, where a fixed value would otherwise go, e.g. \".../categories/{category}/weeks\".",
     "editTemplateBtn": "Edit template",
@@ -406,7 +408,7 @@
     "bodyEncodingForm": "Form (x-www-form-urlencoded)",
     "valuePathLabel": "JSON path to the token in the response",
     "nameLabel": "Placeholder name",
-    "usageHint": "Use {placeholder} in a header (\"From token\" mode, e.g. Bearer {placeholder}) or pick \"Token value\" as the value source of a URL part. Discovery requests reuse the headers.",
+    "usageHint": "Use {placeholder} in a header (\"From token\" mode, e.g. Bearer {placeholder}) or pick \"Token value\" as the value source of a URL part. Requests for the list of values reuse the headers.",
     "valuePlaceholder": "Value",
     "addRow": "+ Row",
     "sourceKind": "Token value",
@@ -460,7 +462,7 @@
     "sourceFormatPlaceholder": "Source format (e.g. \"{dd}.{mm}.{yyyy}\")",
     "separatorPlaceholder": "Separator (e.g. \", \")",
     "splitSourcePlaceholderOption": "Select field…",
-    "splitIndexPlaceholder": "Part (0 = first)",
+    "splitIndexPlaceholder": "Part (1 = first)",
     "onErrorKeepOriginalOption": "On failure: keep original value",
     "onErrorUseDefaultOption": "On failure: use default value",
     "defaultValuePlaceholder": "Default value",
@@ -621,7 +623,9 @@
       "openCompanion": "Open companion address in a tab",
       "hint": "Only exists in a development build — the extension you install from a release cannot do this. For a self-signed development certificate: open the companion address once in a browser tab (button above) and accept the warning, then reload this panel.",
       "reloadHint": "Saved — reload the panel (or retry the connection) to apply it."
-    }
+    },
+    "externalConfigAdvanced": "Advanced: editable config file",
+    "glossaryTitle": "Glossary: what these terms mean"
   },
   "modals": {
     "fieldName": {
@@ -652,7 +656,8 @@
       "maxSizeLabel": "Max. file size (MB, optional)",
       "maxSizePlaceholder": "No limit",
       "allowedTypesLabel": "Allowed content types (optional, comma-separated)",
-      "allowedTypesPlaceholder": "e.g. application/pdf, application/zip"
+      "allowedTypesPlaceholder": "e.g. application/pdf, application/zip",
+      "advanced": "Advanced: size and file-type limits"
     },
     "apiGroupNew": {
       "nameLabel": "Group name (e.g. \"Subcategory\")",
@@ -677,7 +682,7 @@
       "namePlaceholder": "Field name",
       "sourceLabel": "Which field should be split?",
       "separatorLabel": "Separator",
-      "indexLabel": "Part (0 = first)",
+      "indexLabel": "Part (1 = first)",
       "removeOriginalToggle": "Remove the original field from the output"
     },
     "saveConfig": {
@@ -704,12 +709,12 @@
       "found": "{count} element(s) found"
     },
     "manageBlueprints": {
-      "title": "Output blueprints",
-      "empty": "No output blueprints saved yet.",
-      "newBtn": "+ New blueprint"
+      "title": "Output layouts",
+      "empty": "No output layouts saved yet.",
+      "newBtn": "+ New layout"
     },
     "blueprintEdit": {
-      "nameLabel": "Blueprint name (e.g. \"Standard product export\")",
+      "nameLabel": "Layout name (e.g. \"Standard product export\")",
       "namePlaceholder": "Name",
       "flatSchemaBtn": "Flat",
       "treeSchemaBtn": "Tree",
@@ -752,11 +757,11 @@
     "outputLoadFailed": "Could not load output: {message}",
     "outputDeleted": "Output deleted.",
     "outputDeleteFailed": "Could not delete output: {message}",
-    "blueprintLoadFailed": "Could not load output blueprint: {message}",
-    "blueprintDeleted": "Output blueprint deleted.",
-    "blueprintDeleteFailed": "Could not delete output blueprint: {message}",
-    "blueprintSaved": "Output blueprint saved.",
-    "blueprintSaveFailed": "Could not save output blueprint: {message}",
+    "blueprintLoadFailed": "Could not load output layout: {message}",
+    "blueprintDeleted": "Output layout deleted.",
+    "blueprintDeleteFailed": "Could not delete output layout: {message}",
+    "blueprintSaved": "Output layout saved.",
+    "blueprintSaveFailed": "Could not save output layout: {message}",
     "blueprintImportEmpty": "Could not find any field names in the pasted sample.",
     "blueprintImportParsed": "Imported {count} field(s) from the sample.",
     "blueprintImportFileReadFailed": "Could not read the selected file: {message}",
@@ -822,7 +827,8 @@
     "testValueLabelPassword": "Test password",
     "timeoutSecondsLabel": "Wait at most (seconds)",
     "waitAfterRoundSecondsLabel": "Pause after each round (seconds)",
-    "waitAfterClickSecondsLabel": "Pause after each click (seconds)"
+    "waitAfterClickSecondsLabel": "Pause after each click (seconds)",
+    "persistentSessionAdvanced": "Advanced: stay logged in between runs"
   },
   "help": {
     "requestHeaders": {
@@ -998,6 +1004,28 @@
         "text": "For APIs (GitHub, GitLab, WordPress, ...) that announce the next page in the HTTP Link response header instead of in the body. The script requests that URL page after page for every parameter combination until no next link is left. Not for POST requests.",
         "example": "Link: <…?page=2>; rel=\"next\""
       }
+    },
+    "outputLayout": {
+      "overview": {
+        "text": "A saved list of column names in a fixed order. Pick one and map your fields onto it, so every export for the same pipeline has the same columns — whichever site it came from.",
+        "example": "Standard product export: name, price, link"
+      }
+    },
+    "safetyChecks": {
+      "overview": {
+        "text": "Checks the script runs by itself after every run: found nothing? A field always empty? Far fewer rows than last time? Blocked by the site? It warns you, or marks the run as failed so a scheduler notices."
+      }
+    },
+    "preflight": {
+      "overview": {
+        "text": "Before the real run, the script asks the page one cheap question: has it changed since last time? If not, the run is skipped. Pages that don't say so are always scraped."
+      }
+    },
+    "dedup": {
+      "overview": {
+        "text": "Drops an item when one with the same key already appeared — in this run, or (if you choose) in an earlier one. Pick the field(s) that identify an item, e.g. an article number.",
+        "example": "Article number"
+      }
     }
   },
   "errors": {
@@ -1171,5 +1199,8 @@
       "boolean": "yes/no",
       "null": "empty"
     }
+  },
+  "glossary": {
+    "safetyChecks": "Safety checks"
   }
 }

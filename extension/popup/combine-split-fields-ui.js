@@ -18,7 +18,7 @@
 // this file only ever decides *whether* the input is complete enough to
 // call that callback at all, never *where* the result goes.
 const { t } = require('../i18n/i18n');
-const { combineFieldsIsValid, splitFieldIsValid } = require('./combine-split-fields');
+const { combineFieldsIsValid, splitFieldIsValid, partNumberToIndex, indexToPartNumber } = require('./combine-split-fields');
 
 function openCombineFieldModal(bridge, scope) {
   bridge.patchState({ combineFieldModalOpen: true, pendingDerivedFieldScope: scope });
@@ -85,7 +85,7 @@ function renderSplitFieldModal(bridge, availableFieldNames) {
   const separatorInput = document.getElementById('input-split-field-separator');
   if (separatorInput) separatorInput.value = ' ';
   const indexInput = document.getElementById('input-split-field-index');
-  if (indexInput) indexInput.value = '0';
+  if (indexInput) indexInput.value = String(indexToPartNumber(0));
   const removeToggle = document.getElementById('toggle-split-field-remove-original');
   if (removeToggle) removeToggle.checked = false;
 
@@ -139,8 +139,7 @@ function wireCombineSplitFieldsEvents(bridge, handlers) {
     const sourceFieldName = document.getElementById('select-split-field-source')?.value ?? '';
     if (!splitFieldIsValid(sourceFieldName)) return;
     const separator = document.getElementById('input-split-field-separator')?.value ?? ' ';
-    const parsedIndex = parseInt(document.getElementById('input-split-field-index')?.value, 10);
-    const index = Number.isFinite(parsedIndex) && parsedIndex >= 0 ? parsedIndex : 0;
+    const index = partNumberToIndex(parseInt(document.getElementById('input-split-field-index')?.value, 10));
     const removeOriginal = document.getElementById('toggle-split-field-remove-original')?.checked ?? false;
     if (handlers.onConfirmSplit(scope, name, sourceFieldName, separator, index, removeOriginal)) {
       bridge.patchState({ splitFieldModalOpen: false, pendingDerivedFieldScope: null });

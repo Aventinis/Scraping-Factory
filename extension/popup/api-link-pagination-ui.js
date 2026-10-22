@@ -11,7 +11,7 @@
 //   apiConfigDraft.sourceHasNextLink — the recorded response carried a
 //   rel="next" Link header, so the option is highlighted as a suggestion.
 const { createLogger } = require('../shared/logger');
-const { autoOpenAdvanced } = require('./api-config-shared-ui');
+const { autoOpenAdvanced } = require('./advanced-disclosure-ui');
 const log = createLogger('SF:ApiLinkPaginationUI');
 const { createDefaultLinkDraft, DEFAULT_MAX_PAGES } = require('./api-link-pagination');
 

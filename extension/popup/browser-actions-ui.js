@@ -12,6 +12,7 @@ const log = createLogger('SF:Popup');
 const { t } = require('../i18n/i18n');
 const { STATES, escapeHtml } = require('./api-config');
 const { envVarNoteHtml } = require('./env-var-ui');
+const { autoOpenAdvanced } = require('./advanced-disclosure-ui');
 const { helpHostHtml } = require('./help-popover');
 const { createAdvancedDisclosure } = require('./advanced-disclosure-ui');
 const { addLoginFlow, msToSecondsText, secondsTextToMs } = require('./login-flow');
@@ -200,6 +201,7 @@ function renderBrowserActionsSection(bridge) {
 
   const persistentSessionToggle = document.getElementById('toggle-persistent-session');
   if (persistentSessionToggle) persistentSessionToggle.checked = state.persistentSession;
+  autoOpenAdvanced(persistentSessionToggle, !!state.persistentSession); // Issue #407
 }
 
 function wireBrowserActionsEvents(bridge) {
