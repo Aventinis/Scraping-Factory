@@ -11,7 +11,11 @@
 //                                    variable name; memory only, never persisted
 //                                    (same treatment as fillTestValues)
 const { t } = require('../i18n/i18n');
-const { addHeaderRow, removeHeaderRow, updateHeaderRow } = require('./request-headers');
+const { addHeaderRow, appendHeaderRow, removeHeaderRow, updateHeaderRow } = require('./request-headers');
+const {
+  REQUEST_HEADER_PRESETS, OTHER_PRESET_ID, presetById, presetForName, rowFromPreset,
+  isSecretHeaderName, suggestHeaderEnvName,
+} = require('./request-header-presets');
 
 // Duplicated from the other -ui modules' own copies rather than imported —
 // the codebase's "no cross-module includes for small DOM helpers" convention.
@@ -23,6 +27,20 @@ function escapeHtml(str) {
 
 function patchHeaders(bridge, next) {
   bridge.setState(bridge.getState().current, { requestHeaders: next });
+}
+
+// The line(s) under a row's inputs (Issue #402): what a recognised header is
+// for, and — for a credential-looking header holding a fixed value — a
+// warning that the value would sit in the script as plain text. Not an input,
+// so it can be refreshed in place without disturbing the focused field.
+function notesHtml(row) {
+  const preset = presetForName(row.name);
+  const parts = [];
+  if (preset) parts.push(`<p class="request-header-desc">${escapeHtml(t(`requestHeaderPresets.${preset.id}.desc`))}</p>`);
+  if (row.kind !== 'env' && isSecretHeaderName(row.name)) {
+    parts.push(`<p class="request-header-secret-warning" role="alert">${escapeHtml(t('idle.requestHeaderSecretWarning'))} <button type="button" class="btn-secondary btn-tiny request-header-switch-env">${escapeHtml(t('idle.requestHeaderSwitchToEnv'))}</button></p>`);
+  }
+  return parts.join('');
 }
 
 function rowHtml(row, index, testValues) {
@@ -38,6 +56,7 @@ function rowHtml(row, index, testValues) {
         <input type="text" class="request-header-value"${isEnv ? ' data-env-var' : ''} value="${escapeHtml(row.value)}" placeholder="${escapeHtml(t(isEnv ? 'envVar.placeholder.header' : 'idle.requestHeaderValuePlaceholder'))}" autocomplete="off" spellcheck="false" />
         ${isEnv && row.value.trim() ? `<input type="password" class="request-header-test-value" value="${escapeHtml(testValue)}" placeholder="${escapeHtml(t('envVar.testValuePlaceholder'))}" autocomplete="off" />` : ''}
         <button type="button" class="btn-danger btn-tiny btn-remove-request-header" data-index="${index}">${escapeHtml(t('common.remove'))}</button>
+        <div class="request-header-notes">${notesHtml(row)}</div>
       </div>`;
 }
 
@@ -54,6 +73,8 @@ function renderRequestHeadersSection(bridge) {
   if (toggle) toggle.checked = headers.enabled;
   document.getElementById('request-headers-config')?.classList.toggle('hidden', !headers.enabled);
 
+  renderHeaderPicker(headers);
+
   // Rebuilt only when the *structure* changes (rows added/removed, a row's
   // kind switched); otherwise the existing inputs are updated in place, and
   // never the focused one. Committing one input (a `change` fires as the
@@ -67,9 +88,37 @@ function renderRequestHeadersSection(bridge) {
   if (list.dataset.structure !== structure || list.children.length !== headers.rows.length) {
     list.dataset.structure = structure;
     list.innerHTML = headers.rows.map((row, i) => rowHtml(row, i, testValues)).join('');
+    list.querySelectorAll('.request-header-notes').forEach((el) => { el.dataset.signature = el.innerHTML; });
     return;
   }
   headers.rows.forEach((row, i) => syncRow(list.children[i], row, testValues));
+}
+
+// The "Add a header…" picker (Issue #402). Rebuilt only when its labels or
+// which presets are already in use change (a language switch, a row added or
+// renamed), so it never flickers under an open dropdown.
+function renderHeaderPicker(headers) {
+  const select = /** @type {HTMLSelectElement | null} */ (document.getElementById('select-add-request-header'));
+  if (!select) return;
+  const used = new Set(headers.rows.map((row) => row.name.trim().toLowerCase()));
+  const options = [
+    { value: '', label: t('idle.requestHeaderPickerPlaceholder'), disabled: false },
+    ...REQUEST_HEADER_PRESETS.map((preset) => ({
+      value: preset.id,
+      label: t(`requestHeaderPresets.${preset.id}.label`),
+      // The companion rejects the same header twice, so don't offer it again.
+      disabled: used.has(preset.name.toLowerCase()),
+    })),
+    { value: OTHER_PRESET_ID, label: t('requestHeaderPresets.other.label'), disabled: false },
+  ];
+  const signature = JSON.stringify(options);
+  if (select.dataset.signature === signature) return;
+  select.dataset.signature = signature;
+  select.setAttribute('aria-label', t('idle.requestHeaderPickerPlaceholder'));
+  select.innerHTML = options
+    .map((o) => `<option value="${escapeHtml(o.value)}"${o.disabled ? ' disabled' : ''}>${escapeHtml(o.label)}</option>`)
+    .join('');
+  select.value = '';
 }
 
 function setIfIdle(input, value) {
@@ -96,21 +145,46 @@ function syncRow(rowEl, row, testValues) {
     testInput = null;
   }
   if (testInput) setIfIdle(testInput, testValues[row.value.trim()] || '');
+
+  const notesEl = rowEl.querySelector('.request-header-notes');
+  const notes = notesHtml(row);
+  if (notesEl && notesEl.dataset.signature !== notes) {
+    notesEl.dataset.signature = notes;
+    notesEl.innerHTML = notes;
+  }
 }
 
 function wireRequestHeadersEvents(bridge) {
   document.getElementById('toggle-request-headers')?.addEventListener('change', (e) => {
     const next = { ...bridge.getState().requestHeaders, enabled: /** @type {HTMLInputElement} */ (e.target).checked };
-    // The first time it is switched on, offer a row to fill in right away.
-    patchHeaders(bridge, next.enabled && next.rows.length === 0 ? addHeaderRow(next) : next);
+    patchHeaders(bridge, next);
   });
-  document.getElementById('btn-add-request-header')?.addEventListener('click', () => {
-    patchHeaders(bridge, addHeaderRow(bridge.getState().requestHeaders));
+  // Picking a header from the list adds a ready-to-use row (Issue #402); the
+  // select goes back to its placeholder so the next pick starts fresh.
+  document.getElementById('select-add-request-header')?.addEventListener('change', (e) => {
+    const select = /** @type {HTMLSelectElement} */ (e.target);
+    const id = select.value;
+    select.value = '';
+    if (!id) return;
+    const headers = bridge.getState().requestHeaders;
+    const preset = presetById(id);
+    patchHeaders(bridge, id === OTHER_PRESET_ID || !preset ? addHeaderRow(headers) : appendHeaderRow(headers, rowFromPreset(preset)));
   });
 
   const list = document.getElementById('request-headers-list');
   list?.addEventListener('click', (e) => {
-    const btn = /** @type {HTMLElement} */ (e.target).closest('.btn-remove-request-header');
+    const target = /** @type {HTMLElement} */ (e.target);
+    const switchBtn = target.closest('.request-header-switch-env');
+    if (switchBtn) {
+      // A credential-looking header with a fixed value → environment variable,
+      // with a suggested variable name so the row stays complete.
+      const rowEl = switchBtn.closest('.request-header-row');
+      const index = Number(rowEl?.getAttribute('data-index'));
+      const row = bridge.getState().requestHeaders.rows[index];
+      if (row) patchHeaders(bridge, updateHeaderRow(bridge.getState().requestHeaders, index, { kind: 'env', value: suggestHeaderEnvName(row.name) }));
+      return;
+    }
+    const btn = target.closest('.btn-remove-request-header');
     if (!btn) return;
     patchHeaders(bridge, removeHeaderRow(bridge.getState().requestHeaders, Number(btn.getAttribute('data-index'))));
   });
