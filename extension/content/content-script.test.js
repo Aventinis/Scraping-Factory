@@ -3,7 +3,7 @@ const {
   matchFlatFields, matchGroupTree, computePreviewMatches,
   findValueInJson, siblingFields, siblingFieldsAt, findApiCandidates,
   deriveItemsAndValuePath, deriveApiTreeSkeleton,
-  scriptTagSelector, findEmbeddedJsonCandidates,
+  scriptTagSelector, findEmbeddedJsonCandidates, readEmbeddedJson,
   findIframeSelectorForWindow, resolveFramePath, frameDepth,
 } = require('./content-script');
 
@@ -1677,5 +1677,28 @@ describe('COUNT_PICK_WITH_TEXT (live match count for a text filter on the last p
     capturedListener({ type: 'START_SELECTION' });
 
     expect(ask('merken')).not.toHaveBeenCalled();
+  });
+});
+
+// Issue #404: the JSON of the embedded <script> tag an API config came from.
+describe('readEmbeddedJson', () => {
+  afterEach(() => { document.body.innerHTML = ''; });
+
+  test('returns the tag text for a selector that matches', () => {
+    document.body.innerHTML = '<script id="__NEXT_DATA__" type="application/json">{"props":{"n":1}}</script>';
+    expect(readEmbeddedJson('#__NEXT_DATA__')).toEqual({ body: '{"props":{"n":1}}', truncated: false, found: true });
+  });
+
+  test('reports "not found" for no selector, an unmatched one and an invalid one', () => {
+    document.body.innerHTML = '<script id="x" type="application/json">{}</script>';
+    const none = { body: '', truncated: false, found: false };
+    expect(readEmbeddedJson('')).toEqual(none);
+    expect(readEmbeddedJson('#nope')).toEqual(none);
+    expect(readEmbeddedJson('###')).toEqual(none);
+  });
+
+  test('an oversized blob is reported as truncated, not cut', () => {
+    document.body.innerHTML = `<script id="big" type="application/json">${'x'.repeat(2000001)}</script>`;
+    expect(readEmbeddedJson('#big')).toEqual({ body: '', truncated: true, found: true });
   });
 });

@@ -14,6 +14,7 @@ const { wireTransformList } = require('./field-transforms-ui');
 const { isDerivedField } = require('./combine-split-fields');
 const { openCombineFieldModal, openSplitFieldModal } = require('./combine-split-fields-ui');
 const { patchApiConfigDraft } = require('./api-config-shared-ui');
+const { wirePathPickerEvents } = require('./json-path-picker-ui');
 
 // Issue #139: one static inline chevron per row instead of swapping between
 // two different Unicode glyphs (▸/▾) on click — see container-tree-ui.js's
@@ -213,13 +214,13 @@ function confirmApiGroupModal(bridge) {
   log('API_TREE_GROUP_ADD', { name, path, parentPath: state.pendingApiTreeParentPath });
   bridge.setState(STATES.API_CONFIG, {
     apiConfigDraft: { ...state.apiConfigDraft, groups: insertApiTreeNode(state.apiConfigDraft.groups, state.pendingApiTreeParentPath, node) },
-    apiGroupModalOpen: false, pendingApiTreeParentPath: null,
+    apiGroupModalOpen: false, pendingApiTreeParentPath: null, apiPathPicker: null,
   });
 }
 
 function cancelApiGroupModal(bridge) {
   log('API_GROUP_MODAL cancel');
-  bridge.patchState({ apiGroupModalOpen: false, pendingApiTreeParentPath: null });
+  bridge.patchState({ apiGroupModalOpen: false, pendingApiTreeParentPath: null, apiPathPicker: null });
 }
 
 // Renames a tree node in place — Phase A5 generalization of
@@ -276,6 +277,7 @@ function cancelApiFieldTransformsModal(bridge) {
 }
 
 function wireApiResponseTreeEvents(bridge) {
+  wirePathPickerEvents(bridge, document.getElementById('modal-api-group-new')); // Issue #404
   document.getElementById('btn-api-tree-add-root')?.addEventListener('click', () => startApiTreeFieldSearch(bridge, null));
 
   // Event delegation for the API-tree's per-row add/remove buttons and name

@@ -39,6 +39,7 @@ const { launchBrowser, openPopup, focusFixture, waitForIdleScreen, startCompanio
     await popupPage.click('.api-candidate-confirm');
     await popupPage.waitForSelector('#screen-api-config:not(.hidden)');
 
+    await popupPage.click('#api-cursor-advanced > summary'); // Issue #404: the option sits under "Advanced"
     await popupPage.check('#toggle-api-cursor');
     if (!(await popupPage.isDisabled('#btn-api-config-confirm'))) throw new Error('Apply should be blocked while the cursor section is incomplete');
     await popupPage.click('#btn-api-cursor-detect');

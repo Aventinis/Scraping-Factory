@@ -330,7 +330,7 @@
     "variableLabel": "variable",
     "unnamedPart": "(aún sin nombre)",
     "sourceKindStaticList": "Lista de valores",
-    "sourceKindDiscovery": "Endpoint de descubrimiento",
+    "sourceKindDiscovery": "Lista de otra petición",
     "sourceKindRange": "Rango",
     "sourceKindBrowserDiscovery": "Descubrimiento con navegador",
     "discoveryUrlLabel": "URL de descubrimiento",
@@ -364,11 +364,13 @@
     "bodyToFixedBtn": "→ Fijo",
     "bodyPickParameterPlaceholder": "-- elegir un parámetro --",
     "bodyNewParameterOption": "+ Nuevo parámetro…",
-    "bodyCoerceToTitle": "Tipo de valor para usar en el cuerpo (por defecto: texto)"
+    "bodyCoerceToTitle": "Tipo de valor para usar en el cuerpo (por defecto: texto)",
+    "sourceAdvancedSummary": "Fuentes avanzadas",
+    "bodyValueTypeAdvanced": "Avanzado: tipo de valor",
+    "bodyValueTypeLabel": "Tipo de valor"
   },
   "apiCursor": {
     "toggleLabel": "Seguir el cursor de la página siguiente (paginación por cursor/token)",
-    "hint": "Para APIs que solo revelan el cursor de la página siguiente dentro de la respuesta actual (p. ej. pageInfo.endCursor o next_page_token). El script pide página tras página para cada combinación de parámetros hasta que no se devuelva más cursor.",
     "detectBtn": "Detectar desde la grabación",
     "detectNone": "No se encontró nada similar a un cursor en la solicitud/respuesta grabada. Introduce las rutas manualmente.",
     "detectApplied": "Ajustes de cursor rellenados desde la grabación; revísalos.",
@@ -379,19 +381,19 @@
     "targetBody": "Campo del cuerpo de la solicitud",
     "bodyNeedsPost": "Un destino en el cuerpo requiere una solicitud POST con cuerpo grabado.",
     "maxPagesLabel": "Máximo de páginas por combinación de solicitud",
-    "firstPageHint": "La página 1 se envía exactamente como se grabó; asegúrate de que la solicitud grabada sea la primera página, sin cursor."
+    "firstPageHint": "La página 1 se envía exactamente como se grabó; asegúrate de que la solicitud grabada sea la primera página, sin cursor.",
+    "advancedSummary": "Avanzado: el cursor de la página siguiente está en la respuesta"
   },
   "apiLink": {
     "toggleLabel": "Seguir la cabecera Link (paginación rel=\"next\")",
-    "hint": "Para APIs (GitHub, GitLab, WordPress, ...) que anuncian la página siguiente en la cabecera de respuesta HTTP Link en lugar de en el cuerpo. El script solicita esa URL página tras página para cada combinación de parámetros hasta que no quede enlace siguiente. No para peticiones POST.",
     "detectedHint": "Una respuesta grabada anunció una página siguiente mediante una cabecera Link — esta opción probablemente encaja.",
     "needsGet": "La paginación por cabecera Link necesita una petición GET.",
     "maxPagesLabel": "Máximo de páginas por combinación de petición",
-    "firstPageHint": "La página 1 se envía exactamente como se grabó — asegúrate de que la petición grabada sea la primera página. Los enlaces siguientes a otro host nunca se siguen."
+    "firstPageHint": "La página 1 se envía exactamente como se grabó — asegúrate de que la petición grabada sea la primera página. Los enlaces siguientes a otro host nunca se siguen.",
+    "advancedSummary": "Avanzado: la página siguiente está en la cabecera Link"
   },
   "apiBootstrap": {
     "toggleLabel": "Obtener un token nuevo antes de cada ejecución (auth bootstrap)",
-    "hint": "Para APIs que primero necesitan un token de corta duración de una solicitud de login/token. El script envía esa solicitud al inicio de cada ejecución y usa el valor extraído en los encabezados/la URL de abajo — las credenciales solo provienen de variables de entorno.",
     "fromRecordingBtn": "Tomar de la grabación",
     "recordingHint": "Elige la solicitud de login/token. ¿No aparece? Sigue grabando, recarga la página (o vuelve a iniciar sesión) y abre la lista de nuevo.",
     "recordingEmpty": "No se encontró ninguna solicitud grabada con respuesta JSON.",
@@ -410,7 +412,8 @@
     "sourceKind": "Valor del token",
     "sourceKindNote": "Se rellena con el token recién obtenido ({placeholder}) en cada ejecución.",
     "sourceKindMissing": "No hay auth bootstrap configurado — actívalo arriba o elige otra fuente de valores.",
-    "headerMode": "Desde token"
+    "headerMode": "Desde token",
+    "advancedSummary": "Avanzado: la API necesita primero un token de inicio de sesión"
   },
   "group": {
     "repeating": "repetitivo",
@@ -943,6 +946,58 @@
         "text": "Para sitios cuya lista de páginas cambia, p. ej. un menú de categorías: el script abre esta página una vez, recoge cada enlace que coincide con el selector y lee cada página enlazada como página de inicio adicional. Elige un enlace del menú — el selector sirve entonces para todos los similares. También se puede elegir un enlace por su texto.",
         "example": "a:contains(\"Verduras\")"
       }
+    },
+    "apiConfig": {
+      "urlParts": {
+        "text": "Cada parte de la dirección permanece fija o cambia entre peticiones. Marca «variable» en la parte que toma valores distintos — una semana, una categoría, una página — y dale un nombre; abajo indicas de dónde salen sus valores. Las partes fijas se envían tal como se grabaron.",
+        "example": "/api/weeks/2026-W35  →  marcar «variable», llamarla «semana»"
+      },
+      "bodyVariable": {
+        "text": "Un valor del cuerpo de la petición es fijo o cambia entre peticiones. «→ Variable» le hace tomar los valores de un parámetro (nuevo o existente), p. ej. la categoría de una búsqueda.",
+        "example": "category: \"electronics\"  →  variable «category»"
+      },
+      "valueType": {
+        "text": "Cómo se escribe el valor en el cuerpo. Texto sirve para la mayoría de las API; elige Número o Boolean cuando el servidor espera un número o true/false — un «10» entre comillas se rechazaría.",
+        "example": "\"pageSize\": 10  →  Number"
+      },
+      "sourceStaticList": {
+        "text": "Escribes los valores tú mismo o los recoges de la grabación; el script pide cada uno.",
+        "example": "electronica, libros"
+      },
+      "sourceDiscovery": {
+        "text": "Los valores salen de otra petición del sitio, p. ej. una lista de categorías. Haz clic en uno de esos valores en la página y se encuentra la petición adecuada.",
+        "example": "GET /api/categories  →  cada id de la lista"
+      },
+      "sourceRange": {
+        "text": "Recorre un rango: semanas ISO, números o fechas.",
+        "example": "2026-W30 … 2026-W35"
+      },
+      "sourceBrowserDiscovery": {
+        "text": "Para valores que solo aparecen al usar la página: el script abre un navegador, hace tus clics y desplazamientos y anota qué valores pide el sitio.",
+        "example": "desplazar la página de ofertas, recoger cada nombre de categoría"
+      },
+      "sourceBootstrap": {
+        "text": "Esta parte de la dirección toma el token de acceso recién obtenido (ver «la API necesita primero un token de inicio de sesión»).",
+        "example": "?access_token={token}"
+      }
+    },
+    "apiBootstrap": {
+      "overview": {
+        "text": "Para APIs que primero necesitan un token de corta duración de una solicitud de login/token. El script envía esa solicitud al inicio de cada ejecución y usa el valor extraído en los encabezados/la URL de abajo — las credenciales solo provienen de variables de entorno.",
+        "example": "POST /auth/token  →  access_token"
+      }
+    },
+    "apiCursor": {
+      "overview": {
+        "text": "Para APIs que solo revelan el cursor de la página siguiente dentro de la respuesta actual (p. ej. pageInfo.endCursor o next_page_token). El script pide página tras página para cada combinación de parámetros hasta que no se devuelva más cursor.",
+        "example": "pageInfo.endCursor"
+      }
+    },
+    "apiLink": {
+      "overview": {
+        "text": "Para APIs (GitHub, GitLab, WordPress, ...) que anuncian la página siguiente en la cabecera de respuesta HTTP Link en lugar de en el cuerpo. El script solicita esa URL página tras página para cada combinación de parámetros hasta que no quede enlace siguiente. No para peticiones POST.",
+        "example": "Link: <…?page=2>; rel=\"next\""
+      }
     }
   },
   "errors": {
@@ -1075,6 +1130,46 @@
       "header": "p. ej. API_KEY",
       "fill": "p. ej. SITE_PASSWORD",
       "apiHeader": "p. ej. API_KEY"
+    }
+  },
+  "jsonPathPicker": {
+    "openBtn": "Elegir de la grabación",
+    "closeBtn": "Cerrar",
+    "loading": "Cargando la respuesta grabada…",
+    "toggle": "Mostrar u ocultar",
+    "items": "{count} elementos",
+    "recordedSource": "Grabado: {request}",
+    "embeddedSource": "JSON incrustado de la página ({selector})",
+    "chooseResponse": "¿De qué respuesta grabada se debe elegir la ruta?",
+    "otherResponse": "Elegir de otra respuesta grabada",
+    "treeTruncated": "Una respuesta muy grande — solo se muestra el principio.",
+    "hint": {
+      "group": "Haz clic en la lista o el objeto sobre el que debe recorrer este grupo. La ruta es relativa al grupo superior; dentro de una lista, crea un grupo propio.",
+      "leaf": "Haz clic en el valor que se debe leer. Una lista se muestra a través de su primer elemento.",
+      "body": "Haz clic en el campo del cuerpo de la petición que recibe el cursor (vacío en la primera página)."
+    },
+    "message": {
+      "noRecording": "No hay nada grabado de donde elegir. Graba primero la petición (iniciar la grabación y volver a cargar la página) o escribe la ruta.",
+      "truncated": "Esta respuesta era demasiado grande para guardarla completa y no se puede mostrar aquí. Escribe la ruta.",
+      "notJson": "No es una respuesta JSON — escribe la ruta.",
+      "skipped": "No se pudo grabar el cuerpo de esta petición (no es texto JSON) — escribe la ruta.",
+      "scopeMissing": "No se encontró el grupo superior en esta respuesta — elige otra respuesta grabada o escribe la ruta.",
+      "nothingToPick": "Aquí no hay nada que elegir — esta respuesta no tiene un valor adecuado.",
+      "embeddedMissing": "Ya no se encontró el JSON incrustado de la página — recarga la página o escribe la ruta.",
+      "noEntry": "No hay nada grabado de donde elegir.",
+      "noBody": "No se grabó ningún cuerpo para esta petición — escribe la ruta."
+    },
+    "reason": {
+      "badKey": "Esta clave contiene un punto o un corchete, que una ruta no puede expresar.",
+      "bodyNoArrays": "Una ruta del cuerpo no puede pasar por una lista."
+    },
+    "type": {
+      "object": "objeto",
+      "array": "lista",
+      "string": "texto",
+      "number": "número",
+      "boolean": "sí/no",
+      "null": "vacío"
     }
   }
 }

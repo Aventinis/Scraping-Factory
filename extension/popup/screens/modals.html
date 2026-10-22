@@ -207,6 +207,9 @@
       <input id="input-api-group-name" type="text" data-i18n-placeholder="modals.apiGroupNew.namePlaceholder" autocomplete="off" />
       <label for="input-api-group-path" data-i18n="modals.apiGroupNew.pathLabel"></label>
       <input id="input-api-group-path" type="text" data-i18n-placeholder="modals.apiGroupNew.pathPlaceholder" autocomplete="off" />
+      <!-- Issue #404: pick the path from the recorded response instead of typing it -->
+      <div class="actions"><button type="button" class="btn-secondary btn-tiny json-path-open" data-field="group" data-i18n="jsonPathPicker.openBtn"></button></div>
+      <div id="api-group-path-picker"></div>
       <div class="modal-actions">
         <button id="btn-api-group-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
         <button id="btn-api-group-confirm" class="btn-primary" data-i18n="modals.apiGroupNew.confirm"></button>

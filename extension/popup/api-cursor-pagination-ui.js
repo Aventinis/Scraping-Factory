@@ -11,6 +11,8 @@ const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:ApiCursorPaginationUI');
 const { t } = require('../i18n/i18n');
 const { createDefaultCursorDraft, detectCursorSuggestion, DEFAULT_MAX_PAGES } = require('./api-cursor-pagination');
+const { autoOpenAdvanced } = require('./api-config-shared-ui');
+const { pathPickerButtonHtml, pathPickerPanelHtml, wirePathPickerEvents } = require('./json-path-picker-ui');
 
 // Duplicated from api-bootstrap-ui.js's own copy rather than imported — the
 // codebase's "no cross-module includes for small DOM helpers" convention.
@@ -32,7 +34,7 @@ function patchCursor(bridge, patch) {
 
 // ── Rendering ───────────────────────────────────────────────────────────────
 
-function cursorConfigHtml(cursor, draft) {
+function cursorConfigHtml(cursor, draft, state) {
   const bodyUnavailable = draft.method !== 'POST' || !draft.bodyTree;
   return `
       <div class="actions">
@@ -40,8 +42,10 @@ function cursorConfigHtml(cursor, draft) {
       </div>
       <div class="row-label">${escapeHtml(t('apiCursor.nextCursorPathLabel'))}</div>
       <input type="text" class="api-cursor-field" data-field="nextCursorPath" placeholder="pageInfo.endCursor" value="${escapeHtml(cursor.nextCursorPath)}" />
+      <div class="actions">${pathPickerButtonHtml('cursor.nextCursorPath')}</div>${pathPickerPanelHtml(state, 'cursor.nextCursorPath')}
       <div class="row-label">${escapeHtml(t('apiCursor.hasNextPathLabel'))}</div>
       <input type="text" class="api-cursor-field" data-field="hasNextPagePath" placeholder="pageInfo.hasNextPage" value="${escapeHtml(cursor.hasNextPagePath)}" />
+      <div class="actions">${pathPickerButtonHtml('cursor.hasNextPagePath')}</div>${pathPickerPanelHtml(state, 'cursor.hasNextPagePath')}
       <div class="row-label">${escapeHtml(t('apiCursor.targetLabel'))}</div>
       <div class="api-cursor-target-row">
         <select class="api-cursor-field" data-field="target">
@@ -55,6 +59,7 @@ function cursorConfigHtml(cursor, draft) {
       ${cursor.target === 'Body' && bodyUnavailable
       ? `<p class="browser-actions-hint">${escapeHtml(t('apiCursor.bodyNeedsPost'))}</p>`
       : ''}
+      ${cursor.target === 'Body' ? `<div class="actions">${pathPickerButtonHtml('cursor.bodyPath')}</div>${pathPickerPanelHtml(state, 'cursor.bodyPath')}` : ''}
       <div class="row-label">${escapeHtml(t('apiCursor.maxPagesLabel'))}</div>
       <input type="number" min="1" step="1" class="api-cursor-field" data-field="maxPages" value="${escapeHtml(cursor.maxPages)}" />
       <p class="browser-actions-hint">${escapeHtml(t('apiCursor.firstPageHint'))}</p>`;
@@ -64,11 +69,14 @@ function cursorConfigHtml(cursor, draft) {
 // An embedded-JSON source hides the whole section: a page load has no
 // cursor to follow (ScrapingPlanValidator rejects the combination).
 function renderApiCursorPaginationSection(bridge) {
-  const draft = bridge.getState().apiConfigDraft;
+  const state = bridge.getState();
+  const draft = state.apiConfigDraft;
   const section = document.getElementById('api-cursor-section');
   if (!section) return;
-  section.classList.toggle('hidden', !!draft?.embeddedJsonSource);
+  // The section sits inside its "Advanced" disclosure — hide that whole block for an embedded source.
+  (section.closest('details') || section).classList.toggle('hidden', !!draft?.embeddedJsonSource);
   const cursor = draft?.cursorPagination || null;
+  autoOpenAdvanced(section, !!cursor);
   const toggle = /** @type {HTMLInputElement | null} */ (document.getElementById('toggle-api-cursor'));
   if (toggle) toggle.checked = !!cursor;
   const configEl = document.getElementById('api-cursor-config');
@@ -76,7 +84,7 @@ function renderApiCursorPaginationSection(bridge) {
   configEl.classList.toggle('hidden', !cursor);
   // Fields commit on `change` (never per keystroke), so re-rendering the
   // whole block every time can't clobber an input mid-edit.
-  configEl.innerHTML = cursor ? cursorConfigHtml(cursor, draft) : '';
+  configEl.innerHTML = cursor ? cursorConfigHtml(cursor, draft, state) : '';
 }
 
 // ── Actions ─────────────────────────────────────────────────────────────────
@@ -159,6 +167,7 @@ async function detectFromRecording(bridge) {
 function wireApiCursorPaginationEvents(bridge) {
   const section = document.getElementById('api-cursor-section');
   if (!section) return;
+  wirePathPickerEvents(bridge, section); // Issue #404
 
   section.addEventListener('change', (e) => {
     const target = /** @type {HTMLInputElement} */ (e.target);

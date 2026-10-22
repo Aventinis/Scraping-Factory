@@ -5,6 +5,8 @@
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:ApiConfigUI');
 const { t } = require('../i18n/i18n');
+const { helpHostHtml } = require('./help-popover');
+const { createAdvancedDisclosure } = require('./advanced-disclosure-ui');
 const {
   STATES, escapeHtml, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId, allParameterParts,
 } = require('./api-config');
@@ -90,13 +92,22 @@ function buildBodyTreeNodeEl(key, node, path, depth, availableParameters) {
       `<option value="__new__">${escapeHtml(t('apiConfig.bodyNewParameterOption'))}</option>`;
     row.appendChild(picker);
 
+    // Issue #404: the value type matters only when the server expects a number
+    // or true/false — so it sits under "Advanced" (opened by itself when a
+    // non-default type is already chosen), with a "?" popover.
     const coerceSelect = document.createElement('select');
     coerceSelect.className = 'body-tree-coerce-to';
     coerceSelect.title = t('apiConfig.bodyCoerceToTitle');
     coerceSelect.innerHTML = ['String', 'Number', 'Boolean']
       .map(kind => `<option value="${kind}" ${(node.coerceTo || 'String') === kind ? 'selected' : ''}>${kind}</option>`)
       .join('');
-    row.appendChild(coerceSelect);
+    const valueTypeAdvanced = createAdvancedDisclosure('api-body-value-type', 'apiConfig.bodyValueTypeAdvanced');
+    const valueTypeBody = valueTypeAdvanced.querySelector('.advanced-disclosure-body');
+    valueTypeBody.setAttribute('data-help-anchor', '');
+    valueTypeBody.insertAdjacentHTML('beforeend', `<span>${escapeHtml(t('apiConfig.bodyValueTypeLabel'))}</span>${helpHostHtml('help.apiConfig.valueType')}`);
+    valueTypeBody.appendChild(coerceSelect);
+    if (node.coerceTo && node.coerceTo !== 'String') valueTypeAdvanced.open = true;
+    row.appendChild(valueTypeAdvanced);
 
     const toFixedBtn = document.createElement('button');
     toFixedBtn.type = 'button';

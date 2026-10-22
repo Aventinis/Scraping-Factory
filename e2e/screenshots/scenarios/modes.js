@@ -51,4 +51,32 @@ module.exports = [
       await s.shot('modes-container-tree');
     },
   },
+  {
+    // Issue #404: the "add group" modal's path picked from the recorded response.
+    id: 'modes-api-path-picker',
+    fixture: 'api-nested-and-post',
+    async run(s) {
+      const { popupPage, fixturePage } = s;
+      await s.waitForIdle();
+      await popupPage.click('#btn-mode-api');
+      await popupPage.click('#btn-api-capture');
+      await fixturePage.click('#btn-reload-search');
+      await fixturePage.waitForSelector('#result-search .product-title');
+      await popupPage.click('#btn-api-capture');
+      await fixturePage.bringToFront();
+      await fixturePage.waitForTimeout(150);
+      await popupPage.click('#btn-api-search');
+      await fixturePage.click('#result-search .product-title >> nth=0');
+      await popupPage.waitForSelector('.api-candidate-field-name', { state: 'visible' });
+      await popupPage.fill('.api-candidate-field-name', 'Title');
+      await popupPage.click('.api-candidate-confirm');
+      await popupPage.waitForSelector('#screen-api-config:not(.hidden)');
+      await popupPage.locator('#api-tree-root .btn-add-api-subgroup').first().click();
+      await popupPage.waitForSelector('#modal-api-group-new:not(.hidden)');
+      await popupPage.fill('#input-api-group-name', 'Subcategory');
+      await popupPage.click('#modal-api-group-new .json-path-open');
+      await popupPage.waitForSelector('#api-group-path-picker .json-path-pick');
+      await s.shot('modes-api-path-picker', '#modal-api-group-new .modal-inner');
+    },
+  },
 ];

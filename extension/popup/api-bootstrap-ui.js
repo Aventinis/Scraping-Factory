@@ -19,6 +19,8 @@ const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:ApiBootstrapUI');
 const { t } = require('../i18n/i18n');
 const { envVarNoteHtml } = require('./env-var-ui');
+const { autoOpenAdvanced } = require('./api-config-shared-ui');
+const { pathPickerButtonHtml, pathPickerPanelHtml, wirePathPickerEvents } = require('./json-path-picker-ui');
 const {
   createDefaultBootstrapDraft, createBootstrapPair, detectTokenInResponse, bootstrapDraftFromCaptureEntry,
   wireTokenIntoMainRequest, stripBootstrapReferences, suggestEnvVarName,
@@ -80,7 +82,7 @@ function recordingListHtml(entries) {
       </li>`).join('');
 }
 
-function bootstrapConfigHtml(bootstrap, recordingEntries, testValues) {
+function bootstrapConfigHtml(bootstrap, recordingEntries, testValues, state) {
   return `
       ${envVarNoteHtml()}
       <div class="actions">
@@ -109,6 +111,7 @@ function bootstrapConfigHtml(bootstrap, recordingEntries, testValues) {
       : ''}
       <div class="row-label">${escapeHtml(t('apiBootstrap.valuePathLabel'))}</div>
       <input type="text" class="api-bootstrap-field" data-field="valuePath" placeholder="access_token" value="${escapeHtml(bootstrap.valuePath)}" />
+      <div class="actions">${pathPickerButtonHtml('bootstrap.valuePath')}</div>${pathPickerPanelHtml(state, 'bootstrap.valuePath')}
       <div class="row-label">${escapeHtml(t('apiBootstrap.nameLabel'))}</div>
       <input type="text" class="api-bootstrap-field" data-field="name" placeholder="token" value="${escapeHtml(bootstrap.name)}" />
       <p class="browser-actions-hint">${escapeHtml(t('apiBootstrap.usageHint', { placeholder: `{${bootstrap.name || 'token'}}` }))}</p>`;
@@ -120,11 +123,12 @@ function renderApiBootstrapSection(bridge) {
   const bootstrap = state.apiConfigDraft?.bootstrap || null;
   const toggle = /** @type {HTMLInputElement | null} */ (document.getElementById('toggle-api-bootstrap'));
   if (toggle) toggle.checked = !!bootstrap;
+  autoOpenAdvanced(document.getElementById('api-bootstrap-section'), !!bootstrap);
   const configEl = document.getElementById('api-bootstrap-config');
   if (!configEl) return;
   configEl.classList.toggle('hidden', !bootstrap);
   configEl.innerHTML = bootstrap
-    ? bootstrapConfigHtml(bootstrap, state.apiBootstrapRecordingEntries, state.apiBootstrapTestValues || {})
+    ? bootstrapConfigHtml(bootstrap, state.apiBootstrapRecordingEntries, state.apiBootstrapTestValues || {}, state)
     : '';
 }
 
@@ -234,6 +238,7 @@ function applyRecordingEntry(bridge, entryId) {
 function wireApiBootstrapEvents(bridge) {
   const section = document.getElementById('api-bootstrap-section');
   if (!section) return;
+  wirePathPickerEvents(bridge, section); // Issue #404
 
   section.addEventListener('change', (e) => {
     const target = /** @type {HTMLInputElement} */ (e.target);

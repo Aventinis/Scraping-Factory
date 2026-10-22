@@ -22,10 +22,10 @@
       <ul id="api-tree-search-list" class="api-candidates-list"></ul>
     </div>
 
-    <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.urlPathLabel"></div>
+    <div class="row-label" style="margin-top: 10px;" data-help-anchor><span data-i18n="apiConfig.urlPathLabel"></span><span class="help-host" data-help="help.apiConfig.urlParts"></span></div>
     <ul id="api-config-segments" class="api-config-parts"></ul>
 
-    <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.urlQueryLabel"></div>
+    <div class="row-label" style="margin-top: 10px;" data-help-anchor><span data-i18n="apiConfig.urlQueryLabel"></span><span class="help-host" data-help="help.apiConfig.urlParts"></span></div>
     <ul id="api-config-query-params" class="api-config-parts"></ul>
 
     <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.valueSourcesLabel"></div>
@@ -36,45 +36,61 @@
          (see loadInitialBodyTreeForCandidate); hidden entirely for a GET
          config or an unparsable/bodyless POST. -->
     <div id="api-config-body-section" class="hidden">
-      <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.bodyLabel"></div>
+      <div class="row-label" style="margin-top: 10px;" data-help-anchor><span data-i18n="apiConfig.bodyLabel"></span><span class="help-host" data-help="help.apiConfig.bodyVariable"></span></div>
       <ul id="body-tree-root" class="body-tree"></ul>
     </div>
 
     <!-- Token/auth bootstrap (Issue #220): one extra request the generated
          script sends at the start of every run to fetch a fresh token,
          rendered by api-bootstrap-ui.js's renderApiBootstrapSection. -->
-    <div id="api-bootstrap-section" class="api-bootstrap-section">
-      <label class="output-settings-toggle" style="margin-top: 10px;">
-        <input type="checkbox" id="toggle-api-bootstrap" />
-        <span data-i18n="apiBootstrap.toggleLabel"></span>
-      </label>
-      <p class="browser-actions-hint" data-i18n="apiBootstrap.hint"></p>
-      <div id="api-bootstrap-config" class="api-bootstrap-config hidden"></div>
-    </div>
+    <!-- Issue #404: rarely needed, so under a remembered "Advanced" whose
+         one-line summary says when it applies; opened by itself once the
+         option is on. The longer explanation is the "?" popover. -->
+    <details class="advanced-disclosure" id="api-bootstrap-advanced" data-advanced="api-bootstrap">
+      <summary data-i18n="apiBootstrap.advancedSummary"></summary>
+      <div class="advanced-disclosure-body">
+        <div id="api-bootstrap-section" class="api-bootstrap-section">
+          <label class="output-settings-toggle">
+            <input type="checkbox" id="toggle-api-bootstrap" />
+            <span data-i18n="apiBootstrap.toggleLabel"></span>
+            <span class="help-host" data-help="help.apiBootstrap.overview"></span>
+          </label>
+          <div id="api-bootstrap-config" class="api-bootstrap-config hidden"></div>
+        </div>
+      </div>
+    </details>
 
     <!-- Cursor/token-based pagination (Issue #224): follow a "next page"
          cursor the API returns in its own response, rendered by
          api-cursor-pagination-ui.js's renderApiCursorPaginationSection.
          Hidden for an embedded-JSON source (a page load has no cursor). -->
-    <div id="api-cursor-section" class="api-cursor-section">
-      <label class="output-settings-toggle" style="margin-top: 10px;">
-        <input type="checkbox" id="toggle-api-cursor" />
-        <span data-i18n="apiCursor.toggleLabel"></span>
-      </label>
-      <p class="browser-actions-hint" data-i18n="apiCursor.hint"></p>
-      <div id="api-cursor-config" class="api-cursor-config hidden"></div>
-    </div>
+    <details class="advanced-disclosure" id="api-cursor-advanced" data-advanced="api-cursor">
+      <summary data-i18n="apiCursor.advancedSummary"></summary>
+      <div class="advanced-disclosure-body">
+        <div id="api-cursor-section" class="api-cursor-section">
+          <label class="output-settings-toggle">
+            <input type="checkbox" id="toggle-api-cursor" />
+            <span data-i18n="apiCursor.toggleLabel"></span>
+            <span class="help-host" data-help="help.apiCursor.overview"></span>
+          </label>
+          <div id="api-cursor-config" class="api-cursor-config hidden"></div>
+        </div>
+      </div>
+    </details>
 
     <!-- Link-header pagination (Issue #321): follow the rel="next" URL the
          API names in its `Link` response header, rendered by
          api-link-pagination-ui.js's renderApiLinkPaginationSection. Hidden
          for an embedded-JSON source; exclusive with the cursor section. -->
+    <details class="advanced-disclosure" id="api-link-advanced" data-advanced="api-link">
+      <summary data-i18n="apiLink.advancedSummary"></summary>
+      <div class="advanced-disclosure-body">
     <div id="api-link-section" class="api-link-section">
-      <label class="output-settings-toggle" style="margin-top: 10px;">
+      <label class="output-settings-toggle">
         <input type="checkbox" id="toggle-api-link" />
         <span data-i18n="apiLink.toggleLabel"></span>
+        <span class="help-host" data-help="help.apiLink.overview"></span>
       </label>
-      <p class="browser-actions-hint" data-i18n="apiLink.hint"></p>
       <p id="api-link-detected-hint" class="browser-actions-hint hidden" data-i18n="apiLink.detectedHint"></p>
       <p id="api-link-post-hint" class="browser-actions-hint hidden" data-i18n="apiLink.needsGet"></p>
       <div id="api-link-config" class="api-cursor-config hidden">
@@ -83,6 +99,8 @@
         <p class="browser-actions-hint" data-i18n="apiLink.firstPageHint"></p>
       </div>
     </div>
+      </div>
+    </details>
 
     <div class="row-label" style="margin-top: 10px;" data-i18n="apiConfig.headersLabel"></div>
     <p class="env-var-note" data-help-anchor><span data-i18n="envVar.whatLabel"></span><span class="help-host" data-help="help.envVar.what"></span></p>

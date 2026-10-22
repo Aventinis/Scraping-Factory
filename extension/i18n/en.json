@@ -330,7 +330,7 @@
     "variableLabel": "variable",
     "unnamedPart": "(not yet named)",
     "sourceKindStaticList": "Value list",
-    "sourceKindDiscovery": "Discovery endpoint",
+    "sourceKindDiscovery": "List from another request",
     "sourceKindRange": "Range",
     "sourceKindBrowserDiscovery": "Browser discovery",
     "discoveryUrlLabel": "Discovery URL",
@@ -364,11 +364,13 @@
     "bodyToFixedBtn": "→ Fixed",
     "bodyPickParameterPlaceholder": "-- choose a parameter --",
     "bodyNewParameterOption": "+ New parameter…",
-    "bodyCoerceToTitle": "Value type to use in the body (default: text)"
+    "bodyCoerceToTitle": "Value type to use in the body (default: text)",
+    "sourceAdvancedSummary": "Advanced sources",
+    "bodyValueTypeAdvanced": "Advanced: value type",
+    "bodyValueTypeLabel": "Value type"
   },
   "apiCursor": {
     "toggleLabel": "Follow a next-page cursor (cursor/token pagination)",
-    "hint": "For APIs that only reveal the next page's cursor inside the current response (e.g. pageInfo.endCursor or next_page_token). The script fetches page after page for every parameter combination until no cursor is returned.",
     "detectBtn": "Detect from recording",
     "detectNone": "Nothing cursor-like found in the recorded request/response. Enter the paths manually.",
     "detectApplied": "Cursor settings filled in from the recording — please check them.",
@@ -379,19 +381,19 @@
     "targetBody": "Request body field",
     "bodyNeedsPost": "A body target needs a POST request with a recorded request body.",
     "maxPagesLabel": "Maximum pages per request combination",
-    "firstPageHint": "Page 1 is sent exactly as recorded — make sure the recorded request is the first page, without a cursor."
+    "firstPageHint": "Page 1 is sent exactly as recorded — make sure the recorded request is the first page, without a cursor.",
+    "advancedSummary": "Advanced: the next page's cursor is in the response"
   },
   "apiLink": {
     "toggleLabel": "Follow the Link header (rel=\"next\" pagination)",
-    "hint": "For APIs (GitHub, GitLab, WordPress, ...) that announce the next page in the HTTP Link response header instead of in the body. The script requests that URL page after page for every parameter combination until no next link is left. Not for POST requests.",
     "detectedHint": "A recorded response announced a next page via a Link header — this option probably fits.",
     "needsGet": "Link-header pagination needs a GET request.",
     "maxPagesLabel": "Maximum pages per request combination",
-    "firstPageHint": "Page 1 is sent exactly as recorded — make sure the recorded request is the first page. Next-page links to another host are never followed."
+    "firstPageHint": "Page 1 is sent exactly as recorded — make sure the recorded request is the first page. Next-page links to another host are never followed.",
+    "advancedSummary": "Advanced: the next page is in the Link header"
   },
   "apiBootstrap": {
     "toggleLabel": "Fetch a fresh token before every run (auth bootstrap)",
-    "hint": "For APIs that need a short-lived token from a login/token request first. The script sends that request at the start of every run and uses the extracted value in the headers/URL below — credentials only ever come from environment variables.",
     "fromRecordingBtn": "Take from recording",
     "recordingHint": "Pick the login/token request. Not listed? Keep recording, reload the page (or log in again), then reopen this list.",
     "recordingEmpty": "No recorded request with a JSON response found.",
@@ -410,7 +412,8 @@
     "sourceKind": "Token value",
     "sourceKindNote": "Filled with the freshly fetched token ({placeholder}) on every run.",
     "sourceKindMissing": "No auth bootstrap configured — enable it above or pick another value source.",
-    "headerMode": "From token"
+    "headerMode": "From token",
+    "advancedSummary": "Advanced: the API needs a login token first"
   },
   "group": {
     "repeating": "repeating",
@@ -943,6 +946,58 @@
         "text": "For sites whose list of pages changes, e.g. a category menu: the script opens this page once, collects every link that matches the selector and scrapes each linked page as an extra start page. Pick one link in the menu — the selector then fits all similar links. A link can also be chosen by its text.",
         "example": "a:contains(\"Vegetables\")"
       }
+    },
+    "apiConfig": {
+      "urlParts": {
+        "text": "Each part of the address either stays fixed or changes between requests. Tick \"variable\" for a part that takes different values — a week, a category, a page — and give it a name; below you say where its values come from. Parts left fixed are sent exactly as recorded.",
+        "example": "/api/weeks/2026-W35  →  tick \"variable\", name it \"week\""
+      },
+      "bodyVariable": {
+        "text": "A value in the request body is fixed or changes between requests. \"→ Variable\" lets it take the values of a parameter (a new one or an existing one), e.g. the category of a search request.",
+        "example": "category: \"electronics\"  →  variable \"category\""
+      },
+      "valueType": {
+        "text": "How the value is written into the body. Text fits most APIs; choose Number or Boolean when the server expects a number or true/false — a quoted \"10\" would be rejected.",
+        "example": "\"pageSize\": 10  →  Number"
+      },
+      "sourceStaticList": {
+        "text": "You type the values yourself, or collect them from the recording; the script requests every one of them.",
+        "example": "electronics, books"
+      },
+      "sourceDiscovery": {
+        "text": "The values come from another request the site makes, e.g. a list of categories. Click one of those values on the page and the matching request is found for you.",
+        "example": "GET /api/categories  →  every id in the list"
+      },
+      "sourceRange": {
+        "text": "Counts through a range: ISO weeks, plain numbers or dates.",
+        "example": "2026-W30 … 2026-W35"
+      },
+      "sourceBrowserDiscovery": {
+        "text": "For values that only show up while the page is used: the script opens a browser, performs your clicks and scrolls and notes which values the site requests.",
+        "example": "scroll the offers page, collect each category name"
+      },
+      "sourceBootstrap": {
+        "text": "This part of the address takes the freshly fetched login token (see \"the API needs a login token first\").",
+        "example": "?access_token={token}"
+      }
+    },
+    "apiBootstrap": {
+      "overview": {
+        "text": "For APIs that need a short-lived token from a login/token request first. The script sends that request at the start of every run and uses the extracted value in the headers/URL below — credentials only ever come from environment variables.",
+        "example": "POST /auth/token  →  access_token"
+      }
+    },
+    "apiCursor": {
+      "overview": {
+        "text": "For APIs that only reveal the next page's cursor inside the current response (e.g. pageInfo.endCursor or next_page_token). The script fetches page after page for every parameter combination until no cursor is returned.",
+        "example": "pageInfo.endCursor"
+      }
+    },
+    "apiLink": {
+      "overview": {
+        "text": "For APIs (GitHub, GitLab, WordPress, ...) that announce the next page in the HTTP Link response header instead of in the body. The script requests that URL page after page for every parameter combination until no next link is left. Not for POST requests.",
+        "example": "Link: <…?page=2>; rel=\"next\""
+      }
     }
   },
   "errors": {
@@ -1075,6 +1130,46 @@
       "header": "e.g. API_KEY",
       "fill": "e.g. SITE_PASSWORD",
       "apiHeader": "e.g. API_KEY"
+    }
+  },
+  "jsonPathPicker": {
+    "openBtn": "Pick from the recording",
+    "closeBtn": "Close",
+    "loading": "Loading the recorded response…",
+    "toggle": "Show or hide",
+    "items": "{count} items",
+    "recordedSource": "Recorded: {request}",
+    "embeddedSource": "Embedded JSON of the page ({selector})",
+    "chooseResponse": "Which recorded response should the path be picked from?",
+    "otherResponse": "Pick from another recorded response",
+    "treeTruncated": "A very large response — only the first part is shown.",
+    "hint": {
+      "group": "Click the list or object this group should run over. The path is relative to the parent group; inside a list, add a group of its own.",
+      "leaf": "Click the value to read. A list is shown through its first item.",
+      "body": "Click the field of the request body that takes the cursor (empty on the first page)."
+    },
+    "message": {
+      "noRecording": "Nothing recorded to pick from. Record the request first (Start recording on the idle screen, then load the page again), or type the path.",
+      "truncated": "This response was too large to keep in full, so it can't be shown here. Type the path instead.",
+      "notJson": "This is not a JSON response — type the path instead.",
+      "skipped": "The body of this request could not be recorded (not JSON text) — type the path instead.",
+      "scopeMissing": "The parent group was not found in this response — pick another recorded response or type the path.",
+      "nothingToPick": "Nothing to pick here — this response has no matching value.",
+      "embeddedMissing": "The page's embedded JSON was not found any more — reload the page, or type the path.",
+      "noEntry": "Nothing recorded to pick from.",
+      "noBody": "No request body was recorded for this request — type the path instead."
+    },
+    "reason": {
+      "badKey": "This key contains a dot or a bracket, which a path can't express.",
+      "bodyNoArrays": "A body path can't go through a list."
+    },
+    "type": {
+      "object": "object",
+      "array": "list",
+      "string": "text",
+      "number": "number",
+      "boolean": "yes/no",
+      "null": "empty"
     }
   }
 }
