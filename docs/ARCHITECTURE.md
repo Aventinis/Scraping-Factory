@@ -634,6 +634,21 @@ transform objects are unchanged. See CLAUDE.md for the details.
   `popup/transform-helpers-ui.test.js`, real-browser check
   `e2e/examples/issue-400-transform-helpers-check.js` (fixture `test-pages/transform-helpers`)
 
+### 2.10f Monitoring / Hardening in plain language (Issue #399)
+
+Labels, help and a preset for the Monitoring section: a one-sentence intro, a
+"Warn me" / "Stop the run" severity wording with its own popover (no wire change), one
+popover per hardening check, thresholds written as sentences, the rare blocking options
+under an "Advanced" disclosure, and a one-click "Recommended checks" preset. See
+CLAUDE.md for the details.
+
+- Extension: `popup/hardening-presets.js` (pure: `applyRecommendedHardening`),
+  `popup/settings-panel-ui.js` (button wiring, null-rate row sentences),
+  `popup/screens/idle.html` (intro, heading, hosts, sentences, disclosure),
+  `idle.hardening*`/`help.hardening.*` in `i18n/*.json`
+- Tests: `popup/hardening-presets.test.js`, `popup/hardening-presets-ui.test.js`,
+  real-browser check `e2e/examples/issue-399-hardening-plain-language-check.js`
+
 ### 2.11 i18n (extension UI language)
 
 Lets the user pick the popup's own display language (German/English/Spanish)
