@@ -1,6 +1,15 @@
 // Screenshots for docs/user/modes.md — the mode toggle and a container tree.
 module.exports = [
   {
+    id: 'modes-help',
+    fixture: 'speisekarte',
+    async run(s) {
+      await s.waitForIdle();
+      await s.popupPage.locator('.row-label:has(.help-host[data-help="help.mode.choice"]) .help-btn').click();
+      await s.shot('modes-help');
+    },
+  },
+  {
     id: 'modes-toggle',
     fixture: 'speisekarte',
     async run(s) {
