@@ -668,6 +668,24 @@ CLAUDE.md for the details.
 - Tests: `popup/hardening-presets.test.js`, `popup/hardening-presets-ui.test.js`,
   real-browser check `e2e/examples/issue-399-hardening-plain-language-check.js`
 
+### 2.10j API mode guidance and JSON-path pickers (Issue #404)
+
+"Pick from the recording" for every JSON-path input (group path, cursor and "has more"
+paths, the cursor's body field, the bootstrap token path), "?" popovers for URL parts,
+value sources and the body, and the rarely needed options (auth bootstrap, cursor and
+Link pagination, browser discovery, value type) under "Advanced". No wire-format or
+companion change. See CLAUDE.md for the details.
+
+- Extension: `popup/json-path-picker.js` (pure tree model + path derivation),
+  `popup/json-path-picker-ui.js` (state-driven panel, loading, wiring),
+  `popup/api-cursor-pagination-ui.js`/`api-bootstrap-ui.js`/`api-response-tree-ui.js`
+  (buttons and panels), `popup/api-config-shared-ui.js` (`autoOpenAdvanced`),
+  `popup/screens/api-config.html`/`modals.html`, `jsonPathPicker.*`/`help.api*` in `i18n/*.json`;
+  `content/content-script.js` (`readEmbeddedJson`) + `background/service-worker.js`
+  (`GET_EMBEDDED_JSON`)
+- Tests: `popup/json-path-picker.test.js`, `json-path-picker-ui.test.js`,
+  `api-config-guidance.test.js`, real-browser checks `e2e/examples/issue-404-*.js`
+
 ### 2.10i Pagination helpers (Issue #405)
 
 A page-number URL template proposed from a clicked "next"/"page 2" link or a start URL

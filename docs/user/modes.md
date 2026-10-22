@@ -84,6 +84,40 @@ HTML. API mode finds that request for you:
    fixed or **variable** (a list of values, a second endpoint that supplies the
    values, or a range such as ISO weeks), and name your fields.
 
+Each **?** on that screen explains the concept in place: what a **variable** URL
+part is, what each value source does (with an example), what **→ Variable** does to
+a request-body value. The everyday value sources — **Value list**, **List from
+another request** and **Range** — are shown first; **Browser discovery** and the
+**token value** are under **Advanced sources**, and a body value's **value type**
+is under its own **Advanced**.
+
+### Picking JSON paths
+
+You never have to type a JSON path. Wherever one is asked — a group's path, the
+cursor and "has more pages" paths, the request-body field a cursor goes into, the
+path to a login token — **Pick from the recording** shows the recorded response (or
+request body) as a small tree. Click a value and its path is filled in.
+
+![Picking a group's path from the recorded response](images/modes-api-path-picker.png)
+
+- A group's path is relative to its parent group, so the tree starts at the parent's
+  first entry; lists are offered as a whole (what is inside a list belongs in a
+  group of its own).
+- For a cursor, a flag or a token, click the value itself. A list is shown through
+  its first item.
+- For the request body, only fields you can reach without going through a list are
+  offered.
+- A very large response is not kept in full and can't be shown; then the picker says
+  so and you type the path (**Detect from recording** still works for cursors and
+  tokens). With nothing recorded at all it points you back to **Start network
+  recording**. For a page's own embedded JSON the tree is read from the page itself.
+
+The rarely needed options — an **auth bootstrap** (a token fetched by a login
+request first), **cursor** pagination and **Link-header** pagination — sit under
+their own **Advanced** lines, each saying in one sentence when it applies. They open
+by themselves once switched on, and the Link-header one when the recording shows a
+`Link: rel="next"` header.
+
 Some sites put all their data in the page itself (Next.js and similar). For
 those, use **Search page's own JSON data** instead of recording.
 
