@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.19.17](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.16...v1.19.17) (2026-10-22)
+
+
+### Features
+
+* **transforms:** Pattern helper for Regex extract and date-format guess for Convert to date ([#400](https://github.com/Aventinis/Scraping-Factory/issues/400)) ([7ecbce5](https://github.com/Aventinis/Scraping-Factory/commit/7ecbce591fd7c5b75e8376974d80dd5e84872c9a))
+* **transforms:** Pattern helper for Regex extract and date-format guess for Convert to date ([#400](https://github.com/Aventinis/Scraping-Factory/issues/400)) ([85cf27c](https://github.com/Aventinis/Scraping-Factory/commit/85cf27c09fdd48530dd3e4b53ff395f169e96f7d))
+* **transforms:** regex recipes and date-format inference logic, with .NET/Python parity tests ([#400](https://github.com/Aventinis/Scraping-Factory/issues/400)) ([a0af8e1](https://github.com/Aventinis/Scraping-Factory/commit/a0af8e1a91e796a0768d455b4ee6f8cc7d910b22))
+
 ## [1.19.16](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.15...v1.19.16) (2026-10-22)
 
 
