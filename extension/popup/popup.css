@@ -1034,7 +1034,7 @@ input.env-var-invalid, input.env-var-invalid:focus { border-color: var(--color-d
 .hardening-heading { margin: 6px 0 4px; }
 .hardening-recommended-row { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
 .hardening-recommended-note { text-align: left; margin: 0 0 6px; }
-.hardening-sentence { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.hardening-sentence input { width: 64px; }
+.hardening-sentence { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-secondary); }
+.hardening-sentence input { width: 64px; font-size: 12px; }
 .hardening-null-rate-row { flex-wrap: wrap; }
 .hardening-sentence-text { flex: none; }
