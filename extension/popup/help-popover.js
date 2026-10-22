@@ -17,6 +17,7 @@
 //     option is and what a user must know before touching it — no jargon
 //     without a gloss. Longer explanations belong in the user documentation
 //     (docs/user/), not here;
+//   - a "\n" in the text starts a new line (a short list of causes/fixes);
 //   - `.example` is optional: one line of what to type, written as it would
 //     be typed (rendered in code style);
 //   - nothing else under an entry; every key exists in de, en and es.

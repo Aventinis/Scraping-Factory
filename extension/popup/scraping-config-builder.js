@@ -49,9 +49,9 @@ const { buildRequestHeadersConfig } = require('./request-headers');
  * @returns {string}
  */
 function sanitizeFileNameBase(input, fallback) {
-if (!input || !input.trim()) return fallback;
-const sanitized = input.trim().replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^[-_]+|[-_]+$/g, '');
-return sanitized || fallback;
+  if (!input || !input.trim()) return fallback;
+  const sanitized = input.trim().replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^[-_]+|[-_]+$/g, '');
+  return sanitized || fallback;
 }
 
 // Issue-driven follow-up (default script name preference): derives a
@@ -67,15 +67,15 @@ return sanitized || fallback;
  * @returns {string}
  */
 function deriveScriptFileNameFromHostname(url, fallback) {
-let hostname = '';
-try {
-  hostname = new URL(url).hostname;
-} catch {
-  // hostname stays '' — sanitizeFileNameBase below falls back to
-  // `fallback`, same as any other unreachable default elsewhere in this
-  // popup.
-}
-return sanitizeFileNameBase(hostname, fallback);
+  let hostname = '';
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    // hostname stays '' — sanitizeFileNameBase below falls back to
+    // `fallback`, same as any other unreachable default elsewhere in this
+    // popup.
+  }
+  return sanitizeFileNameBase(hostname, fallback);
 }
 
 // Issue-driven follow-up: the scriptFileName patch to apply whenever a
@@ -96,13 +96,13 @@ return sanitizeFileNameBase(hostname, fallback);
  * @returns {{scriptFileName?: string}}
  */
 function computeScriptFileNamePatch(currentScriptFileName, url, globalSettings) {
-if (globalSettings.scriptNameMode === 'hostname') {
-  return { scriptFileName: deriveScriptFileNameFromHostname(url, globalSettings.scriptNameFixed) };
-}
-if (!currentScriptFileName) {
-  return { scriptFileName: globalSettings.scriptNameFixed };
-}
-return {};
+  if (globalSettings.scriptNameMode === 'hostname') {
+    return { scriptFileName: deriveScriptFileNameFromHostname(url, globalSettings.scriptNameFixed) };
+  }
+  if (!currentScriptFileName) {
+    return { scriptFileName: globalSettings.scriptNameFixed };
+  }
+  return {};
 }
 
 // Issue #83: one URL per line, pasted/typed into the additional-start-urls
@@ -117,7 +117,7 @@ return {};
  * @returns {string[]}
  */
 function parseAdditionalUrls(text) {
-return (text || '').split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  return (text || '').split('\n').map(line => line.trim()).filter(line => line.length > 0);
 }
 
 
@@ -133,31 +133,31 @@ return (text || '').split('\n').map(line => line.trim()).filter(line => line.len
  * @returns {SFWire.ChangeDetectionConfig | null}
  */
 function buildChangeDetectionConfig(changeDetection) {
-if (!changeDetection?.enabled) return null;
+  if (!changeDetection?.enabled) return null;
 
-if (changeDetection.notify === 'Webhook') {
-  const urlEnvVar = (changeDetection.webhook.urlEnvVar || '').trim();
-  return urlEnvVar ? { notify: 'Webhook', webhook: { urlEnvVar } } : null;
-}
+  if (changeDetection.notify === 'Webhook') {
+    const urlEnvVar = (changeDetection.webhook.urlEnvVar || '').trim();
+    return urlEnvVar ? { notify: 'Webhook', webhook: { urlEnvVar } } : null;
+  }
 
-const email = changeDetection.email;
-const smtpHostEnvVar = (email.smtpHostEnvVar || '').trim();
-const fromEnvVar = (email.fromEnvVar || '').trim();
-const toEnvVar = (email.toEnvVar || '').trim();
-if (!smtpHostEnvVar || !fromEnvVar || !toEnvVar) return null;
+  const email = changeDetection.email;
+  const smtpHostEnvVar = (email.smtpHostEnvVar || '').trim();
+  const fromEnvVar = (email.fromEnvVar || '').trim();
+  const toEnvVar = (email.toEnvVar || '').trim();
+  if (!smtpHostEnvVar || !fromEnvVar || !toEnvVar) return null;
 
-const smtpPortEnvVar = (email.smtpPortEnvVar || '').trim();
-const smtpUsernameEnvVar = (email.smtpUsernameEnvVar || '').trim();
-const smtpPasswordEnvVar = (email.smtpPasswordEnvVar || '').trim();
-return {
-  notify: 'Email',
-  email: {
-    smtpHostEnvVar, fromEnvVar, toEnvVar,
-    ...(smtpPortEnvVar ? { smtpPortEnvVar } : {}),
-    ...(smtpUsernameEnvVar ? { smtpUsernameEnvVar } : {}),
-    ...(smtpPasswordEnvVar ? { smtpPasswordEnvVar } : {}),
-  },
-};
+  const smtpPortEnvVar = (email.smtpPortEnvVar || '').trim();
+  const smtpUsernameEnvVar = (email.smtpUsernameEnvVar || '').trim();
+  const smtpPasswordEnvVar = (email.smtpPasswordEnvVar || '').trim();
+  return {
+    notify: 'Email',
+    email: {
+      smtpHostEnvVar, fromEnvVar, toEnvVar,
+      ...(smtpPortEnvVar ? { smtpPortEnvVar } : {}),
+      ...(smtpUsernameEnvVar ? { smtpUsernameEnvVar } : {}),
+      ...(smtpPasswordEnvVar ? { smtpPasswordEnvVar } : {}),
+    },
+  };
 }
 
 // Issue #88: converts _state.proxy's editable draft shape into the wire
@@ -170,9 +170,9 @@ return {
  * @returns {SFWire.ProxyConfig | null}
  */
 function buildProxyConfig(proxy) {
-if (!proxy?.enabled) return null;
-const environmentVariableName = (proxy.envVar || '').trim();
-return environmentVariableName ? { environmentVariableName } : null;
+  if (!proxy?.enabled) return null;
+  const environmentVariableName = (proxy.envVar || '').trim();
+  return environmentVariableName ? { environmentVariableName } : null;
 }
 
 // Issue #222: converts _state.requestDelay's editable draft (two free-text
@@ -189,21 +189,21 @@ const REQUEST_DELAY_MAX_MS = 60000;
  * @returns {number | null}
  */
 function parseSecondsToMs(text) {
-const normalized = String(text ?? '').trim().replace(',', '.');
-if (normalized === '') return null;
-const seconds = Number(normalized);
-return Number.isFinite(seconds) && seconds >= 0 ? Math.min(Math.round(seconds * 1000), REQUEST_DELAY_MAX_MS) : null;
+  const normalized = String(text ?? '').trim().replace(',', '.');
+  if (normalized === '') return null;
+  const seconds = Number(normalized);
+  return Number.isFinite(seconds) && seconds >= 0 ? Math.min(Math.round(seconds * 1000), REQUEST_DELAY_MAX_MS) : null;
 }
 /**
  * @param {SFDraft.RequestDelayState | null | undefined} requestDelay
  * @returns {SFWire.RequestDelayConfig | null}
  */
 function buildRequestDelayConfig(requestDelay) {
-if (!requestDelay?.enabled) return null;
-const minMs = parseSecondsToMs(requestDelay.minSecondsText);
-if (minMs === null) return null;
-const maxMs = parseSecondsToMs(requestDelay.maxSecondsText);
-return { minMs, maxMs: maxMs === null ? minMs : Math.max(minMs, maxMs) };
+  if (!requestDelay?.enabled) return null;
+  const minMs = parseSecondsToMs(requestDelay.minSecondsText);
+  if (minMs === null) return null;
+  const maxMs = parseSecondsToMs(requestDelay.maxSecondsText);
+  return { minMs, maxMs: maxMs === null ? minMs : Math.max(minMs, maxMs) };
 }
 
 // Issue #223: converts _state.retry's editable draft into the wire
@@ -222,16 +222,16 @@ const RETRY_DEFAULT_DELAY_MS = 2000;
  * @returns {SFWire.RetryConfig | null}
  */
 function buildRetryConfig(retry) {
-if (!retry?.enabled) return null;
-const attempts = parseInt(String(retry.maxAttemptsText ?? '').trim(), 10);
-const maxAttempts = Number.isFinite(attempts) ? Math.min(Math.max(attempts, 2), 10) : RETRY_DEFAULT_ATTEMPTS;
-const delayMs = parseSecondsToMs(retry.delaySecondsText) ?? RETRY_DEFAULT_DELAY_MS;
-const codes = [...new Set(String(retry.statusCodesText ?? '').split(/[^0-9]+/).filter(Boolean).map(Number))]
-  .filter(code => code >= 400 && code <= 599);
-return {
-  maxAttempts, delayMs, exponential: retry.exponential !== false,
-  ...(codes.length > 0 ? { retryOnStatusCodes: codes } : {}),
-};
+  if (!retry?.enabled) return null;
+  const attempts = parseInt(String(retry.maxAttemptsText ?? '').trim(), 10);
+  const maxAttempts = Number.isFinite(attempts) ? Math.min(Math.max(attempts, 2), 10) : RETRY_DEFAULT_ATTEMPTS;
+  const delayMs = parseSecondsToMs(retry.delaySecondsText) ?? RETRY_DEFAULT_DELAY_MS;
+  const codes = [...new Set(String(retry.statusCodesText ?? '').split(/[^0-9]+/).filter(Boolean).map(Number))]
+    .filter(code => code >= 400 && code <= 599);
+  return {
+    maxAttempts, delayMs, exponential: retry.exponential !== false,
+    ...(codes.length > 0 ? { retryOnStatusCodes: codes } : {}),
+  };
 }
 
 // Issue #174: converts _state.pagination's editable draft shape into the
@@ -246,15 +246,15 @@ return {
  * @returns {SFWire.PaginationConfig | null}
  */
 function buildPaginationConfig(pagination) {
-if (!pagination?.enabled) return null;
-const maxPagesRaw = Number(pagination.maxPages);
-const maxPages = Number.isFinite(maxPagesRaw) && maxPagesRaw > 0 ? Math.floor(maxPagesRaw) : 50;
-if (pagination.kind === 'pageNumber') {
-  const urlTemplate = (pagination.urlTemplate || '').trim();
-  return urlTemplate ? { kind: 'pageNumber', urlTemplate, maxPages } : null;
-}
-const nextLinkSelector = (pagination.nextLinkSelector || '').trim();
-return nextLinkSelector ? { kind: 'nextLink', nextLinkSelector, maxPages } : null;
+  if (!pagination?.enabled) return null;
+  const maxPagesRaw = Number(pagination.maxPages);
+  const maxPages = Number.isFinite(maxPagesRaw) && maxPagesRaw > 0 ? Math.floor(maxPagesRaw) : 50;
+  if (pagination.kind === 'pageNumber') {
+    const urlTemplate = (pagination.urlTemplate || '').trim();
+    return urlTemplate ? { kind: 'pageNumber', urlTemplate, maxPages } : null;
+  }
+  const nextLinkSelector = (pagination.nextLinkSelector || '').trim();
+  return nextLinkSelector ? { kind: 'nextLink', nextLinkSelector, maxPages } : null;
 }
 
 // Issue #218: builds the wire-format DiscoveredUrlsConfig from
@@ -270,13 +270,13 @@ return nextLinkSelector ? { kind: 'nextLink', nextLinkSelector, maxPages } : nul
  * @returns {SFWire.DiscoveredUrlsConfig | null}
  */
 function buildDiscoveredUrlsConfig(discoveredUrls) {
-if (!discoveredUrls?.enabled) return null;
-const pageUrl = (discoveredUrls.pageUrl || '').trim();
-const linkSelector = (discoveredUrls.linkSelector || '').trim();
-if (!pageUrl || !linkSelector) return null;
-const maxUrlsRaw = Number(discoveredUrls.maxUrls);
-const maxUrls = Number.isFinite(maxUrlsRaw) && maxUrlsRaw > 0 ? Math.floor(maxUrlsRaw) : 100;
-return { pageUrl, linkSelector, maxUrls };
+  if (!discoveredUrls?.enabled) return null;
+  const pageUrl = (discoveredUrls.pageUrl || '').trim();
+  const linkSelector = (discoveredUrls.linkSelector || '').trim();
+  if (!pageUrl || !linkSelector) return null;
+  const maxUrlsRaw = Number(discoveredUrls.maxUrls);
+  const maxUrls = Number.isFinite(maxUrlsRaw) && maxUrlsRaw > 0 ? Math.floor(maxUrlsRaw) : 100;
+  return { pageUrl, linkSelector, maxUrls };
 }
 
 // Issue #129: builds the wire-format Hardening list (companion's
@@ -294,62 +294,62 @@ return { pageUrl, linkSelector, maxUrls };
  * @returns {SFWire.HardeningCheck[] | null}
  */
 function buildHardeningConfig(hardening) {
-/** @type {SFWire.HardeningCheck[]} */
-const checks = [];
-if (hardening?.noResult?.enabled) {
-  checks.push({ kind: 'noResult', severity: hardening.noResult.severity });
-}
-// Issue #130: unlike noResult, a row with no field chosen yet is simply
-// skipped rather than blocking generation — same "incomplete draft, not
-// an error" convention as an unfinished Fill/Proxy env-var name. Threshold
-// is stored as a whole percent (0-100) in the UI for a friendlier input,
-// divided by 100 to reach the wire format's 0.0-1.0 fraction — clamped and
-// defaulted here too, since a cleared/invalid number input can leave
-// `threshold` as NaN or out of range.
-for (const row of hardening?.nullRate || []) {
-  const fieldName = (row.fieldName || '').trim();
-  if (!fieldName) continue;
-  const percent = Number.isFinite(row.threshold) ? row.threshold : 50;
-  const threshold = Math.min(100, Math.max(0, percent)) / 100;
-  checks.push({ kind: 'nullRate', severity: row.severity, fieldName, threshold });
-}
-// Issue #131: same percent-to-fraction conversion as nullRate above.
-// Unlike nullRate, there's only ever one baseline row (a single object,
-// not an array) — an unfinished/invalid dropThresholdPercent is clamped/
-// defaulted rather than skipping the check entirely, since there's no
-// "which field" completeness gate the way nullRate has.
-if (hardening?.baseline?.enabled) {
-  const percent = Number.isFinite(hardening.baseline.dropThresholdPercent) ? hardening.baseline.dropThresholdPercent : 20;
-  const dropThreshold = Math.min(100, Math.max(0, percent)) / 100;
-  checks.push({ kind: 'baseline', severity: hardening.baseline.severity, dropThreshold });
-}
-// Issue #132: unlike baseline's percent, minBodyLengthText has no
-// meaningful default to fall back to (there's no "at least one signal
-// configured" requirement — the cross-origin-redirect signal is always
-// active) — a blank/invalid input simply omits minBodyLength (signal
-// disabled) rather than substituting a guessed number. phrasesText is
-// one phrase per line (not comma-split like API mode's value list — a
-// block phrase such as "Please verify you are human" could plausibly
-// contain a comma of its own); blank lines are dropped.
-if (hardening?.blocking?.enabled) {
-  const minBodyLength = parseInt(hardening.blocking.minBodyLengthText, 10);
-  const blockPhrases = String(hardening.blocking.phrasesText || '').split('\n').map(s => s.trim()).filter(s => s.length > 0);
-  checks.push({
-    kind: 'blocking',
-    severity: hardening.blocking.severity,
-    minBodyLength: Number.isFinite(minBodyLength) && minBodyLength > 0 ? minBodyLength : null,
-    blockPhrases,
-  });
-}
-// Issue #133: like nullRate's own "incomplete draft" rows, an enabled
-// check with no fields picked yet is simply skipped rather than sent as
-// an empty list — ScrapingPlanValidator rejects an empty FieldNames list
-// outright, and there's nothing incomplete-but-useful to send here the
-// way an unfinished env-var name still is for Fill/Proxy.
-if (hardening?.requiredFields?.enabled && hardening.requiredFields.fields.length > 0) {
-  checks.push({ kind: 'requiredFields', severity: hardening.requiredFields.severity, fieldNames: hardening.requiredFields.fields });
-}
-return checks.length > 0 ? checks : null;
+  /** @type {SFWire.HardeningCheck[]} */
+  const checks = [];
+  if (hardening?.noResult?.enabled) {
+    checks.push({ kind: 'noResult', severity: hardening.noResult.severity });
+  }
+  // Issue #130: unlike noResult, a row with no field chosen yet is simply
+  // skipped rather than blocking generation — same "incomplete draft, not
+  // an error" convention as an unfinished Fill/Proxy env-var name. Threshold
+  // is stored as a whole percent (0-100) in the UI for a friendlier input,
+  // divided by 100 to reach the wire format's 0.0-1.0 fraction — clamped and
+  // defaulted here too, since a cleared/invalid number input can leave
+  // `threshold` as NaN or out of range.
+  for (const row of hardening?.nullRate || []) {
+    const fieldName = (row.fieldName || '').trim();
+    if (!fieldName) continue;
+    const percent = Number.isFinite(row.threshold) ? row.threshold : 50;
+    const threshold = Math.min(100, Math.max(0, percent)) / 100;
+    checks.push({ kind: 'nullRate', severity: row.severity, fieldName, threshold });
+  }
+  // Issue #131: same percent-to-fraction conversion as nullRate above.
+  // Unlike nullRate, there's only ever one baseline row (a single object,
+  // not an array) — an unfinished/invalid dropThresholdPercent is clamped/
+  // defaulted rather than skipping the check entirely, since there's no
+  // "which field" completeness gate the way nullRate has.
+  if (hardening?.baseline?.enabled) {
+    const percent = Number.isFinite(hardening.baseline.dropThresholdPercent) ? hardening.baseline.dropThresholdPercent : 20;
+    const dropThreshold = Math.min(100, Math.max(0, percent)) / 100;
+    checks.push({ kind: 'baseline', severity: hardening.baseline.severity, dropThreshold });
+  }
+  // Issue #132: unlike baseline's percent, minBodyLengthText has no
+  // meaningful default to fall back to (there's no "at least one signal
+  // configured" requirement — the cross-origin-redirect signal is always
+  // active) — a blank/invalid input simply omits minBodyLength (signal
+  // disabled) rather than substituting a guessed number. phrasesText is
+  // one phrase per line (not comma-split like API mode's value list — a
+  // block phrase such as "Please verify you are human" could plausibly
+  // contain a comma of its own); blank lines are dropped.
+  if (hardening?.blocking?.enabled) {
+    const minBodyLength = parseInt(hardening.blocking.minBodyLengthText, 10);
+    const blockPhrases = String(hardening.blocking.phrasesText || '').split('\n').map(s => s.trim()).filter(s => s.length > 0);
+    checks.push({
+      kind: 'blocking',
+      severity: hardening.blocking.severity,
+      minBodyLength: Number.isFinite(minBodyLength) && minBodyLength > 0 ? minBodyLength : null,
+      blockPhrases,
+    });
+  }
+  // Issue #133: like nullRate's own "incomplete draft" rows, an enabled
+  // check with no fields picked yet is simply skipped rather than sent as
+  // an empty list — ScrapingPlanValidator rejects an empty FieldNames list
+  // outright, and there's nothing incomplete-but-useful to send here the
+  // way an unfinished env-var name still is for Fill/Proxy.
+  if (hardening?.requiredFields?.enabled && hardening.requiredFields.fields.length > 0) {
+    checks.push({ kind: 'requiredFields', severity: hardening.requiredFields.severity, fieldNames: hardening.requiredFields.fields });
+  }
+  return checks.length > 0 ? checks : null;
 }
 
 // Issue #183: the "Monitoring" section (change detection + hardening)
@@ -364,7 +364,7 @@ return checks.length > 0 ? checks : null;
  * @returns {boolean}
  */
 function computeInitialMonitoringSectionOpen(changeDetection, hardening) {
-return buildChangeDetectionConfig(changeDetection) !== null || buildHardeningConfig(hardening) !== null;
+  return buildChangeDetectionConfig(changeDetection) !== null || buildHardeningConfig(hardening) !== null;
 }
 
 // Issue #130: collects every leaf field name currently configured, across
@@ -388,35 +388,35 @@ return buildChangeDetectionConfig(changeDetection) !== null || buildHardeningCon
  * @returns {string[]}
  */
 function collectFieldNames(mode, fields, groups, apiConfig) {
-/** @type {string[]} */
-const names = [];
-/** @param {string} name */
-const add = (name) => { if (name && !names.includes(name)) names.push(name); };
+  /** @type {string[]} */
+  const names = [];
+  /** @param {string} name */
+  const add = (name) => { if (name && !names.includes(name)) names.push(name); };
 
-if (mode === 'container') {
-  /** @param {SFDraft.ContainerNode[] | undefined} nodes */
-  const walk = (nodes) => {
-    for (const node of nodes || []) {
-      if (node.kind === 'field') add(node.name);
-      else if (node.kind === 'group') walk(node.children);
-    }
-  };
-  walk(groups || []);
-} else if (mode === 'api') {
-  /** @param {SFWire.ApiNode[] | undefined} nodes */
-  const walk = (nodes) => {
-    for (const node of nodes || []) {
-      const n = /** @type {any} */ (node);
-      if (n.children) walk(n.children);
-      else add(n.name);
-    }
-  };
-  if (apiConfig?.groups) walk(apiConfig.groups);
-  else for (const f of apiConfig?.fields || []) add(f.name);
-} else {
-  for (const f of fields || []) add(f.name);
-}
-return names;
+  if (mode === 'container') {
+    /** @param {SFDraft.ContainerNode[] | undefined} nodes */
+    const walk = (nodes) => {
+      for (const node of nodes || []) {
+        if (node.kind === 'field') add(node.name);
+        else if (node.kind === 'group') walk(node.children);
+      }
+    };
+    walk(groups || []);
+  } else if (mode === 'api') {
+    /** @param {SFWire.ApiNode[] | undefined} nodes */
+    const walk = (nodes) => {
+      for (const node of nodes || []) {
+        const n = /** @type {any} */ (node);
+        if (n.children) walk(n.children);
+        else add(n.name);
+      }
+    };
+    if (apiConfig?.groups) walk(apiConfig.groups);
+    else for (const f of apiConfig?.fields || []) add(f.name);
+  } else {
+    for (const f of fields || []) add(f.name);
+  }
+  return names;
 }
 
 // `apiConfig` is only read when mode === 'api' — the confirmed ApiConfig
@@ -494,232 +494,232 @@ return names;
  * @returns {object}
  */
 function buildScrapingConfig(
-url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
-engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
-additionalUrls = [], changeDetection = null, proxy = null, hardening = null, pagination = null,
-persistentSession = false, includeOutputFile = false, externalConfig = false, combinedComponents = null,
-blocks = null, outputBlueprintId = null, outputBlueprintFieldNames = [], outputBlueprintMapping = {},
-// Issue #244: the tree-shaped counterpart of the three params just above
-// — outputBlueprintSchemaKind picks which pair buildOutputBlueprintMapping
-// actually reads, the other pair is simply ignored.
-outputBlueprintSchemaKind = 'Flat', outputBlueprintTree = [], outputBlueprintTreeMapping = {},
-// Issue #218: appended at the end, not alongside pagination above, since
-// this function already has dozens of positional callers (including every
-// existing test) — inserting a new parameter in the middle would silently
-// shift every argument after it rather than failing loudly.
-discoveredUrls = null,
-// Issue #219: same "append at the end, never insert in the middle" rule as
-// discoveredUrls just above.
-preflight = false,
-// Issue #222: same "append at the end" rule.
-requestDelay = null,
-// Issue #223: same "append at the end" rule.
-retry = null,
-// Issue #225: same "append at the end" rule.
-deduplication = null,
-// Issue #226: same "append at the end" rule.
-requestHeaders = null,
-// Issue #228: same "append at the end" rule.
-respectRobotsDelay = false,
-// Issue #292: same "append at the end" rule.
-skipVerification = false,
-// Issue #333: same "append at the end" rule.
-robotsDisallow = null,
-// Issue #342: same "append at the end" rule.
-appendOutput = false,
+  url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
+  engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
+  additionalUrls = [], changeDetection = null, proxy = null, hardening = null, pagination = null,
+  persistentSession = false, includeOutputFile = false, externalConfig = false, combinedComponents = null,
+  blocks = null, outputBlueprintId = null, outputBlueprintFieldNames = [], outputBlueprintMapping = {},
+  // Issue #244: the tree-shaped counterpart of the three params just above
+  // — outputBlueprintSchemaKind picks which pair buildOutputBlueprintMapping
+  // actually reads, the other pair is simply ignored.
+  outputBlueprintSchemaKind = 'Flat', outputBlueprintTree = [], outputBlueprintTreeMapping = {},
+  // Issue #218: appended at the end, not alongside pagination above, since
+  // this function already has dozens of positional callers (including every
+  // existing test) — inserting a new parameter in the middle would silently
+  // shift every argument after it rather than failing loudly.
+  discoveredUrls = null,
+  // Issue #219: same "append at the end, never insert in the middle" rule as
+  // discoveredUrls just above.
+  preflight = false,
+  // Issue #222: same "append at the end" rule.
+  requestDelay = null,
+  // Issue #223: same "append at the end" rule.
+  retry = null,
+  // Issue #225: same "append at the end" rule.
+  deduplication = null,
+  // Issue #226: same "append at the end" rule.
+  requestHeaders = null,
+  // Issue #228: same "append at the end" rule.
+  respectRobotsDelay = false,
+  // Issue #292: same "append at the end" rule.
+  skipVerification = false,
+  // Issue #333: same "append at the end" rule.
+  robotsDisallow = null,
+  // Issue #342: same "append at the end" rule.
+  appendOutput = false,
 ) {
-// Issue #292: a plain on/off switch (the Global Settings preference),
-// mode-independent — sent for every mode, omitted when off.
-/** @type {Record<string, unknown>} */
-const skipVerificationFields = skipVerification ? { skipVerification: true } : {};
-// Issue #228: a plain on/off switch, independent of requestDelay (the
-// companion uses the larger of the two gaps) — omitted when off.
-const respectRobotsFields = respectRobotsDelay ? { respectRobotsDelay: true } : {};
-// Issue #229: the output-format preference — the legacy boolean (true =
-// Json) or one of 'json' | 'sqlite' | 'xlsx'; anything else (false,
-// 'default') leaves the companion's own per-shape default in charge.
-const tableOrJsonFormat = useJsonOutput === true || useJsonOutput === 'json' ? 'Json'
-  : useJsonOutput === 'sqlite' ? 'Sqlite' : useJsonOutput === 'xlsx' ? 'Xlsx' : null;
-const requestDelayConfig = buildRequestDelayConfig(requestDelay);
-const requestDelayFields = requestDelayConfig ? { requestDelay: requestDelayConfig } : {};
-// Issue #333: the run-time robots.txt Disallow check (flat/container/api/
-// blocks; Combined returns before this is used — rejected on the outer request).
-const robotsDisallowFields = robotsDisallow?.enabled ? { robotsDisallow: { action: robotsDisallow.action } } : {};
-// Issue #342: append to the previous output file instead of replacing it
-// (flat/container/api/blocks; Combined returns before this is used).
-const appendOutputFields = appendOutput ? { appendOutput: true } : {};
-// The pacing/robots/append settings in one spread — the object literals below are
-// already at TypeScript's union-complexity limit.
-/** @type {Record<string, unknown>} */
-const settingFields = { ...requestDelayFields, ...respectRobotsFields, ...robotsDisallowFields, ...appendOutputFields };
-const retryConfig = buildRetryConfig(retry);
-const retryFields = retryConfig ? { retry: retryConfig } : {};
-// Issue #225: key fields no longer in the field list are dropped.
-// Blocks/Combined return before this is used (not supported there).
-const deduplicationConfig = buildDeduplicationConfig(deduplication, collectFieldNames(mode, fields, groups, apiConfig));
-const deduplicationFields = deduplicationConfig ? { deduplication: deduplicationConfig } : {};
-// Issue #226: DOM shapes only (flat/container/Blocks) — API mode has its
-// own header list inside apiConfig, and Combined components carry theirs.
-const requestHeadersConfig = buildRequestHeadersConfig(requestHeaders);
-// Typed as a plain record: with this many optional spread groups, TypeScript
-// otherwise gives up on the object literals' union type (TS2590).
-/** @type {Record<string, unknown>} */
-const requestHeadersFields = requestHeadersConfig ? { headers: requestHeadersConfig } : {};
-// Issue #182: Blocks mode has no ad-hoc fields/groups/apiConfig of its own
-// either — each block is a fully independent {name, outputFileName,
-// fields|groups} sent verbatim, sharing this one request's Url/engine/
-// browserActions/additionalUrls/proxy/pagination/persistentSession
-// (unlike Combined mode above, these DO apply — see ScrapingConfig.Blocks
-// on the companion side for why). changeDetection/hardening/
-// useJsonOutput/externalConfig are deliberately NOT included at all —
-// the companion rejects the first two outright on this outer level (each
-// block would need its own, not yet reachable from this UI — see
-// CLAUDE.md), and the latter two have no meaning without a single shape/
-// output file to apply to.
-if (mode === 'blocks') {
+  // Issue #292: a plain on/off switch (the Global Settings preference),
+  // mode-independent — sent for every mode, omitted when off.
+  /** @type {Record<string, unknown>} */
+  const skipVerificationFields = skipVerification ? { skipVerification: true } : {};
+  // Issue #228: a plain on/off switch, independent of requestDelay (the
+  // companion uses the larger of the two gaps) — omitted when off.
+  const respectRobotsFields = respectRobotsDelay ? { respectRobotsDelay: true } : {};
+  // Issue #229: the output-format preference — the legacy boolean (true =
+  // Json) or one of 'json' | 'sqlite' | 'xlsx'; anything else (false,
+  // 'default') leaves the companion's own per-shape default in charge.
+  const tableOrJsonFormat = useJsonOutput === true || useJsonOutput === 'json' ? 'Json'
+    : useJsonOutput === 'sqlite' ? 'Sqlite' : useJsonOutput === 'xlsx' ? 'Xlsx' : null;
+  const requestDelayConfig = buildRequestDelayConfig(requestDelay);
+  const requestDelayFields = requestDelayConfig ? { requestDelay: requestDelayConfig } : {};
+  // Issue #333: the run-time robots.txt Disallow check (flat/container/api/
+  // blocks; Combined returns before this is used — rejected on the outer request).
+  const robotsDisallowFields = robotsDisallow?.enabled ? { robotsDisallow: { action: robotsDisallow.action } } : {};
+  // Issue #342: append to the previous output file instead of replacing it
+  // (flat/container/api/blocks; Combined returns before this is used).
+  const appendOutputFields = appendOutput ? { appendOutput: true } : {};
+  // The pacing/robots/append settings in one spread — the object literals below are
+  // already at TypeScript's union-complexity limit.
+  /** @type {Record<string, unknown>} */
+  const settingFields = { ...requestDelayFields, ...respectRobotsFields, ...robotsDisallowFields, ...appendOutputFields };
+  const retryConfig = buildRetryConfig(retry);
+  const retryFields = retryConfig ? { retry: retryConfig } : {};
+  // Issue #225: key fields no longer in the field list are dropped.
+  // Blocks/Combined return before this is used (not supported there).
+  const deduplicationConfig = buildDeduplicationConfig(deduplication, collectFieldNames(mode, fields, groups, apiConfig));
+  const deduplicationFields = deduplicationConfig ? { deduplication: deduplicationConfig } : {};
+  // Issue #226: DOM shapes only (flat/container/Blocks) — API mode has its
+  // own header list inside apiConfig, and Combined components carry theirs.
+  const requestHeadersConfig = buildRequestHeadersConfig(requestHeaders);
+  // Typed as a plain record: with this many optional spread groups, TypeScript
+  // otherwise gives up on the object literals' union type (TS2590).
+  /** @type {Record<string, unknown>} */
+  const requestHeadersFields = requestHeadersConfig ? { headers: requestHeadersConfig } : {};
+  // Issue #182: Blocks mode has no ad-hoc fields/groups/apiConfig of its own
+  // either — each block is a fully independent {name, outputFileName,
+  // fields|groups} sent verbatim, sharing this one request's Url/engine/
+  // browserActions/additionalUrls/proxy/pagination/persistentSession
+  // (unlike Combined mode above, these DO apply — see ScrapingConfig.Blocks
+  // on the companion side for why). changeDetection/hardening/
+  // useJsonOutput/externalConfig are deliberately NOT included at all —
+  // the companion rejects the first two outright on this outer level (each
+  // block would need its own, not yet reachable from this UI — see
+  // CLAUDE.md), and the latter two have no meaning without a single shape/
+  // output file to apply to.
+  if (mode === 'blocks') {
+    const engineFields = engine === 'Browser'
+      ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
+      : {};
+    const previewFields = includePreview ? { includePreview: true } : {};
+    const additionalUrlsFields = additionalUrls.length > 0 ? { additionalUrls } : {};
+    const proxyConfig = buildProxyConfig(proxy);
+    const proxyFields = proxyConfig ? { proxy: proxyConfig } : {};
+    const paginationConfig = buildPaginationConfig(pagination);
+    const paginationFields = paginationConfig ? { pagination: paginationConfig } : {};
+    const persistentSessionFields = persistentSession ? { persistentSession: true } : {};
+    const outputFileFields = includeOutputFile ? { includeOutputFile: true } : {};
+    return {
+      version: '1', url,
+      blocks: (blocks || []).map(b => ({
+        name: b.name || null,
+        outputFileName: b.outputFileName || null,
+        ...(b.shape === 'group'
+          ? { groups: serializeGroupTree(/** @type {SFDraft.ContainerNode[]} */ (b.groups)) }
+          : { fields: (b.fields || []).map(f => ({
+              name: f.name, selector: f.selector, attribute: f.attribute ?? null,
+              ...(f.framePath ? { framePath: f.framePath } : {}),
+              ...(f.transforms && f.transforms.length > 0 ? { transforms: f.transforms } : {}),
+            })) }),
+      })),
+      scriptFileName: scriptFileName || null,
+      ...engineFields, ...previewFields, ...additionalUrlsFields,
+      ...proxyFields, ...settingFields, ...retryFields, ...requestHeadersFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields, ...skipVerificationFields,
+    };
+  }
+  // Combined mode (Issue #239): no ad-hoc fields/groups/apiConfig of its own
+  // — each component is a fully independent, already-resolved
+  // {name, config, savedConfigId} (see companion-client.js's
+  // resolveCombinedComponents), sent verbatim. None of engine/
+  // browserActions/additionalUrls/changeDetection/proxy/hardening/
+  // pagination/persistentSession/externalConfig/useJsonOutput apply at this
+  // outer level — the companion rejects all of them here outright (each
+  // component's own config carries its own instead) — so this branch
+  // deliberately ignores every one of those parameters.
+  if (mode === 'combined') {
+    const previewFields = includePreview ? { includePreview: true } : {};
+    const outputFileFields = includeOutputFile ? { includeOutputFile: true } : {};
+    return {
+      version: '1', url,
+      combined: (combinedComponents || []).map(c => ({
+        name: c.name, config: c.config,
+        ...(c.savedConfigId ? { savedConfigId: c.savedConfigId } : {}),
+      })),
+      scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
+      ...previewFields, ...outputFileFields, ...skipVerificationFields,
+    };
+  }
+
   const engineFields = engine === 'Browser'
     ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
     : {};
   const previewFields = includePreview ? { includePreview: true } : {};
+  const outputFormatFields = tableOrJsonFormat ? { outputFormat: tableOrJsonFormat } : {};
   const additionalUrlsFields = additionalUrls.length > 0 ? { additionalUrls } : {};
+  const changeDetectionConfig = buildChangeDetectionConfig(changeDetection);
+  const changeDetectionFields = changeDetectionConfig ? { changeDetection: changeDetectionConfig } : {};
   const proxyConfig = buildProxyConfig(proxy);
   const proxyFields = proxyConfig ? { proxy: proxyConfig } : {};
+  const hardeningConfig = buildHardeningConfig(hardening);
+  const hardeningFields = hardeningConfig ? { hardening: hardeningConfig } : {};
   const paginationConfig = buildPaginationConfig(pagination);
   const paginationFields = paginationConfig ? { pagination: paginationConfig } : {};
+  const discoveredUrlsConfig = buildDiscoveredUrlsConfig(discoveredUrls);
+  const discoveredUrlsFields = discoveredUrlsConfig ? { discoveredUrls: discoveredUrlsConfig } : {};
+  // Issue #175: Browser-engine only, but simply sent as-is (like
+  // browserActions) rather than gated on `engine === 'Browser'` here — the
+  // toggle itself is only reachable through the UI while the browser-actions
+  // section is visible (Engine=Browser), and the companion rejects the
+  // combination server-side regardless (see ScrapingPlanValidator).
   const persistentSessionFields = persistentSession ? { persistentSession: true } : {};
+  // Issue #219: mirrors persistentSessionFields exactly — a plain on/off
+  // switch, only included when true. Hidden from the UI (and thus never
+  // true) for API/Combined/Blocks mode, but that's enforced by the UI's own
+  // visibility toggle, not here — this function doesn't need its own
+  // mode-specific gate since those branches simply never reference it.
+  const preflightFields = preflight ? { preflight: true } : {};
+  // Issue #161: mirrors previewFields exactly — only included when true, so
+  // the default (checkbox unchecked) request stays byte-for-byte identical
+  // to before this existed. See companion's ScrapingConfig.IncludeOutputFile.
   const outputFileFields = includeOutputFile ? { includeOutputFile: true } : {};
+  // Issue #178: mirrors previewFields/outputFileFields exactly — only
+  // included when true, so the default (checkbox unchecked) request stays
+  // byte-for-byte identical to before this existed.
+  const externalConfigFields = externalConfig ? { externalConfig: true } : {};
+  // Issue #191/#192: reachable for flat mode, container mode, and both of
+  // Api mode's shapes (container/Api-tree flatten into denormalized rows
+  // instead of being renamed in place — see the companion's
+  // OutputBlueprintFlattening) — buildOutputBlueprintMapping itself returns
+  // null (omitted, same "incomplete draft" convention as
+  // buildProxyConfig/buildChangeDetectionConfig) whenever no blueprint is
+  // picked or the mapping isn't complete yet, so this is a genuine no-op
+  // for Combined/Blocks too even though it's computed here unconditionally
+  // for every mode.
+  const outputBlueprintConfig = buildOutputBlueprintMapping(
+    outputBlueprintId, outputBlueprintSchemaKind, outputBlueprintFieldNames, outputBlueprintMapping,
+    outputBlueprintTree, outputBlueprintTreeMapping,
+  );
+  const outputBlueprintFields = outputBlueprintConfig ? { outputBlueprint: outputBlueprintConfig } : {};
+
+  if (mode === 'container') {
+    return {
+      version: '1', url, groups: serializeGroupTree(groups),
+      scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
+      ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
+      ...proxyFields, ...settingFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...preflightFields, ...outputFileFields, ...skipVerificationFields, ...externalConfigFields, ...outputBlueprintFields,
+    };
+  }
+  if (mode === 'api') {
+    return {
+      version: '1', url, api: apiConfig,
+      scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
+      ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
+      ...proxyFields, ...settingFields, ...retryFields, ...deduplicationFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...preflightFields, ...outputFileFields, ...skipVerificationFields, ...externalConfigFields, ...outputBlueprintFields,
+    };
+  }
   return {
-    version: '1', url,
-    blocks: (blocks || []).map(b => ({
-      name: b.name || null,
-      outputFileName: b.outputFileName || null,
-      ...(b.shape === 'group'
-        ? { groups: serializeGroupTree(/** @type {SFDraft.ContainerNode[]} */ (b.groups)) }
-        : { fields: (b.fields || []).map(f => ({
-            name: f.name, selector: f.selector, attribute: f.attribute ?? null,
-            ...(f.framePath ? { framePath: f.framePath } : {}),
-            ...(f.transforms && f.transforms.length > 0 ? { transforms: f.transforms } : {}),
-          })) }),
+    version: '1',
+    url,
+    fields: fields.map(f => ({
+      name: f.name, selector: f.selector, attribute: f.attribute ?? null,
+      ...(f.framePath ? { framePath: f.framePath } : {}),
+      ...(f.transforms && f.transforms.length > 0 ? { transforms: f.transforms } : {}),
+      // Issue #214: same "incomplete/off = key omitted" convention
+      // framePath/transforms above already use.
+      ...(f.download ? { download: true } : {}),
+      ...(f.download && f.maxDownloadSizeBytes ? { maxDownloadSizeBytes: f.maxDownloadSizeBytes } : {}),
+      ...(f.download && f.allowedContentTypes?.length > 0 ? { allowedContentTypes: f.allowedContentTypes } : {}),
+      // Issue #206 follow-up: same "incomplete/off = key omitted" convention.
+      ...(f.hiddenFromOutput ? { hiddenFromOutput: true } : {}),
     })),
+    outputFormat: tableOrJsonFormat ?? 'Csv',
     scriptFileName: scriptFileName || null,
-    ...engineFields, ...previewFields, ...additionalUrlsFields,
-    ...proxyFields, ...settingFields, ...retryFields, ...requestHeadersFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields, ...skipVerificationFields,
-  };
-}
-// Combined mode (Issue #239): no ad-hoc fields/groups/apiConfig of its own
-// — each component is a fully independent, already-resolved
-// {name, config, savedConfigId} (see companion-client.js's
-// resolveCombinedComponents), sent verbatim. None of engine/
-// browserActions/additionalUrls/changeDetection/proxy/hardening/
-// pagination/persistentSession/externalConfig/useJsonOutput apply at this
-// outer level — the companion rejects all of them here outright (each
-// component's own config carries its own instead) — so this branch
-// deliberately ignores every one of those parameters.
-if (mode === 'combined') {
-  const previewFields = includePreview ? { includePreview: true } : {};
-  const outputFileFields = includeOutputFile ? { includeOutputFile: true } : {};
-  return {
-    version: '1', url,
-    combined: (combinedComponents || []).map(c => ({
-      name: c.name, config: c.config,
-      ...(c.savedConfigId ? { savedConfigId: c.savedConfigId } : {}),
-    })),
-    scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
-    ...previewFields, ...outputFileFields, ...skipVerificationFields,
-  };
-}
-
-const engineFields = engine === 'Browser'
-  ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
-  : {};
-const previewFields = includePreview ? { includePreview: true } : {};
-const outputFormatFields = tableOrJsonFormat ? { outputFormat: tableOrJsonFormat } : {};
-const additionalUrlsFields = additionalUrls.length > 0 ? { additionalUrls } : {};
-const changeDetectionConfig = buildChangeDetectionConfig(changeDetection);
-const changeDetectionFields = changeDetectionConfig ? { changeDetection: changeDetectionConfig } : {};
-const proxyConfig = buildProxyConfig(proxy);
-const proxyFields = proxyConfig ? { proxy: proxyConfig } : {};
-const hardeningConfig = buildHardeningConfig(hardening);
-const hardeningFields = hardeningConfig ? { hardening: hardeningConfig } : {};
-const paginationConfig = buildPaginationConfig(pagination);
-const paginationFields = paginationConfig ? { pagination: paginationConfig } : {};
-const discoveredUrlsConfig = buildDiscoveredUrlsConfig(discoveredUrls);
-const discoveredUrlsFields = discoveredUrlsConfig ? { discoveredUrls: discoveredUrlsConfig } : {};
-// Issue #175: Browser-engine only, but simply sent as-is (like
-// browserActions) rather than gated on `engine === 'Browser'` here — the
-// toggle itself is only reachable through the UI while the browser-actions
-// section is visible (Engine=Browser), and the companion rejects the
-// combination server-side regardless (see ScrapingPlanValidator).
-const persistentSessionFields = persistentSession ? { persistentSession: true } : {};
-// Issue #219: mirrors persistentSessionFields exactly — a plain on/off
-// switch, only included when true. Hidden from the UI (and thus never
-// true) for API/Combined/Blocks mode, but that's enforced by the UI's own
-// visibility toggle, not here — this function doesn't need its own
-// mode-specific gate since those branches simply never reference it.
-const preflightFields = preflight ? { preflight: true } : {};
-// Issue #161: mirrors previewFields exactly — only included when true, so
-// the default (checkbox unchecked) request stays byte-for-byte identical
-// to before this existed. See companion's ScrapingConfig.IncludeOutputFile.
-const outputFileFields = includeOutputFile ? { includeOutputFile: true } : {};
-// Issue #178: mirrors previewFields/outputFileFields exactly — only
-// included when true, so the default (checkbox unchecked) request stays
-// byte-for-byte identical to before this existed.
-const externalConfigFields = externalConfig ? { externalConfig: true } : {};
-// Issue #191/#192: reachable for flat mode, container mode, and both of
-// Api mode's shapes (container/Api-tree flatten into denormalized rows
-// instead of being renamed in place — see the companion's
-// OutputBlueprintFlattening) — buildOutputBlueprintMapping itself returns
-// null (omitted, same "incomplete draft" convention as
-// buildProxyConfig/buildChangeDetectionConfig) whenever no blueprint is
-// picked or the mapping isn't complete yet, so this is a genuine no-op
-// for Combined/Blocks too even though it's computed here unconditionally
-// for every mode.
-const outputBlueprintConfig = buildOutputBlueprintMapping(
-  outputBlueprintId, outputBlueprintSchemaKind, outputBlueprintFieldNames, outputBlueprintMapping,
-  outputBlueprintTree, outputBlueprintTreeMapping,
-);
-const outputBlueprintFields = outputBlueprintConfig ? { outputBlueprint: outputBlueprintConfig } : {};
-
-if (mode === 'container') {
-  return {
-    version: '1', url, groups: serializeGroupTree(groups),
-    scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
-    ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-    ...proxyFields, ...settingFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+    outputFileName: outputFileName || null,
+    ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields, ...settingFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields,
+    ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
     ...preflightFields, ...outputFileFields, ...skipVerificationFields, ...externalConfigFields, ...outputBlueprintFields,
   };
-}
-if (mode === 'api') {
-  return {
-    version: '1', url, api: apiConfig,
-    scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
-    ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-    ...proxyFields, ...settingFields, ...retryFields, ...deduplicationFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
-    ...preflightFields, ...outputFileFields, ...skipVerificationFields, ...externalConfigFields, ...outputBlueprintFields,
-  };
-}
-return {
-  version: '1',
-  url,
-  fields: fields.map(f => ({
-    name: f.name, selector: f.selector, attribute: f.attribute ?? null,
-    ...(f.framePath ? { framePath: f.framePath } : {}),
-    ...(f.transforms && f.transforms.length > 0 ? { transforms: f.transforms } : {}),
-    // Issue #214: same "incomplete/off = key omitted" convention
-    // framePath/transforms above already use.
-    ...(f.download ? { download: true } : {}),
-    ...(f.download && f.maxDownloadSizeBytes ? { maxDownloadSizeBytes: f.maxDownloadSizeBytes } : {}),
-    ...(f.download && f.allowedContentTypes?.length > 0 ? { allowedContentTypes: f.allowedContentTypes } : {}),
-    // Issue #206 follow-up: same "incomplete/off = key omitted" convention.
-    ...(f.hiddenFromOutput ? { hiddenFromOutput: true } : {}),
-  })),
-  outputFormat: tableOrJsonFormat ?? 'Csv',
-  scriptFileName: scriptFileName || null,
-  outputFileName: outputFileName || null,
-  ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields, ...settingFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields,
-  ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
-  ...preflightFields, ...outputFileFields, ...skipVerificationFields, ...externalConfigFields, ...outputBlueprintFields,
-};
 }
 
 // Wraps the exact wire-format config (buildScrapingConfig) with export
@@ -769,46 +769,46 @@ return {
  * @returns {{exportedAt: string, extensionVersion: string, config: object}}
  */
 function buildConfigExport(
-url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
-engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false, additionalUrls = [],
-changeDetection = null, proxy = null, hardening = null, pagination = null, persistentSession = false,
-includeOutputFile = false, externalConfig = false, combinedComponents = null, blocks = null,
-outputBlueprintId = null, outputBlueprintFieldNames = [], outputBlueprintMapping = {},
-outputBlueprintSchemaKind = 'Flat', outputBlueprintTree = [], outputBlueprintTreeMapping = {},
-// Issue #218: see buildScrapingConfig's own doc comment on why this is
-// appended at the end rather than alongside pagination above.
-discoveredUrls = null,
-// Issue #219: same "append at the end" rule as discoveredUrls just above.
-preflight = false,
-// Issue #222: same "append at the end" rule.
-requestDelay = null,
-// Issue #223: same "append at the end" rule.
-retry = null,
-// Issue #225: same "append at the end" rule.
-deduplication = null,
-// Issue #226: same "append at the end" rule.
-requestHeaders = null,
-// Issue #228: same "append at the end" rule.
-respectRobotsDelay = false,
-// Issue #292: same "append at the end" rule.
-skipVerification = false,
-// Issue #333: same "append at the end" rule.
-robotsDisallow = null,
-// Issue #342: same "append at the end" rule.
-appendOutput = false,
+  url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
+  engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false, additionalUrls = [],
+  changeDetection = null, proxy = null, hardening = null, pagination = null, persistentSession = false,
+  includeOutputFile = false, externalConfig = false, combinedComponents = null, blocks = null,
+  outputBlueprintId = null, outputBlueprintFieldNames = [], outputBlueprintMapping = {},
+  outputBlueprintSchemaKind = 'Flat', outputBlueprintTree = [], outputBlueprintTreeMapping = {},
+  // Issue #218: see buildScrapingConfig's own doc comment on why this is
+  // appended at the end rather than alongside pagination above.
+  discoveredUrls = null,
+  // Issue #219: same "append at the end" rule as discoveredUrls just above.
+  preflight = false,
+  // Issue #222: same "append at the end" rule.
+  requestDelay = null,
+  // Issue #223: same "append at the end" rule.
+  retry = null,
+  // Issue #225: same "append at the end" rule.
+  deduplication = null,
+  // Issue #226: same "append at the end" rule.
+  requestHeaders = null,
+  // Issue #228: same "append at the end" rule.
+  respectRobotsDelay = false,
+  // Issue #292: same "append at the end" rule.
+  skipVerification = false,
+  // Issue #333: same "append at the end" rule.
+  robotsDisallow = null,
+  // Issue #342: same "append at the end" rule.
+  appendOutput = false,
 ) {
-return {
-  exportedAt: new Date().toISOString(),
-  extensionVersion: manifest.version || '?',
-  config: buildScrapingConfig(
-    url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview,
-    useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession,
-    includeOutputFile, externalConfig, combinedComponents, blocks,
-    outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping,
-    outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping, discoveredUrls, preflight, requestDelay, retry,
-    deduplication, requestHeaders, respectRobotsDelay, skipVerification, robotsDisallow, appendOutput,
-  ),
-};
+  return {
+    exportedAt: new Date().toISOString(),
+    extensionVersion: manifest.version || '?',
+    config: buildScrapingConfig(
+      url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview,
+      useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession,
+      includeOutputFile, externalConfig, combinedComponents, blocks,
+      outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping,
+      outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping, discoveredUrls, preflight, requestDelay, retry,
+      deduplication, requestHeaders, respectRobotsDelay, skipVerification, robotsDisallow, appendOutput,
+    ),
+  };
 }
 
 // Issue #214: attribute/download/maxDownloadSizeBytes/allowedContentTypes
@@ -835,18 +835,18 @@ return {
  * @returns {SFDraft.Field[]}
  */
 function addField(
-fields, name, selector, framePath = null, transforms = [], attribute = null,
-download = false, maxDownloadSizeBytes = null, allowedContentTypes = [], hiddenFromOutput = false,
+  fields, name, selector, framePath = null, transforms = [], attribute = null,
+  download = false, maxDownloadSizeBytes = null, allowedContentTypes = [], hiddenFromOutput = false,
 ) {
-const isDownload = !!attribute && !!download;
-return [...fields, {
-  name, selector, attribute: attribute || null, framePath: framePath || null,
-  transforms: transforms.length > 0 ? transforms : null,
-  download: isDownload,
-  maxDownloadSizeBytes: isDownload ? (maxDownloadSizeBytes || null) : null,
-  allowedContentTypes: isDownload && allowedContentTypes.length > 0 ? allowedContentTypes : [],
-  hiddenFromOutput,
-}];
+  const isDownload = !!attribute && !!download;
+  return [...fields, {
+    name, selector, attribute: attribute || null, framePath: framePath || null,
+    transforms: transforms.length > 0 ? transforms : null,
+    download: isDownload,
+    maxDownloadSizeBytes: isDownload ? (maxDownloadSizeBytes || null) : null,
+    allowedContentTypes: isDownload && allowedContentTypes.length > 0 ? allowedContentTypes : [],
+    hiddenFromOutput,
+  }];
 }
 
 // Issue #206 follow-up: generic in-place field patch — same shape as
@@ -861,7 +861,7 @@ return [...fields, {
  * @returns {SFDraft.Field[]}
  */
 function updateField(fields, index, patch) {
-return fields.map((f, i) => (i === index ? { ...f, ...patch } : f));
+  return fields.map((f, i) => (i === index ? { ...f, ...patch } : f));
 }
 
 // Issue #41/#42, Phase 5/6: browser actions (WaitFor/Fill/Click/Scroll,
@@ -875,17 +875,17 @@ return fields.map((f, i) => (i === index ? { ...f, ...patch } : f));
  * @returns {SFDraft.BrowserAction[]}
  */
 function addBrowserAction(actions, kind) {
-/** @type {Record<SFDraft.BrowserAction['kind'], SFDraft.BrowserAction>} */
-const defaults = {
-  waitFor: { kind: 'waitFor', selector: '', timeoutMs: 5000 },
-  fill:    { kind: 'fill', selector: '', environmentVariableName: '' },
-  // Issue #267: first match by default (the companion's own default too).
-  click:   { kind: 'click', selector: '', target: 'first', waitAfterMs: 250 },
-  // Issue #289: scrollStepPx stays null (keeping today's "jump straight
-  // to the bottom" default) until the user explicitly types a value.
-  scroll:  { kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000, scrollStepPx: null },
-};
-return [...actions, defaults[kind]];
+  /** @type {Record<SFDraft.BrowserAction['kind'], SFDraft.BrowserAction>} */
+  const defaults = {
+    waitFor: { kind: 'waitFor', selector: '', timeoutMs: 5000 },
+    fill:    { kind: 'fill', selector: '', environmentVariableName: '' },
+    // Issue #267: first match by default (the companion's own default too).
+    click:   { kind: 'click', selector: '', target: 'first', waitAfterMs: 250 },
+    // Issue #289: scrollStepPx stays null (keeping today's "jump straight
+    // to the bottom" default) until the user explicitly types a value.
+    scroll:  { kind: 'scroll', containerSelector: '', loadMoreButtonSelector: '', maxIterations: 10, waitAfterMs: 1000, scrollStepPx: null },
+  };
+  return [...actions, defaults[kind]];
 }
 
 /**
@@ -894,7 +894,7 @@ return [...actions, defaults[kind]];
  * @returns {SFDraft.BrowserAction[]}
  */
 function removeBrowserAction(actions, index) {
-return actions.filter((_, i) => i !== index);
+  return actions.filter((_, i) => i !== index);
 }
 
 /**
@@ -904,7 +904,7 @@ return actions.filter((_, i) => i !== index);
  * @returns {SFDraft.BrowserAction[]}
  */
 function updateBrowserAction(actions, index, patch) {
-return actions.map((a, i) => (i === index ? { ...a, ...patch } : a));
+  return actions.map((a, i) => (i === index ? { ...a, ...patch } : a));
 }
 
 // Picks exactly the wire-relevant fields per kind (companion's BrowserAction
@@ -918,40 +918,40 @@ return actions.map((a, i) => (i === index ? { ...a, ...patch } : a));
  * @returns {SFWire.BrowserAction[]}
  */
 function serializeBrowserActions(actions) {
-return actions.map((a) => {
-  const framePath = a.framePath ? { framePath: a.framePath } : {};
-  const selector = /** @type {string} */ (a.selector);
-  if (a.kind === 'waitFor') return { kind: 'waitFor', selector, timeoutMs: a.timeoutMs, ...framePath };
-  if (a.kind === 'fill') {
+  return actions.map((a) => {
+    const framePath = a.framePath ? { framePath: a.framePath } : {};
+    const selector = /** @type {string} */ (a.selector);
+    if (a.kind === 'waitFor') return { kind: 'waitFor', selector, timeoutMs: a.timeoutMs, ...framePath };
+    if (a.kind === 'fill') {
+      return {
+        kind: 'fill', selector,
+        environmentVariableName: /** @type {string} */ (a.environmentVariableName),
+        ...framePath,
+      };
+    }
+    if (a.kind === 'scroll') {
+      return {
+        kind: 'scroll',
+        containerSelector: a.containerSelector || null,
+        loadMoreButtonSelector: a.loadMoreButtonSelector || null,
+        maxIterations: a.maxIterations,
+        waitAfterMs: a.waitAfterMs,
+        // Issue #289: omitted (not 0/null) when unset — None is the
+        // runtime's own "jump straight to the bottom" default.
+        ...(a.scrollStepPx ? { scrollStepPx: a.scrollStepPx } : {}),
+        ...framePath,
+      };
+    }
+    // Issue #267: target/waitAfterMs only when they differ from the
+    // companion's defaults (First / only used for All).
+    const target = a.target === 'last' ? 'Last' : a.target === 'all' ? 'All' : null;
     return {
-      kind: 'fill', selector,
-      environmentVariableName: /** @type {string} */ (a.environmentVariableName),
+      kind: 'click', selector,
+      ...(target ? { target } : {}),
+      ...(target === 'All' ? { waitAfterMs: a.waitAfterMs ?? 250 } : {}),
       ...framePath,
     };
-  }
-  if (a.kind === 'scroll') {
-    return {
-      kind: 'scroll',
-      containerSelector: a.containerSelector || null,
-      loadMoreButtonSelector: a.loadMoreButtonSelector || null,
-      maxIterations: a.maxIterations,
-      waitAfterMs: a.waitAfterMs,
-      // Issue #289: omitted (not 0/null) when unset — None is the
-      // runtime's own "jump straight to the bottom" default.
-      ...(a.scrollStepPx ? { scrollStepPx: a.scrollStepPx } : {}),
-      ...framePath,
-    };
-  }
-  // Issue #267: target/waitAfterMs only when they differ from the
-  // companion's defaults (First / only used for All).
-  const target = a.target === 'last' ? 'Last' : a.target === 'all' ? 'All' : null;
-  return {
-    kind: 'click', selector,
-    ...(target ? { target } : {}),
-    ...(target === 'All' ? { waitAfterMs: a.waitAfterMs ?? 250 } : {}),
-    ...framePath,
-  };
-});
+  });
 }
 
 // Issue #43: bundles fillTestValues into the wire dict /generate expects,
@@ -965,15 +965,15 @@ return actions.map((a) => {
  * @returns {Record<string, string>}
  */
 function buildVerificationValues(browserActions, fillTestValues) {
-/** @type {Record<string, string>} */
-const result = {};
-for (const action of browserActions) {
-  if (action.kind !== 'fill') continue;
-  const name = action.environmentVariableName?.trim();
-  const value = name ? fillTestValues[name] : null;
-  if (name && value) result[name] = value;
-}
-return result;
+  /** @type {Record<string, string>} */
+  const result = {};
+  for (const action of browserActions) {
+    if (action.kind !== 'fill') continue;
+    const name = action.environmentVariableName?.trim();
+    const value = name ? fillTestValues[name] : null;
+    if (name && value) result[name] = value;
+  }
+  return result;
 }
 
 /**
@@ -982,7 +982,7 @@ return result;
  * @returns {SFDraft.Field[]}
  */
 function removeField(fields, index) {
-return fields.filter((_, i) => i !== index);
+  return fields.filter((_, i) => i !== index);
 }
 
 // Issue #130: same pure add/remove/update shape as addBrowserAction/
@@ -996,7 +996,7 @@ return fields.filter((_, i) => i !== index);
  * @returns {SFDraft.NullRateRow[]}
  */
 function addNullRateCheck(nullRate, fieldName) {
-return [...nullRate, { fieldName: fieldName || '', threshold: 50, severity: /** @type {SFWire.HardeningSeverity} */ ('Warning') }];
+  return [...nullRate, { fieldName: fieldName || '', threshold: 50, severity: /** @type {SFWire.HardeningSeverity} */ ('Warning') }];
 }
 
 /**
@@ -1005,7 +1005,7 @@ return [...nullRate, { fieldName: fieldName || '', threshold: 50, severity: /** 
  * @returns {SFDraft.NullRateRow[]}
  */
 function removeNullRateCheck(nullRate, index) {
-return nullRate.filter((_, i) => i !== index);
+  return nullRate.filter((_, i) => i !== index);
 }
 
 /**
@@ -1015,7 +1015,7 @@ return nullRate.filter((_, i) => i !== index);
  * @returns {SFDraft.NullRateRow[]}
  */
 function updateNullRateCheck(nullRate, index, patch) {
-return nullRate.map((row, i) => (i === index ? { ...row, ...patch } : row));
+  return nullRate.map((row, i) => (i === index ? { ...row, ...patch } : row));
 }
 
 // Issue #133: unlike nullRate's rows (each its own draft object with a
@@ -1030,8 +1030,8 @@ return nullRate.map((row, i) => (i === index ? { ...row, ...patch } : row));
  * @returns {string[]}
  */
 function addRequiredField(fields, fieldName) {
-if (!fieldName || fields.includes(fieldName)) return fields;
-return [...fields, fieldName];
+  if (!fieldName || fields.includes(fieldName)) return fields;
+  return [...fields, fieldName];
 }
 
 /**
@@ -1040,7 +1040,7 @@ return [...fields, fieldName];
  * @returns {string[]}
  */
 function removeRequiredField(fields, index) {
-return fields.filter((_, i) => i !== index);
+  return fields.filter((_, i) => i !== index);
 }
 
 // Issue #42, Phase 7: a small pill shown next to a field's/node's/action's
@@ -1055,9 +1055,9 @@ return fields.filter((_, i) => i !== index);
  * @returns {string}
  */
 function frameBadgeHtml(framePath) {
-if (!framePath || framePath.length === 0) return '';
-const title = escapeHtml(t('frame.badgeTitle', { path: framePath.join(' > ') }));
-return `<span class="frame-badge" title="${title}">${escapeHtml(t('frame.badge'))}</span>`;
+  if (!framePath || framePath.length === 0) return '';
+  const title = escapeHtml(t('frame.badgeTitle', { path: framePath.join(' > ') }));
+  return `<span class="frame-badge" title="${title}">${escapeHtml(t('frame.badge'))}</span>`;
 }
 
 module.exports = {sanitizeFileNameBase, deriveScriptFileNameFromHostname, computeScriptFileNamePatch, parseAdditionalUrls,

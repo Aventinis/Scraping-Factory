@@ -30,8 +30,23 @@
     "message": "Verbinde mit Companion…"
   },
   "error": {
-    "title": "Companion App nicht erreichbar",
-    "hint": "Starte ScrapingFactory.Companion und versuche es erneut.",
+    "title": "Companion-App nicht erreichbar",
+    "hintShort": "Starte die Companion-App und versuche es erneut, oder gib unten eine andere Adresse ein.",
+    "intro": "Der Companion ist ein kleines Hilfsprogramm auf deinem Rechner. Er baut dein Skript und testet es einmal, bevor du es bekommst — das kann die Browser-Erweiterung allein nicht.",
+    "likely": "Am wahrscheinlichsten",
+    "whyLabel": "Warum klappt die Verbindung nicht?",
+    "install": {
+      "title": "1 · Noch nicht installiert",
+      "text": "Entpacke den Scraping-Factory-Download und starte in diesem Ordner den Installer ({installer}), dann „Erneut versuchen“:"
+    },
+    "start": {
+      "title": "2 · Installiert, läuft aber nicht",
+      "text": "Führe den Installer noch einmal aus — er startet den Companion — oder starte das Programm selbst. Mit der Autostart-Option des Installers startet er bei jeder Anmeldung:"
+    },
+    "address": {
+      "title": "3 · Läuft unter anderer Adresse oder Port",
+      "text": "Trage seine Adresse unten ein, z. B. http://localhost:5050. Für einen Companion auf einem anderen Rechner nimm https://."
+    },
     "currentUrl": "Versuchte Adresse: {url}",
     "customUrlLabel": "Läuft die Companion App unter einer anderen Adresse?",
     "customUrlPlaceholder": "z. B. http://localhost:5050",
@@ -727,6 +742,11 @@
       "append": {
         "text": "Jeder Lauf hängt seine Zeilen an die Ausgabedatei der früheren Läufe an, die Datei wächst also zu einem Archiv. Ändern sich die Felder, bleiben die Spalten der Datei erhalten und neue kommen dazu; eine nicht lesbare Datei stoppt den Lauf, ohne angefasst zu werden. Nicht im Kombiniert-Modus.",
         "example": "Lauf 1: 120 Zeilen → Lauf 2: 240 Zeilen"
+      }
+    },
+    "companionError": {
+      "causes": {
+        "text": "Nicht gestartet → starten, dann „Erneut versuchen“.\nAnderer Port oder Rechner → unten die Adresse eintragen.\nAnderer Rechner → die Adresse muss mit https:// beginnen.\nGeteilter Companion → er verlangt evtl. einen Zugangsschlüssel (Einstellungen)."
       }
     }
   }

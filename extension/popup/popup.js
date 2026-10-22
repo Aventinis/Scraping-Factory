@@ -52,6 +52,7 @@ const {
   renderTransformPresetsSettings, wireTransformPresetsSettings,
 } = require('./transform-presets-ui');
 
+const { renderCompanionGuidance } = require('./companion-guidance-ui');
 const { initHelpPopovers, wireHelpPopoverEvents } = require('./help-popover-ui');
 const { initAdvancedDisclosures, wireAdvancedDisclosureEvents } = require('./advanced-disclosure-ui');
 
@@ -893,6 +894,7 @@ function render() {
 
   if (_state.current === STATES.COMPANION_ERROR) {
     renderCompanionErrorScreen();
+    renderCompanionGuidance(); // Issue #406
   }
 
   if (_state.current === STATES.IDLE) {

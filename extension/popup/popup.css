@@ -267,6 +267,17 @@ body {
 .error-icon svg, .success-icon svg { width: 32px; height: 32px; }
 .error-icon  { color: var(--color-danger); }
 .error-hint  { color: var(--color-text-muted); font-size: 13px; margin: 6px 0 16px; }
+/* Issue #406: the structured first-run explanation */
+.error-guidance { text-align: left; margin: 10px 0 12px; font-size: 12px; color: var(--color-text-secondary); }
+.error-intro { margin: 0 0 10px; }
+.error-situation { margin: 0 0 8px; padding: 8px 10px; background: var(--color-surface-subtle); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.error-situation.likely { border-color: var(--color-primary); background: var(--color-primary-soft); }
+.error-situation h3 { margin: 0 0 4px; font-size: 12px; font-weight: 600; color: var(--color-text); }
+.error-situation p { margin: 0 0 6px; }
+.error-situation p:last-child { margin-bottom: 0; }
+.error-likely { margin-left: 4px; padding: 1px 6px; font-size: 10px; font-weight: 600; border-radius: var(--radius-pill); background: var(--color-primary); color: var(--color-on-accent); white-space: nowrap; }
+.error-code { display: block; padding: 4px 6px; font-size: 11px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
+.error-why { margin: 0 0 12px; font-size: 12px; color: var(--color-text-muted); }
 .error-current-url { color: var(--color-text-faint); font-size: 11px; font-family: monospace; margin: -8px 0 16px; word-break: break-all; }
 .companion-url-override { text-align: left; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--color-border); }
 .companion-url-override label { display: block; font-size: 11px; color: var(--color-text-muted); margin-bottom: 4px; }
@@ -959,7 +970,7 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
   font-size: 12px; line-height: 1.45; text-align: left;
   overflow-wrap: anywhere;
 }
-.help-popover-text { margin: 0; }
+.help-popover-text { margin: 0; white-space: pre-line; } /* "\n" in a help text starts a new line */
 .help-popover-example {
   display: block; margin-top: 6px; padding: 4px 6px;
   background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm);
