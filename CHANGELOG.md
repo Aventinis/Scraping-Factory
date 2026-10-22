@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.19.15](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.14...v1.19.15) (2026-10-22)
+
+
+### Features
+
+* **ui:** plain-language error messages for a failed Generate ([#401](https://github.com/Aventinis/Scraping-Factory/issues/401)) ([c4162cb](https://github.com/Aventinis/Scraping-Factory/commit/c4162cbc9a28d05f7687bb6920f1da7b24b3ffd7))
+* **ui:** plain-language messages for failed Generate, original text behind Details ([#401](https://github.com/Aventinis/Scraping-Factory/issues/401)) ([1d9caa3](https://github.com/Aventinis/Scraping-Factory/commit/1d9caa38bbd7916469f2abb6efb06cb06bac0696))
+
 ## [1.19.14](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.13...v1.19.14) (2026-10-22)
 
 
