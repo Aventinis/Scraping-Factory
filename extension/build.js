@@ -13,11 +13,14 @@
 // The i18n dictionaries are not copied: i18n.js requires them, so they are
 // bundled into the popup.
 //
+// docs/user/*.md is turned into dist/docs/*.html too (docs-build.js, Issue #354).
+//
 // Source maps are written next to each bundle. Two `process.env.*` constants
 // are replaced at build time (see defineFor): NODE_ENV, which is how the few
 // Jest-only branches in the sources (they check for 'test') stay out of the
 // real extension, and SF_CHANNEL, the release channel (shared/build-config.js).
 const esbuild = require('esbuild');
+const { buildDocs } = require('./docs-build');
 const fs = require('fs');
 const path = require('path');
 
@@ -88,6 +91,19 @@ function copyStaticFiles(outdir) {
   }
 }
 
+// Issue #354 Part B: docs/user/*.md → <outdir>/docs/*.html, so "Learn more" in
+// the side panel opens a bundled page and works offline.
+const DOCS_DIR = path.join(ROOT, '..', 'docs', 'user');
+
+async function copyDocs(outdir) {
+  if (!fs.existsSync(DOCS_DIR)) {
+    console.warn(`No ${DOCS_DIR} — the bundled documentation is skipped.`);
+    return;
+  }
+  const pages = await buildDocs({ docsDir: DOCS_DIR, outdir });
+  console.log(`Built ${pages.length} documentation pages into ${path.join(outdir, 'docs')}`);
+}
+
 function parseArgs(argv) {
   const args = { watch: false, channel: 'development', outdir: DEFAULT_DIST };
   for (let i = 0; i < argv.length; i++) {
@@ -105,6 +121,7 @@ async function main() {
   verifyChannel(args.channel);
   fs.rmSync(args.outdir, { recursive: true, force: true });
   copyStaticFiles(args.outdir);
+  await copyDocs(args.outdir);
   const options = buildOptions(args);
 
   if (!args.watch) {
@@ -120,6 +137,16 @@ async function main() {
     fs.watchFile(path.join(ROOT, file), { interval: 300 }, () => {
       copyStaticFiles(args.outdir);
       console.log(`Copied ${file}`);
+    });
+  }
+  // The documentation pages: rebuilt (debounced) whenever a page or image changes.
+  if (fs.existsSync(DOCS_DIR)) {
+    let timer = null;
+    fs.watch(DOCS_DIR, { recursive: true }, () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        copyDocs(args.outdir).catch((err) => console.error(err.message));
+      }, 200);
     });
   }
   console.log(`Watching… extension is in ${args.outdir}`);
