@@ -49,6 +49,7 @@ function parseHttpUrl(value, base) {
  * @param {string} pageUrl
  */
 function resolveLinkHref(href, pageUrl) {
+  if (!String(href || '').trim()) return ''; // an element without an href is not a link
   const url = parseHttpUrl(href, pageUrl);
   return url ? url.href : '';
 }

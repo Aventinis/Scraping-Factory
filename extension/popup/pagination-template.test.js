@@ -113,7 +113,8 @@ describe('helpers', () => {
     expect(resolveLinkHref('?page=2', 'https://a.example/list')).toBe('https://a.example/list?page=2');
     expect(resolveLinkHref('/x/2', 'https://a.example/list')).toBe('https://a.example/x/2');
     expect(resolveLinkHref('javascript:void(0)', 'https://a.example/list')).toBe('');
-    expect(resolveLinkHref('', 'https://a.example/list')).toBe('https://a.example/list');
+    expect(resolveLinkHref('', 'https://a.example/list')).toBe('');
+    expect(resolveLinkHref(undefined, 'https://a.example/list')).toBe('');
   });
 
   test('proposalAlreadyApplied only when the same template is active as a page-number pagination', () => {
