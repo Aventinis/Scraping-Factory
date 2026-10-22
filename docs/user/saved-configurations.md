@@ -36,7 +36,7 @@ After a successful run, **Save output** on the done screen stores the scraped
 data and links it to a saved configuration. If the site has none yet, the same
 dialog lets you create one in one step. Each saved configuration then has an
 **Outputs** list where you can **Download** or **Delete** past outputs, and
-**Test hardening** against them (see [monitoring](monitoring.md)).
+**Test safety checks** against them (see [monitoring](monitoring.md)).
 
 ## Combining configurations
 

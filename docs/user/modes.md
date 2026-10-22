@@ -87,7 +87,7 @@ HTML. API mode finds that request for you:
 Each **?** on that screen explains the concept in place: what a **variable** URL
 part is, what each value source does (with an example), what **→ Variable** does to
 a request-body value. The everyday value sources — **Value list**, **List from
-another request** and **Range** — are shown first; **Browser discovery** and the
+another request** and **Range** — are shown first; **Collect from the page (browser)** and the
 **token value** are under **Advanced sources**, and a body value's **value type**
 is under its own **Advanced**.
 

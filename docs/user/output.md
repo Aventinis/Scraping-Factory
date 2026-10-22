@@ -1,4 +1,4 @@
-# Output formats and blueprints
+# Output formats and output layouts
 
 ## Output format
 
@@ -24,7 +24,7 @@ Notes:
 
 Other output-related preferences in **Settings**: **Show trial-run data
 preview**, **Download the full scraped data file** (the complete trial-run
-output, from the done screen), **Editable config file (XML)**, and **Skip the
+output, from the done screen), **Editable config file (XML)** (under **Advanced**), and **Skip the
 trial run (return the script immediately)** — faster, but the script is then not
 proven to work.
 
@@ -38,26 +38,28 @@ ones, and leaves gaps empty. A file it can't read stops the run (exit code
 
 ## Remove duplicates
 
-**Remove duplicates by key field(s)** drops a later row whose key (one or
+**Remove duplicates** drops a later row whose key (one or
 several fields) already appeared. With **Only write new items since the last
 run** the script remembers the keys it has seen in a small file and writes only
-new items — either just the new ones, or appended to the growing file.
+new items — either just the new ones, or appended to the growing file. How long
+items are remembered (by number or by days) is under **Advanced**; the default fits
+almost every scraper.
 
-## Output blueprints
+## Output layouts
 
-A **blueprint** is a saved list of target field names in a fixed order — the
-column set your downstream import expects. With a blueprint selected (**Output
-blueprint** in the idle screen's Settings), you map each target field to one of
+An **output layout** is a saved list of target field names in a fixed order — the
+column set your downstream import expects. With a layout selected (**Output
+layout** in the idle screen's Settings), you map each target field to one of
 your scraper's fields, and the output always has exactly those names in exactly
 that order, whichever scraper produced it.
 
-Create and edit blueprints under **Settings → Output blueprints**. You can type
+Create and edit layouts under **Settings → Output layouts**. You can type
 the fields, or **paste or upload a sample** (a JSON object, a CSV header row or a
 list of names) and **Parse & fill fields**.
 
-A blueprint can be **Flat** or **Tree** (nested target structure). Nested
-scraper output can be mapped onto a flat blueprint — it is flattened into rows —
-or onto a tree blueprint, where each target group draws from its own source
+A layout can be **Flat** or **Tree** (nested target structure). Nested
+scraper output can be mapped onto a flat layout — it is flattened into rows —
+or onto a tree layout, where each target group draws from its own source
 group.
 
-Blueprints are not available for Combined and Blocks mode.
+Output layouts are not available for Combined and Blocks mode.

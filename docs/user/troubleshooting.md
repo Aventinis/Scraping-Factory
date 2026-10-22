@@ -77,15 +77,23 @@ dialog.
 after a hover or a click won't be found. For container mode, field picks are
 limited to the container you clicked in.
 
+## What do these terms mean?
+
+The panel's own **Settings → Glossary** explains the terms used for the more technical
+options in one sentence each: **Output layout**, **Safety checks**, **Skip if the page
+hasn't changed**, **Remove duplicates**, **List from another request**, **Collect from
+the page (browser)** and **environment variable**. Rarely needed options are tucked
+away under **Advanced** and open by themselves when they are in use.
+
 ## Script exit codes
 
 | Code | Meaning |
 | --- | --- |
 | 0 | Success |
 | 1 | Unhandled error (a bug or unexpected failure) |
-| 2 | A hardening check with severity Error failed |
+| 2 | A safety check with severity Error failed |
 | 3 | The editable config file is invalid |
-| 4 / 5 | Preflight: page unchanged / not reachable |
+| 4 / 5 | "Skip if the page hasn't changed": page unchanged / not reachable |
 | 6 | Auth bootstrap request failed (API mode) |
 | 7 | A page or API request failed (HTTP error, unreachable) |
 | 8 | A needed Python package (e.g. `openpyxl`) is missing |

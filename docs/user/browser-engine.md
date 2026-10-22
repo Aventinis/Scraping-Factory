@@ -68,7 +68,7 @@ To let the trial run get past the login, type a **Test user name** and **Test
 password**. They are sent to the companion for that one run and are never saved,
 logged or written into the script.
 
-**Reuse session between runs** remembers the login, so later runs skip the login
+**Reuse session between runs** (under **Advanced: stay logged in between runs**) remembers the login, so later runs skip the login
 steps. The saved session file holds live cookies — treat it like a password and never
 share or commit it. If the session expires the run fails; there is no automatic
 re-login (delete the file to log in again).
