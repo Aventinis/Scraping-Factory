@@ -616,6 +616,24 @@ bootstrap, an API discovery Fill action) shares one explanation popover
 - Tests: `popup/env-var.test.js`, real-browser check
   `e2e/examples/issue-397-env-var-help-check.js`
 
+### 2.10e Transform helpers: regex recipes and date-format guess (Issue #400)
+
+The "Regex extract" transform gets a **Pattern helper** (recipes: first number, digits,
+text after/before/between, text inside brackets — the user's text escaped, only
+constructs .NET and Python read the same), and "Convert to date" pre-selects the format
+guessed from the picked value. The recipe panel keeps its state in its own DOM; the
+transform objects are unchanged. See CLAUDE.md for the details.
+
+- Extension: `popup/transform-helpers.js` (pure: `buildRecipe`, `previewRecipe`,
+  `inferDateFormat`), `popup/transform-helpers-ui.js`, `popup/field-transforms-ui.js`
+  (`getRawValue` getter through `renderTransformList`/`wireTransformList`),
+  `flat-mode-ui.js`/`container-tree-ui.js`/`api-config-ui.js` (raw-value resolvers),
+  `transforms.helper.*`/`help.transforms.*` in `i18n/*.json`
+- Companion (tests only): `ScrapingFactory.Tests/RegexRecipeEndToEndTests.cs`
+- Tests: `popup/transform-helpers.test.js` (incl. Python `re` parity),
+  `popup/transform-helpers-ui.test.js`, real-browser check
+  `e2e/examples/issue-400-transform-helpers-check.js` (fixture `test-pages/transform-helpers`)
+
 ### 2.11 i18n (extension UI language)
 
 Lets the user pick the popup's own display language (German/English/Spanish)

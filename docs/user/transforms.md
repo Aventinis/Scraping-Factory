@@ -40,6 +40,45 @@ a thousand in Germany, a little over one in the US. The four formats
 (`1.234,56`, `1,234.56`, `1 234,56`, `1'234.56`) remove the guesswork. Only the
 amount is produced; the currency symbol is not extracted.
 
+### Pattern helper (Regex extract)
+
+Most prices, numbers and IDs sit inside other text. **Regex extract** pulls out the
+part you want with a *pattern* — but you don't have to write one. Click **Pattern
+helper** next to the pattern, choose what to extract, and type only the text around
+it:
+
+| Recipe | Gives you | Example |
+| --- | --- | --- |
+| First number | the first number, with decimals and a sign | `Preis 12,99 EUR` → `12,99` |
+| First run of digits | the first group of digits | `Art.-Nr. 4711-B` → `4711` |
+| Text after … | everything after your text | after `Preis:` in `Preis: 12,99 €` → `12,99 €` |
+| Text before … | everything before your text | before `€` in `12,99 € netto` → `12,99` |
+| Text between … and … | what sits between two texts | between `(` and `)` in `Müller (Berlin)` → `Berlin` |
+| Text inside brackets | what is inside `( )`, `[ ]`, `{ }` or `< >` | `Preis (inkl. MwSt.)` → `inkl. MwSt.` |
+
+![The pattern helper with a live result](images/transforms-pattern-helper.png)
+
+The helper shows **the result on your real value** as you type. **Use this pattern**
+then writes the pattern into the (still editable) **Pattern (advanced)** field. Your
+text is taken literally — symbols like `.`, `(` or `$` are not special. **Part to
+keep** says which bracketed part of the pattern becomes the value (0 = the whole
+match). Need two cuts? Add a second **Regex extract** step, for example "Text after
+`Preis:`" followed by "Text before `€`".
+
+### Date format guess (Convert to date)
+
+When you choose **Convert to date**, the format is filled in from the value you
+picked: `28.08.2026` → `{dd}.{mm}.{yyyy}`, `2026-08-28` → `{yyyy}-{mm}-{dd}`,
+`08/28/2026` → `{mm}/{dd}/{yyyy}`. A value that could be day-first or month-first
+(`03/04/2026`) is read day-first, and the hint names the other reading. The hint
+below the format says what was detected; edit the format if it's wrong.
+
+![A date format guessed from the value](images/transforms-date-guess.png)
+
+Only all-numeric dates work — month names such as `28 Aug 2026` are not supported,
+and a date with other text around it (`Stand: 28.08.2026`) gets no guess; cut the date
+out first with a **Regex extract** step.
+
 Steps run top to bottom; use the arrows to reorder. Transforms are available in
 flat mode, container mode and API mode (the **Transform** button next to a field
 in the API tree).
