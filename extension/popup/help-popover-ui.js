@@ -20,6 +20,8 @@
 // its closest <label>, else the host itself.
 const { t } = require('../i18n/i18n');
 const { getHelpEntry, isValidHelpKey, nextOpenHelpId } = require('./help-popover');
+const { resolveDocTarget } = require('./docs-links');
+const { learnMoreHtml } = require('./docs-links-ui');
 
 let nextUid = 0;
 let wired = false;
@@ -77,6 +79,13 @@ function buildHost(host, key) {
   const example = document.createElement('code');
   example.className = 'help-popover-example hidden';
   panel.append(text, example);
+  // Issue #354 Part B: `data-doc="<key>"` on the host adds a "Learn more" link to the bundled docs.
+  if (host.dataset.doc && resolveDocTarget(host.dataset.doc)) {
+    const more = document.createElement('p');
+    more.className = 'help-popover-more';
+    more.innerHTML = learnMoreHtml(host.dataset.doc);
+    panel.append(more);
+  }
 
   anchor.insertAdjacentElement('afterend', panel);
   return { button, panel };
@@ -98,6 +107,7 @@ function initHelpPopovers(root = document) {
     button.setAttribute('aria-label', label);
     button.title = label;
     fillPanel(panel, getHelpEntry(t, key), key);
+    panel.querySelectorAll('a.learn-more').forEach((a) => { a.textContent = t('common.learnMore'); });
   });
 }
 

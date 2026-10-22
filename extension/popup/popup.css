@@ -1112,3 +1112,8 @@ input.env-var-invalid, input.env-var-invalid:focus { border-color: var(--color-d
 .glossary-list dt { font-weight: 600; margin-top: 8px; }
 .glossary-list dd { margin: 2px 0 0; color: var(--color-text-muted); font-size: 12px; line-height: 1.4; }
 .glossary-example { display: block; margin-top: 2px; }
+
+/* Issue #354 Part B: "Learn more" opens the bundled documentation in a tab */
+.learn-more { font-size: 12px; white-space: nowrap; color: var(--color-primary); text-decoration: underline; }
+.learn-more::after { content: ' ↗'; text-decoration: none; display: inline-block; }
+.help-popover-more { margin: 4px 0 0; }

@@ -54,6 +54,7 @@ const {
 
 const { renderCompanionGuidance } = require('./companion-guidance-ui');
 const { initHelpPopovers, wireHelpPopoverEvents } = require('./help-popover-ui');
+const { initDocsLinks, wireDocsLinkEvents } = require('./docs-links-ui');
 const { refreshEnvVarValidation, wireEnvVarValidation } = require('./env-var-ui');
 const { initAdvancedDisclosures, wireAdvancedDisclosureEvents } = require('./advanced-disclosure-ui');
 
@@ -744,6 +745,7 @@ function applyStaticTranslations() {
   if (typeof document !== 'undefined' && document.documentElement) document.documentElement.lang = getLanguage();
   renderThemeToggle();
   initHelpPopovers(); // Issue #396: (re)builds and translates every [data-help] host
+  initDocsLinks(); // Issue #354: "Learn more" links get their bundled-docs address
 }
 
 // Issue #206 follow-up: the mode-dispatch glue for the shared combine/split
@@ -970,6 +972,7 @@ function render() {
   // Issue #397: rows built by this render (and the explanation lines with their help
   // hosts) are new — give them the shared env-var validation and popover.
   initHelpPopovers();
+  initDocsLinks();
   refreshEnvVarValidation();
 }
 
@@ -1158,6 +1161,7 @@ function wireEvents() {
   wireCompanionErrorEvents(bridge);
 
   wireHelpPopoverEvents();
+  wireDocsLinkEvents();
   wireErrorToastEvents(); // Issue #401
   wireEnvVarValidation(); // Issue #397
   wireAdvancedDisclosureEvents();

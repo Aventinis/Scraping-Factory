@@ -23,7 +23,7 @@ const ERROR_CLASS = 'env-var-error';
  * popover's anchor, so the panel opens right below it instead of inside a flex row.
  */
 function envVarNoteHtml() {
-  return `<p class="env-var-note" data-help-anchor><span>${t('envVar.whatLabel')}</span>${helpHostHtml('help.envVar.what')}</p>`;
+  return `<p class="env-var-note" data-help-anchor><span>${t('envVar.whatLabel')}</span>${helpHostHtml('help.envVar.what', 'envVars')}</p>`;
 }
 
 // Where the message goes: right after the input's own row (a message inside a

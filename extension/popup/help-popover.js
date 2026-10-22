@@ -138,8 +138,13 @@ function nextOpenHelpId(openId, requestedId) {
  * Markup for a help host, for DOM that is built in JS instead of declared in HTML.
  * @param {string} key
  */
-function helpHostHtml(key) {
-  return `<span class="help-host" data-help="${String(key).replace(/"/g, '&quot;')}"></span>`;
+/**
+ * @param {string} key help key
+ * @param {string} [docKey] optional "Learn more" key (docs-links.js)
+ */
+function helpHostHtml(key, docKey) {
+  const doc = docKey ? ` data-doc="${String(docKey).replace(/"/g, '&quot;')}"` : '';
+  return `<span class="help-host" data-help="${String(key).replace(/"/g, '&quot;')}"${doc}></span>`;
 }
 
 module.exports = {
