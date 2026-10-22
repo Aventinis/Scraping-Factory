@@ -1076,5 +1076,44 @@
       "fill": "p. ej. SITE_PASSWORD",
       "apiHeader": "p. ej. API_KEY"
     }
+  },
+  "jsonPathPicker": {
+    "openBtn": "Elegir de la grabación",
+    "closeBtn": "Cerrar",
+    "loading": "Cargando la respuesta grabada…",
+    "toggle": "Mostrar u ocultar",
+    "items": "{count} elementos",
+    "recordedSource": "Grabado: {request}",
+    "embeddedSource": "JSON incrustado de la página ({selector})",
+    "chooseResponse": "¿De qué respuesta grabada se debe elegir la ruta?",
+    "otherResponse": "Elegir de otra respuesta grabada",
+    "treeTruncated": "Una respuesta muy grande — solo se muestra el principio.",
+    "hint": {
+      "group": "Haz clic en la lista o el objeto sobre el que debe recorrer este grupo. La ruta es relativa al grupo superior; dentro de una lista, crea un grupo propio.",
+      "leaf": "Haz clic en el valor que se debe leer. Una lista se muestra a través de su primer elemento.",
+      "body": "Haz clic en el campo del cuerpo de la petición que recibe el cursor (vacío en la primera página)."
+    },
+    "message": {
+      "noRecording": "No hay nada grabado de donde elegir. Graba primero la petición (iniciar la grabación y volver a cargar la página) o escribe la ruta.",
+      "truncated": "Esta respuesta era demasiado grande para guardarla completa y no se puede mostrar aquí. Escribe la ruta.",
+      "notJson": "No es una respuesta JSON — escribe la ruta.",
+      "skipped": "No se pudo grabar el cuerpo de esta petición (no es texto JSON) — escribe la ruta.",
+      "scopeMissing": "No se encontró el grupo superior en esta respuesta — elige otra respuesta grabada o escribe la ruta.",
+      "nothingToPick": "Aquí no hay nada que elegir — esta respuesta no tiene un valor adecuado.",
+      "embeddedMissing": "Ya no se encontró el JSON incrustado de la página — recarga la página o escribe la ruta.",
+      "noEntry": "No hay nada grabado de donde elegir."
+    },
+    "reason": {
+      "badKey": "Esta clave contiene un punto o un corchete, que una ruta no puede expresar.",
+      "bodyNoArrays": "Una ruta del cuerpo no puede pasar por una lista."
+    },
+    "type": {
+      "object": "objeto",
+      "array": "lista",
+      "string": "texto",
+      "number": "número",
+      "boolean": "sí/no",
+      "null": "vacío"
+    }
   }
 }

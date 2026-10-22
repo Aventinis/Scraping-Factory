@@ -1078,3 +1078,31 @@ input.env-var-invalid, input.env-var-invalid:focus { border-color: var(--color-d
 .pagination-suggestion p { margin: 0 0 4px; }
 .pagination-suggestion code { word-break: break-all; }
 .pagination-suggestion-example { color: var(--color-text-muted); word-break: break-all; }
+
+/* Issue #404: the JSON-path picker panel under a path input (json-path-picker-ui.js) */
+.json-path-panel {
+  margin: 4px 0 8px; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--color-surface-subtle); font-size: 12px; max-width: 100%; overflow-x: auto;
+}
+.json-path-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 4px; }
+.json-path-source { color: var(--color-text-muted); font-size: 11px; word-break: break-all; min-width: 0; }
+.json-path-hint { margin: 0 0 4px; color: var(--color-text-muted); font-size: 11px; line-height: 1.4; }
+.json-path-tree, .json-path-children { list-style: none; margin: 0; padding: 0; }
+.json-path-children { padding-left: 14px; }
+.json-path-node.collapsed > .json-path-children { display: none; }
+.json-path-row { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+.json-path-toggle, .json-path-toggle-space { flex: none; width: 14px; height: 14px; }
+.json-path-toggle { padding: 0; border: none; background: none; cursor: pointer; color: var(--color-text-muted); }
+.json-path-toggle::before { content: "▾"; font-size: 11px; }
+.json-path-node.collapsed > .json-path-row > .json-path-toggle::before { content: "▸"; }
+.json-path-pick, .json-path-static {
+  display: flex; flex: 1; gap: 6px; align-items: baseline; min-width: 0; padding: 1px 4px; text-align: left;
+  font: inherit; border-radius: var(--radius-sm);
+}
+.json-path-pick { border: 1px solid transparent; background: none; cursor: pointer; color: var(--color-text); }
+.json-path-pick:hover { background: var(--color-surface); border-color: var(--color-primary); }
+.json-path-static { color: var(--color-text-muted); }
+.json-path-key { font-weight: 600; flex: none; }
+.json-path-type { flex: none; font-size: 10px; color: var(--color-text-muted); }
+.json-path-preview { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 11px; color: var(--color-text-secondary); }
+.json-path-message { color: var(--color-warning-strong); }

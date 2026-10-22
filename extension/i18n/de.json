@@ -1076,5 +1076,44 @@
       "fill": "z. B. SITE_PASSWORD",
       "apiHeader": "z. B. API_KEY"
     }
+  },
+  "jsonPathPicker": {
+    "openBtn": "Aus der Aufzeichnung wählen",
+    "closeBtn": "Schließen",
+    "loading": "Lade die aufgezeichnete Antwort…",
+    "toggle": "Ein- oder ausklappen",
+    "items": "{count} Einträge",
+    "recordedSource": "Aufgezeichnet: {request}",
+    "embeddedSource": "Eingebettetes JSON der Seite ({selector})",
+    "chooseResponse": "Aus welcher aufgezeichneten Antwort soll der Pfad gewählt werden?",
+    "otherResponse": "Aus einer anderen aufgezeichneten Antwort wählen",
+    "treeTruncated": "Eine sehr große Antwort — nur der Anfang wird gezeigt.",
+    "hint": {
+      "group": "Klicken Sie die Liste oder das Objekt an, über das diese Gruppe laufen soll. Der Pfad gilt relativ zur übergeordneten Gruppe; innerhalb einer Liste legen Sie eine eigene Gruppe an.",
+      "leaf": "Klicken Sie den Wert an, der gelesen werden soll. Eine Liste wird über ihren ersten Eintrag gezeigt.",
+      "body": "Klicken Sie das Feld des Request-Bodys an, das den Cursor aufnimmt (auf der ersten Seite leer)."
+    },
+    "message": {
+      "noRecording": "Nichts aufgezeichnet, woraus man wählen könnte. Zeichnen Sie die Anfrage zuerst auf (Aufzeichnung starten, dann die Seite neu laden) oder tippen Sie den Pfad.",
+      "truncated": "Diese Antwort war zu groß, um sie vollständig zu speichern, und lässt sich hier nicht zeigen. Tippen Sie den Pfad.",
+      "notJson": "Das ist keine JSON-Antwort — tippen Sie den Pfad.",
+      "skipped": "Der Body dieser Anfrage ließ sich nicht aufzeichnen (kein JSON-Text) — tippen Sie den Pfad.",
+      "scopeMissing": "Die übergeordnete Gruppe wurde in dieser Antwort nicht gefunden — wählen Sie eine andere aufgezeichnete Antwort oder tippen Sie den Pfad.",
+      "nothingToPick": "Hier gibt es nichts zu wählen — diese Antwort hat keinen passenden Wert.",
+      "embeddedMissing": "Das eingebettete JSON der Seite wurde nicht mehr gefunden — laden Sie die Seite neu oder tippen Sie den Pfad.",
+      "noEntry": "Nichts aufgezeichnet, woraus man wählen könnte."
+    },
+    "reason": {
+      "badKey": "Dieser Schlüssel enthält einen Punkt oder eine Klammer, die ein Pfad nicht ausdrücken kann.",
+      "bodyNoArrays": "Ein Body-Pfad kann nicht durch eine Liste führen."
+    },
+    "type": {
+      "object": "Objekt",
+      "array": "Liste",
+      "string": "Text",
+      "number": "Zahl",
+      "boolean": "Ja/Nein",
+      "null": "leer"
+    }
   }
 }

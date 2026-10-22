@@ -460,6 +460,8 @@ let _state = {
   // but unlike those, not persisted: this modal never involves a
   // content-script round trip (no click-based search — see
   // confirmApiGroupModal), so there's no risk of losing it to a popup close.
+  // Issue #404: the one open JSON-path picker (see json-path-picker-ui.js), or null — never persisted.
+  apiPathPicker:      null,
   apiGroupModalOpen:  false,
   pendingApiTreeParentPath: null,
   // modal-api-body-parameter-new visibility, and which body-tree path (see

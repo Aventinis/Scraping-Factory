@@ -40,6 +40,7 @@ const {
 const { BOOTSTRAP_SOURCE_KIND, resolveBootstrapUrlParts } = require('./api-bootstrap');
 const { renderTransformList, renderTransformPreview } = require('./field-transforms-ui');
 const { serializeBrowserActions } = require('./scraping-config-builder');
+const { renderGroupPathPicker } = require('./json-path-picker-ui');
 const {
   patchApiConfigSource,
 } = require('./api-config-shared-ui');
@@ -145,7 +146,7 @@ function renderApiConfigScreen(draft, discoveryCandidates, discoveryTemplateEdit
 
 function cancelApiConfig(bridge) {
   log('API_CONFIG cancel');
-  bridge.setState(STATES.IDLE, { apiConfigDraft: null, apiDiscoveryCandidates: null, apiTreeSearchResult: null });
+  bridge.setState(STATES.IDLE, { apiConfigDraft: null, apiDiscoveryCandidates: null, apiTreeSearchResult: null, apiPathPicker: null });
 }
 
 // ── API-Mode tree wiring (Issue #54, Phase A5) ──────────────────────────────
@@ -217,13 +218,14 @@ function confirmApiConfig(bridge) {
   });
 
   log('API_CONFIG confirm', apiConfig);
-  bridge.setState(STATES.IDLE, { apiConfig, apiConfigDraft: null, apiDiscoveryCandidates: null, apiTreeSearchResult: null });
+  bridge.setState(STATES.IDLE, { apiConfig, apiConfigDraft: null, apiDiscoveryCandidates: null, apiTreeSearchResult: null, apiPathPicker: null });
 }
 
 // Called from popup.js's render() only while _state.current === STATES.API_CONFIG
 // and an apiConfigDraft is in progress — the screen's own tree-search panel
 // and its three small modals (add group, add body parameter, edit a leaf
 // field's transform chain).
+let groupModalWasOpen = false;
 function renderApiConfigModals(bridge) {
   const state = bridge.getState();
   renderApiConfigScreen(state.apiConfigDraft, state.apiDiscoveryCandidates, state.discoveryTemplateEditingPartId);
@@ -238,13 +240,22 @@ function renderApiConfigModals(bridge) {
     }
   }
 
+  // popup.js hides every modal at the start of each render, so "just opened"
+  // can't be read off the DOM: remember whether the previous render had it open.
+  // The inputs are reset only on the opening render — a later one (e.g. the
+  // JSON-path picker finishing loading) must not wipe what was typed meanwhile.
+  const groupModalJustOpened = state.apiGroupModalOpen && !groupModalWasOpen;
+  groupModalWasOpen = !!state.apiGroupModalOpen;
   if (state.apiGroupModalOpen) {
     document.getElementById('modal-api-group-new')?.classList.remove('hidden');
-    const nameInput = document.getElementById('input-api-group-name');
-    if (nameInput) { nameInput.value = ''; nameInput.focus(); }
-    const pathInput = document.getElementById('input-api-group-path');
-    if (pathInput) pathInput.value = '';
+    if (groupModalJustOpened) {
+      const nameInput = document.getElementById('input-api-group-name');
+      if (nameInput) { nameInput.value = ''; nameInput.focus(); }
+      const pathInput = document.getElementById('input-api-group-path');
+      if (pathInput) pathInput.value = '';
+    }
   }
+  renderGroupPathPicker(bridge); // Issue #404
 
   if (state.bodyParameterModalOpen) {
     document.getElementById('modal-api-body-parameter-new')?.classList.remove('hidden');

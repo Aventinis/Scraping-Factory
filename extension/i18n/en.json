@@ -1076,5 +1076,44 @@
       "fill": "e.g. SITE_PASSWORD",
       "apiHeader": "e.g. API_KEY"
     }
+  },
+  "jsonPathPicker": {
+    "openBtn": "Pick from the recording",
+    "closeBtn": "Close",
+    "loading": "Loading the recorded response…",
+    "toggle": "Show or hide",
+    "items": "{count} items",
+    "recordedSource": "Recorded: {request}",
+    "embeddedSource": "Embedded JSON of the page ({selector})",
+    "chooseResponse": "Which recorded response should the path be picked from?",
+    "otherResponse": "Pick from another recorded response",
+    "treeTruncated": "A very large response — only the first part is shown.",
+    "hint": {
+      "group": "Click the list or object this group should run over. The path is relative to the parent group; inside a list, add a group of its own.",
+      "leaf": "Click the value to read. A list is shown through its first item.",
+      "body": "Click the field of the request body that takes the cursor (empty on the first page)."
+    },
+    "message": {
+      "noRecording": "Nothing recorded to pick from. Record the request first (Start recording on the idle screen, then load the page again), or type the path.",
+      "truncated": "This response was too large to keep in full, so it can't be shown here. Type the path instead.",
+      "notJson": "This is not a JSON response — type the path instead.",
+      "skipped": "The body of this request could not be recorded (not JSON text) — type the path instead.",
+      "scopeMissing": "The parent group was not found in this response — pick another recorded response or type the path.",
+      "nothingToPick": "Nothing to pick here — this response has no matching value.",
+      "embeddedMissing": "The page's embedded JSON was not found any more — reload the page, or type the path.",
+      "noEntry": "Nothing recorded to pick from."
+    },
+    "reason": {
+      "badKey": "This key contains a dot or a bracket, which a path can't express.",
+      "bodyNoArrays": "A body path can't go through a list."
+    },
+    "type": {
+      "object": "object",
+      "array": "list",
+      "string": "text",
+      "number": "number",
+      "boolean": "yes/no",
+      "null": "empty"
+    }
   }
 }
