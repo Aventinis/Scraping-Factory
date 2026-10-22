@@ -103,7 +103,10 @@ It writes `output.csv` next to itself, one row per dish.
 
 Options with a small **?** button next to them have a short explanation and an
 example. Click it (or press Enter on it) to open it, press Escape or click
-elsewhere to close it. These pages go into more depth.
+elsewhere to close it. Many of them, and most options with a short hint, also have
+a **Learn more** link: it opens the matching page of this documentation in a new
+tab. The pages are bundled inside the extension, so this works without an
+internet connection.
 
 ## What next
 

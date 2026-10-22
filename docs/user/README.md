@@ -47,6 +47,14 @@ your machine; there is no cloud service.
 - Screenshots live in [`images/`](images/) and are generated, not hand-made —
   see [Maintaining these docs](#maintaining-these-docs).
 
+## Where these pages live
+
+On GitHub they are rendered from `docs/user/`. Inside the extension they ship as
+HTML pages (built from these same files when the extension is built) that the
+**Learn more** links in the side panel open in a browser tab — offline, no
+external address involved. The release bundles also contain the Markdown files
+and images in their `docs/` folder.
+
 ## Maintaining these docs
 
 Contributors: a pull request that changes what a user sees or does must update
@@ -65,8 +73,13 @@ node e2e/screenshots/run.js --list            # list scenario ids
 node e2e/screenshots/check-docs.js            # verify every image and link in these pages exists
 ```
 
+A new **Learn more** link in the extension needs a key in
+`extension/popup/docs-links.js` that points at a page and heading here — renaming
+a heading that a link uses makes that file's test fail until the key is updated.
+Keep the hints in the extension to one line and put the explanation on the page.
+
 Scenarios live in `e2e/screenshots/scenarios/`; each one names a fixture, the
 clicks to reach a screen, and the image to save. To add a screenshot to a page,
 add (or extend) a scenario, run it, and reference
 `images/<name>.png` from the page. Pages use stable headings, because the
-extension will link to them.
+extension links to them.

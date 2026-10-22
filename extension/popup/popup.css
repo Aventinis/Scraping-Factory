@@ -1114,6 +1114,8 @@ input.env-var-invalid, input.env-var-invalid:focus { border-color: var(--color-d
 .glossary-example { display: block; margin-top: 2px; }
 
 /* Issue #354 Part B: "Learn more" opens the bundled documentation in a tab */
-.learn-more { font-size: 12px; white-space: nowrap; color: var(--color-primary); text-decoration: underline; }
+.learn-more { text-transform: none; letter-spacing: normal; font-weight: 400; font-size: 12px; white-space: nowrap; color: var(--color-primary); text-decoration: underline; }
 .learn-more::after { content: ' ↗'; text-decoration: none; display: inline-block; }
 .help-popover-more { margin: 4px 0 0; }
+
+.error-more { margin: 4px 0 0; }
