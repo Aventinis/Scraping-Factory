@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.19.21](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.20...v1.19.21) (2026-10-22)
+
+
+### Features
+
+* **api-mode:** JSON-path picker tree model and path derivation ([#404](https://github.com/Aventinis/Scraping-Factory/issues/404)) ([793ed9c](https://github.com/Aventinis/Scraping-Factory/commit/793ed9c906b8d41b985985748f6a6bf0160c604d))
+* **api-mode:** JSON-path picker UI, wired into the group modal, cursor paths and the token path ([#404](https://github.com/Aventinis/Scraping-Factory/issues/404)) ([c42cd5f](https://github.com/Aventinis/Scraping-Factory/commit/c42cd5f3485cbda3b2ec79e0fbaf1f2e5ad080f7))
+* **api-mode:** popovers for URL parts, value sources and the body, rarely used options under Advanced, plainer source label ([#404](https://github.com/Aventinis/Scraping-Factory/issues/404)) ([daddd6e](https://github.com/Aventinis/Scraping-Factory/commit/daddd6e39763ea70ad7083a4d7f80e648eec5d9a))
+* **extension:** GET_EMBEDDED_JSON relay so the JSON-path picker can read an embedded &lt;script&gt; blob ([#404](https://github.com/Aventinis/Scraping-Factory/issues/404)) ([d0e4c58](https://github.com/Aventinis/Scraping-Factory/commit/d0e4c5879f81b5fea3bd94873c20d1ba577e9313))
+
 ## [1.19.20](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.19...v1.19.20) (2026-10-22)
 
 
