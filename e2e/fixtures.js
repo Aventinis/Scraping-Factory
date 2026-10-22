@@ -32,6 +32,7 @@ const FIXTURES = {
   'robots-disallow': { dir: path.join(REPO_ROOT, 'test-pages/robots-disallow'), port: 8510, kind: 'script', script: 'server.py' },
   'crawl-delay': { dir: path.join(REPO_ROOT, 'test-pages/crawl-delay'), port: 8508, kind: 'script', script: 'server.py' },
   'flaky-server': { dir: path.join(REPO_ROOT, 'test-pages/flaky-server'), port: 8900, kind: 'script', script: 'server.py' },
+  'paginated-listing': { dir: path.join(REPO_ROOT, 'test-pages/paginated-listing'), port: 8512, kind: 'script', script: 'server.py' },
   'request-headers': { dir: path.join(REPO_ROOT, 'test-pages/request-headers'), port: 8506, kind: 'script', script: 'server.py' },
 };
 
