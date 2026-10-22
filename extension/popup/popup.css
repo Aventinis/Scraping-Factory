@@ -1028,3 +1028,13 @@ input.env-var-invalid, input.env-var-invalid:focus { border-color: var(--color-d
 .transform-recipe-preview.warn { color: var(--color-warning); }
 .transform-recipe-actions { flex: 1 1 100%; display: flex; gap: 6px; justify-content: flex-end; }
 .transform-date-hint { flex: 1 1 100%; margin: 0; font-size: 11px; color: var(--color-text-muted); }
+
+/* Issue #399: Monitoring in plain language — section intro, "Recommended checks", sentence-style thresholds */
+.monitoring-intro { margin: 0 0 8px; font-size: 11px; color: var(--color-text-muted); }
+.hardening-heading { margin: 6px 0 4px; }
+.hardening-recommended-row { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
+.hardening-recommended-note { text-align: left; margin: 0 0 6px; }
+.hardening-sentence { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.hardening-sentence input { width: 64px; }
+.hardening-null-rate-row { flex-wrap: wrap; }
+.hardening-sentence-text { flex: none; }
