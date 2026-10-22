@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.19.18](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.17...v1.19.18) (2026-10-22)
+
+
+### Features
+
+* **ui:** explain Monitoring and Hardening in plain language, with recommended checks ([#399](https://github.com/Aventinis/Scraping-Factory/issues/399)) ([e8528f7](https://github.com/Aventinis/Scraping-Factory/commit/e8528f7995eaa613e29884dff386f1606115234c))
+* **ui:** explain Monitoring and Hardening in plain language, with recommended checks ([#399](https://github.com/Aventinis/Scraping-Factory/issues/399)) ([bd9eb35](https://github.com/Aventinis/Scraping-Factory/commit/bd9eb35c97cd0a36d1f7064abf9137e82eedf376))
+
 ## [1.19.17](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.16...v1.19.17) (2026-10-22)
 
 
