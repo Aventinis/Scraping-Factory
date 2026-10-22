@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.19.13](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.12...v1.19.13) (2026-10-22)
+
+
+### Features
+
+* **ui:** first-run and "companion unreachable" guidance ([#406](https://github.com/Aventinis/Scraping-Factory/issues/406)) ([fe7f322](https://github.com/Aventinis/Scraping-Factory/commit/fe7f322134d3abacaa1715eae23f884f2888714c))
+* **ui:** structured first-run guidance on the companion-unreachable screen ([#406](https://github.com/Aventinis/Scraping-Factory/issues/406)) ([d5334d7](https://github.com/Aventinis/Scraping-Factory/commit/d5334d7447a5550551a5d82746aa4f73719e176c))
+
 ## [1.19.12](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.11...v1.19.12) (2026-10-21)
 
 
