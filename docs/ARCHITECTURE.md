@@ -550,6 +550,24 @@ port or even a different host than the browser.
 - Companion: `ScrapingFactory.Companion/CompanionHostOptions.cs`,
   `CompanionBackendOverrides.cs`, `Program.cs` (`builder.WebHost.UseUrls(...)`)
 
+### 2.10a Companion-unreachable guidance (Issue #406)
+
+What the `COMPANION_ERROR` screen tells a user who has no working companion: a
+plain-language explanation and the three situations (not installed / installed but
+not running / another address or port) with the concrete next step for the user's
+OS — in full until a companion has answered once on this browser
+(`chrome.storage.local` `companionReached`), as a one-line hint afterwards — plus a
+"Why can't it connect?" help popover. See CLAUDE.md for the behavior details.
+
+- Extension: `popup/companion-guidance.js` (OS detection, installer commands/paths,
+  `likelySituations`, the persisted flag), `popup/companion-guidance-ui.js`
+  (`renderCompanionGuidance`, called from `popup.js`'s `render()`),
+  `popup/companion-client.js` (`checkCompanion` loads/sets the flag and keeps the last
+  failure for `getCompanionFailure()`), `#screen-error` in `popup/popup.html`,
+  `error.*`/`help.companionError.*` in `i18n/*.json`
+- Tests: `popup/companion-guidance.test.js`, `popup/companion-guidance-ui.test.js`,
+  real-browser check `e2e/examples/issue-406-companion-guidance-check.js`
+
 ### 2.11 i18n (extension UI language)
 
 Lets the user pick the popup's own display language (German/English/Spanish)

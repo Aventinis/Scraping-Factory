@@ -4,7 +4,12 @@
 
 ![The companion-unreachable screen](images/troubleshooting-companion-unreachable.png)
 
-The extension can't reach the companion. In order:
+The extension can't reach the companion. Until a companion has answered once on
+this browser, the screen explains what it is and shows the three usual situations,
+each with its next step (the installer command and program path are the ones for
+your operating system); the situation that fits the failure best is marked
+**Most likely**. Afterwards only a one-line hint is shown — the **?** next to
+**Why can't it connect?** lists the usual causes in either case. In order:
 
 1. Is the companion running? Open <http://localhost:5000/health> — you should
    see JSON. If not, start it (the installer's `--autostart` does this at login),
