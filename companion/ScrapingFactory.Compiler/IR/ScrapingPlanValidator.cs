@@ -111,7 +111,10 @@ public static class ScrapingPlanValidator
         // ChangeDetection/Proxy/Hardening above.
         if (plan.Pagination is { } pagination)
         {
-            var paginationError = ValidatePagination(pagination);
+            // Issue #405: "{url}" is only optional when exactly one start page
+            // exists (see ValidatePageNumberUrlTemplate).
+            var startUrlCount = plan.Steps.OfType<NavigateStep>().Sum(step => step.Urls.Count);
+            var paginationError = ValidatePagination(pagination, singleStartPage: startUrlCount <= 1 && plan.DiscoveredUrls is null);
             if (paginationError is not null)
                 return Invalid(paginationError);
         }
@@ -1510,7 +1513,7 @@ public static class ScrapingPlanValidator
     // validation already uses above, just checked by presence rather than
     // matched against a declared Parameters list (there's no equivalent
     // concept here).
-    private static string? ValidatePagination(PaginationConfig pagination)
+    private static string? ValidatePagination(PaginationConfig pagination, bool singleStartPage)
     {
         if (pagination.MaxPages <= 0)
             return $"Pagination.MaxPages must be positive (was {pagination.MaxPages}).";
@@ -1520,18 +1523,26 @@ public static class ScrapingPlanValidator
             NextLinkPagination nextLink => string.IsNullOrWhiteSpace(nextLink.NextLinkSelector)
                 ? "NextLinkPagination.NextLinkSelector must not be empty."
                 : SelectorTextFilter.Validate(nextLink.NextLinkSelector, "NextLinkPagination.NextLinkSelector"),
-            PageNumberPagination pageNumber => ValidatePageNumberUrlTemplate(pageNumber.UrlTemplate),
+            PageNumberPagination pageNumber => ValidatePageNumberUrlTemplate(pageNumber.UrlTemplate, singleStartPage),
             _ => throw new InvalidOperationException($"Unknown PaginationConfig type: {pagination.GetType()}"),
         };
     }
 
-    private static string? ValidatePageNumberUrlTemplate(string urlTemplate)
+    // Issue #405: "{page}" is always required (without it the template would
+    // refetch the same URL until MaxPages). "{url}" — the start page as-is — is
+    // only required when it matters: a template written out in full
+    // ("https://site/list?page={page}", what a start URL that already says
+    // "?page=1" needs) is fine for a single start page, but with several
+    // (Url + AdditionalUrls, or discovered ones) it would request the same
+    // page N for every one of them, so "{url}" stays mandatory then.
+    private static string? ValidatePageNumberUrlTemplate(string urlTemplate, bool singleStartPage)
     {
         if (string.IsNullOrWhiteSpace(urlTemplate))
             return "PageNumberPagination.UrlTemplate must not be empty.";
 
         var placeholders = UrlTemplatePlaceholderPattern.Matches(urlTemplate).Select(match => match.Groups[1].Value).ToHashSet();
-        var missing = new[] { "url", "page" }.Where(token => !placeholders.Contains(token)).ToList();
+        var required = singleStartPage ? new[] { "page" } : new[] { "url", "page" };
+        var missing = required.Where(token => !placeholders.Contains(token)).ToList();
         return missing.Count > 0
             ? $"PageNumberPagination.UrlTemplate is missing placeholder(s): {string.Join(", ", missing.Select(token => $"{{{token}}}"))}."
             : null;
