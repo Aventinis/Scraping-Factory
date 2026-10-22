@@ -47,6 +47,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep the message channel open for the async sendResponse above
   }
 
+  // Issue #404: the JSON of an embedded <script> tag for the JSON-path picker —
+  // same request/response relay as GET_API_CAPTURE_ENTRIES; the popup treats
+  // { found: false } as "nothing to pick from".
+  if (message.type === 'GET_EMBEDDED_JSON') {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs.length === 0) {
+        sendResponse({ body: '', truncated: false, found: false });
+        return;
+      }
+      chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_EMBEDDED_JSON', scriptSelector: message.scriptSelector })
+        .then((result) => sendResponse(result || { body: '', truncated: false, found: false }))
+        .catch(() => sendResponse({ body: '', truncated: false, found: false }));
+    });
+    return true; // keep the message channel open for the async sendResponse above
+  }
+
   // Issue #227: live match count for a text filter on the last picked element
   // — same request/response relay as GET_API_CAPTURE_ENTRIES. Whichever frame
   // made the pick answers; if none does (or the tab has no content script),
