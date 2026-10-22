@@ -5,6 +5,7 @@
 // whenever a toast carries a `context` — bug-report.js only ever reads the
 // result via getLastError().
 const { t } = require('../i18n/i18n');
+const { containerCountAdvice } = require('./choice-guidance');
 
 let lastReportedError = null; // { message, context, ts } — feeds the next bug report
 
@@ -50,8 +51,23 @@ function showToast(message, context, variant) {
 // issue exists to catch early, instead of only failing much later at
 // /generate), green otherwise. Silently skipped if the content script
 // couldn't compute a count at all (matchCount === null).
-function showMatchCountToast(containerName, matchCount) {
+//
+// Issue #398: `repeating` is the type chosen beforehand in modal-container-new
+// — when the count contradicts it (several matches for a "single" container,
+// one match for a "repeating" one) the toast says so instead of just counting,
+// since the type is asked before the element is picked and so can't show the
+// count next to the choice. Omitted → the plain count, as before.
+function showMatchCountToast(containerName, matchCount, repeating) {
   if (matchCount === null) return;
+  const advice = containerCountAdvice(matchCount, repeating);
+  if (advice === 'singleMany') {
+    showToast(t('toast.containerSingleMany', { name: containerName, count: matchCount }), null, 'warn');
+    return;
+  }
+  if (advice === 'repeatingOne') {
+    showToast(t('toast.containerRepeatingOne', { name: containerName }), null, 'info');
+    return;
+  }
   showToast(t('toast.containerAdded', { name: containerName, count: matchCount }), null, matchCount === 0 ? 'warn' : 'info');
 }
 

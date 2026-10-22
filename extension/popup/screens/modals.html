@@ -10,7 +10,7 @@
            modal for its own flat draft shape but doesn't support Download
            yet (see flat-mode-ui.js's renderFlatFieldModal). -->
       <div id="field-name-mode-section">
-        <label for="select-field-name-mode" data-i18n="modals.fieldExtended.typeLabel"></label>
+        <label for="select-field-name-mode"><span data-i18n="modals.fieldExtended.typeLabel"></span><span class="help-host" data-help="help.fieldType.flat"></span></label>
         <select id="select-field-name-mode">
           <option value="text" data-i18n="modals.fieldExtended.textOption"></option>
           <option value="attribute" data-i18n="modals.fieldExtended.attributeOption"></option>
@@ -109,7 +109,7 @@
     <div class="modal-inner">
       <label for="input-container-name" data-i18n="modals.containerNew.label"></label>
       <input id="input-container-name" type="text" data-i18n-placeholder="modals.containerNew.namePlaceholder" autocomplete="off" />
-      <label data-i18n="modals.containerNew.typeLabel"></label>
+      <label><span data-i18n="modals.containerNew.typeLabel"></span><span class="help-host" data-help="help.containerType.type"></span></label>
       <div class="radio-row">
         <label><input type="radio" name="container-type" id="radio-container-single" checked /> <span data-i18n="modals.containerNew.single"></span></label>
         <label><input type="radio" name="container-type" id="radio-container-repeating" /> <span data-i18n="modals.containerNew.repeating"></span></label>
@@ -126,7 +126,7 @@
     <div class="modal-inner">
       <label for="input-field-extended-name" data-i18n="modals.fieldExtended.label"></label>
       <input id="input-field-extended-name" type="text" data-i18n-placeholder="modals.fieldExtended.placeholder" autocomplete="off" />
-      <label for="select-field-mode" data-i18n="modals.fieldExtended.typeLabel"></label>
+      <label for="select-field-mode"><span data-i18n="modals.fieldExtended.typeLabel"></span><span class="help-host" data-help="help.fieldType.container"></span></label>
       <select id="select-field-mode">
         <option value="text" data-i18n="modals.fieldExtended.textOption"></option>
         <option value="attribute" data-i18n="modals.fieldExtended.attributeOption"></option>

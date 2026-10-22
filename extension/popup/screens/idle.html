@@ -16,6 +16,13 @@
       <textarea id="input-additional-urls" rows="3" data-i18n-placeholder="idle.additionalUrlsPlaceholder"></textarea>
     </div>
 
+    <!-- Issue #398: "which fits?" help for the mode — the label text sits in its own
+         span because data-i18n replaces an element's whole content (it would wipe
+         the help host); data-help-anchor puts the popover panel after this row. -->
+    <div class="row-label" data-help-anchor>
+      <span data-i18n="idle.modeLabel"></span>
+      <span class="help-host" data-help="help.mode.choice"></span>
+    </div>
     <div class="mode-toggle">
       <div class="mode-toggle-thumb"></div>
       <button id="btn-mode-flat" class="mode-btn active" type="button" data-i18n="idle.modeFlat"></button>
@@ -31,11 +38,14 @@
          below. Browser-actions run before extraction regardless of mode
          (see companion ScrapingPlanBuilder). -->
     <div id="engine-section" class="engine-section">
-      <div class="row-label" data-i18n="idle.engineLabel"></div>
+      <div class="row-label" data-help-anchor>
+        <span data-i18n="idle.engineLabel"></span>
+        <span class="help-host" data-help="help.engine.choice"></span>
+      </div>
       <div class="mode-toggle" style="margin-bottom: 8px;">
         <div class="mode-toggle-thumb"></div>
         <button id="btn-engine-static" class="mode-btn active" type="button" data-i18n="idle.engineStatic"></button>
-        <button id="btn-engine-browser" class="mode-btn" type="button" data-i18n="idle.engineBrowser" data-i18n-title="idle.engineBrowserTitle"></button>
+        <button id="btn-engine-browser" class="mode-btn" type="button" data-i18n="idle.engineBrowser"></button>
       </div>
 
       <div id="browser-actions-section" class="hidden">

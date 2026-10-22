@@ -103,12 +103,13 @@ function wireMessageListener(bridge) {
         // #85), so it's surfaced as a toast instead — read the name before
         // setState() clears pendingNewContainer.
         const containerName = state.pendingNewContainer.name;
+        const containerRepeating = state.pendingNewContainer.repeating;
         const node = buildGroupNode(state.pendingNewContainer.name, message.selector, state.pendingNewContainer.repeating, framePath);
         bridge.setState(STATES.IDLE, {
           groups: insertContainerNode(state.groups, state.pendingParentPath, node),
           selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
         });
-        showMatchCountToast(containerName, matchCount);
+        showMatchCountToast(containerName, matchCount, containerRepeating);
       } else if (state.selectionKind === 'browserAction' && state.pendingBrowserActionIndex !== null) {
         // The action card already exists (kind chosen when it was added via
         // btn-add-action-*) — write the selector straight into the field

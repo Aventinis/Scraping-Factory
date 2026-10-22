@@ -26,6 +26,7 @@ const { buildBootstrapVerificationValues } = require('./api-bootstrap');
 const { getGlobalSettings } = require('../shared/global-settings');
 
 const { loadCompanionReached, markCompanionReached } = require('./companion-guidance');
+const { shouldSuggestBrowserEngine } = require('./choice-guidance');
 
 // Resolved fresh in checkCompanion() (default or the user's persisted
 // override, see shared/companion-config.js) and reused by generate()/the
@@ -347,7 +348,11 @@ async function generate(bridge) {
   } catch (err) {
     log('GENERATE FAIL', err.message);
     bridge.setState(STATES.IDLE);
-    showToast(t('toast.generationError', { message: err.message }), 'Script generation');
+    // Issue #398: a trial run that found nothing on the Static engine is most
+    // often a page built by JavaScript — say so, instead of leaving the user
+    // with "returned no data" alone.
+    const suggestion = shouldSuggestBrowserEngine(state.engine, err.message) ? ` ${t('toast.noDataTryBrowser')}` : '';
+    showToast(t('toast.generationError', { message: err.message }) + suggestion, 'Script generation');
   }
 }
 
