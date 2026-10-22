@@ -624,7 +624,8 @@
       "hint": "Solo existe en un build de desarrollo — la extensión instalada desde una release no puede hacerlo. Para un certificado de desarrollo autofirmado: abre la dirección del companion una vez en una pestaña (botón de arriba), acepta la advertencia y recarga este panel.",
       "reloadHint": "Guardado — recarga el panel (o reintenta la conexión) para aplicarlo."
     },
-    "externalConfigAdvanced": "Avanzado: archivo de configuración editable"
+    "externalConfigAdvanced": "Avanzado: archivo de configuración editable",
+    "glossaryTitle": "Glosario: qué significan estos términos"
   },
   "modals": {
     "fieldName": {
@@ -1003,6 +1004,28 @@
         "text": "Para APIs (GitHub, GitLab, WordPress, ...) que anuncian la página siguiente en la cabecera de respuesta HTTP Link en lugar de en el cuerpo. El script solicita esa URL página tras página para cada combinación de parámetros hasta que no quede enlace siguiente. No para peticiones POST.",
         "example": "Link: <…?page=2>; rel=\"next\""
       }
+    },
+    "outputLayout": {
+      "overview": {
+        "text": "Una lista guardada de nombres de columna en un orden fijo. Elige una y asigna tus campos: así todas las exportaciones para el mismo proceso tienen las mismas columnas, vengan de la página que vengan.",
+        "example": "Exportación estándar de productos: nombre, precio, enlace"
+      }
+    },
+    "safetyChecks": {
+      "overview": {
+        "text": "Comprobaciones que el script hace por sí mismo después de cada ejecución: ¿no encontró nada? ¿Un campo siempre vacío? ¿Muchas menos filas que la última vez? ¿Bloqueado por el sitio? Te avisa o marca la ejecución como fallida para que un programador lo note."
+      }
+    },
+    "preflight": {
+      "overview": {
+        "text": "Antes de la ejecución real, el script hace una pregunta barata a la página: ¿ha cambiado desde la última vez? Si no, se omite la ejecución. Las páginas que no lo indican se leen siempre."
+      }
+    },
+    "dedup": {
+      "overview": {
+        "text": "Descarta un elemento cuando ya apareció otro con la misma clave, en esta ejecución o (si lo eliges) en una anterior. Elige los campos que identifican un elemento, p. ej. el número de artículo.",
+        "example": "Número de artículo"
+      }
     }
   },
   "errors": {
@@ -1176,5 +1199,8 @@
       "boolean": "sí/no",
       "null": "vacío"
     }
+  },
+  "glossary": {
+    "safetyChecks": "Comprobaciones de seguridad"
   }
 }

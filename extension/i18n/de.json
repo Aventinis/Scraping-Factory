@@ -624,7 +624,8 @@
       "hint": "Gibt es nur in einem Entwicklungs-Build — die Extension aus einem Release kann das nicht. Für ein selbstsigniertes Entwicklungszertifikat: die Companion-Adresse einmal in einem Browser-Tab öffnen (Button oben), die Warnung akzeptieren und dieses Panel neu laden.",
       "reloadHint": "Gespeichert — Panel neu laden (oder die Verbindung erneut versuchen), damit es wirkt."
     },
-    "externalConfigAdvanced": "Erweitert: bearbeitbare Konfigurationsdatei"
+    "externalConfigAdvanced": "Erweitert: bearbeitbare Konfigurationsdatei",
+    "glossaryTitle": "Glossar: was diese Begriffe bedeuten"
   },
   "modals": {
     "fieldName": {
@@ -1003,6 +1004,28 @@
         "text": "Für APIs (GitHub, GitLab, WordPress, ...), die die nächste Seite im HTTP-Antwort-Header Link statt im Body ankündigen. Das Skript ruft diese URL Seite für Seite für jede Parameterkombination ab, bis kein Next-Link mehr kommt. Nicht für POST-Anfragen.",
         "example": "Link: <…?page=2>; rel=\"next\""
       }
+    },
+    "outputLayout": {
+      "overview": {
+        "text": "Eine gespeicherte Liste von Spaltennamen in fester Reihenfolge. Wähle eins und ordne deine Felder zu – so haben alle Exporte für dieselbe Weiterverarbeitung dieselben Spalten, egal von welcher Seite sie kommen.",
+        "example": "Standard-Produktexport: Name, Preis, Link"
+      }
+    },
+    "safetyChecks": {
+      "overview": {
+        "text": "Prüfungen, die das Skript nach jedem Lauf selbst durchführt: nichts gefunden? Ein Feld immer leer? Viel weniger Zeilen als beim letzten Mal? Von der Seite blockiert? Es warnt dich oder markiert den Lauf als fehlgeschlagen, damit ein Scheduler es merkt."
+      }
+    },
+    "preflight": {
+      "overview": {
+        "text": "Vor dem eigentlichen Lauf fragt das Skript die Seite einmal kurz: Hat sie sich seit dem letzten Mal geändert? Wenn nicht, wird der Lauf übersprungen. Seiten, die das nicht angeben, werden immer gelesen."
+      }
+    },
+    "dedup": {
+      "overview": {
+        "text": "Entfernt einen Eintrag, wenn einer mit demselben Schlüssel schon vorkam – in diesem Lauf oder (auf Wunsch) in einem früheren. Wähle die Felder, die einen Eintrag eindeutig machen, z. B. die Artikelnummer.",
+        "example": "Artikelnummer"
+      }
     }
   },
   "errors": {
@@ -1176,5 +1199,8 @@
       "boolean": "Ja/Nein",
       "null": "leer"
     }
+  },
+  "glossary": {
+    "safetyChecks": "Sicherheitsprüfungen"
   }
 }

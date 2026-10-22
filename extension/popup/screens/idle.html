@@ -381,6 +381,7 @@
             <label class="output-settings-toggle">
               <input type="checkbox" id="toggle-dedup" />
               <span data-i18n="idle.dedupToggle"></span>
+              <span class="help-host" data-help="help.dedup.overview"></span>
             </label>
             <div id="dedup-config" class="hidden">
               <p class="preview-summary" data-i18n="idle.dedupKeyFieldsHint"></p>
@@ -536,8 +537,8 @@
                OutputBlueprintFlattening. The blueprint list itself is
                unscoped (reusable across any site/configuration), fetched
                once on companion connect like the saved-configs list. -->
-          <div class="output-settings-row" id="output-blueprint-toggle-row">
-            <label for="select-output-blueprint" data-i18n="idle.outputBlueprintLabel"></label>
+          <div class="output-settings-row" id="output-blueprint-toggle-row" data-help-anchor>
+            <label for="select-output-blueprint"><span data-i18n="idle.outputBlueprintLabel"></span><span class="help-host" data-help="help.outputLayout.overview"></span></label>
             <select id="select-output-blueprint">
               <option value="" data-i18n="idle.outputBlueprintNoneOption"></option>
             </select>
@@ -797,6 +798,7 @@
           <label class="output-settings-toggle" id="preflight-toggle-row">
             <input type="checkbox" id="toggle-preflight" />
             <span data-i18n="idle.preflightToggle"></span>
+            <span class="help-host" data-help="help.preflight.overview"></span>
           </label>
           <p class="preview-summary" data-i18n="idle.preflightHint"></p>
         </div>

@@ -26,6 +26,7 @@ const { renderAccountAndDeveloperSections, wireAccountAndDeveloperEvents } = req
 const { renderEmailAccountSection, wireEmailAccountEvents } = require('./email-account-ui');
 
 const { renderManageBlueprintsModal } = require('./output-blueprints-ui');
+const { renderGlossary } = require('./glossary-ui');
 
 const { renderAllSavedConfigsList, wireAllSavedConfigsEvents } = require('./saved-configs-ui');
 
@@ -43,6 +44,8 @@ function renderSettingsScreen(bridge) {
   autoOpenAdvanced(externalConfigToggle, !!settings.externalConfig); // Issue #407
   const skipVerificationToggle = document.getElementById('toggle-skip-verification');
   if (skipVerificationToggle) skipVerificationToggle.checked = settings.skipVerification;
+
+  renderGlossary(); // Issue #407
 
   const isHostnameMode = settings.scriptNameMode === 'hostname';
   document.getElementById('btn-script-name-mode-fixed')?.classList.toggle('active', !isHostnameMode);

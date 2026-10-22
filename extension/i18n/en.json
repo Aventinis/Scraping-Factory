@@ -624,7 +624,8 @@
       "hint": "Only exists in a development build — the extension you install from a release cannot do this. For a self-signed development certificate: open the companion address once in a browser tab (button above) and accept the warning, then reload this panel.",
       "reloadHint": "Saved — reload the panel (or retry the connection) to apply it."
     },
-    "externalConfigAdvanced": "Advanced: editable config file"
+    "externalConfigAdvanced": "Advanced: editable config file",
+    "glossaryTitle": "Glossary: what these terms mean"
   },
   "modals": {
     "fieldName": {
@@ -1003,6 +1004,28 @@
         "text": "For APIs (GitHub, GitLab, WordPress, ...) that announce the next page in the HTTP Link response header instead of in the body. The script requests that URL page after page for every parameter combination until no next link is left. Not for POST requests.",
         "example": "Link: <…?page=2>; rel=\"next\""
       }
+    },
+    "outputLayout": {
+      "overview": {
+        "text": "A saved list of column names in a fixed order. Pick one and map your fields onto it, so every export for the same pipeline has the same columns — whichever site it came from.",
+        "example": "Standard product export: name, price, link"
+      }
+    },
+    "safetyChecks": {
+      "overview": {
+        "text": "Checks the script runs by itself after every run: found nothing? A field always empty? Far fewer rows than last time? Blocked by the site? It warns you, or marks the run as failed so a scheduler notices."
+      }
+    },
+    "preflight": {
+      "overview": {
+        "text": "Before the real run, the script asks the page one cheap question: has it changed since last time? If not, the run is skipped. Pages that don't say so are always scraped."
+      }
+    },
+    "dedup": {
+      "overview": {
+        "text": "Drops an item when one with the same key already appeared — in this run, or (if you choose) in an earlier one. Pick the field(s) that identify an item, e.g. an article number.",
+        "example": "Article number"
+      }
     }
   },
   "errors": {
@@ -1176,5 +1199,8 @@
       "boolean": "yes/no",
       "null": "empty"
     }
+  },
+  "glossary": {
+    "safetyChecks": "Safety checks"
   }
 }
