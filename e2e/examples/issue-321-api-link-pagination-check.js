@@ -50,6 +50,7 @@ const { launchBrowser, openPopup, focusFixture, waitForIdleScreen, startCompanio
     await popupPage.check('#toggle-api-link');
     if (!(await popupPage.isHidden('#api-link-detected-hint'))) throw new Error('The suggestion should disappear once the option is on');
     // Exclusive with the cursor section.
+    await popupPage.click('#api-cursor-advanced > summary'); // Issue #404: the cursor option sits under "Advanced" too
     await popupPage.check('#toggle-api-cursor');
     if (await popupPage.isChecked('#toggle-api-link')) throw new Error('Cursor and Link-header pagination must exclude each other');
     await popupPage.check('#toggle-api-link');
