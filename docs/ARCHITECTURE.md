@@ -649,6 +649,21 @@ CLAUDE.md for the details.
 - Tests: `popup/hardening-presets.test.js`, `popup/hardening-presets-ui.test.js`,
   real-browser check `e2e/examples/issue-399-hardening-plain-language-check.js`
 
+### 2.10h Login flow guidance for the browser actions (Issue #403)
+
+A "Login form (4 steps)" starter, role-named cards, times in seconds, an overview and
+"Max. rounds" popover, and the rarely used options under "Advanced". UI-only: the
+wire format and generated scripts are unchanged (a starter action's `role` never
+leaves the draft). See CLAUDE.md for the details.
+
+- Extension: `popup/login-flow.js` (pure: `addLoginFlow`, `msToSecondsText`,
+  `secondsTextToMs`), `popup/browser-actions-ui.js` (cards, starter wiring),
+  `popup/api-config-ui.js` (the discovery action editor shares the seconds inputs),
+  `popup/advanced-disclosure-ui.js` (open state applied synchronously),
+  `popup/screens/idle.html`, `browserActions.*`/`help.browserActions.*` in `i18n/*.json`
+- Tests: `popup/login-flow.test.js`, real-browser check
+  `e2e/examples/issue-403-login-starter-check.js`
+
 ### 2.10g Request-header picker (Issue #402)
 
 "Send custom request headers" starts from an "Add a header…" picker (Accept-Language,

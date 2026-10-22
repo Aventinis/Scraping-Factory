@@ -41,39 +41,57 @@ page — you never write a selector by hand.
 
 ### A login flow
 
-There is no special "login" feature; you assemble one from the actions:
-**Fill** (user name), **Fill** (password), **Click** (the sign-in button),
-**Wait** (for something only visible after signing in).
+A login is four steps: fill in the user name, fill in the password, click the
+sign-in button, then wait until the signed-in page appears. **Login form (4
+steps)** adds all four in one click; the **?** next to **Browser actions** explains
+the sequence.
 
-A **Fill** action never stores a secret in the script. You give it the *name of
-an environment variable*, and the script reads the value when it runs:
+![The Login form starter: four steps, two of them already picked](images/browser-engine-login-starter.png)
+
+Each step is named for what it does (**Fill in the user name**, **Click the login
+button**, …). All that is left is to click the four elements on the page with
+**Select the user name field**, **Select the password field**, **Select the login
+button** and **Select an element shown after login** (something only visible once you
+are signed in, such as a welcome line). The starter adds to your list — it never
+replaces steps you already made — and waits up to 10 seconds for the signed-in page.
+
+A **Fill** step never stores a secret in the script. You give it the *name of an
+environment variable* (the starter suggests `SITE_USERNAME` and `SITE_PASSWORD`),
+and the script reads the value when it runs:
 
 ```bash
 export SITE_PASSWORD='…'
 python scraper.py
 ```
 
-To let the trial run get past the login, type a **Test value** next to the
-action. It is sent to the companion for that one run and is never saved, logged
-or written into the script.
+To let the trial run get past the login, type a **Test user name** and **Test
+password**. They are sent to the companion for that one run and are never saved,
+logged or written into the script.
 
-**Reuse session between runs** saves the login cookies in a file next to the
-output, so later runs skip the login actions. That file holds live session
-cookies — treat it like a password and never share or commit it.
+**Reuse session between runs** remembers the login, so later runs skip the login
+steps. The saved session file holds live cookies — treat it like a password and never
+share or commit it. If the session expires the run fails; there is no automatic
+re-login (delete the file to log in again).
+
+Times are in plain **seconds** (for example **Wait at most (seconds)**; `0.25` works).
+Rarely needed options — which match a click uses, the scroll step, a scroll's container
+and "Load more" button — are under a collapsed **Advanced** that remembers whether you
+opened it.
 
 ### Click: first, last or all
 
 If a selector matches several elements (say, one "Show more" toggle per entry),
-**Click which match** chooses **First match**, **Last match** or **All matches,
-in order**. For all, you can set how long to wait after each click.
+**Click which match** (under **Advanced**) chooses **First match**, **Last match** or
+**All matches, in order**. For all, you can set how long to wait after each click, in
+seconds.
 
 ### Scroll
 
-**Scroll** repeats up to **Max. rounds** times, stopping when no new content
-appears. You can name a **Container** (a scrollable box instead of the whole
+**Scroll** repeats up to **Max. rounds** times (the **?** explains it), stopping when no
+new content appears. Under **Advanced** you can name a **Container** (a scrollable box instead of the whole
 page) and a **"Load more" button** to click each round. By default every round
 jumps to the bottom. If a site only loads a section once you scroll *through*
-it, set **Scroll step (px)** to scroll that many pixels at a time.
+it, set **Scroll step (pixels)** to scroll that many pixels at a time.
 
 ## Things to know
 
