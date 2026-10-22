@@ -764,7 +764,7 @@
   },
   "browserActions": {
     "title": "Browser actions",
-    "hint": "Run in order before extraction, e.g. for a login flow.",
+    "hint": "Steps the script runs in order before it reads data — typically a login. Start with “Login form”.",
     "addWaitBtn": "+ Wait",
     "addFillBtn": "+ Fill",
     "addClickBtn": "+ Click",
@@ -775,7 +775,6 @@
     "kindScroll": "Scroll",
     "noSelector": "No element selected",
     "pickSelectorBtn": "Select element",
-    "timeoutLabel": "Timeout (ms)",
     "envVarLabel": "Variable holding the text to type",
     "envVarHint": "The value is read from this environment variable at runtime, never stored in the script.",
     "testValueLabel": "Test value",
@@ -783,17 +782,37 @@
     "containerSelectorLabel": "Container (optional)",
     "loadMoreButtonSelectorLabel": "\"Load more\" button (optional)",
     "maxIterationsLabel": "Max. rounds",
-    "waitAfterMsLabel": "Wait time (ms)",
     "clickTargetLabel": "Click which match",
     "clickTarget": {
       "first": "First match",
       "last": "Last match",
       "all": "All matches, in order"
     },
-    "scrollStepPxLabel": "Scroll step (px)",
-    "scrollStepPxPlaceholder": "blank = jump to bottom",
+    "scrollStepPxLabel": "Scroll step (pixels)",
+    "scrollStepPxPlaceholder": "blank = jump to the bottom",
     "persistentSessionToggle": "Reuse session between runs",
-    "persistentSessionHint": "Saves cookies/login state after each run and skips the login actions above on the next run. Warning: the saved file contains live session cookies — treat it like a password and never share or commit it. If the session ever expires, the run simply fails; there is no automatic re-login."
+    "persistentSessionHint": "Remembers the login between runs, so the login steps are skipped next time. Warning: the saved session file holds live cookies — treat it like a password.",
+    "addLoginFlowBtn": "+ Login form (4 steps)",
+    "loginFlowHint": "Now click the four elements on the page: the user name field, the password field, the login button and something that only shows once you are logged in.",
+    "role": {
+      "user": "Fill in the user name",
+      "password": "Fill in the password",
+      "submit": "Click the login button",
+      "loggedIn": "Wait until you are logged in"
+    },
+    "pickRole": {
+      "user": "Select the user name field",
+      "password": "Select the password field",
+      "submit": "Select the login button",
+      "loggedIn": "Select an element shown after login"
+    },
+    "envVarLabelUser": "Variable holding the user name",
+    "envVarLabelPassword": "Variable holding the password",
+    "testValueLabelUser": "Test user name",
+    "testValueLabelPassword": "Test password",
+    "timeoutSecondsLabel": "Wait at most (seconds)",
+    "waitAfterRoundSecondsLabel": "Pause after each round (seconds)",
+    "waitAfterClickSecondsLabel": "Pause after each click (seconds)"
   },
   "help": {
     "requestHeaders": {
@@ -887,6 +906,19 @@
       "requiredFields": {
         "text": "Leaves out every row that has no value for the chosen fields, so incomplete rows never reach the file. The rest of the run carries on.",
         "example": "A database import that needs a non-empty Price."
+      }
+    },
+    "browserActions": {
+      "overview": {
+        "text": "A login is four steps: fill in the user name, fill in the password, click the login button, then wait until the logged-in page appears. The steps run in the order listed, before any data is read. “Login form” adds all four at once — you only click the elements on the page.",
+        "example": "Fill user name → Fill password → Click “Log in” → Wait for “Welcome back”"
+      },
+      "maxRounds": {
+        "text": "How many times the script scrolls down or clicks “Load more” before it stops. A higher number loads more items but takes longer; it also stops early once nothing new appears.",
+        "example": "10"
+      },
+      "persistentSession": {
+        "text": "After a run the script saves your cookies and login state in a file next to its output and, next time, skips the login steps above. The file holds live session cookies: treat it like a password and never share or commit it. If the session expires the run simply fails — there is no automatic re-login; delete the file to log in again."
       }
     }
   },

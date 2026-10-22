@@ -18,7 +18,7 @@ const fs = require('fs');
 const { launchBrowser, startCompanion, startFixture } = require('../harness');
 const { openScenario } = require('./lib');
 
-const SCENARIO_FILES = ['getting-started', 'modes', 'pagination', 'transforms', 'monitoring', 'network', 'troubleshooting'];
+const SCENARIO_FILES = ['getting-started', 'modes', 'pagination', 'transforms', 'monitoring', 'network', 'browser-engine', 'troubleshooting'];
 const COMPANION_PORT = 5056;
 
 function parseArgs(argv) {

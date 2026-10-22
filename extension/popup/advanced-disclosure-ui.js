@@ -27,6 +27,9 @@ function createAdvancedDisclosure(id, summaryKey = 'common.advanced') {
   const details = document.createElement('details');
   details.className = 'advanced-disclosure';
   details.dataset.advanced = id;
+  // Remembered state applies at once (sections are loaded at init): a
+  // disclosure built by a re-render must not collapse and reopen.
+  details.open = isSectionOpen(sections, id);
   const summary = document.createElement('summary');
   summary.dataset.i18n = summaryKey;
   summary.textContent = t(summaryKey);

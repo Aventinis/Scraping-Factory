@@ -83,11 +83,12 @@ describe('the click card in the real popup', () => {
 
   test('"all" reveals the wait input; the choice is persisted', () => {
     choose('all');
-    expect(document.querySelector('.browser-action-click-wait-after-ms').value).toBe('250');
+    // Issue #403: shown in seconds, stored in milliseconds.
+    expect(document.querySelector('.browser-action-click-wait-after-ms').value).toBe('0.25');
     expect(chrome.storage.session.set.mock.calls.at(-1)[0].browserActions[0]).toMatchObject({ kind: 'click', target: 'all' });
 
     const wait = document.querySelector('.browser-action-click-wait-after-ms');
-    wait.value = '700';
+    wait.value = '0.7';
     wait.dispatchEvent(new Event('change', { bubbles: true }));
     expect(chrome.storage.session.set.mock.calls.at(-1)[0].browserActions[0].waitAfterMs).toBe(700);
   });

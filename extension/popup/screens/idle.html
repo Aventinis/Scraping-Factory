@@ -49,8 +49,13 @@
       </div>
 
       <div id="browser-actions-section" class="hidden">
-        <div class="row-label" data-i18n="browserActions.title"></div>
+        <div class="row-label" data-help-anchor><span data-i18n="browserActions.title"></span><span class="help-host" data-help="help.browserActions.overview"></span></div>
         <p class="browser-actions-hint" data-i18n="browserActions.hint"></p>
+        <!-- Issue #403: one click adds the four steps of a typical login. -->
+        <div class="actions">
+          <button id="btn-add-login-flow" class="btn-secondary" type="button" data-i18n="browserActions.addLoginFlowBtn"></button>
+        </div>
+        <p id="login-flow-hint" class="browser-actions-hint hidden" data-i18n="browserActions.loginFlowHint"></p>
         <div id="browser-actions-list"></div>
         <div class="actions">
           <button id="btn-add-action-wait" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.addWaitBtn"></button>
@@ -68,6 +73,7 @@
         <label class="output-settings-toggle" id="persistent-session-toggle-row">
           <input type="checkbox" id="toggle-persistent-session" />
           <span data-i18n="browserActions.persistentSessionToggle"></span>
+          <span class="help-host" data-help="help.browserActions.persistentSession"></span>
         </label>
         <p class="preview-summary" data-i18n="browserActions.persistentSessionHint"></p>
       </div>

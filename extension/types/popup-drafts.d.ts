@@ -66,8 +66,12 @@ declare namespace SFDraft {
 
   // ── Browser actions (scraping-config-builder.js) ─────────────────────────
 
+  /** Issue #403 — UI-only purpose of a "Login form" starter action; never sent to the companion. */
+  type BrowserActionRole = 'user' | 'password' | 'submit' | 'loggedIn';
+
   interface BrowserAction {
     kind: 'waitFor' | 'fill' | 'click' | 'scroll';
+    role?: BrowserActionRole;
     selector?: string;
     timeoutMs?: number;
     environmentVariableName?: string;
