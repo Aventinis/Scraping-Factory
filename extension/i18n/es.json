@@ -30,8 +30,23 @@
     "message": "Conectando con Companion…"
   },
   "error": {
-    "title": "No se puede conectar con la app Companion",
-    "hint": "Inicia ScrapingFactory.Companion y vuelve a intentarlo.",
+    "title": "Aplicación companion no accesible",
+    "hintShort": "Inicia la aplicación companion e inténtalo de nuevo, o introduce otra dirección abajo.",
+    "intro": "El companion es un pequeño programa auxiliar en tu ordenador. Genera tu script y lo prueba una vez antes de entregártelo; la extensión del navegador no puede hacerlo por sí sola.",
+    "likely": "Lo más probable",
+    "whyLabel": "¿Por qué no se conecta?",
+    "install": {
+      "title": "1 · Aún no instalado",
+      "text": "Descomprime la descarga de Scraping Factory y ejecuta su instalador ({installer}) en esa carpeta; luego pulsa «Reintentar»:"
+    },
+    "start": {
+      "title": "2 · Instalado, pero no en ejecución",
+      "text": "Ejecuta de nuevo el instalador (inicia el companion) o inicia el programa tú mismo. Con la opción de inicio automático del instalador arranca en cada inicio de sesión:"
+    },
+    "address": {
+      "title": "3 · En otra dirección o puerto",
+      "text": "Introduce su dirección en el campo de abajo, p. ej. http://localhost:5050. Para un companion en otro ordenador usa https://."
+    },
     "currentUrl": "Dirección probada: {url}",
     "customUrlLabel": "¿La app Companion se ejecuta en otra dirección?",
     "customUrlPlaceholder": "p. ej. http://localhost:5050",
@@ -727,6 +742,11 @@
       "append": {
         "text": "Cada ejecución añade sus filas al archivo de salida de las anteriores, de modo que el archivo crece como un histórico. Si cambian los campos, el archivo conserva sus columnas y se añaden las nuevas; un archivo ilegible detiene la ejecución sin tocarlo. No disponible en el modo combinado.",
         "example": "Ejecución 1: 120 filas → ejecución 2: 240 filas"
+      }
+    },
+    "companionError": {
+      "causes": {
+        "text": "No iniciado → iníciala y pulsa «Reintentar».\nOtro puerto u ordenador → introduce su dirección abajo.\nOtro ordenador → la dirección debe empezar por https://.\nCompanion compartido → puede requerir una clave de acceso (Configuración)."
       }
     }
   }

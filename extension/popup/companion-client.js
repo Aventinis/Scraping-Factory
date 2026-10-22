@@ -25,6 +25,8 @@ const { buildBootstrapVerificationValues } = require('./api-bootstrap');
 
 const { getGlobalSettings } = require('../shared/global-settings');
 
+const { loadCompanionReached, markCompanionReached } = require('./companion-guidance');
+
 // Resolved fresh in checkCompanion() (default or the user's persisted
 // override, see shared/companion-config.js) and reused by generate()/the
 // saved-configs endpoints below — module-level rather than re-resolved per
@@ -43,6 +45,15 @@ let companionInfo = { authRequired: false, registration: false, email: 'off', pa
 
 function getCompanionInfo() {
   return companionInfo;
+}
+
+// The last failed health check ({ message }, or null after a successful one) —
+// the COMPANION_ERROR screen's guidance (Issue #406) reads it to tell which of
+// the usual causes is the most likely.
+let companionFailure = null;
+
+function getCompanionFailure() {
+  return companionFailure;
 }
 
 // Issue #278: every request to the companion goes through here so the access
@@ -91,11 +102,14 @@ async function checkCompanion(bridge) {
   await loadDeveloperOptions();
   companionUrl = await getCompanionUrl();
   await loadAccessKey();
+  await loadCompanionReached(); // Issue #406: first-run vs. returning-user guidance
   log('HEALTH_CHECK start', companionUrl);
   try {
     const res = await fetch(`${companionUrl}/health`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     log('HEALTH_CHECK OK');
+    companionFailure = null;
+    await markCompanionReached();
     await warnAboutAccessKey(res);
 
     const tabs = await new Promise(resolve =>
@@ -127,6 +141,7 @@ async function checkCompanion(bridge) {
     bridge.fetchTransformPresets?.();
   } catch (err) {
     log('HEALTH_CHECK FAIL', err.message);
+    companionFailure = { message: err.message };
     setLastError(err.message, 'Companion connection');
     bridge.setState(STATES.COMPANION_ERROR);
   }
@@ -368,7 +383,7 @@ function wireCompanionErrorEvents(bridge) {
   });
 }
 
-module.exports = {getResolvedCompanionUrl, getCompanionInfo, companionFetch, checkCompanion, useCustomCompanionUrl, resetCustomCompanionUrl,
+module.exports = {getResolvedCompanionUrl, getCompanionInfo, getCompanionFailure, companionFetch, checkCompanion, useCustomCompanionUrl, resetCustomCompanionUrl,
   checkRobotsTxt, buildVerificationErrorMessage, generate, resolveCombinedComponents,
   renderCompanionErrorScreen, wireCompanionErrorEvents,};
 

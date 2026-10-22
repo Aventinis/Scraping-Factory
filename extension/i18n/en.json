@@ -31,7 +31,22 @@
   },
   "error": {
     "title": "Companion app unreachable",
-    "hint": "Start ScrapingFactory.Companion and try again.",
+    "hintShort": "Start the companion app and try again, or enter another address below.",
+    "intro": "The companion is a small helper program on your computer. It builds your script and tests it once before you get it — the browser extension can't do that on its own.",
+    "likely": "Most likely",
+    "whyLabel": "Why can't it connect?",
+    "install": {
+      "title": "1 · Not installed yet",
+      "text": "Unpack the Scraping Factory download and run its installer ({installer}) in that folder, then press \"Try again\":"
+    },
+    "start": {
+      "title": "2 · Installed, but not running",
+      "text": "Run the installer again — it starts the companion — or start the program yourself. With the installer's autostart option it starts at every login:"
+    },
+    "address": {
+      "title": "3 · Running on another address or port",
+      "text": "Enter its address in the field below, e.g. http://localhost:5050. For a companion on another computer use https://."
+    },
     "currentUrl": "Address tried: {url}",
     "customUrlLabel": "Is the companion app running at a different address?",
     "customUrlPlaceholder": "e.g. http://localhost:5050",
@@ -727,6 +742,11 @@
       "append": {
         "text": "Each run adds its rows to the output file the earlier runs left, so the file grows into an archive. If the fields change, the file keeps its columns and new ones are added; a file that cannot be read stops the run without being touched. Not available in combined mode.",
         "example": "Run 1: 120 rows → run 2: 240 rows"
+      }
+    },
+    "companionError": {
+      "causes": {
+        "text": "Not started → start it, then press \"Try again\".\nOther port or computer → enter its address below.\nAnother computer → the address must start with https://.\nShared companion → it may need an access key (Settings)."
       }
     }
   }
