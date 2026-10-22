@@ -1599,7 +1599,7 @@ function renderApiConfigModals(bridge) {
 
   if (state.apiFieldTransformModalOpen) {
     document.getElementById('modal-api-field-transforms')?.classList.remove('hidden');
-    renderTransformList('api-field-transform-list', state.pendingTransforms);
+    renderTransformList('api-field-transform-list', state.pendingTransforms, () => bridge.getState().pendingRawText);
     // Issue #147: live preview against the node's own sampleValue, threaded
     // through as pendingRawText by openApiFieldTransformsModal — reuses the
     // same renderTransformPreview flat mode's own preview already calls.
@@ -1732,6 +1732,7 @@ function wireApiConfigEvents(bridge) {
     'api-field-transform-list',
     () => bridge.getState().pendingTransforms,
     (transforms) => bridge.patchState({ pendingTransforms: transforms }),
+    () => bridge.getState().pendingRawText,
   );
   document.getElementById('btn-api-field-transforms-confirm')?.addEventListener('click', () => confirmApiFieldTransformsModal(bridge));
   document.getElementById('btn-api-field-transforms-cancel')?.addEventListener('click', () => cancelApiFieldTransformsModal(bridge));

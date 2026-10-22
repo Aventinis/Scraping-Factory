@@ -52,7 +52,7 @@ public class TypeConversionTransformEndToEndTests
     // extracted, transformed cell (the second CSV line — the first is the
     // header) — enough to observe a single transform's actual runtime
     // result without needing to parse a whole CSV document per test.
-    private static async Task<string> ScrapeSingleValueAsync(string rawValue, params FieldTransform[] transforms)
+    internal static async Task<string> ScrapeSingleValueAsync(string rawValue, params FieldTransform[] transforms)
     {
         using var server = new LocalTestServer($"<html><body><span class='value'>{rawValue}</span></body></html>");
         var plan = new ScrapingPlan

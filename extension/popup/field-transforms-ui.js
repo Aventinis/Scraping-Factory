@@ -14,6 +14,7 @@ const { t } = require('../i18n/i18n');
 const {
   removeTransform, updateTransform, changeTransformKind, moveTransform, applyTransformsPreview, CURRENCY_FORMAT_IDS,
 } = require('./field-transforms');
+const { appendRegexHelperControls, wireRecipePanels, appendDateHelper, dateFormatPatchFor } = require('./transform-helpers-ui');
 
 // Issue #234: i18n key suffix per currency-format preset (see
 // transforms.currencyFormat.* in i18n/*.json).
@@ -73,7 +74,7 @@ function appendTypeConversionInputs(li, transform) {
   }
 }
 
-function buildTransformRowEl(transform, index, total) {
+function buildTransformRowEl(transform, index, total, getRawValue) {
   const li = document.createElement('li');
   li.className = 'transform-row';
   li.dataset.index = String(index);
@@ -104,6 +105,7 @@ function buildTransformRowEl(transform, index, total) {
     groupInput.placeholder = t('transforms.groupPlaceholder');
     groupInput.value = String(transform.group);
     li.appendChild(groupInput);
+    appendRegexHelperControls(li); // Issue #400: "Pattern helper" + "?" popover
   } else if (transform.kind === 'replace') {
     const findInput = document.createElement('input');
     findInput.type = 'text';
@@ -126,6 +128,7 @@ function buildTransformRowEl(transform, index, total) {
     sourceFormatInput.value = transform.sourceFormat;
     li.appendChild(sourceFormatInput);
     appendTypeConversionInputs(li, transform);
+    appendDateHelper(li, transform, getRawValue); // Issue #400: "?" popover + the format guessed from the value
   } else if (transform.kind === 'toCurrency') {
     // Issue #234: each preset's option text is its own example amount plus
     // a short hint naming the decimal separator.
@@ -167,11 +170,14 @@ function buildTransformRowEl(transform, index, total) {
   return li;
 }
 
-function renderTransformList(listElId, transforms) {
+// Issue #400: `getRawValue` returns the picked value the chain runs on (or null) —
+// read lazily, since the helpers (date-format guess, recipe preview) must follow
+// what the modal currently shows (e.g. a changed attribute).
+function renderTransformList(listElId, transforms, getRawValue = () => null) {
   const root = document.getElementById(listElId);
   if (!root) return;
   root.innerHTML = '';
-  transforms.forEach((transform, i) => root.appendChild(buildTransformRowEl(transform, i, transforms.length)));
+  transforms.forEach((transform, i) => root.appendChild(buildTransformRowEl(transform, i, transforms.length, getRawValue)));
 }
 
 // Issue #143: live "what would this chain actually produce" hint, run
@@ -205,9 +211,14 @@ function renderTransformPreview(elId, rawValue, transforms) {
 // Wired once (in popup.js's wireEvents()) per list root — event delegation
 // survives renderTransformList's innerHTML rebuild, same as the group
 // tree's own delegated click handler.
-function wireTransformList(listElId, getTransforms, setTransforms) {
+function wireTransformList(listElId, getTransforms, setTransforms, getRawValue = () => null) {
   const root = document.getElementById(listElId);
   if (!root) return;
+
+  // Issue #400: the regex "Pattern helper" panel — writes pattern + group like typing them.
+  wireRecipePanels(root, getRawValue, (index, recipe) => {
+    setTransforms(updateTransform(getTransforms(), index, { pattern: recipe.pattern, group: recipe.group }));
+  });
 
   root.addEventListener('change', (e) => {
     const row = e.target.closest('.transform-row');
@@ -216,7 +227,13 @@ function wireTransformList(listElId, getTransforms, setTransforms) {
     const transforms = getTransforms();
 
     if (e.target.classList.contains('transform-kind-select')) {
-      setTransforms(changeTransformKind(transforms, index, e.target.value));
+      let changed = changeTransformKind(transforms, index, e.target.value);
+      // Issue #400: "Convert to date" starts with the format guessed from the picked value.
+      if (e.target.value === 'toDate') {
+        const patch = dateFormatPatchFor(getRawValue());
+        if (patch) changed = updateTransform(changed, index, patch);
+      }
+      setTransforms(changed);
     } else if (e.target.classList.contains('transform-pattern-input')) {
       setTransforms(updateTransform(transforms, index, { pattern: e.target.value }));
     } else if (e.target.classList.contains('transform-group-input')) {

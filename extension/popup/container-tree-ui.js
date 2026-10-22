@@ -315,8 +315,7 @@ function renderMatchCountHint(elId, count) {
 // mode reads pendingOwnText, computed at click time by content-script.js's
 // collectOwnText — no DOM input to wait on, unlike attribute mode's
 // attribute-name field.
-function refreshExtendedTransformPreview(bridge) {
-  const state = bridge.getState();
+function resolveExtendedRawValue(state) {
   const mode = document.getElementById('select-field-mode')?.value ?? 'text';
   let rawValue = null;
   if (mode === 'text') {
@@ -327,7 +326,12 @@ function refreshExtendedTransformPreview(bridge) {
   } else if (mode === 'ownText') {
     rawValue = state.pendingOwnText;
   }
-  renderTransformPreview('field-extended-transform-preview', rawValue, state.pendingTransforms);
+  return rawValue;
+}
+
+function refreshExtendedTransformPreview(bridge) {
+  const state = bridge.getState();
+  renderTransformPreview('field-extended-transform-preview', resolveExtendedRawValue(state), state.pendingTransforms);
 }
 
 // Called from popup.js's render() once it's determined the confirmed-
@@ -382,7 +386,7 @@ function renderContainerFieldModal(bridge, isNewPick) {
     resetTextFilter('input-field-text-filter', 'btn-field-use-text', state.pendingRawText);
   }
   renderMatchCountHint('field-extended-match-count', effectiveMatchCount('input-field-text-filter', state.pendingMatchCount));
-  renderTransformList('field-extended-transform-list', state.pendingTransforms);
+  renderTransformList('field-extended-transform-list', state.pendingTransforms, () => resolveExtendedRawValue(bridge.getState()));
   refreshExtendedTransformPreview(bridge);
 }
 
@@ -502,6 +506,7 @@ function wireContainerModeEvents(bridge) {
     'field-extended-transform-list',
     () => bridge.getState().pendingTransforms,
     (transforms) => bridge.patchState({ pendingTransforms: transforms }),
+    () => resolveExtendedRawValue(bridge.getState()),
   );
 }
 
