@@ -694,8 +694,7 @@
     "insecureCompanionUrl": "This address would send passwords and keys over an unencrypted connection to another computer. Use an https:// address.",
     "emailUnverified": "This companion needs a verified email address before it serves your data — confirm it under Settings → Account.",
     "containerSingleMany": "Container \"{name}\" added — {count} elements found, but it is set to \"single\", so only the first is used. Click \"(single)\" in the tree to make it repeating.",
-    "containerRepeatingOne": "Container \"{name}\" added — only 1 element found. A repeating container is meant for several; click \"(repeating)\" in the tree to make it single.",
-    "noDataTryBrowser": "The Static engine may not see this page's content (it is built by JavaScript) — try the Browser engine."
+    "containerRepeatingOne": "Container \"{name}\" added — only 1 element found. A repeating container is meant for several; click \"(repeating)\" in the tree to make it single."
   },
   "frame": {
     "badge": "iframe",
@@ -777,6 +776,118 @@
       "choice": {
         "text": "Static — fast; reads the page as the server sends it.\nBrowser — a real browser; for pages built by JavaScript, with a login, or that need scrolling.\nWhen Static finds nothing, Browser is usually the fix."
       }
+    }
+  },
+  "errors": {
+    "detailsLabel": "Details",
+    "copyDetails": "Copy",
+    "copied": "Copied",
+    "close": "Close",
+    "noData": {
+      "title": "No data was found",
+      "hint": "The selectors matched nothing the script could read. Check the highlighted elements with “Show preview”.",
+      "hintStatic": "The selectors matched nothing the script could read. Check the highlighted elements with “Show preview”. If the page builds its content with JavaScript, try the Browser engine."
+    },
+    "noOutput": {
+      "title": "The script produced no result file",
+      "hint": "It stopped before writing any data. Details shows what happened."
+    },
+    "siteUnreachable": {
+      "title": "The site can't be reached",
+      "hint": "Check the page address and your internet connection (and the proxy, if you use one)."
+    },
+    "siteForbidden": {
+      "title": "The site refuses the script",
+      "hint": "It needs a login or blocks automated requests. Use the Browser engine with a login flow, or send a request header such as a cookie."
+    },
+    "pageNotFound": {
+      "title": "The page was not found",
+      "hint": "Check the page address at the top of the panel."
+    },
+    "rateLimited": {
+      "title": "The site says: too many requests",
+      "hint": "Turn on “Pause between requests” in Settings, or try again later."
+    },
+    "siteError": {
+      "title": "The site reported an error",
+      "hint": "This is usually temporary. Try again later, or turn on “Retry on transient errors” in Settings."
+    },
+    "httpError": {
+      "title": "The site answered with an error (HTTP {status})",
+      "hint": "Details has the exact answer. Check the page address and try again."
+    },
+    "requestFailed": {
+      "title": "A request failed",
+      "hint": "Details has the reason."
+    },
+    "pageLoadTimeout": {
+      "title": "The page took too long to load",
+      "hint": "Try again. If the page works in your browser, it may just be slow."
+    },
+    "pageLoadFailed": {
+      "title": "The page could not be loaded",
+      "hint": "Check the page address and your connection, then try again."
+    },
+    "missingEnvVar": {
+      "title": "The script needs the variable {name}",
+      "hint": "Enter a test value next to the field that uses it so the trial run can proceed, and set the variable on the computer where you run the script."
+    },
+    "trialTimeout": {
+      "title": "The trial run took too long",
+      "hint": "Use fewer pages or requests, or turn on “Skip the trial run” in Settings."
+    },
+    "robotsDisallowed": {
+      "title": "The site's robots.txt forbids this request",
+      "hint": "Choose “Skip it and carry on” or “Warn, but request it anyway” in Settings, or leave this page out."
+    },
+    "pythonMissing": {
+      "title": "Python was not found",
+      "hint": "The companion needs Python 3.9 or newer to test your script. Install it (or run the installer again), then try again."
+    },
+    "packageMissing": {
+      "title": "A Python package is missing",
+      "hint": "Install it with “pip install {name}” on the computer running the companion (the installer does this for you)."
+    },
+    "scriptCrash": {
+      "title": "The script stopped with an error",
+      "hint": "Details shows the technical message. If it looks like a bug, use “Report bug”."
+    },
+    "companionUnreachable": {
+      "title": "The companion app can't be reached",
+      "hint": "Check that it is still running, then try again."
+    },
+    "companionError": {
+      "title": "The companion app had a problem",
+      "hint": "Try again. If it keeps happening, use “Report bug”."
+    },
+    "invalidStartUrl": {
+      "title": "The page address isn't valid",
+      "hint": "Start URL #{index} (“{url}”) must be a full address starting with http:// or https://."
+    },
+    "noFields": {
+      "title": "Nothing to scrape yet",
+      "hint": "Open a page and add at least one field or container."
+    },
+    "emptySelector": {
+      "title": "An element has no selector",
+      "hint": "Pick it on the page again, or remove it.",
+      "hintNamed": "Pick “{name}” on the page again, or remove it."
+    },
+    "duplicateFieldNames": {
+      "title": "Two fields have the same name",
+      "hint": "Give each field its own name: {names}."
+    },
+    "emptyFieldName": {
+      "title": "A field has no name",
+      "hint": "Give every field a name."
+    },
+    "invalidRegex": {
+      "title": "A transformation's pattern isn't valid",
+      "hint": "Check the pattern of the “Regex extract” step in {field}."
+    },
+    "invalidEnvVarName": {
+      "title": "“{name}” is not a valid variable name",
+      "hint": "Use letters, digits and underscores only, and don't start with a digit."
     }
   }
 }

@@ -694,8 +694,7 @@
     "insecureCompanionUrl": "Esta dirección enviaría contraseñas y claves sin cifrar a otro equipo. Usa una dirección https://.",
     "emailUnverified": "Este companion necesita una dirección de correo verificada antes de servir tus datos — confírmala en Ajustes → Cuenta.",
     "containerSingleMany": "Contenedor «{name}» añadido — {count} elementos encontrados, pero está en «único», así que solo se usa el primero. Pulsa «(único)» en el árbol para hacerlo repetitivo.",
-    "containerRepeatingOne": "Contenedor «{name}» añadido — solo 1 elemento encontrado. Un contenedor repetitivo es para varios; pulsa «(repetitivo)» en el árbol para hacerlo único.",
-    "noDataTryBrowser": "Puede que el motor estático no vea el contenido de esta página (se crea con JavaScript) — prueba el motor del navegador."
+    "containerRepeatingOne": "Contenedor «{name}» añadido — solo 1 elemento encontrado. Un contenedor repetitivo es para varios; pulsa «(repetitivo)» en el árbol para hacerlo único."
   },
   "frame": {
     "badge": "iframe",
@@ -777,6 +776,118 @@
       "choice": {
         "text": "Estático — rápido; lee la página tal como la envía el servidor.\nNavegador — un navegador real; para páginas creadas con JavaScript, con inicio de sesión o que necesitan desplazarse.\nSi Estático no encuentra nada, suele bastar con Navegador."
       }
+    }
+  },
+  "errors": {
+    "detailsLabel": "Detalles",
+    "copyDetails": "Copiar",
+    "copied": "Copiado",
+    "close": "Cerrar",
+    "noData": {
+      "title": "No se encontraron datos",
+      "hint": "Los selectores no coincidieron con nada que el script pudiera leer. Revisa los elementos resaltados con «Mostrar vista previa».",
+      "hintStatic": "Los selectores no coincidieron con nada que el script pudiera leer. Revisa los elementos resaltados con «Mostrar vista previa». Si la página crea su contenido con JavaScript, prueba el motor Navegador."
+    },
+    "noOutput": {
+      "title": "El script no generó ningún archivo de resultados",
+      "hint": "Se detuvo antes de escribir datos. En Detalles verás qué ocurrió."
+    },
+    "siteUnreachable": {
+      "title": "No se puede acceder al sitio",
+      "hint": "Revisa la dirección de la página y tu conexión a internet (y el proxy, si usas uno)."
+    },
+    "siteForbidden": {
+      "title": "El sitio rechaza el script",
+      "hint": "Requiere iniciar sesión o bloquea las solicitudes automáticas. Usa el motor Navegador con un flujo de inicio de sesión, o envía una cabecera como una cookie."
+    },
+    "pageNotFound": {
+      "title": "No se encontró la página",
+      "hint": "Revisa la dirección de la página en la parte superior del panel."
+    },
+    "rateLimited": {
+      "title": "El sitio indica: demasiadas solicitudes",
+      "hint": "Activa «Pausa entre solicitudes» en Configuración o inténtalo más tarde."
+    },
+    "siteError": {
+      "title": "El sitio informa de un error",
+      "hint": "Suele ser pasajero. Inténtalo más tarde o activa «Reintentar ante errores transitorios» en Configuración."
+    },
+    "httpError": {
+      "title": "El sitio respondió con un error (HTTP {status})",
+      "hint": "En Detalles está la respuesta exacta. Revisa la dirección de la página e inténtalo de nuevo."
+    },
+    "requestFailed": {
+      "title": "Una solicitud falló",
+      "hint": "En Detalles está el motivo."
+    },
+    "pageLoadTimeout": {
+      "title": "La página tardó demasiado en cargar",
+      "hint": "Inténtalo de nuevo. Si la página funciona en tu navegador, puede que solo sea lenta."
+    },
+    "pageLoadFailed": {
+      "title": "No se pudo cargar la página",
+      "hint": "Revisa la dirección de la página y tu conexión e inténtalo de nuevo."
+    },
+    "missingEnvVar": {
+      "title": "El script necesita la variable {name}",
+      "hint": "Introduce un valor de prueba junto al campo que la usa para que la ejecución de prueba continúe, y define la variable en el equipo donde ejecutes el script."
+    },
+    "trialTimeout": {
+      "title": "La ejecución de prueba tardó demasiado",
+      "hint": "Usa menos páginas o solicitudes, o activa «Omitir la ejecución de prueba» en Configuración."
+    },
+    "robotsDisallowed": {
+      "title": "El robots.txt del sitio prohíbe esta solicitud",
+      "hint": "Elige «Omitirla y continuar» o «Avisar, pero hacerla igualmente» en Configuración, o deja fuera esta página."
+    },
+    "pythonMissing": {
+      "title": "No se encontró Python",
+      "hint": "El companion necesita Python 3.9 o superior para probar tu script. Instálalo (o ejecuta de nuevo el instalador) e inténtalo otra vez."
+    },
+    "packageMissing": {
+      "title": "Falta un paquete de Python",
+      "hint": "Instálalo con «pip install {name}» en el equipo donde se ejecuta el companion (el instalador lo hace por ti)."
+    },
+    "scriptCrash": {
+      "title": "El script se detuvo con un error",
+      "hint": "En Detalles está el mensaje técnico. Si parece un fallo del programa, usa «Informar de un error»."
+    },
+    "companionUnreachable": {
+      "title": "No se puede acceder a la aplicación companion",
+      "hint": "Comprueba que sigue en ejecución e inténtalo de nuevo."
+    },
+    "companionError": {
+      "title": "La aplicación companion tuvo un problema",
+      "hint": "Inténtalo de nuevo. Si sigue ocurriendo, usa «Informar de un error»."
+    },
+    "invalidStartUrl": {
+      "title": "La dirección de la página no es válida",
+      "hint": "La URL de inicio n.º {index} («{url}») debe ser una dirección completa que empiece por http:// o https://."
+    },
+    "noFields": {
+      "title": "Todavía no hay nada que extraer",
+      "hint": "Abre una página y añade al menos un campo o contenedor."
+    },
+    "emptySelector": {
+      "title": "Un elemento no tiene selector",
+      "hint": "Vuelve a elegirlo en la página o elimínalo.",
+      "hintNamed": "Vuelve a elegir «{name}» en la página o elimínalo."
+    },
+    "duplicateFieldNames": {
+      "title": "Dos campos tienen el mismo nombre",
+      "hint": "Dale a cada campo su propio nombre: {names}."
+    },
+    "emptyFieldName": {
+      "title": "Un campo no tiene nombre",
+      "hint": "Dale un nombre a cada campo."
+    },
+    "invalidRegex": {
+      "title": "El patrón de una transformación no es válido",
+      "hint": "Revisa el patrón del paso «Extracción con regex» en {field}."
+    },
+    "invalidEnvVarName": {
+      "title": "«{name}» no es un nombre de variable válido",
+      "hint": "Usa solo letras, dígitos y guiones bajos, y no empieces con un dígito."
     }
   }
 }

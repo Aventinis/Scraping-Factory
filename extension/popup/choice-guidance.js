@@ -6,9 +6,9 @@
 // what lives here is the part that reacts to what actually happened:
 //   - after the click that picks a container's element, whether the match
 //     count contradicts the type the user chose beforehand (type and element are
-//     asked in that order, so the count can't be shown next to the choice),
-//   - whether a failed trial run on the Static engine is the "the page builds
-//     its content with JavaScript" case (wording of the suggestion is i18n).
+//     asked in that order, so the count can't be shown next to the choice).
+// (The "try the Browser engine" suggestion after an empty Static trial run lives
+// in error-messages.js — the plain-language "no data" hint, Issue #401.)
 
 /**
  * @typedef {'unknown' | 'zero' | 'singleMany' | 'repeatingOne' | 'ok'} ContainerCountAdvice
@@ -27,20 +27,4 @@ function containerCountAdvice(matchCount, repeating) {
   return 'ok';
 }
 
-// The one stable sentence the companion's verifier uses when a script ran
-// cleanly but wrote nothing (PythonScriptVerifier: "Script ran without errors
-// but returned no data …"). Matching the broader error wording belongs to the
-// error-message issue (#401); this only recognises that one case.
-const NO_DATA_PATTERN = /returned no data/i;
-
-/**
- * True when the Browser engine is worth suggesting: a trial run on the Static
- * engine that came back without data.
- * @param {string | null | undefined} engine
- * @param {string | null | undefined} errorMessage
- */
-function shouldSuggestBrowserEngine(engine, errorMessage) {
-  return engine === 'Static' && NO_DATA_PATTERN.test(String(errorMessage || ''));
-}
-
-module.exports = { containerCountAdvice, shouldSuggestBrowserEngine };
+module.exports = { containerCountAdvice };

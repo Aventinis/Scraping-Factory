@@ -15,7 +15,7 @@ const { getCompanionUrl, setCompanionUrlOverride, resetCompanionUrlOverride, nor
 
 const { STATES } = require('./api-config');
 
-const { showToast, setLastError } = require('./toast');
+const { showToast, showErrorToast, hideToast, setLastError } = require('./toast');
 
 const { buildScrapingConfig, buildVerificationValues, computeScriptFileNamePatch } =
   require('./scraping-config-builder');
@@ -26,7 +26,7 @@ const { buildBootstrapVerificationValues } = require('./api-bootstrap');
 const { getGlobalSettings } = require('../shared/global-settings');
 
 const { loadCompanionReached, markCompanionReached } = require('./companion-guidance');
-const { shouldSuggestBrowserEngine } = require('./choice-guidance');
+const { describeError } = require('./error-messages');
 
 // Resolved fresh in checkCompanion() (default or the user's persisted
 // override, see shared/companion-config.js) and reused by generate()/the
@@ -205,6 +205,22 @@ function buildVerificationErrorMessage(data) {
   return data?.error || t('toast.verificationFailed');
 }
 
+// Issue #401: shows a failed Generate. A failure the mapping recognises (the
+// common classes — no data, site unreachable/refused, missing variable, an
+// invalid configuration, ...) gets a plain-language title and hint with the
+// original text behind "Details"; anything else keeps today's wording. `reportable`
+// = whether "Report bug" is offered (false for a configuration the user can fix).
+// The raw text is always what lands in a bug report.
+function showGenerateFailure(rawMessage, { engine, reportable, fallbackKey }) {
+  const plain = describeError(rawMessage, { engine });
+  const context = reportable ? 'Script generation' : null;
+  if (plain) {
+    showErrorToast({ title: plain.title, hint: plain.hint, details: rawMessage }, context);
+    return;
+  }
+  showToast(t(fallbackKey, { message: rawMessage }), context);
+}
+
 // Issue #239: a component in _state.combinedComponents only ever stores
 // {savedConfigId, name} — its full underlying ScrapingConfig is resolved
 // live here (GET /configs/{id}) at generate/save/export time, never cached
@@ -224,6 +240,7 @@ async function resolveCombinedComponents(components) {
 }
 
 async function generate(bridge) {
+  hideToast(); // a failure from the previous attempt (Issue #401: those stay until closed)
   bridge.stopPreviewIfActive();
   bridge.setState(STATES.GENERATING);
   const state = bridge.getState();
@@ -288,7 +305,7 @@ async function generate(bridge) {
       const data = await res.json().catch(() => null);
       log('GENERATE CONFIG INVALID', data);
       bridge.setState(STATES.IDLE);
-      showToast(t('toast.configInvalid', { message: data?.error || t('toast.verificationFailed') }));
+      showGenerateFailure(data?.error || t('toast.verificationFailed'), { engine: state.engine, reportable: false, fallbackKey: 'toast.configInvalid' });
       return;
     }
     if (res.status === 422) {
@@ -348,11 +365,7 @@ async function generate(bridge) {
   } catch (err) {
     log('GENERATE FAIL', err.message);
     bridge.setState(STATES.IDLE);
-    // Issue #398: a trial run that found nothing on the Static engine is most
-    // often a page built by JavaScript — say so, instead of leaving the user
-    // with "returned no data" alone.
-    const suggestion = shouldSuggestBrowserEngine(state.engine, err.message) ? ` ${t('toast.noDataTryBrowser')}` : '';
-    showToast(t('toast.generationError', { message: err.message }) + suggestion, 'Script generation');
+    showGenerateFailure(err.message, { engine: state.engine, reportable: true, fallbackKey: 'toast.generationError' });
   }
 }
 

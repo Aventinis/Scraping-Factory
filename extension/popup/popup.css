@@ -837,6 +837,20 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
   padding: 4px 8px; flex: none; white-space: nowrap;
 }
 .toast-report-btn:hover { background: var(--overlay-white-strong); }
+/* Issue #401: plain-language error toast — title, hint, original text behind "Details" */
+.toast-body { flex: 1; min-width: 0; }
+.toast-hint { margin: 4px 0 0; font-size: 12px; opacity: .95; }
+.toast-details { margin-top: 6px; font-size: 12px; }
+.toast-details summary { cursor: pointer; }
+.toast-details pre {
+  margin: 4px 0 6px; padding: 6px 8px; max-height: 120px; overflow: auto;
+  background: var(--overlay-white-weak); border-radius: var(--radius-sm);
+  font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; user-select: all;
+}
+.toast-actions { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; flex: none; }
+.toast-close-btn { background: none; color: var(--color-on-accent); font-size: 18px; line-height: 1; padding: 0 4px; }
+.toast-close-btn:hover { background: var(--overlay-white-weak); }
+.toast:has(.toast-body > .toast-hint:not(.hidden)) { align-items: flex-start; }
 /* Issue #85: non-error toast variants (container-group match count) */
 .toast.toast-info { background: var(--color-success); }
 .toast.toast-warn { background: var(--color-warning); }
