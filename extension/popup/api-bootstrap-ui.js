@@ -19,7 +19,7 @@ const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:ApiBootstrapUI');
 const { t } = require('../i18n/i18n');
 const { envVarNoteHtml } = require('./env-var-ui');
-const { autoOpenAdvanced } = require('./api-config-shared-ui');
+const { autoOpenAdvanced } = require('./advanced-disclosure-ui');
 const { pathPickerButtonHtml, pathPickerPanelHtml, wirePathPickerEvents } = require('./json-path-picker-ui');
 const {
   createDefaultBootstrapDraft, createBootstrapPair, detectTokenInResponse, bootstrapDraftFromCaptureEntry,

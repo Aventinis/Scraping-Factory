@@ -28,11 +28,16 @@
     <input type="checkbox" id="toggle-include-output-file" />
     <span data-i18n="idle.outputFileToggle"></span>
   </label>
-  <label class="output-settings-toggle">
-    <input type="checkbox" id="toggle-external-config" />
-    <span data-i18n="idle.externalConfigToggle"></span>
-  </label>
-  <p class="preview-summary" data-i18n="idle.externalConfigHint"></p>
+  <details class="advanced-disclosure" id="external-config-advanced" data-advanced="external-config">
+    <summary data-i18n="settings.externalConfigAdvanced"></summary>
+    <div class="advanced-disclosure-body">
+      <label class="output-settings-toggle">
+        <input type="checkbox" id="toggle-external-config" />
+        <span data-i18n="idle.externalConfigToggle"></span>
+      </label>
+      <p class="preview-summary" data-i18n="idle.externalConfigHint"></p>
+    </div>
+  </details>
   <!-- Issue #292: skip the companion's trial run — the script is returned
        right away, without having been run against the live page. -->
   <label class="output-settings-toggle">

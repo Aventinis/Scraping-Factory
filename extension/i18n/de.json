@@ -266,7 +266,9 @@
     "paginationSuggestionUse": "Muster verwenden",
     "paginationPickNextLink": "„Weiter“-Link auswählen",
     "paginationPickPageLink": "Link zu Seite 2 anklicken, um das Muster zu erkennen",
-    "discoveredUrlsAdvanced": "Erweitert: Startseiten automatisch finden"
+    "discoveredUrlsAdvanced": "Erweitert: Startseiten automatisch finden",
+    "retryAdvanced": "Erweitert: bei welchen Fehlern wiederholen",
+    "dedupRetentionAdvanced": "Erweitert: wie lange Einträge gemerkt werden"
   },
   "requestHeaderPresets": {
     "acceptLanguage": {
@@ -621,7 +623,8 @@
       "openCompanion": "Companion-Adresse in einem Tab öffnen",
       "hint": "Gibt es nur in einem Entwicklungs-Build — die Extension aus einem Release kann das nicht. Für ein selbstsigniertes Entwicklungszertifikat: die Companion-Adresse einmal in einem Browser-Tab öffnen (Button oben), die Warnung akzeptieren und dieses Panel neu laden.",
       "reloadHint": "Gespeichert — Panel neu laden (oder die Verbindung erneut versuchen), damit es wirkt."
-    }
+    },
+    "externalConfigAdvanced": "Erweitert: bearbeitbare Konfigurationsdatei"
   },
   "modals": {
     "fieldName": {
@@ -652,7 +655,8 @@
       "maxSizeLabel": "Max. Dateigröße (MB, optional)",
       "maxSizePlaceholder": "Kein Limit",
       "allowedTypesLabel": "Erlaubte Content-Types (optional, kommagetrennt)",
-      "allowedTypesPlaceholder": "z. B. application/pdf, application/zip"
+      "allowedTypesPlaceholder": "z. B. application/pdf, application/zip",
+      "advanced": "Erweitert: Größen- und Dateityp-Grenzen"
     },
     "apiGroupNew": {
       "nameLabel": "Name der Gruppe (z. B. \"Subkategorie\")",
@@ -822,7 +826,8 @@
     "testValueLabelPassword": "Test-Passwort",
     "timeoutSecondsLabel": "Höchstens warten (Sekunden)",
     "waitAfterRoundSecondsLabel": "Pause nach jeder Runde (Sekunden)",
-    "waitAfterClickSecondsLabel": "Pause nach jedem Klick (Sekunden)"
+    "waitAfterClickSecondsLabel": "Pause nach jedem Klick (Sekunden)",
+    "persistentSessionAdvanced": "Erweitert: zwischen Läufen angemeldet bleiben"
   },
   "help": {
     "requestHeaders": {

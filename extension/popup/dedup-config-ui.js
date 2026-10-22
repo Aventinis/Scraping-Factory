@@ -11,6 +11,8 @@
 const { t } = require('../i18n/i18n');
 const { collectFieldNames } = require('./scraping-config-builder');
 const { addKeyField, removeKeyField, setRetentionKind } = require('./dedup-config');
+const { autoOpenAdvanced } = require('./advanced-disclosure-ui');
+const { dedupRetentionDiffers } = require('./advanced-defaults');
 
 // Duplicated from settings-panel-ui.js's own copy rather than imported —
 // the codebase's "no cross-module includes for small DOM helpers" convention.
@@ -52,6 +54,7 @@ function renderDedupSection(bridge) {
   if (kindSelect && document.activeElement !== kindSelect) kindSelect.value = dedup.retentionKind;
   const valueInput = /** @type {HTMLInputElement | null} */ (document.getElementById('input-dedup-retention-value'));
   if (valueInput && document.activeElement !== valueInput) valueInput.value = dedup.retentionValueText;
+  autoOpenAdvanced(kindSelect, dedupRetentionDiffers(dedup)); // Issue #407
 }
 
 // One row per chosen key field plus a shared <select>/button pair to add a

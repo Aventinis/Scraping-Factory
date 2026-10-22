@@ -12,6 +12,8 @@ const log = createLogger('SF:Popup');
 
 const { t } = require('../i18n/i18n');
 const { applyRecommendedHardening } = require('./hardening-presets');
+const { autoOpenAdvanced } = require('./advanced-disclosure-ui');
+const { retryStatusCodesDiffer } = require('./advanced-defaults');
 
 const { STATES, escapeHtml } = require('./api-config');
 
@@ -79,6 +81,9 @@ function renderSettingsPanel(bridge) {
       const input = /** @type {HTMLInputElement | null} */ (document.getElementById(id));
       if (input && document.activeElement !== input) input.value = state.retry[key];
     });
+
+    // Issue #407: the status-code list sits under "Advanced"; a changed list opens it.
+    autoOpenAdvanced(document.getElementById('input-retry-status-codes'), retryStatusCodesDiffer(state.retry.statusCodesText));
 
     const proxyToggle = document.getElementById('toggle-proxy');
     if (proxyToggle) proxyToggle.checked = state.proxy.enabled;

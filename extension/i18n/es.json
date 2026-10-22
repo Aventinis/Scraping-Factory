@@ -266,7 +266,9 @@
     "paginationSuggestionUse": "Usar este patrón",
     "paginationPickNextLink": "Seleccionar el enlace «Siguiente»",
     "paginationPickPageLink": "Haz clic en un enlace a la página 2 para aprender el patrón",
-    "discoveredUrlsAdvanced": "Avanzado: encontrar páginas de inicio automáticamente"
+    "discoveredUrlsAdvanced": "Avanzado: encontrar páginas de inicio automáticamente",
+    "retryAdvanced": "Avanzado: en qué errores reintentar",
+    "dedupRetentionAdvanced": "Avanzado: cuánto tiempo recordar elementos"
   },
   "requestHeaderPresets": {
     "acceptLanguage": {
@@ -621,7 +623,8 @@
       "openCompanion": "Abrir la dirección del companion en una pestaña",
       "hint": "Solo existe en un build de desarrollo — la extensión instalada desde una release no puede hacerlo. Para un certificado de desarrollo autofirmado: abre la dirección del companion una vez en una pestaña (botón de arriba), acepta la advertencia y recarga este panel.",
       "reloadHint": "Guardado — recarga el panel (o reintenta la conexión) para aplicarlo."
-    }
+    },
+    "externalConfigAdvanced": "Avanzado: archivo de configuración editable"
   },
   "modals": {
     "fieldName": {
@@ -652,7 +655,8 @@
       "maxSizeLabel": "Tamaño máx. de archivo (MB, opcional)",
       "maxSizePlaceholder": "Sin límite",
       "allowedTypesLabel": "Tipos de contenido permitidos (opcional, separados por comas)",
-      "allowedTypesPlaceholder": "p. ej. application/pdf, application/zip"
+      "allowedTypesPlaceholder": "p. ej. application/pdf, application/zip",
+      "advanced": "Avanzado: límites de tamaño y tipo de archivo"
     },
     "apiGroupNew": {
       "nameLabel": "Nombre del grupo (p. ej. \"Subcategoría\")",
@@ -822,7 +826,8 @@
     "testValueLabelPassword": "Contraseña de prueba",
     "timeoutSecondsLabel": "Esperar como máximo (segundos)",
     "waitAfterRoundSecondsLabel": "Pausa tras cada ronda (segundos)",
-    "waitAfterClickSecondsLabel": "Pausa tras cada clic (segundos)"
+    "waitAfterClickSecondsLabel": "Pausa tras cada clic (segundos)",
+    "persistentSessionAdvanced": "Avanzado: mantener la sesión entre ejecuciones"
   },
   "help": {
     "requestHeaders": {

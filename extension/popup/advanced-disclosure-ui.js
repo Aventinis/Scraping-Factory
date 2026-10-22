@@ -63,5 +63,21 @@ function wireAdvancedDisclosureEvents() {
   }, true);
 }
 
-module.exports = { createAdvancedDisclosure, initAdvancedDisclosures, wireAdvancedDisclosureEvents };
+// Issues #404/#407: a rarely needed option sits under a remembered "Advanced".
+// When the option is already in use (on, or different from its default) its
+// disclosure opens once by itself, so a returning user's setting is never
+// tucked away.
+// `section` is any element inside the disclosure; a screen without one (the
+// unit-test fixtures) is left alone.
+function autoOpenAdvanced(section, shouldOpen) {
+  const details = section && section.closest('details.advanced-disclosure');
+  if (!details) return;
+  if (!shouldOpen) { delete details.dataset.autoOpened; return; }
+  if (!details.open && !details.dataset.autoOpened) {
+    details.dataset.autoOpened = '1';
+    details.open = true;
+  }
+}
+
+module.exports = { createAdvancedDisclosure, initAdvancedDisclosures, wireAdvancedDisclosureEvents, autoOpenAdvanced };
 

@@ -266,7 +266,9 @@
     "paginationSuggestionUse": "Use this pattern",
     "paginationPickNextLink": "Select the “Next” link",
     "paginationPickPageLink": "Click a link to page 2 to learn the pattern",
-    "discoveredUrlsAdvanced": "Advanced: find start pages automatically"
+    "discoveredUrlsAdvanced": "Advanced: find start pages automatically",
+    "retryAdvanced": "Advanced: which errors to retry",
+    "dedupRetentionAdvanced": "Advanced: how long to remember items"
   },
   "requestHeaderPresets": {
     "acceptLanguage": {
@@ -621,7 +623,8 @@
       "openCompanion": "Open companion address in a tab",
       "hint": "Only exists in a development build — the extension you install from a release cannot do this. For a self-signed development certificate: open the companion address once in a browser tab (button above) and accept the warning, then reload this panel.",
       "reloadHint": "Saved — reload the panel (or retry the connection) to apply it."
-    }
+    },
+    "externalConfigAdvanced": "Advanced: editable config file"
   },
   "modals": {
     "fieldName": {
@@ -652,7 +655,8 @@
       "maxSizeLabel": "Max. file size (MB, optional)",
       "maxSizePlaceholder": "No limit",
       "allowedTypesLabel": "Allowed content types (optional, comma-separated)",
-      "allowedTypesPlaceholder": "e.g. application/pdf, application/zip"
+      "allowedTypesPlaceholder": "e.g. application/pdf, application/zip",
+      "advanced": "Advanced: size and file-type limits"
     },
     "apiGroupNew": {
       "nameLabel": "Group name (e.g. \"Subcategory\")",
@@ -822,7 +826,8 @@
     "testValueLabelPassword": "Test password",
     "timeoutSecondsLabel": "Wait at most (seconds)",
     "waitAfterRoundSecondsLabel": "Pause after each round (seconds)",
-    "waitAfterClickSecondsLabel": "Pause after each click (seconds)"
+    "waitAfterClickSecondsLabel": "Pause after each click (seconds)",
+    "persistentSessionAdvanced": "Advanced: stay logged in between runs"
   },
   "help": {
     "requestHeaders": {

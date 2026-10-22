@@ -70,12 +70,17 @@
              "Settings" section since it's specifically about reusing
              whatever session a login flow (the Fill/Click actions above)
              establishes, not an unrelated output/inspection format choice. -->
-        <label class="output-settings-toggle" id="persistent-session-toggle-row">
-          <input type="checkbox" id="toggle-persistent-session" />
-          <span data-i18n="browserActions.persistentSessionToggle"></span>
-          <span class="help-host" data-help="help.browserActions.persistentSession"></span>
-        </label>
-        <p class="preview-summary" data-i18n="browserActions.persistentSessionHint"></p>
+        <details class="advanced-disclosure" id="persistent-session-advanced" data-advanced="persistent-session">
+          <summary data-i18n="browserActions.persistentSessionAdvanced"></summary>
+          <div class="advanced-disclosure-body">
+            <label class="output-settings-toggle" id="persistent-session-toggle-row">
+              <input type="checkbox" id="toggle-persistent-session" />
+              <span data-i18n="browserActions.persistentSessionToggle"></span>
+              <span class="help-host" data-help="help.browserActions.persistentSession"></span>
+            </label>
+            <p class="preview-summary" data-i18n="browserActions.persistentSessionHint"></p>
+          </div>
+        </details>
       </div>
     </div>
 
@@ -324,10 +329,16 @@
               <input type="checkbox" id="toggle-retry-exponential" />
               <span data-i18n="idle.retryExponentialToggle"></span>
             </label>
-            <div class="output-settings-row">
-              <label for="input-retry-status-codes" data-i18n="idle.retryStatusCodesLabel"></label>
-              <input type="text" id="input-retry-status-codes" autocomplete="off" />
-            </div>
+            <!-- Issue #407: the default list fits nearly every site -->
+            <details class="advanced-disclosure" id="retry-advanced" data-advanced="retry-status-codes">
+              <summary data-i18n="idle.retryAdvanced"></summary>
+              <div class="advanced-disclosure-body">
+                <div class="output-settings-row">
+                  <label for="input-retry-status-codes" data-i18n="idle.retryStatusCodesLabel"></label>
+                  <input type="text" id="input-retry-status-codes" autocomplete="off" />
+                </div>
+              </div>
+            </details>
             <p class="preview-summary" data-i18n="idle.retryHint"></p>
           </div>
           <!-- Issue #226: custom request headers for flat/container/Blocks
@@ -388,14 +399,20 @@
                   <button id="btn-dedup-output-delta" class="mode-btn active" type="button" data-i18n="idle.dedupOutputDelta" data-i18n-title="idle.dedupOutputDeltaTitle"></button>
                   <button id="btn-dedup-output-append" class="mode-btn" type="button" data-i18n="idle.dedupOutputAppend" data-i18n-title="idle.dedupOutputAppendTitle"></button>
                 </div>
-                <div class="output-settings-row">
-                  <label for="select-dedup-retention-kind" data-i18n="idle.dedupRetentionLabel"></label>
-                  <select id="select-dedup-retention-kind">
-                    <option value="MaxCount" data-i18n="idle.dedupRetentionMaxCount"></option>
-                    <option value="MaxAge" data-i18n="idle.dedupRetentionMaxAge"></option>
-                  </select>
-                  <input type="text" inputmode="numeric" id="input-dedup-retention-value" autocomplete="off" />
-                </div>
+                <!-- Issue #407: the remembered-items limit, left at its default by almost everyone -->
+                <details class="advanced-disclosure" id="dedup-retention-advanced" data-advanced="dedup-retention">
+                  <summary data-i18n="idle.dedupRetentionAdvanced"></summary>
+                  <div class="advanced-disclosure-body">
+                    <div class="output-settings-row">
+                      <label for="select-dedup-retention-kind" data-i18n="idle.dedupRetentionLabel"></label>
+                      <select id="select-dedup-retention-kind">
+                        <option value="MaxCount" data-i18n="idle.dedupRetentionMaxCount"></option>
+                        <option value="MaxAge" data-i18n="idle.dedupRetentionMaxAge"></option>
+                      </select>
+                      <input type="text" inputmode="numeric" id="input-dedup-retention-value" autocomplete="off" />
+                    </div>
+                  </div>
+                </details>
                 <p class="preview-summary" data-i18n="idle.dedupIncrementalHint"></p>
               </div>
             </div>
