@@ -23,6 +23,7 @@
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:ApiConfigUI');
 const { t } = require('../i18n/i18n');
+const { envVarNoteHtml } = require('./env-var-ui');
 const {
   STATES, escapeHtml,
   parseUrlTemplateParts, findUrlTemplateMatches, mergeValueListValues,
@@ -688,8 +689,8 @@ function renderBrowserDiscoverySourceFields(draft, part, source) {
       card.appendChild(pickRow(i, 'selector', action.selector, null));
       card.insertAdjacentHTML('beforeend', `<div class="browser-action-field-row">
           <label>${escapeHtml(t('browserActions.envVarLabel'))}</label>
-          <input type="text" class="discovery-action-env-name" data-part-id="${safePartId}" data-index="${i}" value="${escapeHtml(action.environmentVariableName || '')}" />
-        </div>`);
+          <input type="text" class="discovery-action-env-name" data-env-var data-part-id="${safePartId}" data-index="${i}" placeholder="${escapeHtml(t('envVar.placeholder.fill'))}" value="${escapeHtml(action.environmentVariableName || '')}" />
+        </div>${envVarNoteHtml()}`);
     } else if (action.kind === 'click') {
       card.appendChild(pickRow(i, 'selector', action.selector, null));
       // Issue #267: same first/last/all choice as the top-level click action.
@@ -764,7 +765,7 @@ function renderApiConfigHeaders(capturedHeaders, headerDecisions, bootstrap = nu
               : '') +
           `</span>` +
           (decision.mode === 'env'
-            ? `<input type="text" class="api-config-env-name" data-header-name="${escapeHtml(header.name)}" placeholder="${escapeHtml(t('apiConfig.envNamePlaceholder'))}" value="${escapeHtml(decision.envName || '')}" />`
+            ? `<input type="text" class="api-config-env-name" data-env-var data-header-name="${escapeHtml(header.name)}" placeholder="${escapeHtml(t('envVar.placeholder.apiHeader'))}" value="${escapeHtml(decision.envName || '')}" />`
             : decision.mode === 'bootstrap'
               ? `<input type="text" class="api-config-header-template" data-header-name="${escapeHtml(header.name)}" placeholder="Bearer {${escapeHtml(bootstrap?.name || 'token')}}" value="${escapeHtml(decision.template || '')}" />`
               : '')

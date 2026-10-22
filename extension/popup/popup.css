@@ -1005,3 +1005,14 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
 }
 .advanced-disclosure > summary:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .advanced-disclosure-body { padding-top: 4px; }
+
+/* Issue #397: environment-variable name inputs (env-var-ui.js) — the shared
+   "What is an environment variable?" line, and the inline validation. */
+.env-var-note { margin: 4px 0 6px; font-size: 11px; color: var(--color-text-muted); text-align: left; }
+.env-var-error { margin: 2px 0 6px; font-size: 11px; color: var(--color-danger); text-align: left; overflow-wrap: anywhere; }
+li.env-var-error { list-style: none; }
+input.env-var-invalid, input.env-var-invalid:focus { border-color: var(--color-danger); box-shadow: 0 0 0 3px rgba(239, 68, 68, .18); }
+/* The descriptive "Variable holding …" labels are longer than the 110px the generic
+   .output-settings-row label gives a short name — let them wrap into the space. */
+.output-settings-row:has(> input[data-env-var]) label { width: 150px; }
+@media (max-width: 340px) { .output-settings-row:has(> input[data-env-var]) label { width: 110px; } }

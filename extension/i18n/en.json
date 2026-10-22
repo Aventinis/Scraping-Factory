@@ -138,18 +138,16 @@
     "changeDetectionToggle": "Enable change detection (notify on changes)",
     "notifyEmail": "Email",
     "notifyWebhook": "Webhook",
-    "smtpHostEnvVarLabel": "SMTP host (env var)",
-    "smtpPortEnvVarLabel": "SMTP port (env var)",
-    "smtpUsernameEnvVarLabel": "SMTP username (env var)",
-    "smtpPasswordEnvVarLabel": "SMTP password (env var)",
-    "notifyEmailFromEnvVarLabel": "From address (env var)",
-    "notifyEmailToEnvVarLabel": "To address (env var)",
-    "webhookUrlEnvVarLabel": "Webhook URL (env var)",
-    "envVarPlaceholder": "Environment variable name",
-    "envVarPlaceholderOptional": "Environment variable name (optional)",
+    "smtpHostEnvVarLabel": "Variable holding the SMTP host",
+    "smtpPortEnvVarLabel": "Variable holding the SMTP port",
+    "smtpUsernameEnvVarLabel": "Variable holding the SMTP user name",
+    "smtpPasswordEnvVarLabel": "Variable holding the SMTP password",
+    "notifyEmailFromEnvVarLabel": "Variable holding the sender address",
+    "notifyEmailToEnvVarLabel": "Variable holding the recipient address",
+    "webhookUrlEnvVarLabel": "Variable holding the webhook URL",
     "changeDetectionHint": "Every field here is the name of an environment variable, not the value itself — the real value is read from the environment at the actual run, never written into the script.",
     "proxyToggle": "Use a proxy",
-    "proxyEnvVarLabel": "Proxy list (env var)",
+    "proxyEnvVarLabel": "Variable holding the proxy list",
     "proxyHint": "The name of an environment variable holding a comma-separated list of proxy URLs (e.g. \"http://user:pass@host:port\"), not the addresses themselves — with more than one, the script rotates through them per request.",
     "requestDelayToggle": "Pause between requests",
     "requestDelayFromLabel": "from",
@@ -191,8 +189,6 @@
     "requestHeaderKindValue": "Fixed value",
     "requestHeaderKindEnv": "Environment variable",
     "requestHeaderValuePlaceholder": "Value (e.g. de-CH)",
-    "requestHeaderEnvPlaceholder": "Variable name (e.g. API_KEY)",
-    "requestHeaderTestValuePlaceholder": "Test value for the trial run (not saved)",
     "externalConfigToggle": "Editable config file (XML)",
     "externalConfigHint": "Lets you tweak the start URL(s), the output filename, a field's output name, or a fixed-value-list API parameter's values later, by editing a small XML file — without touching the .py file or reopening the extension. The file doesn't exist yet; the script creates it next to itself the first time it actually runs.",
     "paginationToggle": "Enable pagination",
@@ -314,7 +310,6 @@
     "noHeadersRecorded": "No request headers recorded.",
     "headerModeValue": "Value",
     "headerModeEnv": "Environment variable",
-    "envNamePlaceholder": "ENV_NAME",
     "bodyLabel": "Request body",
     "bodyRootLabel": "Body",
     "bodyToVariableBtn": "→ Variable",
@@ -363,7 +358,6 @@
     "nameLabel": "Placeholder name",
     "usageHint": "Use {placeholder} in a header (\"From token\" mode, e.g. Bearer {placeholder}) or pick \"Token value\" as the value source of a URL part. Discovery requests reuse the headers.",
     "valuePlaceholder": "Value",
-    "testValuePlaceholder": "Test value (trial run only)",
     "addRow": "+ Row",
     "sourceKind": "Token value",
     "sourceKindNote": "Filled with the freshly fetched token ({placeholder}) on every run.",
@@ -714,11 +708,9 @@
     "noSelector": "No element selected",
     "pickSelectorBtn": "Select element",
     "timeoutLabel": "Timeout (ms)",
-    "envVarLabel": "Environment variable",
-    "envNamePlaceholder": "ENV_NAME",
+    "envVarLabel": "Variable holding the text to type",
     "envVarHint": "The value is read from this environment variable at runtime, never stored in the script.",
     "testValueLabel": "Test value",
-    "testValuePlaceholder": "Only for verification",
     "testValueHint": "Used only for the one-time trial run when generating — never stored, never included in the script.",
     "containerSelectorLabel": "Container (optional)",
     "loadMoreButtonSelectorLabel": "\"Load more\" button (optional)",
@@ -775,6 +767,12 @@
     "engine": {
       "choice": {
         "text": "Static — fast; reads the page as the server sends it.\nBrowser — a real browser; for pages built by JavaScript, with a login, or that need scrolling.\nWhen Static finds nothing, Browser is usually the fix."
+      }
+    },
+    "envVar": {
+      "what": {
+        "text": "A named value stored on the computer that runs the script — a safe place for passwords and keys, so they never end up in the script. Enter only its name here (e.g. SMTP_PASSWORD); the script reads the value when it runs, on that computer — not in the browser.",
+        "example": "Windows:  setx SMTP_PASSWORD \"secret\"\nmacOS/Linux:  export SMTP_PASSWORD=\"secret\""
       }
     }
   },
@@ -888,6 +886,26 @@
     "invalidEnvVarName": {
       "title": "“{name}” is not a valid variable name",
       "hint": "Use letters, digits and underscores only, and don't start with a digit."
+    }
+  },
+  "envVar": {
+    "whatLabel": "What is an environment variable?",
+    "startsWithDigit": "“{name}” can't start with a digit — use a name like SMTP_PASSWORD.",
+    "invalidChars": "“{name}” has characters a variable name can't have — use only letters, digits and underscores (no spaces or dashes).",
+    "generateBlocked": "Fix the environment variable name first: {message}",
+    "testValuePlaceholder": "Test value (only for the trial run, never saved)",
+    "placeholder": {
+      "smtpHost": "e.g. SMTP_HOST",
+      "smtpPort": "e.g. SMTP_PORT (optional)",
+      "smtpUser": "e.g. SMTP_USER (optional)",
+      "smtpPassword": "e.g. SMTP_PASSWORD (optional)",
+      "mailFrom": "e.g. MAIL_FROM",
+      "mailTo": "e.g. MAIL_TO",
+      "webhookUrl": "e.g. WEBHOOK_URL",
+      "proxy": "e.g. PROXY_LIST",
+      "header": "e.g. API_KEY",
+      "fill": "e.g. SITE_PASSWORD",
+      "apiHeader": "e.g. API_KEY"
     }
   }
 }

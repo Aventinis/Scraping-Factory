@@ -11,6 +11,7 @@ const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');
 const { t } = require('../i18n/i18n');
 const { STATES, escapeHtml } = require('./api-config');
+const { envVarNoteHtml } = require('./env-var-ui');
 const { addBrowserAction, removeBrowserAction, updateBrowserAction, frameBadgeHtml } =
   require('./scraping-config-builder');
 
@@ -123,8 +124,9 @@ function renderBrowserActions(actions, testValues) {
       row.className = 'browser-action-field-row';
       row.innerHTML =
         `<label>${escapeHtml(t('browserActions.envVarLabel'))}</label>` +
-        `<input type="text" class="browser-action-env-name" data-index="${i}" placeholder="${escapeHtml(t('browserActions.envNamePlaceholder'))}" value="${escapeHtml(action.environmentVariableName || '')}" />`;
+        `<input type="text" class="browser-action-env-name" data-env-var data-index="${i}" placeholder="${escapeHtml(t('envVar.placeholder.fill'))}" value="${escapeHtml(action.environmentVariableName || '')}" />`;
       card.appendChild(row);
+      card.insertAdjacentHTML('beforeend', envVarNoteHtml()); // Issue #397: the shared explanation + popover
 
       const hint = document.createElement('p');
       hint.className = 'browser-action-hint';
@@ -142,7 +144,7 @@ function renderBrowserActions(actions, testValues) {
         testValueRow.innerHTML =
           `<label>${escapeHtml(t('browserActions.testValueLabel'))}</label>` +
           `<input type="password" class="browser-action-test-value" data-env-name="${escapeHtml(envName)}" ` +
-          `placeholder="${escapeHtml(t('browserActions.testValuePlaceholder'))}" value="${escapeHtml(testValues[envName] || '')}" />`;
+          `placeholder="${escapeHtml(t('envVar.testValuePlaceholder'))}" value="${escapeHtml(testValues[envName] || '')}" />`;
         card.appendChild(testValueRow);
 
         const testValueHint = document.createElement('p');

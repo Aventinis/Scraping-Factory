@@ -18,6 +18,7 @@
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:ApiBootstrapUI');
 const { t } = require('../i18n/i18n');
+const { envVarNoteHtml } = require('./env-var-ui');
 const {
   createDefaultBootstrapDraft, createBootstrapPair, detectTokenInResponse, bootstrapDraftFromCaptureEntry,
   wireTokenIntoMainRequest, stripBootstrapReferences, suggestEnvVarName,
@@ -46,8 +47,8 @@ function patchBootstrap(bridge, patch) {
 function pairRowHtml(listKey, pair, index, testValues) {
   const attrs = `data-list="${listKey}" data-index="${index}"`;
   const valueInput = pair.mode === 'env'
-    ? `<input type="text" class="api-bootstrap-pair-env" ${attrs} placeholder="${escapeHtml(t('apiConfig.envNamePlaceholder'))}" value="${escapeHtml(pair.envName)}" />` +
-      `<input type="password" class="api-bootstrap-test-value" data-env-name="${escapeHtml(pair.envName)}" placeholder="${escapeHtml(t('apiBootstrap.testValuePlaceholder'))}" value="${escapeHtml(testValues[pair.envName] || '')}" ${pair.envName ? '' : 'disabled'} autocomplete="off" />`
+    ? `<input type="text" class="api-bootstrap-pair-env" data-env-var ${attrs} placeholder="${escapeHtml(t('envVar.placeholder.apiHeader'))}" value="${escapeHtml(pair.envName)}" />` +
+      `<input type="password" class="api-bootstrap-test-value" data-env-name="${escapeHtml(pair.envName)}" placeholder="${escapeHtml(t('envVar.testValuePlaceholder'))}" value="${escapeHtml(testValues[pair.envName] || '')}" ${pair.envName ? '' : 'disabled'} autocomplete="off" />`
     : `<input type="text" class="api-bootstrap-pair-value" ${attrs} placeholder="${escapeHtml(t('apiBootstrap.valuePlaceholder'))}" value="${escapeHtml(pair.value)}" />`;
   return `
       <li class="api-bootstrap-pair-row">
@@ -81,6 +82,7 @@ function recordingListHtml(entries) {
 
 function bootstrapConfigHtml(bootstrap, recordingEntries, testValues) {
   return `
+      ${envVarNoteHtml()}
       <div class="actions">
         <button type="button" id="btn-api-bootstrap-from-recording" class="btn-secondary btn-tiny">${escapeHtml(t('apiBootstrap.fromRecordingBtn'))}</button>
       </div>

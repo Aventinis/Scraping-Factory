@@ -138,18 +138,16 @@
     "changeDetectionToggle": "Änderungserkennung aktivieren (Benachrichtigung bei Änderungen)",
     "notifyEmail": "E-Mail",
     "notifyWebhook": "Webhook",
-    "smtpHostEnvVarLabel": "SMTP-Host (Env-Var)",
-    "smtpPortEnvVarLabel": "SMTP-Port (Env-Var)",
-    "smtpUsernameEnvVarLabel": "SMTP-Benutzer (Env-Var)",
-    "smtpPasswordEnvVarLabel": "SMTP-Passwort (Env-Var)",
-    "notifyEmailFromEnvVarLabel": "Absender (Env-Var)",
-    "notifyEmailToEnvVarLabel": "Empfänger (Env-Var)",
-    "webhookUrlEnvVarLabel": "Webhook-URL (Env-Var)",
-    "envVarPlaceholder": "Name der Umgebungsvariable",
-    "envVarPlaceholderOptional": "Name der Umgebungsvariable (optional)",
+    "smtpHostEnvVarLabel": "Variable mit dem SMTP-Host",
+    "smtpPortEnvVarLabel": "Variable mit dem SMTP-Port",
+    "smtpUsernameEnvVarLabel": "Variable mit dem SMTP-Benutzernamen",
+    "smtpPasswordEnvVarLabel": "Variable mit dem SMTP-Passwort",
+    "notifyEmailFromEnvVarLabel": "Variable mit der Absenderadresse",
+    "notifyEmailToEnvVarLabel": "Variable mit der Empfängeradresse",
+    "webhookUrlEnvVarLabel": "Variable mit der Webhook-URL",
     "changeDetectionHint": "Jedes Feld ist der Name einer Umgebungsvariable, nicht der Wert selbst — der eigentliche Wert wird beim echten Lauf aus der Umgebung gelesen, niemals ins Skript geschrieben.",
     "proxyToggle": "Proxy verwenden",
-    "proxyEnvVarLabel": "Proxy-Liste (Env-Var)",
+    "proxyEnvVarLabel": "Variable mit der Proxy-Liste",
     "proxyHint": "Der Name einer Umgebungsvariable mit einer durch Kommas getrennten Liste von Proxy-URLs (z. B. \"http://user:pass@host:port\"), nicht die Adressen selbst — bei mehreren Proxys wechselt das Skript bei jeder Anfrage reihum durch.",
     "requestDelayToggle": "Pause zwischen Anfragen",
     "requestDelayFromLabel": "von",
@@ -191,8 +189,6 @@
     "requestHeaderKindValue": "Fester Wert",
     "requestHeaderKindEnv": "Umgebungsvariable",
     "requestHeaderValuePlaceholder": "Wert (z. B. de-CH)",
-    "requestHeaderEnvPlaceholder": "Variablenname (z. B. API_KEY)",
-    "requestHeaderTestValuePlaceholder": "Testwert für den Probelauf (wird nicht gespeichert)",
     "externalConfigToggle": "Bearbeitbare Konfigurationsdatei (XML)",
     "externalConfigHint": "Ermöglicht es, die Start-URL(s), den Namen der Ausgabedatei, den Ausgabenamen eines Feldes oder die Werteliste eines API-Parameters später über eine kleine XML-Datei anzupassen — ohne die .py-Datei zu bearbeiten oder die Erweiterung erneut zu öffnen. Die Datei existiert noch nicht; das Skript legt sie beim ersten echten Lauf neben sich selbst an.",
     "paginationToggle": "Pagination aktivieren",
@@ -314,7 +310,6 @@
     "noHeadersRecorded": "Keine Request-Header aufgezeichnet.",
     "headerModeValue": "Wert",
     "headerModeEnv": "Umgebungsvariable",
-    "envNamePlaceholder": "ENV_NAME",
     "bodyLabel": "Request-Body",
     "bodyRootLabel": "Body",
     "bodyToVariableBtn": "→ Variabel",
@@ -363,7 +358,6 @@
     "nameLabel": "Platzhaltername",
     "usageHint": "{placeholder} in einem Header verwenden (Modus „Aus Token“, z. B. Bearer {placeholder}) oder „Token-Wert“ als Wertquelle eines URL-Teils wählen. Discovery-Anfragen übernehmen die Header.",
     "valuePlaceholder": "Wert",
-    "testValuePlaceholder": "Testwert (nur Probelauf)",
     "addRow": "+ Zeile",
     "sourceKind": "Token-Wert",
     "sourceKindNote": "Wird bei jedem Lauf mit dem frisch geholten Token ({placeholder}) befüllt.",
@@ -714,11 +708,9 @@
     "noSelector": "Kein Element ausgewählt",
     "pickSelectorBtn": "Element auswählen",
     "timeoutLabel": "Timeout (ms)",
-    "envVarLabel": "Umgebungsvariable",
-    "envNamePlaceholder": "ENV_NAME",
+    "envVarLabel": "Variable mit dem einzugebenden Text",
     "envVarHint": "Der Wert wird zur Laufzeit aus dieser Umgebungsvariable gelesen, nie im Skript gespeichert.",
     "testValueLabel": "Testwert",
-    "testValuePlaceholder": "Nur für die Prüfung",
     "testValueHint": "Wird nur für den einmaligen Testlauf bei „Skript erzeugen“ verwendet — nie gespeichert, nie im Skript enthalten.",
     "containerSelectorLabel": "Container (optional)",
     "loadMoreButtonSelectorLabel": "„Mehr laden“-Button (optional)",
@@ -775,6 +767,12 @@
     "engine": {
       "choice": {
         "text": "Statisch — schnell; liest die Seite so, wie der Server sie schickt.\nBrowser — ein echter Browser; für Seiten, die per JavaScript aufgebaut werden, mit Login oder die Scrollen brauchen.\nFindet Statisch nichts, hilft meist Browser."
+      }
+    },
+    "envVar": {
+      "what": {
+        "text": "Ein benannter Wert auf dem Rechner, der das Skript ausführt — ein sicherer Ort für Passwörter und Schlüssel, damit sie nie im Skript landen. Trage hier nur den Namen ein (z. B. SMTP_PASSWORD); das Skript liest den Wert beim Lauf auf diesem Rechner — nicht im Browser.",
+        "example": "Windows:  setx SMTP_PASSWORD \"geheim\"\nmacOS/Linux:  export SMTP_PASSWORD=\"geheim\""
       }
     }
   },
@@ -888,6 +886,26 @@
     "invalidEnvVarName": {
       "title": "„{name}“ ist kein gültiger Variablenname",
       "hint": "Nutze nur Buchstaben, Ziffern und Unterstriche, und beginne nicht mit einer Ziffer."
+    }
+  },
+  "envVar": {
+    "whatLabel": "Was ist eine Umgebungsvariable?",
+    "startsWithDigit": "„{name}“ darf nicht mit einer Ziffer beginnen — nimm einen Namen wie SMTP_PASSWORD.",
+    "invalidChars": "„{name}“ enthält Zeichen, die ein Variablenname nicht haben darf — nur Buchstaben, Ziffern und Unterstriche (keine Leerzeichen oder Bindestriche).",
+    "generateBlocked": "Korrigiere zuerst den Namen der Umgebungsvariable: {message}",
+    "testValuePlaceholder": "Testwert (nur für den Testlauf, wird nie gespeichert)",
+    "placeholder": {
+      "smtpHost": "z. B. SMTP_HOST",
+      "smtpPort": "z. B. SMTP_PORT (optional)",
+      "smtpUser": "z. B. SMTP_USER (optional)",
+      "smtpPassword": "z. B. SMTP_PASSWORD (optional)",
+      "mailFrom": "z. B. MAIL_FROM",
+      "mailTo": "z. B. MAIL_TO",
+      "webhookUrl": "z. B. WEBHOOK_URL",
+      "proxy": "z. B. PROXY_LIST",
+      "header": "z. B. API_KEY",
+      "fill": "z. B. SITE_PASSWORD",
+      "apiHeader": "z. B. API_KEY"
     }
   }
 }

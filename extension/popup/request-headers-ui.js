@@ -35,8 +35,8 @@ function rowHtml(row, index, testValues) {
           <option value="value"${isEnv ? '' : ' selected'}>${escapeHtml(t('idle.requestHeaderKindValue'))}</option>
           <option value="env"${isEnv ? ' selected' : ''}>${escapeHtml(t('idle.requestHeaderKindEnv'))}</option>
         </select>
-        <input type="text" class="request-header-value" value="${escapeHtml(row.value)}" placeholder="${escapeHtml(t(isEnv ? 'idle.requestHeaderEnvPlaceholder' : 'idle.requestHeaderValuePlaceholder'))}" autocomplete="off" spellcheck="false" />
-        ${isEnv && row.value.trim() ? `<input type="password" class="request-header-test-value" value="${escapeHtml(testValue)}" placeholder="${escapeHtml(t('idle.requestHeaderTestValuePlaceholder'))}" autocomplete="off" />` : ''}
+        <input type="text" class="request-header-value"${isEnv ? ' data-env-var' : ''} value="${escapeHtml(row.value)}" placeholder="${escapeHtml(t(isEnv ? 'envVar.placeholder.header' : 'idle.requestHeaderValuePlaceholder'))}" autocomplete="off" spellcheck="false" />
+        ${isEnv && row.value.trim() ? `<input type="password" class="request-header-test-value" value="${escapeHtml(testValue)}" placeholder="${escapeHtml(t('envVar.testValuePlaceholder'))}" autocomplete="off" />` : ''}
         <button type="button" class="btn-danger btn-tiny btn-remove-request-header" data-index="${index}">${escapeHtml(t('common.remove'))}</button>
       </div>`;
 }
@@ -88,7 +88,7 @@ function syncRow(rowEl, row, testValues) {
     testInput = document.createElement('input');
     testInput.type = 'password';
     testInput.className = 'request-header-test-value';
-    testInput.placeholder = t('idle.requestHeaderTestValuePlaceholder');
+    testInput.placeholder = t('envVar.testValuePlaceholder');
     testInput.autocomplete = 'off';
     rowEl.insertBefore(testInput, rowEl.querySelector('.btn-remove-request-header'));
   } else if (!needsTestInput && testInput) {
