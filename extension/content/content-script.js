@@ -1,8 +1,7 @@
 // Exported for testing (Jest/jsdom). In the extension build the chrome API
 // calls are guarded by the message listener below.
 
-const { createLogger, getLogBuffer } =
-  typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+const { createLogger, getLogBuffer } = require('../shared/logger');
 const log = createLogger('SF:Content');
 
 // Surfaces otherwise-silent script errors in the bug report (see GET_LOGS
@@ -848,18 +847,16 @@ if (typeof window !== 'undefined') {
   window.addEventListener('message', handleFramePathMessage);
 }
 
-if (typeof module !== 'undefined') {
-  module.exports = {
-    buildSelector, countSelectorMatches, splitTextFilter, normalizeText, querySelectorAllWithText, querySelectorWithText,
-    appendTextFilterToSelector, collectElementAttributes, collectOwnText, elementPath, serializeDomTree,
-    matchFlatFields, matchGroupTree, computePreviewMatches, matchHoverHighlight,
-    findValueInJson, siblingFields, siblingFieldsAt, findApiCandidates,
-    deriveItemsAndValuePath, deriveApiTreeSkeleton,
-    scriptTagSelector, findEmbeddedJsonCandidates,
-    parseRobotsTxt, evaluateRobotsTxt, checkRobotsTxt,
-    findIframeSelectorForWindow, resolveFramePath, frameDepth,
-  };
-}
+module.exports = {
+  buildSelector, countSelectorMatches, splitTextFilter, normalizeText, querySelectorAllWithText, querySelectorWithText,
+  appendTextFilterToSelector, collectElementAttributes, collectOwnText, elementPath, serializeDomTree,
+  matchFlatFields, matchGroupTree, computePreviewMatches, matchHoverHighlight,
+  findValueInJson, siblingFields, siblingFieldsAt, findApiCandidates,
+  deriveItemsAndValuePath, deriveApiTreeSkeleton,
+  scriptTagSelector, findEmbeddedJsonCandidates,
+  parseRobotsTxt, evaluateRobotsTxt, checkRobotsTxt,
+  findIframeSelectorForWindow, resolveFramePath, frameDepth,
+};
 
 // ── Overlay ──────────────────────────────────────────────────────────────────
 

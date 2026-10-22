@@ -18,6 +18,7 @@
 // running on the default port is never used or touched.
 //
 // Usage: node e2e/examples/issue-396-help-popover-check.js
+const fs = require('fs');
 const path = require('path');
 const { launchBrowser, openPopup, focusFixture, waitForIdleScreen, startCompanion, startFixture } = require('../harness');
 
@@ -124,35 +125,35 @@ function assert(condition, message) {
     console.log('language switch + dark theme: ok');
 
     // 7) "Advanced" disclosure: collapsed by default, remembered per section across a reload.
-    const addDisclosure = () => popup.evaluate(() => {
-      const details = SFAdvancedDisclosureUI.createAdvancedDisclosure('e2e-rare-options');
-      details.querySelector('.advanced-disclosure-body').textContent = 'Rarely needed option';
-      document.getElementById('settings-section-content').appendChild(details);
-      return SFAdvancedDisclosureUI.initAdvancedDisclosures();
-    });
-    await addDisclosure();
-    const summary = popup.locator('details[data-advanced="e2e-rare-options"] > summary');
-    assert(!(await popup.locator('details[data-advanced="e2e-rare-options"]').evaluate((d) => d.open)), 'the disclosure should start collapsed');
-    await summary.scrollIntoViewIfNeeded();
-    await summary.click();
-    await popup.locator('details[data-advanced="e2e-rare-options"]').evaluate((d) => d.open || Promise.reject(new Error('click did not open it')));
+    // No screen uses one yet, so the idle screen's partial is served with two
+    // extra disclosures appended (the extension is a bundle, there are no globals
+    // to build one from the page).
+    const idlePartial = fs.readFileSync(path.join(__dirname, '../../extension/dist/popup/screens/idle.html'), 'utf8');
+    const disclosure = (id, text) => `<details class="advanced-disclosure" data-advanced="${id}"><summary>Advanced</summary><div class="advanced-disclosure-body">${text}</div></details>`;
+    await popup.route('**/popup/screens/idle.html', (route) => route.fulfill({
+      contentType: 'text/html',
+      body: idlePartial + disclosure('e2e-rare-options', 'Rarely needed option') + disclosure('e2e-other-section', 'Another one'),
+    }));
+    const section = (id) => popup.locator(`details[data-advanced="${id}"]`);
+    const reopenPopup = async () => {
+      await popup.reload();
+      await focusFixture(fixturePage);
+      await waitForIdleScreen(popup);
+    };
+    await reopenPopup();
+    assert(!(await section('e2e-rare-options').evaluate((d) => d.open)), 'the disclosure should start collapsed');
+    await section('e2e-rare-options').locator('> summary').scrollIntoViewIfNeeded();
+    await section('e2e-rare-options').locator('> summary').click();
+    assert(await section('e2e-rare-options').evaluate((d) => d.open), 'click did not open it');
     await popup.waitForTimeout(300);
     const stored = await popup.evaluate(() => chrome.storage.local.get('advancedSections'));
     assert(JSON.stringify(stored.advancedSections) === '{"e2e-rare-options":true}', `unexpected stored state: ${JSON.stringify(stored)}`);
-    await popup.reload();
-    await focusFixture(fixturePage);
-    await waitForIdleScreen(popup);
-    await popup.click('#settings-section-toggle');
-    await addDisclosure();
-    assert(await popup.locator('details[data-advanced="e2e-rare-options"]').evaluate((d) => d.open), 'an opened section should be open again after a reload');
-    await popup.evaluate(() => {
-      const other = SFAdvancedDisclosureUI.createAdvancedDisclosure('e2e-other-section');
-      document.getElementById('settings-section-content').appendChild(other);
-      return SFAdvancedDisclosureUI.initAdvancedDisclosures();
-    });
-    assert(!(await popup.locator('details[data-advanced="e2e-other-section"]').evaluate((d) => d.open)), 'another section must stay collapsed');
-    await popup.locator('details[data-advanced="e2e-rare-options"]').scrollIntoViewIfNeeded();
-    await popup.locator('#settings-section-content').screenshot({ path: path.join(__dirname, 'issue-396-advanced-disclosure.png') });
+
+    await reopenPopup();
+    assert(await section('e2e-rare-options').evaluate((d) => d.open), 'an opened section should be open again after a reload');
+    assert(!(await section('e2e-other-section').evaluate((d) => d.open)), 'another section must stay collapsed');
+    await section('e2e-rare-options').scrollIntoViewIfNeeded();
+    await section('e2e-other-section').screenshot({ path: path.join(__dirname, 'issue-396-advanced-disclosure.png') });
     console.log('advanced disclosure: remembered per section across a reload');
 
     console.log('OK — help popover works with mouse and keyboard at 280/320/400 px, and the Advanced disclosure remembers its state.');

@@ -165,7 +165,7 @@ PEM file plus `CertificateKeyPath`) — installer: `--host 0.0.0.0 --tls-cert FI
 refuses to start with plain HTTP on a non-local address. The extension itself
 only talks to `https://` addresses or to this computer. Self-signed certificates
 and plain HTTP to another machine exist only in development builds (running from
-source, "Load unpacked" from a checkout); the release bundles cannot be switched
+source, "Load unpacked" from a checkout's `extension/dist/`); the release bundles cannot be switched
 into that mode.
 
 ### 2. Load the browser extension
@@ -173,7 +173,10 @@ into that mode.
 1. Open your browser's extension management page
    (`chrome://extensions`, `edge://extensions`, or Opera's equivalent).
 2. Enable **Developer mode**.
-3. Click **Load unpacked** and select the `extension/` directory.
+3. Build it once (`cd extension && npm install && npm run build`; `npm run build:watch`
+   keeps rebuilding while you edit), then click **Load unpacked** and select the
+   **`extension/dist/`** directory. (The release bundles already contain the built
+   extension.)
 4. Click the extension's toolbar icon to open the side panel (Chrome/Edge) or
    sidebar (Opera).
 
@@ -194,7 +197,7 @@ and a troubleshooting/FAQ page.
 ## Architecture, in brief
 
 ```
-extension/                  Browser extension (Manifest V3)
+extension/                  Browser extension (Manifest V3); `npm run build` bundles it into extension/dist/
   background/               Service worker — message relay only
   content/                  Content script — DOM highlighting, selector/API extraction
   popup/                    Side panel UI (the actual state machine)
@@ -368,8 +371,12 @@ dotnet build companion/ScrapingFactory.sln
 # Run the .NET tests
 dotnet test companion/ScrapingFactory.sln
 
-# Run the extension tests
-cd extension && npm install && npm test
+# Run the extension tests and the type check
+cd extension && npm install && npm test && npm run typecheck
+
+# Build the extension into extension/dist/ (what "Load unpacked" points at);
+# `npm run build:watch` rebuilds on every change
+npm run build
 ```
 
 ## Known issues

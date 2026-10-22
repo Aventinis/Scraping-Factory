@@ -7,7 +7,8 @@
 # Usage: install/build-bundle.sh <rid> <version> [output-dir]
 #   rid: win-x64 | linux-x64 | osx-arm64 | osx-x64
 # Needs the .NET SDK (cross-publishing for the other operating systems works
-# from any host) and `zip` for Windows bundles.
+# from any host), Node.js 22 + npm (the extension is built with esbuild, Issue
+# #389) and `zip` for Windows bundles.
 set -euo pipefail
 
 RID="${1:?usage: build-bundle.sh <rid> <version> [output-dir]}"
@@ -30,20 +31,16 @@ dotnet publish "$ROOT/companion/ScrapingFactory.Companion" -c Release -r "$RID" 
   -p:DebugType=None -p:Version="$VERSION" -o "$BUNDLE/companion" >/dev/null
 rm -f "$BUNDLE/companion/"*.staticwebassets.endpoints.json
 
-# The extension as "Load unpacked" wants it: runtime files only.
-(cd "$ROOT/extension" && tar -cf - --exclude=node_modules --exclude='*.test.js' --exclude=types \
-  --exclude=tsconfig.json --exclude=package.json --exclude=package-lock.json --exclude=coverage .) \
-  | tar -xf - -C "$BUNDLE/extension"
-
-# Issue #352: the shipped extension is the release channel — it cannot be
-# switched into the development behaviours (plain http to another machine).
-# Fails loudly if the line this rewrites ever changes, instead of silently
-# shipping a development build.
-BUILD_CONFIG="$BUNDLE/extension/shared/build-config.js"
-sed -i.bak "s/^  const CHANNEL = 'development';/  const CHANNEL = 'release';/" "$BUILD_CONFIG"
-rm -f "$BUILD_CONFIG.bak"
-grep -q "^  const CHANNEL = 'release';" "$BUILD_CONFIG" \
-  || { echo "build-bundle.sh: could not set the release channel in $BUILD_CONFIG" >&2; exit 1; }
+# The extension as "Load unpacked" wants it: the esbuild output (Issue #389),
+# built here for the release channel. Issue #352: the shipped extension cannot
+# be switched into the development behaviours (plain http to another machine) —
+# the channel is a compile-time constant, and build.js fails the build if a
+# release build did not produce it, instead of silently shipping a development
+# build. Source maps are left out of the bundle.
+EXT_BUILD="$STAGE/extension-build"
+(cd "$ROOT/extension" && { [ -d node_modules/esbuild ] || npm ci --silent; } \
+  && node build.js --channel release --outdir "$EXT_BUILD" >/dev/null)
+(cd "$EXT_BUILD" && tar -cf - --exclude='*.map' .) | tar -xf - -C "$BUNDLE/extension"
 
 case "$RID" in
   win-*) cp "$ROOT/install/install.ps1" "$ROOT/install/uninstall.ps1" "$BUNDLE/" ;;

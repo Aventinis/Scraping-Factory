@@ -214,27 +214,25 @@ function stopRecording() {
   persistRecordingFlag(false);
 }
 
-if (typeof module !== 'undefined') {
-  module.exports = {
-    buildEntry,
-    hasNextLinkRel,
-    truncateBody,
-    shouldSkipBody,
-    normalizeHeaders,
-    resolveUrl,
-    classifyRequestBody,
-    readFetchRequestBody,
-    recordEntry,
-    startRecording,
-    stopRecording,
-    shouldResumeRecording,
-    MAX_CAPTURED_ENTRIES,
-    MAX_BODY_CHARS,
-    MAX_BODY_BYTES_TO_READ,
-    MAX_REQUEST_HEADERS,
-    MAX_HEADER_VALUE_CHARS,
-  };
-}
+module.exports = {
+  buildEntry,
+  hasNextLinkRel,
+  truncateBody,
+  shouldSkipBody,
+  normalizeHeaders,
+  resolveUrl,
+  classifyRequestBody,
+  readFetchRequestBody,
+  recordEntry,
+  startRecording,
+  stopRecording,
+  shouldResumeRecording,
+  MAX_CAPTURED_ENTRIES,
+  MAX_BODY_CHARS,
+  MAX_BODY_BYTES_TO_READ,
+  MAX_REQUEST_HEADERS,
+  MAX_HEADER_VALUE_CHARS,
+};
 
 // ── fetch/XHR interception ──────────────────────────────────────────────────
 // Only patches real browser globals — guarded so requiring this file under
@@ -242,7 +240,7 @@ if (typeof module !== 'undefined') {
 // and no real page traffic to intercept anyway) doesn't install patches that
 // would leak into unrelated tests.
 
-if (typeof window !== 'undefined' && typeof module === 'undefined') {
+if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'test') {
   if (shouldResumeRecording()) startRecording(); // same-origin navigation mid-recording — see known limitations above
 
   window.addEventListener('message', (event) => {

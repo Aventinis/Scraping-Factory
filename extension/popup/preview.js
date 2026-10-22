@@ -13,46 +13,40 @@
 // feature (previewActive/#btn-preview), which highlights matched elements
 // on the live page and has nothing to do with the generated script's
 // actual trial-run output.
-const SFPreview = (function() {
-const { createLogger } =
-  typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');
 
-const { serializeGroupTree } =
-  typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
+const { serializeGroupTree } = require('./container-tree');
 
 function startPreview(bridge) {
-  const state = bridge.getState();
-  const hasConfig = state.mode === 'container' ? state.groups.length > 0 : state.fields.length > 0;
-  if (!hasConfig) return;
+const state = bridge.getState();
+const hasConfig = state.mode === 'container' ? state.groups.length > 0 : state.fields.length > 0;
+if (!hasConfig) return;
 
-  const payload = state.mode === 'container'
-    ? { groups: serializeGroupTree(state.groups) }
-    : { fields: state.fields.map(f => ({ name: f.name, selector: f.selector })) };
-  log('PREVIEW_START', { mode: state.mode, ...payload });
-  chrome.runtime.sendMessage({ type: 'PREVIEW_START', mode: state.mode, ...payload });
-  bridge.patchState({ previewActive: true, previewSummary: null });
+const payload = state.mode === 'container'
+  ? { groups: serializeGroupTree(state.groups) }
+  : { fields: state.fields.map(f => ({ name: f.name, selector: f.selector })) };
+log('PREVIEW_START', { mode: state.mode, ...payload });
+chrome.runtime.sendMessage({ type: 'PREVIEW_START', mode: state.mode, ...payload });
+bridge.patchState({ previewActive: true, previewSummary: null });
 }
 
 function stopPreview(bridge) {
-  log('PREVIEW_STOP');
-  chrome.runtime.sendMessage({ type: 'PREVIEW_STOP' });
-  bridge.patchState({ previewActive: false, previewSummary: null });
+log('PREVIEW_STOP');
+chrome.runtime.sendMessage({ type: 'PREVIEW_STOP' });
+bridge.patchState({ previewActive: false, previewSummary: null });
 }
 
 function togglePreview(bridge) {
-  if (bridge.getState().previewActive) stopPreview(bridge); else startPreview(bridge);
+if (bridge.getState().previewActive) stopPreview(bridge); else startPreview(bridge);
 }
 
 // Called wherever the Fields/Groups configuration changes or a new selection
 // starts — an active preview would otherwise keep showing highlights for a
 // configuration that no longer matches the current state.
 function stopPreviewIfActive(bridge) {
-  if (bridge.getState().previewActive) stopPreview(bridge);
+if (bridge.getState().previewActive) stopPreview(bridge);
 }
 
-  return {startPreview, stopPreview, togglePreview, stopPreviewIfActive};
-})();
+module.exports = {startPreview, stopPreview, togglePreview, stopPreviewIfActive};
 
-if (typeof module !== 'undefined') module.exports = SFPreview;
-if (typeof self !== 'undefined') self.SFPreview = SFPreview;

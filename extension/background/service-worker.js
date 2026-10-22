@@ -2,11 +2,7 @@
 // The side panel cannot send messages directly to a content script — it
 // must go through the service worker, which has access to chrome.tabs.
 
-if (typeof require === 'undefined' && typeof importScripts === 'function') {
-  importScripts('../shared/logger.js');
-}
-const { createLogger, getLogBuffer } =
-  typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+const { createLogger, getLogBuffer } = require('../shared/logger');
 const log = createLogger('SF:SW');
 
 // Surfaces otherwise-silent script errors in the bug report (see GET_LOGS

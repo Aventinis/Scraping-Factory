@@ -6,6 +6,9 @@ This is **not** a replacement for the Jest unit test suite — it's specifically
 
 ## Setup (one-time)
 
+The extension is loaded from `extension/dist/` (the esbuild output, Issue #389). `extension/` needs its own `npm install` once; after that `launchBrowser()` runs `extension/build.js` itself before every launch, so a check always runs against the current sources — there is no separate build step to remember. (Consequence: the popup has no page-level globals any more — drive it through the DOM, `chrome.storage` or Playwright routes, not `page.evaluate(() => SFSomething…)`.)
+
+
 ```bash
 cd e2e
 npm install   # also downloads Playwright's own Chromium build (~190 MB)

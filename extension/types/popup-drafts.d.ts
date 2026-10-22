@@ -9,8 +9,7 @@
 // namespace here (`SFDraft`) rather than as a local `@typedef` duplicated
 // per file: JSDoc `@typedef`s declared inside a plain script (no
 // import/export, like every file in extension/popup/) are file-scoped to
-// TypeScript's checker, not implicitly global the way a runtime
-// `self.SFXxx` assignment is — so e.g. container-tree.js's own tree-node
+// TypeScript's checker — so e.g. container-tree.js's own tree-node
 // shape couldn't otherwise be referenced from scraping-config-builder.js's
 // JSDoc without either this shared file or a real (unused-at-runtime)
 // `import(...)` type query.

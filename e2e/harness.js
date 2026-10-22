@@ -5,13 +5,15 @@
 // (no chrome.* extension APIs, no side panel, no content-script injection).
 // Manual/on-demand only, not wired into CI — see README.md for why.
 const { chromium } = require('playwright');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { resolveFixture, REPO_ROOT } = require('./fixtures');
 
-const EXTENSION_PATH = path.join(REPO_ROOT, 'extension');
+// "Load unpacked" points at extension/dist/ — the esbuild output (Issue #389).
+const EXTENSION_DIR = path.join(REPO_ROOT, 'extension');
+const EXTENSION_PATH = path.join(EXTENSION_DIR, 'dist');
 const COMPANION_CSPROJ = path.join(REPO_ROOT, 'companion/ScrapingFactory.Companion/ScrapingFactory.Companion.csproj');
 
 async function waitForHttpOk(url, { timeoutMs = 20000, intervalMs = 300 } = {}) {
@@ -37,6 +39,10 @@ async function waitForHttpOk(url, { timeoutMs = 20000, intervalMs = 300 } = {}) 
 // registered. Playwright's own unbranded Chromium build has no such
 // restriction, so this harness deliberately never passes `channel: 'chrome'`.
 async function launchBrowser({ headless = false } = {}) {
+  // Always rebuild first (tens of milliseconds) so a check never runs against
+  // a stale or missing dist/. Needs `npm install` in extension/ once.
+  execFileSync(process.execPath, [path.join(EXTENSION_DIR, 'build.js')], { cwd: EXTENSION_DIR, stdio: 'pipe' });
+
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-e2e-'));
   const context = await chromium.launchPersistentContext(userDataDir, {
     headless,

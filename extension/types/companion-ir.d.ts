@@ -15,9 +15,8 @@
 // and never serialized as-is.
 //
 // This file has no top-level import/export, so every declaration below is a
-// plain global ambient type (not an ES module) — consistent with every
-// other file in this project being a classic `<script>`, not a module (see
-// CLAUDE.md's "IIFE assigned to one self.SFXxx global" convention). Grouped
+// plain global ambient type (not an ES module) — consistent with the
+// extension's sources being CommonJS files rather than ES modules. Grouped
 // under one `SFWire` namespace purely to keep ~25 type names from crowding
 // the global namespace and to avoid colliding with any popup-internal
 // `@typedef` of a similar name (e.g. a module's own internal `GroupNode`
