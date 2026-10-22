@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.19.20](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.19...v1.19.20) (2026-10-22)
+
+
+### Features
+
+* **pagination:** {url} is optional in a page-number template for a single start page ([#405](https://github.com/Aventinis/Scraping-Factory/issues/405)) ([e6c59eb](https://github.com/Aventinis/Scraping-Factory/commit/e6c59eb3ab269ff7800792367884b29c8b62252e))
+* **pagination:** derive a page-number URL template from the start URL or a clicked link ([#405](https://github.com/Aventinis/Scraping-Factory/issues/405)) ([759654c](https://github.com/Aventinis/Scraping-Factory/commit/759654c7b17a32a13dab04704f684e1fd7bf5422))
+* **pagination:** proposal banner, link pickers, popovers and Advanced for the pagination helpers ([#405](https://github.com/Aventinis/Scraping-Factory/issues/405)) ([f180f3a](https://github.com/Aventinis/Scraping-Factory/commit/f180f3a51d5e2cd2372266bd22bb7b8375d6486d))
+
 ## [1.19.19](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.18...v1.19.19) (2026-10-22)
 
 
