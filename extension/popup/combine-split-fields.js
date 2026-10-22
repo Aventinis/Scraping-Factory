@@ -19,6 +19,17 @@ function isDerivedField(transforms) {
     (transforms[0].kind === 'combineFields' || transforms[0].kind === 'splitField');
 }
 
+// Issue #407: the split modal shows "Part (1 = first)" — people count from
+// one — while the wire format (SplitFieldTransform.Index) stays 0-based.
+// These two are the only place the +1/-1 lives.
+function partNumberToIndex(partNumber) {
+  return Number.isFinite(partNumber) && partNumber >= 1 ? Math.floor(partNumber) - 1 : 0;
+}
+
+function indexToPartNumber(index) {
+  return Number.isFinite(index) && index >= 0 ? Math.floor(index) + 1 : 1;
+}
+
 function buildCombineFieldsTransform(sourceFieldNames, separator) {
   return { kind: 'combineFields', sourceFieldNames, separator: separator || ' ' };
 }
@@ -41,6 +52,6 @@ function splitFieldIsValid(sourceFieldName) {
 
 module.exports = {
   isDerivedField, buildCombineFieldsTransform, buildSplitFieldTransform,
-  combineFieldsIsValid, splitFieldIsValid,
+  combineFieldsIsValid, splitFieldIsValid, partNumberToIndex, indexToPartNumber,
 };
 

@@ -1,6 +1,6 @@
 const {
   isDerivedField, buildCombineFieldsTransform, buildSplitFieldTransform,
-  combineFieldsIsValid, splitFieldIsValid,
+  combineFieldsIsValid, splitFieldIsValid, partNumberToIndex, indexToPartNumber,
 } = require('./combine-split-fields');
 
 describe('isDerivedField', () => {
@@ -56,5 +56,23 @@ describe('combineFieldsIsValid / splitFieldIsValid', () => {
     expect(splitFieldIsValid('')).toBe(false);
     expect(splitFieldIsValid('   ')).toBe(false);
     expect(splitFieldIsValid('A')).toBe(true);
+  });
+});
+
+// Issue #407: the UI counts parts from 1, the wire format stays 0-based.
+describe('partNumberToIndex / indexToPartNumber', () => {
+  test('part 1 is wire index 0, and the two convert back and forth', () => {
+    expect(partNumberToIndex(1)).toBe(0);
+    expect(partNumberToIndex(3)).toBe(2);
+    expect(indexToPartNumber(0)).toBe(1);
+    expect(indexToPartNumber(2)).toBe(3);
+    for (let i = 0; i < 5; i++) expect(partNumberToIndex(indexToPartNumber(i))).toBe(i);
+  });
+
+  test('an empty, zero or negative input falls back to the first part', () => {
+    expect(partNumberToIndex(NaN)).toBe(0);
+    expect(partNumberToIndex(0)).toBe(0);
+    expect(partNumberToIndex(-4)).toBe(0);
+    expect(indexToPartNumber(undefined)).toBe(1);
   });
 });
