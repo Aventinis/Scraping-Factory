@@ -38,6 +38,15 @@ describe('TypeScript setup', () => {
     expect(code).toContain('applyRecommendedHardening');
   });
 
+  test('the wire and draft types are modules, not ambient namespaces', () => {
+    for (const file of ['types/wire.ts', 'types/drafts.ts']) {
+      const text = fs.readFileSync(path.join(ROOT, file), 'utf8');
+      expect([file, /declare\s+namespace/.test(text)]).toEqual([file, false]);
+      expect([file, /^export (interface|type) /m.test(text)]).toEqual([file, true]);
+    }
+    expect(fs.readdirSync(path.join(ROOT, 'types')).filter((f) => f.endsWith('.d.ts'))).toEqual([]);
+  });
+
   test('a converted file is TypeScript through and through: no leftover CommonJS exports or @ts-check pragma', () => {
     const files = tsSources();
     expect(files.length).toBeGreaterThan(0);

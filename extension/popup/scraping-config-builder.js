@@ -1,4 +1,6 @@
 // @ts-check
+/** @import * as SFWire from '../types/wire' */
+/** @import * as SFDraft from '../types/drafts' */
 // ── Pure scraping-config builder functions ─────────────────────────────────
 // Extracted from popup.js (see CLAUDE.md's "Popup module boundaries"
 // architecture decision) — every function here is a pure data
@@ -7,7 +9,7 @@
 // (see scraping-config-builder.test.js).
 //
 // Issue #238: JSDoc-annotated and typechecked via `// @ts-check` + tsconfig
-// (`npm run typecheck`), against types/companion-ir.d.ts's `SFWire`
+// (`npm run typecheck`), against types/wire.ts's `SFWire`
 // namespace. `buildScrapingConfig`/`buildConfigExport` deliberately return
 // a plain `object` rather than `SFWire.ScrapingConfig` — each one has five
 // mutually-exclusive branches (blocks/combined/container/api/flat) built as
@@ -20,7 +22,7 @@
 // SFDraft.ProxyState, SFDraft.PaginationState, SFDraft.HardeningState,
 // SFDraft.GlobalSettings, SFDraft.Field, SFDraft.CombinedComponent,
 // SFDraft.Block, SFDraft.BrowserAction, SFDraft.ContainerNode — all live in
-// types/popup-drafts.d.ts rather than as local @typedefs here, since
+// types/drafts.ts rather than as local @typedefs here, since
 // container-tree.js's own JSDoc needs to reference the very same shapes
 // (see that file's own top-of-file comment).
 const { escapeHtml } = require('./api-config');

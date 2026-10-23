@@ -1,4 +1,6 @@
 // @ts-check
+/** @import * as SFWire from '../types/wire' */
+/** @import * as SFDraft from '../types/drafts' */
 // Reverses buildScrapingConfig's wire output into a _state patch (the "Load" half of saved configurations). Pure and
 // DOM-free. Inputs are typed against SFWire, the reconstructed draft shapes against SFDraft. applyConfigToState returns a
 // loose `object`: it spans every mode's slice at once and no interface would describe the five exclusive branches; its

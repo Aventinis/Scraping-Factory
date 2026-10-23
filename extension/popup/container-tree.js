@@ -1,7 +1,9 @@
 // @ts-check
+/** @import * as SFWire from '../types/wire' */
+/** @import * as SFDraft from '../types/drafts' */
 // Pure, DOM-free helpers for Container mode's group tree: draft build/resolve/insert/remove, the repeating-ancestor
 // check, node labels and serialization to the wire format. The tree nodes are a popup-internal draft shape
-// (`kind: 'group'|'field'`, lowercase `mode`), typed as SFDraft.* in types/popup-drafts.d.ts; serializeGroupTree
+// (`kind: 'group'|'field'`, lowercase `mode`), typed as SFDraft.* in types/drafts.ts; serializeGroupTree
 // produces SFWire.ContainerNode.
 
 const { t } = require('../i18n/i18n');

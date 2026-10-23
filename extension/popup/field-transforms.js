@@ -1,4 +1,5 @@
 // @ts-check
+/** @import * as SFWire from '../types/wire' */
 // Pure, DOM-free helpers for a field's transform chain (applied in order; mirrors the IR's FieldTransform.cs). The
 // objects already match the wire format 1:1, so there is no serialize step. Typed against SFWire; a `switch` on
 // `t.kind` inside a loop needs a few `@type` casts where narrowing cannot follow.

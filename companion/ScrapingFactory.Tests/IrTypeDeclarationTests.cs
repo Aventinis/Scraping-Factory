@@ -8,24 +8,24 @@ using Xunit;
 
 namespace ScrapingFactory.Tests;
 
-// Issue #388: extension/types/companion-ir.d.ts (the SFWire namespace the extension's JSDoc types refer to) is a
+// Issue #388: extension/types/wire.ts (the SFWire types the extension's JSDoc and TypeScript code refer to) is a
 // hand-kept description of this assembly's wire types. Generating it was evaluated and rejected (see
 // docs/ARCHITECTURE.md, "Wire-format mirrors"): this test is the guard instead. It parses the declaration file and
 // compares it with the real IR types by reflection:
 //   * every interface must have an IR class of the same name with exactly the same JSON properties (the polymorphic
-//     `kind` discriminator is the one allowed extra), and a `required` C# property must not be optional in the .d.ts;
+//     `kind` discriminator is the one allowed extra), and a `required` C# property must not be optional in wire.ts;
 //   * every string-literal union that names an IR enum must list exactly the enum's members.
 // Anything knowingly different goes into the allow-lists below with its reason.
 public class IrTypeDeclarationTests
 {
-    private static readonly string DeclarationFile = Path.Combine(TestVectors.RepoRoot, "extension", "types", "companion-ir.d.ts");
+    private static readonly string DeclarationFile = Path.Combine(TestVectors.RepoRoot, "extension", "types", "wire.ts");
 
     // interface name -> reason; the interface is not an IR class (or intentionally differs).
     private static readonly Dictionary<string, string> InterfaceNotCompared = new()
     {
     };
 
-    // "Interface.property" -> reason: a deliberate difference between the .d.ts and the IR class.
+    // "Interface.property" -> reason: a deliberate difference between wire.ts and the IR class.
     private static readonly Dictionary<string, string> PropertyDifferences = new()
     {
     };
@@ -133,7 +133,7 @@ public class IrTypeDeclarationTests
     {
         if (InterfaceNotCompared.ContainsKey(name)) return;
         var type = IrType(name);
-        Assert.True(type is not null, $"companion-ir.d.ts declares interface {name}, but the IR has no type of that name (rename it, or add it to InterfaceNotCompared with a reason).");
+        Assert.True(type is not null, $"wire.ts declares interface {name}, but the IR has no type of that name (rename it, or add it to InterfaceNotCompared with a reason).");
 
         var declared = ParseInterfaces()[name];
         var actual = WireProperties(type!).ToDictionary(JsonName, p => p);
@@ -143,14 +143,14 @@ public class IrTypeDeclarationTests
         var missingInDts = actual.Keys.Where(k => !declaredNames.Contains(k) && !PropertyDifferences.ContainsKey($"{name}.{k}")).Order().ToList();
         var extraInDts = declaredNames.Where(k => !actual.ContainsKey(k) && !PropertyDifferences.ContainsKey($"{name}.{k}")).Order().ToList();
         Assert.True(missingInDts.Count == 0 && extraInDts.Count == 0,
-            $"companion-ir.d.ts and the IR disagree on {name}:" +
-            (missingInDts.Count > 0 ? $"{Environment.NewLine}  in the IR but not in the .d.ts: {string.Join(", ", missingInDts)}" : "") +
-            (extraInDts.Count > 0 ? $"{Environment.NewLine}  in the .d.ts but not in the IR: {string.Join(", ", extraInDts)}" : ""));
+            $"wire.ts and the IR disagree on {name}:" +
+            (missingInDts.Count > 0 ? $"{Environment.NewLine}  in the IR but not in wire.ts: {string.Join(", ", missingInDts)}" : "") +
+            (extraInDts.Count > 0 ? $"{Environment.NewLine}  in wire.ts but not in the IR: {string.Join(", ", extraInDts)}" : ""));
 
         var optionalButRequired = declared
             .Where(m => m.Optional && actual.TryGetValue(m.Name, out var p) && p.GetCustomAttribute<System.Runtime.CompilerServices.RequiredMemberAttribute>() is not null)
             .Select(m => m.Name).Where(n => !PropertyDifferences.ContainsKey($"{name}.{n}")).ToList();
-        Assert.True(optionalButRequired.Count == 0, $"{name}: required in the IR but optional in the .d.ts: {string.Join(", ", optionalButRequired)}");
+        Assert.True(optionalButRequired.Count == 0, $"{name}: required in the IR but optional in wire.ts: {string.Join(", ", optionalButRequired)}");
     }
 
     [Theory]
@@ -160,7 +160,7 @@ public class IrTypeDeclarationTests
         var declared = ParseLiteralUnions()[name].Order().ToList();
         var actual = Enum.GetNames(IrType(name)!).Order().ToList();
         Assert.True(declared.SequenceEqual(actual),
-            $"companion-ir.d.ts type {name} = {string.Join(" | ", declared)} but the enum has {string.Join(", ", actual)}.");
+            $"wire.ts type {name} = {string.Join(" | ", declared)} but the enum has {string.Join(", ", actual)}.");
     }
 
     [Fact]
