@@ -1,5 +1,5 @@
 // Pure, DOM-free helpers for Output Blueprints: editing a blueprint's target-field list or tree (create / edit modal) and
-// building the per-scrape source-field mapping draft. The tree structure reuses container-tree.js's generic path helpers
+// building the per-scrape source-field mapping draft. The tree structure reuses container-tree.ts's generic path helpers
 // (insertContainerNode, removeGroupTreeNode, ...), which only read `.children`, against the much smaller
 // {kind, name, children} schema node (Architecture Decision #13).
 // ── Editing a blueprint's own field-name list (create / edit modal, Flat) ──
@@ -17,7 +17,7 @@ function updateBlueprintFieldName(fieldNames, index, name) {
 }
 
 // direction: -1 (up) or +1 (down) — same swap-with-adjacent-sibling
-// convention as field-transforms.js's moveTransform/combined-config.js's
+// convention as field-transforms.ts's moveTransform/combined-config.js's
 // moveComponent.
 function moveBlueprintFieldName(fieldNames, index, direction) {
   const target = index + direction;
@@ -198,7 +198,7 @@ function parseBlueprintSchemaTree(wireNodes) {
 }
 
 // Reverse of parseBlueprintSchemaTree — strips the popup's internal `kind`
-// tag, mirrors container-tree.js's own serializeGroupTree in spirit.
+// tag, mirrors container-tree.ts's own serializeGroupTree in spirit.
 function serializeBlueprintSchemaTree(nodes) {
   return nodes.map(node => (node.kind === 'group'
     ? { name: node.name, children: serializeBlueprintSchemaTree(node.children) }

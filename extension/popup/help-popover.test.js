@@ -1,4 +1,4 @@
-// Issue #396: pure logic of the help popover (help-popover.js).
+// Issue #396: pure logic of the help popover (help-popover.ts).
 const {
   isValidHelpKey, getHelpEntry, collectHelpKeysFromHtml, collectHelpEntries,
   helpEntryProblems, helpEntryLengthWarnings, nextOpenHelpId, helpHostHtml,

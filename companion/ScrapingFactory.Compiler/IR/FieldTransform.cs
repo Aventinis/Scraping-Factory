@@ -84,7 +84,7 @@ public sealed class ToCurrencyTransform : FieldTransform
 
     public const string DefaultFormat = "1.234,56";
 
-    // Mirrored by _CURRENCY_FORMATS in the templates and CURRENCY_FORMATS in field-transforms.js.
+    // Mirrored by _CURRENCY_FORMATS in the templates and CURRENCY_FORMATS in field-transforms.ts.
     public static readonly IReadOnlyList<string> SupportedFormats = ["1.234,56", "1,234.56", "1 234,56", "1'234.56"];
 }
 

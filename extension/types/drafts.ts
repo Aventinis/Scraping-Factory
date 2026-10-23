@@ -4,7 +4,7 @@
 
 import type * as SFWire from './wire';
 
-// ── Container mode (container-tree.js) ───────────────────────────────────
+// ── Container mode (container-tree.ts) ───────────────────────────────────
 
 export type FieldMode = 'text' | 'attribute' | 'exists' | 'ownText';
 
@@ -250,14 +250,14 @@ export interface Block {
   groups?: ContainerNode[];
 }
 
-// ── Output Blueprints: tree-schema draft (config-import.js, scraping-config-builder.js) ──
+// ── Output Blueprints: tree-schema draft (config-import.ts, scraping-config-builder.js) ──
 
 export interface OutputBlueprintTreeNode {
   name: string;
   children?: OutputBlueprintTreeNode[];
 }
 
-// ── API mode: token/auth bootstrap (api-bootstrap.js, Issue #220) ─────────
+// ── API mode: token/auth bootstrap (api-bootstrap.ts, Issue #220) ─────────
 
 export interface ApiBootstrapPair {
   name: string;
@@ -276,7 +276,7 @@ export interface ApiBootstrap {
   bodyFields: ApiBootstrapPair[];
 }
 
-// ── API mode: cursor/token pagination (api-cursor-pagination.js, Issue #224) ─
+// ── API mode: cursor/token pagination (api-cursor-pagination.ts, Issue #224) ─
 
 export interface ApiCursorPagination {
   nextCursorPath: string;

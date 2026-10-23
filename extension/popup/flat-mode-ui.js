@@ -11,12 +11,12 @@ const { transformsAreValid, addTransform } = require('./field-transforms');
 const { appendTextFilter } = require('./selector-text-filter');
 const { resetTextFilter, effectiveMatchCount, wireTextFilter } = require('./selector-text-filter-ui');
 const { renderTransformList, renderTransformPreview, wireTransformList } = require('./field-transforms-ui');
-// Pure data helpers are imported from container-tree.js; small DOM helpers (renderMatchCountHint) are duplicated instead.
+// Pure data helpers are imported from container-tree.ts; small DOM helpers (renderMatchCountHint) are duplicated instead.
 const { guessUrlAttribute, parseAllowedContentTypes, megabytesToBytes } = require('./container-tree');
 const { isDerivedField } = require('./combine-split-fields');
 const { openCombineFieldModal, openSplitFieldModal } = require('./combine-split-fields-ui');
 
-// A combine / split field has no real selector: show a distinguishing description instead (like container-tree.js's groupNodeSuffix).
+// A combine / split field has no real selector: show a distinguishing description instead (like container-tree.ts's groupNodeSuffix).
 function fieldSelectorLabel(field) {
   if (isDerivedField(field.transforms)) {
     const transform = field.transforms[0];

@@ -2,7 +2,7 @@
 // "Felder kombinieren"/"Feld aufteilen" field creation flow — replaces the
 // original Issue #206 design, where combineFields/splitField were just two
 // more kinds in the generic per-field transform-chain editor
-// (field-transforms.js/-ui.js), reachable only by first faking a normal
+// (field-transforms.ts/-ui.js), reachable only by first faking a normal
 // field (a click-based selector pick the resulting value never actually
 // uses). A combine/split-derived field has no selector/path of its own —
 // its whole value comes from other already-configured sibling fields — so
@@ -38,7 +38,7 @@ function buildSplitFieldTransform(sourceFieldName, separator, index) {
   return { kind: 'splitField', sourceFieldName, separator: separator || ' ', index: Number.isFinite(index) && index >= 0 ? index : 0 };
 }
 
-// Same structural checks field-transforms.js's own transformsAreValid
+// Same structural checks field-transforms.ts's own transformsAreValid
 // already applies to these two kinds when they could still appear inside
 // an arbitrary chain — exposed directly here since the dedicated modals
 // below only ever build one transform at a time, not a whole chain.

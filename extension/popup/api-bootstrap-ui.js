@@ -1,6 +1,6 @@
 // API mode: token/auth bootstrap value (Issue #220) — DOM rendering and
 // event wiring for the "Auth bootstrap (token)" section on the API_CONFIG
-// screen (see api-bootstrap.js for the pure draft/wire logic, the same
+// screen (see api-bootstrap.ts for the pure draft/wire logic, the same
 // <feature>.js/<feature>-ui.js split the rest of the popup uses). Every
 // function that touches state takes popup.js's `bridge` as its first
 // parameter, per Architecture Decision #12.

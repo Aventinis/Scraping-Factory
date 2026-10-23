@@ -114,7 +114,7 @@ function wireMessageListener(bridge) {
         });
       } else if (state.selectionKind === 'paginationPageLink') {
         // Issue #405: a link to page 2 — only its address is wanted (the
-        // page-number template is derived from it, see pagination-template.js).
+        // page-number template is derived from it, see pagination-template.ts).
         const linkHref = resolveLinkHref(message.attributes?.href || '', message.url || state.url || '');
         if (!linkHref) showToast(t('toast.paginationNotALink'), null, 'warn');
         bridge.setState(STATES.IDLE, {
