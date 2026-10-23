@@ -1,51 +1,28 @@
 namespace ScrapingFactory.Compiler.Backends;
 
-// Issue #122: a capped sample of what a /generate trial run actually
-// scraped — built from data PythonScriptVerifier already reads to check
-// "at least one row/element" (see ScriptVerificationResult.RowCount), only
-// kept instead of discarded when the caller opted in (VerifyAsync's
-// includePreview parameter). Never built/returned unless requested, so the
-// default (no preview) path allocates nothing extra beyond today.
+// A capped sample of what a trial run scraped, kept (instead of discarded after the row-count check) only when
+// the caller asked for it.
 public sealed class ScriptPreviewData
 {
-    // "Csv" | "Xml" | "Json" — mirrors OutputFormat, so the extension knows
-    // which of Columns/Rows vs. XmlSample/JsonSample is populated without
-    // re-deriving it. Json covers two structurally different shapes (Issue
-    // #86) — a flat array of records populates Columns/Rows exactly like
-    // Csv does, a nested tree populates JsonSample exactly like Xml does —
-    // so the extension still only needs to check "is there a text sample"
-    // vs. "is there a table" rather than a third distinct rendering path.
+    // "Csv" | "Xml" | "Json". Tells the extension which members are set: Columns/Rows (Csv, and Json's flat array)
+    // or XmlSample/JsonSample (trees).
     public required string OutputFormat { get; init; }
 
-    // The same count VerifyAsync already computed for pass/fail (CSV data-row
-    // count, or XML descendant-element count) — duplicated here so this
-    // object is self-contained and the extension doesn't need to cross-
-    // reference RowCount separately.
+    // The count verification used for pass/fail (data rows, or descendant elements).
     public required int TotalCount { get; init; }
 
-    // True when Rows/the XmlSample's top-level elements were capped below
-    // the actual total — lets the extension show a "showing N of M" note.
+    // Rows / top-level elements were capped below TotalCount.
     public required bool Truncated { get; init; }
 
-    // Csv, and Json's flat-array shape: header names in the order they
-    // appear in output.csv/the first record of output.json.
+    // Column names in file order.
     public IReadOnlyList<string>? Columns { get; init; }
 
-    // Csv, and Json's flat-array shape: up to PythonScriptVerifier's row
-    // cap, each row keyed by column name (matches Columns) rather than a
-    // plain positional array — easier for the extension to render as a
-    // table without also shipping Columns' order-dependent zip logic
-    // client-side.
+    // Capped rows keyed by column name.
     public IReadOnlyList<IReadOnlyDictionary<string, string>>? Rows { get; init; }
 
-    // Xml only (Phase A — see PLAN-trial-run-data-preview.md): a pretty-
-    // printed, capped fragment of output.xml, shown read-only as text. A
-    // structured tree view (mirroring the container/API config tree UI) is
-    // deliberately out of scope for this phase.
+    // Pretty-printed, capped fragment of output.xml, shown read-only.
     public string? XmlSample { get; init; }
 
-    // Json's tree shape only (Issue #86) — same "Phase A, no structured
-    // tree view yet" scope as XmlSample above, just for output.json's
-    // nested-object shape instead of output.xml.
+    // The same for output.json in its tree shape.
     public string? JsonSample { get; init; }
 }

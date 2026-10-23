@@ -3,25 +3,16 @@ using ScrapingFactory.Compiler.IR;
 
 namespace ScrapingFactory.Compiler.Backends.Python;
 
-// Serializes an ApiConfig into Python source: a handful of module-level
-// constants (FIELDS/PARAMETERS/HEADERS) that scraper_api.py.j2 embeds
-// verbatim. Same rationale as PythonGroupTreeLiteral: ApiParameterSource has
-// three shapes (StaticListSource/DiscoverySource/RangeSource) with no common
-// structure for Scriban to loop over generically, so the dict-of-dicts shape
-// is built here in C#, and the template's runtime code only needs to switch
-// on a "kind" string identical to the wire format's JSON discriminator (see
-// ApiConfig.cs's [JsonPolymorphic] attribute).
+// Serializes an ApiConfig into Python source: module-level constants (FIELDS/PARAMETERS/HEADERS/...) that the API
+// templates embed verbatim. Built here as dict-of-dicts because ApiParameterSource has no common structure for
+// Scriban to loop over; the runtime switches on the same "kind" string as the wire format.
 internal static class PythonApiConfigLiteral
 {
     public static string RenderFields(List<ApiField> fields) =>
         RenderList(fields, RenderField);
 
-    // Serializes ApiConfig.Groups (Issue #54's tree shape) the same way
-    // PythonGroupTreeLiteral serializes Container-Mode's GroupNode tree:
-    // a nested list-of-dicts literal that scraper_api_grouped.py.j2's
-    // _extract_api_group() walks at runtime, using presence of the
-    // "children" key as the group-vs-field discriminator (mirroring
-    // ApiNodeJsonConverter's own structural discriminator on the wire).
+    // The tree shape as a nested list-of-dicts literal, like PythonGroupTreeLiteral; the runtime tells group from field
+    // by the "children" key.
     public static string RenderGroups(IReadOnlyList<ApiGroup> groups, int indent = 0) =>
         RenderNodes(groups, indent);
 
@@ -53,20 +44,12 @@ internal static class PythonApiConfigLiteral
         return $$"""{"name": {{PythonLiteral.Str(group.Name)}}, "path": {{PythonLiteral.Str(group.Path)}}, "children": {{children}}}""";
     }
 
-    // Always includes "transform" (Issue #84) and "hiddenFromOutput" (Issue
-    // #206 follow-up), even when empty/False — used by both the flat
-    // RenderFields (FIELDS constant) and the tree shape's RenderNode above,
-    // so _resolve_field/_extract_api_group can apply them uniformly via a
-    // plain node.get(...) either way. "path" is "" (never None) when blank —
-    // a derived (combineFields/splitField) field's own path is never read
-    // at runtime (see _resolve_field's/_extract_api_group's "if path:"
-    // guard).
+    // Always includes "transform" and "hiddenFromOutput", even when empty, so the runtime reads them with a plain
+    // node.get(...). "path" is "" (never None) when blank: a derived field's path is never read.
     private static string RenderField(ApiField field) =>
         $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "path": {{PythonLiteral.Str(field.Path ?? "")}}, "transform": {{PythonFieldTransformLiteral.Render(field.Transforms)}}, "hiddenFromOutput": {{(field.HiddenFromOutput ? "True" : "False")}}}""";
 
-    // See PythonGroupTreeLiteral.CollectHiddenFieldNames — same "global by
-    // name" tree walk, used to build scraper_api_grouped.py.j2's own
-    // HIDDEN_FIELD_NAMES set.
+    // See PythonGroupTreeLiteral.CollectHiddenFieldNames (feeds HIDDEN_FIELD_NAMES).
     public static IReadOnlyList<string> CollectHiddenFieldNames(IReadOnlyList<ApiNode> nodes) => nodes.SelectMany(node => node switch
     {
         ApiField { HiddenFromOutput: true } field => new[] { field.Name },
@@ -75,13 +58,7 @@ internal static class PythonApiConfigLiteral
         _ => Array.Empty<string>(),
     }).ToList();
 
-    // Serializes ApiConfig.Body (Issue #55's request-body tree) into the
-    // same kind of dict-of-dicts literal RenderGroups already builds for the
-    // response-extraction tree — the runtime's _render_body (Phase B3) reads
-    // it back using the same "which key is present" discriminator this
-    // codebase already uses everywhere a JsonConverter sniffs structurally
-    // (ContainerNodeJsonConverter, ApiNodeJsonConverter, ApiBodyNodeJsonConverter).
-    // "None" (Python's null) for an absent Body — a bodyless GET/POST.
+    // The request-body tree as a dict-of-dicts literal read back by the runtime's _render_body. "None" for no body.
     public static string RenderBody(ApiBodyNode? body) => body is null ? "None" : RenderBodyNode(body);
 
     private static string RenderBodyNode(ApiBodyNode node) => node switch
@@ -106,9 +83,7 @@ internal static class PythonApiConfigLiteral
         ? $$"""{"parameterName": {{PythonLiteral.Str(variable.ParameterName)}}, "coerceTo": {{PythonLiteral.Str(coerceTo.ToString())}}}"""
         : $$"""{"parameterName": {{PythonLiteral.Str(variable.ParameterName)}}}""";
 
-    // "value" is omitted entirely for Null (mirrors RenderFormatSuffix's
-    // "omit rather than send a meaningless default" pattern above) — the
-    // runtime's _render_body never looks at it for kind == "Null" either.
+    // "value" is omitted for Null; the runtime never reads it then.
     private static string RenderBodyLiteral(ApiBodyLiteral literal) => literal.Kind switch
     {
         ApiBodyLiteralKind.String => $$"""{"kind": "String", "value": {{PythonLiteral.Str(literal.StringValue!)}}}""",
@@ -118,10 +93,7 @@ internal static class PythonApiConfigLiteral
         _ => throw new InvalidOperationException($"Unknown ApiBodyLiteralKind: {literal.Kind}"),
     };
 
-    // Issue #136: "None" (Python's null) when no EmbeddedJsonSource is set —
-    // the runtime's _extract_embedded_json helper is only called when this
-    // constant isn't None, mirroring RenderBody's own "None means absent"
-    // convention above.
+    // "None" when no EmbeddedJsonSource is set (the runtime helper is only called otherwise).
     public static string RenderEmbeddedJsonSource(EmbeddedJsonSource? source) => source is null
         ? "None"
         : $$"""{"scriptSelector": {{PythonLiteral.Str(source.ScriptSelector)}}}""";
@@ -133,12 +105,8 @@ internal static class PythonApiConfigLiteral
     public static string RenderHeaders(List<ApiHeader>? headers) =>
         headers is null ? "[]" : RenderList(headers, RenderHeader);
 
-    // Mirrors ScrapingPlanValidator.ValidateApiHeaders's "meaningful" check
-    // (IsNullOrWhiteSpace, not just != null) — an empty-string
-    // EnvironmentVariableName alongside a set Value passes validation as "Value
-    // wins" there, so codegen has to agree on which one is actually set.
-    // Issue #220: a Template header renders as {"name", "template"} —
-    // _build_headers() substitutes the bootstrap value into it at runtime.
+    // Mirrors ScrapingPlanValidator.ValidateApiHeaders' "meaningful" check (IsNullOrWhiteSpace): an empty env var name
+    // next to a set Value means "Value wins", so codegen must agree. A Template header renders as {"name", "template"}.
     private static string RenderHeader(ApiHeader header) =>
         !string.IsNullOrWhiteSpace(header.EnvironmentVariableName)
             ? $$"""{"name": {{PythonLiteral.Str(header.Name)}}, "envVar": {{PythonLiteral.Str(header.EnvironmentVariableName)}}}"""
@@ -146,17 +114,12 @@ internal static class PythonApiConfigLiteral
                 ? $$"""{"name": {{PythonLiteral.Str(header.Name)}}, "template": {{PythonLiteral.Str(header.Template!)}}}"""
                 : $$"""{"name": {{PythonLiteral.Str(header.Name)}}, "value": {{PythonLiteral.Str(header.Value!)}}}""";
 
-    // Issue #220: "None" when no bootstrap is configured, same "None means
-    // absent" convention as RenderBody/RenderEmbeddedJsonSource. Body fields
-    // reuse the header dict shape ({"name", "value"|"envVar"}) so the
-    // runtime resolves both through one helper (_resolve_bootstrap_pairs).
+    // "None" without a bootstrap. Body fields reuse the header dict shape so one runtime helper resolves both.
     public static string RenderBootstrap(ApiBootstrap? bootstrap) => bootstrap is null
         ? "None"
         : $$"""{"name": {{PythonLiteral.Str(bootstrap.Name)}}, "method": {{PythonLiteral.Str(bootstrap.Method)}}, "url": {{PythonLiteral.Str(bootstrap.Url)}}, "headers": {{RenderHeaders(bootstrap.Headers)}}, "bodyFields": {{RenderBootstrapBodyFields(bootstrap.BodyFields)}}, "bodyEncoding": {{PythonLiteral.Str(bootstrap.BodyEncoding.ToString())}}, "valuePath": {{PythonLiteral.Str(bootstrap.ValuePath)}}}""";
 
-    // Issue #224: same "None when absent" convention as RenderBootstrap.
-    // Only the key belonging to the chosen Target is meaningful at runtime
-    // (_apply_cursor), the other is rendered as None.
+    // "None" when absent; only the key of the chosen Target is meaningful at run time, the other is None.
     public static string RenderCursorPagination(ApiCursorPagination? cursor) => cursor is null
         ? "None"
         : $$"""{"nextCursorPath": {{PythonLiteral.Str(cursor.NextCursorPath)}}, "hasNextPagePath": {{(cursor.HasNextPagePath is null ? "None" : PythonLiteral.Str(cursor.HasNextPagePath))}}, "target": {{PythonLiteral.Str(cursor.Target.ToString())}}, "queryParameterName": {{(cursor.Target == ApiCursorTarget.Query ? PythonLiteral.Str(cursor.QueryParameterName!) : "None")}}, "bodyPath": {{(cursor.Target == ApiCursorTarget.Body ? PythonLiteral.Str(cursor.BodyPath!) : "None")}}, "maxPages": {{cursor.MaxPages}}}""";
@@ -170,18 +133,10 @@ internal static class PythonApiConfigLiteral
     {
         StaticListSource s => $$"""{"kind": "staticList", "values": [{{string.Join(", ", s.Values.Select(PythonLiteral.Str))}}]}""",
         DiscoverySource d => $$"""{"kind": "discovery", "urlTemplate": {{PythonLiteral.Str(d.UrlTemplate)}}, "itemsPath": {{PythonLiteral.Str(d.ItemsPath)}}, "valuePath": {{PythonLiteral.Str(d.ValuePath)}}}""",
-        // "format" is omitted when unset (rather than sending the resolved
-        // default) so the runtime's own RangeFormat.Resolve-equivalent
-        // (_resolve_parameter_values's `source.get("format")` fallback in
-        // scraper_api.py.j2) stays the single source of truth for defaults.
+        // "format" is omitted when unset so the runtime's own default stays the single source of truth.
         RangeSource r => $$"""{"kind": "range", "type": {{PythonLiteral.Str(r.Type.ToString())}}, "from": {{PythonLiteral.Str(r.From)}}, "to": {{PythonLiteral.Str(r.To)}}{{RenderFormatSuffix(r.Format)}}}""",
-        // Issue #216: Actions is rendered as a runtime-interpreted
-        // list-of-dicts (see RenderBrowserActions), not baked as literal
-        // Playwright code the way the top-level login action sequence
-        // already is (PythonPlaywrightCodeGenerator) — this list can occur
-        // once per parameter, so a generic runtime dispatcher (see
-        // _run_browser_action in scraper_api.py.j2) scales better than one
-        // bespoke generated function per discovery source.
+        // Actions is a runtime-interpreted list-of-dicts (RenderBrowserActions), not baked-in Playwright code: it can occur
+        // once per parameter, so one generic dispatcher (_run_browser_action) scales better.
         BrowserDiscoverySource b => $$"""{"kind": "browserDiscovery", "discoveryUrl": {{PythonLiteral.Str(b.DiscoveryUrl)}}, "actions": {{RenderBrowserActions(b.Actions)}}}""",
         _ => throw new InvalidOperationException($"Unknown ApiParameterSource type: {source.GetType()}"),
     };
@@ -189,14 +144,7 @@ internal static class PythonApiConfigLiteral
     private static string RenderFormatSuffix(string? format) =>
         format is null ? "" : $$""", "format": {{PythonLiteral.Str(format)}}""";
 
-    // Issue #216: serializes BrowserDiscoverySource.Actions the same
-    // camelCase-key-matches-the-wire-JSON convention every other dict this
-    // class builds already uses (unlike PythonGroupTreeLiteral's own
-    // snake_case "frame_path", a one-off for that specific tree walker) —
-    // _run_browser_action/_run_scroll_action in scraper_api.py.j2 read these
-    // keys directly. FramePath is omitted entirely when unset, same
-    // "absent key = no FramePath" convention PythonGroupTreeLiteral's
-    // FramePathPart already established.
+    // BrowserDiscoverySource.Actions with camelCase keys matching the wire JSON; FramePath is omitted when unset.
     private static string RenderBrowserActions(List<BrowserAction>? actions) =>
         actions is null ? "[]" : RenderList(actions, RenderBrowserAction);
 

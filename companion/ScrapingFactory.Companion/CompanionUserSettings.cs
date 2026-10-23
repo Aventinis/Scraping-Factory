@@ -2,18 +2,11 @@ using Microsoft.Extensions.Configuration;
 
 namespace ScrapingFactory.Companion;
 
-// Issue #346: an optional per-user settings file next to the companion's own
-// data (the same per-user app-data directory the SQLite stores live in), read
-// as one more configuration source. The bundle installer writes the dedicated
-// Python interpreter it created here (Companion:PythonExecutable), and later
-// per-installation settings (e.g. a database connection) have a home that
-// doesn't require editing the appsettings.json shipped inside the program
-// folder (which an update would overwrite).
+// An optional per-user settings file next to the companion's data, read as one more configuration source. The bundle
+// installer writes its Python interpreter here; it also gives per-installation settings a home that an update does not
+// overwrite (unlike the appsettings.json in the program folder).
 //
-// Precedence (later wins): appsettings.json < this file < environment
-// variables < command-line arguments — so Companion__Port=5050 or
-// --Companion:Port=5050 still override the file, exactly as they override
-// appsettings.json.
+// Precedence (later wins): appsettings.json < this file < environment variables < command line.
 public static class CompanionUserSettings
 {
     public const string FileName = "companion.settings.json";

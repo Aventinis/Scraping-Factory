@@ -3,28 +3,18 @@ using ScrapingFactory.Companion.Storage;
 
 namespace ScrapingFactory.Companion.Auth;
 
-// Issue #278: the out-of-band user administration — run on the machine that
-// runs the companion, against the same storage backend/settings the companion
-// itself uses (so an installed companion's settings file, or the MySQL server
-// it points at, is honored):
+// Out-of-band user administration, run on the machine that runs the companion against the same storage and settings:
 //
 //   ScrapingFactory.Companion user add <name>      create a user, print the key (once)
 //   ScrapingFactory.Companion user list
 //   ScrapingFactory.Companion user rotate <name>   issue a new key (the old one stops working)
 //   ScrapingFactory.Companion user remove <name>   delete the user (their data stays, unreachable)
-//   ScrapingFactory.Companion user adopt <name>    give the user all data saved before
-//                                                  authentication was switched on
-//   ScrapingFactory.Companion user set-password <name>   set or reset a password (read from
-//                                                  the terminal, or one line of stdin);
-//                                                  signs the user out on every device
+//   ScrapingFactory.Companion user adopt <name>    give the user all data saved before authentication was switched on
+//   ScrapingFactory.Companion user set-password <name>   set or reset a password (terminal or one stdin line); signs the user out everywhere
 //   ScrapingFactory.Companion user disable <name>  the user's key and logins stop working
 //   ScrapingFactory.Companion user enable <name>   undo that
-//   ScrapingFactory.Companion user set-email <name> <email> [--verified]
-//                                                  set a user's email address (unverified
-//                                                  unless --verified); an operator's change
-//                                                  needs no mailed code
+//   ScrapingFactory.Companion user set-email <name> <email> [--verified]   no mailed code needed for an operator
 //   ScrapingFactory.Companion user verify <name>   mark the user's email address as verified
-// (Issue #352: set-password/disable/enable. Issue #353: set-email/verify.)
 public static class UserCommands
 {
     // One line from the given reader (tests, a pipe), otherwise typed on the

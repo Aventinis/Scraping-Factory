@@ -1,23 +1,9 @@
-// Ambient JSDoc-only type declarations describing the companion's wire-format IR
-// (companion/ScrapingFactory.Compiler/IR/*.cs) — Issue #238. Hand-kept, because
-// the polymorphic converters (ContainerNodeJsonConverter, ApiNodeJsonConverter, ...)
-// defeat schema generation; companion/ScrapingFactory.Tests/IrTypeDeclarationTests.cs
-// compares every interface and string union here with the real C# types, and
-// test-vectors/wire/ checks the requests the extension actually builds (Issue #388).
-// They only describe the JSON *wire* shape (the exact object `/generate` expects as its
-// request body, and `buildConfigExport`'s own `config` field) — the popup's own
-// internal, richer "draft" shapes (e.g. container-tree.js's `kind: 'group'|'field'`
-// nodes, api-config.js's draft trees) are intentionally NOT modeled here; each file
-// that needs them declares its own local `@typedef`s, since those shapes are
-// popup-internal and never serialized as-is.
-//
-// This file has no top-level import/export, so every declaration below is a
-// plain global ambient type (not an ES module) — consistent with the
-// extension's sources being CommonJS files rather than ES modules. Grouped
-// under one `SFWire` namespace purely to keep ~25 type names from crowding
-// the global namespace and to avoid colliding with any popup-internal
-// `@typedef` of a similar name (e.g. a module's own internal `GroupNode`
-// draft type) — reference as `SFWire.ScrapingConfig` etc. from JSDoc.
+// Ambient types for the companion's wire-format IR (companion/ScrapingFactory.Compiler/IR/*.cs), referenced from
+// JSDoc as SFWire.ScrapingConfig etc. Hand-kept, because the custom polymorphic converters defeat schema
+// generation; IrTypeDeclarationTests.cs compares every interface and string union with the C# types and
+// test-vectors/wire/ checks the requests the extension builds (Issue #388). Only the wire shape is modeled; the
+// popup's own draft shapes are in popup-drafts.d.ts. No top-level import/export, so these are plain global ambient
+// types, grouped in one namespace to avoid clashes with module-local typedefs.
 declare namespace SFWire {
   // ── Top-level request body (ScrapingConfig.cs) ──────────────────────────
 
@@ -64,7 +50,7 @@ declare namespace SFWire {
   /** Flat mode's leaf (ScrapingConfig.cs's `ScrapingField`). */
   interface ScrapingField {
     name: string;
-    /** Required to be non-blank unless `transforms` starts with a combineFields/splitField transform (Issue #206 follow-up). */
+    /** May be blank only when `transforms` starts with combineFields/splitField (a derived field). */
     selector: string | null;
     attribute?: string | null;
     framePath?: string[] | null;
@@ -141,7 +127,7 @@ declare namespace SFWire {
     loadMoreButtonSelector?: string | null;
     maxIterations?: number;
     waitAfterMs?: number;
-    /** Issue #289 — null/unset keeps the default "jump straight to the current bottom" behavior. */
+    /** null/unset = jump to the bottom each round. */
     scrollStepPx?: number | null;
     framePath?: string[] | null;
   }
@@ -173,7 +159,7 @@ declare namespace SFWire {
     environmentVariableName: string;
   }
 
-  // Issue #223: see IR/RetryConfig.cs.
+  // See IR/RetryConfig.cs.
   interface RetryConfig {
     maxAttempts?: number;
     delayMs?: number;
@@ -181,7 +167,7 @@ declare namespace SFWire {
     retryOnStatusCodes?: number[] | null;
   }
 
-  // Issue #225: see IR/DeduplicationConfig.cs.
+  // See IR/DeduplicationConfig.cs.
   interface DeduplicationConfig {
     keyFields: string[];
     incremental?: boolean;
@@ -189,12 +175,12 @@ declare namespace SFWire {
     retention?: { kind: 'MaxCount' | 'MaxAge'; value: number };
   }
 
-  // Issue #333: see IR/RobotsDisallowConfig.cs.
+  // See IR/RobotsDisallowConfig.cs.
   interface RobotsDisallowConfig {
     action?: 'Warn' | 'Skip' | 'Abort';
   }
 
-  // Issue #222: see IR/RequestDelayConfig.cs.
+  // See IR/RequestDelayConfig.cs.
   interface RequestDelayConfig {
     minMs: number;
     maxMs: number;
@@ -267,12 +253,12 @@ declare namespace SFWire {
     linkHeaderPagination?: ApiLinkHeaderPagination;
   }
 
-  // Issue #321: see ApiConfig.LinkHeaderPagination in IR/ApiConfig.cs.
+  // See ApiConfig.LinkHeaderPagination in IR/ApiConfig.cs.
   interface ApiLinkHeaderPagination {
     maxPages: number;
   }
 
-  // Issue #224: see ApiConfig.CursorPagination in IR/ApiConfig.cs.
+  // See ApiConfig.CursorPagination in IR/ApiConfig.cs.
   interface ApiCursorPagination {
     nextCursorPath: string;
     hasNextPagePath?: string;
@@ -282,7 +268,7 @@ declare namespace SFWire {
     maxPages: number;
   }
 
-  // Issue #220: see ApiConfig.Bootstrap in IR/ApiConfig.cs.
+  // See ApiConfig.Bootstrap in IR/ApiConfig.cs.
   interface ApiBootstrap {
     name: string;
     method?: 'GET' | 'POST';
@@ -320,7 +306,7 @@ declare namespace SFWire {
   interface StaticListSource { kind: 'staticList'; values: string[]; }
   interface DiscoverySource { kind: 'discovery'; method?: 'GET'; urlTemplate: string; itemsPath: string; valuePath: string; }
   interface RangeSource { kind: 'range'; type: RangeType; from: string; to: string; format?: string; }
-  /** Issue #216 — no URL-match-pattern field of its own; matched against the enclosing ApiConfig.urlTemplate at runtime. */
+  /** No URL pattern of its own: matched against the enclosing ApiConfig.urlTemplate at run time. */
   interface BrowserDiscoverySource { kind: 'browserDiscovery'; discoveryUrl: string; actions?: BrowserAction[]; }
 
   type RangeType = 'IsoWeek' | 'Number' | 'Date';

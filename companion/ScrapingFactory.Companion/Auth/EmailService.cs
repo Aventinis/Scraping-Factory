@@ -1,10 +1,8 @@
 namespace ScrapingFactory.Companion.Auth;
 
-// Issue #353: abuse protection for the endpoints that send mail — a small
-// in-memory window like LoginThrottle (same implementation, other limits): per
-// client address how often mail can be asked for, and per account how many
-// codes may be mailed per hour. A restart forgets it; the cooldown between two
-// mails to one account is additionally kept in the database (EmailCodes).
+// Abuse protection for the endpoints that send mail: a small in-memory window like LoginThrottle, per client address
+// (how often mail can be asked for) and per account (codes per hour). A restart forgets it; the cooldown between two
+// mails to one account is also kept in the database (EmailCodes).
 public sealed class EmailThrottle
 {
     private readonly LoginThrottle _inner;

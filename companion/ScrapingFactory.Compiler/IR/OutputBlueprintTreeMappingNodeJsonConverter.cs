@@ -3,10 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace ScrapingFactory.Compiler.IR;
 
-// Issue #244: same reason/shape as ContainerNodeJsonConverter/
-// OutputBlueprintTreeSchemaNodeJsonConverter — discriminates
-// OutputBlueprintTreeMappingGroup vs. ...Field structurally, via the
-// presence of a "children" property.
+// Same as ContainerNodeJsonConverter: a "children" property means OutputBlueprintTreeMappingGroup, otherwise ...Field.
 public sealed class OutputBlueprintTreeMappingNodeJsonConverter : JsonConverter<OutputBlueprintTreeMappingNode>
 {
     public override OutputBlueprintTreeMappingNode? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)

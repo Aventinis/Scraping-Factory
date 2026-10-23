@@ -1,14 +1,8 @@
 namespace ScrapingFactory.Compiler.IR;
 
-// Request-body construction tree (Issue #55) — the mirror image of
-// ApiGroup/ApiField's response-extraction tree (see ApiNode in
-// ApiConfig.cs): describes what JSON value to WRITE at this position of the
-// outgoing request body, not where to read one FROM an already-received
-// response. A leaf is either a fixed literal (ApiBodyLiteral) or a
-// reference to one of ApiConfig.Parameters by name (ApiBodyVariable),
-// resolved per request from that parameter's Source — reusing the existing
-// ApiParameter/ApiParameterSource machinery rather than inventing a second,
-// body-specific value-source. See ApiConfig.Body/ApiBodyNodeJsonConverter.
+// What to write at one position of the outgoing request body, the write-side mirror of ApiGroup/ApiField.
+// A leaf is a fixed literal or a reference by name to an ApiConfig.Parameters entry, so no second value-source
+// concept exists.
 public abstract class ApiBodyNode
 {
 }
@@ -25,13 +19,7 @@ public sealed class ApiBodyArray : ApiBodyNode
 
 public enum ApiBodyLiteralKind { String, Number, Boolean, Null }
 
-// Which of StringValue/NumberValue/BoolValue is actually set is determined
-// by Kind (checked in ScrapingPlanValidator) — Kind itself can't be inferred
-// structurally from which value property is non-null the way ApiNode's
-// Group/Field split can, since e.g. "no value set" would otherwise be
-// indistinguishable from a literal null. See
-// ApiBodyNodeJsonConverter's doc comment for why Kind stays an explicit tag
-// even though the outer ApiBodyNode split is structural.
+// Kind says which of the value properties is set (it cannot be inferred: "no value" would look like a literal null).
 public sealed class ApiBodyLiteral : ApiBodyNode
 {
     public required ApiBodyLiteralKind Kind { get; init; }
@@ -42,15 +30,10 @@ public sealed class ApiBodyLiteral : ApiBodyNode
 
 public sealed class ApiBodyVariable : ApiBodyNode
 {
-    // Cross-checked against ApiConfig.Parameters in ScrapingPlanValidator —
-    // an unknown name is rejected there, not here.
+    // Checked against ApiConfig.Parameters in ScrapingPlanValidator.
     public required string ParameterName { get; init; }
 
-    // Best-effort: an unparsable resolved value falls back to a plain JSON
-    // string at runtime rather than crashing the run (see the Python
-    // runtime's _coerce_body_value, Phase B3) — a strictly-typed GraphQL
-    // server rejecting a stringified number is a target-site problem this
-    // can only mitigate, since every ApiParameterSource value is
-    // string-typed end to end.
+    // Parameter values are strings; this converts to a typed value for strict APIs (GraphQL variables). Best
+    // effort: an unparsable value stays a string.
     public ApiBodyLiteralKind? CoerceTo { get; init; }
 }

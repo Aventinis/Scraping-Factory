@@ -1,17 +1,10 @@
 namespace ScrapingFactory.Compiler.IR;
 
-// Issue #87: optional, mode-independent (Fields/Groups/Api alike) opt-in —
-// after writing the current run's output as always, the generated script
-// diffs it against the previous run's output (if any) and only notifies
-// when something actually changed. Every credential/target below is an
-// *environment variable name*, never a literal value — same "read at
-// runtime via os.environ[...]" pattern FillAction.EnvironmentVariableName
-// and ApiHeader.EnvironmentVariableName already use, and for the same
-// reason: none of this should ever end up baked into the downloaded script.
+// After writing its output the script diffs it against the previous run's and notifies only on a change. Every
+// credential/target is an environment variable *name*, never a literal.
 public sealed class ChangeDetectionConfig
 {
-    // "Email" or "Webhook" (enforced in ScrapingPlanValidator) — exactly one
-    // of Email/Webhook below must be set to match.
+    // "Email" or "Webhook"; exactly the matching sub-config must be set.
     public required string Notify { get; init; }
 
     public EmailNotificationConfig? Email { get; init; }
@@ -22,14 +15,10 @@ public sealed class EmailNotificationConfig
 {
     public required string SmtpHostEnvVar { get; init; }
 
-    // Optional: a missing env var (or this being unset) falls back to 587
-    // at runtime — see scraper.py.j2's _notify_email. Most SMTP servers
-    // listen on 587 (STARTTLS) today, so this is rarely needed.
+    // Optional; the port defaults to 587.
     public string? SmtpPortEnvVar { get; init; }
 
-    // Optional: an authentication-less internal/local relay is a valid
-    // setup — the generated script only calls smtplib's login() when both
-    // are configured and actually resolve to a value at runtime.
+    // Optional: login() is only called when both resolve to a value (an unauthenticated relay is valid).
     public string? SmtpUsernameEnvVar { get; init; }
     public string? SmtpPasswordEnvVar { get; init; }
 

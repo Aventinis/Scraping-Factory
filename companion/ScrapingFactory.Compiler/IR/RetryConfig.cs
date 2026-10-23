@@ -1,22 +1,10 @@
 namespace ScrapingFactory.Compiler.IR;
 
-// Issue #223: optional, mode- and engine-independent retry of a request
-// that failed transiently — a connection error/timeout, or one of
-// RetryOnStatusCodes (429/502/503/504 by default). Real targets routinely
-// return such blips that succeed a few seconds later; without this, one of
-// them aborts an entire scheduled run. Any other failure (404/401/403, ...)
-// still fails immediately, and API mode's "404 = this combination doesn't
-// exist, skip it" convention is untouched (404 isn't retryable by default).
-//
-// MaxAttempts counts the first try (3 = one try + two retries). Between
-// attempts the script waits DelayMs — doubled after every retry when
-// Exponential — or, for a 429/503 carrying a Retry-After header, exactly
-// what the server asks for; every single wait is capped at MaxWaitMs. Each
-// retry is announced on stdout, both so a scheduled run never degrades
-// silently and so the companion's trial run can extend its deadline by the
-// announced wait (PythonScriptVerifier). Once every attempt has failed, the
-// run behaves exactly as it does without retries (Issue #223's own scope:
-// abort, no "skip and continue").
+// Retries a request that failed transiently (a connection error, a timeout, or one of RetryOnStatusCodes).
+// Other failures (404, 401, …) fail at once; API mode's "404 = skip this combination" is unchanged. MaxAttempts
+// counts the first try. The wait is DelayMs, doubled per retry when Exponential, or exactly a 429/503's
+// Retry-After; each wait is capped at MaxWaitMs. Every retry is announced on stdout (the trial run extends its
+// deadline by it). When all attempts fail the run behaves as without retries.
 public sealed class RetryConfig
 {
     public int MaxAttempts { get; init; } = 3;

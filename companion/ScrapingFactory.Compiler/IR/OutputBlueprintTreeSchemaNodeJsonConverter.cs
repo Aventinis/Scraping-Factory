@@ -3,14 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace ScrapingFactory.Compiler.IR;
 
-// Issue #244: same reason/shape as ContainerNodeJsonConverter — System.Text.
-// Json can't deserialize into OutputBlueprintTreeSchemaNode's abstract base
-// type, and would silently drop OutputBlueprintTreeSchemaGroup-only
-// properties (Children) when serializing a
-// List<OutputBlueprintTreeSchemaNode> through its declared type. Discriminates
-// structurally (presence of a "children" property), exactly like
-// ContainerNodeJsonConverter/ApiNodeJsonConverter — no natural need for an
-// explicit "kind" tag here either.
+// Same as ContainerNodeJsonConverter: a "children" property means OutputBlueprintTreeSchemaGroup, otherwise ...Field.
 public sealed class OutputBlueprintTreeSchemaNodeJsonConverter : JsonConverter<OutputBlueprintTreeSchemaNode>
 {
     public override OutputBlueprintTreeSchemaNode? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)

@@ -7,22 +7,15 @@ namespace ScrapingFactory.Companion;
 
 public enum TlsMode { Off, Certificate, SelfSigned }
 
-// Issue #352: HTTPS for the companion. Passwords (and access keys) travel
-// between the extension and the companion, so a companion reachable beyond
-// the local machine must speak TLS:
+// HTTPS for the companion. Passwords and access keys travel between extension and companion, so a companion reachable
+// beyond the local machine must speak TLS:
 //
-//   Companion:Tls:Mode = Off          plain HTTP (default). Only allowed on a
-//                                     loopback address (localhost/127.x/::1),
-//                                     e.g. a single-user setup or a companion
-//                                     behind a TLS-terminating reverse proxy.
-//   Companion:Tls:Mode = Certificate  a real certificate: CertificatePath
-//                                     (a .pfx, with CertificatePassword — or a
-//                                     PEM file, with CertificateKeyPath).
-//   Companion:Tls:Mode = SelfSigned   a self-signed development certificate,
-//                                     generated on first start. Development
-//                                     builds only (see CompanionBuild).
-//   Companion:Tls:AllowInsecureRemote = true  plain HTTP on a non-local address
-//                                     anyway — development builds only.
+//   Companion:Tls:Mode = Off          plain HTTP (default); only allowed on a loopback address (a single-user setup, or
+//                                     behind a TLS-terminating reverse proxy).
+//   Companion:Tls:Mode = Certificate  a real certificate: CertificatePath (.pfx + CertificatePassword, or PEM +
+//                                     CertificateKeyPath).
+//   Companion:Tls:Mode = SelfSigned   a self-signed certificate generated on first start; development builds only.
+//   Companion:Tls:AllowInsecureRemote = true  plain HTTP on a non-local address; development builds only.
 public static class CompanionTls
 {
     public static TlsMode ReadMode(IConfiguration configuration) =>
@@ -117,10 +110,7 @@ public static class CompanionTls
         }
     }
 
-    // A development certificate for localhost, regenerated when it is missing,
-    // unreadable or about to expire. Its private key lives in a file next to
-    // the user's other companion data — it is a throwaway development key,
-    // never meant to protect anything real.
+    // A development certificate for localhost, regenerated when missing, unreadable or about to expire. A throwaway key.
     public static X509Certificate2 LoadOrCreateSelfSigned(string path, string? host = null)
     {
         if (File.Exists(path))

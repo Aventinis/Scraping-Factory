@@ -3,18 +3,9 @@ using System.Text.Json.Serialization;
 
 namespace ScrapingFactory.Compiler.IR;
 
-// System.Text.Json can't instantiate an abstract type (ContainerNode) during
-// deserialization, and by default serializes collection elements using their
-// *declared* type — silently dropping GroupNode/DataFieldNode-only
-// properties (Selector, Repeating, Children, Mode, Attribute) when writing a
-// List<ContainerNode>. This converter handles both directions.
-//
-// Discriminates the same way the generated Python does at runtime
-// ("children" in node — see PythonGroupTreeLiteral and the grouped
-// templates): presence of a "children" property means GroupNode, its
-// absence means DataFieldNode. Keeps the wire format exactly as documented
-// (no extra "kind"/"$type" discriminator field) at the cost of this
-// converter having to peek at the raw JSON first.
+// System.Text.Json cannot instantiate the abstract ContainerNode and would serialize list elements by their
+// declared type, dropping GroupNode/DataFieldNode-only properties. Discriminated structurally, like the generated
+// Python does: a "children" property means GroupNode, otherwise DataFieldNode (no extra "kind" field).
 public sealed class ContainerNodeJsonConverter : JsonConverter<ContainerNode>
 {
     public override ContainerNode? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)

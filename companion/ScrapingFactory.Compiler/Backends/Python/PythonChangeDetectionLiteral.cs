@@ -2,15 +2,8 @@ using ScrapingFactory.Compiler.IR;
 
 namespace ScrapingFactory.Compiler.Backends.Python;
 
-// Issue #87: builds the single Scriban context object every one of the six
-// templates renders `change_detection.*` from — every *_env_var_literal
-// field is either a Python string literal (the env var *name*, never a
-// value — see ChangeDetectionConfig's own doc comment) or the literal
-// "None" when that particular field isn't configured (either because
-// Notify picked the other method, or because it's one of Email's optional
-// fields). Always emitting all seven possible fields, regardless of which
-// method is active, keeps every template's own Scriban logic uniform
-// instead of branching on which shape of object it got.
+// Builds the `change_detection.*` Scriban context. Every *_env_var_literal is a Python string literal (an env var
+// *name*) or "None"; all seven are always emitted so the templates need no branching on the object's shape.
 internal static class PythonChangeDetectionLiteral
 {
     public static object BuildContext(ChangeDetectionConfig? changeDetection)
@@ -20,12 +13,7 @@ internal static class PythonChangeDetectionLiteral
             return new
             {
                 enabled = false,
-                // Plain "Email"/"Webhook" (not Python-literal-quoted) — used
-                // for Scriban {{ if }} branching on which imports/helper to
-                // render, kept separate from notify_literal below (the
-                // quoted form actually emitted as Python source), so the
-                // template layer never has to compare against a
-                // string-with-quotes.
+                // Plain "Email"/"Webhook" for Scriban branching, apart from notify_literal (the quoted Python form).
                 notify_method = (string?)null,
                 notify_literal = "None",
                 smtp_host_env_var_literal = "None",
