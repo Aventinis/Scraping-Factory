@@ -8,7 +8,7 @@ const { loadVectors } = require('../../test-vectors/load');
 beforeAll(() => initI18n('de-DE'));
 
 const {
-  buildScrapingConfig, buildConfigExport,
+  buildScrapingConfig, buildConfigExport, configOptionsFromState,
   sanitizeFileNameBase, deriveScriptFileNameFromHostname, computeScriptFileNamePatch, parseAdditionalUrls,
   buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildDiscoveredUrlsConfig, buildHardeningConfig,
   computeInitialMonitoringSectionOpen, collectFieldNames,
@@ -24,10 +24,14 @@ const { buildGroupNode } = require('./container-tree');
 
 describe('buildScrapingConfig (flat mode)', () => {
   test('produces correct structure with multiple fields', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [
-      { name: 'Titel', selector: 'h1' },
-      { name: 'Preis', selector: '.price' },
-    ]);
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [
+        { name: 'Titel', selector: 'h1' },
+        { name: 'Preis', selector: '.price' },
+      ],
+    });
     expect(result).toEqual({
       version: '1',
       url: 'https://example.com',
@@ -42,50 +46,67 @@ describe('buildScrapingConfig (flat mode)', () => {
   });
 
   test('handles empty fields array', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', []);
+    const result = buildScrapingConfig({ url: 'https://example.com', mode: 'flat' });
     expect(result.fields).toEqual([]);
     expect(result.url).toBe('https://example.com');
     expect(result.outputFormat).toBe('Csv');
   });
 
   test('preserves explicit attribute value', () => {
-    const result = buildScrapingConfig('https://x.com', 'flat', [
-      { name: 'Link', selector: 'a', attribute: 'href' },
-    ]);
+    const result = buildScrapingConfig({
+      url: 'https://x.com',
+      mode: 'flat',
+      fields: [
+        { name: 'Link', selector: 'a', attribute: 'href' },
+      ],
+    });
     expect(result.fields[0].attribute).toBe('href');
   });
 
   test('passes through scriptFileName/outputFileName as-is (companion sanitizes/defaults)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [], [], null, 'my scraper!', 'result data');
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      scriptFileName: 'my scraper!',
+      outputFileName: 'result data',
+    });
     expect(result.scriptFileName).toBe('my scraper!');
     expect(result.outputFileName).toBe('result data');
   });
 
   test('defaults scriptFileName/outputFileName to null when not given', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', []);
+    const result = buildScrapingConfig({ url: 'https://example.com', mode: 'flat' });
     expect(result.scriptFileName).toBeNull();
     expect(result.outputFileName).toBeNull();
   });
 
   // Issue #42, Phase 7
   test('includes framePath on a field when set, omits it when not', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [
-      { name: 'Preis', selector: '.price', framePath: ['#price-widget'] },
-      { name: 'Titel', selector: 'h1' },
-    ]);
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [
+        { name: 'Preis', selector: '.price', framePath: ['#price-widget'] },
+        { name: 'Titel', selector: 'h1' },
+      ],
+    });
     expect(result.fields[0].framePath).toEqual(['#price-widget']);
     expect(result.fields[1]).not.toHaveProperty('framePath');
   });
 
   // Issue #214
   test('includes download + safety net on a field when set, omits when off', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [
-      {
-        name: 'Datei', selector: 'a.file', attribute: 'href', download: true,
-        maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'],
-      },
-      { name: 'Titel', selector: 'h1' },
-    ]);
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [
+        {
+          name: 'Datei', selector: 'a.file', attribute: 'href', download: true,
+          maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'],
+        },
+        { name: 'Titel', selector: 'h1' },
+      ],
+    });
     expect(result.fields[0].download).toBe(true);
     expect(result.fields[0].maxDownloadSizeBytes).toBe(1024);
     expect(result.fields[0].allowedContentTypes).toEqual(['application/pdf']);
@@ -95,9 +116,13 @@ describe('buildScrapingConfig (flat mode)', () => {
   });
 
   test('omits maxDownloadSizeBytes/allowedContentTypes when download is off', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [
-      { name: 'Datei', selector: 'a.file', attribute: 'href', maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'] },
-    ]);
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [
+        { name: 'Datei', selector: 'a.file', attribute: 'href', maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'] },
+      ],
+    });
     expect(result.fields[0]).not.toHaveProperty('download');
     expect(result.fields[0]).not.toHaveProperty('maxDownloadSizeBytes');
     expect(result.fields[0]).not.toHaveProperty('allowedContentTypes');
@@ -111,10 +136,7 @@ describe('buildScrapingConfig (combined mode, Issue #239)', () => {
   ];
 
   test('sends each already-resolved component verbatim, with savedConfigId only when present', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'combined', [], [], null, null, null,
-      'Static', [], false, false, [], null, null, null, null, false, false, false, combinedComponents,
-    );
+    const result = buildScrapingConfig({ url: 'https://example.com', mode: 'combined', combinedComponents });
     expect(result).toEqual({
       version: '1',
       url: 'https://example.com',
@@ -128,12 +150,21 @@ describe('buildScrapingConfig (combined mode, Issue #239)', () => {
   });
 
   test('ignores engine/browserActions/additionalUrls/changeDetection/proxy/hardening/pagination — none of them apply at the outer Combined level', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'combined', [], [], null, null, null,
-      'Browser', [{ kind: 'click', selector: '#x' }], false, true, ['https://extra.example.com'],
-      { enabled: true }, { enabled: true }, [{ kind: 'noResult', severity: 'Error' }],
-      { enabled: true }, true, false, true, combinedComponents,
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'combined',
+      engine: 'Browser',
+      browserActions: [{ kind: 'click', selector: '#x' }],
+      useJsonOutput: true,
+      additionalUrls: ['https://extra.example.com'],
+      changeDetection: { enabled: true },
+      proxy: { enabled: true },
+      hardening: [{ kind: 'noResult', severity: 'Error' }],
+      pagination: { enabled: true },
+      persistentSession: true,
+      externalConfig: true,
+      combinedComponents,
+    });
     expect(result).not.toHaveProperty('engine');
     expect(result).not.toHaveProperty('browserActions');
     expect(result).not.toHaveProperty('additionalUrls');
@@ -145,16 +176,19 @@ describe('buildScrapingConfig (combined mode, Issue #239)', () => {
   });
 
   test('includePreview/includeOutputFile still apply — the final merged output is what they preview/download', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'combined', [], [], null, null, null,
-      'Static', [], true, false, [], null, null, null, null, false, true, false, combinedComponents,
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'combined',
+      includePreview: true,
+      includeOutputFile: true,
+      combinedComponents,
+    });
     expect(result.includePreview).toBe(true);
     expect(result.includeOutputFile).toBe(true);
   });
 
   test('an empty/missing component list sends an empty combined array rather than throwing', () => {
-    const result = buildScrapingConfig('https://example.com', 'combined', [], []);
+    const result = buildScrapingConfig({ url: 'https://example.com', mode: 'combined' });
     expect(result.combined).toEqual([]);
   });
 });
@@ -171,10 +205,7 @@ describe('buildScrapingConfig (blocks mode, Issue #182)', () => {
   ];
 
   test('serializes each block by its own shape — fields for flat, a serialized group tree for group', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'blocks', [], [], null, null, null,
-      'Static', [], false, false, [], null, null, null, null, false, false, false, null, blocks,
-    );
+    const result = buildScrapingConfig({ url: 'https://example.com', mode: 'blocks', blocks });
     expect(result).toEqual({
       version: '1',
       url: 'https://example.com',
@@ -191,12 +222,17 @@ describe('buildScrapingConfig (blocks mode, Issue #182)', () => {
   });
 
   test('shares engine/browserActions/additionalUrls/proxy/pagination/persistentSession with the outer request', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'blocks', [], [], null, null, null,
-      'Browser', [{ kind: 'click', selector: '#x' }], false, false, ['https://extra.example.com'],
-      null, { enabled: true, envVar: 'PROXY_LIST' }, null,
-      { enabled: true, kind: 'nextLink', nextLinkSelector: '.next', maxPages: 10 }, true, false, false, null, blocks,
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'blocks',
+      engine: 'Browser',
+      browserActions: [{ kind: 'click', selector: '#x' }],
+      additionalUrls: ['https://extra.example.com'],
+      proxy: { enabled: true, envVar: 'PROXY_LIST' },
+      pagination: { enabled: true, kind: 'nextLink', nextLinkSelector: '.next', maxPages: 10 },
+      persistentSession: true,
+      blocks,
+    });
     expect(result.engine).toBe('Browser');
     expect(result.browserActions).toBeDefined();
     expect(result.additionalUrls).toEqual(['https://extra.example.com']);
@@ -206,11 +242,15 @@ describe('buildScrapingConfig (blocks mode, Issue #182)', () => {
   });
 
   test('never includes changeDetection/hardening/outputFormat/externalConfig at the outer level', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'blocks', [], [], null, null, null,
-      'Static', [], false, true, [], { enabled: true }, null, [{ kind: 'noResult', severity: 'Error' }],
-      null, false, false, true, null, blocks,
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'blocks',
+      useJsonOutput: true,
+      changeDetection: { enabled: true },
+      hardening: [{ kind: 'noResult', severity: 'Error' }],
+      externalConfig: true,
+      blocks,
+    });
     expect(result).not.toHaveProperty('changeDetection');
     expect(result).not.toHaveProperty('hardening');
     expect(result).not.toHaveProperty('outputFormat');
@@ -221,7 +261,7 @@ describe('buildScrapingConfig (blocks mode, Issue #182)', () => {
   });
 
   test('an empty/missing block list sends an empty blocks array rather than throwing', () => {
-    const result = buildScrapingConfig('https://example.com', 'blocks', [], []);
+    const result = buildScrapingConfig({ url: 'https://example.com', mode: 'blocks' });
     expect(result.blocks).toEqual([]);
   });
 });
@@ -232,24 +272,34 @@ describe('buildScrapingConfig (blocks mode, Issue #182)', () => {
 // the omit/include behavior is important for existing-call backward-compat.
 describe('buildScrapingConfig (engine / browserActions, Issue #41/#42 Phase 5)', () => {
   test('omits engine entirely when Static (the default) — byte-for-byte the same as before this existed', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+    });
     expect(result.engine).toBeUndefined();
     expect(result.browserActions).toBeUndefined();
   });
 
   test('includes engine when Browser, even with no browserActions', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Browser',
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      engine: 'Browser',
+    });
     expect(result.engine).toBe('Browser');
     expect(result.browserActions).toBeUndefined();
   });
 
   test('includes serialized browserActions alongside engine when Browser and non-empty', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Browser',
-      [{ kind: 'click', selector: '#submit' }],
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      engine: 'Browser',
+      browserActions: [{ kind: 'click', selector: '#submit' }],
+    });
     expect(result.engine).toBe('Browser');
     expect(result.browserActions).toEqual([{ kind: 'click', selector: '#submit' }]);
   });
@@ -259,20 +309,27 @@ describe('buildScrapingConfig (engine / browserActions, Issue #41/#42 Phase 5)',
     // the browser-actions section without clearing it, so a user flipping
     // the toggle back and forth doesn't lose their work — but nothing
     // meaningless for the Static engine should ever reach the wire.
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static',
-      [{ kind: 'click', selector: '#submit' }],
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      browserActions: [{ kind: 'click', selector: '#submit' }],
+    });
     expect(result.engine).toBeUndefined();
     expect(result.browserActions).toBeUndefined();
   });
 
   test('works the same way for container and api modes', () => {
     const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig('https://example.com', 'container', [], groups, null, null, null, 'Browser');
+    const containerResult = buildScrapingConfig({ url: 'https://example.com', mode: 'container', groups, engine: 'Browser' });
     expect(containerResult.engine).toBe('Browser');
 
-    const apiResult = buildScrapingConfig('https://example.com', 'api', [], [], { fields: [] }, null, null, 'Browser');
+    const apiResult = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'api',
+      apiConfig: { fields: [] },
+      engine: 'Browser',
+    });
     expect(apiResult.engine).toBe('Browser');
   });
 });
@@ -283,23 +340,35 @@ describe('buildScrapingConfig (engine / browserActions, Issue #41/#42 Phase 5)',
 // request body as before this existed.
 describe('buildScrapingConfig (includePreview, Issue #122)', () => {
   test('omits includePreview entirely when false (the default)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+    });
     expect(result.includePreview).toBeUndefined();
   });
 
   test('includes includePreview: true when requested', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], true,
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      includePreview: true,
+    });
     expect(result.includePreview).toBe(true);
   });
 
   test('works the same way for container and api modes', () => {
     const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig('https://example.com', 'container', [], groups, null, null, null, 'Static', [], true);
+    const containerResult = buildScrapingConfig({ url: 'https://example.com', mode: 'container', groups, includePreview: true });
     expect(containerResult.includePreview).toBe(true);
 
-    const apiResult = buildScrapingConfig('https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], true);
+    const apiResult = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'api',
+      apiConfig: { fields: [] },
+      includePreview: true,
+    });
     expect(apiResult.includePreview).toBe(true);
   });
 });
@@ -309,39 +378,47 @@ describe('buildScrapingConfig (includePreview, Issue #122)', () => {
 // of it (either/both/neither may be requested).
 describe('buildScrapingConfig (includeOutputFile, Issue #161)', () => {
   test('omits includeOutputFile entirely when false (the default)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+    });
     expect(result.includeOutputFile).toBeUndefined();
   });
 
   test('includes includeOutputFile: true when requested', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], null, null, null, null, false, true,
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      includeOutputFile: true,
+    });
     expect(result.includeOutputFile).toBe(true);
   });
 
   test('works alongside includePreview — both may be requested at once', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], true,
-      false, [], null, null, null, null, false, true,
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      includePreview: true,
+      includeOutputFile: true,
+    });
     expect(result.includePreview).toBe(true);
     expect(result.includeOutputFile).toBe(true);
   });
 
   test('works the same way for container and api modes', () => {
     const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null,
-      null, null, false, true,
-    );
+    const containerResult = buildScrapingConfig({ url: 'https://example.com', mode: 'container', groups, includeOutputFile: true });
     expect(containerResult.includeOutputFile).toBe(true);
 
-    const apiResult = buildScrapingConfig(
-      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], null, null,
-      null, null, false, true,
-    );
+    const apiResult = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'api',
+      apiConfig: { fields: [] },
+      includeOutputFile: true,
+    });
     expect(apiResult.includeOutputFile).toBe(true);
   });
 });
@@ -352,33 +429,41 @@ describe('buildScrapingConfig (includeOutputFile, Issue #161)', () => {
 // key entirely by default and only add it when Json is requested.
 describe('buildScrapingConfig (useJsonOutput, Issue #86)', () => {
   test('flat mode sends outputFormat: "Csv" by default, "Json" when requested', () => {
-    const defaultResult = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const defaultResult = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+    });
     expect(defaultResult.outputFormat).toBe('Csv');
 
-    const jsonResult = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false, true,
-    );
+    const jsonResult = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      useJsonOutput: true,
+    });
     expect(jsonResult.outputFormat).toBe('Json');
   });
 
   test('container mode omits outputFormat by default, sends "Json" when requested', () => {
     const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const defaultResult = buildScrapingConfig('https://example.com', 'container', [], groups);
+    const defaultResult = buildScrapingConfig({ url: 'https://example.com', mode: 'container', groups });
     expect(defaultResult.outputFormat).toBeUndefined();
 
-    const jsonResult = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, true,
-    );
+    const jsonResult = buildScrapingConfig({ url: 'https://example.com', mode: 'container', groups, useJsonOutput: true });
     expect(jsonResult.outputFormat).toBe('Json');
   });
 
   test('api mode omits outputFormat by default, sends "Json" when requested', () => {
-    const defaultResult = buildScrapingConfig('https://example.com', 'api', [], [], { fields: [] });
+    const defaultResult = buildScrapingConfig({ url: 'https://example.com', mode: 'api', apiConfig: { fields: [] } });
     expect(defaultResult.outputFormat).toBeUndefined();
 
-    const jsonResult = buildScrapingConfig(
-      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, true,
-    );
+    const jsonResult = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'api',
+      apiConfig: { fields: [] },
+      useJsonOutput: true,
+    });
     expect(jsonResult.outputFormat).toBe('Json');
   });
 });
@@ -389,28 +474,40 @@ describe('buildScrapingConfig (useJsonOutput, Issue #86)', () => {
 // existed.
 describe('buildScrapingConfig (additionalUrls, Issue #83)', () => {
   test('omits additionalUrls entirely when empty (the default)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+    });
     expect(result.additionalUrls).toBeUndefined();
   });
 
   test('includes additionalUrls when non-empty', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, ['https://example.com/2', 'https://example.com/3'],
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      additionalUrls: ['https://example.com/2', 'https://example.com/3'],
+    });
     expect(result.additionalUrls).toEqual(['https://example.com/2', 'https://example.com/3']);
   });
 
   test('works the same way for container and api modes', () => {
     const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, ['https://example.com/2'],
-    );
+    const containerResult = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'container',
+      groups,
+      additionalUrls: ['https://example.com/2'],
+    });
     expect(containerResult.additionalUrls).toEqual(['https://example.com/2']);
 
-    const apiResult = buildScrapingConfig(
-      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, ['https://example.com/2'],
-    );
+    const apiResult = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'api',
+      apiConfig: { fields: [] },
+      additionalUrls: ['https://example.com/2'],
+    });
     expect(apiResult.additionalUrls).toEqual(['https://example.com/2']);
   });
 });
@@ -478,7 +575,11 @@ describe('buildChangeDetectionConfig', () => {
 
 describe('buildScrapingConfig (changeDetection, Issue #87)', () => {
   test('omits changeDetection entirely when disabled (the default)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+    });
     expect(result.changeDetection).toBeUndefined();
   });
 
@@ -488,10 +589,12 @@ describe('buildScrapingConfig (changeDetection, Issue #87)', () => {
       email: { smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: '', toEnvVar: '' },
       webhook: { urlEnvVar: 'SF_WEBHOOK_URL' },
     };
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], changeDetection,
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      changeDetection,
+    });
     expect(result.changeDetection).toEqual({ notify: 'Webhook', webhook: { urlEnvVar: 'SF_WEBHOOK_URL' } });
   });
 
@@ -502,14 +605,10 @@ describe('buildScrapingConfig (changeDetection, Issue #87)', () => {
       webhook: { urlEnvVar: 'SF_WEBHOOK_URL' },
     };
     const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], changeDetection,
-    );
+    const containerResult = buildScrapingConfig({ url: 'https://example.com', mode: 'container', groups, changeDetection });
     expect(containerResult.changeDetection).toEqual({ notify: 'Webhook', webhook: { urlEnvVar: 'SF_WEBHOOK_URL' } });
 
-    const apiResult = buildScrapingConfig(
-      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], changeDetection,
-    );
+    const apiResult = buildScrapingConfig({ url: 'https://example.com', mode: 'api', apiConfig: { fields: [] }, changeDetection });
     expect(apiResult.changeDetection).toEqual({ notify: 'Webhook', webhook: { urlEnvVar: 'SF_WEBHOOK_URL' } });
   });
 });
@@ -540,30 +639,32 @@ describe('buildProxyConfig', () => {
 
 describe('buildScrapingConfig (proxy, Issue #88)', () => {
   test('omits proxy entirely when disabled (the default)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+    });
     expect(result.proxy).toBeUndefined();
   });
 
   test('includes proxy when enabled and configured', () => {
     const proxy = { enabled: true, envVar: 'SF_PROXIES' };
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], null, proxy,
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      proxy,
+    });
     expect(result.proxy).toEqual({ environmentVariableName: 'SF_PROXIES' });
   });
 
   test('works the same way for container and api modes', () => {
     const proxy = { enabled: true, envVar: 'SF_PROXIES' };
     const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, proxy,
-    );
+    const containerResult = buildScrapingConfig({ url: 'https://example.com', mode: 'container', groups, proxy });
     expect(containerResult.proxy).toEqual({ environmentVariableName: 'SF_PROXIES' });
 
-    const apiResult = buildScrapingConfig(
-      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], null, proxy,
-    );
+    const apiResult = buildScrapingConfig({ url: 'https://example.com', mode: 'api', apiConfig: { fields: [] }, proxy });
     expect(apiResult.proxy).toEqual({ environmentVariableName: 'SF_PROXIES' });
   });
 });
@@ -657,25 +758,29 @@ describe('buildDiscoveredUrlsConfig (Issue #218)', () => {
 
 describe('buildScrapingConfig (pagination, Issue #174)', () => {
   test('omits pagination entirely when disabled (the default)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+    });
     expect(result.pagination).toBeUndefined();
   });
 
   test('includes pagination when enabled and configured', () => {
     const pagination = { enabled: true, kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 30 };
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], null, null, null, pagination,
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      pagination,
+    });
     expect(result.pagination).toEqual({ kind: 'nextLink', nextLinkSelector: 'a.next', maxPages: 30 });
   });
 
   test('works the same way for container mode', () => {
     const pagination = { enabled: true, kind: 'pageNumber', urlTemplate: '{url}?page={page}', maxPages: 10 };
     const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null, null, pagination,
-    );
+    const containerResult = buildScrapingConfig({ url: 'https://example.com', mode: 'container', groups, pagination });
     expect(containerResult.pagination).toEqual({ kind: 'pageNumber', urlTemplate: '{url}?page={page}', maxPages: 10 });
   });
 });
@@ -687,26 +792,29 @@ describe('buildScrapingConfig (pagination, Issue #174)', () => {
 // ever needs to reach as far as the one parameter it's testing.
 describe('buildScrapingConfig (discoveredUrls, Issue #218)', () => {
   test('omits discoveredUrls entirely when disabled (the default)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+    });
     expect(result.discoveredUrls).toBeUndefined();
   });
 
   test('includes discoveredUrls when enabled and configured', () => {
     const discoveredUrls = { enabled: true, pageUrl: 'https://example.com/nav', linkSelector: 'nav a', maxUrls: 20 };
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], null, null, null, null, false, false, false, null, null, null, [], {}, 'Flat', [], {}, discoveredUrls,
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      discoveredUrls,
+    });
     expect(result.discoveredUrls).toEqual({ pageUrl: 'https://example.com/nav', linkSelector: 'nav a', maxUrls: 20 });
   });
 
   test('works the same way for container mode', () => {
     const discoveredUrls = { enabled: true, pageUrl: 'https://example.com/nav', linkSelector: 'nav a', maxUrls: 20 };
     const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null,
-      null, null, false, false, false, null, null, null, [], {}, 'Flat', [], {}, discoveredUrls,
-    );
+    const containerResult = buildScrapingConfig({ url: 'https://example.com', mode: 'container', groups, discoveredUrls });
     expect(containerResult.discoveredUrls).toEqual({ pageUrl: 'https://example.com/nav', linkSelector: 'nav a', maxUrls: 20 });
   });
 });
@@ -717,24 +825,27 @@ describe('buildScrapingConfig (discoveredUrls, Issue #218)', () => {
 // just above.
 describe('buildScrapingConfig (preflight, Issue #219)', () => {
   test('omits preflight entirely when disabled (the default)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+    });
     expect(result.preflight).toBeUndefined();
   });
 
   test('includes preflight: true when enabled', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], null, null, null, null, false, false, false, null, null, null, [], {}, 'Flat', [], {}, null, true,
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      preflight: true,
+    });
     expect(result.preflight).toBe(true);
   });
 
   test('works the same way for container mode', () => {
     const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null,
-      null, null, false, false, false, null, null, null, [], {}, 'Flat', [], {}, null, true,
-    );
+    const containerResult = buildScrapingConfig({ url: 'https://example.com', mode: 'container', groups, preflight: true });
     expect(containerResult.preflight).toBe(true);
   });
 });
@@ -742,28 +853,43 @@ describe('buildScrapingConfig (preflight, Issue #219)', () => {
 // Issue #175
 describe('buildScrapingConfig (persistentSession, Issue #175)', () => {
   test('omits persistentSession entirely when false (the default)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+    });
     expect(result.persistentSession).toBeUndefined();
   });
 
   test('includes persistentSession: true when enabled', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Browser', [], false,
-      false, [], null, null, null, null, true,
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      engine: 'Browser',
+      persistentSession: true,
+    });
     expect(result.persistentSession).toBe(true);
   });
 
   test('works the same way for container and api modes', () => {
     const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null, 'Browser', [], false, false, [], null, null, null, null, true,
-    );
+    const containerResult = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'container',
+      groups,
+      engine: 'Browser',
+      persistentSession: true,
+    });
     expect(containerResult.persistentSession).toBe(true);
 
-    const apiResult = buildScrapingConfig(
-      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Browser', [], false, false, [], null, null, null, null, true,
-    );
+    const apiResult = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'api',
+      apiConfig: { fields: [] },
+      engine: 'Browser',
+      persistentSession: true,
+    });
     expect(apiResult.persistentSession).toBe(true);
   });
 });
@@ -771,28 +897,35 @@ describe('buildScrapingConfig (persistentSession, Issue #175)', () => {
 // Issue #178
 describe('buildScrapingConfig (externalConfig)', () => {
   test('omits externalConfig entirely when false (the default)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+    });
     expect(result.externalConfig).toBeUndefined();
   });
 
   test('includes externalConfig: true when enabled', () => {
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], null, null, null, null, false, false, true,
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      externalConfig: true,
+    });
     expect(result.externalConfig).toBe(true);
   });
 
   test('works the same way for container and api modes', () => {
     const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null, null, null, false, false, true,
-    );
+    const containerResult = buildScrapingConfig({ url: 'https://example.com', mode: 'container', groups, externalConfig: true });
     expect(containerResult.externalConfig).toBe(true);
 
-    const apiResult = buildScrapingConfig(
-      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], null, null, null, null, false, false, true,
-    );
+    const apiResult = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'api',
+      apiConfig: { fields: [] },
+      externalConfig: true,
+    });
     expect(apiResult.externalConfig).toBe(true);
   });
 });
@@ -820,32 +953,32 @@ describe('buildHardeningConfig', () => {
 
 describe('buildScrapingConfig (hardening, Issue #129)', () => {
   test('omits hardening entirely when disabled (the default)', () => {
-    const result = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+    });
     expect(result.hardening).toBeUndefined();
   });
 
   test('includes hardening when enabled and configured', () => {
     const hardening = { noResult: { enabled: true, severity: 'Error' } };
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], null, null, hardening,
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      hardening,
+    });
     expect(result.hardening).toEqual([{ kind: 'noResult', severity: 'Error' }]);
   });
 
   test('works the same way for container and api modes', () => {
     const hardening = { noResult: { enabled: true, severity: 'Warning' } };
     const groups = [buildGroupNode('Kategorie', 'section', true)];
-    const containerResult = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false, [], null, null,
-      hardening,
-    );
+    const containerResult = buildScrapingConfig({ url: 'https://example.com', mode: 'container', groups, hardening });
     expect(containerResult.hardening).toEqual([{ kind: 'noResult', severity: 'Warning' }]);
 
-    const apiResult = buildScrapingConfig(
-      'https://example.com', 'api', [], [], { fields: [] }, null, null, 'Static', [], false, false, [], null, null,
-      hardening,
-    );
+    const apiResult = buildScrapingConfig({ url: 'https://example.com', mode: 'api', apiConfig: { fields: [] }, hardening });
     expect(apiResult.hardening).toEqual([{ kind: 'noResult', severity: 'Warning' }]);
   });
 });
@@ -936,10 +1069,12 @@ describe('buildHardeningConfig (baseline)', () => {
 describe('buildScrapingConfig (baseline hardening, Issue #131)', () => {
   test('threads a baseline check through the wire config', () => {
     const hardening = { baseline: { enabled: true, severity: 'Error', dropThresholdPercent: 25 } };
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], null, null, hardening,
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      hardening,
+    });
     expect(result.hardening).toEqual([{ kind: 'baseline', severity: 'Error', dropThreshold: 0.25 }]);
   });
 });
@@ -1004,10 +1139,12 @@ describe('buildHardeningConfig (blocking)', () => {
 describe('buildScrapingConfig (blocking hardening, Issue #132)', () => {
   test('threads a blocking check through the wire config', () => {
     const hardening = { blocking: { enabled: true, severity: 'Error', minBodyLengthText: '200', phrasesText: 'Access Denied' } };
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], null, null, hardening,
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      hardening,
+    });
     expect(result.hardening).toEqual([{ kind: 'blocking', severity: 'Error', minBodyLength: 200, blockPhrases: ['Access Denied'] }]);
   });
 });
@@ -1073,10 +1210,12 @@ describe('buildHardeningConfig (requiredFields)', () => {
 describe('buildScrapingConfig (requiredFields hardening, Issue #133)', () => {
   test('threads a requiredFields check through the wire config', () => {
     const hardening = { requiredFields: { enabled: true, severity: 'Error', fields: ['Titel'] } };
-    const result = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], null, null, hardening,
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      hardening,
+    });
     expect(result.hardening).toEqual([{ kind: 'requiredFields', severity: 'Error', fieldNames: ['Titel'] }]);
   });
 });
@@ -1206,7 +1345,7 @@ describe('addNullRateCheck / removeNullRateCheck / updateNullRateCheck (Issue #1
 describe('buildScrapingConfig (container mode)', () => {
   test('sends groups instead of fields, no outputFormat', () => {
     const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
-    const result = buildScrapingConfig('https://example.com', 'container', [], groups);
+    const result = buildScrapingConfig({ url: 'https://example.com', mode: 'container', groups });
 
     expect(result).toEqual({
       version: '1',
@@ -1228,7 +1367,7 @@ describe('buildScrapingConfig (api mode, Issue #53 Phase 6)', () => {
       fields: [{ name: 'Titel', path: 'name' }],
       parameters: [{ name: 'category', source: { kind: 'staticList', values: ['Elektronik'] } }],
     };
-    const result = buildScrapingConfig('https://example.com', 'api', [], [], apiConfig);
+    const result = buildScrapingConfig({ url: 'https://example.com', mode: 'api', apiConfig });
 
     expect(result).toEqual({
       version: '1', url: 'https://example.com', api: apiConfig,
@@ -1243,11 +1382,12 @@ describe('buildScrapingConfig (api mode, Issue #53 Phase 6)', () => {
 describe('buildScrapingConfig (output blueprint, container/api-tree mode, Issue #192)', () => {
   test('container mode includes outputBlueprint once the mapping is complete', () => {
     const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
-    const result = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null,
-      'Static', [], false, false, [], null, null, null, null, false, false, false, null, null,
-      '3', ['name'], { name: 'Kategorie' },
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'container',
+      groups,
+      outputBlueprint: { id: '3', fieldNames: ['name'], mapping: { name: 'Kategorie' } },
+    });
 
     expect(result.outputBlueprint).toEqual({
       blueprintId: 3,
@@ -1258,11 +1398,12 @@ describe('buildScrapingConfig (output blueprint, container/api-tree mode, Issue 
 
   test('container mode omits outputBlueprint while the mapping is incomplete', () => {
     const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
-    const result = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null,
-      'Static', [], false, false, [], null, null, null, null, false, false, false, null, null,
-      '3', ['name', 'price'], { name: 'Kategorie', price: null },
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'container',
+      groups,
+      outputBlueprint: { id: '3', fieldNames: ['name', 'price'], mapping: { name: 'Kategorie', price: null } },
+    });
 
     expect(result.outputBlueprint).toBeUndefined();
   });
@@ -1272,11 +1413,12 @@ describe('buildScrapingConfig (output blueprint, container/api-tree mode, Issue 
       urlTemplate: 'https://example.com/api',
       groups: [{ name: 'Kategorie', path: 'categories', children: [{ name: 'Titel', path: 'name' }] }],
     };
-    const result = buildScrapingConfig(
-      'https://example.com', 'api', [], [], apiConfig, null, null,
-      'Static', [], false, false, [], null, null, null, null, false, false, false, null, null,
-      '5', ['title'], { title: 'Titel' },
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'api',
+      apiConfig,
+      outputBlueprint: { id: '5', fieldNames: ['title'], mapping: { title: 'Titel' } },
+    });
 
     expect(result.outputBlueprint).toEqual({
       blueprintId: 5,
@@ -1289,11 +1431,12 @@ describe('buildScrapingConfig (output blueprint, container/api-tree mode, Issue 
   test('container mode includes a Tree-schema outputBlueprint once the tree mapping is complete', () => {
     const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
     const treeSchema = [{ name: 'Name' }];
-    const result = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null,
-      'Static', [], false, false, [], null, null, null, null, false, false, false, null, null,
-      '4', [], {}, 'Tree', treeSchema, { 0: 'Kategorie' },
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'container',
+      groups,
+      outputBlueprint: { id: '4', schemaKind: 'Tree', tree: treeSchema, treeMapping: { 0: 'Kategorie' } },
+    });
 
     expect(result.outputBlueprint).toEqual({
       blueprintId: 4,
@@ -1305,11 +1448,12 @@ describe('buildScrapingConfig (output blueprint, container/api-tree mode, Issue 
   test('container mode omits a Tree-schema outputBlueprint while the tree mapping is incomplete', () => {
     const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
     const treeSchema = [{ name: 'Name' }];
-    const result = buildScrapingConfig(
-      'https://example.com', 'container', [], groups, null, null, null,
-      'Static', [], false, false, [], null, null, null, null, false, false, false, null, null,
-      '4', [], {}, 'Tree', treeSchema, { 0: null },
-    );
+    const result = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'container',
+      groups,
+      outputBlueprint: { id: '4', schemaKind: 'Tree', tree: treeSchema, treeMapping: { 0: null } },
+    });
 
     expect(result.outputBlueprint).toBeUndefined();
   });
@@ -1402,43 +1546,94 @@ describe('parseAdditionalUrls', () => {
 describe('buildConfigExport', () => {
   test('wraps the flat-mode config with exportedAt and the extension version', () => {
     const fields = [{ name: 'Titel', selector: 'h1', attribute: null }];
-    const result = buildConfigExport('https://example.com', 'flat', fields, [], { version: '1.2.3' });
+    const result = buildConfigExport({ url: 'https://example.com', mode: 'flat', fields, manifest: { version: '1.2.3' } });
 
     expect(result.extensionVersion).toBe('1.2.3');
     expect(() => new Date(result.exportedAt).toISOString()).not.toThrow();
-    expect(result.config).toEqual(buildScrapingConfig('https://example.com', 'flat', fields, []));
+    expect(result.config).toEqual(buildScrapingConfig({ url: 'https://example.com', mode: 'flat', fields }));
   });
 
   test('wraps the container-mode config (groups) the same way', () => {
     const groups = [buildGroupNode('Kategorie', 'section.menu-category', true)];
-    const result = buildConfigExport('https://example.com', 'container', [], groups, { version: '1.2.3' });
+    const result = buildConfigExport({ url: 'https://example.com', mode: 'container', groups, manifest: { version: '1.2.3' } });
 
-    expect(result.config).toEqual(buildScrapingConfig('https://example.com', 'container', [], groups));
+    expect(result.config).toEqual(buildScrapingConfig({ url: 'https://example.com', mode: 'container', groups }));
     expect(result.config.groups).toBeDefined();
     expect(result.config.fields).toBeUndefined();
   });
 
   test('falls back to "?" when no manifest/version is available', () => {
-    const result = buildConfigExport('https://example.com', 'flat', [], []);
+    const result = buildConfigExport({ url: 'https://example.com', mode: 'flat' });
     expect(result.extensionVersion).toBe('?');
   });
 
   test('wraps the api-mode config (api) the same way (Issue #53 Phase 6)', () => {
     const apiConfig = { urlTemplate: 'https://example.com/api/{id}', itemsPath: 'data', fields: [], parameters: [] };
-    const result = buildConfigExport('https://example.com', 'api', [], [], { version: '1.2.3' }, apiConfig);
+    const result = buildConfigExport({ url: 'https://example.com', mode: 'api', manifest: { version: '1.2.3' }, apiConfig });
 
-    expect(result.config).toEqual(buildScrapingConfig('https://example.com', 'api', [], [], apiConfig));
+    expect(result.config).toEqual(buildScrapingConfig({ url: 'https://example.com', mode: 'api', apiConfig }));
     expect(result.config.api).toEqual(apiConfig);
   });
 
   test('carries scriptFileName/outputFileName through into the wrapped config', () => {
-    const result = buildConfigExport('https://example.com', 'flat', [], [], { version: '1.2.3' }, null, 'myscraper', 'result');
+    const result = buildConfigExport({
+      url: 'https://example.com',
+      mode: 'flat',
+      manifest: { version: '1.2.3' },
+      scriptFileName: 'myscraper',
+      outputFileName: 'result',
+    });
     expect(result.config.scriptFileName).toBe('myscraper');
     expect(result.config.outputFileName).toBe('result');
   });
 });
 
 // ── addField ─────────────────────────────────────────────────────────────────
+
+// The one mapping from popup state + global settings to buildScrapingConfig's options (Issue #387): generate(), "Save configuration"
+// and "Export configuration" all go through it.
+describe('configOptionsFromState', () => {
+  const state = {
+    url: 'https://example.com/list', mode: 'flat', fields: [{ name: 'Titel', selector: 'h1', attribute: null }], groups: [], apiConfig: null,
+    scriptFileName: 'my_script', outputFileName: 'my_output', engine: 'Browser', browserActions: [{ kind: 'click', selector: '.go' }],
+    persistentSession: true, additionalStartUrls: ['https://example.com/2'], pagination: null, discoveredUrls: null, preflight: true,
+    changeDetection: null, proxy: { enabled: true, envVar: 'PROXY_LIST' }, hardening: null, requestDelay: null, retry: null,
+    deduplication: null, requestHeaders: null, respectRobotsDelay: true, robotsDisallow: null, appendOutput: true, blocks: null,
+    selectedOutputBlueprintId: '7', selectedOutputBlueprintSchemaKind: 'Flat', selectedOutputBlueprintFieldNames: ['name'],
+    outputBlueprintMapping: { name: 'Titel' }, selectedOutputBlueprintTree: [], outputBlueprintTreeMapping: {},
+  };
+  const globalSettings = { includeDataPreview: true, outputFormat: 'json', includeOutputFile: true, externalConfig: true, skipVerification: true };
+
+  test('maps every piece of state and the global settings onto the options', () => {
+    const config = buildScrapingConfig(configOptionsFromState(state, globalSettings));
+    expect(config).toMatchObject({
+      url: 'https://example.com/list', engine: 'Browser', scriptFileName: 'my_script', outputFileName: 'my_output', persistentSession: true,
+      additionalUrls: ['https://example.com/2'], preflight: true, respectRobotsDelay: true, appendOutput: true,
+      proxy: { environmentVariableName: 'PROXY_LIST' }, outputFormat: 'Json', includePreview: true, includeOutputFile: true,
+      externalConfig: true, skipVerification: true, outputBlueprint: { blueprintId: 7, schemaKind: 'Flat' },
+    });
+  });
+
+  test('the nested blueprint options reach the request', () => {
+    const options = configOptionsFromState(state, globalSettings);
+    expect(options.outputBlueprint).toEqual({
+      id: '7', schemaKind: 'Flat', fieldNames: ['name'], mapping: { name: 'Titel' }, tree: [], treeMapping: {},
+    });
+  });
+
+  test('overrides win: a save keeps the output file out, an export adds the manifest', () => {
+    const save = buildScrapingConfig(configOptionsFromState(state, globalSettings, { includeOutputFile: false }));
+    expect(save).not.toHaveProperty('includeOutputFile');
+    const exported = buildConfigExport(configOptionsFromState(state, globalSettings, { manifest: { version: '9.9.9' } }));
+    expect(exported.extensionVersion).toBe('9.9.9');
+    expect(exported.config).toMatchObject({ url: 'https://example.com/list', includeOutputFile: true });
+  });
+
+  test('the config of an export equals buildScrapingConfig for the same options', () => {
+    const options = configOptionsFromState(state, globalSettings);
+    expect(buildConfigExport(options).config).toEqual(buildScrapingConfig(options));
+  });
+});
 
 describe('addField', () => {
   test('appends field with null attribute', () => {
@@ -1451,7 +1646,7 @@ describe('addField', () => {
 
   // Issue #42, Phase 7
   test('appends field with framePath when given', () => {
-    const result = addField([], 'Preis', 'h2', ['#price-widget']);
+    const result = addField([], 'Preis', 'h2', { framePath: ['#price-widget'] });
     expect(result).toEqual([{
       name: 'Preis', selector: 'h2', attribute: null, framePath: ['#price-widget'], transforms: null,
       download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false,
@@ -1461,7 +1656,7 @@ describe('addField', () => {
   // Issue #84
   test('appends field with transforms when given', () => {
     const transforms = [{ kind: 'trim' }, { kind: 'toNumber' }];
-    const result = addField([], 'Preis', '.price', null, transforms);
+    const result = addField([], 'Preis', '.price', { framePath: null, transforms });
     expect(result).toEqual([{
       name: 'Preis', selector: '.price', attribute: null, framePath: null, transforms,
       download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false,
@@ -1470,7 +1665,7 @@ describe('addField', () => {
 
   // Issue #214
   test('appends attribute-mode field with download and safety net when given', () => {
-    const result = addField([], 'Datei', 'a.file', null, [], 'href', true, 1024, ['application/pdf']);
+    const result = addField([], 'Datei', 'a.file', { framePath: null, transforms: [], attribute: 'href', download: true, maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'] });
     expect(result).toEqual([{
       name: 'Datei', selector: 'a.file', attribute: 'href', framePath: null, transforms: null,
       download: true, maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'], hiddenFromOutput: false,
@@ -1478,7 +1673,7 @@ describe('addField', () => {
   });
 
   test('ignores download/safety net when no attribute is given', () => {
-    const result = addField([], 'Titel', 'h1', null, [], null, true, 1024, ['application/pdf']);
+    const result = addField([], 'Titel', 'h1', { framePath: null, transforms: [], attribute: null, download: true, maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'] });
     expect(result).toEqual([{
       name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null,
       download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false,

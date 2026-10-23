@@ -22,32 +22,9 @@ const { createDefaultLinkDraft } = require('./api-link-pagination');
 const FIXTURE_DIR = path.join(__dirname, '..', '..', 'test-vectors', 'wire');
 const UPDATE = process.env.UPDATE_WIRE_FIXTURES === '1';
 
-// buildScrapingConfig takes ~37 positional parameters (the options-object refactor is Issue #387). The fixtures
-// are the stable contract either way: this maps names to positions once, so a case reads as what it configures.
-const PARAMETERS = [
-  'url', 'mode', 'fields', 'groups', 'apiConfig', 'scriptFileName', 'outputFileName', 'engine', 'browserActions',
-  'includePreview', 'useJsonOutput', 'additionalUrls', 'changeDetection', 'proxy', 'hardening', 'pagination',
-  'persistentSession', 'includeOutputFile', 'externalConfig', 'combinedComponents', 'blocks', 'outputBlueprintId',
-  'outputBlueprintFieldNames', 'outputBlueprintMapping', 'outputBlueprintSchemaKind', 'outputBlueprintTree',
-  'outputBlueprintTreeMapping', 'discoveredUrls', 'preflight', 'requestDelay', 'retry', 'deduplication',
-  'requestHeaders', 'respectRobotsDelay', 'skipVerification', 'robotsDisallow', 'appendOutput',
-];
-
+// A case states what it configures; the blueprint options are nested under `outputBlueprint` as in buildScrapingConfig.
 function request(state) {
-  const defaults = {
-    url: 'https://example.test/list', mode: 'flat', fields: [], groups: [], apiConfig: null, scriptFileName: null,
-    outputFileName: null, engine: 'Static', browserActions: [], includePreview: false, useJsonOutput: false,
-    additionalUrls: [], changeDetection: null, proxy: null, hardening: null, pagination: null, persistentSession: false,
-    includeOutputFile: false, externalConfig: false, combinedComponents: null, blocks: null, outputBlueprintId: null,
-    outputBlueprintFieldNames: [], outputBlueprintMapping: {}, outputBlueprintSchemaKind: 'Flat', outputBlueprintTree: [],
-    outputBlueprintTreeMapping: {}, discoveredUrls: null, preflight: false, requestDelay: null, retry: null,
-    deduplication: null, requestHeaders: null, respectRobotsDelay: false, skipVerification: false, robotsDisallow: null,
-    appendOutput: false,
-  };
-  const merged = { ...defaults, ...state };
-  const unknown = Object.keys(state).filter((key) => !PARAMETERS.includes(key));
-  if (unknown.length) throw new Error(`unknown request parameter(s): ${unknown.join(', ')}`);
-  return buildScrapingConfig(...PARAMETERS.map((name) => merged[name]));
+  return buildScrapingConfig({ url: 'https://example.test/list', mode: 'flat', ...state });
 }
 
 // ── Building blocks shared by several cases ──────────────────────────────────
@@ -200,8 +177,7 @@ const CASES = {
     });
   },
   'flat-output-blueprint': () => request({
-    fields: FLAT_FIELDS, outputBlueprintId: '1', outputBlueprintSchemaKind: 'Flat',
-    outputBlueprintFieldNames: ['product', 'price_eur'], outputBlueprintMapping: { product: 'Title', price_eur: 'Price' },
+    fields: FLAT_FIELDS, outputBlueprint: { id: '1', schemaKind: 'Flat', fieldNames: ['product', 'price_eur'], mapping: { product: 'Title', price_eur: 'Price' } },
   }),
 
   'container-basic': () => request({ mode: 'container', url: 'https://example.test/menu', groups: containerTree() }),
@@ -231,13 +207,16 @@ const CASES = {
     return request({ mode: 'container', groups, engine: 'Browser' });
   },
   'container-blueprint-flat': () => request({
-    mode: 'container', url: 'https://example.test/menu', groups: containerTree(), outputBlueprintId: '2', outputBlueprintSchemaKind: 'Flat',
-    outputBlueprintFieldNames: ['category', 'dish', 'price'], outputBlueprintMapping: { category: 'Heading', dish: 'Name', price: 'Price' },
+    mode: 'container', url: 'https://example.test/menu', groups: containerTree(),
+    outputBlueprint: { id: '2', schemaKind: 'Flat', fieldNames: ['category', 'dish', 'price'], mapping: { category: 'Heading', dish: 'Name', price: 'Price' } },
   }),
   'container-blueprint-tree': () => request({
-    mode: 'container', url: 'https://example.test/menu', groups: containerTree(), outputBlueprintId: '3', outputBlueprintSchemaKind: 'Tree',
-    outputBlueprintTree: [{ kind: 'group', name: 'Menu', children: [{ kind: 'field', name: 'title' }, { kind: 'group', name: 'Entry', children: [{ kind: 'field', name: 'label' }, { kind: 'field', name: 'amount' }] }] }],
-    outputBlueprintTreeMapping: { '0.0': 'Heading', '0.1.0': 'Name', '0.1.1': 'Price' },
+    mode: 'container', url: 'https://example.test/menu', groups: containerTree(),
+    outputBlueprint: {
+      id: '3', schemaKind: 'Tree',
+      tree: [{ kind: 'group', name: 'Menu', children: [{ kind: 'field', name: 'title' }, { kind: 'group', name: 'Entry', children: [{ kind: 'field', name: 'label' }, { kind: 'field', name: 'amount' }] }] }],
+      treeMapping: { '0.0': 'Heading', '0.1.0': 'Name', '0.1.1': 'Price' },
+    },
   }),
 
   'api-flat': () => request({ mode: 'api', url: 'https://example.test/api/items', apiConfig: buildApiConfig(apiDraft()) }),
@@ -269,7 +248,6 @@ const CASES = {
     hardening: { noResult: { enabled: true, severity: 'Warning' }, requiredFields: { enabled: true, severity: 'Error', fields: ['Title'] } },
     retry: { enabled: true, maxAttemptsText: '3', delaySecondsText: '2', exponential: true, statusCodesText: '' },
     requestDelay: { enabled: true, minSecondsText: '0.5', maxSecondsText: '' },
-    outputBlueprintId: null,
   }),
   'api-post-body-with-variable': () => {
     const bodyTree = jsonValueToBodyDraft({ query: '{ items { name } }', variables: { week: 1, limit: 50, active: true, cursor: null, tags: ['a', 'b'] } });
@@ -321,8 +299,8 @@ const CASES = {
     apiConfig: buildApiConfig(apiDraft({ urlParts: parseUrlTemplateParts('https://example.test/page'), embeddedJsonSource: { scriptSelector: 'script#__NEXT_DATA__' } })),
   }),
   'api-flat-output-blueprint': () => request({
-    mode: 'api', apiConfig: buildApiConfig(apiDraft()), outputBlueprintId: '4', outputBlueprintSchemaKind: 'Flat',
-    outputBlueprintFieldNames: ['product', 'price_eur'], outputBlueprintMapping: { product: 'Name', price_eur: 'Price' },
+    mode: 'api', apiConfig: buildApiConfig(apiDraft()),
+    outputBlueprint: { id: '4', schemaKind: 'Flat', fieldNames: ['product', 'price_eur'], mapping: { product: 'Name', price_eur: 'Price' } },
   }),
 
   'blocks-basic': () => request({

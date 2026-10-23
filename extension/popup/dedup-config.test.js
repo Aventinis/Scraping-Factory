@@ -89,10 +89,14 @@ describe('buildDeduplicationConfig', () => {
 describe('buildScrapingConfig', () => {
   const fields = [{ name: 'Titel', selector: 'h1' }, { name: 'Preis', selector: '.price' }];
   // Same positional layout retry.test.js uses, plus the new trailing parameter.
-  const build = (mode, dedup, extra = {}) => buildScrapingConfig(
-    'https://example.com', mode, extra.fields ?? fields, extra.groups ?? [], extra.apiConfig ?? null, null, null, 'Static', [], false, false,
-    [], null, null, null, null, false, false, false, null, null, null, [], {}, 'Flat', [], {}, null, false, null, null, dedup,
-  );
+  const build = (mode, dedup, extra = {}) => buildScrapingConfig({
+    url: 'https://example.com',
+    mode,
+    fields: extra.fields ?? fields,
+    groups: extra.groups ?? [],
+    apiConfig: extra.apiConfig ?? null,
+    deduplication: dedup,
+  });
 
   test('flat mode sends the deduplication block only when configured', () => {
     expect(build('flat', draft()).deduplication).toEqual({ keyFields: ['Titel'] });

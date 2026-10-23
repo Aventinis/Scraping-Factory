@@ -75,7 +75,11 @@ function readBlobText(blob) {
 
 describe('applyConfigToState', () => {
   test('never includes `url` — the live browser tab stays authoritative', () => {
-    const config = buildScrapingConfig('https://example.com/products', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const config = buildScrapingConfig({
+      url: 'https://example.com/products',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+    });
     expect(applyConfigToState(config)).not.toHaveProperty('url');
   });
 
@@ -84,10 +88,15 @@ describe('applyConfigToState', () => {
       { name: 'Titel', selector: 'h1', attribute: null, framePath: null, transforms: null, download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false },
       { name: 'Bild', selector: 'img', attribute: 'src', framePath: ['#widget'], transforms: [{ kind: 'trim' }], download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false },
     ];
-    const config = buildScrapingConfig(
-      'https://example.com', 'flat', fields, [], null, 'myscraper', 'result', 'Static', [], false, true,
-      ['https://example.com/page2'],
-    );
+    const config = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields,
+      scriptFileName: 'myscraper',
+      outputFileName: 'result',
+      useJsonOutput: true,
+      additionalUrls: ['https://example.com/page2'],
+    });
 
     const result = applyConfigToState(config);
 
@@ -112,14 +121,14 @@ describe('applyConfigToState', () => {
         download: true, maxDownloadSizeBytes: 1024, allowedContentTypes: ['application/pdf'], hiddenFromOutput: false,
       },
     ];
-    const config = buildScrapingConfig('https://example.com', 'flat', fields);
+    const config = buildScrapingConfig({ url: 'https://example.com', mode: 'flat', fields });
     expect(applyConfigToState(config).fields).toEqual(fields);
   });
 
   test('container mode: round-trips a nested group tree through serialize/deserialize', () => {
     const inner = buildFieldNode('Preis', '.price', 'attribute', 'data-price');
     const group = { ...buildGroupNode('Kategorie', 'section.menu-category', true), children: [inner] };
-    const config = buildScrapingConfig('https://example.com', 'container', [], [group]);
+    const config = buildScrapingConfig({ url: 'https://example.com', mode: 'container', groups: [group] });
 
     const result = applyConfigToState(config);
 
@@ -135,14 +144,14 @@ describe('applyConfigToState', () => {
       buildFieldNode('Vorhanden', '.badge', 'exists'),
       buildFieldNode('Name', 'h2', 'ownText'),
     ];
-    const config = buildScrapingConfig('https://example.com', 'container', [], groups);
+    const config = buildScrapingConfig({ url: 'https://example.com', mode: 'container', groups });
 
     expect(applyConfigToState(config).groups).toEqual(groups);
   });
 
   test('api mode: passes apiConfig through unchanged', () => {
     const apiConfig = { urlTemplate: 'https://example.com/api/{id}', itemsPath: 'data', fields: [{ name: 'Titel', path: 'title' }], parameters: [] };
-    const config = buildScrapingConfig('https://example.com', 'api', [], [], apiConfig);
+    const config = buildScrapingConfig({ url: 'https://example.com', mode: 'api', apiConfig });
 
     const result = applyConfigToState(config);
 
@@ -159,9 +168,13 @@ describe('applyConfigToState', () => {
       { kind: 'click', selector: '#submit', framePath: null, target: 'first', waitAfterMs: 250 },
       { kind: 'scroll', containerSelector: '.list', loadMoreButtonSelector: '.more', maxIterations: 5, waitAfterMs: 500, framePath: null },
     ];
-    const config = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Browser', browserActions,
-    );
+    const config = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      engine: 'Browser',
+      browserActions,
+    });
 
     const result = applyConfigToState(config);
 
@@ -170,7 +183,11 @@ describe('applyConfigToState', () => {
   });
 
   test('defaults engine to Static and browserActions to [] when omitted (Static-engine wire config)', () => {
-    const config = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const config = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+    });
     const result = applyConfigToState(config);
     expect(result.engine).toBe('Static');
     expect(result.browserActions).toEqual([]);
@@ -183,10 +200,13 @@ describe('applyConfigToState', () => {
       webhook: { urlEnvVar: 'SF_WEBHOOK_URL' },
     };
     const proxy = { enabled: true, envVar: 'SF_PROXIES' };
-    const config = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], changeDetection, proxy,
-    );
+    const config = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      changeDetection,
+      proxy,
+    });
 
     const result = applyConfigToState(config);
 
@@ -200,16 +220,22 @@ describe('applyConfigToState', () => {
       email: { smtpHostEnvVar: 'SF_HOST', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: 'SF_FROM', toEnvVar: 'SF_TO' },
       webhook: { urlEnvVar: '' },
     };
-    const config = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], changeDetection,
-    );
+    const config = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      changeDetection,
+    });
 
     expect(applyConfigToState(config).changeDetection).toEqual(changeDetection);
   });
 
   test('defaults changeDetection/proxy to their disabled shape when omitted', () => {
-    const config = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const config = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+    });
     const result = applyConfigToState(config);
     expect(result.changeDetection).toEqual({
       enabled: false, notify: 'Email',
@@ -221,10 +247,14 @@ describe('applyConfigToState', () => {
 
   test('round-trips pagination (both kinds) and persistentSession', () => {
     const pagination = { enabled: true, kind: 'pageNumber', nextLinkSelector: '', urlTemplate: '{url}?page={page}', maxPages: 10 };
-    const config = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Browser', [], false,
-      false, [], null, null, null, pagination, true,
-    );
+    const config = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      engine: 'Browser',
+      pagination,
+      persistentSession: true,
+    });
 
     const result = applyConfigToState(config);
 
@@ -233,7 +263,11 @@ describe('applyConfigToState', () => {
   });
 
   test('defaults pagination to disabled/nextLink and persistentSession to false when omitted', () => {
-    const config = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const config = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+    });
     const result = applyConfigToState(config);
     expect(result.pagination).toEqual({ enabled: false, kind: 'nextLink', nextLinkSelector: '', urlTemplate: '', maxPages: 50 });
     expect(result.persistentSession).toBe(false);
@@ -244,10 +278,12 @@ describe('applyConfigToState', () => {
   // applyConfigToState no longer touches it at all, regardless of whether
   // the loaded/exported config itself had it set.
   test('never round-trips externalConfig — it is a global preference now', () => {
-    const config = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], null, null, null, null, false, false, true,
-    );
+    const config = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      externalConfig: true,
+    });
     expect(applyConfigToState(config)).not.toHaveProperty('externalConfig');
   });
 
@@ -259,16 +295,22 @@ describe('applyConfigToState', () => {
       blocking: { enabled: true, severity: 'Warning', minBodyLengthText: '500', phrasesText: 'Access Denied\nCAPTCHA' },
       requiredFields: { enabled: true, severity: 'Error', fields: ['Titel', 'Preis'] },
     };
-    const config = buildScrapingConfig(
-      'https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }], [], null, null, null, 'Static', [], false,
-      false, [], null, null, hardening,
-    );
+    const config = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+      hardening,
+    });
 
     expect(applyConfigToState(config).hardening).toEqual(hardening);
   });
 
   test('defaults hardening to its fully-disabled shape when omitted', () => {
-    const config = buildScrapingConfig('https://example.com', 'flat', [{ name: 'Titel', selector: 'h1' }]);
+    const config = buildScrapingConfig({
+      url: 'https://example.com',
+      mode: 'flat',
+      fields: [{ name: 'Titel', selector: 'h1' }],
+    });
     expect(applyConfigToState(config).hardening).toEqual({
       noResult: { enabled: false, severity: 'Warning' },
       nullRate: [],
