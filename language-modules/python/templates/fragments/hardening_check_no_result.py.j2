@@ -1,0 +1,8 @@
+        if check["kind"] == "noResult":
+            if result_count == 0:
+                message = "No data was extracted — a selector, path or request likely matched nothing."
+                if check["severity"] == "Error":
+                    print(f"ERROR: {message}", file=sys.stderr)
+                    has_error = True
+                else:
+                    print(f"WARNING: {message}", file=sys.stderr)
