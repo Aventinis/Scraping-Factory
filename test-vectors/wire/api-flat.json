@@ -1,0 +1,21 @@
+{
+  "version": "1",
+  "url": "https://example.test/api/items",
+  "api": {
+    "urlTemplate": "https://example.test/api/items",
+    "itemsPath": "items",
+    "fields": [
+      {
+        "name": "Name",
+        "path": "name"
+      },
+      {
+        "name": "Price",
+        "path": "price"
+      }
+    ],
+    "parameters": []
+  },
+  "scriptFileName": null,
+  "outputFileName": null
+}

@@ -1,0 +1,39 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "api": {
+    "urlTemplate": "https://example.test/api/items",
+    "method": "POST",
+    "itemsPath": "items",
+    "fields": [
+      {
+        "name": "Name",
+        "path": "name"
+      },
+      {
+        "name": "Price",
+        "path": "price"
+      }
+    ],
+    "parameters": [],
+    "body": {
+      "properties": {
+        "cursor": {
+          "kind": "Null"
+        },
+        "size": {
+          "kind": "Number",
+          "numberValue": 20
+        }
+      }
+    },
+    "cursorPagination": {
+      "nextCursorPath": "meta.next",
+      "target": "Body",
+      "bodyPath": "cursor",
+      "maxPages": 7
+    }
+  },
+  "scriptFileName": null,
+  "outputFileName": null
+}

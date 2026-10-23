@@ -1,0 +1,52 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "fields": [
+    {
+      "name": "Title",
+      "selector": "h2.title",
+      "attribute": null
+    },
+    {
+      "name": "Price",
+      "selector": "span.price",
+      "attribute": null
+    },
+    {
+      "name": "Link",
+      "selector": "a.more",
+      "attribute": "href"
+    }
+  ],
+  "outputFormat": "Csv",
+  "scriptFileName": null,
+  "outputFileName": null,
+  "engine": "Browser",
+  "browserActions": [
+    {
+      "kind": "waitFor",
+      "selector": "form#login",
+      "timeoutMs": 5000
+    },
+    {
+      "kind": "fill",
+      "selector": "#user",
+      "environmentVariableName": "SITE_USERNAME"
+    },
+    {
+      "kind": "fill",
+      "selector": "#password",
+      "environmentVariableName": "SITE_PASSWORD"
+    },
+    {
+      "kind": "click",
+      "selector": "button.login"
+    },
+    {
+      "kind": "waitFor",
+      "selector": ".account",
+      "timeoutMs": 10000
+    }
+  ],
+  "persistentSession": true
+}

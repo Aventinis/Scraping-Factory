@@ -1,0 +1,35 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "api": {
+    "urlTemplate": "https://example.test/api/items",
+    "itemsPath": "items",
+    "fields": [
+      {
+        "name": "Name",
+        "path": "name"
+      },
+      {
+        "name": "Price",
+        "path": "price"
+      }
+    ],
+    "parameters": []
+  },
+  "scriptFileName": null,
+  "outputFileName": null,
+  "outputBlueprint": {
+    "blueprintId": 4,
+    "schemaKind": "Flat",
+    "fields": [
+      {
+        "targetField": "product",
+        "sourceField": "Name"
+      },
+      {
+        "targetField": "price_eur",
+        "sourceField": "Price"
+      }
+    ]
+  }
+}

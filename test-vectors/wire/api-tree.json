@@ -1,0 +1,49 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "api": {
+    "urlTemplate": "https://example.test/api/items",
+    "groups": [
+      {
+        "name": "Category",
+        "path": "categories",
+        "children": [
+          {
+            "name": "Name",
+            "path": "name"
+          },
+          {
+            "name": "Product",
+            "path": "products",
+            "children": [
+              {
+                "name": "Title",
+                "path": "title",
+                "transforms": [
+                  {
+                    "kind": "trim"
+                  }
+                ]
+              },
+              {
+                "name": "Price",
+                "path": "price",
+                "transforms": [
+                  {
+                    "kind": "toCurrency",
+                    "format": "1,234.56",
+                    "onError": "KeepOriginal",
+                    "defaultValue": ""
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "parameters": []
+  },
+  "scriptFileName": null,
+  "outputFileName": null
+}

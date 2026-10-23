@@ -1,0 +1,38 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "fields": [
+    {
+      "name": "Title",
+      "selector": "h2.title",
+      "attribute": null
+    },
+    {
+      "name": "Price",
+      "selector": "span.price",
+      "attribute": null
+    },
+    {
+      "name": "Link",
+      "selector": "a.more",
+      "attribute": "href"
+    }
+  ],
+  "outputFormat": "Csv",
+  "scriptFileName": null,
+  "outputFileName": null,
+  "outputBlueprint": {
+    "blueprintId": 1,
+    "schemaKind": "Flat",
+    "fields": [
+      {
+        "targetField": "product",
+        "sourceField": "Title"
+      },
+      {
+        "targetField": "price_eur",
+        "sourceField": "Price"
+      }
+    ]
+  }
+}

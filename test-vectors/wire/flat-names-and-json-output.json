@@ -1,0 +1,26 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "fields": [
+    {
+      "name": "Title",
+      "selector": "h2.title",
+      "attribute": null
+    },
+    {
+      "name": "Price",
+      "selector": "span.price",
+      "attribute": null
+    },
+    {
+      "name": "Link",
+      "selector": "a.more",
+      "attribute": "href"
+    }
+  ],
+  "outputFormat": "Json",
+  "scriptFileName": "menu_scraper",
+  "outputFileName": "menu_out",
+  "includePreview": true,
+  "includeOutputFile": true
+}

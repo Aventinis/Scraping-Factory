@@ -1,0 +1,31 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "groups": [
+    {
+      "name": "Item",
+      "selector": "li.item",
+      "repeating": true,
+      "children": [
+        {
+          "name": "Title",
+          "selector": "h3",
+          "mode": "Text"
+        },
+        {
+          "name": "Image",
+          "selector": "img",
+          "mode": "Attribute",
+          "attribute": "src",
+          "download": true,
+          "maxDownloadSizeBytes": 2097152,
+          "allowedContentTypes": [
+            "image/jpeg"
+          ]
+        }
+      ]
+    }
+  ],
+  "scriptFileName": null,
+  "outputFileName": null
+}
