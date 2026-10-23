@@ -48,8 +48,10 @@ public abstract class SqlStore
     protected long Insert(DbConnection connection, string sql, params (string Name, object? Value)[] args)
     {
         Execute(connection, sql, args);
-        return Convert.ToInt64(Scalar(connection, LastInsertIdSql));
+        return LastInsertId(connection);
     }
+
+    protected long LastInsertId(DbConnection connection) => Convert.ToInt64(Scalar(connection, LastInsertIdSql));
 
     protected static long? NullableInt64(DbDataReader reader, int ordinal) =>
         reader.IsDBNull(ordinal) ? null : reader.GetInt64(ordinal);
