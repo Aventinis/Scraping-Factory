@@ -785,7 +785,7 @@ wire-format, companion or generated-script change. See docs/design-notes/extensi
 
 - Extension: `i18n/{de,en,es}.json` (renamed values; keys unchanged), `popup/advanced-defaults.js`
   (pure: does a retry code list / dedup retention differ from its default?),
-  `popup/advanced-disclosure-ui.js` (`autoOpenAdvanced`), `popup/combine-split-fields.js`
+  `popup/advanced-disclosure-ui.js` (`autoOpenAdvanced`), `popup/combine-split-fields.ts`
   (`partNumberToIndex`/`indexToPartNumber`), `popup/glossary.js` + `glossary-ui.js`,
   `popup/screens/{idle,settings,modals}.html`, `help.outputLayout|safetyChecks|preflight|dedup.overview`
 - Tests: `popup/advanced-defaults.test.js`, `advanced-groups-ui.test.js`, `glossary.test.js`,
@@ -1786,7 +1786,7 @@ channel constant in the extension (`shared/build-config.ts`, set to `release` by
   `CompanionHostOptions.cs`, `Program.cs` (transport validation, Kestrel HTTPS,
   anonymous paths, `/health` `registration`)
 - Extension: `shared/build-config.ts`, `shared/companion-config.ts` (address policy,
-  developer flag), `popup/account.js` + `popup/account-ui.js`,
+  developer flag), `popup/account.ts` + `popup/account-ui.js`,
   `popup/screens/settings.html` (Account, Developer options),
   `popup/companion-client.js` (`getCompanionInfo`, `useCustomCompanionUrl`)
 - Installer: `--registration`, `--host`, `--tls-cert`/`--tls-key`, `--no-tls`;
@@ -1810,7 +1810,7 @@ verified address; a successful reset revokes every token.
   `Storage/MySqlSchema.EnsureIndex`; `UserCommands` (`set-email`, `verify`);
   `Program.cs` (validation, anonymous reset endpoints, `RequireVerified` gate,
   `/health` + `/whoami` fields)
-- Extension: `popup/email-account.js`, `popup/email-account-ui.js`,
+- Extension: `popup/email-account.ts`, `popup/email-account-ui.js`,
   `popup/account-ui.js` (shared state), `popup/screens/settings.html`,
   `popup/companion-client.js` (`getCompanionInfo`)
 - Installer: `--smtp-*`, `--require-email`, `--require-verified-email`,
@@ -1927,7 +1927,7 @@ independently (Issue #244, see below), which is what lets two independent/
 sibling source repeating groups (which a `Flat` mapping must reject) each
 map into a different target branch.
 
-- Extension: `popup/output-blueprints.js` (pure — editing a blueprint's own
+- Extension: `popup/output-blueprints.ts` (pure — editing a blueprint's own
   ordered field-name list in the create/edit modal;
   building/validating the per-scrape source-field mapping draft) and
   `popup/output-blueprints-ui.js` (CRUD against `/blueprints`, the
@@ -1944,7 +1944,7 @@ map into a different target branch.
   blueprint is picked or the mapping isn't complete, the same convention
   `buildProxyConfig`/`buildChangeDetectionConfig` already use),
   `config-import.ts` (`applyOutputBlueprintConfig`, the reverse).
-- Extension (Issue #244): `output-blueprints.js` gains tree-schema editing
+- Extension (Issue #244): `output-blueprints.ts` gains tree-schema editing
   helpers for the create/edit modal (`buildBlueprintSchemaGroup`/
   `buildBlueprintSchemaField`/`parseBlueprintSchemaTree`/
   `serializeBlueprintSchemaTree`/`blueprintTreeSchemaIsValid`) — the tree's
@@ -2369,7 +2369,7 @@ compile time anywhere.
 | Pagination | `popup.js`: `buildPaginationConfig()` (returns `null` when disabled or the kind-specific required field is blank) → `buildScrapingConfig`'s `pagination` key | `{pagination?: {kind:"nextLink", nextLinkSelector, maxPages} \| {kind:"pageNumber", urlTemplate, maxPages}}` | `IR/PaginationConfig.cs`: `NextLinkPagination`/`PageNumberPagination` (via `[JsonPolymorphic]`) |
 | Persistent session | `popup.js`: `_state.persistentSession` (plain boolean) → `buildScrapingConfig`'s `persistentSession` key, sent only when `true` | `{persistentSession?: true}` | `IR/ScrapingConfig.cs`: `bool? PersistentSession` |
 | Range format mini-template | `api-config.ts`: `RANGE_FORMAT_PRESETS`, `compileRangeFormatPattern()` (client-side mirror) | `{format?: "{yyyy}-W{ww}"}` inside a `RangeSource` | `Backends/Python/RangeFormat.cs` (server-side, authoritative) |
-| Output Blueprint mapping | `output-blueprints.js`: `buildOutputBlueprintMapping()` (returns `null` when no blueprint is picked or the mapping isn't complete) → `buildScrapingConfig`'s `outputBlueprint` key | `{outputBlueprint?: {blueprintId, schemaKind: 'Flat', fields: [{targetField, sourceField}]} \| {blueprintId, schemaKind: 'Tree', tree: [{name, children: [...]} \| {name, sourceField}]}}` | `IR/OutputBlueprintMapping.cs`: `OutputBlueprintMapping`/`OutputBlueprintFieldMapping`/`OutputBlueprintSchemaKind`/`OutputBlueprintTreeMappingGroup`/`OutputBlueprintTreeMappingField` (Issue #244) |
+| Output Blueprint mapping | `output-blueprints.ts`: `buildOutputBlueprintMapping()` (returns `null` when no blueprint is picked or the mapping isn't complete) → `buildScrapingConfig`'s `outputBlueprint` key | `{outputBlueprint?: {blueprintId, schemaKind: 'Flat', fields: [{targetField, sourceField}]} \| {blueprintId, schemaKind: 'Tree', tree: [{name, children: [...]} \| {name, sourceField}]}}` | `IR/OutputBlueprintMapping.cs`: `OutputBlueprintMapping`/`OutputBlueprintFieldMapping`/`OutputBlueprintSchemaKind`/`OutputBlueprintTreeMappingGroup`/`OutputBlueprintTreeMappingField` (Issue #244) |
 
 Two rows above are explicitly **hand-kept mirrors**, not generated from a shared
 schema: `sanitizeFileNameBase` (popup.js) vs. `FileNameSanitizer` (C#), and the
