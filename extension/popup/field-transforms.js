@@ -127,11 +127,8 @@ function transformsAreValid(transforms) {
   });
 }
 
-// Issue #143: hand-kept JS mirror of the Python runtime's own _to_number
-// (see any of the six .py.j2 templates) — same "both sides must
-// independently reach the same result" pattern as sanitizeFileNameBase's
-// relationship to the companion's FileNameSanitizer, since this only ever
-// has to *look* right in the popup, never actually run server-side.
+// Issue #143: JS mirror of the runtime's _to_number (fragments/transforms.py.j2);
+// test-vectors/transforms.json pins both to the same results.
 /**
  * @param {string} value
  * @returns {string}
@@ -146,18 +143,29 @@ function toNumberPreview(value) {
     const decimalPos = Math.max(lastDot, lastComma);
     const integerPart = raw.slice(0, decimalPos).replace(/[.,]/g, '');
     const fractionalPart = raw.slice(decimalPos + 1);
-    return `${integerPart}.${fractionalPart}`;
+    return normalizeNumber(`${integerPart}.${fractionalPart}`);
   }
   if ((raw.match(/,/g) || []).length > 1 || (raw.match(/\./g) || []).length > 1) {
-    return raw.replace(/[.,]/g, '');
+    return normalizeNumber(raw.replace(/[.,]/g, ''));
   }
-  return raw.replace(',', '.');
+  return normalizeNumber(raw.replace(',', '.'));
 }
 
-// Issue #205: hand-kept JS mirrors of the Python runtime's own
-// _to_integer/_to_boolean/_to_date (see any of the eight .py.j2
-// templates) — same "both sides must independently reach the same
-// result" pattern toNumberPreview already has to _to_number. Each
+// _to_number ends with float() and str(): "12.90" becomes "12.9", "100.0" becomes "100", a whole
+// number is printed without exponent however large. BigInt gives the exact digits Python's int()
+// prints for a whole float.
+/**
+ * @param {string} text
+ * @returns {string}
+ */
+function normalizeNumber(text) {
+  const numeric = Number(text);
+  if (Number.isNaN(numeric)) return '';
+  return Number.isInteger(numeric) ? BigInt(numeric).toString() : String(numeric);
+}
+
+// Issue #205: JS mirrors of the runtime's _to_integer/_to_boolean/_to_date
+// (fragments/transforms.py.j2), pinned by test-vectors/transforms.json. Each
 // returns null on conversion failure (distinct from a valid, possibly
 // empty, converted string) so applyTransformsPreview below can apply the
 // transform's own onError/defaultValue the same way _apply_transforms
@@ -169,7 +177,8 @@ function toNumberPreview(value) {
  */
 function toIntegerPreview(value) {
   const trimmed = value.trim();
-  return /^[+-]?\d+$/.test(trimmed) ? String(parseInt(trimmed, 10)) : null;
+  // BigInt, not parseInt: Python's int() keeps every digit of a long number.
+  return /^[+-]?\d+$/.test(trimmed) ? BigInt(trimmed).toString() : null;
 }
 
 /**
@@ -218,21 +227,23 @@ function toDatePreview(value, sourceFormat) {
   const yyyy = parseInt(match.groups.yyyy, 10);
   const mm = parseInt(match.groups.mm, 10);
   const dd = parseInt(match.groups.dd, 10);
-  const d = new Date(Date.UTC(yyyy, mm - 1, dd));
+  // setUTCFullYear, not Date.UTC: Date.UTC maps the years 0-99 to 1900-1999.
+  const d = new Date(0);
+  d.setUTCFullYear(yyyy, mm - 1, dd);
   // A structural match doesn't guarantee a real calendar date (e.g.
   // "2026-02-30") — JS's own Date rolls invalid day-of-month values over
   // into the next month instead of raising, so the roll-over is detected
   // by checking the constructed date's own fields didn't move, the same
   // check Python's date() raising ValueError gives us for free server-side.
-  if (d.getUTCFullYear() !== yyyy || d.getUTCMonth() !== mm - 1 || d.getUTCDate() !== dd) return null;
+  // Python's date() starts at year 1, so "0000" is a failure there too.
+  if (yyyy < 1 || d.getUTCFullYear() !== yyyy || d.getUTCMonth() !== mm - 1 || d.getUTCDate() !== dd) return null;
   /** @param {number} n */
   const pad = (n) => String(n).padStart(2, '0');
-  return `${yyyy}-${pad(mm)}-${pad(dd)}`;
+  return `${String(yyyy).padStart(4, '0')}-${pad(mm)}-${pad(dd)}`;
 }
 
 // Issue #234: decimal separator and accepted thousands separator(s) per
-// ToCurrencyTransform.SupportedFormats preset — must stay in sync with the
-// companion's list and the templates' own _CURRENCY_FORMATS table.
+// ToCurrencyTransform.SupportedFormats preset (the vectors cover each preset).
 /** @type {Record<string, {decimal: string, thousands: string}>} */
 const CURRENCY_FORMATS = {
   '1.234,56': { decimal: ',', thousands: '.' },
@@ -250,8 +261,7 @@ function escapeCharClass(chars) {
   return chars.replace(/[\]\\^-]/g, '\\$&');
 }
 
-// Hand-kept mirror of the templates' _to_currency (same "both sides must
-// reach the same result" relationship toNumberPreview has to _to_number):
+// Mirror of the runtime's _to_currency (pinned by test-vectors/transforms.json):
 // the first number in the value — a separator only counts when a digit
 // follows — must match the chosen format strictly (thousands groups of
 // exactly three digits, at most one decimal separator); the fraction is
@@ -329,7 +339,8 @@ function applyTransformsPreview(rawValue, transforms) {
         break;
       }
       case 'replace':
-        value = value.replaceAll(t.find, t.replacement);
+        // A function replacer, so "$&"/"$1" in the replacement stay literal text, like Python's str.replace.
+        value = value.replaceAll(t.find, () => t.replacement);
         break;
       case 'toNumber':
         value = toNumberPreview(value);
