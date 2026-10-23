@@ -1,0 +1,18 @@
+import re
+from datetime import date
+{{~ if needs_os_import || external_config.enabled || download_enabled ~}}
+import os
+{{~ end ~}}
+import sys
+{{~ if hardening.has_baseline || preflight.enabled ~}}
+import json
+{{~ end ~}}
+{{~ if proxy.enabled ~}}
+import itertools
+{{~ end ~}}
+{{~ if proxy.enabled || hardening.enabled || download_enabled || discovered_urls.enabled ~}}
+import urllib.parse
+{{~ end ~}}
+{{~ if hardening.enabled ~}}
+from urllib.parse import urlsplit
+{{~ end ~}}

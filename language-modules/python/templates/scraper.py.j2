@@ -28,34 +28,7 @@ from urllib.parse import urlsplit
 {{~ if external_config.enabled ~}}
 import xml.etree.ElementTree as ET
 {{~ end ~}}
-{{~ if (pagination.enabled && pagination.kind == "nextLink") || download_enabled || discovered_urls.enabled ~}}
-from urllib.parse import urljoin
-{{~ end ~}}
-{{~ if download_enabled ~}}
-import hashlib
-{{~ end ~}}
-{{~ if change_detection.enabled ~}}
-import difflib
-{{~ if change_detection.notify_method == "Email" ~}}
-import smtplib
-from email.mime.text import MIMEText
-{{~ else ~}}
-import json
-import urllib.request
-{{~ end ~}}
-{{~ end ~}}
-
-# Issue #83: one or more start URLs — the same extraction runs against each,
-# and results are combined into a single output file.
-URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
-#@include discovered_urls_constants
-
-#@include request_headers_static
-{{~ if text_selector.enabled ~}}
-#@include text_selector_common
-
-#@include text_selector_bs4
-{{~ end ~}}
+#@include static_imports_and_constants
 
 OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else if output_is_sqlite }}sqlite{{ else if output_is_xlsx }}xlsx{{ else }}csv{{ end }}"
 

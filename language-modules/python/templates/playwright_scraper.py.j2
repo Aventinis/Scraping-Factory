@@ -9,56 +9,11 @@ import json
 {{~ else ~}}
 import csv
 {{~ end ~}}
-import re
-from datetime import date
-{{~ if needs_os_import || external_config.enabled || download_enabled ~}}
-import os
-{{~ end ~}}
-import sys
-{{~ if hardening.has_baseline || preflight.enabled ~}}
-import json
-{{~ end ~}}
-{{~ if proxy.enabled ~}}
-import itertools
-{{~ end ~}}
-{{~ if proxy.enabled || hardening.enabled || download_enabled || discovered_urls.enabled ~}}
-import urllib.parse
-{{~ end ~}}
-{{~ if hardening.enabled ~}}
-from urllib.parse import urlsplit
-{{~ end ~}}
+#@include playwright_imports_head
 {{~ if external_config.enabled ~}}
 import xml.etree.ElementTree as ET
 {{~ end ~}}
-{{~ if pagination.enabled ~}}
-{{~ if pagination.kind == "nextLink" ~}}
-import urllib.parse
-{{~ end ~}}
-{{~ end ~}}
-{{~ if download_enabled ~}}
-import hashlib
-{{~ end ~}}
-{{~ if discovered_urls.enabled || preflight.enabled ~}}
-# Issue #218/#219: both the discovery pass and the preflight check are
-# deliberately plain `requests` calls, never a live Playwright page (both
-# run before any navigation happens) — same "doesn't need the full
-# machinery of the main run" precedent DiscoverySource/BrowserDiscoverySource
-# already established for API mode.
-import requests
-{{~ end ~}}
-{{~ if discovered_urls.enabled ~}}
-from bs4 import BeautifulSoup
-{{~ end ~}}
-{{~ if change_detection.enabled ~}}
-import difflib
-{{~ if change_detection.notify_method == "Email" ~}}
-import smtplib
-from email.mime.text import MIMEText
-{{~ else ~}}
-import json
-import urllib.request
-{{~ end ~}}
-{{~ end ~}}
+#@include playwright_imports_tail
 from playwright.sync_api import sync_playwright
 
 # Issue #83: one or more start URLs — the same extraction runs against each,
