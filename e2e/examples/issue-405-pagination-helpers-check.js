@@ -56,14 +56,8 @@ function assert(condition, message) {
     assert(!(await popup.locator('#toggle-discovered-urls').isVisible()), '"Discover start pages" sits under a collapsed Advanced');
     assert(/Advanced: find start pages automatically/.test(await popup.locator('#discovered-urls-advanced > summary').textContent()), 'summary of the discovery block');
 
-    // The service worker stores every pick as a "pending selector" for a closed panel,
-    // and that write can land after the open panel's own cleanup — a pre-existing race
-    // that would pop a stale field modal after a reload, so clear any leftover first.
     const reloadPopup = async (language) => {
-      await popup.evaluate(async (lang) => {
-        await chrome.storage.session.remove('pendingSelector');
-        if (lang) await chrome.storage.local.set({ language: lang });
-      }, language || null);
+      if (language) await popup.evaluate((lang) => chrome.storage.local.set({ language: lang }), language);
       await popup.reload();
       await focusFixture(fixturePage);
       await waitForIdleScreen(popup);

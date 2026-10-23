@@ -1,4 +1,4 @@
-const { applyStoredSessionState, restorePendingSelection } = require('./session-restore');
+const { applyStoredSessionState, restorePendingSelection, isLeftoverOfHandledPick, markPickHandled } = require('./session-restore');
 const { STATES } = require('./api-config');
 
 describe('applyStoredSessionState', () => {
@@ -151,5 +151,69 @@ describe('restorePendingSelection', () => {
       await restorePendingSelection(bridge, stored);
       expect(state.url).toBe('https://example.com/other-page');
     });
+  });
+});
+
+// Issue #429: the service worker's fallback write of a pick can land after the open panel's
+// cleanup. The panel records the pick as handled, so such a leftover is not replayed.
+describe('a leftover of an already handled pick', () => {
+  let state;
+  let bridge;
+  let storage;
+
+  beforeEach(() => {
+    state = { current: STATES.IDLE, groups: [], browserActions: [], pagination: { enabled: false } };
+    bridge = {
+      getState: () => state,
+      setState: jest.fn((current, patch = {}) => { state = { ...state, current, ...patch }; }),
+    };
+    storage = {};
+    global.chrome = {
+      storage: {
+        session: {
+          set: jest.fn(async (o) => { Object.assign(storage, o); }),
+          remove: jest.fn(async (k) => { delete storage[k]; }),
+        },
+      },
+    };
+  });
+
+  test('isLeftoverOfHandledPick compares the stored pick id with the handled one', () => {
+    expect(isLeftoverOfHandledPick({ pendingPickId: 'a', handledPickId: 'a' })).toBe(true);
+    expect(isLeftoverOfHandledPick({ pendingPickId: 'b', handledPickId: 'a' })).toBe(false);
+    expect(isLeftoverOfHandledPick({ pendingPickId: 'a' })).toBe(false);
+    expect(isLeftoverOfHandledPick({ pendingPickId: null, handledPickId: null })).toBe(false);
+    expect(isLeftoverOfHandledPick({ pendingSelector: '.x' })).toBe(false); // an older sender without ids
+  });
+
+  test('the panel cleans up first, the service worker writes late: the leftover is discarded, not replayed', async () => {
+    markPickHandled('p1');
+    await chrome.storage.session.remove('pendingSelector');
+    Object.assign(storage, { pendingSelector: '.price', pendingPickId: 'p1' }); // the late write
+
+    const handled = await restorePendingSelection(bridge, { ...storage });
+    expect(handled).toBe(false);
+    expect(bridge.setState).not.toHaveBeenCalled();
+    expect(storage.pendingSelector).toBeUndefined();
+  });
+
+  test('a pick the panel did not handle (it was closed) is still replayed, and then marked handled', async () => {
+    Object.assign(storage, { pendingSelector: '.price', pendingPickId: 'p2', handledPickId: 'p1' });
+    const handled = await restorePendingSelection(bridge, { ...storage });
+    expect(handled).toBe(true);
+    expect(bridge.setState).toHaveBeenCalledWith(STATES.SELECTING, expect.objectContaining({ pendingSelector: '.price' }));
+    expect(storage.handledPickId).toBe('p2');
+  });
+
+  test('a stored selector without ids (an older sender) is replayed as before', async () => {
+    const handled = await restorePendingSelection(bridge, { pendingSelector: '.price' });
+    expect(handled).toBe(true);
+  });
+
+  test('markPickHandled ignores a missing or non-string id', () => {
+    markPickHandled(undefined);
+    markPickHandled(42);
+    markPickHandled('');
+    expect(chrome.storage.session.set).not.toHaveBeenCalled();
   });
 });

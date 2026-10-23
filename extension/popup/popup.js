@@ -1319,7 +1319,7 @@ async function init() {
 
   log('INIT reading session storage');
   const stored = await chrome.storage.session.get([
-    'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
+    'fields', 'url', 'pendingSelector', 'pendingPickId', 'handledPickId', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
     'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'requestDelay', 'retry', 'deduplication', 'requestHeaders', 'hardening', 'pagination', 'persistentSession', 'preflight', 'respectRobotsDelay', 'robotsDisallow', 'appendOutput', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'pendingApiDiscoveryPartId', 'pendingApiDiscoveryActionIndex', 'pendingApiDiscoveryActionField',

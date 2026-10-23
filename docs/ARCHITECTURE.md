@@ -668,6 +668,17 @@ CLAUDE.md for the details.
 - Tests: `popup/hardening-presets.test.js`, `popup/hardening-presets-ui.test.js`,
   real-browser check `e2e/examples/issue-399-hardening-plain-language-check.js`
 
+### 2.10m Pick ids for the pending-selector fallback (Issue #429)
+
+Each element pick carries a `pickId`; the service worker's fallback write stores it, the panel records the
+pick it handled, and a restore ignores a stored selector of an already handled pick, so a late write can
+no longer reopen a field dialog after a reload. No wire-format or companion change. See CLAUDE.md.
+
+- Extension: `content/content-script.js` (`pickId`), `background/service-worker.js` (`pendingPickId`),
+  `popup/message-router.js` + `popup/session-restore.js` (`markPickHandled`, `isLeftoverOfHandledPick`)
+- Tests: `popup/session-restore.test.js`, `background/service-worker.test.js`, `content/content-script.test.js`,
+  `popup/popup.test.js`, real-browser check `e2e/examples/issue-429-pending-selector-race-check.js`
+
 ### 2.10l Bundled documentation and "Learn more" (Issue #354 Part B)
 
 `docs/user/*.md` is built into HTML pages inside the extension (`dist/docs/`), the panel's

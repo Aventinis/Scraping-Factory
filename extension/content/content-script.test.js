@@ -354,6 +354,21 @@ describe('scoped selection (START_SELECTION with scopeSelector)', () => {
     expect(section).toBeTruthy(); // sanity: the scope root itself was found, not just any element
   });
 
+  // Issue #429: every pick is named, so the panel can mark it handled.
+  test('every ELEMENT_SELECTED carries its own pickId', async () => {
+    capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
+    const target = document.querySelector('h3.item-name');
+    target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
+    capturedListener({ type: 'START_SELECTION', scopeSelector: 'section.menu-category' });
+    target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
+    const ids = chrome.runtime.sendMessage.mock.calls.map((c) => c[0]).filter((m) => m.type === 'ELEMENT_SELECTED').map((m) => m.pickId);
+    expect(ids).toHaveLength(2);
+    expect(ids.every((id) => typeof id === 'string' && id.length > 3)).toBe(true);
+    expect(ids[0]).not.toBe(ids[1]);
+  });
+
   // Issue #85: the match count travels alongside the selector on the same
   // ELEMENT_SELECTED message, scoped to the container instance exactly like
   // the selector itself already is — a second, unscoped category elsewhere

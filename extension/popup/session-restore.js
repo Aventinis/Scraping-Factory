@@ -83,9 +83,28 @@ function applyStoredSessionState(state, stored) {
 // restored groups/browserActions/pagination. Returns true if it fully
 // handled the recovery (init() should stop there, not fall through to its
 // own checkCompanion() call) — false when there was nothing pending.
+// Issue #429: the service worker writes pendingSelector as a fallback for a closed panel, at
+// the same time as the live message reaches an open one; the panel's cleanup can run before
+// that write lands. So the panel also records which pick it handled (handledPickId), and a
+// stored selector that belongs to that pick is a leftover, not a pending selection.
+function isLeftoverOfHandledPick(stored) {
+  return typeof stored.pendingPickId === 'string' && stored.pendingPickId === stored.handledPickId;
+}
+
+function markPickHandled(pickId) {
+  if (typeof pickId !== 'string' || !pickId) return;
+  chrome.storage.session.set({ handledPickId: pickId });
+}
+
 async function restorePendingSelection(bridge, stored) {
   if (!stored.pendingSelector) return false;
+  if (isLeftoverOfHandledPick(stored)) {
+    log('INIT pending selector belongs to an already handled pick — discarding', stored.pendingPickId);
+    await chrome.storage.session.remove('pendingSelector');
+    return false;
+  }
   await chrome.storage.session.remove('pendingSelector');
+  markPickHandled(stored.pendingPickId);
   const state = bridge.getState();
 
   // Same self-correction as message-router.js's live ELEMENT_SELECTED path
@@ -239,5 +258,5 @@ async function restorePendingSelection(bridge, stored) {
   return true;
 }
 
-module.exports = { applyStoredSessionState, restorePendingSelection };
+module.exports = { applyStoredSessionState, restorePendingSelection, isLeftoverOfHandledPick, markPickHandled };
 
