@@ -1,6 +1,6 @@
 // API mode: Link-header pagination (Issue #321) — DOM rendering and event
 // wiring for the "Follow the Link header" section on the API_CONFIG screen
-// (see api-link-pagination.js for the pure draft/wire logic, the same
+// (see api-link-pagination.ts for the pure draft/wire logic, the same
 // <feature>.js/<feature>-ui.js split api-cursor-pagination-ui.js uses). Every
 // function that touches state takes popup.js's `bridge` as its first
 // parameter, per Architecture Decision #12.

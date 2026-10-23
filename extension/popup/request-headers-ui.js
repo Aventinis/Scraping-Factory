@@ -1,6 +1,6 @@
 // Custom request headers for flat/container/Blocks mode (Issue #226) — DOM
 // rendering and event wiring for the "Request headers" subsection of the
-// Settings section (see request-headers.js for the pure draft/wire logic, the
+// Settings section (see request-headers.ts for the pure draft/wire logic, the
 // same <feature>.js/<feature>-ui.js split every other popup feature uses).
 // Every function that touches state takes popup.js's `bridge` as its first
 // parameter, per Architecture Decision #13.

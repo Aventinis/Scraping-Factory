@@ -1,4 +1,4 @@
-// Issue #400: regex recipes and date-format inference (transform-helpers.js).
+// Issue #400: regex recipes and date-format inference (transform-helpers.ts).
 const { spawnSync } = require('child_process');
 const { escapeRegexLiteral, RECIPES, buildRecipe, previewRecipe, inferDateFormat } = require('./transform-helpers');
 const { applyTransformsPreview } = require('./field-transforms');

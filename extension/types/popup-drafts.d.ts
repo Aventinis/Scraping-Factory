@@ -160,7 +160,7 @@ declare namespace SFDraft {
     statusCodesText: string;
   }
 
-  // See dedup-config.js. retentionValueText is kept as typed.
+  // See dedup-config.ts. retentionValueText is kept as typed.
   interface DeduplicationState {
     enabled: boolean;
     keyFields: string[];
@@ -170,7 +170,7 @@ declare namespace SFDraft {
     retentionValueText: string;
   }
 
-  // See request-headers.js. `value` is the literal for kind
+  // See request-headers.ts. `value` is the literal for kind
   // 'value', the environment variable's *name* for kind 'env'.
   interface RequestHeaderRow {
     name: string;
@@ -287,7 +287,7 @@ declare namespace SFDraft {
     maxPages: number;
   }
 
-  // ── API mode: Link-header pagination (api-link-pagination.js, Issue #321) ──
+  // ── API mode: Link-header pagination (api-link-pagination.ts, Issue #321) ──
 
   interface ApiLinkHeaderPagination {
     maxPages: number;

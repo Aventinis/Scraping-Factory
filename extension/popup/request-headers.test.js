@@ -1,5 +1,5 @@
 // Issue #226: custom request headers for flat/container/Blocks mode — pure
-// draft/wire logic (request-headers.js), the builder integration
+// draft/wire logic (request-headers.ts), the builder integration
 // (buildScrapingConfig), the reverse mapping for a loaded config
 // (applyConfigToState), the one-time test values, and the settings UI in the
 // real popup.

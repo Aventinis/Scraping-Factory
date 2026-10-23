@@ -1,4 +1,3 @@
-// @ts-check
 // Plain-language versions of the failures a user hits at the worst moment, a failed Generate. The companion's and the script's messages are
 // written for developers and say nothing about what to do next. describeError() recognises the common classes by pattern and returns a
 // translated { title, hint }; anything else returns null and keeps the raw text, which always stays available (behind "Details", and
@@ -7,14 +6,11 @@
 // The patterns read the English wording of the companion (ScrapingPlanValidator, PythonScriptVerifier) and of the scripts' "ERROR: ..."
 // lines (fragments/request_errors_*.py.j2, require_env_function.py.j2, output_tabular.py.j2), and are deliberately loose about the
 // surrounding words; where one would be too brittle, the fix is a stable error code in the companion's response, not a tighter regex.
-const { t } = require('../i18n/i18n');
+import { t } from '../i18n/i18n';
 
-/**
- * @typedef {{ code: string, params: Record<string, string | number> }} ErrorClass
- */
+export interface ErrorClass { code: string; params: Record<string, string | number> }
 
-/** @type {Array<{ test: RegExp, build: (m: RegExpMatchArray) => ErrorClass }>} */
-const RULES = [
+const RULES: Array<{ test: RegExp; build: (m: RegExpMatchArray) => ErrorClass }> = [
   // ── Configuration rejected before anything ran (HTTP 400) ──────────────────
   { test: /Invalid start URL #(\d+) '([^']*)'/, build: (m) => ({ code: 'invalidStartUrl', params: { index: m[1], url: m[2] } }) },
   { test: /^Invalid ScrapingConfig: Url and at least one/, build: () => ({ code: 'noFields', params: {} }) },
@@ -45,8 +41,7 @@ const RULES = [
   { test: /^HTTP 5\d\d$/, build: () => ({ code: 'companionError', params: {} }) },
 ];
 
-/** @param {number} status */
-function httpClass(status) {
+function httpClass(status: number): string {
   if (status === 401 || status === 403) return 'siteForbidden';
   if (status === 404) return 'pageNotFound';
   if (status === 429) return 'rateLimited';
@@ -54,12 +49,8 @@ function httpClass(status) {
   return 'httpError';
 }
 
-/**
- * Which failure class a raw message belongs to, or null when it is none we know.
- * @param {string | null | undefined} rawMessage
- * @returns {ErrorClass | null}
- */
-function classifyError(rawMessage) {
+/** Which failure class a raw message belongs to, or null when it is none we know. */
+export function classifyError(rawMessage: string | null | undefined): ErrorClass | null {
   const text = String(rawMessage || '');
   for (const rule of RULES) {
     const match = text.match(rule.test);
@@ -71,24 +62,15 @@ function classifyError(rawMessage) {
 // Some classes read better with a variant of the hint: "no data" suggests the
 // Browser engine only where the Static engine is in use, and an empty selector
 // names the element when the message did.
-/**
- * @param {ErrorClass} errorClass
- * @param {string | undefined} engine
- */
-function hintKey(errorClass, engine) {
+function hintKey(errorClass: ErrorClass, engine: string | undefined): string {
   const base = `errors.${errorClass.code}.hint`;
   if (errorClass.code === 'noData' && engine === 'Static') return `${base}Static`;
   if (errorClass.code === 'emptySelector' && errorClass.params.name) return `${base}Named`;
   return base;
 }
 
-/**
- * The plain-language message for a raw failure text, in the current UI language.
- * @param {string | null | undefined} rawMessage
- * @param {{ engine?: string }} [context]
- * @returns {{ code: string, title: string, hint: string } | null}
- */
-function describeError(rawMessage, context = {}) {
+/** The plain-language message for a raw failure text in the current UI language, or null for a failure we do not recognise. */
+export function describeError(rawMessage: string | null | undefined, context: { engine?: string } = {}): { code: string; title: string; hint: string } | null {
   const errorClass = classifyError(rawMessage);
   if (!errorClass) return null;
   return {
@@ -97,5 +79,3 @@ function describeError(rawMessage, context = {}) {
     hint: t(hintKey(errorClass, context.engine), errorClass.params),
   };
 }
-
-module.exports = { classifyError, describeError };

@@ -4,7 +4,7 @@
 // border) and every feature the same "What is an environment variable?" line with
 // the one shared help popover (`help.envVar.what`) — so none of the seven places
 // has its own copy of the label, the popover or the check. Logic (what is valid) is
-// in env-var.js.
+// in env-var.ts.
 //
 //   - static inputs (idle.html): mark with `data-env-var`;
 //   - inputs built in JS: add `data-env-var` to the input and put envVarNoteHtml()

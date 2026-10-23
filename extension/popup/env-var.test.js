@@ -1,4 +1,4 @@
-// Issue #397: the shared environment-variable name rule (env-var.js), the shared
+// Issue #397: the shared environment-variable name rule (env-var.ts), the shared
 // inline validation/explanation (env-var-ui.js) and the Generate guard.
 Object.defineProperty(window.navigator, 'language', { value: 'en-US', configurable: true });
 

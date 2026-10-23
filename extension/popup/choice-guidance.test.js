@@ -1,5 +1,5 @@
 // Issue #398: guidance for the first decisions of a scrape — the pure logic
-// (choice-guidance.js), the match-count toast that now checks the count against
+// (choice-guidance.ts), the match-count toast that now checks the count against
 // the chosen container type, and the container type toggle in the tree rows.
 // German is the language every popup test assumes (see popup.test.js).
 Object.defineProperty(window.navigator, 'language', { value: 'de-DE', configurable: true });

@@ -1,16 +1,11 @@
-// @ts-check
-// Issue #354 Part B: the one table of "Learn more" targets. The popup never
-// writes a documentation path by hand — markup says `data-doc="<key>"` and this
-// table maps the key to a page and heading of docs/user/*.md (bundled as
-// docs/<page>.html inside the extension, see extension/docs-build.js). So a
-// renamed heading breaks exactly one place, and docs-links.test.js fails until
-// it is fixed instead of the extension shipping a dead link.
-//
-// Anchors are GitHub's heading slugs (docs-build.js `slugify`): lower-case,
-// punctuation dropped, spaces → hyphens.
+// The one table of "Learn more" targets. The popup never writes a documentation path by hand: markup says `data-doc="<key>"` and
+// this table maps the key to a page and heading of docs/user/*.md (bundled as docs/<page>.html, see extension/docs-build.js). A
+// renamed heading breaks exactly this table, and docs-links.test.js fails instead of the extension shipping a dead link. Anchors
+// are GitHub's heading slugs (docs-build.js `slugify`).
 
-/** @type {Readonly<Record<string, string>>} key → "page" or "page#anchor" */
-const DOC_TARGETS = Object.freeze({
+
+/** key -> "page" or "page#anchor" */
+export const DOC_TARGETS: Readonly<Record<string, string>> = Object.freeze({
   start: 'getting-started',
   companionUnreachable: 'troubleshooting#the-panel-says-companion-app-unreachable',
   modes: 'modes',
@@ -47,20 +42,16 @@ const DOC_TARGETS = Object.freeze({
   accessKey: 'authentication#using-a-shared-companion',
 });
 
-/**
- * @typedef {{ de?: Record<string, Record<string, string>> }} DocAnchors
- *   docs/anchors.json: for each German page, its English heading anchors → the German ones
- */
+/** docs/anchors.json: for each German page, its English heading anchors mapped to the German ones. */
+export interface DocAnchors { de?: Record<string, Record<string, string>> }
+
+export interface DocTarget { page: string; anchor: string; file: string }
 
 /**
- * @param {string} key a DOC_TARGETS key
- * @param {string} [language] the panel language; only German has its own pages
- * @param {DocAnchors | null} [anchors] docs/anchors.json (see extension/docs-build.js)
- * @returns {{ page: string, anchor: string, file: string } | null}
- *   `file` is the path inside the extension: docs/[de/]<page>.html[#anchor]. A German
- *   page that does not exist (or no anchor table) falls back to the English page.
+ * `file` is the path inside the extension: docs/[de/]<page>.html[#anchor]. Only German has its own pages; a German page that does
+ * not exist (or a missing anchor table) falls back to the English page.
  */
-function resolveDocTarget(key, language = 'en', anchors = null) {
+export function resolveDocTarget(key: string, language = 'en', anchors: DocAnchors | null = null): DocTarget | null {
   const target = Object.prototype.hasOwnProperty.call(DOC_TARGETS, key) ? DOC_TARGETS[key] : null;
   if (!target) return null;
   const [page, anchor = ''] = target.split('#');
@@ -72,13 +63,7 @@ function resolveDocTarget(key, language = 'en', anchors = null) {
   return { page, anchor, file: `docs/${page}.html${anchor ? `#${anchor}` : ''}` };
 }
 
-/**
- * Every `data-doc="…"` key in a piece of HTML, de-duplicated (for the sync test).
- * @param {string} html
- * @returns {string[]}
- */
-function collectDocKeysFromHtml(html) {
+/** Every `data-doc="…"` key in a piece of HTML, de-duplicated (for the sync test). */
+export function collectDocKeysFromHtml(html: string): string[] {
   return [...new Set([...html.matchAll(/data-doc="([A-Za-z]+)"/g)].map((m) => m[1]))];
 }
-
-module.exports = { DOC_TARGETS, resolveDocTarget, collectDocKeysFromHtml };

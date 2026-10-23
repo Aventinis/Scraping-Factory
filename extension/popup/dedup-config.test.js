@@ -1,5 +1,5 @@
 // Issue #225: deduplication by key field(s) — pure draft/wire logic
-// (dedup-config.js), the builder integration (buildScrapingConfig), the
+// (dedup-config.ts), the builder integration (buildScrapingConfig), the
 // reverse mapping for a loaded config (applyConfigToState) and the settings
 // UI in the real popup.
 const {
