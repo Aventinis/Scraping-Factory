@@ -3,6 +3,16 @@
 Object.defineProperty(window.navigator, 'language', { value: 'en-US', configurable: true });
 
 const { ENV_VAR_NAME_PATTERN, validateEnvVarName, findInvalidEnvVarNames } = require('./env-var');
+const { loadVectors } = require('../../test-vectors/load');
+
+// The companion's ScrapingPlanValidator accepts exactly the names this pattern accepts
+// (test-vectors/env-var-name.json; EnvVarNameVectorTests.cs is the C# half).
+describe('ENV_VAR_NAME_PATTERN (shared vectors)', () => {
+  const { cases } = loadVectors('env-var-name.json');
+  test.each(cases.map((c) => [c.name, c]))('%s', (_name, c) => {
+    expect(ENV_VAR_NAME_PATTERN.test(c.value)).toBe(c.valid);
+  });
+});
 
 describe('validateEnvVarName', () => {
   test.each([

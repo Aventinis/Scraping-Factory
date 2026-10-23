@@ -1,0 +1,28 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "api": {
+    "urlTemplate": "https://example.test/api/items",
+    "itemsPath": "items",
+    "fields": [
+      {
+        "name": "Name",
+        "path": "name"
+      },
+      {
+        "name": "Price",
+        "path": "price"
+      }
+    ],
+    "parameters": [],
+    "cursorPagination": {
+      "nextCursorPath": "meta.next",
+      "hasNextPagePath": "meta.more",
+      "target": "Query",
+      "queryParameterName": "cursor",
+      "maxPages": 10
+    }
+  },
+  "scriptFileName": null,
+  "outputFileName": null
+}

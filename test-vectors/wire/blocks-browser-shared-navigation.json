@@ -1,0 +1,68 @@
+{
+  "version": "1",
+  "url": "https://example.test/offers",
+  "blocks": [
+    {
+      "name": "Deals",
+      "outputFileName": null,
+      "fields": [
+        {
+          "name": "Title",
+          "selector": "div.deal h3",
+          "attribute": null
+        }
+      ]
+    },
+    {
+      "name": "Tickets",
+      "outputFileName": null,
+      "fields": [
+        {
+          "name": "Name",
+          "selector": ".ticket",
+          "attribute": null
+        }
+      ]
+    }
+  ],
+  "scriptFileName": null,
+  "engine": "Browser",
+  "browserActions": [
+    {
+      "kind": "waitFor",
+      "selector": "form#login",
+      "timeoutMs": 5000
+    },
+    {
+      "kind": "fill",
+      "selector": "#user",
+      "environmentVariableName": "SITE_USERNAME"
+    },
+    {
+      "kind": "fill",
+      "selector": "#password",
+      "environmentVariableName": "SITE_PASSWORD"
+    },
+    {
+      "kind": "click",
+      "selector": "button.login"
+    },
+    {
+      "kind": "waitFor",
+      "selector": ".account",
+      "timeoutMs": 10000
+    }
+  ],
+  "additionalUrls": [
+    "https://example.test/offers?page=2"
+  ],
+  "proxy": {
+    "environmentVariableName": "PROXY_LIST"
+  },
+  "pagination": {
+    "kind": "nextLink",
+    "nextLinkSelector": "a.next",
+    "maxPages": 3
+  },
+  "persistentSession": true
+}

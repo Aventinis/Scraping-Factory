@@ -1,0 +1,49 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "fields": [
+    {
+      "name": "First",
+      "selector": "span.first",
+      "attribute": null,
+      "hiddenFromOutput": true
+    },
+    {
+      "name": "Last",
+      "selector": "span.last",
+      "attribute": null,
+      "hiddenFromOutput": true
+    },
+    {
+      "name": "Full",
+      "selector": null,
+      "attribute": null,
+      "transforms": [
+        {
+          "kind": "combineFields",
+          "sourceFieldNames": [
+            "First",
+            "Last"
+          ],
+          "separator": " "
+        }
+      ]
+    },
+    {
+      "name": "Initial",
+      "selector": null,
+      "attribute": null,
+      "transforms": [
+        {
+          "kind": "splitField",
+          "sourceFieldName": "First",
+          "separator": "-",
+          "index": 0
+        }
+      ]
+    }
+  ],
+  "outputFormat": "Csv",
+  "scriptFileName": null,
+  "outputFileName": null
+}

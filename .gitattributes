@@ -1,2 +1,5 @@
 # Generated-script snapshots (Issue #386) are compared byte for byte; keep their line endings as they are.
 companion/ScrapingFactory.Tests/Snapshots/*.py -text eol=lf
+
+# Shared contract vectors and wire fixtures (Issue #388): Jest compares the fixtures byte for byte.
+test-vectors/** -text eol=lf

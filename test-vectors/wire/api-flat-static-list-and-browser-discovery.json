@@ -1,0 +1,50 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "api": {
+    "urlTemplate": "https://example.test/api/shop/{p2}?lang={lang}",
+    "itemsPath": "items",
+    "fields": [
+      {
+        "name": "Name",
+        "path": "name"
+      },
+      {
+        "name": "Price",
+        "path": "price"
+      }
+    ],
+    "parameters": [
+      {
+        "name": "p2",
+        "source": {
+          "kind": "browserDiscovery",
+          "discoveryUrl": "https://example.test/shop",
+          "actions": [
+            {
+              "kind": "click",
+              "selector": "button.menu"
+            },
+            {
+              "kind": "waitFor",
+              "selector": "nav.menu a",
+              "timeoutMs": 5000
+            }
+          ]
+        }
+      },
+      {
+        "name": "lang",
+        "source": {
+          "kind": "staticList",
+          "values": [
+            "de",
+            "en"
+          ]
+        }
+      }
+    ]
+  },
+  "scriptFileName": null,
+  "outputFileName": null
+}

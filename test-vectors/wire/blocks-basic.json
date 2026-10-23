@@ -1,0 +1,46 @@
+{
+  "version": "1",
+  "url": "https://example.test/offers",
+  "blocks": [
+    {
+      "name": "Deals",
+      "outputFileName": "deals",
+      "fields": [
+        {
+          "name": "Title",
+          "selector": "div.deal h3",
+          "attribute": null
+        },
+        {
+          "name": "Price",
+          "selector": "div.deal .price",
+          "attribute": null,
+          "transforms": [
+            {
+              "kind": "toNumber"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Vouchers",
+      "outputFileName": "vouchers",
+      "groups": [
+        {
+          "name": "Voucher",
+          "selector": "div.voucher",
+          "repeating": true,
+          "children": [
+            {
+              "name": "Code",
+              "selector": ".code",
+              "mode": "Text"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "scriptFileName": null
+}

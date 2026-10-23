@@ -1,0 +1,177 @@
+{
+ "description": "Issue #388: the values a RangeSource expands to. The generated script's _iso_week_range/_date_range/_number_range produce the list; the companion's RangeFormat.CountValues must predict its length exactly, because the trial-run timeout estimate is built from it (Issue #295). Inclusive on both ends, an inverted range is empty.",
+ "cases": [
+  {
+   "name": "iso weeks across a 53-week year",
+   "type": "IsoWeek",
+   "from": "2026-W50",
+   "to": "2027-W02",
+   "values": [
+    "2026-W50",
+    "2026-W51",
+    "2026-W52",
+    "2026-W53",
+    "2027-W01",
+    "2027-W02"
+   ]
+  },
+  {
+   "name": "iso weeks across a 52-week year",
+   "type": "IsoWeek",
+   "from": "2025-W51",
+   "to": "2026-W02",
+   "values": [
+    "2025-W51",
+    "2025-W52",
+    "2026-W01",
+    "2026-W02"
+   ]
+  },
+  {
+   "name": "iso weeks without the W",
+   "type": "IsoWeek",
+   "from": "2026-07",
+   "to": "2026-09",
+   "values": [
+    "2026-07",
+    "2026-08",
+    "2026-09"
+   ],
+   "format": "{yyyy}-{ww}"
+  },
+  {
+   "name": "iso week single week",
+   "type": "IsoWeek",
+   "from": "2026-W10",
+   "to": "2026-W10",
+   "values": [
+    "2026-W10"
+   ]
+  },
+  {
+   "name": "iso weeks inverted range is empty",
+   "type": "IsoWeek",
+   "from": "2026-W10",
+   "to": "2026-W05",
+   "values": []
+  },
+  {
+   "name": "iso weeks joined format",
+   "type": "IsoWeek",
+   "from": "202651",
+   "to": "202702",
+   "values": [
+    "202651",
+    "202652",
+    "202653",
+    "202701",
+    "202702"
+   ],
+   "format": "{yyyy}{ww}"
+  },
+  {
+   "name": "dates across a month end",
+   "type": "Date",
+   "from": "2026-02-27",
+   "to": "2026-03-02",
+   "values": [
+    "2026-02-27",
+    "2026-02-28",
+    "2026-03-01",
+    "2026-03-02"
+   ]
+  },
+  {
+   "name": "dates in a leap year",
+   "type": "Date",
+   "from": "2024-02-28",
+   "to": "2024-03-01",
+   "values": [
+    "2024-02-28",
+    "2024-02-29",
+    "2024-03-01"
+   ]
+  },
+  {
+   "name": "dates single day",
+   "type": "Date",
+   "from": "2026-05-05",
+   "to": "2026-05-05",
+   "values": [
+    "2026-05-05"
+   ]
+  },
+  {
+   "name": "dates inverted range is empty",
+   "type": "Date",
+   "from": "2026-05-06",
+   "to": "2026-05-05",
+   "values": []
+  },
+  {
+   "name": "dates across a year end in german format",
+   "type": "Date",
+   "from": "30.12.2025",
+   "to": "02.01.2026",
+   "values": [
+    "30.12.2025",
+    "31.12.2025",
+    "01.01.2026",
+    "02.01.2026"
+   ],
+   "format": "{dd}.{mm}.{yyyy}"
+  },
+  {
+   "name": "dates compact format",
+   "type": "Date",
+   "from": "20260228",
+   "to": "20260301",
+   "values": [
+    "20260228",
+    "20260301"
+   ],
+   "format": "{yyyy}{mm}{dd}"
+  },
+  {
+   "name": "numbers",
+   "type": "Number",
+   "from": "1",
+   "to": "5",
+   "values": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5"
+   ]
+  },
+  {
+   "name": "numbers single",
+   "type": "Number",
+   "from": "10",
+   "to": "10",
+   "values": [
+    "10"
+   ]
+  },
+  {
+   "name": "numbers inverted range is empty",
+   "type": "Number",
+   "from": "5",
+   "to": "1",
+   "values": []
+  },
+  {
+   "name": "numbers negative start",
+   "type": "Number",
+   "from": "-2",
+   "to": "1",
+   "values": [
+    "-2",
+    "-1",
+    "0",
+    "1"
+   ]
+  }
+ ]
+}

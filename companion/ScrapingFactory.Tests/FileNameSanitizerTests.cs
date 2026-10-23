@@ -5,38 +5,17 @@ namespace ScrapingFactory.Tests;
 
 public class FileNameSanitizerTests
 {
+    private const string VectorFile = "file-name-sanitizer.json";
+
+    // Issue #388: the extension's sanitizeFileNameBase (scraping-config-builder.js) runs the same table, so both
+    // sides must reach the same name for the same raw input — the companion never reports back which one it used.
+    public static IEnumerable<object[]> Cases() => TestVectors.Names(VectorFile);
+
     [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void SanitizeBaseName_FallsBackForEmptyOrWhitespaceInput(string? input)
+    [MemberData(nameof(Cases))]
+    public void SanitizeBaseName_MatchesTheSharedVectors(string name)
     {
-        Assert.Equal("fallback", FileNameSanitizer.SanitizeBaseName(input, "fallback"));
-    }
-
-    [Fact]
-    public void SanitizeBaseName_CollapsesPathSeparatorsAndPreventsTraversal()
-    {
-        Assert.Equal("etc_passwd", FileNameSanitizer.SanitizeBaseName("../../etc/passwd", "fallback"));
-    }
-
-    [Fact]
-    public void SanitizeBaseName_ReplacesSpacesAndQuotes()
-    {
-        Assert.Equal("my_scraper", FileNameSanitizer.SanitizeBaseName("my scraper!", "fallback"));
-        Assert.Equal("a_b_c", FileNameSanitizer.SanitizeBaseName("a\"b'c", "fallback"));
-    }
-
-    [Fact]
-    public void SanitizeBaseName_KeepsLettersDigitsUnderscoreAndHyphen()
-    {
-        Assert.Equal("my-scraper_v2", FileNameSanitizer.SanitizeBaseName("my-scraper_v2", "fallback"));
-    }
-
-    [Fact]
-    public void SanitizeBaseName_FallsBackWhenEverythingIsStripped()
-    {
-        Assert.Equal("fallback", FileNameSanitizer.SanitizeBaseName("///", "fallback"));
-        Assert.Equal("fallback", FileNameSanitizer.SanitizeBaseName("...", "fallback"));
+        var testCase = TestVectors.Case(VectorFile, name);
+        Assert.Equal(testCase.StringOrNull("expected"), FileNameSanitizer.SanitizeBaseName(testCase.StringOrNull("input"), testCase.StringOrNull("fallback")!));
     }
 }

@@ -1,0 +1,89 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "fields": [
+    {
+      "name": "Title",
+      "selector": "h2.title",
+      "attribute": null,
+      "transforms": [
+        {
+          "kind": "trim"
+        },
+        {
+          "kind": "replace",
+          "find": "Sale: ",
+          "replacement": ""
+        }
+      ]
+    },
+    {
+      "name": "Price",
+      "selector": "span.price",
+      "attribute": null,
+      "transforms": [
+        {
+          "kind": "regexExtract",
+          "pattern": "([0-9,.]+)",
+          "group": 1
+        },
+        {
+          "kind": "toNumber"
+        }
+      ]
+    },
+    {
+      "name": "Stock",
+      "selector": "span.stock",
+      "attribute": null,
+      "transforms": [
+        {
+          "kind": "toInteger",
+          "onError": "UseDefault",
+          "defaultValue": "0"
+        }
+      ]
+    },
+    {
+      "name": "Available",
+      "selector": "span.available",
+      "attribute": null,
+      "transforms": [
+        {
+          "kind": "toBoolean",
+          "onError": "KeepOriginal",
+          "defaultValue": ""
+        }
+      ]
+    },
+    {
+      "name": "Released",
+      "selector": "time",
+      "attribute": null,
+      "transforms": [
+        {
+          "kind": "toDate",
+          "sourceFormat": "{dd}.{mm}.{yyyy}",
+          "onError": "UseDefault",
+          "defaultValue": "1970-01-01"
+        }
+      ]
+    },
+    {
+      "name": "Amount",
+      "selector": "span.amount",
+      "attribute": null,
+      "transforms": [
+        {
+          "kind": "toCurrency",
+          "format": "1.234,56",
+          "onError": "KeepOriginal",
+          "defaultValue": ""
+        }
+      ]
+    }
+  ],
+  "outputFormat": "Csv",
+  "scriptFileName": null,
+  "outputFileName": null
+}

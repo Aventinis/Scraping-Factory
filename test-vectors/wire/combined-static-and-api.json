@@ -1,0 +1,61 @@
+{
+  "version": "1",
+  "url": "https://example.test",
+  "combined": [
+    {
+      "name": "products",
+      "config": {
+        "version": "1",
+        "url": "https://example.test/products",
+        "fields": [
+          {
+            "name": "Title",
+            "selector": "h2.title",
+            "attribute": null
+          },
+          {
+            "name": "Price",
+            "selector": "span.price",
+            "attribute": null
+          },
+          {
+            "name": "Link",
+            "selector": "a.more",
+            "attribute": "href"
+          }
+        ],
+        "outputFormat": "Csv",
+        "scriptFileName": null,
+        "outputFileName": null
+      },
+      "savedConfigId": 1
+    },
+    {
+      "name": "api_items",
+      "config": {
+        "version": "1",
+        "url": "https://example.test/api",
+        "api": {
+          "urlTemplate": "https://example.test/api/items",
+          "itemsPath": "items",
+          "fields": [
+            {
+              "name": "Name",
+              "path": "name"
+            },
+            {
+              "name": "Price",
+              "path": "price"
+            }
+          ],
+          "parameters": []
+        },
+        "scriptFileName": null,
+        "outputFileName": null
+      },
+      "savedConfigId": 2
+    }
+  ],
+  "scriptFileName": "everything",
+  "outputFileName": "all_data"
+}

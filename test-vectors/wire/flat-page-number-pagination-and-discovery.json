@@ -1,0 +1,34 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "fields": [
+    {
+      "name": "Title",
+      "selector": "h2.title",
+      "attribute": null
+    },
+    {
+      "name": "Price",
+      "selector": "span.price",
+      "attribute": null
+    },
+    {
+      "name": "Link",
+      "selector": "a.more",
+      "attribute": "href"
+    }
+  ],
+  "outputFormat": "Csv",
+  "scriptFileName": null,
+  "outputFileName": null,
+  "pagination": {
+    "kind": "pageNumber",
+    "urlTemplate": "{url}?page={page}",
+    "maxPages": 8
+  },
+  "discoveredUrls": {
+    "pageUrl": "https://example.test/categories",
+    "linkSelector": "nav a",
+    "maxUrls": 25
+  }
+}

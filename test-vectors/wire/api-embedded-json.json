@@ -1,0 +1,24 @@
+{
+  "version": "1",
+  "url": "https://example.test/page",
+  "api": {
+    "urlTemplate": "https://example.test/page",
+    "itemsPath": "items",
+    "fields": [
+      {
+        "name": "Name",
+        "path": "name"
+      },
+      {
+        "name": "Price",
+        "path": "price"
+      }
+    ],
+    "parameters": [],
+    "embeddedJsonSource": {
+      "scriptSelector": "script#__NEXT_DATA__"
+    }
+  },
+  "scriptFileName": null,
+  "outputFileName": null
+}

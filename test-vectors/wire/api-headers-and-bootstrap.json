@@ -1,0 +1,52 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "api": {
+    "urlTemplate": "https://example.test/api/items",
+    "itemsPath": "items",
+    "fields": [
+      {
+        "name": "Name",
+        "path": "name"
+      },
+      {
+        "name": "Price",
+        "path": "price"
+      }
+    ],
+    "parameters": [],
+    "headers": [
+      {
+        "name": "Accept",
+        "value": "application/json"
+      },
+      {
+        "name": "X-Api-Key",
+        "environmentVariableName": "API_KEY"
+      },
+      {
+        "name": "Authorization",
+        "template": "Bearer {token}"
+      }
+    ],
+    "bootstrap": {
+      "name": "token",
+      "method": "POST",
+      "url": "https://example.test/auth/token",
+      "bodyFields": [
+        {
+          "name": "client_id",
+          "value": "abc"
+        },
+        {
+          "name": "client_secret",
+          "environmentVariableName": "CLIENT_SECRET"
+        }
+      ],
+      "bodyEncoding": "Form",
+      "valuePath": "access_token"
+    }
+  },
+  "scriptFileName": null,
+  "outputFileName": null
+}

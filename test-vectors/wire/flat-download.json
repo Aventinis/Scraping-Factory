@@ -1,0 +1,25 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "fields": [
+    {
+      "name": "Title",
+      "selector": "h2.title",
+      "attribute": null
+    },
+    {
+      "name": "Image",
+      "selector": "img.product",
+      "attribute": "src",
+      "download": true,
+      "maxDownloadSizeBytes": 5242880,
+      "allowedContentTypes": [
+        "image/jpeg",
+        "image/png"
+      ]
+    }
+  ],
+  "outputFormat": "Csv",
+  "scriptFileName": null,
+  "outputFileName": null
+}
