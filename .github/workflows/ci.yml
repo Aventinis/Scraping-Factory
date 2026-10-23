@@ -55,8 +55,10 @@ jobs:
           python3 -m pip install requests beautifulsoup4 playwright openpyxl
           python3 -m playwright install --with-deps chromium
 
+      # A known high or critical NuGet advisory (NU1903/NU1904) in a direct or transitive
+      # package fails the build here instead of scrolling by as a warning (Issue #438).
       - name: Restore
-        run: dotnet restore companion/ScrapingFactory.sln
+        run: dotnet restore companion/ScrapingFactory.sln -warnaserror:NU1903,NU1904
 
       - name: Build
         run: dotnet build companion/ScrapingFactory.sln --no-restore --configuration Release
