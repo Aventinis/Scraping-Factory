@@ -83,11 +83,11 @@ async function testAccessKey() {
 }
 
 // updateGlobalSettings's own cache update happens synchronously (before
-// its first `await`, see shared/global-settings.js's own doc comment) —
+// its first `await`, see shared/global-settings.ts's own doc comment) —
 // so a plain, un-awaited call already left the cache in its new state by
 // the time the immediately-following bridge.patchState({}) re-renders
 // from it. Fire-and-forget, same "best-effort persist" treatment
-// shared/theme.js/companion-config.js's own writes already get.
+// shared/theme.ts/companion-config.js's own writes already get.
 function updateAndRerender(bridge, patch) {
   updateGlobalSettings(patch);
   bridge.patchState({});

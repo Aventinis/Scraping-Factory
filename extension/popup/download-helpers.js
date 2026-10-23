@@ -96,7 +96,7 @@ async function downloadConfigExport(bridge) {
 
   // Issue-driven follow-up: outputAsJson/includeDataPreview/externalConfig
   // moved from per-scrape _state to the cross-session global Settings tab
-  // (shared/global-settings.js) — read from there now, same as generate().
+  // (shared/global-settings.ts) — read from there now, same as generate().
   const globalSettings = getGlobalSettings();
   const exportObj = buildConfigExport(
     configOptionsFromState(state, globalSettings, { manifest, combinedComponents, includeOutputFile: false }));

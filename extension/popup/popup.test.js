@@ -107,7 +107,7 @@ describe('applyConfigToState', () => {
     expect(result.scriptFileName).toBe('myscraper');
     expect(result.outputFileName).toBe('result');
     // useJsonOutput moved off per-scrape state to the global Settings tab
-    // (shared/global-settings.js) — applyConfigToState no longer touches it
+    // (shared/global-settings.ts) — applyConfigToState no longer touches it
     // at all, so a loaded/exported config never stomps that preference.
     expect(result).not.toHaveProperty('useJsonOutput');
     expect(result.additionalStartUrls).toEqual(['https://example.com/page2']);
@@ -274,7 +274,7 @@ describe('applyConfigToState', () => {
   });
 
   // Issue #178 / Issue-driven follow-up: externalConfig moved off per-scrape
-  // state to the global Settings tab (shared/global-settings.js) —
+  // state to the global Settings tab (shared/global-settings.ts) —
   // applyConfigToState no longer touches it at all, regardless of whether
   // the loaded/exported config itself had it set.
   test('never round-trips externalConfig — it is a global preference now', () => {
@@ -4420,7 +4420,7 @@ describe('output settings (script/output filename)', () => {
   });
 
   // Issue-driven follow-up: "Output as JSON" moved off per-scrape state to
-  // the global Settings tab (shared/global-settings.js) — the extension
+  // the global Settings tab (shared/global-settings.ts) — the extension
   // hint has to read it from there now, overriding whichever of .csv/.xml
   // the current mode would otherwise show (Architecture Decision, Issue #86).
   test('the output extension hint shows .json when the global "Output as JSON" preference is on', async () => {

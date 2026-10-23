@@ -97,16 +97,16 @@ partial/virtual-DOM diffing. `setState` also persists selected state fields to
 `chrome.storage.session` (see `persistState()`) so the panel survives being closed
 mid-configuration; `chrome.storage.local` is used instead for the two settings that
 should survive a full browser restart (UI language, a custom companion URL — see
-`extension/i18n/i18n.js` and `extension/shared/companion-config.js`).
+`extension/i18n/i18n.ts` and `extension/shared/companion-config.ts`).
 
 Because `popup.js` had grown past ~3800 lines, mode-specific logic was split out
 into sibling files loaded *before* it (see `popup.html`'s script order):
 
 ```mermaid
 flowchart TB
-    logger["shared/logger.js"]
-    i18n["i18n/i18n.js"]
-    ccfg["shared/companion-config.js"]
+    logger["shared/logger.ts"]
+    i18n["i18n/i18n.ts"]
+    ccfg["shared/companion-config.ts"]
     apiCfg["popup/api-config.ts\n(pure builders/validators, API mode)"]
     ctree["popup/container-tree.js\n(pure builders/validators, Container mode)"]
     apiUi["popup/api-config-ui.js + api-*-ui.js\n(DOM rendering + handlers, API mode)"]
@@ -629,7 +629,7 @@ app's local HTTP server address — needed when the default `localhost:5000` is
 already taken on the user's machine, or when the companion runs on a different
 port or even a different host than the browser.
 
-- Extension: `shared/companion-config.js` (`getCompanionUrl`,
+- Extension: `shared/companion-config.ts` (`getCompanionUrl`,
   `setCompanionUrlOverride`), `popup/popup.js` (`checkCompanion`,
   `useCustomCompanionUrl`, `resetCustomCompanionUrl`, the `COMPANION_ERROR` screen)
 - Companion: `ScrapingFactory.Companion/CompanionHostOptions.cs`,
@@ -867,7 +867,7 @@ from a dropdown, independently of the browser's own UI language — via a small
 custom dictionary system rather than the browser's built-in `chrome.i18n`, which
 is tied to browser language and can't be switched from inside the extension.
 
-- Extension: `i18n/i18n.js`, `i18n/de.json`/`en.json`/`es.json`, every popup
+- Extension: `i18n/i18n.ts`, `i18n/de.json`/`en.json`/`es.json`, every popup
   module's `t(...)` calls, `popup.js`'s `applyStaticTranslations`
 
 ### 2.11a Help popover and "Advanced" disclosure (Issue #396)
@@ -899,7 +899,7 @@ shareable report, and can pre-fill a GitHub issue with it — so a bug can be
 diagnosed from what actually happened, without having to ask the user to
 reproduce it live or describe it from memory.
 
-- Extension: `shared/logger.js` (ring buffer, one instance per JS context),
+- Extension: `shared/logger.ts` (ring buffer, one instance per JS context),
   `popup/popup.js` (`collectLogs`, `buildBugReport`, `buildGithubIssueUrl`,
   `downloadBugReport`, `reportBug`), `background/service-worker.js`/
   `content/content-script.js` (`GET_LOGS` responders)
@@ -1682,7 +1682,7 @@ needed for Excel only. Appending to an existing file is §2.21ab3.
 - Verifier: `PythonScriptVerifier.VerifyTabularOutputAsync` (helper script),
   `ScriptVerificationResult.OutputFileEncoding`, `/generate` envelope
   `outputFile.encoding`; `HardeningReplayEvaluator.IsReplayable`
-- Extension: `shared/global-settings.js` (`outputFormat`, migration),
+- Extension: `shared/global-settings.ts` (`outputFormat`, migration),
   `global-settings-ui.js`, `screens/settings.html`, `idle-screen-ui.js`
   (extension + flatten hint), `scraping-config-builder.ts`,
   `download-helpers.js` (base64 decode)
@@ -1761,7 +1761,7 @@ request except `/health` and CORS preflights needs `Authorization: Bearer
   `MySqlUserStore`, `CurrentUser`, `AuthOptions`, `UserCommands`), middleware,
   `/health` (`authRequired`) and `/whoami` in `Program.cs`; `ownerId` on the
   three store interfaces and both implementations (`OwnerId` columns)
-- Extension: `shared/companion-config.js` (access key), `companionFetch` in
+- Extension: `shared/companion-config.ts` (access key), `companionFetch` in
   `popup/companion-client.js`, `global-settings-ui.js` + `screens/settings.html`
 - Installer: `--enable-auth` / `-EnableAuth`
 - Tests: `AuthenticationTests.cs`, `extension/popup/access-key.test.js`,
@@ -1777,7 +1777,7 @@ a name exists and a throttle slows guessing. The companion speaks HTTPS when
 `Companion:Tls` is configured and refuses to start with plain HTTP beyond the
 local machine. A self-signed certificate and plain remote HTTP exist only in
 development builds: compile-time in the companion (`CompanionBuild`), a rewritten
-channel constant in the extension (`shared/build-config.js`, set to `release` by
+channel constant in the extension (`shared/build-config.ts`, set to `release` by
 `install/build-bundle.sh`), so a user can't switch either on.
 
 - Companion: `Auth/` (`PasswordHasher`, `LoginThrottle`, `AuthEndpoints`; `IUserStore`
@@ -1785,7 +1785,7 @@ channel constant in the extension (`shared/build-config.js`, set to `release` by
   `disable`, `enable`), `CompanionTls.cs`, `CompanionBuild.cs`,
   `CompanionHostOptions.cs`, `Program.cs` (transport validation, Kestrel HTTPS,
   anonymous paths, `/health` `registration`)
-- Extension: `shared/build-config.js`, `shared/companion-config.js` (address policy,
+- Extension: `shared/build-config.ts`, `shared/companion-config.ts` (address policy,
   developer flag), `popup/account.js` + `popup/account-ui.js`,
   `popup/screens/settings.html` (Account, Developer options),
   `popup/companion-client.js` (`getCompanionInfo`, `useCustomCompanionUrl`)
@@ -2115,9 +2115,9 @@ are inherently site-independent concepts. No companion/wire-format changes
 at all — every request `/generate` receives is still byte-for-byte the same
 shape; only *where the extension sources those four values from* changed.
 
-- Extension: `shared/global-settings.js` — one `chrome.storage.local` key
+- Extension: `shared/global-settings.ts` — one `chrome.storage.local` key
   (`globalSettings`) holding all six preferences, mirroring
-  `shared/theme.js`'s exact cache-then-sync-read pattern
+  `shared/theme.ts`'s exact cache-then-sync-read pattern
   (`loadGlobalSettings`/`getGlobalSettings`/`updateGlobalSettings`).
   `popup/screens/settings.html` (new runtime-loaded partial, same
   `loadScreenPartial` convention as `idle.html`/`api-config.html`) +
@@ -2477,7 +2477,7 @@ backend's own optional constructor parameter, via `ctorOverrides`) → no
 
 **Add a new extension-side persisted preference** (like the companion URL
 override or UI language): `chrome.storage.local` (survives browser restart) via a
-small dedicated module mirroring `shared/companion-config.js`'s
+small dedicated module mirroring `shared/companion-config.ts`'s
 `getStoredOverride`/`setXxxOverride`/`resetXxxOverride` shape — don't add it to
 `popup.js`'s `persistState()`, which is `chrome.storage.session` (popup-lifetime
 only).

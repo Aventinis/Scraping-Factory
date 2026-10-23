@@ -499,7 +499,7 @@ let _state = {
   // — that one highlights matched elements on the live page; this one shows
   // a sample of what the last /generate trial run actually scraped.
   // Whether to *request* one (includeDataPreview) moved to the global
-  // Settings tab (shared/global-settings.js, Issue-driven follow-up) — a
+  // Settings tab (shared/global-settings.ts, Issue-driven follow-up) — a
   // cross-session preference now, not a per-scrape toggle — but the
   // *result* of the last request still lives here, same as before.
   dataPreview:        null, // the companion's ScriptPreviewData from the last successful /generate with includeDataPreview on, or null
@@ -1143,7 +1143,7 @@ function wireEvents() {
     render(); // re-render currently-visible dynamic content (group tree, API candidates, …) in the new language
   });
 
-  // Issue #140: system -> light -> dark -> system, see shared/theme.js's
+  // Issue #140: system -> light -> dark -> system, see shared/theme.ts's
   // own doc comment. Applying/persisting the new theme is all synchronous-
   // feeling from the user's perspective (cycleTheme sets the data-theme
   // attribute immediately, the chrome.storage.local write just happens to

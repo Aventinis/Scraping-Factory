@@ -10,7 +10,7 @@
 // static files copied next to them with the same relative paths the sources
 // use — the manifest, the popup's HTML/CSS and its screen partials, which
 // popup.js fetches at runtime via chrome.runtime.getURL('popup/screens/…').
-// The i18n dictionaries are not copied: i18n.js requires them, so they are
+// The i18n dictionaries are not copied: i18n.ts imports them, so they are
 // bundled into the popup.
 //
 // docs/user/*.md is turned into dist/docs/*.html too (docs-build.js, Issue #354).
@@ -18,7 +18,7 @@
 // Source maps are written next to each bundle. Two `process.env.*` constants
 // are replaced at build time (see defineFor): NODE_ENV, which is how the few
 // Jest-only branches in the sources (they check for 'test') stay out of the
-// real extension, and SF_CHANNEL, the release channel (shared/build-config.js).
+// real extension, and SF_CHANNEL, the release channel (shared/build-config.ts).
 const esbuild = require('esbuild');
 const { buildDocs } = require('./docs-build');
 const fs = require('fs');
@@ -69,17 +69,17 @@ function buildOptions({ channel, outdir }) {
 
 // Issue #352: the channel decides whether development-only conveniences (plain
 // http to another machine) exist at all, so a release build must never come out
-// as a development one. Bundles shared/build-config.js on its own with the very
+// as a development one. Bundles shared/build-config.ts on its own with the very
 // same defines and checks what it evaluates to.
 function verifyChannel(channel) {
   const result = esbuild.buildSync({
-    entryPoints: [path.join(ROOT, 'shared/build-config.js')],
+    entryPoints: [path.join(ROOT, 'shared/build-config.ts')],
     bundle: true, format: 'iife', globalName: 'buildConfig', platform: 'browser', write: false,
     define: defineFor(channel), logLevel: 'silent',
   });
   const evaluated = new Function(`${result.outputFiles[0].text}; return buildConfig;`)();
   if (evaluated.CHANNEL !== channel) {
-    throw new Error(`build.js: asked for the "${channel}" channel but shared/build-config.js evaluates to "${evaluated.CHANNEL}"`);
+    throw new Error(`build.js: asked for the "${channel}" channel but shared/build-config.ts evaluates to "${evaluated.CHANNEL}"`);
   }
 }
 

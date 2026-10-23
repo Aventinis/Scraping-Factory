@@ -3,9 +3,16 @@
 // be combined into a bug report. Each context's bundle contains its own
 // copy of this module, hence one buffer per JS context.
 const MAX_LOG_ENTRIES = 300;
-const buffer = [];
 
-function createLogger(prefix) {
+export interface LogEntry {
+  ts: string;
+  event: string;
+  data: unknown;
+}
+
+const buffer: LogEntry[] = [];
+
+export function createLogger(prefix: string): (event: string, data?: unknown) => void {
   return function log(event, data) {
     const ts = new Date().toISOString();
     buffer.push({ ts, event, data: data !== undefined ? data : null });
@@ -18,13 +25,11 @@ function createLogger(prefix) {
   };
 }
 
-function getLogBuffer() {
+export function getLogBuffer(): LogEntry[] {
   return buffer.slice();
 }
 
-function clearLogBuffer() {
+export function clearLogBuffer(): void {
   buffer.length = 0;
 }
-
-module.exports = { createLogger, getLogBuffer, clearLogBuffer };
 

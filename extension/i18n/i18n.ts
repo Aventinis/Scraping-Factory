@@ -3,38 +3,50 @@
 // (which is tied to the browser's own UI language and can't be switched
 // from inside the extension the way a picker needs).
 
-const SUPPORTED_LANGUAGES = ['de', 'en', 'es'];
-const FALLBACK_LANGUAGE = 'en';
+import de from './de.json';
+import en from './en.json';
+import es from './es.json';
+
+export type Language = 'de' | 'en' | 'es';
+export const SUPPORTED_LANGUAGES: Language[] = ['de', 'en', 'es'];
+export const FALLBACK_LANGUAGE: Language = 'en';
 const STORAGE_KEY = 'language';
 
-// The three dictionaries are required statically, so the bundler inlines them
+// Looked up by dotted key; the JSON files are plain nested objects of strings.
+type Dictionary = { readonly [key: string]: unknown };
+
+// The three dictionaries are imported statically, so the bundler inlines them
 // into the popup bundle and Jest loads them the same way — one mechanism for
 // both, and no network round trip at startup.
-const DICTIONARIES = { de: require('./de.json'), en: require('./en.json'), es: require('./es.json') };
+const DICTIONARIES: Record<string, Dictionary> = { de, en, es };
 
-function detectDefaultLanguage(navigatorLanguage) {
-  const lang = String(navigatorLanguage || '').slice(0, 2).toLowerCase();
-  return SUPPORTED_LANGUAGES.includes(lang) ? lang : FALLBACK_LANGUAGE;
+function isLanguage(value: unknown): value is Language {
+  return SUPPORTED_LANGUAGES.includes(value as Language);
 }
 
-async function loadDictionary(lang) {
+export function detectDefaultLanguage(navigatorLanguage: unknown): Language {
+  const lang = String(navigatorLanguage || '').slice(0, 2).toLowerCase();
+  return isLanguage(lang) ? lang : FALLBACK_LANGUAGE;
+}
+
+async function loadDictionary(lang: string): Promise<Dictionary> {
   return DICTIONARIES[lang] || DICTIONARIES[FALLBACK_LANGUAGE];
 }
 
 // chrome.storage.local (not .session, unlike the rest of the popup's state)
 // — a language choice is a long-lived device preference that should
 // survive a browser restart, not just a popup close/reopen.
-async function getStoredLanguage() {
+async function getStoredLanguage(): Promise<Language | null> {
   if (typeof chrome === 'undefined' || !chrome.storage?.local) return null;
   try {
     const stored = await chrome.storage.local.get(STORAGE_KEY);
-    return SUPPORTED_LANGUAGES.includes(stored[STORAGE_KEY]) ? stored[STORAGE_KEY] : null;
+    return isLanguage(stored[STORAGE_KEY]) ? stored[STORAGE_KEY] : null;
   } catch {
     return null;
   }
 }
 
-async function persistLanguage(lang) {
+async function persistLanguage(lang: Language): Promise<void> {
   if (typeof chrome === 'undefined' || !chrome.storage?.local) return;
   try {
     await chrome.storage.local.set({ [STORAGE_KEY]: lang });
@@ -43,14 +55,17 @@ async function persistLanguage(lang) {
   }
 }
 
-let currentLanguage = FALLBACK_LANGUAGE;
-let currentDictionary = null;
+let currentLanguage: Language = FALLBACK_LANGUAGE;
+let currentDictionary: Dictionary | null = null;
 
-function lookup(key) {
-  return key.split('.').reduce((obj, part) => (obj && typeof obj === 'object' ? obj[part] : undefined), currentDictionary);
+function lookup(key: string): unknown {
+  return key.split('.').reduce<unknown>(
+    (obj, part) => (obj && typeof obj === 'object' ? (obj as Dictionary)[part] : undefined),
+    currentDictionary,
+  );
 }
 
-function interpolate(str, params) {
+function interpolate(str: string, params?: Record<string, unknown>): string {
   if (!params) return str;
   return str.replace(/\{(\w+)\}/g, (match, name) => (Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : match));
 }
@@ -58,29 +73,27 @@ function interpolate(str, params) {
 // A missing key resolves to the key itself, so a gap in a dictionary
 // shows up as an obviously-wrong string in the UI instead of blank text
 // or a thrown error.
-function t(key, params) {
+export function t(key: string, params?: Record<string, unknown>): string {
   const value = lookup(key);
   return typeof value === 'string' ? interpolate(value, params) : key;
 }
 
-async function initI18n(navigatorLanguage) {
+export async function initI18n(navigatorLanguage?: unknown): Promise<Language> {
   const stored = await getStoredLanguage();
   currentLanguage = stored || detectDefaultLanguage(navigatorLanguage);
   currentDictionary = await loadDictionary(currentLanguage);
   return currentLanguage;
 }
 
-async function setLanguage(lang) {
-  if (!SUPPORTED_LANGUAGES.includes(lang)) return currentLanguage;
+export async function setLanguage(lang: string): Promise<Language> {
+  if (!isLanguage(lang)) return currentLanguage;
   currentDictionary = await loadDictionary(lang);
   currentLanguage = lang;
   await persistLanguage(lang);
   return currentLanguage;
 }
 
-function getLanguage() {
+export function getLanguage(): Language {
   return currentLanguage;
 }
-
-module.exports = { SUPPORTED_LANGUAGES, FALLBACK_LANGUAGE, detectDefaultLanguage, initI18n, setLanguage, getLanguage, t };
 

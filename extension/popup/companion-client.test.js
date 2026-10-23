@@ -7,7 +7,7 @@
 Object.defineProperty(window.navigator, 'language', { value: 'de-DE', configurable: true });
 
 // buildVerificationErrorMessage (below) renders translated copy via
-// i18n.js's t() — needs a real dictionary loaded, same as
+// i18n.ts's t() — needs a real dictionary loaded, same as
 // scraping-config-builder.test.js's own setup for frameBadgeHtml.
 global.chrome = global.chrome || { storage: { local: { get: (k, cb) => cb({}), set: (o, cb) => cb && cb() } } };
 const { initI18n } = require('../i18n/i18n');
@@ -488,7 +488,7 @@ describe('robots.txt check (btn-check-robots)', () => {
 
 // Issue-driven follow-up: outputAsJson/includeDataPreview/includeOutputFile/
 // externalConfig moved off per-scrape state into the cross-session global
-// Settings tab (shared/global-settings.js) — generate() now has to read
+// Settings tab (shared/global-settings.ts) — generate() now has to read
 // them from there, persisted via chrome.storage.local, instead of from
 // _state. checkCompanion()'s own default-script-name preference is exercised
 // separately by scraping-config-builder.test.js's computeScriptFileNamePatch
@@ -549,7 +549,7 @@ describe('generate() reads the global Settings tab\'s preferences, not per-scrap
           remove: jest.fn().mockResolvedValue(undefined),
         },
         // A real (in-memory) chrome.storage.local, unlike this file's other
-        // describe blocks — global-settings.js persists through this, so a
+        // describe blocks — global-settings.ts persists through this, so a
         // toggle flipped on the Settings screen actually survives.
         local: {
           get: jest.fn((key) => Promise.resolve(storedGlobalSettings ? { globalSettings: storedGlobalSettings } : {})),

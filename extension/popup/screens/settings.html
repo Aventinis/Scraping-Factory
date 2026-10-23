@@ -7,7 +7,7 @@
      section (Issue-driven follow-up): these are personal preferences about
      how every future scrape should behave, not properties of the scrape
      currently being configured, so they persist via chrome.storage.local
-     (shared/global-settings.js) instead of the per-scrape _state. -->
+     (shared/global-settings.ts) instead of the per-scrape _state. -->
 <div id="settings-preferences-section">
   <p class="row-label" data-i18n="settings.preferencesTitle"></p>
   <div class="output-settings-row">
@@ -203,7 +203,7 @@
 
 <!-- Issue #278: access key for a shared companion with per-user
      authentication — a device preference (chrome.storage.local via
-     shared/companion-config.js), sent as a Bearer header with every request. -->
+     shared/companion-config.ts), sent as a Bearer header with every request. -->
 <div id="settings-access-key-section">
   <p class="row-label" data-help-anchor><span data-i18n="settings.accessKeyTitle"></span><span class="help-host" data-help="help.accessKey.overview" data-doc="accessKey"></span></p>
   <div class="output-settings-row">
@@ -218,7 +218,7 @@
 </div>
 
 <!-- Issue #352: development builds only — account-ui.js removes this whole
-     section when the extension is a release build (shared/build-config.js),
+     section when the extension is a release build (shared/build-config.ts),
      so an ordinary user's extension cannot switch any of it on. -->
 <div id="settings-developer-section">
   <p class="row-label" data-help-anchor><span data-i18n="settings.developer.title"></span><span class="help-host" data-help="help.developer.overview" data-doc="accessKey"></span></p>

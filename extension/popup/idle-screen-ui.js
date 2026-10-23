@@ -263,7 +263,7 @@ function renderIdleScreen(bridge) {
   // block names its own (see #blocks-mode-section's own input).
   document.getElementById('output-filename-row')?.classList.toggle('hidden', state.mode === 'blocks');
   // The default extension follows the shape (container Xml; API tree Xml, API flat Csv, like flat mode); the global JSON
-  // preference (shared/global-settings.js) overrides it.
+  // preference (shared/global-settings.ts) overrides it.
   const isTreeShapedMode = state.mode === 'container'
     || (state.mode === 'api' && !!state.apiConfig?.groups?.length);
   const outputExtEl = document.getElementById('output-filename-ext');

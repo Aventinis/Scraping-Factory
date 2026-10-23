@@ -35,7 +35,7 @@
    automatically when the OS prefers dark AND the user hasn't made an
    explicit choice (:root:not([data-theme])); an explicit choice
    (html[data-theme="light"|"dark"], set by #btn-theme-toggle via
-   shared/theme.js, mirroring i18n.js's own chrome.storage.local
+   shared/theme.ts, mirroring i18n.ts's own chrome.storage.local
    pattern) always wins over both, and for "light" specifically needs no
    *custom-property* rule of its own — the media query already stays out
    of its way, so :root's own defaults show through unchanged (it still
@@ -875,7 +875,7 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
   background: var(--color-surface); color: var(--color-text-secondary); font-family: inherit;
 }
 /* Theme toggle (Issue #140) — cycles system/light/dark, see shared/
-   theme.js's own doc comment for why a single compact button instead of
+   theme.ts's own doc comment for why a single compact button instead of
    a dropdown (no room for a second select next to the language one at
    this panel width). */
 #theme-toggle {

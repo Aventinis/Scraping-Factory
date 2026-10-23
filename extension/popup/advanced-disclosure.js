@@ -3,7 +3,7 @@
 // tucks away rarely needed options. Collapsed by default; whether a section
 // was opened is remembered per section (never globally — there is no
 // "advanced mode") in chrome.storage.local, the same device-preference store
-// theme.js and i18n.js use. See advanced-disclosure-ui.js for the DOM side.
+// theme.ts and i18n.ts use. See advanced-disclosure-ui.js for the DOM side.
 const STORAGE_KEY = 'advancedSections';
 
 /**

@@ -170,7 +170,7 @@ export interface HardeningState {
   requiredFields: { enabled: boolean; severity: SFWire.HardeningSeverity; fields: string[] };
 }
 
-// ── Global (cross-session) settings (shared/global-settings.js) ─────────
+// ── Global (cross-session) settings (shared/global-settings.ts) ─────────
 
 export interface GlobalSettings {
   scriptNameMode: 'fixed' | 'hostname';

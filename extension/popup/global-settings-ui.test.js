@@ -6,7 +6,7 @@
 Object.defineProperty(window.navigator, 'language', { value: 'de-DE', configurable: true });
 
 // The global Settings tab (screens/settings.html) — cross-session
-// preferences persisted via chrome.storage.local (shared/global-settings.js),
+// preferences persisted via chrome.storage.local (shared/global-settings.ts),
 // reached from the header's #btn-open-settings icon. Covers the four
 // preference toggles and the default-script-name preference's own UI;
 // generate() actually reading these values back is covered separately by

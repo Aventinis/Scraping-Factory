@@ -4,13 +4,13 @@
 // with `node build.js --channel release`, which replaces process.env.SF_CHANNEL
 // with a constant. Development conveniences that would be a security risk in
 // the hands of an ordinary user (talking plain HTTP to a companion on another
-// machine, see shared/companion-config.js) exist only in the development
+// machine, see shared/companion-config.ts) exist only in the development
 // channel; nothing in the extension's UI or storage can turn them on in a
 // release build. (Under Jest the variable is unset, which means development.)
-const CHANNEL = process.env.SF_CHANNEL === 'release' ? 'release' : 'development';
+export type Channel = 'release' | 'development';
 
-function isDevelopmentBuild() {
+export const CHANNEL: Channel = process.env.SF_CHANNEL === 'release' ? 'release' : 'development';
+
+export function isDevelopmentBuild(): boolean {
   return CHANNEL === 'development';
 }
-
-module.exports = { CHANNEL, isDevelopmentBuild };
