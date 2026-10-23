@@ -101,9 +101,17 @@ It writes `output.csv` next to itself, one row per dish.
 
 ## Help right where you need it
 
-Options with a small **?** button next to them have a short explanation and an
-example. Click it (or press Enter on it) to open it, press Escape or click
-elsewhere to close it. These pages go into more depth.
+The panel keeps one short title per option. The explanation — what it does, an
+example, what to watch out for — is behind the small **?** next to the title: click
+it (or press Enter on it) to open it, press Escape or click elsewhere to close it.
+Its **Learn more** link opens the matching page of this documentation in a new tab;
+the pages are bundled inside the extension, so this works without an internet
+connection.
+
+On the **Settings** screen (the gear icon) the lists — output layouts,
+transformation presets and saved configurations — and the connection settings sit in
+collapsed sections; click a title to open it. Rarely needed options are under
+**Advanced** and open by themselves when they are in use.
 
 ## What next
 

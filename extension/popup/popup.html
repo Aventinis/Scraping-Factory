@@ -56,11 +56,12 @@
          companion-guidance-ui.js. The install/start texts are set by script
          (they carry the installer name and the program path for this OS). -->
     <div id="error-guidance-long" class="error-guidance hidden">
-      <p class="error-intro" data-i18n="error.intro"></p>
+      <p class="error-intro"><span data-i18n="error.intro"></span> <a class="learn-more" data-doc="companionUnreachable" href="#" data-i18n="common.learnMore"></a></p>
       <div id="error-situation-install" class="error-situation">
         <h3><span data-i18n="error.install.title"></span> <span class="error-likely hidden" data-i18n="error.likely"></span></h3>
         <p id="error-install-text"></p>
         <code id="error-install-command" class="error-code"></code>
+        <p class="error-more"><a class="learn-more" data-doc="start" href="#" data-i18n="common.learnMore"></a></p>
       </div>
       <div id="error-situation-start" class="error-situation">
         <h3><span data-i18n="error.start.title"></span> <span class="error-likely hidden" data-i18n="error.likely"></span></h3>

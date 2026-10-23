@@ -10,16 +10,8 @@ const path = require('path');
 const DOCS_DIR = path.resolve(__dirname, '../../docs/user');
 const IMAGES_DIR = path.join(DOCS_DIR, 'images');
 
-// GitHub's heading-to-anchor rule: lower-case, drop punctuation except
-// hyphens, spaces become hyphens.
-function slug(heading) {
-  return heading
-    .toLowerCase()
-    .replace(/[`*_]/g, '')
-    .replace(/[^\p{L}\p{N}\s-]/gu, '')
-    .trim()
-    .replace(/\s/g, '-');
-}
+// The one heading-to-anchor rule (GitHub's) shared with the extension's docs build.
+const { slugify: slug } = require('../../extension/docs-build');
 
 function headingsOf(file) {
   const anchors = new Set();

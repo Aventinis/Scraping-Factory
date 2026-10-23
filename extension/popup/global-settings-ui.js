@@ -13,7 +13,6 @@ const log = createLogger('SF:Popup');
 const { getGlobalSettings, updateGlobalSettings } = require('../shared/global-settings');
 
 const { STATES } = require('./api-config');
-const { autoOpenAdvanced } = require('./advanced-disclosure-ui');
 
 const { getAccessKey, setAccessKey } = require('../shared/companion-config');
 
@@ -41,7 +40,6 @@ function renderSettingsScreen(bridge) {
   if (outputFileToggle) outputFileToggle.checked = settings.includeOutputFile;
   const externalConfigToggle = document.getElementById('toggle-external-config');
   if (externalConfigToggle) externalConfigToggle.checked = settings.externalConfig;
-  autoOpenAdvanced(externalConfigToggle, !!settings.externalConfig); // Issue #407
   const skipVerificationToggle = document.getElementById('toggle-skip-verification');
   if (skipVerificationToggle) skipVerificationToggle.checked = settings.skipVerification;
 
@@ -51,7 +49,6 @@ function renderSettingsScreen(bridge) {
   document.getElementById('btn-script-name-mode-fixed')?.classList.toggle('active', !isHostnameMode);
   document.getElementById('btn-script-name-mode-hostname')?.classList.toggle('active', isHostnameMode);
   document.getElementById('script-name-fixed-row')?.classList.toggle('hidden', isHostnameMode);
-  document.getElementById('script-name-hostname-hint')?.classList.toggle('hidden', !isHostnameMode);
   const fixedNameInput = document.getElementById('input-script-name-fixed');
   if (fixedNameInput && document.activeElement !== fixedNameInput) fixedNameInput.value = settings.scriptNameFixed;
 

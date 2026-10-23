@@ -47,6 +47,12 @@ case "$RID" in
   *)     cp "$ROOT/install/install.sh" "$ROOT/install/uninstall.sh" "$BUNDLE/"; chmod +x "$BUNDLE/install.sh" "$BUNDLE/uninstall.sh" ;;
 esac
 cp "$ROOT/install/INSTALL.md" "$BUNDLE/INSTALL.md"
+
+# Issue #354 Part B: the user documentation as plain files too (Markdown + images,
+# readable offline in any viewer). The extension carries its own HTML build of the
+# same pages (extension/docs/, opened by the "Learn more" links).
+mkdir -p "$BUNDLE/docs"
+cp -r "$ROOT/docs/user/." "$BUNDLE/docs/"
 echo "$VERSION" > "$BUNDLE/VERSION"
 
 NAME="scraping-factory-$VERSION-$RID"

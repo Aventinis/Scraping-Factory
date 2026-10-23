@@ -102,9 +102,11 @@ describe('plain-language wording in the markup', () => {
     }
   });
 
-  test('the section intro, the severity popover and one popover per check exist', async () => {
+  test('the section intro popover, the severity popover and one popover per check exist', async () => {
     await mount([]);
-    expect(document.querySelector('.monitoring-intro').textContent).toContain('run the script again and again');
+    // Issue #354: the intro sits behind a "?" next to the section title (and no paragraph is left).
+    expect(document.querySelector('#monitoring-section-toggle .help-host').dataset.help).toBe('help.monitoring.intro');
+    expect(document.querySelector('.monitoring-intro')).toBeNull();
     const keys = Array.from(document.querySelectorAll('#hardening-config .help-host')).map((h) => h.dataset.help);
     expect(keys).toEqual([
       'help.hardening.severity', 'help.hardening.recommended', 'help.hardening.noResult', 'help.hardening.nullRate',

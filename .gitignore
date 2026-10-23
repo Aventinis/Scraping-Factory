@@ -26,6 +26,8 @@ Thumbs.db
 # Node
 extension/node_modules/
 extension/dist/
+extension/dist.building/
+extension/dist.previous/
 e2e/node_modules/
 
 # Issue #180: screenshots/scratch output the e2e harness produces when run

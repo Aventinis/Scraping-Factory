@@ -668,6 +668,21 @@ CLAUDE.md for the details.
 - Tests: `popup/hardening-presets.test.js`, `popup/hardening-presets-ui.test.js`,
   real-browser check `e2e/examples/issue-399-hardening-plain-language-check.js`
 
+### 2.10l Bundled documentation and "Learn more" (Issue #354 Part B)
+
+`docs/user/*.md` is built into HTML pages inside the extension (`dist/docs/`), the panel's
+long hints became one line each, and "Learn more" links open the bundled page offline. No
+wire-format or companion change. See CLAUDE.md for the details.
+
+- Build: `extension/docs-build.js` (markdown → HTML, link/anchor check, `slugify`),
+  `extension/docs-template/docs.css`, `extension/build.js` (`copyDocs`), `install/build-bundle.sh`
+  (docs as files in the bundle)
+- Extension: `popup/docs-links.js` (key → page#anchor table), `popup/docs-links-ui.js`
+  (links, click, `learnMoreHtml`), `popup/help-popover-ui.js` (`data-doc` on a help host),
+  `popup/screens/*.html`/`popup.html` (the links), `common.learnMore` + shortened `*Hint` texts in `i18n/*.json`
+- Tests: `docs-build.test.js`, `popup/docs-links.test.js`, `popup/docs-links-ui.test.js`,
+  `i18n/hint-length.test.js`, real-browser check `e2e/examples/issue-354-bundled-docs-check.js`
+
 ### 2.10k Terminology pass, Advanced groups and glossary (Issue #407)
 
 Plainer names for the jargon terms (output layout, safety checks, "Alerts & safety checks",

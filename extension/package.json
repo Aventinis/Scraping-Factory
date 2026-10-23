@@ -27,6 +27,7 @@
     "esbuild": "^0.28.2",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
+    "marked": "^18.1.1",
     "typescript": "^7.0.2"
   },
   "overrides": {

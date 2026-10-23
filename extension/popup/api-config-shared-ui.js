@@ -25,7 +25,6 @@ function renderParameterPlaceholderPicker(earlierNames, safePartId, targetSelect
         <option value="">${escapeHtml(t('apiConfig.insertParameterPlaceholder'))}</option>
         ${options}
       </select>
-      <p class="api-param-placeholder-hint">${escapeHtml(t('apiConfig.insertParameterHint'))}</p>
     `;
 }
 

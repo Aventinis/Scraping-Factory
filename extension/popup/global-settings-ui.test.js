@@ -43,7 +43,6 @@ describe('global Settings tab: preferences', () => {
       <div id="script-name-fixed-row">
         <input type="text" id="input-script-name-fixed" />
       </div>
-      <p id="script-name-hostname-hint" class="hidden"></p>
       <div id="manage-blueprints-list"></div>
       <p id="manage-blueprints-empty" class="hidden"></p>
       <div id="all-saved-configs-list"></div>
@@ -107,7 +106,6 @@ describe('global Settings tab: preferences', () => {
     expect(document.getElementById('btn-script-name-mode-fixed').classList.contains('active')).toBe(true);
     expect(document.getElementById('btn-script-name-mode-hostname').classList.contains('active')).toBe(false);
     expect(document.getElementById('script-name-fixed-row').classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('script-name-hostname-hint').classList.contains('hidden')).toBe(true);
     expect(document.getElementById('input-script-name-fixed').value).toBe('scraper');
   });
 
@@ -142,7 +140,6 @@ describe('global Settings tab: preferences', () => {
     expect(document.getElementById('btn-script-name-mode-hostname').classList.contains('active')).toBe(true);
     expect(document.getElementById('btn-script-name-mode-fixed').classList.contains('active')).toBe(false);
     expect(document.getElementById('script-name-fixed-row').classList.contains('hidden')).toBe(true);
-    expect(document.getElementById('script-name-hostname-hint').classList.contains('hidden')).toBe(false);
   });
 
   test('editing the fixed script name persists it', () => {
