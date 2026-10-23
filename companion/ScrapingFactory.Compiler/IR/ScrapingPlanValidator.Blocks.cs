@@ -5,13 +5,8 @@ namespace ScrapingFactory.Compiler.IR;
 
 public static partial class ScrapingPlanValidator
 {
-    // Issue #182: at least 2 blocks (a single block is just Fields/Groups —
-    // see ScrapingConfig.Blocks), unique Name/OutputFileBaseName across the
-    // whole list (both already resolved by ScrapingPlanBuilder — a blank
-    // Name/OutputFileName can never reach here as a blank string, only as
-    // the resolved default), then each block's own content validated by
-    // reusing the exact same per-shape/per-cross-cutting-config validators
-    // the single-shape branches above already call.
+    // At least 2 blocks with unique Name/OutputFileBaseName (already resolved by ScrapingPlanBuilder), then each block through the usual
+    // per-shape validators.
     private static string? ValidateExtractionBlocks(List<PlanExtractionBlock> blocks, ScrapingEngine engine)
     {
         if (blocks.Count < 2)

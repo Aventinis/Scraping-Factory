@@ -5,16 +5,8 @@ namespace ScrapingFactory.Compiler.IR;
 
 public static partial class ScrapingPlanValidator
 {
-    // Issue #217: only DiscoverySource/BrowserDiscoverySource have a
-    // template string a {name} placeholder could even appear in —
-    // StaticListSource/RangeSource have no such field, so they can never
-    // depend on anything (out of scope per the issue's own open
-    // questions) and this returns null immediately for them. A placeholder
-    // naming something that isn't a declared parameter at all is left
-    // alone (same laissez-faire ValidateDiscoverySource's own doc comment
-    // already establishes for an otherwise-unrelated template) — only a
-    // name that IS a declared parameter, just not one declared before this
-    // one, is actually rejected.
+    // Only discovery sources have a template a {name} placeholder can appear in. A placeholder that is not a declared parameter is left
+    // alone; one that names a parameter declared later is rejected.
     private static string? ValidateParameterDependencyOrder(
         ApiParameter parameter, HashSet<string> declaredSoFar, HashSet<string> allParameterNames)
     {
@@ -40,9 +32,7 @@ public static partial class ScrapingPlanValidator
         return null;
     }
 
-    // DiscoverySource.UrlTemplate may now reference an earlier-declared
-    // parameter's own value (Issue #217, validated above) — otherwise it's
-    // still expected to be fully static, same as before that existed.
+    // May reference an earlier-declared parameter (checked above); otherwise it is expected to be static.
     private static string? ValidateDiscoverySource(string parameterName, DiscoverySource discovery)
     {
         if (discovery.Method != "GET")
@@ -56,14 +46,7 @@ public static partial class ScrapingPlanValidator
         return null;
     }
 
-    // Unlike the CSS-selector/JSON-path laissez-faire elsewhere in this
-    // validator, a Range's From/To/Format are plain user-typed strings with
-    // a fully deterministic syntax (no library-compatibility ambiguity to
-    // punt on) — so, same as EnvironmentVariableNamePattern above, checking
-    // them here is cheap and catches a real bug class: a From/To value that
-    // doesn't match its (possibly default) Format used to only fail deep
-    // inside the generated script (raw Python traceback, e.g. a site using
-    // "2026-35" instead of ISO-8601 "2026-W35" for a week number).
+    // Unlike selectors, a Range's From/To/Format have a deterministic syntax, so a mismatch is caught here instead of as a Python traceback.
     private static string? ValidateRangeSource(string parameterName, RangeSource range)
     {
         if (string.IsNullOrWhiteSpace(range.From) || string.IsNullOrWhiteSpace(range.To))
@@ -83,8 +66,7 @@ public static partial class ScrapingPlanValidator
             return $"Format for parameter '{parameterName}': {formatError}";
 
         var format = RangeFormat.Resolve(range.Type, range.Format);
-        // See RangeFormat.IsValid's doc comment for why allowToday differs
-        // between From and To here.
+        // allowToday differs between From and To (see RangeFormat.IsValid).
         if (!RangeFormat.IsValid(range.From, format, allowToday: range.Type == RangeType.IsoWeek))
             return $"Start value '{range.From}' for parameter '{parameterName}' does not match format '{format}'.";
         if (!RangeFormat.IsValid(range.To, format, allowToday: true))
@@ -93,24 +75,9 @@ public static partial class ScrapingPlanValidator
         return null;
     }
 
-    // Issue #216: DiscoveryUrl is the page actually opened/scrolled — unlike
-    // UrlTemplate (checked separately, see the call site above), it needs no
-    // cross-check against api.Parameters here (that's ValidateParameterDependencyOrder's
-    // job, called before this): Uri.TryCreate(..., UriKind.Absolute, ...)
-    // happily parses a "{name}"-templated string too (confirmed: curly
-    // braces don't make .NET's Uri parser reject an otherwise well-formed
-    // absolute URL), so the same plain absolute-URI check already works
-    // whether or not this Issue #217 chaining is actually used, mirroring
-    // the NavigateStep URL check at the top of this validator. Each action
-    // is validated the same way its plan-level
-    // WaitForStep/FillStep/ClickStep/ScrollStep counterpart already is above
-    // — duplicated rather than shared, since those checks run against
-    // ScrapingStep (post-ScrapingPlanBuilder translation), not the
-    // wire-level BrowserAction this list is made of. FramePath is validated
-    // against a literal ScrapingEngine.Browser regardless of plan.Engine
-    // (always ScrapingEngine.Api here) — this action list always runs
-    // inside its own dedicated Playwright session, independent of whatever
-    // engine the main request itself uses.
+    // DiscoveryUrl may contain {name} placeholders (ValidateParameterDependencyOrder checks them), which the absolute-URI check accepts.
+    // The actions are validated like their plan-level counterparts, duplicated because this list is wire-level BrowserAction; the
+    // FramePath check uses the Browser engine because the list always runs in its own Playwright session.
     private static string? ValidateBrowserDiscoverySource(string parameterName, BrowserDiscoverySource source)
     {
         if (!Uri.TryCreate(source.DiscoveryUrl, UriKind.Absolute, out var uri) ||

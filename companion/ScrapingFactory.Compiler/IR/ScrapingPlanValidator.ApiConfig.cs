@@ -193,10 +193,7 @@ public static partial class ScrapingPlanValidator
             if ((hasValue ? 1 : 0) + (hasEnvironmentVariable ? 1 : 0) + (hasTemplate ? 1 : 0) != 1)
                 return $"Header '{header.Name}' needs exactly one of Value/EnvironmentVariableName/Template.";
 
-            // Issue #220: a Template's only purpose is splicing in the
-            // bootstrap value, so it must reference it, and nothing else —
-            // there's no per-combination parameter context when headers are
-            // built (they're shared by every request of the run).
+            // A Template exists to splice in the bootstrap value, so it must reference it and nothing else (headers are shared by every request).
             if (hasTemplate)
             {
                 if (bootstrapName is null)
@@ -213,9 +210,7 @@ public static partial class ScrapingPlanValidator
                 return $"Invalid environment variable name '{header.EnvironmentVariableName}' in header '{header.Name}'.";
         }
 
-        // _build_headers() in scraper_api.py.j2 builds a dict keyed by name —
-        // a duplicate would silently overwrite an earlier header instead of
-        // surfacing as an error.
+        // The script builds a dict keyed by name; a duplicate would silently overwrite an earlier header.
         var duplicateHeaderNames = FindDuplicates(headers, header => header.Name);
         if (duplicateHeaderNames.Count > 0)
             return $"Duplicate header names: {string.Join(", ", duplicateHeaderNames)}.";

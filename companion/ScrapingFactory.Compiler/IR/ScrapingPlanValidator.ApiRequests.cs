@@ -5,7 +5,7 @@ namespace ScrapingFactory.Compiler.IR;
 
 public static partial class ScrapingPlanValidator
 {
-    // Issue #321: see ApiLinkHeaderPagination's own doc comment.
+    // See ApiLinkHeaderPagination.
     private static string? ValidateApiLinkHeaderPagination(ApiConfig api, ApiLinkHeaderPagination linkPagination)
     {
         if (linkPagination.MaxPages <= 0)
@@ -19,7 +19,7 @@ public static partial class ScrapingPlanValidator
         return null;
     }
 
-    // Issue #224: see ApiCursorPagination's own doc comment.
+    // See ApiCursorPagination.
     private static string? ValidateApiCursorPagination(ApiConfig api, ApiCursorPagination cursor)
     {
         if (string.IsNullOrWhiteSpace(cursor.NextCursorPath))
@@ -51,11 +51,7 @@ public static partial class ScrapingPlanValidator
         return null;
     }
 
-    // Issue #220: see ApiBootstrap's own doc comment. The value name itself
-    // is checked against EnvironmentVariableNamePattern too — it has to be a
-    // valid Python str.format() keyword (it's substituted into UrlTemplate
-    // via URL_TEMPLATE.format(**...)), which is exactly the same
-    // identifier-shaped character set.
+    // See ApiBootstrap. The name is substituted via Python's str.format, so it must be identifier-shaped.
     private static string? ValidateApiBootstrap(ApiBootstrap bootstrap)
     {
         if (string.IsNullOrWhiteSpace(bootstrap.Name))

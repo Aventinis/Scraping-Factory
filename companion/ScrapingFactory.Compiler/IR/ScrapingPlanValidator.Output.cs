@@ -5,21 +5,10 @@ namespace ScrapingFactory.Compiler.IR;
 
 public static partial class ScrapingPlanValidator
 {
-    // Issue #225. Key fields must be real fields of the current shape (leaf
-    // fields for the tree shapes, flat field names — plus Api parameter names
-    // — otherwise), the same "reference something that exists" rule the
-    // hardening field pickers' wire values get elsewhere. Two shape-specific
-    // restriction, "reject rather than silently do something else" (appending
-    // — Issue #342 — works for every format, trees included):
-    //  - a tree-shaped source combined with an OutputBlueprint mapping is
-    //    not designed yet: the blueprint walkers re-read the source tree on
-    //    their own and never see the deduplicated instances.
     private static bool IsTabularFormat(OutputFormat format) => format is OutputFormat.Sqlite or OutputFormat.Xlsx;
 
-    // Issue #229: rules for writing Sqlite/Xlsx. Tree-shaped sources are
-    // allowed — ScrapingPlanBuilder flattens them via an identity (or the
-    // caller's own flat) Output Blueprint — but need unique field names and
-    // a flat blueprint.
+    // Sqlite/Xlsx: a tree source is flattened by an identity (or the caller's flat) blueprint, so it needs unique field
+    // names and a flat blueprint.
     private static string? ValidateTabularOutput(ScrapingPlan plan)
     {
         var blockWithTable = plan.Steps.OfType<ExtractionBlockStep>().SelectMany(step => step.Blocks)
@@ -50,6 +39,9 @@ public static partial class ScrapingPlanValidator
         return null;
     }
 
+    // Key fields must be real fields of the current shape (leaf fields for trees; flat field names plus API parameter
+    // names otherwise). A tree-shaped source with an Output Blueprint is rejected: the blueprint walkers re-read the
+    // source tree and never see the deduplicated instances.
     private static string? ValidateDeduplication(DeduplicationConfig dedup, IReadOnlyCollection<string> availableFieldNames, bool isTreeShape, bool hasOutputBlueprint)
     {
         if (dedup.KeyFields.Count == 0)
@@ -72,12 +64,7 @@ public static partial class ScrapingPlanValidator
         return null;
     }
 
-    // Issue #191: availableSourceFields is the mode's own already-resolved
-    // field-name list (flat ExtractStep.Name, or Api-flat ApiField.Name —
-    // API parameters are deliberately not mappable, the same simplification
-    // NullRateCheck/RequiredFieldsCheck's own field pickers already made for
-    // API mode). Mirrors FieldTransformValidator's "static helper returning
-    // string? (null = valid)" pattern.
+    // availableSourceFields: flat ExtractStep names or Api-flat field names; API parameters are not mappable.
     private static string? ValidateOutputBlueprint(OutputBlueprintMapping mapping, IReadOnlyCollection<string> availableSourceFields)
     {
         if (mapping.Fields is not { Count: > 0 })
@@ -104,16 +91,8 @@ public static partial class ScrapingPlanValidator
         return null;
     }
 
-    // Issue #244: the tree-shaped counterpart to ValidateOutputBlueprint
-    // above — availableSourceFields is still the mode's own already-resolved
-    // LEAF field-name list (container mode's DataFieldNode names, or Api-
-    // tree's ApiField names), exactly as ValidateOutputBlueprint already
-    // uses for the flat case. Unlike the flat mapping, duplicate TARGET node
-    // names are deliberately not rejected here — they're just output tag/key
-    // names, and container mode's own tree already allows duplicate sibling
-    // names by design (see Issue #177) — only duplicate SOURCE fields are
-    // still rejected, preserving the "still 1:1 per field" scope boundary
-    // #191/#192 already established.
+    // Tree counterpart: availableSourceFields is the leaf-field list. Duplicate target node names are allowed (they are only output tag names);
+    // a source field may still be mapped only once.
     private static string? ValidateOutputBlueprintTree(List<OutputBlueprintTreeMappingNode>? tree, IReadOnlyCollection<string> availableSourceFields)
     {
         if (tree is not { Count: > 0 })

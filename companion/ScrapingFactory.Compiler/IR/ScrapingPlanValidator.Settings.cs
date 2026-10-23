@@ -8,12 +8,8 @@ public static partial class ScrapingPlanValidator
     // RFC 9110 token characters — what an HTTP header field name may consist of.
     private static readonly Regex HeaderNamePattern = new("^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+$");
 
-    // Issue #226: the DOM-mode counterpart of ValidateApiHeaders. Reuses the
-    // ApiHeader shape, but there is no bootstrap value to splice in, so a
-    // Template is rejected; a name must be a valid header token and a literal
-    // value must not contain a line break (header injection), since both end
-    // up verbatim in the request. Duplicates are compared case-insensitively
-    // — header names are, and the runtime builds a dict keyed by name.
+    // DOM-mode counterpart of ValidateApiHeaders: no Template (there is no bootstrap value), the name must be an HTTP token, a value
+    // must not contain a line break, and duplicates are compared case-insensitively.
     private static string? ValidateRequestHeaders(List<ApiHeader> headers)
     {
         foreach (var header in headers)
@@ -44,9 +40,7 @@ public static partial class ScrapingPlanValidator
         return null;
     }
 
-    // Issue #87: every field here is an env var *name* (like
-    // FillAction.EnvironmentVariableName), never a literal value — same
-    // EnvironmentVariableNamePattern check as everywhere else that's true.
+    // Every field is an environment variable name, never a literal value.
     private static string? ValidateChangeDetection(ChangeDetectionConfig changeDetection)
     {
         if (changeDetection.Notify is not ("Email" or "Webhook"))
@@ -93,21 +87,13 @@ public static partial class ScrapingPlanValidator
             : $"Invalid environment variable name '{changeDetection.Webhook.UrlEnvVar}' in ChangeDetection.Webhook.UrlEnvVar.";
     }
 
-    // Issue #88: only the env var *name* is validated here — the companion
-    // never sees the actual proxy URLs (same boundary as FillAction/
-    // ChangeDetection credentials).
+    // Only the variable name is validated; the companion never sees the proxy URLs.
     private static string? ValidateProxy(ProxyConfig proxy) =>
         EnvironmentVariableNamePattern.IsMatch(proxy.EnvironmentVariableName)
             ? null
             : $"Invalid environment variable name '{proxy.EnvironmentVariableName}' in Proxy.EnvironmentVariableName.";
 
-    // Issue #174: MaxPages is checked regardless of kind; the two kinds then
-    // each validate their own one required field. PageNumberPagination.
-    // UrlTemplate must reference both "{url}" and "{page}" — reused via the
-    // same UrlTemplatePlaceholderPattern API-mode's own UrlTemplate
-    // validation already uses above, just checked by presence rather than
-    // matched against a declared Parameters list (there's no equivalent
-    // concept here).
+    // MaxPages applies to both kinds; a page-number template must reference "{url}" and "{page}".
     private static string? ValidatePagination(PaginationConfig pagination, bool singleStartPage)
     {
         if (pagination.MaxPages <= 0)
@@ -123,13 +109,8 @@ public static partial class ScrapingPlanValidator
         };
     }
 
-    // Issue #405: "{page}" is always required (without it the template would
-    // refetch the same URL until MaxPages). "{url}" — the start page as-is — is
-    // only required when it matters: a template written out in full
-    // ("https://site/list?page={page}", what a start URL that already says
-    // "?page=1" needs) is fine for a single start page, but with several
-    // (Url + AdditionalUrls, or discovered ones) it would request the same
-    // page N for every one of them, so "{url}" stays mandatory then.
+    // "{page}" is always required (else the same URL is refetched). "{url}" is only required with several start pages, because a
+    // template written out in full would request the same page N for each of them.
     private static string? ValidatePageNumberUrlTemplate(string urlTemplate, bool singleStartPage)
     {
         if (string.IsNullOrWhiteSpace(urlTemplate))
@@ -143,16 +124,7 @@ public static partial class ScrapingPlanValidator
             : null;
     }
 
-    // Issue #218: PageUrl is always a fully concrete, unparameterized
-    // address (the page actually fetched for the discovery pass) — same
-    // plain absolute-URI check as NavigateStep's own start URL / Issue
-    // #216's DiscoveryUrl, not the "{name}"-placeholder-aware check
-    // UrlTemplate itself gets. LinkSelector's own CSS syntax is deliberately
-    // not validated — same laissez-faire this project already applies to
-    // every other CSS selector (see CLAUDE.md's "Selector compatibility"
-    // architecture note); a bad selector simply matches nothing, caught the
-    // same way an unrelated bad field selector already would be, by the
-    // real trial run finding no data.
+    // PageUrl is a concrete address (no placeholders). LinkSelector syntax is not checked, like any other selector.
     private static string? ValidateDiscoveredUrls(DiscoveredUrlsConfig discoveredUrls)
     {
         if (!Uri.TryCreate(discoveredUrls.PageUrl, UriKind.Absolute, out var uri) ||

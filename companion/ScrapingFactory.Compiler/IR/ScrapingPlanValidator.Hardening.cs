@@ -5,17 +5,7 @@ namespace ScrapingFactory.Compiler.IR;
 
 public static partial class ScrapingPlanValidator
 {
-    // Issue #129/#130: every non-NullRate check kind (the concrete
-    // HardeningCheck subtype, since there's no separate string "Kind"
-    // property to compare on the C# side; that string only exists on the
-    // wire/in the generated script) may appear at most once — Severity is a
-    // required enum (an invalid string already fails deserialization before
-    // this ever runs), and NoResultCheck has no parameters of its own, so
-    // there's nothing that would distinguish two instances of it anyway.
-    // NullRateCheck is deliberately exempt from that rule (see its own doc
-    // comment) — more than one is expected, one per monitored field — so it
-    // gets its own "duplicate FieldName" rule plus its own parameter checks
-    // instead.
+    // Each check kind may appear once, except NullRateCheck (one per monitored field, unique by FieldName).
     private static string? ValidateHardening(List<HardeningCheck> hardening)
     {
         var duplicateKind = hardening
@@ -43,21 +33,14 @@ public static partial class ScrapingPlanValidator
                 return $"Hardening check 'NullRate' for field '{check.FieldName}': threshold must be between 0 and 1 (was {check.Threshold}).";
         }
 
-        // Issue #131: only DropThreshold's own range needs checking —
-        // BaselineCheck already goes through the generic duplicate-kind rule
-        // above like NoResultCheck, since more than one never makes sense.
+        // Only the threshold's range needs checking.
         foreach (var check in hardening.OfType<BaselineCheck>())
         {
             if (check.DropThreshold is < 0 or > 1)
                 return $"Hardening check 'Baseline': threshold must be between 0 and 1 (was {check.DropThreshold}).";
         }
 
-        // Issue #132: like BaselineCheck, only one BlockingCheck ever makes
-        // sense (already covered by the generic duplicate-kind rule above).
-        // MinBodyLength/BlockPhrases are both optional — a BlockingCheck
-        // with neither set is still meaningful (the cross-origin-redirect
-        // signal is always active), so there's no "at least one signal
-        // configured" requirement here.
+        // MinBodyLength/BlockPhrases are optional: the cross-origin-redirect signal is always active.
         foreach (var check in hardening.OfType<BlockingCheck>())
         {
             if (check.MinBodyLength is <= 0)
@@ -66,13 +49,7 @@ public static partial class ScrapingPlanValidator
                 return "Hardening check 'Blocking': block phrases must not be blank.";
         }
 
-        // Issue #133 (+ #204 follow-up): unlike BlockingCheck's optional
-        // signals, FieldNames is the one thing this check configures at
-        // all, so — unlike an incomplete NullRateCheck row, which is simply
-        // skipped client-side — an empty list is rejected here rather than
-        // silently doing nothing. Supported for every shape (flat, Api-flat,
-        // container, and — since #204 — Api-tree), so there's no per-shape
-        // restriction to enforce anywhere else in this validator.
+        // FieldNames is this check's only setting, so an empty list is rejected instead of doing nothing.
         foreach (var check in hardening.OfType<RequiredFieldsCheck>())
         {
             if (check.FieldNames.Count == 0)

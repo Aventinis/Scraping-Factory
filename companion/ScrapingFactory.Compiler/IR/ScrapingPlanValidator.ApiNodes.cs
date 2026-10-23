@@ -5,8 +5,7 @@ namespace ScrapingFactory.Compiler.IR;
 
 public static partial class ScrapingPlanValidator
 {
-    // Mirrors CollectContainerFieldNames for API-Mode's tree shape (Issue
-    // #54) — leaf ApiField names only, not ApiGroup names.
+    // Leaf ApiField names only.
     private static List<string> CollectApiFieldNames(IEnumerable<ApiNode> nodes)
     {
         var names = new List<string>();
@@ -22,18 +21,10 @@ public static partial class ScrapingPlanValidator
         return names;
     }
 
-    // Mirrors ValidateContainerNodes for API-Mode's JSON-path tree (Issue
-    // #54): same non-empty-name rule and recursive walk. Path itself stays
-    // deliberately unvalidated (see ValidateApiConfig's doc comment) except
-    // ApiField.Path, which — unlike ApiGroup.Path — must be non-empty: an
-    // empty ApiGroup.Path is a legitimate "operate directly on the parent
-    // scope" marker (see ApiGroup's doc comment), but an empty ApiField.Path
-    // would silently extract nothing.
+    // Mirror of ValidateContainerNodes. ApiField.Path must be non-empty (unlike ApiGroup.Path, where "" means the parent scope).
     private static string? ValidateApiNodes(IEnumerable<ApiNode> nodes)
     {
-        // Issue #206: same per-scope tracking as ValidateContainerNodes —
-        // a combine/split transform can only reference a sibling ApiField
-        // already declared earlier within this exact group's own Children.
+        // One scope per group, as in ValidateContainerNodes.
         var precedingFieldNames = new List<string>();
         foreach (var node in nodes)
         {
@@ -66,9 +57,7 @@ public static partial class ScrapingPlanValidator
         return null;
     }
 
-    // A tree of only nested, empty-of-fields groups would extract nothing —
-    // mirrors the flat shape's "Fields.Count == 0 → error" check above, just
-    // walked recursively since a field could be reachable at any depth.
+    // A tree of only empty groups would extract nothing.
     private static bool ApiNodesContainField(IEnumerable<ApiNode> nodes) =>
         nodes.Any(node => node switch
         {
@@ -77,14 +66,8 @@ public static partial class ScrapingPlanValidator
             _ => false,
         });
 
-    // Request-body tree (Issue #55): the write-side mirror of
-    // ValidateApiNodes above. Object/Array just recurse; a Variable must
-    // reference a declared parameter (collected into referencedParameterNames
-    // so the caller can fold body references into its own UrlTemplate
-    // "unused parameter" check); a Literal's Kind must agree with which
-    // value field is actually set — Kind itself isn't inferred structurally
-    // (see ApiBodyLiteral's doc comment), so a mismatch here would otherwise
-    // only surface as a silently-wrong value in the generated request body.
+    // Request-body tree: a Variable must reference a declared parameter (collected into referencedParameterNames), and a Literal's Kind must
+    // match the value that is set (Kind is not inferred, so a mismatch would silently send a wrong value).
     private static string? ValidateApiBodyNode(ApiBodyNode node, HashSet<string> parameterNames, HashSet<string> referencedParameterNames)
     {
         switch (node)

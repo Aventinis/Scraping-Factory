@@ -5,28 +5,12 @@ namespace ScrapingFactory.Compiler.IR;
 
 public static partial class ScrapingPlanValidator
 {
-    // Issue #206: CombineFieldsTransform/SplitFieldTransform reference
-    // another field's own already-computed value by name (see
-    // FieldTransform.cs's own doc comment) — the runtime only ever has that
-    // value available once extraction has already reached that sibling, so
-    // the referenced name must be a field declared *earlier* in the very
-    // same list precedingSiblingNames represents. Callers reset this list
-    // per scope: the whole field list for flat/Api-flat mode, or just one
-    // group's own Children for container/Api-tree mode (siblings under a
-    // *different* parent group are out of scope entirely, mirroring how the
-    // Python runtime only ever has the current scope's own in-progress
-    // values on hand — see CLAUDE.md's Python Templates section).
-    // Issue #206 follow-up: a field whose entire value comes from a
-    // combineFields/splitField transform has no DOM value/JSON path of its
-    // own to select — the extension's dedicated creation flow for these two
-    // kinds never collects one, so Selector/Path is allowed to be blank
-    // precisely (and only) in this case. Must be the *first* transform —
-    // that's already the only shape the extension ever produces (a derived
-    // field carries exactly one transform), and requiring it here instead
-    // of "anywhere in the chain" keeps the check cheap and unambiguous.
+    // A field whose value comes from a leading combineFields/splitField transform has no selector or path of its own.
     private static bool IsDerivedField(IReadOnlyList<FieldTransform>? transforms) =>
         transforms is { Count: > 0 } && transforms[0] is CombineFieldsTransform or SplitFieldTransform;
 
+    // A combine/split transform reads another field's already-computed value, so that field must be declared earlier in the
+    // same scope (callers pass the siblings of one list or one group), and not be the field itself.
     private static string? ValidateFieldTransformOrdering(IReadOnlyList<FieldTransform>? transforms, string fieldName, IReadOnlyList<string> precedingSiblingNames, string fieldLabel)
     {
         if (transforms is null)
@@ -55,10 +39,7 @@ public static partial class ScrapingPlanValidator
         return null;
     }
 
-    // Issue #192: leaf field names only (DataFieldNode, not GroupNode) —
-    // mirrors ValidateContainerNodes' own recursive walk, and the
-    // extension's own collectFieldNames() for this mode, which likewise
-    // never offers a group's own name as a mappable source field.
+    // Leaf field names only: a group's own name is not a mappable source field.
     private static List<string> CollectContainerFieldNames(IEnumerable<ContainerNode> nodes)
     {
         var names = new List<string>();
@@ -74,11 +55,7 @@ public static partial class ScrapingPlanValidator
         return names;
     }
 
-    // Issue #214: shared by both flat ExtractStep.Download and container
-    // DataFieldNode.Download — a mode/shape-agnostic check on the optional
-    // safety net alongside Download itself (whether Download is actually
-    // enabled at all is validated separately by each caller, the same way
-    // Attribute-mode-requiredness already is).
+    // Shared by flat and container Download; whether Download is enabled is checked by each caller.
     private static string? ValidateDownloadSafetyNet(int? maxSizeBytes, List<string>? allowedContentTypes, string fieldDescription)
     {
         if (maxSizeBytes is <= 0)
@@ -88,17 +65,10 @@ public static partial class ScrapingPlanValidator
         return null;
     }
 
-    // Deliberately doesn't check whether Name is a valid XML tag name, or
-    // whether a non-repeating GroupNode's selector could ever match more
-    // than once — same laissez-faire as CSS selector syntax elsewhere in
-    // this validator (see class doc comment): a bad tag name surfaces as a
-    // real Python exception via PythonScriptVerifier, not here.
+    // Tag names and whether a non-repeating group matches more than once are not checked; the trial run reports those.
     private static string? ValidateContainerNodes(IEnumerable<ContainerNode> nodes, ScrapingEngine engine)
     {
-        // Issue #206: one scope per call (a fresh ValidateContainerNodes
-        // call per group's own Children) — a combine/split transform can
-        // only reference a sibling DataFieldNode already declared earlier
-        // within this exact scope, never a node under a different group.
+        // One scope per call: a combine/split transform may only reference a sibling declared earlier in the same group.
         var precedingFieldNames = new List<string>();
         foreach (var node in nodes)
         {
