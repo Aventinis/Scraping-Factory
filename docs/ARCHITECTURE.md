@@ -1574,7 +1574,9 @@ per engine, per shape) instead of once per template.
 - `Backends/EmbeddedScribanTemplate` (`ExpandIncludes`, recursion/cycle
   guard, re-indentation), `ScrapingFactory.Compiler.csproj` (wildcard
   `EmbeddedResource` for `fragments/*.py.j2`)
-- `language-modules/python/templates/fragments/` (the fragments),
+- `language-modules/python/templates/fragments/` (the fragments; since Issue #395 also the shell blocks the
+  top-level templates share: `playwright_browser_*`, `static_*`, `main_*`, `api_*`, `blueprint_source_index` — see
+  `docs/design-notes/templates.md`),
   `scraper.py.j2` & co. (the templates, now mostly the parts that really
   differ per template)
 - Tests: `TemplateIncludeTests.cs`; the existing end-to-end tests run the
