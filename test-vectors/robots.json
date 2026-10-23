@@ -1,0 +1,229 @@
+{
+ "description": "Issue #388: robots.txt matching. The extension's advisory check (content-script.js evaluateRobotsTxt) and the generated scripts' run-time check (fragments/robots_disallow.py.j2 _parse_robots_rules/_robots_allowed) must agree on RFC 9309 matching: group selection, longest pattern wins, ties go to Allow, * and $. appliesTo [\"python\"] marks the cases that depend on the script's own ScrapingFactory token, which the advisory check does not know.",
+ "cases": [
+  {
+   "name": "empty file allows everything",
+   "robots": "",
+   "path": "/anything",
+   "allowed": true
+  },
+  {
+   "name": "no rule matches",
+   "robots": "User-agent: *\nDisallow: /private",
+   "path": "/public/page",
+   "allowed": true
+  },
+  {
+   "name": "simple disallow prefix",
+   "robots": "User-agent: *\nDisallow: /private",
+   "path": "/private/page",
+   "allowed": false
+  },
+  {
+   "name": "the prefix is not a path segment match",
+   "robots": "User-agent: *\nDisallow: /private",
+   "path": "/privateer",
+   "allowed": false
+  },
+  {
+   "name": "empty Disallow says nothing",
+   "robots": "User-agent: *\nDisallow:",
+   "path": "/any",
+   "allowed": true
+  },
+  {
+   "name": "disallow everything",
+   "robots": "User-agent: *\nDisallow: /",
+   "path": "/x",
+   "allowed": false
+  },
+  {
+   "name": "longest pattern wins (allow)",
+   "robots": "User-agent: *\nDisallow: /shop\nAllow: /shop/public",
+   "path": "/shop/public/item",
+   "allowed": true
+  },
+  {
+   "name": "longest pattern wins (disallow)",
+   "robots": "User-agent: *\nAllow: /shop\nDisallow: /shop/private",
+   "path": "/shop/private/item",
+   "allowed": false
+  },
+  {
+   "name": "a tie goes to Allow",
+   "robots": "User-agent: *\nDisallow: /page\nAllow: /page",
+   "path": "/page",
+   "allowed": true
+  },
+  {
+   "name": "a tie goes to Allow regardless of order",
+   "robots": "User-agent: *\nAllow: /page\nDisallow: /page",
+   "path": "/page",
+   "allowed": true
+  },
+  {
+   "name": "wildcard in the middle",
+   "robots": "User-agent: *\nDisallow: /*/private",
+   "path": "/a/private/x",
+   "allowed": false
+  },
+  {
+   "name": "wildcard does not match a different suffix",
+   "robots": "User-agent: *\nDisallow: /*/private",
+   "path": "/a/public/x",
+   "allowed": true
+  },
+  {
+   "name": "end anchor matches the end",
+   "robots": "User-agent: *\nDisallow: /*.pdf$",
+   "path": "/files/report.pdf",
+   "allowed": false
+  },
+  {
+   "name": "end anchor does not match a longer path",
+   "robots": "User-agent: *\nDisallow: /*.pdf$",
+   "path": "/files/report.pdf.html",
+   "allowed": true
+  },
+  {
+   "name": "the query string is part of the matched target",
+   "robots": "User-agent: *\nDisallow: /search?",
+   "path": "/search?q=1",
+   "allowed": false
+  },
+  {
+   "name": "a pattern with a query part",
+   "robots": "User-agent: *\nDisallow: /*?session=",
+   "path": "/page?session=abc",
+   "allowed": false
+  },
+  {
+   "name": "regex metacharacters in a pattern are literal",
+   "robots": "User-agent: *\nDisallow: /a.b(c)",
+   "path": "/a.b(c)/x",
+   "allowed": false
+  },
+  {
+   "name": "a dot in a pattern does not match any character",
+   "robots": "User-agent: *\nDisallow: /a.b",
+   "path": "/axb",
+   "allowed": true
+  },
+  {
+   "name": "a plus sign is literal",
+   "robots": "User-agent: *\nDisallow: /c++",
+   "path": "/c++/intro",
+   "allowed": false
+  },
+  {
+   "name": "a dollar sign in the middle is literal",
+   "robots": "User-agent: *\nDisallow: /a$b",
+   "path": "/a$b/x",
+   "allowed": false
+  },
+  {
+   "name": "comments are ignored",
+   "robots": "User-agent: * # everyone\nDisallow: /private # secret\n# Disallow: /public",
+   "path": "/public",
+   "allowed": true
+  },
+  {
+   "name": "comment-only and blank lines are ignored",
+   "robots": "\n# nothing\nUser-agent: *\n\nDisallow: /x",
+   "path": "/x/y",
+   "allowed": false
+  },
+  {
+   "name": "field names are case-insensitive",
+   "robots": "USER-AGENT: *\nDISALLOW: /x",
+   "path": "/x/y",
+   "allowed": false
+  },
+  {
+   "name": "windows line endings",
+   "robots": "User-agent: *\r\nDisallow: /x\r\n",
+   "path": "/x/y",
+   "allowed": false
+  },
+  {
+   "name": "rules before any user-agent are ignored",
+   "robots": "Disallow: /x\nUser-agent: *\nDisallow: /y",
+   "path": "/x",
+   "allowed": true
+  },
+  {
+   "name": "several user-agent lines share one group",
+   "robots": "User-agent: foo\nUser-agent: *\nDisallow: /x",
+   "path": "/x/y",
+   "allowed": false
+  },
+  {
+   "name": "a user-agent after rules starts a new group",
+   "robots": "User-agent: foo\nDisallow: /x\nUser-agent: *\nDisallow: /y",
+   "path": "/x",
+   "allowed": true
+  },
+  {
+   "name": "the star group is used when no other group applies",
+   "robots": "User-agent: googlebot\nDisallow: /\nUser-agent: *\nDisallow: /y",
+   "path": "/x",
+   "allowed": true
+  },
+  {
+   "name": "lines without a colon are ignored",
+   "robots": "User-agent: *\nthis is not a rule\nDisallow: /x",
+   "path": "/x",
+   "allowed": false
+  },
+  {
+   "name": "sitemap lines are ignored",
+   "robots": "Sitemap: https://example.test/s.xml\nUser-agent: *\nDisallow: /x",
+   "path": "/x",
+   "allowed": false
+  },
+  {
+   "name": "a value may contain a colon",
+   "robots": "User-agent: *\nDisallow: /a:b",
+   "path": "/a:b/c",
+   "allowed": false
+  },
+  {
+   "name": "an allow-only group allows",
+   "robots": "User-agent: *\nAllow: /x",
+   "path": "/x",
+   "allowed": true
+  },
+  {
+   "name": "the root path",
+   "robots": "User-agent: *\nDisallow: /index",
+   "path": "/",
+   "allowed": true
+  },
+  {
+   "name": "the ScrapingFactory group takes precedence over *",
+   "robots": "User-agent: ScrapingFactory\nDisallow: /x\nUser-agent: *\nDisallow:",
+   "path": "/x/y",
+   "allowed": false,
+   "appliesTo": [
+    "python"
+   ],
+   "note": "The extension's advisory check only evaluates the generic * group (content-script.js evaluateRobotsTxt); the generated script also honors its own ScrapingFactory token."
+  },
+  {
+   "name": "a ScrapingFactory/1.0 style token matches the group",
+   "robots": "User-agent: ScrapingFactory/1.0\nDisallow: /x",
+   "path": "/x/y",
+   "allowed": false,
+   "appliesTo": [
+    "python"
+   ],
+   "note": "Same as above: only the script knows its own user-agent token."
+  },
+  {
+   "name": "a different named group does not apply",
+   "robots": "User-agent: otherbot\nDisallow: /",
+   "path": "/x",
+   "allowed": true
+  }
+ ]
+}

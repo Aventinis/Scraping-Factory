@@ -724,7 +724,8 @@ function robotsPatternToRegex(pattern) {
 }
 
 // Decides whether `path` is allowed, per the standard "longest matching
-// pattern wins, ties go to Allow" rule. Always checked against the
+// pattern wins, ties go to Allow" rule (pinned against the script runtime's
+// matcher by test-vectors/robots.json). Always checked against the
 // catch-all "User-agent: *" group — the scripts this tool generates
 // (`requests`' default UA, a plain Playwright/Chromium UA) don't carry a
 // dedicated product token most robots.txt files would recognize by name,

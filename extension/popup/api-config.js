@@ -381,13 +381,9 @@ const RANGE_FORMAT_PRESETS = {
 
 const RANGE_FORMAT_TOKEN_PATTERNS = { yyyy: '\\d{4}', ww: '\\d{1,2}', mm: '\\d{1,2}', dd: '\\d{1,2}' };
 
-// Mirrors, character for character, RangeFormat.CompilePattern on the
-// companion side (companion/ScrapingFactory.Compiler/Backends/Python/RangeFormat.cs)
-// and _compile_range_format in scraper_api.py.j2 — a value this matches is
-// guaranteed to parse there too. Kept as its own small copy rather than
-// shared code across the extension/companion boundary, same as every other
-// piece of duplicated-but-consistent logic in this app (e.g. the JSON-path
-// DSL, per CLAUDE.md).
+// Same format mini-template as RangeFormat.CompilePattern (companion) and
+// _compile_range_format (generated script); test-vectors/range-format.json
+// pins all three to the same matches, so a value this accepts parses there too.
 /**
  * @param {string} format
  * @returns {RegExp}

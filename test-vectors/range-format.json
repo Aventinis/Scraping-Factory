@@ -1,0 +1,180 @@
+{
+ "description": "Issue #388: does a value match a RangeSource format mini-template ({yyyy}/{ww}/{mm}/{dd}, everything else literal)? Three implementations must agree: the extension's compileRangeFormatPattern (detects the format of a recorded value), the companion's RangeFormat.IsValid (rejects a From/To that would not parse) and the generated script's _compile_range_format.",
+ "cases": [
+  {
+   "name": "iso week standard",
+   "type": "IsoWeek",
+   "format": "{yyyy}-W{ww}",
+   "value": "2026-W35",
+   "matches": true
+  },
+  {
+   "name": "iso week without the W is rejected by the standard format",
+   "type": "IsoWeek",
+   "format": "{yyyy}-W{ww}",
+   "value": "2026-35",
+   "matches": false
+  },
+  {
+   "name": "iso week single digit week",
+   "type": "IsoWeek",
+   "format": "{yyyy}-W{ww}",
+   "value": "2026-W5",
+   "matches": true
+  },
+  {
+   "name": "iso week three-digit week",
+   "type": "IsoWeek",
+   "format": "{yyyy}-W{ww}",
+   "value": "2026-W123",
+   "matches": false
+  },
+  {
+   "name": "iso week two-digit year",
+   "type": "IsoWeek",
+   "format": "{yyyy}-W{ww}",
+   "value": "26-W35",
+   "matches": false
+  },
+  {
+   "name": "iso week leading space",
+   "type": "IsoWeek",
+   "format": "{yyyy}-W{ww}",
+   "value": " 2026-W35",
+   "matches": false
+  },
+  {
+   "name": "iso week trailing space",
+   "type": "IsoWeek",
+   "format": "{yyyy}-W{ww}",
+   "value": "2026-W35 ",
+   "matches": false
+  },
+  {
+   "name": "iso week empty",
+   "type": "IsoWeek",
+   "format": "{yyyy}-W{ww}",
+   "value": "",
+   "matches": false
+  },
+  {
+   "name": "iso week without separator format",
+   "type": "IsoWeek",
+   "format": "{yyyy}-{ww}",
+   "value": "2026-35",
+   "matches": true
+  },
+  {
+   "name": "iso week without separator format rejects the W",
+   "type": "IsoWeek",
+   "format": "{yyyy}-{ww}",
+   "value": "2026-W35",
+   "matches": false
+  },
+  {
+   "name": "iso week joined format",
+   "type": "IsoWeek",
+   "format": "{yyyy}{ww}",
+   "value": "202635",
+   "matches": true
+  },
+  {
+   "name": "iso week plus sign is literal",
+   "type": "IsoWeek",
+   "format": "{yyyy}+{ww}",
+   "value": "2026+35",
+   "matches": true
+  },
+  {
+   "name": "iso week plus sign is not a quantifier",
+   "type": "IsoWeek",
+   "format": "{yyyy}+{ww}",
+   "value": "2026035",
+   "matches": false
+  },
+  {
+   "name": "date standard",
+   "type": "Date",
+   "format": "{yyyy}-{mm}-{dd}",
+   "value": "2026-08-28",
+   "matches": true
+  },
+  {
+   "name": "date single digits",
+   "type": "Date",
+   "format": "{yyyy}-{mm}-{dd}",
+   "value": "2026-8-5",
+   "matches": true
+  },
+  {
+   "name": "date german value against the standard format",
+   "type": "Date",
+   "format": "{yyyy}-{mm}-{dd}",
+   "value": "28.08.2026",
+   "matches": false
+  },
+  {
+   "name": "date german format",
+   "type": "Date",
+   "format": "{dd}.{mm}.{yyyy}",
+   "value": "28.08.2026",
+   "matches": true
+  },
+  {
+   "name": "date german format rejects slashes",
+   "type": "Date",
+   "format": "{dd}.{mm}.{yyyy}",
+   "value": "28/08/2026",
+   "matches": false
+  },
+  {
+   "name": "date dot is literal, not any character",
+   "type": "Date",
+   "format": "{dd}.{mm}.{yyyy}",
+   "value": "28x08x2026",
+   "matches": false
+  },
+  {
+   "name": "date compact format",
+   "type": "Date",
+   "format": "{yyyy}{mm}{dd}",
+   "value": "20260828",
+   "matches": true
+  },
+  {
+   "name": "date compact format with single digits",
+   "type": "Date",
+   "format": "{yyyy}{mm}{dd}",
+   "value": "2026828",
+   "matches": true
+  },
+  {
+   "name": "date compact format with too many digits",
+   "type": "Date",
+   "format": "{yyyy}{mm}{dd}",
+   "value": "202608281",
+   "matches": false
+  },
+  {
+   "name": "date brackets are literal",
+   "type": "Date",
+   "format": "[{yyyy}]({mm}/{dd})",
+   "value": "[2026](08/28)",
+   "matches": true
+  },
+  {
+   "name": "date a month above 12 still matches the pattern",
+   "type": "Date",
+   "format": "{yyyy}-{mm}-{dd}",
+   "value": "2026-13-45",
+   "matches": true
+  },
+  {
+   "name": "date empty",
+   "type": "Date",
+   "format": "{yyyy}-{mm}-{dd}",
+   "value": "",
+   "matches": false
+  }
+ ]
+}
