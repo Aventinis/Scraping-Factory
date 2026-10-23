@@ -4,6 +4,7 @@
 // of init()).
 global.chrome = global.chrome || { storage: { local: { get: (k, cb) => cb({}), set: (o, cb) => cb && cb() } } };
 const { initI18n } = require('../i18n/i18n');
+const { loadVectors } = require('../../test-vectors/load');
 beforeAll(() => initI18n('de-DE'));
 
 const {
@@ -1315,30 +1316,19 @@ describe('buildScrapingConfig (output blueprint, container/api-tree mode, Issue 
 });
 
 // ── sanitizeFileNameBase ─────────────────────────────────────────────────────
-// Mirrors the companion's FileNameSanitizer (see popup.js) so the actual
-// downloaded filename always matches what the generated script's own
-// "# Run: python X.py" comment says, for the same raw input.
+// Must reach the same name as the companion's FileNameSanitizer for the same
+// raw input (the downloaded file name vs. the script's "# Run: python X.py"
+// comment). Both sides run test-vectors/file-name-sanitizer.json
+// (FileNameSanitizerTests.cs is the C# half).
 
-describe('sanitizeFileNameBase', () => {
-  test('falls back for empty/whitespace-only input', () => {
-    expect(sanitizeFileNameBase('', 'scraper')).toBe('scraper');
-    expect(sanitizeFileNameBase('   ', 'scraper')).toBe('scraper');
-    expect(sanitizeFileNameBase(null, 'scraper')).toBe('scraper');
+describe('sanitizeFileNameBase (shared vectors)', () => {
+  const { cases } = loadVectors('file-name-sanitizer.json');
+  test.each(cases.map((c) => [c.name, c]))('%s', (_name, c) => {
+    expect(sanitizeFileNameBase(c.input, c.fallback)).toBe(c.expected);
+  });
+
+  test('undefined input falls back like null', () => {
     expect(sanitizeFileNameBase(undefined, 'scraper')).toBe('scraper');
-  });
-
-  test('replaces path separators, spaces and other unsafe characters', () => {
-    expect(sanitizeFileNameBase('../../etc/passwd', 'output')).toBe('etc_passwd');
-    expect(sanitizeFileNameBase('my scraper!', 'scraper')).toBe('my_scraper');
-    expect(sanitizeFileNameBase('a"b\'c', 'output')).toBe('a_b_c');
-  });
-
-  test('keeps letters, digits, underscore and hyphen as-is', () => {
-    expect(sanitizeFileNameBase('my-scraper_v2', 'scraper')).toBe('my-scraper_v2');
-  });
-
-  test('falls back when every character is invalid', () => {
-    expect(sanitizeFileNameBase('///', 'output')).toBe('output');
   });
 });
 

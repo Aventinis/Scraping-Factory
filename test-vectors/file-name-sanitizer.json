@@ -1,0 +1,125 @@
+{
+  "description": "Issue #388: FileNameSanitizer (C#) and sanitizeFileNameBase (extension) must reach the same name for the same raw input - the companion never reports back which name it used.",
+  "cases": [
+    {
+      "name": "null input falls back",
+      "input": null,
+      "fallback": "fallback",
+      "expected": "fallback"
+    },
+    {
+      "name": "empty falls back",
+      "input": "",
+      "fallback": "fallback",
+      "expected": "fallback"
+    },
+    {
+      "name": "spaces only fall back",
+      "input": "   ",
+      "fallback": "fallback",
+      "expected": "fallback"
+    },
+    {
+      "name": "tab and newline only fall back",
+      "input": "\t\n ",
+      "fallback": "fallback",
+      "expected": "fallback"
+    },
+    {
+      "name": "path traversal collapses",
+      "input": "../../etc/passwd",
+      "fallback": "fallback",
+      "expected": "etc_passwd"
+    },
+    {
+      "name": "windows path separators",
+      "input": "C:\\Users\\me\\file",
+      "fallback": "fallback",
+      "expected": "C_Users_me_file"
+    },
+    {
+      "name": "spaces and bang",
+      "input": "my scraper!",
+      "fallback": "fallback",
+      "expected": "my_scraper"
+    },
+    {
+      "name": "quotes",
+      "input": "a\"b'c",
+      "fallback": "fallback",
+      "expected": "a_b_c"
+    },
+    {
+      "name": "allowed characters stay",
+      "input": "my-scraper_v2",
+      "fallback": "fallback",
+      "expected": "my-scraper_v2"
+    },
+    {
+      "name": "everything stripped (slashes)",
+      "input": "///",
+      "fallback": "fallback",
+      "expected": "fallback"
+    },
+    {
+      "name": "everything stripped (dots)",
+      "input": "...",
+      "fallback": "fallback",
+      "expected": "fallback"
+    },
+    {
+      "name": "leading and trailing separators are trimmed",
+      "input": "--_name_--",
+      "fallback": "fallback",
+      "expected": "name"
+    },
+    {
+      "name": "only separators fall back",
+      "input": "_-_-",
+      "fallback": "fallback",
+      "expected": "fallback"
+    },
+    {
+      "name": "surrounding whitespace is trimmed first",
+      "input": "  report  ",
+      "fallback": "fallback",
+      "expected": "report"
+    },
+    {
+      "name": "runs of invalid characters collapse to one underscore",
+      "input": "a   b///c",
+      "fallback": "fallback",
+      "expected": "a_b_c"
+    },
+    {
+      "name": "umlauts are replaced",
+      "input": "Müller Preise",
+      "fallback": "fallback",
+      "expected": "M_ller_Preise"
+    },
+    {
+      "name": "digits are kept",
+      "input": "2026-08-28",
+      "fallback": "fallback",
+      "expected": "2026-08-28"
+    },
+    {
+      "name": "script extension is not special",
+      "input": "scraper.py",
+      "fallback": "fallback",
+      "expected": "scraper_py"
+    },
+    {
+      "name": "emoji collapses to one underscore",
+      "input": "a😀b",
+      "fallback": "fallback",
+      "expected": "a_b"
+    },
+    {
+      "name": "custom fallback",
+      "input": "",
+      "fallback": "output",
+      "expected": "output"
+    }
+  ]
+}
