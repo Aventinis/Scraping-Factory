@@ -1,5 +1,5 @@
 // Issue #400: DOM side of the two transform-editor helpers (logic in
-// transform-helpers.js) — the regex "Pattern helper" panel under a "Regex extract"
+// transform-helpers.ts) — the regex "Pattern helper" panel under a "Regex extract"
 // row, and the date-format hint under a "Convert to date" row. Used by
 // field-transforms-ui.js for all three modes' transform modals.
 //

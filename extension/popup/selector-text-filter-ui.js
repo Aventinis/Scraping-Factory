@@ -1,6 +1,6 @@
 // The optional "text contains" input of the field modals (Issue #227) — flat
 // mode's modal-field-name and container mode's modal-field-extended share it
-// (see selector-text-filter.js for the pure helpers). Picking a button by its
+// (see selector-text-filter.ts for the pure helpers). Picking a button by its
 // label is the one thing a clicked CSS selector can't express, so the modals
 // offer one extra input: the text the element must contain. Left empty, the
 // pick's selector is used exactly as before; filled in, `:contains("…")` is

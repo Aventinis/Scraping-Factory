@@ -1,5 +1,5 @@
 // Issue #354 Part B: "Learn more" links that open the bundled documentation
-// (see docs-links.js for the key → page table). Markup:
+// (see docs-links.ts for the key → page table). Markup:
 //
 //   <a class="learn-more" data-doc="monitoring" href="#" data-i18n="common.learnMore"></a>
 //

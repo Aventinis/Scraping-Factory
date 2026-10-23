@@ -102,7 +102,7 @@ docs/
 - User-facing strings exist in `extension/i18n/{de,en,es}.json` and are always changed together. Name a UI element in docs and PRs by its `en.json` value.
 - A hint under a control is one line (`hint-length.test.js` caps it at 160/190/200 characters in en/de/es). Longer explanations go behind a "?" help popover (`help.<area>.<field>` in the three dictionaries) or into `docs/user/`, with a "Learn more" link registered in `popup/docs-links.js`.
 - A failed Generate is shown in plain language through `popup/error-messages.js` (pattern → title and hint); the raw text stays behind "Details".
-- `// @ts-check` JSDoc types (`types/companion-ir.d.ts` = `SFWire`, `types/popup-drafts.d.ts` = `SFDraft`) are functional: keep them, run `npm run typecheck`.
+- The extension is being migrated to TypeScript file by file (Issue #394; the remaining `.js` files are the open sub-issues). **Write new modules as `.ts`** (`strict` is on); convert a file by renaming it, turning its JSDoc types into inline types and dropping the `// @ts-check` pragma. A not-yet-migrated `.js` file keeps its `// @ts-check` JSDoc types (`types/companion-ir.d.ts` = `SFWire`, `types/popup-drafts.d.ts` = `SFDraft`): keep them. `.ts` and `.js` import each other freely (esbuild bundles both; Jest compiles `.ts` through `extension/jest-transform.js`), but a script run by plain Node (`build.js`, `docs-build.js`) cannot load a `.ts` file. Tests stay `*.test.js`. Run `npm run typecheck`.
 
 **Tests and documentation**
 - `dotnet test companion/ScrapingFactory.sln`, `cd extension && npx jest`, `npm run typecheck`. A feature that runs inside the generated script gets a real end-to-end test that executes the script (the black-box trial run cannot tell many things apart). Anything user-visible also gets a real-browser check in `e2e/examples/` (see `e2e/README.md`).
@@ -113,7 +113,7 @@ docs/
 Comments answer what the code cannot: a non-obvious *why*, a constraint, a trap, or a pointer to the one document that explains the design.
 
 - **Models and DTOs** (`IR/*.cs`, the `.d.ts` files, draft shapes): at most one line per property, and only where the name and type do not already say it. Validation rules, which modes allow it and why a default is what it is belong in `docs/design-notes/`. A short class-level summary with a pointer is fine.
-- **Functions**: a doc comment only for a non-obvious contract (units, what `null` means, ordering, side effects). Do not restate the name. JSDoc `@param`/`@returns` in `// @ts-check` files are types — keep them.
+- **Functions**: a doc comment only for a non-obvious contract (units, what `null` means, ordering, side effects). Do not restate the name. JSDoc `@param`/`@returns` in a `// @ts-check` `.js` file are types — keep them; in a `.ts` file they are redundant and go.
 - **Issue numbers**: keep one where it saves a search (a workaround for a specific bug, a deliberate deviation). Do not use them to date code; history is `git log` and the pull requests.
 - **Rationale lives once**, in `docs/design-notes/` (feature behavior) or in Architecture Decisions here (cross-cutting) — not repeated at each call site. When a comment you are trimming holds a design explanation that is not in the docs yet, move it there first.
 - **Templates**: comments that never reach the output (Scriban `{{~ ~}}` blocks, `#` lines before rendering) are ordinary code comments. Comments rendered into the generated script are product text: keep them accurate and useful for the end user, and change them only on purpose, with the snapshots updated.

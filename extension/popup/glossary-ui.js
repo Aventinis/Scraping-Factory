@@ -1,4 +1,4 @@
-// Issue #407: renders the glossary list (glossary.js) into the Settings screen.
+// Issue #407: renders the glossary list (glossary.ts) into the Settings screen.
 // Plain DOM built with textContent — the texts are translations, but a
 // translation must never be able to inject markup.
 const { t } = require('../i18n/i18n');

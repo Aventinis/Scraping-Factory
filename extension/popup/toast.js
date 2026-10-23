@@ -57,7 +57,7 @@ function showToast(message, context, variant) {
   scheduleHide(toast, context ? 8000 : 4000);
 }
 
-// Issue #401: a failure the plain-language mapping recognised (error-messages.js)
+// Issue #401: a failure the plain-language mapping recognised (error-messages.ts)
 // — the title and hint say what happened and what to try, the companion's/script's
 // original text stays available behind "Details" (copyable) and is what "Report
 // bug" sends. Such a toast stays until closed: "Details" is useless on a toast

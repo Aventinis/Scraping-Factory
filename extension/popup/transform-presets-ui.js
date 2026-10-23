@@ -2,7 +2,7 @@
 // wrappers, the "Apply preset… / Save as preset" controls shown under each
 // of the three transform editors (flat field modal, container field modal,
 // API field-transforms modal), and the preset management section on the
-// Settings screen. Pure logic lives in transform-presets.js. Every function
+// Settings screen. Pure logic lives in transform-presets.ts. Every function
 // touching state takes popup.js's `bridge` (Architecture Decision #12).
 //
 // State owned here:

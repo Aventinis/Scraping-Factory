@@ -560,8 +560,8 @@ reads the same data, so changing only one side fails. The shared data lives in `
 | robots.txt matching | `evaluateRobotsTxt` (`content-script.js`) | `fragments/robots_disallow.py.j2` | `robots.json` — `robots-vectors.test.js`, `RobotsVectorTests.cs` |
 | Range formats | `compileRangeFormatPattern` (`api-config.js`) | `Backends/Python/RangeFormat.cs`, `fragments/api_common.py.j2` | `range-format.json`, `range-expansion.json` — `range-format-vectors.test.js`, `RangeFormatVectorTests.cs` |
 | URL-template matching | `findUrlTemplateMatches` (`api-config.js`) | `_match_url_against_template` (`fragments/api_common.py.j2`) | `url-template.json` — `url-template-vectors.test.js`, `UrlTemplateVectorTests.cs` |
-| `:contains("…")` split | `selector-text-filter.js`, `content-script.js` | `IR/SelectorTextFilter.cs`, `fragments/text_selector_common.py.j2` | `text-selector.json` — both JS tests, `SelectorTextFilterTests.cs` |
-| Environment-variable names | `env-var.js` | `ScrapingPlanValidator` | `env-var-name.json` — `env-var.test.js`, `EnvVarNameVectorTests.cs` |
+| `:contains("…")` split | `selector-text-filter.ts`, `content-script.js` | `IR/SelectorTextFilter.cs`, `fragments/text_selector_common.py.j2` | `text-selector.json` — both JS tests, `SelectorTextFilterTests.cs` |
+| Environment-variable names | `env-var.ts` | `ScrapingPlanValidator` | `env-var-name.json` — `env-var.test.js`, `EnvVarNameVectorTests.cs` |
 | The request body | `buildScrapingConfig` and the draft builders | `IR/ScrapingConfig.cs` and `/generate` | `test-vectors/wire/*.json` — `wire-fixtures.test.js` writes/verifies, `WireFixtureTests.cs` deserializes strictly and calls `/generate` |
 | TypeScript wire types | `types/companion-ir.d.ts` | `IR/*.cs` | `IrTypeDeclarationTests.cs` (reflection: property names, required-ness, enum unions) |
 
@@ -1496,7 +1496,7 @@ carries it per component only.
   `output_tabular.py.j2`
 - Extension: `scraping-config-builder.js` (`appendOutput` option),
   `config-import.js`, `session-restore.js`, `settings-panel-ui.js`,
-  `#toggle-append-output` in `screens/idle.html`; `dedup-config.js` lost its
+  `#toggle-append-output` in `screens/idle.html`; `dedup-config.ts` lost its
   tree-shape Append restriction
 - Tests: `AppendOutputTests.cs`, `AppendOutputEndpointTests.cs`,
   `extension/popup/append-output.test.js`,
@@ -1549,7 +1549,7 @@ repeating group instance that owns every key field.
   `fragments/dedup_{common,flat,tree}.py.j2` right before `main()`
   (`_dedup_filter_rows`/`_dedup_new_rows` for the flat shapes,
   `_dedup_register_instance`/`_dedup_delta_tree` for the tree shapes)
-- Extension: `dedup-config.js` (pure) + `dedup-config-ui.js`
+- Extension: `dedup-config.ts` (pure) + `dedup-config-ui.js`
   (`renderDedupSection`/`wireDedupEvents`), `scraping-config-builder.js`
   (`deduplication` option), `config-import.js`,
   `session-restore.js`, `#toggle-dedup`/`#dedup-config` in
@@ -1601,7 +1601,7 @@ Playwright's `extra_http_headers` (every request of the page) and
 - Fragments: `request_headers_static`, `request_headers_playwright`,
   `require_env_function`; the static/Browser templates and the Browser-engine
   `preflight_playwright`/`discovered_urls_playwright` fragments use them
-- Extension: `request-headers.js` (pure) + `request-headers-ui.js`
+- Extension: `request-headers.ts` (pure) + `request-headers-ui.js`
   (`renderRequestHeadersSection`/`wireRequestHeadersEvents`),
   `scraping-config-builder.js` (`requestHeaders` option),
   `companion-client.js` (test values → `verificationValues`),

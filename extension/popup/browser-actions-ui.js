@@ -15,7 +15,7 @@ const { addBrowserAction, removeBrowserAction, updateBrowserAction, frameBadgeHt
 
 // One card per action, its kind fixed at creation (there is no "change the kind" control). A card made by the "Login form" starter carries a
 // UI-only `role` (user / password / submit / loggedIn) that only changes wording; times are shown in seconds (stored as milliseconds, see
-// login-flow.js); rarely needed options sit under a remembered "Advanced" disclosure.
+// login-flow.ts); rarely needed options sit under a remembered "Advanced" disclosure.
 function renderBrowserActions(actions, testValues) {
   const container = document.getElementById('browser-actions-list');
   if (!container) return;

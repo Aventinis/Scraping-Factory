@@ -131,7 +131,7 @@ function nextOpenHelpId(openId, requestedId) {
  */
 /**
  * @param {string} key help key
- * @param {string} [docKey] optional "Learn more" key (docs-links.js)
+ * @param {string} [docKey] optional "Learn more" key (docs-links.ts)
  */
 function helpHostHtml(key, docKey) {
   const doc = docKey ? ` data-doc="${String(docKey).replace(/"/g, '&quot;')}"` : '';

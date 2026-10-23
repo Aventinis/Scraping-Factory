@@ -116,7 +116,7 @@ const { BOOTSTRAP_SOURCE_KIND, buildApiBootstrap, bootstrapDraftIsComplete } = r
 // Issue #224: same split — the cursor-pagination draft→wire/validity logic
 // lives in api-cursor-pagination.js (loaded before this file).
 const { buildApiCursorPagination, cursorDraftIsComplete } = require('./api-cursor-pagination');
-// Issue #321: same split for Link-header pagination (api-link-pagination.js).
+// Issue #321: same split for Link-header pagination (api-link-pagination.ts).
 const { buildApiLinkHeaderPagination, linkDraftIsComplete } = require('./api-link-pagination');
 const { t } = require('../i18n/i18n');
 

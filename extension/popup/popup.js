@@ -248,11 +248,11 @@ let _state = {
   retry: { enabled: false, maxAttemptsText: '3', delaySecondsText: '2', exponential: true, statusCodesText: '429, 502, 503, 504' },
   // Issue #225: opt-in deduplication by key field(s) and, optionally,
   // incremental "only new items" output — persisted like retry (real
-  // scrape-target configuration), see dedup-config.js.
+  // scrape-target configuration), see dedup-config.ts.
   deduplication: createDefaultDeduplication(),
   // Issue #226: custom request headers for flat/container/Blocks mode —
   // persisted like retry (real scrape-target configuration), see
-  // request-headers.js. The one-time test values for env-var-backed rows
+  // request-headers.ts. The one-time test values for env-var-backed rows
   // live in requestHeaderTestValues instead: memory only, never persisted —
   // like fillTestValues (see buildHeaderVerificationValues).
   requestHeaders: createDefaultRequestHeaders(),
