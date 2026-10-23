@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.1](https://github.com/Aventinis/Scraping-Factory/compare/v1.20.0...v1.20.1) (2026-10-23)
+
+
+### Bug Fixes
+
+* **selection:** name every pick and let the panel mark it handled, so a late service-worker write is not replayed ([#429](https://github.com/Aventinis/Scraping-Factory/issues/429)) ([4b39cf4](https://github.com/Aventinis/Scraping-Factory/commit/4b39cf4ef23cdf5e8c390a1e4d1ff37839ddf4f1))
+
 ## [1.20.0](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.22...v1.20.0) (2026-10-23)
 
 
