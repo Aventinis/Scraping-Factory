@@ -512,6 +512,33 @@ clear error message instead of a silently broken download.
   `Backends/ScriptVerificationResult.cs`, `Backends/IScriptVerifier.cs`,
   `Program.cs` (the `/generate` handler's verify-then-respond logic)
 
+### 2.7a Generated-script snapshot tests (Issue #386)
+
+Golden files pin the exact text of every generated script, so a change to a
+template, a fragment or a code generator is visible as a diff instead of being
+discovered by users. This is also the safety net for refactoring the templates
+(Issue #395): sharing code between them must leave every snapshot untouched.
+
+- `companion/ScrapingFactory.Tests/SnapshotCases.cs` (base shapes, `All`, `Add`),
+  `SnapshotCases.Features.cs` (static/browser flat and container features),
+  `SnapshotCases.Api.cs` (API, Blocks, Combined, interaction cases) — a case is
+  named wire-format JSON, built from a base shape plus a patch; its id is the
+  snapshot file name
+- `ScriptSnapshotTests.cs` — renders each case via the real `POST /generate`
+  (`skipVerification`, no Python run) and compares byte for byte; also checks for
+  orphan snapshot files and that rendering is deterministic
+- `SnapshotSupport.cs` — paths, line-ending normalization, update mode
+  (`UPDATE_SNAPSHOTS=1`), the failure message
+- `SnapshotCoverageTests.cs` — cases may only use properties the IR knows; every
+  settable IR property appears in some case or in the documented `NotRendered`
+  list; no machine-specific content
+- `companion/ScrapingFactory.Tests/Snapshots/*.py` — the golden files;
+  `.gitattributes` keeps them LF
+
+Update with `UPDATE_SNAPSHOTS=1 dotnet test companion/ScrapingFactory.sln --filter Snapshot`
+and review the diff. Template context keys are not checked separately; the IR
+property check is the proxy for "every option reaches a template".
+
 ### 2.8 Trial-run data preview (Issue #122)
 
 An opt-in checkbox that lets the user see a capped sample (up to 50 rows/elements)

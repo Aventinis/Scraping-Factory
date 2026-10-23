@@ -1,0 +1,2 @@
+# Generated-script snapshots (Issue #386) are compared byte for byte; keep their line endings as they are.
+companion/ScrapingFactory.Tests/Snapshots/*.py -text eol=lf

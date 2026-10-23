@@ -447,6 +447,19 @@ Originally tracked as "v1 scope (MVP)" — the MVP has been reached since v1.0.0
 
 - **Additional target languages** besides Python (Issue #176 — the architecture is already designed for this, see "Project Overview")
 
+## Generated-script snapshot tests (Issue #386)
+
+Every generated script is pinned by a golden file: `companion/ScrapingFactory.Tests/Snapshots/<case>.py`, one per named configuration in `SnapshotCases*.cs` (Static/Browser/API × flat/container/API tree/Blocks/Combined × every feature that changes the script, plus combinations that touch the same template regions). `ScriptSnapshotTests` renders each case through the real `POST /generate` with `skipVerification: true` — the whole pipeline (validation, plan building, Combined/Blocks orchestration, templates) is exercised, but nothing is run: no Python, no network — and compares the result **byte for byte** (CRLF is normalized; `.gitattributes` keeps the files LF). They run in the normal `dotnet test`.
+
+**A template, fragment or code-generator change that alters a script fails these tests on purpose.** If the change is intended, accept it and review the diff of the changed snapshot files like any other code change:
+
+```bash
+UPDATE_SNAPSHOTS=1 dotnet test companion/ScrapingFactory.sln --filter Snapshot
+git diff companion/ScrapingFactory.Tests/Snapshots/
+```
+
+A refactoring that must not change behavior (e.g. sharing template code, Issue #395) is proven by **no** snapshot changing. Update mode also deletes snapshot files whose case no longer exists. On a mismatch the failure message shows the first differing line, writes the full actual script to `$TMP/sf-snapshot-actual/<case>.py` and prints a `diff` command. Cases are wire-format JSON (what the extension sends); add one by registering it in the matching `Register*` method. `SnapshotCoverageTests` keeps the matrix honest: a case may not use a property the IR doesn't know, every settable IR property must appear in some case (or be listed in `NotRendered` with a reason), and snapshots may not contain machine-specific paths or names. Generated output must stay deterministic — no timestamps, random values or absolute paths.
+
 ## Consistency Rule
 
 The companion app doesn't just verify at the same rendering stage as the generated script anymore — before delivery, it runs the exact generated script once as a trial (`Backends/Python/PythonScriptVerifier`: write the script to a temporary directory, run it via a `python3`/`python` subprocess, check the exit code and `output.csv`). This rules out any discrepancy between verification and the generated script (encoding, selector compatibility, network errors, runtime errors), and is why a separate Playwright- or AngleSharp-based verification path was rejected: it could only ever have approximated real script behavior.
