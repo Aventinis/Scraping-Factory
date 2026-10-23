@@ -9,7 +9,7 @@ const log = createLogger('SF:Popup');
 
 const { t } = require('../i18n/i18n');
 
-const { sanitizeFileNameBase, buildConfigExport } = require('./scraping-config-builder');
+const { sanitizeFileNameBase, buildConfigExport, configOptionsFromState } = require('./scraping-config-builder');
 
 const { resolveCombinedComponents } = require('./companion-client');
 
@@ -99,14 +99,7 @@ async function downloadConfigExport(bridge) {
   // (shared/global-settings.js) — read from there now, same as generate().
   const globalSettings = getGlobalSettings();
   const exportObj = buildConfigExport(
-    state.url, state.mode, state.fields, state.groups, manifest, state.apiConfig,
-    state.scriptFileName, state.outputFileName, state.engine, state.browserActions, globalSettings.includeDataPreview,
-    globalSettings.outputFormat, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
-    state.pagination, state.persistentSession, false, globalSettings.externalConfig, combinedComponents, state.blocks,
-    state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
-    state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
-    state.discoveredUrls, state.preflight, state.requestDelay, state.retry, state.deduplication, state.requestHeaders, state.respectRobotsDelay, globalSettings.skipVerification, state.robotsDisallow, state.appendOutput,
-  );
+    configOptionsFromState(state, globalSettings, { manifest, combinedComponents, includeOutputFile: false }));
   log('DOWNLOAD scraping-config.json', exportObj);
 
   const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });

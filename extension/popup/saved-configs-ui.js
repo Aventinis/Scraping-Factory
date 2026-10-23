@@ -15,7 +15,7 @@ const { STATES, escapeHtml } = require('./api-config');
 
 const { showToast } = require('./toast');
 
-const { buildScrapingConfig, buildHardeningConfig } = require('./scraping-config-builder');
+const { buildScrapingConfig, buildHardeningConfig, configOptionsFromState } = require('./scraping-config-builder');
 
 const { downloadFile } = require('./download-helpers');
 
@@ -245,15 +245,7 @@ async function createSavedConfig(bridge, name) {
   // Settings tab (shared/global-settings.js) — read from there now, same as
   // every other buildScrapingConfig/buildConfigExport call site.
   const globalSettings = getGlobalSettings();
-  const config = buildScrapingConfig(
-    state.url, state.mode, state.fields, state.groups, state.apiConfig,
-    state.scriptFileName, state.outputFileName, state.engine, state.browserActions, globalSettings.includeDataPreview,
-    globalSettings.outputFormat, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
-    state.pagination, state.persistentSession, false, globalSettings.externalConfig, combinedComponents, state.blocks,
-    state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
-    state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
-    state.discoveredUrls, state.preflight, state.requestDelay, state.retry, state.deduplication, state.requestHeaders, state.respectRobotsDelay, globalSettings.skipVerification, state.robotsDisallow, state.appendOutput,
-  );
+  const config = buildScrapingConfig(configOptionsFromState(state, globalSettings, { combinedComponents, includeOutputFile: false }));
   const res = await companionFetch(`${getResolvedCompanionUrl()}/configs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

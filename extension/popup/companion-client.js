@@ -13,7 +13,7 @@ const { STATES } = require('./api-config');
 
 const { showToast, showErrorToast, hideToast, setLastError } = require('./toast');
 
-const { buildScrapingConfig, buildVerificationValues, computeScriptFileNamePatch } =
+const { buildScrapingConfig, buildVerificationValues, computeScriptFileNamePatch, configOptionsFromState } =
   require('./scraping-config-builder');
 
 const { buildHeaderVerificationValues } = require('./request-headers');
@@ -226,15 +226,7 @@ async function generate(bridge) {
   // externalConfig moved from per-scrape _state to the cross-session global
   // Settings tab (shared/global-settings.js) — read from there now.
   const globalSettings = getGlobalSettings();
-  const config = buildScrapingConfig(
-    state.url, state.mode, state.fields, state.groups, state.apiConfig,
-    state.scriptFileName, state.outputFileName, state.engine, state.browserActions, globalSettings.includeDataPreview,
-    globalSettings.outputFormat, state.additionalStartUrls, state.changeDetection, state.proxy, state.hardening,
-    state.pagination, state.persistentSession, globalSettings.includeOutputFile, globalSettings.externalConfig, combinedComponents,
-    state.blocks, state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
-    state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
-    state.discoveredUrls, state.preflight, state.requestDelay, state.retry, state.deduplication, state.requestHeaders, state.respectRobotsDelay, globalSettings.skipVerification, state.robotsDisallow, state.appendOutput,
-  );
+  const config = buildScrapingConfig(configOptionsFromState(state, globalSettings, { combinedComponents }));
   // One-time test values (Fill, bootstrap, request headers) go only in this request body, deliberately out of `config` and so
   // out of the log line, the export and bug reports. A bad environment-variable name is reported up front, naming it.
   const invalidEnvVars = findInvalidEnvVarNames(config);
