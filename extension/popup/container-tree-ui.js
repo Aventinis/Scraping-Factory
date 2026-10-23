@@ -334,21 +334,9 @@ function refreshExtendedTransformPreview(bridge) {
   renderTransformPreview('field-extended-transform-preview', resolveExtendedRawValue(state), state.pendingTransforms);
 }
 
-// Called from popup.js's render() once it's determined the confirmed-
-// selection modal is container mode's own (STATES.SELECTING + a pending
-// selector + mode === 'container'). `isNewPick` distinguishes an actual
-// closed→open transition (reset name/mode/focus) from a re-render
-// triggered by editing the transform chain (which must not wipe what's
-// already typed/chosen).
-// Issue #213 follow-up: populates the attribute picker with the actually-
-// clicked element's own attributes ("name: value preview" options)
-// instead of a free text field the user would otherwise need to
-// guess/inspect DevTools for — per CLAUDE.md's own "no programming
-// knowledge" target audience, typing a raw HTML attribute name blind
-// defeats the point of a visual tool. guessUrlAttribute (container-tree.js)
-// preselects whichever attribute looks most like a downloadable resource
-// URL, but every other attribute the element actually has is still listed
-// and pickable — the heuristic is a convenience default, not a hard gate.
+// Populates the attribute picker with the clicked element's own attributes ("name: value preview") instead of a free-text field:
+// typing an HTML attribute name blind defeats a visual tool. guessUrlAttribute preselects the likeliest resource URL; every
+// attribute stays pickable.
 function populateAttributeSelect(attributes) {
   const select = document.getElementById('select-field-attribute');
   if (!select) return;

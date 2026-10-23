@@ -1,34 +1,12 @@
-// Issue #141: reverses buildScrapingConfig's wire-format output back into a
-// _state patch — the "Laden" half of local saved-config history (see
-// popup.js's applyConfigImport / saved-configs panel). Split out of popup.js
-// the same way container-tree.js/api-config.js already are: a pure, DOM-free
-// module, no behavior beyond the mapping itself.
 // @ts-check
-// Issue #238: JSDoc-annotated and typechecked via `// @ts-check` + tsconfig
-// (`npm run typecheck`) — inputs are typed against types/companion-ir.d.ts's
-// `SFWire` namespace (the exact wire shape this module reverses), outputs
-// against types/popup-drafts.d.ts's `SFDraft` namespace for the
-// popup-internal draft shapes it reconstructs (`SFDraft.HardeningState`,
-// `SFDraft.OutputBlueprintTreeNode`, etc. — shared there, not a local
-// `@typedef` here, so scraping-config-builder.js's own JSDoc can reference
-// the same shapes this module reverses them from — see that file's own
-// top-of-file comment and types/popup-drafts.d.ts's). `applyConfigToState`'s
-// own return type is intentionally loose (`object`) — it's a `_state` patch
-// spanning every mode's own slice at once (mode/fields/groups/apiConfig/
-// combinedComponents/blocks/engine/...), and no single interface here would
-// usefully describe five mutually-exclusive branches without fighting
-// TypeScript's excess-property checks for little real benefit; its own
-// per-branch helpers (deserializeGroupTree, applyHardeningConfig, etc.) are
-// each typed precisely instead, which is where a real shape mismatch would
-// actually get caught.
+// Reverses buildScrapingConfig's wire output into a _state patch (the "Load" half of saved configurations). Pure and
+// DOM-free. Inputs are typed against SFWire, the reconstructed draft shapes against SFDraft. applyConfigToState returns a
+// loose `object`: it spans every mode's slice at once and no interface would describe the five exclusive branches; its
+// per-branch helpers are typed precisely.
 const { applyDeduplicationConfig } = require('./dedup-config');
 const { applyRequestHeadersConfig } = require('./request-headers');
 
-// Inverse of container-tree.js's FIELD_MODE_WIRE_NAMES — kept as its own
-// copy rather than importing that module, the same "small, hand-kept
-// mirror" tradeoff already made elsewhere in this codebase (e.g.
-// sanitizeFileNameBase vs. FileNameSanitizer) rather than adding a
-// cross-module dependency for four constant strings.
+// Inverse of container-tree.js's FIELD_MODE_WIRE_NAMES, kept as its own copy for four constants.
 /** @type {Record<SFWire.ExtractMode, string>} */
 const FIELD_MODE_INTERNAL_NAMES = { Text: 'text', Attribute: 'attribute', Exists: 'exists', OwnText: 'ownText' };
 
@@ -41,11 +19,8 @@ const FIELD_MODE_INTERNAL_NAMES = { Text: 'text', Attribute: 'attribute', Exists
  */
 function deserializeGroupTree(wireNodes) {
   return (wireNodes || []).map((node) => {
-    // Same structural discriminator the companion's own
-    // ContainerNodeJsonConverter uses (children present = group); a
-    // DataFieldNode's own type has none of GroupNode's fields (or vice
-    // versa) at all, so reading whichever one applies here goes through
-    // an `any` view rather than narrowing the union field by field.
+    // The structural discriminator of ContainerNodeJsonConverter (children present = group), read through an `any` view
+    // instead of narrowing the union field by field.
     const n = /** @type {any} */ (node);
     return Array.isArray(n.children)
       ? {
@@ -98,10 +73,7 @@ function deserializeBrowserActions(wireActions) {
   });
 }
 
-// Reverse of buildChangeDetectionConfig — wire is null (or absent) when
-// disabled; a present wire config's optional sub-fields (smtpPortEnvVar
-// etc.) may themselves be absent, so defaults are spread first and the
-// wire values written on top, never the other way round.
+// Reverse of buildChangeDetectionConfig; defaults are spread first and the wire values written on top.
 /**
  * @param {SFWire.ChangeDetectionConfig | null | undefined} wire
  * @returns {object}
@@ -183,11 +155,7 @@ function applyRetryConfig(wire) {
 function applyPaginationConfig(wire) {
   const defaults = { enabled: false, kind: 'nextLink', nextLinkSelector: '', urlTemplate: '', maxPages: 50 };
   if (!wire) return defaults;
-  // Cross-branch field access (a NextLinkPagination has no urlTemplate,
-  // a PageNumberPagination has no nextLinkSelector) — reading both
-  // unconditionally and keeping only the relevant one (via `kind` below)
-  // is simpler than narrowing twice, so this one spot reads through an
-  // `any` cast rather than fighting the union.
+  // Reads both branches' fields through an `any` cast and keeps the one `kind` selects.
   const w = /** @type {any} */ (wire);
   return {
     enabled: true,
@@ -216,11 +184,8 @@ function applyDiscoveredUrlsConfig(wire) {
   };
 }
 
-// Reverse of buildHardeningConfig — wire is a flat list of `{kind, ...}`
-// checks (or null/absent); each kind writes into its own slot of the
-// nested per-check state shape (see _state.hardening's own doc comment),
-// converting the wire's 0.0-1.0 fraction back to a 0-100 whole percent for
-// the UI, the exact inverse of buildHardeningConfig's own `/ 100`.
+// Reverse of buildHardeningConfig: each wire kind goes into its slot of _state.hardening; the 0.0-1.0 fraction becomes
+// a whole percent again.
 /**
  * @param {SFWire.HardeningCheck[] | null | undefined} wire
  * @returns {SFDraft.HardeningState}
@@ -256,15 +221,8 @@ function applyHardeningConfig(wire) {
   return result;
 }
 
-// Reverse of buildOutputBlueprintMapping — wire is null (or absent) when
-// no blueprint was mapped. Unlike the fetch-based selectOutputBlueprint
-// (output-blueprints-ui.js), neither shape needs a round trip back to the
-// companion here: the wire mapping's own `fields` (Flat) or `tree` (Tree)
-// already carries everything needed to reproduce the picker's own state
-// — Issue #244's tree shape reuses createTreeMappingDraft/
-// updateTreeMappingSource's own path-keyed draft convention, walking the
-// wire tree and the (structurally identical, since it was built FROM that
-// tree) draft in lockstep.
+// Reverse of buildOutputBlueprintMapping. No round trip to the companion is needed: the wire mapping carries the whole
+// target list / tree; a tree is walked in lockstep with its path-keyed draft (createTreeMappingDraft).
 /** @type {{selectedOutputBlueprintId: string, selectedOutputBlueprintFieldNames: string[], outputBlueprintMapping: Record<string, string>, selectedOutputBlueprintSchemaKind: SFWire.OutputBlueprintSchemaKind, selectedOutputBlueprintTree: SFDraft.OutputBlueprintTreeNode[], outputBlueprintTreeMapping: Record<string, string>}} */
 const EMPTY_OUTPUT_BLUEPRINT_STATE = {
   selectedOutputBlueprintId: '', selectedOutputBlueprintFieldNames: [], outputBlueprintMapping: {},
@@ -333,31 +291,16 @@ function applyOutputBlueprintConfig(wire) {
   };
 }
 
-// The one entry point: takes a wire-format ScrapingConfig (the exact
-// shape buildScrapingConfig produces, and /generate's request body itself
-// — see buildConfigExport's own `config` field) and returns a full
-// setState patch reproducing it. Deliberately does NOT include `url` —
-// the current browser tab's URL stays authoritative (see popup.js's
-// loadSavedConfig), so a loaded config only ever replaces the extraction
-// setup/settings, never navigates the popup away from the page it's
-// actually looking at.
+// The entry point: a wire ScrapingConfig (buildScrapingConfig's output) in, a full setState patch out. It never includes
+// `url`: the live tab's URL stays authoritative, so loading only replaces the extraction setup and settings.
 /**
  * @param {SFWire.ScrapingConfig} config
  * @returns {object}
  */
 function applyConfigToState(config) {
-  // Issue #239: Combined mode has none of Fields/Groups/Api/engine/
-  // browserActions/changeDetection/proxy/pagination/hardening/
-  // persistentSession of its own (the companion rejects all of those at
-  // this outer level) — reloading one only ever restores
-  // combinedComponents (each entry's own full config lives in its own,
-  // separately-saved configuration, resolved live at generate/save/export
-  // time, never re-imported into ad-hoc fields/groups/apiConfig here).
-  // Issue-driven follow-up: outputAsJson/includeDataPreview/
-  // includeOutputFile/externalConfig are no longer part of this patch at
-  // all — they're cross-session global preferences now (shared/
-  // global-settings.js), so loading a saved/exported config must not
-  // touch them.
+  // Combined mode only restores combinedComponents (each component's config is resolved live from its own saved
+  // configuration). The cross-session global preferences (JSON output, preview, full file, external config) are never part
+  // of this patch: loading a config must not change them.
   if (config.combined) {
     return {
       mode: 'combined',
@@ -388,15 +331,9 @@ function applyConfigToState(config) {
     };
   }
 
-  // Issue #182: Blocks mode has no ad-hoc fields/groups/apiConfig of its
-  // own either — each block's own Fields-or-Groups content is restored
-  // into _state.blocks directly (never into the shared draft slots, which
-  // only ever hold whichever block is currently being *edited* — see
-  // blocks-config-ui.js). Per-block ChangeDetection/Hardening/
-  // OutputFormat aren't tracked in _state.blocks yet (no UI to edit them
-  // — see CLAUDE.md), so a re-loaded block that had one of those loses it,
-  // the same kind of documented v1 gap Combined mode's own
-  // VerificationValues round-trip already has.
+  // Blocks mode restores each block into _state.blocks (the shared draft slots only hold the block being edited). A
+  // block's own ChangeDetection / Hardening / OutputFormat are not tracked in _state.blocks yet, so a reloaded block
+  // loses them (documented gap).
   if (config.blocks) {
     return {
       mode: 'blocks',

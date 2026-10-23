@@ -1,13 +1,8 @@
 // @ts-check
-// Common request headers for the "Send custom request headers" picker
-// (Issue #402) — pure data/logic only, no DOM (see request-headers-ui.js for
-// the rendering). Instead of an empty row with a free-text header name, the
-// user picks what they want ("a language", "an API key", …) and gets a valid
-// row: the header's name, a sensible kind (fixed value vs. environment
-// variable) and an example value or variable name.
-//
-// The wire format is untouched: a picked preset only ever produces the same
-// { name, kind, value } draft row a hand-typed header produces.
+// Common request headers for the "Send custom request headers" picker: pure data / logic (request-headers-ui.js renders it). Instead of
+// an empty row with a free-text name, the user picks what they want ("a language", "an API key", ...) and gets a valid row with the
+// header name, a sensible kind (fixed value vs. environment variable) and an example. The wire format is untouched: a preset produces
+// the same { name, kind, value } draft row a hand-typed header would.
 
 /**
  * @typedef {Object} RequestHeaderPreset

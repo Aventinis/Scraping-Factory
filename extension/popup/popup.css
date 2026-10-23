@@ -182,7 +182,7 @@ input, textarea, select { transition: border-color var(--transition-fast), box-s
 /* Issue #140 modernization: slim, theme-aware scrollbars for every
    scrollable container introduced across #138/#122 — ::-webkit-scrollbar
    is Chromium-only, which is exactly the extension's own supported
-   range (Chrome/Edge/Opera, see CLAUDE.md's Build section), so no
+   range (Chrome/Edge/Opera), so no
    Firefox-specific scrollbar-* fallback is needed. Listed once here as
    a combined selector rather than a new shared class, so none of these
    five elements' existing class lists (and anything that queries them)

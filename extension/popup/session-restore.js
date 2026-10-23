@@ -1,14 +1,7 @@
-// ── Session-storage restore (popup reopen recovery) ──────────────────────────
-// Extracted from popup.js (see CLAUDE.md's "Popup module boundaries"
-// architecture decision) — init()'s chrome.storage.session recovery logic
-// (restoring persisted fields/groups/settings, then replaying whichever
-// pending-selector recovery branch applies) was the largest remaining chunk
-// of popup.js not yet claimed by any feature module. It mirrors
-// message-router.js's own ELEMENT_SELECTED branches closely (container node
-// insertion, browser-action update, pagination update, generic field modal)
-// — the same four outcomes, just replayed from chrome.storage.session after
-// a popup reopen instead of from a live message — but stays a separate
-// module since it's about *session restore*, not *live message dispatch*.
+// ── Session-storage restore (popup reopen recovery) ──
+// init()'s chrome.storage.session recovery: restore persisted fields / groups / settings, then replay the pending-selector outcome.
+// It mirrors message-router.js's ELEMENT_SELECTED branches (container insert, browser action, pagination, field modal), replayed
+// from storage after a reopen instead of from a live message, hence its own module.
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');
 const { t } = require('../i18n/i18n');
@@ -18,11 +11,8 @@ const { updateBrowserAction, computeInitialMonitoringSectionOpen } = require('./
 const { showToast, showMatchCountToast } = require('./toast');
 const { resolveLinkHref } = require('./pagination-template');
 
-// Pure: folds chrome.storage.session's restored values onto a fresh
-// _state, the same "only overwrite what was actually persisted" shape
-// popup.js's own persistState() writes. Issue #183's one-time Monitoring-
-// section auto-expand is computed here too, since it depends on
-// changeDetection/hardening already being restored.
+// Pure: folds the restored values onto a fresh _state, overwriting only what was persisted (like persistState()). Also computes
+// the one-time Monitoring-section auto-expand, which needs changeDetection / hardening restored.
 function applyStoredSessionState(state, stored) {
   let next = state;
   if (Array.isArray(stored.fields)) next = { ...next, fields: stored.fields };
@@ -76,17 +66,11 @@ function applyStoredSessionState(state, stored) {
   return next;
 }
 
-// Replays whichever pending-selector outcome applies — the user clicked an
-// element while the side panel was closed (e.g. it hadn't finished loading
-// yet, or was closed manually). Call only after applyStoredSessionState has
-// already run, since these branches read bridge.getState()'s already-
-// restored groups/browserActions/pagination. Returns true if it fully
-// handled the recovery (init() should stop there, not fall through to its
-// own checkCompanion() call) — false when there was nothing pending.
-// Issue #429: the service worker writes pendingSelector as a fallback for a closed panel, at
-// the same time as the live message reaches an open one; the panel's cleanup can run before
-// that write lands. So the panel also records which pick it handled (handledPickId), and a
-// stored selector that belongs to that pick is a leftover, not a pending selection.
+// Replays the pending-selector outcome for an element picked while the panel was closed. Call after applyStoredSessionState (the
+// branches read the restored groups / actions / pagination). Returns true if it fully handled the recovery (init() stops there).
+// The service worker writes pendingSelector as a fallback while the live message reaches an open panel, and the panel's cleanup can
+// run before that write lands: the panel records the pick it handled (handledPickId), and a stored selector of that pick is a
+// leftover, not a pending selection.
 function isLeftoverOfHandledPick(stored) {
   return typeof stored.pendingPickId === 'string' && stored.pendingPickId === stored.handledPickId;
 }
@@ -107,14 +91,8 @@ async function restorePendingSelection(bridge, stored) {
   markPickHandled(stored.pendingPickId);
   const state = bridge.getState();
 
-  // Same self-correction as message-router.js's live ELEMENT_SELECTED path
-  // — the pending selection was made on stored.pendingUrl (persisted by
-  // service-worker.js's own session-storage fallback), which can differ
-  // from the already-restored state.url if the tab navigated to a
-  // different page between the click and the popup reopening.
-  // patchState (not setState) here is enough: whichever branch below
-  // still runs its own setState afterward, which persists the corrected
-  // url along with everything else.
+  // Same stale-URL self-correction as message-router.js, from the persisted pendingUrl. patchState is enough: the branch below
+  // persists the corrected url with its own setState.
   if (typeof stored.pendingUrl === 'string' && stored.pendingUrl && stored.pendingUrl !== state.url) {
     log('INIT pending selector\'s page changed since last sync', { from: state.url, to: stored.pendingUrl });
     bridge.patchState({ url: stored.pendingUrl });
@@ -122,11 +100,8 @@ async function restorePendingSelection(bridge, stored) {
   }
 
   if (stored.apiSearchTarget) {
-    // Unlike the other pending-selector cases below, there's nothing to
-    // recover here: the actual search result (API_CANDIDATES) is a
-    // transient message content-script.js never persists anywhere, so a
-    // leftover selector alone can't be turned into a candidate list —
-    // discard it rather than misinterpret it as a flat-field pick.
+    // Nothing to recover: API_CANDIDATES is transient and never persisted, so a leftover selector cannot become a candidate list; discard
+    // it rather than misread it as a flat-field pick.
     log('INIT pending API-search selector found, but candidates were never persisted — discarding');
     bridge.setState(state.apiConfigDraft ? STATES.API_CONFIG : STATES.IDLE, {});
     return true;
@@ -241,11 +216,8 @@ async function restorePendingSelection(bridge, stored) {
     return true;
   }
 
-  // Flat field or container field — show the (extended, in container
-  // mode) field-name modal without re-checking the companion. The
-  // transform chain itself is never persisted (see pendingTransforms'
-  // own doc comment) — a reopened popup shows the modal with an empty
-  // chain, same as the name input itself starting blank again.
+  // Flat or container field: show the field modal without re-checking the companion. The transform chain is never persisted, so the
+  // modal reopens with an empty chain, like the blank name input.
   log('INIT pending selector found → show modal', stored.pendingSelector);
   bridge.setState(STATES.SELECTING, {
     pendingSelector: stored.pendingSelector, pendingFramePath: stored.pendingFramePath || null,

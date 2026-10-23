@@ -1,19 +1,11 @@
 // @ts-check
-// API mode: cursor/token-based pagination (Issue #224) — pure data/logic
-// only, no DOM (see api-cursor-pagination-ui.js for rendering/event wiring,
-// the same <feature>.js/<feature>-ui.js split api-bootstrap.js/
-// api-bootstrap-ui.js use). Some APIs only reveal the *next* page's
-// identifier inside the current page's own response (a Relay-style
-// pageInfo.endCursor, a next_page_token field), so the generated script
-// fetches page after page, feeding each response's cursor into the next
-// request — see ApiConfig.CursorPagination in IR/ApiConfig.cs.
+// API mode: cursor / token pagination — pure data / logic (api-cursor-pagination-ui.js renders it). Some APIs reveal the next
+// page's identifier only in the current response (Relay's pageInfo.endCursor, next_page_token); see ApiConfig.CursorPagination.
 //
-// Draft shape (apiConfigDraft.cursorPagination, null = disabled):
-//   { nextCursorPath, hasNextPagePath, target: 'Query' | 'Body',
-//     queryParameterName, bodyPath, maxPages }
-// Page 1 is always sent exactly as recorded; from page 2 on the cursor is
-// placed at `target` — the query parameter `queryParameterName`, or the
-// dot-separated path `bodyPath` within a POST request's JSON body.
+// Draft (apiConfigDraft.cursorPagination, null = off):
+//   { nextCursorPath, hasNextPagePath, target: 'Query' | 'Body', queryParameterName, bodyPath, maxPages }
+// Page 1 is sent as recorded; from page 2 the cursor goes to `target`: a query parameter, or a dot path in a POST request's
+// JSON body.
 const DEFAULT_MAX_PAGES = 50;
 
 // Last key of a leaf's path that looks like "the next page's cursor" /
@@ -50,11 +42,8 @@ function isValidBodyPath(path) {
   return path.length > 0 && !path.includes('[') && path.split('.').every(segment => segment.trim().length > 0);
 }
 
-// Gates the API_CONFIG screen's "Apply" alongside the other draft checks —
-// mirrors ScrapingPlanValidator's ValidateApiCursorPagination closely
-// enough that a draft passing here won't get a 400 back from /generate for
-// a structural cursor-pagination problem. `context.hasBodyTree`/`method`
-// describe the rest of the draft (a Body target needs a POST with a body).
+// Gates "Apply"; mirrors ScrapingPlanValidator.ValidateApiCursorPagination closely enough to avoid a 400. `context` describes the
+// rest of the draft (a Body target needs a POST with a body).
 /**
  * @param {SFDraft.ApiCursorPagination | null | undefined} draft
  * @param {{ method?: string, hasBodyTree?: boolean }} [context]
@@ -91,11 +80,8 @@ function buildApiCursorPagination(draft) {
   };
 }
 
-// Every scalar leaf of a parsed JSON value (null included — a Relay
-// request's "after" is null on page 1) with its path in the same minimal
-// dot/[n] DSL the generated script's _resolve_field understands. Paths
-// through an array are marked by containing '[' — the callers skip those,
-// since a per-item cursor (e.g. Relay's edges[0].cursor) isn't the page's.
+// Every scalar leaf (null included: Relay's "after" is null on page 1) with its path in the script's dot / [n] DSL. A path through an
+// array contains '[' and is skipped by callers: a per-item cursor is not the page's.
 /**
  * @param {*} value
  * @param {string} [path]
@@ -129,11 +115,8 @@ function findLeafPath(json, keyPattern, valueOk) {
   return matches[0]?.path || '';
 }
 
-// Suggests a cursor configuration from one recorded request/response pair:
-// where the next cursor sits in the response, the "has more" flag, and —
-// if the recorded request itself carries a cursor-looking slot (a query
-// parameter, or a field of a JSON request body) — where to put it. Every
-// part may come back blank; the caller only applies what was found.
+// Suggests a cursor configuration from one recorded pair: the next cursor and "has more" flag in the response and, if the request has
+// a cursor-looking slot (query parameter or JSON body field), where to put it. Any part may be blank.
 /**
  * @param {{ url?: string, method?: string, body?: string, requestBody?: string, requestBodySkipped?: boolean }} entry
  *   a GET_API_CAPTURE_ENTRIES entry

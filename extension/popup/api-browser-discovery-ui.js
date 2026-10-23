@@ -28,9 +28,7 @@ const { renderParameterPlaceholderPicker, patchApiConfigSource } = require('./ap
 // parameterized version of that function: renderBrowserActions is
 // hardcoded to the single, page-level '#browser-actions-list' container,
 // and this is this codebase's own established convention for a second,
-// differently-scoped instance of the same kind of small DOM helper (see
-// CLAUDE.md's "no cross-module includes for small DOM helpers" note on
-// renderMatchCountHint). Every control carries both data-part-id and
+// differently-scoped instance of the same kind of small DOM helper (see renderMatchCountHint). Every control carries both data-part-id and
 // data-index so the single delegated listener on #api-config-parameters
 // can address the right parameter's own action array.
 function renderBrowserDiscoverySourceFields(draft, part, source) {

@@ -1,8 +1,5 @@
-// API mode: the response-tree editor (Issue #54) — the tree rows, the "add group"
-// and "edit a leaf's transforms" modals, and the JSON-scoped search that adds a
-// field or group to an already-confirmed tree. Split out of api-config-ui.js
-// (Issue #390); behavior unchanged. See api-config-ui.js for the `bridge`
-// convention every handler here follows.
+// API mode: the response-tree editor: the rows, the "add group" and "edit a leaf's transforms" modals, and the JSON-scoped search that adds a
+// field or group to a confirmed tree. See api-config-ui.js for the `bridge` convention.
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:ApiConfigUI');
 const { t } = require('../i18n/i18n');
@@ -24,13 +21,8 @@ const TREE_TOGGLE_CHEVRON_SVG =
   'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<polyline points="6 9 12 15 18 9"></polyline></svg>';
 
-// Same visual pattern as the Container-Mode tree editor below (indentation,
-// toggle arrow, add/remove buttons, nodes start expanded) — see
-// buildGroupTreeNodeEl. Row content differs: an editable name input (Phase
-// A5 — every node's name stays editable, same precedent the flat API-Mode
-// field list already established) plus a read-only path display instead of
-// a single selector label, and there's no repeating/attribute/mode label
-// (see Container-Mode) or frame badge (JSON has no iframes) to add.
+// Same pattern as the container tree editor (buildGroupTreeNodeEl). Rows differ: an editable name input and a read-only path; no
+// repeating / attribute / mode label and no frame badge (JSON has no iframes).
 function buildApiTreeNodeEl(node, path, depth) {
   const li = document.createElement('li');
   li.className = 'api-tree-node';
@@ -146,21 +138,12 @@ function renderApiTree(groups) {
   root.innerHTML = '';
   groups.forEach((node, i) => root.appendChild(buildApiTreeNodeEl(node, [i], 0)));
 }
-// ── API-mode candidate search results (Issue #53 Phase 4) ──────────────────
-// Renders content-script.js's findApiCandidates output: one row per
-// candidate (request + JSON path + matched value), with the same object's
-// sibling scalar keys offered as click-to-toggle suggestions for additional
-// fields — purely a visual "picked" toggle for now, since there's no
-// ApiConfig to feed them into yet (that's Phase 5+).
+// ── Candidate search results ──
+// Renders findApiCandidates' output: per candidate the request, JSON path and matched value, with the sibling scalar keys as click-to-toggle
+// suggestions for more fields.
 
-// Issue #136: when the tree being extended was originally sourced from an
-// embedded <script> tag (draft.embeddedJsonSource set), the search must
-// scan that exact same tag rather than the network-recorded pool — unlike
-// a network entryId, there's no pool of interchangeable sources once
-// EmbeddedJsonSource.ScriptSelector is fixed (see findEmbeddedJsonCandidates'
-// own doc comment on scriptSelector). confirmApiTreeFieldCandidate below
-// needs no change either way: it only reads candidate.treeSkeleton/
-// .siblings, which both search kinds populate identically.
+// A tree sourced from an embedded <script> tag (draft.embeddedJsonSource) is extended by scanning that same tag, not the recorded pool (there
+// is only one source once ScriptSelector is fixed). confirmApiTreeFieldCandidate needs no change: both search kinds fill treeSkeleton / siblings.
 function startApiTreeFieldSearch(bridge, parentPath) {
   const state = bridge.getState();
   const scopePath = parentPath ? resolveApiGroupScopePath(state.apiConfigDraft.groups, parentPath) : null;
@@ -202,11 +185,8 @@ function openApiGroupModal(bridge, parentPath) {
 function confirmApiGroupModal(bridge) {
   const name = document.getElementById('input-api-group-name')?.value.trim();
   const path = document.getElementById('input-api-group-path')?.value.trim();
-  // Unlike a CSS selector, a JSON path can legitimately be "" (see
-  // ApiGroup.Path's array-of-arrays case) — but that's only ever reachable
-  // through the automatic skeleton derivation above; requiring a non-empty
-  // path here keeps this small, no-click modal unambiguous (was it really
-  // meant to be empty, or just not filled in yet?).
+  // A JSON path can legitimately be "" (array of arrays), but only through automatic derivation; requiring a non-empty path keeps this no-click
+  // modal unambiguous.
   if (!name || !path) return;
 
   const node = buildApiGroupDraft(name, path);
@@ -229,20 +209,10 @@ function setApiTreeNodeName(bridge, path, name) {
   patchApiConfigDraft(bridge, { groups: updateApiTreeNode(bridge.getState().apiConfigDraft.groups, path, node => ({ ...node, name })) });
 }
 
-// ── API-mode field transforms (Issue #84 follow-up) ─────────────────────────
-// Reuses the exact same field-transforms.js/field-transforms-ui.js editor
-// flat/container mode's own field modals already use, plus
-// _state.pendingTransforms as the in-progress chain — the API_CONFIG screen
-// and those two modals are never open at the same time, so there's no
-// conflict reusing that one slot instead of adding a second. Live preview
-// (Issue #147) reuses _state.pendingRawText the exact same way — the
-// node's own sampleValue (see buildApiFieldDraft/buildApiSubtreeFromCandidate
-// in api-config.js), stringified the same way the Python runtime resolves
-// a field value before applying transforms (`"" if value is None else
-// str(value)`, see scraper_api.py.j2's _resolve_field call site).
-// undefined (no sample ever captured — e.g. a hand-typed path with no
-// click behind it) maps to null instead, so renderTransformPreview hides
-// the hint entirely rather than showing a misleading empty result.
+// ── Field transforms ──
+// Reuses the flat / container transform editor and _state.pendingTransforms (these screens never overlap). The live preview reuses
+// _state.pendingRawText: the node's sampleValue stringified like the runtime (`"" if value is None else str(value)`); undefined (a
+// hand-typed path with no click behind it) maps to null, so the hint hides instead of showing a misleading empty result.
 function sampleValueToRawText(sampleValue) {
   if (sampleValue === undefined) return null;
   return sampleValue === null ? '' : String(sampleValue);

@@ -1,6 +1,5 @@
 // ── Preview mode ─────────────────────────────────────────────────────────────
-// Extracted from popup.js (see CLAUDE.md's "Popup module boundaries"
-// architecture decision). Sends the current Fields/Groups to the content
+// Extracted from popup.js (docs/design-notes/extension.md, "Popup module boundaries"). Sends the current Fields/Groups to the content
 // script so it can match them against the live DOM and highlight the
 // results directly on the page — see content-script.js's
 // computePreviewMatches/startPreview for the matching semantics (mirrors

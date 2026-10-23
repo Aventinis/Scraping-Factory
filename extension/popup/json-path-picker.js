@@ -1,23 +1,14 @@
 // @ts-check
-// JSON-path picker: tree model and path derivation (Issue #404) — pure
-// data/logic only, no DOM (see json-path-picker-ui.js for the rendering). API
-// mode asks for JSON paths in several places (a group's path, the cursor and
-// "has more" paths, the body slot a cursor goes into, the token's path); a
-// non-developer shouldn't have to type them. This turns a recorded response
-// (or request body) into a small clickable tree, and a click into a path in
-// the exact syntax the generated script's `_resolve_json_path` understands:
-// dot notation for object keys, `[n]` for an array element.
+// JSON-path picker: tree model and path derivation — pure, no DOM (json-path-picker-ui.js renders it). API mode asks for JSON
+// paths in several places (a group's path, the cursor and "has more" paths, the cursor's body slot, the token path); this
+// turns a recorded response or request body into a clickable tree and a click into a path in the syntax of the script's
+// `_resolve_json_path`: dots for object keys, `[n]` for an array element.
 //
-// Three modes, one per kind of path:
-//   'leaf'  a scalar (or null) is picked — cursor, "has more" flag, token.
-//           Arrays are shown through their first element (`items[0].id`).
-//   'group' an object or array is picked — a group's path, *relative to the
-//           parent scope* (the tree is rooted at that scope's first instance,
-//           the same "first instance is the template" assumption the rest of
-//           API mode uses). Arrays are terminal: what's inside an item belongs
-//           in a nested group of its own, not in one long path.
-//   'body'  like 'leaf', but arrays aren't entered at all: the cursor's body
-//           slot is a plain dot path (no `[`), see isValidBodyPath.
+// Three modes:
+//   'leaf'  a scalar (or null) is picked: cursor, "has more" flag, token. Arrays are shown through their first element.
+//   'group' an object or array is picked: a group's path, relative to the parent scope (the tree is rooted at that scope's
+//           first instance). Arrays are terminal: what is inside an item belongs in a nested group.
+//   'body'  like 'leaf', but arrays are not entered: the cursor's body slot is a plain dot path (isValidBodyPath).
 
 const PATH_TOKEN_PATTERN = /[^.[\]]+|\[\*\]|\[\d+\]/g;
 const DEFAULT_MAX_NODES = 400;

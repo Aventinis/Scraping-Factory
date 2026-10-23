@@ -1,18 +1,10 @@
-// Issue #233: hovering a row in the flat fields list or the container tree
-// highlights that one row's element(s) on the live page — the reverse
-// direction of the DOM inspector's own HOVER_ELEMENT (page → tree row), and
-// a single-row counterpart to the full "Vorschau" (preview.js), which always
-// highlights every configured element at once. Needs no toggle: it's purely
-// a hover affordance, active whenever the list is visible.
+// Hovering a row in the flat fields list or container tree highlights that row's element(s) on the live page: the reverse of the DOM inspector's
+// HOVER_ELEMENT, and a single-row counterpart to the full "Show preview" (preview.js). No toggle: active whenever the list is visible.
 //
-// The pure builders below turn a flat field / a container tree path into the
-// HOVER_HIGHLIGHT payload content-script.js's matchHoverHighlight resolves:
-// the selector chain from the root down to the hovered row, each step
-// flagged `all` exactly the way matchGroupTree treats it (a repeating group
-// or a flat field keeps every match, a non-repeating group or a container
-// field only the first per scope). wireHoverHighlight attaches the delegated
-// mouse listeners; it needs no popup state of its own, so (unlike most
-// popup modules) it takes no `bridge` — callers pass a resolver instead.
+// The pure builders turn a flat field / a container path into the HOVER_HIGHLIGHT payload that content-script.js's matchHoverHighlight resolves:
+// the selector chain from the root to the row, each step flagged `all` as matchGroupTree treats it (repeating group or flat field: every match;
+// non-repeating group or container field: the first per scope). wireHoverHighlight attaches the delegated listeners; it needs no popup state,
+// so unlike most popup modules it takes no `bridge`, callers pass a resolver.
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:HoverHighlight');
 
@@ -27,10 +19,8 @@ function buildFlatFieldHighlight(field) {
   return { name: field.name, steps: [{ selector: field.selector, all: true }], framePath: field.framePath || null };
 }
 
-// Walks `groups` along `path` (the same index path container-tree-ui.js
-// stamps onto each row's <li data-path>). The framePath is the nearest one
-// set on the chain, hovered node first — a node picked inside an iframe
-// carries its own, and its descendants were picked within the same frame.
+// Walks `groups` along `path` (the index path container-tree-ui.js stamps on each row's <li data-path>). The framePath is the nearest one on
+// the chain, hovered node first: a node picked inside an iframe carries its own, and its descendants were picked in the same frame.
 /**
  * @param {Array<*>} groups
  * @param {number[]} path
@@ -71,14 +61,9 @@ function sendClear() {
   }
 }
 
-// Delegated on the list container (rows are re-rendered on every state
-// change, so per-row listeners would need re-attaching each time).
-// `rowSelector` identifies a row element; `resolvePayload(rowEl)` returns
-// the HOVER_HIGHLIGHT payload for it, or null. Moving within one row sends
-// nothing new (`currentRow` dedupes); moving onto a gap between rows,
-// leaving the list, or clicking (a click may remove/re-render the hovered
-// row, after which no mouseleave would ever fire for it) clears the
-// highlight.
+// Delegated on the list container (rows are re-rendered on every state change). `rowSelector` identifies a row, `resolvePayload(rowEl)` returns
+// its payload or null. Moving within a row sends nothing (`currentRow` dedupes); a gap, leaving the list, or a click (which may re-render the row,
+// so no mouseleave would fire) clears the highlight.
 /**
  * @param {HTMLElement | null} listEl
  * @param {string} rowSelector

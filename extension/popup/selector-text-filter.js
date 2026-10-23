@@ -1,18 +1,9 @@
 // @ts-check
-// The `:contains("text")` selector suffix (Issue #227) — pure helpers, no DOM
-// (see selector-text-filter-ui.js for the field modals' text input). A
-// selector may end in :contains("text"): the CSS part in front of it matches
-// as usual, then only the elements whose text contains `text` are kept. The
-// matching rule (whole text, whitespace collapsed, case-insensitive) lives in
-// the generated scripts' text_selector_* fragments and the content script;
-// this module only *builds* the suffix and parses it back for display/tests.
-// The companion's SelectorTextFilter.cs and the content script's
-// splitTextFilter hold the other copies of the syntax — selector-text-
-// filter.test.js, SelectorTextFilterTests.cs and content-script.test.js run
-// the same cases.
-// Long enough to be distinctive, short enough that the selector (shown in
-// the field list) stays readable — the match is a substring anyway, so a
-// cut-off start of a long label still finds it.
+// The `:contains("text")` selector suffix: pure helpers (selector-text-filter-ui.js has the field modals' input). The CSS part matches as usual,
+// then only elements whose text contains `text` are kept; the matching rule (whole text, whitespace collapsed, case-insensitive) lives in the
+// generated scripts' text_selector_* fragments and the content script. This module builds the suffix and parses it back; the syntax is pinned
+// across all implementations by test-vectors/text-selector.json. Suggested texts are kept short so the selector shown in the field list stays
+// readable (the match is a substring anyway).
 const SUGGESTED_TEXT_MAX_LENGTH = 60;
 
 const TEXT_FILTER_PATTERN = /:contains\(\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')\s*\)\s*$/i;

@@ -1,19 +1,12 @@
 // @ts-check
-// Issue #401: plain-language versions of the failures a user hits at the worst
-// moment — a failed Generate. The companion's and the script's messages are
-// written for developers ("Script (python3) exited with an error…", "returned no
-// data (output.csv contains only the header row)…") and say nothing about what to
-// do next. describeError() recognises the common classes by pattern and returns a
-// translated { title, hint }; anything it doesn't recognise returns null and keeps
-// today's behavior (the raw text). The raw text always stays available — the
-// toast keeps it behind "Details" and "Report bug" still sends it.
+// Plain-language versions of the failures a user hits at the worst moment, a failed Generate. The companion's and the script's messages are
+// written for developers and say nothing about what to do next. describeError() recognises the common classes by pattern and returns a
+// translated { title, hint }; anything else returns null and keeps the raw text, which always stays available (behind "Details", and
+// "Report bug" sends it).
 //
-// The patterns work on the English wording of the companion
-// (ScrapingPlanValidator, PythonScriptVerifier) and of the generated scripts'
-// "ERROR: …" lines (fragments/request_errors_*.py.j2, require_env_function.py.j2,
-// output_tabular.py.j2). They are deliberately loose about the surrounding
-// words; where one would be too brittle, the right fix is a stable error code in
-// the companion's response, not a tighter regex here.
+// The patterns read the English wording of the companion (ScrapingPlanValidator, PythonScriptVerifier) and of the scripts' "ERROR: ..."
+// lines (fragments/request_errors_*.py.j2, require_env_function.py.j2, output_tabular.py.j2), and are deliberately loose about the
+// surrounding words; where one would be too brittle, the fix is a stable error code in the companion's response, not a tighter regex.
 const { t } = require('../i18n/i18n');
 
 /**

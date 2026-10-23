@@ -1,20 +1,9 @@
-// JSON-path picker: DOM rendering, loading and event wiring (Issue #404) — see
-// json-path-picker.js for the pure tree model and path derivation. A path
-// input in API mode gets a "Pick from the recording" button; it opens a small
-// panel right under the input showing the recorded response (or request body,
-// or the page's embedded JSON) as a clickable tree, and a click fills the path.
+// JSON-path picker: rendering, loading and event wiring (json-path-picker.js has the tree model). A path input in API mode gets a "Pick from the
+// recording" button that opens a panel under it with the recorded response, request body or embedded JSON as a clickable tree; a click fills the path.
 //
-// State this module owns (popup state, never persisted):
-//   _state.apiPathPicker — null, or { field, status, token, … } for the one
-//   picker that is open. It lives in state (not only in the DOM) because the
-//   cursor and bootstrap sections rebuild their HTML on every state change.
-//
-// `field` names the path input a picker belongs to:
-//   'group'                    the "add group" modal's path (relative to the parent scope)
-//   'cursor.nextCursorPath'    where the next cursor sits in the response
-//   'cursor.hasNextPagePath'   the "has more pages" flag in the response
-//   'cursor.bodyPath'          the request-body field the cursor goes into
-//   'bootstrap.valuePath'      the token in the token request's response
+// _state.apiPathPicker (never persisted) is null or { field, status, token, ... } for the one open picker; it lives in state because the cursor
+// and bootstrap sections rebuild their HTML on every state change. `field` names the input: 'group' (relative to the parent scope),
+// 'cursor.nextCursorPath', 'cursor.hasNextPagePath', 'cursor.bodyPath' (the request-body field the cursor goes into), 'bootstrap.valuePath'.
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:JsonPathPickerUI');
 const { t } = require('../i18n/i18n');

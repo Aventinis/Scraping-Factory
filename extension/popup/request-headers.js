@@ -1,18 +1,10 @@
 // @ts-check
-// Custom request headers for flat/container/Blocks mode (Issue #226) — pure
-// data/logic only, no DOM (see request-headers-ui.js for rendering/event
-// wiring, the same <feature>.js/<feature>-ui.js split every other popup
-// feature uses). API mode keeps its own header editor on the API_CONFIG
-// screen (adopted from the recorded request); this is the DOM-mode
-// counterpart, written by hand because there's no recorded request to adopt
-// from.
+// Custom request headers for flat / container / Blocks mode: pure data / logic (request-headers-ui.js renders it). API mode has its
+// own header editor (adopted from the recorded request); this is the hand-written DOM-mode counterpart.
 //
-// Draft shape (_state.requestHeaders), kept as typed so a half-edited row
-// never blocks anything:
+// Draft (_state.requestHeaders), kept as typed so a half-edited row never blocks anything:
 //   { enabled, rows: [{ name, kind: 'value' | 'env', value }] }
-// `value` is the header's literal value for kind 'value', or the *name* of an
-// environment variable for kind 'env' — never a secret literal, the same
-// credentials convention FillAction/ApiHeader already follow.
+// `value` is the literal for kind 'value', or the *name* of an environment variable for 'env', never a secret literal.
 /** @returns {SFDraft.RequestHeadersState} */
 function createDefaultRequestHeaders() {
   return { enabled: false, rows: [] };

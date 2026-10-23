@@ -1,15 +1,10 @@
 // @ts-check
-// Deduplication by key field(s) (Issue #225) — pure data/logic only, no DOM
-// (see dedup-config-ui.js for rendering/event wiring, the same
-// <feature>.js/<feature>-ui.js split every other popup feature uses).
+// Deduplication by key field(s): pure data / logic (dedup-config-ui.js renders it).
 //
-// Draft shape (_state.deduplication), kept as typed so a half-edited number
-// never blocks anything (same "draft is forgiving, wire is strict"
-// convention buildRequestDelayConfig/buildRetryConfig use):
-//   { enabled, keyFields: string[], incremental, appendOutput,
-//     retentionKind: 'MaxCount' | 'MaxAge', retentionValueText }
-// keyFields are field names picked from the current mode's own field list
-// (collectFieldNames) — the (composite) identity of a row/element.
+// Draft (_state.deduplication), kept as typed so a half-edited number never blocks anything (the draft is forgiving, the wire is
+// strict, like buildRequestDelayConfig / buildRetryConfig):
+//   { enabled, keyFields: string[], incremental, appendOutput, retentionKind: 'MaxCount' | 'MaxAge', retentionValueText }
+// keyFields are field names from the current mode's field list (collectFieldNames): the (composite) identity of a row / element.
 const DEFAULT_MAX_COUNT = 100000;
 const DEFAULT_MAX_AGE_DAYS = 90;
 

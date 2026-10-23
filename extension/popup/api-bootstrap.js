@@ -1,34 +1,20 @@
 // @ts-check
-// API mode: token/auth bootstrap value (Issue #220) — pure data/logic only,
-// no DOM (see api-bootstrap-ui.js for rendering/event wiring, the same
-// <feature>.js/<feature>-ui.js split api-config.js/api-config-ui.js already
-// use). A bootstrap is one extra request the generated script sends once at
-// the start of every run (e.g. a POST to a login/token endpoint), extracting
-// a single short-lived value from its JSON response via a JSON path; that
-// value is then spliced into the main request's headers ("Bearer {token}")
-// and/or URL.
+// API mode: the token/auth bootstrap — pure data/logic (api-bootstrap-ui.js renders it). A bootstrap is one request the
+// script sends at the start of every run, extracting a short-lived value from the JSON response that is spliced into the
+// main request's headers ("Bearer {token}") and/or URL.
 //
-// Draft shape (apiConfigDraft.bootstrap, null = no bootstrap):
+// Draft (apiConfigDraft.bootstrap, null = none):
 //   { name, method, url, valuePath, bodyEncoding: 'Json' | 'Form',
 //     headers:    [{ name, mode: 'literal' | 'env', value, envName }],
 //     bodyFields: [{ name, mode: 'literal' | 'env', value, envName }] }
-// A credential row in 'env' mode is sent as an environment-variable *name*
-// only — the same FillAction/ApiHeader convention that keeps a password out
-// of the generated script.
-//
-// A URL part that should carry the bootstrap value uses the pseudo source
-// kind BOOTSTRAP_SOURCE_KIND in apiConfigDraft.parameterSources — it renders
-// like any other value-source option, but resolveBootstrapUrlParts/
-// buildApiConfig turn it into a "{<bootstrap name>}" placeholder instead of
-// a declared ApiParameter (the bootstrap value must never become one: a
-// parameter's value ends up as an output column).
+// A credential row in 'env' mode sends only an environment-variable *name*. A URL part carrying the bootstrap value uses the
+// pseudo source kind BOOTSTRAP_SOURCE_KIND; buildApiConfig turns it into a "{<name>}" placeholder, never a declared
+// parameter (parameter values become output columns).
 const BOOTSTRAP_SOURCE_KIND = 'bootstrap';
 const DEFAULT_BOOTSTRAP_NAME = 'token';
 
-// Body-field/header names that almost certainly carry a credential — a
-// row picked up from a recorded request with one of these names defaults
-// to environment-variable mode instead of embedding the recorded literal
-// (which would otherwise put e.g. a real password into the script).
+// Names that almost certainly carry a credential: a row picked up from a recording defaults to env-var mode instead of
+// embedding the recorded literal.
 const CREDENTIAL_NAME_PATTERN = /pass(word)?|secret|token|api[-_]?key|credential|authorization|^key$/i;
 
 // Request headers the browser (not the page's own script) sets, or that
@@ -77,12 +63,8 @@ function pairFromRecorded(name, value) {
     : { name, mode: 'literal', value, envName: '' };
 }
 
-// A recorded request body → bootstrap body fields + encoding. Only a flat
-// JSON object or a form-encoded string is supported (the narrow shape
-// ApiBootstrap.BodyFields models) — a nested JSON value is kept as its
-// JSON text in a literal field rather than dropped, so nothing the token
-// endpoint expects silently disappears. Anything unparseable yields no
-// fields at all.
+// A recorded body → bootstrap body fields + encoding. Only a flat JSON object or a form-encoded string (what
+// ApiBootstrap.BodyFields models); a nested value is kept as JSON text in a literal field so nothing silently disappears.
 /**
  * @param {string | null | undefined} requestBody
  * @param {Array<{name: string, value: string}>} [requestHeaders]
@@ -132,13 +114,8 @@ function collectStringLeaves(value, path = '', out = []) {
   return out;
 }
 
-// Finds the token within a recorded bootstrap response: preferably the
-// string leaf whose value actually shows up in the main request (its
-// headers or URL — e.g. "Authorization: Bearer <that value>"), the one
-// signal that proves it's really the value the API wants; otherwise the
-// first leaf whose key looks like a token. Short values (< 8 chars) are
-// never matched by the first rule, so an incidental "ok"/"en" can't
-// masquerade as a token just because it also appears in a URL.
+// Finds the token in a recorded response: the string leaf whose value shows up in the main request (headers or URL), else
+// the first leaf whose key looks like a token. Values under 8 characters never match the first rule.
 /**
  * @param {*} responseJson
  * @param {string[]} mainRequestStrings
@@ -152,11 +129,7 @@ function detectTokenInResponse(responseJson, mainRequestStrings) {
   return leaves.find(leaf => /(^|[._\[])(access_?token|id_?token|token|jwt|bearer|session_?id|nonce)$/i.test(leaf.path)) || null;
 }
 
-// A recorded request (a GET_API_CAPTURE_ENTRIES entry) → a ready bootstrap
-// draft, plus the detected token value (or null) the caller can use to
-// auto-wire the main request's own headers/URL. `mainRequest` is the
-// already-confirmed main request: its captured headers and URL are where
-// detectTokenInResponse looks for the token's actual use.
+// A recorded request → a bootstrap draft plus the detected token value (or null), for auto-wiring the main request.
 /**
  * @param {SFDraft.ApiCaptureEntry} entry
  * @param {{ url?: string, capturedHeaders?: Array<{name: string, value: string}> }} mainRequest
@@ -200,12 +173,8 @@ function suggestHeaderTemplate(headerValue, tokenValue, name) {
   return headerValue.split(tokenValue).join(`{${name}}`);
 }
 
-// Auto-wires the main request once a recorded bootstrap's token is known:
-// every captured header containing it switches to template mode (e.g.
-// "Authorization: Bearer {token}"), every URL query parameter whose value
-// *is* it becomes a bootstrap-sourced variable part. Returns only the
-// draft keys it changed (headerDecisions/urlParts/parameterSources), for
-// the caller to merge into apiConfigDraft.
+// Auto-wires the main request once the token is known: every header containing it becomes a template ("Bearer {token}"),
+// every query parameter whose value is it becomes a bootstrap-sourced part. Returns only the draft keys it changed.
 /**
  * @param {*} draft
  * @param {string | null} tokenValue
@@ -236,10 +205,7 @@ function pairIsComplete(pair) {
   return !!pair.name?.trim() && (pair.mode === 'env' ? /^[A-Za-z_][A-Za-z0-9_]*$/.test(pair.envName?.trim() || '') : true);
 }
 
-// Gates the API_CONFIG screen's "Apply" alongside
-// apiConfigDraftHasAllSourcesChosen — mirrors ScrapingPlanValidator's own
-// ValidateApiBootstrap closely enough that a draft passing here won't get
-// a 400 back from /generate for a structural bootstrap problem.
+// Gates "Apply"; mirrors ScrapingPlanValidator.ValidateApiBootstrap closely enough to avoid a 400.
 /**
  * @param {SFDraft.ApiBootstrap | null | undefined} bootstrap
  * @returns {boolean}
@@ -264,10 +230,7 @@ function serializePair(pair) {
     : { name: pair.name.trim(), value: pair.value ?? '' };
 }
 
-// Draft → wire ApiBootstrap (companion/.../IR/ApiConfig.cs). Empty lists
-// and the default method/encoding are still sent explicitly — unlike most
-// optional wire keys, there's no "omitted = today's behavior" concern for
-// a brand-new object.
+// Draft → wire ApiBootstrap; empty lists and the default method / encoding are sent explicitly (a new object).
 /**
  * @param {SFDraft.ApiBootstrap | null | undefined} bootstrap
  * @returns {SFWire.ApiBootstrap | null}
@@ -286,10 +249,7 @@ function buildApiBootstrap(bootstrap) {
   };
 }
 
-// Every URL part whose value source is BOOTSTRAP_SOURCE_KIND gets the
-// bootstrap's own name as its placeholder name (so buildUrlTemplate
-// renders "{token}"), regardless of whatever (possibly blank) name the
-// part itself carries.
+// A bootstrap-sourced part takes the bootstrap's name as placeholder name, whatever name it carries.
 /**
  * @param {*} urlParts
  * @param {Record<string, {kind?: string}>} partSources keyed by part id
@@ -307,11 +267,8 @@ function resolveBootstrapUrlParts(urlParts, partSources, bootstrapName) {
   };
 }
 
-// Turning the bootstrap off must not leave the main request pointing at a
-// value that no longer exists: every header in bootstrap mode falls back
-// to its recorded literal value, every bootstrap-sourced URL part loses
-// its (now meaningless) source and must be given a real one again. Returns
-// only the draft keys it changed, like wireTokenIntoMainRequest.
+// Turning the bootstrap off: bootstrap-mode headers fall back to their recorded literal, bootstrap-sourced URL parts lose
+// their source. Returns only the draft keys it changed.
 /**
  * @param {*} draft
  * @returns {Record<string, *>}
@@ -330,11 +287,8 @@ function stripBootstrapReferences(draft) {
   return { headerDecisions, parameterSources };
 }
 
-// Issue #43's verification-value convention, extended to the bootstrap:
-// one-time test values for its credential env vars, keyed by env-var
-// name, sent only with the /generate request so a token flow can be
-// verified without the credential being an OS env var on the companion
-// host. Mirrors buildVerificationValues (scraping-config-builder.js).
+// One-time test values for the bootstrap's credential env vars, keyed by name and sent only with /generate (mirrors
+// buildVerificationValues).
 /**
  * @param {SFWire.ApiConfig | null | undefined} apiConfig
  * @param {Record<string, string>} testValues

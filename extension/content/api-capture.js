@@ -1,36 +1,17 @@
-// Injected in the MAIN world (unlike content-script.js, which runs isolated)
-// so it can patch window.fetch/XMLHttpRequest before the page's own scripts
-// get a chance to call them — see manifest.json's second content_scripts
-// entry (world: "MAIN", run_at: "document_start"). MAIN-world scripts have
-// no chrome.runtime access, so everything here talks to the isolated
-// content-script.js via window.postMessage instead (see the bridge at the
-// bottom of content-script.js).
+// Injected in the MAIN world (unlike the isolated content-script.js) to patch window.fetch / XMLHttpRequest before the page's scripts
+// call them (manifest: world "MAIN", document_start). MAIN-world scripts have no chrome.runtime, so everything goes through
+// window.postMessage to content-script.js.
 //
-// API-Mode (Issue #53, Phase 3): records fetch/XHR request+response pairs
-// while recording is active, so Phase 4 can later search their JSON bodies
-// for a user-clicked value. Phase 5 additionally records each request's own
-// headers (see normalizeHeaders below), fed into the header-adoption step
-// once a request has been picked as the API-mode source.
+// Records fetch / XHR request-response pairs (and each request's headers, for the header-adoption step) while recording is active, so
+// a clicked value can later be searched in their JSON bodies.
 //
-// Known limitations (not solved here):
-// - Requests that don't go through fetch/XHR (navigator.sendBeacon,
-//   WebSocket) aren't captured.
-// - Request bodies (Issue #55 prep): only string bodies (a JSON.stringify'd
-//   object, plain text) are captured as `requestBody`. A FormData/Blob/
-//   ArrayBuffer/URLSearchParams body is flagged via `requestBodySkipped`
-//   instead of being read — form-encoded/multipart request bodies are out
-//   of scope for now.
-// - The control/entry channel is window.postMessage(..., '*'), which the
-//   hosting page's own scripts can also observe or forge (both worlds share
-//   the same `window`). Accepted for now — there is no unforgeable channel
-//   between the MAIN and ISOLATED worlds without a shared secret neither
-//   side can currently obtain, and the data only ever leaves the page via
-//   this extension's own UI.
-// - Recording survives same-origin navigation (see RESUME_KEY below via
-//   sessionStorage, which both worlds and the page share per tab+origin),
-//   but not a navigation to a different origin — sessionStorage doesn't
-//   carry over, so recording silently stops there until the user restarts
-//   it from the popup.
+// Known limitations:
+// - Requests that do not use fetch / XHR (sendBeacon, WebSocket) are not captured.
+// - Only string request bodies are captured as `requestBody`; FormData / Blob / ArrayBuffer / URLSearchParams are flagged via
+//   `requestBodySkipped`.
+// - window.postMessage(..., '*') can be observed or forged by the page's own scripts (both worlds share `window`). Accepted: there
+//   is no unforgeable channel between the worlds, and the data only leaves the page through this extension's UI.
+// - Recording survives a same-origin navigation (via sessionStorage, shared per tab and origin) but not a cross-origin one.
 
 const MAX_CAPTURED_ENTRIES = 200; // caps buffered requests on a long recording of a request-heavy page
 const MAX_BODY_CHARS = 200000; // ~200 KB of text per response — generous for JSON, small enough to stay message-safe
@@ -64,12 +45,8 @@ function shouldSkipBody(contentType, contentLengthHeader) {
   return false;
 }
 
-// Resolves a possibly-relative URL — as XHR's open() or a bare fetch()
-// string argument may legally be for a same-origin request — against the
-// page's own location, the same way the browser resolves it internally
-// before actually sending. Needed so a captured entry's `url` is always an
-// absolute URL: Phase 5's URL decomposition (parseUrlTemplateParts,
-// popup.js) parses it with `new URL(...)`, which requires one.
+// Resolves a possibly-relative URL (XHR open(), a bare fetch() string) against the page's location so an entry's `url` is absolute, as
+// parseUrlTemplateParts' `new URL(...)` requires.
 function resolveUrl(url) {
   try {
     return new URL(url, location.href).href;
@@ -83,14 +60,8 @@ function truncateHeaderValue(value) {
   return str.length > MAX_HEADER_VALUE_CHARS ? str.slice(0, MAX_HEADER_VALUE_CHARS) : str;
 }
 
-// Normalizes the three shapes fetch's `headers` init option can take (a
-// Headers instance, a plain object, or an array of [name, value] pairs) —
-// and XHR's own name/value pair list, already in array form by the time it
-// gets here, see setRequestHeader below — into one flat, capped array.
-// Request-header capture (Issue #53, Phase 5): feeds the header-adoption
-// step, where the user picks per-header whether/how to carry it into the
-// generated script (see ApiHeader — literal or via an environment
-// variable, same as FillStep already does for form values).
+// Normalizes the shapes fetch's `headers` can take (Headers, plain object, [name, value] pairs), and XHR's pair list, into one capped
+// array, for the header-adoption step (literal or environment variable, like FillStep).
 function normalizeHeaders(headersLike) {
   if (!headersLike) return [];
   let pairs;
@@ -104,13 +75,9 @@ function normalizeHeaders(headersLike) {
   return pairs.slice(0, MAX_REQUEST_HEADERS).map(([name, value]) => ({ name: String(name), value: truncateHeaderValue(value) }));
 }
 
-// Pure construction of one capture entry — kept separate from the
-// fetch/XHR interception glue below so it's testable without mocking those.
-// Issue #321: only whether the response's `Link` header names a rel="next"
-// page is kept (not the header's URLs) — enough for the API_CONFIG screen to
-// offer Link-header pagination when a recorded response actually carries one.
-// A cross-origin response only exposes `Link` if the server lists it in
-// Access-Control-Expose-Headers; otherwise the header simply reads as absent.
+// Builds one capture entry (separate from the interception glue, so it is testable). Only whether the `Link` header names a
+// rel="next" page is kept, so the API config screen can offer Link-header pagination; a cross-origin response exposes `Link` only if
+// the server lists it in Access-Control-Expose-Headers.
 function hasNextLinkRel(linkHeader) {
   if (typeof linkHeader !== 'string' || !linkHeader) return false;
   return linkHeader.split(/,(?=\s*<)/).some((part) => {
@@ -150,22 +117,14 @@ function recordEntry(url, method, status, contentType, bodyText, bodySkipped, re
   }
 }
 
-// Classifies a raw request-body value (fetch's init.body, or XHR's
-// send(body) argument) synchronously: a string is captured as-is, anything
-// else (FormData/Blob/ArrayBuffer/URLSearchParams/URL-encoded params object)
-// is flagged as not-capturable rather than read — see the known-limitations
-// note at the top of this file.
+// Classifies a request-body value synchronously: a string is captured, anything else is flagged as not capturable.
 function classifyRequestBody(body) {
   if (body == null) return { text: '', skipped: false };
   return typeof body === 'string' ? { text: body, skipped: false } : { text: '', skipped: true };
 }
 
-// fetch-specific: init.body (2nd arg) takes precedence over a Request's own
-// body, mirroring fetch's own override semantics already used above for
-// headers/method. Only reached for the Request-object fallback when
-// init.body is absent — a Request's body is only readable asynchronously,
-// via .clone().text() (mirrors how the response body is already read
-// elsewhere in this file), so this always returns a Promise.
+// fetch only: init.body takes precedence over a Request's body (as for headers / method). A Request's body is only readable
+// asynchronously (.clone().text()), so the Request-object fallback returns a Promise.
 function readFetchRequestBody(initBody, request) {
   if (initBody != null) return Promise.resolve(classifyRequestBody(initBody));
   if (request && typeof request.clone === 'function') {
@@ -176,12 +135,8 @@ function readFetchRequestBody(initBody, request) {
   return Promise.resolve({ text: '', skipped: false });
 }
 
-// Persists the on/off flag in sessionStorage (shared by the MAIN world, the
-// isolated content-script.js and the page itself — it's per tab+origin, not
-// per JS realm) so a same-origin navigation, which fully re-runs this
-// script and resets all module state above, can resume recording on the
-// new page instead of silently going quiet. See the known-limitations note
-// at the top of the file for what this doesn't cover.
+// Persists the on / off flag in sessionStorage (per tab and origin, shared by both worlds) so a same-origin navigation, which re-runs
+// this script and resets its state, can resume recording.
 function persistRecordingFlag(active) {
   if (typeof sessionStorage === 'undefined') return;
   try {
@@ -234,11 +189,8 @@ module.exports = {
   MAX_HEADER_VALUE_CHARS,
 };
 
-// ── fetch/XHR interception ──────────────────────────────────────────────────
-// Only patches real browser globals — guarded so requiring this file under
-// Jest (no `window.fetch`/`XMLHttpRequest` patch target worth installing,
-// and no real page traffic to intercept anyway) doesn't install patches that
-// would leak into unrelated tests.
+// ── fetch / XHR interception ──
+// Patches only real browser globals, so requiring this file under Jest installs nothing that would leak into other tests.
 
 if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'test') {
   if (shouldResumeRecording()) startRecording(); // same-origin navigation mid-recording — see known limitations above

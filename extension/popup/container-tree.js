@@ -1,30 +1,14 @@
-// Pure, DOM-free helpers for Container mode's group tree (GroupNode/
-// DataFieldNode, mirrors the backend IR's ContainerNode.cs): draft
-// build/resolve/insert/remove, the repeating-ancestor check, node-label
-// formatting, and serialization to the wire format. Split out of popup.js
-// (which had grown past 3800 loc) purely for readability — no behavior
-// change.
 // @ts-check
-// Issue #238: JSDoc-annotated and typechecked via `// @ts-check` + tsconfig
-// (`npm run typecheck`). This module's own tree nodes are a popup-internal
-// "draft" shape, not the wire format itself (e.g. `kind: 'group'|'field'`
-// instead of structural `children`-presence discrimination, lowercase
-// `mode` values) — described by types/popup-drafts.d.ts's `SFDraft`
-// namespace (`SFDraft.ContainerNode`/`GroupNode`/`FieldNode`/`FieldMode`)
-// rather than types/companion-ir.d.ts's `SFWire`, which only models the
-// wire shape `serializeGroupTree` actually produces. `SFDraft` lives in its
-// own ambient file, not a local `@typedef` here, specifically so
-// scraping-config-builder.js's own JSDoc can reference this module's tree
-// shape too — see that file's own top-of-file comment and
-// types/popup-drafts.d.ts's.
+// Pure, DOM-free helpers for Container mode's group tree: draft build/resolve/insert/remove, the repeating-ancestor
+// check, node labels and serialization to the wire format. The tree nodes are a popup-internal draft shape
+// (`kind: 'group'|'field'`, lowercase `mode`), typed as SFDraft.* in types/popup-drafts.d.ts; serializeGroupTree
+// produces SFWire.ContainerNode.
 
 const { t } = require('../i18n/i18n');
 
-// ── Container-Mode tree (GroupNode/DataFieldNode) ───────────────────────────
-// Mirrors the backend IR (ContainerNode.cs): a group node scopes its
-// children to matches of its own selector, a field node is the extraction
-// leaf. `path` addresses a node the same way the DOM-tree-view already does
-// (an array of child indices) — see buildTreeNodeEl's `node.path`.
+// ── Container-mode tree ──
+// A group node scopes its children to matches of its selector, a field node is the extraction leaf. `path` addresses a
+// node as an array of child indices (like the DOM tree view's `node.path`).
 
 /**
  * @param {string} name
@@ -37,14 +21,9 @@ function buildGroupNode(name, selector, repeating, framePath = null) {
   return { kind: 'group', name, selector, repeating, children: [], framePath: framePath || null };
 }
 
-// Issue #206 follow-up: selector may be null — the dedicated combine/split
-// creation flow (combine-split-fields-ui.js) always calls this with
-// selector=null and mode='text' (the mode/wire "Text" is functionally
-// irrelevant for a derived field, since its own extracted value is always
-// discarded — see groupNodeSuffix below for how the tree row still shows a
-// distinguishing label instead of "Text"). hiddenFromOutput defaults
-// false, set only via that same flow's own "remove original field(s)"
-// checkbox (updateGroupTreeNode elsewhere), never here.
+// selector may be null: the combine/split flow creates derived fields with selector=null and mode='text' (the mode is
+// irrelevant; groupNodeSuffix shows a distinguishing label). hiddenFromOutput defaults to false and is set only by that
+// flow's "remove original field(s)" option.
 /**
  * @param {string} name
  * @param {string | null} selector
@@ -66,13 +45,9 @@ function buildFieldNode(
   return {
     kind: 'field', name, selector, mode, attribute: mode === 'attribute' ? attribute : null,
     framePath: framePath || null,
-    // Issue #84: not meaningful for Exists mode (see FieldTransform's own
-    // doc comment) — dropped here rather than trusting every call site to
-    // pass [] for that mode itself.
+    // Not meaningful for Exists mode: dropped here rather than trusting every caller.
     transforms: mode !== 'exists' && transforms.length > 0 ? transforms : null,
-    // Issue #213: only meaningful for Attribute mode (the raw value is a
-    // URL only then) — same "gate on mode, don't trust the caller" pattern
-    // attribute/transforms above already use.
+    // Only meaningful for Attribute mode (the raw value is a URL only then); gated here like attribute / transforms.
     download: isDownload,
     // Issue #214: the optional safety net alongside download — same
     // "only meaningful when download is actually on" gate.
@@ -82,14 +57,7 @@ function buildFieldNode(
   };
 }
 
-// Issue #214: shared by container mode's modal-field-extended and flat
-// mode's modal-field-name (both container-tree-ui.js/flat-mode-ui.js
-// import these from here rather than scraping-config-builder.js, which
-// loads too late in popup.html's actual <script> order to be usable from
-// container-tree-ui.js — see classic-script-loading.test.js) — a
-// comma-separated content-type allowlist, same "split, trim, drop blanks"
-// shape scraping-config-builder.js's own parseAdditionalUrls already uses
-// for a newline-separated list.
+// Shared by the container and flat field modals: a comma-separated content-type allowlist, split, trimmed, blanks dropped.
 /**
  * @param {string} text
  * @returns {string[]}
@@ -98,11 +66,7 @@ function parseAllowedContentTypes(text) {
   return (text || '').split(',').map(part => part.trim()).filter(part => part.length > 0);
 }
 
-// Issue #214: the download safety net's max-size input is collected as MB
-// (friendlier for a non-technical user) but the wire format/generated
-// script work in bytes — same "convert at the UI boundary" pattern
-// Hardening's own percent(UI)<->fraction(wire) conversion already uses.
-// null/non-positive input means "no limit", not zero.
+// The max-size input is MB (friendlier), the wire format is bytes. null / non-positive means "no limit".
 /**
  * @param {string} value
  * @returns {number | null}
@@ -112,21 +76,12 @@ function megabytesToBytes(value) {
   return Number.isFinite(mb) && mb > 0 ? Math.round(mb * 1024 * 1024) : null;
 }
 
-// Issue #213 follow-up: guesses which of a clicked element's own
-// attributes most likely holds a downloadable resource URL, so the
-// extension can pre-select it in the attribute picker instead of leaving
-// a non-technical user to guess/inspect DevTools for an HTML attribute
-// name blind (per CLAUDE.md's "no programming knowledge" target audience
-// — the whole reason `select-field-attribute` lists the element's actual
-// attributes rather than being a free-text field at all). A convenience
-// default only — every attribute is still listed and pickable regardless
-// of what this guesses, so a wrong guess costs one click to correct, not
-// a dead end.
+// Guesses which of the clicked element's attributes most likely holds a downloadable resource URL, so the picker can
+// preselect it. Only a convenience: every attribute stays listed and pickable.
 const RESOURCE_LIKE_EXTENSION_RE = /\.(jpe?g|png|gif|webp|avif|svg|bmp|ico|pdf|mp4|webm|mp3)(\?|#|$)/i;
 
-// A "data:" URI is inline base64 content, not a fetchable resource — the
-// classic case being a 1x1 tracking-pixel placeholder sitting in `src`
-// while the real image URL waits in a lazy-load `data-*` attribute.
+// A "data:" URI is inline content, not a fetchable resource (typically a tracking-pixel placeholder in `src` while the
+// real URL sits in a lazy-load data-* attribute).
 /**
  * @param {string} value
  * @returns {boolean}
@@ -155,9 +110,7 @@ function scoreAttributeForDownload(name, value) {
   return 10; // contains a slash but nothing else recognizable
 }
 
-// Returns the best-guess attribute name, or null when nothing on the
-// element looks like a resource URL at all (the picker then simply lists
-// every attribute with no preselection).
+// Returns the best-guess attribute name, or null when nothing looks like a resource URL.
 /**
  * @param {Record<string, string> | null | undefined} attributes
  * @returns {string | null}
@@ -186,13 +139,8 @@ function resolveGroupNode(groups, path) {
   return node;
 }
 
-// True if the node at `path` (or any of its ancestors) is a repeating
-// group — i.e. a selector added under this path will be re-evaluated once
-// per matched instance, not just once. Used to tell content-script to skip
-// its usual id-selector shortcut (see buildSelector's avoidId): an id is
-// page-unique, so a selector built from one can only ever match a single
-// instance, silently starving every other repetition of that field/nested
-// container.
+// True if the node at `path` or an ancestor is a repeating group: content-script then skips its id-selector shortcut
+// (an id is page-unique and would starve the other repetitions).
 /**
  * @param {SFDraft.ContainerNode[]} groups
  * @param {number[] | null | undefined} path
@@ -226,16 +174,9 @@ function insertContainerNode(groups, parentPath, node) {
     : n));
 }
 
-// Issue #206: the field-name options a new field's combineFields/
-// splitField transform may reference — every already-present *field*
-// child (kind === 'field') directly under `parentPath` (or at root level
-// when null), in declared order. Deliberately not global-by-name (unlike
-// collectFieldNames, used by the hardening null-rate/required-fields
-// pickers) — modal-field-extended only ever inserts a brand-new field as
-// the last child of this exact parent, so every current field sibling
-// here is already guaranteed to be "declared earlier" once the new one is
-// appended, matching ScrapingPlanValidator's own same-immediate-parent-
-// group ordering rule exactly, with no slicing needed.
+// Field-name options a new combine/split field may reference: the field children directly under `parentPath`, in
+// declared order. Same-immediate-parent, not global-by-name like collectFieldNames; the new field is appended last, so
+// every current sibling is "declared earlier" (ScrapingPlanValidator's ordering rule).
 /**
  * @param {SFDraft.ContainerNode[]} groups
  * @param {number[] | null | undefined} parentPath
@@ -264,9 +205,7 @@ function removeGroupTreeNode(groups, path) {
     : n));
 }
 
-// Issue #177: replaces the node at `path` with `updater(node)` — same
-// recursive path-walk shape as api-config.js's own updateApiTreeNode, used
-// there for the API tree's own rename-in-place input.
+// Replaces the node at `path` with `updater(node)` (like api-config.js's updateApiTreeNode).
 /**
  * @param {SFDraft.ContainerNode[]} groups
  * @param {number[]} path
@@ -283,11 +222,8 @@ function updateGroupTreeNode(groups, path, updater) {
   });
 }
 
-// Issue #177: swaps the node at `path` with its adjacent sibling —
-// direction is -1 (up) or 1 (down), same convention as field-transforms.js's
-// moveTransform. No-ops (returns `groups` unchanged) past either end of the
-// sibling list, so callers can wire this straight to an unconditional
-// button click without checking the boundary themselves first.
+// Swaps the node at `path` with its adjacent sibling (-1 up, 1 down, like moveTransform); a no-op past either end, so
+// a button can call it unconditionally.
 /**
  * @param {SFDraft.ContainerNode[]} groups
  * @param {number[]} path
@@ -311,9 +247,7 @@ function moveGroupTreeNode(groups, path, direction) {
     : updateGroupTreeNode(groups, parentPath, (n) => ({ ...n, children: swapped }));
 }
 
-// Issue #177: the part of formatGroupNodeLabel below that isn't the name
-// itself — split out so the tree-row editor can render the name as an
-// editable input and this suffix as a separate, read-only label next to it.
+// The part of formatGroupNodeLabel that is not the name, so the tree row can show an editable name and this suffix.
 /**
  * @param {SFDraft.ContainerNode} node
  * @returns {string}
@@ -322,11 +256,7 @@ function groupNodeSuffix(node) {
   if (node.kind === 'group') {
     return `(${t(node.repeating ? 'group.repeating' : 'group.single')})`;
   }
-  // Issue #206 follow-up: a field created through the dedicated combine/
-  // split flow always carries mode='text' (see buildFieldNode's own doc
-  // comment) — branching on the transform's own kind first, rather than
-  // on node.mode, is what shows a distinguishing label instead of "Text"
-  // for a field whose actual extracted value is always discarded.
+  // Branches on the transform kind first: a derived field carries mode='text', which would mislead.
   const firstTransform = node.transforms?.[0];
   const derivedKind = firstTransform?.kind;
   if (derivedKind === 'combineFields') {
@@ -357,9 +287,8 @@ function formatGroupNodeLabel(node) {
 /** @type {Record<SFDraft.FieldMode, SFWire.ExtractMode>} */
 const FIELD_MODE_WIRE_NAMES = { text: 'Text', attribute: 'Attribute', exists: 'Exists', ownText: 'OwnText' };
 
-// Strips the popup's internal `kind` tag and shapes each node exactly like
-// the wire format the Companion expects (ContainerNode.cs / ContainerNodeJsonConverter):
-// `children` present only for groups, `attribute` present only when mode is Attribute.
+// Strips the internal `kind` tag and shapes each node like the wire format (children only for groups, attribute only
+// for Attribute mode).
 /**
  * @param {SFDraft.ContainerNode[]} groups
  * @returns {SFWire.ContainerNode[]}
@@ -378,10 +307,7 @@ function serializeGroupTree(groups) {
         ...(node.mode === 'attribute' ? { attribute: node.attribute } : {}),
         ...(node.framePath ? { framePath: node.framePath } : {}),
         ...(node.transforms && node.transforms.length > 0 ? { transforms: node.transforms } : {}),
-        // Issue #213: same "only meaningful under Attribute mode" gate as
-        // attribute itself — omitted (not sent as false) when off, the
-        // same "incomplete/off = key omitted" convention transforms/
-        // framePath above already use.
+        // Omitted (not false) when off, like transforms / framePath.
         ...(node.mode === 'attribute' && node.download ? { download: true } : {}),
         // Issue #214: the optional safety net alongside download — only
         // sent when download is actually on and a value was configured.
