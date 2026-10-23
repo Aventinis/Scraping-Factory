@@ -6,127 +6,134 @@
 // resolve/update/reference-check/bound-check/serialize), and top-level
 // ApiConfig assembly. Split out of popup.js (which had grown past 3800 loc)
 // purely for readability — no behavior change.
-// @ts-check
-/** @import * as SFWire from '../types/wire' */
-/** @import * as SFDraft from '../types/drafts' */
-// Issue #238: JSDoc-annotated and typechecked via `// @ts-check` + tsconfig
-// (`npm run typecheck`). Wire-shape inputs/outputs are typed against
-// types/wire.ts's `SFWire` namespace; this module's own draft
-// shapes (the URL-template decomposition, the ApiGroup/ApiField response
-// tree, the ApiBodyNode request-body tree) are described by the local
-// `@typedef`s below rather than types/drafts.ts's `SFDraft`
-// namespace, since — unlike container-tree.ts's tree or the Monitoring/
-// Settings section drafts — nothing outside this file ever references them
-// (scraping-config-builder.ts's own `collectFieldNames` reads `apiConfig`
-// only in its already-*serialized* `SFWire.ApiConfig` shape, never this
-// module's own draft). A recorded/embedded-JSON "candidate" (the message
-// content-script.js sends back after a click-based search, carrying
-// `treeSkeleton`/`siblings`/etc. — see `buildApiSubtreeFromCandidate`'s own
-// doc comment) is deliberately left as a loosely-typed `object` throughout:
-// it's an ephemeral cross-context message shape produced by a completely
-// different file this pass doesn't cover, not a shape this module itself
-// owns or persists.
+import type * as SFWire from '../types/wire';
+import type * as SFDraft from '../types/drafts';
+import { BOOTSTRAP_SOURCE_KIND, buildApiBootstrap, bootstrapDraftIsComplete } from './api-bootstrap';
+import { buildApiCursorPagination, cursorDraftIsComplete } from './api-cursor-pagination';
+import { buildApiLinkHeaderPagination, linkDraftIsComplete } from './api-link-pagination';
+import { t } from '../i18n/i18n';
+
+// The API-mode drafts are declared here rather than in types/drafts.ts: only
+// this module and api-bootstrap.ts read them (scraping-config-builder.ts sees
+// the already-serialized SFWire.ApiConfig, never these).
+
+export interface PathSegmentPart {
+  value: string;
+  variable: boolean;
+  name: string;
+}
+
+export interface QueryParamPart {
+  key: string;
+  value: string;
+  variable: boolean;
+  name: string;
+}
+
+export type UrlTemplatePart = PathSegmentPart | QueryParamPart;
+
+export interface UrlParts {
+  origin: string;
+  pathSegments: PathSegmentPart[];
+  queryParams: QueryParamPart[];
+}
+
+export type ApiParameterSourceDraft = SFWire.ApiParameterSource;
+
+export interface ApiGroupDraft {
+  kind: 'group';
+  name: string;
+  path: string;
+  children: ApiNodeDraft[];
+}
+
+export interface ApiFieldDraft {
+  kind: 'field';
+  name: string;
+  path: string | null;
+  transforms: SFWire.FieldTransform[] | null;
+  /** Popup-internal, never sent: drives the transform modal's live preview. */
+  sampleValue?: unknown;
+  hiddenFromOutput: boolean;
+}
+
+export type ApiNodeDraft = ApiGroupDraft | ApiFieldDraft;
+
+export interface ApiBodyObjectDraft {
+  kind: 'object';
+  properties: Record<string, ApiBodyNodeDraft>;
+}
+
+export interface ApiBodyArrayDraft {
+  kind: 'array';
+  items: ApiBodyNodeDraft[];
+}
+
+export interface ApiBodyLiteralDraft {
+  kind: 'literal';
+  literalKind: SFWire.ApiBodyLiteralKind;
+  value: unknown;
+}
+
+export interface ApiBodyVariableDraft {
+  kind: 'variable';
+  literalKind: SFWire.ApiBodyLiteralKind;
+  value: unknown;
+  parameterId: string | null;
+  coerceTo?: SFWire.ApiBodyLiteralKind | null;
+}
+
+export type ApiBodyNodeDraft = ApiBodyObjectDraft | ApiBodyArrayDraft | ApiBodyLiteralDraft | ApiBodyVariableDraft;
+
+export interface ParameterPart {
+  id: string;
+  name: string;
+}
+
+export interface HeaderDecision {
+  include: boolean;
+  mode: 'literal' | 'env' | 'bootstrap';
+  envName?: string;
+  template?: string;
+}
+
+export interface ApiConfigDraft {
+  urlParts: UrlParts;
+  itemsPath?: string;
+  fields?: ApiFieldDraft[];
+  groups?: ApiNodeDraft[];
+  parameterSources: Record<string, ApiParameterSourceDraft>;
+  capturedHeaders: Array<{ name: string; value: string }>;
+  headerDecisions: Record<string, HeaderDecision>;
+  method?: 'GET' | 'POST';
+  bodyTree?: ApiBodyNodeDraft;
+  bodyParameterNames?: string[];
+  parameterIdToName?: Record<string, string>;
+  embeddedJsonSource?: SFWire.EmbeddedJsonSource | null;
+  bodyParameters?: ParameterPart[];
+  bootstrap?: SFDraft.ApiBootstrap | null;
+  cursorPagination?: SFDraft.ApiCursorPagination | null;
+  linkHeaderPagination?: SFDraft.ApiLinkHeaderPagination | null;
+  sourceHasNextLink?: boolean;
+  sourceEntryId?: string;
+}
+
 /**
- * @typedef {Object} UrlTemplatePart
- * @property {string} [key]
- * @property {string} value
- * @property {boolean} variable
- * @property {string} name
+ * The message content-script.js sends back after a click-based search. It is a
+ * cross-context shape this module only reads, so only the parts
+ * buildApiSubtreeFromCandidate uses are declared.
  */
-/**
- * @typedef {Object} UrlParts
- * @property {string} origin
- * @property {UrlTemplatePart[]} pathSegments
- * @property {UrlTemplatePart[]} queryParams
- */
-/**
- * @typedef {SFWire.ApiParameterSource} ApiParameterSourceDraft
- */
-/**
- * @typedef {Object} ApiGroupDraft
- * @property {'group'} kind
- * @property {string} name
- * @property {string} path
- * @property {ApiNodeDraft[]} children
- */
-/**
- * @typedef {Object} ApiFieldDraft
- * @property {'field'} kind
- * @property {string} name
- * @property {string | null} path
- * @property {SFWire.FieldTransform[] | null} transforms
- * @property {*} [sampleValue]
- * @property {boolean} hiddenFromOutput
- */
-/** @typedef {ApiGroupDraft | ApiFieldDraft} ApiNodeDraft */
-/**
- * @typedef {Object} ApiBodyObjectDraft
- * @property {'object'} kind
- * @property {Record<string, ApiBodyNodeDraft>} properties
- */
-/**
- * @typedef {Object} ApiBodyArrayDraft
- * @property {'array'} kind
- * @property {ApiBodyNodeDraft[]} items
- */
-/**
- * @typedef {Object} ApiBodyLiteralDraft
- * @property {'literal'} kind
- * @property {SFWire.ApiBodyLiteralKind} literalKind
- * @property {*} value
- */
-/**
- * @typedef {Object} ApiBodyVariableDraft
- * @property {'variable'} kind
- * @property {SFWire.ApiBodyLiteralKind} literalKind
- * @property {*} value
- * @property {string | null} parameterId
- * @property {SFWire.ApiBodyLiteralKind | null} [coerceTo]
- */
-/** @typedef {ApiBodyObjectDraft | ApiBodyArrayDraft | ApiBodyLiteralDraft | ApiBodyVariableDraft} ApiBodyNodeDraft */
-/**
- * @typedef {Object} ParameterPart
- * @property {string} id
- * @property {string} name
- */
-/**
- * @typedef {Object} ApiConfigDraft
- * @property {UrlParts} urlParts
- * @property {string} [itemsPath]
- * @property {ApiFieldDraft[]} [fields]
- * @property {ApiNodeDraft[]} [groups]
- * @property {Record<string, ApiParameterSourceDraft>} parameterSources
- * @property {Array<{name: string, value: string}>} capturedHeaders
- * @property {Record<string, {include: boolean, mode: 'literal' | 'env' | 'bootstrap', envName?: string, template?: string}>} headerDecisions
- * @property {'GET' | 'POST'} [method]
- * @property {ApiBodyNodeDraft} [bodyTree]
- * @property {string[]} [bodyParameterNames]
- * @property {Record<string, string>} [parameterIdToName]
- * @property {SFWire.EmbeddedJsonSource | null} [embeddedJsonSource]
- * @property {ParameterPart[]} [bodyParameters]
- * @property {SFDraft.ApiBootstrap | null} [bootstrap]
- * @property {SFDraft.ApiCursorPagination | null} [cursorPagination]
- * @property {SFDraft.ApiLinkHeaderPagination | null} [linkHeaderPagination]
- * @property {boolean} [sourceHasNextLink]
- * @property {string} [sourceEntryId]
- */
-// Issue #220: the bootstrap request's own draft→wire logic lives in its
-// own module (api-bootstrap.ts, loaded before this file — see popup.html);
-// this file only needs it to fold the bootstrap into buildApiConfig's
-// output and into the "Apply" gate.
-const { BOOTSTRAP_SOURCE_KIND, buildApiBootstrap, bootstrapDraftIsComplete } = require('./api-bootstrap');
-// Issue #224: same split — the cursor-pagination draft→wire/validity logic
-// lives in api-cursor-pagination.ts (loaded before this file).
-const { buildApiCursorPagination, cursorDraftIsComplete } = require('./api-cursor-pagination');
-// Issue #321: same split for Link-header pagination (api-link-pagination.ts).
-const { buildApiLinkHeaderPagination, linkDraftIsComplete } = require('./api-link-pagination');
-const { t } = require('../i18n/i18n');
+export interface ApiSubtreeCandidate {
+  treeSkeleton: Array<{ path: string }>;
+  value?: unknown;
+  siblings?: Array<{ name: string; value?: unknown }>;
+}
 
 // Popup screen names. Lives here (rather than in popup.js, which loads
 // after this module) purely so api-config-ui.js/container-tree-ui.js's
 // event handlers can reference it too; it has no other tie to API mode
 // specifically.
-const STATES = {
+export const STATES = {
   CHECKING_COMPANION: 'CHECKING_COMPANION',
   COMPANION_ERROR:    'COMPANION_ERROR',
   IDLE:               'IDLE',
@@ -144,11 +151,7 @@ const STATES = {
 
 // Generic, dependency-free HTML-escaping helper — lives here for the same
 // reason as STATES above.
-/**
- * @param {*} str
- * @returns {string}
- */
-function escapeHtml(str) {
+export function escapeHtml(str: unknown): string {
   return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -167,11 +170,7 @@ function escapeHtml(str) {
 // One entry per non-empty path segment / query param, `variable`/`name`
 // default to "not parameterized yet" so the URL-editor screen can render
 // the decomposed request before the user has toggled anything.
-/**
- * @param {string} urlString
- * @returns {UrlParts}
- */
-function parseUrlTemplateParts(urlString) {
+export function parseUrlTemplateParts(urlString: string): UrlParts {
   const url = new URL(urlString);
   const pathSegments = url.pathname.split('/').filter(s => s !== '').map(value => ({ value, variable: false, name: '' }));
   const queryParams = Array.from(url.searchParams.entries()).map(([key, value]) => ({ key, value, variable: false, name: key }));
@@ -184,25 +183,17 @@ function parseUrlTemplateParts(urlString) {
 // from url.pathname (already percent-encoded, so used as-is); query values
 // come from url.searchParams (percent-*decoded* by the URL API), so those
 // need re-encoding when rebuilt.
-/**
- * @param {UrlParts} urlParts
- * @returns {string}
- */
-function buildUrlTemplate({ origin, pathSegments, queryParams }) {
+export function buildUrlTemplate({ origin, pathSegments, queryParams }: UrlParts): string {
   const path = pathSegments.map(seg => (seg.variable ? `{${seg.name}}` : seg.value)).join('/');
   const query = queryParams
-    .map(p => `${encodeURIComponent(/** @type {string} */ (p.key))}=${p.variable ? `{${p.name}}` : encodeURIComponent(p.value)}`)
+    .map(p => `${encodeURIComponent(p.key)}=${p.variable ? `{${p.name}}` : encodeURIComponent(p.value)}`)
     .join('&');
   return `${origin}/${path}${query ? `?${query}` : ''}`;
 }
 
 // Werteliste source: comma- or newline-separated free text → trimmed,
 // non-empty values.
-/**
- * @param {string | null | undefined} text
- * @returns {string[]}
- */
-function parseValueListInput(text) {
+export function parseValueListInput(text: string | null | undefined): string[] {
   return String(text ?? '').split(/[,\n]/).map(s => s.trim()).filter(s => s.length > 0);
 }
 
@@ -220,21 +211,13 @@ function parseValueListInput(text) {
 // (percent-encoded-as-is for a path segment, percent-decoded for a query
 // param) — no extra normalization needed. Returns distinct values in
 // first-seen order.
-/**
- * @param {UrlParts} urlParts
- * @param {string} targetPartId
- * @param {Array<{url: string}>} entries
- * @returns {string[]}
- */
-function findUrlTemplateMatches(urlParts, targetPartId, entries) {
+export function findUrlTemplateMatches(urlParts: UrlParts, targetPartId: string, entries: Array<{ url: string }>): string[] {
   const [targetScope, targetKey] = targetPartId.split(':');
-  /** @type {Set<string>} */
-  const seen = new Set();
-  /** @type {string[]} */
-  const values = [];
+  const seen = new Set<string>();
+  const values: string[] = [];
 
   (entries || []).forEach((entry) => {
-    let candidate;
+    let candidate: UrlParts;
     try {
       candidate = parseUrlTemplateParts(entry.url);
     } catch {
@@ -282,12 +265,7 @@ function findUrlTemplateMatches(urlParts, targetPartId, entries) {
 // "merge, don't replace" decision this mirrors). Dedupes against
 // parseValueListInput's own reading of the existing text, the same split
 // the textarea itself is interpreted with everywhere else.
-/**
- * @param {string} existingText
- * @param {string[]} newValues
- * @returns {{text: string, addedCount: number}}
- */
-function mergeValueListValues(existingText, newValues) {
+export function mergeValueListValues(existingText: string, newValues: string[]): { text: string; addedCount: number } {
   const existing = new Set(parseValueListInput(existingText));
   const added = newValues.filter(v => !existing.has(v));
   if (added.length === 0) return { text: existingText || '', addedCount: 0 };
@@ -295,11 +273,7 @@ function mergeValueListValues(existingText, newValues) {
   return { text: prefix + added.join('\n'), addedCount: added.length };
 }
 
-/**
- * @param {string} valuesText
- * @returns {SFWire.StaticListSource}
- */
-function buildStaticListSource(valuesText) {
+export function buildStaticListSource(valuesText: string): SFWire.StaticListSource {
   return { kind: 'staticList', values: parseValueListInput(valuesText) };
 }
 
@@ -308,13 +282,7 @@ function buildStaticListSource(valuesText) {
 // expected to be fully static (see ScrapingPlanValidator.ValidateDiscoverySource:
 // no cross-checking against the main request's parameters, by design, since
 // Phase 1 rules out dependencies between parameters).
-/**
- * @param {string} urlTemplate
- * @param {string} itemsPath
- * @param {string} valuePath
- * @returns {SFWire.DiscoverySource}
- */
-function buildDiscoverySource(urlTemplate, itemsPath, valuePath) {
+export function buildDiscoverySource(urlTemplate: string, itemsPath: string, valuePath: string): SFWire.DiscoverySource {
   return { kind: 'discovery', urlTemplate, itemsPath, valuePath };
 }
 
@@ -325,14 +293,7 @@ function buildDiscoverySource(urlTemplate, itemsPath, valuePath) {
 // runtime's own hardcoded default (RangeFormat.Resolve) stays the single
 // source of truth for "what ISO-Standard actually means" when nothing was
 // explicitly chosen.
-/**
- * @param {SFWire.RangeType} type
- * @param {string} from
- * @param {string} to
- * @param {string} [format]
- * @returns {SFWire.RangeSource}
- */
-function buildRangeSource(type, from, to, format) {
+export function buildRangeSource(type: SFWire.RangeType, from: string, to: string, format?: string): SFWire.RangeSource {
   return { kind: 'range', type, from, to, ...(format ? { format } : {}) };
 }
 
@@ -343,19 +304,14 @@ function buildRangeSource(type, from, to, format) {
 // edited, the action list is kept in the same draft shape (SFDraft.
 // BrowserAction[]) the top-level login-flow editor already uses — reusing
 // addBrowserAction/removeBrowserAction/updateBrowserAction from
-// scraping-config-builder.ts directly (api-config.js can't import that
+// scraping-config-builder.ts directly (api-config.ts can't import that
 // module itself: scraping-config-builder.ts already imports THIS module,
 // and the reverse would be a circular require) — so `actions` here is
 // already serialized to wire shape (via that module's
 // serializeBrowserActions) by the caller (confirmApiConfig in
 // api-config-ui.js), exactly mirroring how staticList/range's own drafts
 // are converted to wire shape at that same call site.
-/**
- * @param {string} discoveryUrl
- * @param {SFWire.BrowserAction[]} [actions]
- * @returns {SFWire.BrowserDiscoverySource}
- */
-function buildBrowserDiscoverySource(discoveryUrl, actions) {
+export function buildBrowserDiscoverySource(discoveryUrl: string, actions?: SFWire.BrowserAction[]): SFWire.BrowserDiscoverySource {
   return { kind: 'browserDiscovery', discoveryUrl, ...(actions && actions.length ? { actions } : {}) };
 }
 
@@ -368,8 +324,7 @@ function buildBrowserDiscoverySource(discoveryUrl, actions) {
 // list) is the escape hatch for anything else. Order matters: the first
 // entry per type is also the "nothing else matched" fallback in
 // detectRangeFormat, so it must be the ISO-8601/RangeFormat.Resolve default.
-/** @type {Partial<Record<SFWire.RangeType, Array<{format: string, labelKey: string}>>>} */
-const RANGE_FORMAT_PRESETS = {
+export const RANGE_FORMAT_PRESETS: Partial<Record<SFWire.RangeType, Array<{ format: string; labelKey: string }>>> = {
   IsoWeek: [
     { format: '{yyyy}-W{ww}', labelKey: 'apiConfig.presetIsoWeekStandard' },
     { format: '{yyyy}-{ww}', labelKey: 'apiConfig.presetIsoWeekNoSeparator' },
@@ -386,11 +341,7 @@ const RANGE_FORMAT_TOKEN_PATTERNS = { yyyy: '\\d{4}', ww: '\\d{1,2}', mm: '\\d{1
 // Same format mini-template as RangeFormat.CompilePattern (companion) and
 // _compile_range_format (generated script); test-vectors/range-format.json
 // pins all three to the same matches, so a value this accepts parses there too.
-/**
- * @param {string} format
- * @returns {RegExp}
- */
-function compileRangeFormatPattern(format) {
+export function compileRangeFormatPattern(format: string): RegExp {
   let pattern = format.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   for (const [token, valuePattern] of Object.entries(RANGE_FORMAT_TOKEN_PATTERNS)) {
     pattern = pattern.replaceAll(`\\{${token}\\}`, valuePattern);
@@ -406,12 +357,7 @@ function compileRangeFormatPattern(format) {
 // raw value yet. For the reported bug's exact case ("2026-35"), this picks
 // "Jahr-Woche ohne Trennzeichen" with zero typing. Returns null for Number,
 // which has no format concept.
-/**
- * @param {SFWire.RangeType} type
- * @param {string | null | undefined} rawValue
- * @returns {string | null}
- */
-function detectRangeFormat(type, rawValue) {
+export function detectRangeFormat(type: SFWire.RangeType, rawValue: string | null | undefined): string | null {
   const presets = RANGE_FORMAT_PRESETS[type];
   if (!presets) return null;
   if (rawValue) {
@@ -426,12 +372,7 @@ function detectRangeFormat(type, rawValue) {
 // toggle preserves it via object spread, and variableUrlParts carries it
 // through as part.value; this just looks it up by partId for
 // detectRangeFormat's benefit.
-/**
- * @param {UrlParts} urlParts
- * @param {string} partId
- * @returns {string | undefined}
- */
-function findUrlPartValue(urlParts, partId) {
+export function findUrlPartValue(urlParts: UrlParts, partId: string): string | undefined {
   return variableUrlParts(urlParts).find(p => p.id === partId)?.value;
 }
 
@@ -444,12 +385,7 @@ function findUrlPartValue(urlParts, partId) {
 // different preset's template. Kept translation-free (unlike the render
 // functions that call it) so it stays a pure, load-order-independent
 // function to unit-test directly.
-/**
- * @param {string | null | undefined} format
- * @param {string | null | undefined} fromValue
- * @returns {string | null}
- */
-function rangeFormatExample(format, fromValue) {
+export function rangeFormatExample(format: string | null | undefined, fromValue: string | null | undefined): string | null {
   if (!format) return null;
   if (fromValue && compileRangeFormatPattern(format).test(fromValue)) return fromValue;
   return format;
@@ -460,12 +396,7 @@ function rangeFormatExample(format, fromValue) {
 // {include, mode: 'literal'|'env', envName}} — the header-adoption table's
 // per-row choice. Mirrors FillStep's env-var pattern: a header adopted via
 // an environment variable is never embedded literally.
-/**
- * @param {Array<{name: string, value: string}>} capturedHeaders
- * @param {Record<string, {include: boolean, mode: 'literal' | 'env' | 'bootstrap', envName?: string, template?: string}>} decisions
- * @returns {SFWire.ApiHeader[]}
- */
-function buildApiHeaders(capturedHeaders, decisions) {
+export function buildApiHeaders(capturedHeaders: Array<{ name: string; value: string }>, decisions: Record<string, HeaderDecision>): SFWire.ApiHeader[] {
   return capturedHeaders
     .filter(h => decisions[h.name]?.include)
     .map((h) => {
@@ -509,15 +440,11 @@ function buildApiHeaders(capturedHeaders, decisions) {
 // IR/ApiConfig.cs's own EmbeddedJsonSource property, a plain optional
 // object with no serialization of its own to do here (unlike groups/body,
 // which are draft shapes needing conversion to the wire format).
-/**
- * @param {ApiConfigDraft} draft
- * @returns {SFWire.ApiConfig}
- */
-function buildApiConfig({
+export function buildApiConfig({
   urlParts, itemsPath, fields, groups, parameterSources, capturedHeaders, headerDecisions,
   method, bodyTree, bodyParameterNames = [], parameterIdToName = {}, embeddedJsonSource = null, bootstrap = null,
   cursorPagination = null, linkHeaderPagination = null,
-}) {
+}: ApiConfigDraft): SFWire.ApiConfig {
   const urlTemplate = buildUrlTemplate(urlParts);
   // Issue #220: a variable URL part carrying the bootstrap value (already
   // renamed to the bootstrap's own name by resolveBootstrapUrlParts) is a
@@ -540,7 +467,7 @@ function buildApiConfig({
     // under at least one root group — so this cast just narrows
     // serializeApiTree's generic ApiNode[] return to what ApiConfig.Groups
     // itself requires.
-    ...(groups ? { groups: /** @type {SFWire.ApiGroup[]} */ (serializeApiTree(groups)) } : { itemsPath, fields }),
+    ...(groups ? { groups: serializeApiTree(groups) as SFWire.ApiGroup[] } : { itemsPath, fields }),
     parameters,
     ...(headers.length > 0 ? { headers } : {}),
     ...(bodyTree ? { body: serializeBodyTree(bodyTree, parameterIdToName) } : {}),
@@ -562,12 +489,7 @@ function buildApiConfig({
 // Pure helpers only in this phase; event wiring into the API_CONFIG screen
 // is Phase A5.
 
-/**
- * @param {string} name
- * @param {string} path
- * @returns {ApiGroupDraft}
- */
-function buildApiGroupDraft(name, path) {
+export function buildApiGroupDraft(name: string, path: string): ApiGroupDraft {
   return { kind: 'group', name, path, children: [] };
 }
 
@@ -591,45 +513,27 @@ function buildApiGroupDraft(name, path) {
 // value comes entirely from other already-resolved sibling fields).
 // hiddenFromOutput defaults false, set only via that same flow's own
 // "remove original field(s)" checkbox (updateApiTreeNode elsewhere).
-/**
- * @param {string} name
- * @param {string | null} path
- * @param {SFWire.FieldTransform[] | null} [transforms]
- * @param {*} [sampleValue]
- * @param {boolean} [hiddenFromOutput]
- * @returns {ApiFieldDraft}
- */
-function buildApiFieldDraft(name, path, transforms = null, sampleValue = undefined, hiddenFromOutput = false) {
+export function buildApiFieldDraft(
+  name: string, path: string | null, transforms: SFWire.FieldTransform[] | null = null, sampleValue: unknown = undefined, hiddenFromOutput = false,
+): ApiFieldDraft {
   return { kind: 'field', name, path, transforms, sampleValue, hiddenFromOutput };
 }
 
-/**
- * @param {ApiNodeDraft[]} groups
- * @param {number[] | null | undefined} path
- * @returns {ApiNodeDraft | null}
- */
-function resolveApiTreeNode(groups, path) {
+export function resolveApiTreeNode(groups: ApiNodeDraft[], path: number[] | null | undefined): ApiNodeDraft | null {
   if (!path || path.length === 0) return null;
-  /** @type {ApiNodeDraft} */
-  let node = groups[path[0]];
-  for (let i = 1; i < path.length; i++) node = /** @type {ApiGroupDraft} */ (node).children[path[i]];
+  let node: ApiNodeDraft = groups[path[0]];
+  for (let i = 1; i < path.length; i++) node = (node as ApiGroupDraft).children[path[i]];
   return node;
 }
 
 // Appends `node` as the last child at `parentPath` (or at root level when
 // `parentPath` is null) — immutable, like insertContainerNode below.
-/**
- * @param {ApiNodeDraft[]} groups
- * @param {number[] | null | undefined} parentPath
- * @param {ApiNodeDraft} node
- * @returns {ApiNodeDraft[]}
- */
-function insertApiTreeNode(groups, parentPath, node) {
+export function insertApiTreeNode(groups: ApiNodeDraft[], parentPath: number[] | null | undefined, node: ApiNodeDraft): ApiNodeDraft[] {
   const path = parentPath || [];
   if (path.length === 0) return [...groups, node];
   const [head, ...rest] = path;
   return groups.map((n, i) => (i === head
-    ? { ...n, children: insertApiTreeNode(/** @type {ApiGroupDraft} */ (n).children, rest, node) }
+    ? { ...n, children: insertApiTreeNode((n as ApiGroupDraft).children, rest, node) }
     : n));
 }
 
@@ -641,12 +545,7 @@ function insertApiTreeNode(groups, parentPath, node) {
 // only siblings actually declared before it count; a later sibling isn't
 // offered at all here, rather than being offered and then rejected only
 // once "Apply" reaches the companion's own ordering check.
-/**
- * @param {ApiNodeDraft[]} groups
- * @param {number[] | null | undefined} path
- * @returns {string[]}
- */
-function collectPrecedingApiFieldSiblingNames(groups, path) {
+export function collectPrecedingApiFieldSiblingNames(groups: ApiNodeDraft[], path: number[] | null | undefined): string[] {
   if (!path || path.length === 0) return [];
   const parentPath = path.slice(0, -1);
   const ownIndex = path[path.length - 1];
@@ -664,12 +563,7 @@ function collectPrecedingApiFieldSiblingNames(groups, path) {
 // every current field sibling here already counts as "declared earlier"
 // with no slicing needed, unlike collectPrecedingApiFieldSiblingNames
 // above (which targets an already-placed leaf's own position instead).
-/**
- * @param {ApiNodeDraft[]} groups
- * @param {number[] | null | undefined} groupPath
- * @returns {string[]}
- */
-function collectApiGroupFieldNames(groups, groupPath) {
+export function collectApiGroupFieldNames(groups: ApiNodeDraft[], groupPath: number[] | null | undefined): string[] {
   const group = !groupPath || groupPath.length === 0 ? null : resolveApiTreeNode(groups, groupPath);
   const children = !groupPath || groupPath.length === 0
     ? groups
@@ -679,16 +573,11 @@ function collectApiGroupFieldNames(groups, groupPath) {
 
 // Removes the node (and its subtree) at `path` — always non-empty, unlike
 // insertApiTreeNode's parentPath.
-/**
- * @param {ApiNodeDraft[]} groups
- * @param {number[]} path
- * @returns {ApiNodeDraft[]}
- */
-function removeApiTreeNode(groups, path) {
+export function removeApiTreeNode(groups: ApiNodeDraft[], path: number[]): ApiNodeDraft[] {
   if (path.length === 1) return groups.filter((_, i) => i !== path[0]);
   const [head, ...rest] = path;
   return groups.map((n, i) => (i === head
-    ? { ...n, children: removeApiTreeNode(/** @type {ApiGroupDraft} */ (n).children, rest) }
+    ? { ...n, children: removeApiTreeNode((n as ApiGroupDraft).children, rest) }
     : n));
 }
 
@@ -699,12 +588,8 @@ function removeApiTreeNode(groups, path) {
 // codegen side for the same discriminator). transforms (Issue #84) is only
 // included when non-empty, the same "omit rather than send an empty/null
 // key" convention Container-Mode's own serializeGroupTree already uses.
-/**
- * @param {ApiNodeDraft[]} groups
- * @returns {SFWire.ApiNode[]}
- */
-function serializeApiTree(groups) {
-  return groups.map(node => (node.kind === 'group'
+export function serializeApiTree(groups: ApiNodeDraft[]): SFWire.ApiNode[] {
+  return groups.map((node): SFWire.ApiNode => (node.kind === 'group'
     ? { name: node.name, path: node.path, children: serializeApiTree(node.children) }
     : {
         name: node.name, path: node.path,
@@ -719,15 +604,10 @@ function serializeApiTree(groups) {
 // a leaf-field count regardless of shape: the older flat ApiConfig.Fields is
 // already flat, but a tree-shaped ApiConfig.Groups (Issue #54) needs
 // counting recursively — every ApiField anywhere in the tree, at any depth.
-/**
- * @param {SFWire.ApiConfig} apiConfig
- * @returns {number}
- */
-function countApiConfigFields(apiConfig) {
+export function countApiConfigFields(apiConfig: SFWire.ApiConfig): number {
   if (!apiConfig.groups) return (apiConfig.fields || []).length;
-  /** @param {SFWire.ApiNode[]} nodes @returns {number} */
-  const countNodes = nodes => nodes.reduce((sum, node) => {
-    const children = /** @type {any} */ (node).children;
+  const countNodes = (nodes: SFWire.ApiNode[]): number => nodes.reduce((sum, node) => {
+    const children = 'children' in node ? node.children : undefined;
     return sum + (children ? countNodes(children) : 1);
   }, 0);
   return countNodes(apiConfig.groups);
@@ -737,19 +617,13 @@ function countApiConfigFields(apiConfig) {
 // alongside insert/remove, needed once node names became editable in place
 // (Phase A5, see setApiTreeNodeName) rather than only ever chosen once at
 // creation time.
-/**
- * @param {ApiNodeDraft[]} groups
- * @param {number[]} path
- * @param {(node: ApiNodeDraft) => ApiNodeDraft} updater
- * @returns {ApiNodeDraft[]}
- */
-function updateApiTreeNode(groups, path, updater) {
+export function updateApiTreeNode(groups: ApiNodeDraft[], path: number[], updater: (node: ApiNodeDraft) => ApiNodeDraft): ApiNodeDraft[] {
   const [head, ...rest] = path;
   return groups.map((node, i) => {
     if (i !== head) return node;
     return rest.length === 0
       ? updater(node)
-      : { ...node, children: updateApiTreeNode(/** @type {ApiGroupDraft} */ (node).children, rest, updater) };
+      : { ...node, children: updateApiTreeNode((node as ApiGroupDraft).children, rest, updater) };
   });
 }
 
@@ -758,11 +632,7 @@ function updateApiTreeNode(groups, path, updater) {
 // check does, generalized: intermediate groups are auto-named (see
 // buildApiSubtreeFromCandidate) but that name is editable like any other and
 // so can still be blanked out.
-/**
- * @param {ApiNodeDraft[]} nodes
- * @returns {boolean}
- */
-function apiTreeNodesHaveNonBlankNames(nodes) {
+export function apiTreeNodesHaveNonBlankNames(nodes: ApiNodeDraft[]): boolean {
   return nodes.every(node => !!node.name?.trim() && (node.kind !== 'group' || apiTreeNodesHaveNonBlankNames(node.children)));
 }
 
@@ -790,15 +660,10 @@ function apiTreeNodesHaveNonBlankNames(nodes) {
 // by JS's own typeof (JSON has no separate "integer"/"float", so every
 // number becomes ApiBodyLiteralKind.Number regardless of ApiBodyLiteral's
 // own C#-side double NumberValue).
-/**
- * @param {*} value
- * @returns {ApiBodyNodeDraft}
- */
-function jsonValueToBodyDraft(value) {
+export function jsonValueToBodyDraft(value: unknown): ApiBodyNodeDraft {
   if (Array.isArray(value)) return { kind: 'array', items: value.map(jsonValueToBodyDraft) };
   if (value !== null && typeof value === 'object') {
-    /** @type {Record<string, ApiBodyNodeDraft>} */
-    const properties = {};
+    const properties: Record<string, ApiBodyNodeDraft> = {};
     for (const [key, child] of Object.entries(value)) properties[key] = jsonValueToBodyDraft(child);
     return { kind: 'object', properties };
   }
@@ -811,47 +676,38 @@ function jsonValueToBodyDraft(value) {
 // path steps are either a string (an object property key) or a number (an
 // array index) — object/array are never mixed at the same tree level, so
 // this is an unambiguous discriminator for which branch to take.
-/**
- * @param {ApiBodyNodeDraft} node
- * @param {Array<string | number>} path
- * @returns {ApiBodyNodeDraft}
- */
-function resolveBodyTreeNode(node, path) {
-  /** @type {any} */
+export function resolveBodyTreeNode(node: ApiBodyNodeDraft, path: Array<string | number>): ApiBodyNodeDraft {
   let current = node;
-  for (const step of path) current = typeof step === 'number' ? current.items[step] : current.properties[step];
+  for (const step of path) {
+    if (typeof step === 'number' && current.kind === 'array') current = current.items[step];
+    else if (typeof step === 'string' && current.kind === 'object') current = current.properties[step];
+    else throw new Error(`Body tree path step "${step}" does not fit a ${current.kind} node`);
+  }
   return current;
 }
 
 // Immutable "map the one node at `path`" — the body tree's only edit
 // primitive (see this section's own doc comment on why there's no
 // insert/remove here, unlike the response tree's updateApiTreeNode).
-/**
- * @param {ApiBodyNodeDraft} node
- * @param {Array<string | number>} path
- * @param {(node: ApiBodyNodeDraft) => ApiBodyNodeDraft} updater
- * @returns {ApiBodyNodeDraft}
- */
-function updateBodyTreeNode(node, path, updater) {
+export function updateBodyTreeNode(
+  node: ApiBodyNodeDraft, path: Array<string | number>, updater: (node: ApiBodyNodeDraft) => ApiBodyNodeDraft,
+): ApiBodyNodeDraft {
   if (path.length === 0) return updater(node);
   const [step, ...rest] = path;
-  const n = /** @type {any} */ (node);
-  if (typeof step === 'number') {
-    return { ...n, items: n.items.map((/** @type {ApiBodyNodeDraft} */ item, /** @type {number} */ i) => (i === step ? updateBodyTreeNode(item, rest, updater) : item)) };
+  if (typeof step === 'number' && node.kind === 'array') {
+    return { ...node, items: node.items.map((item, i) => (i === step ? updateBodyTreeNode(item, rest, updater) : item)) };
   }
-  return { ...n, properties: { ...n.properties, [step]: updateBodyTreeNode(n.properties[step], rest, updater) } };
+  if (typeof step === 'string' && node.kind === 'object') {
+    return { ...node, properties: { ...node.properties, [step]: updateBodyTreeNode(node.properties[step], rest, updater) } };
+  }
+  throw new Error(`Body tree path step "${step}" does not fit a ${node.kind} node`);
 }
 
 // Whether any 'variable' leaf anywhere in the tree is still bound to
 // `parameterId` — used to decide whether reverting one such leaf back to
 // 'literal' also orphans the body-only parameter it referenced (see
 // toggleBodyLeafToFixed).
-/**
- * @param {ApiBodyNodeDraft} node
- * @param {string} parameterId
- * @returns {boolean}
- */
-function bodyTreeReferencesParameterId(node, parameterId) {
+export function bodyTreeReferencesParameterId(node: ApiBodyNodeDraft, parameterId: string): boolean {
   if (node.kind === 'object') return Object.values(node.properties).some(child => bodyTreeReferencesParameterId(child, parameterId));
   if (node.kind === 'array') return node.items.some(child => bodyTreeReferencesParameterId(child, parameterId));
   return node.kind === 'variable' && node.parameterId === parameterId;
@@ -861,11 +717,7 @@ function bodyTreeReferencesParameterId(node, parameterId) {
 // per-parameter check: a leaf toggled to 'variable' but not yet bound to a
 // parameter (parameterId still null, see toggleBodyLeafToVariable) must
 // block confirmation the same way an unchosen source kind already does.
-/**
- * @param {ApiBodyNodeDraft} node
- * @returns {boolean}
- */
-function bodyTreeLeavesAreBound(node) {
+export function bodyTreeLeavesAreBound(node: ApiBodyNodeDraft): boolean {
   if (node.kind === 'object') return Object.values(node.properties).every(bodyTreeLeavesAreBound);
   if (node.kind === 'array') return node.items.every(bodyTreeLeavesAreBound);
   if (node.kind === 'variable') return !!node.parameterId;
@@ -881,15 +733,9 @@ function bodyTreeLeavesAreBound(node) {
 // wire format references it by — built once by the caller (confirmApiConfig)
 // from the same allParameterParts list the parameter-source cards render
 // from, since a draft-only id has no meaning outside this popup.
-/**
- * @param {ApiBodyNodeDraft} node
- * @param {Record<string, string>} parameterIdToName
- * @returns {SFWire.ApiBodyNode}
- */
-function serializeBodyTree(node, parameterIdToName) {
+export function serializeBodyTree(node: ApiBodyNodeDraft, parameterIdToName: Record<string, string>): SFWire.ApiBodyNode {
   if (node.kind === 'object') {
-    /** @type {Record<string, SFWire.ApiBodyNode>} */
-    const properties = {};
+    const properties: Record<string, SFWire.ApiBodyNode> = {};
     for (const [key, child] of Object.entries(node.properties)) properties[key] = serializeBodyTree(child, parameterIdToName);
     return { properties };
   }
@@ -898,7 +744,7 @@ function serializeBodyTree(node, parameterIdToName) {
   }
   if (node.kind === 'variable') {
     return {
-      parameterName: parameterIdToName[/** @type {string} */ (node.parameterId)],
+      parameterName: parameterIdToName[node.parameterId as string],
       ...(node.coerceTo ? { coerceTo: node.coerceTo } : {}),
     };
   }
@@ -909,9 +755,9 @@ function serializeBodyTree(node, parameterIdToName) {
   // runtime-internal shape are two different things that happen to share a
   // "kind" field. Null has no value property to set at all.
   switch (node.literalKind) {
-    case 'String': return { kind: 'String', stringValue: node.value };
-    case 'Number': return { kind: 'Number', numberValue: node.value };
-    case 'Boolean': return { kind: 'Boolean', boolValue: node.value };
+    case 'String': return { kind: 'String', stringValue: node.value as string };
+    case 'Number': return { kind: 'Number', numberValue: node.value as number };
+    case 'Boolean': return { kind: 'Boolean', boolValue: node.value as boolean };
     default: return { kind: 'Null' };
   }
 }
@@ -923,11 +769,7 @@ function serializeBodyTree(node, parameterIdToName) {
 // already named after its own JSON key. Returns null for an empty path (the
 // array-of-arrays case, see ApiGroup.Path) or a path with no plain key
 // segment at all — callers fall back to a generic placeholder.
-/**
- * @param {string | null | undefined} path
- * @returns {string | null}
- */
-function lastPathSegmentName(path) {
+export function lastPathSegmentName(path: string | null | undefined): string | null {
   if (!path) return null;
   const tokens = path.match(/[^.[\]]+|\[\d+\]/g) || [];
   for (let i = tokens.length - 1; i >= 0; i--) {
@@ -958,25 +800,18 @@ function lastPathSegmentName(path) {
 // .value (from candidate.siblings, see content-script.js's siblingFields)
 // are carried onto the new field drafts as sampleValue — the raw JSON
 // value the transform-chain modal's live preview runs against later.
-/**
- * @param {any} candidate
- * @param {string} fieldName
- * @param {string[]} siblingNames
- * @param {number} [skipSegments]
- * @returns {ApiNodeDraft[]}
- */
-function buildApiSubtreeFromCandidate(candidate, fieldName, siblingNames, skipSegments = 0) {
-  /** @type {Array<{path: string}>} */
+export function buildApiSubtreeFromCandidate(
+  candidate: ApiSubtreeCandidate, fieldName: string, siblingNames: string[], skipSegments = 0,
+): ApiNodeDraft[] {
   const skeleton = candidate.treeSkeleton.slice(skipSegments);
   const leafField = buildApiFieldDraft(fieldName, skeleton[skeleton.length - 1].path, null, candidate.value);
   const siblingDrafts = siblingNames.map((name) => {
-    const sibling = (candidate.siblings || []).find((/** @type {any} */ s) => s.name === name);
+    const sibling = (candidate.siblings || []).find(s => s.name === name);
     return buildApiFieldDraft(name, name, null, sibling ? sibling.value : undefined);
   });
   const groupSegments = skeleton.slice(0, -1);
-  /** @type {ApiNodeDraft[]} */
-  const leaves = [leafField, ...siblingDrafts];
-  return groupSegments.reduceRight((children, seg) => [
+  const leaves: ApiNodeDraft[] = [leafField, ...siblingDrafts];
+  return groupSegments.reduceRight<ApiNodeDraft[]>((children, seg) => [
     { ...buildApiGroupDraft(lastPathSegmentName(seg.path) || t('apiTree.defaultGroupName'), seg.path), children },
   ], leaves);
 }
@@ -988,16 +823,11 @@ function buildApiSubtreeFromCandidate(candidate, fieldName, siblingNames, skipSe
 // scopeSelector already relies on (see content-script.js's
 // pathStartsWithScope). E.g. tree path [0, 1] under {path:'categories'} →
 // {path:'subcategories'} resolves to "categories[0].subcategories[0]".
-/**
- * @param {ApiNodeDraft[]} groups
- * @param {number[]} path
- * @returns {string}
- */
-function resolveApiGroupScopePath(groups, path) {
+export function resolveApiGroupScopePath(groups: ApiNodeDraft[], path: number[]): string {
   let scope = '';
   let nodes = groups;
   for (const index of path) {
-    const node = /** @type {ApiGroupDraft} */ (nodes[index]);
+    const node = nodes[index] as ApiGroupDraft;
     scope = node.path ? (scope ? `${scope}.${node.path}[0]` : `${node.path}[0]`) : `${scope}[0]`;
     nodes = node.children;
   }
@@ -1007,11 +837,7 @@ function resolveApiGroupScopePath(groups, path) {
 // Every {variable: true} part, tagged with its partId — the single source
 // of truth for "which parameter cards exist" (independent of whether a
 // name has been typed for it yet).
-/**
- * @param {UrlParts} urlParts
- * @returns {Array<UrlTemplatePart & {id: string}>}
- */
-function variableUrlParts(urlParts) {
+export function variableUrlParts(urlParts: UrlParts): Array<UrlTemplatePart & { id: string }> {
   return [
     ...urlParts.pathSegments.map((seg, i) => ({ ...seg, id: `path:${i}` })),
     ...urlParts.queryParams.map(p => ({ ...p, id: `query:${p.key}` })),
@@ -1027,11 +853,7 @@ function variableUrlParts(urlParts) {
 // apiConfigDraftHasAllSourcesChosen/confirmApiConfig actually need — a
 // body-only entry needs no more than that since its "value" (unlike a URL
 // part's) was never itself part of anything else to preserve.
-/**
- * @param {ApiConfigDraft} draft
- * @returns {ParameterPart[]}
- */
-function allParameterParts(draft) {
+export function allParameterParts(draft: ApiConfigDraft): ParameterPart[] {
   return [...variableUrlParts(draft.urlParts), ...(draft.bodyParameters || [])];
 }
 
@@ -1048,16 +870,11 @@ function allParameterParts(draft) {
 // order, per the issue's own deliberately simpler scope). A part not found
 // at all (e.g. one just removed) yields an empty list rather than every
 // part, the safer default for an already-stale caller.
-/**
- * @param {ApiConfigDraft} draft
- * @param {string} partId
- * @returns {string[]}
- */
-function earlierParameterNames(draft, partId) {
+export function earlierParameterNames(draft: ApiConfigDraft, partId: string): string[] {
   const parts = allParameterParts(draft);
   const index = parts.findIndex(p => p.id === partId);
   if (index < 0) return [];
-  return parts.slice(0, index).map(p => p.name?.trim()).filter(Boolean);
+  return parts.slice(0, index).map(p => p.name?.trim()).filter((name): name is string => !!name);
 }
 
 // Gates "Übernehmen" — also the single place guarding against a blank
@@ -1076,11 +893,7 @@ function earlierParameterNames(draft, partId) {
 // body-only parameters alongside URL ones, see allParameterParts — a body
 // leaf toggled to 'variable' but not yet bound to any parameter still blocks
 // confirmation the same way an unchosen source kind already does).
-/**
- * @param {ApiConfigDraft} draft
- * @returns {boolean}
- */
-function apiConfigDraftHasAllSourcesChosen(draft) {
+export function apiConfigDraftHasAllSourcesChosen(draft: ApiConfigDraft): boolean {
   const namesOk = draft.groups
     ? apiTreeNodesHaveNonBlankNames(draft.groups)
     : !(draft.fields || []).some(f => !f.name?.trim());
@@ -1089,7 +902,7 @@ function apiConfigDraftHasAllSourcesChosen(draft) {
   // Issue #220: a bootstrap-sourced URL part takes the bootstrap's own name
   // (see resolveBootstrapUrlParts), so its own name may stay blank — but
   // it, and any header in bootstrap mode, need a bootstrap to exist.
-  const partOk = (/** @type {ParameterPart} */ p) => draft.parameterSources[p.id]?.kind === BOOTSTRAP_SOURCE_KIND
+  const partOk = (p: ParameterPart) => draft.parameterSources[p.id]?.kind === BOOTSTRAP_SOURCE_KIND
     ? !!draft.bootstrap
     : !!p.name?.trim() && !!draft.parameterSources[p.id]?.kind;
   if (!parts.every(partOk)) return false;
@@ -1104,18 +917,3 @@ function apiConfigDraftHasAllSourcesChosen(draft) {
   })) return false;
   return draft.bodyTree ? bodyTreeLeavesAreBound(draft.bodyTree) : true;
 }
-
-module.exports = {
-  STATES, escapeHtml,
-  parseUrlTemplateParts, buildUrlTemplate, parseValueListInput, findUrlTemplateMatches, mergeValueListValues,
-  buildStaticListSource, buildDiscoverySource, buildRangeSource, buildBrowserDiscoverySource, RANGE_FORMAT_PRESETS,
-  compileRangeFormatPattern, detectRangeFormat, findUrlPartValue, rangeFormatExample,
-  buildApiHeaders, buildApiConfig,
-  buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
-  collectPrecedingApiFieldSiblingNames, collectApiGroupFieldNames,
-  serializeApiTree, countApiConfigFields, updateApiTreeNode, apiTreeNodesHaveNonBlankNames,
-  jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
-  bodyTreeLeavesAreBound, serializeBodyTree, lastPathSegmentName, buildApiSubtreeFromCandidate,
-  resolveApiGroupScopePath, variableUrlParts, allParameterParts, earlierParameterNames, apiConfigDraftHasAllSourcesChosen,
-};
-

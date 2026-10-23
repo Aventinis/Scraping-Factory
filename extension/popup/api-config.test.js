@@ -1,5 +1,5 @@
 // Issue #217: pure-function coverage for earlierParameterNames — the rest of
-// api-config.js's own pure helpers have historically been covered indirectly
+// api-config.ts's own pure helpers have historically been covered indirectly
 // via popup.test.js's/session-restore.test.js's integration tests rather
 // than a dedicated file, but this is a genuinely new, independently
 // testable function, so it gets its own <feature>.test.js per Architecture

@@ -4,7 +4,7 @@
 // flow instead of two more kinds in the generic transform-chain editor.
 //
 // Deliberately mode-agnostic, unlike container-tree-ui.js/api-config-ui.js:
-// it never imports anything from container-tree.ts/api-config.js/
+// it never imports anything from container-tree.ts/api-config.ts/
 // scraping-config-builder.ts (which would only be safe if this file loaded
 // *after* all three in popup.html — it doesn't, and can't, since
 // flat-mode-ui.js/container-tree-ui.js/api-config-ui.js each need to call

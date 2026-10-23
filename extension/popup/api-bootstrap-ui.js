@@ -27,7 +27,7 @@ const {
   wireTokenIntoMainRequest, stripBootstrapReferences, suggestEnvVarName,
 } = require('./api-bootstrap');
 
-// Duplicated from api-config.js's own copy rather than imported — the
+// Duplicated from api-config.ts's own copy rather than imported — the
 // codebase's "no cross-module includes for small DOM helpers" convention.
 function escapeHtml(str) {
   return String(str ?? '')
