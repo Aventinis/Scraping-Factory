@@ -2,11 +2,8 @@ using ScrapingFactory.Compiler.IR;
 
 namespace ScrapingFactory.Companion;
 
-// Issue #276: the storage contract behind the /blueprints endpoints (Output
-// Blueprints, Issues #191/#244) — see ISavedConfigStore for why the endpoint
-// handlers depend on an interface and what stays inside the SQLite
-// implementation (OutputBlueprintStore). schemaKind is the PascalCase string
-// "Flat"/"Tree"; FieldCount in summaries counts leaf fields for a tree; "not
+// The storage contract behind the /blueprints endpoints (Output Blueprints). See ISavedConfigStore for why the handlers
+// depend on an interface. schemaKind is the PascalCase string "Flat"/"Tree"; FieldCount counts leaf fields for a tree; "not
 // found" is null/false, never an exception.
 public interface IOutputBlueprintStore
 {
