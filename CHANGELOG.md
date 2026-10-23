@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.0](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.22...v1.20.0) (2026-10-23)
+
+
+### Miscellaneous Chores
+
+* **release:** promote to 1.20.0 ([75d6de7](https://github.com/Aventinis/Scraping-Factory/commit/75d6de75eb09e4eb8acea5718198ac5829fdfb28))
+
 ## [1.19.22](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.21...v1.19.22) (2026-10-23)
 
 
