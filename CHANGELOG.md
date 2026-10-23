@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.20.2...v1.20.3) (2026-10-23)
+
+
+### Bug Fixes
+
+* **templates:** strip illegal XML characters via a translate table instead of a regex class ([a983fd4](https://github.com/Aventinis/Scraping-Factory/commit/a983fd4d3b284891b6cabc51c19616b10690858f))
+
 ## [1.20.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.20.1...v1.20.2) (2026-10-23)
 
 
