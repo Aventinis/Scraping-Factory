@@ -1,5 +1,5 @@
 // Issue #220: pure-function coverage for the API-mode token/auth bootstrap
-// (api-bootstrap.js) and its integration into api-config.js's
+// (api-bootstrap.ts) and its integration into api-config.js's
 // buildApiConfig/buildApiHeaders/apiConfigDraftHasAllSourcesChosen.
 const {
   BOOTSTRAP_SOURCE_KIND, createDefaultBootstrapDraft, suggestEnvVarName, parseRecordedBody,

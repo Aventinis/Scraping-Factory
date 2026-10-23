@@ -1,6 +1,6 @@
 const { applyOutputBlueprintConfig, deserializeGroupTree } = require('./config-import');
 
-// Issue #213: deserializeGroupTree is the reverse of container-tree.js's
+// Issue #213: deserializeGroupTree is the reverse of container-tree.ts's
 // serializeGroupTree — a loaded/exported config's Attribute-mode field with
 // "download": true on the wire should come back as download: true in the
 // internal draft shape, and any other mode should always come back false

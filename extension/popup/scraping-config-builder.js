@@ -23,7 +23,7 @@
 // SFDraft.GlobalSettings, SFDraft.Field, SFDraft.CombinedComponent,
 // SFDraft.Block, SFDraft.BrowserAction, SFDraft.ContainerNode — all live in
 // types/drafts.ts rather than as local @typedefs here, since
-// container-tree.js's own JSDoc needs to reference the very same shapes
+// container-tree.ts's own JSDoc needs to reference the very same shapes
 // (see that file's own top-of-file comment).
 const { escapeHtml } = require('./api-config');
 
@@ -371,7 +371,7 @@ function computeInitialMonitoringSectionOpen(changeDetection, hardening) {
 // instead of a second, free-text name input that could too easily drift out
 // of sync with an actual (or renamed) field. Container mode's `groups` is
 // still the live draft tree (GroupNode/DataFieldNode, `kind: 'group'|'field'`
-// — see container-tree.js); API mode's `apiConfig` is instead the *already
+// — see container-tree.ts); API mode's `apiConfig` is instead the *already
 // serialized* wire object built once at API_CONFIG-confirm time, so its tree
 // shape (if any) is discriminated structurally by `children` presence
 // instead, the same way countApiConfigFields already reads it. Deduplicated

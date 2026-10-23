@@ -1,4 +1,4 @@
-// JSON-path picker: rendering, loading and event wiring (json-path-picker.js has the tree model). A path input in API mode gets a "Pick from the
+// JSON-path picker: rendering, loading and event wiring (json-path-picker.ts has the tree model). A path input in API mode gets a "Pick from the
 // recording" button that opens a panel under it with the recorded response, request body or embedded JSON as a clickable tree; a click fills the path.
 //
 // _state.apiPathPicker (never persisted) is null or { field, status, token, ... } for the one open picker; it lives in state because the cursor

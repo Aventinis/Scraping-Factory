@@ -618,7 +618,7 @@ describe('serializeGroupTree', () => {
 });
 
 // Issue #84: pure data helpers for a field's transform chain.
-describe('field-transforms.js (createDefaultTransform / add / remove / update / changeKind / move / validate)', () => {
+describe('field-transforms.ts (createDefaultTransform / add / remove / update / changeKind / move / validate)', () => {
   test('createDefaultTransform returns the right shape per kind', () => {
     expect(createDefaultTransform('trim')).toEqual({ kind: 'trim' });
     expect(createDefaultTransform('regexExtract')).toEqual({ kind: 'regexExtract', pattern: '', group: 0 });

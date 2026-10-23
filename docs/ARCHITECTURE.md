@@ -145,7 +145,7 @@ showToast }`) as their first parameter instead of closing over `popup.js`'s
 `_state` — necessary because `_state` is private to `popup.js` (importing it back
 would make a dependency cycle), and because each file is a separate, isolated Jest
 module with no shared closure. `api-config.js` and
-`container-tree.js` need no such bridge: they're pure, DOM-free functions
+`container-tree.ts` need no such bridge: they're pure, DOM-free functions
 (build/resolve/insert/remove/serialize tree drafts, no state or DOM access).
 
 **API mode's UI is several modules** (Issue #390: `api-config-ui.js` had grown to
@@ -172,7 +172,7 @@ leading `// @ts-check` pragma plus `extension/tsconfig.json`
 (`npm run typecheck`, wired into CI) against two type modules under
 `extension/types/`, imported as namespaces: `SFWire` (`wire.ts`, a hand-kept mirror of the
 companion's wire-format IR) and `SFDraft` (`drafts.ts`, this popup's
-own internal pre-serialization shapes, e.g. `container-tree.js`'s tree
+own internal pre-serialization shapes, e.g. `container-tree.ts`'s tree
 nodes). `checkJs` stays off project-wide — the DOM-rendering `<feature>-ui.js`
 files and `popup.js` itself aren't annotated (yet).
 
@@ -556,7 +556,7 @@ reads the same data, so changing only one side fails. The shared data lives in `
 | Mirror | Extension side | Companion / script side | Checked by |
 | --- | --- | --- | --- |
 | File-name cleanup | `sanitizeFileNameBase` (`scraping-config-builder.js`) | `IR/FileNameSanitizer.cs` | `file-name-sanitizer.json` — `scraping-config-builder.test.js`, `FileNameSanitizerTests.cs` |
-| Transform previews | `applyTransformsPreview` (`field-transforms.js`) | `fragments/transforms.py.j2` `_apply_transforms` | `transforms.json` — `transform-vectors.test.js`, `TransformVectorTests.cs` (real helper, imported from a generated script) |
+| Transform previews | `applyTransformsPreview` (`field-transforms.ts`) | `fragments/transforms.py.j2` `_apply_transforms` | `transforms.json` — `transform-vectors.test.js`, `TransformVectorTests.cs` (real helper, imported from a generated script) |
 | robots.txt matching | `evaluateRobotsTxt` (`content-script.js`) | `fragments/robots_disallow.py.j2` | `robots.json` — `robots-vectors.test.js`, `RobotsVectorTests.cs` |
 | Range formats | `compileRangeFormatPattern` (`api-config.js`) | `Backends/Python/RangeFormat.cs`, `fragments/api_common.py.j2` | `range-format.json`, `range-expansion.json` — `range-format-vectors.test.js`, `RangeFormatVectorTests.cs` |
 | URL-template matching | `findUrlTemplateMatches` (`api-config.js`) | `_match_url_against_template` (`fragments/api_common.py.j2`) | `url-template.json` — `url-template-vectors.test.js`, `UrlTemplateVectorTests.cs` |
@@ -959,7 +959,7 @@ empty, no error shown.
 - Extension: `popup/popup.js` (`fetchSavedConfigs`, `saveCurrentConfig`,
   `loadSavedConfig`, `deleteSavedConfig`, `renderSavedConfigsList`,
   `requestDeleteSavedConfig`/`cancelDeleteSavedConfig`), `popup/
-  config-import.js` (`applyConfigToState` — the reverse of
+  config-import.ts` (`applyConfigToState` — the reverse of
   `buildScrapingConfig`/`buildConfigExport`)
 - Companion: `SavedConfigStore.cs` (SQLite-backed, `Host`-scoped lookup —
   the config JSON itself is stored and returned opaquely, never deserialized
@@ -1082,7 +1082,7 @@ shapes (flat/container/API) since none of them share a common leaf type.
   `ELEMENT_SELECTED` message the selector/matchCount already travel on;
   `service-worker.js`'s session-storage fallback persists them as
   `pendingRawText`/`pendingElementAttributes` alongside `pendingMatchCount`.
-  `field-transforms.js`'s `applyTransformsPreview`/`toNumberPreview` are a
+  `field-transforms.ts`'s `applyTransformsPreview`/`toNumberPreview` are a
   hand-kept JS mirror of the Python runtime's own
   `_apply_transforms`/`_to_number` — an invalid-for-JS regex pattern makes
   the preview return `null` (rendered as "preview unavailable") instead of
@@ -1093,7 +1093,7 @@ shapes (flat/container/API) since none of them share a common leaf type.
   `buildApiTreeNodeEl` (never for a group node — only a leaf actually
   extracts a value, matching `ApiGroup` having no `Transforms` property on
   the companion side). Opens `modal-api-field-transforms`, reusing the exact
-  same `field-transforms.js`/`field-transforms-ui.js` editor and
+  same `field-transforms.ts`/`field-transforms-ui.js` editor and
   `_state.pendingTransforms` slot the flat/container modals already use
   (mutually exclusive screens, no conflict); confirming writes the chain
   onto the `ApiField` draft node via `updateApiTreeNode`, and
@@ -1153,7 +1153,7 @@ for a hardening check that runs once at the very end, not per-transform).
   `RangeFormat.CompilePattern` does in C#, and rejects a structurally-
   matching but non-existent calendar date (e.g. `"2026-02-30"`) via
   `datetime.date`'s own `ValueError`.
-- Extension: the shared `field-transforms.js`/`field-transforms-ui.js`
+- Extension: the shared `field-transforms.ts`/`field-transforms-ui.js`
   editor (§2.18) gains the three kinds directly — no new module, since every
   mode's transform modal already routes through this one editor.
   `toIntegerPreview`/`toBooleanPreview`/`toDatePreview` are hand-kept JS
@@ -1184,7 +1184,7 @@ float rounding); a mismatch goes through the shared `onError` contract.
   `UseDefault`-needs-a-value rule), `PythonFieldTransformLiteral`
 - Every template carrying `_apply_transforms` (all eight): `_CURRENCY_FORMATS`
   table + `_to_currency`
-- Extension: `field-transforms.js` (`toCurrencyPreview` — hand-kept JS mirror
+- Extension: `field-transforms.ts` (`toCurrencyPreview` — hand-kept JS mirror
   of `_to_currency` — plus `CURRENCY_FORMAT_IDS`), `field-transforms-ui.js`
   (format `<select>`), i18n `transforms.toCurrencyOption`/`transforms.currencyFormat.*`
 - Tests: `CurrencyTransformTests.cs` (wire format, validation, real
@@ -1422,7 +1422,7 @@ minutes of pauses).
 - `Backends/Python/PythonScriptVerifier.RunScriptAsync`
   (`PauseAnnouncementPattern`, `MaxRequestDelayExtension`, moving deadline)
 - Extension: `scraping-config-builder.js` (`buildRequestDelayConfig`),
-  `config-import.js` (`applyRequestDelayConfig`), `settings-panel-ui.js`,
+  `config-import.ts` (`applyRequestDelayConfig`), `settings-panel-ui.js`,
   `#toggle-request-delay`/`#request-delay-config` in `screens/idle.html`
 - Tests: `RequestDelayTests.cs`, `extension/popup/request-delay.test.js`,
   real-browser check `e2e/examples/issue-222-request-delay-check.js`
@@ -1442,7 +1442,7 @@ is unaffected. Disallow re-checking is the separate option of 2.21ab2 below.
 - Fragment `request_delay.py.j2` (`_robots_delay`, `_fetch_robots_delay`,
   `urllib.robotparser`); the fetch itself is `fragments/robots_fetch.py.j2`,
   shared with 2.21ab2
-- Extension: `scraping-config-builder.js` (`respectRobotsDelay` option), `config-import.js`, `session-restore.js`,
+- Extension: `scraping-config-builder.js` (`respectRobotsDelay` option), `config-import.ts`, `session-restore.js`,
   `settings-panel-ui.js`, `#toggle-respect-robots-delay` in `screens/idle.html`
 - Tests: `RobotsCrawlDelayTests.cs`, `extension/popup/robots-crawl-delay.test.js`,
   fixture `test-pages/crawl-delay` +
@@ -1470,7 +1470,7 @@ subresources, the auth bootstrap or browser-discovery sessions.
   static page loops, the Browser pagination, preflight/discovery/download
   fragments and `api_fetch.py.j2`/`api_common.py.j2`
 - Extension: `scraping-config-builder.js` (`robotsDisallow` option),
-  `config-import.js` (`applyRobotsDisallowConfig`), `session-restore.js`,
+  `config-import.ts` (`applyRobotsDisallowConfig`), `session-restore.js`,
   `settings-panel-ui.js`, `#toggle-robots-disallow` in `screens/idle.html`
 - Tests: `RobotsDisallowTests.cs`, `RobotsDisallowEndpointTests.cs`,
   `extension/popup/robots-disallow.test.js`, fixture
@@ -1495,7 +1495,7 @@ carries it per component only.
   `main_blocks` and the two API templates), the SQLite/Excel branches of
   `output_tabular.py.j2`
 - Extension: `scraping-config-builder.js` (`appendOutput` option),
-  `config-import.js`, `session-restore.js`, `settings-panel-ui.js`,
+  `config-import.ts`, `session-restore.js`, `settings-panel-ui.js`,
   `#toggle-append-output` in `screens/idle.html`; `dedup-config.ts` lost its
   tree-shape Append restriction
 - Tests: `AppendOutputTests.cs`, `AppendOutputEndpointTests.cs`,
@@ -1522,7 +1522,7 @@ extends its deadline by the wait plus an allowance for the retried request.
 - `Backends/Python/PythonScriptVerifier` (`RetryAnnouncementPattern`,
   `RetryAttemptAllowance`)
 - Extension: `scraping-config-builder.js` (`buildRetryConfig`),
-  `config-import.js` (`applyRetryConfig`), `settings-panel-ui.js`,
+  `config-import.ts` (`applyRetryConfig`), `settings-panel-ui.js`,
   `#toggle-retry`/`#retry-config` in `screens/idle.html`
 - Tests: `RetryTests.cs`, `extension/popup/retry.test.js`, fixture
   `test-pages/flaky-server` + `e2e/examples/issue-223-retry-check.js`
@@ -1551,7 +1551,7 @@ repeating group instance that owns every key field.
   `_dedup_register_instance`/`_dedup_delta_tree` for the tree shapes)
 - Extension: `dedup-config.ts` (pure) + `dedup-config-ui.js`
   (`renderDedupSection`/`wireDedupEvents`), `scraping-config-builder.js`
-  (`deduplication` option), `config-import.js`,
+  (`deduplication` option), `config-import.ts`,
   `session-restore.js`, `#toggle-dedup`/`#dedup-config` in
   `screens/idle.html`
 - Tests: `DeduplicationEndToEndTests.cs`, `DeduplicationConfigJsonTests.cs`,
@@ -1605,7 +1605,7 @@ Playwright's `extra_http_headers` (every request of the page) and
   (`renderRequestHeadersSection`/`wireRequestHeadersEvents`),
   `scraping-config-builder.js` (`requestHeaders` option),
   `companion-client.js` (test values → `verificationValues`),
-  `config-import.js`, `session-restore.js`, `#toggle-request-headers`/
+  `config-import.ts`, `session-restore.js`, `#toggle-request-headers`/
   `#request-headers-config` in `screens/idle.html`
 - Tests: `RequestHeadersEndToEndTests.cs`, `RequestHeadersEndpointTests.cs`,
   `ScrapingPlanValidatorTests.cs`, `FillVerificationValuesTests.cs`,
@@ -1657,7 +1657,7 @@ the last, or every match in order (with a pause after each click).
 - Templates: `playwright_click_step.py.j2`, `fragments/api_common.py.j2`
   (`_run_browser_action`)
 - Extension: `scraping-config-builder.js` (`addBrowserAction`,
-  `serializeBrowserActions`), `config-import.js`, `browser-actions-ui.js`,
+  `serializeBrowserActions`), `config-import.ts`, `browser-actions-ui.js`,
   `api-config-ui.js`
 - Tests: `ClickTargetTests.cs`, `extension/popup/click-target.test.js`,
   fixture `test-pages/click-targets` +
@@ -1943,12 +1943,12 @@ map into a different target branch.
   (`buildOutputBlueprintMapping` → `outputBlueprint`, omitted whenever no
   blueprint is picked or the mapping isn't complete, the same convention
   `buildProxyConfig`/`buildChangeDetectionConfig` already use),
-  `config-import.js` (`applyOutputBlueprintConfig`, the reverse).
+  `config-import.ts` (`applyOutputBlueprintConfig`, the reverse).
 - Extension (Issue #244): `output-blueprints.js` gains tree-schema editing
   helpers for the create/edit modal (`buildBlueprintSchemaGroup`/
   `buildBlueprintSchemaField`/`parseBlueprintSchemaTree`/
   `serializeBlueprintSchemaTree`/`blueprintTreeSchemaIsValid`) — the tree's
-  own structural editing reuses `container-tree.js`'s generic path-based
+  own structural editing reuses `container-tree.ts`'s generic path-based
   helpers directly (`insertContainerNode`/`removeGroupTreeNode`/
   `updateGroupTreeNode`/`moveGroupTreeNode`) rather than reimplementing
   them — and the per-scrape tree mapping draft (`createTreeMappingDraft`/
@@ -2143,7 +2143,7 @@ shape; only *where the extension sources those four values from* changed.
   `buildConfigExport` call site (`companion-client.js`'s `generate()`,
   `download-helpers.js`'s `downloadConfigExport`, `saved-configs-ui.js`'s
   `createSavedConfig`) reads them from `getGlobalSettings()` instead.
-  `config-import.js`'s `applyConfigToState` no longer restores any of the
+  `config-import.ts`'s `applyConfigToState` no longer restores any of the
   four — loading/importing a saved config must never touch a cross-session
   preference.
 
@@ -2351,12 +2351,12 @@ compile time anywhere.
 | Concept | Extension builder / draft shape | Wire JSON | Companion type |
 |---|---|---|---|
 | Flat field | `popup.js`: `addField()`, `buildScrapingConfig()`'s `fields.map(...)` | `{name, selector, attribute?, framePath?}` | `IR/ScrapingConfig.cs`: `ScrapingField` |
-| Container tree node | `container-tree.js`: `buildGroupNode`/`buildFieldNode`, `serializeGroupTree` | `{name,selector,repeating,children:[...],framePath?}` or `{name,selector,mode,attribute?,framePath?}` | `IR/ContainerNode.cs`: `GroupNode`/`DataFieldNode` (via `ContainerNodeJsonConverter`) |
+| Container tree node | `container-tree.ts`: `buildGroupNode`/`buildFieldNode`, `serializeGroupTree` | `{name,selector,repeating,children:[...],framePath?}` or `{name,selector,mode,attribute?,framePath?}` | `IR/ContainerNode.cs`: `GroupNode`/`DataFieldNode` (via `ContainerNodeJsonConverter`) |
 | API config (top level) | `api-config.js`: `buildApiConfig()` | `{urlTemplate, method?, parameters:[...], headers?, itemsPath+fields \| groups, body?, embeddedJsonSource?, bootstrap?}` | `IR/ApiConfig.cs`: `ApiConfig` |
 | API parameter source | `api-config.js`: `buildStaticListSource`/`buildDiscoverySource`/`buildRangeSource` | `{kind:"staticList"\|"discovery"\|"range", ...}` | `IR/ApiConfig.cs`: `ApiParameterSource` (`[JsonPolymorphic]`) |
 | API embedded JSON source (Issue #136) | `api-capture-ui.js`: `confirmEmbeddedJsonFieldCandidate()` (`{scriptSelector}`, stamped from `content-script.js`'s `scriptTagSelector`) | `{scriptSelector}` | `IR/ApiConfig.cs`: `EmbeddedJsonSource` (plain optional object, no converter) |
-| API token/auth bootstrap (Issue #220) | `api-bootstrap.js`: `buildApiBootstrap()` (draft `{name,method,url,valuePath,bodyEncoding,headers,bodyFields}`) | `{name, method?, url, headers?, bodyFields?, bodyEncoding?, valuePath}` | `IR/ApiConfig.cs`: `ApiBootstrap` (plain optional object, no converter) |
-| API cursor/token pagination (Issue #224) | `api-cursor-pagination.js`: `buildApiCursorPagination()` (draft `{nextCursorPath,hasNextPagePath,target,queryParameterName,bodyPath,maxPages}`) | `{nextCursorPath, hasNextPagePath?, target: 'Query'\|'Body', queryParameterName?, bodyPath?, maxPages}` | `IR/ApiConfig.cs`: `ApiCursorPagination` (plain optional object, no converter) |
+| API token/auth bootstrap (Issue #220) | `api-bootstrap.ts`: `buildApiBootstrap()` (draft `{name,method,url,valuePath,bodyEncoding,headers,bodyFields}`) | `{name, method?, url, headers?, bodyFields?, bodyEncoding?, valuePath}` | `IR/ApiConfig.cs`: `ApiBootstrap` (plain optional object, no converter) |
+| API cursor/token pagination (Issue #224) | `api-cursor-pagination.ts`: `buildApiCursorPagination()` (draft `{nextCursorPath,hasNextPagePath,target,queryParameterName,bodyPath,maxPages}`) | `{nextCursorPath, hasNextPagePath?, target: 'Query'\|'Body', queryParameterName?, bodyPath?, maxPages}` | `IR/ApiConfig.cs`: `ApiCursorPagination` (plain optional object, no converter) |
 | API response tree node | `api-config.js`: `buildApiGroupDraft`/`buildApiFieldDraft`, `serializeApiTree` | `{name,path,children:[...]}` or `{name,path}` | `IR/ApiConfig.cs`: `ApiGroup`/`ApiField` (via `ApiNodeJsonConverter`) |
 | API request body node | `api-config.js`: `jsonValueToBodyDraft`/`serializeBodyTree` | `{properties:{...}}` / `{items:[...]}` / `{kind,stringValue\|numberValue\|boolValue}` / `{parameterName, coerceTo?}` | `IR/ApiBodyNode.cs`: `ApiBodyObject`/`Array`/`Literal`/`Variable` (via `ApiBodyNodeJsonConverter`) |
 | Browser action | `popup.js`: `addBrowserAction`/`serializeBrowserActions` | `{kind:"waitFor"\|"fill"\|"click"\|"scroll", selector, ...}` | `IR/BrowserAction.cs`: `WaitForAction`/`FillAction`/`ClickAction`/`ScrollAction` (`[JsonPolymorphic]`) |
@@ -2457,7 +2457,7 @@ mutually-exclusive mode, like a hypothetical fourth extraction shape): `IR/Scrap
 implementation + template(s) → `LanguageModuleRegistry` picks it up automatically
 (no registration needed) → extension: a new top-level mode button, `_state.mode`
 branch, `MODE_SWITCH_CLEARS` entry, and its own draft/serialize module (mirroring
-`api-config.js`/`container-tree.js`).
+`api-config.js`/`container-tree.ts`).
 
 **Add a field to an existing IR node that also needs a UI toggle** (like `Issue
 #122`'s `IncludePreview`, or `FramePath` on Issue #42): add the nullable/optional

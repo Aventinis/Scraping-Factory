@@ -1,5 +1,5 @@
 // Issue #239: pure, DOM-free helpers for Combined mode's ordered component
-// list — mirrors field-transforms.js's own add/remove/move shape exactly
+// list — mirrors field-transforms.ts's own add/remove/move shape exactly
 // (see moveTransform's doc comment for the swap-with-adjacent-sibling
 // convention this reuses verbatim). A component in _state.combinedComponents
 // only ever stores { savedConfigId, name } — its full underlying

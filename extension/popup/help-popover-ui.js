@@ -1,5 +1,5 @@
 // Issue #396: DOM rendering + wiring of the reusable help popover (pure
-// logic in help-popover.js). Every `[data-help]` host element gets a "?"
+// logic in help-popover.ts). Every `[data-help]` host element gets a "?"
 // button; its explanation lives in a panel inserted right after the host's
 // row (not a floating overlay: in a 280 px side panel an in-flow block is the
 // one placement that can never run off-screen). Needs no `bridge` — it owns

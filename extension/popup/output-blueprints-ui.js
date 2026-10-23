@@ -36,7 +36,7 @@ const {
 } = require('./output-blueprints');
 
 // Issue #244: the tree schema editor's own structural editing (add/remove/
-// rename/move a group or field node) reuses container-tree.js's generic
+// rename/move a group or field node) reuses container-tree.ts's generic
 // path-based helpers directly — see output-blueprints.js's own doc comment
 // on why they apply unchanged to a blueprint schema node's much smaller
 // {kind, name, children} shape.

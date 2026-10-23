@@ -15,7 +15,7 @@
 // shapes (the URL-template decomposition, the ApiGroup/ApiField response
 // tree, the ApiBodyNode request-body tree) are described by the local
 // `@typedef`s below rather than types/drafts.ts's `SFDraft`
-// namespace, since — unlike container-tree.js's tree or the Monitoring/
+// namespace, since — unlike container-tree.ts's tree or the Monitoring/
 // Settings section drafts — nothing outside this file ever references them
 // (scraping-config-builder.js's own `collectFieldNames` reads `apiConfig`
 // only in its already-*serialized* `SFWire.ApiConfig` shape, never this
@@ -111,12 +111,12 @@
  * @property {string} [sourceEntryId]
  */
 // Issue #220: the bootstrap request's own draft→wire logic lives in its
-// own module (api-bootstrap.js, loaded before this file — see popup.html);
+// own module (api-bootstrap.ts, loaded before this file — see popup.html);
 // this file only needs it to fold the bootstrap into buildApiConfig's
 // output and into the "Apply" gate.
 const { BOOTSTRAP_SOURCE_KIND, buildApiBootstrap, bootstrapDraftIsComplete } = require('./api-bootstrap');
 // Issue #224: same split — the cursor-pagination draft→wire/validity logic
-// lives in api-cursor-pagination.js (loaded before this file).
+// lives in api-cursor-pagination.ts (loaded before this file).
 const { buildApiCursorPagination, cursorDraftIsComplete } = require('./api-cursor-pagination');
 // Issue #321: same split for Link-header pagination (api-link-pagination.ts).
 const { buildApiLinkHeaderPagination, linkDraftIsComplete } = require('./api-link-pagination');
@@ -521,7 +521,7 @@ function buildApiConfig({
   const urlTemplate = buildUrlTemplate(urlParts);
   // Issue #220: a variable URL part carrying the bootstrap value (already
   // renamed to the bootstrap's own name by resolveBootstrapUrlParts) is a
-  // placeholder, not a declared parameter — see api-bootstrap.js.
+  // placeholder, not a declared parameter — see api-bootstrap.ts.
   const bootstrapWire = buildApiBootstrap(bootstrap);
   const cursorWire = buildApiCursorPagination(cursorPagination);
   const linkWire = buildApiLinkHeaderPagination(linkHeaderPagination);
@@ -636,7 +636,7 @@ function insertApiTreeNode(groups, parentPath, node) {
 // Issue #206: preceding sibling field names (own parent group, indices
 // strictly before this node's own position) an already-inserted ApiField
 // leaf's own combineFields/splitField transform may reference — unlike
-// container-tree.js's collectSiblingFieldNames, this modal reopens
+// container-tree.ts's collectSiblingFieldNames, this modal reopens
 // against an *already-placed* leaf (see openApiFieldTransformsModal), so
 // only siblings actually declared before it count; a later sibling isn't
 // offered at all here, rather than being offered and then rejected only
@@ -660,7 +660,7 @@ function collectPrecedingApiFieldSiblingNames(groups, path) {
 // Issue #206 follow-up: every existing field child directly under
 // groupPath (or at root when null/empty) — the dedicated combine/split
 // creation flow always inserts its new field as the group's own last
-// child, so (mirroring container-tree.js's own collectSiblingFieldNames)
+// child, so (mirroring container-tree.ts's own collectSiblingFieldNames)
 // every current field sibling here already counts as "declared earlier"
 // with no slicing needed, unlike collectPrecedingApiFieldSiblingNames
 // above (which targets an already-placed leaf's own position instead).

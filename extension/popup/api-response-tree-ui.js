@@ -49,7 +49,7 @@ function buildApiTreeNodeEl(node, path, depth) {
   pathLabel.className = 'api-tree-path';
   // Issue #206 follow-up: node.path is null for a combine/split-derived
   // field (see buildApiFieldDraft's own doc comment) — shows a
-  // distinguishing description instead of "—", mirroring container-tree.js's
+  // distinguishing description instead of "—", mirroring container-tree.ts's
   // own groupNodeSuffix branch for the identical case.
   pathLabel.textContent = isDerivedField(node.transforms)
     ? (node.transforms[0].kind === 'combineFields'
@@ -284,7 +284,7 @@ function wireApiResponseTreeEvents(bridge) {
   document.getElementById('btn-api-group-cancel')?.addEventListener('click', () => cancelApiGroupModal(bridge));
 
   // Issue #84 follow-up: API-mode field transforms modal — reuses the same
-  // transform-chain editor (field-transforms.js/field-transforms-ui.js) the
+  // transform-chain editor (field-transforms.ts/field-transforms-ui.js) the
   // flat/container field modals already wire up above.
   document.getElementById('btn-api-field-transforms-add')?.addEventListener('click', () => {
     bridge.patchState({ pendingTransforms: addTransform(bridge.getState().pendingTransforms) });

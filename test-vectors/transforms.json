@@ -1,5 +1,5 @@
 {
- "description": "Issue #388: the extension's live transform preview (applyTransformsPreview, field-transforms.js) and the generated scripts' _apply_transforms must produce the same value for the same chain. Cases without appliesTo run on both sides; appliesTo [\"js\"] / [\"python\"] limits a case to one side and the note says why. expected null = 'preview unavailable' (JS only).",
+ "description": "Issue #388: the extension's live transform preview (applyTransformsPreview, field-transforms.ts) and the generated scripts' _apply_transforms must produce the same value for the same chain. Cases without appliesTo run on both sides; appliesTo [\"js\"] / [\"python\"] limits a case to one side and the note says why. expected null = 'preview unavailable' (JS only).",
  "cases": [
   {
    "name": "no transforms leave the value alone",

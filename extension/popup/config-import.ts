@@ -1,62 +1,44 @@
-// @ts-check
-/** @import * as SFWire from '../types/wire' */
-/** @import * as SFDraft from '../types/drafts' */
-// Reverses buildScrapingConfig's wire output into a _state patch (the "Load" half of saved configurations). Pure and
-// DOM-free. Inputs are typed against SFWire, the reconstructed draft shapes against SFDraft. applyConfigToState returns a
-// loose `object`: it spans every mode's slice at once and no interface would describe the five exclusive branches; its
-// per-branch helpers are typed precisely.
-const { applyDeduplicationConfig } = require('./dedup-config');
-const { applyRequestHeadersConfig } = require('./request-headers');
+// Reverses buildScrapingConfig's wire output into a _state patch (the "Load" half of saved configurations). Pure and DOM-free.
+// Inputs are typed against SFWire, the reconstructed draft shapes against SFDraft. applyConfigToState returns a loose record: it spans
+// every mode's slice at once and no interface would describe the five exclusive branches; its per-branch helpers are typed precisely.
+import type * as SFWire from '../types/wire';
+import type * as SFDraft from '../types/drafts';
+import { applyDeduplicationConfig } from './dedup-config';
+import { applyRequestHeadersConfig } from './request-headers';
 
-// Inverse of container-tree.js's FIELD_MODE_WIRE_NAMES, kept as its own copy for four constants.
-/** @type {Record<SFWire.ExtractMode, string>} */
-const FIELD_MODE_INTERNAL_NAMES = { Text: 'text', Attribute: 'attribute', Exists: 'exists', OwnText: 'ownText' };
+// Inverse of container-tree's FIELD_MODE_WIRE_NAMES, kept as its own copy for four constants.
+const FIELD_MODE_INTERNAL_NAMES: Record<SFWire.ExtractMode, SFDraft.FieldMode> = { Text: 'text', Attribute: 'attribute', Exists: 'exists', OwnText: 'ownText' };
 
-// Reverse of container-tree.js's serializeGroupTree — a wire GroupNode is
-// told apart from a DataFieldNode structurally (children present vs. not),
-// exactly like the companion's own ContainerNodeJsonConverter.
-/**
- * @param {SFWire.ContainerNode[] | null | undefined} wireNodes
- * @returns {object[]}
- */
-function deserializeGroupTree(wireNodes) {
-  return (wireNodes || []).map((node) => {
-    // The structural discriminator of ContainerNodeJsonConverter (children present = group), read through an `any` view
-    // instead of narrowing the union field by field.
-    const n = /** @type {any} */ (node);
-    return Array.isArray(n.children)
-      ? {
-          kind: 'group', name: n.name, selector: n.selector, repeating: !!n.repeating,
-          children: deserializeGroupTree(n.children), framePath: n.framePath || null,
-        }
-      : {
-          kind: 'field', name: n.name, selector: n.selector,
-          mode: FIELD_MODE_INTERNAL_NAMES[/** @type {SFWire.ExtractMode} */ (n.mode)] || 'text',
-          attribute: n.mode === 'Attribute' ? (n.attribute ?? null) : null,
-          framePath: n.framePath || null,
-          transforms: n.transforms && n.transforms.length > 0 ? n.transforms : null,
-          // Issue #213: same "only meaningful under Attribute mode" gate
-          // attribute itself already uses; absent on the wire = false.
-          download: n.mode === 'Attribute' && !!n.download,
-          // Issue #214: same gate as download itself.
-          maxDownloadSizeBytes: n.mode === 'Attribute' && n.download ? (n.maxDownloadSizeBytes ?? null) : null,
-          allowedContentTypes: n.mode === 'Attribute' && n.download ? (n.allowedContentTypes || []) : [],
-          // Issue #206 follow-up: absent on the wire = false, same
-          // convention as download itself.
-          hiddenFromOutput: !!n.hiddenFromOutput,
-        };
+// Reverse of container-tree's serializeGroupTree: a wire GroupNode is told apart from a DataFieldNode structurally (children
+// present or not), exactly like the companion's ContainerNodeJsonConverter.
+export function deserializeGroupTree(wireNodes: SFWire.ContainerNode[] | null | undefined): SFDraft.ContainerNode[] {
+  return (wireNodes || []).map((node): SFDraft.ContainerNode => {
+    if ('children' in node && Array.isArray(node.children)) {
+      return {
+        kind: 'group', name: node.name, selector: node.selector, repeating: !!node.repeating,
+        children: deserializeGroupTree(node.children), framePath: node.framePath || null,
+      };
+    }
+    const field = node as SFWire.DataFieldNode;
+    const isAttribute = field.mode === 'Attribute';
+    return {
+      kind: 'field', name: field.name, selector: field.selector,
+      mode: FIELD_MODE_INTERNAL_NAMES[field.mode] || 'text',
+      attribute: isAttribute ? (field.attribute ?? null) : null,
+      framePath: field.framePath || null,
+      transforms: field.transforms && field.transforms.length > 0 ? field.transforms : null,
+      // The download flag and its safety net are only meaningful under Attribute mode; absent on the wire = false.
+      download: isAttribute && !!field.download,
+      maxDownloadSizeBytes: isAttribute && field.download ? (field.maxDownloadSizeBytes ?? null) : null,
+      allowedContentTypes: isAttribute && field.download ? (field.allowedContentTypes || []) : [],
+      hiddenFromOutput: !!field.hiddenFromOutput,
+    };
   });
 }
 
-// Reverse of popup.js's serializeBrowserActions — fills back in each
-// kind's own defaults (mirroring addBrowserAction) for whichever fields
-// a wire action of that kind doesn't carry.
-/**
- * @param {SFWire.BrowserAction[] | null | undefined} wireActions
- * @returns {object[]}
- */
-function deserializeBrowserActions(wireActions) {
-  return (wireActions || []).map((a) => {
+/** Reverse of serializeBrowserActions: fills back in each kind's own defaults (mirroring addBrowserAction) for fields a wire action lacks. */
+export function deserializeBrowserActions(wireActions: SFWire.BrowserAction[] | null | undefined): SFDraft.BrowserAction[] {
+  return (wireActions || []).map((a): SFDraft.BrowserAction => {
     const framePath = a.framePath || null;
     if (a.kind === 'waitFor') return { kind: 'waitFor', selector: a.selector || '', timeoutMs: a.timeoutMs ?? 5000, framePath };
     if (a.kind === 'fill') return { kind: 'fill', selector: a.selector || '', environmentVariableName: a.environmentVariableName || '', framePath };
@@ -75,13 +57,9 @@ function deserializeBrowserActions(wireActions) {
   });
 }
 
-// Reverse of buildChangeDetectionConfig; defaults are spread first and the wire values written on top.
-/**
- * @param {SFWire.ChangeDetectionConfig | null | undefined} wire
- * @returns {object}
- */
-function applyChangeDetectionConfig(wire) {
-  const defaults = {
+/** Reverse of buildChangeDetectionConfig; defaults are spread first and the wire values written on top. */
+export function applyChangeDetectionConfig(wire: SFWire.ChangeDetectionConfig | null | undefined): SFDraft.ChangeDetectionState {
+  const defaults: SFDraft.ChangeDetectionState = {
     enabled: false,
     notify: 'Email',
     email: { smtpHostEnvVar: '', smtpPortEnvVar: '', smtpUsernameEnvVar: '', smtpPasswordEnvVar: '', fromEnvVar: '', toEnvVar: '' },
@@ -96,24 +74,15 @@ function applyChangeDetectionConfig(wire) {
   };
 }
 
-// Reverse of buildProxyConfig.
-/**
- * @param {SFWire.ProxyConfig | null | undefined} wire
- * @returns {{enabled: boolean, envVar: string}}
- */
-function applyProxyConfig(wire) {
+/** Reverse of buildProxyConfig. */
+export function applyProxyConfig(wire: SFWire.ProxyConfig | null | undefined): SFDraft.ProxyState {
   return wire ? { enabled: true, envVar: wire.environmentVariableName || '' } : { enabled: false, envVar: '' };
 }
 
-// Issue #222: reverse of buildRequestDelayConfig — milliseconds back into
-// the popup's two "seconds" text inputs (a fixed pause leaves "to" blank).
-/**
- * @param {SFWire.RequestDelayConfig | null | undefined} wire
- * @returns {SFDraft.RequestDelayState}
- */
-function applyRequestDelayConfig(wire) {
+/** Reverse of buildRequestDelayConfig: milliseconds back into the popup's two "seconds" text inputs (a fixed pause leaves "to" blank). */
+function applyRequestDelayConfig(wire: SFWire.RequestDelayConfig | null | undefined): SFDraft.RequestDelayState {
   if (!wire) return { enabled: false, minSecondsText: '1', maxSecondsText: '' };
-  const seconds = (/** @type {number} */ ms) => String(Math.round(ms) / 1000);
+  const seconds = (ms: number) => String(Math.round(ms) / 1000);
   return {
     enabled: true,
     minSecondsText: seconds(wire.minMs ?? 0),
@@ -121,23 +90,15 @@ function applyRequestDelayConfig(wire) {
   };
 }
 
-// Issue #333: reverse of the robotsDisallow wire object — absent = off.
-/**
- * @param {SFWire.RobotsDisallowConfig | null | undefined} wire
- * @returns {SFDraft.RobotsDisallowState}
- */
-function applyRobotsDisallowConfig(wire) {
+/** Reverse of the robotsDisallow wire object; absent = off. */
+function applyRobotsDisallowConfig(wire: SFWire.RobotsDisallowConfig | null | undefined): SFDraft.RobotsDisallowState {
   if (!wire) return { enabled: false, action: 'Skip' };
   const action = wire.action === 'Warn' || wire.action === 'Abort' ? wire.action : 'Skip';
   return { enabled: true, action };
 }
 
-// Issue #223: reverse of buildRetryConfig.
-/**
- * @param {SFWire.RetryConfig | null | undefined} wire
- * @returns {SFDraft.RetryState}
- */
-function applyRetryConfig(wire) {
+/** Reverse of buildRetryConfig. */
+function applyRetryConfig(wire: SFWire.RetryConfig | null | undefined): SFDraft.RetryState {
   const defaults = { enabled: false, maxAttemptsText: '3', delaySecondsText: '2', exponential: true, statusCodesText: '429, 502, 503, 504' };
   if (!wire) return defaults;
   return {
@@ -149,52 +110,34 @@ function applyRetryConfig(wire) {
   };
 }
 
-// Reverse of buildPaginationConfig.
-/**
- * @param {SFWire.PaginationConfig | null | undefined} wire
- * @returns {object}
- */
-function applyPaginationConfig(wire) {
-  const defaults = { enabled: false, kind: 'nextLink', nextLinkSelector: '', urlTemplate: '', maxPages: 50 };
+/** Reverse of buildPaginationConfig. */
+export function applyPaginationConfig(wire: SFWire.PaginationConfig | null | undefined): SFDraft.PaginationState {
+  const defaults: SFDraft.PaginationState = { enabled: false, kind: 'nextLink', nextLinkSelector: '', urlTemplate: '', maxPages: 50 };
   if (!wire) return defaults;
-  // Reads both branches' fields through an `any` cast and keeps the one `kind` selects.
-  const w = /** @type {any} */ (wire);
   return {
     enabled: true,
     kind: wire.kind === 'pageNumber' ? 'pageNumber' : 'nextLink',
-    nextLinkSelector: w.nextLinkSelector || '',
-    urlTemplate: w.urlTemplate || '',
-    maxPages: Number.isFinite(wire.maxPages) && (wire.maxPages ?? 0) > 0 ? wire.maxPages : 50,
+    nextLinkSelector: wire.kind === 'nextLink' ? wire.nextLinkSelector || '' : '',
+    urlTemplate: wire.kind === 'pageNumber' ? wire.urlTemplate || '' : '',
+    maxPages: Number.isFinite(wire.maxPages) && (wire.maxPages ?? 0) > 0 ? wire.maxPages! : 50,
   };
 }
 
-// Reverse of buildDiscoveredUrlsConfig (Issue #218) — mirrors
-// applyPaginationConfig's own shape exactly, just with no polymorphic
-// kind to narrow.
-/**
- * @param {SFWire.DiscoveredUrlsConfig | null | undefined} wire
- * @returns {object}
- */
-function applyDiscoveredUrlsConfig(wire) {
-  const defaults = { enabled: false, pageUrl: '', linkSelector: '', maxUrls: 100 };
+/** Reverse of buildDiscoveredUrlsConfig; the same shape as applyPaginationConfig without a polymorphic kind. */
+export function applyDiscoveredUrlsConfig(wire: SFWire.DiscoveredUrlsConfig | null | undefined): SFDraft.DiscoveredUrlsState {
+  const defaults: SFDraft.DiscoveredUrlsState = { enabled: false, pageUrl: '', linkSelector: '', maxUrls: 100 };
   if (!wire) return defaults;
   return {
     enabled: true,
     pageUrl: wire.pageUrl || '',
     linkSelector: wire.linkSelector || '',
-    maxUrls: Number.isFinite(wire.maxUrls) && (wire.maxUrls ?? 0) > 0 ? wire.maxUrls : 100,
+    maxUrls: Number.isFinite(wire.maxUrls) && (wire.maxUrls ?? 0) > 0 ? wire.maxUrls! : 100,
   };
 }
 
-// Reverse of buildHardeningConfig: each wire kind goes into its slot of _state.hardening; the 0.0-1.0 fraction becomes
-// a whole percent again.
-/**
- * @param {SFWire.HardeningCheck[] | null | undefined} wire
- * @returns {SFDraft.HardeningState}
- */
-function applyHardeningConfig(wire) {
-  /** @type {SFDraft.HardeningState} */
-  const result = {
+/** Reverse of buildHardeningConfig: each wire kind goes into its slot of _state.hardening; the 0.0-1.0 fraction becomes a whole percent again. */
+export function applyHardeningConfig(wire: SFWire.HardeningCheck[] | null | undefined): SFDraft.HardeningState {
+  const result: SFDraft.HardeningState = {
     noResult: { enabled: false, severity: 'Warning' },
     nullRate: [],
     baseline: { enabled: false, severity: 'Warning', dropThresholdPercent: 20 },
@@ -223,50 +166,46 @@ function applyHardeningConfig(wire) {
   return result;
 }
 
-// Reverse of buildOutputBlueprintMapping. No round trip to the companion is needed: the wire mapping carries the whole
-// target list / tree; a tree is walked in lockstep with its path-keyed draft (createTreeMappingDraft).
-/** @type {{selectedOutputBlueprintId: string, selectedOutputBlueprintFieldNames: string[], outputBlueprintMapping: Record<string, string>, selectedOutputBlueprintSchemaKind: SFWire.OutputBlueprintSchemaKind, selectedOutputBlueprintTree: SFDraft.OutputBlueprintTreeNode[], outputBlueprintTreeMapping: Record<string, string>}} */
-const EMPTY_OUTPUT_BLUEPRINT_STATE = {
+// Reverse of buildOutputBlueprintMapping. No round trip to the companion is needed: the wire mapping carries the whole target list /
+// tree; a tree is walked in lockstep with its path-keyed draft (createTreeMappingDraft).
+export interface OutputBlueprintStatePatch {
+  selectedOutputBlueprintId: string;
+  selectedOutputBlueprintFieldNames: string[];
+  outputBlueprintMapping: Record<string, string>;
+  selectedOutputBlueprintSchemaKind: SFWire.OutputBlueprintSchemaKind;
+  selectedOutputBlueprintTree: SFDraft.OutputBlueprintTreeNode[];
+  outputBlueprintTreeMapping: Record<string, string>;
+}
+
+const EMPTY_OUTPUT_BLUEPRINT_STATE: OutputBlueprintStatePatch = {
   selectedOutputBlueprintId: '', selectedOutputBlueprintFieldNames: [], outputBlueprintMapping: {},
   selectedOutputBlueprintSchemaKind: 'Flat', selectedOutputBlueprintTree: [], outputBlueprintTreeMapping: {},
 };
 
-/**
- * @param {SFWire.OutputBlueprintTreeMappingNode[]} wireNodes
- * @param {string} prefix
- * @param {SFDraft.OutputBlueprintTreeNode[]} tree
- * @param {Record<string, string>} draft
- */
-function applyOutputBlueprintTreeMapping(wireNodes, prefix, tree, draft) {
+function applyOutputBlueprintTreeMapping(
+  wireNodes: SFWire.OutputBlueprintTreeMappingNode[], prefix: string, tree: SFDraft.OutputBlueprintTreeNode[], draft: Record<string, string>,
+): void {
   wireNodes.forEach((wireNode, i) => {
     const path = prefix ? `${prefix}.${i}` : `${i}`;
-    // Same structural group-vs-leaf discriminator as the companion's own
-    // OutputBlueprintTreeMappingNodeJsonConverter.
-    const n = /** @type {any} */ (wireNode);
-    if (Array.isArray(n.children)) {
-      /** @type {SFDraft.OutputBlueprintTreeNode} */
-      const groupNode = { name: n.name, children: [] };
+    // The same structural group-vs-leaf discriminator as the companion's OutputBlueprintTreeMappingNodeJsonConverter.
+    if ('children' in wireNode && Array.isArray(wireNode.children)) {
+      const groupNode: SFDraft.OutputBlueprintTreeNode = { name: wireNode.name, children: [] };
       tree.push(groupNode);
-      applyOutputBlueprintTreeMapping(n.children, path, /** @type {SFDraft.OutputBlueprintTreeNode[]} */ (groupNode.children), draft);
+      applyOutputBlueprintTreeMapping(wireNode.children, path, groupNode.children!, draft);
     } else {
-      tree.push({ name: n.name });
-      draft[path] = n.sourceField;
+      const field = wireNode as SFWire.OutputBlueprintTreeMappingField;
+      tree.push({ name: field.name });
+      draft[path] = field.sourceField;
     }
   });
 }
 
-/**
- * @param {SFWire.OutputBlueprintMapping | null | undefined} wire
- * @returns {object}
- */
-function applyOutputBlueprintConfig(wire) {
+export function applyOutputBlueprintConfig(wire: SFWire.OutputBlueprintMapping | null | undefined): OutputBlueprintStatePatch {
   if (!wire) return { ...EMPTY_OUTPUT_BLUEPRINT_STATE };
 
   if (wire.schemaKind === 'Tree') {
-    /** @type {SFDraft.OutputBlueprintTreeNode[]} */
-    const tree = [];
-    /** @type {Record<string, string>} */
-    const mapping = {};
+    const tree: SFDraft.OutputBlueprintTreeNode[] = [];
+    const mapping: Record<string, string> = {};
     applyOutputBlueprintTreeMapping(wire.tree || [], '', tree, mapping);
     return {
       selectedOutputBlueprintId: wire.blueprintId != null ? String(wire.blueprintId) : '',
@@ -280,8 +219,7 @@ function applyOutputBlueprintConfig(wire) {
 
   const wireFields = wire.fields || [];
   const fieldNames = wireFields.map(f => f.targetField);
-  /** @type {Record<string, string>} */
-  const mapping = {};
+  const mapping: Record<string, string> = {};
   for (const f of wireFields) mapping[f.targetField] = f.sourceField;
   return {
     selectedOutputBlueprintId: wire.blueprintId != null ? String(wire.blueprintId) : '',
@@ -295,11 +233,7 @@ function applyOutputBlueprintConfig(wire) {
 
 // The entry point: a wire ScrapingConfig (buildScrapingConfig's output) in, a full setState patch out. It never includes
 // `url`: the live tab's URL stays authoritative, so loading only replaces the extraction setup and settings.
-/**
- * @param {SFWire.ScrapingConfig} config
- * @returns {object}
- */
-function applyConfigToState(config) {
+export function applyConfigToState(config: SFWire.ScrapingConfig): Record<string, unknown> {
   // Combined mode only restores combinedComponents (each component's config is resolved live from its own saved
   // configuration). The cross-session global preferences (JSON output, preview, full file, external config) are never part
   // of this patch: loading a config must not change them.
@@ -431,11 +365,3 @@ function applyConfigToState(config) {
     ...applyOutputBlueprintConfig(config.outputBlueprint),
   };
 }
-
-module.exports = {
-  deserializeGroupTree, deserializeBrowserActions,
-  applyChangeDetectionConfig, applyProxyConfig, applyPaginationConfig, applyDiscoveredUrlsConfig, applyHardeningConfig,
-  applyOutputBlueprintConfig,
-  applyConfigToState,
-};
-
