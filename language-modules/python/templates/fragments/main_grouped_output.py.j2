@@ -4,25 +4,7 @@
     # detection below) is unaffected, still the full, unflattened tree.
     output_fieldnames = [m["target"] for m in BLUEPRINT_MAPPING]
     output_rows = [{m["target"]: row.get(m["source"], "") for m in BLUEPRINT_MAPPING} for row in blueprint_rows]
-{{~ if append_output ~}}
-    appended_count = len(output_rows)
-{{~ end ~}}
-{{~ if append_output && !output_is_sqlite && !output_is_xlsx ~}}
-    output_fieldnames, output_rows = _append_previous_rows(OUTPUT_PATH, output_fieldnames, output_rows)
-{{~ end ~}}
-{{~ if output_is_json ~}}
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(output_rows, f, ensure_ascii=False, indent=2)
-{{~ else if output_is_sqlite ~}}
-    _write_rows_sqlite(OUTPUT_PATH, output_fieldnames, output_rows)
-{{~ else if output_is_xlsx ~}}
-    _write_rows_xlsx(OUTPUT_PATH, output_fieldnames, output_rows)
-{{~ else ~}}
-    with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=output_fieldnames)
-        writer.writeheader()
-        writer.writerows(output_rows)
-{{~ end ~}}
+#@include main_write_rows
     count = {{ if append_output }}appended_count{{ else }}len(output_rows){{ end }}
 {{~ else if blueprint_tree_mapping_enabled ~}}
     # Issue #244: BLUEPRINT_TREE_MAPPING builds a real nested output tree of
