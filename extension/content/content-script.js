@@ -1263,6 +1263,10 @@ function onClick(e) {
       // mismatch instead of the eventual /generate request silently running
       // against the wrong page.
       url: window.location.href,
+      // Issue #429: names this pick, so the side panel can mark it handled and a leftover
+      // copy in session storage (the service worker's fallback write can land after the
+      // panel's cleanup) is recognised as already used instead of replayed on reload.
+      pickId: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     });
 
     // API-mode search: additionally correlate the clicked element's text

@@ -19,6 +19,7 @@ const { updateBrowserAction, computeScriptFileNamePatch } = require('./scraping-
 const { getGlobalSettings } = require('../shared/global-settings');
 const { resolveLinkHref } = require('./pagination-template');
 const { showToast, showMatchCountToast, setLastError } = require('./toast');
+const { markPickHandled } = require('./session-restore');
 const { cancelPendingDomTreeRequest, renderDomTree, highlightHover, highlightSelected } = require('./dom-tree-ui');
 
 function wireMessageListener(bridge) {
@@ -61,6 +62,9 @@ function wireMessageListener(bridge) {
     }
     if (message.type === 'ELEMENT_SELECTED' && state.current === STATES.SELECTING) {
       log('ELEMENT_SELECTED received (real-time)', message.selector);
+      // Issue #429: the service worker's fallback write of this pick can still land after the
+      // cleanup below; recording the pick as handled makes such a leftover harmless.
+      markPickHandled(message.pickId);
       if (state.apiSearchTarget) {
         // API-mode search: content-script.js always sends this too (same
         // click), but the actual result arrives as a separate API_CANDIDATES

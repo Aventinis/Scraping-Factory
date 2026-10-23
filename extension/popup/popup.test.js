@@ -4886,6 +4886,15 @@ describe('API-mode candidate search (btn-api-search, Issue #53 Phase 4)', () => 
     expect(document.getElementById('modal-field-name').classList.contains('hidden')).toBe(true);
   });
 
+  // Issue #429: a pick is recorded as handled, also in an api-search round (which returns early),
+  // so the service worker's late fallback write is recognised as a leftover on the next load.
+  test('a live ELEMENT_SELECTED marks its pick as handled, also during an api-search round', () => {
+    recordOneEntry();
+    document.getElementById('btn-api-search').click();
+    capturedListener({ type: 'ELEMENT_SELECTED', selector: '.price', path: [], pickId: 'k1-abc' });
+    expect(chrome.storage.session.set).toHaveBeenCalledWith({ handledPickId: 'k1-abc' });
+  });
+
   test('API_CANDIDATES ends the selection round, returns to idle and renders the results', () => {
     recordOneEntry();
     document.getElementById('btn-api-search').click();

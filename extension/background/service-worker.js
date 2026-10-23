@@ -151,6 +151,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // The page this selection actually happened on — same treatment,
         // for session-restore.js's own stale-tracked-url self-correction.
         pendingUrl: typeof message.url === 'string' ? message.url : null,
+        // Issue #429: lets session-restore.js tell a leftover of an already handled pick apart.
+        pendingPickId: typeof message.pickId === 'string' ? message.pickId : null,
       })
       .then(() => log('STORE OK'))
       .catch(err => log('STORE ERR', err.message));
