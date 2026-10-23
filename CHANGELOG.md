@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.19.22](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.21...v1.19.22) (2026-10-23)
+
+
+### Features
+
+* **docs:** build docs/user/*.md into bundled HTML pages inside the extension ([#354](https://github.com/Aventinis/Scraping-Factory/issues/354)) ([ca7cc92](https://github.com/Aventinis/Scraping-Factory/commit/ca7cc929ecc84707ea06a1efdcf08459c8d6f9e4))
+* **install:** ship the user documentation as files in the release bundle ([#354](https://github.com/Aventinis/Scraping-Factory/issues/354)) ([00f4329](https://github.com/Aventinis/Scraping-Factory/commit/00f432911fcf0dc0254ce28f6ae9c4e4e53b4cee))
+* **popup:** add "Learn more" links that open the bundled documentation, with a key registry and a sync test ([#354](https://github.com/Aventinis/Scraping-Factory/issues/354)) ([3124714](https://github.com/Aventinis/Scraping-Factory/commit/31247145409855265f27226e5df6583ef05a3f4d))
+* **popup:** one title per control with the explanation behind its "?"; Settings screen in collapsed cards, styled output-format select, quiet preset names ([#354](https://github.com/Aventinis/Scraping-Factory/issues/354)) ([b5eb039](https://github.com/Aventinis/Scraping-Factory/commit/b5eb0392ed4ec5e7cf1afdaa4b3e970c8481b344))
+* **popup:** shorten the long hints to one line, link each section to its documentation page and guard the hint length ([#354](https://github.com/Aventinis/Scraping-Factory/issues/354)) ([a789786](https://github.com/Aventinis/Scraping-Factory/commit/a7897868e415f6a6df3d60d53911634917943ff3))
+
+
+### Bug Fixes
+
+* **build:** assemble the extension in a staging folder and swap it in only on success; clear error when marked is missing ([#354](https://github.com/Aventinis/Scraping-Factory/issues/354)) ([5183135](https://github.com/Aventinis/Scraping-Factory/commit/5183135b9c1e297dd36edf16141ae96ebd5accc4))
+* **popup:** style the combined select like the Settings ones, keep a gap between the browser-action buttons, show the config-file checkbox directly, drop the last browser-actions paragraph ([#354](https://github.com/Aventinis/Scraping-Factory/issues/354)) ([71d1ca3](https://github.com/Aventinis/Scraping-Factory/commit/71d1ca396aa4556ff1a9b60da54d48632ff46cc8))
+
 ## [1.19.21](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.20...v1.19.21) (2026-10-22)
 
 
