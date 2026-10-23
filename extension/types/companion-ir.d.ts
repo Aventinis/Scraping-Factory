@@ -1,18 +1,15 @@
-// Ambient JSDoc-only type declarations mirroring the companion's wire-format
-// IR (companion/ScrapingFactory.Compiler/IR/*.cs) — Issue #238. These are
-// hand-kept, read-only mirrors of the C# types (same "both sides must
-// independently reach the same shape" relationship as
-// sanitizeFileNameBase/FileNameSanitizer or any of the other hand-kept
-// JS<->C# mirrors already documented in CLAUDE.md), not generated — there is
-// no build step in this project (see CLAUDE.md's "no build step" principle
-// for the extension itself) and no tool here parses C# to keep them in sync
-// automatically. They only describe the JSON *wire* shape (the exact object
-// `/generate` expects as its request body, and `buildConfigExport`'s own
-// `config` field) — the popup's own internal, richer "draft" shapes (e.g.
-// container-tree.js's `kind: 'group'|'field'` nodes, api-config.js's
-// draft trees) are intentionally NOT modeled here; each file that needs them
-// declares its own local `@typedef`s, since those shapes are popup-internal
-// and never serialized as-is.
+// Ambient JSDoc-only type declarations describing the companion's wire-format IR
+// (companion/ScrapingFactory.Compiler/IR/*.cs) — Issue #238. Hand-kept, because
+// the polymorphic converters (ContainerNodeJsonConverter, ApiNodeJsonConverter, ...)
+// defeat schema generation; companion/ScrapingFactory.Tests/IrTypeDeclarationTests.cs
+// compares every interface and string union here with the real C# types, and
+// test-vectors/wire/ checks the requests the extension actually builds (Issue #388).
+// They only describe the JSON *wire* shape (the exact object `/generate` expects as its
+// request body, and `buildConfigExport`'s own `config` field) — the popup's own
+// internal, richer "draft" shapes (e.g. container-tree.js's `kind: 'group'|'field'`
+// nodes, api-config.js's draft trees) are intentionally NOT modeled here; each file
+// that needs them declares its own local `@typedef`s, since those shapes are
+// popup-internal and never serialized as-is.
 //
 // This file has no top-level import/export, so every declaration below is a
 // plain global ambient type (not an ES module) — consistent with the
@@ -40,6 +37,7 @@ declare namespace SFWire {
     outputFileName?: string | null;
     includePreview?: boolean;
     includeOutputFile?: boolean;
+    skipVerification?: boolean;
     changeDetection?: ChangeDetectionConfig;
     proxy?: ProxyConfig;
     requestDelay?: RequestDelayConfig;
@@ -60,7 +58,7 @@ declare namespace SFWire {
     outputBlueprint?: OutputBlueprintMapping;
   }
 
-  type OutputFormat = 'Csv' | 'Xml' | 'Json';
+  type OutputFormat = 'Csv' | 'Xml' | 'Json' | 'Sqlite' | 'Xlsx';
   type ScrapingEngine = 'Static' | 'Browser' | 'Api';
 
   /** Flat mode's leaf (ScrapingConfig.cs's `ScrapingField`). */

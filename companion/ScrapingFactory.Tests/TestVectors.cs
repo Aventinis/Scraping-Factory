@@ -19,6 +19,9 @@ public static class TestVectors
         throw new DirectoryNotFoundException("test-vectors/ not found above " + AppContext.BaseDirectory);
     }
 
+    /// <summary>The repository root (the directory that contains test-vectors/).</summary>
+    public static string RepoRoot => Path.GetDirectoryName(Directory.Value)!;
+
     public static string PathOf(string file) => Path.Combine(Directory.Value, file);
 
     /// <summary>All cases of a vector file, each a cloned element that stays valid after the document is gone.</summary>
