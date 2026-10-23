@@ -49,12 +49,9 @@ function renderApiConfigHeaders(capturedHeaders, headerDecisions, bootstrap = nu
     listEl.appendChild(li);
   });
 }
-// ── API-Mode request-body tree editor (Issue #55, Phase B4) ─────────────────
-// Visually mirrors the response tree above (buildApiTreeNodeEl/renderApiTree)
-// but simpler: a node's own JSON key/array index is a read-only label (the
-// body's shape itself is never edited, see this section's own doc comment
-// on jsonValueToBodyDraft), and only a 'literal'/'variable' leaf gets any
-// controls at all — object/array nodes just recurse.
+// ── Request-body tree editor ──
+// Mirrors the response tree but simpler: a node's JSON key / index is a read-only label (the body's shape is never edited), and only a
+// 'literal' / 'variable' leaf gets controls; object / array nodes recurse.
 
 function bodyNodeLabel(key, node) {
   if (node.kind === 'literal') return `${key}: ${node.literalKind === 'Null' ? 'null' : JSON.stringify(node.value)}`;
@@ -143,12 +140,9 @@ function renderBodyTree(draft) {
   if (!draft.bodyTree) return;
   root.appendChild(buildBodyTreeNodeEl(t('apiConfig.bodyRootLabel'), draft.bodyTree, [], 0, allParameterParts(draft)));
 }
-// ── API-Mode network recording (Issue #53 Phase 3) ───────────────────────────
-// Unlike preview, this doesn't depend on Fields/Groups — it's a standalone
-// recording of the page's own fetch/XHR traffic, meant to feed the future
-// API-Mode's request-discovery flow (Phase 4+). See content-script.js's
-// API_CAPTURE bridge and api-capture.js (MAIN world) for where the actual
-// interception happens.
+// ── Network recording ──
+// A standalone recording of the page's fetch / XHR traffic, not dependent on Fields / Groups; it feeds request discovery (the interception
+// is in api-capture.js, MAIN world, and the content script's API_CAPTURE bridge).
 
 function setApiConfigHeaderDecision(bridge, headerName, patch) {
   const draft = bridge.getState().apiConfigDraft;
@@ -165,13 +159,9 @@ function setApiConfigHeaderDecision(bridge, headerName, patch) {
   patchApiConfigDraft(bridge, { headerDecisions: { ...draft.headerDecisions, [headerName]: next } });
 }
 
-// ── API-Mode request-body wiring (Issue #55, Phase B4) ──────────────────────
-// Toggling a leaf is the only structural edit the body tree ever gets (see
-// the section's own doc comment above jsonValueToBodyDraft) — everything
-// else here is either that toggle or routing a newly-variable leaf into the
-// exact same parameter-source configuration UI a URL variable part already
-// uses (allParameterParts/renderApiConfigParameters), rather than a second,
-// body-specific source picker.
+// ── Request-body wiring ──
+// Toggling a leaf is the only structural edit; a newly variable leaf is routed into the same parameter-source UI a URL variable part uses
+// (allParameterParts / renderApiConfigParameters), not a second picker.
 
 function toggleBodyLeafToVariable(bridge, path) {
   const bodyTree = updateBodyTreeNode(bridge.getState().apiConfigDraft.bodyTree, path, node => ({
@@ -180,15 +170,9 @@ function toggleBodyLeafToVariable(bridge, path) {
   patchApiConfigDraft(bridge, { bodyTree });
 }
 
-// A body-only parameter (unlike a URL part, which persists regardless of
-// whether the body still references it) only exists because some variable
-// leaf pointed at it — if this was the last one, drop it along with its
-// parameterSources entry rather than leaving an orphaned parameter card
-// that would still need a configured source just to satisfy
-// apiConfigDraftHasAllSourcesChosen (and the companion's own "declared but
-// unused parameter" rejection) for nothing. A leaf bound to a URL-derived
-// id is left alone either way — that part is still a real URL segment/query
-// param regardless of whether the body also referenced it.
+// A body-only parameter exists only because a variable leaf points at it: when the last one goes back to fixed, drop it and its
+// parameterSources entry (an orphan card would still need a source, and the companion rejects an unused parameter). A leaf bound to a
+// URL-derived id is left alone: that part stays a real URL segment either way.
 function toggleBodyLeafToFixed(bridge, path) {
   const draft = bridge.getState().apiConfigDraft;
   const node = resolveBodyTreeNode(draft.bodyTree, path);
@@ -221,11 +205,8 @@ function openBodyParameterModal(bridge, path) {
   bridge.patchState({ bodyParameterModalOpen: true, pendingBodyVariablePath: path });
 }
 
-// New body-only parameter ids are a monotonic sequence (draft.
-// nextBodyParameterSeq), not derived from the current array length —
-// toggleBodyLeafToFixed can remove entries again, and reusing a shrunk
-// array's length as the next id could otherwise collide with one still
-// referenced elsewhere in the tree.
+// New body-only parameter ids are a monotonic sequence (nextBodyParameterSeq), not the array length: removals could make a reused length
+// collide with an id still referenced elsewhere.
 function confirmBodyParameterModal(bridge) {
   const name = document.getElementById('input-api-body-parameter-name')?.value.trim();
   if (!name) return;

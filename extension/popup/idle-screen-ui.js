@@ -25,7 +25,7 @@ const { getGlobalSettings } = require('../shared/global-settings');
 
 // Duplicated verbatim from popup.js's own tiny show(id) helper — same "no
 // cross-module includes for small DOM helpers" convention already used
-// for renderMatchCountHint (see CLAUDE.md).
+// for renderMatchCountHint.
 function show(id) { document.getElementById(id)?.classList.remove('hidden'); }
 
 // Modes are strictly separate: switching clears the other modes' configuration. apiConfigDraft is cleared defensively too

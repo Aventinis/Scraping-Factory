@@ -1,6 +1,5 @@
 // ── Blocks mode: block list render + wiring (Issue #182) ────────────────────
-// Follows the project's <feature>.js/<feature>-ui.js split (see CLAUDE.md's
-// "Popup module boundaries" architecture decision) — pure add/remove/move
+// Follows the project's <feature>.js/<feature>-ui.js split (docs/design-notes/extension.md, "Popup module boundaries") — pure add/remove/move
 // helpers live in blocks-config.js, this file owns the DOM side: the draft
 // shape toggle (Flat/Container — which of _state.fields/_state.groups is
 // currently being edited as "the block in progress"), the draft's own name/

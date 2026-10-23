@@ -1,6 +1,5 @@
 // ── Bug reporting ───────────────────────────────────────────────────────────
-// Extracted from popup.js (see CLAUDE.md's "Popup module boundaries"
-// architecture decision). Combines this side panel's own log buffer with the
+// Extracted from popup.js (docs/design-notes/extension.md, "Popup module boundaries"). Combines this side panel's own log buffer with the
 // service worker's and (best-effort, via the service worker) the active
 // tab's content script's, so a user hitting an error can attach real
 // diagnostic context to a GitHub issue in one click instead of having to
@@ -27,7 +26,7 @@ async function collectLogs() {
 // This log/bug-report format is always English, independent of the popup's
 // selected UI language — it's a diagnostic artifact for maintainers on the
 // public, English-language GitHub repo, not conversational UI a
-// multilingual end user reads day-to-day (see CLAUDE.md's Language policy).
+// multilingual end user reads day-to-day (CLAUDE.md, Language).
 function formatLogSection(title, entries) {
   if (!entries || entries.length === 0) return `## ${title}\n(no entries)\n`;
   const lines = entries.map(e => `${e.ts} ${e.event}${e.data !== null ? ' ' + JSON.stringify(e.data) : ''}`);

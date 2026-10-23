@@ -1,8 +1,5 @@
-// API mode: the URL parts and the parameter-source cards of the API_CONFIG screen
-// (Issue #53/#216/#217) — fixed/variable parts, value lists, discovery endpoints,
-// ranges, and the "browser discovery" source delegated to
-// api-browser-discovery-ui.js. Split out of api-config-ui.js (Issue #390);
-// behavior unchanged. See api-config-ui.js for the `bridge` convention.
+// API mode: the URL parts and parameter-source cards of the API_CONFIG screen: fixed / variable parts, value lists, discovery endpoints,
+// ranges, and the browser-discovery source (api-browser-discovery-ui.js). See api-config-ui.js for the `bridge` convention.
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:ApiConfigUI');
 const { t } = require('../i18n/i18n');
@@ -18,11 +15,8 @@ const { renderParameterPlaceholderPicker, patchApiConfigDraft, patchApiConfigSou
 const { fetchApiCaptureEntries } = require('./api-capture-ui');
 const { renderBrowserDiscoverySourceFields, handleBrowserDiscoveryChange, handleBrowserDiscoveryClick } = require('./api-browser-discovery-ui');
 
-// `id` ("path:<index>" or "query:<key>") embeds the query param's own key
-// for the query-param case — which, like every other piece of a recorded
-// URL, came from the page being recorded and so must be treated as
-// untrusted the same way candidate.url/value already are elsewhere in this
-// file (escapeHtml, not raw interpolation into an innerHTML string).
+// `id` ("path:<index>" or "query:<key>") embeds the query key, which came from the recorded page and is untrusted: escapeHtml, never raw
+// interpolation.
 function urlPartRowHtml(id, valueLabel, variable, name) {
   const safeId = escapeHtml(id);
   return (
@@ -151,12 +145,8 @@ function renderApiConfigParameters(draft, discoveryCandidates, discoveryTemplate
   });
 }
 
-// The preset dropdown + revealed custom-format input + live "Example: …"
-// text below From/To, for IsoWeek/Date only (Number has no format concept).
-// `source.format` is always already set by the time this renders — either
-// auto-detected (setApiConfigSourceKind/the Type-change handler both call
-// detectRangeFormat) or explicitly chosen by the user — so "custom" here
-// just means "not one of this Type's presets", not "unset".
+// Preset dropdown, custom-format input and a live example under From / To (IsoWeek / Date only). `source.format` is always set by now
+// (auto-detected or chosen), so "custom" means "not one of the presets".
 function renderRangeFormatFields(source, safePartId) {
   if (source.type === 'Number') return '';
 
@@ -176,17 +166,9 @@ function renderRangeFormatFields(source, safePartId) {
     `;
 }
 
-// Issue #217: DiscoverySource.UrlTemplate is ordinarily read-only (derived
-// via the click-correlation "Search again" flow below) — editingPartId
-// (state.discoveryTemplateEditingPartId, a screen-scoped UI flag living
-// outside apiConfigDraft, same precedent discoveryCandidates itself
-// already sets, since draft.parameterSources[partId] is sent to the
-// companion byte-for-byte via buildApiConfig and must never carry a
-// UI-only field) temporarily swaps the summary for an editable text input
-// so the user can manually replace a concrete segment with
-// "{earlierParameterName}" to turn a discovered, single-shot endpoint into
-// a chained one. Only UrlTemplate itself is ever edited this way —
-// itemsPath/valuePath stay exactly as originally derived.
+// DiscoverySource.UrlTemplate is read-only (derived by "Search again"); editingPartId (state.discoveryTemplateEditingPartId, a screen-scoped flag
+// outside apiConfigDraft, which is sent to the companion as is) swaps the summary for a text input so the user can replace a concrete segment
+// with "{earlierParameterName}" and chain it. Only the template is edited; itemsPath / valuePath stay.
 function renderDiscoverySourceFields(draft, part, source, discoveryCandidates, editingPartId) {
   const wrap = document.createElement('div');
   const safePartId = escapeHtml(part.id);
@@ -254,12 +236,8 @@ function renderDiscoverySourceFields(draft, part, source, discoveryCandidates, e
   return wrap;
 }
 
-// Starts a *second* search round, reusing the exact same click-selection
-// mechanism as startApiFieldSearch (content-script.js doesn't need to know
-// which purpose this one serves) — its result becomes a DiscoverySource for
-// one specific variable part of the config being drafted, instead of the
-// primary field. `partId` (not the user-editable display name — see the
-// API-Mode config screen's own doc comment) identifies which one.
+// Starts a second search round with the same click selection; its result becomes a DiscoverySource for one variable part. `partId` (not the
+// editable display name) identifies it.
 function startDiscoverySearch(bridge, partId) {
   log('API_DISCOVERY_SEARCH start', partId);
   chrome.runtime.sendMessage({ type: 'START_SELECTION', apiSearch: true });
@@ -320,13 +298,8 @@ const API_CONFIG_SOURCE_DEFAULTS = {
   browserDiscovery: { kind: 'browserDiscovery', discoveryUrl: '', actions: [] },
 };
 
-// Range sources get their format auto-detected from the part's own
-// captured example value the moment "Range" is picked — see
-// detectRangeFormat's doc comment. Browser discovery's own DiscoveryUrl
-// is prefilled from the currently inspected page for the same reason
-// (the live page is overwhelmingly the most likely discovery page) —
-// still freely editable afterward, e.g. for a dedicated listing page
-// different from wherever the clicked data point itself lives.
+// A Range source gets its format from the part's captured example (detectRangeFormat); browser discovery prefills DiscoveryUrl from the
+// inspected page (the likeliest discovery page; still editable).
 function setApiConfigSourceKind(bridge, partId, kind) {
   const state = bridge.getState();
   const draft = state.apiConfigDraft;
@@ -341,13 +314,8 @@ function setApiConfigSourceKind(bridge, partId, kind) {
   patchApiConfigDraft(bridge, { parameterSources: { ...draft.parameterSources, [partId]: source } });
 }
 
-// API-mode follow-up: derives sibling values for one variable URL part from
-// the recorded pool and merges them into that part's StaticListSource value
-// list — see findUrlTemplateMatches/mergeValueListValues above for the
-// actual matching/merging logic. Runs once automatically the moment
-// "Werteliste" is picked as the source kind, and again on demand via the
-// per-card "Aus Aufzeichnung übernehmen" button (e.g. after scrolling the
-// inspected page further to trigger more recorded requests).
+// Derives sibling values for a variable URL part from the recorded pool and merges them into its value list (findUrlTemplateMatches /
+// mergeValueListValues). Runs once when "Value list" is picked and on demand via "Fill from recording".
 async function fillStaticListFromPool(bridge, partId) {
   log('API_AUTOFILL start', partId);
   const entries = await fetchApiCaptureEntries();
@@ -394,11 +362,7 @@ function wireApiParameterEvents(bridge) {
     const kindRadio = e.target.closest('.api-config-source-kind-radio');
     if (kindRadio) {
       setApiConfigSourceKind(bridge, kindRadio.dataset.partId, kindRadio.value);
-      // Best-effort, automatic first pass — picking "Werteliste" is exactly
-      // the moment a user would otherwise go hunting through DevTools for
-      // sibling requests, so try the pool first and let them refine/refresh
-      // via the button rendered alongside the textarea (see
-      // fillStaticListFromPool's own doc comment).
+      // Best-effort first pass: picking "Value list" is when a user would hunt for sibling requests, so try the pool first.
       if (kindRadio.value === 'staticList') fillStaticListFromPool(bridge, kindRadio.dataset.partId);
       return;
     }

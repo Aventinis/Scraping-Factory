@@ -1,9 +1,7 @@
 // ── Toast notifications + last-error tracking ──────────────────────────────
-// Extracted from popup.js (popup.js had grown past 4000 lines — see
-// CLAUDE.md's "Popup module boundaries" architecture decision). setLastError
-// lives here (not in bug-report.js) because showToast itself calls it
-// whenever a toast carries a `context` — bug-report.js only ever reads the
-// result via getLastError().
+// Extracted from popup.js (docs/design-notes/extension.md, "Popup module boundaries"). setLastError lives here, not in
+// bug-report.js, because showToast calls it whenever a toast carries a `context`; bug-report.js only reads it via
+// getLastError().
 const { t } = require('../i18n/i18n');
 const { containerCountAdvice } = require('./choice-guidance');
 

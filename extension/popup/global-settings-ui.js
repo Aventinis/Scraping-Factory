@@ -1,5 +1,4 @@
-// The global Settings tab (screens/settings.html) — a thin orchestrator per
-// CLAUDE.md's "Popup module boundaries" architecture decision: the four
+// The global Settings tab (screens/settings.html) — a thin orchestrator per the popup module rule (Architecture Decision #13): the four
 // cross-session preference toggles and the default-script-name preference
 // are rendered/wired directly here, while Output Blueprint management
 // (output-blueprints-ui.js) and cross-site saved-config browsing

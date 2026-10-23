@@ -1,12 +1,6 @@
-// ── Engine + browser actions: render + event-wiring ─────────────────────────
-// Extracted from popup.js (see CLAUDE.md's "Popup module boundaries"
-// architecture decision) — Issue #41/#42's engine toggle and the generic,
-// ordered browser-actions list (WaitFor/Fill/Click/Scroll) never got their
-// own module even after every other feature area did. Mode-independent,
-// unlike fields/groups/apiConfig — no interaction with switchMode/
-// MODE_SWITCH_CLEARS. Functions take a `bridge` object (same convention as
-// flat-mode-ui.js/container-tree-ui.js) instead of closing over popup.js's
-// own module-level state.
+// ── Engine + browser actions: render / wiring ──
+// Extracted from popup.js (docs/design-notes/extension.md, "Popup module boundaries"): the engine toggle and the ordered browser-actions list
+// (WaitFor / Fill / Click / Scroll). Mode-independent, so no interaction with switchMode. Functions take a `bridge`.
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');
 const { t } = require('../i18n/i18n');
@@ -19,15 +13,9 @@ const { addLoginFlow, msToSecondsText, secondsTextToMs } = require('./login-flow
 const { addBrowserAction, removeBrowserAction, updateBrowserAction, frameBadgeHtml } =
   require('./scraping-config-builder');
 
-// Issue #41/#42, Phase 5/6. One card per action, kind fixed at creation time
-// (via btn-add-action-wait/-fill/-click/-scroll) — unlike the API-config
-// parameter cards, there's no "change the kind afterward" control, since an
-// action is created from scratch by the user rather than pre-existing.
-//
-// Issue #403: a card made by the "Login form" starter carries a UI-only
-// `role` (user/password/submit/loggedIn) that only changes its wording; times
-// are shown in seconds (stored/sent as milliseconds, see login-flow.js), and
-// the rarely needed options sit under a remembered "Advanced" disclosure.
+// One card per action, its kind fixed at creation (there is no "change the kind" control). A card made by the "Login form" starter carries a
+// UI-only `role` (user / password / submit / loggedIn) that only changes wording; times are shown in seconds (stored as milliseconds, see
+// login-flow.js); rarely needed options sit under a remembered "Advanced" disclosure.
 function renderBrowserActions(actions, testValues) {
   const container = document.getElementById('browser-actions-list');
   if (!container) return;
@@ -178,11 +166,7 @@ function renderBrowserActions(actions, testValues) {
   });
 }
 
-// Called from popup.js's render(), alongside the mode-toggle section it
-// sits next to — engine active-state, browser-actions-section visibility,
-// and (Issue #175) the persistent-session toggle's checked-sync, which is
-// nested inside that section and needs no visibility gating of its own
-// beyond it.
+// Called from render(): engine state, browser-actions visibility and the persistent-session toggle's checked state (nested in that section).
 function renderBrowserActionsSection(bridge) {
   const state = bridge.getState();
   document.getElementById('btn-engine-static')?.classList.toggle('active', state.engine === 'Static');

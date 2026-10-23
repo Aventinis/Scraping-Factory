@@ -1,23 +1,14 @@
-// Issue #354 Part B: turns docs/user/*.md into HTML pages that ship inside the
-// extension (dist/docs/), so "Learn more" in the side panel works offline —
-// the extension stays free of external services.
+// Turns docs/user/*.md into HTML pages that ship inside the extension (dist/docs/), so "Learn more" works offline with no external service.
 //
 //   buildDocs({ docsDir, outdir })   writes <outdir>/docs/*.html, docs.css and images/
-//   slugify(heading)                 GitHub's heading-to-anchor rule (the one the
-//                                    markdown links and popup/docs-links.js use)
+//   slugify(heading)                 GitHub's heading-to-anchor rule (also used by the links and popup/docs-links.js)
 //
-// Languages: English (docs/user/*.md) is the source; docs/user/de/*.md is the German
-// translation with the same file names and the same heading structure. Both are built
-// (docs/<page>.html and docs/de/<page>.html) and each page links to its other-language
-// twin. docs/anchors.json maps every English heading anchor to the German one by heading
-// POSITION, which is how the panel's "Learn more" finds the right German heading while
-// its key table (popup/docs-links.js) stays English.
+// English (docs/user/*.md) is the source; docs/user/de/*.md is the German translation with the same file names and heading structure. Both are
+// built (docs/<page>.html, docs/de/<page>.html) and link to their twin. docs/anchors.json maps each English heading anchor to the German one by
+// heading POSITION, which is how "Learn more" finds the German heading while its key table stays English.
 //
-// Plain files only: the pages carry no script (an MV3 extension page may not
-// run inline script), just a linked stylesheet. A link in a page that points
-// at a missing page, anchor or image fails the build instead of shipping a dead
-// "Learn more". A link that leaves docs/user/ (the developer docs the README
-// mentions) is rendered as plain text — those files are not part of the bundle.
+// Plain files only (an MV3 page may not run inline script). A link to a missing page, anchor or image fails the build; a link that leaves
+// docs/user/ is rendered as plain text (not part of the bundle).
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');

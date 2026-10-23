@@ -1,15 +1,10 @@
 // @ts-check
-// Issue #400: pure logic of the two helpers in the transform editor that get a
-// non-programmer to a *working* value (UX audit findings 5 and 12) — the regex
-// "recipes" behind "Regex extract" and the date-format inference behind
-// "Convert to date". Rendering/wiring is in transform-helpers-ui.js.
+// Pure logic of the two transform-editor helpers that get a non-programmer to a working value: the regex "recipes" behind "Regex extract" and
+// the date-format inference behind "Convert to date" (transform-helpers-ui.js renders them).
 //
-// Recipes turn "the text after Price:" into a pattern + group, so nobody has to
-// write a regular expression. The user's own text is escaped (a "." or "(" in it
-// is taken literally), and only constructs the .NET `Regex` (the companion's
-// validation) and Python's `re` (the generated script) read identically are used —
-// groups, `\d`, `\s`, `[^…]`, lazy `+?`; no lookbehind, no named groups, no inline
-// flags. The generated pattern stays editable in the normal pattern input.
+// Recipes turn "the text after Price:" into a pattern + group. The user's text is escaped, and only constructs that .NET's Regex (the companion's
+// validation) and Python's re (the script) read identically are used: groups, \d, \s, [^...], lazy +?; no lookbehind, named groups or inline
+// flags. The pattern stays editable in the normal input.
 const { applyTransformsPreview, toDatePreview } = require('./field-transforms');
 
 /**
