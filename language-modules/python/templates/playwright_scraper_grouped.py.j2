@@ -29,30 +29,7 @@ OUTPUT_PATH = "{{ output_filename }}.{{ if blueprint_mapping_enabled }}{{ if out
 
 #@include external_config_grouped
 
-#@include session_constants
-
-#@include pagination_constants
-
-#@include change_detection_constants
-
-#@include require_env_playwright
-#@include request_headers_playwright
-{{~ if text_selector.enabled ~}}
-#@include text_selector_common
-
-#@include text_selector_playwright
-{{~ if discovered_urls.enabled ~}}
-
-#@include text_selector_bs4
-{{~ end ~}}
-{{~ end ~}}
-
-{{~ if proxy.enabled ~}}
-#@include proxy_pool
-
-
-#@include proxy_playwright
-{{~ end ~}}
+#@include playwright_constants_prelude
 
 #@include hardening_tree
 

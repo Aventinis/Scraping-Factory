@@ -1,0 +1,17 @@
+DOWNLOAD = {
+{{- for field in fields }}
+    "{{ field.name }}": {{ if field.download }}True{{ else }}False{{ end }},
+{{- end }}
+}
+
+MAX_DOWNLOAD_SIZE = {
+{{- for field in fields }}
+    "{{ field.name }}": {{ if field.max_download_size_bytes }}{{ field.max_download_size_bytes }}{{ else }}None{{ end }},
+{{- end }}
+}
+
+ALLOWED_CONTENT_TYPES = {
+{{- for field in fields }}
+    "{{ field.name }}": [{{ for t in field.allowed_content_types }}"{{ t }}"{{ if !for.last }}, {{ end }}{{ end }}],
+{{- end }}
+}
