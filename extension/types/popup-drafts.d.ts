@@ -9,8 +9,7 @@
 // namespace here (`SFDraft`) rather than as a local `@typedef` duplicated
 // per file: JSDoc `@typedef`s declared inside a plain script (no
 // import/export, like every file in extension/popup/) are file-scoped to
-// TypeScript's checker, not implicitly global the way a runtime
-// `self.SFXxx` assignment is — so e.g. container-tree.js's own tree-node
+// TypeScript's checker — so e.g. container-tree.js's own tree-node
 // shape couldn't otherwise be referenced from scraping-config-builder.js's
 // JSDoc without either this shared file or a real (unused-at-runtime)
 // `import(...)` type query.
@@ -67,8 +66,12 @@ declare namespace SFDraft {
 
   // ── Browser actions (scraping-config-builder.js) ─────────────────────────
 
+  /** Issue #403 — UI-only purpose of a "Login form" starter action; never sent to the companion. */
+  type BrowserActionRole = 'user' | 'password' | 'submit' | 'loggedIn';
+
   interface BrowserAction {
     kind: 'waitFor' | 'fill' | 'click' | 'scroll';
+    role?: BrowserActionRole;
     selector?: string;
     timeoutMs?: number;
     environmentVariableName?: string;
@@ -143,12 +146,20 @@ declare namespace SFDraft {
     maxSecondsText: string;
   }
 
+  // Issue #333: the robots.txt Disallow check — action as sent on the wire.
+  interface RobotsDisallowState {
+    enabled: boolean;
+    action: 'Warn' | 'Skip' | 'Abort';
+  }
+
   interface PaginationState {
     enabled: boolean;
     kind: 'nextLink' | 'pageNumber';
     nextLinkSelector: string;
     urlTemplate: string;
     maxPages: number;
+    /** Issue #405 — UI-only: absolute href of the last "next" / "page 2" link the user clicked; never sent. */
+    linkHref?: string;
   }
 
   // Issue #218.
@@ -233,6 +244,12 @@ declare namespace SFDraft {
     maxPages: number;
   }
 
+  // ── API mode: Link-header pagination (api-link-pagination.js, Issue #321) ──
+
+  interface ApiLinkHeaderPagination {
+    maxPages: number;
+  }
+
   // One GET_API_CAPTURE_ENTRIES entry (content/api-capture.js's buildEntry).
   interface ApiCaptureEntry {
     id: number;
@@ -243,6 +260,7 @@ declare namespace SFDraft {
     body: string;
     requestHeaders?: Array<{ name: string; value: string }>;
     requestBody?: string;
+    hasNextLink?: boolean;
     requestBodySkipped?: boolean;
   }
 }

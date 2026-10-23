@@ -7,313 +7,337 @@
 // MODE_SWITCH_CLEARS. Functions take a `bridge` object (same convention as
 // flat-mode-ui.js/container-tree-ui.js) instead of closing over popup.js's
 // own module-level state.
-const SFBrowserActionsUI = (function () {
-  const { createLogger } = typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
-  const log = createLogger('SF:Popup');
-  const { t } = typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
-  const { STATES, escapeHtml } = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
-  const { addBrowserAction, removeBrowserAction, updateBrowserAction, frameBadgeHtml } =
-    typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
+const { createLogger } = require('../shared/logger');
+const log = createLogger('SF:Popup');
+const { t } = require('../i18n/i18n');
+const { STATES, escapeHtml } = require('./api-config');
+const { envVarNoteHtml } = require('./env-var-ui');
+const { autoOpenAdvanced } = require('./advanced-disclosure-ui');
+const { helpHostHtml } = require('./help-popover');
+const { createAdvancedDisclosure } = require('./advanced-disclosure-ui');
+const { addLoginFlow, msToSecondsText, secondsTextToMs } = require('./login-flow');
+const { addBrowserAction, removeBrowserAction, updateBrowserAction, frameBadgeHtml } =
+  require('./scraping-config-builder');
 
-  // Issue #41/#42, Phase 5/6. One card per action, kind fixed at creation time
-  // (via btn-add-action-wait/-fill/-click/-scroll) — unlike the API-config
-  // parameter cards, there's no "change the kind afterward" control, since an
-  // action is created from scratch by the user rather than pre-existing.
-  function renderBrowserActions(actions, testValues) {
-    const container = document.getElementById('browser-actions-list');
-    if (!container) return;
-    container.innerHTML = '';
+// Issue #41/#42, Phase 5/6. One card per action, kind fixed at creation time
+// (via btn-add-action-wait/-fill/-click/-scroll) — unlike the API-config
+// parameter cards, there's no "change the kind afterward" control, since an
+// action is created from scratch by the user rather than pre-existing.
+//
+// Issue #403: a card made by the "Login form" starter carries a UI-only
+// `role` (user/password/submit/loggedIn) that only changes its wording; times
+// are shown in seconds (stored/sent as milliseconds, see login-flow.js), and
+// the rarely needed options sit under a remembered "Advanced" disclosure.
+function renderBrowserActions(actions, testValues) {
+  const container = document.getElementById('browser-actions-list');
+  if (!container) return;
+  container.innerHTML = '';
 
-    const kindLabels = {
-      waitFor: t('browserActions.kindWaitFor'),
-      fill: t('browserActions.kindFill'),
-      click: t('browserActions.kindClick'),
-      scroll: t('browserActions.kindScroll'),
-    };
+  const kindLabels = {
+    waitFor: t('browserActions.kindWaitFor'),
+    fill: t('browserActions.kindFill'),
+    click: t('browserActions.kindClick'),
+    scroll: t('browserActions.kindScroll'),
+  };
 
-    // A single "pick element" row bound to a specific property of `action`
-    // (data-field) — every kind but 'scroll' has exactly one such row
-    // (property 'selector'); 'scroll' has two (containerSelector/
-    // loadMoreButtonSelector), both optional, see buildSelectorRow's callers.
-    function buildSelectorRow(index, field, value, label) {
-      const row = document.createElement('div');
-      row.className = 'browser-action-selector-row';
-      const selectorText = value || t('browserActions.noSelector');
-      const labelHtml = label ? `<label>${escapeHtml(label)}</label>` : '';
-      row.innerHTML =
-        labelHtml +
-        `<span class="field-selector" title="${escapeHtml(selectorText)}">${escapeHtml(selectorText)}</span>` +
-        `<button type="button" class="btn-secondary btn-tiny btn-pick-action-selector" data-index="${index}" data-field="${field}">${escapeHtml(t('browserActions.pickSelectorBtn'))}</button>`;
-      return row;
-    }
+  // A single "pick element" row bound to a specific property of `action`
+  // (data-field) — every kind but 'scroll' has exactly one such row
+  // (property 'selector'); 'scroll' has two (containerSelector/
+  // loadMoreButtonSelector), both optional, see buildSelectorRow's callers.
+  function buildSelectorRow(index, field, value, label, pickLabel) {
+    const row = document.createElement('div');
+    row.className = 'browser-action-selector-row';
+    const selectorText = value || t('browserActions.noSelector');
+    const labelHtml = label ? `<label>${escapeHtml(label)}</label>` : '';
+    row.innerHTML =
+      labelHtml +
+      `<span class="field-selector" title="${escapeHtml(selectorText)}">${escapeHtml(selectorText)}</span>` +
+      `<button type="button" class="btn-secondary btn-tiny btn-pick-action-selector" data-index="${index}" data-field="${field}">${escapeHtml(pickLabel || t('browserActions.pickSelectorBtn'))}</button>`;
+    return row;
+  }
 
-    actions.forEach((action, i) => {
-      const card = document.createElement('div');
-      card.className = 'browser-action-card';
-      card.dataset.index = i;
+  // A labelled number input in seconds: shows the default as a placeholder.
+  function secondsRow(labelKey, cls, index, ms, defaultMs, helpKey) {
+    const row = document.createElement('div');
+    row.className = 'browser-action-field-row';
+    row.innerHTML =
+      `<label>${escapeHtml(t(labelKey))}</label>` +
+      (helpKey ? helpHostHtml(helpKey) : '') +
+      `<input type="number" min="0" step="any" class="${cls}" data-index="${index}" placeholder="${escapeHtml(msToSecondsText(defaultMs))}" value="${escapeHtml(msToSecondsText(ms))}" />`;
+    return row;
+  }
 
-      const header = document.createElement('div');
-      header.className = 'browser-action-header';
-      header.innerHTML =
-        `<span class="row-label">${escapeHtml(kindLabels[action.kind] || action.kind)}</span>` +
-        frameBadgeHtml(action.framePath) +
-        `<button type="button" class="btn-danger btn-remove-action" data-index="${i}">${escapeHtml(t('common.remove'))}</button>`;
-      card.appendChild(header);
+  // Rarely needed options, collapsed by default and remembered per kind.
+  function advancedBlock(id) {
+    const details = createAdvancedDisclosure(id);
+    return { details, body: details.querySelector('.advanced-disclosure-body') };
+  }
 
-      if (action.kind === 'scroll') {
-        card.appendChild(buildSelectorRow(i, 'containerSelector', action.containerSelector, t('browserActions.containerSelectorLabel')));
-        card.appendChild(buildSelectorRow(i, 'loadMoreButtonSelector', action.loadMoreButtonSelector, t('browserActions.loadMoreButtonSelectorLabel')));
+  actions.forEach((action, i) => {
+    const role = action.role;
+    const card = document.createElement('div');
+    card.className = 'browser-action-card';
+    card.dataset.index = i;
 
-        const row = document.createElement('div');
-        row.className = 'browser-action-field-row';
-        row.innerHTML =
-          `<label>${escapeHtml(t('browserActions.maxIterationsLabel'))}</label>` +
-          `<input type="number" min="1" class="browser-action-max-iterations" data-index="${i}" value="${action.maxIterations}" />` +
-          `<label>${escapeHtml(t('browserActions.waitAfterMsLabel'))}</label>` +
-          `<input type="number" min="0" class="browser-action-wait-after-ms" data-index="${i}" value="${action.waitAfterMs}" />`;
-        card.appendChild(row);
+    const header = document.createElement('div');
+    header.className = 'browser-action-header';
+    const headerLabel = role ? t('browserActions.role.' + role) : (kindLabels[action.kind] || action.kind);
+    header.innerHTML =
+      `<span class="row-label">${escapeHtml(headerLabel)}</span>` +
+      frameBadgeHtml(action.framePath) +
+      `<button type="button" class="btn-danger btn-remove-action" data-index="${i}">${escapeHtml(t('common.remove'))}</button>`;
+    card.appendChild(header);
 
-        // Issue #289: empty = null = today's "jump straight to the bottom"
-        // default — only a site whose sections lazy-load per scrolled-through
-        // viewport (not classic append-below infinite scroll) needs this set.
-        const stepRow = document.createElement('div');
-        stepRow.className = 'browser-action-field-row';
-        stepRow.innerHTML =
-          `<label>${escapeHtml(t('browserActions.scrollStepPxLabel'))}</label>` +
-          `<input type="number" min="1" class="browser-action-scroll-step-px" data-index="${i}" placeholder="${escapeHtml(t('browserActions.scrollStepPxPlaceholder'))}" value="${action.scrollStepPx || ''}" />`;
-        card.appendChild(stepRow);
+    if (action.kind === 'scroll') {
+      const rounds = document.createElement('div');
+      rounds.className = 'browser-action-field-row';
+      rounds.innerHTML =
+        `<label>${escapeHtml(t('browserActions.maxIterationsLabel'))}</label>` +
+        helpHostHtml('help.browserActions.maxRounds') +
+        `<input type="number" min="1" class="browser-action-max-iterations" data-index="${i}" placeholder="10" value="${action.maxIterations}" />`;
+      card.appendChild(rounds);
+      card.appendChild(secondsRow('browserActions.waitAfterRoundSecondsLabel', 'browser-action-wait-after-ms', i, action.waitAfterMs, 1000));
 
-        container.appendChild(card);
-        return;
-      }
+      const { details, body } = advancedBlock('browser-action-scroll');
+      body.appendChild(buildSelectorRow(i, 'containerSelector', action.containerSelector, t('browserActions.containerSelectorLabel')));
+      body.appendChild(buildSelectorRow(i, 'loadMoreButtonSelector', action.loadMoreButtonSelector, t('browserActions.loadMoreButtonSelectorLabel')));
 
-      card.appendChild(buildSelectorRow(i, 'selector', action.selector, null));
-
-      if (action.kind === 'click') {
-        // Issue #267: which of several matches to click (Playwright would
-        // otherwise abort on more than one) — "all" additionally paces the
-        // clicks with a wait after each.
-        const target = action.target || 'first';
-        const row = document.createElement('div');
-        row.className = 'browser-action-field-row';
-        row.innerHTML =
-          `<label>${escapeHtml(t('browserActions.clickTargetLabel'))}</label>` +
-          `<select class="browser-action-click-target" data-index="${i}">` +
-          ['first', 'last', 'all'].map(v => `<option value="${v}"${v === target ? ' selected' : ''}>${escapeHtml(t('browserActions.clickTarget.' + v))}</option>`).join('') +
-          `</select>`;
-        card.appendChild(row);
-        if (target === 'all') {
-          const waitRow = document.createElement('div');
-          waitRow.className = 'browser-action-field-row';
-          waitRow.innerHTML =
-            `<label>${escapeHtml(t('browserActions.waitAfterMsLabel'))}</label>` +
-            `<input type="number" min="0" class="browser-action-click-wait-after-ms" data-index="${i}" value="${action.waitAfterMs ?? 250}" />`;
-          card.appendChild(waitRow);
-        }
-      }
-
-      if (action.kind === 'waitFor') {
-        const row = document.createElement('div');
-        row.className = 'browser-action-field-row';
-        row.innerHTML =
-          `<label>${escapeHtml(t('browserActions.timeoutLabel'))}</label>` +
-          `<input type="number" min="1" class="browser-action-timeout" data-index="${i}" value="${action.timeoutMs}" />`;
-        card.appendChild(row);
-      } else if (action.kind === 'fill') {
-        const row = document.createElement('div');
-        row.className = 'browser-action-field-row';
-        row.innerHTML =
-          `<label>${escapeHtml(t('browserActions.envVarLabel'))}</label>` +
-          `<input type="text" class="browser-action-env-name" data-index="${i}" placeholder="${escapeHtml(t('browserActions.envNamePlaceholder'))}" value="${escapeHtml(action.environmentVariableName || '')}" />`;
-        card.appendChild(row);
-
-        const hint = document.createElement('p');
-        hint.className = 'browser-action-hint';
-        hint.textContent = t('browserActions.envVarHint');
-        card.appendChild(hint);
-
-        // Issue #43: one-time test value for the /generate verification trial
-        // run only — keyed by env-var name (not action index) so the change
-        // handler doesn't need to look the action up by position. Only shown
-        // once the env var name is actually set, since that's the join key.
-        const envName = (action.environmentVariableName || '').trim();
-        if (envName) {
-          const testValueRow = document.createElement('div');
-          testValueRow.className = 'browser-action-field-row';
-          testValueRow.innerHTML =
-            `<label>${escapeHtml(t('browserActions.testValueLabel'))}</label>` +
-            `<input type="password" class="browser-action-test-value" data-env-name="${escapeHtml(envName)}" ` +
-            `placeholder="${escapeHtml(t('browserActions.testValuePlaceholder'))}" value="${escapeHtml(testValues[envName] || '')}" />`;
-          card.appendChild(testValueRow);
-
-          const testValueHint = document.createElement('p');
-          testValueHint.className = 'browser-action-hint';
-          testValueHint.textContent = t('browserActions.testValueHint');
-          card.appendChild(testValueHint);
-        }
-      }
+      // Issue #289: empty = null = today's "jump straight to the bottom"
+      // default — only a site whose sections lazy-load per scrolled-through
+      // viewport (not classic append-below infinite scroll) needs this set.
+      const stepRow = document.createElement('div');
+      stepRow.className = 'browser-action-field-row';
+      stepRow.innerHTML =
+        `<label>${escapeHtml(t('browserActions.scrollStepPxLabel'))}</label>` +
+        `<input type="number" min="1" class="browser-action-scroll-step-px" data-index="${i}" placeholder="${escapeHtml(t('browserActions.scrollStepPxPlaceholder'))}" value="${action.scrollStepPx || ''}" />`;
+      body.appendChild(stepRow);
+      card.appendChild(details);
 
       container.appendChild(card);
-    });
-  }
+      return;
+    }
 
-  // Called from popup.js's render(), alongside the mode-toggle section it
-  // sits next to — engine active-state, browser-actions-section visibility,
-  // and (Issue #175) the persistent-session toggle's checked-sync, which is
-  // nested inside that section and needs no visibility gating of its own
-  // beyond it.
-  function renderBrowserActionsSection(bridge) {
-    const state = bridge.getState();
-    document.getElementById('btn-engine-static')?.classList.toggle('active', state.engine === 'Static');
-    document.getElementById('btn-engine-browser')?.classList.toggle('active', state.engine === 'Browser');
-    document.getElementById('browser-actions-section')?.classList.toggle('hidden', state.engine !== 'Browser');
-    if (state.engine === 'Browser') renderBrowserActions(state.browserActions, state.fillTestValues);
+    card.appendChild(buildSelectorRow(i, 'selector', action.selector, null, role ? t('browserActions.pickRole.' + role) : null));
 
-    const persistentSessionToggle = document.getElementById('toggle-persistent-session');
-    if (persistentSessionToggle) persistentSessionToggle.checked = state.persistentSession;
-  }
+    if (action.kind === 'click') {
+      // Issue #267: which of several matches to click (Playwright would
+      // otherwise abort on more than one) — "all" additionally paces the
+      // clicks with a wait after each. A plain login button needs neither,
+      // so both sit under "Advanced".
+      const target = action.target || 'first';
+      const { details, body } = advancedBlock('browser-action-click');
+      const row = document.createElement('div');
+      row.className = 'browser-action-field-row';
+      row.innerHTML =
+        `<label>${escapeHtml(t('browserActions.clickTargetLabel'))}</label>` +
+        `<select class="browser-action-click-target" data-index="${i}">` +
+        ['first', 'last', 'all'].map(v => `<option value="${v}"${v === target ? ' selected' : ''}>${escapeHtml(t('browserActions.clickTarget.' + v))}</option>`).join('') +
+        `</select>`;
+      body.appendChild(row);
+      if (target === 'all') {
+        body.appendChild(secondsRow('browserActions.waitAfterClickSecondsLabel', 'browser-action-click-wait-after-ms', i, action.waitAfterMs ?? 250, 250));
+      }
+      card.appendChild(details);
+    }
 
-  function wireBrowserActionsEvents(bridge) {
-    document.getElementById('btn-engine-static')?.addEventListener('click', () => {
-      log('BTN engine-static');
-      bridge.setState(bridge.getState().current, { engine: 'Static' });
-    });
-    document.getElementById('btn-engine-browser')?.addEventListener('click', () => {
-      log('BTN engine-browser');
-      bridge.setState(bridge.getState().current, { engine: 'Browser' });
-    });
+    if (action.kind === 'waitFor') {
+      card.appendChild(secondsRow('browserActions.timeoutSecondsLabel', 'browser-action-timeout', i, action.timeoutMs, 5000));
+    } else if (action.kind === 'fill') {
+      const envLabelKey = role === 'user' ? 'browserActions.envVarLabelUser' : role === 'password' ? 'browserActions.envVarLabelPassword' : 'browserActions.envVarLabel';
+      const row = document.createElement('div');
+      row.className = 'browser-action-field-row';
+      row.innerHTML =
+        `<label>${escapeHtml(t(envLabelKey))}</label>` +
+        `<input type="text" class="browser-action-env-name" data-env-var data-index="${i}" placeholder="${escapeHtml(t('envVar.placeholder.fill'))}" value="${escapeHtml(action.environmentVariableName || '')}" />`;
+      card.appendChild(row);
+      card.insertAdjacentHTML('beforeend', envVarNoteHtml()); // Issue #397: the shared explanation + popover
 
-    document.getElementById('btn-add-action-wait')?.addEventListener('click', () => {
-      log('BTN add-action-wait');
-      bridge.setState(bridge.getState().current, { browserActions: addBrowserAction(bridge.getState().browserActions, 'waitFor') });
-    });
-    document.getElementById('btn-add-action-fill')?.addEventListener('click', () => {
-      log('BTN add-action-fill');
-      bridge.setState(bridge.getState().current, { browserActions: addBrowserAction(bridge.getState().browserActions, 'fill') });
-    });
-    document.getElementById('btn-add-action-click')?.addEventListener('click', () => {
-      log('BTN add-action-click');
-      bridge.setState(bridge.getState().current, { browserActions: addBrowserAction(bridge.getState().browserActions, 'click') });
-    });
-    document.getElementById('btn-add-action-scroll')?.addEventListener('click', () => {
-      log('BTN add-action-scroll');
-      bridge.setState(bridge.getState().current, { browserActions: addBrowserAction(bridge.getState().browserActions, 'scroll') });
-    });
+      // Issue #43: one-time test value for the /generate verification trial
+      // run only — keyed by env-var name (not action index) so the change
+      // handler doesn't need to look the action up by position. Only shown
+      // once the env var name is actually set, since that's the join key.
+      const envName = (action.environmentVariableName || '').trim();
+      if (envName) {
+        const testLabelKey = role === 'user' ? 'browserActions.testValueLabelUser' : role === 'password' ? 'browserActions.testValueLabelPassword' : 'browserActions.testValueLabel';
+        const testValueRow = document.createElement('div');
+        testValueRow.className = 'browser-action-field-row';
+        testValueRow.innerHTML =
+          `<label>${escapeHtml(t(testLabelKey))}</label>` +
+          `<input type="password" class="browser-action-test-value" data-env-name="${escapeHtml(envName)}" ` +
+          `placeholder="${escapeHtml(t('envVar.testValuePlaceholder'))}" value="${escapeHtml(testValues[envName] || '')}" />`;
+        card.appendChild(testValueRow);
 
-    document.getElementById('browser-actions-list')?.addEventListener('click', (e) => {
-      const removeBtn = e.target.closest('.btn-remove-action');
-      if (removeBtn) {
-        const index = parseInt(removeBtn.dataset.index, 10);
-        log('BROWSER_ACTION_REMOVE', { index });
-        bridge.setState(bridge.getState().current, { browserActions: removeBrowserAction(bridge.getState().browserActions, index) });
-        return;
+        const testValueHint = document.createElement('p');
+        testValueHint.className = 'browser-action-hint';
+        testValueHint.textContent = t('browserActions.testValueHint');
+        card.appendChild(testValueHint);
       }
-      const pickBtn = e.target.closest('.btn-pick-action-selector');
-      if (pickBtn) {
-        const index = parseInt(pickBtn.dataset.index, 10);
-        const field = pickBtn.dataset.field; // 'selector' | 'containerSelector' | 'loadMoreButtonSelector' — see buildSelectorRow
-        log('BTN pick-action-selector → START_SELECTION', { index, field });
-        bridge.stopPreviewIfActive();
-        chrome.runtime.sendMessage({ type: 'START_SELECTION' });
-        bridge.setState(STATES.SELECTING, {
-          pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [], selectionKind: 'browserAction', pendingBrowserActionIndex: index, pendingBrowserActionField: field,
-          domTree: null, domTreeTruncated: false, domTreeError: null,
-        });
-      }
-    });
+    }
 
-    // change (not input) — same reasoning as the API-config screen's text
-    // inputs: a re-render on every keystroke would reset the cursor position.
-    document.getElementById('browser-actions-list')?.addEventListener('change', (e) => {
-      const timeoutInput = e.target.closest('.browser-action-timeout');
-      if (timeoutInput) {
-        const index = parseInt(timeoutInput.dataset.index, 10);
-        const timeoutMs = parseInt(timeoutInput.value, 10);
-        bridge.setState(bridge.getState().current, {
-          browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
-            timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 5000,
-          }),
-        });
-        return;
-      }
-      const envInput = e.target.closest('.browser-action-env-name');
-      if (envInput) {
-        const index = parseInt(envInput.dataset.index, 10);
-        bridge.setState(bridge.getState().current, {
-          browserActions: updateBrowserAction(bridge.getState().browserActions, index, { environmentVariableName: envInput.value.trim() }),
-        });
-        return;
-      }
-      const testValueInput = e.target.closest('.browser-action-test-value');
-      if (testValueInput) {
-        // patchState (not setState): fillTestValues must never reach
-        // persistState()/chrome.storage.session — see its _state comment.
-        const envName = testValueInput.dataset.envName;
-        bridge.patchState({ fillTestValues: { ...bridge.getState().fillTestValues, [envName]: testValueInput.value } });
-        return;
-      }
-      const clickTargetSelect = e.target.closest('.browser-action-click-target');
-      if (clickTargetSelect) {
-        const index = parseInt(clickTargetSelect.dataset.index, 10);
-        bridge.setState(bridge.getState().current, {
-          browserActions: updateBrowserAction(bridge.getState().browserActions, index, { target: clickTargetSelect.value }),
-        });
-        return;
-      }
-      const clickWaitInput = e.target.closest('.browser-action-click-wait-after-ms');
-      if (clickWaitInput) {
-        const index = parseInt(clickWaitInput.dataset.index, 10);
-        const waitAfterMs = parseInt(clickWaitInput.value, 10);
-        bridge.setState(bridge.getState().current, {
-          browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
-            waitAfterMs: Number.isFinite(waitAfterMs) && waitAfterMs >= 0 ? waitAfterMs : 250,
-          }),
-        });
-        return;
-      }
-      const maxIterationsInput = e.target.closest('.browser-action-max-iterations');
-      if (maxIterationsInput) {
-        const index = parseInt(maxIterationsInput.dataset.index, 10);
-        const maxIterations = parseInt(maxIterationsInput.value, 10);
-        bridge.setState(bridge.getState().current, {
-          browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
-            maxIterations: Number.isFinite(maxIterations) && maxIterations > 0 ? maxIterations : 10,
-          }),
-        });
-        return;
-      }
-      const waitAfterMsInput = e.target.closest('.browser-action-wait-after-ms');
-      if (waitAfterMsInput) {
-        const index = parseInt(waitAfterMsInput.dataset.index, 10);
-        const waitAfterMs = parseInt(waitAfterMsInput.value, 10);
-        bridge.setState(bridge.getState().current, {
-          browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
-            waitAfterMs: Number.isFinite(waitAfterMs) && waitAfterMs >= 0 ? waitAfterMs : 1000,
-          }),
-        });
-        return;
-      }
-      // Issue #289: a blank input is a deliberate "go back to the
-      // jump-to-bottom default", not an invalid value falling back to some
-      // other number — unlike maxIterations/waitAfterMs above, there's no
-      // sensible non-null default to clamp to here.
-      const scrollStepPxInput = e.target.closest('.browser-action-scroll-step-px');
-      if (scrollStepPxInput) {
-        const index = parseInt(scrollStepPxInput.dataset.index, 10);
-        const scrollStepPx = parseInt(scrollStepPxInput.value, 10);
-        bridge.setState(bridge.getState().current, {
-          browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
-            scrollStepPx: Number.isFinite(scrollStepPx) && scrollStepPx > 0 ? scrollStepPx : null,
-          }),
-        });
-      }
-    });
-  }
+    container.appendChild(card);
+  });
+}
 
-  return {
-    renderBrowserActions, renderBrowserActionsSection, wireBrowserActionsEvents,
-  };
-})();
+// Called from popup.js's render(), alongside the mode-toggle section it
+// sits next to — engine active-state, browser-actions-section visibility,
+// and (Issue #175) the persistent-session toggle's checked-sync, which is
+// nested inside that section and needs no visibility gating of its own
+// beyond it.
+function renderBrowserActionsSection(bridge) {
+  const state = bridge.getState();
+  document.getElementById('btn-engine-static')?.classList.toggle('active', state.engine === 'Static');
+  document.getElementById('btn-engine-browser')?.classList.toggle('active', state.engine === 'Browser');
+  document.getElementById('browser-actions-section')?.classList.toggle('hidden', state.engine !== 'Browser');
+  if (state.engine === 'Browser') renderBrowserActions(state.browserActions, state.fillTestValues);
+  // Issue #403: while a starter action still has no element, say what to do next.
+  document.getElementById('login-flow-hint')?.classList.toggle(
+    'hidden', !state.browserActions.some((a) => a.role && !a.selector),
+  );
 
-if (typeof module !== 'undefined') module.exports = SFBrowserActionsUI;
-if (typeof self !== 'undefined') self.SFBrowserActionsUI = SFBrowserActionsUI;
+  const persistentSessionToggle = document.getElementById('toggle-persistent-session');
+  if (persistentSessionToggle) persistentSessionToggle.checked = state.persistentSession;
+  autoOpenAdvanced(persistentSessionToggle, !!state.persistentSession); // Issue #407
+}
+
+function wireBrowserActionsEvents(bridge) {
+  document.getElementById('btn-engine-static')?.addEventListener('click', () => {
+    log('BTN engine-static');
+    bridge.setState(bridge.getState().current, { engine: 'Static' });
+  });
+  document.getElementById('btn-engine-browser')?.addEventListener('click', () => {
+    log('BTN engine-browser');
+    bridge.setState(bridge.getState().current, { engine: 'Browser' });
+  });
+
+  document.getElementById('btn-add-login-flow')?.addEventListener('click', () => {
+    log('BTN add-login-flow');
+    bridge.setState(bridge.getState().current, { browserActions: addLoginFlow(bridge.getState().browserActions) });
+  });
+  document.getElementById('btn-add-action-wait')?.addEventListener('click', () => {
+    log('BTN add-action-wait');
+    bridge.setState(bridge.getState().current, { browserActions: addBrowserAction(bridge.getState().browserActions, 'waitFor') });
+  });
+  document.getElementById('btn-add-action-fill')?.addEventListener('click', () => {
+    log('BTN add-action-fill');
+    bridge.setState(bridge.getState().current, { browserActions: addBrowserAction(bridge.getState().browserActions, 'fill') });
+  });
+  document.getElementById('btn-add-action-click')?.addEventListener('click', () => {
+    log('BTN add-action-click');
+    bridge.setState(bridge.getState().current, { browserActions: addBrowserAction(bridge.getState().browserActions, 'click') });
+  });
+  document.getElementById('btn-add-action-scroll')?.addEventListener('click', () => {
+    log('BTN add-action-scroll');
+    bridge.setState(bridge.getState().current, { browserActions: addBrowserAction(bridge.getState().browserActions, 'scroll') });
+  });
+
+  document.getElementById('browser-actions-list')?.addEventListener('click', (e) => {
+    const removeBtn = e.target.closest('.btn-remove-action');
+    if (removeBtn) {
+      const index = parseInt(removeBtn.dataset.index, 10);
+      log('BROWSER_ACTION_REMOVE', { index });
+      bridge.setState(bridge.getState().current, { browserActions: removeBrowserAction(bridge.getState().browserActions, index) });
+      return;
+    }
+    const pickBtn = e.target.closest('.btn-pick-action-selector');
+    if (pickBtn) {
+      const index = parseInt(pickBtn.dataset.index, 10);
+      const field = pickBtn.dataset.field; // 'selector' | 'containerSelector' | 'loadMoreButtonSelector' — see buildSelectorRow
+      log('BTN pick-action-selector → START_SELECTION', { index, field });
+      bridge.stopPreviewIfActive();
+      chrome.runtime.sendMessage({ type: 'START_SELECTION' });
+      bridge.setState(STATES.SELECTING, {
+        pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [], selectionKind: 'browserAction', pendingBrowserActionIndex: index, pendingBrowserActionField: field,
+        domTree: null, domTreeTruncated: false, domTreeError: null,
+      });
+    }
+  });
+
+  // change (not input) — same reasoning as the API-config screen's text
+  // inputs: a re-render on every keystroke would reset the cursor position.
+  document.getElementById('browser-actions-list')?.addEventListener('change', (e) => {
+    const timeoutInput = e.target.closest('.browser-action-timeout');
+    if (timeoutInput) {
+      const index = parseInt(timeoutInput.dataset.index, 10);
+      bridge.setState(bridge.getState().current, {
+        browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
+          timeoutMs: secondsTextToMs(timeoutInput.value, 5000),
+        }),
+      });
+      return;
+    }
+    const envInput = e.target.closest('.browser-action-env-name');
+    if (envInput) {
+      const index = parseInt(envInput.dataset.index, 10);
+      bridge.setState(bridge.getState().current, {
+        browserActions: updateBrowserAction(bridge.getState().browserActions, index, { environmentVariableName: envInput.value.trim() }),
+      });
+      return;
+    }
+    const testValueInput = e.target.closest('.browser-action-test-value');
+    if (testValueInput) {
+      // patchState (not setState): fillTestValues must never reach
+      // persistState()/chrome.storage.session — see its _state comment.
+      const envName = testValueInput.dataset.envName;
+      bridge.patchState({ fillTestValues: { ...bridge.getState().fillTestValues, [envName]: testValueInput.value } });
+      return;
+    }
+    const clickTargetSelect = e.target.closest('.browser-action-click-target');
+    if (clickTargetSelect) {
+      const index = parseInt(clickTargetSelect.dataset.index, 10);
+      bridge.setState(bridge.getState().current, {
+        browserActions: updateBrowserAction(bridge.getState().browserActions, index, { target: clickTargetSelect.value }),
+      });
+      return;
+    }
+    const clickWaitInput = e.target.closest('.browser-action-click-wait-after-ms');
+    if (clickWaitInput) {
+      const index = parseInt(clickWaitInput.dataset.index, 10);
+      bridge.setState(bridge.getState().current, {
+        browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
+          waitAfterMs: secondsTextToMs(clickWaitInput.value, 250, { allowZero: true }),
+        }),
+      });
+      return;
+    }
+    const maxIterationsInput = e.target.closest('.browser-action-max-iterations');
+    if (maxIterationsInput) {
+      const index = parseInt(maxIterationsInput.dataset.index, 10);
+      const maxIterations = parseInt(maxIterationsInput.value, 10);
+      bridge.setState(bridge.getState().current, {
+        browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
+          maxIterations: Number.isFinite(maxIterations) && maxIterations > 0 ? maxIterations : 10,
+        }),
+      });
+      return;
+    }
+    const waitAfterMsInput = e.target.closest('.browser-action-wait-after-ms');
+    if (waitAfterMsInput) {
+      const index = parseInt(waitAfterMsInput.dataset.index, 10);
+      bridge.setState(bridge.getState().current, {
+        browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
+          waitAfterMs: secondsTextToMs(waitAfterMsInput.value, 1000, { allowZero: true }),
+        }),
+      });
+      return;
+    }
+    // Issue #289: a blank input is a deliberate "go back to the
+    // jump-to-bottom default", not an invalid value falling back to some
+    // other number — unlike maxIterations/waitAfterMs above, there's no
+    // sensible non-null default to clamp to here.
+    const scrollStepPxInput = e.target.closest('.browser-action-scroll-step-px');
+    if (scrollStepPxInput) {
+      const index = parseInt(scrollStepPxInput.dataset.index, 10);
+      const scrollStepPx = parseInt(scrollStepPxInput.value, 10);
+      bridge.setState(bridge.getState().current, {
+        browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
+          scrollStepPx: Number.isFinite(scrollStepPx) && scrollStepPx > 0 ? scrollStepPx : null,
+        }),
+      });
+    }
+  });
+}
+
+module.exports = {
+  renderBrowserActions, renderBrowserActionsSection, wireBrowserActionsEvents,
+};
+

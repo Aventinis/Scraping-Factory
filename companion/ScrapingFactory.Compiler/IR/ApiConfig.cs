@@ -94,6 +94,27 @@ public sealed class ApiConfig
     // flat and the tree response shape, since the cursor is resolved
     // against the raw response body just like ItemsPath/Groups.
     public ApiCursorPagination? CursorPagination { get; init; }
+
+    // Link-header pagination (Issue #321): the sibling of CursorPagination
+    // for the many REST APIs (GitHub, GitLab, WordPress, ...) that announce
+    // the next page in the HTTP `Link: <...>; rel="next"` response header
+    // (RFC 8288) instead of in the body — there is no body field a
+    // NextCursorPath could point at. Kept as its own small object rather
+    // than a kind of CursorPagination: nothing of the cursor mechanism
+    // (target, paths) applies, and the two are mutually exclusive. Null =
+    // a single request per combination, today's exact behavior.
+    public ApiLinkHeaderPagination? LinkHeaderPagination { get; init; }
+}
+
+// See ApiConfig.LinkHeaderPagination. Page 1 is sent exactly as configured;
+// every further page is the absolute URL the previous response's
+// rel="next" link names (a relative one is resolved against the URL that
+// was requested), requested with the same headers/authentication.
+public sealed class ApiLinkHeaderPagination
+{
+    // Safety cap on pages per parameter combination, always active — same
+    // convention as ApiCursorPagination.MaxPages.
+    public int MaxPages { get; init; } = 50;
 }
 
 // See ApiConfig.CursorPagination. The first page is sent exactly as

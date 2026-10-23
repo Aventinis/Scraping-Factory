@@ -35,6 +35,7 @@ describe('global Settings tab: preferences', () => {
       <input type="checkbox" id="toggle-include-data-preview" />
       <input type="checkbox" id="toggle-include-output-file" />
       <input type="checkbox" id="toggle-external-config" />
+      <input type="checkbox" id="toggle-skip-verification" />
       <div class="mode-toggle" id="script-name-mode-toggle">
         <button id="btn-script-name-mode-fixed" class="mode-btn"></button>
         <button id="btn-script-name-mode-hostname" class="mode-btn"></button>
@@ -42,7 +43,6 @@ describe('global Settings tab: preferences', () => {
       <div id="script-name-fixed-row">
         <input type="text" id="input-script-name-fixed" />
       </div>
-      <p id="script-name-hostname-hint" class="hidden"></p>
       <div id="manage-blueprints-list"></div>
       <p id="manage-blueprints-empty" class="hidden"></p>
       <div id="all-saved-configs-list"></div>
@@ -100,12 +100,12 @@ describe('global Settings tab: preferences', () => {
     expect(document.getElementById('toggle-include-data-preview').checked).toBe(false);
     expect(document.getElementById('toggle-include-output-file').checked).toBe(false);
     expect(document.getElementById('toggle-external-config').checked).toBe(false);
+    expect(document.getElementById('toggle-skip-verification').checked).toBe(false);
     // Default scriptNameMode is 'fixed' — the fixed-name row is shown, the
     // hostname hint is hidden, and the input carries the default fixed name.
     expect(document.getElementById('btn-script-name-mode-fixed').classList.contains('active')).toBe(true);
     expect(document.getElementById('btn-script-name-mode-hostname').classList.contains('active')).toBe(false);
     expect(document.getElementById('script-name-fixed-row').classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('script-name-hostname-hint').classList.contains('hidden')).toBe(true);
     expect(document.getElementById('input-script-name-fixed').value).toBe('scraper');
   });
 
@@ -121,13 +121,13 @@ describe('global Settings tab: preferences', () => {
     const format = document.getElementById('select-output-format');
     format.value = 'sqlite';
     format.dispatchEvent(new Event('change'));
-    for (const id of ['toggle-include-data-preview', 'toggle-include-output-file', 'toggle-external-config']) {
+    for (const id of ['toggle-include-data-preview', 'toggle-include-output-file', 'toggle-external-config', 'toggle-skip-verification']) {
       const el = document.getElementById(id);
       el.checked = true;
       el.dispatchEvent(new Event('change'));
     }
     expect(storedGlobalSettings).toEqual({
-      outputFormat: 'sqlite', includeDataPreview: true, includeOutputFile: true, externalConfig: true,
+      outputFormat: 'sqlite', includeDataPreview: true, includeOutputFile: true, externalConfig: true, skipVerification: true,
       scriptNameMode: 'fixed', scriptNameFixed: 'scraper',
     });
   });
@@ -140,7 +140,6 @@ describe('global Settings tab: preferences', () => {
     expect(document.getElementById('btn-script-name-mode-hostname').classList.contains('active')).toBe(true);
     expect(document.getElementById('btn-script-name-mode-fixed').classList.contains('active')).toBe(false);
     expect(document.getElementById('script-name-fixed-row').classList.contains('hidden')).toBe(true);
-    expect(document.getElementById('script-name-hostname-hint').classList.contains('hidden')).toBe(false);
   });
 
   test('editing the fixed script name persists it', () => {

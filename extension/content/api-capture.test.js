@@ -3,7 +3,7 @@
 // startRecording/stopRecording) is plain JS with no chrome/DOM dependency —
 // exported for testing the same way content-script.js exports its pure
 // functions. The actual fetch/XHR monkey-patching is skipped under Jest
-// (guarded by `typeof module === 'undefined'`, see the file) so these tests
+// (guarded by `process.env.NODE_ENV !== 'test'`, see the file) so these tests
 // exercise the buffer/cap behavior directly instead.
 
 let capture;
@@ -294,5 +294,32 @@ describe('recording resume flag (survives same-origin navigation)', () => {
     jest.resetModules();
     const freshCapture = require('./api-capture');
     expect(freshCapture.shouldResumeRecording()).toBe(true);
+  });
+});
+
+
+// Issue #321: only the presence of a rel="next" Link header is recorded.
+describe('hasNextLinkRel / buildEntry.hasNextLink', () => {
+  test.each([
+    ['<https://api.example.com/items?page=3>; rel="next"', true],
+    ['<https://api.example.com/items?page=3>; rel=next', true],
+    ['<https://a/x?page=1>; rel="prev", <https://a/x?page=3>; rel="next", <https://a/x?page=9>; rel="last"', true],
+    ['<https://a/x?page=3>; REL="Next"', true],
+    ['<https://a/x>; rel="next last"', true],
+    ['<https://a/x?page=1>; rel="prev", <https://a/x?page=9>; rel="last"', false],
+    ['<https://a/x?rel=next>; rel="canonical"', false],
+    ['<https://a/x>; rel="nextpage"', false],
+    ['', false],
+    [null, false],
+    [undefined, false],
+  ])('%s → %s', (header, expected) => {
+    expect(capture.hasNextLinkRel(header)).toBe(expected);
+  });
+
+  test('an entry carries the flag; absent header means false', () => {
+    const withLink = capture.buildEntry('https://a/x', 'GET', 200, 'application/json', '{}', false, [], undefined, false, '<https://a/x?page=2>; rel="next"');
+    const without = capture.buildEntry('https://a/x', 'GET', 200, 'application/json', '{}');
+    expect(withLink.hasNextLink).toBe(true);
+    expect(without.hasNextLink).toBe(false);
   });
 });

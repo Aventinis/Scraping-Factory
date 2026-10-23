@@ -21,9 +21,7 @@ import os
 {{~ if proxy.enabled ~}}
 import itertools
 {{~ end ~}}
-{{~ if needs_exit_helper || hardening_any ~}}
 import sys
-{{~ end ~}}
 {{~ if hardening_any ~}}
 from urllib.parse import urlsplit
 {{~ end ~}}
@@ -260,23 +258,23 @@ def scrape(url):
             next_href = next_el.get_attribute("href") if next_el else None
             if not next_href:
                 break
+{{~ if robots_check.enabled ~}}
+            if not _robots_gate(urllib.parse.urljoin(page.url, next_href)):
+                break
+{{~ end ~}}
 {{~ if request_delay.enabled ~}}
             _pace_request()
 {{~ end ~}}
-{{~ if retry.enabled ~}}
-            _send_with_retry(lambda _u=urllib.parse.urljoin(page.url, next_href): page.goto(_u, wait_until="load", timeout=30000), urllib.parse.urljoin(page.url, next_href))
+            _goto_checked(page, urllib.parse.urljoin(page.url, next_href))
 {{~ else ~}}
-            page.goto(urllib.parse.urljoin(page.url, next_href), wait_until="load", timeout=30000)
+{{~ if robots_check.enabled ~}}
+            if not _robots_gate(PAGINATION_URL_TEMPLATE.format(url=url, page=page_number)):
+                break
 {{~ end ~}}
-{{~ else ~}}
 {{~ if request_delay.enabled ~}}
             _pace_request()
 {{~ end ~}}
-{{~ if retry.enabled ~}}
-            _send_with_retry(lambda _u=PAGINATION_URL_TEMPLATE.format(url=url, page=page_number): page.goto(_u, wait_until="load", timeout=30000), PAGINATION_URL_TEMPLATE.format(url=url, page=page_number))
-{{~ else ~}}
-            page.goto(PAGINATION_URL_TEMPLATE.format(url=url, page=page_number), wait_until="load", timeout=30000)
-{{~ end ~}}
+            _goto_checked(page, PAGINATION_URL_TEMPLATE.format(url=url, page=page_number))
 {{~ end ~}}
 {{~ else ~}}
             break
@@ -290,6 +288,7 @@ def scrape(url):
 
 
 #@include xml_sanitize
+#@include request_errors_playwright
 #@include main_blocks
 
 

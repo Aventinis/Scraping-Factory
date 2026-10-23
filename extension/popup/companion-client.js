@@ -5,33 +5,29 @@
 // Functions take a `bridge` object (same convention as api-config-ui.js/
 // dom-tree-ui.js/preview.js) instead of closing over popup.js's own
 // module-level state.
-const SFCompanionClient = (function() {
-const { createLogger } =
-  typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');
 
-const { t } =
-  typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
+const { t } = require('../i18n/i18n');
 
-const { getCompanionUrl, setCompanionUrlOverride, resetCompanionUrlOverride, normalizeUrl, DEFAULT_COMPANION_URL, loadAccessKey, getAccessKey } =
-  typeof require !== 'undefined' ? require('../shared/companion-config') : self.SFCompanionConfig;
+const { getCompanionUrl, setCompanionUrlOverride, resetCompanionUrlOverride, normalizeUrl, DEFAULT_COMPANION_URL, loadAccessKey, getAccessKey, checkCompanionUrl, loadDeveloperOptions } =
+  require('../shared/companion-config');
 
-const { STATES } =
-  typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
+const { STATES } = require('./api-config');
 
-const { showToast, setLastError } =
-  typeof require !== 'undefined' ? require('./toast') : self.SFToast;
+const { showToast, showErrorToast, hideToast, setLastError } = require('./toast');
 
 const { buildScrapingConfig, buildVerificationValues, computeScriptFileNamePatch } =
-  typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
+  require('./scraping-config-builder');
 
-const { buildHeaderVerificationValues } =
-  typeof require !== 'undefined' ? require('./request-headers') : self.SFRequestHeaders;
-const { buildBootstrapVerificationValues } =
-  typeof require !== 'undefined' ? require('./api-bootstrap') : self.SFApiBootstrap;
+const { buildHeaderVerificationValues } = require('./request-headers');
+const { buildBootstrapVerificationValues } = require('./api-bootstrap');
 
-const { getGlobalSettings } =
-  typeof require !== 'undefined' ? require('../shared/global-settings') : self.SFGlobalSettings;
+const { getGlobalSettings } = require('../shared/global-settings');
+
+const { loadCompanionReached, markCompanionReached } = require('./companion-guidance');
+const { describeError } = require('./error-messages');
+const { findInvalidEnvVarNames } = require('./env-var');
 
 // Resolved fresh in checkCompanion() (default or the user's persisted
 // override, see shared/companion-config.js) and reused by generate()/the
@@ -42,6 +38,24 @@ let companionUrl = null;
 
 function getResolvedCompanionUrl() {
   return companionUrl;
+}
+
+// What /health last said about this companion (Issue #352): whether it wants
+// an access key at all and whether it offers self-registration — the Settings
+// screen's Account section follows it. Both false until a health check answers.
+let companionInfo = { authRequired: false, registration: false, email: 'off', passwordReset: false, verifiedEmailRequired: false };
+
+function getCompanionInfo() {
+  return companionInfo;
+}
+
+// The last failed health check ({ message }, or null after a successful one) —
+// the COMPANION_ERROR screen's guidance (Issue #406) reads it to tell which of
+// the usual causes is the most likely.
+let companionFailure = null;
+
+function getCompanionFailure() {
+  return companionFailure;
 }
 
 // Issue #278: every request to the companion goes through here so the access
@@ -62,10 +76,23 @@ function companionFetch(url, init) {
 async function warnAboutAccessKey(healthResponse) {
   try {
     const body = await healthResponse.json();
+    companionInfo = {
+      authRequired: body?.authRequired === true,
+      registration: body?.registration === true,
+      // Issue #353: whether an email address is asked for ('off' | 'optional' | 'required'),
+      // whether a forgotten password can be reset by mail, and the operator's verified-email rule.
+      email: ['optional', 'required'].includes(body?.email) ? body.email : 'off',
+      passwordReset: body?.passwordReset === true,
+      verifiedEmailRequired: body?.verifiedEmailRequired === true,
+    };
     if (body?.authRequired !== true) return;
     const whoami = await companionFetch(`${companionUrl}/whoami`);
     if (whoami.status === 401) {
       showToast(t(getAccessKey() ? 'toast.accessKeyRejected' : 'toast.accessKeyRequired'), null, 'warn');
+    } else if (whoami.ok && companionInfo.verifiedEmailRequired) {
+      // Issue #353: signed in, but the companion won't serve data before the address is confirmed.
+      const who = await whoami.json();
+      if (who?.emailVerified !== true) showToast(t('toast.emailUnverified'), null, 'warn');
     }
   } catch {
     // not an authentication-aware companion
@@ -73,13 +100,18 @@ async function warnAboutAccessKey(healthResponse) {
 }
 
 async function checkCompanion(bridge) {
+  // Developer options first: whether a stored http:// address is still allowed depends on them.
+  await loadDeveloperOptions();
   companionUrl = await getCompanionUrl();
   await loadAccessKey();
+  await loadCompanionReached(); // Issue #406: first-run vs. returning-user guidance
   log('HEALTH_CHECK start', companionUrl);
   try {
     const res = await fetch(`${companionUrl}/health`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     log('HEALTH_CHECK OK');
+    companionFailure = null;
+    await markCompanionReached();
     await warnAboutAccessKey(res);
 
     const tabs = await new Promise(resolve =>
@@ -111,6 +143,7 @@ async function checkCompanion(bridge) {
     bridge.fetchTransformPresets?.();
   } catch (err) {
     log('HEALTH_CHECK FAIL', err.message);
+    companionFailure = { message: err.message };
     setLastError(err.message, 'Companion connection');
     bridge.setState(STATES.COMPANION_ERROR);
   }
@@ -123,17 +156,15 @@ async function checkCompanion(bridge) {
 // the next session (see shared/companion-config.js), then re-runs the same
 // health check a plain retry would.
 async function useCustomCompanionUrl(bridge, rawUrl) {
-  const normalized = normalizeUrl(rawUrl);
-  let parsed = null;
-  try {
-    parsed = new URL(normalized);
-  } catch {
-    // parsed stays null — reported as invalid below, same as an empty input.
-  }
-  if (!parsed || !['http:', 'https:'].includes(parsed.protocol)) {
-    showToast(t('toast.invalidCompanionUrl'));
+  // Issue #352: https always, plain http only for this computer (and, in a
+  // development build with the developer option on, anywhere) — see
+  // shared/companion-config.js's checkCompanionUrl.
+  const checked = checkCompanionUrl(rawUrl);
+  if (!checked.ok) {
+    showToast(t(checked.reason === 'insecure' ? 'toast.insecureCompanionUrl' : 'toast.invalidCompanionUrl'));
     return;
   }
+  const normalized = checked.url;
   log('COMPANION_URL_OVERRIDE set', normalized);
   await setCompanionUrlOverride(normalized);
   bridge.setState(STATES.CHECKING_COMPANION);
@@ -175,6 +206,22 @@ function buildVerificationErrorMessage(data) {
   return data?.error || t('toast.verificationFailed');
 }
 
+// Issue #401: shows a failed Generate. A failure the mapping recognises (the
+// common classes — no data, site unreachable/refused, missing variable, an
+// invalid configuration, ...) gets a plain-language title and hint with the
+// original text behind "Details"; anything else keeps today's wording. `reportable`
+// = whether "Report bug" is offered (false for a configuration the user can fix).
+// The raw text is always what lands in a bug report.
+function showGenerateFailure(rawMessage, { engine, reportable, fallbackKey }) {
+  const plain = describeError(rawMessage, { engine });
+  const context = reportable ? 'Script generation' : null;
+  if (plain) {
+    showErrorToast({ title: plain.title, hint: plain.hint, details: rawMessage }, context);
+    return;
+  }
+  showToast(t(fallbackKey, { message: rawMessage }), context);
+}
+
 // Issue #239: a component in _state.combinedComponents only ever stores
 // {savedConfigId, name} — its full underlying ScrapingConfig is resolved
 // live here (GET /configs/{id}) at generate/save/export time, never cached
@@ -194,6 +241,7 @@ async function resolveCombinedComponents(components) {
 }
 
 async function generate(bridge) {
+  hideToast(); // a failure from the previous attempt (Issue #401: those stay until closed)
   bridge.stopPreviewIfActive();
   bridge.setState(STATES.GENERATING);
   const state = bridge.getState();
@@ -221,7 +269,7 @@ async function generate(bridge) {
     state.pagination, state.persistentSession, globalSettings.includeOutputFile, globalSettings.externalConfig, combinedComponents,
     state.blocks, state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
     state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
-    state.discoveredUrls, state.preflight, state.requestDelay, state.retry, state.deduplication, state.requestHeaders, state.respectRobotsDelay,
+    state.discoveredUrls, state.preflight, state.requestDelay, state.retry, state.deduplication, state.requestHeaders, state.respectRobotsDelay, globalSettings.skipVerification, state.robotsDisallow, state.appendOutput,
   );
   // Issue #43: one-time login/test values, sent only in this request body —
   // deliberately kept out of `config` (and therefore out of the log line
@@ -231,6 +279,16 @@ async function generate(bridge) {
   // test-value treatment, from the API_CONFIG screen's own inputs.
   // Issue #226: the DOM modes' env-var-backed request headers get the same
   // one-time test-value treatment.
+  // Issue #397: a bad environment-variable name would only be rejected by the
+  // companion after the round trip — say so up front, naming the variable.
+  const invalidEnvVars = findInvalidEnvVarNames(config);
+  if (invalidEnvVars.length > 0) {
+    const { name, reason } = invalidEnvVars[0];
+    log('GENERATE BLOCKED invalid env var name', invalidEnvVars);
+    bridge.setState(STATES.IDLE);
+    showToast(t('envVar.generateBlocked', { message: t(`envVar.${reason}`, { name }) }), null, 'warn');
+    return;
+  }
   const verificationValues = state.mode === 'api'
     ? buildBootstrapVerificationValues(state.apiConfig, state.apiBootstrapTestValues || {})
     : {
@@ -258,7 +316,7 @@ async function generate(bridge) {
       const data = await res.json().catch(() => null);
       log('GENERATE CONFIG INVALID', data);
       bridge.setState(STATES.IDLE);
-      showToast(t('toast.configInvalid', { message: data?.error || t('toast.verificationFailed') }));
+      showGenerateFailure(data?.error || t('toast.verificationFailed'), { engine: state.engine, reportable: false, fallbackKey: 'toast.configInvalid' });
       return;
     }
     if (res.status === 422) {
@@ -318,7 +376,7 @@ async function generate(bridge) {
   } catch (err) {
     log('GENERATE FAIL', err.message);
     bridge.setState(STATES.IDLE);
-    showToast(t('toast.generationError', { message: err.message }), 'Script generation');
+    showGenerateFailure(err.message, { engine: state.engine, reportable: true, fallbackKey: 'toast.generationError' });
   }
 }
 
@@ -354,10 +412,7 @@ function wireCompanionErrorEvents(bridge) {
   });
 }
 
-  return {getResolvedCompanionUrl, companionFetch, checkCompanion, useCustomCompanionUrl, resetCustomCompanionUrl,
-    checkRobotsTxt, buildVerificationErrorMessage, generate, resolveCombinedComponents,
-    renderCompanionErrorScreen, wireCompanionErrorEvents,};
-})();
+module.exports = {getResolvedCompanionUrl, getCompanionInfo, getCompanionFailure, companionFetch, checkCompanion, useCustomCompanionUrl, resetCustomCompanionUrl,
+  checkRobotsTxt, buildVerificationErrorMessage, generate, resolveCombinedComponents,
+  renderCompanionErrorScreen, wireCompanionErrorEvents,};
 
-if (typeof module !== 'undefined') module.exports = SFCompanionClient;
-if (typeof self !== 'undefined') self.SFCompanionClient = SFCompanionClient;

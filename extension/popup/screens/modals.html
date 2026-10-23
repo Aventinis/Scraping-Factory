@@ -10,7 +10,7 @@
            modal for its own flat draft shape but doesn't support Download
            yet (see flat-mode-ui.js's renderFlatFieldModal). -->
       <div id="field-name-mode-section">
-        <label for="select-field-name-mode" data-i18n="modals.fieldExtended.typeLabel"></label>
+        <label for="select-field-name-mode"><span data-i18n="modals.fieldExtended.typeLabel"></span><span class="help-host" data-help="help.fieldType.flat"></span></label>
         <select id="select-field-name-mode">
           <option value="text" data-i18n="modals.fieldExtended.textOption"></option>
           <option value="attribute" data-i18n="modals.fieldExtended.attributeOption"></option>
@@ -23,10 +23,15 @@
             <span data-i18n="modals.fieldExtended.downloadToggle"></span>
           </label>
           <div id="field-name-download-options" class="hidden">
-            <label for="input-field-name-download-max-size" data-i18n="modals.download.maxSizeLabel"></label>
-            <input id="input-field-name-download-max-size" type="number" min="0" step="any" data-i18n-placeholder="modals.download.maxSizePlaceholder" autocomplete="off" />
-            <label for="input-field-name-download-allowed-types" data-i18n="modals.download.allowedTypesLabel"></label>
-            <input id="input-field-name-download-allowed-types" type="text" data-i18n-placeholder="modals.download.allowedTypesPlaceholder" autocomplete="off" />
+            <details class="advanced-disclosure" data-advanced="download-limits-flat">
+              <summary data-i18n="modals.download.advanced"></summary>
+              <div class="advanced-disclosure-body">
+                <label for="input-field-name-download-max-size" data-i18n="modals.download.maxSizeLabel"></label>
+                <input id="input-field-name-download-max-size" type="number" min="0" step="any" data-i18n-placeholder="modals.download.maxSizePlaceholder" autocomplete="off" />
+                <label for="input-field-name-download-allowed-types" data-i18n="modals.download.allowedTypesLabel"></label>
+                <input id="input-field-name-download-allowed-types" type="text" data-i18n-placeholder="modals.download.allowedTypesPlaceholder" autocomplete="off" />
+              </div>
+            </details>
           </div>
         </div>
       </div>
@@ -34,16 +39,15 @@
            that only its label tells apart from its siblings. Left empty, the
            pick's selector is used as is; see selector-text-filter-ui.js. -->
       <div class="text-filter-row">
-        <label for="input-field-name-text-filter" data-i18n="modals.textFilter.label"></label>
+        <label for="input-field-name-text-filter" data-help-anchor><span data-i18n="modals.textFilter.label"></span><span class="help-host" data-help="help.textFilter.overview" data-doc="textFilter"></span></label>
         <input id="input-field-name-text-filter" type="text" data-i18n-placeholder="modals.textFilter.placeholder" autocomplete="off" />
         <button type="button" id="btn-field-name-use-text" class="btn-secondary btn-tiny hidden" data-i18n="modals.textFilter.useElementText"></button>
-        <p class="preview-summary" data-i18n="modals.textFilter.hint"></p>
       </div>
       <!-- Issue #85: live match count for the just-picked selector -->
       <p id="field-name-match-count" class="match-count-hint hidden"></p>
       <!-- Issue #84: optional per-field transform chain -->
       <div class="field-transforms-section">
-        <label data-i18n="transforms.sectionLabel"></label>
+        <label data-help-anchor><span data-i18n="transforms.sectionLabel"></span><span class="help-host" data-help="help.transforms.overview" data-doc="transforms"></span></label>
         <ul id="field-transform-list" class="field-transform-list"></ul>
         <button type="button" id="btn-field-transform-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
         <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.js -->
@@ -109,7 +113,7 @@
     <div class="modal-inner">
       <label for="input-container-name" data-i18n="modals.containerNew.label"></label>
       <input id="input-container-name" type="text" data-i18n-placeholder="modals.containerNew.namePlaceholder" autocomplete="off" />
-      <label data-i18n="modals.containerNew.typeLabel"></label>
+      <label><span data-i18n="modals.containerNew.typeLabel"></span><span class="help-host" data-help="help.containerType.type"></span></label>
       <div class="radio-row">
         <label><input type="radio" name="container-type" id="radio-container-single" checked /> <span data-i18n="modals.containerNew.single"></span></label>
         <label><input type="radio" name="container-type" id="radio-container-repeating" /> <span data-i18n="modals.containerNew.repeating"></span></label>
@@ -126,7 +130,7 @@
     <div class="modal-inner">
       <label for="input-field-extended-name" data-i18n="modals.fieldExtended.label"></label>
       <input id="input-field-extended-name" type="text" data-i18n-placeholder="modals.fieldExtended.placeholder" autocomplete="off" />
-      <label for="select-field-mode" data-i18n="modals.fieldExtended.typeLabel"></label>
+      <label for="select-field-mode"><span data-i18n="modals.fieldExtended.typeLabel"></span><span class="help-host" data-help="help.fieldType.container"></span></label>
       <select id="select-field-mode">
         <option value="text" data-i18n="modals.fieldExtended.textOption"></option>
         <option value="attribute" data-i18n="modals.fieldExtended.attributeOption"></option>
@@ -160,20 +164,24 @@
              unless the checkbox above is checked, mirroring the checkbox's
              own field-attribute-row-driven visibility. -->
         <div id="field-download-options" class="hidden">
-          <label for="input-field-download-max-size" data-i18n="modals.download.maxSizeLabel"></label>
-          <input id="input-field-download-max-size" type="number" min="0" step="any" data-i18n-placeholder="modals.download.maxSizePlaceholder" autocomplete="off" />
-          <label for="input-field-download-allowed-types" data-i18n="modals.download.allowedTypesLabel"></label>
-          <input id="input-field-download-allowed-types" type="text" data-i18n-placeholder="modals.download.allowedTypesPlaceholder" autocomplete="off" />
+          <details class="advanced-disclosure" data-advanced="download-limits-container">
+            <summary data-i18n="modals.download.advanced"></summary>
+            <div class="advanced-disclosure-body">
+              <label for="input-field-download-max-size" data-i18n="modals.download.maxSizeLabel"></label>
+              <input id="input-field-download-max-size" type="number" min="0" step="any" data-i18n-placeholder="modals.download.maxSizePlaceholder" autocomplete="off" />
+              <label for="input-field-download-allowed-types" data-i18n="modals.download.allowedTypesLabel"></label>
+              <input id="input-field-download-allowed-types" type="text" data-i18n-placeholder="modals.download.allowedTypesPlaceholder" autocomplete="off" />
+            </div>
+          </details>
         </div>
       </div>
       <!-- Issue #227: optional text the element must contain — for a button
            that only its label tells apart from its siblings. Left empty, the
            pick's selector is used as is; see selector-text-filter-ui.js. -->
       <div class="text-filter-row">
-        <label for="input-field-text-filter" data-i18n="modals.textFilter.label"></label>
+        <label for="input-field-text-filter" data-help-anchor><span data-i18n="modals.textFilter.label"></span><span class="help-host" data-help="help.textFilter.overview" data-doc="textFilter"></span></label>
         <input id="input-field-text-filter" type="text" data-i18n-placeholder="modals.textFilter.placeholder" autocomplete="off" />
         <button type="button" id="btn-field-use-text" class="btn-secondary btn-tiny hidden" data-i18n="modals.textFilter.useElementText"></button>
-        <p class="preview-summary" data-i18n="modals.textFilter.hint"></p>
       </div>
       <!-- Issue #85: live match count for the just-picked selector -->
       <p id="field-extended-match-count" class="match-count-hint hidden"></p>
@@ -181,7 +189,7 @@
            "Vorhanden?" (mode === 'exists'), a boolean-ish presence check
            rather than a string pipeline. -->
       <div id="field-extended-transforms-section" class="field-transforms-section">
-        <label data-i18n="transforms.sectionLabel"></label>
+        <label data-help-anchor><span data-i18n="transforms.sectionLabel"></span><span class="help-host" data-help="help.transforms.overview" data-doc="transforms"></span></label>
         <ul id="field-extended-transform-list" class="field-transform-list"></ul>
         <button type="button" id="btn-field-extended-transform-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
         <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.js -->
@@ -207,6 +215,9 @@
       <input id="input-api-group-name" type="text" data-i18n-placeholder="modals.apiGroupNew.namePlaceholder" autocomplete="off" />
       <label for="input-api-group-path" data-i18n="modals.apiGroupNew.pathLabel"></label>
       <input id="input-api-group-path" type="text" data-i18n-placeholder="modals.apiGroupNew.pathPlaceholder" autocomplete="off" />
+      <!-- Issue #404: pick the path from the recorded response instead of typing it -->
+      <div class="actions"><button type="button" class="btn-secondary btn-tiny json-path-open" data-field="group" data-i18n="jsonPathPicker.openBtn"></button></div>
+      <div id="api-group-path-picker"></div>
       <div class="modal-actions">
         <button id="btn-api-group-cancel" class="btn-secondary" data-i18n="common.cancel"></button>
         <button id="btn-api-group-confirm" class="btn-primary" data-i18n="modals.apiGroupNew.confirm"></button>
@@ -238,7 +249,7 @@
   <div id="modal-api-field-transforms" class="modal hidden">
     <div class="modal-inner">
       <div class="field-transforms-section">
-        <label data-i18n="transforms.sectionLabel"></label>
+        <label data-help-anchor><span data-i18n="transforms.sectionLabel"></span><span class="help-host" data-help="help.transforms.overview" data-doc="transforms"></span></label>
         <ul id="api-field-transform-list" class="field-transform-list"></ul>
         <button type="button" id="btn-api-field-transforms-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
         <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.js -->
@@ -262,7 +273,7 @@
     <div class="modal-inner">
       <label for="input-combine-field-name" data-i18n="modals.combineField.nameLabel"></label>
       <input id="input-combine-field-name" type="text" data-i18n-placeholder="modals.combineField.namePlaceholder" autocomplete="off" />
-      <label data-i18n="modals.combineField.sourcesLabel"></label>
+      <label data-help-anchor><span data-i18n="modals.combineField.sourcesLabel"></span><span class="help-host" data-help="help.combineSplit.overview" data-doc="combineSplit"></span></label>
       <ul id="combine-field-source-list" class="combine-field-source-list"></ul>
       <label for="input-combine-field-separator" data-i18n="modals.combineField.separatorLabel"></label>
       <input id="input-combine-field-separator" type="text" data-i18n-placeholder="transforms.separatorPlaceholder" autocomplete="off" />
@@ -285,12 +296,12 @@
     <div class="modal-inner">
       <label for="input-split-field-name" data-i18n="modals.splitField.nameLabel"></label>
       <input id="input-split-field-name" type="text" data-i18n-placeholder="modals.splitField.namePlaceholder" autocomplete="off" />
-      <label for="select-split-field-source" data-i18n="modals.splitField.sourceLabel"></label>
+      <label for="select-split-field-source" data-help-anchor><span data-i18n="modals.splitField.sourceLabel"></span><span class="help-host" data-help="help.combineSplit.overview" data-doc="combineSplit"></span></label>
       <select id="select-split-field-source"></select>
       <label for="input-split-field-separator" data-i18n="modals.splitField.separatorLabel"></label>
       <input id="input-split-field-separator" type="text" data-i18n-placeholder="transforms.separatorPlaceholder" autocomplete="off" />
       <label for="input-split-field-index" data-i18n="modals.splitField.indexLabel"></label>
-      <input id="input-split-field-index" type="number" min="0" data-i18n-placeholder="transforms.splitIndexPlaceholder" autocomplete="off" />
+      <input id="input-split-field-index" type="number" min="1" data-i18n-placeholder="transforms.splitIndexPlaceholder" autocomplete="off" />
       <label class="output-settings-toggle" id="split-field-remove-toggle-row">
         <input type="checkbox" id="toggle-split-field-remove-original" />
         <span data-i18n="modals.splitField.removeOriginalToggle"></span>

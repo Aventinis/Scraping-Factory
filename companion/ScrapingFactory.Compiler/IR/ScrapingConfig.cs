@@ -86,6 +86,20 @@ public sealed class ScrapingConfig
     // either, both, or neither may be requested in the same call.
     public bool? IncludeOutputFile { get; init; }
 
+    // Issue #292: opt out of the trial run entirely — /generate still runs
+    // every structural check (ScrapingPlanValidator, 400 on failure) but
+    // never spawns the script, and returns it straight away with the
+    // X-ScrapingFactory-Verification-Skipped header explaining that it was
+    // not run against the live page. Trades the Consistency Rule's safety
+    // net for speed as an explicit opt-in. Mode-independent (single-mode,
+    // Combined and Blocks alike — read from the outer request only; a
+    // Combined component's own nested value is ignored, since the single
+    // verification run belongs to the combined script). A preview/output
+    // file requested alongside comes back empty, there being nothing to
+    // read them from. Additive, wire-compatible: null/false is today's
+    // exact behavior.
+    public bool? SkipVerification { get; init; }
+
     // Issue #87: opt-in change-detection + notification, mode-independent
     // (Fields/Groups/Api alike) — see IR/ChangeDetectionConfig.cs. Null is
     // today's exact behavior (no previous-run comparison, no notification).
@@ -108,6 +122,23 @@ public sealed class ScrapingConfig
     // same mechanism). Independent of RequestDelay: either, both or neither
     // may be set, the larger gap wins. Null/false is today's exact behavior.
     public bool? RespectRobotsDelay { get; init; }
+
+    // Issue #333: opt-in — the script checks every request against the
+    // target's robots.txt Disallow/Allow rules at run time (see
+    // IR/RobotsDisallowConfig.cs). Independent of RespectRobotsDelay (they
+    // share the one robots.txt fetch per origin). Null is today's exact
+    // behavior.
+    public RobotsDisallowConfig? RobotsDisallow { get; init; }
+
+    // Issue #342: opt-in — instead of replacing the previous output file, the
+    // script appends this run's result to it, for every output format (CSV,
+    // JSON, XML, SQLite, Excel; flat or tree). Schema drift between runs is
+    // handled by one rule in all formats: columns/fields the file already
+    // has are kept, new ones are added, missing values are empty. It is also
+    // what deduplication's incremental "Append" output now means (see
+    // ScrapingPlanBuilder). Mode-independent (Fields/Groups/Api/Blocks
+    // alike); null/false is today's exact behavior (a fresh file).
+    public bool? AppendOutput { get; init; }
 
     // Issue #223: opt-in retry with backoff on transient request failures,
     // mode-independent — see IR/RetryConfig.cs. Null is today's exact

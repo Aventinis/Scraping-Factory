@@ -5,13 +5,10 @@
 // selector without needing devtools open. Takes a `bridge` object (same
 // convention as api-config-ui.js/container-tree-ui.js) instead of closing
 // over popup.js's own module-level state.
-const SFDomTreeUI = (function() {
-const { createLogger } =
-  typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');
 
-const { setLastError } =
-  typeof require !== 'undefined' ? require('./toast') : self.SFToast;
+const { setLastError } = require('./toast');
 
 const DOM_TREE_TIMEOUT_MS = 5000;
 let domTreeTimeoutId = null;
@@ -182,11 +179,8 @@ function wireDomTreeViewEvents(bridge) {
   });
 }
 
-  return {requestDomTree, cancelPendingDomTreeRequest,
-    formatTreeLabel, buildTreeNodeEl, renderDomTree, findTreeNode, expandAncestors,
-    highlightHover, highlightSelected,
-    renderDomTreeViewState, wireDomTreeViewEvents,};
-})();
+module.exports = {requestDomTree, cancelPendingDomTreeRequest,
+  formatTreeLabel, buildTreeNodeEl, renderDomTree, findTreeNode, expandAncestors,
+  highlightHover, highlightSelected,
+  renderDomTreeViewState, wireDomTreeViewEvents,};
 
-if (typeof module !== 'undefined') module.exports = SFDomTreeUI;
-if (typeof self !== 'undefined') self.SFDomTreeUI = SFDomTreeUI;

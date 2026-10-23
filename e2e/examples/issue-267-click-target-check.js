@@ -56,11 +56,14 @@ const { launchBrowser, openPopup, focusFixture, waitForIdleScreen, startCompanio
 
     expectRows('first match', await generate(), ['opened: 1']);
 
+    // Issue #403: the click options sit in a collapsed "Advanced" disclosure.
+    await popupPage.click('#browser-actions-list details.advanced-disclosure > summary');
+    await popupPage.waitForTimeout(300); // let the "remember this section" toggle event land before the next re-render
     await popupPage.selectOption('.browser-action-click-target', 'last');
     expectRows('last match', await generate(), ['opened: 3']);
 
     await popupPage.selectOption('.browser-action-click-target', 'all');
-    await popupPage.fill('.browser-action-click-wait-after-ms', '50');
+    await popupPage.fill('.browser-action-click-wait-after-ms', '0.05');
     await popupPage.locator('#browser-actions-list').screenshot({ path: path.join(__dirname, 'issue-267-click-target.png') });
     expectRows('all matches', await generate(), ['opened: 1,2,3']);
 

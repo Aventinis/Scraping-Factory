@@ -1,0 +1,16 @@
+#@include request_errors_common
+
+
+# Runs one requests call; a connection error/timeout becomes a clean error.
+# With "Retry on transient errors" enabled, `send` already contains the
+# retries, so this only ever reports what is left once they are exhausted.
+def _checked_request(what, url, send):
+    try:
+        return send()
+    except requests.RequestException as e:
+        _request_failed(what, url, f"could not reach the site ({e.__class__.__name__}).")
+
+
+def _require_ok(what, url, response):
+    if not response.ok:
+        _request_failed(what, url, _http_error_detail(response.status_code))

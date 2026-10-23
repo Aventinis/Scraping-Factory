@@ -23,6 +23,8 @@ public static class CompanionHostOptions
 
         var port = configuration.GetValue<int?>("Companion:Port") ?? DefaultPort;
 
-        return $"http://{host}:{port}";
+        // Issue #352: https when Companion:Tls is configured.
+        var scheme = CompanionTls.IsEnabled(configuration) ? "https" : "http";
+        return $"{scheme}://{host}:{port}";
     }
 }

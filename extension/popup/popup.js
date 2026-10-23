@@ -1,17 +1,13 @@
 // ── Logging ───────────────────────────────────────────────────────────────────
 
-const { createLogger } =
-  typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');
 
-const { initI18n, setLanguage, getLanguage, t } =
-  typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
+const { initI18n, setLanguage, getLanguage, t } = require('../i18n/i18n');
 
-const { initTheme, getTheme, cycleTheme } =
-  typeof require !== 'undefined' ? require('../shared/theme') : self.SFTheme;
+const { initTheme, getTheme, cycleTheme } = require('../shared/theme');
 
-const { loadGlobalSettings, getGlobalSettings, updateGlobalSettings } =
-  typeof require !== 'undefined' ? require('../shared/global-settings') : self.SFGlobalSettings;
+const { loadGlobalSettings, getGlobalSettings, updateGlobalSettings } = require('../shared/global-settings');
 
 const {
   STATES, escapeHtml,
@@ -26,20 +22,19 @@ const {
   bodyTreeLeavesAreBound, serializeBodyTree, lastPathSegmentName, buildApiSubtreeFromCandidate,
   resolveApiGroupScopePath, variableUrlParts, allParameterParts, apiConfigDraftHasAllSourcesChosen,
   collectApiGroupFieldNames,
-} = typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
+} = require('./api-config');
 
 const {
   buildGroupNode, buildFieldNode, resolveGroupNode, hasRepeatingAncestor,
   insertContainerNode, removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode,
   formatGroupNodeLabel, serializeGroupTree, collectSiblingFieldNames,
-} = typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
+} = require('./container-tree');
 
-const { buildCombineFieldsTransform, buildSplitFieldTransform } =
-  typeof require !== 'undefined' ? require('./combine-split-fields') : self.SFCombineSplitFields;
+const { buildCombineFieldsTransform, buildSplitFieldTransform } = require('./combine-split-fields');
 
 const {
   renderCombineFieldModal, renderSplitFieldModal, wireCombineSplitFieldsEvents,
-} = typeof require !== 'undefined' ? require('./combine-split-fields-ui') : self.SFCombineSplitFieldsUI;
+} = require('./combine-split-fields-ui');
 
 const {
   renderApiTree, renderApiCandidates, renderApiEntriesList,
@@ -50,68 +45,71 @@ const {
   toggleBodyLeafToVariable, toggleBodyLeafToFixed, setBodyLeafParameter, setBodyLeafCoerceTo,
   openBodyParameterModal, confirmBodyParameterModal, confirmApiConfig,
   renderApiConfigModals, wireApiConfigEvents,
-} = typeof require !== 'undefined' ? require('./api-config-ui') : self.SFApiConfigUI;
+} = require('./api-config-ui');
 
 const {
   fetchTransformPresets, renderTransformPresetControls, wireTransformPresetControls,
   renderTransformPresetsSettings, wireTransformPresetsSettings,
-} = typeof require !== 'undefined' ? require('./transform-presets-ui') : self.SFTransformPresetsUI;
+} = require('./transform-presets-ui');
+
+const { renderCompanionGuidance } = require('./companion-guidance-ui');
+const { initHelpPopovers, wireHelpPopoverEvents } = require('./help-popover-ui');
+const { initDocsLinks, wireDocsLinkEvents } = require('./docs-links-ui');
+const { refreshEnvVarValidation, wireEnvVarValidation } = require('./env-var-ui');
+const { initAdvancedDisclosures, wireAdvancedDisclosureEvents } = require('./advanced-disclosure-ui');
 
 const {
   renderApiBootstrapSection, wireApiBootstrapEvents,
-} = typeof require !== 'undefined' ? require('./api-bootstrap-ui') : self.SFApiBootstrapUI;
+} = require('./api-bootstrap-ui');
 
 const {
   renderApiCursorPaginationSection, wireApiCursorPaginationEvents,
-} = typeof require !== 'undefined' ? require('./api-cursor-pagination-ui') : self.SFApiCursorPaginationUI;
+} = require('./api-cursor-pagination-ui');
+
+const {
+  renderApiLinkPaginationSection, wireApiLinkPaginationEvents,
+} = require('./api-link-pagination-ui');
 
 const {
   renderGroupTree,
   renderContainerFieldModal, wireContainerModeEvents,
-} = typeof require !== 'undefined' ? require('./container-tree-ui') : self.SFContainerTreeUI;
+} = require('./container-tree-ui');
 
 const {
   renderFields, renderFlatFieldModal, wireFlatModeEvents,
-} = typeof require !== 'undefined' ? require('./flat-mode-ui') : self.SFFlatModeUI;
+} = require('./flat-mode-ui');
 
 const {
   renderBrowserActions, wireBrowserActionsEvents,
-} = typeof require !== 'undefined' ? require('./browser-actions-ui') : self.SFBrowserActionsUI;
+} = require('./browser-actions-ui');
 
-const { wireMessageListener } =
-  typeof require !== 'undefined' ? require('./message-router') : self.SFMessageRouter;
+const { wireMessageListener } = require('./message-router');
 
-const { applyStoredSessionState, restorePendingSelection } =
-  typeof require !== 'undefined' ? require('./session-restore') : self.SFSessionRestore;
+const { applyStoredSessionState, restorePendingSelection } = require('./session-restore');
 
 const {
   renderIdleScreen, wireIdleScreenEvents,
-} = typeof require !== 'undefined' ? require('./idle-screen-ui') : self.SFIdleScreenUI;
+} = require('./idle-screen-ui');
 
-const { wireCombinedConfigEvents } =
-  typeof require !== 'undefined' ? require('./combined-config-ui') : self.SFCombinedConfigUI;
+const { wireCombinedConfigEvents } = require('./combined-config-ui');
 
-const { wireBlocksConfigEvents } =
-  typeof require !== 'undefined' ? require('./blocks-config-ui') : self.SFBlocksConfigUI;
+const { wireBlocksConfigEvents } = require('./blocks-config-ui');
 
 const {
   createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
   moveTransform, transformsAreValid, applyTransformsPreview, toNumberPreview,
   toIntegerPreview, toBooleanPreview, toDatePreview,
-} = typeof require !== 'undefined' ? require('./field-transforms') : self.SFFieldTransforms;
+} = require('./field-transforms');
 
-const { renderTransformList, renderTransformPreview } =
-  typeof require !== 'undefined' ? require('./field-transforms-ui') : self.SFFieldTransformsUI;
+const { renderTransformList, renderTransformPreview } = require('./field-transforms-ui');
 
-const { applyConfigToState } =
-  typeof require !== 'undefined' ? require('./config-import') : self.SFConfigImport;
+const { applyConfigToState } = require('./config-import');
 
-const { showToast, setLastError } =
-  typeof require !== 'undefined' ? require('./toast') : self.SFToast;
+const { showToast, setLastError, wireErrorToastEvents } = require('./toast');
 
 const {
   formatLogSection, buildGithubIssueUrl, reportBug,
-} = typeof require !== 'undefined' ? require('./bug-report') : self.SFBugReport;
+} = require('./bug-report');
 
 const {
   sanitizeFileNameBase, parseAdditionalUrls,
@@ -124,25 +122,24 @@ const {
   addNullRateCheck, removeNullRateCheck, updateNullRateCheck,
   addRequiredField, removeRequiredField,
   frameBadgeHtml,
-} = typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
+} = require('./scraping-config-builder');
 
 const {
   requestDomTree, cancelPendingDomTreeRequest,
   formatTreeLabel, renderDomTree,
   highlightHover, highlightSelected,
   renderDomTreeViewState, wireDomTreeViewEvents,
-} = typeof require !== 'undefined' ? require('./dom-tree-ui') : self.SFDomTreeUI;
+} = require('./dom-tree-ui');
 
-const { stopPreviewIfActive } =
-  typeof require !== 'undefined' ? require('./preview') : self.SFPreview;
+const { stopPreviewIfActive } = require('./preview');
 
 const {
   checkCompanion, buildVerificationErrorMessage, generate,
   renderCompanionErrorScreen, wireCompanionErrorEvents,
-} = typeof require !== 'undefined' ? require('./companion-client') : self.SFCompanionClient;
+} = require('./companion-client');
 
 const { triggerDownload, downloadFile, triggerOutputFileDownload, downloadConfigExport } =
-  typeof require !== 'undefined' ? require('./download-helpers') : self.SFDownloadHelpers;
+  require('./download-helpers');
 
 const {
   renderSavedConfigsList,
@@ -152,18 +149,14 @@ const {
   saveCurrentOutput, createConfigAndSaveOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
   requestDeleteSavedOutput, cancelDeleteSavedOutput, deleteSavedOutput,
   renderSaveOutputModal, wireSavedConfigsEvents,
-} = typeof require !== 'undefined' ? require('./saved-configs-ui') : self.SFSavedConfigsUI;
+} = require('./saved-configs-ui');
 
-const { wireSettingsPanelEvents } =
-  typeof require !== 'undefined' ? require('./settings-panel-ui') : self.SFSettingsPanelUI;
-const { createDefaultDeduplication } =
-  typeof require !== 'undefined' ? require('./dedup-config') : self.SFDedupConfig;
-const { createDefaultRequestHeaders } =
-  typeof require !== 'undefined' ? require('./request-headers') : self.SFRequestHeaders;
-const { wireRequestHeadersEvents } =
-  typeof require !== 'undefined' ? require('./request-headers-ui') : self.SFRequestHeadersUI;
-const { wireDedupEvents } =
-  typeof require !== 'undefined' ? require('./dedup-config-ui') : self.SFDedupConfigUI;
+const { wireSettingsPanelEvents } = require('./settings-panel-ui');
+const { wirePaginationHelperEvents } = require('./pagination-ui');
+const { createDefaultDeduplication } = require('./dedup-config');
+const { createDefaultRequestHeaders } = require('./request-headers');
+const { wireRequestHeadersEvents } = require('./request-headers-ui');
+const { wireDedupEvents } = require('./dedup-config-ui');
 
 const {
   fetchOutputBlueprints, selectOutputBlueprint,
@@ -171,11 +164,11 @@ const {
   requestDeleteBlueprint, cancelDeleteBlueprint, deleteBlueprint,
   openBlueprintCreateModal, openBlueprintEditModal, closeBlueprintEditModal, saveBlueprintEdit,
   renderBlueprintEditModal, wireOutputBlueprintsEvents,
-} = typeof require !== 'undefined' ? require('./output-blueprints-ui') : self.SFOutputBlueprintsUI;
+} = require('./output-blueprints-ui');
 
 const {
   renderSettingsScreen, wireSettingsScreenEvents,
-} = typeof require !== 'undefined' ? require('./global-settings-ui') : self.SFGlobalSettingsUI;
+} = require('./global-settings-ui');
 
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (e) => log('UNCAUGHT_ERROR', e.message));
@@ -303,6 +296,11 @@ let _state = {
   // boolean like persistentSession/preflight, persisted the same way,
   // independent of requestDelay (the larger gap wins).
   respectRobotsDelay: false,
+  // Issue #333: opt-in run-time robots.txt Disallow check — { enabled, action }
+  // with action Warn | Skip | Abort, persisted like respectRobotsDelay.
+  robotsDisallow: { enabled: false, action: 'Skip' },
+  // Issue #342: opt-in — append to the previous output file instead of replacing it.
+  appendOutput: false,
   // Issue #129: opt-in script hardening checks — mode-independent like
   // engine/changeDetection/proxy above, persisted the same way (real
   // scrape-target configuration, not a per-generate toggle). Nested one
@@ -385,7 +383,7 @@ let _state = {
   // itself already gets). Written onto the resulting field/node once
   // confirmed (see confirmField/confirmExtendedField).
   pendingTransforms:   [],
-  selectionKind:       null,  // 'field' | 'container' | 'browserAction' | 'pagination' | 'apiDiscoveryAction' | null — which kind the current SELECTING round is for
+  selectionKind:       null,  // 'field' | 'container' | 'browserAction' | 'pagination' | 'paginationPageLink' | 'apiDiscoveryAction' | null — which kind the current SELECTING round is for
   pendingParentPath:   null,  // number[] | null — where the next inserted group-tree node goes; null = root level
   pendingNewContainer: null,  // {name, repeating} captured by modal-container-new before element-selection starts
   pendingBrowserActionIndex: null, // number | null — which browserActions entry the current SELECTING round's result is written into (selectionKind === 'browserAction')
@@ -463,6 +461,8 @@ let _state = {
   // but unlike those, not persisted: this modal never involves a
   // content-script round trip (no click-based search — see
   // confirmApiGroupModal), so there's no risk of losing it to a popup close.
+  // Issue #404: the one open JSON-path picker (see json-path-picker-ui.js), or null — never persisted.
+  apiPathPicker:      null,
   apiGroupModalOpen:  false,
   pendingApiTreeParentPath: null,
   // modal-api-body-parameter-new visibility, and which body-tree path (see
@@ -668,6 +668,8 @@ function persistState() {
       persistentSession: _state.persistentSession,
       preflight: _state.preflight,
       respectRobotsDelay: _state.respectRobotsDelay,
+      robotsDisallow: _state.robotsDisallow,
+      appendOutput: _state.appendOutput,
       hardening: _state.hardening,
       scriptFileName: _state.scriptFileName,
       outputFileName: _state.outputFileName,
@@ -742,6 +744,8 @@ function applyStaticTranslations() {
   if (langSelect) langSelect.value = getLanguage();
   if (typeof document !== 'undefined' && document.documentElement) document.documentElement.lang = getLanguage();
   renderThemeToggle();
+  initHelpPopovers(); // Issue #396: (re)builds and translates every [data-help] host
+  initDocsLinks(); // Issue #354: "Learn more" links get their bundled-docs address
 }
 
 // Issue #206 follow-up: the mode-dispatch glue for the shared combine/split
@@ -896,6 +900,7 @@ function render() {
 
   if (_state.current === STATES.COMPANION_ERROR) {
     renderCompanionErrorScreen();
+    renderCompanionGuidance(); // Issue #406
   }
 
   if (_state.current === STATES.IDLE) {
@@ -906,6 +911,7 @@ function render() {
     renderApiConfigModals(bridge);
     renderApiBootstrapSection(bridge);
     renderApiCursorPaginationSection(bridge);
+    renderApiLinkPaginationSection(bridge);
   }
 
   if (_state.current === STATES.DONE) {
@@ -963,6 +969,11 @@ function render() {
   }
 
   syncModeToggleThumbs();
+  // Issue #397: rows built by this render (and the explanation lines with their help
+  // hosts) are new — give them the shared env-var validation and popover.
+  initHelpPopovers();
+  initDocsLinks();
+  refreshEnvVarValidation();
 }
 
 // Issue #140 modernization: positions every .mode-toggle-thumb behind its
@@ -1149,7 +1160,14 @@ function wireEvents() {
 
   wireCompanionErrorEvents(bridge);
 
+  wireHelpPopoverEvents();
+  wireDocsLinkEvents();
+  wireErrorToastEvents(); // Issue #401
+  wireEnvVarValidation(); // Issue #397
+  wireAdvancedDisclosureEvents();
+
   wireSettingsPanelEvents(bridge);
+  wirePaginationHelperEvents(bridge);
   wireDedupEvents(bridge);
   wireRequestHeadersEvents(bridge);
 
@@ -1158,6 +1176,8 @@ function wireEvents() {
   wireApiBootstrapEvents(bridge);
 
   wireApiCursorPaginationEvents(bridge);
+
+  wireApiLinkPaginationEvents(bridge);
 
   wireTransformPresetControls(bridge);
   wireTransformPresetsSettings(bridge);
@@ -1245,11 +1265,9 @@ function wireEvents() {
 // chrome.runtime.getURL — the extension's own page fetching its own bundled
 // resource, needing neither a real network request nor a
 // web_accessible_resources manifest entry (that only gates access from
-// content scripts/web pages reaching in). Same dual-environment convention
-// i18n.js's own fetchDictionary/loadDictionary already established for
-// exactly this "real chrome.runtime.getURL+fetch in the browser, skip
-// entirely under Jest" split (see that file's own doc comment): under Jest,
-// `require` is defined and this is a deliberate, untested no-op — every
+// content scripts/web pages reaching in). Under Jest (NODE_ENV === 'test',
+// which the bundler replaces with a constant) this is a deliberate,
+// untested no-op — every
 // existing test builds its own minimal document.body.innerHTML fixture for
 // whichever ids it needs (no test ever loads the real popup.html), and
 // actually injecting the real production markup here would silently
@@ -1259,7 +1277,7 @@ function wireEvents() {
 // /generate calls checkCompanion()/generate() make later in the same
 // startup sequence.
 async function loadScreenPartial(elementId, path) {
-  if (typeof require !== 'undefined') return;
+  if (process.env.NODE_ENV === 'test') return;
   const el = document.getElementById(elementId);
   if (!el) return;
   try {
@@ -1297,12 +1315,13 @@ async function init() {
   applyStaticTranslations();
 
   wireEvents();
+  await initAdvancedDisclosures(); // Issue #396: restore each section's remembered open state
 
   log('INIT reading session storage');
   const stored = await chrome.storage.session.get([
     'fields', 'url', 'pendingSelector', 'pendingFramePath', 'pendingMatchCount',
     'pendingRawText', 'pendingElementAttributes', 'pendingOwnText', 'mode', 'groups',
-    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'requestDelay', 'retry', 'deduplication', 'requestHeaders', 'hardening', 'pagination', 'persistentSession', 'preflight', 'respectRobotsDelay', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
+    'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'requestDelay', 'retry', 'deduplication', 'requestHeaders', 'hardening', 'pagination', 'persistentSession', 'preflight', 'respectRobotsDelay', 'robotsDisallow', 'appendOutput', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'pendingApiDiscoveryPartId', 'pendingApiDiscoveryActionIndex', 'pendingApiDiscoveryActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
     'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
@@ -1325,52 +1344,50 @@ if (typeof document !== 'undefined') {
   }
 }
 
-if (typeof module !== 'undefined') {
-  module.exports = {
-    buildScrapingConfig, addField, removeField, escapeHtml, renderFields, STATES,
-    formatTreeLabel, renderDomTree, highlightHover, highlightSelected,
-    formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,
-    buildGroupNode, buildFieldNode, resolveGroupNode, insertContainerNode, removeGroupTreeNode,
-    updateGroupTreeNode, moveGroupTreeNode,
-    formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport, hasRepeatingAncestor,
-    buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
-    collectPrecedingApiFieldSiblingNames, collectSiblingFieldNames,
-    updateApiTreeNode, apiTreeNodesHaveNonBlankNames, lastPathSegmentName, buildApiSubtreeFromCandidate,
-    resolveApiGroupScopePath, countApiConfigFields,
-    serializeApiTree, renderApiTree,
-    renderApiCandidates, renderApiEntriesList,
-    parseUrlTemplateParts, buildUrlTemplate, parseValueListInput,
-    buildStaticListSource, buildDiscoverySource, buildRangeSource, buildBrowserDiscoverySource, buildApiHeaders, buildApiConfig,
-    findUrlTemplateMatches, mergeValueListValues,
-    variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
-    detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
-    applyStaticTranslations, sanitizeFileNameBase, parseAdditionalUrls, buildChangeDetectionConfig, buildProxyConfig,
-    buildPaginationConfig,
-    buildHardeningConfig, collectFieldNames, addNullRateCheck, removeNullRateCheck, updateNullRateCheck,
-    addRequiredField, removeRequiredField,
-    computeInitialMonitoringSectionOpen,
-    addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
-    buildVerificationValues,
-    frameBadgeHtml,
-    jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
-    bodyTreeLeavesAreBound, serializeBodyTree, allParameterParts, renderBodyTree,
-    confirmApiFieldCandidate, loadInitialBodyTreeForCandidate,
-    toggleBodyLeafToVariable, toggleBodyLeafToFixed, setBodyLeafParameter, setBodyLeafCoerceTo,
-    openBodyParameterModal, confirmBodyParameterModal, confirmApiConfig,
-    renderDataPreview,
-    createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
-    moveTransform, transformsAreValid, renderTransformList,
-    applyTransformsPreview, toNumberPreview, toIntegerPreview, toBooleanPreview, toDatePreview, renderTransformPreview,
-    renderThemeToggle, syncModeToggleThumbs,
-    applyConfigToState, renderSavedConfigsList, fetchSavedConfigs, fetchAllSavedConfigs, createSavedConfig, saveCurrentConfig, loadSavedConfig,
-    deleteSavedConfig, requestDeleteSavedConfig, cancelDeleteSavedConfig, openSaveConfigModal,
-    triggerOutputFileDownload, downloadFile,
-    saveCurrentOutput, createConfigAndSaveOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
-    requestDeleteSavedOutput, cancelDeleteSavedOutput, deleteSavedOutput, renderSaveOutputModal,
-    fetchOutputBlueprints, selectOutputBlueprint,
-    renderOutputBlueprintMappingSection,
-    requestDeleteBlueprint, cancelDeleteBlueprint, deleteBlueprint,
-    openBlueprintCreateModal, openBlueprintEditModal, closeBlueprintEditModal, saveBlueprintEdit,
-    renderBlueprintEditModal,
-  };
-}
+module.exports = {
+  buildScrapingConfig, addField, removeField, escapeHtml, renderFields, STATES,
+  formatTreeLabel, renderDomTree, highlightHover, highlightSelected,
+  formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,
+  buildGroupNode, buildFieldNode, resolveGroupNode, insertContainerNode, removeGroupTreeNode,
+  updateGroupTreeNode, moveGroupTreeNode,
+  formatGroupNodeLabel, serializeGroupTree, renderGroupTree, buildConfigExport, hasRepeatingAncestor,
+  buildApiGroupDraft, buildApiFieldDraft, resolveApiTreeNode, insertApiTreeNode, removeApiTreeNode,
+  collectPrecedingApiFieldSiblingNames, collectSiblingFieldNames,
+  updateApiTreeNode, apiTreeNodesHaveNonBlankNames, lastPathSegmentName, buildApiSubtreeFromCandidate,
+  resolveApiGroupScopePath, countApiConfigFields,
+  serializeApiTree, renderApiTree,
+  renderApiCandidates, renderApiEntriesList,
+  parseUrlTemplateParts, buildUrlTemplate, parseValueListInput,
+  buildStaticListSource, buildDiscoverySource, buildRangeSource, buildBrowserDiscoverySource, buildApiHeaders, buildApiConfig,
+  findUrlTemplateMatches, mergeValueListValues,
+  variableUrlParts, apiConfigDraftHasAllSourcesChosen, renderApiConfigScreen,
+  detectRangeFormat, findUrlPartValue, rangeFormatExample, RANGE_FORMAT_PRESETS,
+  applyStaticTranslations, sanitizeFileNameBase, parseAdditionalUrls, buildChangeDetectionConfig, buildProxyConfig,
+  buildPaginationConfig,
+  buildHardeningConfig, collectFieldNames, addNullRateCheck, removeNullRateCheck, updateNullRateCheck,
+  addRequiredField, removeRequiredField,
+  computeInitialMonitoringSectionOpen,
+  addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions, renderBrowserActions,
+  buildVerificationValues,
+  frameBadgeHtml,
+  jsonValueToBodyDraft, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId,
+  bodyTreeLeavesAreBound, serializeBodyTree, allParameterParts, renderBodyTree,
+  confirmApiFieldCandidate, loadInitialBodyTreeForCandidate,
+  toggleBodyLeafToVariable, toggleBodyLeafToFixed, setBodyLeafParameter, setBodyLeafCoerceTo,
+  openBodyParameterModal, confirmBodyParameterModal, confirmApiConfig,
+  renderDataPreview,
+  createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
+  moveTransform, transformsAreValid, renderTransformList,
+  applyTransformsPreview, toNumberPreview, toIntegerPreview, toBooleanPreview, toDatePreview, renderTransformPreview,
+  renderThemeToggle, syncModeToggleThumbs,
+  applyConfigToState, renderSavedConfigsList, fetchSavedConfigs, fetchAllSavedConfigs, createSavedConfig, saveCurrentConfig, loadSavedConfig,
+  deleteSavedConfig, requestDeleteSavedConfig, cancelDeleteSavedConfig, openSaveConfigModal,
+  triggerOutputFileDownload, downloadFile,
+  saveCurrentOutput, createConfigAndSaveOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
+  requestDeleteSavedOutput, cancelDeleteSavedOutput, deleteSavedOutput, renderSaveOutputModal,
+  fetchOutputBlueprints, selectOutputBlueprint,
+  renderOutputBlueprintMappingSection,
+  requestDeleteBlueprint, cancelDeleteBlueprint, deleteBlueprint,
+  openBlueprintCreateModal, openBlueprintEditModal, closeBlueprintEditModal, saveBlueprintEdit,
+  renderBlueprintEditModal,
+};

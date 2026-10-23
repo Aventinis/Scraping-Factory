@@ -3145,11 +3145,12 @@ public class ScrapingPlanValidatorTests
         Assert.Contains("UrlTemplate", result.Error);
     }
 
+    // Issue #405: {url} is optional for a single start page, {page} never is.
     [Theory]
     [InlineData("{url}")]
-    [InlineData("{page}")]
+    [InlineData("https://example.com/list")]
     [InlineData("no placeholders at all")]
-    public void Validate_PageNumberPaginationMissingAPlaceholder_Fails(string urlTemplate)
+    public void Validate_PageNumberPaginationWithoutPageTemplate_Fails(string urlTemplate)
     {
         var plan = new ScrapingPlan
         {
@@ -3159,6 +3160,50 @@ public class ScrapingPlanValidatorTests
         var result = ScrapingPlanValidator.Validate(plan);
         Assert.False(result.Success);
         Assert.Contains("missing placeholder", result.Error);
+        Assert.Contains("{page}", result.Error);
+    }
+
+    [Theory]
+    [InlineData("https://example.com/list?page={page}")]
+    [InlineData("https://example.com/list/page/{page}/")]
+    public void Validate_PageNumberPaginationWithoutStartUrlPlaceholder_SucceedsForASingleStartPage(string urlTemplate)
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Pagination = new PageNumberPagination { UrlTemplate = urlTemplate },
+        };
+        Assert.True(ScrapingPlanValidator.Validate(plan).Success);
+    }
+
+    [Fact]
+    public void Validate_PageNumberPaginationWithoutStartUrlPlaceholder_FailsWithSeveralStartPages()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = [new NavigateStep { Urls = ["https://example.com/a", "https://example.com/b"] }, .. ValidPlan().Steps.Where(step => step is not NavigateStep)],
+            Pagination = new PageNumberPagination { UrlTemplate = "https://example.com/a?page={page}" },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("{url}", result.Error);
+
+        var withUrl = new ScrapingPlan { Steps = plan.Steps, Pagination = new PageNumberPagination { UrlTemplate = "{url}?page={page}" } };
+        Assert.True(ScrapingPlanValidator.Validate(withUrl).Success);
+    }
+
+    [Fact]
+    public void Validate_PageNumberPaginationWithoutStartUrlPlaceholder_FailsWithDiscoveredUrls()
+    {
+        var plan = new ScrapingPlan
+        {
+            Steps = ValidPlan().Steps,
+            Pagination = new PageNumberPagination { UrlTemplate = "https://example.com/list?page={page}" },
+            DiscoveredUrls = new DiscoveredUrlsConfig { PageUrl = "https://example.com/menu", LinkSelector = "nav a" },
+        };
+        var result = ScrapingPlanValidator.Validate(plan);
+        Assert.False(result.Success);
+        Assert.Contains("{url}", result.Error);
     }
 
     // Issue #218
@@ -3745,12 +3790,11 @@ public class ScrapingPlanValidatorTests
     }
 
     [Fact]
-    public void Validate_Deduplication_AppendOnTreeShape_Fails()
+    public void Validate_Deduplication_AppendOnTreeShape_Succeeds()
     {
+        // Issue #342: appending works for every output format, trees included.
         var dedup = new DeduplicationConfig { KeyFields = ["Name"], Incremental = true, IncrementalOutput = IncrementalOutputMode.Append };
-        var result = ScrapingPlanValidator.Validate(DedupGroupPlan(dedup));
-        Assert.False(result.Success);
-        Assert.Contains("flat output", result.Error);
+        Assert.True(ScrapingPlanValidator.Validate(DedupGroupPlan(dedup)).Success);
     }
 
     [Fact]

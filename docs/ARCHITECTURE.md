@@ -100,7 +100,7 @@ flowchart TB
     ccfg["shared/companion-config.js"]
     apiCfg["popup/api-config.js\n(pure builders/validators, API mode)"]
     ctree["popup/container-tree.js\n(pure builders/validators, Container mode)"]
-    apiUi["popup/api-config-ui.js\n(DOM rendering + handlers, API mode)"]
+    apiUi["popup/api-config-ui.js + api-*-ui.js\n(DOM rendering + handlers, API mode)"]
     ctreeUi["popup/container-tree-ui.js\n(DOM rendering + handlers, Container mode)"]
     popup["popup/popup.js\n(orchestrator: _state, render(), wireEvents())"]
 
@@ -122,20 +122,40 @@ flowchart TB
     ccfg --> popup
 ```
 
-Every file uses the same "IIFE assigned to one `self.SFXxx` global, dual-exported
-via `module.exports` for Jest" pattern (see any of these files' own top-of-file
-comment) — classic `<script>` tags loaded into one document share one global scope,
-so this is what keeps `t`, `createLogger`, `STATES`, etc. from colliding across
-files. `popup.js` pulls every function it needs off these globals at its own
-top-of-file `const { ... } = require(...) : self.SFXxx`.
+Every file is a plain CommonJS module (`const { ... } = require('./x')`,
+`module.exports = { ... }`). Since Issue #389 `extension/build.js` (esbuild) bundles
+the popup — `popup/popup.js` is the entry point and `popup.html` has a single
+`<script src="popup.js">` — together with the other three contexts (content
+script, MAIN-world recorder, service worker) into `extension/dist/`, which is what
+"Load unpacked" points at; Jest runs the same sources directly. Module-level names
+never collide, so there is no load order to maintain.
 
 `api-config-ui.js` and `container-tree-ui.js`'s handler functions take a `bridge`
 object (`{ getState, setState, patchState, stopPreviewIfActive, requestDomTree,
 showToast }`) as their first parameter instead of closing over `popup.js`'s
-`_state` — necessary because `popup.js` loads *after* them, and because each file
-is a separate, isolated Jest module with no shared closure. `api-config.js` and
+`_state` — necessary because `_state` is private to `popup.js` (importing it back
+would make a dependency cycle), and because each file is a separate, isolated Jest
+module with no shared closure. `api-config.js` and
 `container-tree.js` need no such bridge: they're pure, DOM-free functions
 (build/resolve/insert/remove/serialize tree drafts, no state or DOM access).
+
+**API mode's UI is several modules** (Issue #390: `api-config-ui.js` had grown to
+1,967 lines). `api-config-ui.js` stays the orchestrator — the API_CONFIG screen's
+own render/confirm/cancel, the modals' render and `wireApiConfigEvents`, which calls
+each module's `wire…Events(bridge)` in turn — and re-exports every name it used to
+export (`api-config-ui-exports.test.js` pins that surface), so `popup.js` and
+`idle-screen-ui.js` import unchanged. The focused modules, none importing
+`api-config-ui.js` (no cycles; `api-config-shared-ui.js` holds the helpers two of
+them share):
+
+| Module | Owns |
+| --- | --- |
+| `api-capture-ui.js` | recording toggle, the click-based searches (network, embedded JSON), candidate and recorded-request lists, confirming a candidate |
+| `api-response-tree-ui.js` | response-tree rows, the group and leaf-transforms modals, the JSON-scoped tree search |
+| `api-parameters-ui.js` | URL parts and parameter-source cards (value list, discovery endpoint, range) |
+| `api-browser-discovery-ui.js` | the BrowserDiscoverySource action editor (its listener branches are called by `api-parameters-ui.js`) |
+| `api-request-ui.js` | captured-header table, POST body tree and its "new parameter" modal |
+| `api-config-shared-ui.js` | `patchApiConfigDraft`/`patchApiConfigSource`, the parameter-placeholder picker |
 
 These DOM-free `<feature>.js` modules are also exactly the ones opted into
 JSDoc type checking (Issue #238, see CLAUDE.md's own entry on this) — a
@@ -290,7 +310,7 @@ mode's own tree editor. Output becomes XML instead of CSV once a tree is used, f
 the same reason Container mode's tree output is XML.
 
 - Extension: `popup/api-config.js` (`ApiGroup`/`ApiField` draft
-  build/insert/remove/serialize), `popup/api-config-ui.js` (`renderApiTree`,
+  build/insert/remove/serialize), `popup/api-response-tree-ui.js` (`renderApiTree`,
   `buildApiTreeNodeEl`, sub-group/sub-field search flows), `content/content-script.js`
   (`deriveApiTreeSkeleton`, `resolveApiGroupScopePath`-adjacent `pathStartsWithScope`)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig.Groups`, `ApiNode`/`ApiGroup`/`ApiField`),
@@ -310,7 +330,7 @@ already uses). GraphQL needs no special handling of its own — its `query`/
 covers.
 
 - Extension: `popup/api-config.js` (`jsonValueToBodyDraft`, body-tree
-  update/reference/serialize helpers), `popup/api-config-ui.js`
+  update/reference/serialize helpers), `popup/api-request-ui.js`
   (`buildBodyTreeNodeEl`/`renderBodyTree`, body-parameter modal wiring),
   `content/api-capture.js` (`requestBody`/`requestBodySkipped` capture)
 - Companion: `IR/ApiBodyNode.cs` (`ApiBodyObject`/`Array`/`Literal`/`Variable`),
@@ -337,7 +357,7 @@ companion fetches the page via `requests` and extracts the identified
 API-mode request (fetch-mechanism-agnostic by design).
 
 - Extension: `content/content-script.js` (`findEmbeddedJsonCandidates`,
-  `scriptTagSelector`), `popup/api-config-ui.js`
+  `scriptTagSelector`), `popup/api-capture-ui.js`
   (`startEmbeddedJsonFieldSearch`, `confirmEmbeddedJsonFieldCandidate`,
   `renderApiCandidates`'s `candidate.scriptSelector` branch), `popup/api-config.js`
   (`buildApiConfig`'s `embeddedJsonSource` param)
@@ -373,8 +393,9 @@ request actually sends.
   `buildBootstrapVerificationValues`), `popup/api-bootstrap-ui.js` (the
   section's render/wiring, recording picker), `popup/api-config.js`
   (`buildApiConfig`'s `bootstrap` param, `buildApiHeaders`'s `'bootstrap'`
-  mode, the Apply gate), `popup/api-config-ui.js` (header "From token" mode,
-  the "Token value" URL-part source, `confirmApiConfig`),
+  mode, the Apply gate), `popup/api-request-ui.js` (header "From token" mode),
+  `popup/api-parameters-ui.js` (the "Token value" URL-part source),
+  `popup/api-config-ui.js` (`confirmApiConfig`),
   `popup/companion-client.js` (bootstrap test values → `verificationValues`),
   `popup/screens/api-config.html` (`#api-bootstrap-section`)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig.Bootstrap`, `ApiBootstrap`,
@@ -403,7 +424,7 @@ the POST body (`variables.after` for GraphQL). The chain ends when no cursor
 is returned, an optional has-more flag is falsy, a cursor repeats, or
 `MaxPages` is reached. Works for the flat and the tree response shape. The
 "Detect from recording" button reads the recorded response/request for
-cursor-looking keys. Sibling follow-up: `Link`-header pagination (#321).
+cursor-looking keys. The `Link`-header sibling is §2.5d.
 
 - Extension: `popup/api-cursor-pagination.js` (pure draft/wire logic:
   `cursorDraftIsComplete`, `buildApiCursorPagination`,
@@ -426,6 +447,32 @@ cursor-looking keys. Sibling follow-up: `Link`-header pagination (#321).
   `e2e/examples/issue-224-api-cursor-pagination-check.js` against the
   `test-pages/api-cursor-pagination` fixture (REST `?cursor=` and GraphQL
   `variables.after`, 7 items over 4 pages, port 9000)
+
+### 2.5d API mode — Link-header pagination (Issue #321)
+
+For REST APIs that announce the next page in the HTTP
+`Link: <url>; rel="next"` response header (GitHub, GitLab, WordPress) instead
+of the body. A sibling of §2.5c, not a kind of it, and mutually exclusive with
+it. Page 1 is sent as configured; every further page is the URL the previous
+response's `Link` header names, requested with the same headers. The chain
+ends when no next link is left, a link repeats, a link points to another host
+(never followed — the headers may carry credentials), or `MaxPages` is
+reached. GET only; flat and tree shapes. The recorder keeps only a
+`hasNextLink` boolean per entry, so the API_CONFIG screen can suggest the
+option.
+
+- Extension: `content/api-capture.js` (`hasNextLinkRel`), `content/content-script.js`
+  (`hasNextLink` on candidates), `popup/api-link-pagination.js` (pure),
+  `popup/api-link-pagination-ui.js`, `popup/api-config.js`,
+  `popup/screens/api-config.html` (`#api-link-section`)
+- Companion: `IR/ApiConfig.cs` (`ApiConfig.LinkHeaderPagination`,
+  `ApiLinkHeaderPagination`), `ScrapingPlanValidator.cs`
+  (`ValidateApiLinkHeaderPagination`), `PythonApiCodeGenerator.cs`
+  (`link_pagination_enabled`/`link_pagination_max_pages`)
+- Templates: `fragments/api_fetch.py.j2` (`_fetch_pages` variant,
+  `_next_link_url`, `_origin_of`)
+- Tests: `ApiLinkHeaderPaginationTests.cs`, `api-link-pagination*.test.js`,
+  `e2e/examples/issue-321-api-link-pagination-check.js`
 
 ### 2.6 Browser engine, browser actions & login flows (Issues #41/#42/#43)
 
@@ -522,6 +569,205 @@ port or even a different host than the browser.
 - Companion: `ScrapingFactory.Companion/CompanionHostOptions.cs`,
   `CompanionBackendOverrides.cs`, `Program.cs` (`builder.WebHost.UseUrls(...)`)
 
+### 2.10a Companion-unreachable guidance (Issue #406)
+
+What the `COMPANION_ERROR` screen tells a user who has no working companion: a
+plain-language explanation and the three situations (not installed / installed but
+not running / another address or port) with the concrete next step for the user's
+OS — in full until a companion has answered once on this browser
+(`chrome.storage.local` `companionReached`), as a one-line hint afterwards — plus a
+"Why can't it connect?" help popover. See CLAUDE.md for the behavior details.
+
+- Extension: `popup/companion-guidance.js` (OS detection, installer commands/paths,
+  `likelySituations`, the persisted flag), `popup/companion-guidance-ui.js`
+  (`renderCompanionGuidance`, called from `popup.js`'s `render()`),
+  `popup/companion-client.js` (`checkCompanion` loads/sets the flag and keeps the last
+  failure for `getCompanionFailure()`), `#screen-error` in `popup/popup.html`,
+  `error.*`/`help.companionError.*` in `i18n/*.json`
+- Tests: `popup/companion-guidance.test.js`, `popup/companion-guidance-ui.test.js`,
+  real-browser check `e2e/examples/issue-406-companion-guidance-check.js`
+
+### 2.10b Guidance for choosing mode, container type, field type and engine (Issue #398)
+
+#396 help popovers (`help.mode.choice`, `help.engine.choice`, `help.containerType.type`,
+`help.fieldType.container|flat`) next to the first decisions of a scrape, a match-count
+check after a container pick against the type chosen beforehand, a clickable
+"(single)"/"(repeating)" suffix in the container tree, and a "try the Browser engine"
+suggestion when a Static trial run returns no data. See CLAUDE.md for details.
+
+- Extension: `popup/choice-guidance.js` (pure: `containerCountAdvice`,
+  `shouldSuggestBrowserEngine`), `popup/toast.js` (`showMatchCountToast`),
+  `popup/message-router.js`/`popup/session-restore.js` (pass the chosen type),
+  `popup/container-tree-ui.js` (`.group-tree-type` toggle), `popup/companion-client.js`
+  (`generate()` suggestion), help hosts in `popup/screens/idle.html`/`modals.html`,
+  `help.*`/`toast.*`/`group.*` in `i18n/*.json`
+- Tests: `popup/choice-guidance.test.js`, real-browser check
+  `e2e/examples/issue-398-choice-guidance-check.js`
+
+### 2.10c Plain-language error messages (Issue #401)
+
+A failed Generate shows a translated title and hint (what happened, what to try)
+instead of the companion's or script's raw text; the raw text stays behind a
+"Details" disclosure (copyable) and is what "Report bug" sends. Recognised by pattern
+in `popup/error-messages.js`; unknown errors keep the old wording. See CLAUDE.md.
+
+- Extension: `popup/error-messages.js` (pure: `classifyError`, `describeError`),
+  `popup/toast.js` (`showErrorToast`, `hideToast`, `wireErrorToastEvents`; sticky toast
+  with hint/details/close/copy), `popup/companion-client.js` (`showGenerateFailure`),
+  the toast markup in `popup/popup.html`, `errors.*` in `i18n/*.json`
+- Tests: `popup/error-messages.test.js`, real-browser check
+  `e2e/examples/issue-401-plain-errors-check.js`
+
+### 2.10d Environment-variable name help and validation (Issue #397)
+
+Every input that takes the *name* of an environment variable (change detection,
+proxy, login Fill actions, custom request headers, API headers, the API auth
+bootstrap, an API discovery Fill action) shares one explanation popover
+(`help.envVar.what`), one inline name validation and one pre-flight check in
+`generate()`. See CLAUDE.md for the conventions (`data-env-var`, `envVarNoteHtml()`).
+
+- Extension: `popup/env-var.js` (pure: `validateEnvVarName`, `findInvalidEnvVarNames`),
+  `popup/env-var-ui.js` (`envVarNoteHtml`, `applyEnvVarValidation`,
+  `refreshEnvVarValidation`, `wireEnvVarValidation`), `popup/popup.js` (`render()`),
+  `popup/companion-client.js` (`generate()` guard), the inputs in `popup/screens/idle.html`,
+  `api-config.html`, `browser-actions-ui.js`, `request-headers-ui.js`, `api-config-ui.js`,
+  `api-bootstrap-ui.js`, `envVar.*`/`help.envVar.*` in `i18n/*.json`
+- Tests: `popup/env-var.test.js`, real-browser check
+  `e2e/examples/issue-397-env-var-help-check.js`
+
+### 2.10e Transform helpers: regex recipes and date-format guess (Issue #400)
+
+The "Regex extract" transform gets a **Pattern helper** (recipes: first number, digits,
+text after/before/between, text inside brackets — the user's text escaped, only
+constructs .NET and Python read the same), and "Convert to date" pre-selects the format
+guessed from the picked value. The recipe panel keeps its state in its own DOM; the
+transform objects are unchanged. See CLAUDE.md for the details.
+
+- Extension: `popup/transform-helpers.js` (pure: `buildRecipe`, `previewRecipe`,
+  `inferDateFormat`), `popup/transform-helpers-ui.js`, `popup/field-transforms-ui.js`
+  (`getRawValue` getter through `renderTransformList`/`wireTransformList`),
+  `flat-mode-ui.js`/`container-tree-ui.js`/`api-config-ui.js` (raw-value resolvers),
+  `transforms.helper.*`/`help.transforms.*` in `i18n/*.json`
+- Companion (tests only): `ScrapingFactory.Tests/RegexRecipeEndToEndTests.cs`
+- Tests: `popup/transform-helpers.test.js` (incl. Python `re` parity),
+  `popup/transform-helpers-ui.test.js`, real-browser check
+  `e2e/examples/issue-400-transform-helpers-check.js` (fixture `test-pages/transform-helpers`)
+
+### 2.10f Monitoring / Hardening in plain language (Issue #399)
+
+Labels, help and a preset for the Monitoring section: a one-sentence intro, a
+"Warn me" / "Stop the run" severity wording with its own popover (no wire change), one
+popover per hardening check, thresholds written as sentences, the rare blocking options
+under an "Advanced" disclosure, and a one-click "Recommended checks" preset. See
+CLAUDE.md for the details.
+
+- Extension: `popup/hardening-presets.js` (pure: `applyRecommendedHardening`),
+  `popup/settings-panel-ui.js` (button wiring, null-rate row sentences),
+  `popup/screens/idle.html` (intro, heading, hosts, sentences, disclosure),
+  `idle.hardening*`/`help.hardening.*` in `i18n/*.json`
+- Tests: `popup/hardening-presets.test.js`, `popup/hardening-presets-ui.test.js`,
+  real-browser check `e2e/examples/issue-399-hardening-plain-language-check.js`
+
+### 2.10l Bundled documentation and "Learn more" (Issue #354 Part B)
+
+`docs/user/*.md` is built into HTML pages inside the extension (`dist/docs/`), the panel's
+long hints became one line each, and "Learn more" links open the bundled page offline. No
+wire-format or companion change. See CLAUDE.md for the details.
+
+- Build: `extension/docs-build.js` (markdown → HTML, link/anchor check, `slugify`),
+  `extension/docs-template/docs.css`, `extension/build.js` (`copyDocs`), `install/build-bundle.sh`
+  (docs as files in the bundle)
+- Extension: `popup/docs-links.js` (key → page#anchor table), `popup/docs-links-ui.js`
+  (links, click, `learnMoreHtml`), `popup/help-popover-ui.js` (`data-doc` on a help host),
+  `popup/screens/*.html`/`popup.html` (the links), `common.learnMore` + shortened `*Hint` texts in `i18n/*.json`
+- Tests: `docs-build.test.js`, `popup/docs-links.test.js`, `popup/docs-links-ui.test.js`,
+  `i18n/hint-length.test.js`, real-browser check `e2e/examples/issue-354-bundled-docs-check.js`
+
+### 2.10k Terminology pass, Advanced groups and glossary (Issue #407)
+
+Plainer names for the jargon terms (output layout, safety checks, "Alerts & safety checks",
+skip-if-unchanged, "Collect from the page", "Remove duplicates"), rarely used options under
+remembered "Advanced" groups that open themselves when the option is in use, a 1-based
+"Part" in Split field, and a glossary on the Settings screen. Labels and grouping only: no
+wire-format, companion or generated-script change. See CLAUDE.md for the details.
+
+- Extension: `i18n/{de,en,es}.json` (renamed values; keys unchanged), `popup/advanced-defaults.js`
+  (pure: does a retry code list / dedup retention differ from its default?),
+  `popup/advanced-disclosure-ui.js` (`autoOpenAdvanced`), `popup/combine-split-fields.js`
+  (`partNumberToIndex`/`indexToPartNumber`), `popup/glossary.js` + `glossary-ui.js`,
+  `popup/screens/{idle,settings,modals}.html`, `help.outputLayout|safetyChecks|preflight|dedup.overview`
+- Tests: `popup/advanced-defaults.test.js`, `advanced-groups-ui.test.js`, `glossary.test.js`,
+  `combine-split-fields.test.js`, real-browser check `e2e/examples/issue-407-terminology-advanced-check.js`
+
+### 2.10j API mode guidance and JSON-path pickers (Issue #404)
+
+"Pick from the recording" for every JSON-path input (group path, cursor and "has more"
+paths, the cursor's body field, the bootstrap token path), "?" popovers for URL parts,
+value sources and the body, and the rarely needed options (auth bootstrap, cursor and
+Link pagination, browser discovery, value type) under "Advanced". No wire-format or
+companion change. See CLAUDE.md for the details.
+
+- Extension: `popup/json-path-picker.js` (pure tree model + path derivation),
+  `popup/json-path-picker-ui.js` (state-driven panel, loading, wiring),
+  `popup/api-cursor-pagination-ui.js`/`api-bootstrap-ui.js`/`api-response-tree-ui.js`
+  (buttons and panels), `popup/advanced-disclosure-ui.js` (`autoOpenAdvanced`),
+  `popup/screens/api-config.html`/`modals.html`, `jsonPathPicker.*`/`help.api*` in `i18n/*.json`;
+  `content/content-script.js` (`readEmbeddedJson`) + `background/service-worker.js`
+  (`GET_EMBEDDED_JSON`)
+- Tests: `popup/json-path-picker.test.js`, `json-path-picker-ui.test.js`,
+  `api-config-guidance.test.js`, real-browser checks `e2e/examples/issue-404-*.js`
+
+### 2.10i Pagination helpers (Issue #405)
+
+A page-number URL template proposed from a clicked "next"/"page 2" link or a start URL
+that already says page 1, the typed "next" selector and the whole "Discover start URLs"
+option under "Advanced", and "?" popovers for the pattern and the max-pages limit. The
+companion's page-number template now needs only `{page}` for a single start page. See
+CLAUDE.md for the details.
+
+- Extension: `popup/pagination-template.js` (pure derivation), `popup/pagination-ui.js`
+  (banner, pickers, Advanced placement), `popup/message-router.js`/`session-restore.js`
+  (the clicked link's address), `popup/screens/idle.html`, `idle.pagination*`/
+  `help.pagination.*`/`help.discoveredUrls.*` in `i18n/*.json`
+- Companion: `IR/ScrapingPlanValidator.cs` (`ValidatePageNumberUrlTemplate`),
+  `IR/PaginationConfig.cs` (doc comment)
+- Tests: `popup/pagination-template.test.js`, `popup/pagination-ui.test.js`,
+  `ScrapingPlanValidatorTests`, `PaginationEndToEndTests`, fixture
+  `test-pages/paginated-listing` + `e2e/examples/issue-405-pagination-helpers-check.js`
+
+### 2.10h Login flow guidance for the browser actions (Issue #403)
+
+A "Login form (4 steps)" starter, role-named cards, times in seconds, an overview and
+"Max. rounds" popover, and the rarely used options under "Advanced". UI-only: the
+wire format and generated scripts are unchanged (a starter action's `role` never
+leaves the draft). See CLAUDE.md for the details.
+
+- Extension: `popup/login-flow.js` (pure: `addLoginFlow`, `msToSecondsText`,
+  `secondsTextToMs`), `popup/browser-actions-ui.js` (cards, starter wiring),
+  `popup/api-browser-discovery-ui.js` (the discovery action editor shares the seconds inputs),
+  `popup/advanced-disclosure-ui.js` (open state applied synchronously),
+  `popup/screens/idle.html`, `browserActions.*`/`help.browserActions.*` in `i18n/*.json`
+- Tests: `popup/login-flow.test.js`, real-browser check
+  `e2e/examples/issue-403-login-starter-check.js`
+
+### 2.10g Request-header picker (Issue #402)
+
+"Send custom request headers" starts from an "Add a header…" picker (Accept-Language,
+Referer, User-Agent, Cookie, Authorization, X-Api-Key, Other) instead of an empty
+free-text row. Secrets default to an environment variable, a recognised header shows a
+plain-language description, and a credential-looking header kept as a fixed value gets a
+warning with a one-click switch. No wire-format or companion change. See CLAUDE.md for
+the details.
+
+- Extension: `popup/request-header-presets.js` (pure: presets, `isSecretHeaderName`,
+  `suggestHeaderEnvName`), `popup/request-headers.js` (`appendHeaderRow`),
+  `popup/request-headers-ui.js` (picker, notes, warning wiring),
+  `popup/screens/idle.html` (`#select-add-request-header`), `popup/popup.css`
+  (`.request-header-picker`/`-notes`), `requestHeaderPresets.*`/`help.requestHeaders.picker`
+  in `i18n/*.json`
+- Tests: `popup/request-header-presets.test.js`, `popup/request-headers.test.js`,
+  real-browser check `e2e/examples/issue-402-request-headers-picker-check.js`
+
 ### 2.11 i18n (extension UI language)
 
 Lets the user pick the popup's own display language (German/English/Spanish)
@@ -531,6 +777,27 @@ is tied to browser language and can't be switched from inside the extension.
 
 - Extension: `i18n/i18n.js`, `i18n/de.json`/`en.json`/`es.json`, every popup
   module's `t(...)` calls, `popup.js`'s `applyStaticTranslations`
+
+### 2.11a Help popover and "Advanced" disclosure (Issue #396)
+
+Reusable UI building blocks for explaining an option *at the option* (a short
+"?" popover with an optional example, text under `help.<area>.<field>` in the
+three dictionaries) and for tucking rarely needed options into a collapsed,
+per-section-remembered `<details>`. See CLAUDE.md (Browser Extension section)
+for the conventions and the sync test that enforces them.
+
+- Extension: `popup/help-popover.js` (pure) + `popup/help-popover-ui.js`
+  (`initHelpPopovers`, `wireHelpPopoverEvents`; hosts declared as
+  `<span class="help-host" data-help="help.…">` in `screens/*.html`),
+  `popup/advanced-disclosure.js` + `popup/advanced-disclosure-ui.js`
+  (`<details data-advanced="…">`, `chrome.storage.local` key `advancedSections`),
+  `popup/popup.css` (`.help-btn`, `.help-popover`, `.advanced-disclosure`),
+  `help.*`/`common.helpBtn`/`common.advanced` in `i18n/*.json`, wired from
+  `popup.js` (`applyStaticTranslations`, `wireEvents`, `init`)
+- Tests: `popup/help-popover.test.js`, `popup/help-popover-ui.test.js`,
+  `popup/advanced-disclosure.test.js`, `i18n/help-i18n.test.js` (key sync across
+  de/en/es and HTML), real-browser check
+  `e2e/examples/issue-396-help-popover-check.js`
 
 ### 2.12 Bug reporting / structured logging
 
@@ -730,7 +997,7 @@ shapes (flat/container/API) since none of them share a common leaf type.
   throwing.
 - **API mode follow-up:** the same editor is also reachable from the
   `API_CONFIG` tree screen (§2.16), via a "Transformieren" button rendered
-  next to every leaf `ApiField` row in `popup/api-config-ui.js`'s
+  next to every leaf `ApiField` row in `popup/api-response-tree-ui.js`'s
   `buildApiTreeNodeEl` (never for a group node — only a leaf actually
   extracts a value, matching `ApiGroup` having no `Transforms` property on
   the companion side). Opens `modal-api-field-transforms`, reusing the exact
@@ -1074,20 +1341,75 @@ An opt-in, independent setting making the generated script read the target's
 robots.txt once and use its `Crawl-delay` / `Request-rate` as a minimum gap
 between requests — one more source for the pacing mechanism of 2.21a (the
 larger of this and a configured pause wins). A site without such a directive
-is unaffected. Disallow re-checking is a separate issue (#333).
+is unaffected. Disallow re-checking is the separate option of 2.21ab2 below.
 
 - IR: `ScrapingConfig.RespectRobotsDelay`/`ScrapingPlan.RespectRobotsDelay`,
   Combined-mode outer-config rejection in `Program.cs`
 - `Backends/Python/PythonRequestDelayLiteral` (now takes the plan:
   `respect_robots`, `robots_urls_literal`)
 - Fragment `request_delay.py.j2` (`_robots_delay`, `_fetch_robots_delay`,
-  `urllib.robotparser`)
+  `urllib.robotparser`); the fetch itself is `fragments/robots_fetch.py.j2`,
+  shared with 2.21ab2
 - Extension: `scraping-config-builder.js` (trailing `respectRobotsDelay`
   parameter), `config-import.js`, `session-restore.js`,
   `settings-panel-ui.js`, `#toggle-respect-robots-delay` in `screens/idle.html`
 - Tests: `RobotsCrawlDelayTests.cs`, `extension/popup/robots-crawl-delay.test.js`,
   fixture `test-pages/crawl-delay` +
   `e2e/examples/issue-228-robots-crawl-delay-check.js`
+
+### 2.21ab2 Check robots.txt Disallow at run time (Issue #333)
+
+An opt-in setting making the generated script evaluate every request it is
+about to make against the target's robots.txt at run time — the extension's
+"Check robots.txt" is advisory and runs once. A disallowed request is
+skipped (default), warned about, or stops the run (exit code 9). RFC 9309
+matching (own evaluator: group of the `ScrapingFactory` agent else `*`,
+longest pattern wins, ties Allow, `*`/`$`), robots.txt fetched once per origin
+and shared with 2.21aa. Covers start URLs, further pages, discovered URLs,
+downloads, the preflight HEAD and API/discovery requests; not browser
+subresources, the auth bootstrap or browser-discovery sessions.
+
+- IR: `IR/RobotsDisallowConfig.cs` (`ScrapingConfig.RobotsDisallow`/
+  `ScrapingPlan.RobotsDisallow`), Combined-mode outer-config rejection in
+  `Program.cs`
+- `Backends/Python/PythonRobotsDisallowLiteral` (`robots_check.*`), wired in
+  `PythonScrapingContextBuilder` and `PythonApiCodeGenerator`
+- Fragments: `robots_fetch.py.j2`, `robots_disallow.py.j2` (included from
+  `request_delay.py.j2`); `_robots_gate` guards in the `main_*` fragments, the
+  static page loops, the Browser pagination, preflight/discovery/download
+  fragments and `api_fetch.py.j2`/`api_common.py.j2`
+- Extension: `scraping-config-builder.js` (trailing `robotsDisallow`),
+  `config-import.js` (`applyRobotsDisallowConfig`), `session-restore.js`,
+  `settings-panel-ui.js`, `#toggle-robots-disallow` in `screens/idle.html`
+- Tests: `RobotsDisallowTests.cs`, `RobotsDisallowEndpointTests.cs`,
+  `extension/popup/robots-disallow.test.js`, fixture
+  `test-pages/robots-disallow` + `e2e/examples/issue-333-robots-disallow-check.js`
+
+### 2.21ab3 Append to the existing output file (Issue #342)
+
+An opt-in setting making the script merge its result into the previous output
+instead of replacing it, for every format: CSV/JSON rows, XML children under
+the existing root, JSON-tree merges, SQLite rows (columns added as needed),
+Excel rows. One drift rule for all formats — keep the file's columns, add new
+ones, fill gaps with empty values; an unreadable or differently shaped file
+stops the run (exit code 10) untouched. Deduplication's incremental `Append`
+output is one case of this mechanism (`ScrapingPlan.AppendsOutput`). Combined
+carries it per component only.
+
+- IR: `ScrapingConfig.AppendOutput`/`ScrapingPlan.AppendOutput`/
+  `AppendsOutput`, Combined-mode outer-config rejection in `Program.cs`
+- Wiring: `PythonScrapingContextBuilder`, `PythonApiCodeGenerator`
+  (`append_output`)
+- Fragments: `output_append.py.j2` (included from `main_flat`/`main_grouped`/
+  `main_blocks` and the two API templates), the SQLite/Excel branches of
+  `output_tabular.py.j2`
+- Extension: `scraping-config-builder.js` (trailing `appendOutput`),
+  `config-import.js`, `session-restore.js`, `settings-panel-ui.js`,
+  `#toggle-append-output` in `screens/idle.html`; `dedup-config.js` lost its
+  tree-shape Append restriction
+- Tests: `AppendOutputTests.cs`, `AppendOutputEndpointTests.cs`,
+  `extension/popup/append-output.test.js`,
+  `e2e/examples/issue-342-append-output-check.js`
 
 ### 2.21b Retry on transient errors (Issue #223)
 
@@ -1255,7 +1577,7 @@ the last, or every match in order (with a pause after each click).
 Flat shapes write their rows like CSV; tree shapes (container mode, API tree)
 are flattened through an identity flat Output Blueprint derived by
 `ScrapingPlanBuilder` (or the caller's own flat blueprint). `openpyxl` is
-needed for Excel only. Appending to an existing file is Issue #342.
+needed for Excel only. Appending to an existing file is §2.21ab3.
 
 - IR: `OutputFormat`, `ScrapingPlan.OutputBlueprintAutoGenerated`,
   `ScrapingPlanBuilder` (auto-flatten, `IdentityMapping`),
@@ -1342,6 +1664,92 @@ request except `/health` and CORS preflights needs `Authorization: Bearer
 - Installer: `--enable-auth` / `-EnableAuth`
 - Tests: `AuthenticationTests.cs`, `extension/popup/access-key.test.js`,
   `e2e/examples/issue-278-access-key-check.js`
+
+### 2.21ag2 Self-service accounts and HTTPS (Issue #352)
+
+Builds on 2.21ag. `Companion:Auth:Registration=Open` lets people register from
+the extension; a successful register/login hands out a per-device token (the same
+`Authorization: Bearer` mechanism as a key from `user add`, but individually
+revocable). Passwords are PBKDF2-SHA256 hashes; login errors never reveal whether
+a name exists and a throttle slows guessing. The companion speaks HTTPS when
+`Companion:Tls` is configured and refuses to start with plain HTTP beyond the
+local machine. A self-signed certificate and plain remote HTTP exist only in
+development builds: compile-time in the companion (`CompanionBuild`), a rewritten
+channel constant in the extension (`shared/build-config.js`, set to `release` by
+`install/build-bundle.sh`), so a user can't switch either on.
+
+- Companion: `Auth/` (`PasswordHasher`, `LoginThrottle`, `AuthEndpoints`; `IUserStore`
+  extended in `SqliteUserStore`/`MySqlUserStore`; `UserCommands` `set-password`,
+  `disable`, `enable`), `CompanionTls.cs`, `CompanionBuild.cs`,
+  `CompanionHostOptions.cs`, `Program.cs` (transport validation, Kestrel HTTPS,
+  anonymous paths, `/health` `registration`)
+- Extension: `shared/build-config.js`, `shared/companion-config.js` (address policy,
+  developer flag), `popup/account.js` + `popup/account-ui.js`,
+  `popup/screens/settings.html` (Account, Developer options),
+  `popup/companion-client.js` (`getCompanionInfo`, `useCustomCompanionUrl`)
+- Installer: `--registration`, `--host`, `--tls-cert`/`--tls-key`, `--no-tls`;
+  `install/build-bundle.sh` (release channel)
+- Tests: `AccountTests.cs`, `CompanionTlsTests.cs`, `shared/companion-url-policy.test.js`,
+  `popup/account.test.js`, `popup/account-ui.test.js`
+
+### 2.21ag3 Email address, verification and password reset (Issue #353)
+
+Optional on top of 2.21ag2 and off until an SMTP server is configured
+(`Companion:Email:Smtp:*`). An account may carry an email address; a one-time
+8-digit code mailed to it (hashed in `EmailCodes`, single-use, 5 attempts) confirms it
+or authorizes a password reset, typed into the extension. Operator rules under
+`Companion:Auth:Email:*` (`Required`, `RequireVerified`, `AllowedDomains`).
+`forgot-password` never reveals whether an account exists and only mails a
+verified address; a successful reset revokes every token.
+
+- Companion: `Auth/EmailOptions.cs`, `EmailCodes.cs`, `EmailSender.cs` (MailKit),
+  `EmailService.cs` (`EmailThrottle`), `EmailEndpoints.cs`; `IUserStore` +
+  `SqliteUserStore`/`MySqlUserStore` (`Email`, `EmailVerified`, `EmailCodes`),
+  `Storage/MySqlSchema.EnsureIndex`; `UserCommands` (`set-email`, `verify`);
+  `Program.cs` (validation, anonymous reset endpoints, `RequireVerified` gate,
+  `/health` + `/whoami` fields)
+- Extension: `popup/email-account.js`, `popup/email-account-ui.js`,
+  `popup/account-ui.js` (shared state), `popup/screens/settings.html`,
+  `popup/companion-client.js` (`getCompanionInfo`)
+- Installer: `--smtp-*`, `--require-email`, `--require-verified-email`,
+  `--email-domains`, `--no-email`
+- Tests: `EmailAccountTests.cs`, `popup/email-account*.test.js`,
+  `e2e/examples/issue-353-email-check.js`
+
+### 2.21ah Trial-run timeout estimate (Issues #289, #295)
+
+`/generate` runs the generated script once as a trial. Its timeout is the
+verifier's base 45 s plus an estimate of extra time the configuration
+legitimately needs: browser-action durations (Scroll/WaitFor, including a
+`BrowserDiscoverySource`'s nested actions) and, for API mode, one assumed
+second per parameter combination beyond the first. An estimate above 10
+minutes skips the trial run (response header
+`X-ScrapingFactory-Verification-Skipped`, warning toast in the popup).
+
+- Companion: `Compiler/Backends/VerificationTimeEstimator.cs`,
+  `RangeFormat.CountValues` (`Backends/Python/RangeFormat.cs`), the cap and
+  header in `Program.cs`
+- Tests: `VerificationTimeEstimatorTests.cs`,
+  `ApiCombinationTimeoutEndToEndTests.cs`, `CompanionEndpointTests.cs`
+
+The caller can also switch the trial run off (`ScrapingConfig.SkipVerification`,
+Issue #292, the extension's Settings screen): same response mechanics as the
+cap skip, `VerificationSkipReason` in `Program.cs`. Tests:
+`SkipVerificationEndpointTests.cs`, `e2e/examples/issue-292-skip-verification-check.js`.
+
+### 2.21ai Clean page-request errors (Issue #319)
+
+A failed page request in flat/container/Blocks mode ends in one
+`ERROR: <what> to <url> failed: <hint>` line and exit code 7 instead of a
+Python traceback (Static: connection error / HTTP status; Browser: navigation
+error / HTTP status ≥ 400). `PythonScriptVerifier.CleanScriptError` shows that
+line as `/generate`'s error. API mode has its own equivalent (Issue #220).
+
+- Templates: `fragments/request_errors_common.py.j2`, `_static.py.j2`,
+  `_playwright.py.j2`; used by the three Static and three Browser flat/grouped/
+  Blocks templates
+- Tests: `PageRequestErrorEndToEndTests.cs`,
+  `e2e/examples/issue-223-retry-check.js`
 
 ### 2.22 Persistent session/cookie handling (Issue #175)
 
@@ -1844,7 +2252,7 @@ compile time anywhere.
 | Container tree node | `container-tree.js`: `buildGroupNode`/`buildFieldNode`, `serializeGroupTree` | `{name,selector,repeating,children:[...],framePath?}` or `{name,selector,mode,attribute?,framePath?}` | `IR/ContainerNode.cs`: `GroupNode`/`DataFieldNode` (via `ContainerNodeJsonConverter`) |
 | API config (top level) | `api-config.js`: `buildApiConfig()` | `{urlTemplate, method?, parameters:[...], headers?, itemsPath+fields \| groups, body?, embeddedJsonSource?, bootstrap?}` | `IR/ApiConfig.cs`: `ApiConfig` |
 | API parameter source | `api-config.js`: `buildStaticListSource`/`buildDiscoverySource`/`buildRangeSource` | `{kind:"staticList"\|"discovery"\|"range", ...}` | `IR/ApiConfig.cs`: `ApiParameterSource` (`[JsonPolymorphic]`) |
-| API embedded JSON source (Issue #136) | `api-config-ui.js`: `confirmEmbeddedJsonFieldCandidate()` (`{scriptSelector}`, stamped from `content-script.js`'s `scriptTagSelector`) | `{scriptSelector}` | `IR/ApiConfig.cs`: `EmbeddedJsonSource` (plain optional object, no converter) |
+| API embedded JSON source (Issue #136) | `api-capture-ui.js`: `confirmEmbeddedJsonFieldCandidate()` (`{scriptSelector}`, stamped from `content-script.js`'s `scriptTagSelector`) | `{scriptSelector}` | `IR/ApiConfig.cs`: `EmbeddedJsonSource` (plain optional object, no converter) |
 | API token/auth bootstrap (Issue #220) | `api-bootstrap.js`: `buildApiBootstrap()` (draft `{name,method,url,valuePath,bodyEncoding,headers,bodyFields}`) | `{name, method?, url, headers?, bodyFields?, bodyEncoding?, valuePath}` | `IR/ApiConfig.cs`: `ApiBootstrap` (plain optional object, no converter) |
 | API cursor/token pagination (Issue #224) | `api-cursor-pagination.js`: `buildApiCursorPagination()` (draft `{nextCursorPath,hasNextPagePath,target,queryParameterName,bodyPath,maxPages}`) | `{nextCursorPath, hasNextPagePath?, target: 'Query'\|'Body', queryParameterName?, bodyPath?, maxPages}` | `IR/ApiConfig.cs`: `ApiCursorPagination` (plain optional object, no converter) |
 | API response tree node | `api-config.js`: `buildApiGroupDraft`/`buildApiFieldDraft`, `serializeApiTree` | `{name,path,children:[...]}` or `{name,path}` | `IR/ApiConfig.cs`: `ApiGroup`/`ApiField` (via `ApiNodeJsonConverter`) |
@@ -1929,7 +2337,7 @@ checks + browser-only gating) → each Playwright template (`playwright_scraper.
 `ScrapingPlanValidator.ValidateApiConfig` (per-source validation) →
 `PythonApiConfigLiteral.RenderSource` → `scraper_api.py.j2`'s
 `_resolve_parameter_values` runtime → `api-config.js` (a new `buildXxxSource`
-builder) → `api-config-ui.js` (`renderApiConfigParameters`'s per-kind branch,
+builder) → `api-parameters-ui.js` (`renderApiConfigParameters`'s per-kind branch,
 `API_CONFIG_SOURCE_DEFAULTS`).
 
 **Add a new field extracted from the page/response** (extending an existing shape,

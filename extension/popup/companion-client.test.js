@@ -52,7 +52,10 @@ describe('generate() surfaces companion verification failures', () => {
       <section id="screen-generating" class="hidden"></section>
       <div id="error-toast" class="hidden">
         <span id="error-toast-message"></span>
+        <p id="error-toast-hint" class="hidden"></p>
+        <details id="error-toast-details" class="hidden"><pre id="error-toast-details-text"></pre></details>
         <button id="btn-report-bug-toast" class="hidden"></button>
+        <button id="btn-toast-close" class="hidden"></button>
       </div>
     `;
 
@@ -98,8 +101,13 @@ describe('generate() surfaces companion verification failures', () => {
 
     const toast = document.getElementById('error-toast');
     expect(toast.classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('error-toast-message').textContent).toContain('returned no data');
+    // Issue #401: a plain-language title and hint, the companion's text behind "Details"
+    expect(document.getElementById('error-toast-message').textContent).toBe('Es wurden keine Daten gefunden');
+    expect(document.getElementById('error-toast-hint').textContent).toContain('Vorschau anzeigen');
+    expect(document.getElementById('error-toast-details-text').textContent).toContain('returned no data');
     expect(document.getElementById('btn-report-bug-toast').classList.contains('hidden')).toBe(false);
+    // ... and "Report bug" still carries the raw text
+    expect(require('./toast').getLastError().message).toContain('returned no data');
   });
 });
 
@@ -513,6 +521,7 @@ describe('generate() reads the global Settings tab\'s preferences, not per-scrap
         <input type="checkbox" id="toggle-include-data-preview" />
         <input type="checkbox" id="toggle-include-output-file" />
         <input type="checkbox" id="toggle-external-config" />
+        <input type="checkbox" id="toggle-skip-verification" />
         <div id="manage-blueprints-list"></div>
         <p id="manage-blueprints-empty" class="hidden"></p>
         <div id="all-saved-configs-list"></div>
@@ -578,6 +587,22 @@ describe('generate() reads the global Settings tab\'s preferences, not per-scrap
     expect(body.outputFormat).toBe('Json');
   });
 
+  // Issue #292: the companion skips its trial run when this is set.
+  test('ticking "Skip the trial run" on the Settings screen sends skipVerification with the next /generate request', async () => {
+    document.getElementById('btn-open-settings').click();
+    const toggle = document.getElementById('toggle-skip-verification');
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+    expect(storedGlobalSettings.skipVerification).toBe(true);
+
+    document.getElementById('btn-close-settings').click();
+    document.getElementById('btn-generate').click();
+    await flushMicrotasks();
+
+    const generateCall = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/generate'));
+    expect(JSON.parse(generateCall[1].body).skipVerification).toBe(true);
+  });
+
   test('leaving every preference off sends today\'s exact byte shape — no outputFormat key for flat mode\'s default Csv', async () => {
     document.getElementById('btn-generate').click();
     await flushMicrotasks();
@@ -588,5 +613,6 @@ describe('generate() reads the global Settings tab\'s preferences, not per-scrap
     expect(body).not.toHaveProperty('includePreview');
     expect(body).not.toHaveProperty('includeOutputFile');
     expect(body).not.toHaveProperty('externalConfig');
+    expect(body).not.toHaveProperty('skipVerification');
   });
 });

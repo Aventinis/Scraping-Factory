@@ -31,6 +31,7 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
         var changeDetection = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection);
         var proxy = PythonProxyLiteral.BuildContext(plan.Proxy);
         var requestDelay = PythonRequestDelayLiteral.BuildContext(plan);
+        var robotsCheck = PythonRobotsDisallowLiteral.BuildContext(plan);
         var retry = PythonRetryLiteral.BuildContext(plan.Retry);
         var hardening = PythonHardeningLiteral.BuildContext(plan.Hardening);
         var externalConfig = PythonExternalConfigLiteral.BuildContext(plan.ExternalConfig);
@@ -74,6 +75,8 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
                 bootstrap_literal = PythonApiConfigLiteral.RenderBootstrap(api.Bootstrap),
                 cursor_pagination_enabled = api.CursorPagination is not null,
                 cursor_pagination_literal = PythonApiConfigLiteral.RenderCursorPagination(api.CursorPagination),
+                link_pagination_enabled = api.LinkHeaderPagination is not null,
+                link_pagination_max_pages = api.LinkHeaderPagination?.MaxPages ?? 0,
                 script_filename = plan.ScriptFileName,
                 output_filename = plan.OutputFileBaseName,
                 output_is_json = plan.OutputFormat == OutputFormat.Json,
@@ -82,6 +85,8 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
                 change_detection = changeDetection,
                 proxy,
                 request_delay = requestDelay,
+                robots_check = robotsCheck,
+                append_output = plan.AppendsOutput,
                 retry,
                 dedup = PythonDeduplicationLiteral.BuildContext(plan.Deduplication),
                 text_selector = PythonTextSelectorLiteral.BuildContext(plan),
@@ -131,6 +136,8 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
             bootstrap_literal = PythonApiConfigLiteral.RenderBootstrap(api.Bootstrap),
             cursor_pagination_enabled = api.CursorPagination is not null,
             cursor_pagination_literal = PythonApiConfigLiteral.RenderCursorPagination(api.CursorPagination),
+                link_pagination_enabled = api.LinkHeaderPagination is not null,
+                link_pagination_max_pages = api.LinkHeaderPagination?.MaxPages ?? 0,
             script_filename = plan.ScriptFileName,
             output_filename = plan.OutputFileBaseName,
             output_is_json = plan.OutputFormat == OutputFormat.Json,
@@ -139,6 +146,8 @@ public sealed class PythonApiCodeGenerator : ICodeGenerator
             change_detection = changeDetection,
             proxy,
             request_delay = requestDelay,
+                robots_check = robotsCheck,
+                append_output = plan.AppendsOutput,
             retry,
             dedup = PythonDeduplicationLiteral.BuildContext(plan.Deduplication),
             text_selector = PythonTextSelectorLiteral.BuildContext(plan),

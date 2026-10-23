@@ -1,8 +1,7 @@
 // Exported for testing (Jest/jsdom). In the extension build the chrome API
 // calls are guarded by the message listener below.
 
-const { createLogger, getLogBuffer } =
-  typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+const { createLogger, getLogBuffer } = require('../shared/logger');
 const log = createLogger('SF:Content');
 
 // Surfaces otherwise-silent script errors in the bug report (see GET_LOGS
@@ -448,6 +447,8 @@ function findApiCandidates(entries, targetText, scopePath = null) {
         valuePath: derived ? derived.valuePath : null,
         treeSkeleton: deriveApiTreeSkeleton(path),
         requestHeaders: entry.requestHeaders || [],
+        // Issue #321: the recorded response announced a rel="next" Link header.
+        hasNextLink: !!entry.hasNextLink,
         isJsonContentType,
         matchCountInBody: matches.length,
       });
@@ -488,6 +489,26 @@ function scriptTagSelector(el) {
     current = parent;
   }
   return segments.join(' > ');
+}
+
+// Issue #404: the text of the one <script> tag an embedded-JSON source was
+// confirmed against (scriptSelector, see EmbeddedJsonSource), for the JSON-path
+// picker — the page's own data has no recorded network response to look at.
+// The popup parses it; a body past MAX_EMBEDDED_JSON_CHARS is reported as
+// truncated (and not sent) rather than cut, since half a JSON document is useless.
+const MAX_EMBEDDED_JSON_CHARS = 2000000;
+function readEmbeddedJson(scriptSelector) {
+  if (!scriptSelector) return { body: '', truncated: false, found: false };
+  let tag = null;
+  try {
+    tag = document.querySelector(scriptSelector);
+  } catch {
+    return { body: '', truncated: false, found: false }; // not a valid selector
+  }
+  if (!tag) return { body: '', truncated: false, found: false };
+  const text = tag.textContent || '';
+  if (text.length > MAX_EMBEDDED_JSON_CHARS) return { body: '', truncated: true, found: true };
+  return { body: text, truncated: false, found: true };
 }
 
 // Issue #136: an alternative candidate source to findApiCandidates above,
@@ -846,18 +867,16 @@ if (typeof window !== 'undefined') {
   window.addEventListener('message', handleFramePathMessage);
 }
 
-if (typeof module !== 'undefined') {
-  module.exports = {
-    buildSelector, countSelectorMatches, splitTextFilter, normalizeText, querySelectorAllWithText, querySelectorWithText,
-    appendTextFilterToSelector, collectElementAttributes, collectOwnText, elementPath, serializeDomTree,
-    matchFlatFields, matchGroupTree, computePreviewMatches, matchHoverHighlight,
-    findValueInJson, siblingFields, siblingFieldsAt, findApiCandidates,
-    deriveItemsAndValuePath, deriveApiTreeSkeleton,
-    scriptTagSelector, findEmbeddedJsonCandidates,
-    parseRobotsTxt, evaluateRobotsTxt, checkRobotsTxt,
-    findIframeSelectorForWindow, resolveFramePath, frameDepth,
-  };
-}
+module.exports = {
+  buildSelector, countSelectorMatches, splitTextFilter, normalizeText, querySelectorAllWithText, querySelectorWithText,
+  appendTextFilterToSelector, collectElementAttributes, collectOwnText, elementPath, serializeDomTree,
+  matchFlatFields, matchGroupTree, computePreviewMatches, matchHoverHighlight,
+  findValueInJson, siblingFields, siblingFieldsAt, findApiCandidates,
+  deriveItemsAndValuePath, deriveApiTreeSkeleton,
+  scriptTagSelector, findEmbeddedJsonCandidates, readEmbeddedJson,
+  parseRobotsTxt, evaluateRobotsTxt, checkRobotsTxt,
+  findIframeSelectorForWindow, resolveFramePath, frameDepth,
+};
 
 // ── Overlay ──────────────────────────────────────────────────────────────────
 
@@ -1505,6 +1524,13 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     if (message.type === 'GET_API_CAPTURE_ENTRIES') {
       if (!isTopFrame()) return;
       sendResponse(capturedApiEntries);
+    }
+    // Issue #404: the JSON of the embedded <script> tag an API config was
+    // sourced from, for the JSON-path picker (same pull-based request/response
+    // shape as GET_API_CAPTURE_ENTRIES).
+    if (message.type === 'GET_EMBEDDED_JSON') {
+      if (!isTopFrame()) return;
+      sendResponse(readEmbeddedJson(message.scriptSelector));
     }
     // Issue #227: how many elements the last pick would match with a text
     // filter added. Answered by the frame the pick happened in only (lastPick

@@ -15,6 +15,7 @@ services, no data collection.
 
 - [What it does](#what-it-does)
 - [Getting started](#getting-started)
+- [User documentation](#user-documentation)
 - [Architecture, in brief](#architecture-in-brief)
 - [Features](#features)
 - [Build & test](#build--test)
@@ -134,16 +135,48 @@ configurations, outputs, Output Blueprints and transform presets. Other
 commands: `user list`, `user rotate <name>`, `user remove <name>`, and
 `user adopt <name>` (hands everything saved before authentication was switched
 on to that user). Authentication is off by default — a companion on your own
-machine needs no login. Note that the companion speaks plain HTTP: when it is
-reachable from other machines, put it behind a TLS-terminating reverse proxy so
-the keys don't travel in clear text.
+machine needs no login.
+
+**Accounts instead of handed-out keys.** With `Companion:Auth:Registration` set to
+`Open` (installer: `--registration open`), people create their own account in the
+extension under **Settings → Account** (user name + password, at least 10
+characters); the extension stores a revocable per-device token, never the
+password. The operator can reset a password with `user set-password <name>` and
+lock someone out with `user disable <name>`.
+
+**Email addresses, verification and password reset.** Configure an SMTP server
+(`Companion:Email:Smtp:Host`, `From`, optionally `Port`, `Security`, `Username`,
+`Password` — installer: `--smtp-host …`, the password in `SF_SMTP_PASSWORD`) and
+accounts can have an email address: it is confirmed with an 8-digit code mailed to
+it and typed into the extension, and a forgotten password is reset the same way
+(**Settings → Account → Forgot password?**; only a *verified* address receives a
+code, and a reset signs every device out). Optional rules:
+`Companion:Auth:Email:Required` (ask for an address at registration),
+`RequireVerified` (an account can only use the companion once its address is
+confirmed) and `AllowedDomains`. Operator commands: `user set-email <name> <email>
+[--verified]` and `user verify <name>`. Without an SMTP server none of this is
+offered.
+
+**HTTPS.** Passwords and keys must not travel in clear text, so a companion that
+listens beyond this computer has to speak HTTPS: set `Companion:Tls:Mode` to
+`Certificate` with `CertificatePath` (a `.pfx` plus `CertificatePassword`, or a
+PEM file plus `CertificateKeyPath`) — installer: `--host 0.0.0.0 --tls-cert FILE`
+— and enter the `https://` address in the extension's error screen. The companion
+refuses to start with plain HTTP on a non-local address. The extension itself
+only talks to `https://` addresses or to this computer. Self-signed certificates
+and plain HTTP to another machine exist only in development builds (running from
+source, "Load unpacked" from a checkout's `extension/dist/`); the release bundles cannot be switched
+into that mode.
 
 ### 2. Load the browser extension
 
 1. Open your browser's extension management page
    (`chrome://extensions`, `edge://extensions`, or Opera's equivalent).
 2. Enable **Developer mode**.
-3. Click **Load unpacked** and select the `extension/` directory.
+3. Build it once (`cd extension && npm install && npm run build`; `npm run build:watch`
+   keeps rebuilding while you edit), then click **Load unpacked** and select the
+   **`extension/dist/`** directory. (The release bundles already contain the built
+   extension.)
 4. Click the extension's toolbar icon to open the side panel (Chrome/Edge) or
    sidebar (Opera).
 
@@ -155,10 +188,16 @@ content-script injection and network-recording model didn't work as expected
 for this extension's needs) — Chrome, Edge, and Opera are the supported
 browsers.
 
+## User documentation
+
+Step-by-step guides with worked examples and screenshots are in
+[`docs/user/`](docs/user/README.md): getting started, one page per feature area,
+and a troubleshooting/FAQ page.
+
 ## Architecture, in brief
 
 ```
-extension/                  Browser extension (Manifest V3)
+extension/                  Browser extension (Manifest V3); `npm run build` bundles it into extension/dist/
   background/               Service worker — message relay only
   content/                  Content script — DOM highlighting, selector/API extraction
   popup/                    Side panel UI (the actual state machine)
@@ -248,6 +287,12 @@ row (or XML element). This is the core guarantee of the whole tool: what you
 download is proven to work right now, not just generated code that looks
 plausible.
 
+If you'd rather not wait for it (a slow login flow, or while iterating on a
+selector), the Settings screen has a "Skip the trial run" preference: the
+script is then returned immediately, still checked for structural problems but
+not run against the live page — you verify it by running it yourself. A data
+preview and a full output file aren't available while it is on.
+
 ### Trial-run data preview
 
 An opt-in checkbox that lets you see a capped sample (up to 50 rows/elements)
@@ -326,8 +371,12 @@ dotnet build companion/ScrapingFactory.sln
 # Run the .NET tests
 dotnet test companion/ScrapingFactory.sln
 
-# Run the extension tests
-cd extension && npm install && npm test
+# Run the extension tests and the type check
+cd extension && npm install && npm test && npm run typecheck
+
+# Build the extension into extension/dist/ (what "Load unpacked" points at);
+# `npm run build:watch` rebuilds on every change
+npm run build
 ```
 
 ## Known issues

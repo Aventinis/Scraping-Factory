@@ -16,7 +16,10 @@
     "attributePlaceholder": "Attribut",
     "noMatches": "Keine Treffer in der Aufzeichnung.",
     "noRecordArray": "Kein Datensatz-Array gefunden — als Quelle nicht verwendbar.",
-    "edit": "Bearbeiten"
+    "edit": "Bearbeiten",
+    "helpBtn": "Hilfe",
+    "advanced": "Erweitert",
+    "learnMore": "Mehr erfahren"
   },
   "language": {
     "label": "Sprache"
@@ -28,8 +31,23 @@
     "message": "Verbinde mit Companion…"
   },
   "error": {
-    "title": "Companion App nicht erreichbar",
-    "hint": "Starte ScrapingFactory.Companion und versuche es erneut.",
+    "title": "Companion-App nicht erreichbar",
+    "hintShort": "Starte die Companion-App und versuche es erneut, oder gib unten eine andere Adresse ein.",
+    "intro": "Der Companion ist ein kleines Hilfsprogramm auf deinem Rechner: Er baut dein Skript und testet es einmal, bevor du es bekommst.",
+    "likely": "Am wahrscheinlichsten",
+    "whyLabel": "Warum klappt die Verbindung nicht?",
+    "install": {
+      "title": "1 · Noch nicht installiert",
+      "text": "Entpacke den Scraping-Factory-Download und starte in diesem Ordner den Installer ({installer}), dann „Erneut versuchen“:"
+    },
+    "start": {
+      "title": "2 · Installiert, läuft aber nicht",
+      "text": "Führe den Installer noch einmal aus — er startet den Companion — oder starte das Programm selbst. Mit der Autostart-Option des Installers startet er bei jeder Anmeldung:"
+    },
+    "address": {
+      "title": "3 · Läuft unter anderer Adresse oder Port",
+      "text": "Trage seine Adresse unten ein, z. B. http://localhost:5050. Für einen Companion auf einem anderen Rechner nimm https://."
+    },
     "currentUrl": "Versuchte Adresse: {url}",
     "customUrlLabel": "Läuft die Companion App unter einer anderen Adresse?",
     "customUrlPlaceholder": "z. B. http://localhost:5050",
@@ -45,7 +63,6 @@
     "modeContainer": "Container (verschachtelt)",
     "modeApi": "API",
     "modeCombined": "Kombiniert",
-    "combinedHint": "Kombiniert mehrere deiner bereits gespeicherten Konfigurationen — auch von verschiedenen Seiten — zu einem Skript, dessen Ergebnisse zu einem einzigen Ergebnis zusammengeführt werden.",
     "combinedAddBtn": "+ Komponente hinzufügen",
     "combinedNoSavedConfigsHint": "Noch keine gespeicherten Konfigurationen — speichere zuerst mindestens zwei Konfigurationen (in einem anderen Modus) und kombiniere sie dann hier.",
     "combinedNamePlaceholder": "Name",
@@ -92,15 +109,15 @@
     "savedOutputsEmpty": "Für diese Konfiguration wurden noch keine Outputs gespeichert.",
     "savedOutputsLoading": "Lädt…",
     "savedOutputsDownloadBtn": "Herunterladen",
-    "savedOutputsReplayHardeningBtn": "Hardening testen",
+    "savedOutputsReplayHardeningBtn": "Sicherheitsprüfungen testen",
     "savedOutputsDeleteConfirm": "Diesen gespeicherten Output löschen?",
-    "hardeningReplayNoChecks": "Aktuell sind keine Hardening-Prüfungen konfiguriert — zuerst eine im Bereich „Monitoring“ einrichten.",
+    "hardeningReplayNoChecks": "Aktuell sind keine Sicherheitsprüfungen konfiguriert — zuerst eine im Bereich „Benachrichtigungen & Prüfungen“ einrichten.",
     "hardeningReplayCompareBasisLabel": "Diese Prüfung benötigt ein vorheriges Ergebnis zum Vergleich:",
     "hardeningReplayCompareBasisConfig": "Gleiche Konfiguration",
-    "hardeningReplayCompareBasisBlueprint": "Blueprint „{name}“",
+    "hardeningReplayCompareBasisBlueprint": "Layout „{name}“",
     "hardeningReplayRunBtn": "Ausführen",
     "hardeningReplayLoading": "Wird getestet…",
-    "hardeningReplayError": "Hardening-Test fehlgeschlagen: {message}",
+    "hardeningReplayError": "Test der Sicherheitsprüfungen fehlgeschlagen: {message}",
     "hardeningReplayOutcomePassed": "Bestanden",
     "hardeningReplayOutcomeTriggered": "Ausgelöst",
     "hardeningReplayOutcomeInconclusive": "Nicht eindeutig",
@@ -113,7 +130,6 @@
     "engineLabel": "Engine",
     "engineStatic": "Statisch",
     "engineBrowser": "Browser",
-    "engineBrowserTitle": "Rendert JavaScript vor der Extraktion — für dynamisch geladene Seiten oder Login-Flows. Langsamer als die statische Engine.",
     "outputJsonToggle": "Ausgabe als JSON (statt CSV/XML)",
     "dataPreviewToggle": "Testlauf-Datenvorschau anzeigen",
     "outputFileToggle": "Vollständige Scraping-Datei herunterladen",
@@ -122,35 +138,33 @@
     "changeDetectionToggle": "Änderungserkennung aktivieren (Benachrichtigung bei Änderungen)",
     "notifyEmail": "E-Mail",
     "notifyWebhook": "Webhook",
-    "smtpHostEnvVarLabel": "SMTP-Host (Env-Var)",
-    "smtpPortEnvVarLabel": "SMTP-Port (Env-Var)",
-    "smtpUsernameEnvVarLabel": "SMTP-Benutzer (Env-Var)",
-    "smtpPasswordEnvVarLabel": "SMTP-Passwort (Env-Var)",
-    "notifyEmailFromEnvVarLabel": "Absender (Env-Var)",
-    "notifyEmailToEnvVarLabel": "Empfänger (Env-Var)",
-    "webhookUrlEnvVarLabel": "Webhook-URL (Env-Var)",
-    "envVarPlaceholder": "Name der Umgebungsvariable",
-    "envVarPlaceholderOptional": "Name der Umgebungsvariable (optional)",
-    "changeDetectionHint": "Jedes Feld ist der Name einer Umgebungsvariable, nicht der Wert selbst — der eigentliche Wert wird beim echten Lauf aus der Umgebung gelesen, niemals ins Skript geschrieben.",
+    "smtpHostEnvVarLabel": "Variable mit dem SMTP-Host",
+    "smtpPortEnvVarLabel": "Variable mit dem SMTP-Port (optional)",
+    "smtpUsernameEnvVarLabel": "Variable mit dem SMTP-Benutzernamen (optional)",
+    "smtpPasswordEnvVarLabel": "Variable mit dem SMTP-Passwort (optional)",
+    "notifyEmailFromEnvVarLabel": "Variable mit der Absenderadresse",
+    "notifyEmailToEnvVarLabel": "Variable mit der Empfängeradresse",
+    "webhookUrlEnvVarLabel": "Variable mit der Webhook-URL",
     "proxyToggle": "Proxy verwenden",
-    "proxyEnvVarLabel": "Proxy-Liste (Env-Var)",
-    "proxyHint": "Der Name einer Umgebungsvariable mit einer durch Kommas getrennten Liste von Proxy-URLs (z. B. \"http://user:pass@host:port\"), nicht die Adressen selbst — bei mehreren Proxys wechselt das Skript bei jeder Anfrage reihum durch.",
+    "proxyEnvVarLabel": "Variable mit der Proxy-Liste",
     "requestDelayToggle": "Pause zwischen Anfragen",
     "requestDelayFromLabel": "von",
     "requestDelayToLabel": "bis",
     "requestDelayToPlaceholder": "(fest)",
     "requestDelaySecondsUnit": "Sekunden",
-    "requestDelayHint": "Das Skript wartet zwischen zwei Anfragen an die Seite – fest oder zufällig im Bereich (z. B. 1 bis 3). Schützt vor Sperren und Rate-Limits, macht den Lauf aber entsprechend länger (z. B. 50 Seiten × 2 s ≈ 1,5 Minuten mehr). Der Probelauf beim Generieren zählt die Pausen nicht gegen sein Zeitlimit.",
     "respectRobotsDelayToggle": "robots.txt der Seite beachten (Crawl-delay)",
-    "respectRobotsDelayHint": "Wenn die robots.txt der Seite ein Tempo vorgibt (Crawl-delay oder Request-rate), wartet das Skript mindestens so lange zwischen zwei Anfragen. Seiten ohne Angabe sind nicht betroffen. Zusammen mit „Pause zwischen Anfragen“ gilt der größere Abstand. Die robots.txt wird einmal pro Lauf gelesen.",
+    "robotsDisallowToggle": "robots.txt der Seite vor jeder Anfrage prüfen",
+    "robotsDisallowActionLabel": "Wenn eine Anfrage nicht erlaubt ist",
+    "robotsDisallowActionSkip": "Überspringen und weitermachen",
+    "robotsDisallowActionWarn": "Warnen, aber trotzdem anfragen",
+    "robotsDisallowActionAbort": "Lauf abbrechen",
+    "appendOutputToggle": "An die vorhandene Ausgabedatei anhängen statt sie zu ersetzen",
     "retryToggle": "Bei vorübergehenden Fehlern erneut versuchen",
     "retryAttemptsLabel": "Versuche",
     "retryDelayLabel": "Wartezeit (s)",
     "retryExponentialToggle": "Wartezeit jedes Mal verdoppeln",
     "retryStatusCodesLabel": "Bei Statuscodes",
-    "retryHint": "Schlägt eine Anfrage wegen eines Verbindungsfehlers, Timeouts oder eines der Statuscodes fehl, versucht das Skript sie nach der Wartezeit erneut (bei 429/503 so lange, wie der Server per Retry-After verlangt; je Wartezeit höchstens 60 s). Andere Fehler wie 404 oder 403 scheitern sofort. Scheitern alle Versuche, bricht der Lauf wie bisher ab.",
-    "dedupToggle": "Duplikate anhand von Schlüsselfeld(ern) entfernen",
-    "dedupKeyFieldsHint": "Wähle das/die Feld(er), die einen Eintrag eindeutig kennzeichnen (zusammen bilden sie den Schlüssel). Eine spätere Zeile/ein späteres Element mit einem Schlüssel, der in diesem Lauf schon vorkam, wird verworfen — nützlich bei überlappenden Seiten oder Einträgen, die über mehrere Start-URLs erreichbar sind. Einträge, deren Schlüsselfelder alle leer sind, werden nie entfernt.",
+    "dedupToggle": "Duplikate entfernen",
     "dedupAddKeyFieldBtn": "Schlüsselfeld hinzufügen",
     "dedupKeyFieldMissing": "existiert nicht mehr",
     "dedupIncrementalToggle": "Nur neue Einträge seit dem letzten Lauf schreiben",
@@ -158,61 +172,50 @@
     "dedupOutputDeltaTitle": "Die Ausgabedatei enthält nur die in diesem Lauf neuen Einträge (sie wird bei jedem Lauf ersetzt).",
     "dedupOutputAppend": "Anhängen",
     "dedupOutputAppendTitle": "Neue Einträge werden an die Ausgabedatei der vorherigen Läufe angehängt, sie wächst also zu einer Sammlung aller bisher gesehenen Einträge.",
-    "dedupAppendUnavailableTitle": "Anhängen braucht eine flache Ausgabe (CSV oder JSON-Liste) — bei verschachtelter XML-/JSON-Ausgabe nicht verfügbar.",
     "dedupRetentionLabel": "Merken",
     "dedupRetentionMaxCount": "neueste Einträge (Anzahl)",
     "dedupRetentionMaxAge": "Tage seit zuletzt gesehen",
-    "dedupIncrementalHint": "Das Skript merkt sich die gesehenen Schlüssel in einer kleinen Datei neben seiner Ausgabe (Ausgabedateiname + .dedup-seen.json). Lösche diese Datei, um von vorn zu beginnen. Die gemerkten Schlüssel sind begrenzt: entweder nach Anzahl (die neuesten bleiben) oder nach Alter. Die Datei wird nur nach einem Lauf aktualisiert, der keine Härtungsprüfung verletzt hat.",
     "requestHeadersToggle": "Eigene Request-Header senden",
-    "requestHeadersAddBtn": "+ Header",
     "requestHeaderNamePlaceholder": "Header-Name (z. B. Accept-Language)",
     "requestHeaderKindValue": "Fester Wert",
     "requestHeaderKindEnv": "Umgebungsvariable",
     "requestHeaderValuePlaceholder": "Wert (z. B. de-CH)",
-    "requestHeaderEnvPlaceholder": "Variablenname (z. B. API_KEY)",
-    "requestHeaderTestValuePlaceholder": "Testwert für den Probelauf (wird nicht gespeichert)",
-    "requestHeadersHint": "Wird bei jeder Anfrage des Skripts mitgeschickt — nützlich für eine Sprache (Accept-Language), einen Referer, einen API-Key oder ein Cookie. Geheimnisse gehören in eine Umgebungsvariable, hier trägst du nur deren Namen ein; der einmalige Testwert gilt nur für den Probelauf und wird weder gespeichert noch ins Skript geschrieben. Ein Header namens User-Agent ersetzt den Standard-User-Agent. Mit der Browser-Engine gehen die Header an jede Anfrage, die die Seite stellt.",
+    "requestHeaderPickerPlaceholder": "Header hinzufügen…",
+    "requestHeaderSecretWarning": "Das sieht nach einem Geheimnis aus. Als fester Wert würde es im Klartext ins Skript geschrieben.",
+    "requestHeaderSwitchToEnv": "Umgebungsvariable verwenden",
     "externalConfigToggle": "Bearbeitbare Konfigurationsdatei (XML)",
-    "externalConfigHint": "Ermöglicht es, die Start-URL(s), den Namen der Ausgabedatei, den Ausgabenamen eines Feldes oder die Werteliste eines API-Parameters später über eine kleine XML-Datei anzupassen — ohne die .py-Datei zu bearbeiten oder die Erweiterung erneut zu öffnen. Die Datei existiert noch nicht; das Skript legt sie beim ersten echten Lauf neben sich selbst an.",
     "paginationToggle": "Pagination aktivieren",
     "paginationKindNextLink": "\"Weiter\"-Link",
     "paginationKindPageNumber": "Seiten-Nummer-URL",
     "paginationNextLinkSelectorLabel": "Selektor für \"Nächste Seite\"-Link",
     "paginationNextLinkSelectorPlaceholder": "z. B. a.next, a:contains(\"Weiter\")",
-    "paginationUrlTemplateLabel": "Seiten-URL-Vorlage",
+    "paginationUrlTemplateLabel": "Muster für die Seiten-URL",
     "paginationUrlTemplatePlaceholder": "z. B. {url}?page={page}",
-    "paginationUrlTemplateHint": "Muss sowohl {url} (die unveränderte Start-URL) als auch {page} (die Seitenzahl, beginnend bei 2 — Seite 1 ist immer die unveränderte Start-URL) enthalten.",
-    "paginationMaxPagesLabel": "Max. Seitenzahl (Sicherheitsgrenze)",
+    "paginationMaxPagesLabel": "Max. Seiten",
     "discoveredUrlsToggle": "Weitere Start-URLs automatisch ermitteln",
     "discoveredUrlsPageUrlLabel": "Seite mit den Links",
     "discoveredUrlsPageUrlPlaceholder": "z. B. https://example.com/kategorien",
     "discoveredUrlsLinkSelectorLabel": "Link-Selektor",
     "discoveredUrlsLinkSelectorPlaceholder": "z. B. nav.kategorien a",
-    "discoveredUrlsHint": "Lädt diese Seite einmalig und übernimmt jeden Link, der zum Selektor passt, zusätzlich zur URL oben und den weiteren Start-URLs. Ein Link lässt sich auch über seinen Text wählen, z. B. a:contains(\"Gemüse\").",
     "discoveredUrlsMaxUrlsLabel": "Max. Anzahl gefundener URLs (Sicherheitsgrenze)",
-    "monitoringSectionToggle": "Überwachung",
+    "monitoringSectionToggle": "Benachrichtigungen & Prüfungen",
     "settingsSectionToggle": "Einstellungen",
     "hardeningNoResultToggle": "Auf leeres Ergebnis prüfen",
-    "hardeningSeverityWarning": "Warnung",
-    "hardeningSeverityWarningTitle": "Das Skript druckt eine Warnung, beendet sich aber weiterhin mit Exit-Code 0.",
-    "hardeningSeverityError": "Fehler",
-    "hardeningSeverityErrorTitle": "Das Skript druckt einen Fehler und beendet sich mit einem eigenen Exit-Code (2), unterscheidbar von einem Absturz (1).",
+    "hardeningSeverityWarning": "Mich warnen",
+    "hardeningSeverityError": "Lauf stoppen",
     "hardeningNullRateSectionLabel": "Auf leere Werte pro Feld prüfen",
     "hardeningNullRateFieldPlaceholder": "-- Feld wählen --",
     "hardeningNullRateAddBtn": "+ Feld hinzufügen",
-    "hardeningBaselineToggle": "Auf Rückgang zum letzten Lauf prüfen",
-    "hardeningBaselineThresholdLabel": "Schwelle (Rückgang)",
-    "hardeningBlockingToggle": "Auf Blockierung prüfen (Weiterleitung, kurze Antwort, Sperr-Phrasen)",
-    "hardeningBlockingMinBodyLengthLabel": "Min. Antwortlänge (Bytes)",
-    "hardeningBlockingMinBodyLengthPlaceholder": "optional",
-    "hardeningBlockingPhrasesLabel": "Sperr-Phrasen (eine pro Zeile)",
+    "hardeningBaselineToggle": "Auf Rückgang gegenüber dem letzten Lauf prüfen",
+    "hardeningBlockingToggle": "Prüfen, ob die Seite das Skript blockiert",
+    "hardeningBlockingMinBodyLengthLabel": "Seite kürzer als",
+    "hardeningBlockingMinBodyLengthPlaceholder": "z. B. 1000",
+    "hardeningBlockingPhrasesLabel": "Phrasen, die eine Sperrseite verraten (eine pro Zeile)",
     "hardeningBlockingPhrasesPlaceholder": "z. B. \"Access Denied\", \"Bitte bestätigen Sie, dass Sie ein Mensch sind\"",
     "hardeningRequiredFieldsToggle": "Felder verpflichtend machen (unvollständige Zeilen verwerfen)",
     "hardeningRequiredFieldsAddBtn": "+ Feld hinzufügen",
-    "preflightToggle": "Vorab prüfen, ob sich die Seite geändert hat, und den Lauf ggf. überspringen",
-    "preflightHint": "Fragt vor dem eigentlichen Scrapen einmal kurz die Seite an. Hat sich seit dem letzten Lauf nichts geändert, oder ist die Seite gerade nicht erreichbar, wird der Lauf ohne den vollen Scrape-Aufwand übersprungen.",
+    "preflightToggle": "Überspringen, wenn die Seite unverändert ist",
     "modeBlocks": "Blöcke",
-    "blocksHint": "Erstellt mehrere unabhängige Extraktionsblöcke (flach oder verschachtelt, beliebig gemischt), die sich die Navigation dieser Seite teilen — jeder schreibt in einem Skriptlauf seine eigene Ausgabedatei.",
     "blocksNameLabel": "Blockname",
     "blocksNamePlaceholder": "z. B. Angebote",
     "blocksOutputFileNameLabel": "Ausgabedateiname",
@@ -224,12 +227,61 @@
     "blocksSummaryFlat": "{count} Feld(er)",
     "blocksSummaryGroup": "{count} Gruppe(n)",
     "blocksUnnamed": "(unbenannt)",
-    "outputBlueprintLabel": "Output-Blueprint",
+    "outputBlueprintLabel": "Ausgabe-Layout",
     "outputBlueprintNoneOption": "Keiner",
     "manageBlueprintsBtn": "Verwalten",
-    "outputBlueprintMappingHint": "Ordne jedem Zielfeld eines der eigenen Quellfelder dieser Konfiguration zu — jedes Zielfeld braucht eine Quelle, bevor das Skript erzeugt werden kann.",
-    "outputBlueprintTreeMappingHint": "Ordne jedem Zielfeld eines der eigenen Quellfelder dieser Konfiguration zu — die Position einer Zielgruppe in der Ausgabe wird automatisch aus ihren zugeordneten Feldern abgeleitet. Jedes Zielfeld braucht eine Quelle, bevor das Skript erzeugt werden kann.",
-    "outputFormatFlattenHint": "Verschachtelte Ergebnisse werden in eine Tabelle flachgezogen: eine Zeile pro innerstem wiederholten Element, Werte höherer Ebenen werden in jeder Zeile wiederholt (oder wähle einen Output Blueprint, um die Spalten selbst festzulegen). Jedes Datenfeld braucht einen eindeutigen Namen."
+    "modeLabel": "Modus",
+    "hardeningSectionLabel": "Prüfungen nach jedem Lauf",
+    "hardeningRecommendedBtn": "Empfohlene Prüfungen",
+    "hardeningRecommendedApplied": "Eingeschaltet: {checks}.",
+    "hardeningRecommendedNoResult": "leeres Ergebnis (mich warnen)",
+    "hardeningRecommendedRequired": "Pflichtfeld „{field}“ (mich warnen)",
+    "hardeningRecommendedNothingNew": "Die empfohlenen Prüfungen sind schon an.",
+    "hardeningRecommendedNeedFields": "Füge zuerst Felder hinzu, um auch den Pflichtfeld-Vorschlag zu bekommen.",
+    "hardeningNullRateMiddle": "ist leer in mehr als",
+    "hardeningNullRateAfter": "% der Zeilen",
+    "hardeningBaselineBefore": "Auslösen bei",
+    "hardeningBaselineAfter": "% weniger Zeilen als im letzten Lauf",
+    "hardeningBlockingAdvanced": "Erweitert: kurze Seiten und Sperr-Phrasen",
+    "hardeningBlockingMinBodyLengthUnit": "Bytes (optional)",
+    "paginationSuggestion": "Sieht aus, als stünde die Seitenzahl in der URL. Dieses Muster verwenden?",
+    "paginationSuggestionExample": "Seite 2 wäre: {example}",
+    "paginationSuggestionUse": "Muster verwenden",
+    "paginationPickNextLink": "„Weiter“-Link auswählen",
+    "paginationPickPageLink": "Link zu Seite 2 anklicken, um das Muster zu erkennen",
+    "discoveredUrlsAdvanced": "Erweitert: Startseiten automatisch finden",
+    "retryAdvanced": "Erweitert: bei welchen Fehlern wiederholen",
+    "dedupRetentionAdvanced": "Erweitert: wie lange Einträge gemerkt werden",
+    "outputFormatFlattenTitle": "Verschachtelte Ergebnisse werden eine Tabelle"
+  },
+  "requestHeaderPresets": {
+    "acceptLanguage": {
+      "label": "Accept-Language — bevorzugte Sprache",
+      "desc": "Bittet die Seite, ihre Inhalte in dieser Sprache zu liefern, z. B. de-CH oder en-US."
+    },
+    "referer": {
+      "label": "Referer — die Seite, von der Sie kommen",
+      "desc": "Teilt der Seite mit, über welche Seite Sie einem Link gefolgt sind. Manche Seiten antworten nur, wenn er gesetzt ist."
+    },
+    "userAgent": {
+      "label": "User-Agent — als wer sich das Skript ausgibt",
+      "desc": "Ersetzt die Standardkennung des Skripts. Nur nötig, wenn die Seite die Standardkennung ablehnt."
+    },
+    "cookie": {
+      "label": "Cookie — angemeldet bleiben",
+      "desc": "Ein Login-Cookie aus Ihrem Browser. Es ist ein Geheimnis, deshalb wird nur der Name seiner Variable gespeichert."
+    },
+    "authorization": {
+      "label": "Authorization — Zugangstoken",
+      "desc": "Ein Token oder Passwort, das die Seite für ihre Daten verlangt (z. B. „Bearer …“). Es ist ein Geheimnis, deshalb wird nur der Name seiner Variable gespeichert."
+    },
+    "apiKey": {
+      "label": "X-Api-Key — API-Schlüssel",
+      "desc": "Der Schlüssel, den manche Seiten für ihre Daten verlangen. Er ist ein Geheimnis, deshalb wird nur der Name seiner Variable gespeichert."
+    },
+    "other": {
+      "label": "Anderer Header (Namen eintippen)…"
+    }
   },
   "robots": {
     "checkFailed": "robots.txt konnte nicht geprüft werden ({error}).",
@@ -264,12 +316,11 @@
     "variableLabel": "variabel",
     "unnamedPart": "(noch unbenannt)",
     "sourceKindStaticList": "Werteliste",
-    "sourceKindDiscovery": "Discovery-Endpunkt",
+    "sourceKindDiscovery": "Liste aus anderer Anfrage",
     "sourceKindRange": "Bereich",
-    "sourceKindBrowserDiscovery": "Browser-Erkennung",
-    "discoveryUrlLabel": "Erkennungs-URL",
+    "sourceKindBrowserDiscovery": "Aus der Seite sammeln (Browser)",
+    "discoveryUrlLabel": "Zu öffnende Seite",
     "insertParameterPlaceholder": "+ Parameter einfügen…",
-    "insertParameterHint": "Fügt den Platzhalter am Ende ein (bzw. an der Cursor-Position, wenn du gerade im Feld geklickt hast) — verschiebe ihn danach selbst an die richtige Stelle im Pfad, dort wo sonst ein fester Wert stünde, z. B. \".../categories/{category}/weeks\".",
     "editTemplateBtn": "Vorlage bearbeiten",
     "doneEditingTemplateBtn": "Fertig",
     "valueListPlaceholder": "Werte, kommagetrennt oder pro Zeile",
@@ -292,18 +343,19 @@
     "noHeadersRecorded": "Keine Request-Header aufgezeichnet.",
     "headerModeValue": "Wert",
     "headerModeEnv": "Umgebungsvariable",
-    "envNamePlaceholder": "ENV_NAME",
     "bodyLabel": "Request-Body",
     "bodyRootLabel": "Body",
     "bodyToVariableBtn": "→ Variabel",
     "bodyToFixedBtn": "→ Fest",
     "bodyPickParameterPlaceholder": "-- Parameter wählen --",
     "bodyNewParameterOption": "+ Neuer Parameter…",
-    "bodyCoerceToTitle": "Werttyp für die Übernahme in den Body (Standard: Text)"
+    "bodyCoerceToTitle": "Werttyp für die Übernahme in den Body (Standard: Text)",
+    "sourceAdvancedSummary": "Erweiterte Quellen",
+    "bodyValueTypeAdvanced": "Erweitert: Werttyp",
+    "bodyValueTypeLabel": "Werttyp"
   },
   "apiCursor": {
     "toggleLabel": "Cursor der nächsten Seite verfolgen (Cursor-/Token-Paginierung)",
-    "hint": "Für APIs, die den Cursor der nächsten Seite nur in der aktuellen Antwort verraten (z. B. pageInfo.endCursor oder next_page_token). Das Skript holt für jede Parameterkombination Seite für Seite, bis kein Cursor mehr zurückkommt.",
     "detectBtn": "Aus Aufzeichnung erkennen",
     "detectNone": "In der aufgezeichneten Anfrage/Antwort wurde nichts Cursor-Ähnliches gefunden. Bitte die Pfade manuell eintragen.",
     "detectApplied": "Cursor-Einstellungen aus der Aufzeichnung übernommen – bitte prüfen.",
@@ -314,11 +366,17 @@
     "targetBody": "Feld im Request-Body",
     "bodyNeedsPost": "Ein Body-Ziel braucht eine POST-Anfrage mit aufgezeichnetem Request-Body.",
     "maxPagesLabel": "Maximale Seiten pro Anfrage-Kombination",
-    "firstPageHint": "Seite 1 wird genau wie aufgezeichnet gesendet – die aufgezeichnete Anfrage sollte also die erste Seite ohne Cursor sein."
+    "advancedSummary": "Erweitert: Der Cursor der nächsten Seite steckt in der Antwort"
+  },
+  "apiLink": {
+    "toggleLabel": "Link-Header folgen (rel=\"next\"-Paginierung)",
+    "detectedHint": "Eine aufgezeichnete Antwort hat eine nächste Seite per Link-Header angekündigt — diese Option passt vermutlich.",
+    "needsGet": "Die Link-Header-Paginierung braucht eine GET-Anfrage.",
+    "maxPagesLabel": "Maximale Seitenzahl pro Anfragekombination",
+    "advancedSummary": "Erweitert: Die nächste Seite steht im Link-Header"
   },
   "apiBootstrap": {
     "toggleLabel": "Vor jedem Lauf frisches Token holen (Auth-Bootstrap)",
-    "hint": "Für APIs, die zuerst ein kurzlebiges Token aus einer Login-/Token-Anfrage brauchen. Das Skript sendet diese Anfrage zu Beginn jedes Laufs und nutzt den ausgelesenen Wert in den Headern/der URL unten — Zugangsdaten kommen ausschließlich aus Umgebungsvariablen.",
     "fromRecordingBtn": "Aus Aufzeichnung übernehmen",
     "recordingHint": "Wähle die Login-/Token-Anfrage. Nicht dabei? Aufzeichnung laufen lassen, Seite neu laden (oder erneut einloggen) und die Liste neu öffnen.",
     "recordingEmpty": "Keine aufgezeichnete Anfrage mit JSON-Antwort gefunden.",
@@ -331,14 +389,13 @@
     "bodyEncodingForm": "Formular (x-www-form-urlencoded)",
     "valuePathLabel": "JSON-Pfad zum Token in der Antwort",
     "nameLabel": "Platzhaltername",
-    "usageHint": "{placeholder} in einem Header verwenden (Modus „Aus Token“, z. B. Bearer {placeholder}) oder „Token-Wert“ als Wertquelle eines URL-Teils wählen. Discovery-Anfragen übernehmen die Header.",
     "valuePlaceholder": "Wert",
-    "testValuePlaceholder": "Testwert (nur Probelauf)",
     "addRow": "+ Zeile",
     "sourceKind": "Token-Wert",
     "sourceKindNote": "Wird bei jedem Lauf mit dem frisch geholten Token ({placeholder}) befüllt.",
     "sourceKindMissing": "Kein Auth-Bootstrap konfiguriert — oben aktivieren oder eine andere Wertquelle wählen.",
-    "headerMode": "Aus Token"
+    "headerMode": "Aus Token",
+    "advancedSummary": "Erweitert: Die API braucht zuerst ein Login-Token"
   },
   "group": {
     "repeating": "wiederholend",
@@ -353,7 +410,9 @@
     "splitFieldBtn": "+ Feld aufteilen",
     "combinedFieldMode": "Kombiniert aus: {sources}",
     "splitFieldMode": "Aufgeteilt aus: {source}",
-    "hiddenFromOutputBadge": "versteckt"
+    "hiddenFromOutputBadge": "versteckt",
+    "toggleToRepeatingTitle": "Klicken, um diesen Container wiederholend zu machen (ein Ergebnis pro Treffer)",
+    "toggleToSingleTitle": "Klicken, um diesen Container einzeln zu machen (nur der erste Treffer)"
   },
   "apiTree": {
     "addSubgroupBtn": "+ Gruppe",
@@ -376,14 +435,14 @@
     "toBooleanOption": "In Wahrheitswert umwandeln",
     "toDateOption": "In Datum umwandeln",
     "toCurrencyOption": "Preis/Währung in Zahl umwandeln",
-    "patternPlaceholder": "Regex-Muster (z. B. \"\\d+\")",
-    "groupPlaceholder": "Gruppe (0 = ganzer Treffer)",
+    "patternPlaceholder": "Muster (fortgeschritten)",
+    "groupPlaceholder": "Zu behaltender Teil (0 = ganzer Treffer)",
     "findPlaceholder": "Suchen",
     "replacementPlaceholder": "Ersetzen durch",
     "sourceFormatPlaceholder": "Quellformat (z. B. \"{dd}.{mm}.{yyyy}\")",
     "separatorPlaceholder": "Trennzeichen (z. B. \", \")",
     "splitSourcePlaceholderOption": "Feld auswählen…",
-    "splitIndexPlaceholder": "Teil (0 = erster)",
+    "splitIndexPlaceholder": "Teil (1 = erster)",
     "onErrorKeepOriginalOption": "Bei Fehler: Originalwert behalten",
     "onErrorUseDefaultOption": "Bei Fehler: Standardwert verwenden",
     "defaultValuePlaceholder": "Standardwert",
@@ -395,6 +454,32 @@
       "dotDecimal": "1,234.56 (EN/US/UK …)",
       "spaceGrouped": "1 234,56 (FR/Skandinavien …)",
       "apostropheGrouped": "1'234.56 (CH)"
+    },
+    "helper": {
+      "button": "Muster-Assistent",
+      "recipePlaceholder": "Was soll extrahiert werden?",
+      "use": "Dieses Muster verwenden",
+      "bracketsLabel": "Art der Klammern",
+      "needsText": "Gib zuerst den Text ein.",
+      "noValue": "Wähle zuerst ein Element mit einem Wert, um das Ergebnis zu sehen.",
+      "noMatch": "Kein Treffer auf deinem Wert — passe den Text an.",
+      "result": "Ergebnis auf deinem Wert: {value}",
+      "afterPlaceholder": "nach diesem Text, z. B. Preis:",
+      "beforePlaceholder": "vor diesem Text, z. B. €",
+      "betweenStartPlaceholder": "zwischen diesem Text …",
+      "betweenEndPlaceholder": "… und diesem Text",
+      "recipe": {
+        "firstNumber": "Erste Zahl",
+        "digits": "Erste Ziffernfolge",
+        "textAfter": "Text nach …",
+        "textBefore": "Text vor …",
+        "textBetween": "Text zwischen … und …",
+        "brackets": "Text in Klammern"
+      },
+      "dateDetected": "Aus deinem Wert erkanntes Format: {format}",
+      "dateDetectedAmbiguous": "Aus deinem Wert erkanntes Format: {format} (könnte auch {alternative} sein)",
+      "dateLooksLike": "Dein Wert sieht aus wie {format}.",
+      "dateNoGuess": "Das Format konnte nicht erraten werden — schreibe es wie deinen Wert, z. B. {dd}.{mm}.{yyyy} für 28.08.2026."
     }
   },
   "transformPresets": {
@@ -411,7 +496,6 @@
     "saveNotPossibleHint": "Erst mindestens eine vollständige Transformation hinzufügen (Kombinieren/Aufteilen lassen sich nicht als Vorlage speichern).",
     "saveUnavailableHint": "Der Companion ist nicht erreichbar oder zu alt — eigene Vorlagen sind gerade nicht verfügbar.",
     "settingsTitle": "Transformations-Vorlagen",
-    "settingsHint": "Speichere eine Transformationskette im Feld-Dialog mit „Als Vorlage speichern“ und wende sie bei jedem Feld über „Vorlage anwenden …“ an.",
     "unavailableHint": "Eigene Vorlagen sind nicht verfügbar (Companion nicht erreichbar oder zu alt) — nur die mitgelieferten werden angezeigt.",
     "renameBtn": "Umbenennen",
     "deleteConfirmPrompt": "Löschen?",
@@ -442,7 +526,6 @@
     "scriptNameModeFixed": "Fester Name",
     "scriptNameModeHostname": "Von der Webseite",
     "scriptNameFixedLabel": "Fester Skriptname",
-    "scriptNameHostnameHint": "Der Skriptname wird immer vom Hostnamen der aktuellen Webseite abgeleitet.",
     "allConfigsTitle": "Alle gespeicherten Konfigurationen",
     "allConfigsEmpty": "Noch keine gespeicherten Konfigurationen.",
     "outputFormatLabel": "Ausgabeformat",
@@ -450,18 +533,71 @@
     "outputFormatJson": "JSON",
     "outputFormatSqlite": "SQLite-Datenbank",
     "outputFormatXlsx": "Excel (.xlsx)",
-    "outputFormatHint": "Die Datei, die das generierte Skript schreibt. SQLite und Excel enthalten eine Tabelle bzw. ein Blatt; verschachtelte Ergebnisse (Container, verschachtelte API-Daten) werden darin flachgezogen. Excel braucht das Python-Paket „openpyxl“ (pip install openpyxl) auf dem Rechner, auf dem Skript und Companion laufen. Nicht für Blocks- oder Combined-Modus verfügbar; nicht mit Änderungserkennung kombinierbar.",
+    "skipVerificationToggle": "Testlauf überspringen (Skript sofort ausgeben)",
     "accessKeyTitle": "Zugangsschlüssel (gemeinsamer Companion)",
     "accessKeyLabel": "Zugangsschlüssel",
     "accessKeyPlaceholder": "sf_…",
     "accessKeySave": "Speichern und testen",
     "accessKeyClear": "Entfernen",
-    "accessKeyHint": "Nur nötig, wenn der Companion, mit dem du dich verbindest, einen persönlichen Zugangsschlüssel verlangt (mehrere Personen teilen sich einen Companion). Wer den Companion betreibt, legt ihn für dich an. Er wird in diesem Browser gespeichert und bei jeder Anfrage an den Companion mitgeschickt.",
     "accessKeyOk": "Verbunden als {name}.",
     "accessKeyNotNeeded": "Dieser Companion verwendet keine Zugangsschlüssel.",
     "accessKeyMissing": "Dieser Companion verlangt einen Zugangsschlüssel.",
     "accessKeyRejected": "Der Zugangsschlüssel ist nicht gültig.",
-    "accessKeyUnreachable": "Der Companion ist nicht erreichbar."
+    "accessKeyUnreachable": "Der Companion ist nicht erreichbar.",
+    "account": {
+      "title": "Konto",
+      "nameLabel": "Benutzername",
+      "passwordLabel": "Passwort",
+      "repeatLabel": "Passwort wiederholen",
+      "login": "Anmelden",
+      "register": "Registrieren",
+      "logout": "Abmelden",
+      "logoutAll": "Überall abmelden",
+      "signedInAs": "Angemeldet als {name}.",
+      "currentPasswordLabel": "Aktuelles Passwort",
+      "newPasswordLabel": "Neues Passwort",
+      "changePassword": "Passwort ändern",
+      "passwordChanged": "Passwort geändert. Andere Geräte müssen sich neu anmelden.",
+      "noRegistration": "Dieser Companion erlaubt keine Selbstregistrierung — bitte bei der Person, die ihn betreibt, ein Konto oder einen Zugangsschlüssel anfragen.",
+      "nameMissing": "Bitte einen Benutzernamen eingeben.",
+      "passwordMissing": "Bitte ein Passwort eingeben.",
+      "passwordMismatch": "Die beiden Passwörter stimmen nicht überein.",
+      "unreachable": "Der Companion ist nicht erreichbar.",
+      "throttled": "Zu viele Versuche — bitte in {seconds} Sekunden erneut versuchen.",
+      "failed": "Der Companion hat mit einem Fehler geantwortet (HTTP {status}).",
+      "emailLabelOptional": "E-Mail (optional)",
+      "emailLabelRequired": "E-Mail",
+      "emailMissing": "Bitte die E-Mail-Adresse eingeben.",
+      "emailInvalid": "Das sieht nicht nach einer E-Mail-Adresse aus.",
+      "forgot": "Passwort vergessen?",
+      "forgotAccountLabel": "Benutzername oder E-Mail",
+      "forgotSend": "Code senden",
+      "forgotSent": "Wenn das Konto eine bestätigte E-Mail-Adresse hat, ist ein Code unterwegs.",
+      "forgotAccountMissing": "Bitte Benutzernamen oder E-Mail-Adresse eingeben.",
+      "codeLabel": "Code aus der E-Mail",
+      "codeInvalid": "Bitte den {digits}-stelligen Code aus der E-Mail eingeben.",
+      "resetConfirm": "Passwort zurücksetzen",
+      "resetDone": "Passwort zurückgesetzt. Melde dich mit dem neuen Passwort an.",
+      "registeredCodeSent": "Ein Code wurde an {email} gesendet — gib ihn unten ein, um die Adresse zu bestätigen.",
+      "registeredNoCode": "Der Code an {email} konnte nicht gesendet werden — nutze unten „Code erneut senden\".",
+      "noEmail": "Dieses Konto hat keine E-Mail-Adresse.",
+      "emailVerifiedState": "E-Mail: {email} (bestätigt)",
+      "emailUnverifiedState": "E-Mail: {email} — noch nicht bestätigt. Gib den Code ein, den wir dir geschickt haben.",
+      "verify": "Bestätigen",
+      "resend": "Code erneut senden",
+      "emailVerifiedNow": "E-Mail-Adresse bestätigt.",
+      "codeResent": "Ein neuer Code wurde gesendet.",
+      "newEmailLabel": "Neue E-Mail-Adresse",
+      "setEmail": "E-Mail-Adresse speichern"
+    },
+    "developer": {
+      "title": "Entwickleroptionen (Entwicklungs-Build)",
+      "insecureHttp": "Unverschlüsseltes http:// zu einem Companion auf einem anderen Rechner erlauben",
+      "openCompanion": "Companion-Adresse in einem Tab öffnen",
+      "reloadHint": "Gespeichert — Panel neu laden (oder die Verbindung erneut versuchen), damit es wirkt."
+    },
+    "glossaryTitle": "Glossar: was diese Begriffe bedeuten",
+    "connectionTitle": "Verbindung zum Companion"
   },
   "modals": {
     "fieldName": {
@@ -492,7 +628,8 @@
       "maxSizeLabel": "Max. Dateigröße (MB, optional)",
       "maxSizePlaceholder": "Kein Limit",
       "allowedTypesLabel": "Erlaubte Content-Types (optional, kommagetrennt)",
-      "allowedTypesPlaceholder": "z. B. application/pdf, application/zip"
+      "allowedTypesPlaceholder": "z. B. application/pdf, application/zip",
+      "advanced": "Erweitert: Größen- und Dateityp-Grenzen"
     },
     "apiGroupNew": {
       "nameLabel": "Name der Gruppe (z. B. \"Subkategorie\")",
@@ -517,7 +654,7 @@
       "namePlaceholder": "Feldname",
       "sourceLabel": "Welches Feld soll aufgeteilt werden?",
       "separatorLabel": "Trennzeichen",
-      "indexLabel": "Teil (0 = erster)",
+      "indexLabel": "Teil (1 = erster)",
       "removeOriginalToggle": "Ursprüngliches Feld aus der Ausgabe entfernen"
     },
     "saveConfig": {
@@ -537,19 +674,18 @@
     "textFilter": {
       "label": "Nur das Element, dessen Text enthält (optional)",
       "placeholder": "z. B. In den Warenkorb",
-      "useElementText": "Text dieses Elements übernehmen",
-      "hint": "Nutze das, wenn sich mehrere ähnliche Elemente (Buttons, Links) nur durch ihre Beschriftung unterscheiden. Groß-/Kleinschreibung und zusätzliche Leerzeichen spielen keine Rolle. Leer lassen, um die Auswahl unverändert zu lassen."
+      "useElementText": "Text dieses Elements übernehmen"
     },
     "matchCount": {
       "found": "{count} Element(e) gefunden"
     },
     "manageBlueprints": {
-      "title": "Output-Blueprints",
-      "empty": "Noch keine Output-Blueprints gespeichert.",
-      "newBtn": "+ Neuer Blueprint"
+      "title": "Ausgabe-Layouts",
+      "empty": "Noch keine Ausgabe-Layouts gespeichert.",
+      "newBtn": "+ Neues Layout"
     },
     "blueprintEdit": {
-      "nameLabel": "Name des Blueprints (z. B. \"Standard-Produktexport\")",
+      "nameLabel": "Name des Layouts (z. B. \"Standard-Produktexport\")",
       "namePlaceholder": "Name",
       "flatSchemaBtn": "Flach",
       "treeSchemaBtn": "Baum",
@@ -574,7 +710,7 @@
     "generationError": "Fehler: {message}",
     "combinedComponentUnresolvable": "Komponente \"{name}\" konnte nicht geladen werden — ihre gespeicherte Konfiguration wurde möglicherweise gelöscht.",
     "selectionUnavailable": "Element-Auswahl auf dieser Seite nicht möglich.",
-    "scopeSelectorNotFound": "Der gewählte Bezugspunkt wurde nicht mehr gefunden — die Seite hat sich zwischenzeitlich verändert (z. B. Hover- oder Ladezustand). Bitte versuche es erneut oder wähle einen anderen Ausgangspunkt.",
+    "scopeSelectorNotFound": "Der Bezugspunkt wurde nicht mehr gefunden — die Seite hat sich inzwischen geändert. Bitte erneut versuchen oder einen anderen Ausgangspunkt wählen.",
     "clickOutsideScope": "Bitte ein Element innerhalb eines Containers auswählen.",
     "trackedUrlUpdated": "Verfolgte Seite aktualisiert auf {url} — das gerade ausgewählte Element stammt von einer anderen Seite als zuvor.",
     "previewUnavailable": "Vorschau auf dieser Seite nicht möglich.",
@@ -592,16 +728,21 @@
     "outputLoadFailed": "Output konnte nicht geladen werden: {message}",
     "outputDeleted": "Output gelöscht.",
     "outputDeleteFailed": "Output konnte nicht gelöscht werden: {message}",
-    "blueprintLoadFailed": "Output-Blueprint konnte nicht geladen werden: {message}",
-    "blueprintDeleted": "Output-Blueprint gelöscht.",
-    "blueprintDeleteFailed": "Output-Blueprint konnte nicht gelöscht werden: {message}",
-    "blueprintSaved": "Output-Blueprint gespeichert.",
-    "blueprintSaveFailed": "Output-Blueprint konnte nicht gespeichert werden: {message}",
+    "blueprintLoadFailed": "Ausgabe-Layout konnte nicht geladen werden: {message}",
+    "blueprintDeleted": "Ausgabe-Layout gelöscht.",
+    "blueprintDeleteFailed": "Ausgabe-Layout konnte nicht gelöscht werden: {message}",
+    "blueprintSaved": "Ausgabe-Layout gespeichert.",
+    "blueprintSaveFailed": "Ausgabe-Layout konnte nicht gespeichert werden: {message}",
     "blueprintImportEmpty": "In der eingefügten Beispieldatei wurden keine Feldnamen gefunden.",
     "blueprintImportParsed": "{count} Feld(er) aus der Beispieldatei importiert.",
     "blueprintImportFileReadFailed": "Die ausgewählte Datei konnte nicht gelesen werden: {message}",
     "accessKeyRequired": "Dieser Companion verlangt einen Zugangsschlüssel — trage ihn unter Einstellungen ein.",
-    "accessKeyRejected": "Der Companion hat den Zugangsschlüssel abgelehnt — prüfe ihn unter Einstellungen."
+    "accessKeyRejected": "Der Companion hat den Zugangsschlüssel abgelehnt — prüfe ihn unter Einstellungen.",
+    "insecureCompanionUrl": "Diese Adresse würde Passwörter und Schlüssel unverschlüsselt an einen anderen Computer senden. Bitte eine https://-Adresse verwenden.",
+    "emailUnverified": "Dieser Companion braucht eine bestätigte E-Mail-Adresse, bevor er deine Daten ausliefert — bestätige sie unter Einstellungen → Konto.",
+    "containerSingleMany": "Container „{name}“ hinzugefügt — {count} Elemente gefunden, er steht aber auf „einzeln“, deshalb wird nur das erste verwendet. Klicke im Baum auf „(einzeln)“, um ihn wiederholend zu machen.",
+    "containerRepeatingOne": "Container „{name}“ hinzugefügt — nur 1 Element gefunden. Ein wiederholender Container ist für mehrere gedacht; klicke im Baum auf „(wiederholend)“, um ihn einzeln zu machen.",
+    "paginationNotALink": "Dieses Element ist kein Link mit Adresse — klicken Sie den Link „2“ oder „Weiter“ selbst an."
   },
   "frame": {
     "badge": "iframe",
@@ -609,7 +750,6 @@
   },
   "browserActions": {
     "title": "Browser-Aktionen",
-    "hint": "Werden der Reihe nach vor der Extraktion ausgeführt, z. B. für einen Login-Flow.",
     "addWaitBtn": "+ Warten",
     "addFillBtn": "+ Ausfüllen",
     "addClickBtn": "+ Klicken",
@@ -620,26 +760,536 @@
     "kindScroll": "Scrollen",
     "noSelector": "Kein Element ausgewählt",
     "pickSelectorBtn": "Element auswählen",
-    "timeoutLabel": "Timeout (ms)",
-    "envVarLabel": "Umgebungsvariable",
-    "envNamePlaceholder": "ENV_NAME",
-    "envVarHint": "Der Wert wird zur Laufzeit aus dieser Umgebungsvariable gelesen, nie im Skript gespeichert.",
+    "envVarLabel": "Variable mit dem einzugebenden Text",
     "testValueLabel": "Testwert",
-    "testValuePlaceholder": "Nur für die Prüfung",
-    "testValueHint": "Wird nur für den einmaligen Testlauf bei „Skript erzeugen“ verwendet — nie gespeichert, nie im Skript enthalten.",
     "containerSelectorLabel": "Container (optional)",
     "loadMoreButtonSelectorLabel": "„Mehr laden“-Button (optional)",
     "maxIterationsLabel": "Max. Durchläufe",
-    "waitAfterMsLabel": "Wartezeit (ms)",
     "clickTargetLabel": "Welcher Treffer wird geklickt",
     "clickTarget": {
       "first": "Erster Treffer",
       "last": "Letzter Treffer",
       "all": "Alle Treffer, der Reihe nach"
     },
-    "scrollStepPxLabel": "Scroll-Schrittweite (px)",
-    "scrollStepPxPlaceholder": "leer = ans Ende springen",
+    "scrollStepPxLabel": "Scroll-Schritt (Pixel)",
+    "scrollStepPxPlaceholder": "leer = ganz nach unten springen",
     "persistentSessionToggle": "Sitzung zwischen Läufen wiederverwenden",
-    "persistentSessionHint": "Speichert Cookies/Login-Status nach jedem Lauf und überspringt beim nächsten Mal die obigen Login-Aktionen. Achtung: Die gespeicherte Datei enthält echte Sitzungs-Cookies — wie ein Passwort behandeln, niemals teilen oder committen. Läuft die Sitzung ab, schlägt der Lauf einfach fehl; es gibt keinen automatischen erneuten Login."
+    "addLoginFlowBtn": "+ Login-Formular (4 Schritte)",
+    "loginFlowHint": "Klicken Sie jetzt die vier Elemente auf der Seite an: das Benutzernamen-Feld, das Passwort-Feld, den Login-Button und etwas, das erst nach dem Login erscheint.",
+    "role": {
+      "user": "Benutzernamen eintragen",
+      "password": "Passwort eintragen",
+      "submit": "Login-Button klicken",
+      "loggedIn": "Warten, bis Sie eingeloggt sind"
+    },
+    "pickRole": {
+      "user": "Benutzernamen-Feld auswählen",
+      "password": "Passwort-Feld auswählen",
+      "submit": "Login-Button auswählen",
+      "loggedIn": "Element nach dem Login auswählen"
+    },
+    "envVarLabelUser": "Variable mit dem Benutzernamen",
+    "envVarLabelPassword": "Variable mit dem Passwort",
+    "testValueLabelUser": "Test-Benutzername",
+    "testValueLabelPassword": "Test-Passwort",
+    "timeoutSecondsLabel": "Höchstens warten (Sekunden)",
+    "waitAfterRoundSecondsLabel": "Pause nach jeder Runde (Sekunden)",
+    "waitAfterClickSecondsLabel": "Pause nach jedem Klick (Sekunden)",
+    "persistentSessionAdvanced": "Erweitert: zwischen Läufen angemeldet bleiben"
+  },
+  "help": {
+    "requestHeaders": {
+      "headers": {
+        "text": "Zusätzliche Header, die das Skript bei jeder Anfrage mitschickt, z. B. eine Sprache, ein Referer oder ein API-Key. Für ein Geheimnis wähle „Umgebungsvariable“ und trage nur deren Namen ein; der Testwert gilt nur für den Probelauf und wird nie gespeichert. Ein Header namens User-Agent ersetzt den Standard-User-Agent.",
+        "example": "Accept-Language: de-CH"
+      },
+      "picker": {
+        "text": "Wählen Sie, wofür der Header gedacht ist: Name und ein Vorschlag werden für Sie eingetragen. Geheimnisse (Cookie, Authorization, API-Schlüssel) starten als Umgebungsvariable und landen so nie im Skript. Mit „Anderer“ tippen Sie einen beliebigen Header-Namen ein.",
+        "example": "Authorization → Umgebungsvariable → AUTH_TOKEN"
+      }
+    },
+    "appendOutput": {
+      "append": {
+        "text": "Jeder Lauf hängt seine Zeilen an die Ausgabedatei der früheren Läufe an, die Datei wächst also zu einem Archiv. Ändern sich die Felder, bleiben die Spalten der Datei erhalten und neue kommen dazu; eine nicht lesbare Datei stoppt den Lauf, ohne angefasst zu werden. Nicht im Kombiniert-Modus.",
+        "example": "Lauf 1: 120 Zeilen → Lauf 2: 240 Zeilen"
+      }
+    },
+    "companionError": {
+      "causes": {
+        "text": "Nicht gestartet → starten, dann „Erneut versuchen“.\nAnderer Port oder Rechner → unten die Adresse eintragen.\nAnderer Rechner → die Adresse muss mit https:// beginnen.\nGeteilter Companion → er verlangt evtl. einen Zugangsschlüssel (Einstellungen)."
+      }
+    },
+    "mode": {
+      "choice": {
+        "text": "Felder — eine einfache Liste, pro Eintrag dieselben Werte (Produktliste).\nContainer — Einträge mit Unterpunkten (Speisekarte: Kategorien → Gerichte).\nAPI — die Seite lädt Daten per versteckter Anfrage; falls Felder nichts finden.\nKombiniert, Blöcke — mehrere Scraper in einem Skript, oder mehrere Dateien pro Seite."
+      }
+    },
+    "containerType": {
+      "type": {
+        "text": "Einzelnes Element — es gibt es nur einmal auf der Seite (z. B. der Seitenkopf).\nWiederholend — es kommt oft vor (z. B. jedes Gericht einer Speisekarte); du bekommst pro Treffer ein Ergebnis.",
+        "example": "Speisekarte mit 12 Gerichten → Wiederholend"
+      }
+    },
+    "fieldType": {
+      "container": {
+        "text": "Text — der sichtbare Text (ein Preis).\nAttribut — ein Wert aus dem Tag (Link-Adresse oder Bildquelle).\nVorhanden? — nur, ob das Element da ist (ein „Sale“-Badge).\nNur eigener Text — der eigene Text ohne verschachtelte Elemente (ein Name ohne sein Badge)."
+      },
+      "flat": {
+        "text": "Text — der sichtbare Text (ein Preis).\nAttribut — ein Wert aus dem Tag (Link-Adresse oder Bildquelle, z. B. zum Herunterladen)."
+      }
+    },
+    "engine": {
+      "choice": {
+        "text": "Statisch — schnell; liest die Seite so, wie der Server sie schickt.\nBrowser — ein echter Browser; für Seiten, die per JavaScript aufgebaut werden, mit Login oder die Scrollen brauchen.\nFindet Statisch nichts, hilft meist Browser."
+      }
+    },
+    "envVar": {
+      "what": {
+        "text": "Ein benannter Wert auf dem Rechner, der das Skript ausführt — ein sicherer Ort für Passwörter und Schlüssel, damit sie nie im Skript landen. Trage hier nur den Namen ein (z. B. SMTP_PASSWORD); das Skript liest den Wert beim Lauf auf diesem Rechner — nicht im Browser.",
+        "example": "Windows:  setx SMTP_PASSWORD \"geheim\"\nmacOS/Linux:  export SMTP_PASSWORD=\"geheim\""
+      }
+    },
+    "transforms": {
+      "regex": {
+        "text": "Wähle ein Rezept, dann wird das Muster für dich geschrieben — dein Text gilt wörtlich, Zeichen wie . oder ( sind kein Problem. Das Muster bleibt änderbar; „Zu behaltender Teil“ ist, welcher geklammerte Teil davon zum Wert wird (0 = der ganze Treffer).",
+        "example": "Preis: 12,99 € → „Text nach … Preis:“ → 12,99 €"
+      },
+      "dateFormat": {
+        "text": "Beschreibe, wie das Datum geschrieben ist: {dd} ist der Tag, {mm} der Monat, {yyyy} das Jahr, alles andere genau so, wie es dasteht. Nur Zahlen-Datumsangaben funktionieren — Monatsnamen wie „Aug“ nicht.",
+        "example": "28.08.2026 → {dd}.{mm}.{yyyy}"
+      },
+      "overview": {
+        "text": "Schritte, die auf den Wert angewendet werden, bevor er geschrieben wird — z. B. Leerzeichen entfernen, eine Zahl extrahieren oder in ein Datum umwandeln. Speichere eine Kette als Vorlage, um sie für andere Felder wiederzuverwenden."
+      }
+    },
+    "hardening": {
+      "severity": {
+        "text": "Die Prüfungen laufen am Ende jedes Skriptlaufs. „Mich warnen“: Der Lauf endet normal und eine Meldung wird ausgegeben. „Lauf stoppen“: Der Lauf gilt als fehlgeschlagen, damit ein Scheduler oder Monitoring-Tool es bemerkt — Exit-Code 2 (ein unerwarteter Absturz ist Code 1)."
+      },
+      "recommended": {
+        "text": "Schaltet einen sinnvollen Start ein: eine Warnung, wenn gar nichts gefunden wurde, und eine Warnung für Zeilen ohne ihr erstes Feld (diese Zeilen fehlen dann in der Datei). Prüfungen, die du schon eingestellt hast, bleiben unberührt."
+      },
+      "noResult": {
+        "text": "Warnt, wenn das Skript gar nichts gefunden hat — meist weil die Webseite ihr Layout geändert hat.",
+        "example": "Der Selektor für „Preis“ trifft plötzlich kein Element mehr."
+      },
+      "nullRate": {
+        "text": "Warnt, wenn zu viele Zeilen in einem Feld keinen Wert haben: Der Selektor findet noch etwas, aber nicht das Richtige.",
+        "example": "Warnen, wenn mehr als 50 % der Zeilen keinen Preis haben."
+      },
+      "baseline": {
+        "text": "Warnt, wenn dieser Lauf viel weniger gefunden hat als der letzte — ein kaputter „Mehr laden“-Button oder eine kaputte Seitenschaltung sieht oft so aus.",
+        "example": "20 % weniger Zeilen als gestern."
+      },
+      "blocking": {
+        "text": "Warnt, wenn die Seite das Skript zu blockieren beginnt, aber normal antwortet: Sie schickt dich auf eine andere Webseite, liefert eine sehr kurze Seite oder zeigt eine Sperrmeldung.",
+        "example": "„Access Denied“, „Ich bin kein Roboter“"
+      },
+      "blockingAdvanced": {
+        "text": "Eine Sperrseite ist meist winzig: 1000 Bytes sind etwa ein Absatz Text. Phrasen werden in der Seite gesucht, eine pro Zeile; jeder Treffer zählt als gesperrt.",
+        "example": "Access Denied\nBitte bestätige, dass du ein Mensch bist"
+      },
+      "requiredFields": {
+        "text": "Lässt jede Zeile weg, die für die gewählten Felder keinen Wert hat, damit unvollständige Zeilen nie in der Datei landen. Der restliche Lauf geht weiter.",
+        "example": "Ein Datenbank-Import, der einen nicht leeren Preis braucht."
+      }
+    },
+    "browserActions": {
+      "overview": {
+        "text": "Ein Login besteht aus vier Schritten: Benutzernamen eintragen, Passwort eintragen, Login-Button klicken und warten, bis die eingeloggte Seite erscheint. Die Schritte laufen in der angezeigten Reihenfolge, bevor Daten gelesen werden. „Login-Formular“ fügt alle vier auf einmal hinzu — Sie klicken nur noch die Elemente auf der Seite an.",
+        "example": "Benutzernamen eintragen → Passwort eintragen → „Anmelden“ klicken → auf „Willkommen zurück“ warten"
+      },
+      "maxRounds": {
+        "text": "Wie oft das Skript nach unten scrollt oder auf „Mehr laden“ klickt, bevor es aufhört. Eine höhere Zahl lädt mehr Einträge, dauert aber länger; es stoppt auch früher, sobald nichts Neues mehr erscheint.",
+        "example": "10"
+      },
+      "persistentSession": {
+        "text": "Nach einem Lauf speichert das Skript Ihre Cookies und den Login-Zustand in einer Datei neben seiner Ausgabe und überspringt beim nächsten Mal die Login-Schritte oben. Die Datei enthält gültige Sitzungs-Cookies: Behandeln Sie sie wie ein Passwort und geben Sie sie nie weiter und checken Sie sie nie ein. Läuft die Sitzung ab, schlägt der Lauf einfach fehl — es gibt kein automatisches Neu-Einloggen; löschen Sie die Datei, um sich neu anzumelden."
+      }
+    },
+    "pagination": {
+      "urlTemplate": {
+        "text": "Das Adressmuster für die Seiten 2, 3, …: {page} wird durch die Seitenzahl ersetzt, {url} (optional) durch die Startseite, genau wie sie ist. Seite 1 ist immer die Startseite selbst. Bei mehreren Startseiten ist {url} Pflicht.",
+        "example": "{url}?page={page}"
+      },
+      "maxPages": {
+        "text": "Eine Sicherheitsgrenze: Das Skript hört nach so vielen Seiten auf, auch wenn es mehr gibt. Es stoppt früher, sobald eine Seite keine Ergebnisse hat oder der „Weiter“-Link fehlt.",
+        "example": "50"
+      }
+    },
+    "discoveredUrls": {
+      "overview": {
+        "text": "Für Seiten, deren Liste sich ändert, z. B. ein Kategorie-Menü: Das Skript öffnet diese Seite einmal, sammelt jeden Link, der zum Selektor passt, und liest jede verlinkte Seite als zusätzliche Startseite. Wählen Sie einen Link im Menü — der Selektor passt dann auf alle ähnlichen Links. Ein Link lässt sich auch über seinen Text wählen.",
+        "example": "a:contains(\"Gemüse\")"
+      }
+    },
+    "apiConfig": {
+      "urlParts": {
+        "text": "Jeder Teil der Adresse bleibt entweder fest oder ändert sich von Anfrage zu Anfrage. Haken Sie „variabel“ bei einem Teil, der unterschiedliche Werte annimmt — eine Woche, eine Kategorie, eine Seite — und geben Sie ihm einen Namen; unten legen Sie fest, woher seine Werte kommen. Feste Teile werden genau wie aufgezeichnet gesendet.",
+        "example": "/api/weeks/2026-W35  →  „variabel“ ankreuzen, „woche“ nennen"
+      },
+      "bodyVariable": {
+        "text": "Ein Wert im Request-Body ist fest oder ändert sich von Anfrage zu Anfrage. „→ Variable“ lässt ihn die Werte eines Parameters annehmen (eines neuen oder bestehenden), z. B. die Kategorie einer Suchanfrage.",
+        "example": "category: \"electronics\"  →  Variable „category“"
+      },
+      "valueType": {
+        "text": "Wie der Wert in den Body geschrieben wird. Text passt für die meisten APIs; wählen Sie Zahl oder Boolean, wenn der Server eine Zahl oder true/false erwartet — ein in Anführungszeichen gesetztes „10“ würde abgelehnt.",
+        "example": "\"pageSize\": 10  →  Number"
+      },
+      "sourceStaticList": {
+        "text": "Sie tippen die Werte selbst ein oder sammeln sie aus der Aufzeichnung; das Skript ruft jeden davon ab.",
+        "example": "elektronik, buecher"
+      },
+      "sourceDiscovery": {
+        "text": "Die Werte stammen aus einer anderen Anfrage der Seite, z. B. einer Kategorienliste. Klicken Sie einen dieser Werte auf der Seite an, dann wird die passende Anfrage für Sie gefunden. Beim Bearbeiten der Adresse fügt die Liste „Parameter einfügen“ {name} an der Cursorposition ein — verschiebe es dorthin, wo sonst ein fester Wert stünde, z. B. .../categories/{category}/weeks.",
+        "example": "GET /api/categories  →  jede ID der Liste"
+      },
+      "sourceRange": {
+        "text": "Zählt durch einen Bereich: ISO-Wochen, einfache Zahlen oder Daten.",
+        "example": "2026-W30 … 2026-W35"
+      },
+      "sourceBrowserDiscovery": {
+        "text": "Für Werte, die erst beim Benutzen der Seite auftauchen: Das Skript öffnet einen Browser, führt Ihre Klicks und Scrolls aus und merkt sich, welche Werte die Seite anfragt.",
+        "example": "Angebotsseite scrollen, jeden Kategorienamen sammeln"
+      },
+      "sourceBootstrap": {
+        "text": "Dieser Teil der Adresse nimmt das frisch geholte Login-Token (siehe „Die API braucht zuerst ein Login-Token“).",
+        "example": "?access_token={token}"
+      },
+      "fields": {
+        "text": "Die Felder, die aus der Antwort extrahiert werden. Eine Gruppe begrenzt ihre Felder auf eine Liste oder ein Objekt im JSON; ein Feld ist ein einzelner Wert."
+      }
+    },
+    "apiBootstrap": {
+      "overview": {
+        "text": "Für APIs, die zuerst ein kurzlebiges Token aus einer Login-/Token-Anfrage brauchen. Das Skript sendet diese Anfrage zu Beginn jedes Laufs und nutzt den ausgelesenen Wert in den Headern/der URL unten — Zugangsdaten kommen ausschließlich aus Umgebungsvariablen.",
+        "example": "POST /auth/token  →  access_token"
+      },
+      "placeholder": {
+        "text": "Verwende den Namen in geschweiften Klammern, z. B. {token}, in einem Header (Modus „Aus Token“) oder wähle „Token-Wert“ als Wertquelle eines URL-Teils. Anfragen für eine Werteliste übernehmen die Header."
+      }
+    },
+    "apiCursor": {
+      "overview": {
+        "text": "Für APIs, die den Cursor der nächsten Seite nur in der aktuellen Antwort verraten (z. B. pageInfo.endCursor oder next_page_token). Das Skript holt für jede Parameterkombination Seite für Seite, bis kein Cursor mehr zurückkommt. Seite 1 wird genau wie aufgezeichnet gesendet — achte darauf, dass die aufgezeichnete Anfrage die erste Seite ist, ohne Cursor.",
+        "example": "pageInfo.endCursor"
+      }
+    },
+    "apiLink": {
+      "overview": {
+        "text": "Für APIs (GitHub, GitLab, WordPress, ...), die die nächste Seite im HTTP-Antwort-Header Link statt im Body ankündigen. Das Skript ruft diese URL Seite für Seite für jede Parameterkombination ab, bis kein Next-Link mehr kommt. Nicht für POST-Anfragen. Seite 1 wird genau wie aufgezeichnet gesendet — achte darauf, dass die aufgezeichnete Anfrage die erste Seite ist. Links zur nächsten Seite auf einen anderen Host werden nie verfolgt.",
+        "example": "Link: <…?page=2>; rel=\"next\""
+      }
+    },
+    "outputLayout": {
+      "overview": {
+        "text": "Eine gespeicherte Liste von Spaltennamen in fester Reihenfolge. Wähle eine und ordne jeder Spalte eines deiner Felder zu — jede Spalte braucht eine Quelle, bevor das Skript erzeugt werden kann; Gruppen eines Baum-Layouts werden automatisch platziert. So haben alle Exporte für dieselbe Weiterverarbeitung dieselben Spalten, egal von welcher Seite sie kommen.",
+        "example": "Standard-Produktexport: Name, Preis, Link"
+      },
+      "manage": {
+        "text": "Ein Ausgabe-Layout ist eine gespeicherte, wiederverwendbare Liste von Spaltennamen. Lege hier eins an und wähle es dann in den Einstellungen eines Scrapers, um seine Ausgabespalten umzubenennen und zu sortieren."
+      }
+    },
+    "safetyChecks": {
+      "overview": {
+        "text": "Prüfungen, die das Skript nach jedem Lauf selbst durchführt: nichts gefunden? Ein Feld immer leer? Viel weniger Zeilen als beim letzten Mal? Von der Seite blockiert? Es warnt dich oder markiert den Lauf als fehlgeschlagen, damit ein Scheduler es merkt."
+      }
+    },
+    "preflight": {
+      "overview": {
+        "text": "Vor dem eigentlichen Lauf fragt das Skript die Seite einmal kurz: Hat sie sich seit dem letzten Mal geändert? Wenn nicht, wird der Lauf übersprungen. Seiten, die das nicht angeben, werden immer gelesen."
+      }
+    },
+    "dedup": {
+      "overview": {
+        "text": "Entfernt einen Eintrag, wenn einer mit demselben Schlüssel schon vorkam — in diesem Lauf oder (auf Wunsch) in einem früheren. Wähle die Felder, die einen Eintrag eindeutig machen (zusammen bilden sie den Schlüssel), z. B. die Artikelnummer. Einträge, deren Schlüsselfelder alle leer sind, werden nie entfernt.",
+        "example": "Artikelnummer"
+      },
+      "incremental": {
+        "text": "Das Skript merkt sich die gesehenen Schlüssel in einer kleinen Datei neben seiner Ausgabe (Ausgabedateiname + .dedup-seen.json); lösche sie, um von vorn zu beginnen. Die gemerkten Schlüssel sind nach Anzahl oder Alter begrenzt. Die Datei wird nur nach einem Lauf aktualisiert, der keine Sicherheitsprüfung verletzt hat."
+      }
+    },
+    "outputFormat": {
+      "overview": {
+        "text": "Die Datei, die das generierte Skript schreibt. SQLite und Excel enthalten eine Tabelle; verschachtelte Ergebnisse werden darin flachgezogen. Excel braucht das Python-Paket openpyxl auf dem Computer, der das Skript ausführt, und auf dem des Companions. Nicht für Blöcke oder Kombiniert und nicht zusammen mit Änderungserkennung."
+      },
+      "flatten": {
+        "text": "Verschachtelte Ergebnisse werden in eine Tabelle flachgezogen: eine Zeile pro innerstem Element, Werte höherer Ebenen werden in jeder Zeile wiederholt. Jedes Datenfeld braucht einen eindeutigen Namen — oder wähle ein Ausgabe-Layout, um die Spalten selbst festzulegen."
+      }
+    },
+    "editableConfig": {
+      "overview": {
+        "text": "Mit dieser Option kannst du Start-URLs, Ausgabenamen oder den Ausgabenamen eines Feldes später in einer kleinen XML-Datei neben dem Skript ändern — ohne die .py-Datei anzufassen. Das Skript legt die Datei beim ersten Lauf an."
+      }
+    },
+    "skipTrialRun": {
+      "overview": {
+        "text": "Das Skript wird geliefert, ohne einmal gegen die echte Seite gelaufen zu sein. Es wird weiterhin auf strukturelle Fehler geprüft, aber ein falscher Selektor oder eine blockierte Anfrage zeigt sich erst, wenn du es selbst ausführst — und es gibt keine Datenvorschau und keine vollständige Ausgabedatei."
+      }
+    },
+    "scriptName": {
+      "overview": {
+        "text": "Fester Name: füllt den Skriptnamen jedes neuen Scrapers vor. Von der Website: Der Name wird jedes Mal aus der Adresse der aktuellen Seite abgeleitet. Du kannst ihn pro Scraper weiterhin ändern."
+      }
+    },
+    "account": {
+      "forgot": {
+        "text": "Gib deinen Benutzernamen oder die bestätigte E-Mail-Adresse deines Kontos ein. Hat es eine, wird dorthin ein Code gesendet; gib ihn unten mit einem neuen Passwort ein."
+      },
+      "overview": {
+        "text": "Das Passwort geht nur an deinen Companion; dieser Browser behält nur ein widerrufbares Token für dieses Gerät. Nutze einen Companion über https:// oder auf diesem Computer, damit das Passwort unterwegs nicht mitgelesen werden kann."
+      }
+    },
+    "accessKey": {
+      "overview": {
+        "text": "Nur nötig, wenn der Companion, mit dem du dich verbindest, einen persönlichen Zugangsschlüssel verlangt (mehrere Personen teilen sich einen Companion). Wer den Companion betreibt, erstellt ihn dir. Er wird in diesem Browser gespeichert und mit jeder Anfrage gesendet."
+      }
+    },
+    "developer": {
+      "overview": {
+        "text": "Gibt es nur in einem Entwicklungs-Build. Bei einem selbstsignierten Zertifikat: die Companion-Adresse einmal in einem Browser-Tab öffnen (Schaltfläche oben), die Warnung akzeptieren und dieses Panel neu laden."
+      }
+    },
+    "presets": {
+      "overview": {
+        "text": "Speichere eine Transformationskette im Dialog eines Feldes mit „Als Vorlage speichern“ und wende sie auf jedes Feld über „Vorlage anwenden …“ an. Eingebaute Vorlagen sind schreibgeschützt; deine eigenen kannst du hier umbenennen oder löschen."
+      }
+    },
+    "savedConfigs": {
+      "overview": {
+        "text": "Alles, was du für beliebige Seiten gespeichert hast. Eine Konfiguration lädst du im Panel auf der jeweiligen Seite; hier kannst du gespeicherte Ausgaben ansehen oder Einträge löschen."
+      },
+      "panel": {
+        "text": "Konfigurationen, die du für diese Seite gespeichert hast. Lade eine, um ihre Einstellungen wiederherzustellen, oder öffne ihre gespeicherten Ausgaben."
+      }
+    },
+    "combined": {
+      "overview": {
+        "text": "Führt mehrere deiner gespeicherten Konfigurationen — auch von verschiedenen Seiten — in einem Skript zusammen. Ihre Ausgaben werden zu einem einzigen Ergebnis kombiniert."
+      }
+    },
+    "blocks": {
+      "overview": {
+        "text": "Baue mehrere unabhängige Extraktionsblöcke (flach oder Container, frei gemischt) auf dieser Seite. Sie teilen sich eine Navigation und jeder schreibt in einem Lauf seine eigene Ausgabedatei. Es sind mindestens 2 Blöcke nötig."
+      }
+    },
+    "proxy": {
+      "overview": {
+        "text": "Gib den Namen einer Umgebungsvariable ein, die eine kommagetrennte Liste von Proxy-URLs enthält, z. B. http://user:pass@host:port — nicht die Adressen selbst. Bei mehreren Proxys nutzt das Skript sie abwechselnd."
+      }
+    },
+    "requestDelay": {
+      "overview": {
+        "text": "Das Skript wartet zwischen zwei Anfragen — fest oder zufällig in einem Bereich (z. B. 1 bis 3 Sekunden) —, um Sperren und Ratenbegrenzungen zu vermeiden. Der Lauf dauert entsprechend länger (50 Seiten × 2 s ≈ 1,5 Minuten mehr). Der Probelauf rechnet die Pausen nicht auf sein Zeitlimit an."
+      }
+    },
+    "robots": {
+      "crawlDelay": {
+        "text": "Verlangt die robots.txt der Seite ein Tempo (Crawl-delay oder Request-rate), wartet das Skript mindestens so lange zwischen zwei Anfragen. Zusammen mit „Pause zwischen Anfragen“ gewinnt die größere Pause. Seiten, die nichts angeben, sind nicht betroffen."
+      },
+      "disallow": {
+        "text": "Beim Laufen prüft das Skript jede Anfrage (Seiten, weitere Seiten, Downloads, API-Aufrufe) gegen die Disallow-Regeln der robots.txt der Seite — falls die Seite sie nach dem Erstellen des Skripts geändert hat. Eine nicht lesbare robots.txt blockiert nie etwas; ohne robots.txt gibt es keine Einschränkungen."
+      }
+    },
+    "retry": {
+      "overview": {
+        "text": "Nach einem Verbindungsfehler, einem Timeout oder einem der Statuscodes versucht das Skript es nach der Wartezeit erneut (bei 429/503 so lange, wie der Server per Retry-After verlangt, höchstens 60 s). Andere Fehler wie 404 oder 403 schlagen sofort fehl. Scheitern alle Versuche, stoppt der Lauf."
+      }
+    },
+    "changeDetection": {
+      "overview": {
+        "text": "Jedes Feld hier ist der Name einer Umgebungsvariable, nicht ihr Wert — der echte Wert wird beim Lauf des Skripts aus der Umgebung gelesen und nie ins Skript geschrieben."
+      }
+    },
+    "monitoring": {
+      "intro": {
+        "text": "Nur nützlich, wenn du das Skript immer wieder ausführst, z. B. jede Nacht: Es sagt dir Bescheid, wenn sich die Website geändert hat und dein Skript nicht mehr funktioniert."
+      }
+    },
+    "textFilter": {
+      "overview": {
+        "text": "Für ähnliche Elemente (Schaltflächen, Links), die sich nur an ihrer Beschriftung unterscheiden. Groß-/Kleinschreibung und zusätzliche Leerzeichen spielen keine Rolle. Leer lassen, um die Auswahl unverändert zu lassen."
+      }
+    },
+    "combineSplit": {
+      "overview": {
+        "text": "Ein kombiniertes oder aufgeteiltes Feld wird aus anderen Feldern derselben Gruppe berechnet, nicht aus der Seite. „Ursprungsfelder entfernen“ blendet die Quellen in der Ausgabe aus, nutzt sie aber weiter."
+      }
+    }
+  },
+  "errors": {
+    "detailsLabel": "Details",
+    "copyDetails": "Kopieren",
+    "copied": "Kopiert",
+    "close": "Schließen",
+    "noData": {
+      "title": "Es wurden keine Daten gefunden",
+      "hint": "Die Selektoren haben nichts getroffen, was das Skript lesen konnte. Prüfe die markierten Elemente mit „Vorschau anzeigen“.",
+      "hintStatic": "Die Selektoren haben nichts getroffen, was das Skript lesen konnte. Prüfe die markierten Elemente mit „Vorschau anzeigen“. Baut die Seite ihren Inhalt mit JavaScript auf, probier die Browser-Engine."
+    },
+    "noOutput": {
+      "title": "Das Skript hat keine Ergebnisdatei erzeugt",
+      "hint": "Es ist abgebrochen, bevor es Daten geschrieben hat. Unter Details steht, was passiert ist."
+    },
+    "siteUnreachable": {
+      "title": "Die Seite ist nicht erreichbar",
+      "hint": "Prüfe die Seitenadresse und deine Internetverbindung (und den Proxy, falls du einen nutzt)."
+    },
+    "siteForbidden": {
+      "title": "Die Seite weist das Skript ab",
+      "hint": "Sie verlangt einen Login oder blockt automatisierte Anfragen. Nutze die Browser-Engine mit einem Login-Ablauf oder sende einen Request-Header wie ein Cookie."
+    },
+    "pageNotFound": {
+      "title": "Die Seite wurde nicht gefunden",
+      "hint": "Prüfe die Seitenadresse oben im Panel."
+    },
+    "rateLimited": {
+      "title": "Die Seite meldet: zu viele Anfragen",
+      "hint": "Schalte in den Einstellungen „Pause zwischen Anfragen“ ein oder versuche es später erneut."
+    },
+    "siteError": {
+      "title": "Die Seite meldet einen Fehler",
+      "hint": "Das ist meist vorübergehend. Versuche es später erneut oder schalte in den Einstellungen „Bei vorübergehenden Fehlern erneut versuchen“ ein."
+    },
+    "httpError": {
+      "title": "Die Seite antwortet mit einem Fehler (HTTP {status})",
+      "hint": "Unter Details steht die genaue Antwort. Prüfe die Seitenadresse und versuche es erneut."
+    },
+    "requestFailed": {
+      "title": "Eine Anfrage ist fehlgeschlagen",
+      "hint": "Unter Details steht der Grund."
+    },
+    "pageLoadTimeout": {
+      "title": "Die Seite hat zu lange zum Laden gebraucht",
+      "hint": "Versuche es erneut. Läuft die Seite in deinem Browser, ist sie vielleicht nur langsam."
+    },
+    "pageLoadFailed": {
+      "title": "Die Seite konnte nicht geladen werden",
+      "hint": "Prüfe die Seitenadresse und deine Verbindung und versuche es erneut."
+    },
+    "missingEnvVar": {
+      "title": "Das Skript braucht die Variable {name}",
+      "hint": "Trage neben dem Feld, das sie verwendet, einen Testwert ein, damit der Testlauf weitergeht, und setze die Variable auf dem Rechner, auf dem du das Skript ausführst."
+    },
+    "trialTimeout": {
+      "title": "Der Testlauf hat zu lange gedauert",
+      "hint": "Nutze weniger Seiten oder Anfragen oder schalte in den Einstellungen „Testlauf überspringen“ ein."
+    },
+    "robotsDisallowed": {
+      "title": "Die robots.txt der Seite verbietet diese Anfrage",
+      "hint": "Wähle in den Einstellungen „Überspringen und weitermachen“ oder „Warnen, aber trotzdem anfragen“, oder lass diese Seite weg."
+    },
+    "pythonMissing": {
+      "title": "Python wurde nicht gefunden",
+      "hint": "Der Companion braucht Python 3.9 oder neuer, um dein Skript zu testen. Installiere es (oder führe den Installer erneut aus) und versuche es dann noch einmal."
+    },
+    "packageMissing": {
+      "title": "Ein Python-Paket fehlt",
+      "hint": "Installiere es mit „pip install {name}“ auf dem Rechner, auf dem der Companion läuft (der Installer erledigt das für dich)."
+    },
+    "scriptCrash": {
+      "title": "Das Skript ist mit einem Fehler abgebrochen",
+      "hint": "Unter Details steht die technische Meldung. Sieht es nach einem Fehler im Programm aus, nutze „Fehler melden“."
+    },
+    "companionUnreachable": {
+      "title": "Die Companion-App ist nicht erreichbar",
+      "hint": "Prüfe, ob sie noch läuft, und versuche es dann erneut."
+    },
+    "companionError": {
+      "title": "Die Companion-App hatte ein Problem",
+      "hint": "Versuche es erneut. Passiert es weiter, nutze „Fehler melden“."
+    },
+    "invalidStartUrl": {
+      "title": "Die Seitenadresse ist ungültig",
+      "hint": "Start-URL Nr. {index} („{url}“) muss eine vollständige Adresse sein, die mit http:// oder https:// beginnt."
+    },
+    "noFields": {
+      "title": "Noch nichts zu scrapen",
+      "hint": "Öffne eine Seite und füge mindestens ein Feld oder einen Container hinzu."
+    },
+    "emptySelector": {
+      "title": "Ein Element hat keinen Selektor",
+      "hint": "Wähle es auf der Seite erneut aus oder entferne es.",
+      "hintNamed": "Wähle „{name}“ auf der Seite erneut aus oder entferne es."
+    },
+    "duplicateFieldNames": {
+      "title": "Zwei Felder heißen gleich",
+      "hint": "Gib jedem Feld einen eigenen Namen: {names}."
+    },
+    "emptyFieldName": {
+      "title": "Ein Feld hat keinen Namen",
+      "hint": "Gib jedem Feld einen Namen."
+    },
+    "invalidRegex": {
+      "title": "Das Muster einer Transformation ist ungültig",
+      "hint": "Prüfe das Muster des Schritts „Regex-Extraktion“ bei {field}."
+    },
+    "invalidEnvVarName": {
+      "title": "„{name}“ ist kein gültiger Variablenname",
+      "hint": "Nutze nur Buchstaben, Ziffern und Unterstriche, und beginne nicht mit einer Ziffer."
+    }
+  },
+  "envVar": {
+    "whatLabel": "Was ist eine Umgebungsvariable?",
+    "startsWithDigit": "„{name}“ darf nicht mit einer Ziffer beginnen — nimm einen Namen wie SMTP_PASSWORD.",
+    "invalidChars": "„{name}“ enthält Zeichen, die ein Variablenname nicht haben darf — nur Buchstaben, Ziffern und Unterstriche (keine Leerzeichen oder Bindestriche).",
+    "generateBlocked": "Korrigiere zuerst den Namen der Umgebungsvariable: {message}",
+    "testValuePlaceholder": "Testwert (nur für den Testlauf, wird nie gespeichert)",
+    "placeholder": {
+      "smtpHost": "z. B. SMTP_HOST",
+      "smtpPort": "z. B. SMTP_PORT",
+      "smtpUser": "z. B. SMTP_USER",
+      "smtpPassword": "z. B. SMTP_PASSWORD",
+      "mailFrom": "z. B. MAIL_FROM",
+      "mailTo": "z. B. MAIL_TO",
+      "webhookUrl": "z. B. WEBHOOK_URL",
+      "proxy": "z. B. PROXY_LIST",
+      "header": "z. B. API_KEY",
+      "fill": "z. B. SITE_PASSWORD",
+      "apiHeader": "z. B. API_KEY"
+    }
+  },
+  "jsonPathPicker": {
+    "openBtn": "Aus der Aufzeichnung wählen",
+    "closeBtn": "Schließen",
+    "loading": "Lade die aufgezeichnete Antwort…",
+    "toggle": "Ein- oder ausklappen",
+    "items": "{count} Einträge",
+    "recordedSource": "Aufgezeichnet: {request}",
+    "embeddedSource": "Eingebettetes JSON der Seite ({selector})",
+    "chooseResponse": "Aus welcher aufgezeichneten Antwort soll der Pfad gewählt werden?",
+    "otherResponse": "Aus einer anderen aufgezeichneten Antwort wählen",
+    "treeTruncated": "Eine sehr große Antwort — nur der Anfang wird gezeigt.",
+    "hint": {
+      "group": "Klicken Sie die Liste oder das Objekt an, über das diese Gruppe laufen soll. Der Pfad gilt relativ zur übergeordneten Gruppe; innerhalb einer Liste legen Sie eine eigene Gruppe an.",
+      "leaf": "Klicken Sie den Wert an, der gelesen werden soll. Eine Liste wird über ihren ersten Eintrag gezeigt.",
+      "body": "Klicken Sie das Feld des Request-Bodys an, das den Cursor aufnimmt (auf der ersten Seite leer)."
+    },
+    "message": {
+      "noRecording": "Nichts aufgezeichnet, woraus man wählen könnte. Zeichnen Sie die Anfrage zuerst auf (Aufzeichnung starten, dann die Seite neu laden) oder tippen Sie den Pfad.",
+      "truncated": "Diese Antwort war zu groß, um sie vollständig zu speichern, und lässt sich hier nicht zeigen. Tippen Sie den Pfad.",
+      "notJson": "Das ist keine JSON-Antwort — tippen Sie den Pfad.",
+      "skipped": "Der Body dieser Anfrage ließ sich nicht aufzeichnen (kein JSON-Text) — tippen Sie den Pfad.",
+      "scopeMissing": "Die übergeordnete Gruppe wurde in dieser Antwort nicht gefunden — wählen Sie eine andere aufgezeichnete Antwort oder tippen Sie den Pfad.",
+      "nothingToPick": "Hier gibt es nichts zu wählen — diese Antwort hat keinen passenden Wert.",
+      "embeddedMissing": "Das eingebettete JSON der Seite wurde nicht mehr gefunden — laden Sie die Seite neu oder tippen Sie den Pfad.",
+      "noEntry": "Nichts aufgezeichnet, woraus man wählen könnte.",
+      "noBody": "Für diese Anfrage wurde kein Request-Body aufgezeichnet — tippen Sie den Pfad."
+    },
+    "reason": {
+      "badKey": "Dieser Schlüssel enthält einen Punkt oder eine Klammer, die ein Pfad nicht ausdrücken kann.",
+      "bodyNoArrays": "Ein Body-Pfad kann nicht durch eine Liste führen."
+    },
+    "type": {
+      "object": "Objekt",
+      "array": "Liste",
+      "string": "Text",
+      "number": "Zahl",
+      "boolean": "Ja/Nein",
+      "null": "leer"
+    }
+  },
+  "glossary": {
+    "safetyChecks": "Sicherheitsprüfungen"
   }
 }

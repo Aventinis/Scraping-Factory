@@ -5,6 +5,10 @@ generates your scripts) and the **browser extension**. You need **Python 3.9 or
 newer** on your computer — the companion runs your generated script once as a
 trial before handing it to you. Nothing else has to be installed by hand.
 
+The user documentation is in the `docs/` folder of this bundle (start with
+`docs/README.md`) and also inside the extension: the **Learn more** links in the
+side panel open it in a browser tab, no internet needed.
+
 ## 1. Install the companion
 
 **Linux / macOS**
@@ -66,6 +70,49 @@ extension under **Settings → Access key**. Further commands: `user list`,
 and `user adopt <name>` (hands everything saved before authentication was
 switched on to that user). `--disable-auth` / `-DisableAuth` switches it off
 again.
+
+### Optional: self-service accounts and HTTPS
+
+Instead of handing out keys, let people register themselves — the extension then
+shows a **Settings → Account** section with Sign in / Register:
+
+```bash
+./install.sh --registration open      # Windows: -Registration open (implies authentication)
+```
+
+Passwords must travel encrypted, so a companion that is reachable from other
+machines needs a real certificate (the companion refuses to start with plain HTTP
+beyond `localhost`):
+
+```bash
+SF_TLS_CERT_PASSWORD=... ./install.sh --host 0.0.0.0 --tls-cert /path/cert.pfx
+# PEM instead of .pfx:   --tls-cert fullchain.pem --tls-key privkey.pem
+```
+
+Users enter `https://your-host:5000` once in the extension's error screen (the
+extension only accepts `https://` addresses or `localhost`). Operator commands:
+`user set-password <name>` (reset a password), `user disable <name>` /
+`user enable <name>`. `--no-tls` / `-NoTls` switches HTTPS off again.
+
+### Optional: email addresses, verification and password reset
+
+With an SMTP server the companion can mail one-time codes, so accounts can have a
+verified email address and people can reset a forgotten password themselves:
+
+```bash
+SF_SMTP_PASSWORD=... ./install.sh --smtp-host smtp.example.com --smtp-from noreply@example.com \
+    --smtp-user noreply@example.com        # Windows: -SmtpHost, -SmtpFrom, -SmtpUser
+# optional rules (they need authentication, e.g. together with --registration open):
+./install.sh --require-email --require-verified-email --email-domains example.com
+```
+
+The SMTP password is read from the environment and stored only in the companion's
+settings file (readable only by you). The default is STARTTLS on port 587;
+`--smtp-security SslOnConnect` uses implicit TLS (port 465). Unencrypted SMTP is
+only accepted for `localhost`. With `--require-verified-email` an account can sign
+in but only uses the companion after confirming its address; for accounts created
+by the operator, `user set-email <name> <email> [--verified]` and `user verify <name>`
+do it from the command line. `--no-email` / `-NoEmail` removes the settings again.
 
 ## 2. Load the extension
 

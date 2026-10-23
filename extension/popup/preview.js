@@ -13,13 +13,10 @@
 // feature (previewActive/#btn-preview), which highlights matched elements
 // on the live page and has nothing to do with the generated script's
 // actual trial-run output.
-const SFPreview = (function() {
-const { createLogger } =
-  typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');
 
-const { serializeGroupTree } =
-  typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
+const { serializeGroupTree } = require('./container-tree');
 
 function startPreview(bridge) {
   const state = bridge.getState();
@@ -51,8 +48,5 @@ function stopPreviewIfActive(bridge) {
   if (bridge.getState().previewActive) stopPreview(bridge);
 }
 
-  return {startPreview, stopPreview, togglePreview, stopPreviewIfActive};
-})();
+module.exports = {startPreview, stopPreview, togglePreview, stopPreviewIfActive};
 
-if (typeof module !== 'undefined') module.exports = SFPreview;
-if (typeof self !== 'undefined') self.SFPreview = SFPreview;

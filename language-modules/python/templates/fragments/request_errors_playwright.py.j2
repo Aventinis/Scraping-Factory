@@ -1,0 +1,24 @@
+#@include request_errors_common
+
+
+# Navigates to `url`. Unlike requests, page.goto() doesn't raise on an HTTP
+# error status (it hands back the error page, which then silently yields "no
+# data"), and a navigation timeout/network error is a Playwright exception —
+# both become one clean error line instead. A page.goto() that returns None
+# (e.g. a same-document navigation) has no status to check.
+def _goto_checked(page, url):
+    try:
+{{~ if retry.enabled ~}}
+        response = _send_with_retry(lambda: page.goto(url, wait_until="load", timeout=30000), url)
+{{~ else ~}}
+        response = page.goto(url, wait_until="load", timeout=30000)
+{{~ end ~}}
+    except Exception as e:
+        # Playwright's message starts with the useful part ("Page.goto:
+        # net::ERR_CONNECTION_REFUSED at ..." / "Timeout 30000ms exceeded");
+        # the rest is a multi-line call log.
+        reason = (str(e).splitlines() or [e.__class__.__name__])[0]
+        _request_failed("Navigation", url, f"could not load the page ({reason}).")
+    if response is not None and response.status >= 400:
+        _request_failed("Navigation", url, _http_error_detail(response.status))
+    return response

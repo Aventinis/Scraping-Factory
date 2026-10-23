@@ -88,8 +88,11 @@ function assert(condition, message) {
 
     // ── Step 5: generate and inspect the actual trial-run output ────────
     console.log('Step 5: enabling trial-run data preview and generating...');
-    await popupPage.locator('#settings-section-toggle').click(); // Settings section starts collapsed
+    // The preview switch lives on the global Settings screen (it is a cross-session preference).
+    await popupPage.locator('#btn-open-settings').click();
     await popupPage.locator('#toggle-include-data-preview').check();
+    await popupPage.locator('#btn-close-settings').click();
+    await waitForIdleScreen(popupPage);
     const generateDisabled = await popupPage.locator('#btn-generate').isDisabled();
     console.log('  #btn-generate disabled?', generateDisabled);
     await popupPage.locator('#btn-generate').click();
@@ -130,7 +133,7 @@ function assert(condition, message) {
     await popupPage.locator('#input-split-field-name').fill('Waehrung');
     await popupPage.locator('#select-split-field-source').selectOption('Preis');
     await popupPage.locator('#input-split-field-separator').fill(' ');
-    await popupPage.locator('#input-split-field-index').fill('1');
+    await popupPage.locator('#input-split-field-index').fill('2');
     await popupPage.locator('#btn-split-field-confirm').click();
     await popupPage.locator('#modal-split-field').waitFor({ state: 'hidden', timeout: 5000 });
 

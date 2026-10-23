@@ -106,7 +106,20 @@ function normalizeHeaders(headersLike) {
 
 // Pure construction of one capture entry — kept separate from the
 // fetch/XHR interception glue below so it's testable without mocking those.
-function buildEntry(url, method, status, contentType, bodyText, bodySkipped, requestHeaders, requestBodyText, requestBodySkipped) {
+// Issue #321: only whether the response's `Link` header names a rel="next"
+// page is kept (not the header's URLs) — enough for the API_CONFIG screen to
+// offer Link-header pagination when a recorded response actually carries one.
+// A cross-origin response only exposes `Link` if the server lists it in
+// Access-Control-Expose-Headers; otherwise the header simply reads as absent.
+function hasNextLinkRel(linkHeader) {
+  if (typeof linkHeader !== 'string' || !linkHeader) return false;
+  return linkHeader.split(/,(?=\s*<)/).some((part) => {
+    const rel = /;\s*rel\s*=\s*(?:"([^"]*)"|([^\s;,]+))/i.exec(part);
+    return !!rel && (rel[1] ?? rel[2]).toLowerCase().split(/\s+/).includes('next');
+  });
+}
+
+function buildEntry(url, method, status, contentType, bodyText, bodySkipped, requestHeaders, requestBodyText, requestBodySkipped, linkHeader) {
   const { body, truncated } = bodySkipped ? { body: '', truncated: false } : truncateBody(bodyText);
   const { body: requestBody, truncated: requestBodyTruncated } = requestBodySkipped ? { body: '', truncated: false } : truncateBody(requestBodyText);
   return {
@@ -122,14 +135,15 @@ function buildEntry(url, method, status, contentType, bodyText, bodySkipped, req
     requestBody,
     requestBodyTruncated,
     requestBodySkipped: !!requestBodySkipped,
+    hasNextLink: hasNextLinkRel(linkHeader),
   };
 }
 
-function recordEntry(url, method, status, contentType, bodyText, bodySkipped, requestHeaders, requestBodyText, requestBodySkipped) {
+function recordEntry(url, method, status, contentType, bodyText, bodySkipped, requestHeaders, requestBodyText, requestBodySkipped, linkHeader) {
   if (!_recording) return;
   if (_entries.length >= MAX_CAPTURED_ENTRIES) return; // silently drop — buffer already at cap
 
-  const entry = buildEntry(url, method, status, contentType, bodyText, bodySkipped, requestHeaders, requestBodyText, requestBodySkipped);
+  const entry = buildEntry(url, method, status, contentType, bodyText, bodySkipped, requestHeaders, requestBodyText, requestBodySkipped, linkHeader);
   _entries.push(entry);
   if (typeof window !== 'undefined') {
     window.postMessage({ source: 'sf-api-capture', type: 'API_CAPTURE_ENTRY', entry }, '*');
@@ -200,26 +214,25 @@ function stopRecording() {
   persistRecordingFlag(false);
 }
 
-if (typeof module !== 'undefined') {
-  module.exports = {
-    buildEntry,
-    truncateBody,
-    shouldSkipBody,
-    normalizeHeaders,
-    resolveUrl,
-    classifyRequestBody,
-    readFetchRequestBody,
-    recordEntry,
-    startRecording,
-    stopRecording,
-    shouldResumeRecording,
-    MAX_CAPTURED_ENTRIES,
-    MAX_BODY_CHARS,
-    MAX_BODY_BYTES_TO_READ,
-    MAX_REQUEST_HEADERS,
-    MAX_HEADER_VALUE_CHARS,
-  };
-}
+module.exports = {
+  buildEntry,
+  hasNextLinkRel,
+  truncateBody,
+  shouldSkipBody,
+  normalizeHeaders,
+  resolveUrl,
+  classifyRequestBody,
+  readFetchRequestBody,
+  recordEntry,
+  startRecording,
+  stopRecording,
+  shouldResumeRecording,
+  MAX_CAPTURED_ENTRIES,
+  MAX_BODY_CHARS,
+  MAX_BODY_BYTES_TO_READ,
+  MAX_REQUEST_HEADERS,
+  MAX_HEADER_VALUE_CHARS,
+};
 
 // ── fetch/XHR interception ──────────────────────────────────────────────────
 // Only patches real browser globals — guarded so requiring this file under
@@ -227,7 +240,7 @@ if (typeof module !== 'undefined') {
 // and no real page traffic to intercept anyway) doesn't install patches that
 // would leak into unrelated tests.
 
-if (typeof window !== 'undefined' && typeof module === 'undefined') {
+if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'test') {
   if (shouldResumeRecording()) startRecording(); // same-origin navigation mid-recording — see known limitations above
 
   window.addEventListener('message', (event) => {
@@ -253,12 +266,13 @@ if (typeof window !== 'undefined' && typeof module === 'undefined') {
       return originalFetch.apply(this, args).then((response) => {
         if (_recording) {
           const contentType = response.headers.get('content-type');
+          const linkHeader = response.headers.get('link');
           requestBodyPromise.then(({ text: requestBodyText, skipped: requestBodySkipped }) => {
             if (shouldSkipBody(contentType, response.headers.get('content-length'))) {
-              recordEntry(url, method, response.status, contentType, '', true, requestHeaders, requestBodyText, requestBodySkipped);
+              recordEntry(url, method, response.status, contentType, '', true, requestHeaders, requestBodyText, requestBodySkipped, linkHeader);
             } else {
               response.clone().text()
-                .then((bodyText) => recordEntry(url, method, response.status, contentType, bodyText, false, requestHeaders, requestBodyText, requestBodySkipped))
+                .then((bodyText) => recordEntry(url, method, response.status, contentType, bodyText, false, requestHeaders, requestBodyText, requestBodySkipped, linkHeader))
                 .catch(() => {}); // unreadable body (e.g. opaque cross-origin response) — just skip capturing it
             }
           });
@@ -292,12 +306,13 @@ if (typeof window !== 'undefined' && typeof module === 'undefined') {
         this.addEventListener('load', () => {
           if (!_recording) return;
           const contentType = this.getResponseHeader('content-type');
+          const linkHeader = this.getResponseHeader('link');
           // The browser already buffers the whole response internally for
           // XHR regardless (unlike fetch, there's no lazy body stream to
           // avoid touching) — this at least skips copying it into our own
           // capture entry.
           if (shouldSkipBody(contentType, this.getResponseHeader('content-length'))) {
-            recordEntry(this._sfUrl, this._sfMethod, this.status, contentType, '', true, requestHeaders, requestBodyText, requestBodySkipped);
+            recordEntry(this._sfUrl, this._sfMethod, this.status, contentType, '', true, requestHeaders, requestBodyText, requestBodySkipped, linkHeader);
             return;
           }
           let bodyText = '';
@@ -306,7 +321,7 @@ if (typeof window !== 'undefined' && typeof module === 'undefined') {
           } catch {
             // Not a text-ish response — capture the entry without a body.
           }
-          recordEntry(this._sfUrl, this._sfMethod, this.status, contentType, bodyText, false, requestHeaders, requestBodyText, requestBodySkipped);
+          recordEntry(this._sfUrl, this._sfMethod, this.status, contentType, bodyText, false, requestHeaders, requestBodyText, requestBodySkipped, linkHeader);
         });
       }
       return originalSend.apply(this, args);

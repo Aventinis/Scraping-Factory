@@ -143,7 +143,7 @@ describe('Request headers settings in the real popup', () => {
           <input type="checkbox" id="toggle-request-headers" />
           <div id="request-headers-config" class="hidden">
             <div id="request-headers-list"></div>
-            <button id="btn-add-request-header"></button>
+            <select id="select-add-request-header"></select>
           </div>
         </div>
         <button id="btn-generate" disabled></button>
@@ -170,16 +170,22 @@ describe('Request headers settings in the real popup', () => {
 
   beforeEach(async () => { await mount({ mode: 'flat', fields: [{ name: 'Titel', selector: 'h1' }] }); });
 
-  test('is off by default; enabling it reveals the config with one empty row', () => {
+  // Issue #402: a header is chosen from the picker instead of starting from an
+  // empty free-text row.
+  const pick = (id) => commit(document.getElementById('select-add-request-header'), { value: id });
+
+  test('is off by default; enabling it reveals the config and the picker, with no row yet', () => {
     expect(document.getElementById('request-headers-config').classList.contains('hidden')).toBe(true);
     commit(document.getElementById('toggle-request-headers'), { checked: true });
 
     expect(document.getElementById('request-headers-config').classList.contains('hidden')).toBe(false);
-    expect(rows()).toHaveLength(1);
+    expect(rows()).toHaveLength(0);
+    expect(document.getElementById('select-add-request-header').options.length).toBeGreaterThan(2);
   });
 
   test('typing a name and a value is persisted with the scrape configuration', () => {
     commit(document.getElementById('toggle-request-headers'), { checked: true });
+    pick('other');
     commit(rows()[0].querySelector('.request-header-name'), { value: 'Accept-Language' });
     commit(rows()[0].querySelector('.request-header-value'), { value: 'de-CH' });
 
@@ -188,6 +194,7 @@ describe('Request headers settings in the real popup', () => {
 
   test('switching a row to an environment variable clears its value and shows the test-value box once a name is set', () => {
     commit(document.getElementById('toggle-request-headers'), { checked: true });
+    pick('other');
     commit(rows()[0].querySelector('.request-header-name'), { value: 'X-Api-Key' });
     commit(rows()[0].querySelector('.request-header-kind'), { value: 'env' });
     expect(rows()[0].querySelector('.request-header-test-value')).toBeNull(); // no variable named yet
@@ -199,6 +206,7 @@ describe('Request headers settings in the real popup', () => {
 
   test('a typed test value is kept in memory only — never in the persisted state', () => {
     commit(document.getElementById('toggle-request-headers'), { checked: true });
+    pick('other');
     commit(rows()[0].querySelector('.request-header-name'), { value: 'X-Api-Key' });
     commit(rows()[0].querySelector('.request-header-kind'), { value: 'env' });
     commit(rows()[0].querySelector('.request-header-value'), { value: 'API_KEY' });
@@ -219,6 +227,7 @@ describe('Request headers settings in the real popup', () => {
   // value input the user had just moved into.
   test('committing a name keeps the neighbouring inputs in the DOM', () => {
     commit(document.getElementById('toggle-request-headers'), { checked: true });
+    pick('other');
     const valueInput = rows()[0].querySelector('.request-header-value');
 
     commit(rows()[0].querySelector('.request-header-name'), { value: 'Accept-Language' });
@@ -226,9 +235,10 @@ describe('Request headers settings in the real popup', () => {
     expect(rows()[0].querySelector('.request-header-value')).toBe(valueInput);
   });
 
-  test('"+ Header" appends a row and "Remove" deletes one', () => {
+  test('"Other" appends an empty row and "Remove" deletes one', () => {
     commit(document.getElementById('toggle-request-headers'), { checked: true });
-    document.getElementById('btn-add-request-header').click();
+    pick('other');
+    pick('other');
     expect(rows()).toHaveLength(2);
 
     rows()[0].querySelector('.btn-remove-request-header').click();

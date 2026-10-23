@@ -11,7 +11,10 @@ Closes the gap CLAUDE.md's own "start the dev server and use the feature in a br
 
 ```bash
 cd e2e && npm install   # no-op if node_modules already present; downloads Playwright's Chromium on first run
+cd ../extension && npm install   # once: the harness builds the extension (esbuild) into extension/dist/ before every launch
 ```
+
+The extension under test is `extension/dist/`, not `extension/` (Issue #389) — `launchBrowser()` rebuilds it itself, so edits to the sources are picked up on the next run. The popup is a bundle, so there are no page-level globals to `page.evaluate` against; reach state through the DOM, `chrome.storage` or Playwright routes (e.g. serve a modified `popup/screens/*.html` partial).
 
 ## Running a check
 

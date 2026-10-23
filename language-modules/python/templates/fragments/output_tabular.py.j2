@@ -1,6 +1,6 @@
 {{~ if output_is_sqlite || output_is_xlsx ~}}
-# Issue #229: tabular output. The result is always written as a fresh file
-# (every run replaces the previous one); every value is stored as text, the
+# Issue #229: tabular output. The result is written as a fresh file (every run
+# replaces the previous one) unless output is appended (Issue #342); every value is stored as text, the
 # same way CSV holds it, and a missing value is an empty string.
 def _cell_text(value):
     return "" if value is None else str(value)
@@ -11,6 +11,35 @@ def _write_rows_sqlite(path, fieldnames, rows):
     # One table "data", one TEXT column per field in output order.
     import os
     import sqlite3
+{{~ if append_output ~}}
+    # Issue #342: an existing database keeps its table and rows; columns the
+    # table doesn't have yet are added, and a column this run doesn't write is
+    # filled with an empty string.
+    try:
+        connection = sqlite3.connect(path)
+        try:
+            existing = [row[1] for row in connection.execute('PRAGMA table_info("data")')]
+            if not existing:
+                columns = ", ".join('"' + name.replace('"', '""') + '" TEXT' for name in fieldnames)
+                connection.execute(f'CREATE TABLE "data" ({columns})')
+                existing = list(fieldnames)
+            else:
+                for name in fieldnames:
+                    if name not in existing:
+                        connection.execute('ALTER TABLE "data" ADD COLUMN "' + name.replace('"', '""') + '" TEXT')
+                        existing.append(name)
+            quoted = ", ".join('"' + name.replace('"', '""') + '"' for name in existing)
+            placeholders = ", ".join("?" for _ in existing)
+            connection.executemany(
+                f'INSERT INTO "data" ({quoted}) VALUES ({placeholders})',
+                [[_cell_text(row.get(name)) for name in existing] for row in rows],
+            )
+            connection.commit()
+        finally:
+            connection.close()
+    except sqlite3.DatabaseError as error:
+        _append_failed(path, f"the existing file is not a usable SQLite database ({error}).")
+{{~ else ~}}
     if os.path.exists(path):
         os.remove(path)
     connection = sqlite3.connect(path)
@@ -25,10 +54,56 @@ def _write_rows_sqlite(path, fieldnames, rows):
         connection.commit()
     finally:
         connection.close()
+{{~ end ~}}
 {{~ else ~}}
 EXIT_MISSING_DEPENDENCY = 8
 
 
+{{~ if append_output ~}}
+def _write_rows_xlsx(path, fieldnames, rows):
+    # One sheet "Data", header in the first row. Needs the optional
+    # `openpyxl` package (pip install openpyxl) — only this output format does.
+    import os
+    import re
+    import sys
+    try:
+        from openpyxl import Workbook, load_workbook
+    except ImportError:
+        print("ERROR: Excel output needs the 'openpyxl' package — install it with: pip install openpyxl", file=sys.stderr)
+        sys.exit(EXIT_MISSING_DEPENDENCY)
+    # Issue #342: an existing workbook keeps its sheet and rows; new columns
+    # are added to the header on the right, a column this run doesn't write is
+    # left empty.
+    if os.path.exists(path) and os.path.getsize(path) > 0:
+        try:
+            workbook = load_workbook(path)
+        except Exception as error:
+            _append_failed(path, f"the existing file is not a usable Excel workbook ({type(error).__name__}).")
+        sheet = workbook["Data"] if "Data" in workbook.sheetnames else workbook.active
+        header = [cell.value for cell in sheet[1]] if sheet.max_row >= 1 and sheet.max_column >= 1 else []
+        header = [("" if value is None else str(value)) for value in header]
+        if not any(header):
+            header = []
+        for name in fieldnames:
+            if name not in header:
+                header.append(name)
+                sheet.cell(row=1, column=len(header), value=name)
+        columns = header
+    else:
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Data"
+        sheet.append(list(fieldnames))
+        columns = list(fieldnames)
+    for row in rows:
+        values = [re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", _cell_text(row.get(name))) for name in columns]
+        sheet.append(values)
+        # A scraped value that starts with "=" must stay text, never a formula.
+        for cell in sheet[sheet.max_row]:
+            if isinstance(cell.value, str) and cell.value.startswith("="):
+                cell.data_type = "s"
+    workbook.save(path)
+{{~ else ~}}
 def _write_rows_xlsx(path, fieldnames, rows):
     # One sheet "Data", header in the first row. Needs the optional
     # `openpyxl` package (pip install openpyxl) — only this output format does.
@@ -51,6 +126,7 @@ def _write_rows_xlsx(path, fieldnames, rows):
             if isinstance(cell.value, str) and cell.value.startswith("="):
                 cell.data_type = "s"
     workbook.save(path)
+{{~ end ~}}
 {{~ end ~}}
 
 

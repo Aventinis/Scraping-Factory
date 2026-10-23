@@ -267,6 +267,17 @@ body {
 .error-icon svg, .success-icon svg { width: 32px; height: 32px; }
 .error-icon  { color: var(--color-danger); }
 .error-hint  { color: var(--color-text-muted); font-size: 13px; margin: 6px 0 16px; }
+/* Issue #406: the structured first-run explanation */
+.error-guidance { text-align: left; margin: 10px 0 12px; font-size: 12px; color: var(--color-text-secondary); }
+.error-intro { margin: 0 0 10px; }
+.error-situation { margin: 0 0 8px; padding: 8px 10px; background: var(--color-surface-subtle); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.error-situation.likely { border-color: var(--color-primary); background: var(--color-primary-soft); }
+.error-situation h3 { margin: 0 0 4px; font-size: 12px; font-weight: 600; color: var(--color-text); }
+.error-situation p { margin: 0 0 6px; }
+.error-situation p:last-child { margin-bottom: 0; }
+.error-likely { margin-left: 4px; padding: 1px 6px; font-size: 10px; font-weight: 600; border-radius: var(--radius-pill); background: var(--color-primary); color: var(--color-on-accent); white-space: nowrap; }
+.error-code { display: block; padding: 4px 6px; font-size: 11px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
+.error-why { margin: 0 0 12px; font-size: 12px; color: var(--color-text-muted); }
 .error-current-url { color: var(--color-text-faint); font-size: 11px; font-family: monospace; margin: -8px 0 16px; word-break: break-all; }
 .companion-url-override { text-align: left; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--color-border); }
 .companion-url-override label { display: block; font-size: 11px; color: var(--color-text-muted); margin-bottom: 4px; }
@@ -372,8 +383,10 @@ body {
 .browser-action-selector-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .browser-action-selector-row label { flex: none; width: 60px; font-size: 11px; color: var(--color-text-muted); }
 .browser-action-selector-row .field-selector { flex: 1; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 3px 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.browser-action-field-row { display: flex; align-items: center; gap: 6px; }
+.browser-action-field-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.browser-action-card .advanced-disclosure { margin-top: 4px; }
 .browser-action-field-row label { flex: none; font-size: 11px; color: var(--color-text-muted); }
+.browser-action-field-row select { flex: 1; min-width: 0; font-size: 11px; }
 .browser-action-field-row input { flex: 1; min-width: 0; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
 .browser-action-hint { font-size: 10px; color: var(--color-text-faint); margin: 4px 0 0; }
 
@@ -539,6 +552,11 @@ body {
 /* Issue #177: editable node name, same shape as .api-tree-name below. */
 .group-tree-name { min-width: 70px; font-weight: 500; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
 .group-tree-label  { flex: 1; min-width: 60px; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Issue #398: a container's "(single)"/"(repeating)" suffix is a toggle — a small
+   click target, not the whole flexible gap, so a stray click can't flip the type. */
+.group-tree-type { flex: 0 1 auto; margin-right: auto; background: transparent; border: none; padding: 0 2px; font-size: inherit; color: var(--color-text-muted); cursor: pointer; text-decoration: underline dotted; }
+.group-tree-type:hover { color: var(--color-primary); }
+.group-tree-type:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .btn-tiny { font-size: 11px; padding: 3px 6px; }
 /* Issue #239: Combined mode's component rows reuse .group-tree-row/.group-
    tree-name above for the shared row layout and editable-name input — this
@@ -670,6 +688,10 @@ body {
 .output-settings-row label { flex: none; width: 110px; font-size: 11px; color: var(--color-text-muted); }
 .output-settings-row input[type="text"] {
   flex: 1; min-width: 0; border: 1px solid var(--color-border-input); border-radius: var(--radius-md);
+  padding: 5px 8px; font-size: 12px; font-family: inherit; outline: none;
+}
+.output-settings-row input[type="number"] {
+  flex: 1 1 60px; min-width: 0; max-width: 120px; border: 1px solid var(--color-border-input); border-radius: var(--radius-md);
   padding: 5px 8px; font-size: 12px; font-family: inherit; outline: none;
 }
 .output-settings-row input[type="text"]:focus { border-color: var(--color-primary); box-shadow: var(--focus-ring); }
@@ -821,6 +843,21 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
   padding: 4px 8px; flex: none; white-space: nowrap;
 }
 .toast-report-btn:hover { background: var(--overlay-white-strong); }
+/* Issue #401: plain-language error toast — title, hint, original text behind "Details" */
+.toast-body { flex: 1; min-width: 0; }
+.toast-hint { margin: 4px 0 0; font-size: 12px; opacity: .95; }
+.toast-body:has(> .toast-hint:not(.hidden)) > #error-toast-message { font-weight: 600; }
+.toast-details { margin-top: 6px; font-size: 12px; }
+.toast-details summary { cursor: pointer; }
+.toast-details pre {
+  margin: 4px 0 6px; padding: 6px 8px; max-height: 120px; overflow: auto;
+  background: var(--overlay-white-weak); border-radius: var(--radius-sm);
+  font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; user-select: all;
+}
+.toast-actions { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; flex: none; }
+.toast-close-btn { background: none; color: var(--color-on-accent); font-size: 18px; line-height: 1; padding: 0 4px; }
+.toast-close-btn:hover { background: var(--overlay-white-weak); }
+.toast:has(.toast-body > .toast-hint:not(.hidden)) { align-items: flex-start; }
 /* Issue #85: non-error toast variants (container-group match count) */
 .toast.toast-info { background: var(--color-success); }
 .toast.toast-warn { background: var(--color-warning); }
@@ -879,7 +916,7 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
 .transform-preset-name-input { flex: 1; min-width: 0; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
 .transform-preset-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 6px 8px; margin-bottom: 4px; background: var(--color-surface-subtle); border-radius: var(--radius-md); }
 .transform-preset-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.transform-preset-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.transform-preset-name { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .transform-preset-summary { font-size: 11px; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .transform-preset-rename-input { font-size: 12px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
 .transform-preset-actions { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
@@ -926,6 +963,26 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
 .request-header-test-value { flex: 1 1 100%; }
 .request-header-row .btn-remove-request-header { margin-left: auto; }
 
+/* Issue #402: the header picker and the notes under a row (what a
+   recognised header is for; the warning for a credential kept as a fixed
+   value). The notes take a full line of their own and are empty — taking
+   no space — for an unrecognised header. */
+.request-header-picker { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.request-header-picker select { flex: 1 1 auto; min-width: 0; margin: 0; }
+.request-header-notes { flex: 1 1 100%; min-width: 0; }
+.request-header-notes:empty { display: none; }
+.request-header-desc,
+.request-header-secret-warning { margin: 0; font-size: 12px; line-height: 1.4; }
+.request-header-desc { color: var(--color-text-muted, inherit); }
+.request-header-secret-warning {
+  margin-top: 2px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-strong);
+}
+.request-header-secret-warning .request-header-switch-env { margin-left: 4px; }
+
 /* Issue #227: the field modals' optional "text contains" input and its
    "use this element's text" shortcut. The match-count hint that follows it
    normally tucks up under the previous input (negative top margin) — here a
@@ -934,3 +991,156 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
 .text-filter-row .btn-tiny { margin-top: 6px; }
 .text-filter-row .preview-summary { text-align: left; margin: 6px 0 4px; }
 .text-filter-row + .match-count-hint { margin-top: 0; }
+
+/* Issue #396: reusable help popover (help-popover-ui.js). The "?" button
+   sits inline next to a label; its explanation is an in-flow block right
+   after the label's row, so it can never run off a narrow side panel. All
+   colors come from the theme tokens, so light/dark need no rules of their
+   own. */
+.help-host { display: inline-flex; align-items: center; vertical-align: middle; }
+.help-btn {
+  width: 18px; height: 18px; padding: 0; margin-left: 2px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--color-border-input); border-radius: var(--radius-pill);
+  background: var(--color-surface); color: var(--color-text-muted);
+  font-size: 11px; font-weight: 600; line-height: 1;
+}
+.help-btn:hover { background: var(--color-surface-muted); color: var(--color-text); }
+.help-btn:focus-visible, .help-btn[aria-expanded="true"] {
+  outline: none; border-color: var(--color-primary); color: var(--color-primary); box-shadow: var(--focus-ring);
+}
+.help-popover {
+  margin: 6px 0 4px; padding: 8px 10px;
+  background: var(--color-primary-soft); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); color: var(--color-text-secondary);
+  font-size: 12px; line-height: 1.45; text-align: left;
+  overflow-wrap: anywhere;
+}
+.help-popover-text { margin: 0; white-space: pre-line; } /* "\n" in a help text starts a new line */
+.help-popover-example {
+  display: block; margin-top: 6px; padding: 4px 6px;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  color: var(--color-text); font-size: 11px; white-space: pre-wrap; user-select: all;
+}
+
+/* Issue #396: "Advanced" disclosure (advanced-disclosure-ui.js) */
+.advanced-disclosure { margin-top: 8px; }
+.advanced-disclosure > summary {
+  cursor: pointer; font-size: 12px; font-weight: 600; color: var(--color-text-secondary);
+  padding: 4px 0; border-radius: var(--radius-sm);
+}
+.advanced-disclosure > summary:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.advanced-disclosure-body { padding-top: 4px; }
+
+/* Issue #397: environment-variable name inputs (env-var-ui.js) — the shared
+   "What is an environment variable?" line, and the inline validation. */
+.env-var-note { margin: 4px 0 6px; font-size: 11px; color: var(--color-text-muted); text-align: left; }
+.env-var-error { margin: 2px 0 6px; font-size: 11px; color: var(--color-danger); text-align: left; overflow-wrap: anywhere; }
+li.env-var-error { list-style: none; }
+input.env-var-invalid, input.env-var-invalid:focus { border-color: var(--color-danger); box-shadow: 0 0 0 3px rgba(239, 68, 68, .18); }
+/* The descriptive "Variable holding …" labels are longer than the 110px the generic
+   .output-settings-row label gives a short name — let them wrap into the space. */
+.output-settings-row:has(> input[data-env-var]) label { width: 150px; }
+@media (max-width: 340px) { .output-settings-row:has(> input[data-env-var]) label { width: 110px; } }
+
+/* Issue #400: regex "Pattern helper" panel and the date-format hint (transform-helpers-ui.js) */
+.transform-helper-panel {
+  list-style: none; margin: 0 0 8px; padding: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  background: var(--color-primary-soft); border: 1px solid var(--color-border); border-radius: var(--radius-md);
+}
+.transform-helper-panel select, .transform-helper-panel input { flex: 1 1 120px; min-width: 0; }
+.transform-recipe-args { display: contents; }
+.transform-recipe-preview { flex: 1 1 100%; margin: 0; font-size: 12px; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.transform-recipe-preview.warn { color: var(--color-warning); }
+.transform-recipe-actions { flex: 1 1 100%; display: flex; gap: 6px; justify-content: flex-end; }
+.transform-date-hint { flex: 1 1 100%; margin: 0; font-size: 11px; color: var(--color-text-muted); }
+
+/* Issue #399: Monitoring in plain language — section intro, "Recommended checks", sentence-style thresholds */
+.monitoring-intro { margin: 0 0 8px; font-size: 11px; color: var(--color-text-muted); }
+.hardening-heading { margin: 6px 0 4px; }
+.hardening-recommended-row { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
+.hardening-recommended-note { text-align: left; margin: 0 0 6px; }
+.hardening-sentence { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-secondary); }
+.hardening-sentence input { width: 64px; font-size: 12px; }
+.hardening-null-rate-row { flex-wrap: wrap; }
+.hardening-sentence-text { flex: none; }
+
+/* Issue #405: the page-number pattern proposal above the pagination kind toggle. */
+.pagination-suggestion {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.pagination-suggestion p { margin: 0 0 4px; }
+.pagination-suggestion code { word-break: break-all; }
+.pagination-suggestion-example { color: var(--color-text-muted); word-break: break-all; }
+
+/* Issue #404: the JSON-path picker panel under a path input (json-path-picker-ui.js) */
+.json-path-panel {
+  margin: 4px 0 8px; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--color-surface-subtle); font-size: 12px; max-width: 100%; overflow-x: auto;
+}
+.json-path-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 4px; }
+.json-path-source { color: var(--color-text-muted); font-size: 11px; word-break: break-all; min-width: 0; }
+.json-path-hint { margin: 0 0 4px; color: var(--color-text-muted); font-size: 11px; line-height: 1.4; }
+.json-path-tree, .json-path-children { list-style: none; margin: 0; padding: 0; }
+.json-path-children { padding-left: 14px; }
+.json-path-node.collapsed > .json-path-children { display: none; }
+.json-path-row { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+.json-path-toggle, .json-path-toggle-space { flex: none; width: 14px; height: 14px; }
+.json-path-toggle { padding: 0; border: none; background: none; cursor: pointer; color: var(--color-text-muted); }
+.json-path-toggle::before { content: "▾"; font-size: 11px; }
+.json-path-node.collapsed > .json-path-row > .json-path-toggle::before { content: "▸"; }
+.json-path-pick, .json-path-static {
+  display: flex; flex: 1; gap: 6px; align-items: baseline; min-width: 0; padding: 1px 4px; text-align: left;
+  font: inherit; border-radius: var(--radius-sm);
+}
+.json-path-pick { border: 1px solid transparent; background: none; cursor: pointer; color: var(--color-text); }
+.json-path-pick:hover { background: var(--color-surface); border-color: var(--color-primary); }
+.json-path-static { color: var(--color-text-muted); }
+.json-path-key { font-weight: 600; flex: none; }
+.json-path-type { flex: none; font-size: 10px; color: var(--color-text-muted); }
+.json-path-preview { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 11px; color: var(--color-text-secondary); }
+.json-path-message { color: var(--color-warning-strong); }
+
+/* Issue #407: Settings glossary — term / one-sentence explanation pairs */
+.glossary-list { margin: 0; }
+.glossary-list dt { font-weight: 600; margin-top: 8px; }
+.glossary-list dd { margin: 2px 0 0; color: var(--color-text-muted); font-size: 12px; line-height: 1.4; }
+.glossary-example { display: block; margin-top: 2px; }
+
+/* Issue #354 Part B: "Learn more" opens the bundled documentation in a tab */
+.learn-more { text-transform: none; letter-spacing: normal; font-weight: 400; font-size: 12px; white-space: nowrap; color: var(--color-primary); text-decoration: underline; }
+.learn-more::after { content: ' ↗'; text-decoration: none; display: inline-block; }
+.help-popover-more { margin: 4px 0 0; }
+
+.error-more { margin: 4px 0 0; }
+
+/* Issue #354 follow-up: the Settings screen. Every control is one title with its
+   explanation behind a "?"; lists and rarely used blocks sit in collapsed cards. */
+.output-settings-row select {
+  flex: 1; min-width: 0; max-width: 100%; border: 1px solid var(--color-border-input); border-radius: var(--radius-md);
+  padding: 5px 8px; font-size: 12px; font-family: inherit; background: var(--color-surface); color: var(--color-text);
+  outline: none;
+}
+.output-settings-row select:focus { border-color: var(--color-primary); box-shadow: var(--focus-ring); }
+.settings-card { margin: 10px 0 0; padding: 4px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+.settings-card > summary { padding: 6px 0; font-size: 12px; font-weight: 600; }
+.settings-card > .advanced-disclosure-body { padding: 2px 0 8px; }
+.settings-card .row-label { margin-top: 8px; }
+.format-note { margin: 4px 0 0; font-size: 11px; color: var(--color-text-muted); }
+#settings-preferences-section .row-label { margin-top: 12px; }
+
+/* Issue #354 follow-up: a select next to an action button looks like the Settings one, and the
+   browser-actions buttons keep a small gap (the login-form button used to touch the row below). */
+.actions select {
+  flex: 1; min-width: 0; max-width: 100%; border: 1px solid var(--color-border-input); border-radius: var(--radius-md);
+  padding: 5px 8px; font-size: 12px; font-family: inherit; background: var(--color-surface); color: var(--color-text);
+  outline: none;
+}
+.actions select:focus { border-color: var(--color-primary); box-shadow: var(--focus-ring); }
+#browser-actions-section .actions { margin: 6px 0; }

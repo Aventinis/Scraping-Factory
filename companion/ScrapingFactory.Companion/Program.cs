@@ -20,7 +20,24 @@ if (UserCommands.IsUserCommand(args))
     return;
 }
 
+// Issue #352: refuse configurations that would send passwords/keys in clear
+// text beyond this machine, and set up HTTPS when it is configured.
+var transportError = CompanionTls.Validate(builder.Configuration) ?? AuthOptions.Validate(builder.Configuration)
+    ?? EmailOptions.Validate(builder.Configuration);
+if (transportError is not null)
+{
+    Console.Error.WriteLine($"ERROR: {transportError}");
+    Environment.ExitCode = 1;
+    return;
+}
+
 builder.WebHost.UseUrls(CompanionHostOptions.BuildListenUrl(builder.Configuration));
+if (CompanionTls.IsEnabled(builder.Configuration))
+{
+    var certificate = CompanionTls.LoadCertificate(builder.Configuration, out var certificateDescription);
+    builder.WebHost.ConfigureKestrel(kestrel => kestrel.ConfigureHttpsDefaults(https => https.ServerCertificate = certificate));
+    Console.WriteLine($"HTTPS enabled with {certificateDescription}.");
+}
 
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy => policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
@@ -71,6 +88,17 @@ builder.Services.AddSingleton<ITransformPresetStore>(sp => StorageOptions.Create
 // Issue #278: the users behind the access keys, in the same backend as the data.
 builder.Services.AddSingleton<IUserStore>(sp => StorageOptions.CreateUserStore(sp.GetRequiredService<IConfiguration>()));
 
+// Issue #352: abuse protection for /auth/login and /auth/register.
+builder.Services.AddSingleton<LoginThrottle>();
+
+// Issue #353: email addresses, verification and password reset — the sender
+// (SMTP when configured), the throttle for mail-sending endpoints and the
+// service that issues codes.
+builder.Services.AddSingleton<IEmailSender>(sp =>
+    EmailOptions.ReadSmtp(sp.GetRequiredService<IConfiguration>()) is { } smtp ? new SmtpEmailSender(smtp) : new NoEmailSender());
+builder.Services.AddSingleton<EmailThrottle>();
+builder.Services.AddSingleton<EmailService>();
+
 var app = builder.Build();
 
 // Issue #277: fail fast on an unknown storage provider / missing MySQL
@@ -103,17 +131,24 @@ app.Use(async (context, next) =>
 // every store call is then scoped to (CurrentUser). Without it everything runs
 // as the anonymous owner 0, exactly as before.
 var authEnabled = AuthOptions.IsEnabled(app.Configuration);
+var registrationOpen = AuthOptions.IsRegistrationOpen(app.Configuration);
+var emailPolicy = EmailOptions.Read(app.Configuration);
 app.Use(async (context, next) =>
 {
-    if (!authEnabled || HttpMethods.IsOptions(context.Request.Method) || context.Request.Path == "/health")
+    // /health and, for self-service accounts (Issue #352), the two endpoints a
+    // person without a key has to be able to reach.
+    var anonymous = context.Request.Path == "/health"
+        || context.Request.Path == "/auth/register" || context.Request.Path == "/auth/login"
+        // Issue #353: a person who forgot the password has no key.
+        || context.Request.Path == "/auth/forgot-password" || context.Request.Path == "/auth/reset-password";
+    if (!authEnabled || HttpMethods.IsOptions(context.Request.Method) || anonymous)
     {
         CurrentUser.Set(context, CurrentUser.Anonymous);
         await next();
         return;
     }
 
-    var header = context.Request.Headers.Authorization.ToString();
-    var key = header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? header["Bearer ".Length..].Trim() : "";
+    var key = AuthEndpoints.BearerToken(context);
     var user = key.Length > 0 ? context.RequestServices.GetRequiredService<IUserStore>().FindByKey(key) : null;
     if (user is null)
     {
@@ -125,15 +160,54 @@ app.Use(async (context, next) =>
         return;
     }
     CurrentUser.Set(context, new CurrentUser(user.Id, user.Name));
+
+    // Issue #353: with RequireVerified, an account without a confirmed email
+    // address can sign in and see who it is, and use the account endpoints to
+    // confirm one — but not the companion's data. (A 403 with a code the
+    // extension recognizes, not a 401: the key itself is fine.)
+    if (emailPolicy.RequireVerified && !user.EmailVerified
+        && !(context.Request.Path == "/whoami" || context.Request.Path.StartsWithSegments("/auth")))
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            error = user.Email is null
+                ? "This companion requires a verified email address - add one in the extension's Settings > Account."
+                : "This companion requires a verified email address - enter the code from the email in the extension's Settings > Account.",
+            code = "email_unverified",
+        });
+        return;
+    }
     await next();
 });
 
 // authRequired lets the extension know whether to ask for / validate a key.
-app.MapGet("/health", () => Results.Ok(new { authRequired = authEnabled }));
+// registration tells the extension whether to offer "Register" (Issue #352).
+// Issue #353: email = whether the extension should ask for an address
+// ("off" | "optional" | "required"), passwordReset = whether a forgotten
+// password can be reset by email, verifiedEmailRequired = the operator's rule.
+app.MapGet("/health", () => Results.Ok(new
+{
+    authRequired = authEnabled,
+    registration = registrationOpen,
+    email = authEnabled ? emailPolicy.Mode : "off",
+    passwordReset = authEnabled && emailPolicy.SmtpConfigured,
+    verifiedEmailRequired = authEnabled && emailPolicy.RequireVerified,
+}));
+
+if (authEnabled)
+    AuthEndpoints.Map(app, registrationOpen);
 
 // Issue #278: "who am I" — the extension's Settings screen uses it to check a
 // key (401 when the key is missing/wrong while authentication is on).
-app.MapGet("/whoami", (CurrentUser user) => Results.Ok(new { name = user.Name, authRequired = authEnabled }));
+app.MapGet("/whoami", (CurrentUser user, HttpContext context) =>
+{
+    // Issue #353: the account's email state (when there is an account). The
+    // user store is only touched when authentication is on, so a companion
+    // without it never creates users.db.
+    var account = authEnabled && user.Id != 0 ? context.RequestServices.GetRequiredService<IUserStore>().FindByName(user.Name) : null;
+    return Results.Ok(new { name = user.Name, authRequired = authEnabled, email = account?.Email, emailVerified = account?.EmailVerified ?? false });
+});
 
 // Issue #141: local SQLite-backed configuration history — save/list/load/
 // delete past per-site configs, so a repeatedly-scraped site's setup doesn't
@@ -560,34 +634,10 @@ static (ScrapingPlan? Plan, string? Script, string? ValidationError, string? Gen
 }
 
 // Issue #289 follow-up: a ScrollStep/WaitForStep's own configured cost can
-// make the verifier's trial run legitimately take a long time — summed
-// across every such step in the plan AND every BrowserDiscoverySource
-// parameter's own nested Actions (Issue #216), since those run as their own
-// separate, sequential Playwright sessions during parameter resolution,
-// before the main request loop even starts, and never go through
-// ScrapingPlanBuilder's own step translation (see BrowserDiscoverySource's
-// own doc comment) — invisible to a plain plan.Steps.OfType<ScrollStep>()
-// scan on its own, which is exactly the gap that let a long-running
-// discovery configuration always fail verification with a generic timeout.
-static long EstimateExtraVerificationTimeoutMs(ScrapingPlan plan)
-{
-    var ms = plan.Steps.OfType<ScrollStep>().Sum(step => (long)step.MaxIterations * step.WaitAfterMs)
-        + plan.Steps.OfType<WaitForStep>().Sum(step => (long)step.TimeoutMs);
-
-    var apiCallStep = plan.Steps.OfType<ApiCallStep>().SingleOrDefault();
-    if (apiCallStep is not null)
-    {
-        foreach (var parameter in apiCallStep.Config.Parameters)
-        {
-            if (parameter.Source is not BrowserDiscoverySource { Actions: { } actions })
-                continue;
-            ms += actions.OfType<ScrollAction>().Sum(action => (long)action.MaxIterations * action.WaitAfterMs)
-                + actions.OfType<WaitForAction>().Sum(action => (long)action.TimeoutMs);
-        }
-    }
-
-    return ms;
-}
+// make the verifier's trial run legitimately take a long time, as can API
+// mode's sheer parameter combination count (Issue #295) — see
+// VerificationTimeEstimator for the details of what is summed.
+static long EstimateExtraVerificationTimeoutMs(ScrapingPlan plan) => VerificationTimeEstimator.EstimateExtraMs(plan);
 
 // A trial run exists to prove the artifact works, not to accommodate an
 // unboundedly slow configuration — once EstimateExtraVerificationTimeoutMs
@@ -607,7 +657,24 @@ static TimeSpan VerificationTimeoutCap() => TimeSpan.FromMinutes(10);
 // VerificationTimeoutCap. Value is a plain English reason, same "companion
 // error text is always English, never part of the extension's i18n system"
 // convention CLAUDE.md already documents for /generate's 400/422 bodies.
+// The reason texts are deliberately plain ASCII: Kestrel refuses to send a
+// header value with any other character (an em dash once turned the
+// timeout-cap skip into a 500 on a real host, while the in-memory test server
+// accepted it — SkipVerificationEndpointTests pins this).
 const string VerificationSkippedHeader = "X-ScrapingFactory-Verification-Skipped";
+
+// Issue #292: the caller can switch the trial run off outright (a Global
+// Settings preference in the extension). Same response mechanics as the
+// timeout-cap skip above — no subprocess, a synthetic "success, nothing
+// populated" result, and the header carrying the reason — so the structural
+// validation (ScrapingPlanValidator, a 400 on failure) has already happened
+// by the time this is consulted. A setting the user chose gets checked
+// before the automatic cap, so the message says what actually happened.
+static string? VerificationSkipReason(ScrapingConfig config, long extraTimeoutMs) =>
+    config.SkipVerification == true
+        ? "Verification was skipped because it is disabled in Settings - the generated script was not run against the live page. " +
+          "Run it yourself to check that it works."
+        : CheckVerificationTimeoutCap(extraTimeoutMs);
 
 static string? CheckVerificationTimeoutCap(long extraTimeoutMs)
 {
@@ -616,7 +683,7 @@ static string? CheckVerificationTimeoutCap(long extraTimeoutMs)
     if (extra <= cap)
         return null;
     return $"Estimated extra verification time ({extra:hh\\:mm\\:ss}) exceeds the {cap:hh\\:mm\\:ss} cap for a " +
-           "/generate trial run — the generated script was returned without being run against the live page first. Test it " +
+           "/generate trial run - the generated script was returned without being run against the live page first. Test it " +
            "manually before relying on it.";
 }
 
@@ -665,6 +732,10 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
             return Results.BadRequest(new { error = "RequestDelay is not supported on a Combined request — set it on each component's own config instead." });
         if (config.RespectRobotsDelay == true)
             return Results.BadRequest(new { error = "RespectRobotsDelay is not supported on a Combined request — set it on each component's own config instead." });
+        if (config.AppendOutput == true)
+            return Results.BadRequest(new { error = "AppendOutput is not supported on a Combined request — set it on each component's own config instead." });
+        if (config.RobotsDisallow is not null)
+            return Results.BadRequest(new { error = "RobotsDisallow is not supported on a Combined request — set it on each component's own config instead." });
         if (config.Retry is not null)
             return Results.BadRequest(new { error = "Retry is not supported on a Combined request — set it on each component's own config instead." });
         if (config.Hardening is { Count: > 0 })
@@ -737,7 +808,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
         // (see CompanionBackendOverrides) on top of that, for the baseline
         // itself.
         ScriptVerificationResult combinedVerification;
-        var combinedSkipReason = CheckVerificationTimeoutCap(componentExtraTimeoutMs);
+        var combinedSkipReason = VerificationSkipReason(config, componentExtraTimeoutMs);
         if (combinedSkipReason is not null)
         {
             httpContext.Response.Headers[VerificationSkippedHeader] = combinedSkipReason;
@@ -850,7 +921,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
         var blockVerificationEnv = FillVerificationValues.Filter(config.BrowserActions, config.VerificationValues, requestHeaders: config.Headers);
 
         ScriptVerificationResult blockVerification;
-        var blockSkipReason = CheckVerificationTimeoutCap(blockExtraTimeoutMs);
+        var blockSkipReason = VerificationSkipReason(config, blockExtraTimeoutMs);
         if (blockSkipReason is not null)
         {
             httpContext.Response.Headers[VerificationSkippedHeader] = blockSkipReason;
@@ -925,7 +996,7 @@ app.MapPost("/generate", async ([FromBody] ScrapingConfig? config, LanguageModul
     var verificationEnv = FillVerificationValues.Filter(config.BrowserActions, config.VerificationValues, config.Api, config.Headers);
 
     ScriptVerificationResult verification;
-    var skipReason = CheckVerificationTimeoutCap(extraTimeoutMs);
+    var skipReason = VerificationSkipReason(config, extraTimeoutMs);
     if (skipReason is not null)
     {
         httpContext.Response.Headers[VerificationSkippedHeader] = skipReason;

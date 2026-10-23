@@ -16,7 +16,10 @@
     "attributePlaceholder": "Atributo",
     "noMatches": "Sin coincidencias en la grabación.",
     "noRecordArray": "No se encontró ningún array de registros — no se puede usar como fuente.",
-    "edit": "Editar"
+    "edit": "Editar",
+    "helpBtn": "Ayuda",
+    "advanced": "Avanzado",
+    "learnMore": "Saber más"
   },
   "language": {
     "label": "Idioma"
@@ -28,8 +31,23 @@
     "message": "Conectando con Companion…"
   },
   "error": {
-    "title": "No se puede conectar con la app Companion",
-    "hint": "Inicia ScrapingFactory.Companion y vuelve a intentarlo.",
+    "title": "Aplicación companion no accesible",
+    "hintShort": "Inicia la aplicación companion e inténtalo de nuevo, o introduce otra dirección abajo.",
+    "intro": "El companion es un pequeño programa auxiliar en tu ordenador: crea tu script y lo prueba una vez antes de entregártelo.",
+    "likely": "Lo más probable",
+    "whyLabel": "¿Por qué no se conecta?",
+    "install": {
+      "title": "1 · Aún no instalado",
+      "text": "Descomprime la descarga de Scraping Factory y ejecuta su instalador ({installer}) en esa carpeta; luego pulsa «Reintentar»:"
+    },
+    "start": {
+      "title": "2 · Instalado, pero no en ejecución",
+      "text": "Ejecuta de nuevo el instalador (inicia el companion) o inicia el programa tú mismo. Con la opción de inicio automático del instalador arranca en cada inicio de sesión:"
+    },
+    "address": {
+      "title": "3 · En otra dirección o puerto",
+      "text": "Introduce su dirección en el campo de abajo, p. ej. http://localhost:5050. Para un companion en otro ordenador usa https://."
+    },
     "currentUrl": "Dirección probada: {url}",
     "customUrlLabel": "¿La app Companion se ejecuta en otra dirección?",
     "customUrlPlaceholder": "p. ej. http://localhost:5050",
@@ -45,7 +63,6 @@
     "modeContainer": "Contenedores (anidado)",
     "modeApi": "API",
     "modeCombined": "Combinado",
-    "combinedHint": "Combina varias de tus configuraciones ya guardadas — incluso de sitios distintos — en un solo script cuyos resultados se combinan en un único resultado.",
     "combinedAddBtn": "+ Añadir componente",
     "combinedNoSavedConfigsHint": "Todavía no hay configuraciones guardadas — guarda al menos dos configuraciones primero (en otro modo) y combínalas aquí.",
     "combinedNamePlaceholder": "Nombre",
@@ -92,15 +109,15 @@
     "savedOutputsEmpty": "Todavía no hay salidas guardadas para esta configuración.",
     "savedOutputsLoading": "Cargando…",
     "savedOutputsDownloadBtn": "Descargar",
-    "savedOutputsReplayHardeningBtn": "Probar hardening",
+    "savedOutputsReplayHardeningBtn": "Probar comprobaciones de seguridad",
     "savedOutputsDeleteConfirm": "¿Eliminar esta salida guardada?",
-    "hardeningReplayNoChecks": "No hay comprobaciones de hardening configuradas actualmente — configura una en la sección \"Monitorización\" primero.",
+    "hardeningReplayNoChecks": "No hay comprobaciones de seguridad configuradas actualmente — configura una en la sección \"Avisos y comprobaciones\" primero.",
     "hardeningReplayCompareBasisLabel": "Esta comprobación necesita un resultado anterior para comparar:",
     "hardeningReplayCompareBasisConfig": "Misma configuración",
-    "hardeningReplayCompareBasisBlueprint": "Blueprint \"{name}\"",
+    "hardeningReplayCompareBasisBlueprint": "Diseño \"{name}\"",
     "hardeningReplayRunBtn": "Ejecutar",
     "hardeningReplayLoading": "Probando…",
-    "hardeningReplayError": "No se pudo probar el hardening: {message}",
+    "hardeningReplayError": "No se pudieron probar las comprobaciones de seguridad: {message}",
     "hardeningReplayOutcomePassed": "Superado",
     "hardeningReplayOutcomeTriggered": "Activado",
     "hardeningReplayOutcomeInconclusive": "No concluyente",
@@ -113,7 +130,6 @@
     "engineLabel": "Motor",
     "engineStatic": "Estático",
     "engineBrowser": "Navegador",
-    "engineBrowserTitle": "Renderiza JavaScript antes de la extracción — para páginas cargadas dinámicamente o flujos de inicio de sesión. Más lento que el motor estático.",
     "outputJsonToggle": "Salida como JSON (en lugar de CSV/XML)",
     "dataPreviewToggle": "Mostrar vista previa de los datos de la prueba",
     "outputFileToggle": "Descargar el archivo de datos completo",
@@ -122,35 +138,33 @@
     "changeDetectionToggle": "Activar detección de cambios (notificar ante cambios)",
     "notifyEmail": "Correo electrónico",
     "notifyWebhook": "Webhook",
-    "smtpHostEnvVarLabel": "Host SMTP (var. de entorno)",
-    "smtpPortEnvVarLabel": "Puerto SMTP (var. de entorno)",
-    "smtpUsernameEnvVarLabel": "Usuario SMTP (var. de entorno)",
-    "smtpPasswordEnvVarLabel": "Contraseña SMTP (var. de entorno)",
-    "notifyEmailFromEnvVarLabel": "Remitente (var. de entorno)",
-    "notifyEmailToEnvVarLabel": "Destinatario (var. de entorno)",
-    "webhookUrlEnvVarLabel": "URL del webhook (var. de entorno)",
-    "envVarPlaceholder": "Nombre de la variable de entorno",
-    "envVarPlaceholderOptional": "Nombre de la variable de entorno (opcional)",
-    "changeDetectionHint": "Cada campo es el nombre de una variable de entorno, no el valor en sí — el valor real se lee del entorno en la ejecución real, nunca se escribe en el script.",
+    "smtpHostEnvVarLabel": "Variable con el host SMTP",
+    "smtpPortEnvVarLabel": "Variable con el puerto SMTP (opcional)",
+    "smtpUsernameEnvVarLabel": "Variable con el usuario SMTP (opcional)",
+    "smtpPasswordEnvVarLabel": "Variable con la contraseña SMTP (opcional)",
+    "notifyEmailFromEnvVarLabel": "Variable con la dirección del remitente",
+    "notifyEmailToEnvVarLabel": "Variable con la dirección del destinatario",
+    "webhookUrlEnvVarLabel": "Variable con la URL del webhook",
     "proxyToggle": "Usar un proxy",
-    "proxyEnvVarLabel": "Lista de proxies (variable de entorno)",
-    "proxyHint": "El nombre de una variable de entorno con una lista de URLs de proxy separadas por comas (p. ej. \"http://usuario:contraseña@host:puerto\"), no las direcciones en sí — con más de una, el script rota entre ellas en cada solicitud.",
+    "proxyEnvVarLabel": "Variable con la lista de proxies",
     "requestDelayToggle": "Pausa entre solicitudes",
     "requestDelayFromLabel": "de",
     "requestDelayToLabel": "a",
     "requestDelayToPlaceholder": "(fija)",
     "requestDelaySecondsUnit": "segundos",
-    "requestDelayHint": "El script espera entre dos solicitudes al sitio — de forma fija o aleatoria dentro de un rango (p. ej. 1 a 3). Protege contra bloqueos y límites de frecuencia, pero alarga la ejecución en proporción (p. ej. 50 páginas × 2 s ≈ 1,5 minutos más). La ejecución de prueba al generar no cuenta las pausas en su límite de tiempo.",
     "respectRobotsDelayToggle": "Respetar el robots.txt del sitio (Crawl-delay)",
-    "respectRobotsDelayHint": "Si el robots.txt del sitio pide un ritmo (Crawl-delay o Request-rate), el script espera al menos ese tiempo entre dos solicitudes. Los sitios que no publican nada no se ven afectados. Combinado con «Pausa entre solicitudes», se aplica el intervalo mayor. El robots.txt se lee una vez por ejecución.",
+    "robotsDisallowToggle": "Comprobar el robots.txt del sitio antes de cada petición",
+    "robotsDisallowActionLabel": "Si una petición no está permitida",
+    "robotsDisallowActionSkip": "Omitirla y continuar",
+    "robotsDisallowActionWarn": "Avisar, pero hacerla igualmente",
+    "robotsDisallowActionAbort": "Detener la ejecución",
+    "appendOutputToggle": "Añadir al archivo de salida existente en lugar de reemplazarlo",
     "retryToggle": "Reintentar ante errores transitorios",
     "retryAttemptsLabel": "Intentos",
     "retryDelayLabel": "Espera (s)",
     "retryExponentialToggle": "Duplicar la espera tras cada reintento",
     "retryStatusCodesLabel": "Con códigos de estado",
-    "retryHint": "Si una solicitud falla por un error de conexión, un tiempo de espera agotado o uno de los códigos de estado, el script la reintenta tras la espera (con 429/503, tanto como el servidor indique con Retry-After; como máximo 60 s por espera). Otros errores como 404 o 403 fallan de inmediato. Si fallan todos los intentos, la ejecución se detiene como hasta ahora.",
-    "dedupToggle": "Eliminar duplicados por campo(s) clave",
-    "dedupKeyFieldsHint": "Elige el/los campo(s) que identifican un elemento (juntos forman su clave). Una fila/elemento posterior con una clave que ya apareció en esta ejecución se descarta: útil con páginas solapadas o elementos accesibles desde varias URL de inicio. Los elementos cuyos campos clave están todos vacíos nunca se eliminan.",
+    "dedupToggle": "Eliminar duplicados",
     "dedupAddKeyFieldBtn": "Añadir campo clave",
     "dedupKeyFieldMissing": "ya no existe",
     "dedupIncrementalToggle": "Escribir solo los elementos nuevos desde la última ejecución",
@@ -158,61 +172,50 @@
     "dedupOutputDeltaTitle": "El archivo de salida contiene solo los elementos nuevos de esta ejecución (se reemplaza en cada ejecución).",
     "dedupOutputAppend": "Añadir",
     "dedupOutputAppendTitle": "Los elementos nuevos se añaden al archivo de salida de las ejecuciones anteriores, que crece hasta ser una colección de todo lo visto.",
-    "dedupAppendUnavailableTitle": "Añadir requiere una salida plana (CSV o lista JSON); no disponible para salida XML/JSON anidada.",
     "dedupRetentionLabel": "Recordar",
     "dedupRetentionMaxCount": "elementos más recientes (cantidad)",
     "dedupRetentionMaxAge": "días desde la última vez visto",
-    "dedupIncrementalHint": "El script recuerda las claves vistas en un pequeño archivo junto a su salida (nombre del archivo de salida + .dedup-seen.json). Bórralo para empezar de cero. Las claves recordadas están limitadas: por cantidad (se conservan las más recientes) o por antigüedad. El archivo solo se actualiza tras una ejecución que no incumplió ninguna comprobación de robustez.",
     "requestHeadersToggle": "Enviar cabeceras de solicitud personalizadas",
-    "requestHeadersAddBtn": "+ Cabecera",
     "requestHeaderNamePlaceholder": "Nombre de la cabecera (p. ej. Accept-Language)",
     "requestHeaderKindValue": "Valor fijo",
     "requestHeaderKindEnv": "Variable de entorno",
     "requestHeaderValuePlaceholder": "Valor (p. ej. de-CH)",
-    "requestHeaderEnvPlaceholder": "Nombre de la variable (p. ej. API_KEY)",
-    "requestHeaderTestValuePlaceholder": "Valor de prueba para la ejecución de prueba (no se guarda)",
-    "requestHeadersHint": "Se envía con cada solicitud del script: útil para un idioma (Accept-Language), un Referer, una clave de API o una cookie. Guarda los secretos en una variable de entorno e indica aquí solo su nombre; el valor de prueba puntual se usa solo en la ejecución de prueba y nunca se guarda ni se escribe en el script. Una cabecera llamada User-Agent sustituye a la predeterminada. Con el motor de navegador, las cabeceras van en cada solicitud que hace la página.",
+    "requestHeaderPickerPlaceholder": "Añadir una cabecera…",
+    "requestHeaderSecretWarning": "Esto parece un secreto. Como valor fijo se escribiría en el script en texto plano.",
+    "requestHeaderSwitchToEnv": "Usar variable de entorno",
     "externalConfigToggle": "Archivo de configuración editable (XML)",
-    "externalConfigHint": "Permite ajustar después la(s) URL(s) de inicio, el nombre del archivo de salida, el nombre de salida de un campo o los valores de un parámetro de API de lista fija, editando un pequeño archivo XML — sin tocar el archivo .py ni volver a abrir la extensión. El archivo aún no existe; el script lo crea junto a sí mismo la primera vez que se ejecuta de verdad.",
     "paginationToggle": "Activar paginación",
     "paginationKindNextLink": "Enlace \"Siguiente\"",
     "paginationKindPageNumber": "URL con número de página",
     "paginationNextLinkSelectorLabel": "Selector del enlace \"Página siguiente\"",
     "paginationNextLinkSelectorPlaceholder": "p. ej. a.next, a:contains(\"Siguiente\")",
-    "paginationUrlTemplateLabel": "Plantilla de URL de página",
+    "paginationUrlTemplateLabel": "Patrón de la URL de página",
     "paginationUrlTemplatePlaceholder": "p. ej. {url}?page={page}",
-    "paginationUrlTemplateHint": "Debe contener tanto {url} (la página de inicio, sin cambios) como {page} (el número de página, empezando en 2 — la página 1 es siempre la página de inicio tal cual).",
-    "paginationMaxPagesLabel": "Máx. de páginas (límite de seguridad)",
+    "paginationMaxPagesLabel": "Máx. páginas",
     "discoveredUrlsToggle": "Descubrir URLs de inicio adicionales automáticamente",
     "discoveredUrlsPageUrlLabel": "Página con los enlaces",
     "discoveredUrlsPageUrlPlaceholder": "p. ej. https://example.com/categorias",
     "discoveredUrlsLinkSelectorLabel": "Selector de enlaces",
     "discoveredUrlsLinkSelectorPlaceholder": "p. ej. nav.categorias a",
-    "discoveredUrlsHint": "Carga esta página una vez y añade cada enlace que coincida con el selector, además de la URL de arriba y cualquier URL de inicio adicional. Un enlace también se puede elegir por su texto, p. ej. a:contains(\"Verduras\").",
     "discoveredUrlsMaxUrlsLabel": "Núm. máx. de URLs descubiertas (límite de seguridad)",
-    "monitoringSectionToggle": "Monitorización",
+    "monitoringSectionToggle": "Avisos y comprobaciones",
     "settingsSectionToggle": "Configuración",
     "hardeningNoResultToggle": "Comprobar resultado vacío",
-    "hardeningSeverityWarning": "Advertencia",
-    "hardeningSeverityWarningTitle": "El script imprime una advertencia, pero sigue terminando con código de salida 0.",
-    "hardeningSeverityError": "Error",
-    "hardeningSeverityErrorTitle": "El script imprime un error y termina con su propio código (2), distinguible de un fallo (1).",
+    "hardeningSeverityWarning": "Avisarme",
+    "hardeningSeverityError": "Detener la ejecución",
     "hardeningNullRateSectionLabel": "Comprobar valores vacíos por campo",
     "hardeningNullRateFieldPlaceholder": "-- elegir campo --",
     "hardeningNullRateAddBtn": "+ Añadir campo",
-    "hardeningBaselineToggle": "Comprobar descenso frente a la última ejecución",
-    "hardeningBaselineThresholdLabel": "Umbral (descenso)",
-    "hardeningBlockingToggle": "Comprobar bloqueo (redirección, respuesta corta, frases de bloqueo)",
-    "hardeningBlockingMinBodyLengthLabel": "Longitud mín. de respuesta (bytes)",
-    "hardeningBlockingMinBodyLengthPlaceholder": "opcional",
-    "hardeningBlockingPhrasesLabel": "Frases de bloqueo (una por línea)",
+    "hardeningBaselineToggle": "Comprobar una caída respecto a la última ejecución",
+    "hardeningBlockingToggle": "Comprobar si el sitio bloquea el script",
+    "hardeningBlockingMinBodyLengthLabel": "Página más corta de",
+    "hardeningBlockingMinBodyLengthPlaceholder": "p. ej. 1000",
+    "hardeningBlockingPhrasesLabel": "Frases que delatan una página de bloqueo (una por línea)",
     "hardeningBlockingPhrasesPlaceholder": "p. ej. \"Access Denied\", \"Por favor verifica que eres humano\"",
     "hardeningRequiredFieldsToggle": "Exigir campos (descartar filas incompletas)",
     "hardeningRequiredFieldsAddBtn": "+ Añadir campo",
-    "preflightToggle": "Comprobar antes si la página ha cambiado y omitir la ejecución si no",
-    "preflightHint": "Envía una solicitud rápida a la página antes de iniciar el scraping real. Si no ha cambiado nada desde la última ejecución, o la página no está accesible en este momento, la ejecución se omite sin el coste de un scraping completo.",
+    "preflightToggle": "Omitir si la página no ha cambiado",
     "modeBlocks": "Bloques",
-    "blocksHint": "Crea varios bloques de extracción independientes (planos o de contenedor, combinados libremente) que comparten la navegación de esta página; cada uno escribe su propio archivo de salida en una sola ejecución del script.",
     "blocksNameLabel": "Nombre del bloque",
     "blocksNamePlaceholder": "p. ej. Ofertas",
     "blocksOutputFileNameLabel": "Nombre del archivo de salida",
@@ -224,12 +227,61 @@
     "blocksSummaryFlat": "{count} campo(s)",
     "blocksSummaryGroup": "{count} grupo(s)",
     "blocksUnnamed": "(sin nombre)",
-    "outputBlueprintLabel": "Plantilla de salida",
-    "outputBlueprintNoneOption": "Ninguna",
+    "outputBlueprintLabel": "Diseño de salida",
+    "outputBlueprintNoneOption": "Ninguno",
     "manageBlueprintsBtn": "Gestionar",
-    "outputBlueprintMappingHint": "Asigna a cada campo de destino uno de los campos de origen propios de esta configuración — cada campo de destino necesita un origen antes de poder generar el script.",
-    "outputBlueprintTreeMappingHint": "Asigna a cada campo de destino uno de los campos de origen propios de esta configuración — la posición de un grupo de destino en la salida se infiere automáticamente a partir de sus campos asignados. Cada campo de destino necesita un origen antes de poder generar el script.",
-    "outputFormatFlattenHint": "Los resultados anidados se aplanan en una tabla: una fila por cada elemento repetido más interno; los valores de niveles superiores se repiten en cada fila (o elige un Output Blueprint para definir las columnas). Cada campo de datos necesita un nombre único."
+    "modeLabel": "Modo",
+    "hardeningSectionLabel": "Comprobaciones tras cada ejecución",
+    "hardeningRecommendedBtn": "Comprobaciones recomendadas",
+    "hardeningRecommendedApplied": "Activadas: {checks}.",
+    "hardeningRecommendedNoResult": "resultado vacío (avisarme)",
+    "hardeningRecommendedRequired": "campo obligatorio «{field}» (avisarme)",
+    "hardeningRecommendedNothingNew": "Las comprobaciones recomendadas ya están activadas.",
+    "hardeningRecommendedNeedFields": "Añade primero campos para obtener también la sugerencia de campo obligatorio.",
+    "hardeningNullRateMiddle": "está vacío en más del",
+    "hardeningNullRateAfter": "% de las filas",
+    "hardeningBaselineBefore": "Activar si hay un",
+    "hardeningBaselineAfter": "% menos de filas que en la última ejecución",
+    "hardeningBlockingAdvanced": "Avanzado: páginas cortas y frases de bloqueo",
+    "hardeningBlockingMinBodyLengthUnit": "bytes (opcional)",
+    "paginationSuggestion": "Parece que el número de página está en la URL. ¿Usar este patrón?",
+    "paginationSuggestionExample": "La página 2 sería: {example}",
+    "paginationSuggestionUse": "Usar este patrón",
+    "paginationPickNextLink": "Seleccionar el enlace «Siguiente»",
+    "paginationPickPageLink": "Haz clic en un enlace a la página 2 para aprender el patrón",
+    "discoveredUrlsAdvanced": "Avanzado: encontrar páginas de inicio automáticamente",
+    "retryAdvanced": "Avanzado: en qué errores reintentar",
+    "dedupRetentionAdvanced": "Avanzado: cuánto tiempo recordar elementos",
+    "outputFormatFlattenTitle": "Los resultados anidados se convierten en una tabla"
+  },
+  "requestHeaderPresets": {
+    "acceptLanguage": {
+      "label": "Accept-Language — idioma preferido",
+      "desc": "Pide al sitio sus páginas en este idioma, p. ej. es-ES o en-US."
+    },
+    "referer": {
+      "label": "Referer — la página de la que vienes",
+      "desc": "Indica al sitio desde qué página seguiste un enlace. Algunos sitios solo responden si está definido."
+    },
+    "userAgent": {
+      "label": "User-Agent — quién dice ser el script",
+      "desc": "Sustituye el identificador por defecto del script. Úsalo solo si el sitio rechaza el predeterminado."
+    },
+    "cookie": {
+      "label": "Cookie — mantener la sesión",
+      "desc": "Una cookie de sesión copiada de tu navegador. Es un secreto, por eso solo se guarda el nombre de su variable."
+    },
+    "authorization": {
+      "label": "Authorization — token de acceso",
+      "desc": "Un token o contraseña que el sitio exige para sus datos (p. ej. «Bearer …»). Es un secreto, por eso solo se guarda el nombre de su variable."
+    },
+    "apiKey": {
+      "label": "X-Api-Key — clave de API",
+      "desc": "La clave que algunos sitios exigen para sus datos. Es un secreto, por eso solo se guarda el nombre de su variable."
+    },
+    "other": {
+      "label": "Otra cabecera (escribe el nombre)…"
+    }
   },
   "robots": {
     "checkFailed": "No se pudo comprobar el robots.txt ({error}).",
@@ -264,12 +316,11 @@
     "variableLabel": "variable",
     "unnamedPart": "(aún sin nombre)",
     "sourceKindStaticList": "Lista de valores",
-    "sourceKindDiscovery": "Endpoint de descubrimiento",
+    "sourceKindDiscovery": "Lista de otra petición",
     "sourceKindRange": "Rango",
-    "sourceKindBrowserDiscovery": "Descubrimiento con navegador",
-    "discoveryUrlLabel": "URL de descubrimiento",
+    "sourceKindBrowserDiscovery": "Recoger de la página (navegador)",
+    "discoveryUrlLabel": "Página que abrir",
     "insertParameterPlaceholder": "+ Insertar parámetro…",
-    "insertParameterHint": "Inserta el marcador al final (o en la posición del cursor si acabas de hacer clic en el campo) — muévelo después tú mismo al lugar correcto de la ruta, donde normalmente iría un valor fijo, p. ej. \".../categories/{category}/weeks\".",
     "editTemplateBtn": "Editar plantilla",
     "doneEditingTemplateBtn": "Listo",
     "valueListPlaceholder": "Valores, separados por comas o uno por línea",
@@ -292,18 +343,19 @@
     "noHeadersRecorded": "No se registraron cabeceras de solicitud.",
     "headerModeValue": "Valor",
     "headerModeEnv": "Variable de entorno",
-    "envNamePlaceholder": "ENV_NAME",
     "bodyLabel": "Cuerpo de la solicitud",
     "bodyRootLabel": "Cuerpo",
     "bodyToVariableBtn": "→ Variable",
     "bodyToFixedBtn": "→ Fijo",
     "bodyPickParameterPlaceholder": "-- elegir un parámetro --",
     "bodyNewParameterOption": "+ Nuevo parámetro…",
-    "bodyCoerceToTitle": "Tipo de valor para usar en el cuerpo (por defecto: texto)"
+    "bodyCoerceToTitle": "Tipo de valor para usar en el cuerpo (por defecto: texto)",
+    "sourceAdvancedSummary": "Fuentes avanzadas",
+    "bodyValueTypeAdvanced": "Avanzado: tipo de valor",
+    "bodyValueTypeLabel": "Tipo de valor"
   },
   "apiCursor": {
     "toggleLabel": "Seguir el cursor de la página siguiente (paginación por cursor/token)",
-    "hint": "Para APIs que solo revelan el cursor de la página siguiente dentro de la respuesta actual (p. ej. pageInfo.endCursor o next_page_token). El script pide página tras página para cada combinación de parámetros hasta que no se devuelva más cursor.",
     "detectBtn": "Detectar desde la grabación",
     "detectNone": "No se encontró nada similar a un cursor en la solicitud/respuesta grabada. Introduce las rutas manualmente.",
     "detectApplied": "Ajustes de cursor rellenados desde la grabación; revísalos.",
@@ -314,11 +366,17 @@
     "targetBody": "Campo del cuerpo de la solicitud",
     "bodyNeedsPost": "Un destino en el cuerpo requiere una solicitud POST con cuerpo grabado.",
     "maxPagesLabel": "Máximo de páginas por combinación de solicitud",
-    "firstPageHint": "La página 1 se envía exactamente como se grabó; asegúrate de que la solicitud grabada sea la primera página, sin cursor."
+    "advancedSummary": "Avanzado: el cursor de la página siguiente está en la respuesta"
+  },
+  "apiLink": {
+    "toggleLabel": "Seguir la cabecera Link (paginación rel=\"next\")",
+    "detectedHint": "Una respuesta grabada anunció una página siguiente mediante una cabecera Link — esta opción probablemente encaja.",
+    "needsGet": "La paginación por cabecera Link necesita una petición GET.",
+    "maxPagesLabel": "Máximo de páginas por combinación de petición",
+    "advancedSummary": "Avanzado: la página siguiente está en la cabecera Link"
   },
   "apiBootstrap": {
     "toggleLabel": "Obtener un token nuevo antes de cada ejecución (auth bootstrap)",
-    "hint": "Para APIs que primero necesitan un token de corta duración de una solicitud de login/token. El script envía esa solicitud al inicio de cada ejecución y usa el valor extraído en los encabezados/la URL de abajo — las credenciales solo provienen de variables de entorno.",
     "fromRecordingBtn": "Tomar de la grabación",
     "recordingHint": "Elige la solicitud de login/token. ¿No aparece? Sigue grabando, recarga la página (o vuelve a iniciar sesión) y abre la lista de nuevo.",
     "recordingEmpty": "No se encontró ninguna solicitud grabada con respuesta JSON.",
@@ -331,14 +389,13 @@
     "bodyEncodingForm": "Formulario (x-www-form-urlencoded)",
     "valuePathLabel": "Ruta JSON al token en la respuesta",
     "nameLabel": "Nombre del marcador",
-    "usageHint": "Usa {placeholder} en un encabezado (modo \"Desde token\", p. ej. Bearer {placeholder}) o elige \"Valor del token\" como fuente de valores de una parte de la URL. Las solicitudes de descubrimiento reutilizan los encabezados.",
     "valuePlaceholder": "Valor",
-    "testValuePlaceholder": "Valor de prueba (solo ejecución de prueba)",
     "addRow": "+ Fila",
     "sourceKind": "Valor del token",
     "sourceKindNote": "Se rellena con el token recién obtenido ({placeholder}) en cada ejecución.",
     "sourceKindMissing": "No hay auth bootstrap configurado — actívalo arriba o elige otra fuente de valores.",
-    "headerMode": "Desde token"
+    "headerMode": "Desde token",
+    "advancedSummary": "Avanzado: la API necesita primero un token de inicio de sesión"
   },
   "group": {
     "repeating": "repetitivo",
@@ -353,7 +410,9 @@
     "splitFieldBtn": "+ Dividir campo",
     "combinedFieldMode": "Combinado de: {sources}",
     "splitFieldMode": "Dividido de: {source}",
-    "hiddenFromOutputBadge": "oculto"
+    "hiddenFromOutputBadge": "oculto",
+    "toggleToRepeatingTitle": "Pulsa para hacer repetitivo este contenedor (un resultado por coincidencia)",
+    "toggleToSingleTitle": "Pulsa para hacer único este contenedor (solo la primera coincidencia)"
   },
   "apiTree": {
     "addSubgroupBtn": "+ Grupo",
@@ -376,14 +435,14 @@
     "toBooleanOption": "Convertir a booleano",
     "toDateOption": "Convertir a fecha",
     "toCurrencyOption": "Convertir precio/moneda a número",
-    "patternPlaceholder": "Patrón regex (p. ej. \"\\d+\")",
-    "groupPlaceholder": "Grupo (0 = coincidencia completa)",
+    "patternPlaceholder": "Patrón (avanzado)",
+    "groupPlaceholder": "Parte a conservar (0 = coincidencia completa)",
     "findPlaceholder": "Buscar",
     "replacementPlaceholder": "Reemplazar con",
     "sourceFormatPlaceholder": "Formato de origen (p. ej. \"{dd}.{mm}.{yyyy}\")",
     "separatorPlaceholder": "Separador (p. ej. \", \")",
     "splitSourcePlaceholderOption": "Seleccionar campo…",
-    "splitIndexPlaceholder": "Parte (0 = primera)",
+    "splitIndexPlaceholder": "Parte (1 = primera)",
     "onErrorKeepOriginalOption": "En caso de error: mantener valor original",
     "onErrorUseDefaultOption": "En caso de error: usar valor predeterminado",
     "defaultValuePlaceholder": "Valor predeterminado",
@@ -395,6 +454,32 @@
       "dotDecimal": "1,234.56 (EN/US/MX …)",
       "spaceGrouped": "1 234,56 (FR/países nórdicos …)",
       "apostropheGrouped": "1'234.56 (CH)"
+    },
+    "helper": {
+      "button": "Asistente de patrón",
+      "recipePlaceholder": "¿Qué quieres extraer?",
+      "use": "Usar este patrón",
+      "bracketsLabel": "Tipo de corchetes",
+      "needsText": "Introduce primero el texto.",
+      "noValue": "Elige primero un elemento con valor para ver el resultado.",
+      "noMatch": "Sin coincidencia en tu valor — ajusta el texto.",
+      "result": "Resultado con tu valor: {value}",
+      "afterPlaceholder": "después de este texto, p. ej. Precio:",
+      "beforePlaceholder": "antes de este texto, p. ej. €",
+      "betweenStartPlaceholder": "entre este texto…",
+      "betweenEndPlaceholder": "…y este texto",
+      "recipe": {
+        "firstNumber": "Primer número",
+        "digits": "Primera serie de dígitos",
+        "textAfter": "Texto después de …",
+        "textBefore": "Texto antes de …",
+        "textBetween": "Texto entre … y …",
+        "brackets": "Texto entre paréntesis"
+      },
+      "dateDetected": "Formato detectado en tu valor: {format}",
+      "dateDetectedAmbiguous": "Formato detectado en tu valor: {format} (también podría ser {alternative})",
+      "dateLooksLike": "Tu valor parece {format}.",
+      "dateNoGuess": "No se pudo adivinar el formato — escríbelo como tu valor, p. ej. {dd}.{mm}.{yyyy} para 28.08.2026."
     }
   },
   "transformPresets": {
@@ -411,7 +496,6 @@
     "saveNotPossibleHint": "Añade primero al menos una transformación completa (los pasos de combinar/dividir no se pueden guardar como plantilla).",
     "saveUnavailableHint": "El companion no está disponible o es demasiado antiguo — tus plantillas no están disponibles ahora mismo.",
     "settingsTitle": "Plantillas de transformación",
-    "settingsHint": "Guarda una cadena de transformaciones desde el diálogo de un campo con \"Guardar como plantilla\" y aplícala a cualquier campo con \"Aplicar plantilla …\".",
     "unavailableHint": "Tus plantillas no están disponibles (companion inaccesible o demasiado antiguo) — solo se muestran las incluidas.",
     "renameBtn": "Renombrar",
     "deleteConfirmPrompt": "¿Eliminar?",
@@ -442,7 +526,6 @@
     "scriptNameModeFixed": "Nombre fijo",
     "scriptNameModeHostname": "Desde el sitio web",
     "scriptNameFixedLabel": "Nombre de script fijo",
-    "scriptNameHostnameHint": "El nombre del script siempre se deriva del nombre de host del sitio web actual.",
     "allConfigsTitle": "Todas las configuraciones guardadas",
     "allConfigsEmpty": "Todavía no hay configuraciones guardadas.",
     "outputFormatLabel": "Formato de salida",
@@ -450,18 +533,71 @@
     "outputFormatJson": "JSON",
     "outputFormatSqlite": "Base de datos SQLite",
     "outputFormatXlsx": "Excel (.xlsx)",
-    "outputFormatHint": "El archivo que escribe el script generado. SQLite y Excel contienen una tabla / hoja; los resultados anidados (contenedores, datos de API anidados) se aplanan en ella. Excel necesita el paquete de Python «openpyxl» (pip install openpyxl) en el equipo donde se ejecutan el script y el companion. No disponible para el modo Blocks ni Combined; no se puede combinar con la detección de cambios.",
+    "skipVerificationToggle": "Omitir la ejecución de prueba (devolver el script de inmediato)",
     "accessKeyTitle": "Clave de acceso (companion compartido)",
     "accessKeyLabel": "Clave de acceso",
     "accessKeyPlaceholder": "sf_…",
     "accessKeySave": "Guardar y probar",
     "accessKeyClear": "Quitar",
-    "accessKeyHint": "Solo es necesaria si el companion al que te conectas exige una clave de acceso personal (varias personas comparten un companion). Quien administra el companion la crea para ti. Se guarda en este navegador y se envía con cada solicitud al companion.",
     "accessKeyOk": "Conectado como {name}.",
     "accessKeyNotNeeded": "Este companion no usa claves de acceso.",
     "accessKeyMissing": "Este companion exige una clave de acceso.",
     "accessKeyRejected": "La clave de acceso no es válida.",
-    "accessKeyUnreachable": "No se pudo alcanzar el companion."
+    "accessKeyUnreachable": "No se pudo alcanzar el companion.",
+    "account": {
+      "title": "Cuenta",
+      "nameLabel": "Nombre de usuario",
+      "passwordLabel": "Contraseña",
+      "repeatLabel": "Repetir contraseña",
+      "login": "Iniciar sesión",
+      "register": "Registrarse",
+      "logout": "Cerrar sesión",
+      "logoutAll": "Cerrar sesión en todas partes",
+      "signedInAs": "Sesión iniciada como {name}.",
+      "currentPasswordLabel": "Contraseña actual",
+      "newPasswordLabel": "Contraseña nueva",
+      "changePassword": "Cambiar contraseña",
+      "passwordChanged": "Contraseña cambiada. Los demás dispositivos deben iniciar sesión de nuevo.",
+      "noRegistration": "Este companion no permite el autorregistro — pide una cuenta o una clave de acceso a quien lo gestiona.",
+      "nameMissing": "Introduce un nombre de usuario.",
+      "passwordMissing": "Introduce una contraseña.",
+      "passwordMismatch": "Las dos contraseñas no coinciden.",
+      "unreachable": "No se pudo alcanzar el companion.",
+      "throttled": "Demasiados intentos — inténtalo de nuevo en {seconds} segundos.",
+      "failed": "El companion respondió con un error (HTTP {status}).",
+      "emailLabelOptional": "Correo (opcional)",
+      "emailLabelRequired": "Correo",
+      "emailMissing": "Introduce tu dirección de correo.",
+      "emailInvalid": "Eso no parece una dirección de correo.",
+      "forgot": "¿Olvidaste la contraseña?",
+      "forgotAccountLabel": "Usuario o correo",
+      "forgotSend": "Enviar código",
+      "forgotSent": "Si esa cuenta tiene una dirección de correo verificada, un código está en camino.",
+      "forgotAccountMissing": "Introduce tu usuario o dirección de correo.",
+      "codeLabel": "Código del correo",
+      "codeInvalid": "Introduce el código de {digits} dígitos del correo.",
+      "resetConfirm": "Restablecer contraseña",
+      "resetDone": "Contraseña restablecida. Inicia sesión con la nueva contraseña.",
+      "registeredCodeSent": "Se envió un código a {email} — introdúcelo abajo para confirmar la dirección.",
+      "registeredNoCode": "No se pudo enviar el código a {email} — usa «Enviar el código de nuevo» abajo.",
+      "noEmail": "Esta cuenta no tiene dirección de correo.",
+      "emailVerifiedState": "Correo: {email} (verificado)",
+      "emailUnverifiedState": "Correo: {email} — aún sin verificar. Introduce el código que te enviamos.",
+      "verify": "Verificar",
+      "resend": "Enviar el código de nuevo",
+      "emailVerifiedNow": "Dirección de correo confirmada.",
+      "codeResent": "Se envió un código nuevo.",
+      "newEmailLabel": "Nueva dirección de correo",
+      "setEmail": "Guardar dirección de correo"
+    },
+    "developer": {
+      "title": "Opciones de desarrollo (build de desarrollo)",
+      "insecureHttp": "Permitir http:// sin cifrar hacia un companion en otro equipo",
+      "openCompanion": "Abrir la dirección del companion en una pestaña",
+      "reloadHint": "Guardado — recarga el panel (o reintenta la conexión) para aplicarlo."
+    },
+    "glossaryTitle": "Glosario: qué significan estos términos",
+    "connectionTitle": "Conexión con el companion"
   },
   "modals": {
     "fieldName": {
@@ -492,7 +628,8 @@
       "maxSizeLabel": "Tamaño máx. de archivo (MB, opcional)",
       "maxSizePlaceholder": "Sin límite",
       "allowedTypesLabel": "Tipos de contenido permitidos (opcional, separados por comas)",
-      "allowedTypesPlaceholder": "p. ej. application/pdf, application/zip"
+      "allowedTypesPlaceholder": "p. ej. application/pdf, application/zip",
+      "advanced": "Avanzado: límites de tamaño y tipo de archivo"
     },
     "apiGroupNew": {
       "nameLabel": "Nombre del grupo (p. ej. \"Subcategoría\")",
@@ -517,7 +654,7 @@
       "namePlaceholder": "Nombre del campo",
       "sourceLabel": "¿Qué campo se debe dividir?",
       "separatorLabel": "Separador",
-      "indexLabel": "Parte (0 = primera)",
+      "indexLabel": "Parte (1 = primera)",
       "removeOriginalToggle": "Eliminar el campo original de la salida"
     },
     "saveConfig": {
@@ -537,19 +674,18 @@
     "textFilter": {
       "label": "Solo el elemento cuyo texto contiene (opcional)",
       "placeholder": "p. ej. Añadir al carrito",
-      "useElementText": "Usar el texto de este elemento",
-      "hint": "Úsalo cuando varios elementos parecidos (botones, enlaces) solo se distinguen por su etiqueta. Las mayúsculas y los espacios de más no importan. Déjalo vacío para mantener la selección tal cual."
+      "useElementText": "Usar el texto de este elemento"
     },
     "matchCount": {
       "found": "{count} elemento(s) encontrado(s)"
     },
     "manageBlueprints": {
-      "title": "Plantillas de salida",
-      "empty": "Todavía no hay plantillas de salida guardadas.",
-      "newBtn": "+ Nueva plantilla"
+      "title": "Diseños de salida",
+      "empty": "Todavía no hay diseños de salida guardados.",
+      "newBtn": "+ Nuevo diseño"
     },
     "blueprintEdit": {
-      "nameLabel": "Nombre de la plantilla (p. ej. \"Exportación estándar de productos\")",
+      "nameLabel": "Nombre del diseño (p. ej. \"Exportación estándar de productos\")",
       "namePlaceholder": "Nombre",
       "flatSchemaBtn": "Plano",
       "treeSchemaBtn": "Árbol",
@@ -574,7 +710,7 @@
     "generationError": "Error: {message}",
     "combinedComponentUnresolvable": "No se pudo cargar el componente \"{name}\" — es posible que su configuración guardada haya sido eliminada.",
     "selectionUnavailable": "No es posible seleccionar elementos en esta página.",
-    "scopeSelectorNotFound": "Ya no se pudo encontrar el punto de referencia seleccionado — la página cambió mientras tanto (p. ej. un estado de hover o de carga). Inténtalo de nuevo o elige otro punto de partida.",
+    "scopeSelectorNotFound": "Ya no se encontró el punto de referencia: la página cambió mientras tanto. Inténtalo de nuevo o elige otro punto de partida.",
     "clickOutsideScope": "Selecciona un elemento dentro de un contenedor.",
     "trackedUrlUpdated": "Página seguida actualizada a {url} — el elemento que acabas de seleccionar proviene de una página diferente a la anterior.",
     "previewUnavailable": "No es posible la vista previa en esta página.",
@@ -592,16 +728,21 @@
     "outputLoadFailed": "No se pudo cargar la salida: {message}",
     "outputDeleted": "Salida eliminada.",
     "outputDeleteFailed": "No se pudo eliminar la salida: {message}",
-    "blueprintLoadFailed": "No se pudo cargar la plantilla de salida: {message}",
-    "blueprintDeleted": "Plantilla de salida eliminada.",
-    "blueprintDeleteFailed": "No se pudo eliminar la plantilla de salida: {message}",
-    "blueprintSaved": "Plantilla de salida guardada.",
-    "blueprintSaveFailed": "No se pudo guardar la plantilla de salida: {message}",
+    "blueprintLoadFailed": "No se pudo cargar el diseño de salida: {message}",
+    "blueprintDeleted": "Diseño de salida eliminado.",
+    "blueprintDeleteFailed": "No se pudo eliminar el diseño de salida: {message}",
+    "blueprintSaved": "Diseño de salida guardado.",
+    "blueprintSaveFailed": "No se pudo guardar el diseño de salida: {message}",
     "blueprintImportEmpty": "No se encontraron nombres de campo en la muestra pegada.",
     "blueprintImportParsed": "Se importaron {count} campo(s) de la muestra.",
     "blueprintImportFileReadFailed": "No se pudo leer el archivo seleccionado: {message}",
     "accessKeyRequired": "Este companion exige una clave de acceso — introdúcela en Ajustes.",
-    "accessKeyRejected": "El companion rechazó la clave de acceso — compruébala en Ajustes."
+    "accessKeyRejected": "El companion rechazó la clave de acceso — compruébala en Ajustes.",
+    "insecureCompanionUrl": "Esta dirección enviaría contraseñas y claves sin cifrar a otro equipo. Usa una dirección https://.",
+    "emailUnverified": "Este companion necesita una dirección de correo verificada antes de servir tus datos — confírmala en Ajustes → Cuenta.",
+    "containerSingleMany": "Contenedor «{name}» añadido — {count} elementos encontrados, pero está en «único», así que solo se usa el primero. Pulsa «(único)» en el árbol para hacerlo repetitivo.",
+    "containerRepeatingOne": "Contenedor «{name}» añadido — solo 1 elemento encontrado. Un contenedor repetitivo es para varios; pulsa «(repetitivo)» en el árbol para hacerlo único.",
+    "paginationNotALink": "Ese elemento no es un enlace con dirección — haz clic en el propio enlace «2» o «Siguiente»."
   },
   "frame": {
     "badge": "iframe",
@@ -609,7 +750,6 @@
   },
   "browserActions": {
     "title": "Acciones del navegador",
-    "hint": "Se ejecutan en orden antes de la extracción, p. ej. para un flujo de inicio de sesión.",
     "addWaitBtn": "+ Esperar",
     "addFillBtn": "+ Rellenar",
     "addClickBtn": "+ Clic",
@@ -620,26 +760,536 @@
     "kindScroll": "Desplazar",
     "noSelector": "Ningún elemento seleccionado",
     "pickSelectorBtn": "Seleccionar elemento",
-    "timeoutLabel": "Tiempo de espera (ms)",
-    "envVarLabel": "Variable de entorno",
-    "envNamePlaceholder": "ENV_NAME",
-    "envVarHint": "El valor se lee de esta variable de entorno en tiempo de ejecución, nunca se guarda en el script.",
+    "envVarLabel": "Variable con el texto a escribir",
     "testValueLabel": "Valor de prueba",
-    "testValuePlaceholder": "Solo para la verificación",
-    "testValueHint": "Se usa solo para la ejecución de prueba única al generar — nunca se guarda, nunca se incluye en el script.",
     "containerSelectorLabel": "Contenedor (opcional)",
     "loadMoreButtonSelectorLabel": "Botón \"Cargar más\" (opcional)",
     "maxIterationsLabel": "Rondas máx.",
-    "waitAfterMsLabel": "Tiempo de espera (ms)",
     "clickTargetLabel": "Qué coincidencia se hace clic",
     "clickTarget": {
       "first": "Primera coincidencia",
       "last": "Última coincidencia",
       "all": "Todas las coincidencias, en orden"
     },
-    "scrollStepPxLabel": "Paso de scroll (px)",
+    "scrollStepPxLabel": "Paso de desplazamiento (píxeles)",
     "scrollStepPxPlaceholder": "vacío = saltar al final",
     "persistentSessionToggle": "Reutilizar sesión entre ejecuciones",
-    "persistentSessionHint": "Guarda las cookies/el estado de inicio de sesión después de cada ejecución y omite las acciones de inicio de sesión anteriores en la siguiente. Advertencia: el archivo guardado contiene cookies de sesión reales — trátalo como una contraseña y nunca lo compartas ni lo subas a un repositorio. Si la sesión llega a caducar, la ejecución simplemente falla; no hay reinicio de sesión automático."
+    "addLoginFlowBtn": "+ Formulario de inicio de sesión (4 pasos)",
+    "loginFlowHint": "Ahora haz clic en los cuatro elementos de la página: el campo de usuario, el campo de contraseña, el botón de inicio de sesión y algo que solo aparece una vez iniciada la sesión.",
+    "role": {
+      "user": "Escribir el usuario",
+      "password": "Escribir la contraseña",
+      "submit": "Hacer clic en el botón de inicio de sesión",
+      "loggedIn": "Esperar a haber iniciado sesión"
+    },
+    "pickRole": {
+      "user": "Seleccionar el campo de usuario",
+      "password": "Seleccionar el campo de contraseña",
+      "submit": "Seleccionar el botón de inicio de sesión",
+      "loggedIn": "Seleccionar un elemento visible tras iniciar sesión"
+    },
+    "envVarLabelUser": "Variable con el usuario",
+    "envVarLabelPassword": "Variable con la contraseña",
+    "testValueLabelUser": "Usuario de prueba",
+    "testValueLabelPassword": "Contraseña de prueba",
+    "timeoutSecondsLabel": "Esperar como máximo (segundos)",
+    "waitAfterRoundSecondsLabel": "Pausa tras cada ronda (segundos)",
+    "waitAfterClickSecondsLabel": "Pausa tras cada clic (segundos)",
+    "persistentSessionAdvanced": "Avanzado: mantener la sesión entre ejecuciones"
+  },
+  "help": {
+    "requestHeaders": {
+      "headers": {
+        "text": "Cabeceras adicionales que el script envía con cada solicitud, p. ej. un idioma, un Referer o una clave de API. Para un secreto elige «Variable de entorno» e indica solo su nombre; el valor de prueba se usa solo en la ejecución de prueba y nunca se guarda. Una cabecera llamada User-Agent sustituye a la predeterminada.",
+        "example": "Accept-Language: de-CH"
+      },
+      "picker": {
+        "text": "Elige para qué sirve la cabecera: el nombre y una sugerencia se rellenan por ti. Los secretos (Cookie, Authorization, clave de API) empiezan como variable de entorno, así nunca acaban en el script. Con «Otra» escribes cualquier nombre de cabecera.",
+        "example": "Authorization → Variable de entorno → AUTH_TOKEN"
+      }
+    },
+    "appendOutput": {
+      "append": {
+        "text": "Cada ejecución añade sus filas al archivo de salida de las anteriores, de modo que el archivo crece como un histórico. Si cambian los campos, el archivo conserva sus columnas y se añaden las nuevas; un archivo ilegible detiene la ejecución sin tocarlo. No disponible en el modo combinado.",
+        "example": "Ejecución 1: 120 filas → ejecución 2: 240 filas"
+      }
+    },
+    "companionError": {
+      "causes": {
+        "text": "No iniciado → iníciala y pulsa «Reintentar».\nOtro puerto u ordenador → introduce su dirección abajo.\nOtro ordenador → la dirección debe empezar por https://.\nCompanion compartido → puede requerir una clave de acceso (Configuración)."
+      }
+    },
+    "mode": {
+      "choice": {
+        "text": "Campos — lista sencilla, los mismos valores por elemento (productos).\nContenedores — elementos con subelementos (carta: categorías → platos).\nAPI — la página carga datos con una petición oculta; pruébala si Campos no halla nada.\nCombinado, Bloques — varios scrapers en un script, o varios archivos de una página."
+      }
+    },
+    "containerType": {
+      "type": {
+        "text": "Elemento único — existe una sola vez en la página (p. ej. la cabecera).\nRepetitivo — aparece muchas veces (p. ej. cada plato de una carta); obtienes un resultado por coincidencia.",
+        "example": "Carta con 12 platos → Repetitivo"
+      }
+    },
+    "fieldType": {
+      "container": {
+        "text": "Texto — el texto visible (un precio).\nAtributo — un valor de la etiqueta (la dirección de un enlace o el origen de una imagen).\n¿Existe? — solo si el elemento está (una insignia «oferta»).\nSolo texto propio — el texto del propio elemento sin elementos anidados (un nombre sin su insignia)."
+      },
+      "flat": {
+        "text": "Texto — el texto visible (un precio).\nAtributo — un valor de la etiqueta (la dirección de un enlace o el origen de una imagen, p. ej. para descargarla)."
+      }
+    },
+    "engine": {
+      "choice": {
+        "text": "Estático — rápido; lee la página tal como la envía el servidor.\nNavegador — un navegador real; para páginas creadas con JavaScript, con inicio de sesión o que necesitan desplazarse.\nSi Estático no encuentra nada, suele bastar con Navegador."
+      }
+    },
+    "envVar": {
+      "what": {
+        "text": "Un valor con nombre guardado en el equipo que ejecuta el script — un lugar seguro para contraseñas y claves, para que nunca acaben en el script. Introduce aquí solo su nombre (p. ej. SMTP_PASSWORD); el script lee el valor al ejecutarse, en ese equipo, no en el navegador.",
+        "example": "Windows:  setx SMTP_PASSWORD \"secreto\"\nmacOS/Linux:  export SMTP_PASSWORD=\"secreto\""
+      }
+    },
+    "transforms": {
+      "regex": {
+        "text": "Elige una receta y el patrón se escribe por ti — tu texto se toma literalmente, así que símbolos como . o ( no dan problema. El patrón sigue siendo editable; «Parte a conservar» indica qué parte entre paréntesis pasa a ser el valor (0 = la coincidencia completa).",
+        "example": "Precio: 12,99 € → «Texto después de … Precio:» → 12,99 €"
+      },
+      "dateFormat": {
+        "text": "Describe cómo está escrita la fecha: {dd} es el día, {mm} el mes, {yyyy} el año, todo lo demás tal como aparece. Solo funcionan fechas numéricas — nombres de mes como «ago» no.",
+        "example": "28.08.2026 → {dd}.{mm}.{yyyy}"
+      },
+      "overview": {
+        "text": "Pasos que se aplican al valor antes de escribirlo, por ejemplo recortarlo, extraer un número o convertirlo en fecha. Guarda una cadena como plantilla para reutilizarla en otros campos."
+      }
+    },
+    "hardening": {
+      "severity": {
+        "text": "Las comprobaciones se ejecutan al final de cada ejecución del script. «Avisarme»: la ejecución termina con normalidad y se imprime un mensaje. «Detener la ejecución»: se marca como fallida para que un programador de tareas o un monitor lo note — código de salida 2 (un fallo inesperado es el código 1)."
+      },
+      "recommended": {
+        "text": "Activa un comienzo sensato: un aviso si no se encontró nada y un aviso para las filas sin su primer campo (esas filas no aparecen en el archivo). Las comprobaciones que ya configuraste no se tocan."
+      },
+      "noResult": {
+        "text": "Avisa cuando el script no encontró nada — normalmente porque la web cambió su diseño.",
+        "example": "El selector de «Precio» de repente no encuentra ningún elemento."
+      },
+      "nullRate": {
+        "text": "Avisa cuando demasiadas filas no tienen valor en un campo: el selector aún encuentra algo, pero no lo correcto.",
+        "example": "Avisar si más del 50 % de las filas no tienen Precio."
+      },
+      "baseline": {
+        "text": "Avisa cuando esta ejecución encontró mucho menos que la anterior — un botón «cargar más» o una paginación rotos suelen verse así.",
+        "example": "Un 20 % menos de filas que ayer."
+      },
+      "blocking": {
+        "text": "Avisa cuando el sitio empieza a bloquear el script pero responde con normalidad: te lleva a otra web, envía una página muy corta o muestra un mensaje de bloqueo.",
+        "example": "«Access Denied», «No soy un robot»"
+      },
+      "blockingAdvanced": {
+        "text": "Una página de bloqueo suele ser diminuta: 1000 bytes son más o menos un párrafo de texto. Las frases se buscan en la página, una por línea; cualquier coincidencia cuenta como bloqueo.",
+        "example": "Access Denied\nConfirma que eres una persona"
+      },
+      "requiredFields": {
+        "text": "Omite cada fila sin valor en los campos elegidos, para que las filas incompletas nunca lleguen al archivo. El resto de la ejecución continúa.",
+        "example": "Una importación a base de datos que necesita un Precio no vacío."
+      }
+    },
+    "browserActions": {
+      "overview": {
+        "text": "Un inicio de sesión son cuatro pasos: escribir el usuario, escribir la contraseña, hacer clic en el botón y esperar a que aparezca la página ya identificada. Los pasos se ejecutan en el orden indicado, antes de leer datos. «Formulario de inicio de sesión» añade los cuatro de una vez: solo tienes que hacer clic en los elementos de la página.",
+        "example": "Escribir usuario → Escribir contraseña → Clic en «Entrar» → Esperar «Bienvenido de nuevo»"
+      },
+      "maxRounds": {
+        "text": "Cuántas veces el script se desplaza hacia abajo o pulsa «Cargar más» antes de parar. Un número mayor carga más elementos pero tarda más; también se detiene antes si no aparece nada nuevo.",
+        "example": "10"
+      },
+      "persistentSession": {
+        "text": "Tras una ejecución el script guarda tus cookies y el estado de sesión en un archivo junto a su salida y, la próxima vez, omite los pasos de inicio de sesión. El archivo contiene cookies de sesión activas: trátalo como una contraseña y nunca lo compartas ni lo subas a un repositorio. Si la sesión caduca, la ejecución simplemente falla — no hay reinicio de sesión automático; borra el archivo para iniciar sesión de nuevo."
+      }
+    },
+    "pagination": {
+      "urlTemplate": {
+        "text": "El patrón de dirección para las páginas 2, 3, …: {page} se sustituye por el número de página, {url} (opcional) por la página de inicio tal cual. La página 1 es siempre la propia página de inicio. Con varias páginas de inicio {url} es obligatorio.",
+        "example": "{url}?page={page}"
+      },
+      "maxPages": {
+        "text": "Un límite de seguridad: el script se detiene tras tantas páginas aunque haya más. También se detiene antes si una página no tiene resultados o desaparece el enlace «Siguiente».",
+        "example": "50"
+      }
+    },
+    "discoveredUrls": {
+      "overview": {
+        "text": "Para sitios cuya lista de páginas cambia, p. ej. un menú de categorías: el script abre esta página una vez, recoge cada enlace que coincide con el selector y lee cada página enlazada como página de inicio adicional. Elige un enlace del menú — el selector sirve entonces para todos los similares. También se puede elegir un enlace por su texto.",
+        "example": "a:contains(\"Verduras\")"
+      }
+    },
+    "apiConfig": {
+      "urlParts": {
+        "text": "Cada parte de la dirección permanece fija o cambia entre peticiones. Marca «variable» en la parte que toma valores distintos — una semana, una categoría, una página — y dale un nombre; abajo indicas de dónde salen sus valores. Las partes fijas se envían tal como se grabaron.",
+        "example": "/api/weeks/2026-W35  →  marcar «variable», llamarla «semana»"
+      },
+      "bodyVariable": {
+        "text": "Un valor del cuerpo de la petición es fijo o cambia entre peticiones. «→ Variable» le hace tomar los valores de un parámetro (nuevo o existente), p. ej. la categoría de una búsqueda.",
+        "example": "category: \"electronics\"  →  variable «category»"
+      },
+      "valueType": {
+        "text": "Cómo se escribe el valor en el cuerpo. Texto sirve para la mayoría de las API; elige Número o Boolean cuando el servidor espera un número o true/false — un «10» entre comillas se rechazaría.",
+        "example": "\"pageSize\": 10  →  Number"
+      },
+      "sourceStaticList": {
+        "text": "Escribes los valores tú mismo o los recoges de la grabación; el script pide cada uno.",
+        "example": "electronica, libros"
+      },
+      "sourceDiscovery": {
+        "text": "Los valores salen de otra petición del sitio, p. ej. una lista de categorías. Haz clic en uno de esos valores en la página y se encuentra la petición adecuada. Al editar su dirección, la lista \"insertar parámetro\" añade {name} en el cursor; muévelo a donde iría un valor fijo, p. ej. .../categories/{category}/weeks.",
+        "example": "GET /api/categories  →  cada id de la lista"
+      },
+      "sourceRange": {
+        "text": "Recorre un rango: semanas ISO, números o fechas.",
+        "example": "2026-W30 … 2026-W35"
+      },
+      "sourceBrowserDiscovery": {
+        "text": "Para valores que solo aparecen al usar la página: el script abre un navegador, hace tus clics y desplazamientos y anota qué valores pide el sitio.",
+        "example": "desplazar la página de ofertas, recoger cada nombre de categoría"
+      },
+      "sourceBootstrap": {
+        "text": "Esta parte de la dirección toma el token de acceso recién obtenido (ver «la API necesita primero un token de inicio de sesión»).",
+        "example": "?access_token={token}"
+      },
+      "fields": {
+        "text": "Los campos que se extraen de la respuesta. Un grupo limita sus campos a una lista u objeto del JSON; un campo es un único valor."
+      }
+    },
+    "apiBootstrap": {
+      "overview": {
+        "text": "Para APIs que primero necesitan un token de corta duración de una solicitud de login/token. El script envía esa solicitud al inicio de cada ejecución y usa el valor extraído en los encabezados/la URL de abajo — las credenciales solo provienen de variables de entorno.",
+        "example": "POST /auth/token  →  access_token"
+      },
+      "placeholder": {
+        "text": "Usa el nombre entre llaves, p. ej. {token}, en un encabezado (modo \"Desde token\") o elige \"Valor del token\" como fuente de valores de una parte de la URL. Las solicitudes de una lista de valores reutilizan los encabezados."
+      }
+    },
+    "apiCursor": {
+      "overview": {
+        "text": "Para APIs que solo revelan el cursor de la página siguiente dentro de la respuesta actual (p. ej. pageInfo.endCursor o next_page_token). El script pide página tras página para cada combinación de parámetros hasta que no se devuelva más cursor. La página 1 se envía exactamente como se grabó, así que comprueba que la solicitud grabada sea la primera página, sin cursor.",
+        "example": "pageInfo.endCursor"
+      }
+    },
+    "apiLink": {
+      "overview": {
+        "text": "Para APIs (GitHub, GitLab, WordPress, ...) que anuncian la página siguiente en la cabecera de respuesta HTTP Link en lugar de en el cuerpo. El script solicita esa URL página tras página para cada combinación de parámetros hasta que no quede enlace siguiente. No para peticiones POST. La página 1 se envía exactamente como se grabó, así que comprueba que la solicitud grabada sea la primera página. Los enlaces a la página siguiente en otro host nunca se siguen.",
+        "example": "Link: <…?page=2>; rel=\"next\""
+      }
+    },
+    "outputLayout": {
+      "overview": {
+        "text": "Una lista guardada de nombres de columna en un orden fijo. Elige una y asigna cada columna a uno de tus campos: cada columna necesita un origen antes de poder generar el script; los grupos de un diseño en árbol se colocan automáticamente. Así todas las exportaciones para el mismo proceso tienen las mismas columnas, vengan de la página que vengan.",
+        "example": "Exportación estándar de productos: nombre, precio, enlace"
+      },
+      "manage": {
+        "text": "Un diseño de salida es una lista guardada y reutilizable de nombres de columna. Crea uno aquí y elígelo luego en los ajustes de un scraper para renombrar y ordenar sus columnas de salida."
+      }
+    },
+    "safetyChecks": {
+      "overview": {
+        "text": "Comprobaciones que el script hace por sí mismo después de cada ejecución: ¿no encontró nada? ¿Un campo siempre vacío? ¿Muchas menos filas que la última vez? ¿Bloqueado por el sitio? Te avisa o marca la ejecución como fallida para que un programador lo note."
+      }
+    },
+    "preflight": {
+      "overview": {
+        "text": "Antes de la ejecución real, el script hace una pregunta barata a la página: ¿ha cambiado desde la última vez? Si no, se omite la ejecución. Las páginas que no lo indican se leen siempre."
+      }
+    },
+    "dedup": {
+      "overview": {
+        "text": "Descarta un elemento cuando ya apareció otro con la misma clave, en esta ejecución o (si lo eliges) en una anterior. Elige los campos que identifican un elemento (juntos forman su clave), p. ej. el número de artículo. Los elementos cuyos campos clave están todos vacíos nunca se eliminan.",
+        "example": "Número de artículo"
+      },
+      "incremental": {
+        "text": "El script recuerda las claves vistas en un pequeño archivo junto a su salida (nombre del archivo de salida + .dedup-seen.json); bórralo para empezar de cero. Las claves recordadas están limitadas por número o antigüedad. El archivo solo se actualiza tras una ejecución que no incumplió una comprobación de seguridad."
+      }
+    },
+    "outputFormat": {
+      "overview": {
+        "text": "El archivo que escribe el script generado. SQLite y Excel contienen una tabla; los resultados anidados se aplanan en ella. Excel necesita el paquete de Python openpyxl en el equipo que ejecuta el script y en el del companion. No disponible para bloques ni combinado, ni junto con la detección de cambios."
+      },
+      "flatten": {
+        "text": "Los resultados anidados se aplanan en una tabla: una fila por elemento más interno, con los valores de niveles superiores repetidos en cada fila. Cada campo de datos necesita un nombre único, o elige un diseño de salida para definir tú las columnas."
+      }
+    },
+    "editableConfig": {
+      "overview": {
+        "text": "Te permite cambiar más tarde las URL de inicio, el nombre de salida o el nombre de salida de un campo en un pequeño archivo XML junto al script, sin tocar el archivo .py. El script crea el archivo en su primera ejecución."
+      }
+    },
+    "skipTrialRun": {
+      "overview": {
+        "text": "El script se entrega sin haberse ejecutado antes contra la página real. Se sigue comprobando su estructura, pero un selector incorrecto o una solicitud bloqueada solo se nota al ejecutarlo tú, y no hay vista previa de datos ni archivo de salida completo."
+      }
+    },
+    "scriptName": {
+      "overview": {
+        "text": "Nombre fijo: rellena el nombre del script de cada scraper nuevo. Desde el sitio web: el nombre se deriva cada vez de la dirección del sitio actual. Puedes seguir cambiándolo en cada scraper."
+      }
+    },
+    "account": {
+      "forgot": {
+        "text": "Introduce tu nombre de usuario o la dirección de correo verificada de tu cuenta. Si la tiene, se envía allí un código; introdúcelo abajo con una contraseña nueva."
+      },
+      "overview": {
+        "text": "La contraseña solo va a tu companion; este navegador guarda solo un token revocable para este dispositivo. Usa un companion por https:// o en este equipo para que nadie pueda leer la contraseña por el camino."
+      }
+    },
+    "accessKey": {
+      "overview": {
+        "text": "Solo hace falta si el companion al que te conectas exige una clave de acceso personal (varias personas comparten un companion). Quien lo gestiona te la crea. Se guarda en este navegador y se envía con cada solicitud."
+      }
+    },
+    "developer": {
+      "overview": {
+        "text": "Solo existe en una versión de desarrollo. Con un certificado autofirmado: abre la dirección del companion una vez en una pestaña (botón de arriba), acepta el aviso y recarga este panel."
+      }
+    },
+    "presets": {
+      "overview": {
+        "text": "Guarda una cadena de transformaciones desde el diálogo de un campo con \"Guardar como plantilla\" y aplícala a cualquier campo con \"Aplicar plantilla …\". Las plantillas integradas son de solo lectura; las tuyas se pueden renombrar o eliminar aquí."
+      }
+    },
+    "savedConfigs": {
+      "overview": {
+        "text": "Todo lo que guardaste para cualquier sitio. Carga una configuración desde el panel en la página de ese sitio; aquí puedes ver sus salidas guardadas o eliminar entradas."
+      },
+      "panel": {
+        "text": "Configuraciones que guardaste para este sitio. Carga una para restaurar su ajuste o abre sus salidas guardadas."
+      }
+    },
+    "combined": {
+      "overview": {
+        "text": "Une varias de tus configuraciones guardadas, incluso de sitios distintos, en un solo script. Sus salidas se combinan en un único resultado."
+      }
+    },
+    "blocks": {
+      "overview": {
+        "text": "Crea varios bloques de extracción independientes (planos o contenedores, mezclados a voluntad) en esta página. Comparten una navegación y cada uno escribe su propio archivo de salida en una sola ejecución. Se necesitan al menos 2 bloques."
+      }
+    },
+    "proxy": {
+      "overview": {
+        "text": "Introduce el nombre de una variable de entorno con una lista de URL de proxy separadas por comas, p. ej. http://user:pass@host:port, no las direcciones en sí. Con varios proxies el script los usa por turnos."
+      }
+    },
+    "requestDelay": {
+      "overview": {
+        "text": "El script espera entre dos solicitudes, un tiempo fijo o aleatorio dentro de un rango (p. ej. de 1 a 3 segundos), para evitar bloqueos y límites de frecuencia. La ejecución tarda más en consecuencia (50 páginas × 2 s ≈ 1,5 minutos más). La ejecución de prueba no cuenta las pausas en su límite de tiempo."
+      }
+    },
+    "robots": {
+      "crawlDelay": {
+        "text": "Si el robots.txt del sitio pide un ritmo (Crawl-delay o Request-rate), el script espera al menos ese tiempo entre dos solicitudes. Junto con \"Pausa entre solicitudes\" gana la pausa mayor. Los sitios que no publican nada no se ven afectados."
+      },
+      "disallow": {
+        "text": "Mientras se ejecuta, el script comprueba cada solicitud (páginas, páginas siguientes, descargas, llamadas a la API) con las reglas Disallow del robots.txt del sitio, por si el sitio las cambió después de crear el script. Un robots.txt ilegible nunca bloquea nada; sin robots.txt no hay restricciones."
+      }
+    },
+    "retry": {
+      "overview": {
+        "text": "Tras un error de conexión, un tiempo de espera o uno de los códigos de estado, el script lo intenta de nuevo tras la espera (con 429/503 tanto como pida el servidor mediante Retry-After, como máximo 60 s). Otros errores como 404 o 403 fallan de inmediato. Si fallan todos los intentos, la ejecución se detiene."
+      }
+    },
+    "changeDetection": {
+      "overview": {
+        "text": "Cada campo es el nombre de una variable de entorno, no su valor: el valor real se lee del entorno cuando se ejecuta el script y nunca se escribe en él."
+      }
+    },
+    "monitoring": {
+      "intro": {
+        "text": "Solo es útil si ejecutas el script una y otra vez, p. ej. cada noche: te avisa cuando el sitio web cambió y tu script dejó de funcionar."
+      }
+    },
+    "textFilter": {
+      "overview": {
+        "text": "Para elementos parecidos (botones, enlaces) que solo se distinguen por su etiqueta. Las mayúsculas y los espacios extra no importan. Déjalo vacío para mantener la selección tal cual."
+      }
+    },
+    "combineSplit": {
+      "overview": {
+        "text": "Un campo combinado o dividido se calcula a partir de otros campos del mismo grupo, no de la página. \"Quitar los campos originales\" oculta las fuentes de la salida pero sigue usándolas."
+      }
+    }
+  },
+  "errors": {
+    "detailsLabel": "Detalles",
+    "copyDetails": "Copiar",
+    "copied": "Copiado",
+    "close": "Cerrar",
+    "noData": {
+      "title": "No se encontraron datos",
+      "hint": "Los selectores no coincidieron con nada que el script pudiera leer. Revisa los elementos resaltados con «Mostrar vista previa».",
+      "hintStatic": "Los selectores no coincidieron con nada que el script pudiera leer. Revisa los elementos resaltados con «Mostrar vista previa». Si la página crea su contenido con JavaScript, prueba el motor Navegador."
+    },
+    "noOutput": {
+      "title": "El script no generó ningún archivo de resultados",
+      "hint": "Se detuvo antes de escribir datos. En Detalles verás qué ocurrió."
+    },
+    "siteUnreachable": {
+      "title": "No se puede acceder al sitio",
+      "hint": "Revisa la dirección de la página y tu conexión a internet (y el proxy, si usas uno)."
+    },
+    "siteForbidden": {
+      "title": "El sitio rechaza el script",
+      "hint": "Requiere iniciar sesión o bloquea las solicitudes automáticas. Usa el motor Navegador con un flujo de inicio de sesión, o envía una cabecera como una cookie."
+    },
+    "pageNotFound": {
+      "title": "No se encontró la página",
+      "hint": "Revisa la dirección de la página en la parte superior del panel."
+    },
+    "rateLimited": {
+      "title": "El sitio indica: demasiadas solicitudes",
+      "hint": "Activa «Pausa entre solicitudes» en Configuración o inténtalo más tarde."
+    },
+    "siteError": {
+      "title": "El sitio informa de un error",
+      "hint": "Suele ser pasajero. Inténtalo más tarde o activa «Reintentar ante errores transitorios» en Configuración."
+    },
+    "httpError": {
+      "title": "El sitio respondió con un error (HTTP {status})",
+      "hint": "En Detalles está la respuesta exacta. Revisa la dirección de la página e inténtalo de nuevo."
+    },
+    "requestFailed": {
+      "title": "Una solicitud falló",
+      "hint": "En Detalles está el motivo."
+    },
+    "pageLoadTimeout": {
+      "title": "La página tardó demasiado en cargar",
+      "hint": "Inténtalo de nuevo. Si la página funciona en tu navegador, puede que solo sea lenta."
+    },
+    "pageLoadFailed": {
+      "title": "No se pudo cargar la página",
+      "hint": "Revisa la dirección de la página y tu conexión e inténtalo de nuevo."
+    },
+    "missingEnvVar": {
+      "title": "El script necesita la variable {name}",
+      "hint": "Introduce un valor de prueba junto al campo que la usa para que la ejecución de prueba continúe, y define la variable en el equipo donde ejecutes el script."
+    },
+    "trialTimeout": {
+      "title": "La ejecución de prueba tardó demasiado",
+      "hint": "Usa menos páginas o solicitudes, o activa «Omitir la ejecución de prueba» en Configuración."
+    },
+    "robotsDisallowed": {
+      "title": "El robots.txt del sitio prohíbe esta solicitud",
+      "hint": "Elige «Omitirla y continuar» o «Avisar, pero hacerla igualmente» en Configuración, o deja fuera esta página."
+    },
+    "pythonMissing": {
+      "title": "No se encontró Python",
+      "hint": "El companion necesita Python 3.9 o superior para probar tu script. Instálalo (o ejecuta de nuevo el instalador) e inténtalo otra vez."
+    },
+    "packageMissing": {
+      "title": "Falta un paquete de Python",
+      "hint": "Instálalo con «pip install {name}» en el equipo donde se ejecuta el companion (el instalador lo hace por ti)."
+    },
+    "scriptCrash": {
+      "title": "El script se detuvo con un error",
+      "hint": "En Detalles está el mensaje técnico. Si parece un fallo del programa, usa «Informar de un error»."
+    },
+    "companionUnreachable": {
+      "title": "No se puede acceder a la aplicación companion",
+      "hint": "Comprueba que sigue en ejecución e inténtalo de nuevo."
+    },
+    "companionError": {
+      "title": "La aplicación companion tuvo un problema",
+      "hint": "Inténtalo de nuevo. Si sigue ocurriendo, usa «Informar de un error»."
+    },
+    "invalidStartUrl": {
+      "title": "La dirección de la página no es válida",
+      "hint": "La URL de inicio n.º {index} («{url}») debe ser una dirección completa que empiece por http:// o https://."
+    },
+    "noFields": {
+      "title": "Todavía no hay nada que extraer",
+      "hint": "Abre una página y añade al menos un campo o contenedor."
+    },
+    "emptySelector": {
+      "title": "Un elemento no tiene selector",
+      "hint": "Vuelve a elegirlo en la página o elimínalo.",
+      "hintNamed": "Vuelve a elegir «{name}» en la página o elimínalo."
+    },
+    "duplicateFieldNames": {
+      "title": "Dos campos tienen el mismo nombre",
+      "hint": "Dale a cada campo su propio nombre: {names}."
+    },
+    "emptyFieldName": {
+      "title": "Un campo no tiene nombre",
+      "hint": "Dale un nombre a cada campo."
+    },
+    "invalidRegex": {
+      "title": "El patrón de una transformación no es válido",
+      "hint": "Revisa el patrón del paso «Extracción con regex» en {field}."
+    },
+    "invalidEnvVarName": {
+      "title": "«{name}» no es un nombre de variable válido",
+      "hint": "Usa solo letras, dígitos y guiones bajos, y no empieces con un dígito."
+    }
+  },
+  "envVar": {
+    "whatLabel": "¿Qué es una variable de entorno?",
+    "startsWithDigit": "«{name}» no puede empezar por un dígito — usa un nombre como SMTP_PASSWORD.",
+    "invalidChars": "«{name}» tiene caracteres que un nombre de variable no admite — usa solo letras, dígitos y guiones bajos (sin espacios ni guiones).",
+    "generateBlocked": "Corrige primero el nombre de la variable de entorno: {message}",
+    "testValuePlaceholder": "Valor de prueba (solo para la ejecución de prueba, nunca se guarda)",
+    "placeholder": {
+      "smtpHost": "p. ej. SMTP_HOST",
+      "smtpPort": "p. ej. SMTP_PORT",
+      "smtpUser": "p. ej. SMTP_USER",
+      "smtpPassword": "p. ej. SMTP_PASSWORD",
+      "mailFrom": "p. ej. MAIL_FROM",
+      "mailTo": "p. ej. MAIL_TO",
+      "webhookUrl": "p. ej. WEBHOOK_URL",
+      "proxy": "p. ej. PROXY_LIST",
+      "header": "p. ej. API_KEY",
+      "fill": "p. ej. SITE_PASSWORD",
+      "apiHeader": "p. ej. API_KEY"
+    }
+  },
+  "jsonPathPicker": {
+    "openBtn": "Elegir de la grabación",
+    "closeBtn": "Cerrar",
+    "loading": "Cargando la respuesta grabada…",
+    "toggle": "Mostrar u ocultar",
+    "items": "{count} elementos",
+    "recordedSource": "Grabado: {request}",
+    "embeddedSource": "JSON incrustado de la página ({selector})",
+    "chooseResponse": "¿De qué respuesta grabada se debe elegir la ruta?",
+    "otherResponse": "Elegir de otra respuesta grabada",
+    "treeTruncated": "Una respuesta muy grande — solo se muestra el principio.",
+    "hint": {
+      "group": "Haz clic en la lista o el objeto sobre el que debe recorrer este grupo. La ruta es relativa al grupo superior; dentro de una lista, crea un grupo propio.",
+      "leaf": "Haz clic en el valor que se debe leer. Una lista se muestra a través de su primer elemento.",
+      "body": "Haz clic en el campo del cuerpo de la petición que recibe el cursor (vacío en la primera página)."
+    },
+    "message": {
+      "noRecording": "No hay nada grabado de donde elegir. Graba primero la petición (iniciar la grabación y volver a cargar la página) o escribe la ruta.",
+      "truncated": "Esta respuesta era demasiado grande para guardarla completa y no se puede mostrar aquí. Escribe la ruta.",
+      "notJson": "No es una respuesta JSON — escribe la ruta.",
+      "skipped": "No se pudo grabar el cuerpo de esta petición (no es texto JSON) — escribe la ruta.",
+      "scopeMissing": "No se encontró el grupo superior en esta respuesta — elige otra respuesta grabada o escribe la ruta.",
+      "nothingToPick": "Aquí no hay nada que elegir — esta respuesta no tiene un valor adecuado.",
+      "embeddedMissing": "Ya no se encontró el JSON incrustado de la página — recarga la página o escribe la ruta.",
+      "noEntry": "No hay nada grabado de donde elegir.",
+      "noBody": "No se grabó ningún cuerpo para esta petición — escribe la ruta."
+    },
+    "reason": {
+      "badKey": "Esta clave contiene un punto o un corchete, que una ruta no puede expresar.",
+      "bodyNoArrays": "Una ruta del cuerpo no puede pasar por una lista."
+    },
+    "type": {
+      "object": "objeto",
+      "array": "lista",
+      "string": "texto",
+      "number": "número",
+      "boolean": "sí/no",
+      "null": "vacío"
+    }
+  },
+  "glossary": {
+    "safetyChecks": "Comprobaciones de seguridad"
   }
 }

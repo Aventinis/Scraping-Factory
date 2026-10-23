@@ -2,11 +2,7 @@
 // The side panel cannot send messages directly to a content script — it
 // must go through the service worker, which has access to chrome.tabs.
 
-if (typeof require === 'undefined' && typeof importScripts === 'function') {
-  importScripts('../shared/logger.js');
-}
-const { createLogger, getLogBuffer } =
-  typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+const { createLogger, getLogBuffer } = require('../shared/logger');
 const log = createLogger('SF:SW');
 
 // Surfaces otherwise-silent script errors in the bug report (see GET_LOGS
@@ -47,6 +43,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_API_CAPTURE_ENTRIES' })
         .then((entries) => sendResponse(entries || []))
         .catch(() => sendResponse([])); // no content script on this tab — same as GET_LOGS' content half, but nothing else here needs a background half
+    });
+    return true; // keep the message channel open for the async sendResponse above
+  }
+
+  // Issue #404: the JSON of an embedded <script> tag for the JSON-path picker —
+  // same request/response relay as GET_API_CAPTURE_ENTRIES; the popup treats
+  // { found: false } as "nothing to pick from".
+  if (message.type === 'GET_EMBEDDED_JSON') {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs.length === 0) {
+        sendResponse({ body: '', truncated: false, found: false });
+        return;
+      }
+      chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_EMBEDDED_JSON', scriptSelector: message.scriptSelector })
+        .then((result) => sendResponse(result || { body: '', truncated: false, found: false }))
+        .catch(() => sendResponse({ body: '', truncated: false, found: false }));
     });
     return true; // keep the message channel open for the async sendResponse above
   }

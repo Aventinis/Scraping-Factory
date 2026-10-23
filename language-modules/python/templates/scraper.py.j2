@@ -18,9 +18,7 @@ import os
 {{~ if proxy.enabled ~}}
 import itertools
 {{~ end ~}}
-{{~ if proxy.enabled || hardening.enabled || external_config.enabled || download_enabled || preflight.enabled || request_headers.has_env ~}}
 import sys
-{{~ end ~}}
 {{~ if hardening.has_baseline || preflight.enabled ~}}
 import json
 {{~ end ~}}
@@ -193,15 +191,19 @@ def scrape(url):
     page_number = 1
     page_url = url
     while page_url:
+{{~ if robots_check.enabled ~}}
+        if page_number > 1 and not _robots_gate(page_url):
+            break
+{{~ end ~}}
 {{~ if request_delay.enabled ~}}
         _pace_request()
 {{~ end ~}}
 {{~ if retry.enabled ~}}
-        response = _send_with_retry(lambda _u=page_url: requests.get(_u, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10), page_url)
+        response = _checked_request("Request", page_url, lambda: _send_with_retry(lambda _u=page_url: requests.get(_u, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10), page_url))
 {{~ else ~}}
-        response = requests.get(page_url, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10)
+        response = _checked_request("Request", page_url, lambda: requests.get(page_url, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10))
 {{~ end ~}}
-        response.raise_for_status()
+        _require_ok("Request", page_url, response)
 {{~ if hardening.enabled ~}}
         _BLOCKING_RESPONSES.append({"url": page_url, "final_url": response.url, "length": len(response.content), "text": response.text})
 {{~ end ~}}
@@ -232,6 +234,8 @@ def scrape(url):
 {{~ end ~}}
     return rows
 
+
+#@include request_errors_static
 
 #@include request_delay
 #@include retry

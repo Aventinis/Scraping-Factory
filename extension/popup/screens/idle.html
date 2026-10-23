@@ -16,6 +16,13 @@
       <textarea id="input-additional-urls" rows="3" data-i18n-placeholder="idle.additionalUrlsPlaceholder"></textarea>
     </div>
 
+    <!-- Issue #398: "which fits?" help for the mode — the label text sits in its own
+         span because data-i18n replaces an element's whole content (it would wipe
+         the help host); data-help-anchor puts the popover panel after this row. -->
+    <div class="row-label" data-help-anchor>
+      <span data-i18n="idle.modeLabel"></span>
+      <span class="help-host" data-help="help.mode.choice" data-doc="modes"></span>
+    </div>
     <div class="mode-toggle">
       <div class="mode-toggle-thumb"></div>
       <button id="btn-mode-flat" class="mode-btn active" type="button" data-i18n="idle.modeFlat"></button>
@@ -31,16 +38,23 @@
          below. Browser-actions run before extraction regardless of mode
          (see companion ScrapingPlanBuilder). -->
     <div id="engine-section" class="engine-section">
-      <div class="row-label" data-i18n="idle.engineLabel"></div>
+      <div class="row-label" data-help-anchor>
+        <span data-i18n="idle.engineLabel"></span>
+        <span class="help-host" data-help="help.engine.choice" data-doc="browserEngine"></span>
+      </div>
       <div class="mode-toggle" style="margin-bottom: 8px;">
         <div class="mode-toggle-thumb"></div>
         <button id="btn-engine-static" class="mode-btn active" type="button" data-i18n="idle.engineStatic"></button>
-        <button id="btn-engine-browser" class="mode-btn" type="button" data-i18n="idle.engineBrowser" data-i18n-title="idle.engineBrowserTitle"></button>
+        <button id="btn-engine-browser" class="mode-btn" type="button" data-i18n="idle.engineBrowser"></button>
       </div>
 
       <div id="browser-actions-section" class="hidden">
-        <div class="row-label" data-i18n="browserActions.title"></div>
-        <p class="browser-actions-hint" data-i18n="browserActions.hint"></p>
+        <div class="row-label" data-help-anchor><span data-i18n="browserActions.title"></span><span class="help-host" data-help="help.browserActions.overview" data-doc="browserActions"></span></div>
+        <!-- Issue #403: one click adds the four steps of a typical login. -->
+        <div class="actions">
+          <button id="btn-add-login-flow" class="btn-secondary" type="button" data-i18n="browserActions.addLoginFlowBtn"></button>
+        </div>
+        <p id="login-flow-hint" class="browser-actions-hint hidden"><span data-i18n="browserActions.loginFlowHint"></span> <a class="learn-more" data-doc="loginFlow" href="#" data-i18n="common.learnMore"></a></p>
         <div id="browser-actions-list"></div>
         <div class="actions">
           <button id="btn-add-action-wait" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.addWaitBtn"></button>
@@ -55,11 +69,16 @@
              "Settings" section since it's specifically about reusing
              whatever session a login flow (the Fill/Click actions above)
              establishes, not an unrelated output/inspection format choice. -->
-        <label class="output-settings-toggle" id="persistent-session-toggle-row">
-          <input type="checkbox" id="toggle-persistent-session" />
-          <span data-i18n="browserActions.persistentSessionToggle"></span>
-        </label>
-        <p class="preview-summary" data-i18n="browserActions.persistentSessionHint"></p>
+        <details class="advanced-disclosure" id="persistent-session-advanced" data-advanced="persistent-session">
+          <summary data-i18n="browserActions.persistentSessionAdvanced"></summary>
+          <div class="advanced-disclosure-body">
+            <label class="output-settings-toggle" id="persistent-session-toggle-row">
+              <input type="checkbox" id="toggle-persistent-session" />
+              <span data-i18n="browserActions.persistentSessionToggle"></span>
+              <span class="help-host" data-help="help.browserActions.persistentSession" data-doc="persistentSession"></span>
+            </label>
+          </div>
+        </details>
       </div>
     </div>
 
@@ -135,7 +154,7 @@
          (fetchAllSavedConfigs), not just the current page's, since a
          component doesn't have to match the page currently open. -->
     <div id="combined-mode-section" class="hidden">
-      <p class="preview-summary" data-i18n="idle.combinedHint"></p>
+      <div class="row-label" data-help-anchor><span data-i18n="idle.modeCombined"></span><span class="help-host" data-help="help.combined.overview" data-doc="modesCombined"></span></div>
       <ul id="combined-components-list" class="group-tree"></ul>
       <div class="actions">
         <select id="select-combined-add-component"></select>
@@ -154,7 +173,7 @@
          snapshotted into the list below via "+ Add block", starting the
          next block fresh. -->
     <div id="blocks-mode-section" class="hidden">
-      <p class="preview-summary" data-i18n="idle.blocksHint"></p>
+      <div class="row-label" data-help-anchor><span data-i18n="idle.modeBlocks"></span><span class="help-host" data-help="help.blocks.overview" data-doc="modesBlocks"></span></div>
 
       <div id="blocks-draft-editor">
         <div class="mode-toggle" style="margin-bottom: 8px;">
@@ -237,13 +256,17 @@
           <label class="output-settings-toggle">
             <input type="checkbox" id="toggle-proxy" />
             <span data-i18n="idle.proxyToggle"></span>
+            <span class="help-host" data-help="help.proxy.overview" data-doc="proxy"></span>
           </label>
           <div id="proxy-config" class="hidden">
+            <!-- Issue #397: the shared "What is an environment variable?" line + popover
+                 (help.envVar.what) and the shared inline name validation (data-env-var,
+                 see env-var-ui.js) — same on every input that takes a variable name. -->
+            <p class="env-var-note" data-help-anchor><span data-i18n="envVar.whatLabel"></span><span class="help-host" data-help="help.envVar.what" data-doc="envVars"></span></p>
             <div class="output-settings-row">
               <label for="input-proxy-env-var" data-i18n="idle.proxyEnvVarLabel"></label>
-              <input type="text" id="input-proxy-env-var" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+              <input type="text" id="input-proxy-env-var" data-env-var data-i18n-placeholder="envVar.placeholder.proxy" autocomplete="off" />
             </div>
-            <p class="preview-summary" data-i18n="idle.proxyHint"></p>
           </div>
           <!-- Issue #222: opt-in pause between outbound requests (a minimum
                gap between two requests, fixed or randomized within a
@@ -252,6 +275,7 @@
           <label class="output-settings-toggle">
             <input type="checkbox" id="toggle-request-delay" />
             <span data-i18n="idle.requestDelayToggle"></span>
+            <span class="help-host" data-help="help.requestDelay.overview" data-doc="pause"></span>
           </label>
           <div id="request-delay-config" class="hidden">
             <div class="output-settings-row request-delay-row">
@@ -261,7 +285,6 @@
               <input type="text" inputmode="decimal" id="input-request-delay-max" data-i18n-placeholder="idle.requestDelayToPlaceholder" autocomplete="off" />
               <span data-i18n="idle.requestDelaySecondsUnit"></span>
             </div>
-            <p class="preview-summary" data-i18n="idle.requestDelayHint"></p>
           </div>
           <!-- Issue #228: independent of the pause above — the script reads
                Crawl-delay/Request-rate from the site's own robots.txt and
@@ -269,14 +292,30 @@
           <label class="output-settings-toggle">
             <input type="checkbox" id="toggle-respect-robots-delay" />
             <span data-i18n="idle.respectRobotsDelayToggle"></span>
+            <span class="help-host" data-help="help.robots.crawlDelay" data-doc="robots"></span>
           </label>
-          <p class="preview-summary" data-i18n="idle.respectRobotsDelayHint"></p>
+          <!-- Issue #333: the script re-checks robots.txt Disallow at run time
+               and handles a disallowed request per the chosen action. -->
+          <label class="output-settings-toggle">
+            <input type="checkbox" id="toggle-robots-disallow" />
+            <span data-i18n="idle.robotsDisallowToggle"></span>
+            <span class="help-host" data-help="help.robots.disallow" data-doc="robots"></span>
+          </label>
+          <div id="robots-disallow-config" class="output-settings-row hidden">
+            <label for="select-robots-disallow-action" data-i18n="idle.robotsDisallowActionLabel"></label>
+            <select id="select-robots-disallow-action">
+              <option value="Skip" data-i18n="idle.robotsDisallowActionSkip"></option>
+              <option value="Warn" data-i18n="idle.robotsDisallowActionWarn"></option>
+              <option value="Abort" data-i18n="idle.robotsDisallowActionAbort"></option>
+            </select>
+          </div>
           <!-- Issue #223: opt-in retry with backoff on transient request
                failures (connection errors/timeouts, 429/502/503/504 by
                default) — mode- and engine-independent. -->
           <label class="output-settings-toggle">
             <input type="checkbox" id="toggle-retry" />
             <span data-i18n="idle.retryToggle"></span>
+            <span class="help-host" data-help="help.retry.overview" data-doc="retry"></span>
           </label>
           <div id="retry-config" class="hidden">
             <div class="output-settings-row retry-row">
@@ -289,11 +328,16 @@
               <input type="checkbox" id="toggle-retry-exponential" />
               <span data-i18n="idle.retryExponentialToggle"></span>
             </label>
-            <div class="output-settings-row">
-              <label for="input-retry-status-codes" data-i18n="idle.retryStatusCodesLabel"></label>
-              <input type="text" id="input-retry-status-codes" autocomplete="off" />
-            </div>
-            <p class="preview-summary" data-i18n="idle.retryHint"></p>
+            <!-- Issue #407: the default list fits nearly every site -->
+            <details class="advanced-disclosure" id="retry-advanced" data-advanced="retry-status-codes">
+              <summary data-i18n="idle.retryAdvanced"></summary>
+              <div class="advanced-disclosure-body">
+                <div class="output-settings-row">
+                  <label for="input-retry-status-codes" data-i18n="idle.retryStatusCodesLabel"></label>
+                  <input type="text" id="input-retry-status-codes" autocomplete="off" />
+                </div>
+              </div>
+            </details>
           </div>
           <!-- Issue #226: custom request headers for flat/container/Blocks
                mode (API mode has its own header editor; hidden for it and for
@@ -303,11 +347,17 @@
             <label class="output-settings-toggle">
               <input type="checkbox" id="toggle-request-headers" />
               <span data-i18n="idle.requestHeadersToggle"></span>
+              <span class="help-host" data-help="help.requestHeaders.headers" data-doc="headers"></span>
             </label>
             <div id="request-headers-config" class="hidden">
+              <p class="env-var-note" data-help-anchor><span data-i18n="envVar.whatLabel"></span><span class="help-host" data-help="help.envVar.what" data-doc="envVars"></span></p>
               <div id="request-headers-list"></div>
-              <button type="button" id="btn-add-request-header" class="btn-secondary btn-tiny" data-i18n="idle.requestHeadersAddBtn"></button>
-              <p class="preview-summary" data-i18n="idle.requestHeadersHint"></p>
+              <!-- Issue #402: pick what the header is for instead of typing an
+                   empty row; secrets start as an environment variable. -->
+              <div class="request-header-picker" data-help-anchor>
+                <select id="select-add-request-header"></select>
+                <span class="help-host" data-help="help.requestHeaders.picker"></span>
+              </div>
             </div>
           </div>
           <!-- Issue #225: opt-in deduplication by key field(s) — drops a
@@ -315,13 +365,23 @@
                and, optionally, remembers seen keys across runs so only new
                items are written. Hidden for Combined/Blocks (see
                renderDedupSection). -->
+          <!-- Issue #342: append this run's result to the existing output file
+               instead of replacing it (every output format). Inert for
+               Combined (each component carries its own). -->
+          <div id="append-output-row">
+            <label class="output-settings-toggle">
+              <input type="checkbox" id="toggle-append-output" />
+              <span data-i18n="idle.appendOutputToggle"></span>
+              <span class="help-host" data-help="help.appendOutput.append" data-doc="appendOutput"></span>
+            </label>
+          </div>
           <div id="dedup-section">
             <label class="output-settings-toggle">
               <input type="checkbox" id="toggle-dedup" />
               <span data-i18n="idle.dedupToggle"></span>
+              <span class="help-host" data-help="help.dedup.overview" data-doc="dedup"></span>
             </label>
             <div id="dedup-config" class="hidden">
-              <p class="preview-summary" data-i18n="idle.dedupKeyFieldsHint"></p>
               <div id="dedup-key-fields-list"></div>
               <div class="hardening-required-field-add-row">
                 <select id="select-dedup-key-field"></select>
@@ -330,6 +390,7 @@
               <label class="output-settings-toggle">
                 <input type="checkbox" id="toggle-dedup-incremental" />
                 <span data-i18n="idle.dedupIncrementalToggle"></span>
+            <span class="help-host" data-help="help.dedup.incremental" data-doc="dedup"></span>
               </label>
               <div id="dedup-incremental-config" class="hidden">
                 <div class="mode-toggle" style="margin: 6px 0 8px;">
@@ -337,15 +398,20 @@
                   <button id="btn-dedup-output-delta" class="mode-btn active" type="button" data-i18n="idle.dedupOutputDelta" data-i18n-title="idle.dedupOutputDeltaTitle"></button>
                   <button id="btn-dedup-output-append" class="mode-btn" type="button" data-i18n="idle.dedupOutputAppend" data-i18n-title="idle.dedupOutputAppendTitle"></button>
                 </div>
-                <div class="output-settings-row">
-                  <label for="select-dedup-retention-kind" data-i18n="idle.dedupRetentionLabel"></label>
-                  <select id="select-dedup-retention-kind">
-                    <option value="MaxCount" data-i18n="idle.dedupRetentionMaxCount"></option>
-                    <option value="MaxAge" data-i18n="idle.dedupRetentionMaxAge"></option>
-                  </select>
-                  <input type="text" inputmode="numeric" id="input-dedup-retention-value" autocomplete="off" />
-                </div>
-                <p class="preview-summary" data-i18n="idle.dedupIncrementalHint"></p>
+                <!-- Issue #407: the remembered-items limit, left at its default by almost everyone -->
+                <details class="advanced-disclosure" id="dedup-retention-advanced" data-advanced="dedup-retention">
+                  <summary data-i18n="idle.dedupRetentionAdvanced"></summary>
+                  <div class="advanced-disclosure-body">
+                    <div class="output-settings-row">
+                      <label for="select-dedup-retention-kind" data-i18n="idle.dedupRetentionLabel"></label>
+                      <select id="select-dedup-retention-kind">
+                        <option value="MaxCount" data-i18n="idle.dedupRetentionMaxCount"></option>
+                        <option value="MaxAge" data-i18n="idle.dedupRetentionMaxAge"></option>
+                      </select>
+                      <input type="text" inputmode="numeric" id="input-dedup-retention-value" autocomplete="off" />
+                    </div>
+                  </div>
+                </details>
               </div>
             </div>
           </div>
@@ -363,34 +429,52 @@
             <span data-i18n="idle.paginationToggle"></span>
           </label>
           <div id="pagination-config" class="hidden">
+            <!-- Issue #405: a page-number template proposed from the tracked
+                 URL / a clicked link; only ever applied by the button. -->
+            <div id="pagination-suggestion" class="pagination-suggestion hidden" role="status">
+              <p><span id="pagination-suggestion-text"></span></p>
+              <p><code id="pagination-suggestion-template"></code></p>
+              <p class="pagination-suggestion-example" id="pagination-suggestion-example"></p>
+              <button id="btn-pagination-use-template" class="btn-secondary btn-tiny" type="button" data-i18n="idle.paginationSuggestionUse"></button>
+            </div>
             <div class="mode-toggle" style="margin-bottom: 8px;">
               <div class="mode-toggle-thumb"></div>
               <button id="btn-pagination-next-link" class="mode-btn active" type="button" data-i18n="idle.paginationKindNextLink"></button>
               <button id="btn-pagination-page-number" class="mode-btn" type="button" data-i18n="idle.paginationKindPageNumber"></button>
             </div>
             <div id="pagination-next-link-fields">
-              <div class="output-settings-row">
-                <label for="input-pagination-next-link-selector" data-i18n="idle.paginationNextLinkSelectorLabel"></label>
-                <input type="text" id="input-pagination-next-link-selector" data-i18n-placeholder="idle.paginationNextLinkSelectorPlaceholder" autocomplete="off" />
-              </div>
               <!-- Issue #174 follow-up: lets a non-developer pick the "next
-                   page" link by clicking it on the page instead of having to
-                   know/type a CSS selector by hand — same click-based
-                   selection flow browser actions' own pick button already
-                   uses (see .btn-pick-action-selector). -->
-              <div class="actions">
-                <button id="btn-pick-pagination-next-link" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.pickSelectorBtn"></button>
+                   page" link by clicking it instead of having to know/type a
+                   CSS selector by hand — same click-based selection flow
+                   browser actions' own pick button already uses. Issue #405:
+                   the typed selector is an editable detail under Advanced. -->
+              <div class="browser-action-selector-row">
+                <span class="field-selector" id="pagination-next-link-selected"></span>
+                <button id="btn-pick-pagination-next-link" class="btn-secondary btn-tiny" type="button" data-i18n="idle.paginationPickNextLink"></button>
               </div>
+              <details class="advanced-disclosure" data-advanced="pagination-next-link">
+                <summary data-i18n="common.advanced"></summary>
+                <div class="advanced-disclosure-body">
+                  <div class="output-settings-row">
+                    <label for="input-pagination-next-link-selector" data-i18n="idle.paginationNextLinkSelectorLabel"></label>
+                    <input type="text" id="input-pagination-next-link-selector" data-i18n-placeholder="idle.paginationNextLinkSelectorPlaceholder" autocomplete="off" />
+                  </div>
+                </div>
+              </details>
             </div>
             <div id="pagination-page-number-fields" class="hidden">
-              <div class="output-settings-row">
+              <div class="output-settings-row" data-help-anchor>
                 <label for="input-pagination-url-template" data-i18n="idle.paginationUrlTemplateLabel"></label>
+                <span class="help-host" data-help="help.pagination.urlTemplate" data-doc="pagination"></span>
                 <input type="text" id="input-pagination-url-template" data-i18n-placeholder="idle.paginationUrlTemplatePlaceholder" autocomplete="off" />
               </div>
-              <p class="preview-summary" data-i18n="idle.paginationUrlTemplateHint"></p>
+              <div class="actions">
+                <button id="btn-pick-pagination-page-link" class="btn-secondary btn-tiny" type="button" data-i18n="idle.paginationPickPageLink"></button>
+              </div>
             </div>
-            <div class="output-settings-row">
+            <div class="output-settings-row" data-help-anchor>
               <label for="input-pagination-max-pages" data-i18n="idle.paginationMaxPagesLabel"></label>
+              <span class="help-host" data-help="help.pagination.maxPages"></span>
               <input type="number" id="input-pagination-max-pages" min="1" step="1" />
             </div>
           </div>
@@ -402,34 +486,42 @@
                entirely for API mode (see render()'s own
                #discovered-urls-toggle-row toggle), same reasoning as
                #additional-urls-row/#pagination-toggle-row above. -->
-          <label class="output-settings-toggle" id="discovered-urls-toggle-row">
-            <input type="checkbox" id="toggle-discovered-urls" />
-            <span data-i18n="idle.discoveredUrlsToggle"></span>
-          </label>
-          <div id="discovered-urls-config" class="hidden">
-            <div class="output-settings-row">
-              <label for="input-discovered-urls-page-url" data-i18n="idle.discoveredUrlsPageUrlLabel"></label>
-              <input type="text" id="input-discovered-urls-page-url" data-i18n-placeholder="idle.discoveredUrlsPageUrlPlaceholder" autocomplete="off" />
+          <!-- Issue #405: the whole discovery option is rarely needed, so it
+               sits under a remembered "Advanced" disclosure (opened by
+               renderPaginationHelpers once the option is switched on). -->
+          <details class="advanced-disclosure" id="discovered-urls-advanced" data-advanced="discovered-urls">
+            <summary data-i18n="idle.discoveredUrlsAdvanced"></summary>
+            <div class="advanced-disclosure-body">
+              <label class="output-settings-toggle" id="discovered-urls-toggle-row">
+                <input type="checkbox" id="toggle-discovered-urls" />
+                <span data-i18n="idle.discoveredUrlsToggle"></span>
+                <span class="help-host" data-help="help.discoveredUrls.overview" data-doc="pagination"></span>
+              </label>
+              <div id="discovered-urls-config" class="hidden">
+                <div class="output-settings-row">
+                  <label for="input-discovered-urls-page-url" data-i18n="idle.discoveredUrlsPageUrlLabel"></label>
+                  <input type="text" id="input-discovered-urls-page-url" data-i18n-placeholder="idle.discoveredUrlsPageUrlPlaceholder" autocomplete="off" />
+                </div>
+                <div class="output-settings-row">
+                  <label for="input-discovered-urls-link-selector" data-i18n="idle.discoveredUrlsLinkSelectorLabel"></label>
+                  <input type="text" id="input-discovered-urls-link-selector" data-i18n-placeholder="idle.discoveredUrlsLinkSelectorPlaceholder" autocomplete="off" />
+                </div>
+                <!-- Issue #218 follow-up: lets a non-developer pick a navigation
+                     link by clicking it on the live page, writing both the
+                     clicked page's own URL (Page-URL) and a generalized selector
+                     (Link-selector) at once — no need to know/type either by
+                     hand. Same click-based selection flow browser actions'/
+                     pagination's own pick button already use. -->
+                <div class="actions">
+                  <button id="btn-pick-discovered-urls-link" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.pickSelectorBtn"></button>
+                </div>
+                <div class="output-settings-row">
+                  <label for="input-discovered-urls-max-urls" data-i18n="idle.discoveredUrlsMaxUrlsLabel"></label>
+                  <input type="number" id="input-discovered-urls-max-urls" min="1" step="1" />
+                </div>
+              </div>
             </div>
-            <div class="output-settings-row">
-              <label for="input-discovered-urls-link-selector" data-i18n="idle.discoveredUrlsLinkSelectorLabel"></label>
-              <input type="text" id="input-discovered-urls-link-selector" data-i18n-placeholder="idle.discoveredUrlsLinkSelectorPlaceholder" autocomplete="off" />
-            </div>
-            <!-- Issue #218 follow-up: lets a non-developer pick a navigation
-                 link by clicking it on the live page, writing both the
-                 clicked page's own URL (Page-URL) and a generalized selector
-                 (Link-selector) at once — no need to know/type either by
-                 hand. Same click-based selection flow browser actions'/
-                 pagination's own pick button already use. -->
-            <div class="actions">
-              <button id="btn-pick-discovered-urls-link" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.pickSelectorBtn"></button>
-            </div>
-            <p class="preview-summary" data-i18n="idle.discoveredUrlsHint"></p>
-            <div class="output-settings-row">
-              <label for="input-discovered-urls-max-urls" data-i18n="idle.discoveredUrlsMaxUrlsLabel"></label>
-              <input type="number" id="input-discovered-urls-max-urls" min="1" step="1" />
-            </div>
-          </div>
+          </details>
           <!-- Issue #191/#192: opt-in output blueprint field mapping —
                reachable for flat mode, container mode, and both of API
                mode's shapes (hidden only for Combined/Blocks, which have no
@@ -440,15 +532,14 @@
                OutputBlueprintFlattening. The blueprint list itself is
                unscoped (reusable across any site/configuration), fetched
                once on companion connect like the saved-configs list. -->
-          <div class="output-settings-row" id="output-blueprint-toggle-row">
-            <label for="select-output-blueprint" data-i18n="idle.outputBlueprintLabel"></label>
+          <div class="output-settings-row" id="output-blueprint-toggle-row" data-help-anchor>
+            <label for="select-output-blueprint"><span data-i18n="idle.outputBlueprintLabel"></span><span class="help-host" data-help="help.outputLayout.overview"></span></label>
             <select id="select-output-blueprint">
               <option value="" data-i18n="idle.outputBlueprintNoneOption"></option>
             </select>
             <button type="button" id="btn-manage-blueprints" class="btn-secondary btn-tiny" data-i18n="idle.manageBlueprintsBtn"></button>
           </div>
           <div id="output-blueprint-mapping" class="hidden">
-            <p class="preview-summary" data-i18n="idle.outputBlueprintMappingHint"></p>
             <ul id="output-blueprint-mapping-list"></ul>
           </div>
           <!-- Issue #244: a Tree-schema blueprint's own mapping view — shown
@@ -458,7 +549,6 @@
                each leaf row getting a source-field <select> exactly like the
                flat mapping's own per-row <select>. -->
           <div id="output-blueprint-tree-mapping" class="hidden">
-            <p class="preview-summary" data-i18n="idle.outputBlueprintTreeMappingHint"></p>
             <ul id="output-blueprint-tree-mapping-list" class="group-tree-root"></ul>
           </div>
         </div>
@@ -488,9 +578,10 @@
               <polyline points="6 9 12 15 18 9"></polyline>
             </svg>
           </span>
-          <span data-i18n="idle.monitoringSectionToggle"></span>
+          <span data-i18n="idle.monitoringSectionToggle"></span><span class="help-host" data-help="help.monitoring.intro" data-doc="monitoring"></span>
         </div>
         <div id="monitoring-section-content" class="hidden">
+          <!-- Issue #399: when this section matters, in one sentence. -->
           <!-- Issue #87: opt-in change detection + notification — every
                credential/target field below is the *name* of an
                environment variable, never a literal value (mirrors
@@ -499,8 +590,10 @@
           <label class="output-settings-toggle">
             <input type="checkbox" id="toggle-change-detection" />
             <span data-i18n="idle.changeDetectionToggle"></span>
+            <span class="help-host" data-help="help.changeDetection.overview" data-doc="changeDetection"></span>
           </label>
           <div id="change-detection-config" class="hidden">
+            <p class="env-var-note" data-help-anchor><span data-i18n="envVar.whatLabel"></span><span class="help-host" data-help="help.envVar.what" data-doc="envVars"></span></p>
             <div class="mode-toggle" style="margin-bottom: 8px;">
               <div class="mode-toggle-thumb"></div>
               <button id="btn-notify-email" class="mode-btn active" type="button" data-i18n="idle.notifyEmail"></button>
@@ -509,36 +602,35 @@
             <div id="notify-email-fields">
               <div class="output-settings-row">
                 <label for="input-cd-smtp-host" data-i18n="idle.smtpHostEnvVarLabel"></label>
-                <input type="text" id="input-cd-smtp-host" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+                <input type="text" id="input-cd-smtp-host" data-env-var data-i18n-placeholder="envVar.placeholder.smtpHost" autocomplete="off" />
               </div>
               <div class="output-settings-row">
                 <label for="input-cd-smtp-port" data-i18n="idle.smtpPortEnvVarLabel"></label>
-                <input type="text" id="input-cd-smtp-port" data-i18n-placeholder="idle.envVarPlaceholderOptional" autocomplete="off" />
+                <input type="text" id="input-cd-smtp-port" data-env-var data-i18n-placeholder="envVar.placeholder.smtpPort" autocomplete="off" />
               </div>
               <div class="output-settings-row">
                 <label for="input-cd-smtp-username" data-i18n="idle.smtpUsernameEnvVarLabel"></label>
-                <input type="text" id="input-cd-smtp-username" data-i18n-placeholder="idle.envVarPlaceholderOptional" autocomplete="off" />
+                <input type="text" id="input-cd-smtp-username" data-env-var data-i18n-placeholder="envVar.placeholder.smtpUser" autocomplete="off" />
               </div>
               <div class="output-settings-row">
                 <label for="input-cd-smtp-password" data-i18n="idle.smtpPasswordEnvVarLabel"></label>
-                <input type="text" id="input-cd-smtp-password" data-i18n-placeholder="idle.envVarPlaceholderOptional" autocomplete="off" />
+                <input type="text" id="input-cd-smtp-password" data-env-var data-i18n-placeholder="envVar.placeholder.smtpPassword" autocomplete="off" />
               </div>
               <div class="output-settings-row">
                 <label for="input-cd-email-from" data-i18n="idle.notifyEmailFromEnvVarLabel"></label>
-                <input type="text" id="input-cd-email-from" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+                <input type="text" id="input-cd-email-from" data-env-var data-i18n-placeholder="envVar.placeholder.mailFrom" autocomplete="off" />
               </div>
               <div class="output-settings-row">
                 <label for="input-cd-email-to" data-i18n="idle.notifyEmailToEnvVarLabel"></label>
-                <input type="text" id="input-cd-email-to" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+                <input type="text" id="input-cd-email-to" data-env-var data-i18n-placeholder="envVar.placeholder.mailTo" autocomplete="off" />
               </div>
             </div>
             <div id="notify-webhook-fields" class="hidden">
               <div class="output-settings-row">
                 <label for="input-cd-webhook-url" data-i18n="idle.webhookUrlEnvVarLabel"></label>
-                <input type="text" id="input-cd-webhook-url" data-i18n-placeholder="idle.envVarPlaceholder" autocomplete="off" />
+                <input type="text" id="input-cd-webhook-url" data-env-var data-i18n-placeholder="envVar.placeholder.webhookUrl" autocomplete="off" />
               </div>
             </div>
-            <p class="preview-summary" data-i18n="idle.changeDetectionHint"></p>
           </div>
           <!-- Issue #129: opt-in script hardening — the generated script
                re-checks its own result after scraping (e.g. before a
@@ -550,14 +642,27 @@
                four can add its own row below without restructuring
                #hardening-config. -->
           <div id="hardening-config">
+            <!-- Issue #399: what "checks" are, what happens when one fails (Warn me /
+                 Stop the run — one shared popover instead of exit-code tooltips), and a
+                 one-click "Recommended checks" for people who don't want to read on. -->
+            <div class="row-label hardening-heading" data-help-anchor>
+              <span data-i18n="idle.hardeningSectionLabel"></span>
+              <span class="help-host" data-help="help.hardening.severity" data-doc="safetyChecks"></span>
+            </div>
+            <div class="hardening-recommended-row" data-help-anchor>
+              <button type="button" id="btn-hardening-recommended" class="btn-secondary btn-tiny" data-i18n="idle.hardeningRecommendedBtn"></button>
+              <span class="help-host" data-help="help.hardening.recommended" data-doc="safetyChecks"></span>
+            </div>
+            <p id="hardening-recommended-note" class="preview-summary hardening-recommended-note hidden"></p>
             <label class="output-settings-toggle">
               <input type="checkbox" id="toggle-hardening-no-result" />
               <span data-i18n="idle.hardeningNoResultToggle"></span>
+              <span class="help-host" data-help="help.hardening.noResult"></span>
             </label>
             <div id="hardening-no-result-severity" class="mode-toggle hidden" style="margin: 6px 0 8px;">
               <div class="mode-toggle-thumb"></div>
-              <button id="btn-hardening-no-result-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning" data-i18n-title="idle.hardeningSeverityWarningTitle"></button>
-              <button id="btn-hardening-no-result-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError" data-i18n-title="idle.hardeningSeverityErrorTitle"></button>
+              <button id="btn-hardening-no-result-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning"></button>
+              <button id="btn-hardening-no-result-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError"></button>
             </div>
             <!-- Issue #130: per-field empty-value-rate check — catches a
                  field whose selector silently starts matching the wrong
@@ -569,8 +674,9 @@
                  input. Rows are entirely JS-rendered
                  (renderHardeningNullRateList) — this div is just the mount
                  point. -->
-            <div class="output-settings-toggle" style="margin-top: 10px;">
+            <div class="output-settings-toggle" style="margin-top: 10px;" data-help-anchor>
               <span data-i18n="idle.hardeningNullRateSectionLabel"></span>
+              <span class="help-host" data-help="help.hardening.nullRate"></span>
             </div>
             <div id="hardening-null-rate-list"></div>
             <button type="button" id="btn-add-null-rate-check" class="btn-secondary btn-tiny" data-i18n="idle.hardeningNullRateAddBtn"></button>
@@ -586,16 +692,18 @@
             <label class="output-settings-toggle" style="margin-top: 10px;">
               <input type="checkbox" id="toggle-hardening-baseline" />
               <span data-i18n="idle.hardeningBaselineToggle"></span>
+              <span class="help-host" data-help="help.hardening.baseline"></span>
             </label>
             <div id="hardening-baseline-config" class="hidden">
               <div id="hardening-baseline-severity" class="mode-toggle" style="margin: 6px 0 8px;">
                 <div class="mode-toggle-thumb"></div>
-                <button id="btn-hardening-baseline-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning" data-i18n-title="idle.hardeningSeverityWarningTitle"></button>
-                <button id="btn-hardening-baseline-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError" data-i18n-title="idle.hardeningSeverityErrorTitle"></button>
+                <button id="btn-hardening-baseline-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning"></button>
+                <button id="btn-hardening-baseline-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError"></button>
               </div>
-              <label class="browser-action-field-row">
-                <span data-i18n="idle.hardeningBaselineThresholdLabel"></span>
-                <input type="number" min="0" max="100" id="input-hardening-baseline-threshold" />%
+              <label class="browser-action-field-row hardening-sentence">
+                <span data-i18n="idle.hardeningBaselineBefore"></span>
+                <input type="number" min="0" max="100" id="input-hardening-baseline-threshold" />
+                <span data-i18n="idle.hardeningBaselineAfter"></span>
               </label>
             </div>
             <!-- Issue #132: blocking-detection check — catches a site that
@@ -610,21 +718,31 @@
             <label class="output-settings-toggle" style="margin-top: 10px;">
               <input type="checkbox" id="toggle-hardening-blocking" />
               <span data-i18n="idle.hardeningBlockingToggle"></span>
+              <span class="help-host" data-help="help.hardening.blocking"></span>
             </label>
             <div id="hardening-blocking-config" class="hidden">
               <div id="hardening-blocking-severity" class="mode-toggle" style="margin: 6px 0 8px;">
                 <div class="mode-toggle-thumb"></div>
-                <button id="btn-hardening-blocking-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning" data-i18n-title="idle.hardeningSeverityWarningTitle"></button>
-                <button id="btn-hardening-blocking-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError" data-i18n-title="idle.hardeningSeverityErrorTitle"></button>
+                <button id="btn-hardening-blocking-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning"></button>
+                <button id="btn-hardening-blocking-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError"></button>
               </div>
-              <label class="browser-action-field-row">
-                <span data-i18n="idle.hardeningBlockingMinBodyLengthLabel"></span>
-                <input type="number" min="1" id="input-hardening-blocking-min-body-length" data-i18n-placeholder="idle.hardeningBlockingMinBodyLengthPlaceholder" />
-              </label>
-              <div class="output-settings-row" style="align-items: flex-start; margin-top: 6px;">
-                <label for="input-hardening-blocking-phrases" data-i18n="idle.hardeningBlockingPhrasesLabel"></label>
-                <textarea id="input-hardening-blocking-phrases" rows="2" data-i18n-placeholder="idle.hardeningBlockingPhrasesPlaceholder"></textarea>
-              </div>
+              <!-- Issue #399: the two rarely needed signals, tucked away (state remembered
+                   per section, see advanced-disclosure-ui.js) -->
+              <details class="advanced-disclosure" data-advanced="hardening-blocking">
+                <summary data-i18n="idle.hardeningBlockingAdvanced"></summary>
+                <div class="advanced-disclosure-body">
+                  <label class="browser-action-field-row hardening-sentence" data-help-anchor>
+                    <span data-i18n="idle.hardeningBlockingMinBodyLengthLabel"></span>
+                    <input type="number" min="1" id="input-hardening-blocking-min-body-length" data-i18n-placeholder="idle.hardeningBlockingMinBodyLengthPlaceholder" />
+                    <span data-i18n="idle.hardeningBlockingMinBodyLengthUnit"></span>
+                    <span class="help-host" data-help="help.hardening.blockingAdvanced"></span>
+                  </label>
+                  <div class="output-settings-row" style="align-items: flex-start; margin-top: 6px;">
+                    <label for="input-hardening-blocking-phrases" data-i18n="idle.hardeningBlockingPhrasesLabel"></label>
+                    <textarea id="input-hardening-blocking-phrases" rows="2" data-i18n-placeholder="idle.hardeningBlockingPhrasesPlaceholder"></textarea>
+                  </div>
+                </div>
+              </details>
             </div>
             <!-- Issue #133 (+ container-mode and, since #204, Api-mode-tree
                  follow-ups): required-fields check — a row (flat/Api-flat
@@ -642,12 +760,13 @@
               <label class="output-settings-toggle" style="margin-top: 10px;">
                 <input type="checkbox" id="toggle-hardening-required-fields" />
                 <span data-i18n="idle.hardeningRequiredFieldsToggle"></span>
+                <span class="help-host" data-help="help.hardening.requiredFields"></span>
               </label>
               <div id="hardening-required-fields-config" class="hidden">
                 <div id="hardening-required-fields-severity" class="mode-toggle" style="margin: 6px 0 8px;">
                   <div class="mode-toggle-thumb"></div>
-                  <button id="btn-hardening-required-fields-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning" data-i18n-title="idle.hardeningSeverityWarningTitle"></button>
-                  <button id="btn-hardening-required-fields-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError" data-i18n-title="idle.hardeningSeverityErrorTitle"></button>
+                  <button id="btn-hardening-required-fields-warning" class="mode-btn active" type="button" data-i18n="idle.hardeningSeverityWarning"></button>
+                  <button id="btn-hardening-required-fields-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError"></button>
                 </div>
                 <div id="hardening-required-fields-list"></div>
                 <div class="hardening-required-field-add-row">
@@ -671,8 +790,8 @@
           <label class="output-settings-toggle" id="preflight-toggle-row">
             <input type="checkbox" id="toggle-preflight" />
             <span data-i18n="idle.preflightToggle"></span>
+            <span class="help-host" data-help="help.preflight.overview" data-doc="skipIfUnchanged"></span>
           </label>
-          <p class="preview-summary" data-i18n="idle.preflightHint"></p>
         </div>
       </div>
       <!-- Filenames last: a final naming step right before Export/Generate,
@@ -691,7 +810,7 @@
         <input type="text" id="input-output-filename" data-i18n-placeholder="idle.outputFilenamePlaceholder" autocomplete="off" />
         <span id="output-filename-ext" class="output-settings-ext">.csv</span>
       </div>
-      <p id="output-format-hint" class="preview-summary hidden" data-i18n="idle.outputFormatFlattenHint"></p>
+      <p id="output-format-hint" class="format-note hidden" data-help-anchor><span data-i18n="idle.outputFormatFlattenTitle"></span><span class="help-host" data-help="help.outputFormat.flatten" data-doc="outputFormat"></span></p>
     </div>
     </div>
 
@@ -704,7 +823,7 @@
          `url` itself, which always stays whatever the live browser tab
          shows (see config-import.js's applyConfigToState doc comment). -->
     <div id="saved-configs-section">
-      <p class="preview-summary" data-i18n="idle.savedConfigsTitle"></p>
+      <p class="row-label" data-help-anchor><span data-i18n="idle.savedConfigsTitle"></span><span class="help-host" data-help="help.savedConfigs.panel" data-doc="savedConfigs"></span></p>
       <div id="saved-configs-list"></div>
       <p id="saved-configs-empty" class="preview-summary hidden" data-i18n="idle.savedConfigsEmpty"></p>
     </div>

@@ -47,7 +47,7 @@ from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 {{~ end ~}}
 import requests
-from urllib.parse import quote, urlsplit{{ if needs_browser_discovery }}, parse_qsl{{ end }}
+from urllib.parse import quote, urlsplit{{ if needs_browser_discovery }}, parse_qsl{{ end }}{{ if link_pagination_enabled }}, urljoin{{ end }}
 
 URL_TEMPLATE = {{ url_template_literal }}
 METHOD = {{ method_literal }}
@@ -139,6 +139,7 @@ def scrape():
 {{~ end ~}}
 
 
+#@include output_append
 def main():
 {{~ if change_detection.enabled ~}}
     previous_content = _read_previous_output(OUTPUT_PATH)
@@ -165,9 +166,12 @@ def main():
         # a HiddenFromOutput field is dropped from the write-time projection
         # only, never from `data` itself.
         output_rows = [{k: v for k, v in row.items() if k not in HIDDEN_FIELD_NAMES} for row in written_data] if HIDDEN_FIELD_NAMES else written_data
+{{~ if append_output ~}}
+    appended_count = len(output_rows)
+{{~ end ~}}
 {{~ if output_is_json ~}}
-{{~ if dedup.append ~}}
-    output_rows = _dedup_with_previous_output(output_rows, [])
+{{~ if append_output ~}}
+    _, output_rows = _append_previous_rows(OUTPUT_PATH, [], output_rows)
 {{~ end ~}}
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(output_rows, f, ensure_ascii=False, indent=2)
@@ -178,8 +182,8 @@ def main():
         fieldnames = [parameter["name"] for parameter in PARAMETERS] + [
             field["name"] for field in FIELDS if field["name"] not in HIDDEN_FIELD_NAMES
         ]
-{{~ if dedup.append ~}}
-    output_rows = _dedup_with_previous_output(output_rows, fieldnames)
+{{~ if append_output && !output_is_sqlite && !output_is_xlsx ~}}
+    fieldnames, output_rows = _append_previous_rows(OUTPUT_PATH, fieldnames, output_rows)
 {{~ end ~}}
 {{~ if output_is_sqlite ~}}
     _write_rows_sqlite(OUTPUT_PATH, fieldnames, output_rows)
@@ -192,7 +196,7 @@ def main():
         writer.writerows(output_rows)
 {{~ end ~}}
 {{~ end ~}}
-    print(f"Done — {{ if dedup.enabled }}{len(output_rows)}{{ else }}{len(data)}{{ end }} rows written to {OUTPUT_PATH}")
+    print(f"Done — {{ if append_output }}{appended_count}{{ else if dedup.enabled }}{len(output_rows)}{{ else }}{len(data)}{{ end }} rows {{ if append_output }}appended to{{ else }}written to{{ end }} {OUTPUT_PATH}")
 {{~ if change_detection.enabled ~}}
     with open(OUTPUT_PATH, "r", encoding="utf-8") as f:
         new_content = f.read()

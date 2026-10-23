@@ -5,25 +5,18 @@
 // configuration take a `bridge` object (same convention as
 // api-config-ui.js/companion-client.js) instead of closing over popup.js's
 // own module-level state; downloadFile itself is state-free.
-const SFDownloadHelpers = (function() {
-const { createLogger } =
-  typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');
 
-const { t } =
-  typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
+const { t } = require('../i18n/i18n');
 
-const { sanitizeFileNameBase, buildConfigExport } =
-  typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
+const { sanitizeFileNameBase, buildConfigExport } = require('./scraping-config-builder');
 
-const { resolveCombinedComponents } =
-  typeof require !== 'undefined' ? require('./companion-client') : self.SFCompanionClient;
+const { resolveCombinedComponents } = require('./companion-client');
 
-const { showToast } =
-  typeof require !== 'undefined' ? require('./toast') : self.SFToast;
+const { showToast } = require('./toast');
 
-const { getGlobalSettings } =
-  typeof require !== 'undefined' ? require('../shared/global-settings') : self.SFGlobalSettings;
+const { getGlobalSettings } = require('../shared/global-settings');
 
 function triggerDownload(bridge) {
   const state = bridge.getState();
@@ -113,7 +106,7 @@ async function downloadConfigExport(bridge) {
     state.pagination, state.persistentSession, false, globalSettings.externalConfig, combinedComponents, state.blocks,
     state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
     state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
-    state.discoveredUrls, state.preflight, state.requestDelay, state.retry, state.deduplication, state.requestHeaders, state.respectRobotsDelay,
+    state.discoveredUrls, state.preflight, state.requestDelay, state.retry, state.deduplication, state.requestHeaders, state.respectRobotsDelay, globalSettings.skipVerification, state.robotsDisallow, state.appendOutput,
   );
   log('DOWNLOAD scraping-config.json', exportObj);
 
@@ -128,8 +121,5 @@ async function downloadConfigExport(bridge) {
   URL.revokeObjectURL(objectUrl);
 }
 
-  return {triggerDownload, downloadFile, triggerOutputFileDownload, downloadConfigExport};
-})();
+module.exports = {triggerDownload, downloadFile, triggerOutputFileDownload, downloadConfigExport};
 
-if (typeof module !== 'undefined') module.exports = SFDownloadHelpers;
-if (typeof self !== 'undefined') self.SFDownloadHelpers = SFDownloadHelpers;

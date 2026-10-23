@@ -41,6 +41,10 @@ def _run_preflight_check(url):
     if _USER_AGENT:
         headers["User-Agent"] = _USER_AGENT
 {{~ end ~}}
+{{~ if robots_check.enabled ~}}
+    if not _robots_gate(url):
+        return "proceed", None, None
+{{~ end ~}}
     try:
 {{~ if proxy.enabled ~}}
         proxy = _next_proxy()

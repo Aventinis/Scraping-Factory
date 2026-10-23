@@ -5,13 +5,10 @@
 // tab's content script's, so a user hitting an error can attach real
 // diagnostic context to a GitHub issue in one click instead of having to
 // copy devtools console output by hand.
-const SFBugReport = (function() {
-const { createLogger, getLogBuffer } =
-  typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+const { createLogger, getLogBuffer } = require('../shared/logger');
 const log = createLogger('SF:Popup');
 
-const { getLastError } =
-  typeof require !== 'undefined' ? require('./toast') : self.SFToast;
+const { getLastError } = require('./toast');
 
 const GITHUB_REPO_URL = 'https://github.com/Aventinis/Scraping-Factory';
 const BUG_REPORT_LOG_EXCERPT_LIMIT = 5000; // chars embedded directly in the GitHub issue body
@@ -140,9 +137,6 @@ async function reportBug(pageUrl) {
   chrome.tabs.create({ url: buildGithubIssueUrl(reportText) });
 }
 
-  return {collectLogs, formatLogSection, buildBugReport, downloadBugReport,
-    buildIssueTitle, buildIssueUrl, buildGithubIssueUrl, reportBug,};
-})();
+module.exports = {collectLogs, formatLogSection, buildBugReport, downloadBugReport,
+  buildIssueTitle, buildIssueUrl, buildGithubIssueUrl, reportBug,};
 
-if (typeof module !== 'undefined') module.exports = SFBugReport;
-if (typeof self !== 'undefined') self.SFBugReport = SFBugReport;

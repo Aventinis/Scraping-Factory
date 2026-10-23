@@ -10,11 +10,9 @@ import json as _dd_json
 import os as _dd_os
 import sys as _dd_sys
 import time as _dd_time
-import csv as _dd_csv
 
 DEDUP_KEY_FIELDS = {{ dedup.key_fields_literal }}
 DEDUP_INCREMENTAL = {{ dedup.incremental_literal }}
-DEDUP_APPEND = {{ dedup.append_literal }}
 DEDUP_RETENTION_KIND = {{ dedup.retention_kind_literal }}
 DEDUP_RETENTION_VALUE = {{ dedup.retention_value }}
 DEDUP_STATE_PATH = OUTPUT_PATH + ".dedup-seen.json"

@@ -529,3 +529,40 @@ test('unknown message type is ignored', () => {
   expect(chrome.tabs.query).not.toHaveBeenCalled();
   expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
 });
+
+// Issue #404
+describe('GET_EMBEDDED_JSON', () => {
+  const EMPTY = { body: '', truncated: false, found: false };
+
+  test('forwards the selector to the active tab and relays its result', async () => {
+    chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+    const result = { body: '{"a":1}', truncated: false, found: true };
+    chrome.tabs.sendMessage.mockImplementation((tabId, msg) => {
+      expect(tabId).toBe(7);
+      expect(msg).toEqual({ type: 'GET_EMBEDDED_JSON', scriptSelector: '#__NEXT_DATA__' });
+      return Promise.resolve(result);
+    });
+    const sendResponse = jest.fn();
+
+    const kept = capturedListener({ type: 'GET_EMBEDDED_JSON', scriptSelector: '#__NEXT_DATA__' }, {}, sendResponse);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(kept).toBe(true);
+    expect(sendResponse).toHaveBeenCalledWith(result);
+  });
+
+  test('answers "not found" without an active tab and when the content script is unreachable', async () => {
+    chrome.tabs.query.mockImplementation((_, cb) => cb([]));
+    let sendResponse = jest.fn();
+    capturedListener({ type: 'GET_EMBEDDED_JSON', scriptSelector: 'script' }, {}, sendResponse);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(sendResponse).toHaveBeenCalledWith(EMPTY);
+
+    chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+    chrome.tabs.sendMessage.mockRejectedValue(new Error('Could not establish connection.'));
+    sendResponse = jest.fn();
+    capturedListener({ type: 'GET_EMBEDDED_JSON', scriptSelector: 'script' }, {}, sendResponse);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(sendResponse).toHaveBeenCalledWith(EMPTY);
+  });
+});

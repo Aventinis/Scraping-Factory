@@ -23,23 +23,16 @@
 // types/popup-drafts.d.ts rather than as local @typedefs here, since
 // container-tree.js's own JSDoc needs to reference the very same shapes
 // (see that file's own top-of-file comment).
-const SFScrapingConfigBuilder = (function() {
-const { escapeHtml } =
-  typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
+const { escapeHtml } = require('./api-config');
 
-const { t } =
-  typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
+const { t } = require('../i18n/i18n');
 
-const { serializeGroupTree } =
-  typeof require !== 'undefined' ? require('./container-tree') : self.SFContainerTree;
+const { serializeGroupTree } = require('./container-tree');
 
-const { buildOutputBlueprintMapping } =
-  typeof require !== 'undefined' ? require('./output-blueprints') : self.SFOutputBlueprints;
+const { buildOutputBlueprintMapping } = require('./output-blueprints');
 
-const { buildDeduplicationConfig } =
-  typeof require !== 'undefined' ? require('./dedup-config') : self.SFDedupConfig;
-const { buildRequestHeadersConfig } =
-  typeof require !== 'undefined' ? require('./request-headers') : self.SFRequestHeaders;
+const { buildDeduplicationConfig } = require('./dedup-config');
+const { buildRequestHeadersConfig } = require('./request-headers');
 
 // ── Pure functions (exported for testing) ────────────────────────────────────
 
@@ -495,6 +488,9 @@ function collectFieldNames(mode, fields, groups, apiConfig) {
  * @param {SFDraft.DeduplicationState | null} [deduplication]
  * @param {SFDraft.RequestHeadersState | null} [requestHeaders]
  * @param {boolean} [respectRobotsDelay]
+ * @param {boolean} [skipVerification]
+ * @param {SFDraft.RobotsDisallowState | null} [robotsDisallow]
+ * @param {boolean} [appendOutput]
  * @returns {object}
  */
 function buildScrapingConfig(
@@ -525,7 +521,17 @@ function buildScrapingConfig(
   requestHeaders = null,
   // Issue #228: same "append at the end" rule.
   respectRobotsDelay = false,
+  // Issue #292: same "append at the end" rule.
+  skipVerification = false,
+  // Issue #333: same "append at the end" rule.
+  robotsDisallow = null,
+  // Issue #342: same "append at the end" rule.
+  appendOutput = false,
 ) {
+  // Issue #292: a plain on/off switch (the Global Settings preference),
+  // mode-independent — sent for every mode, omitted when off.
+  /** @type {Record<string, unknown>} */
+  const skipVerificationFields = skipVerification ? { skipVerification: true } : {};
   // Issue #228: a plain on/off switch, independent of requestDelay (the
   // companion uses the larger of the two gaps) — omitted when off.
   const respectRobotsFields = respectRobotsDelay ? { respectRobotsDelay: true } : {};
@@ -536,18 +542,21 @@ function buildScrapingConfig(
     : useJsonOutput === 'sqlite' ? 'Sqlite' : useJsonOutput === 'xlsx' ? 'Xlsx' : null;
   const requestDelayConfig = buildRequestDelayConfig(requestDelay);
   const requestDelayFields = requestDelayConfig ? { requestDelay: requestDelayConfig } : {};
-  // Both pacing settings in one spread — the object literals below are
+  // Issue #333: the run-time robots.txt Disallow check (flat/container/api/
+  // blocks; Combined returns before this is used — rejected on the outer request).
+  const robotsDisallowFields = robotsDisallow?.enabled ? { robotsDisallow: { action: robotsDisallow.action } } : {};
+  // Issue #342: append to the previous output file instead of replacing it
+  // (flat/container/api/blocks; Combined returns before this is used).
+  const appendOutputFields = appendOutput ? { appendOutput: true } : {};
+  // The pacing/robots/append settings in one spread — the object literals below are
   // already at TypeScript's union-complexity limit.
   /** @type {Record<string, unknown>} */
-  const pacingFields = { ...requestDelayFields, ...respectRobotsFields };
+  const settingFields = { ...requestDelayFields, ...respectRobotsFields, ...robotsDisallowFields, ...appendOutputFields };
   const retryConfig = buildRetryConfig(retry);
   const retryFields = retryConfig ? { retry: retryConfig } : {};
-  // Issue #225: the Append output needs a flat output file, so container
-  // mode and API mode's tree response shape fall back to Delta — see
-  // buildDeduplicationConfig. Key fields no longer in the field list are
-  // dropped. Blocks/Combined return before this is used (not supported there).
-  const isTreeShape = mode === 'container' || (mode === 'api' && (apiConfig?.groups?.length ?? 0) > 0);
-  const deduplicationConfig = buildDeduplicationConfig(deduplication, isTreeShape, collectFieldNames(mode, fields, groups, apiConfig));
+  // Issue #225: key fields no longer in the field list are dropped.
+  // Blocks/Combined return before this is used (not supported there).
+  const deduplicationConfig = buildDeduplicationConfig(deduplication, collectFieldNames(mode, fields, groups, apiConfig));
   const deduplicationFields = deduplicationConfig ? { deduplication: deduplicationConfig } : {};
   // Issue #226: DOM shapes only (flat/container/Blocks) — API mode has its
   // own header list inside apiConfig, and Combined components carry theirs.
@@ -585,7 +594,7 @@ function buildScrapingConfig(
         name: b.name || null,
         outputFileName: b.outputFileName || null,
         ...(b.shape === 'group'
-          ? { groups: serializeGroupTree(b.groups) }
+          ? { groups: serializeGroupTree(/** @type {SFDraft.ContainerNode[]} */ (b.groups)) }
           : { fields: (b.fields || []).map(f => ({
               name: f.name, selector: f.selector, attribute: f.attribute ?? null,
               ...(f.framePath ? { framePath: f.framePath } : {}),
@@ -594,7 +603,7 @@ function buildScrapingConfig(
       })),
       scriptFileName: scriptFileName || null,
       ...engineFields, ...previewFields, ...additionalUrlsFields,
-      ...proxyFields, ...pacingFields, ...retryFields, ...requestHeadersFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields,
+      ...proxyFields, ...settingFields, ...retryFields, ...requestHeadersFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields, ...skipVerificationFields,
     };
   }
   // Combined mode (Issue #239): no ad-hoc fields/groups/apiConfig of its own
@@ -616,7 +625,7 @@ function buildScrapingConfig(
         ...(c.savedConfigId ? { savedConfigId: c.savedConfigId } : {}),
       })),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
-      ...previewFields, ...outputFileFields,
+      ...previewFields, ...outputFileFields, ...skipVerificationFields,
     };
   }
 
@@ -676,8 +685,8 @@ function buildScrapingConfig(
       version: '1', url, groups: serializeGroupTree(groups),
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...pacingFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
-      ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
+      ...proxyFields, ...settingFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...preflightFields, ...outputFileFields, ...skipVerificationFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
   if (mode === 'api') {
@@ -685,8 +694,8 @@ function buildScrapingConfig(
       version: '1', url, api: apiConfig,
       scriptFileName: scriptFileName || null, outputFileName: outputFileName || null,
       ...engineFields, ...previewFields, ...outputFormatFields, ...additionalUrlsFields, ...changeDetectionFields,
-      ...proxyFields, ...pacingFields, ...retryFields, ...deduplicationFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
-      ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
+      ...proxyFields, ...settingFields, ...retryFields, ...deduplicationFields, ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
+      ...preflightFields, ...outputFileFields, ...skipVerificationFields, ...externalConfigFields, ...outputBlueprintFields,
     };
   }
   return {
@@ -707,9 +716,9 @@ function buildScrapingConfig(
     outputFormat: tableOrJsonFormat ?? 'Csv',
     scriptFileName: scriptFileName || null,
     outputFileName: outputFileName || null,
-    ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields, ...pacingFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields,
+    ...engineFields, ...previewFields, ...additionalUrlsFields, ...changeDetectionFields, ...proxyFields, ...settingFields, ...retryFields, ...deduplicationFields, ...requestHeadersFields,
     ...hardeningFields, ...paginationFields, ...discoveredUrlsFields, ...persistentSessionFields,
-    ...preflightFields, ...outputFileFields, ...externalConfigFields, ...outputBlueprintFields,
+    ...preflightFields, ...outputFileFields, ...skipVerificationFields, ...externalConfigFields, ...outputBlueprintFields,
   };
 }
 
@@ -754,6 +763,9 @@ function buildScrapingConfig(
  * @param {SFDraft.DeduplicationState | null} [deduplication]
  * @param {SFDraft.RequestHeadersState | null} [requestHeaders]
  * @param {boolean} [respectRobotsDelay]
+ * @param {boolean} [skipVerification]
+ * @param {SFDraft.RobotsDisallowState | null} [robotsDisallow]
+ * @param {boolean} [appendOutput]
  * @returns {{exportedAt: string, extensionVersion: string, config: object}}
  */
 function buildConfigExport(
@@ -778,6 +790,12 @@ function buildConfigExport(
   requestHeaders = null,
   // Issue #228: same "append at the end" rule.
   respectRobotsDelay = false,
+  // Issue #292: same "append at the end" rule.
+  skipVerification = false,
+  // Issue #333: same "append at the end" rule.
+  robotsDisallow = null,
+  // Issue #342: same "append at the end" rule.
+  appendOutput = false,
 ) {
   return {
     exportedAt: new Date().toISOString(),
@@ -788,7 +806,7 @@ function buildConfigExport(
       includeOutputFile, externalConfig, combinedComponents, blocks,
       outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping,
       outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping, discoveredUrls, preflight, requestDelay, retry,
-      deduplication, requestHeaders, respectRobotsDelay,
+      deduplication, requestHeaders, respectRobotsDelay, skipVerification, robotsDisallow, appendOutput,
     ),
   };
 }
@@ -1042,17 +1060,14 @@ function frameBadgeHtml(framePath) {
   return `<span class="frame-badge" title="${title}">${escapeHtml(t('frame.badge'))}</span>`;
 }
 
-  return {sanitizeFileNameBase, deriveScriptFileNameFromHostname, computeScriptFileNamePatch, parseAdditionalUrls,
-    buildChangeDetectionConfig, buildProxyConfig, buildRequestDelayConfig, buildRetryConfig, buildPaginationConfig, buildDiscoveredUrlsConfig, buildHardeningConfig,
-    computeInitialMonitoringSectionOpen, collectFieldNames,
-    buildScrapingConfig, buildConfigExport,
-    addField, removeField, updateField,
-    addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions,
-    buildVerificationValues,
-    addNullRateCheck, removeNullRateCheck, updateNullRateCheck,
-    addRequiredField, removeRequiredField,
-    frameBadgeHtml,};
-})();
+module.exports = {sanitizeFileNameBase, deriveScriptFileNameFromHostname, computeScriptFileNamePatch, parseAdditionalUrls,
+  buildChangeDetectionConfig, buildProxyConfig, buildRequestDelayConfig, buildRetryConfig, buildPaginationConfig, buildDiscoveredUrlsConfig, buildHardeningConfig,
+  computeInitialMonitoringSectionOpen, collectFieldNames,
+  buildScrapingConfig, buildConfigExport,
+  addField, removeField, updateField,
+  addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions,
+  buildVerificationValues,
+  addNullRateCheck, removeNullRateCheck, updateNullRateCheck,
+  addRequiredField, removeRequiredField,
+  frameBadgeHtml,};
 
-if (typeof module !== 'undefined') module.exports = SFScrapingConfigBuilder;
-if (typeof self !== 'undefined') self.SFScrapingConfigBuilder = SFScrapingConfigBuilder;

@@ -168,11 +168,12 @@ describe('Engine + browser actions integration', () => {
     maxIterationsInput.dispatchEvent(new Event('change', { bubbles: true }));
 
     const waitAfterMsInput = document.querySelector('.browser-action-wait-after-ms');
-    waitAfterMsInput.value = '2500';
+    waitAfterMsInput.value = '2.5'; // Issue #403: typed in seconds
     waitAfterMsInput.dispatchEvent(new Event('change', { bubbles: true }));
 
     expect(document.querySelector('.browser-action-max-iterations').value).toBe('20');
-    expect(document.querySelector('.browser-action-wait-after-ms').value).toBe('2500');
+    expect(document.querySelector('.browser-action-wait-after-ms').value).toBe('2.5');
+    expect(chrome.storage.session.set.mock.calls.at(-1)[0].browserActions[0]).toMatchObject({ maxIterations: 20, waitAfterMs: 2500 });
   });
 
   // Issue #289

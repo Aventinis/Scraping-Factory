@@ -50,29 +50,30 @@ describe('draft helpers', () => {
 
 describe('buildDeduplicationConfig', () => {
   test('within-run only: just the key fields, no incremental keys at all', () => {
-    expect(buildDeduplicationConfig(draft({ keyFields: ['A', 'B'] }), false)).toEqual({ keyFields: ['A', 'B'] });
+    expect(buildDeduplicationConfig(draft({ keyFields: ['A', 'B'] }))).toEqual({ keyFields: ['A', 'B'] });
   });
 
   test('incremental sends the output mode and the retention', () => {
-    expect(buildDeduplicationConfig(draft({ incremental: true, retentionValueText: '250' }), false)).toEqual({
+    expect(buildDeduplicationConfig(draft({ incremental: true, retentionValueText: '250' }))).toEqual({
       keyFields: ['Titel'], incremental: true, incrementalOutput: 'Delta', retention: { kind: 'MaxCount', value: 250 },
     });
-    expect(buildDeduplicationConfig(draft({ incremental: true, appendOutput: true, retentionKind: 'MaxAge', retentionValueText: '14' }), false))
+    expect(buildDeduplicationConfig(draft({ incremental: true, appendOutput: true, retentionKind: 'MaxAge', retentionValueText: '14' })))
       .toEqual({ keyFields: ['Titel'], incremental: true, incrementalOutput: 'Append', retention: { kind: 'MaxAge', value: 14 } });
   });
 
-  test('a tree shape cannot append — it falls back to the delta output', () => {
-    expect(buildDeduplicationConfig(draft({ incremental: true, appendOutput: true }), true).incrementalOutput).toBe('Delta');
+  test('the Append output is sent as chosen (every output format can append, Issue #342)', () => {
+    expect(buildDeduplicationConfig(draft({ incremental: true, appendOutput: true })).incrementalOutput).toBe('Append');
+    expect(buildDeduplicationConfig(draft({ incremental: true, appendOutput: false })).incrementalOutput).toBe('Delta');
   });
 
   test('the sidecar-related keys are omitted without incremental, even if the draft carries them', () => {
-    const wire = buildDeduplicationConfig(draft({ appendOutput: true, retentionKind: 'MaxAge' }), false);
+    const wire = buildDeduplicationConfig(draft({ appendOutput: true, retentionKind: 'MaxAge' }));
     expect(wire).toEqual({ keyFields: ['Titel'] });
   });
 
   test('key fields that no longer exist in the field list are dropped; none left means off', () => {
-    expect(buildDeduplicationConfig(draft({ keyFields: ['Alt', 'Titel'] }), false, ['Titel', 'Preis'])).toEqual({ keyFields: ['Titel'] });
-    expect(buildDeduplicationConfig(draft({ keyFields: ['Alt'] }), false, ['Titel'])).toBeNull();
+    expect(buildDeduplicationConfig(draft({ keyFields: ['Alt', 'Titel'] }), ['Titel', 'Preis'])).toEqual({ keyFields: ['Titel'] });
+    expect(buildDeduplicationConfig(draft({ keyFields: ['Alt'] }), ['Titel'])).toBeNull();
   });
 
   test.each([
@@ -81,7 +82,7 @@ describe('buildDeduplicationConfig', () => {
     [null],
     [undefined],
   ])('%j is treated as off', (input) => {
-    expect(buildDeduplicationConfig(input, false)).toBeNull();
+    expect(buildDeduplicationConfig(input)).toBeNull();
   });
 });
 
@@ -103,20 +104,20 @@ describe('buildScrapingConfig', () => {
     expect(build('flat', draft({ keyFields: ['Geloescht'] }))).not.toHaveProperty('deduplication');
   });
 
-  test('container mode: leaf field names count as key fields, and Append falls back to Delta', () => {
+  test('container mode: leaf field names count as key fields, and Append is allowed', () => {
     const groups = [{
       kind: 'group', name: 'Gericht', selector: '.item', repeating: true,
       children: [{ kind: 'field', name: 'Name', selector: 'h1', mode: 'text' }],
     }];
     const wire = build('container', draft({ keyFields: ['Name'], incremental: true, appendOutput: true }), { groups }).deduplication;
-    expect(wire).toMatchObject({ keyFields: ['Name'], incremental: true, incrementalOutput: 'Delta' });
+    expect(wire).toMatchObject({ keyFields: ['Name'], incremental: true, incrementalOutput: 'Append' });
   });
 
-  test('API mode: tree response shape → delta only; flat response shape may append', () => {
+  test('API mode: both response shapes may append', () => {
     const treeApi = { urlTemplate: 'https://example.com/a', groups: [{ name: 'Artikel', path: 'items', children: [{ name: 'Id', path: 'id' }] }] };
     const flatApi = { urlTemplate: 'https://example.com/a', itemsPath: 'items', fields: [{ name: 'Id', path: 'id' }] };
     const dedup = draft({ keyFields: ['Id'], incremental: true, appendOutput: true });
-    expect(build('api', dedup, { apiConfig: treeApi }).deduplication.incrementalOutput).toBe('Delta');
+    expect(build('api', dedup, { apiConfig: treeApi }).deduplication.incrementalOutput).toBe('Append');
     expect(build('api', dedup, { apiConfig: flatApi }).deduplication.incrementalOutput).toBe('Append');
   });
 
@@ -136,13 +137,13 @@ describe('loading a config restores the deduplication settings', () => {
       enabled: true, keyFields: ['Titel', 'Preis'], incremental: true, appendOutput: true,
       retentionKind: 'MaxAge', retentionValueText: '14',
     });
-    expect(buildDeduplicationConfig(state, false)).toEqual(wire);
+    expect(buildDeduplicationConfig(state)).toEqual(wire);
   });
 
   test('a within-run-only config round-trips without picking up incremental settings', () => {
     const state = applyDeduplicationConfig({ keyFields: ['Titel'] });
     expect(state).toMatchObject({ enabled: true, incremental: false, appendOutput: false, retentionKind: 'MaxCount' });
-    expect(buildDeduplicationConfig(state, false)).toEqual({ keyFields: ['Titel'] });
+    expect(buildDeduplicationConfig(state)).toEqual({ keyFields: ['Titel'] });
   });
 
   test('no deduplication (or no key field) means off with the defaults', () => {
@@ -246,16 +247,16 @@ describe('Deduplication settings in the real popup', () => {
     expect(document.getElementById('btn-dedup-output-delta').classList.contains('active')).toBe(false);
   });
 
-  test('the append choice is disabled for container mode (tree output)', async () => {
+  test('the append choice is available for container mode too (Issue #342: every format can append)', async () => {
     await mount({
       mode: 'container',
       groups: [{ kind: 'group', name: 'G', selector: '.g', repeating: true, children: [{ kind: 'field', name: 'N', selector: 'h1', mode: 'text' }] }],
       deduplication: { ...createDefaultDeduplication(), enabled: true, incremental: true, appendOutput: true, keyFields: ['N'] },
     });
 
-    expect(document.getElementById('btn-dedup-output-append').disabled).toBe(true);
-    expect(document.getElementById('btn-dedup-output-append').classList.contains('active')).toBe(false);
-    expect(document.getElementById('btn-dedup-output-delta').classList.contains('active')).toBe(true);
+    expect(document.getElementById('btn-dedup-output-append').disabled).toBe(false);
+    expect(document.getElementById('btn-dedup-output-append').classList.contains('active')).toBe(true);
+    expect(document.getElementById('btn-dedup-output-delta').classList.contains('active')).toBe(false);
   });
 
   test('the section is hidden for Combined and Blocks mode', async () => {

@@ -113,15 +113,14 @@ public class TabularOutputTests
     }
 
     [Fact]
-    public void Validate_DeduplicationAppend_IsRejected()
+    public void Validate_DeduplicationAppend_IsAccepted()
     {
+        // Issue #342: SQLite/Excel append to the existing file.
         var plan = FlatPlan(OutputFormat.Xlsx, b => b.Deduplication = new DeduplicationConfig
         {
             KeyFields = ["Titel"], Incremental = true, IncrementalOutput = IncrementalOutputMode.Append,
         });
-        var result = ScrapingPlanValidator.Validate(plan);
-        Assert.False(result.Success);
-        Assert.Contains("append", result.Error);
+        Assert.True(ScrapingPlanValidator.Validate(plan).Success);
     }
 
     [Fact]

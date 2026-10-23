@@ -68,6 +68,7 @@ const { launchBrowser, openPopup, focusFixture, waitForIdleScreen, startCompanio
     // Incremental options: Append is available for flat output; retention switches its default.
     await popupPage.check('#toggle-dedup-incremental');
     if (await popupPage.isDisabled('#btn-dedup-output-append')) throw new Error('Append should be available for flat output');
+    await popupPage.click('#dedup-retention-advanced > summary'); // Issue #407: the retention row sits under "Advanced"
     const countDefault = await popupPage.inputValue('#input-dedup-retention-value');
     await popupPage.selectOption('#select-dedup-retention-kind', 'MaxAge');
     const ageDefault = await popupPage.inputValue('#input-dedup-retention-value');

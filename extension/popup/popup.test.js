@@ -3373,6 +3373,7 @@ describe('Live selector match-count preview (Issue #85)', () => {
     document.getElementById('btn-mode-container').click();
     document.getElementById('btn-add-root-container').click();
     document.getElementById('input-container-name').value = 'Vorspeisen';
+    document.getElementById('radio-container-repeating').checked = true; // 7 matches fit "repeating" (Issue #398 would warn for "single")
     document.getElementById('btn-container-confirm').click();
 
     capturedListener({ type: 'ELEMENT_SELECTED', selector: 'section.menu-category', matchCount: 7 });
@@ -3929,12 +3930,15 @@ describe('Field transform-chain editor (Issue #84)', () => {
 
     document.getElementById('input-split-field-name').value = 'Strasse';
     document.getElementById('select-split-field-source').value = 'Adresse';
-    document.getElementById('input-split-field-index').value = '0';
+    // Issue #407: the field says "Part (1 = first)"; 2 is the wire index 1.
+    document.getElementById('input-split-field-index').value = '2';
     document.getElementById('btn-split-field-confirm').click();
 
     const rows = document.querySelectorAll('#fields-list .field-row');
     expect(rows).toHaveLength(2);
     expect(rows[1].querySelector('.field-name').textContent).toBe('Strasse');
+    const savedFields = chrome.storage.session.set.mock.calls.map(c => c[0].fields).filter(Boolean).pop();
+    expect(savedFields[1].transforms[0]).toMatchObject({ kind: 'splitField', sourceFieldName: 'Adresse', index: 1 });
   });
 
   test('container mode: "Felder kombinieren" is scoped to the same immediate parent group', async () => {

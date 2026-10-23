@@ -7,21 +7,20 @@
 // Functions take a `bridge` object (same convention as api-config-ui.js/
 // companion-client.js) instead of closing over popup.js's own module-level
 // state.
-const SFSettingsPanelUI = (function() {
-const { createLogger } =
-  typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');
 
-const { t } =
-  typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
+const { t } = require('../i18n/i18n');
+const { applyRecommendedHardening } = require('./hardening-presets');
+const { autoOpenAdvanced } = require('./advanced-disclosure-ui');
+const { retryStatusCodesDiffer } = require('./advanced-defaults');
 
-const { STATES, escapeHtml } =
-  typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
+const { STATES, escapeHtml } = require('./api-config');
 
 const {
   collectFieldNames, addNullRateCheck, removeNullRateCheck, updateNullRateCheck,
   addRequiredField, removeRequiredField,
-} = typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
+} = require('./scraping-config-builder');
 
 function renderSettingsPanel(bridge) {
   const state = bridge.getState();
@@ -51,6 +50,17 @@ function renderSettingsPanel(bridge) {
     // Issue #228: opt-in robots.txt Crawl-delay/Request-rate.
     const respectRobotsToggle = /** @type {HTMLInputElement | null} */ (document.getElementById('toggle-respect-robots-delay'));
     if (respectRobotsToggle) respectRobotsToggle.checked = state.respectRobotsDelay;
+    // Issue #342: opt-in — append to the existing output file.
+    const appendOutputToggle = /** @type {HTMLInputElement | null} */ (document.getElementById('toggle-append-output'));
+    if (appendOutputToggle) appendOutputToggle.checked = state.appendOutput;
+    document.getElementById('append-output-row')?.classList.toggle('hidden', state.mode === 'combined');
+
+    // Issue #333: opt-in run-time robots.txt Disallow check.
+    const robotsDisallowToggle = /** @type {HTMLInputElement | null} */ (document.getElementById('toggle-robots-disallow'));
+    if (robotsDisallowToggle) robotsDisallowToggle.checked = state.robotsDisallow.enabled;
+    document.getElementById('robots-disallow-config')?.classList.toggle('hidden', !state.robotsDisallow.enabled);
+    const robotsActionSelect = /** @type {HTMLSelectElement | null} */ (document.getElementById('select-robots-disallow-action'));
+    if (robotsActionSelect) robotsActionSelect.value = state.robotsDisallow.action;
 
     // Issue #222: opt-in pause between requests.
     const requestDelayToggle = document.getElementById('toggle-request-delay');
@@ -71,6 +81,9 @@ function renderSettingsPanel(bridge) {
       const input = /** @type {HTMLInputElement | null} */ (document.getElementById(id));
       if (input && document.activeElement !== input) input.value = state.retry[key];
     });
+
+    // Issue #407: the status-code list sits under "Advanced"; a changed list opens it.
+    autoOpenAdvanced(document.getElementById('input-retry-status-codes'), retryStatusCodesDiffer(state.retry.statusCodesText));
 
     const proxyToggle = document.getElementById('toggle-proxy');
     if (proxyToggle) proxyToggle.checked = state.proxy.enabled;
@@ -234,7 +247,9 @@ function renderHardeningNullRateList(
       `<option value="">${escapeHtml(t('idle.hardeningNullRateFieldPlaceholder'))}</option>` +
       options.map(name => `<option value="${escapeHtml(name)}"${name === row.fieldName ? ' selected' : ''}>${escapeHtml(name)}</option>`).join('') +
       `</select>` +
-      `<input type="number" min="0" max="100" class="hardening-null-rate-threshold" data-index="${i}" value="${row.threshold}" />%` +
+      `<span class="hardening-sentence-text">${escapeHtml(t('idle.hardeningNullRateMiddle'))}</span>` +
+      `<input type="number" min="0" max="100" class="hardening-null-rate-threshold" data-index="${i}" value="${row.threshold}" />` +
+      `<span class="hardening-sentence-text">${escapeHtml(t('idle.hardeningNullRateAfter'))}</span>` +
       `<div class="mode-toggle hardening-null-rate-severity">` +
       `<div class="mode-toggle-thumb"></div>` +
       `<button type="button" class="mode-btn btn-null-rate-warning${row.severity === 'Warning' ? ' active' : ''}" data-index="${i}">${escapeHtml(t('idle.hardeningSeverityWarning'))}</button>` +
@@ -327,6 +342,20 @@ function wireSettingsPanelEvents(bridge) {
     bridge.setState(bridge.getState().current, { respectRobotsDelay: e.target.checked });
   });
 
+  // Issue #342: opt-in append to the existing output file — plain boolean.
+  document.getElementById('toggle-append-output')?.addEventListener('change', (e) => {
+    bridge.setState(bridge.getState().current, { appendOutput: e.target.checked });
+  });
+
+  // Issue #333: opt-in run-time robots.txt Disallow check — an on/off switch
+  // plus what to do with a disallowed request.
+  document.getElementById('toggle-robots-disallow')?.addEventListener('change', (e) => {
+    bridge.setState(bridge.getState().current, { robotsDisallow: { ...bridge.getState().robotsDisallow, enabled: e.target.checked } });
+  });
+  document.getElementById('select-robots-disallow-action')?.addEventListener('change', (e) => {
+    bridge.setState(bridge.getState().current, { robotsDisallow: { ...bridge.getState().robotsDisallow, action: e.target.value } });
+  });
+
   // Issue #222: opt-in pause between requests.
   document.getElementById('toggle-request-delay')?.addEventListener('change', (e) => {
     bridge.setState(bridge.getState().current, { requestDelay: { ...bridge.getState().requestDelay, enabled: e.target.checked } });
@@ -415,6 +444,25 @@ function wireSettingsPanelEvents(bridge) {
       pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [], selectionKind: 'discoveredUrls',
       domTree: null, domTreeTruncated: false, domTreeError: null,
     });
+  });
+
+  // Issue #399: "Recommended checks" — one click for the sensible starting set.
+  document.getElementById('btn-hardening-recommended')?.addEventListener('click', () => {
+    const state = bridge.getState();
+    const fieldNames = collectFieldNames(state.mode, state.fields, state.groups, state.apiConfig);
+    const { hardening, applied, needsFields } = applyRecommendedHardening(state.hardening, fieldNames);
+    bridge.setState(state.current, { hardening });
+    const parts = [];
+    if (applied.noResult) parts.push(t('idle.hardeningRecommendedNoResult'));
+    if (applied.requiredField) parts.push(t('idle.hardeningRecommendedRequired', { field: applied.requiredField }));
+    const note = document.getElementById('hardening-recommended-note');
+    if (note) {
+      note.textContent = [
+        parts.length ? t('idle.hardeningRecommendedApplied', { checks: parts.join(', ') }) : t('idle.hardeningRecommendedNothingNew'),
+        needsFields ? t('idle.hardeningRecommendedNeedFields') : '',
+      ].filter(Boolean).join(' ');
+      note.classList.remove('hidden');
+    }
   });
 
   // Issue #129: opt-in script hardening — the "no result" check.
@@ -592,10 +640,13 @@ function wireSettingsPanelEvents(bridge) {
   // (and Enter/Space, since the header is a div with role="button", not a
   // real <button>) flips monitoringSectionOpen; nothing else about
   // change-detection/hardening's own state is touched.
-  document.getElementById('monitoring-section-toggle')?.addEventListener('click', () => {
+  document.getElementById('monitoring-section-toggle')?.addEventListener('click', (e) => {
+    // Issue #354: the "?" next to the title opens its explanation, it doesn't collapse the section.
+    if (e.target.closest && e.target.closest('.help-host')) return;
     bridge.setState(bridge.getState().current, { monitoringSectionOpen: !bridge.getState().monitoringSectionOpen });
   });
   document.getElementById('monitoring-section-toggle')?.addEventListener('keydown', (e) => {
+    if (e.target !== e.currentTarget) return; // a key on the "?" inside belongs to its own button
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       bridge.setState(bridge.getState().current, { monitoringSectionOpen: !bridge.getState().monitoringSectionOpen });
@@ -618,9 +669,6 @@ function wireSettingsPanelEvents(bridge) {
 
 }
 
-  return {renderSettingsPanel, renderHardeningNullRateList, renderHardeningRequiredFieldsList,
-    wireSettingsPanelEvents,};
-})();
+module.exports = {renderSettingsPanel, renderHardeningNullRateList, renderHardeningRequiredFieldsList,
+  wireSettingsPanelEvents,};
 
-if (typeof module !== 'undefined') module.exports = SFSettingsPanelUI;
-if (typeof self !== 'undefined') self.SFSettingsPanelUI = SFSettingsPanelUI;

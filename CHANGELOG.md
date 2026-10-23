@@ -1,5 +1,195 @@
 # Changelog
 
+## [1.20.0](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.22...v1.20.0) (2026-10-23)
+
+
+### Miscellaneous Chores
+
+* **release:** promote to 1.20.0 ([75d6de7](https://github.com/Aventinis/Scraping-Factory/commit/75d6de75eb09e4eb8acea5718198ac5829fdfb28))
+
+## [1.19.22](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.21...v1.19.22) (2026-10-23)
+
+
+### Features
+
+* **docs:** build docs/user/*.md into bundled HTML pages inside the extension ([#354](https://github.com/Aventinis/Scraping-Factory/issues/354)) ([ca7cc92](https://github.com/Aventinis/Scraping-Factory/commit/ca7cc929ecc84707ea06a1efdcf08459c8d6f9e4))
+* **install:** ship the user documentation as files in the release bundle ([#354](https://github.com/Aventinis/Scraping-Factory/issues/354)) ([00f4329](https://github.com/Aventinis/Scraping-Factory/commit/00f432911fcf0dc0254ce28f6ae9c4e4e53b4cee))
+* **popup:** add "Learn more" links that open the bundled documentation, with a key registry and a sync test ([#354](https://github.com/Aventinis/Scraping-Factory/issues/354)) ([3124714](https://github.com/Aventinis/Scraping-Factory/commit/31247145409855265f27226e5df6583ef05a3f4d))
+* **popup:** one title per control with the explanation behind its "?"; Settings screen in collapsed cards, styled output-format select, quiet preset names ([#354](https://github.com/Aventinis/Scraping-Factory/issues/354)) ([b5eb039](https://github.com/Aventinis/Scraping-Factory/commit/b5eb0392ed4ec5e7cf1afdaa4b3e970c8481b344))
+* **popup:** shorten the long hints to one line, link each section to its documentation page and guard the hint length ([#354](https://github.com/Aventinis/Scraping-Factory/issues/354)) ([a789786](https://github.com/Aventinis/Scraping-Factory/commit/a7897868e415f6a6df3d60d53911634917943ff3))
+
+
+### Bug Fixes
+
+* **build:** assemble the extension in a staging folder and swap it in only on success; clear error when marked is missing ([#354](https://github.com/Aventinis/Scraping-Factory/issues/354)) ([5183135](https://github.com/Aventinis/Scraping-Factory/commit/5183135b9c1e297dd36edf16141ae96ebd5accc4))
+* **popup:** style the combined select like the Settings ones, keep a gap between the browser-action buttons, show the config-file checkbox directly, drop the last browser-actions paragraph ([#354](https://github.com/Aventinis/Scraping-Factory/issues/354)) ([71d1ca3](https://github.com/Aventinis/Scraping-Factory/commit/71d1ca396aa4556ff1a9b60da54d48632ff46cc8))
+
+## [1.19.21](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.20...v1.19.21) (2026-10-22)
+
+
+### Features
+
+* **api-mode:** JSON-path picker tree model and path derivation ([#404](https://github.com/Aventinis/Scraping-Factory/issues/404)) ([793ed9c](https://github.com/Aventinis/Scraping-Factory/commit/793ed9c906b8d41b985985748f6a6bf0160c604d))
+* **api-mode:** JSON-path picker UI, wired into the group modal, cursor paths and the token path ([#404](https://github.com/Aventinis/Scraping-Factory/issues/404)) ([c42cd5f](https://github.com/Aventinis/Scraping-Factory/commit/c42cd5f3485cbda3b2ec79e0fbaf1f2e5ad080f7))
+* **api-mode:** popovers for URL parts, value sources and the body, rarely used options under Advanced, plainer source label ([#404](https://github.com/Aventinis/Scraping-Factory/issues/404)) ([daddd6e](https://github.com/Aventinis/Scraping-Factory/commit/daddd6e39763ea70ad7083a4d7f80e648eec5d9a))
+* **extension:** GET_EMBEDDED_JSON relay so the JSON-path picker can read an embedded &lt;script&gt; blob ([#404](https://github.com/Aventinis/Scraping-Factory/issues/404)) ([d0e4c58](https://github.com/Aventinis/Scraping-Factory/commit/d0e4c5879f81b5fea3bd94873c20d1ba577e9313))
+
+## [1.19.20](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.19...v1.19.20) (2026-10-22)
+
+
+### Features
+
+* **pagination:** {url} is optional in a page-number template for a single start page ([#405](https://github.com/Aventinis/Scraping-Factory/issues/405)) ([e6c59eb](https://github.com/Aventinis/Scraping-Factory/commit/e6c59eb3ab269ff7800792367884b29c8b62252e))
+* **pagination:** derive a page-number URL template from the start URL or a clicked link ([#405](https://github.com/Aventinis/Scraping-Factory/issues/405)) ([759654c](https://github.com/Aventinis/Scraping-Factory/commit/759654c7b17a32a13dab04704f684e1fd7bf5422))
+* **pagination:** proposal banner, link pickers, popovers and Advanced for the pagination helpers ([#405](https://github.com/Aventinis/Scraping-Factory/issues/405)) ([f180f3a](https://github.com/Aventinis/Scraping-Factory/commit/f180f3a51d5e2cd2372266bd22bb7b8375d6486d))
+
+## [1.19.19](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.18...v1.19.19) (2026-10-22)
+
+
+### Features
+
+* **request-headers:** add common-header presets and appendHeaderRow ([#402](https://github.com/Aventinis/Scraping-Factory/issues/402)) ([06d35e8](https://github.com/Aventinis/Scraping-Factory/commit/06d35e8a8974d3f1a7da9cd7ea49936e1c934c22))
+* **request-headers:** pick common headers instead of typing an empty row ([#402](https://github.com/Aventinis/Scraping-Factory/issues/402)) ([b9971a2](https://github.com/Aventinis/Scraping-Factory/commit/b9971a2e19ba0cfb52d234158e2a51ee40c2d743))
+
+## [1.19.18](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.17...v1.19.18) (2026-10-22)
+
+
+### Features
+
+* **ui:** explain Monitoring and Hardening in plain language, with recommended checks ([#399](https://github.com/Aventinis/Scraping-Factory/issues/399)) ([e8528f7](https://github.com/Aventinis/Scraping-Factory/commit/e8528f7995eaa613e29884dff386f1606115234c))
+* **ui:** explain Monitoring and Hardening in plain language, with recommended checks ([#399](https://github.com/Aventinis/Scraping-Factory/issues/399)) ([bd9eb35](https://github.com/Aventinis/Scraping-Factory/commit/bd9eb35c97cd0a36d1f7064abf9137e82eedf376))
+
+## [1.19.17](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.16...v1.19.17) (2026-10-22)
+
+
+### Features
+
+* **transforms:** Pattern helper for Regex extract and date-format guess for Convert to date ([#400](https://github.com/Aventinis/Scraping-Factory/issues/400)) ([7ecbce5](https://github.com/Aventinis/Scraping-Factory/commit/7ecbce591fd7c5b75e8376974d80dd5e84872c9a))
+* **transforms:** Pattern helper for Regex extract and date-format guess for Convert to date ([#400](https://github.com/Aventinis/Scraping-Factory/issues/400)) ([85cf27c](https://github.com/Aventinis/Scraping-Factory/commit/85cf27c09fdd48530dd3e4b53ff395f169e96f7d))
+* **transforms:** regex recipes and date-format inference logic, with .NET/Python parity tests ([#400](https://github.com/Aventinis/Scraping-Factory/issues/400)) ([a0af8e1](https://github.com/Aventinis/Scraping-Factory/commit/a0af8e1a91e796a0768d455b4ee6f8cc7d910b22))
+
+## [1.19.16](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.15...v1.19.16) (2026-10-22)
+
+
+### Features
+
+* **ui:** explain environment variables once and validate their names everywhere ([#397](https://github.com/Aventinis/Scraping-Factory/issues/397)) ([98392f8](https://github.com/Aventinis/Scraping-Factory/commit/98392f8d5be2fc3c27ac88bd8f5e86c6cab065ef))
+* **ui:** explain environment variables once and validate their names everywhere ([#397](https://github.com/Aventinis/Scraping-Factory/issues/397)) ([107173f](https://github.com/Aventinis/Scraping-Factory/commit/107173fb06759a93dbd710b577081594cba4b574))
+
+## [1.19.15](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.14...v1.19.15) (2026-10-22)
+
+
+### Features
+
+* **ui:** plain-language error messages for a failed Generate ([#401](https://github.com/Aventinis/Scraping-Factory/issues/401)) ([c4162cb](https://github.com/Aventinis/Scraping-Factory/commit/c4162cbc9a28d05f7687bb6920f1da7b24b3ffd7))
+* **ui:** plain-language messages for failed Generate, original text behind Details ([#401](https://github.com/Aventinis/Scraping-Factory/issues/401)) ([1d9caa3](https://github.com/Aventinis/Scraping-Factory/commit/1d9caa38bbd7916469f2abb6efb06cb06bac0696))
+
+## [1.19.14](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.13...v1.19.14) (2026-10-22)
+
+
+### Features
+
+* **ui:** guidance for choosing the mode, container type, field type and engine ([#398](https://github.com/Aventinis/Scraping-Factory/issues/398)) ([b294ad1](https://github.com/Aventinis/Scraping-Factory/commit/b294ad1ee8a1a49342f086deb5305e131c625099))
+
+
+### Bug Fixes
+
+* **i18n:** keep the mode help text within the length guideline ([#398](https://github.com/Aventinis/Scraping-Factory/issues/398)) ([d78de77](https://github.com/Aventinis/Scraping-Factory/commit/d78de77f7cfa28f0edf3a71d7ee51dec3437c35b))
+
+## [1.19.13](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.12...v1.19.13) (2026-10-22)
+
+
+### Features
+
+* **ui:** first-run and "companion unreachable" guidance ([#406](https://github.com/Aventinis/Scraping-Factory/issues/406)) ([fe7f322](https://github.com/Aventinis/Scraping-Factory/commit/fe7f322134d3abacaa1715eae23f884f2888714c))
+* **ui:** structured first-run guidance on the companion-unreachable screen ([#406](https://github.com/Aventinis/Scraping-Factory/issues/406)) ([d5334d7](https://github.com/Aventinis/Scraping-Factory/commit/d5334d7447a5550551a5d82746aa4f73719e176c))
+
+## [1.19.12](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.11...v1.19.12) (2026-10-21)
+
+
+### Features
+
+* **help:** add reusable help popover and Advanced disclosure ([#396](https://github.com/Aventinis/Scraping-Factory/issues/396)) ([d2c3506](https://github.com/Aventinis/Scraping-Factory/commit/d2c35066c9d46db20a0b1c6c36f1959fe71afc8d))
+* **ui:** reusable help popover, Advanced disclosure and help-text conventions ([#396](https://github.com/Aventinis/Scraping-Factory/issues/396)) ([c859ac7](https://github.com/Aventinis/Scraping-Factory/commit/c859ac7c5906f8b3a49954796d88265ba6c52aeb))
+
+## [1.19.11](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.10...v1.19.11) (2026-10-21)
+
+
+### Features
+
+* **docs:** add screenshot generator for the user documentation ([#354](https://github.com/Aventinis/Scraping-Factory/issues/354)) ([b000203](https://github.com/Aventinis/Scraping-Factory/commit/b0002038683b148312592c35fb5d8eb64a47e94c))
+
+## [1.19.10](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.9...v1.19.10) (2026-10-21)
+
+
+### Features
+
+* **companion:** email address, verified flag and one-time codes in the user stores (SQLite + MySQL) ([a0cc7ff](https://github.com/Aventinis/Scraping-Factory/commit/a0cc7ffd9fa22322e5c4c5ddc2f1eccfbd68999c))
+* **companion:** email codes, verification, password reset endpoints, rules and CLI ([#353](https://github.com/Aventinis/Scraping-Factory/issues/353)) ([3eee3cf](https://github.com/Aventinis/Scraping-Factory/commit/3eee3cf5fc093f4c147fec749ad36f3b54e4545f))
+* email addresses, verification and password reset by mailed code ([#353](https://github.com/Aventinis/Scraping-Factory/issues/353)) ([08cbb98](https://github.com/Aventinis/Scraping-Factory/commit/08cbb982174d752f7e3bc4817016008b796ce766))
+* **extension:** email address, code verification and password reset in the Account section ([#353](https://github.com/Aventinis/Scraping-Factory/issues/353)) ([8df7bf4](https://github.com/Aventinis/Scraping-Factory/commit/8df7bf45f7b9ef82ab658d50f119cc4b698be28b))
+* **install:** SMTP, email rules and --no-email flags for the installers ([#353](https://github.com/Aventinis/Scraping-Factory/issues/353)) ([bb4c117](https://github.com/Aventinis/Scraping-Factory/commit/bb4c1174ac14acb128d9c4fdfb16dffe14b279c8))
+
+## [1.19.9](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.8...v1.19.9) (2026-10-21)
+
+
+### Features
+
+* **companion:** self-service accounts and HTTPS (store, endpoints, TLS) ([64c3363](https://github.com/Aventinis/Scraping-Factory/commit/64c33636cdda43a9f7af3d54e249e2ba5d236d5e))
+* **extension:** account section, https policy and development-only options ([44b6966](https://github.com/Aventinis/Scraping-Factory/commit/44b69664ac8c710b065f584194265a41703adb9c))
+* **install:** release channel for the bundled extension, registration and HTTPS flags ([d0613b7](https://github.com/Aventinis/Scraping-Factory/commit/d0613b77bbef7db8c9b6fbbdb068fe22f3dc1b6b))
+* self-service accounts, per-device tokens and HTTPS ([#352](https://github.com/Aventinis/Scraping-Factory/issues/352)) ([b71c800](https://github.com/Aventinis/Scraping-Factory/commit/b71c800b257ca3bd44d0e8ef4fc8bf23f332a0ba))
+
+## [1.19.8](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.7...v1.19.8) (2026-10-21)
+
+
+### Features
+
+* append to an existing output file for every output format ([4d26cda](https://github.com/Aventinis/Scraping-Factory/commit/4d26cdac24776f938e9b7cd73e241b14253c4f24))
+* **companion:** append to an existing output file in every format (AppendOutput) ([5fc98c8](https://github.com/Aventinis/Scraping-Factory/commit/5fc98c8f491c788c4c02d474132b55346b81b34e))
+* **extension:** setting to append to the existing output file ([6f9a49d](https://github.com/Aventinis/Scraping-Factory/commit/6f9a49d699398305174f1de906f2bd3d26bb46cc))
+
+## [1.19.7](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.6...v1.19.7) (2026-10-21)
+
+
+### Features
+
+* check robots.txt Disallow at script runtime ([8b7015b](https://github.com/Aventinis/Scraping-Factory/commit/8b7015b593739c95b0d94b05ce5239efaf23089e))
+* **companion:** check robots.txt Disallow at script runtime (RobotsDisallow) ([c0be3f4](https://github.com/Aventinis/Scraping-Factory/commit/c0be3f4e3793d5062d111f7bd37dfa277c67684c))
+* **extension:** setting to check robots.txt Disallow at script runtime ([7591393](https://github.com/Aventinis/Scraping-Factory/commit/7591393794d4746d8d9f34f7ca4400ffaa8a7408))
+
+## [1.19.6](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.5...v1.19.6) (2026-10-21)
+
+
+### Features
+
+* API mode Link-header pagination (rel="next") ([5198211](https://github.com/Aventinis/Scraping-Factory/commit/519821160cc2312101f752f9aaa587ab850542f5))
+* **extension:** Link-header pagination for API mode (recorder, draft, API_CONFIG section) ([9960096](https://github.com/Aventinis/Scraping-Factory/commit/9960096b7e5dd58f56e2403bf4547968c6cda33b))
+
+## [1.19.5](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.4...v1.19.5) (2026-10-21)
+
+
+### Features
+
+* **companion:** let a request skip the trial run (ScrapingConfig.SkipVerification) ([c019401](https://github.com/Aventinis/Scraping-Factory/commit/c019401233d6418f2b4afbfc5e63d12e8b427ff6))
+* optional Settings preference to skip the trial run ([f3bde26](https://github.com/Aventinis/Scraping-Factory/commit/f3bde26e305d7b2eb4819a0226c5b136e2df4e0d))
+
+## [1.19.4](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.3...v1.19.4) (2026-10-21)
+
+
+### Bug Fixes
+
+* **templates:** clean error message for failed page requests in flat/container/Blocks mode ([db5396f](https://github.com/Aventinis/Scraping-Factory/commit/db5396f9f79cd6ab4f02bcb960aac9a1f582cda0))
+* **templates:** report failed page requests as one clean error line instead of a traceback ([87672f6](https://github.com/Aventinis/Scraping-Factory/commit/87672f62887823487a0db984ddf244e4fade8905))
+
+## [1.19.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.2...v1.19.3) (2026-10-21)
+
+
+### Bug Fixes
+
+* **companion:** scale trial-run timeout estimate with API parameter combination count ([c376a9b](https://github.com/Aventinis/Scraping-Factory/commit/c376a9bf25674042b88105d298e7cef6486c1fd2))
+* **companion:** scale trial-run timeout estimate with API parameter combination count ([2d1c3c4](https://github.com/Aventinis/Scraping-Factory/commit/2d1c3c4f8f1c58bb40c130f3e30bfa2981b979f4))
+
 ## [1.19.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.1...v1.19.2) (2026-10-21)
 
 

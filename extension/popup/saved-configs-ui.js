@@ -6,34 +6,24 @@
 // "Saved configurations" panel's own rendering, lives here. Functions take
 // a `bridge` object (same convention as api-config-ui.js/companion-client.js)
 // instead of closing over popup.js's own module-level state.
-const SFSavedConfigsUI = (function() {
-const { createLogger } =
-  typeof require !== 'undefined' ? require('../shared/logger') : self.SFLogger;
+const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');
 
-const { t } =
-  typeof require !== 'undefined' ? require('../i18n/i18n') : self.SFI18n;
+const { t } = require('../i18n/i18n');
 
-const { STATES, escapeHtml } =
-  typeof require !== 'undefined' ? require('./api-config') : self.SFApiConfig;
+const { STATES, escapeHtml } = require('./api-config');
 
-const { showToast } =
-  typeof require !== 'undefined' ? require('./toast') : self.SFToast;
+const { showToast } = require('./toast');
 
-const { buildScrapingConfig, buildHardeningConfig } =
-  typeof require !== 'undefined' ? require('./scraping-config-builder') : self.SFScrapingConfigBuilder;
+const { buildScrapingConfig, buildHardeningConfig } = require('./scraping-config-builder');
 
-const { downloadFile } =
-  typeof require !== 'undefined' ? require('./download-helpers') : self.SFDownloadHelpers;
+const { downloadFile } = require('./download-helpers');
 
-const { getResolvedCompanionUrl, resolveCombinedComponents, companionFetch } =
-  typeof require !== 'undefined' ? require('./companion-client') : self.SFCompanionClient;
+const { getResolvedCompanionUrl, resolveCombinedComponents, companionFetch } = require('./companion-client');
 
-const { applyConfigToState } =
-  typeof require !== 'undefined' ? require('./config-import') : self.SFConfigImport;
+const { applyConfigToState } = require('./config-import');
 
-const { getGlobalSettings } =
-  typeof require !== 'undefined' ? require('../shared/global-settings') : self.SFGlobalSettings;
+const { getGlobalSettings } = require('../shared/global-settings');
 
 // Issue #141: renders _state.savedConfigs (scoped to the current page's
 // hostname, see fetchSavedConfigs) as a Load/Delete row per entry. A row
@@ -262,7 +252,7 @@ async function createSavedConfig(bridge, name) {
     state.pagination, state.persistentSession, false, globalSettings.externalConfig, combinedComponents, state.blocks,
     state.selectedOutputBlueprintId, state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping,
     state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
-    state.discoveredUrls, state.preflight, state.requestDelay, state.retry, state.deduplication, state.requestHeaders, state.respectRobotsDelay,
+    state.discoveredUrls, state.preflight, state.requestDelay, state.retry, state.deduplication, state.requestHeaders, state.respectRobotsDelay, globalSettings.skipVerification, state.robotsDisallow, state.appendOutput,
   );
   const res = await companionFetch(`${getResolvedCompanionUrl()}/configs`, {
     method: 'POST',
@@ -841,19 +831,16 @@ function wireSavedConfigsEvents(bridge) {
   });
 }
 
-  return {renderSavedConfigsList, buildSavedOutputsPanelEl,
-    wireSavedConfigsEvents,
-    fetchSavedConfigs, fetchAllSavedConfigs, createSavedConfig, saveCurrentConfig, loadSavedConfig,
-    requestDeleteSavedConfig, cancelDeleteSavedConfig, deleteSavedConfig,
-    openSaveConfigModal,
-    saveCurrentOutput, createConfigAndSaveOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
-    requestDeleteSavedOutput, cancelDeleteSavedOutput, deleteSavedOutput,
-    renderSaveOutputModal,
-    startHardeningReplay, chooseHardeningReplayCompareBasis, runHardeningReplay, cancelHardeningReplay,
-    buildHardeningReplayPanelEl,
-    renderAllSavedConfigsList, wireAllSavedConfigsEvents,
-    requestDeleteAllSavedConfig, cancelDeleteAllSavedConfig, deleteAllSavedConfigsEntry,};
-})();
+module.exports = {renderSavedConfigsList, buildSavedOutputsPanelEl,
+  wireSavedConfigsEvents,
+  fetchSavedConfigs, fetchAllSavedConfigs, createSavedConfig, saveCurrentConfig, loadSavedConfig,
+  requestDeleteSavedConfig, cancelDeleteSavedConfig, deleteSavedConfig,
+  openSaveConfigModal,
+  saveCurrentOutput, createConfigAndSaveOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
+  requestDeleteSavedOutput, cancelDeleteSavedOutput, deleteSavedOutput,
+  renderSaveOutputModal,
+  startHardeningReplay, chooseHardeningReplayCompareBasis, runHardeningReplay, cancelHardeningReplay,
+  buildHardeningReplayPanelEl,
+  renderAllSavedConfigsList, wireAllSavedConfigsEvents,
+  requestDeleteAllSavedConfig, cancelDeleteAllSavedConfig, deleteAllSavedConfigsEntry,};
 
-if (typeof module !== 'undefined') module.exports = SFSavedConfigsUI;
-if (typeof self !== 'undefined') self.SFSavedConfigsUI = SFSavedConfigsUI;

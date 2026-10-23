@@ -37,6 +37,7 @@ const { launchBrowser, openPopup, focusFixture, waitForIdleScreen, startCompanio
     await popupPage.click('.api-candidate-confirm');
     await popupPage.waitForSelector('#screen-api-config:not(.hidden)');
 
+    await popupPage.click('#api-bootstrap-advanced > summary'); // Issue #404: the option sits under "Advanced"
     await popupPage.check('#toggle-api-bootstrap');
     await popupPage.click('#btn-api-bootstrap-from-recording');
     const likely = popupPage.locator('.api-bootstrap-recording-entry.likely');

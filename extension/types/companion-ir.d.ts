@@ -15,9 +15,8 @@
 // and never serialized as-is.
 //
 // This file has no top-level import/export, so every declaration below is a
-// plain global ambient type (not an ES module) — consistent with every
-// other file in this project being a classic `<script>`, not a module (see
-// CLAUDE.md's "IIFE assigned to one self.SFXxx global" convention). Grouped
+// plain global ambient type (not an ES module) — consistent with the
+// extension's sources being CommonJS files rather than ES modules. Grouped
 // under one `SFWire` namespace purely to keep ~25 type names from crowding
 // the global namespace and to avoid colliding with any popup-internal
 // `@typedef` of a similar name (e.g. a module's own internal `GroupNode`
@@ -53,6 +52,8 @@ declare namespace SFWire {
     persistentSession?: boolean;
     preflight?: boolean;
     respectRobotsDelay?: boolean;
+    robotsDisallow?: RobotsDisallowConfig;
+    appendOutput?: boolean;
     externalConfig?: boolean;
     combined?: CombinedComponentConfig[];
     blocks?: ExtractionBlockConfig[];
@@ -190,6 +191,11 @@ declare namespace SFWire {
     retention?: { kind: 'MaxCount' | 'MaxAge'; value: number };
   }
 
+  // Issue #333: see IR/RobotsDisallowConfig.cs.
+  interface RobotsDisallowConfig {
+    action?: 'Warn' | 'Skip' | 'Abort';
+  }
+
   // Issue #222: see IR/RequestDelayConfig.cs.
   interface RequestDelayConfig {
     minMs: number;
@@ -260,6 +266,12 @@ declare namespace SFWire {
     embeddedJsonSource?: EmbeddedJsonSource;
     bootstrap?: ApiBootstrap;
     cursorPagination?: ApiCursorPagination;
+    linkHeaderPagination?: ApiLinkHeaderPagination;
+  }
+
+  // Issue #321: see ApiConfig.LinkHeaderPagination in IR/ApiConfig.cs.
+  interface ApiLinkHeaderPagination {
+    maxPages: number;
   }
 
   // Issue #224: see ApiConfig.CursorPagination in IR/ApiConfig.cs.

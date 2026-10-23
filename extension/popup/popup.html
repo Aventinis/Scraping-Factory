@@ -51,7 +51,30 @@
       </svg>
     </p>
     <p data-i18n="error.title"></p>
-    <p class="error-hint" data-i18n="error.hint"></p>
+    <!-- Issue #406: first run (no companion has ever answered) shows the long
+         explanation, afterwards only the one-line hint — see
+         companion-guidance-ui.js. The install/start texts are set by script
+         (they carry the installer name and the program path for this OS). -->
+    <div id="error-guidance-long" class="error-guidance hidden">
+      <p class="error-intro"><span data-i18n="error.intro"></span> <a class="learn-more" data-doc="companionUnreachable" href="#" data-i18n="common.learnMore"></a></p>
+      <div id="error-situation-install" class="error-situation">
+        <h3><span data-i18n="error.install.title"></span> <span class="error-likely hidden" data-i18n="error.likely"></span></h3>
+        <p id="error-install-text"></p>
+        <code id="error-install-command" class="error-code"></code>
+        <p class="error-more"><a class="learn-more" data-doc="start" href="#" data-i18n="common.learnMore"></a></p>
+      </div>
+      <div id="error-situation-start" class="error-situation">
+        <h3><span data-i18n="error.start.title"></span> <span class="error-likely hidden" data-i18n="error.likely"></span></h3>
+        <p id="error-start-text"></p>
+        <code id="error-start-path" class="error-code"></code>
+      </div>
+      <div id="error-situation-address" class="error-situation">
+        <h3><span data-i18n="error.address.title"></span> <span class="error-likely hidden" data-i18n="error.likely"></span></h3>
+        <p data-i18n="error.address.text"></p>
+      </div>
+    </div>
+    <p id="error-hint-short" class="error-hint hidden" data-i18n="error.hintShort"></p>
+    <p class="error-why"><span data-i18n="error.whyLabel"></span><span class="help-host" data-help="help.companionError.causes"></span></p>
     <p id="error-current-url" class="error-current-url"></p>
     <div class="actions">
       <button id="btn-retry" class="btn-primary" data-i18n="common.retry"></button>
@@ -165,64 +188,24 @@
   <div id="modals-mount"></div>
   <!-- Error toast -->
   <div id="error-toast" class="toast hidden">
-    <span id="error-toast-message"></span>
-    <button id="btn-report-bug-toast" class="toast-report-btn hidden" data-i18n="common.reportBug"></button>
+    <div class="toast-body">
+      <span id="error-toast-message"></span>
+      <!-- Issue #401: a recognised failure shows a plain-language title + hint and
+           keeps the original text behind "Details" (copyable); such a toast stays
+           until closed (see showErrorToast in toast.js). -->
+      <p id="error-toast-hint" class="toast-hint hidden"></p>
+      <details id="error-toast-details" class="toast-details hidden">
+        <summary data-i18n="errors.detailsLabel"></summary>
+        <pre id="error-toast-details-text"></pre>
+        <button id="btn-toast-copy-details" class="toast-report-btn" type="button" data-i18n="errors.copyDetails"></button>
+      </details>
+    </div>
+    <div class="toast-actions">
+      <button id="btn-report-bug-toast" class="toast-report-btn hidden" data-i18n="common.reportBug"></button>
+      <button id="btn-toast-close" class="toast-close-btn hidden" type="button" data-i18n-title="errors.close" aria-label="Close">×</button>
+    </div>
   </div>
 
-  <script src="../shared/logger.js"></script>
-  <script src="../shared/companion-config.js"></script>
-  <script src="../shared/theme.js"></script>
-  <script src="../shared/global-settings.js"></script>
-  <script src="../i18n/i18n.js"></script>
-  <script src="api-bootstrap.js"></script>
-  <script src="api-cursor-pagination.js"></script>
-  <script src="api-config.js"></script>
-  <script src="container-tree.js"></script>
-  <script src="hover-highlight.js"></script>
-  <script src="field-transforms.js"></script>
-  <script src="selector-text-filter.js"></script>
-  <script src="selector-text-filter-ui.js"></script>
-  <script src="field-transforms-ui.js"></script>
-  <script src="transform-presets.js"></script>
-  <script src="combine-split-fields.js"></script>
-  <script src="combine-split-fields-ui.js"></script>
-  <script src="container-tree-ui.js"></script>
-  <script src="dedup-config.js"></script>
-  <script src="request-headers.js"></script>
-  <script src="config-import.js"></script>
-  <script src="toast.js"></script>
-  <script src="bug-report.js"></script>
-  <script src="output-blueprints.js"></script>
-  <script src="scraping-config-builder.js"></script>
-  <!-- Issue #216: BrowserDiscoverySource's action-list editor reuses
-       scraping-config-builder.js's addBrowserAction/removeBrowserAction/
-       updateBrowserAction/serializeBrowserActions/frameBadgeHtml, so this
-       must load after it (same reason browser-actions-ui.js below already
-       does) — it used to load earlier, right after combine-split-fields-ui.js,
-       back when it had no such dependency. -->
-  <script src="api-config-ui.js"></script>
-  <script src="api-bootstrap-ui.js"></script>
-  <script src="api-cursor-pagination-ui.js"></script>
-  <script src="dom-tree-ui.js"></script>
-  <script src="preview.js"></script>
-  <script src="companion-client.js"></script>
-  <script src="transform-presets-ui.js"></script>
-  <script src="download-helpers.js"></script>
-  <script src="saved-configs-ui.js"></script>
-  <script src="settings-panel-ui.js"></script>
-  <script src="dedup-config-ui.js"></script>
-  <script src="request-headers-ui.js"></script>
-  <script src="flat-mode-ui.js"></script>
-  <script src="browser-actions-ui.js"></script>
-  <script src="combined-config.js"></script>
-  <script src="combined-config-ui.js"></script>
-  <script src="blocks-config.js"></script>
-  <script src="blocks-config-ui.js"></script>
-  <script src="output-blueprints-ui.js"></script>
-  <script src="global-settings-ui.js"></script>
-  <script src="idle-screen-ui.js"></script>
-  <script src="message-router.js"></script>
-  <script src="session-restore.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
