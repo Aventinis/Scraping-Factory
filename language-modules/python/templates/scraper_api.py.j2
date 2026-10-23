@@ -9,43 +9,11 @@ import json
 {{~ else ~}}
 import csv
 {{~ end ~}}
-{{~ if cursor_pagination_enabled ~}}
-import copy
-{{~ end ~}}
-import datetime
-import itertools
-import re
-from datetime import date
-{{~ if needs_os_import || external_config.enabled ~}}
-import os
-{{~ end ~}}
-import sys
+#@include api_imports_base
 {{~ if external_config.enabled ~}}
 import xml.etree.ElementTree as ET
 {{~ end ~}}
-{{~ if hardening.has_baseline ~}}
-import json
-{{~ end ~}}
-{{~ if change_detection.enabled ~}}
-import difflib
-{{~ if change_detection.notify_method == "Email" ~}}
-import smtplib
-from email.mime.text import MIMEText
-{{~ else ~}}
-import json
-import urllib.request
-{{~ end ~}}
-{{~ end ~}}
-{{~ if embedded_json_source ~}}
-import json
-from bs4 import BeautifulSoup
-{{~ end ~}}
-{{~ if needs_browser_discovery ~}}
-# Issue #216: only scripts that actually use browser-discovery-sourced
-# parameters need Playwright — every other Api-mode script stays exactly as
-# lightweight as before this existed.
-from playwright.sync_api import sync_playwright
-{{~ end ~}}
+#@include api_imports_features
 import requests
 from urllib.parse import quote, urlsplit{{ if needs_browser_discovery }}, parse_qsl{{ end }}{{ if link_pagination_enabled }}, urljoin{{ end }}
 
@@ -102,26 +70,11 @@ def _extract_row(record, combo):
 #@include api_fetch
 
 
-def scrape():
-{{~ if has_bootstrap ~}}
-    _BOOTSTRAP_VALUES.update(_run_bootstrap())
-    headers = _build_headers(_BOOTSTRAP_VALUES)
-    combos = _resolve_parameter_combos(headers, _BOOTSTRAP_VALUES)
-{{~ else ~}}
-    headers = _build_headers()
-    combos = _resolve_parameter_combos(headers)
-{{~ end ~}}
+#@include api_scrape_head
 
     rows = []
     for combo in combos:
-        # Every parameter value is URL-encoded before being substituted into
-        # UrlTemplate — values discovered at runtime (DiscoverySource) could
-        # contain spaces or other characters that aren't valid unescaped in a
-        # URL.
-        encoded_combo = {name: quote(str(value), safe="") for name, value in {{ if has_bootstrap }}{**_BOOTSTRAP_VALUES, **combo}{{ else }}combo{{ end }}.items()}
-        url = URL_TEMPLATE.format(**encoded_combo)
-
-        body = _render_body(BODY, {{ if has_bootstrap }}{**_BOOTSTRAP_VALUES, **combo}{{ else }}combo{{ end }})
+#@include api_combo_request
         for data in _fetch_pages(url, body, headers):
             for record in _resolve_items(data, ITEMS_PATH):
                 rows.append(_extract_row(record, combo))

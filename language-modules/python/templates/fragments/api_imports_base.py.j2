@@ -1,0 +1,11 @@
+{{~ if cursor_pagination_enabled ~}}
+import copy
+{{~ end ~}}
+import datetime
+import itertools
+import re
+from datetime import date
+{{~ if needs_os_import || external_config.enabled ~}}
+import os
+{{~ end ~}}
+import sys

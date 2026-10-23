@@ -1,0 +1,23 @@
+{{~ if hardening.has_baseline ~}}
+import json
+{{~ end ~}}
+{{~ if change_detection.enabled ~}}
+import difflib
+{{~ if change_detection.notify_method == "Email" ~}}
+import smtplib
+from email.mime.text import MIMEText
+{{~ else ~}}
+import json
+import urllib.request
+{{~ end ~}}
+{{~ end ~}}
+{{~ if embedded_json_source ~}}
+import json
+from bs4 import BeautifulSoup
+{{~ end ~}}
+{{~ if needs_browser_discovery ~}}
+# Issue #216: only scripts that actually use browser-discovery-sourced
+# parameters need Playwright — every other Api-mode script stays exactly as
+# lightweight as before this existed.
+from playwright.sync_api import sync_playwright
+{{~ end ~}}
