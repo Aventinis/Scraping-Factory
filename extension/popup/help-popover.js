@@ -1,8 +1,6 @@
 // @ts-check
-// Issue #396: the reusable help popover's pure logic (no DOM — see
-// help-popover-ui.js for rendering/wiring). A "?" button next to a label
-// toggles a short, offline explanation with an optional example. Screens
-// declare one in HTML only:
+// The reusable help popover's pure logic (help-popover-ui.js renders it): a "?" button toggles a short offline explanation with an
+// optional example. A screen declares one in HTML only,
 //
 //   <span class="help-host" data-help="help.requestHeaders.headers"></span>
 //
@@ -10,17 +8,10 @@
 //
 //   "help": { "requestHeaders": { "headers": { "text": "…", "example": "…" } } }
 //
-// Conventions for the texts (enforced where a machine can, see
-// help-i18n.test.js):
-//   - key shape `help.<area>.<field>`, camelCase segments;
-//   - `.text` is required: at most 2–3 short sentences, saying what the
-//     option is and what a user must know before touching it — no jargon
-//     without a gloss. Longer explanations belong in the user documentation
-//     (docs/user/), not here;
-//   - a "\n" in the text starts a new line (a short list of causes/fixes);
-//   - `.example` is optional: one line of what to type, written as it would
-//     be typed (rendered in code style);
-//   - nothing else under an entry; every key exists in de, en and es.
+// Conventions (help-i18n.test.js enforces what a machine can): key `help.<area>.<field>` in camelCase; `.text` is required, at most
+// 2–3 short sentences saying what the option is and what to know before touching it (longer explanations go to docs/user/); a "\n"
+// starts a new line; `.example` is optional, one line as it would be typed; nothing else under an entry; every key exists in de, en
+// and es.
 const HELP_KEY_PATTERN = /^help\.[a-z][A-Za-z0-9]*\.[a-z][A-Za-z0-9]*$/;
 
 // Soft limits — a help text longer than this has outgrown a popover in a

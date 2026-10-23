@@ -1,12 +1,6 @@
-// ── Flat mode: "Fields (flat)" render + event-wiring ────────────────────────
-// Extracted from popup.js (see CLAUDE.md's "Popup module boundaries"
-// architecture decision) — flat mode was the original mode and, unlike
-// container mode (container-tree.js/container-tree-ui.js) and API mode
-// (api-config.js/api-config-ui.js), never got its own module. This is that
-// module: the flat fields list, the "+ Datenfeld" pick flow, modal-field-name,
-// and the transform-chain editor for it. Functions take a `bridge` object
-// (same convention as api-config-ui.js/container-tree-ui.js) instead of
-// closing over popup.js's own module-level state.
+// ── Flat mode render / wiring ──
+// The original mode's module: the flat fields list, the "+ Field" pick flow, modal-field-name and its transform-chain editor.
+// Functions take a `bridge` instead of closing over popup.js state.
 const { createLogger } = require('../shared/logger');
 const { buildFlatFieldHighlight, wireHoverHighlight } = require('./hover-highlight');
 const log = createLogger('SF:Popup');
@@ -17,20 +11,12 @@ const { transformsAreValid, addTransform } = require('./field-transforms');
 const { appendTextFilter } = require('./selector-text-filter');
 const { resetTextFilter, effectiveMatchCount, wireTextFilter } = require('./selector-text-filter-ui');
 const { renderTransformList, renderTransformPreview, wireTransformList } = require('./field-transforms-ui');
-// Issue #214: guessUrlAttribute/parseAllowedContentTypes/megabytesToBytes
-// are pure data helpers (not DOM-rendering ones), so they're imported
-// straight from container-tree.js rather than duplicated — same "small
-// DOM helpers get duplicated, pure logic doesn't" convention this
-// codebase already draws elsewhere (see renderMatchCountHint).
+// Pure data helpers are imported from container-tree.js; small DOM helpers (renderMatchCountHint) are duplicated instead.
 const { guessUrlAttribute, parseAllowedContentTypes, megabytesToBytes } = require('./container-tree');
 const { isDerivedField } = require('./combine-split-fields');
 const { openCombineFieldModal, openSplitFieldModal } = require('./combine-split-fields-ui');
 
-// Issue #206 follow-up: a field created through the dedicated combine/
-// split flow has no real selector (see addField's own doc comment) —
-// shows a distinguishing description instead of the (functionally
-// unused) selector string, mirroring container-tree.js's own
-// groupNodeSuffix branch for the identical case.
+// A combine / split field has no real selector: show a distinguishing description instead (like container-tree.js's groupNodeSuffix).
 function fieldSelectorLabel(field) {
   if (isDerivedField(field.transforms)) {
     const transform = field.transforms[0];
@@ -60,14 +46,8 @@ function renderFields(fields) {
   });
 }
 
-// Issue #85: existence/quantity feedback next to the name input, the
-// instant a selector is picked — mirrors previewSummary's own
-// count/warn-styling pattern, just scoped to a single in-flight pick.
-// count is null before any pick, or if the content script couldn't
-// compute it — the hint simply stays hidden then. Duplicated in
-// container-tree-ui.js (its own extended-field modal needs the same
-// hint), same "no cross-module includes" convention as other small
-// shared DOM helpers in this codebase.
+// Match-count feedback next to the name input the instant a selector is picked. count is null before a pick or if the content
+// script could not compute it; the hint stays hidden then. Duplicated in container-tree-ui.js (its modal needs the same hint).
 function renderMatchCountHint(elId, count) {
   const el = document.getElementById(elId);
   if (!el) return;
@@ -81,14 +61,8 @@ function renderMatchCountHint(elId, count) {
   el.classList.remove('hidden');
 }
 
-// Issue #143/#214: live preview of the transform chain's output — reads
-// the live select-field-name-mode/select-field-name-attribute DOM values
-// directly, not _state (neither is state-managed), mirroring container
-// mode's own refreshExtendedTransformPreview exactly.
-// The value the modal's transform chain would run on right now: the picked
-// element's text, or (Attribute type) its chosen attribute — null until one is
-// chosen. Read for the live preview and, lazily, by the transform editor's
-// helpers (Issue #400: the date-format guess and the regex recipe preview).
+// Live preview of the chain's output, reading the live mode / attribute DOM values (not _state). The value the chain would run on now:
+// the picked element's text, or its chosen attribute (null until chosen); also read lazily by the transform editor's helpers.
 function resolveFlatRawValue(state) {
   const mode = document.getElementById('select-field-name-mode')?.value ?? 'text';
   if (mode === 'attribute') {
@@ -103,11 +77,7 @@ function refreshFlatTransformPreview(bridge) {
   renderTransformPreview('field-transform-preview', resolveFlatRawValue(state), state.pendingTransforms);
 }
 
-// Issue #214: same "clicked element's own actual attributes, pre-guessed
-// toward a resource-like URL" picker container-tree-ui.js's own
-// populateAttributeSelect already establishes — duplicated (not shared)
-// per this codebase's "small DOM helpers get duplicated" convention
-// (see renderMatchCountHint's own doc comment).
+// The attribute picker, like container-tree-ui.js's populateAttributeSelect (duplicated, not shared).
 function populateFlatAttributeSelect(attributes) {
   const select = document.getElementById('select-field-name-attribute');
   if (!select) return;
@@ -124,20 +94,13 @@ function populateFlatAttributeSelect(attributes) {
   }).join('');
 }
 
-// Called from popup.js's render() once it's determined the confirmed-
-// selection modal is flat mode's own (STATES.SELECTING + a pending
-// selector + mode !== 'container'). `isNewPick` distinguishes an actual
-// closed→open transition (reset name/focus) from a re-render triggered
-// by editing the transform chain (which must not wipe what's typed).
+// Called from render() once the confirmed-selection modal is flat mode's own. `isNewPick` tells a closed→open transition (reset
+// name / focus) from a re-render caused by editing the transform chain (which must not wipe what is typed).
 function renderFlatFieldModal(bridge, isNewPick) {
   const state = bridge.getState();
   document.getElementById('modal-field-name')?.classList.remove('hidden');
-  // Issue #214/#182: Blocks mode reuses this exact modal for its own flat
-  // draft shape (see blocks-config-ui.js), but Download isn't wired into
-  // Blocks-mode's own serialization yet (ScrapingPlanBuilder deliberately
-  // doesn't carry it onto a block's ExtractStep) — hiding the whole
-  // mode/attribute/download block there avoids exposing a control that
-  // would silently do nothing, rather than only catching it server-side.
+  // Blocks mode reuses this modal, but Download is not carried onto a block's fields: hide the whole mode / attribute / download block
+  // there instead of exposing a control that silently does nothing.
   document.getElementById('field-name-mode-section')?.classList.toggle('hidden', state.mode === 'blocks');
   if (isNewPick) {
     const input = document.getElementById('input-field-name');
