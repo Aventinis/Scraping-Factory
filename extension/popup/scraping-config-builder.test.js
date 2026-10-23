@@ -1,4 +1,4 @@
-// frameBadgeHtml (below) renders translated copy via i18n.js's t() — needs a
+// frameBadgeHtml (below) renders translated copy via i18n.ts's t() — needs a
 // real dictionary loaded, same as popup.test.js's own top-level setup
 // achieves indirectly by requiring ./popup (which calls initI18n() as part
 // of init()).

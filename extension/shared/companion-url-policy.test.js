@@ -97,7 +97,7 @@ describe('getCompanionUrl with a stored address the policy no longer allows', ()
   });
 });
 
-describe('build-config.js', () => {
+describe('build-config.ts', () => {
   test('unbundled (Jest, a checkout) it is the development channel; a release build sets it at compile time (see build.test.js)', () => {
     jest.resetModules();
     jest.dontMock('./build-config');

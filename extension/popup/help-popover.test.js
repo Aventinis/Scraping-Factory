@@ -19,7 +19,7 @@ describe('isValidHelpKey', () => {
 });
 
 describe('getHelpEntry', () => {
-  // i18n.js's t() resolves a missing key to the key itself.
+  // i18n.ts's t() resolves a missing key to the key itself.
   const dictionary = { 'help.a.b.text': 'Text', 'help.a.b.example': 'x: 1', 'help.a.c.text': 'Only text' };
   const t = (key) => dictionary[key] ?? key;
 

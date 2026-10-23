@@ -1,5 +1,5 @@
 // Resolves the popup's light/dark theme and persists an explicit manual
-// override (Issue #140), mirroring i18n.js's getStoredLanguage/setLanguage
+// override (Issue #140), mirroring i18n.ts's getStoredLanguage/setLanguage
 // pattern exactly (chrome.storage.local — a long-lived device preference
 // that should survive a browser restart, not just a popup close/reopen).
 //
@@ -11,20 +11,25 @@
 // can't round-trip through chrome.storage.local's key/value shape the way
 // a string could, an explicit "no stored preference" instead of a
 // storable-but-meaningless one.
-const THEMES = ['light', 'dark'];
+export const THEMES = ['light', 'dark'] as const;
+export type Theme = (typeof THEMES)[number];
+
+function isTheme(value: unknown): value is Theme {
+  return THEMES.includes(value as Theme);
+}
 const STORAGE_KEY = 'theme';
 
-async function getStoredTheme() {
+export async function getStoredTheme(): Promise<Theme | null> {
   if (typeof chrome === 'undefined' || !chrome.storage?.local) return null;
   try {
     const stored = await chrome.storage.local.get(STORAGE_KEY);
-    return THEMES.includes(stored[STORAGE_KEY]) ? stored[STORAGE_KEY] : null;
+    return isTheme(stored[STORAGE_KEY]) ? stored[STORAGE_KEY] : null;
   } catch {
     return null;
   }
 }
 
-async function persistTheme(theme) {
+async function persistTheme(theme: Theme | null): Promise<void> {
   if (typeof chrome === 'undefined' || !chrome.storage?.local) return;
   try {
     if (theme === null) await chrome.storage.local.remove(STORAGE_KEY);
@@ -38,25 +43,25 @@ async function persistTheme(theme) {
 // :root:not([data-theme]) picks up @media (prefers-color-scheme: dark)
 // automatically when the attribute is absent (theme === null, "follow
 // system"); :root[data-theme="light"|"dark"] overrides that when present.
-function applyTheme(theme) {
+export function applyTheme(theme: Theme | null): void {
   if (typeof document === 'undefined' || !document.documentElement) return;
   if (theme === null) document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', theme);
 }
 
-// Mirrors i18n.js's currentLanguage/getLanguage() pair — the popup needs
+// Mirrors i18n.ts's currentLanguage/getLanguage() pair — the popup needs
 // synchronous access to "what's the theme right now" to render the toggle
 // button's icon/title and to know what cycleTheme() should advance from,
 // without every caller re-awaiting a storage round trip.
-let currentTheme = null;
+let currentTheme: Theme | null = null;
 
-async function initTheme() {
+export async function initTheme(): Promise<Theme | null> {
   currentTheme = await getStoredTheme();
   applyTheme(currentTheme);
   return currentTheme;
 }
 
-function getTheme() {
+export function getTheme(): Theme | null {
   return currentTheme;
 }
 
@@ -64,19 +69,17 @@ function getTheme() {
 // button cycles through all three instead of a dropdown, which wouldn't
 // fit next to the existing language selector at this panel width (see
 // #theme-toggle in popup.html).
-function nextTheme(current) {
+export function nextTheme(current: Theme | null): Theme | null {
   if (current === null) return 'light';
   if (current === 'light') return 'dark';
   return null;
 }
 
-async function cycleTheme() {
+export async function cycleTheme(): Promise<Theme | null> {
   const next = nextTheme(currentTheme);
   applyTheme(next);
   await persistTheme(next);
   currentTheme = next;
   return next;
 }
-
-module.exports = { THEMES, getStoredTheme, applyTheme, initTheme, getTheme, nextTheme, cycleTheme };
 

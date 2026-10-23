@@ -1,11 +1,11 @@
 // Cross-session user preferences, reached from the popup's own dedicated
 // Settings tab (extension/popup/global-settings-ui.js) — mirrors
-// shared/theme.js's exact pattern (chrome.storage.local, a long-lived device
+// shared/theme.ts's exact pattern (chrome.storage.local, a long-lived device
 // preference that should survive a browser restart, not just a popup close/
 // reopen; one module-level cache populated once by an async init, synchronous
 // reads after that, explicit async writes).
 //
-// Unlike theme.js/i18n.js (one scalar preference each) or companion-config.js
+// Unlike theme.ts/i18n.js (one scalar preference each) or companion-config.ts
 // (one string, present or absent), this holds several related preferences
 // that are always read/written together — the four toggles that used to be
 // per-scrape opt-ins (Output as JSON, trial-run data preview, full output-
@@ -14,12 +14,25 @@
 // rather than one key per value.
 const STORAGE_KEY = 'globalSettings';
 
+export interface GlobalSettingsValues {
+  outputFormat: 'default' | 'json' | 'sqlite' | 'xlsx';
+  includeDataPreview: boolean;
+  includeOutputFile: boolean;
+  externalConfig: boolean;
+  skipVerification: boolean;
+  scriptNameMode: 'fixed' | 'hostname';
+  scriptNameFixed: string;
+}
+
+// What may be stored: the current shape, plus the boolean the pre-#229 versions wrote.
+type StoredSettings = Partial<GlobalSettingsValues> & { outputAsJson?: boolean };
+
 // scriptNameMode: 'fixed' (scriptNameFixed is the pre-filled default for
 // every new site) | 'hostname' (the current site's own hostname is derived
 // and pre-filled instead, re-applied every time a new site is detected —
 // see companion-client.js's checkCompanion/message-router.js's stale-URL
 // correction).
-const DEFAULTS = {
+export const DEFAULTS: GlobalSettingsValues = {
   // Issue #229: 'default' (CSV, or XML for a tree) | 'json' | 'sqlite' | 'xlsx'.
   // Replaces the earlier boolean `outputAsJson` (migrated on load).
   outputFormat: 'default',
@@ -32,34 +45,35 @@ const DEFAULTS = {
   scriptNameFixed: 'scraper',
 };
 
-let cached = { ...DEFAULTS };
+let cached: GlobalSettingsValues = { ...DEFAULTS };
 
-async function loadGlobalSettings() {
+export async function loadGlobalSettings(): Promise<GlobalSettingsValues> {
   if (typeof chrome === 'undefined' || !chrome.storage?.local) {
     cached = { ...DEFAULTS };
     return cached;
   }
   try {
     const stored = await chrome.storage.local.get(STORAGE_KEY);
-    const saved = stored[STORAGE_KEY] || {};
-    cached = { ...DEFAULTS, ...saved };
+    const saved: StoredSettings = stored[STORAGE_KEY] || {};
+    const merged: StoredSettings = { ...DEFAULTS, ...saved };
     // Migrate the pre-#229 boolean "Output as JSON" preference.
-    if (saved.outputFormat === undefined && saved.outputAsJson === true) cached.outputFormat = 'json';
-    delete cached.outputAsJson;
+    if (saved.outputFormat === undefined && saved.outputAsJson === true) merged.outputFormat = 'json';
+    delete merged.outputAsJson;
+    cached = merged as GlobalSettingsValues;
   } catch {
     cached = { ...DEFAULTS };
   }
   return cached;
 }
 
-// Mirrors theme.js's getTheme()/i18n.js's getLanguage() — synchronous, no
+// Mirrors theme.ts's getTheme()/i18n.js's getLanguage() — synchronous, no
 // storage round trip, so a hot read path (every field.js's render()/every
 // /generate call) doesn't need to be async just to read a preference.
-function getGlobalSettings() {
+export function getGlobalSettings(): GlobalSettingsValues {
   return cached;
 }
 
-async function updateGlobalSettings(patch) {
+export async function updateGlobalSettings(patch: Partial<GlobalSettingsValues>): Promise<GlobalSettingsValues> {
   cached = { ...cached, ...patch };
   if (typeof chrome === 'undefined' || !chrome.storage?.local) return cached;
   try {
@@ -69,6 +83,4 @@ async function updateGlobalSettings(patch) {
   }
   return cached;
 }
-
-module.exports = { DEFAULTS, loadGlobalSettings, getGlobalSettings, updateGlobalSettings };
 

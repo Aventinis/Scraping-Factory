@@ -24,7 +24,7 @@ export function isValidHelpKey(key: unknown): boolean {
   return typeof key === 'string' && HELP_KEY_PATTERN.test(key);
 }
 
-/** Reads one entry through `t`, which resolves a missing key to the key itself (see i18n.js). Null when the text is missing. */
+/** Reads one entry through `t`, which resolves a missing key to the key itself (see i18n.ts). Null when the text is missing. */
 export function getHelpEntry(t: (key: string) => string, key: string): HelpEntry | null {
   const textKey = `${key}.text`;
   const text = t(textKey);

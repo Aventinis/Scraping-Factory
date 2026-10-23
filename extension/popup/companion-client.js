@@ -25,7 +25,7 @@ const { loadCompanionReached, markCompanionReached } = require('./companion-guid
 const { describeError } = require('./error-messages');
 const { findInvalidEnvVarNames } = require('./env-var');
 
-// Resolved in checkCompanion() (default or the persisted override, shared/companion-config.js) and reused by generate() and
+// Resolved in checkCompanion() (default or the persisted override, shared/companion-config.ts) and reused by generate() and
 // the saved-configs endpoints; it only changes through a full health-check round trip.
 let companionUrl = null;
 
@@ -132,12 +132,12 @@ async function checkCompanion(bridge) {
   }
 }
 
-// Entry point of the COMPANION_ERROR screen's address field: persists the override (shared/companion-config.js), then re-runs
+// Entry point of the COMPANION_ERROR screen's address field: persists the override (shared/companion-config.ts), then re-runs
 // the health check.
 async function useCustomCompanionUrl(bridge, rawUrl) {
   // Issue #352: https always, plain http only for this computer (and, in a
   // development build with the developer option on, anywhere) — see
-  // shared/companion-config.js's checkCompanionUrl.
+  // shared/companion-config.ts's checkCompanionUrl.
   const checked = checkCompanionUrl(rawUrl);
   if (!checked.ok) {
     showToast(t(checked.reason === 'insecure' ? 'toast.insecureCompanionUrl' : 'toast.invalidCompanionUrl'));
@@ -224,7 +224,7 @@ async function generate(bridge) {
 
   // Issue-driven follow-up: outputAsJson/includeDataPreview/includeOutputFile/
   // externalConfig moved from per-scrape _state to the cross-session global
-  // Settings tab (shared/global-settings.js) — read from there now.
+  // Settings tab (shared/global-settings.ts) — read from there now.
   const globalSettings = getGlobalSettings();
   const config = buildScrapingConfig(configOptionsFromState(state, globalSettings, { combinedComponents }));
   // One-time test values (Fill, bootstrap, request headers) go only in this request body, deliberately out of `config` and so

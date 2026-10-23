@@ -242,7 +242,7 @@ async function createSavedConfig(bridge, name) {
     : null;
   // Issue-driven follow-up: outputAsJson/includeDataPreview/includeOutputFile/
   // externalConfig moved from per-scrape _state to the cross-session global
-  // Settings tab (shared/global-settings.js) — read from there now, same as
+  // Settings tab (shared/global-settings.ts) — read from there now, same as
   // every other buildScrapingConfig/buildConfigExport call site.
   const globalSettings = getGlobalSettings();
   const config = buildScrapingConfig(configOptionsFromState(state, globalSettings, { combinedComponents, includeOutputFile: false }));

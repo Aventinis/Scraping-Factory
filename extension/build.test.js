@@ -23,7 +23,7 @@ function runBuild(outdir, ...extraArgs) {
 
 function evaluateBuildConfig(channel) {
   const result = esbuild.buildSync({
-    entryPoints: [path.join(__dirname, 'shared/build-config.js')],
+    entryPoints: [path.join(__dirname, 'shared/build-config.ts')],
     bundle: true, format: 'iife', globalName: 'buildConfig', platform: 'browser', write: false,
     define: defineFor(channel), logLevel: 'silent',
   });
@@ -36,7 +36,7 @@ describe('compile-time constants', () => {
     expect(defineFor('development')['process.env.SF_CHANNEL']).toBe('"development"');
   });
 
-  test.each(['development', 'release'])('a %s build evaluates shared/build-config.js to that channel', (channel) => {
+  test.each(['development', 'release'])('a %s build evaluates shared/build-config.ts to that channel', (channel) => {
     const config = evaluateBuildConfig(channel);
     expect(config.CHANNEL).toBe(channel);
     expect(config.isDevelopmentBuild()).toBe(channel === 'development');
