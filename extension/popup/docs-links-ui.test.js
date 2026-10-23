@@ -50,6 +50,58 @@ test('learnMoreHtml builds a translated link for DOM built in JS', async () => {
   expect(document.querySelector('a.learn-more').dataset.doc).toBe('dedup');
 });
 
+describe('German panel', () => {
+  const anchorsJson = { de: { monitoring: { 'safety-checks': 'sicherheitspruefungen' } } };
+
+  async function loadGerman() {
+    jest.resetModules();
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => anchorsJson });
+    global.chrome = {
+      storage: { local: { get: jest.fn().mockResolvedValue({}), set: jest.fn() } },
+      runtime: { getURL: (p) => `chrome-extension://abc/${p}` },
+      tabs: { create: jest.fn() },
+    };
+    const i18n = require('../i18n/i18n');
+    await i18n.setLanguage('de');
+    return { ui: require('./docs-links-ui') };
+  }
+
+  afterEach(() => { delete global.fetch; });
+
+  test('a click opens the German page at the German heading', async () => {
+    const { ui } = await loadGerman();
+    ui.wireDocsLinkEvents();
+    document.body.innerHTML = '<a class="learn-more" data-doc="safetyChecks" href="#">Mehr erfahren</a>';
+    document.querySelector('a').click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(global.fetch).toHaveBeenCalledWith('chrome-extension://abc/docs/anchors.json');
+    expect(chrome.tabs.create).toHaveBeenCalledWith({ url: 'chrome-extension://abc/docs/de/monitoring.html#sicherheitspruefungen' });
+  });
+
+  test('initDocsLinks points the link at the German page once the table has loaded', async () => {
+    const { ui } = await loadGerman();
+    document.body.innerHTML = '<a class="learn-more" data-doc="safetyChecks" href="#">x</a>';
+    ui.initDocsLinks();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.querySelector('a').getAttribute('href')).toBe('chrome-extension://abc/docs/de/monitoring.html#sicherheitspruefungen');
+  });
+
+  test('without the table (a failed fetch) the English page opens', async () => {
+    const { ui } = await loadGerman();
+    global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
+    jest.resetModules();
+    const i18n = require('../i18n/i18n');
+    await i18n.setLanguage('de');
+    const fresh = require('./docs-links-ui');
+    fresh.wireDocsLinkEvents();
+    document.body.innerHTML = '<a class="learn-more" data-doc="safetyChecks" href="#">x</a>';
+    document.querySelector('a').click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(chrome.tabs.create).toHaveBeenCalledWith({ url: 'chrome-extension://abc/docs/monitoring.html#safety-checks' });
+    expect(ui).toBeDefined();
+  });
+});
+
 describe('help popover', () => {
   test('a host with data-doc gets a "Learn more" link in its panel, one without does not', async () => {
     const { help } = await load();

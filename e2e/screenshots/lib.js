@@ -7,6 +7,10 @@ const fs = require('fs');
 const { openPopup, focusFixture, waitForIdleScreen } = require('../harness');
 
 const IMAGES_DIR = path.resolve(__dirname, '../../docs/user/images');
+// Issue #436: the German pages show the German UI, in their own folder next to the pages
+// (docs/user/de/*.md refer to images/<name>.png, i.e. docs/user/de/images/).
+const IMAGES_DIR_DE = path.resolve(__dirname, '../../docs/user/de/images');
+const imagesDirFor = (language) => (language === 'de' ? IMAGES_DIR_DE : IMAGES_DIR);
 
 // Roughly a side panel: narrow enough to look like one, tall enough to show a
 // whole screen without scrolling.
@@ -30,14 +34,21 @@ async function openScenario(ctx, { fixture, companionUrl, language = 'en', theme
   await popupPage.reload();
   await focusFixture(fixturePage);
 
+  // Field names and similar words a scenario types are data, not UI — but the German pages show
+  // them in German, so the screenshots must too.
+  const WORDS_DE = { Dish: 'Gericht', Price: 'Preis', Name: 'Name', Title: 'Titel', Date: 'Datum', Subcategory: 'Unterkategorie' };
+
   return {
+    language,
+    word: (english) => (language === 'de' ? (WORDS_DE[english] || english) : english),
     fixturePage,
     popupPage,
     // Writes docs/user/images/<name>.png. `target` is an optional locator /
     // selector string to crop to instead of the whole popup.
     async shot(name, target) {
-      fs.mkdirSync(IMAGES_DIR, { recursive: true });
-      const file = path.join(IMAGES_DIR, `${name}.png`);
+      const imagesDir = imagesDirFor(language);
+      fs.mkdirSync(imagesDir, { recursive: true });
+      const file = path.join(imagesDir, `${name}.png`);
       // Let transitions (sliding mode-toggle thumb, modal fade) finish.
       await popupPage.waitForTimeout(400);
       const locator = target ? popupPage.locator(target).first() : null;
@@ -65,4 +76,4 @@ async function openScenario(ctx, { fixture, companionUrl, language = 'en', theme
   };
 }
 
-module.exports = { openScenario, IMAGES_DIR, VIEWPORT, focusFixture };
+module.exports = { openScenario, IMAGES_DIR, IMAGES_DIR_DE, imagesDirFor, VIEWPORT, focusFixture };

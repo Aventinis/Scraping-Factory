@@ -11,7 +11,7 @@ module.exports = [
       await fixturePage.waitForTimeout(500);
       await fixturePage.click('li.product >> nth=0 >> .price');
       await popupPage.waitForSelector('#modal-field-name:not(.hidden)');
-      await popupPage.fill('#input-field-name', 'Price');
+      await popupPage.fill('#input-field-name', s.word('Price'));
       await popupPage.click('#btn-field-transform-add');
       await popupPage.locator('.transform-kind-select').last().selectOption('regexExtract');
       await popupPage.locator('.btn-transform-helper-toggle').click();
@@ -30,7 +30,7 @@ module.exports = [
       await fixturePage.waitForTimeout(500);
       await fixturePage.click('li.product >> nth=0 >> .date');
       await popupPage.waitForSelector('#modal-field-name:not(.hidden)');
-      await popupPage.fill('#input-field-name', 'Date');
+      await popupPage.fill('#input-field-name', s.word('Date'));
       await popupPage.click('#btn-field-transform-add');
       await popupPage.locator('.transform-kind-select').last().selectOption('toDate');
       await s.shot('transforms-date-guess');
@@ -45,7 +45,7 @@ module.exports = [
       await popupPage.click('#btn-add-field');
       await fixturePage.click('li.menu-item >> nth=0 >> .item-price');
       await popupPage.waitForSelector('#modal-field-name:not(.hidden)');
-      await popupPage.fill('#input-field-name', 'Price');
+      await popupPage.fill('#input-field-name', s.word('Price'));
 
       await popupPage.click('#btn-field-transform-add');
       await popupPage.click('#btn-field-transform-add');

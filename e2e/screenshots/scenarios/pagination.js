@@ -8,7 +8,7 @@ module.exports = [
     async run(s) {
       const { popupPage, fixturePage } = s;
       await s.waitForIdle();
-      await s.addFlatField('Title', 'li.item >> nth=0');
+      await s.addFlatField(s.word('Title'), 'li.item >> nth=0');
       await popupPage.click('#settings-section-toggle');
       await popupPage.check('#toggle-pagination');
       await popupPage.click('#btn-pick-pagination-next-link');
@@ -27,7 +27,7 @@ module.exports = [
     async run(s) {
       const { popupPage } = s;
       await s.waitForIdle();
-      await s.addFlatField('Dish', 'li.menu-item >> nth=0 >> .item-name');
+      await s.addFlatField(s.word('Dish'), 'li.menu-item >> nth=0 >> .item-name');
       await popupPage.click('#settings-section-toggle');
       await popupPage.check('#toggle-pagination');
       await popupPage.click('#btn-pagination-page-number');

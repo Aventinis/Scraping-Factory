@@ -48,14 +48,27 @@ const DOC_TARGETS = Object.freeze({
 });
 
 /**
- * @param {string} key a DOC_TARGETS key
- * @returns {{ page: string, anchor: string, file: string } | null}
- *   `file` is the path inside the extension: docs/<page>.html[#anchor]
+ * @typedef {{ de?: Record<string, Record<string, string>> }} DocAnchors
+ *   docs/anchors.json: for each German page, its English heading anchors → the German ones
  */
-function resolveDocTarget(key) {
+
+/**
+ * @param {string} key a DOC_TARGETS key
+ * @param {string} [language] the panel language; only German has its own pages
+ * @param {DocAnchors | null} [anchors] docs/anchors.json (see extension/docs-build.js)
+ * @returns {{ page: string, anchor: string, file: string } | null}
+ *   `file` is the path inside the extension: docs/[de/]<page>.html[#anchor]. A German
+ *   page that does not exist (or no anchor table) falls back to the English page.
+ */
+function resolveDocTarget(key, language = 'en', anchors = null) {
   const target = Object.prototype.hasOwnProperty.call(DOC_TARGETS, key) ? DOC_TARGETS[key] : null;
   if (!target) return null;
   const [page, anchor = ''] = target.split('#');
+  const german = language === 'de' && anchors && anchors.de && anchors.de[page];
+  if (german) {
+    const germanAnchor = anchor ? (german[anchor] || '') : '';
+    return { page, anchor: germanAnchor, file: `docs/de/${page}.html${germanAnchor ? `#${germanAnchor}` : ''}` };
+  }
   return { page, anchor, file: `docs/${page}.html${anchor ? `#${anchor}` : ''}` };
 }
 

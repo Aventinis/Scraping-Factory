@@ -11,12 +11,12 @@ module.exports = [
       await s.popupPage.click('#btn-add-field');
       await s.fixturePage.click('li.menu-item >> nth=0 >> .item-name');
       await s.popupPage.waitForSelector('#modal-field-name:not(.hidden)');
-      await s.popupPage.fill('#input-field-name', 'Dish');
+      await s.popupPage.fill('#input-field-name', s.word('Dish'));
       await s.shot('getting-started-name-field');
       await s.popupPage.click('#btn-field-confirm');
       await s.waitForIdle();
 
-      await s.addFlatField('Price', 'li.menu-item >> nth=0 >> .item-price');
+      await s.addFlatField(s.word('Price'), 'li.menu-item >> nth=0 >> .item-price');
       await s.shot('getting-started-fields');
 
       // Generate runs the script once against the live fixture; the data

@@ -8,8 +8,10 @@ program.
 This documentation is for people *using* the extension. (Developers: see
 [`CLAUDE.md`](../../CLAUDE.md) and [`ARCHITECTURE.md`](../ARCHITECTURE.md).)
 
-> The documentation is written in English first; a German version will follow.
-> The extension itself speaks German, English and Spanish.
+> This documentation is available in English (the source) and in German:
+> [Deutsche Version](de/README.md). The extension itself speaks German, English
+> and Spanish; the **Learn more** links open the German pages when the panel is
+> set to German, and the English pages otherwise.
 
 ## Where to start
 
@@ -49,10 +51,11 @@ your machine; there is no cloud service.
 
 ## Where these pages live
 
-On GitHub they are rendered from `docs/user/`. Inside the extension they ship as
-HTML pages (built from these same files when the extension is built) that the
-**Learn more** links in the side panel open in a browser tab — offline, no
-external address involved. The release bundles also contain the Markdown files
+On GitHub they are rendered from `docs/user/` (English) and `docs/user/de/`
+(German). Inside the extension they ship as HTML pages (built from these same
+files when the extension is built) that the **Learn more** links in the side panel
+open in a browser tab — offline, no external address involved. Each page links to
+its twin in the other language. The release bundles also contain the Markdown files
 and images in their `docs/` folder.
 
 ## Maintaining these docs
@@ -60,6 +63,24 @@ and images in their `docs/` folder.
 Contributors: a pull request that changes what a user sees or does must update
 the matching page here (and its screenshots), the same way it already updates
 `CLAUDE.md` and `docs/ARCHITECTURE.md`.
+
+**Translations.** The English pages are the source. `docs/user/de/<page>.md` is the
+German version with the same file name and **the same heading structure** (the panel
+finds the German heading of a "Learn more" link by position, so a page must not gain
+or lose a heading in only one language). Use the German labels from
+`extension/i18n/de.json` for everything the extension shows, and address the reader
+as *du*, like the interface. After translating or updating a page, stamp it with the
+hash of its English source, so a later change to the English page shows up as stale:
+
+```bash
+node extension/docs-build.js --stamp monitoring      # writes <!-- source: … --> into de/monitoring.md
+node e2e/screenshots/run.js --language de            # German screenshots into de/images/
+node e2e/screenshots/check-docs.js                   # lists missing, unstamped and stale translations
+```
+
+`check-docs.js` reports a German page whose English source changed since it was
+stamped (`--strict` turns that into a failure) and fails on a different heading
+structure. A page without a German version is fine — the panel falls back to English.
 
 The screenshots are produced by driving the real extension against the
 fixtures, so they never go stale by accident:
@@ -69,8 +90,9 @@ cd e2e && npm install            # once
 node e2e/screenshots/run.js      # regenerate every screenshot
 node e2e/screenshots/run.js --only modes      # just the scenarios whose id contains "modes"
 node e2e/screenshots/run.js --theme dark      # same scenes in dark mode
+node e2e/screenshots/run.js --language de     # the German interface (images go to de/images/)
 node e2e/screenshots/run.js --list            # list scenario ids
-node e2e/screenshots/check-docs.js            # verify every image and link in these pages exists
+node e2e/screenshots/check-docs.js            # verify every image and link in both languages
 ```
 
 A new **Learn more** link in the extension needs a key in
