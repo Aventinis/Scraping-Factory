@@ -27,8 +27,7 @@ Notes:
 
 Other output-related preferences in **Settings**: **Show trial-run data
 preview**, **Download the full scraped data file** (the complete trial-run
-output, from the done screen), **Editable config file (XML)** (under **Advanced**,
-see below), and **Skip the trial run** (see below).
+output, from the done screen), **Editable config file (XML)** (see below), and **Skip the trial run** (see below).
 
 ## Skip the trial run
 
@@ -42,7 +41,7 @@ is not available while this is on.
 
 ## Editable config file
 
-**Editable config file (XML)** (under **Advanced**) lets you change a few
+**Editable config file (XML)** lets you change a few
 things *after* generating, without touching the `.py` file or reopening the
 extension: the start URL(s), the output file name, a field's output name (flat
 mode), and the values of a fixed-value-list API parameter. The file doesn't exist

@@ -596,7 +596,6 @@
       "openCompanion": "Abrir la dirección del companion en una pestaña",
       "reloadHint": "Guardado — recarga el panel (o reintenta la conexión) para aplicarlo."
     },
-    "externalConfigAdvanced": "Avanzado: archivo de configuración editable",
     "glossaryTitle": "Glosario: qué significan estos términos",
     "connectionTitle": "Conexión con el companion"
   },
@@ -751,7 +750,6 @@
   },
   "browserActions": {
     "title": "Acciones del navegador",
-    "hint": "Pasos que el script ejecuta en orden antes de leer datos — normalmente un inicio de sesión. Empieza con «Formulario de inicio de sesión».",
     "addWaitBtn": "+ Esperar",
     "addFillBtn": "+ Rellenar",
     "addClickBtn": "+ Clic",

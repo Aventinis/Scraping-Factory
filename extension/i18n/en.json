@@ -596,7 +596,6 @@
       "openCompanion": "Open companion address in a tab",
       "reloadHint": "Saved — reload the panel (or retry the connection) to apply it."
     },
-    "externalConfigAdvanced": "Advanced: editable config file",
     "glossaryTitle": "Glossary: what these terms mean",
     "connectionTitle": "Companion connection"
   },
@@ -751,7 +750,6 @@
   },
   "browserActions": {
     "title": "Browser actions",
-    "hint": "Steps the script runs in order before it reads data — typically a login. Start with “Login form”.",
     "addWaitBtn": "+ Wait",
     "addFillBtn": "+ Fill",
     "addClickBtn": "+ Click",

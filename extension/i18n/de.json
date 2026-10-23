@@ -596,7 +596,6 @@
       "openCompanion": "Companion-Adresse in einem Tab öffnen",
       "reloadHint": "Gespeichert — Panel neu laden (oder die Verbindung erneut versuchen), damit es wirkt."
     },
-    "externalConfigAdvanced": "Erweitert: bearbeitbare Konfigurationsdatei",
     "glossaryTitle": "Glossar: was diese Begriffe bedeuten",
     "connectionTitle": "Verbindung zum Companion"
   },
@@ -751,7 +750,6 @@
   },
   "browserActions": {
     "title": "Browser-Aktionen",
-    "hint": "Schritte, die das Skript der Reihe nach ausführt, bevor es Daten liest — typischerweise ein Login. Beginnen Sie mit „Login-Formular“.",
     "addWaitBtn": "+ Warten",
     "addFillBtn": "+ Ausfüllen",
     "addClickBtn": "+ Klicken",

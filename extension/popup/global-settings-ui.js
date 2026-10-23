@@ -13,7 +13,6 @@ const log = createLogger('SF:Popup');
 const { getGlobalSettings, updateGlobalSettings } = require('../shared/global-settings');
 
 const { STATES } = require('./api-config');
-const { autoOpenAdvanced } = require('./advanced-disclosure-ui');
 
 const { getAccessKey, setAccessKey } = require('../shared/companion-config');
 
@@ -41,7 +40,6 @@ function renderSettingsScreen(bridge) {
   if (outputFileToggle) outputFileToggle.checked = settings.includeOutputFile;
   const externalConfigToggle = document.getElementById('toggle-external-config');
   if (externalConfigToggle) externalConfigToggle.checked = settings.externalConfig;
-  autoOpenAdvanced(externalConfigToggle, !!settings.externalConfig); // Issue #407
   const skipVerificationToggle = document.getElementById('toggle-skip-verification');
   if (skipVerificationToggle) skipVerificationToggle.checked = settings.skipVerification;
 

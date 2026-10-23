@@ -25,7 +25,6 @@ describe('markup: each rare option lives inside its Advanced disclosure', () => 
     ['idle.html', 'input-retry-status-codes', 'retry-status-codes'],
     ['idle.html', 'input-dedup-retention-value', 'dedup-retention'],
     ['idle.html', 'toggle-persistent-session', 'persistent-session'],
-    ['settings.html', 'toggle-external-config', 'external-config'],
     ['modals.html', 'input-field-download-max-size', 'download-limits-container'],
     ['modals.html', 'input-field-download-allowed-types', 'download-limits-container'],
     ['modals.html', 'input-field-name-download-max-size', 'download-limits-flat'],
