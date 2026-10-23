@@ -1,21 +1,8 @@
-// Ambient JSDoc-only type declarations for the popup's internal "draft"
-// state shapes (Issue #238) — richer, popup-only representations that get
-// converted to/from the wire format (types/companion-ir.d.ts's `SFWire`
-// namespace) by each feature module's own build*/serialize*/apply*
-// functions (e.g. container-tree.js's `serializeGroupTree`, config-import.js's
-// `applyHardeningConfig`). Unlike SFWire, these have no C# counterpart to
-// mirror — they only need to agree across this popup's own `// @ts-check`-
-// annotated files, which is exactly why they live in one shared ambient
-// namespace here (`SFDraft`) rather than as a local `@typedef` duplicated
-// per file: JSDoc `@typedef`s declared inside a plain script (no
-// import/export, like every file in extension/popup/) are file-scoped to
-// TypeScript's checker — so e.g. container-tree.js's own tree-node
-// shape couldn't otherwise be referenced from scraping-config-builder.js's
-// JSDoc without either this shared file or a real (unused-at-runtime)
-// `import(...)` type query.
-//
-// No top-level import/export, so this is a plain global ambient namespace,
-// same as types/companion-ir.d.ts's `SFWire`.
+// Ambient types for the popup's internal draft state (SFDraft): richer, popup-only shapes that the feature modules'
+// build*/serialize*/apply* functions convert to and from the wire format (SFWire in companion-ir.d.ts). They live in
+// one shared ambient namespace because a JSDoc @typedef in a plain script is file-scoped for the type checker, so a
+// shape like container-tree.js's tree node could not otherwise be referenced from other files. No top-level
+// import/export.
 declare namespace SFDraft {
   // ── Container mode (container-tree.js) ───────────────────────────────────
 
@@ -66,7 +53,7 @@ declare namespace SFDraft {
 
   // ── Browser actions (scraping-config-builder.js) ─────────────────────────
 
-  /** Issue #403 — UI-only purpose of a "Login form" starter action; never sent to the companion. */
+  /** UI-only purpose of a "Login form" starter action; never sent to the companion. */
   type BrowserActionRole = 'user' | 'password' | 'submit' | 'loggedIn';
 
   interface BrowserAction {
@@ -79,9 +66,9 @@ declare namespace SFDraft {
     loadMoreButtonSelector?: string;
     maxIterations?: number;
     waitAfterMs?: number;
-    /** Issue #289 — null/unset keeps the default "jump straight to the current bottom" behavior. */
+    /** null/unset = jump to the bottom each round. */
     scrollStepPx?: number | null;
-    /** Issue #267 — which match a click action clicks; waitAfterMs (above) is the pause after each click for 'all'. */
+    /** Which match a click action clicks; waitAfterMs (above) is the pause after each click for 'all'. */
     target?: 'first' | 'last' | 'all';
     framePath?: string[] | null;
   }
@@ -107,7 +94,7 @@ declare namespace SFDraft {
     envVar: string;
   }
 
-  // Issue #223: inputs as typed — see buildRetryConfig.
+  // Inputs as typed — see buildRetryConfig.
   interface RetryState {
     enabled: boolean;
     maxAttemptsText: string;
@@ -116,7 +103,7 @@ declare namespace SFDraft {
     statusCodesText: string;
   }
 
-  // Issue #225: see dedup-config.js. retentionValueText is kept as typed.
+  // See dedup-config.js. retentionValueText is kept as typed.
   interface DeduplicationState {
     enabled: boolean;
     keyFields: string[];
@@ -126,7 +113,7 @@ declare namespace SFDraft {
     retentionValueText: string;
   }
 
-  // Issue #226: see request-headers.js. `value` is the literal for kind
+  // See request-headers.js. `value` is the literal for kind
   // 'value', the environment variable's *name* for kind 'env'.
   interface RequestHeaderRow {
     name: string;
@@ -139,14 +126,14 @@ declare namespace SFDraft {
     rows: RequestHeaderRow[];
   }
 
-  // Issue #222: seconds as typed (decimal comma or point); blank max = fixed.
+  // Seconds as typed (decimal comma or point); blank max = fixed.
   interface RequestDelayState {
     enabled: boolean;
     minSecondsText: string;
     maxSecondsText: string;
   }
 
-  // Issue #333: the robots.txt Disallow check — action as sent on the wire.
+  // The robots.txt Disallow check — action as sent on the wire.
   interface RobotsDisallowState {
     enabled: boolean;
     action: 'Warn' | 'Skip' | 'Abort';
@@ -158,11 +145,10 @@ declare namespace SFDraft {
     nextLinkSelector: string;
     urlTemplate: string;
     maxPages: number;
-    /** Issue #405 — UI-only: absolute href of the last "next" / "page 2" link the user clicked; never sent. */
+    /** UI-only: absolute href of the last "next" / "page 2" link the user clicked; never sent. */
     linkHref?: string;
   }
 
-  // Issue #218.
   interface DiscoveredUrlsState {
     enabled: boolean;
     pageUrl: string;
