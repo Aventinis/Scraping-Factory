@@ -49,7 +49,7 @@ function insertParameterPlaceholder(bridge, selectEl) {
 }
 
 // ── BrowserDiscoverySource action list ──
-// Thin per-parameter wrappers around scraping-config-builder.js's add / remove / updateBrowserAction (generic over "some actions array"),
+// Thin per-parameter wrappers around scraping-config-builder.ts's add / remove / updateBrowserAction (generic over "some actions array"),
 // routing the result back into this parameter's source instead of _state.browserActions.
 
 module.exports = {

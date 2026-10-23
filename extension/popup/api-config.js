@@ -17,7 +17,7 @@
 // `@typedef`s below rather than types/drafts.ts's `SFDraft`
 // namespace, since — unlike container-tree.ts's tree or the Monitoring/
 // Settings section drafts — nothing outside this file ever references them
-// (scraping-config-builder.js's own `collectFieldNames` reads `apiConfig`
+// (scraping-config-builder.ts's own `collectFieldNames` reads `apiConfig`
 // only in its already-*serialized* `SFWire.ApiConfig` shape, never this
 // module's own draft). A recorded/embedded-JSON "candidate" (the message
 // content-script.js sends back after a click-based search, carrying
@@ -343,8 +343,8 @@ function buildRangeSource(type, from, to, format) {
 // edited, the action list is kept in the same draft shape (SFDraft.
 // BrowserAction[]) the top-level login-flow editor already uses — reusing
 // addBrowserAction/removeBrowserAction/updateBrowserAction from
-// scraping-config-builder.js directly (api-config.js can't import that
-// module itself: scraping-config-builder.js already imports THIS module,
+// scraping-config-builder.ts directly (api-config.js can't import that
+// module itself: scraping-config-builder.ts already imports THIS module,
 // and the reverse would be a circular require) — so `actions` here is
 // already serialized to wire shape (via that module's
 // serializeBrowserActions) by the caller (confirmApiConfig in

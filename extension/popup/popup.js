@@ -771,7 +771,7 @@ function computeDerivedFieldAvailableNames(state, scope) {
 // was opened for, then — if requested — marks the picked source fields
 // hiddenFromOutput (never deletes them: their value is still needed for the
 // new field's own combine/split transform to read via the runtime's usual
-// sibling lookup, see scraping-config-builder.js's own updateField doc
+// sibling lookup, see scraping-config-builder.ts's own updateField doc
 // comment). Returns the full _state patch to apply in one setState call.
 function insertDerivedField(state, scope, name, transform, sourceFieldNames, removeOriginals) {
   if (scope.mode === 'flat') {
