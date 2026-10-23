@@ -175,3 +175,43 @@ test('the real docs/user builds without a broken link, and every page has an <h1
     expect(fs.readFileSync(path.join(out, 'docs', `${name}.html`), 'utf8')).toMatch(/<h1 id="/);
   }
 });
+
+// Issue #436: the real German tree. A page without a translation or one that went stale is
+// reported but does not fail (the panel falls back to English); what would break the anchor
+// mapping — a different heading structure — or an unstamped page does.
+describe('the real German translation', () => {
+  const status = translationStatus(REAL_DOCS);
+
+  test('every German page has the heading structure of its English source', () => {
+    expect(status.structure).toEqual([]);
+  });
+
+  test('every German page carries its source stamp', () => {
+    expect(status.unstamped).toEqual([]);
+  });
+
+  test('missing and stale translations are reported, not failed', () => {
+    if (status.missing.length) console.warn(`no German page for: ${status.missing.join(', ')}`);
+    if (status.stale.length) console.warn(`German pages older than their English source: ${status.stale.join(', ')} (node extension/docs-build.js --stamp <page> after updating them)`);
+    expect(Array.isArray(status.stale)).toBe(true);
+  });
+
+  test('the built docs carry every German page and a complete anchor table', () => {
+    const out = tmp();
+    buildDocs({ docsDir: REAL_DOCS, outdir: out });
+    const anchors = JSON.parse(fs.readFileSync(path.join(out, 'docs/anchors.json'), 'utf8'));
+    for (const { name } of listDocPages(REAL_DOCS)) {
+      if (status.missing.includes(name)) continue;
+      expect(fs.existsSync(path.join(out, 'docs/de', `${name}.html`))).toBe(true);
+      const english = anchorListOf(fs.readFileSync(path.join(REAL_DOCS, `${name}.md`), 'utf8'));
+      expect(Object.keys(anchors.de[name])).toEqual(english);
+    }
+    // The anchors the panel's key table uses all have a German counterpart.
+    const { DOC_TARGETS } = require('./popup/docs-links');
+    for (const target of Object.values(DOC_TARGETS)) {
+      const [page, anchor] = target.split('#');
+      if (!anchor || status.missing.includes(page)) continue;
+      expect(anchors.de[page][anchor]).toEqual(expect.any(String));
+    }
+  });
+});

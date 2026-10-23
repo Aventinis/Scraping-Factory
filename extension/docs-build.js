@@ -170,7 +170,7 @@ ${body}
 
 // Parses every page of one language tree and returns it with the problems found
 // (a link to a missing page/anchor/image). `langDir` holds the .md files, its `images/` the pictures.
-function parseTree(Marked, langDir, problems, label) {
+function parseTree(Marked, langDir, problems, label, twin) {
   const pages = listDocPages(langDir).map((p) => {
     const markdown = fs.readFileSync(p.file, 'utf8');
     return { ...p, markdown, title: titleOf(markdown, p.name), anchors: anchorsOf(markdown) };
@@ -203,6 +203,12 @@ function parseTree(Marked, langDir, problems, label) {
             return `<a href="#${escapeHtml(anchor || '')}">${inner}</a>`;
           }
           const resolved = path.resolve(langDir, rel);
+          // A link to the other language's page of the same tree pair (README ↔ de/README).
+          if (twin && path.dirname(resolved) === twin.dir && resolved.endsWith('.md')) {
+            if (!fs.existsSync(resolved)) { problems.push(`${where}: "${href}" does not exist`); return inner; }
+            if (anchor && !anchorsOf(fs.readFileSync(resolved, 'utf8')).has(anchor)) problems.push(`${where}: "${href}" — no heading with that anchor`);
+            return `<a href="${twin.prefix}${path.basename(resolved, '.md')}.html${anchor ? `#${escapeHtml(anchor)}` : ''}">${inner}</a>`;
+          }
           if (path.dirname(resolved) !== langDir || !resolved.endsWith('.md')) {
             // Outside the docs tree (CLAUDE.md, ARCHITECTURE.md): not shipped, show the text only.
             return inner;
@@ -215,7 +221,11 @@ function parseTree(Marked, langDir, problems, label) {
         image({ href, title, text }) {
           const resolved = path.resolve(langDir, href);
           if (!resolved.startsWith(imagesDir + path.sep) || !fs.existsSync(resolved)) {
-            problems.push(`${where}: image "${href}" does not exist under ${label}images/`);
+            // The screenshot generator builds the extension before it has made the images (a new
+            // language has none yet), so it may let a missing image pass.
+            const message = `${where}: image "${href}" does not exist under ${label}images/`;
+            if (process.env.SF_DOCS_ALLOW_MISSING_IMAGES === '1') console.warn(message);
+            else problems.push(message);
           }
           return `<img src="${escapeHtml(href)}" alt="${escapeHtml(text)}"${title ? ` title="${escapeHtml(title)}"` : ''} loading="lazy">`;
         },
@@ -242,8 +252,8 @@ async function buildDocs({ docsDir: docsDirArg, outdir }) {
   const deDir = path.join(docsDir, 'de');
   const problems = [];
 
-  const en = parseTree(Marked, docsDir, problems, 'docs/user/');
-  const de = fs.existsSync(deDir) ? parseTree(Marked, deDir, problems, 'docs/user/de/') : { pages: [], imagesDir: null };
+  const en = parseTree(Marked, docsDir, problems, 'docs/user/', { dir: deDir, prefix: 'de/' });
+  const de = fs.existsSync(deDir) ? parseTree(Marked, deDir, problems, 'docs/user/de/', { dir: docsDir, prefix: '../' }) : { pages: [], imagesDir: null };
   if (problems.length) throw new Error(`docs/user/ has broken links:\n${problems.join('\n')}`);
 
   const out = path.join(outdir, 'docs');

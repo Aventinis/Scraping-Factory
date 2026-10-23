@@ -34,7 +34,13 @@ async function openScenario(ctx, { fixture, companionUrl, language = 'en', theme
   await popupPage.reload();
   await focusFixture(fixturePage);
 
+  // Field names and similar words a scenario types are data, not UI — but the German pages show
+  // them in German, so the screenshots must too.
+  const WORDS_DE = { Dish: 'Gericht', Price: 'Preis', Name: 'Name', Title: 'Titel', Date: 'Datum', Subcategory: 'Unterkategorie' };
+
   return {
+    language,
+    word: (english) => (language === 'de' ? (WORDS_DE[english] || english) : english),
     fixturePage,
     popupPage,
     // Writes docs/user/images/<name>.png. `target` is an optional locator /
