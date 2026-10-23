@@ -7,12 +7,14 @@
 // ApiConfig assembly. Split out of popup.js (which had grown past 3800 loc)
 // purely for readability — no behavior change.
 // @ts-check
+/** @import * as SFWire from '../types/wire' */
+/** @import * as SFDraft from '../types/drafts' */
 // Issue #238: JSDoc-annotated and typechecked via `// @ts-check` + tsconfig
 // (`npm run typecheck`). Wire-shape inputs/outputs are typed against
-// types/companion-ir.d.ts's `SFWire` namespace; this module's own draft
+// types/wire.ts's `SFWire` namespace; this module's own draft
 // shapes (the URL-template decomposition, the ApiGroup/ApiField response
 // tree, the ApiBodyNode request-body tree) are described by the local
-// `@typedef`s below rather than types/popup-drafts.d.ts's `SFDraft`
+// `@typedef`s below rather than types/drafts.ts's `SFDraft`
 // namespace, since — unlike container-tree.js's tree or the Monitoring/
 // Settings section drafts — nothing outside this file ever references them
 // (scraping-config-builder.js's own `collectFieldNames` reads `apiConfig`

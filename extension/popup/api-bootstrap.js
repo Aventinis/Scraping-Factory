@@ -1,4 +1,6 @@
 // @ts-check
+/** @import * as SFWire from '../types/wire' */
+/** @import * as SFDraft from '../types/drafts' */
 // API mode: the token/auth bootstrap — pure data/logic (api-bootstrap-ui.js renders it). A bootstrap is one request the
 // script sends at the start of every run, extracting a short-lived value from the JSON response that is spliced into the
 // main request's headers ("Bearer {token}") and/or URL.

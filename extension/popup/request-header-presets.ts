@@ -3,6 +3,8 @@
 // header name, a sensible kind (fixed value vs. environment variable) and an example. The wire format is untouched: a preset produces
 // the same { name, kind, value } draft row a hand-typed header would.
 
+import type * as SFDraft from '../types/drafts';
+
 export interface RequestHeaderPreset {
   /** Stable id; also the i18n key suffix (requestHeaderPresets.<id>). */
   id: string;

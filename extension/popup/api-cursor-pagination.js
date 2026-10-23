@@ -1,4 +1,6 @@
 // @ts-check
+/** @import * as SFWire from '../types/wire' */
+/** @import * as SFDraft from '../types/drafts' */
 // API mode: cursor / token pagination — pure data / logic (api-cursor-pagination-ui.js renders it). Some APIs reveal the next
 // page's identifier only in the current response (Relay's pageInfo.endCursor, next_page_token); see ApiConfig.CursorPagination.
 //

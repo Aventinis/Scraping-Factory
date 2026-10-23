@@ -169,9 +169,9 @@ them share):
 These DOM-free `<feature>.js` modules are also exactly the ones opted into
 JSDoc type checking (Issue #238; the design notes in `docs/design-notes/extension.md` cover it) — a
 leading `// @ts-check` pragma plus `extension/tsconfig.json`
-(`npm run typecheck`, wired into CI) against two ambient namespaces under
-`extension/types/`: `SFWire` (`companion-ir.d.ts`, a hand-kept mirror of the
-companion's wire-format IR) and `SFDraft` (`popup-drafts.d.ts`, this popup's
+(`npm run typecheck`, wired into CI) against two type modules under
+`extension/types/`, imported as namespaces: `SFWire` (`wire.ts`, a hand-kept mirror of the
+companion's wire-format IR) and `SFDraft` (`drafts.ts`, this popup's
 own internal pre-serialization shapes, e.g. `container-tree.js`'s tree
 nodes). `checkJs` stays off project-wide — the DOM-rendering `<feature>-ui.js`
 files and `popup.js` itself aren't annotated (yet).
@@ -563,9 +563,9 @@ reads the same data, so changing only one side fails. The shared data lives in `
 | `:contains("…")` split | `selector-text-filter.ts`, `content-script.js` | `IR/SelectorTextFilter.cs`, `fragments/text_selector_common.py.j2` | `text-selector.json` — both JS tests, `SelectorTextFilterTests.cs` |
 | Environment-variable names | `env-var.ts` | `ScrapingPlanValidator` | `env-var-name.json` — `env-var.test.js`, `EnvVarNameVectorTests.cs` |
 | The request body | `buildScrapingConfig` and the draft builders | `IR/ScrapingConfig.cs` and `/generate` | `test-vectors/wire/*.json` — `wire-fixtures.test.js` writes/verifies, `WireFixtureTests.cs` deserializes strictly and calls `/generate` |
-| TypeScript wire types | `types/companion-ir.d.ts` | `IR/*.cs` | `IrTypeDeclarationTests.cs` (reflection: property names, required-ness, enum unions) |
+| TypeScript wire types | `types/wire.ts` | `IR/*.cs` | `IrTypeDeclarationTests.cs` (reflection: property names, required-ness, enum unions) |
 
-**Evaluated and rejected: generating `companion-ir.d.ts`.** `System.Text.Json`'s `JsonSchemaExporter` handles the
+**Evaluated and rejected: generating `wire.ts`.** `System.Text.Json`'s `JsonSchemaExporter` handles the
 plain properties and the `[JsonPolymorphic]` unions (`hardening`, `pagination`, `transforms`, parameter sources come out
 as `anyOf` with a `const kind`), but not the custom converters: container nodes lose their `DataFieldNode` branch
 (`children` becomes an untyped array), and API nodes, body nodes and blueprint trees are not described at all. It also

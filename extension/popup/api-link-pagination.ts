@@ -3,6 +3,9 @@
 // after page (ApiConfig.LinkHeaderPagination in IR/ApiConfig.cs). The draft (apiConfigDraft.linkHeaderPagination, null =
 // disabled) is just { maxPages }. Page 1 is sent exactly as recorded; GET only, and exclusive with cursor pagination.
 
+import type * as SFWire from '../types/wire';
+import type * as SFDraft from '../types/drafts';
+
 export const DEFAULT_MAX_PAGES = 50;
 
 export function createDefaultLinkDraft(): SFDraft.ApiLinkHeaderPagination {

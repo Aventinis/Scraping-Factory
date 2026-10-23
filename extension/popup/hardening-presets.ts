@@ -8,6 +8,8 @@
 //     fields are legitimately empty).
 // A check the user already switched on, or already configured fields for, stays exactly as it is: the preset only ever adds.
 
+import type * as SFDraft from '../types/drafts';
+
 export interface RecommendedApplied { noResult: boolean; requiredField: string | null }
 
 export interface RecommendedHardening {

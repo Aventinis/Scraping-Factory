@@ -5,6 +5,9 @@
 //   { enabled, rows: [{ name, kind: 'value' | 'env', value }] }
 // `value` is the literal for kind 'value', or the *name* of an environment variable for 'env', never a secret literal.
 
+import type * as SFWire from '../types/wire';
+import type * as SFDraft from '../types/drafts';
+
 export function createDefaultRequestHeaders(): SFDraft.RequestHeadersState {
   return { enabled: false, rows: [] };
 }

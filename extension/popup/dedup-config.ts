@@ -5,6 +5,9 @@
 //   { enabled, keyFields: string[], incremental, appendOutput, retentionKind: 'MaxCount' | 'MaxAge', retentionValueText }
 // keyFields are field names from the current mode's field list (collectFieldNames): the (composite) identity of a row / element.
 
+import type * as SFWire from '../types/wire';
+import type * as SFDraft from '../types/drafts';
+
 type RetentionKind = 'MaxCount' | 'MaxAge';
 
 export const DEFAULT_MAX_COUNT = 100000;
