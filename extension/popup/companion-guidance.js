@@ -1,11 +1,6 @@
-// Issue #406: the guidance shown on the "Companion app unreachable" screen —
-// pure logic (this file) plus the one persisted flag it needs; the rendering
-// is in companion-guidance-ui.js. A user who has never had a companion
-// answer doesn't know what it is or where it comes from, so until the first
-// successful health check the screen explains it in full (what it is, and the
-// three situations with the concrete next step for each); afterwards it shows
-// the short form. Everything here is text-free — wording lives in
-// i18n/*.json (`error.*`, `help.companionError.*`) so it works offline.
+// The guidance on the "Companion app unreachable" screen: pure logic plus the one persisted flag (companion-guidance-ui.js renders it). Until the first
+// successful health check the screen explains in full what the companion is and the three situations with their next step; afterwards the short form.
+// Wording lives in i18n/*.json (`error.*`, `help.companionError.*`), so it works offline.
 const STORAGE_KEY = 'companionReached';
 
 /** @typedef {'windows' | 'mac' | 'linux'} Platform */
@@ -62,10 +57,8 @@ function likelySituations({ url, defaultUrl, errorMessage }) {
   return ['install', 'start'];
 }
 
-// ── The "has a companion ever answered here" flag ───────────────────────────
-// chrome.storage.local, like the language/theme preferences: a device fact that
-// should survive closing the panel and restarting the browser. Cached so the
-// render can read it synchronously.
+// ── The "has a companion ever answered here" flag ──
+// chrome.storage.local like the language / theme: a device fact that survives restarts. Cached so render can read it synchronously.
 let reached = false;
 
 function isCompanionReached() {

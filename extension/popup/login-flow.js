@@ -1,14 +1,8 @@
 // @ts-check
-// "Login form" starter and plain-unit helpers for the browser actions
-// (Issue #403) — pure data/logic only, no DOM (see browser-actions-ui.js for
-// the rendering).
-//
-// A login is built from the generic WaitFor/Fill/Click/Scroll actions; the
-// starter adds the four steps a typical login consists of in one go, so the
-// user only has to click the four elements on the page. Each starter action
-// carries a UI-only `role` (the card then says "Fill in the user name"
-// instead of a bare "Fill"); serializeBrowserActions picks the wire fields
-// per kind, so a role never reaches the request body.
+// The "Login form" starter and plain-unit helpers for the browser actions: pure (browser-actions-ui.js renders them). A login is built from the
+// generic WaitFor / Fill / Click / Scroll actions; the starter adds the four typical steps at once so the user only clicks the four elements. Each
+// starter action carries a UI-only `role` (the card then says "Fill in the user name" instead of "Fill"); serializeBrowserActions picks the wire
+// fields per kind, so a role never reaches the request.
 
 /** @type {SFDraft.BrowserActionRole[]} */
 const LOGIN_FLOW_ROLES = ['user', 'password', 'submit', 'loggedIn'];

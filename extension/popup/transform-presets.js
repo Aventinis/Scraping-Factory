@@ -1,18 +1,11 @@
 // @ts-check
-// Issue #279: reusable, named transform-chain presets — pure data/logic, no
-// DOM (see transform-presets-ui.js for rendering/wiring and the companion's
-// /transform-presets endpoints for storage). A preset is just a saved
-// FieldTransform[] in exactly the wire shape a field's own chain already
-// uses, so applying one is a plain array copy into _state.pendingTransforms —
-// the same slot all three transform editors (flat, container, API field
-// modals) already share.
+// Reusable named transform-chain presets: pure (transform-presets-ui.js renders them; the companion's /transform-presets endpoints store them).
+// A preset is a saved FieldTransform[] in the wire shape a field's chain already uses, so applying one is an array copy into
+// _state.pendingTransforms, the slot all three transform editors share.
 const { transformsAreValid } = require('./field-transforms');
 
-// Built-in presets ship with the extension itself (not the companion's
-// database): read-only, available even without a reachable companion, and
-// nothing to migrate when they change. Names come from i18n (nameKey), so
-// they follow the UI language. The price clean-up chain is the one Issue
-// #279 itself names as the natural first example (Issue #234's transform).
+// Built-in presets ship with the extension: read-only, available without a companion, nothing to migrate. Names come from i18n (nameKey).
+// The price clean-up chain (trim + toCurrency) is the natural first example.
 /** @type {Array<{id: string, builtin: true, nameKey: string, transforms: SFWire.FieldTransform[]}>} */
 const BUILTIN_TRANSFORM_PRESETS = [
   {
@@ -56,11 +49,8 @@ function applyTransformPreset(transforms, preset) {
   return [...transforms, ...preset.transforms.map(step => ({ ...step }))];
 }
 
-// Mirrors the companion's ValidateTransformPresetChain closely enough that
-// the "Save as preset" button is only ever enabled for a chain the
-// companion will accept: at least one step, every step complete
-// (transformsAreValid), and no combine/split step (those reference other
-// fields by name, meaningless as a reusable chain).
+// Mirrors the companion's ValidateTransformPresetChain so "Save as preset" is only enabled for a chain it will accept: at least one step, every
+// step complete, no combine / split (they reference other fields by name).
 /**
  * @param {SFWire.FieldTransform[]} transforms
  * @returns {boolean}
