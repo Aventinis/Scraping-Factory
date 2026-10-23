@@ -476,11 +476,10 @@ export function buildScrapingConfig({
   const outputFileFields: WireFields = includeOutputFile ? { includeOutputFile: true } : {};
   const externalConfigFields: WireFields = externalConfig ? { externalConfig: true } : {};
   // Null (key omitted) until a blueprint is picked and its mapping is complete, so a no-op for Combined/Blocks too.
-  // output-blueprints.js is still untyped JS, so its result is asserted to the wire shape here.
   const outputBlueprintConfig = buildOutputBlueprintMapping(
     outputBlueprintId, outputBlueprintSchemaKind, outputBlueprintFieldNames, outputBlueprintMapping,
     outputBlueprintTree, outputBlueprintTreeMapping,
-  ) as SFWire.OutputBlueprintMapping | null;
+  );
   const outputBlueprintFields: WireFields = outputBlueprintConfig ? { outputBlueprint: outputBlueprintConfig } : {};
 
   if (mode === 'container') {

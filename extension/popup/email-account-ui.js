@@ -1,7 +1,7 @@
 // Issue #353: the email parts of the Settings screen's Account section —
 // the address field at registration, the "verify your email" box with the code
 // the companion mailed, changing the address, and "Forgot password?". Request
-// logic is in email-account.js; the signed-in state is shared with
+// logic is in email-account.ts; the signed-in state is shared with
 // account-ui.js. Same `bridge`-parameter convention as every other -ui module.
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');

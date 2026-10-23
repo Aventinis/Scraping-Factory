@@ -37,7 +37,7 @@ const {
 
 // Issue #244: the tree schema editor's own structural editing (add/remove/
 // rename/move a group or field node) reuses container-tree.ts's generic
-// path-based helpers directly — see output-blueprints.js's own doc comment
+// path-based helpers directly — see output-blueprints.ts's own doc comment
 // on why they apply unchanged to a blueprint schema node's much smaller
 // {kind, name, children} shape.
 const {
@@ -196,7 +196,7 @@ function renderOutputBlueprintMappingSection(bridge) {
 // OutputBlueprintFlattening.ResolveContainerTreeRowScopes), each target
 // LEAF row getting a source-field <select> exactly like the flat mapping's
 // own per-row <select>. `path` addresses a node the same dot-joined-index
-// scheme output-blueprints.js's own createTreeMappingDraft uses as its
+// scheme output-blueprints.ts's own createTreeMappingDraft uses as its
 // draft keys, so a row's `data-path` can be used directly as the lookup.
 function buildOutputBlueprintTreeMappingRowHtml(node, path, depth, availableSourceFields, draft) {
   const indent = `style="padding-left:${depth * 12}px"`;

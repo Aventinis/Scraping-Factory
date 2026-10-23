@@ -1,6 +1,6 @@
 // ── Combined mode: component list render + wiring (Issue #239) ─────────────
 // Follows the project's <feature>.js/<feature>-ui.js split (docs/design-notes/extension.md, "Popup module boundaries") — pure add/remove/move
-// helpers live in combined-config.js, this file owns the DOM side: the
+// helpers live in combined-config.ts, this file owns the DOM side: the
 // ordered component list, the "add from saved configurations" picker
 // (sourced from every saved configuration regardless of host — see
 // saved-configs-ui.js's fetchAllSavedConfigs — since a component doesn't
