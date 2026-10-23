@@ -1,27 +1,21 @@
 // Issue #227: the `:contains("text")` selector suffix on the popup side — the
-// pure helpers (shared vectors with the content script's and the companion's
-// copies) and the optional "text contains" input of the flat and container
+// pure helpers (test-vectors/text-selector.json is shared with the content
+// script's, the companion's and the script runtime's copies) and the optional "text contains" input of the flat and container
 // field modals, in the real popup.
+const { loadVectors } = require('../../test-vectors/load');
 const {
   escapeFilterText, collapseWhitespace, appendTextFilter, splitTextFilter, suggestFilterText, SUGGESTED_TEXT_MAX_LENGTH,
 } = require('./selector-text-filter');
 
 describe('splitTextFilter (shared vectors)', () => {
-  test.each([
-    ['.btn:contains("Add to cart")', '.btn', 'Add to cart'],
-    [".card .btn:contains('Merken')", '.card .btn', 'Merken'],
-    ['a:contains(  "x"  )   ', 'a', 'x'],
-    [':contains("only")', '*', 'only'],
-    ['.a > .b:contains("say \\"hi\\"")', '.a > .b', 'say "hi"'],
-    [".b:contains('it\\'s')", '.b', "it's"],
-    ['A:CONTAINS("x")', 'A', 'x'],
-    ['div', 'div', null],
-  ])('%s → base %j, text %j', (selector, base, text) => {
-    expect(splitTextFilter(selector)).toEqual({ base, text });
+  const { cases } = loadVectors('text-selector.json');
+
+  test.each(cases.filter((c) => !c.invalid).map((c) => [c.name, c]))('%s', (_name, c) => {
+    expect(splitTextFilter(c.selector)).toEqual({ base: c.base, text: c.text });
   });
 
-  test.each([['a:contains(x)'], ['a:contains("x"'], ['a:contains("x") b']])('%s is not a filter', (selector) => {
-    expect(splitTextFilter(selector)).toEqual({ base: selector, text: null });
+  test.each(cases.filter((c) => c.splitUnchanged).map((c) => [c.name, c]))('%s is not a filter', (_name, c) => {
+    expect(splitTextFilter(c.selector)).toEqual({ base: c.selector, text: null });
   });
 });
 
