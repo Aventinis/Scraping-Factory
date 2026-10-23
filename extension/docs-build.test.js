@@ -3,7 +3,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { slugify, anchorsOf, listDocPages } = require('./docs-build');
+const { slugify, anchorsOf, anchorListOf, headingStructureOf, listDocPages, sourceHash, stampedHash, stampTranslation, translationStatus } = require('./docs-build');
 
 // Jest cannot load `marked` (an ES module), so the build runs in a real Node process.
 function buildDocs({ docsDir, outdir }) {
@@ -79,6 +79,91 @@ describe('buildDocs', () => {
   test('pages come in the documented order, unknown ones last', () => {
     const docs = makeDocs({ 'zzz.md': '# Z\n', 'README.md': '# R\n', 'modes.md': '# M\n' });
     expect(listDocPages(docs).map((p) => p.name)).toEqual(['README', 'modes', 'zzz']);
+  });
+});
+
+describe('German translation', () => {
+  function makeBilingual(en, de) {
+    const dir = makeDocs(en);
+    fs.mkdirSync(path.join(dir, 'de', 'images'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'de', 'images', 'pic.png'), 'x');
+    for (const [name, text] of Object.entries(de)) fs.writeFileSync(path.join(dir, 'de', name), text);
+    return dir;
+  }
+  const EN = { 'README.md': '# Home\n\nSee [the guide](guide.md#first-step).\n', 'guide.md': '# Guide\n\n## First step\n\n![shot](images/pic.png)\n' };
+  const DE = { 'README.md': '# Start\n\nSiehe [die Anleitung](guide.md#erster-schritt).\n', 'guide.md': '# Anleitung\n\n## Erster Schritt\n\n![Bild](images/pic.png)\n' };
+
+  test('builds both languages with a link to the twin page and its own images', () => {
+    const dir = makeBilingual(EN, DE);
+    const out = tmp();
+    buildDocs({ docsDir: dir, outdir: out });
+    const de = fs.readFileSync(path.join(out, 'docs/de/guide.html'), 'utf8');
+    const en = fs.readFileSync(path.join(out, 'docs/guide.html'), 'utf8');
+    expect(de).toContain('<html lang="de">');
+    expect(de).toContain('<h2 id="erster-schritt">');
+    expect(de).toContain('href="../docs.css"');
+    expect(de).toContain('<a href="../guide.html" hreflang="en"');
+    expect(en).toContain('<a href="de/guide.html" hreflang="de"');
+    expect(fs.existsSync(path.join(out, 'docs/de/images/pic.png'))).toBe(true);
+    expect(fs.readFileSync(path.join(out, 'docs/de/README.html'), 'utf8')).toContain('<a href="guide.html#erster-schritt">die Anleitung</a>');
+  });
+
+  test('anchors.json maps every English heading to its German one by position', () => {
+    const out = tmp();
+    buildDocs({ docsDir: makeBilingual(EN, DE), outdir: out });
+    const anchors = JSON.parse(fs.readFileSync(path.join(out, 'docs/anchors.json'), 'utf8'));
+    expect(anchors.de.guide).toEqual({ guide: 'anleitung', 'first-step': 'erster-schritt' });
+    expect(anchors.de.README).toEqual({ home: 'start' });
+  });
+
+  test('an English page without a translation has no twin link and no mapping', () => {
+    const out = tmp();
+    buildDocs({ docsDir: makeBilingual(EN, { 'README.md': DE['README.md'].replace('guide.md#erster-schritt', 'README.md') }), outdir: out });
+    expect(fs.readFileSync(path.join(out, 'docs/guide.html'), 'utf8')).not.toContain('hreflang');
+    expect(JSON.parse(fs.readFileSync(path.join(out, 'docs/anchors.json'), 'utf8')).de.guide).toBeUndefined();
+  });
+
+  test('a broken link or image in a German page fails the build and names the file', () => {
+    const dir = makeBilingual(EN, { ...DE, 'guide.md': '# Anleitung\n\n## Erster Schritt\n\n[x](nope.md) ![y](images/missing.png) [z](#falsch)\n' });
+    let error;
+    try { buildDocs({ docsDir: dir, outdir: tmp() }); } catch (err) { error = err; }
+    expect(String(error.message)).toContain('docs/user/de/guide.md');
+    expect(String(error.message)).toContain('nope.md');
+    expect(String(error.message)).toContain('missing.png');
+    expect(String(error.message)).toContain('#falsch');
+  });
+
+  test('a different heading structure is reported and not mapped', () => {
+    const dir = makeBilingual(EN, { 'README.md': '# Start\n\nText.\n', 'guide.md': '# Anleitung\n\n## Eins\n\n## Zwei\n' });
+    const out = tmp();
+    buildDocs({ docsDir: dir, outdir: out });
+    expect(JSON.parse(fs.readFileSync(path.join(out, 'docs/anchors.json'), 'utf8')).de.guide).toEqual({});
+    expect(translationStatus(dir).structure).toEqual(['guide']);
+  });
+
+  test('the source stamp tells a stale translation apart', () => {
+    const dir = makeBilingual(EN, DE);
+    expect(translationStatus(dir).unstamped).toEqual(['README', 'guide']);
+    stampTranslation(dir, 'guide');
+    stampTranslation(dir, 'README');
+    expect(translationStatus(dir)).toEqual({ missing: [], stale: [], unstamped: [], structure: [] });
+    expect(stampedHash(fs.readFileSync(path.join(dir, 'de/guide.md'), 'utf8'))).toBe(sourceHash(EN['guide.md']));
+
+    fs.writeFileSync(path.join(dir, 'guide.md'), EN['guide.md'] + '\nMore text.\n');
+    expect(translationStatus(dir).stale).toEqual(['guide']);
+    stampTranslation(dir, 'guide');
+    stampTranslation(dir, 'guide'); // stamping twice replaces the marker instead of stacking
+    expect(translationStatus(dir).stale).toEqual([]);
+    expect(fs.readFileSync(path.join(dir, 'de/guide.md'), 'utf8').match(/<!-- source:/g)).toHaveLength(1);
+  });
+
+  test('a missing translation is listed', () => {
+    expect(translationStatus(makeBilingual(EN, { 'README.md': DE['README.md'] })).missing).toEqual(['guide']);
+  });
+
+  test('heading helpers keep order and structure', () => {
+    expect(anchorListOf('# A\n## B\n## B\n### C\n')).toEqual(['a', 'b', 'b-1', 'c']);
+    expect(headingStructureOf('# A\n```\n# x\n```\n## B\n')).toEqual([1, 2]);
   });
 });
 
