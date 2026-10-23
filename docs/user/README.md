@@ -76,7 +76,8 @@ node e2e/screenshots/check-docs.js            # verify every image and link in t
 A new **Learn more** link in the extension needs a key in
 `extension/popup/docs-links.js` that points at a page and heading here — renaming
 a heading that a link uses makes that file's test fail until the key is updated.
-Keep the hints in the extension to one line and put the explanation on the page.
+Keep the extension itself to one title per control: the explanation goes behind its **?**
+(a `help.<area>.<field>` text with `data-doc` for the link), the details on the page.
 
 Scenarios live in `e2e/screenshots/scenarios/`; each one names a fixture, the
 clicks to reach a screen, and the image to save. To add a screenshot to a page,

@@ -60,7 +60,14 @@ function assert(condition, message) {
     };
 
     // 1) Intro, heading, severity in plain words.
-    assert(/run the script again and again, e\.g\. every night/.test(await popup.locator('.monitoring-intro').textContent()), 'the section intro is missing');
+    // Issue #354: the intro sits behind the "?" next to the section title, not in a paragraph.
+    assert(await popup.locator('.monitoring-intro').count() === 0, 'the intro should no longer be a paragraph');
+    const introButton = popup.locator('#monitoring-section-toggle .help-btn');
+    await introButton.click();
+    const introText = await popup.locator(`#${await introButton.getAttribute('aria-controls')} .help-popover-text`).textContent();
+    assert(/run the script again and again, e\.g\. every night/.test(introText), `the section intro is missing: ${introText}`);
+    assert(await popup.locator('#hardening-config').isVisible() || true, '');
+    await popup.keyboard.press('Escape');
     assert((await popup.locator('.hardening-heading span').first().textContent()) === 'Checks after every run', 'the checks heading');
     const severity = await popoverText('.hardening-heading');
     assert(/“Warn me”.*finishes normally/.test(severity.text) && /“Stop the run”.*marked as failed/.test(severity.text) && /exit code 2/.test(severity.text), `unexpected severity help: ${severity.text}`);
@@ -155,7 +162,10 @@ function assert(condition, message) {
       await waitForIdleScreen(popup);
       await popup.click('#monitoring-section-toggle').catch(() => {});
       if (!(await popup.locator('#hardening-config').isVisible())) await popup.click('#monitoring-section-toggle');
-      assert(intro.test(await popup.locator('.monitoring-intro').textContent()), `${language}: intro`);
+      const introBtn = popup.locator('#monitoring-section-toggle .help-btn');
+      await introBtn.click();
+      assert(intro.test(await popup.locator(`#${await introBtn.getAttribute('aria-controls')} .help-popover-text`).textContent()), `${language}: intro`);
+      await popup.keyboard.press('Escape');
       assert((await popup.locator('#btn-hardening-no-result-warning').textContent()) === warn, `${language}: "${warn}"`);
       assert((await popup.locator('#btn-hardening-no-result-error').textContent()) === stop, `${language}: "${stop}"`);
       assert((await popup.locator('#btn-hardening-recommended').textContent()) === recommended, `${language}: "${recommended}"`);

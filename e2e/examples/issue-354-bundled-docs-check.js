@@ -44,8 +44,11 @@ function assert(condition, message) {
 
     // 1) A hint link opens the bundled page in a new tab.
     await popup.click('#monitoring-section-toggle');
-    const hintLink = popup.locator('.monitoring-intro a.learn-more');
-    assert(await hintLink.isVisible(), 'the Monitoring intro should carry a "Learn more" link');
+    // The explanation sits behind the "?" next to the title; its popover carries the link.
+    const introButton = popup.locator('#monitoring-section-toggle .help-btn');
+    await introButton.click();
+    const hintLink = popup.locator(`#${await introButton.getAttribute('aria-controls')} a.learn-more`);
+    assert(await hintLink.isVisible(), 'the Monitoring popover should carry a "Learn more" link');
     assert((await hintLink.textContent()) === 'Learn more', 'unexpected link text');
     const requests = [];
     browser.context.on('request', (r) => requests.push(r.url()));
@@ -90,10 +93,13 @@ function assert(condition, message) {
     // 4) The long hints are one short line now.
     await popup.click('#settings-section-toggle');
     await popup.check('#toggle-retry');
-    const retryHint = await popup.locator('#retry-config .preview-summary span[data-i18n="idle.retryHint"]').textContent();
-    assert(retryHint.length <= 160, `the retry hint should be one short line, got ${retryHint.length} characters`);
-    assert(retryHint === 'Retries after a connection error, a timeout or one of these status codes; other errors such as 404 fail at once.', `unexpected retry hint: ${retryHint}`);
-    const retryLink = popup.locator('#retry-config a.learn-more[data-doc="retry"]');
+    // No explanation paragraph any more: the retry toggle has a "?" whose popover explains it.
+    assert(await popup.locator('#retry-config .preview-summary').count() === 0, 'the retry section should carry no explanation paragraph');
+    const retryButton = popup.locator('.help-host[data-help="help.retry.overview"] .help-btn');
+    await retryButton.click();
+    const retryPanel = popup.locator(`#${await retryButton.getAttribute('aria-controls')}`);
+    assert(/tries again after the wait/.test(await retryPanel.locator('.help-popover-text').textContent()), 'the retry popover should explain the setting');
+    const retryLink = retryPanel.locator('a.learn-more[data-doc="retry"]');
     const [docPage3] = await Promise.all([browser.context.waitForEvent('page'), retryLink.click()]);
     await docPage3.waitForLoadState('load');
     assert(docPage3.url() === `${origin}docs/network-settings.html#retry-on-transient-errors`, `unexpected address: ${docPage3.url()}`);
@@ -108,7 +114,9 @@ function assert(condition, message) {
     await focusFixture(fixturePage);
     await waitForIdleScreen(popup);
     await popup.click('#monitoring-section-toggle');
-    assert((await popup.locator('.monitoring-intro a.learn-more').textContent()) === 'Mehr erfahren', 'the link should read "Mehr erfahren" in German');
+    const introButtonDe = popup.locator('#monitoring-section-toggle .help-btn');
+    await introButtonDe.click();
+    assert((await popup.locator(`#${await introButtonDe.getAttribute('aria-controls')} a.learn-more`).textContent()) === 'Mehr erfahren', 'the link should read "Mehr erfahren" in German');
     await popup.evaluate(() => chrome.storage.local.set({ language: 'en' }));
     await popup.reload();
     await focusFixture(fixturePage);
@@ -126,7 +134,46 @@ function assert(condition, message) {
     await popup.setViewportSize({ width: 420, height: 1200 });
     await popup.screenshot({ path: path.join(__dirname, 'issue-354-learn-more.png') });
 
-    // 7) A release-channel build carries the documentation too.
+    // 7) The Settings screen: one title per control, explanations behind the "?", lists in cards.
+    await popup.click('#btn-open-settings');
+    await popup.waitForSelector('#screen-settings:not(.hidden)');
+    for (const width of [320, 400]) {
+      await popup.setViewportSize({ width, height: 1400 });
+      const m = await popup.evaluate(() => {
+        const select = document.getElementById('select-output-format');
+        const input = document.getElementById('input-script-name-fixed');
+        return {
+          right: select.getBoundingClientRect().right,
+          clientWidth: document.documentElement.clientWidth,
+          overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          selectBg: getComputedStyle(select).backgroundColor,
+          inputBg: getComputedStyle(input).backgroundColor,
+        };
+      });
+      assert(m.right <= m.clientWidth - 8, `width ${width}px: the output format select reaches the edge (${m.right} of ${m.clientWidth})`);
+      assert(m.overflow <= 4, `width ${width}px: the Settings screen scrolls sideways by ${m.overflow}px`);
+      assert(m.selectBg === m.inputBg || m.selectBg === 'rgb(255, 255, 255)', `the select should look like the other fields, got ${m.selectBg} vs ${m.inputBg}`);
+      console.log(`settings at ${width}px: select inside the panel, overflow ${m.overflow}px`);
+    }
+    const cards = await popup.$$eval('.settings-card', (els) => els.map((d) => d.open));
+    assert(cards.length >= 5 && cards.every((open) => !open), `the cards should start collapsed: ${JSON.stringify(cards)}`);
+    const visibleExplanations = await popup.$$eval('#settings-preferences-section .preview-summary', (els) => els.filter((e) => e.offsetParent !== null).length);
+    assert(visibleExplanations === 0, `the preferences should carry no explanation paragraphs, found ${visibleExplanations}`);
+    const formatButton = popup.locator('label[for="select-output-format"] .help-btn');
+    await formatButton.click();
+    const formatText = await popup.locator(`#${await formatButton.getAttribute('aria-controls')} .help-popover-text`).textContent();
+    assert(/openpyxl/.test(formatText), `the output format popover should mention openpyxl: ${formatText}`);
+    await popup.keyboard.press('Escape');
+    await popup.click('.settings-card[data-advanced="settings-presets"] > summary');
+    const presetName = await popup.locator('.transform-preset-name').first().evaluate((el) => ({ size: getComputedStyle(el).fontSize, weight: getComputedStyle(el).fontWeight }));
+    assert(parseFloat(presetName.size) <= 13 && Number(presetName.weight) <= 500, `preset names should be small and not bold: ${JSON.stringify(presetName)}`);
+    await popup.screenshot({ path: path.join(__dirname, 'issue-354-settings.png') });
+    console.log('settings: collapsed cards, no explanation paragraphs, quiet preset names');
+    await popup.click('#btn-close-settings');
+    await waitForIdleScreen(popup);
+    await popup.setViewportSize({ width: 420, height: 1200 });
+
+    // 8) A release-channel build carries the documentation too.
     const releaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-release-'));
     execFileSync(process.execPath, [path.join(__dirname, '../../extension/build.js'), '--channel', 'release', '--outdir', releaseDir], { stdio: 'pipe' });
     assert(fs.existsSync(path.join(releaseDir, 'docs/monitoring.html')) && fs.existsSync(path.join(releaseDir, 'docs/images/monitoring-recommended.png')), 'the release build should contain docs/');
