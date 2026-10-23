@@ -1,0 +1,17 @@
+_BLUEPRINT_GROUP_BY_NAME = {}
+_BLUEPRINT_LEAF_BY_NAME = {}
+_BLUEPRINT_PATH_BY_NAME = {}
+
+
+def _blueprint_index_source_tree(nodes, ancestors):
+    for node in nodes:
+        if "children" in node:
+            _BLUEPRINT_GROUP_BY_NAME.setdefault(node["name"], node)
+            _BLUEPRINT_PATH_BY_NAME.setdefault(node["name"], ancestors)
+            _blueprint_index_source_tree(node["children"], ancestors + [node])
+        else:
+            _BLUEPRINT_PATH_BY_NAME.setdefault(node["name"], ancestors)
+            _BLUEPRINT_LEAF_BY_NAME.setdefault(node["name"], node)
+
+
+_blueprint_index_source_tree(GROUPS, [])

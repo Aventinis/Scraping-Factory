@@ -127,23 +127,7 @@ def _flatten_group_tree_for_blueprint(page, scope, node, context):
 # reason extract_group()/_flatten_group_tree_for_blueprint already do.
 BLUEPRINT_TREE_MAPPING = {{ blueprint_tree_mapping_literal }}
 
-_BLUEPRINT_GROUP_BY_NAME = {}
-_BLUEPRINT_LEAF_BY_NAME = {}
-_BLUEPRINT_PATH_BY_NAME = {}
-
-
-def _blueprint_index_source_tree(nodes, ancestors):
-    for node in nodes:
-        if "children" in node:
-            _BLUEPRINT_GROUP_BY_NAME.setdefault(node["name"], node)
-            _BLUEPRINT_PATH_BY_NAME.setdefault(node["name"], ancestors)
-            _blueprint_index_source_tree(node["children"], ancestors + [node])
-        else:
-            _BLUEPRINT_PATH_BY_NAME.setdefault(node["name"], ancestors)
-            _BLUEPRINT_LEAF_BY_NAME.setdefault(node["name"], node)
-
-
-_blueprint_index_source_tree(GROUPS, [])
+#@include blueprint_source_index
 
 
 def _blueprint_repeating_chain(name):
