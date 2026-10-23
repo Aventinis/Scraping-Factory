@@ -44,17 +44,7 @@ def _discover_additional_urls():
         response = requests.get(DISCOVERED_URLS_PAGE_URL, headers=headers, timeout=10)
 {{~ end ~}}
 {{~ end ~}}
-        response.raise_for_status()
-        soup = BeautifulSoup(response.content, "html.parser")
-    except Exception as e:
-        print(f"WARNING: Could not discover additional URLs from {DISCOVERED_URLS_PAGE_URL}: {e}")
-        return []
-
-    discovered = []
-    for el in soup.select(DISCOVERED_URLS_LINK_SELECTOR):
-        href = el.get("href")
-        if not href:
-            continue
+#@include discovered_urls_parse
         absolute_url = urllib.parse.urljoin(DISCOVERED_URLS_PAGE_URL, href)
         if absolute_url not in discovered:
             discovered.append(absolute_url)

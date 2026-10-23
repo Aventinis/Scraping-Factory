@@ -1,0 +1,13 @@
+{{~ if robots_check.enabled ~}}
+        if page_number > 1 and not _robots_gate(page_url):
+            break
+{{~ end ~}}
+{{~ if request_delay.enabled ~}}
+        _pace_request()
+{{~ end ~}}
+{{~ if retry.enabled ~}}
+        response = _checked_request("Request", page_url, lambda: _send_with_retry(lambda _u=page_url: requests.get(_u, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10), page_url))
+{{~ else ~}}
+        response = _checked_request("Request", page_url, lambda: requests.get(page_url, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10))
+{{~ end ~}}
+        _require_ok("Request", page_url, response)
