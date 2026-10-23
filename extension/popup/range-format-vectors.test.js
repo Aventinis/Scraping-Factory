@@ -1,4 +1,4 @@
-// Issue #388: compileRangeFormatPattern (api-config.js) decides which format preset fits a recorded value. It must
+// Issue #388: compileRangeFormatPattern (api-config.ts) decides which format preset fits a recorded value. It must
 // agree with RangeFormat.IsValid on the companion and _compile_range_format in the generated script — all three run
 // test-vectors/range-format.json (RangeFormatVectorTests.cs is the other half).
 const { loadVectors } = require('../../test-vectors/load');

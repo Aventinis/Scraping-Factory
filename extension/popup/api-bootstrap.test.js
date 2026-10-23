@@ -1,5 +1,5 @@
 // Issue #220: pure-function coverage for the API-mode token/auth bootstrap
-// (api-bootstrap.ts) and its integration into api-config.js's
+// (api-bootstrap.ts) and its integration into api-config.ts's
 // buildApiConfig/buildApiHeaders/apiConfigDraftHasAllSourcesChosen.
 const {
   BOOTSTRAP_SOURCE_KIND, createDefaultBootstrapDraft, suggestEnvVarName, parseRecordedBody,
@@ -229,7 +229,7 @@ describe('buildBootstrapVerificationValues', () => {
   });
 });
 
-describe('api-config.js integration', () => {
+describe('api-config.ts integration', () => {
   test('buildApiHeaders renders a bootstrap-mode header as a template', () => {
     expect(buildApiHeaders(
       [{ name: 'Authorization', value: `Bearer ${TOKEN}` }],

@@ -107,7 +107,7 @@ flowchart TB
     logger["shared/logger.js"]
     i18n["i18n/i18n.js"]
     ccfg["shared/companion-config.js"]
-    apiCfg["popup/api-config.js\n(pure builders/validators, API mode)"]
+    apiCfg["popup/api-config.ts\n(pure builders/validators, API mode)"]
     ctree["popup/container-tree.js\n(pure builders/validators, Container mode)"]
     apiUi["popup/api-config-ui.js + api-*-ui.js\n(DOM rendering + handlers, API mode)"]
     ctreeUi["popup/container-tree-ui.js\n(DOM rendering + handlers, Container mode)"]
@@ -144,7 +144,7 @@ object (`{ getState, setState, patchState, stopPreviewIfActive, requestDomTree,
 showToast }`) as their first parameter instead of closing over `popup.js`'s
 `_state` — necessary because `_state` is private to `popup.js` (importing it back
 would make a dependency cycle), and because each file is a separate, isolated Jest
-module with no shared closure. `api-config.js` and
+module with no shared closure. `api-config.ts` and
 `container-tree.ts` need no such bridge: they're pure, DOM-free functions
 (build/resolve/insert/remove/serialize tree drafts, no state or DOM access).
 
@@ -297,7 +297,7 @@ list, a second "discovery" request, or a computed range (e.g. the last N ISO
 weeks) — so the generated script can call the API directly, once per parameter
 combination, without ever touching the HTML.
 
-- Extension: `popup/api-config.js` (URL decomposition, value-source builders,
+- Extension: `popup/api-config.ts` (URL decomposition, value-source builders,
   `buildApiConfig`), `popup/api-config-ui.js` (API_CONFIG screen rendering +
   handlers, recording UI), `content/api-capture.js` (MAIN-world fetch/XHR patch),
   `content/content-script.js` (`findApiCandidates`, `deriveItemsAndValuePath`,
@@ -318,7 +318,7 @@ relative to its parent) instead of a single flat record list, mirroring Containe
 mode's own tree editor. Output becomes XML instead of CSV once a tree is used, for
 the same reason Container mode's tree output is XML.
 
-- Extension: `popup/api-config.js` (`ApiGroup`/`ApiField` draft
+- Extension: `popup/api-config.ts` (`ApiGroup`/`ApiField` draft
   build/insert/remove/serialize), `popup/api-response-tree-ui.js` (`renderApiTree`,
   `buildApiTreeNodeEl`, sub-group/sub-field search flows), `content/content-script.js`
   (`deriveApiTreeSkeleton`, `resolveApiGroupScopePath`-adjacent `pathStartsWithScope`)
@@ -338,7 +338,7 @@ already uses). GraphQL needs no special handling of its own — its `query`/
 `variables` body is just an ordinary nested object this generic mechanism already
 covers.
 
-- Extension: `popup/api-config.js` (`jsonValueToBodyDraft`, body-tree
+- Extension: `popup/api-config.ts` (`jsonValueToBodyDraft`, body-tree
   update/reference/serialize helpers), `popup/api-request-ui.js`
   (`buildBodyTreeNodeEl`/`renderBodyTree`, body-parameter modal wiring),
   `content/api-capture.js` (`requestBody`/`requestBodySkipped` capture)
@@ -368,7 +368,7 @@ API-mode request (fetch-mechanism-agnostic by design).
 - Extension: `content/content-script.js` (`findEmbeddedJsonCandidates`,
   `scriptTagSelector`), `popup/api-capture-ui.js`
   (`startEmbeddedJsonFieldSearch`, `confirmEmbeddedJsonFieldCandidate`,
-  `renderApiCandidates`'s `candidate.scriptSelector` branch), `popup/api-config.js`
+  `renderApiCandidates`'s `candidate.scriptSelector` branch), `popup/api-config.ts`
   (`buildApiConfig`'s `embeddedJsonSource` param)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig.EmbeddedJsonSource`,
   `EmbeddedJsonSource`), `ScrapingPlanValidator.cs` (`ValidateApiConfig`'s
@@ -400,7 +400,7 @@ request actually sends.
   `bootstrapDraftFromCaptureEntry`, `detectTokenInResponse`,
   `wireTokenIntoMainRequest`, `buildApiBootstrap`, `resolveBootstrapUrlParts`,
   `buildBootstrapVerificationValues`), `popup/api-bootstrap-ui.js` (the
-  section's render/wiring, recording picker), `popup/api-config.js`
+  section's render/wiring, recording picker), `popup/api-config.ts`
   (`buildApiConfig`'s `bootstrap` param, `buildApiHeaders`'s `'bootstrap'`
   mode, the Apply gate), `popup/api-request-ui.js` (header "From token" mode),
   `popup/api-parameters-ui.js` (the "Token value" URL-part source),
@@ -438,7 +438,7 @@ cursor-looking keys. The `Link`-header sibling is §2.5d.
 - Extension: `popup/api-cursor-pagination.js` (pure draft/wire logic:
   `cursorDraftIsComplete`, `buildApiCursorPagination`,
   `detectCursorSuggestion`), `popup/api-cursor-pagination-ui.js` (the
-  section's render/wiring), `popup/api-config.js` (`buildApiConfig`'s
+  section's render/wiring), `popup/api-config.ts` (`buildApiConfig`'s
   `cursorPagination` param, the Apply gate), `popup/api-config-ui.js`
   (`confirmApiConfig`, `sourceEntryId` on the draft),
   `popup/screens/api-config.html` (`#api-cursor-section`)
@@ -472,7 +472,7 @@ option.
 
 - Extension: `content/api-capture.js` (`hasNextLinkRel`), `content/content-script.js`
   (`hasNextLink` on candidates), `popup/api-link-pagination.js` (pure),
-  `popup/api-link-pagination-ui.js`, `popup/api-config.js`,
+  `popup/api-link-pagination-ui.js`, `popup/api-config.ts`,
   `popup/screens/api-config.html` (`#api-link-section`)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig.LinkHeaderPagination`,
   `ApiLinkHeaderPagination`), `ScrapingPlanValidator.cs`
@@ -558,8 +558,8 @@ reads the same data, so changing only one side fails. The shared data lives in `
 | File-name cleanup | `sanitizeFileNameBase` (`scraping-config-builder.ts`) | `IR/FileNameSanitizer.cs` | `file-name-sanitizer.json` — `scraping-config-builder.test.js`, `FileNameSanitizerTests.cs` |
 | Transform previews | `applyTransformsPreview` (`field-transforms.ts`) | `fragments/transforms.py.j2` `_apply_transforms` | `transforms.json` — `transform-vectors.test.js`, `TransformVectorTests.cs` (real helper, imported from a generated script) |
 | robots.txt matching | `evaluateRobotsTxt` (`content-script.js`) | `fragments/robots_disallow.py.j2` | `robots.json` — `robots-vectors.test.js`, `RobotsVectorTests.cs` |
-| Range formats | `compileRangeFormatPattern` (`api-config.js`) | `Backends/Python/RangeFormat.cs`, `fragments/api_common.py.j2` | `range-format.json`, `range-expansion.json` — `range-format-vectors.test.js`, `RangeFormatVectorTests.cs` |
-| URL-template matching | `findUrlTemplateMatches` (`api-config.js`) | `_match_url_against_template` (`fragments/api_common.py.j2`) | `url-template.json` — `url-template-vectors.test.js`, `UrlTemplateVectorTests.cs` |
+| Range formats | `compileRangeFormatPattern` (`api-config.ts`) | `Backends/Python/RangeFormat.cs`, `fragments/api_common.py.j2` | `range-format.json`, `range-expansion.json` — `range-format-vectors.test.js`, `RangeFormatVectorTests.cs` |
+| URL-template matching | `findUrlTemplateMatches` (`api-config.ts`) | `_match_url_against_template` (`fragments/api_common.py.j2`) | `url-template.json` — `url-template-vectors.test.js`, `UrlTemplateVectorTests.cs` |
 | `:contains("…")` split | `selector-text-filter.ts`, `content-script.js` | `IR/SelectorTextFilter.cs`, `fragments/text_selector_common.py.j2` | `text-selector.json` — both JS tests, `SelectorTextFilterTests.cs` |
 | Environment-variable names | `env-var.ts` | `ScrapingPlanValidator` | `env-var-name.json` — `env-var.test.js`, `EnvVarNameVectorTests.cs` |
 | The request body | `buildScrapingConfig` and the draft builders | `IR/ScrapingConfig.cs` and `/generate` | `test-vectors/wire/*.json` — `wire-fixtures.test.js` writes/verifies, `WireFixtureTests.cs` deserializes strictly and calls `/generate` |
@@ -1102,7 +1102,7 @@ shapes (flat/container/API) since none of them share a common leaf type.
 - **API mode live preview** (Issue #147): unlike a DOM pick, a tree field
   node has no raw value to preview against once inserted — the only value
   ever available is the one matched at candidate-confirm time.
-  `buildApiFieldDraft` (`api-config.js`) gained an optional `sampleValue`
+  `buildApiFieldDraft` (`api-config.ts`) gained an optional `sampleValue`
   (the raw JSON scalar the field/sibling resolved to — `candidate.value` for
   the primary field, or the matching entry's own `.value` in
   `candidate.siblings` for a picked sibling, see `content-script.js`'s
@@ -2352,13 +2352,13 @@ compile time anywhere.
 |---|---|---|---|
 | Flat field | `popup.js`: `addField()`, `buildScrapingConfig()`'s `fields.map(...)` | `{name, selector, attribute?, framePath?}` | `IR/ScrapingConfig.cs`: `ScrapingField` |
 | Container tree node | `container-tree.ts`: `buildGroupNode`/`buildFieldNode`, `serializeGroupTree` | `{name,selector,repeating,children:[...],framePath?}` or `{name,selector,mode,attribute?,framePath?}` | `IR/ContainerNode.cs`: `GroupNode`/`DataFieldNode` (via `ContainerNodeJsonConverter`) |
-| API config (top level) | `api-config.js`: `buildApiConfig()` | `{urlTemplate, method?, parameters:[...], headers?, itemsPath+fields \| groups, body?, embeddedJsonSource?, bootstrap?}` | `IR/ApiConfig.cs`: `ApiConfig` |
-| API parameter source | `api-config.js`: `buildStaticListSource`/`buildDiscoverySource`/`buildRangeSource` | `{kind:"staticList"\|"discovery"\|"range", ...}` | `IR/ApiConfig.cs`: `ApiParameterSource` (`[JsonPolymorphic]`) |
+| API config (top level) | `api-config.ts`: `buildApiConfig()` | `{urlTemplate, method?, parameters:[...], headers?, itemsPath+fields \| groups, body?, embeddedJsonSource?, bootstrap?}` | `IR/ApiConfig.cs`: `ApiConfig` |
+| API parameter source | `api-config.ts`: `buildStaticListSource`/`buildDiscoverySource`/`buildRangeSource` | `{kind:"staticList"\|"discovery"\|"range", ...}` | `IR/ApiConfig.cs`: `ApiParameterSource` (`[JsonPolymorphic]`) |
 | API embedded JSON source (Issue #136) | `api-capture-ui.js`: `confirmEmbeddedJsonFieldCandidate()` (`{scriptSelector}`, stamped from `content-script.js`'s `scriptTagSelector`) | `{scriptSelector}` | `IR/ApiConfig.cs`: `EmbeddedJsonSource` (plain optional object, no converter) |
 | API token/auth bootstrap (Issue #220) | `api-bootstrap.ts`: `buildApiBootstrap()` (draft `{name,method,url,valuePath,bodyEncoding,headers,bodyFields}`) | `{name, method?, url, headers?, bodyFields?, bodyEncoding?, valuePath}` | `IR/ApiConfig.cs`: `ApiBootstrap` (plain optional object, no converter) |
 | API cursor/token pagination (Issue #224) | `api-cursor-pagination.ts`: `buildApiCursorPagination()` (draft `{nextCursorPath,hasNextPagePath,target,queryParameterName,bodyPath,maxPages}`) | `{nextCursorPath, hasNextPagePath?, target: 'Query'\|'Body', queryParameterName?, bodyPath?, maxPages}` | `IR/ApiConfig.cs`: `ApiCursorPagination` (plain optional object, no converter) |
-| API response tree node | `api-config.js`: `buildApiGroupDraft`/`buildApiFieldDraft`, `serializeApiTree` | `{name,path,children:[...]}` or `{name,path}` | `IR/ApiConfig.cs`: `ApiGroup`/`ApiField` (via `ApiNodeJsonConverter`) |
-| API request body node | `api-config.js`: `jsonValueToBodyDraft`/`serializeBodyTree` | `{properties:{...}}` / `{items:[...]}` / `{kind,stringValue\|numberValue\|boolValue}` / `{parameterName, coerceTo?}` | `IR/ApiBodyNode.cs`: `ApiBodyObject`/`Array`/`Literal`/`Variable` (via `ApiBodyNodeJsonConverter`) |
+| API response tree node | `api-config.ts`: `buildApiGroupDraft`/`buildApiFieldDraft`, `serializeApiTree` | `{name,path,children:[...]}` or `{name,path}` | `IR/ApiConfig.cs`: `ApiGroup`/`ApiField` (via `ApiNodeJsonConverter`) |
+| API request body node | `api-config.ts`: `jsonValueToBodyDraft`/`serializeBodyTree` | `{properties:{...}}` / `{items:[...]}` / `{kind,stringValue\|numberValue\|boolValue}` / `{parameterName, coerceTo?}` | `IR/ApiBodyNode.cs`: `ApiBodyObject`/`Array`/`Literal`/`Variable` (via `ApiBodyNodeJsonConverter`) |
 | Browser action | `popup.js`: `addBrowserAction`/`serializeBrowserActions` | `{kind:"waitFor"\|"fill"\|"click"\|"scroll", selector, ...}` | `IR/BrowserAction.cs`: `WaitForAction`/`FillAction`/`ClickAction`/`ScrollAction` (`[JsonPolymorphic]`) |
 | Verification values (login test values) | `popup.js`: `buildVerificationValues()` (from `_state.fillTestValues`, never persisted) | `{verificationValues: {ENV_NAME: "value"}}` | `IR/FillVerificationValues.cs`: `Filter()` reads `ScrapingConfig.VerificationValues` |
 | Data-preview opt-in / result | `popup.js`: `_state.includeDataPreview` toggle → `buildScrapingConfig`'s `includePreview` key; `renderDataPreview()` consumes the response | request: `{includePreview: true}`; response: `{script, preview: {outputFormat, totalCount, truncated, columns?, rows?, xmlSample?}}` | `IR/ScrapingConfig.cs`: `IncludePreview`; `Backends/ScriptPreviewData.cs` |
@@ -2368,12 +2368,12 @@ compile time anywhere.
 | Proxy support | `popup.js`: `buildProxyConfig()` (returns `null` when disabled or the env-var-name field is blank) → `buildScrapingConfig`'s `proxy` key | `{proxy?: {environmentVariableName}}` | `IR/ProxyConfig.cs`: `ProxyConfig` |
 | Pagination | `popup.js`: `buildPaginationConfig()` (returns `null` when disabled or the kind-specific required field is blank) → `buildScrapingConfig`'s `pagination` key | `{pagination?: {kind:"nextLink", nextLinkSelector, maxPages} \| {kind:"pageNumber", urlTemplate, maxPages}}` | `IR/PaginationConfig.cs`: `NextLinkPagination`/`PageNumberPagination` (via `[JsonPolymorphic]`) |
 | Persistent session | `popup.js`: `_state.persistentSession` (plain boolean) → `buildScrapingConfig`'s `persistentSession` key, sent only when `true` | `{persistentSession?: true}` | `IR/ScrapingConfig.cs`: `bool? PersistentSession` |
-| Range format mini-template | `api-config.js`: `RANGE_FORMAT_PRESETS`, `compileRangeFormatPattern()` (client-side mirror) | `{format?: "{yyyy}-W{ww}"}` inside a `RangeSource` | `Backends/Python/RangeFormat.cs` (server-side, authoritative) |
+| Range format mini-template | `api-config.ts`: `RANGE_FORMAT_PRESETS`, `compileRangeFormatPattern()` (client-side mirror) | `{format?: "{yyyy}-W{ww}"}` inside a `RangeSource` | `Backends/Python/RangeFormat.cs` (server-side, authoritative) |
 | Output Blueprint mapping | `output-blueprints.js`: `buildOutputBlueprintMapping()` (returns `null` when no blueprint is picked or the mapping isn't complete) → `buildScrapingConfig`'s `outputBlueprint` key | `{outputBlueprint?: {blueprintId, schemaKind: 'Flat', fields: [{targetField, sourceField}]} \| {blueprintId, schemaKind: 'Tree', tree: [{name, children: [...]} \| {name, sourceField}]}}` | `IR/OutputBlueprintMapping.cs`: `OutputBlueprintMapping`/`OutputBlueprintFieldMapping`/`OutputBlueprintSchemaKind`/`OutputBlueprintTreeMappingGroup`/`OutputBlueprintTreeMappingField` (Issue #244) |
 
 Two rows above are explicitly **hand-kept mirrors**, not generated from a shared
 schema: `sanitizeFileNameBase` (popup.js) vs. `FileNameSanitizer` (C#), and the
-range-format regex compiler in `api-config.js` vs. `RangeFormat.cs`. Both sides
+range-format regex compiler in `api-config.ts` vs. `RangeFormat.cs`. Both sides
 must independently reach the same answer for the same input; there is no
 compile-time or test-time enforcement of this beyond hand-written unit tests on
 each side. Keep this in mind when touching either — a "small tweak" to one side's
@@ -2438,7 +2438,7 @@ checks + browser-only gating) → each Playwright template (`playwright_scraper.
 `IR/ApiConfig.cs` (new `[JsonDerivedType]` on `ApiParameterSource`) →
 `ScrapingPlanValidator.ValidateApiConfig` (per-source validation) →
 `PythonApiConfigLiteral.RenderSource` → `scraper_api.py.j2`'s
-`_resolve_parameter_values` runtime → `api-config.js` (a new `buildXxxSource`
+`_resolve_parameter_values` runtime → `api-config.ts` (a new `buildXxxSource`
 builder) → `api-parameters-ui.js` (`renderApiConfigParameters`'s per-kind branch,
 `API_CONFIG_SOURCE_DEFAULTS`).
 
@@ -2457,7 +2457,7 @@ mutually-exclusive mode, like a hypothetical fourth extraction shape): `IR/Scrap
 implementation + template(s) → `LanguageModuleRegistry` picks it up automatically
 (no registration needed) → extension: a new top-level mode button, `_state.mode`
 branch, `MODE_SWITCH_CLEARS` entry, and its own draft/serialize module (mirroring
-`api-config.js`/`container-tree.ts`).
+`api-config.ts`/`container-tree.ts`).
 
 **Add a field to an existing IR node that also needs a UI toggle** (like `Issue
 #122`'s `IncludePreview`, or `FramePath` on Issue #42): add the nullable/optional

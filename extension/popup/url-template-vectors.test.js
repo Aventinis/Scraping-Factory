@@ -1,4 +1,4 @@
-// Issue #388: findUrlTemplateMatches (api-config.js) picks the recorded requests that are "the same endpoint,
+// Issue #388: findUrlTemplateMatches (api-config.ts) picks the recorded requests that are "the same endpoint,
 // different value" for the auto-fill of a value list. The generated script's _match_url_against_template does the
 // same at run time for browser discovery. Both run test-vectors/url-template.json (UrlTemplateVectorTests.cs is the
 // script half).
