@@ -10,11 +10,11 @@ extension/companion boundary. It's meant to answer three recurring questions:
    interact with?
 3. **Briefing an implementation** — which exact files should a change start from?
 
-It deliberately does not re-explain *why* individual decisions were made — that's
-`CLAUDE.md`, which stays the authoritative source for behavioral detail, edge cases,
-and the reasoning behind non-obvious choices. This document is the structural map;
-`CLAUDE.md` is the annotated reference. When in doubt, this doc tells you *where*,
-`CLAUDE.md` tells you *why it works the way it does*.
+It deliberately does not re-explain *why* individual decisions were made — the
+cross-cutting rules and architecture decisions are in `CLAUDE.md`, and the behavior,
+edge cases and reasoning of each feature are in `docs/design-notes/`. This document is
+the structural map. When in doubt, this doc tells you *where*, the design notes tell
+you *why it works the way it does*.
 
 Contents:
 
@@ -158,7 +158,7 @@ them share):
 | `api-config-shared-ui.js` | `patchApiConfigDraft`/`patchApiConfigSource`, the parameter-placeholder picker |
 
 These DOM-free `<feature>.js` modules are also exactly the ones opted into
-JSDoc type checking (Issue #238, see CLAUDE.md's own entry on this) — a
+JSDoc type checking (Issue #238; the design notes in `docs/design-notes/extension.md` cover it) — a
 leading `// @ts-check` pragma plus `extension/tsconfig.json`
 (`npm run typecheck`, wired into CI) against two ambient namespaces under
 `extension/types/`: `SFWire` (`companion-ir.d.ts`, a hand-kept mirror of the
@@ -240,7 +240,7 @@ dimension — see §3.1 for the full class picture.
 For each feature: a plain-language explanation of what it does (for anyone
 orienting themselves, not just implementers), followed by the exact file set that
 implements it. For behavioral detail (edge cases, validation rules, why a design
-choice was made), see the matching section of `CLAUDE.md` — the file lists below
+choice was made), see the matching section of `docs/design-notes/` — the file lists below
 are deliberately terse.
 
 ### 2.1 Flat field scraping (original v1 mode)
@@ -633,7 +633,7 @@ plain-language explanation and the three situations (not installed / installed b
 not running / another address or port) with the concrete next step for the user's
 OS — in full until a companion has answered once on this browser
 (`chrome.storage.local` `companionReached`), as a one-line hint afterwards — plus a
-"Why can't it connect?" help popover. See CLAUDE.md for the behavior details.
+"Why can't it connect?" help popover. See docs/design-notes/extension.md for the behavior details.
 
 - Extension: `popup/companion-guidance.js` (OS detection, installer commands/paths,
   `likelySituations`, the persisted flag), `popup/companion-guidance-ui.js`
@@ -650,7 +650,7 @@ OS — in full until a companion has answered once on this browser
 `help.fieldType.container|flat`) next to the first decisions of a scrape, a match-count
 check after a container pick against the type chosen beforehand, a clickable
 "(single)"/"(repeating)" suffix in the container tree, and a "try the Browser engine"
-suggestion when a Static trial run returns no data. See CLAUDE.md for details.
+suggestion when a Static trial run returns no data. See docs/design-notes/extension.md for details.
 
 - Extension: `popup/choice-guidance.js` (pure: `containerCountAdvice`,
   `shouldSuggestBrowserEngine`), `popup/toast.js` (`showMatchCountToast`),
@@ -666,7 +666,7 @@ suggestion when a Static trial run returns no data. See CLAUDE.md for details.
 A failed Generate shows a translated title and hint (what happened, what to try)
 instead of the companion's or script's raw text; the raw text stays behind a
 "Details" disclosure (copyable) and is what "Report bug" sends. Recognised by pattern
-in `popup/error-messages.js`; unknown errors keep the old wording. See CLAUDE.md.
+in `popup/error-messages.js`; unknown errors keep the old wording. See docs/design-notes/extension.md.
 
 - Extension: `popup/error-messages.js` (pure: `classifyError`, `describeError`),
   `popup/toast.js` (`showErrorToast`, `hideToast`, `wireErrorToastEvents`; sticky toast
@@ -681,7 +681,7 @@ Every input that takes the *name* of an environment variable (change detection,
 proxy, login Fill actions, custom request headers, API headers, the API auth
 bootstrap, an API discovery Fill action) shares one explanation popover
 (`help.envVar.what`), one inline name validation and one pre-flight check in
-`generate()`. See CLAUDE.md for the conventions (`data-env-var`, `envVarNoteHtml()`).
+`generate()`. See docs/design-notes/extension.md for the conventions (`data-env-var`, `envVarNoteHtml()`).
 
 - Extension: `popup/env-var.js` (pure: `validateEnvVarName`, `findInvalidEnvVarNames`),
   `popup/env-var-ui.js` (`envVarNoteHtml`, `applyEnvVarValidation`,
@@ -698,7 +698,7 @@ The "Regex extract" transform gets a **Pattern helper** (recipes: first number, 
 text after/before/between, text inside brackets — the user's text escaped, only
 constructs .NET and Python read the same), and "Convert to date" pre-selects the format
 guessed from the picked value. The recipe panel keeps its state in its own DOM; the
-transform objects are unchanged. See CLAUDE.md for the details.
+transform objects are unchanged. See docs/design-notes/extension.md for the details.
 
 - Extension: `popup/transform-helpers.js` (pure: `buildRecipe`, `previewRecipe`,
   `inferDateFormat`), `popup/transform-helpers-ui.js`, `popup/field-transforms-ui.js`
@@ -716,7 +716,7 @@ Labels, help and a preset for the Monitoring section: a one-sentence intro, a
 "Warn me" / "Stop the run" severity wording with its own popover (no wire change), one
 popover per hardening check, thresholds written as sentences, the rare blocking options
 under an "Advanced" disclosure, and a one-click "Recommended checks" preset. See
-CLAUDE.md for the details.
+docs/design-notes/extension.md for the details.
 
 - Extension: `popup/hardening-presets.js` (pure: `applyRecommendedHardening`),
   `popup/settings-panel-ui.js` (button wiring, null-rate row sentences),
@@ -729,7 +729,7 @@ CLAUDE.md for the details.
 
 `docs/user/de/*.md` is the German version of the user documentation (same file names, same heading
 structure), built next to the English pages; "Learn more" opens the German page when the panel is
-German. No wire-format or companion change. See CLAUDE.md for the details.
+German. No wire-format or companion change. See docs/design-notes/extension.md for the details.
 
 - Build: `extension/docs-build.js` (both trees, `anchors.json`, source stamps, `translationStatus`),
   `extension/docs-template/docs.css` (language switch), `install/build-bundle.sh` (both Markdown trees)
@@ -744,7 +744,7 @@ German. No wire-format or companion change. See CLAUDE.md for the details.
 
 Each element pick carries a `pickId`; the service worker's fallback write stores it, the panel records the
 pick it handled, and a restore ignores a stored selector of an already handled pick, so a late write can
-no longer reopen a field dialog after a reload. No wire-format or companion change. See CLAUDE.md.
+no longer reopen a field dialog after a reload. No wire-format or companion change. See docs/design-notes/extension.md.
 
 - Extension: `content/content-script.js` (`pickId`), `background/service-worker.js` (`pendingPickId`),
   `popup/message-router.js` + `popup/session-restore.js` (`markPickHandled`, `isLeftoverOfHandledPick`)
@@ -755,7 +755,7 @@ no longer reopen a field dialog after a reload. No wire-format or companion chan
 
 `docs/user/*.md` is built into HTML pages inside the extension (`dist/docs/`), the panel's
 long hints became one line each, and "Learn more" links open the bundled page offline. No
-wire-format or companion change. See CLAUDE.md for the details.
+wire-format or companion change. See docs/design-notes/extension.md for the details.
 
 - Build: `extension/docs-build.js` (markdown → HTML, link/anchor check, `slugify`),
   `extension/docs-template/docs.css`, `extension/build.js` (`copyDocs`), `install/build-bundle.sh`
@@ -772,7 +772,7 @@ Plainer names for the jargon terms (output layout, safety checks, "Alerts & safe
 skip-if-unchanged, "Collect from the page", "Remove duplicates"), rarely used options under
 remembered "Advanced" groups that open themselves when the option is in use, a 1-based
 "Part" in Split field, and a glossary on the Settings screen. Labels and grouping only: no
-wire-format, companion or generated-script change. See CLAUDE.md for the details.
+wire-format, companion or generated-script change. See docs/design-notes/extension.md for the details.
 
 - Extension: `i18n/{de,en,es}.json` (renamed values; keys unchanged), `popup/advanced-defaults.js`
   (pure: does a retry code list / dedup retention differ from its default?),
@@ -788,7 +788,7 @@ wire-format, companion or generated-script change. See CLAUDE.md for the details
 paths, the cursor's body field, the bootstrap token path), "?" popovers for URL parts,
 value sources and the body, and the rarely needed options (auth bootstrap, cursor and
 Link pagination, browser discovery, value type) under "Advanced". No wire-format or
-companion change. See CLAUDE.md for the details.
+companion change. See docs/design-notes/extension.md for the details.
 
 - Extension: `popup/json-path-picker.js` (pure tree model + path derivation),
   `popup/json-path-picker-ui.js` (state-driven panel, loading, wiring),
@@ -806,7 +806,7 @@ A page-number URL template proposed from a clicked "next"/"page 2" link or a sta
 that already says page 1, the typed "next" selector and the whole "Discover start URLs"
 option under "Advanced", and "?" popovers for the pattern and the max-pages limit. The
 companion's page-number template now needs only `{page}` for a single start page. See
-CLAUDE.md for the details.
+docs/design-notes/extension.md for the details.
 
 - Extension: `popup/pagination-template.js` (pure derivation), `popup/pagination-ui.js`
   (banner, pickers, Advanced placement), `popup/message-router.js`/`session-restore.js`
@@ -823,7 +823,7 @@ CLAUDE.md for the details.
 A "Login form (4 steps)" starter, role-named cards, times in seconds, an overview and
 "Max. rounds" popover, and the rarely used options under "Advanced". UI-only: the
 wire format and generated scripts are unchanged (a starter action's `role` never
-leaves the draft). See CLAUDE.md for the details.
+leaves the draft). See docs/design-notes/extension.md for the details.
 
 - Extension: `popup/login-flow.js` (pure: `addLoginFlow`, `msToSecondsText`,
   `secondsTextToMs`), `popup/browser-actions-ui.js` (cards, starter wiring),
@@ -839,7 +839,7 @@ leaves the draft). See CLAUDE.md for the details.
 Referer, User-Agent, Cookie, Authorization, X-Api-Key, Other) instead of an empty
 free-text row. Secrets default to an environment variable, a recognised header shows a
 plain-language description, and a credential-looking header kept as a fixed value gets a
-warning with a one-click switch. No wire-format or companion change. See CLAUDE.md for
+warning with a one-click switch. No wire-format or companion change. See docs/design-notes/extension.md for
 the details.
 
 - Extension: `popup/request-header-presets.js` (pure: presets, `isSecretHeaderName`,
@@ -866,7 +866,7 @@ is tied to browser language and can't be switched from inside the extension.
 Reusable UI building blocks for explaining an option *at the option* (a short
 "?" popover with an optional example, text under `help.<area>.<field>` in the
 three dictionaries) and for tucking rarely needed options into a collapsed,
-per-section-remembered `<details>`. See CLAUDE.md (Browser Extension section)
+per-section-remembered `<details>`. See `docs/design-notes/extension.md`
 for the conventions and the sync test that enforces them.
 
 - Extension: `popup/help-popover.js` (pure) + `popup/help-popover-ui.js`
@@ -1061,7 +1061,7 @@ shapes (flat/container/API) since none of them share a common leaf type.
   `PythonApiConfigLiteral`, and flat mode's own `TRANSFORMS` dict)
 - All six leaf templates (§2.6/§2.3/§2.4's own template list) carry the same
   hand-duplicated `_apply_transforms`/`_to_number` runtime helper pair — see
-  the Python Templates section of `CLAUDE.md` for the `_to_number` heuristic's
+  the `docs/design-notes/templates.md` for the `_to_number` heuristic's
   documented ambiguity.
 - **Live preview** (Issue #143): a hint below the transform list in
   `modal-field-name`/`modal-field-extended` shows what the chain actually
@@ -1708,7 +1708,7 @@ register autostart. The extension is still loaded manually ("Load unpacked").
 - Companion: `CompanionUserSettings.cs`, wired in `Program.cs`
 - Workflow: `.github/workflows/release-bundles.yml`
 - Tests: `CompanionUserSettingsTests.cs`; the Linux installer was verified by
-  hand end to end (see CLAUDE.md), Windows/macOS/systemd paths are untested
+  hand end to end (see `docs/design-notes/companion.md`), Windows/macOS/systemd paths are untested
 
 ### 2.21af MySQL storage backend (Issue #277)
 

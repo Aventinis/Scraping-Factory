@@ -229,7 +229,8 @@ as a script that might not work.
 For the full system diagrams, a feature-to-file index, and the class/wire-format
 relationships between the extension and the companion, see
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). For the reasoning behind
-individual design decisions and edge cases, see [`CLAUDE.md`](CLAUDE.md).
+individual design decisions and edge cases, see [`CLAUDE.md`](CLAUDE.md) (the rules and
+architecture decisions) and [`docs/design-notes/`](docs/design-notes/) (per feature).
 
 ## Features
 
