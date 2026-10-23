@@ -95,40 +95,67 @@ function copyStaticFiles(outdir) {
 // the side panel opens a bundled page and works offline.
 const DOCS_DIR = path.join(ROOT, '..', 'docs', 'user');
 
-async function copyDocs(outdir) {
-  if (!fs.existsSync(DOCS_DIR)) {
-    console.warn(`No ${DOCS_DIR} — the bundled documentation is skipped.`);
+async function copyDocs(outdir, docsDir = DOCS_DIR) {
+  if (!fs.existsSync(docsDir)) {
+    console.warn(`No ${docsDir} — the bundled documentation is skipped.`);
     return;
   }
-  const pages = await buildDocs({ docsDir: DOCS_DIR, outdir });
+  const pages = await buildDocs({ docsDir, outdir });
   console.log(`Built ${pages.length} documentation pages into ${path.join(outdir, 'docs')}`);
 }
 
 function parseArgs(argv) {
-  const args = { watch: false, channel: 'development', outdir: DEFAULT_DIST };
+  const args = { watch: false, channel: 'development', outdir: DEFAULT_DIST, docsDir: DOCS_DIR };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--watch') args.watch = true;
     else if (argv[i] === '--channel') args.channel = argv[++i];
     else if (argv[i] === '--outdir') args.outdir = path.resolve(argv[++i]);
+    else if (argv[i] === '--docs-dir') args.docsDir = path.resolve(argv[++i]);
     else throw new Error(`Unknown argument "${argv[i]}"`);
   }
   if (!CHANNELS.includes(args.channel)) throw new Error(`--channel must be one of: ${CHANNELS.join(', ')}`);
   return args;
 }
 
+// A one-off build is assembled next to the target and swapped in only when every
+// part succeeded. Building straight into dist/ used to leave a half-written
+// extension behind when a later step failed (for instance the documentation build
+// without `npm install`): the manifest and popup.html were there, popup.js was
+// not, and the side panel just kept loading.
+async function buildOnce(args) {
+  const staging = `${args.outdir}.building`;
+  const previous = `${args.outdir}.previous`;
+  fs.rmSync(staging, { recursive: true, force: true });
+  try {
+    copyStaticFiles(staging);
+    await esbuild.build(buildOptions({ ...args, outdir: staging }));
+    await copyDocs(staging, args.docsDir);
+  } catch (err) {
+    fs.rmSync(staging, { recursive: true, force: true });
+    console.error(`\nBuild failed — ${fs.existsSync(args.outdir) ? 'the previous build in ' + args.outdir + ' was left untouched' : 'nothing was written'}.`);
+    throw err;
+  }
+  fs.rmSync(previous, { recursive: true, force: true });
+  if (fs.existsSync(args.outdir)) fs.renameSync(args.outdir, previous);
+  fs.renameSync(staging, args.outdir);
+  fs.rmSync(previous, { recursive: true, force: true });
+  console.log(`Built the ${args.channel} extension into ${args.outdir}`);
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   verifyChannel(args.channel);
-  fs.rmSync(args.outdir, { recursive: true, force: true });
-  copyStaticFiles(args.outdir);
-  await copyDocs(args.outdir);
-  const options = buildOptions(args);
 
   if (!args.watch) {
-    await esbuild.build(options);
-    console.log(`Built the ${args.channel} extension into ${args.outdir}`);
+    await buildOnce(args);
     return;
   }
+
+  fs.rmSync(args.outdir, { recursive: true, force: true });
+  copyStaticFiles(args.outdir);
+  // In watch mode a documentation problem must not take the extension down with it.
+  await copyDocs(args.outdir, args.docsDir).catch((err) => console.error(err.message));
+  const options = buildOptions(args);
 
   const context = await esbuild.context(options);
   await context.watch();
@@ -140,12 +167,12 @@ async function main() {
     });
   }
   // The documentation pages: rebuilt (debounced) whenever a page or image changes.
-  if (fs.existsSync(DOCS_DIR)) {
+  if (fs.existsSync(args.docsDir)) {
     let timer = null;
-    fs.watch(DOCS_DIR, { recursive: true }, () => {
+    fs.watch(args.docsDir, { recursive: true }, () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
-        copyDocs(args.outdir).catch((err) => console.error(err.message));
+        copyDocs(args.outdir, args.docsDir).catch((err) => console.error(err.message));
       }, 200);
     });
   }

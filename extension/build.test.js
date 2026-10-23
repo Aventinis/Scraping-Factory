@@ -125,3 +125,61 @@ describe('build.js arguments', () => {
     }
   });
 });
+
+// A failed build must never leave a half-written extension behind. It used to:
+// without `npm install` the documentation step threw after dist/ had been wiped,
+// the side panel found popup.html but no popup.js and kept loading forever.
+describe('a failing build', () => {
+  const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'sf-build-fail-'));
+
+  function failingBuild(outdir, docsDir) {
+    try {
+      runBuild(outdir, '--docs-dir', docsDir);
+    } catch (err) {
+      return err;
+    }
+    throw new Error('the build should have failed');
+  }
+
+  test('keeps the previous build untouched and leaves no staging folder', () => {
+    const root = tmp();
+    const outdir = path.join(root, 'dist');
+    fs.mkdirSync(outdir);
+    fs.writeFileSync(path.join(outdir, 'previous-build.txt'), 'still here');
+    const brokenDocs = path.join(root, 'docs');
+    fs.mkdirSync(brokenDocs);
+    fs.writeFileSync(path.join(brokenDocs, 'README.md'), '# Home\n\n[gone](nope.md)\n');
+
+    const err = failingBuild(outdir, brokenDocs);
+    expect(String(err.stderr)).toContain('nope.md');
+    expect(String(err.stderr)).toContain('previous build');
+    expect(fs.readFileSync(path.join(outdir, 'previous-build.txt'), 'utf8')).toBe('still here');
+    expect(fs.existsSync(path.join(outdir, 'popup/popup.js'))).toBe(false); // not half-replaced
+    expect(fs.existsSync(`${outdir}.building`)).toBe(false);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  test('a failing first build writes nothing at all', () => {
+    const root = tmp();
+    const outdir = path.join(root, 'dist');
+    const brokenDocs = path.join(root, 'docs');
+    fs.mkdirSync(brokenDocs);
+    fs.writeFileSync(path.join(brokenDocs, 'README.md'), '# Home\n\n![x](images/missing.png)\n');
+    failingBuild(outdir, brokenDocs);
+    expect(fs.existsSync(outdir)).toBe(false);
+    expect(fs.existsSync(`${outdir}.building`)).toBe(false);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  test('a successful build leaves neither a staging nor a "previous" folder', () => {
+    const root = tmp();
+    const outdir = path.join(root, 'dist');
+    runBuild(outdir);
+    runBuild(outdir); // the second one replaces the first
+    expect(fs.existsSync(path.join(outdir, 'popup/popup.js'))).toBe(true);
+    expect(fs.existsSync(path.join(outdir, 'docs/README.html'))).toBe(true);
+    expect(fs.existsSync(`${outdir}.building`)).toBe(false);
+    expect(fs.existsSync(`${outdir}.previous`)).toBe(false);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+});

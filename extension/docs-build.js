@@ -93,7 +93,15 @@ ${body}
 // marked ships as an ES module only, hence the dynamic import (works on every Node
 // the build supports, and from this CommonJS file).
 async function buildDocs({ docsDir: docsDirArg, outdir }) {
-  const { Marked } = await import('marked');
+  let Marked;
+  try {
+    ({ Marked } = await import('marked'));
+  } catch (err) {
+    if (err && err.code === 'ERR_MODULE_NOT_FOUND') {
+      throw new Error('The documentation build needs the "marked" package, which is not installed. Run `npm install` in extension/ and build again.');
+    }
+    throw err;
+  }
   const docsDir = path.resolve(docsDirArg);
   const pages = listDocPages(docsDir).map((p) => {
     const markdown = fs.readFileSync(p.file, 'utf8');
