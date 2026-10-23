@@ -4,19 +4,14 @@ using ScrapingFactory.Companion.Auth;
 
 namespace ScrapingFactory.Companion.Storage;
 
-// Issue #277: which backend holds the saved configurations/outputs, Output
-// Blueprints and transform presets (the three interfaces from Issue #276).
+// Which backend holds saved configurations/outputs, Output Blueprints and transform presets:
 //
 //   Companion:Storage:Provider                  "Sqlite" (default) | "MySql"
 //   Companion:Storage:MySql:ConnectionString    required for "MySql"
 //
-// Set in appsettings.json, the per-user companion.settings.json (Issue #346),
-// or as environment variables (Companion__Storage__Provider=MySql,
-// Companion__Storage__MySql__ConnectionString=...) — the usual precedence.
-// "Sqlite" keeps today's behavior exactly (one local file per store, see the
-// *DbPath settings). With "MySql" all three stores live in the one configured
-// database (tables are created on first use, later columns are added by
-// idempotent migrations).
+// Set via the usual configuration chain (appsettings.json, companion.settings.json, environment variables such as
+// Companion__Storage__Provider). "Sqlite" keeps one local file per store; with "MySql" all three stores share the one
+// database (tables are created on first use, later columns by idempotent migrations).
 public static class StorageOptions
 {
     public const string ProviderKey = "Companion:Storage:Provider";
@@ -34,10 +29,8 @@ public static class StorageOptions
         throw new InvalidOperationException($"Unknown storage provider '{configured}' in {ProviderKey} — use \"Sqlite\" or \"MySql\".");
     }
 
-    // Normalized through MySqlConnectionStringBuilder so a malformed string
-    // fails at startup with the driver's own message. UseAffectedRows=false
-    // makes UPDATE report *matched* rows (the stores' "false = no such id"
-    // contract), not only changed ones.
+    // Normalized through MySqlConnectionStringBuilder so a malformed string fails at startup. UseAffectedRows=false makes
+    // UPDATE report matched rows (the stores' "false = no such id" contract).
     public static string BuildMySqlConnectionString(IConfiguration configuration)
     {
         var raw = configuration[MySqlConnectionStringKey];
@@ -47,11 +40,8 @@ public static class StorageOptions
         return builder.ConnectionString;
     }
 
-    // Called once at startup — validates the configuration without opening a
-    // connection (an unreachable database then only fails the first request,
-    // see the MySqlException handler in Program.cs), so a typo in the
-    // provider name or a missing connection string stops the companion with
-    // a clear message instead of surfacing later.
+    // Called once at startup: validates without connecting (an unreachable database only fails the first request), so a
+    // typo or a missing connection string stops the companion with a clear message.
     public static void Validate(IConfiguration configuration)
     {
         if (ResolveProvider(configuration) == Provider.MySql)

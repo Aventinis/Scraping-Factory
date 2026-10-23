@@ -2,16 +2,10 @@ using Microsoft.Extensions.Configuration;
 
 namespace ScrapingFactory.Companion.Auth;
 
-// Issue #278: authentication is opt-in. Companion:Auth:Enabled (default false —
-// a purely local, single-user companion keeps today's "no login" behavior) set
-// in appsettings.json, the per-user settings file (the installer's
-// --enable-auth), or Companion__Auth__Enabled=true.
-//
-// Issue #352: Companion:Auth:Registration (Disabled by default, or Open) lets
-// people create their own account from the extension (/auth/register); it only
-// makes sense with authentication on, and — because it handles passwords — the
-// companion refuses to listen beyond the local machine without TLS (see
-// CompanionTls.Validate).
+// Authentication is opt-in: Companion:Auth:Enabled (default false; a local single-user companion needs no login).
+// Companion:Auth:Registration (Disabled, or Open) lets people create their own account from the extension; it needs
+// authentication, and because it handles passwords the companion refuses to listen beyond the local machine without
+// TLS (CompanionTls.Validate).
 public static class AuthOptions
 {
     public const string EnabledKey = "Companion:Auth:Enabled";
