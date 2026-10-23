@@ -1,15 +1,6 @@
-// ── Inbound content-script/service-worker message dispatch ──────────────────
-// Extracted from popup.js (see CLAUDE.md's "Popup module boundaries"
-// architecture decision) — the single chrome.runtime.onMessage listener that
-// handles every message type content-script.js/service-worker.js send back
-// to the popup (selection results, DOM tree data, preview/API-capture
-// results, ...) was the last large, self-contained chunk of popup.js's
-// wireEvents() not yet claimed by any feature module. It's genuinely
-// cross-cutting — a single dispatch table touching container/browser-action/
-// pagination/DOM-tree/preview/API-capture state alike — so it gets its own
-// module rather than joining any one of those feature areas specifically.
-// Takes a `bridge` object (same convention as every other extracted module)
-// instead of closing over popup.js's own module-level state.
+// ── Inbound content-script / service-worker message dispatch ──
+// The single chrome.runtime.onMessage listener for everything the content script and service worker send back (selection
+// results, DOM tree data, preview / API-capture results, ...). Cross-cutting, so its own module. Takes a `bridge`.
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');
 const { t } = require('../i18n/i18n');
@@ -35,18 +26,9 @@ function wireMessageListener(bridge) {
         pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', apiSearchTarget: null,
         pendingApiDiscoveryPartId: null, pendingApiDiscoveryActionIndex: null, pendingApiDiscoveryActionField: 'selector',
       });
-      // Issue #137 follow-up: content-script.js's retryScopeSelector tags
-      // its own "retried and still nothing" case with unavailableKind —
-      // distinct from the other SELECTION_UNAVAILABLE sender (service-
-      // worker.js, when chrome.tabs.sendMessage itself fails — no content
-      // script running at all). A scope selector legitimately, repeatedly
-      // failing to resolve can have entirely page-specific causes outside
-      // the extension's control (confirmed via a real report: a class only
-      // present while the element is actually hovered, gone the instant the
-      // cursor leaves the page for the side panel) — not a plugin
-      // malfunction, so it's shown as a softer warning with no "Report bug"
-      // button (no context passed to showToast) instead of the harder error
-      // styling the other, genuinely unexpected case still gets.
+      // retryScopeSelector tags its "retried and still nothing" case with unavailableKind, unlike the service worker's other
+      // SELECTION_UNAVAILABLE (no content script at all). A scope selector can fail repeatedly for page-specific reasons outside our
+      // control (e.g. a class present only while hovered), so it is a softer warning without "Report bug".
       if (message.unavailableKind === 'scopeSelectorNotFound') {
         showToast(t('toast.scopeSelectorNotFound'), null, 'warn');
       } else {
@@ -74,39 +56,22 @@ function wireMessageListener(bridge) {
       }
       // Clear the storage entry the service worker wrote — we have it now.
       chrome.storage.session.remove('pendingSelector');
-      // The tracked _state.url only ever gets set once, at panel-load/
-      // companion-connection time (checkCompanion) — there's no
-      // chrome.tabs.onUpdated listener anywhere in this extension, so it
-      // silently goes stale if the same tab navigates to a different page
-      // while the panel stays open. The just-picked element's own page
-      // (message.url) is unambiguous ground truth for "what page the user
-      // is actually working with now" — self-correct rather than letting
-      // an eventual /generate request run against the wrong page with a
-      // confusingly unrelated-looking "no data" failure.
+      // _state.url is set once, at panel load; with no chrome.tabs.onUpdated listener it goes stale if the tab navigates while the panel
+      // stays open. The picked element's own page (message.url) is ground truth: self-correct, instead of a /generate against the wrong
+      // page ending in a confusing "no data".
       if (typeof message.url === 'string' && message.url && message.url !== state.url) {
         log('ELEMENT_SELECTED page changed since last sync', { from: state.url, to: message.url });
-        // Issue-driven follow-up: the default-script-name preference — see
-        // computeScriptFileNamePatch's own doc comment for the
-        // 'hostname'-vs-'fixed' mode rule. A fresh site detected mid-
-        // session (this stale-URL self-correction) is treated the same
-        // as checkCompanion()'s own initial site detection.
+        // The default-script-name preference applies here too: a new site mid-session counts like the initial detection.
         const scriptFileNamePatch = computeScriptFileNamePatch(state.scriptFileName, message.url, getGlobalSettings());
         bridge.setState(STATES.SELECTING, { url: message.url, ...scriptFileNamePatch });
         showToast(t('toast.trackedUrlUpdated', { url: message.url }), null, 'info');
       }
       const framePath = message.framePath || null;
       const matchCount = typeof message.matchCount === 'number' ? message.matchCount : null;
-      // Issue #182: Blocks mode reuses this exact same "new top-level
-      // group" flow for its own draft whenever the draft's own shape is
-      // 'group' (see blocks-config-ui.js's switchBlocksDraftShape) —
-      // state.groups is the draft's own content in that case, same as
-      // state.mode === 'container' already is for container mode itself.
+      // Blocks mode reuses this flow when its draft shape is 'group' (state.groups is then the draft).
       if ((state.mode === 'container' || (state.mode === 'blocks' && state.blocksDraftShape === 'group')) && state.selectionKind === 'container') {
-        // Name/type were already collected by modal-container-new — insert
-        // the new group node straight away, no further modal needed. There's
-        // no modal left open at this point to show the match count in (Issue
-        // #85), so it's surfaced as a toast instead — read the name before
-        // setState() clears pendingNewContainer.
+        // Name and type came from modal-container-new, so the node is inserted straight away; the match count becomes a toast (read the
+        // name before setState() clears pendingNewContainer).
         const containerName = state.pendingNewContainer.name;
         const containerRepeating = state.pendingNewContainer.repeating;
         const node = buildGroupNode(state.pendingNewContainer.name, message.selector, state.pendingNewContainer.repeating, framePath);
@@ -116,16 +81,8 @@ function wireMessageListener(bridge) {
         });
         showMatchCountToast(containerName, matchCount, containerRepeating);
       } else if (state.selectionKind === 'browserAction' && state.pendingBrowserActionIndex !== null) {
-        // The action card already exists (kind chosen when it was added via
-        // btn-add-action-*) — write the selector straight into the field
-        // the pick button was for (pendingBrowserActionField — always
-        // 'selector' except for a ScrollStep's two optional selectors), no
-        // naming modal needed, same shape as the container branch above.
-        // framePath is written unconditionally (even to null) rather than
-        // merged: the backend models exactly one FramePath per ScrollStep,
-        // shared by both ContainerSelector and LoadMoreButtonSelector (see
-        // IR/BrowserAction.cs), so re-picking either selector re-records
-        // which frame the *step* now targets.
+        // The action card exists already: write the selector into the field the pick button was for (pendingBrowserActionField), no modal.
+        // framePath is written unconditionally: a ScrollStep has one FramePath shared by both selectors, so re-picking either re-records it.
         bridge.setState(STATES.IDLE, {
           browserActions: updateBrowserAction(state.browserActions, state.pendingBrowserActionIndex, {
             [state.pendingBrowserActionField]: message.selector,
@@ -134,12 +91,7 @@ function wireMessageListener(bridge) {
           selectionKind: null, pendingBrowserActionIndex: null, pendingBrowserActionField: 'selector', pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
         });
       } else if (state.selectionKind === 'apiDiscoveryAction' && state.pendingApiDiscoveryPartId !== null && state.pendingApiDiscoveryActionIndex !== null) {
-        // Issue #216: same "write straight into the field the pick button
-        // was for, no naming modal" shape as the browserAction branch
-        // above, just nested one level deeper (one specific
-        // BrowserDiscoverySource's own action list, inside
-        // apiConfigDraft.parameterSources) and returning to API_CONFIG
-        // (where this picker lives) instead of IDLE.
+        // Same as the browserAction branch, one level deeper (a BrowserDiscoverySource's action list) and back to API_CONFIG.
         const partId = state.pendingApiDiscoveryPartId;
         const draft = state.apiConfigDraft;
         const source = draft.parameterSources[partId];
@@ -170,25 +122,15 @@ function wireMessageListener(bridge) {
           selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
         });
       } else if (state.selectionKind === 'pagination') {
-        // Issue #174 follow-up: lets a non-developer pick the "next page"
-        // link by clicking it instead of having to know/type a CSS
-        // selector — same "write straight into the one field, no naming
-        // modal needed" shape as the browserAction branch above, just with
-        // no index (there's only ever one nextLinkSelector).
+        // Picks the "next page" link by clicking it; writes the one nextLinkSelector field, no modal.
         bridge.setState(STATES.IDLE, {
           // Issue #405: the clicked link's own address feeds the page-number proposal.
           pagination: { ...state.pagination, nextLinkSelector: message.selector, linkHref: resolveLinkHref(message.attributes?.href || '', message.url || state.url || '') },
           selectionKind: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
         });
       } else if (state.selectionKind === 'discoveredUrls') {
-        // Issue #218 follow-up: lets a non-developer pick a navigation/
-        // listing link by clicking it, writing both the clicked page's own
-        // URL (message.url — unambiguous ground truth for "which page has
-        // this navigation", same source the stale-tracked-URL
-        // self-correction above already uses) and the selector at once —
-        // avoidId (set when this selection round was started) is what
-        // keeps the selector generalized across every sibling link rather
-        // than collapsing to a single #id-based match.
+        // Picks a navigation link by clicking: writes the clicked page's URL (message.url) and the selector; avoidId keeps the selector
+        // generalized across sibling links.
         bridge.setState(STATES.IDLE, {
           discoveredUrls: {
             ...state.discoveredUrls,
@@ -243,12 +185,7 @@ function wireMessageListener(bridge) {
       bridge.patchState({ apiCaptureActive: false, apiCaptureCount: 0 });
       showToast(t('toast.captureUnavailable'), 'Network recording');
     }
-    // Issue #136: EMBEDDED_JSON_CANDIDATES is content-script.js's
-    // findEmbeddedJsonCandidates counterpart to API_CANDIDATES — handled
-    // identically here, since dispatch is entirely keyed off the shape of
-    // state.apiSearchTarget (set by either startApiFieldSearch/
-    // startEmbeddedJsonFieldSearch for 'field', or startApiTreeFieldSearch
-    // for the tree-extension case), not off which message type arrived.
+    // EMBEDDED_JSON_CANDIDATES is handled like API_CANDIDATES: dispatch depends on state.apiSearchTarget, not the message type.
     if ((message.type === 'API_CANDIDATES' || message.type === 'EMBEDDED_JSON_CANDIDATES') && state.apiSearchTarget) {
       log(`${message.type} received`, { target: message.target, count: message.candidates?.length, for: state.apiSearchTarget });
       chrome.storage.session.remove('pendingSelector');

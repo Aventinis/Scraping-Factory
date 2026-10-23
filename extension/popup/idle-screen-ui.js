@@ -1,12 +1,6 @@
-// ── Idle screen: mode switch + top-level chrome render/wiring ───────────────
-// Extracted from popup.js (see CLAUDE.md's "Popup module boundaries"
-// architecture decision) — the STATES.IDLE render block and its own
-// top-level widgets (mode toggle, robots.txt check, preview/API-capture
-// toggles, output-settings filename inputs) were the largest remaining
-// chunk of popup.js's render()/wireEvents() not yet claimed by any feature
-// module. Functions take a `bridge` object (same convention as every other
-// extracted module) instead of closing over popup.js's own module-level
-// state.
+// ── Idle screen: mode switch + top-level chrome render / wiring ──
+// The STATES.IDLE render block and its widgets (mode toggle, robots.txt check, preview / API-capture toggles, output-settings
+// filename inputs). Functions take a `bridge` instead of closing over popup.js state.
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');
 const { t } = require('../i18n/i18n');
@@ -34,30 +28,14 @@ const { getGlobalSettings } = require('../shared/global-settings');
 // for renderMatchCountHint (see CLAUDE.md).
 function show(id) { document.getElementById(id)?.classList.remove('hidden'); }
 
-// Strictly separate — switching modes clears the *other* modes' configs
-// rather than keeping all three around.
-// apiConfigDraft is cleared defensively alongside apiConfig when switching
-// *away* from api mode — unreachable in practice today (the mode buttons
-// only live on screen-idle, and a non-null apiConfigDraft means
-// screen-api-config is showing instead), but keeps this table's own
-// "switching modes clears the other modes' configuration" contract honest
-// regardless of that.
-// Issue #182: switching to/from 'blocks' also resets its own draft
-// (blocksDraftShape/Name/OutputFileName/EditingIndex) and its confirmed
-// list (blocks) — a half-built block or a list of blocks built against
-// *this* page has no meaning once the mode switches away to something
-// else entirely, the same "switching clears what doesn't belong to the
-// new mode" reasoning every other entry here already follows.
+// Modes are strictly separate: switching clears the other modes' configuration. apiConfigDraft is cleared defensively too
+// (unreachable today). Switching to or from 'blocks' also resets its draft and confirmed list: a half-built block means nothing
+// in another mode.
 const BLOCKS_DRAFT_RESET = {
   blocks: [], blocksDraftShape: 'flat', blocksDraftName: '', blocksDraftOutputFileName: '', blocksEditingIndex: null,
 };
 
-// Issue #191: a blueprint mapping's own source-field names only ever mean
-// something relative to the mode that built it — switching to ANY other
-// mode (even flat<->api, both of which could otherwise carry a mapping)
-// clears it the same "switching clears what doesn't belong to the new
-// mode" way BLOCKS_DRAFT_RESET does, so a mapping never silently survives
-// pointing at field names the new mode doesn't have.
+// A blueprint mapping's source-field names only mean something in the mode that built it, so every mode switch clears it.
 const OUTPUT_BLUEPRINT_RESET = {
   selectedOutputBlueprintId: '', selectedOutputBlueprintFieldNames: [], outputBlueprintMapping: {},
   // Issue #244: the tree-shaped mapping's own equivalent state, cleared
@@ -79,11 +57,8 @@ function switchMode(bridge, mode) {
   log('MODE_SWITCH', mode);
   bridge.stopPreviewIfActive();
   bridge.setState(state.current, { mode, ...MODE_SWITCH_CLEARS[mode] });
-  // Issue #239: fetched once on entering Combined mode rather than kept
-  // continuously in sync — the picker's own "add" list is naturally a
-  // little stale if a config is saved/deleted elsewhere while this popup
-  // stays open, the same tradeoff fetchSavedConfigs' own hostname-scoped
-  // list already accepts.
+  // Fetched once on entering Combined mode; the picker list may go slightly stale if a config is saved elsewhere meanwhile
+  // (same tradeoff as fetchSavedConfigs).
   if (mode === 'combined') fetchAllSavedConfigs(bridge);
 }
 
@@ -126,11 +101,8 @@ function renderIdleScreen(bridge) {
   document.getElementById('btn-mode-api')?.classList.toggle('active', state.mode === 'api');
   document.getElementById('btn-mode-combined')?.classList.toggle('active', state.mode === 'combined');
   document.getElementById('btn-mode-blocks')?.classList.toggle('active', state.mode === 'blocks');
-  // Issue #182: Blocks mode reuses the flat/container sections themselves
-  // as its own "block currently being edited" draft editor — shown
-  // whenever either the matching top-level mode is active, or Blocks mode
-  // is active and its own draft shape toggle currently picks that shape
-  // (see blocks-config-ui.js's switchBlocksDraftShape).
+  // Blocks mode reuses the flat / container sections as its block draft editor: shown when the matching top-level mode is active,
+  // or Blocks is active and its draft shape picks that shape.
   const isBlocksFlatDraft = state.mode === 'blocks' && state.blocksDraftShape === 'flat';
   const isBlocksGroupDraft = state.mode === 'blocks' && state.blocksDraftShape === 'group';
   document.getElementById('flat-mode-section')?.classList.toggle('hidden', !(state.mode === 'flat' || isBlocksFlatDraft));
@@ -138,18 +110,10 @@ function renderIdleScreen(bridge) {
   document.getElementById('api-mode-section')?.classList.toggle('hidden', state.mode !== 'api');
   document.getElementById('combined-mode-section')?.classList.toggle('hidden', state.mode !== 'combined');
   document.getElementById('blocks-mode-section')?.classList.toggle('hidden', state.mode !== 'blocks');
-  // Vorschau highlights matched DOM elements — meaningless for API-Mode
-  // and for Combined mode (no selectors/DOM of its own to highlight).
-  // Blocks mode keeps it available, highlighting whichever shape the
-  // current draft is (same fields/groups the flat/container sections
-  // above are already reused for).
+  // "Show preview" highlights DOM matches: meaningless for API and Combined mode; Blocks keeps it (the draft's fields / groups).
   document.getElementById('preview-section')?.classList.toggle('hidden', state.mode === 'api' || state.mode === 'combined');
-  // Issue #239: engine/browser-actions are entirely component-level for
-  // Combined mode — the companion rejects BrowserActions on the outer
-  // request outright (each component's own config carries its own).
-  // Blocks mode keeps this section, unlike Combined — Engine/
-  // BrowserActions are shared/outer-level for Blocks (see
-  // ScrapingConfig.Blocks on the companion side).
+  // Engine / browser actions are component-level in Combined mode (the companion rejects them on the outer request); Blocks keeps
+  // the section, since they are shared at the outer level there.
   document.getElementById('engine-section')?.classList.toggle('hidden', state.mode === 'combined');
 
   // Engine + browser actions (Issue #41/#42, Phase 5) — mode-independent,
@@ -167,12 +131,8 @@ function renderIdleScreen(bridge) {
 
   if (state.mode === 'blocks') renderBlocksSection(bridge);
 
-  // Issue #206 follow-up: the dedicated combine/split field buttons are
-  // deliberately excluded from Blocks mode's own (shared) flat draft —
-  // same "not designed for this yet, reject rather than silently no-op"
-  // precedent Download already established there (see companion-side
-  // Program.cs). Disabled (not hidden) below that count, since a real
-  // click-based field still needs to exist to combine/split first.
+  // The combine / split buttons are excluded from Blocks mode (its templates do not handle derived fields). Disabled, not hidden,
+  // below the needed field count: a real click-picked field has to exist first.
   const combineSplitActionsHidden = state.mode === 'blocks';
   document.getElementById('btn-add-combine-field')?.classList.toggle('hidden', combineSplitActionsHidden);
   document.getElementById('btn-add-split-field')?.classList.toggle('hidden', combineSplitActionsHidden);
@@ -186,18 +146,8 @@ function renderIdleScreen(bridge) {
     : state.mode === 'combined' ? (state.combinedComponents || []).length >= 2
     : state.mode === 'blocks' ? (state.blocks || []).length >= 2
     : state.fields.length > 0;
-  // Issue #191/#192: reachable for flat mode, container mode, and both of
-  // Api mode's shapes — hidden only for Combined/Blocks, which have no
-  // single field/tree config of their own to map at the outer level (see
-  // #output-blueprint-toggle-row's own toggle below). Container mode/
-  // Api's tree shape flatten into denormalized rows (Issue #192) rather
-  // than being renamed in place, so they're just as eligible as flat
-  // mode/Api's flat shape were already under Issue #191. A blueprint
-  // picked but not fully mapped blocks "Generate" specifically (the same
-  // "incomplete draft blocks the action it feeds" convention the
-  // per-field null-rate hardening check's own rows already establish) —
-  // it does NOT block Export/Save/Preview, which don't depend on the
-  // mapping being complete.
+  // Reachable for flat, container and both API shapes; hidden for Combined / Blocks, which have no single config to map. A
+  // blueprint picked but not fully mapped blocks "Generate" only (not Export / Save / Preview).
   const outputBlueprintEligibleMode = state.mode === 'flat' || state.mode === 'container' || state.mode === 'api';
   // Issue #244: a Tree-schema mapping additionally needs the "completeness"
   // check to walk the fetched target tree instead of the flat field list.
@@ -312,12 +262,8 @@ function renderIdleScreen(bridge) {
   // Issue #182: no single output file to name for Blocks mode — each
   // block names its own (see #blocks-mode-section's own input).
   document.getElementById('output-filename-row')?.classList.toggle('hidden', state.mode === 'blocks');
-  // Container mode always forces Xml server-side (absent Json); API mode
-  // forces Xml too, but only for its tree shape (Groups) — its flat shape
-  // forces Csv, same as flat mode itself. Issue #86's "Output as JSON"
-  // preference (now a global Settings-tab preference, not per-scrape
-  // state — see shared/global-settings.js) overrides whichever of those
-  // would otherwise apply.
+  // The default extension follows the shape (container Xml; API tree Xml, API flat Csv, like flat mode); the global JSON
+  // preference (shared/global-settings.js) overrides it.
   const isTreeShapedMode = state.mode === 'container'
     || (state.mode === 'api' && !!state.apiConfig?.groups?.length);
   const outputExtEl = document.getElementById('output-filename-ext');
@@ -344,11 +290,8 @@ function renderIdleScreen(bridge) {
   renderDedupSection(bridge);
   renderRequestHeadersSection(bridge);
 
-  // Issue #141: saved-configs-section is scoped to the current page's
-  // hostname (fetchSavedConfigs, kicked off from checkCompanion) —
-  // rendered every pass like the other IDLE-only lists above rather than
-  // only on state transitions, so an in-progress delete confirmation
-  // (savedConfigsPendingDeleteId) re-renders correctly too.
+  // The saved-configurations list is scoped to the page's hostname (fetchSavedConfigs) and rendered on every pass, so a pending
+  // delete confirmation re-renders correctly.
   renderSavedConfigsList(bridge);
 
   if (state.containerModalOpen) {

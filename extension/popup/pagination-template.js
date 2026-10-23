@@ -1,17 +1,9 @@
 // @ts-check
-// Page-number template derivation (Issue #405) — pure data/logic only, no DOM
-// (see pagination-ui.js for the rendering). The "Page-number URL" pagination
-// kind needs a template with a {page} placeholder (and, optionally, {url} for
-// the start page as-is); a non-developer can't be expected to know how a
-// site's page URLs look, so this proposes one from what the extension can
-// already see: the tracked page's URL and, when the user clicked one, the
-// href of a "next" / "page 2" link.
-//
-// Only ever a *proposal* — never applied by itself — and deliberately
-// conservative: anything ambiguous (zero-based counters, offsets, several
-// plausible parameters, a #fragment in the way) returns null instead of a
-// guess. {page} counts from 2 in the generated script (page 1 is always the
-// start URL exactly as given), so a proposal must make page 2 the second page.
+// Page-number template derivation: pure, no DOM (pagination-ui.js renders it). The "Page-number URL" kind needs a template with
+// {page} (and optionally {url}); this proposes one from the tracked page's URL and, when the user clicked one, the href of a
+// "next" / "page 2" link. Only ever a proposal, never applied by itself, and conservative: anything ambiguous (zero-based
+// counters, offsets, several plausible parameters, a #fragment) returns null. {page} counts from 2 in the script, so page 2 must
+// be the second page.
 
 // Query parameter names that, by convention, carry a page number.
 const PAGE_PARAM_NAMES = ['page', 'p', 'pg', 'paged', 'pagenum', 'pagenumber', 'pageno', 'seite', 'pagina', 'currentpage'];

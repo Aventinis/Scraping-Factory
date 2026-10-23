@@ -1,8 +1,6 @@
-// API mode: network recording and the candidate-search results (Issue #53/#136) —
-// the recording toggle, the click-based searches (recorded requests and the
-// page's embedded JSON), the candidate and recorded-requests lists, confirming a
-// candidate into an apiConfigDraft. Split out of api-config-ui.js (Issue #390);
-// behavior unchanged. See api-config-ui.js for the `bridge` convention.
+// API mode: network recording and the candidate-search results: the recording toggle, the click-based searches (recorded
+// requests, the page's embedded JSON), the candidate and recorded-request lists, and confirming a candidate into an
+// apiConfigDraft. See api-config-ui.js for the `bridge` convention.
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:ApiConfigUI');
 const { t } = require('../i18n/i18n');
@@ -11,12 +9,8 @@ const {
 } = require('./api-config');
 const { patchApiConfigDraft } = require('./api-config-shared-ui');
 
-// ids (Phase A5): the primary-field search panel (#api-candidates-target/
-// -list, the default) and the "add root group"/"add sub-field" search panel
-// (#api-tree-search-target/-list) render the exact same candidate shape —
-// only the confirm action differs (confirmApiFieldCandidate vs.
-// confirmApiTreeFieldCandidate, see wireApiCandidateListEvents), so this one
-// function serves both rather than duplicating the whole render.
+// ids: the primary-field search panel (#api-candidates-*) and the "add group / sub-field" panel (#api-tree-search-*) render the
+// same candidate shape and differ only in the confirm action, so one function serves both.
 function renderApiCandidates({ target, candidates }, ids = { targetEl: 'api-candidates-target', listEl: 'api-candidates-list' }) {
   const targetEl = document.getElementById(ids.targetEl);
   if (targetEl) targetEl.textContent = t('apiCandidates.searchedFor', { target });
@@ -36,10 +30,7 @@ function renderApiCandidates({ target, candidates }, ids = { targetEl: 'api-cand
   candidates.forEach((candidate, i) => {
     const li = document.createElement('li');
     li.className = 'api-candidate';
-    // Issue #136: an embedded-JSON candidate (content-script.js's
-    // findEmbeddedJsonCandidates) has no request/method at all — only the
-    // <script> tag selector it was found in — unlike a network candidate
-    // (findApiCandidates), which always has both.
+    // An embedded-JSON candidate has no request / method, only the selector of the <script> tag it was found in.
     const sourceLine = candidate.scriptSelector
       ? `<div class="api-candidate-url" title="${escapeHtml(candidate.scriptSelector)}">${escapeHtml(t('apiCandidates.embeddedJsonSourceLabel', { selector: candidate.scriptSelector }))}</div>`
       : `<div class="api-candidate-url" title="${escapeHtml(candidate.url)}">${escapeHtml(candidate.method)} ${escapeHtml(candidate.url)}</div>`;
@@ -52,14 +43,8 @@ function renderApiCandidates({ target, candidates }, ids = { targetEl: 'api-cand
       const siblingsEl = document.createElement('div');
       siblingsEl.className = 'api-candidate-siblings';
 
-      // Picking one-by-one is fine for a handful of siblings, but a record
-      // with many keys is exactly the "I want most of these" case a user
-      // asked to no longer have to click through individually — one button
-      // to pick all of them, toggling back to none on a second click
-      // (mirrors this file's other state-reflecting toggle buttons, e.g.
-      // preview show/hide). Picked state itself stays DOM-only (see the
-      // click handler in wireEvents), so this button's own label is updated
-      // directly on click rather than through a render() pass.
+      // One button picks all siblings (a second click none), for records with many keys. Picked state stays DOM-only, so the
+      // label is updated on click, not through a render pass.
       const selectAllBtn = document.createElement('button');
       selectAllBtn.type = 'button';
       selectAllBtn.className = 'api-sibling-select-all';
@@ -80,11 +65,8 @@ function renderApiCandidates({ target, candidates }, ids = { targetEl: 'api-cand
       li.appendChild(siblingsEl);
     }
 
-    // "Use" (Issue #53 Phase 5): only offered when the match sits
-    // inside an actual repeating record (candidate.itemsPath truthy,
-    // valuePath non-empty — see deriveItemsAndValuePath's doc comment for
-    // why an empty-but-non-null valuePath also isn't usable) — Api-Mode's
-    // whole model is "records extracted from a repeating array".
+    // "Use" is only offered when the match sits in a repeating record (itemsPath set, valuePath non-empty): API mode extracts
+    // records from a repeating array.
     if (candidate.itemsPath && candidate.valuePath) {
       const useRow = document.createElement('div');
       useRow.className = 'api-candidate-use';
@@ -103,13 +85,8 @@ function renderApiCandidates({ target, candidates }, ids = { targetEl: 'api-cand
   });
 }
 
-// API-mode follow-up: the raw recorded pool, for whoever wants to see it
-// directly instead of only going through a value-correlation search — e.g.
-// to sanity-check that a variable part's other values were actually
-// recorded before relying on the pool-derived autofill below. Reuses the
-// same .api-candidate/.api-candidate-url/.api-candidate-path row styling
-// renderApiCandidates already uses, just without the value/siblings/use
-// parts that only apply to a JSON-body match.
+// The raw recorded pool, to check that a variable part's other values were actually recorded before relying on the
+// autofill. Reuses the candidate row styling without the value / siblings / use parts.
 function renderApiEntriesList(entries) {
   const listEl = document.getElementById('api-entries-list');
   if (!listEl) return;
@@ -126,10 +103,7 @@ function renderApiEntriesList(entries) {
   entries.forEach((entry) => {
     const li = document.createElement('li');
     li.className = 'api-candidate';
-    // Request-body display (Issue #55 prep): a GET/HEAD entry never has one
-    // (requestBody stays '' and requestBodySkipped stays false, see
-    // api-capture.js's buildEntry), so this naturally shows nothing for them
-    // without needing an explicit method check here.
+    // A GET / HEAD entry has no request body, so nothing shows for it without a method check.
     let bodyHtml = '';
     if (entry.requestBodySkipped) {
       bodyHtml = `<div class="api-candidate-body api-candidate-body-skipped">${escapeHtml(t('idle.apiEntriesBodyNotCaptured'))}</div>`;
@@ -143,24 +117,12 @@ function renderApiEntriesList(entries) {
     listEl.appendChild(li);
   });
 }
-// ── API-Mode config screen (Issue #53 Phase 5) ──────────────────────────────
-// Renders the in-progress apiConfigDraft: confirmed fields (read-only),
-// URL path segments/query params with a fest/variabel toggle per part, one
-// source-configuration card per variable part, and the header-adoption
-// table. Structural choices (variable toggle, source kind, header
-// include/mode) are reactive — patched into apiConfigDraft and immediately
-// re-rendered — but committed via the `change` event, not `input`, so
-// typing in a text field doesn't trigger a re-render (and thus lose focus)
-// on every keystroke; only leaving the field (or picking a different
-// control) does. A rerender triggered by one control can still visually
-// reset another field's *not yet committed* typing elsewhere on the same
-// screen — an accepted rough edge given how many independent inputs this
-// screen has, not a bug in the reactive fields themselves.
-//
-// partId identifies a variable-part-in-progress independently of its
-// (user-editable, only committed on blur) name — "path:<index>" or
-// "query:<key>" — so apiConfigDraft.parameterSources can be keyed by
-// something stable while the display name is still being typed.
+// ── API config screen ──
+// Renders the in-progress apiConfigDraft: confirmed fields, URL parts with a fixed / variable toggle, one source card per
+// variable part, and the header-adoption table. Structural choices are patched into the draft and re-rendered on `change`
+// (not `input`), so typing does not lose focus on every keystroke; an uncommitted entry elsewhere on the screen can still
+// reset on a re-render (accepted). partId ("path:<index>" or "query:<key>") identifies a variable part independently of its
+// user-editable name, so parameterSources can be keyed by something stable.
 
 function startApiCapture(bridge) {
   log('API_CAPTURE_START');
@@ -180,13 +142,9 @@ function toggleApiCapture(bridge) {
   if (bridge.getState().apiCaptureActive) stopApiCapture(bridge); else startApiCapture(bridge);
 }
 
-// ── API-Mode candidate search (Issue #53 Phase 4) ───────────────────────────
-// Reuses the existing click-selection mechanism (START_SELECTION/
-// ELEMENT_SELECTED) with an extra apiSearch flag — content-script.js still
-// sends ELEMENT_SELECTED as always (see the guard in popup.js's message
-// listener), but additionally correlates the clicked element's text against
-// the entries buffered during the (now stopped) recording and reports
-// candidates via a separate API_CANDIDATES message.
+// ── Candidate search ──
+// Reuses the click selection (START_SELECTION / ELEMENT_SELECTED) with an apiSearch flag: the content script also correlates
+// the clicked text against the recorded entries and reports API_CANDIDATES.
 
 function startApiFieldSearch(bridge) {
   const state = bridge.getState();
@@ -201,16 +159,9 @@ function startApiFieldSearch(bridge) {
   if (state.domViewEnabled) bridge.requestDomTree();
 }
 
-// Issue #136: the embedded-JSON analogue of startApiFieldSearch above —
-// needs no recording toggle/apiCaptureCount gate at all, since
-// findEmbeddedJsonCandidates scans document.scripts directly at click
-// time rather than a pool that first has to be recorded into. Reuses the
-// exact same apiSearchTarget/apiCandidates state (and so the exact same
-// #api-candidates-panel/-list rendering and wireApiCandidateListEvents
-// wiring, see popup.js) as the network search — the resulting
-// EMBEDDED_JSON_CANDIDATES message is handled identically to
-// API_CANDIDATES there, and confirmEmbeddedJsonFieldCandidate below is
-// dispatched to purely by candidate shape (candidate.scriptSelector).
+// The embedded-JSON analogue of startApiFieldSearch: no recording needed, since the content script scans document.scripts
+// at click time. It reuses the same apiSearchTarget / apiCandidates state and list; EMBEDDED_JSON_CANDIDATES is handled like
+// API_CANDIDATES, and confirmation is dispatched by candidate shape (candidate.scriptSelector).
 function startEmbeddedJsonFieldSearch(bridge) {
   const state = bridge.getState();
   log('EMBEDDED_JSON_SEARCH start → START_SELECTION(embeddedJsonSearch)');
@@ -223,23 +174,13 @@ function startEmbeddedJsonFieldSearch(bridge) {
   if (state.domViewEnabled) bridge.requestDomTree();
 }
 
-// ── API-Mode parameter configuration (Issue #53 Phase 5) ────────────────────
-// Turns a confirmed primary-field candidate into an in-progress ApiConfig
-// draft and enters STATES.API_CONFIG — see buildApiConfig (the pure wire-
-// format assembly) for what this eventually becomes once the user finishes
-// configuring URL segments/params/headers there.
+// ── Parameter configuration ──
+// Turns a confirmed primary-field candidate into an ApiConfig draft and enters STATES.API_CONFIG; buildApiConfig later
+// assembles the wire format.
 
-// `siblingNames` are JSON keys the user picked as one-click extra fields —
-// each already IS a valid field name/path (a sibling's own key, always a
-// direct property of the same record, see content-script.js's
-// siblingFields) so no separate naming step is needed for those, unlike the
-// primary field which needs a user-chosen name.
-//
-// Issue #54, Phase A5: builds the full nested tree draft (buildApiSubtree
-// FromCandidate, using A3's deriveApiTreeSkeleton) instead of a flat fields
-// array — a single top-level match still ends up a one-node-deep tree, see
-// buildApiConfig's own doc comment on why the flat wire shape stays
-// available even though the popup only ever builds trees now.
+// `siblingNames` are keys picked as one-click extra fields; each is already a valid name and path (a direct property of the same
+// record), unlike the primary field, which gets a user-chosen name. Builds the full nested tree draft; a single match is a
+// one-node-deep tree (the flat wire shape stays available, see buildApiConfig).
 function confirmApiFieldCandidate(bridge, candidate, fieldName, siblingNames) {
   const groups = buildApiSubtreeFromCandidate(candidate, fieldName, siblingNames);
 
@@ -254,11 +195,8 @@ function confirmApiFieldCandidate(bridge, candidate, fieldName, siblingNames) {
       capturedHeaders: candidate.requestHeaders || [],
       parameterSources: {},
       headerDecisions: {},
-      // Issue #55, Phase B4: candidate.method is already there for free
-      // (content-script.js's findApiCandidates always carried it, just
-      // unused until now) — bodyTree starts null and is filled in
-      // asynchronously below since the captured body itself isn't attached
-      // to the candidate (only entryId is).
+      // candidate.method is available; bodyTree starts null and is filled in asynchronously (the captured body is not on the
+      // candidate, only entryId).
       method: candidate.method || 'GET',
       bodyTree: null,
       bodyParameters: [],
@@ -274,19 +212,9 @@ function confirmApiFieldCandidate(bridge, candidate, fieldName, siblingNames) {
   loadInitialBodyTreeForCandidate(bridge, candidate);
 }
 
-// Issue #136: the embedded-JSON analogue of confirmApiFieldCandidate above.
-// Unlike a network candidate, there's no captured request to derive
-// sourceUrl/method/headers from — the request is just an ordinary GET of
-// the current page (bridge.getState().url), optionally parameterized later
-// on the API_CONFIG screen exactly like a network candidate's URL already
-// is (see the "Architecture Decisions" note on UrlTemplate parameterization
-// staying available for embedded-JSON mode). No request body is possible
-// (a page load has no body — ScrapingPlanValidator rejects the
-// combination), so bodyTree/loadInitialBodyTreeForCandidate don't apply
-// here. embeddedJsonSource is stamped with the candidate's own
-// scriptSelector, later read by startApiTreeFieldSearch (to scope any
-// further tree-extension search to that same <script> tag) and by
-// buildApiConfig (to include it in the wire object).
+// The embedded-JSON analogue of confirmApiFieldCandidate: there is no captured request, so the request is a GET of the
+// current page (bridge.getState().url), parameterizable later like any URL. No body is possible. embeddedJsonSource is
+// stamped with the candidate's scriptSelector, which scopes further tree searches and goes into the wire object.
 function confirmEmbeddedJsonFieldCandidate(bridge, candidate, fieldName, siblingNames) {
   const groups = buildApiSubtreeFromCandidate(candidate, fieldName, siblingNames);
   const url = bridge.getState().url;
@@ -311,18 +239,9 @@ function confirmEmbeddedJsonFieldCandidate(bridge, candidate, fieldName, sibling
   });
 }
 
-// Fire-and-forget follow-up (Issue #55): a POST candidate's own captured
-// request body isn't attached to the click-correlated candidate object
-// itself (only entryId is — content-script.js's findApiCandidates never
-// needed the request body before this) — so once the primary field is
-// confirmed and the API_CONFIG screen is already showing, this looks the
-// matching entry up in the raw recorded pool (fetchApiCaptureEntries, the
-// same pool "Aufgezeichnete Anfragen" and the value-list autofill already
-// use) and, if it captured a JSON-string body, turns it into the initial
-// all-literal body draft (jsonValueToBodyDraft). Runs after the screen is
-// already up rather than blocking the transition on it — a bodyless POST is
-// still a fully valid config, so an extra async round trip just to maybe
-// populate the body tree isn't worth delaying the screen transition for.
+// Fire-and-forget: looks the POST candidate's captured body up in the recorded pool and, if it is a JSON string, turns it
+// into the initial all-literal body draft. It runs after the screen is up: a bodyless POST is a valid config, so the
+// transition is not delayed.
 async function loadInitialBodyTreeForCandidate(bridge, candidate) {
   if (!candidate.method || candidate.method === 'GET' || candidate.method === 'HEAD') return;
 
@@ -345,11 +264,7 @@ async function loadInitialBodyTreeForCandidate(bridge, candidate) {
   patchApiConfigDraft(bridge, { bodyTree: jsonValueToBodyDraft(parsed) });
 }
 
-// Low-level GET_API_CAPTURE_ENTRIES round trip, shared by the "view
-// recorded endpoints" panel below and the value-list autofill further down
-// — same request/response shape as GET_LOGS/CHECK_ROBOTS_TXT, just no
-// dedicated loading/result state of its own since both callers keep their
-// own. Needs no bridge — it only ever talks to chrome.runtime, never state.
+// GET_API_CAPTURE_ENTRIES round trip shared by the recorded-endpoints panel and the value-list autofill; needs no bridge.
 async function fetchApiCaptureEntries() {
   try {
     return await chrome.runtime.sendMessage({ type: 'GET_API_CAPTURE_ENTRIES' }) || [];
@@ -359,10 +274,7 @@ async function fetchApiCaptureEntries() {
   }
 }
 
-// API-mode follow-up: toggles the inline "view recorded endpoints" panel —
-// fetches a fresh snapshot of the pool on every open (not just once) so a
-// user who recorded more requests, closed the panel, and reopens it sees
-// them without needing to stop/restart recording.
+// Toggles the recorded-endpoints panel; fetches a fresh snapshot on every open.
 async function toggleApiEntriesPanel(bridge) {
   if (bridge.getState().apiEntriesPanelOpen) {
     log('API_ENTRIES_PANEL close');
@@ -374,18 +286,8 @@ async function toggleApiEntriesPanel(bridge) {
   bridge.patchState({ apiEntriesPanelOpen: true, apiEntries: entries });
 }
 
-// Event delegation for the sibling-field suggestion chips and the "Use" row —
-// shared by both candidate-search panels (the primary/root search's
-// #api-candidates-list and Phase A5's "add root group"/"add sub-field" search's
-// #api-tree-search-list, see renderApiCandidates' own `ids` doc comment):
-// identical markup and interaction, only getCandidates/onConfirm differ per
-// caller.
-// Event delegation for the sibling-field suggestion chips and the "Use"
-// row — shared by both candidate-search panels (the primary/root search's
-// #api-candidates-list and Phase A5's "add root group"/"add sub-field"
-// search's #api-tree-search-list, see renderApiCandidates' own `ids` doc
-// comment): identical markup and interaction, only getCandidates/onConfirm
-// differ per caller.
+// Event delegation for the sibling chips and the "Use" row, shared by both candidate panels (identical markup; only
+// getCandidates / onConfirm differ).
 function wireApiCandidateListEvents(listElId, getCandidates, onConfirm) {
   document.getElementById(listElId)?.addEventListener('click', (e) => {
     const chip = e.target.closest('.api-sibling-chip');
@@ -444,11 +346,8 @@ function wireApiCaptureEvents(bridge) {
     toggleApiEntriesPanel(bridge);
   });
 
-  // Issue #136: the same #api-candidates-list serves both a network search
-  // (startApiFieldSearch) and an embedded-JSON search (startEmbeddedJsonField
-  // Search) — dispatch to the matching confirm function purely by candidate
-  // shape (only an embedded-JSON candidate ever carries scriptSelector, see
-  // content-script.js's findEmbeddedJsonCandidates vs. findApiCandidates).
+  // The same list serves a network and an embedded-JSON search: dispatch by candidate shape (only an embedded-JSON candidate
+  // carries scriptSelector).
   wireApiCandidateListEvents(
     'api-candidates-list', () => bridge.getState().apiCandidates?.candidates,
     (candidate, fieldName, siblingNames) => (candidate.scriptSelector

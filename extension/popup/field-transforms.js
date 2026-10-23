@@ -1,18 +1,7 @@
 // @ts-check
-// Issue #84: pure, DOM-free helpers for a field's transform chain (trim/
-// regexExtract/replace/toNumber, applied in order — mirrors the backend
-// IR's FieldTransform.cs). Split out the same way container-tree.js/
-// api-config.js are. Object shape already matches the
-// wire format 1:1 (camelCase keys = the companion's own JSON property
-// names), so there's no separate serialize step the way container-tree.js's
-// serializeGroupTree needs one — these objects are sent as-is.
-//
-// Issue #238: JSDoc-annotated and typechecked via `// @ts-check` + tsconfig
-// (`npm run typecheck`) — every exported function's wire-shape inputs/
-// outputs are typed against types/companion-ir.d.ts's SFWire namespace; a
-// transform kind string is narrowed with `/** @type {...} */` casts at the
-// few spots TypeScript's control-flow narrowing can't follow (a `switch` on
-// `t.kind` inside a loop where `value` itself changes type per-iteration).
+// Pure, DOM-free helpers for a field's transform chain (applied in order; mirrors the IR's FieldTransform.cs). The
+// objects already match the wire format 1:1, so there is no serialize step. Typed against SFWire; a `switch` on
+// `t.kind` inside a loop needs a few `@type` casts where narrowing cannot follow.
 /**
  * @param {SFWire.FieldTransform['kind']} kind
  * @returns {SFWire.FieldTransform}
@@ -66,9 +55,7 @@ function updateTransform(transforms, index, patch) {
   return transforms.map((t, i) => (i === index ? { ...t, ...patch } : t));
 }
 
-// Switching kind starts that step over with fresh defaults rather than
-// trying to carry over unrelated fields (e.g. a "replace" step's find/
-// replacement wouldn't mean anything on a "trim" step).
+// Switching kind starts the step over with fresh defaults (a "replace" step's fields mean nothing on "trim").
 /**
  * @param {SFWire.FieldTransform[]} transforms
  * @param {number} index
@@ -79,9 +66,7 @@ function changeTransformKind(transforms, index, kind) {
   return transforms.map((t, i) => (i === index ? createDefaultTransform(kind) : t));
 }
 
-// direction: -1 (up) or +1 (down). Out-of-range moves are a no-op rather
-// than clamped/wrapped — the UI already disables the button at either end
-// (see field-transforms-ui.js), this is just the data-layer safety net.
+// direction: -1 (up) or +1 (down). Out of range is a no-op; the UI disables the buttons at the ends.
 /**
  * @param {SFWire.FieldTransform[]} transforms
  * @param {number} index
@@ -96,20 +81,9 @@ function moveTransform(transforms, index, direction) {
   return copy;
 }
 
-// Blocks "Hinzufügen" the same way an empty "Attribut" input already does
-// for Attribute mode (see confirmExtendedField) — an empty regex pattern
-// can never usefully match anything, so failing fast here avoids a round
-// trip to the companion's own FieldTransformValidator just to learn the
-// same thing. Issue #205: a blank toDate sourceFormat is the same kind of
-// "can never usefully match anything" case; toInteger/toBoolean's
-// onError/defaultValue never reach an invalid state through this UI (the
-// default value input always starts at '', never null), so they need no
-// check here.
-// Issue #206: combineFields needs at least 2 picked source fields (the
-// multi-select itself can obviously end up empty/single right after
-// switching to this kind); splitField needs a picked source field —
-// mirrors FieldTransformValidator's own structural checks companion-side,
-// just surfaced here before a round trip is even attempted.
+// Blocks "Add" like an empty attribute input does: an empty regex pattern or toDate format can never match, so fail
+// fast instead of a round trip. combineFields needs at least 2 source fields, splitField one (as the companion's
+// FieldTransformValidator). toInteger / toBoolean never reach an invalid state through the UI.
 /**
  * @param {SFWire.FieldTransform[]} transforms
  * @returns {boolean}
@@ -117,9 +91,7 @@ function moveTransform(transforms, index, direction) {
 function transformsAreValid(transforms) {
   return transforms.every(t => {
     if (t.kind === 'regexExtract') return t.pattern.trim() !== '';
-    // sourceFormat is optional on the wire (falls back to the ISO default
-    // server-side), but this UI always starts it at a non-blank default —
-    // `?? ''` only guards the type, never actually fires in practice.
+    // Optional on the wire, but the UI always starts it non-blank; `?? ''` only satisfies the type.
     if (t.kind === 'toDate') return (t.sourceFormat ?? '').trim() !== '';
     if (t.kind === 'combineFields') return t.sourceFieldNames.length >= 2;
     if (t.kind === 'splitField') return t.sourceFieldName.trim() !== '';
@@ -151,9 +123,8 @@ function toNumberPreview(value) {
   return normalizeNumber(raw.replace(',', '.'));
 }
 
-// _to_number ends with float() and str(): "12.90" becomes "12.9", "100.0" becomes "100", a whole
-// number is printed without exponent however large. BigInt gives the exact digits Python's int()
-// prints for a whole float.
+// _to_number ends with float() and str(): "12.90" gives "12.9", "100.0" gives "100", a whole number never uses an
+// exponent. BigInt gives the digits Python's int() prints for a whole float.
 /**
  * @param {string} text
  * @returns {string}
@@ -164,13 +135,9 @@ function normalizeNumber(text) {
   return Number.isInteger(numeric) ? BigInt(numeric).toString() : String(numeric);
 }
 
-// Issue #205: JS mirrors of the runtime's _to_integer/_to_boolean/_to_date
-// (fragments/transforms.py.j2), pinned by test-vectors/transforms.json. Each
-// returns null on conversion failure (distinct from a valid, possibly
-// empty, converted string) so applyTransformsPreview below can apply the
-// transform's own onError/defaultValue the same way _apply_transforms
-// does, rather than the generic "preview unavailable" regexExtract uses
-// for an outright invalid pattern.
+// JS mirrors of the runtime's _to_integer / _to_boolean / _to_date (pinned by test-vectors/transforms.json). null means
+// conversion failure (distinct from a valid empty string) so applyTransformsPreview can apply the transform's own
+// onError / defaultValue.
 /**
  * @param {string} value
  * @returns {string | null}
@@ -202,16 +169,9 @@ function escapeRegExpLiteral(value) {
 
 const DATE_FORMAT_TOKEN_PATTERNS = { yyyy: '(?<yyyy>\\d{4})', mm: '(?<mm>\\d{1,2})', dd: '(?<dd>\\d{1,2})' };
 
-// Mirrors RangeFormat.cs's CompilePattern (escape the literal template,
-// then substitute each "{token}" placeholder for its own named capture
-// group) — the same mini-template syntax RangeSource.Format already uses
-// for ISO week/date API parameters. Unlike RegexExtractTransform.Pattern,
-// sourceFormat is never itself treated as regex syntax (every character
-// that isn't one of the three known tokens is escaped first), so — unlike
-// regexExtract's "invalid pattern" case — there's no "the format itself
-// is broken" outcome to report separately; any mismatch (wrong shape,
-// wrong token, or a structurally-valid but non-existent calendar date)
-// is just a conversion failure, handled by the caller's onError contract.
+// Mirrors RangeFormat.CompilePattern: the literal template is escaped, then each "{token}" becomes a named group.
+// sourceFormat is never regex syntax, so any mismatch (shape, token, non-existent date) is just a conversion failure
+// for onError.
 /**
  * @param {string} value
  * @param {string} sourceFormat
@@ -230,12 +190,8 @@ function toDatePreview(value, sourceFormat) {
   // setUTCFullYear, not Date.UTC: Date.UTC maps the years 0-99 to 1900-1999.
   const d = new Date(0);
   d.setUTCFullYear(yyyy, mm - 1, dd);
-  // A structural match doesn't guarantee a real calendar date (e.g.
-  // "2026-02-30") — JS's own Date rolls invalid day-of-month values over
-  // into the next month instead of raising, so the roll-over is detected
-  // by checking the constructed date's own fields didn't move, the same
-  // check Python's date() raising ValueError gives us for free server-side.
-  // Python's date() starts at year 1, so "0000" is a failure there too.
+  // A structural match is not a real date ("2026-02-30"): JS's Date rolls over instead of raising, so check the
+  // fields did not move (Python's date() raises). Year 0 fails there too, since date() starts at year 1.
   if (yyyy < 1 || d.getUTCFullYear() !== yyyy || d.getUTCMonth() !== mm - 1 || d.getUTCDate() !== dd) return null;
   /** @param {number} n */
   const pad = (n) => String(n).padStart(2, '0');
@@ -261,12 +217,9 @@ function escapeCharClass(chars) {
   return chars.replace(/[\]\\^-]/g, '\\$&');
 }
 
-// Mirror of the runtime's _to_currency (pinned by test-vectors/transforms.json):
-// the first number in the value — a separator only counts when a digit
-// follows — must match the chosen format strictly (thousands groups of
-// exactly three digits, at most one decimal separator); the fraction is
-// kept exactly as scraped. [0-9] rather than \d on both sides, since
-// Python's \d also matches non-ASCII digits and JS's doesn't.
+// Mirror of the runtime's _to_currency (pinned by test-vectors/transforms.json): the first number (a separator only
+// counts before a digit) must match the format strictly; the fraction is kept as scraped. [0-9] instead of \d because
+// Python's \d also matches non-ASCII digits.
 /**
  * @param {string} value
  * @param {string} format
@@ -286,13 +239,9 @@ function toCurrencyPreview(value, format) {
   return `${match[1] === '-' ? '-' : ''}${integer}${match[3] ? `.${match[3]}` : ''}`;
 }
 
-// converted is the conversion's own result: a converted string on
-// success, or null on failure (see toIntegerPreview/toBooleanPreview/
-// toDatePreview above). On failure this applies the transform's own
-// onError contract exactly like the Python runtime's
-// _type_conversion_fallback: "KeepOriginal" passes currentValue through
-// unchanged (the chain keeps going, it does NOT mean "preview
-// unavailable"), "UseDefault" substitutes defaultValue.
+// converted is the conversion's result, or null on failure; on failure the transform's onError applies like
+// _type_conversion_fallback: KeepOriginal passes currentValue through (the chain goes on), UseDefault substitutes
+// defaultValue.
 /**
  * @param {string} currentValue
  * @param {SFWire.ToIntegerTransform | SFWire.ToBooleanTransform | SFWire.ToDateTransform | SFWire.ToCurrencyTransform} t
@@ -304,16 +253,9 @@ function typeConversionFallback(currentValue, t, converted) {
   return t.onError === 'UseDefault' ? (t.defaultValue ?? '') : currentValue;
 }
 
-// Issue #143: applies the chain against a raw picked value the same way
-// _apply_transforms does at runtime, for a live "what would this produce"
-// preview while the user is still editing the chain — no companion round
-// trip. regexExtract runs through JS's own RegExp/exec rather than
-// Python's `re.search`, which is the same "not 100% syntax-identical"
-// known risk already documented on RegexExtractTransform/
-// FieldTransformValidator — a pattern that fails to compile as a JS
-// RegExp makes this return null (distinct from a valid empty-string
-// result) so the caller can show "preview unavailable" instead of a wrong
-// value.
+// Applies the chain to a raw picked value like _apply_transforms, for the live preview. regexExtract uses JS's RegExp,
+// not Python's re, so a pattern that does not compile as a JS RegExp returns null ("preview unavailable"), distinct
+// from a valid empty result.
 /**
  * @param {string} rawValue
  * @param {SFWire.FieldTransform[]} transforms
@@ -359,13 +301,7 @@ function applyTransformsPreview(rawValue, transforms) {
         break;
       case 'combineFields':
       case 'splitField':
-        // Issue #206: no sibling field's own value is available client-side
-        // at preview time (this preview only ever has the *one* field
-        // currently being edited's own picked raw value, see
-        // renderTransformPreview's own doc comment) — null signals
-        // "preview unavailable" here, the same as an invalid regexExtract
-        // pattern, rather than misleadingly showing this field's own raw
-        // value untouched.
+        // No sibling value exists client-side: null, "preview unavailable", rather than showing the raw value untouched.
         return null;
     }
   }

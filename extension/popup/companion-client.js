@@ -1,10 +1,6 @@
-// ── Companion HTTP client ────────────────────────────────────────────────────
-// Extracted from popup.js (see CLAUDE.md's "Popup module boundaries"
-// architecture decision) — every request the side panel makes to the local
-// companion server (health check, robots.txt relay, /generate) lives here.
-// Functions take a `bridge` object (same convention as api-config-ui.js/
-// dom-tree-ui.js/preview.js) instead of closing over popup.js's own
-// module-level state.
+// ── Companion HTTP client ──
+// Every request the side panel makes to the companion (health check, robots.txt relay, /generate). Functions take a
+// `bridge` (see api-config-ui.js) instead of closing over popup.js state.
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');
 
@@ -29,11 +25,8 @@ const { loadCompanionReached, markCompanionReached } = require('./companion-guid
 const { describeError } = require('./error-messages');
 const { findInvalidEnvVarNames } = require('./env-var');
 
-// Resolved fresh in checkCompanion() (default or the user's persisted
-// override, see shared/companion-config.js) and reused by generate()/the
-// saved-configs endpoints below — module-level rather than re-resolved per
-// fetch since it only ever changes via a full CHECKING_COMPANION ->
-// checkCompanion() round trip anyway.
+// Resolved in checkCompanion() (default or the persisted override, shared/companion-config.js) and reused by generate() and
+// the saved-configs endpoints; it only changes through a full health-check round trip.
 let companionUrl = null;
 
 function getResolvedCompanionUrl() {
@@ -58,21 +51,16 @@ function getCompanionFailure() {
   return companionFailure;
 }
 
-// Issue #278: every request to the companion goes through here so the access
-// key (when one is set — Settings screen) is sent as `Authorization: Bearer
-// <key>`. Without a key the call is exactly the plain `fetch(url[, init])` it
-// always was, so a companion without authentication sees no difference.
+// Every request to the companion goes through here so the access key (if set) is sent as `Authorization: Bearer <key>`;
+// without a key it is the plain fetch.
 function companionFetch(url, init) {
   const key = getAccessKey();
   if (!key) return init === undefined ? fetch(url) : fetch(url, init);
   return fetch(url, { ...init, headers: { ...init?.headers, Authorization: `Bearer ${key}` } });
 }
 
-// Issue #278: /health tells whether this companion has authentication switched
-// on; if so (and only then) the key is checked right away via /whoami so a
-// missing or wrong key is explained up front instead of as a puzzling failure
-// of the first saved-config request. Anything unexpected here (an older
-// companion, a mock without a body) is silently ignored.
+// /health says whether authentication is on; only then is the key checked via /whoami, so a missing or wrong key is explained up
+// front. Anything unexpected (an older companion) is ignored.
 async function warnAboutAccessKey(healthResponse) {
   try {
     const body = await healthResponse.json();
@@ -128,12 +116,7 @@ async function checkCompanion(bridge) {
     // once (or if) it resolves, no need to await/block the IDLE transition
     // on it.
     if (url) bridge.fetchSavedConfigs(url);
-    // Issue #239: fetched unconditionally alongside the hostname-scoped list
-    // above (not gated on the restored mode actually being 'combined') —
-    // simpler than chasing the exact ordering between this health check and
-    // session-restore's own mode restoration, and just as cheap/harmless as
-    // fetchSavedConfigs itself when Combined mode never ends up being used
-    // this session.
+    // Fetched unconditionally (not gated on the restored mode): simpler than ordering this against session restore, and cheap.
     bridge.fetchAllSavedConfigs();
     // Issue #191: fetched unconditionally like fetchAllSavedConfigs above —
     // a blueprint is reusable across any site/mode, so there's no "current
@@ -149,12 +132,8 @@ async function checkCompanion(bridge) {
   }
 }
 
-// Manual override entry point for the COMPANION_ERROR screen — lets the user
-// point at a companion instance running on another host/port (e.g. a custom
-// Companion:Port in its own appsettings.json) when the default address isn't
-// reachable. Persisted via setCompanionUrlOverride so it's remembered for
-// the next session (see shared/companion-config.js), then re-runs the same
-// health check a plain retry would.
+// Entry point of the COMPANION_ERROR screen's address field: persists the override (shared/companion-config.js), then re-runs
+// the health check.
 async function useCustomCompanionUrl(bridge, rawUrl) {
   // Issue #352: https always, plain http only for this computer (and, in a
   // development build with the developer option on, anywhere) — see
@@ -178,10 +157,8 @@ async function resetCustomCompanionUrl(bridge) {
   await checkCompanion(bridge);
 }
 
-// robots.txt is fetched by the content script (same-origin relative to the
-// inspected page, see checkRobotsTxt in content-script.js) — the side panel
-// only relays the request/response through the service worker, same
-// request/response shape as GET_LOGS.
+// robots.txt is fetched by the content script (same origin as the page); the panel only relays the request through the
+// service worker, like GET_LOGS.
 async function checkRobotsTxt(bridge) {
   log('ROBOTS_TXT_CHECK start');
   bridge.patchState({ robotsTxtChecking: true, robotsTxtResult: null });
@@ -195,23 +172,15 @@ async function checkRobotsTxt(bridge) {
   }
 }
 
-// The companion actually generates and runs the script against the live
-// page before handing it out (same rendering stage, and now the exact
-// artifact the user would download) and responds 422 with a message when
-// that run fails or errors — is the page unreachable, does the script raise
-// an exception, or does it run cleanly but write no data (all selectors
-// found nothing). `data` is logged separately so it ends up in the bug
-// report if the user reports it.
+// The companion generates and runs the script against the live page and answers 422 when that fails (page unreachable, an
+// exception, or no data). `data` is logged separately so it reaches a bug report.
 function buildVerificationErrorMessage(data) {
   return data?.error || t('toast.verificationFailed');
 }
 
-// Issue #401: shows a failed Generate. A failure the mapping recognises (the
-// common classes — no data, site unreachable/refused, missing variable, an
-// invalid configuration, ...) gets a plain-language title and hint with the
-// original text behind "Details"; anything else keeps today's wording. `reportable`
-// = whether "Report bug" is offered (false for a configuration the user can fix).
-// The raw text is always what lands in a bug report.
+// Shows a failed Generate: a recognised failure gets a plain-language title and hint with the original text behind
+// "Details", anything else keeps the raw wording. `reportable` = whether "Report bug" is offered (false for a
+// configuration the user can fix). The raw text always goes into a bug report.
 function showGenerateFailure(rawMessage, { engine, reportable, fallbackKey }) {
   const plain = describeError(rawMessage, { engine });
   const context = reportable ? 'Script generation' : null;
@@ -222,13 +191,8 @@ function showGenerateFailure(rawMessage, { engine, reportable, fallbackKey }) {
   showToast(t(fallbackKey, { message: rawMessage }), context);
 }
 
-// Issue #239: a component in _state.combinedComponents only ever stores
-// {savedConfigId, name} — its full underlying ScrapingConfig is resolved
-// live here (GET /configs/{id}) at generate/save/export time, never cached
-// from whenever it was picked, so editing/re-saving the source config
-// elsewhere is picked up automatically. Throws (naming the offending
-// component) if a referenced saved configuration no longer exists — callers
-// surface that the same way any other generation failure already is.
+// A component only stores {savedConfigId, name}; its ScrapingConfig is resolved live (GET /configs/{id}) at generate / save /
+// export time so edits to the source config are picked up. Throws, naming the component, if it no longer exists.
 async function resolveCombinedComponents(components) {
   const resolved = [];
   for (const component of components) {
@@ -271,16 +235,8 @@ async function generate(bridge) {
     state.selectedOutputBlueprintSchemaKind, state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping,
     state.discoveredUrls, state.preflight, state.requestDelay, state.retry, state.deduplication, state.requestHeaders, state.respectRobotsDelay, globalSettings.skipVerification, state.robotsDisallow, state.appendOutput,
   );
-  // Issue #43: one-time login/test values, sent only in this request body —
-  // deliberately kept out of `config` (and therefore out of the log line
-  // below, buildConfigExport, and the "Report bug" log export) since none of
-  // those are meant to ever see them. See fillTestValues/buildVerificationValues.
-  // Issue #220: Api mode's bootstrap credentials get the same one-time
-  // test-value treatment, from the API_CONFIG screen's own inputs.
-  // Issue #226: the DOM modes' env-var-backed request headers get the same
-  // one-time test-value treatment.
-  // Issue #397: a bad environment-variable name would only be rejected by the
-  // companion after the round trip — say so up front, naming the variable.
+  // One-time test values (Fill, bootstrap, request headers) go only in this request body, deliberately out of `config` and so
+  // out of the log line, the export and bug reports. A bad environment-variable name is reported up front, naming it.
   const invalidEnvVars = findInvalidEnvVarNames(config);
   if (invalidEnvVars.length > 0) {
     const { name, reason } = invalidEnvVars[0];
@@ -305,14 +261,8 @@ async function generate(bridge) {
       ),
     });
     if (res.status === 400) {
-      // A structural config rejection (bad URL, mutually exclusive Fields/
-      // Groups/Api, a FramePath without Engine=Browser, ...) — always a
-      // deterministic, pre-execution validation failure caused by the
-      // current configuration, never a companion/script malfunction. Unlike
-      // the 422/network-error cases below, no "Report bug" prompt is
-      // offered — showToast's context arg is intentionally omitted, since
-      // inviting a bug report here would just fill GitHub issues with
-      // non-bugs (an invalid config, not a defect).
+      // A structural rejection (bad URL, exclusive modes, FramePath without Browser, ...) is a deterministic validation failure of
+      // the current configuration, not a defect, so no "Report bug" is offered.
       const data = await res.json().catch(() => null);
       log('GENERATE CONFIG INVALID', data);
       bridge.setState(STATES.IDLE);
@@ -326,21 +276,12 @@ async function generate(bridge) {
     }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    // Issue #289 follow-up: present regardless of whether the body below
-    // ends up plain-text or the JSON preview/outputFile envelope — a header
-    // survives either response shape unchanged, unlike a body field that
-    // would need its own per-shape plumbing. Shown as a warning toast (the
-    // same "raw companion-originated English text, not routed through
-    // i18n" convention buildVerificationErrorMessage's own 422 handling
-    // already uses) rather than failing the request — the script itself was
-    // still generated successfully, just not run against the live page.
+    // The verification-skipped header exists for either body shape; shown as a warning (the companion's English text as is, not
+    // i18n) since the script itself was generated.
     const verificationSkippedReason = res.headers?.get('X-ScrapingFactory-Verification-Skipped');
 
-    // Issue #122/#161: only when includeDataPreview or includeOutputFile
-    // asked for it does the companion respond with a JSON envelope
-    // ({ script, preview, outputFile }) instead of the plain script text —
-    // the client already knows which one(s) it requested, no need to sniff
-    // the response's Content-Type.
+    // Only when a preview or output file was requested is the response a JSON envelope ({ script, preview, outputFile }); the
+    // client knows which it asked for, so no Content-Type sniffing.
     let scriptText;
     let dataPreview = null;
     let outputFile = null;
@@ -348,11 +289,7 @@ async function generate(bridge) {
     if (globalSettings.includeDataPreview || globalSettings.includeOutputFile) {
       const data = await res.json();
       scriptText = data.script;
-      // Issue #182: Blocks mode's own envelope is { script, blocks: [...] }
-      // instead of { script, preview, outputFile } — self-describes via the
-      // presence of `blocks` rather than branching on state.mode, so this
-      // stays correct even if a Blocks response somehow arrives outside the
-      // Blocks-mode code path.
+      // Blocks mode answers { script, blocks: [...] }; recognised by the presence of `blocks`, not by state.mode.
       if (Array.isArray(data.blocks)) {
         blocksOutput = data.blocks;
       } else {
@@ -380,12 +317,8 @@ async function generate(bridge) {
   }
 }
 
-// Called from popup.js's render() only while _state.current ===
-// STATES.COMPANION_ERROR — fills in the currently-resolved companion URL
-// (default or override) and, if the user hasn't typed anything yet, seeds
-// the override input with the current override (blank when it's still just
-// the default, so the placeholder shows through instead of a redundant
-// pre-filled default value).
+// Called from render() only on COMPANION_ERROR: fills in the resolved companion URL and seeds the override input (blank when it
+// is still the default, so the placeholder shows).
 function renderCompanionErrorScreen() {
   const currentUrlEl = document.getElementById('error-current-url');
   if (currentUrlEl) currentUrlEl.textContent = t('error.currentUrl', { url: getResolvedCompanionUrl() || DEFAULT_COMPANION_URL });
