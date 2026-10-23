@@ -640,10 +640,13 @@ function wireSettingsPanelEvents(bridge) {
   // (and Enter/Space, since the header is a div with role="button", not a
   // real <button>) flips monitoringSectionOpen; nothing else about
   // change-detection/hardening's own state is touched.
-  document.getElementById('monitoring-section-toggle')?.addEventListener('click', () => {
+  document.getElementById('monitoring-section-toggle')?.addEventListener('click', (e) => {
+    // Issue #354: the "?" next to the title opens its explanation, it doesn't collapse the section.
+    if (e.target.closest && e.target.closest('.help-host')) return;
     bridge.setState(bridge.getState().current, { monitoringSectionOpen: !bridge.getState().monitoringSectionOpen });
   });
   document.getElementById('monitoring-section-toggle')?.addEventListener('keydown', (e) => {
+    if (e.target !== e.currentTarget) return; // a key on the "?" inside belongs to its own button
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       bridge.setState(bridge.getState().current, { monitoringSectionOpen: !bridge.getState().monitoringSectionOpen });

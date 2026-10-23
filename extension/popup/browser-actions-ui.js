@@ -152,11 +152,6 @@ function renderBrowserActions(actions, testValues) {
       card.appendChild(row);
       card.insertAdjacentHTML('beforeend', envVarNoteHtml()); // Issue #397: the shared explanation + popover
 
-      const hint = document.createElement('p');
-      hint.className = 'browser-action-hint';
-      hint.textContent = t('browserActions.envVarHint');
-      card.appendChild(hint);
-
       // Issue #43: one-time test value for the /generate verification trial
       // run only — keyed by env-var name (not action index) so the change
       // handler doesn't need to look the action up by position. Only shown

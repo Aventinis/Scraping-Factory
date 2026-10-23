@@ -8,7 +8,7 @@
          list entirely (Phase A5): a single top-level match renders as a
          one-node-deep tree, visually almost identical to the old list but
          wrapped in the same tree-editor chrome every deeper level reuses. -->
-    <div class="row-label"><span data-i18n="common.fields"></span> <a class="learn-more" data-doc="modesApi" href="#" data-i18n="common.learnMore"></a></div>
+    <div class="row-label" data-help-anchor><span data-i18n="common.fields"></span><span class="help-host" data-help="help.apiConfig.fields" data-doc="modesApi"></span></div>
     <ul id="api-tree-root" class="api-tree"></ul>
     <div class="actions">
       <button id="btn-api-tree-add-root" class="btn-secondary btn-tiny" type="button" data-i18n="apiTree.addRootGroupBtn"></button>
@@ -53,7 +53,7 @@
           <label class="output-settings-toggle">
             <input type="checkbox" id="toggle-api-bootstrap" />
             <span data-i18n="apiBootstrap.toggleLabel"></span>
-            <span class="help-host" data-help="help.apiBootstrap.overview"></span>
+            <span class="help-host" data-help="help.apiBootstrap.overview" data-doc="modesApi"></span>
           </label>
           <div id="api-bootstrap-config" class="api-bootstrap-config hidden"></div>
         </div>
@@ -71,7 +71,7 @@
           <label class="output-settings-toggle">
             <input type="checkbox" id="toggle-api-cursor" />
             <span data-i18n="apiCursor.toggleLabel"></span>
-            <span class="help-host" data-help="help.apiCursor.overview"></span>
+            <span class="help-host" data-help="help.apiCursor.overview" data-doc="modesApi"></span>
           </label>
           <div id="api-cursor-config" class="api-cursor-config hidden"></div>
         </div>
@@ -89,14 +89,13 @@
       <label class="output-settings-toggle">
         <input type="checkbox" id="toggle-api-link" />
         <span data-i18n="apiLink.toggleLabel"></span>
-        <span class="help-host" data-help="help.apiLink.overview"></span>
+        <span class="help-host" data-help="help.apiLink.overview" data-doc="modesApi"></span>
       </label>
       <p id="api-link-detected-hint" class="browser-actions-hint hidden" data-i18n="apiLink.detectedHint"></p>
       <p id="api-link-post-hint" class="browser-actions-hint hidden" data-i18n="apiLink.needsGet"></p>
       <div id="api-link-config" class="api-cursor-config hidden">
         <div class="row-label" data-i18n="apiLink.maxPagesLabel"></div>
         <input type="number" min="1" step="1" id="input-api-link-max-pages" value="50" />
-        <p class="browser-actions-hint"><span data-i18n="apiLink.firstPageHint"></span> <a class="learn-more" data-doc="modesApi" href="#" data-i18n="common.learnMore"></a></p>
       </div>
     </div>
       </div>

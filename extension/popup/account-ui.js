@@ -11,6 +11,7 @@ const { getAccessKey, setAccessKey, isInsecureHttpAllowed, setInsecureHttpAllowe
 const { isDevelopmentBuild } = require('../shared/build-config');
 const { t } = require('../i18n/i18n');
 const { showToast } = require('./toast');
+const { autoOpenAdvanced } = require('./advanced-disclosure-ui');
 const { getResolvedCompanionUrl, getCompanionInfo, companionFetch } = require('./companion-client');
 const account = require('./account');
 const { looksLikeEmail } = require('./email-account');
@@ -68,6 +69,8 @@ function renderAccountSection() {
   const section = byId('settings-account-section');
   if (!section) return;
   section.classList.toggle('hidden', !info.authRequired);
+  // Issue #354: the connection card is collapsed by default; a companion that asks for a login opens it.
+  autoOpenAdvanced(section, info.authRequired && acct.name === '');
   if (!info.authRequired) return;
 
   const signedIn = acct.name !== '';

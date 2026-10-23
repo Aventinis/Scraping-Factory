@@ -51,7 +51,6 @@ function renderSettingsScreen(bridge) {
   document.getElementById('btn-script-name-mode-fixed')?.classList.toggle('active', !isHostnameMode);
   document.getElementById('btn-script-name-mode-hostname')?.classList.toggle('active', isHostnameMode);
   document.getElementById('script-name-fixed-row')?.classList.toggle('hidden', isHostnameMode);
-  document.getElementById('script-name-hostname-hint')?.classList.toggle('hidden', !isHostnameMode);
   const fixedNameInput = document.getElementById('input-script-name-fixed');
   if (fixedNameInput && document.activeElement !== fixedNameInput) fixedNameInput.value = settings.scriptNameFixed;
 

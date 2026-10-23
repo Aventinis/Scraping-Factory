@@ -63,7 +63,6 @@
     "modeContainer": "Contenedores (anidado)",
     "modeApi": "API",
     "modeCombined": "Combinado",
-    "combinedHint": "Combina varias de tus configuraciones ya guardadas — incluso de sitios distintos — en un solo script cuyos resultados se combinan en un único resultado.",
     "combinedAddBtn": "+ Añadir componente",
     "combinedNoSavedConfigsHint": "Todavía no hay configuraciones guardadas — guarda al menos dos configuraciones primero (en otro modo) y combínalas aquí.",
     "combinedNamePlaceholder": "Nombre",
@@ -146,20 +145,15 @@
     "notifyEmailFromEnvVarLabel": "Variable con la dirección del remitente",
     "notifyEmailToEnvVarLabel": "Variable con la dirección del destinatario",
     "webhookUrlEnvVarLabel": "Variable con la URL del webhook",
-    "changeDetectionHint": "Cada campo es el nombre de una variable de entorno, no su valor: se lee al ejecutar y nunca se escribe en el script.",
     "proxyToggle": "Usar un proxy",
     "proxyEnvVarLabel": "Variable con la lista de proxies",
-    "proxyHint": "Nombre de una variable de entorno con URL de proxy separadas por comas, p. ej. http://user:pass@host:port; se usan por turnos.",
     "requestDelayToggle": "Pausa entre solicitudes",
     "requestDelayFromLabel": "de",
     "requestDelayToLabel": "a",
     "requestDelayToPlaceholder": "(fija)",
     "requestDelaySecondsUnit": "segundos",
-    "requestDelayHint": "Espera entre dos solicitudes para evitar bloqueos y límites de frecuencia; la ejecución tarda más en consecuencia.",
     "respectRobotsDelayToggle": "Respetar el robots.txt del sitio (Crawl-delay)",
-    "respectRobotsDelayHint": "Espera al menos el Crawl-delay que pide el robots.txt del sitio; gana la pausa mayor frente a la tuya.",
     "robotsDisallowToggle": "Comprobar el robots.txt del sitio antes de cada petición",
-    "robotsDisallowHint": "Mientras se ejecuta, el script comprueba cada solicitud con las reglas Disallow del robots.txt del sitio.",
     "robotsDisallowActionLabel": "Si una petición no está permitida",
     "robotsDisallowActionSkip": "Omitirla y continuar",
     "robotsDisallowActionWarn": "Avisar, pero hacerla igualmente",
@@ -170,9 +164,7 @@
     "retryDelayLabel": "Espera (s)",
     "retryExponentialToggle": "Duplicar la espera tras cada reintento",
     "retryStatusCodesLabel": "Con códigos de estado",
-    "retryHint": "Reintenta tras un error de conexión, un tiempo de espera o uno de estos códigos de estado; otros errores como 404 fallan de inmediato.",
     "dedupToggle": "Eliminar duplicados",
-    "dedupKeyFieldsHint": "Elige el/los campo(s) que identifican un elemento; una fila posterior con la misma clave se descarta.",
     "dedupAddKeyFieldBtn": "Añadir campo clave",
     "dedupKeyFieldMissing": "ya no existe",
     "dedupIncrementalToggle": "Escribir solo los elementos nuevos desde la última ejecución",
@@ -183,7 +175,6 @@
     "dedupRetentionLabel": "Recordar",
     "dedupRetentionMaxCount": "elementos más recientes (cantidad)",
     "dedupRetentionMaxAge": "días desde la última vez visto",
-    "dedupIncrementalHint": "Las claves vistas se recuerdan en un pequeño archivo junto a la salida; bórralo para empezar de cero.",
     "requestHeadersToggle": "Enviar cabeceras de solicitud personalizadas",
     "requestHeaderNamePlaceholder": "Nombre de la cabecera (p. ej. Accept-Language)",
     "requestHeaderKindValue": "Valor fijo",
@@ -193,7 +184,6 @@
     "requestHeaderSecretWarning": "Esto parece un secreto. Como valor fijo se escribiría en el script en texto plano.",
     "requestHeaderSwitchToEnv": "Usar variable de entorno",
     "externalConfigToggle": "Archivo de configuración editable (XML)",
-    "externalConfigHint": "Edita más tarde las URL de inicio, el nombre de salida o los nombres de campo en un pequeño archivo XML junto al script.",
     "paginationToggle": "Activar paginación",
     "paginationKindNextLink": "Enlace \"Siguiente\"",
     "paginationKindPageNumber": "URL con número de página",
@@ -201,14 +191,12 @@
     "paginationNextLinkSelectorPlaceholder": "p. ej. a.next, a:contains(\"Siguiente\")",
     "paginationUrlTemplateLabel": "Patrón de la URL de página",
     "paginationUrlTemplatePlaceholder": "p. ej. {url}?page={page}",
-    "paginationUrlTemplateHint": "{page} cuenta 2, 3, … — la página 1 es siempre la página de inicio.",
     "paginationMaxPagesLabel": "Máx. páginas",
     "discoveredUrlsToggle": "Descubrir URLs de inicio adicionales automáticamente",
     "discoveredUrlsPageUrlLabel": "Página con los enlaces",
     "discoveredUrlsPageUrlPlaceholder": "p. ej. https://example.com/categorias",
     "discoveredUrlsLinkSelectorLabel": "Selector de enlaces",
     "discoveredUrlsLinkSelectorPlaceholder": "p. ej. nav.categorias a",
-    "discoveredUrlsHint": "Carga esta página una vez y añade cada enlace coincidente como página de inicio adicional.",
     "discoveredUrlsMaxUrlsLabel": "Núm. máx. de URLs descubiertas (límite de seguridad)",
     "monitoringSectionToggle": "Avisos y comprobaciones",
     "settingsSectionToggle": "Configuración",
@@ -227,9 +215,7 @@
     "hardeningRequiredFieldsToggle": "Exigir campos (descartar filas incompletas)",
     "hardeningRequiredFieldsAddBtn": "+ Añadir campo",
     "preflightToggle": "Omitir si la página no ha cambiado",
-    "preflightHint": "Primero una solicitud rápida; si la página no ha cambiado o no está accesible, se omite la ejecución.",
     "modeBlocks": "Bloques",
-    "blocksHint": "Varios bloques de extracción independientes comparten la navegación de esta página; cada uno escribe su propio archivo de salida.",
     "blocksNameLabel": "Nombre del bloque",
     "blocksNamePlaceholder": "p. ej. Ofertas",
     "blocksOutputFileNameLabel": "Nombre del archivo de salida",
@@ -244,11 +230,7 @@
     "outputBlueprintLabel": "Diseño de salida",
     "outputBlueprintNoneOption": "Ninguno",
     "manageBlueprintsBtn": "Gestionar",
-    "outputBlueprintMappingHint": "Asigna a cada campo de destino uno de los campos de origen propios de esta configuración — cada campo de destino necesita un origen antes de poder generar el script.",
-    "outputBlueprintTreeMappingHint": "Asigna a cada campo de destino uno de tus campos de origen; los grupos de destino se colocan automáticamente. Cada campo de destino necesita un origen.",
-    "outputFormatFlattenHint": "Los resultados anidados se aplanan en una tabla: una fila por elemento más interno, con los valores de niveles superiores repetidos. Cada campo de datos necesita un nombre único.",
     "modeLabel": "Modo",
-    "monitoringIntro": "Solo es útil si ejecutas el script una y otra vez, p. ej. cada noche: te avisa cuando la web ha cambiado y tu script ha dejado de funcionar.",
     "hardeningSectionLabel": "Comprobaciones tras cada ejecución",
     "hardeningRecommendedBtn": "Comprobaciones recomendadas",
     "hardeningRecommendedApplied": "Activadas: {checks}.",
@@ -269,7 +251,8 @@
     "paginationPickPageLink": "Haz clic en un enlace a la página 2 para aprender el patrón",
     "discoveredUrlsAdvanced": "Avanzado: encontrar páginas de inicio automáticamente",
     "retryAdvanced": "Avanzado: en qué errores reintentar",
-    "dedupRetentionAdvanced": "Avanzado: cuánto tiempo recordar elementos"
+    "dedupRetentionAdvanced": "Avanzado: cuánto tiempo recordar elementos",
+    "outputFormatFlattenTitle": "Los resultados anidados se convierten en una tabla"
   },
   "requestHeaderPresets": {
     "acceptLanguage": {
@@ -338,7 +321,6 @@
     "sourceKindBrowserDiscovery": "Recoger de la página (navegador)",
     "discoveryUrlLabel": "Página que abrir",
     "insertParameterPlaceholder": "+ Insertar parámetro…",
-    "insertParameterHint": "Inserta el marcador en el cursor — muévelo a donde iría un valor fijo, p. ej. .../categories/{category}/weeks.",
     "editTemplateBtn": "Editar plantilla",
     "doneEditingTemplateBtn": "Listo",
     "valueListPlaceholder": "Valores, separados por comas o uno por línea",
@@ -384,7 +366,6 @@
     "targetBody": "Campo del cuerpo de la solicitud",
     "bodyNeedsPost": "Un destino en el cuerpo requiere una solicitud POST con cuerpo grabado.",
     "maxPagesLabel": "Máximo de páginas por combinación de solicitud",
-    "firstPageHint": "La página 1 se envía exactamente como se grabó; asegúrate de que la solicitud grabada sea la primera página, sin cursor.",
     "advancedSummary": "Avanzado: el cursor de la página siguiente está en la respuesta"
   },
   "apiLink": {
@@ -392,7 +373,6 @@
     "detectedHint": "Una respuesta grabada anunció una página siguiente mediante una cabecera Link — esta opción probablemente encaja.",
     "needsGet": "La paginación por cabecera Link necesita una petición GET.",
     "maxPagesLabel": "Máximo de páginas por combinación de petición",
-    "firstPageHint": "La página 1 se envía exactamente como se grabó — asegúrate de que la petición grabada sea la primera página. Los enlaces siguientes a otro host nunca se siguen.",
     "advancedSummary": "Avanzado: la página siguiente está en la cabecera Link"
   },
   "apiBootstrap": {
@@ -409,7 +389,6 @@
     "bodyEncodingForm": "Formulario (x-www-form-urlencoded)",
     "valuePathLabel": "Ruta JSON al token en la respuesta",
     "nameLabel": "Nombre del marcador",
-    "usageHint": "Usa {placeholder} en un encabezado (modo \"Desde token\") o elige \"Valor del token\" para una parte de la URL.",
     "valuePlaceholder": "Valor",
     "addRow": "+ Fila",
     "sourceKind": "Valor del token",
@@ -517,7 +496,6 @@
     "saveNotPossibleHint": "Añade primero al menos una transformación completa (los pasos de combinar/dividir no se pueden guardar como plantilla).",
     "saveUnavailableHint": "El companion no está disponible o es demasiado antiguo — tus plantillas no están disponibles ahora mismo.",
     "settingsTitle": "Plantillas de transformación",
-    "settingsHint": "Guarda una cadena de transformaciones desde el diálogo de un campo con \"Guardar como plantilla\" y aplícala a cualquier campo con \"Aplicar plantilla …\".",
     "unavailableHint": "Tus plantillas no están disponibles (companion inaccesible o demasiado antiguo) — solo se muestran las incluidas.",
     "renameBtn": "Renombrar",
     "deleteConfirmPrompt": "¿Eliminar?",
@@ -548,7 +526,6 @@
     "scriptNameModeFixed": "Nombre fijo",
     "scriptNameModeHostname": "Desde el sitio web",
     "scriptNameFixedLabel": "Nombre de script fijo",
-    "scriptNameHostnameHint": "El nombre del script siempre se deriva del nombre de host del sitio web actual.",
     "allConfigsTitle": "Todas las configuraciones guardadas",
     "allConfigsEmpty": "Todavía no hay configuraciones guardadas.",
     "outputFormatLabel": "Formato de salida",
@@ -556,15 +533,12 @@
     "outputFormatJson": "JSON",
     "outputFormatSqlite": "Base de datos SQLite",
     "outputFormatXlsx": "Excel (.xlsx)",
-    "outputFormatHint": "SQLite y Excel escriben una tabla; los resultados anidados se aplanan. Excel necesita el paquete de Python openpyxl.",
     "skipVerificationToggle": "Omitir la ejecución de prueba (devolver el script de inmediato)",
-    "skipVerificationHint": "El script se entrega sin ejecución de prueba: un selector incorrecto o una solicitud bloqueada solo se nota al ejecutarlo tú, y no hay vista previa de datos.",
     "accessKeyTitle": "Clave de acceso (companion compartido)",
     "accessKeyLabel": "Clave de acceso",
     "accessKeyPlaceholder": "sf_…",
     "accessKeySave": "Guardar y probar",
     "accessKeyClear": "Quitar",
-    "accessKeyHint": "Solo hace falta si tu companion exige una clave de acceso personal; quien lo gestiona te la crea. Se guarda en este navegador.",
     "accessKeyOk": "Conectado como {name}.",
     "accessKeyNotNeeded": "Este companion no usa claves de acceso.",
     "accessKeyMissing": "Este companion exige una clave de acceso.",
@@ -585,7 +559,6 @@
       "changePassword": "Cambiar contraseña",
       "passwordChanged": "Contraseña cambiada. Los demás dispositivos deben iniciar sesión de nuevo.",
       "noRegistration": "Este companion no permite el autorregistro — pide una cuenta o una clave de acceso a quien lo gestiona.",
-      "hint": "La contraseña solo va a tu companion; este navegador guarda solo un token revocable. Usa https:// o un companion en este equipo.",
       "nameMissing": "Introduce un nombre de usuario.",
       "passwordMissing": "Introduce una contraseña.",
       "passwordMismatch": "Las dos contraseñas no coinciden.",
@@ -597,7 +570,6 @@
       "emailMissing": "Introduce tu dirección de correo.",
       "emailInvalid": "Eso no parece una dirección de correo.",
       "forgot": "¿Olvidaste la contraseña?",
-      "forgotHint": "Introduce tu nombre de usuario o la dirección de correo verificada de tu cuenta. Si tiene una, se envía un código allí; introdúcelo abajo con una contraseña nueva.",
       "forgotAccountLabel": "Usuario o correo",
       "forgotSend": "Enviar código",
       "forgotSent": "Si esa cuenta tiene una dirección de correo verificada, un código está en camino.",
@@ -622,11 +594,11 @@
       "title": "Opciones de desarrollo (build de desarrollo)",
       "insecureHttp": "Permitir http:// sin cifrar hacia un companion en otro equipo",
       "openCompanion": "Abrir la dirección del companion en una pestaña",
-      "hint": "Solo en la versión de desarrollo. Con un certificado autofirmado: abre la dirección del companion una vez en una pestaña, acepta el aviso y recarga este panel.",
       "reloadHint": "Guardado — recarga el panel (o reintenta la conexión) para aplicarlo."
     },
     "externalConfigAdvanced": "Avanzado: archivo de configuración editable",
-    "glossaryTitle": "Glosario: qué significan estos términos"
+    "glossaryTitle": "Glosario: qué significan estos términos",
+    "connectionTitle": "Conexión con el companion"
   },
   "modals": {
     "fieldName": {
@@ -703,8 +675,7 @@
     "textFilter": {
       "label": "Solo el elemento cuyo texto contiene (opcional)",
       "placeholder": "p. ej. Añadir al carrito",
-      "useElementText": "Usar el texto de este elemento",
-      "hint": "Para elementos parecidos que solo se distinguen por su etiqueta. Las mayúsculas y los espacios extra no importan."
+      "useElementText": "Usar el texto de este elemento"
     },
     "matchCount": {
       "found": "{count} elemento(s) encontrado(s)"
@@ -792,9 +763,7 @@
     "noSelector": "Ningún elemento seleccionado",
     "pickSelectorBtn": "Seleccionar elemento",
     "envVarLabel": "Variable con el texto a escribir",
-    "envVarHint": "El valor se lee de esta variable de entorno en tiempo de ejecución, nunca se guarda en el script.",
     "testValueLabel": "Valor de prueba",
-    "testValueHint": "Se usa solo para la ejecución de prueba única al generar — nunca se guarda, nunca se incluye en el script.",
     "containerSelectorLabel": "Contenedor (opcional)",
     "loadMoreButtonSelectorLabel": "Botón \"Cargar más\" (opcional)",
     "maxIterationsLabel": "Rondas máx.",
@@ -807,7 +776,6 @@
     "scrollStepPxLabel": "Paso de desplazamiento (píxeles)",
     "scrollStepPxPlaceholder": "vacío = saltar al final",
     "persistentSessionToggle": "Reutilizar sesión entre ejecuciones",
-    "persistentSessionHint": "Recuerda el inicio de sesión entre ejecuciones, así que sus pasos se omiten la próxima vez. Aviso: el archivo de sesión contiene cookies activas; trátalo como una contraseña.",
     "addLoginFlowBtn": "+ Formulario de inicio de sesión (4 pasos)",
     "loginFlowHint": "Ahora haz clic en los cuatro elementos de la página: el campo de usuario, el campo de contraseña, el botón de inicio de sesión y algo que solo aparece una vez iniciada la sesión.",
     "role": {
@@ -891,6 +859,9 @@
       "dateFormat": {
         "text": "Describe cómo está escrita la fecha: {dd} es el día, {mm} el mes, {yyyy} el año, todo lo demás tal como aparece. Solo funcionan fechas numéricas — nombres de mes como «ago» no.",
         "example": "28.08.2026 → {dd}.{mm}.{yyyy}"
+      },
+      "overview": {
+        "text": "Pasos que se aplican al valor antes de escribirlo, por ejemplo recortarlo, extraer un número o convertirlo en fecha. Guarda una cadena como plantilla para reutilizarla en otros campos."
       }
     },
     "hardening": {
@@ -972,7 +943,7 @@
         "example": "electronica, libros"
       },
       "sourceDiscovery": {
-        "text": "Los valores salen de otra petición del sitio, p. ej. una lista de categorías. Haz clic en uno de esos valores en la página y se encuentra la petición adecuada.",
+        "text": "Los valores salen de otra petición del sitio, p. ej. una lista de categorías. Haz clic en uno de esos valores en la página y se encuentra la petición adecuada. Al editar su dirección, la lista \"insertar parámetro\" añade {name} en el cursor; muévelo a donde iría un valor fijo, p. ej. .../categories/{category}/weeks.",
         "example": "GET /api/categories  →  cada id de la lista"
       },
       "sourceRange": {
@@ -986,30 +957,39 @@
       "sourceBootstrap": {
         "text": "Esta parte de la dirección toma el token de acceso recién obtenido (ver «la API necesita primero un token de inicio de sesión»).",
         "example": "?access_token={token}"
+      },
+      "fields": {
+        "text": "Los campos que se extraen de la respuesta. Un grupo limita sus campos a una lista u objeto del JSON; un campo es un único valor."
       }
     },
     "apiBootstrap": {
       "overview": {
         "text": "Para APIs que primero necesitan un token de corta duración de una solicitud de login/token. El script envía esa solicitud al inicio de cada ejecución y usa el valor extraído en los encabezados/la URL de abajo — las credenciales solo provienen de variables de entorno.",
         "example": "POST /auth/token  →  access_token"
+      },
+      "placeholder": {
+        "text": "Usa el nombre entre llaves, p. ej. {token}, en un encabezado (modo \"Desde token\") o elige \"Valor del token\" como fuente de valores de una parte de la URL. Las solicitudes de una lista de valores reutilizan los encabezados."
       }
     },
     "apiCursor": {
       "overview": {
-        "text": "Para APIs que solo revelan el cursor de la página siguiente dentro de la respuesta actual (p. ej. pageInfo.endCursor o next_page_token). El script pide página tras página para cada combinación de parámetros hasta que no se devuelva más cursor.",
+        "text": "Para APIs que solo revelan el cursor de la página siguiente dentro de la respuesta actual (p. ej. pageInfo.endCursor o next_page_token). El script pide página tras página para cada combinación de parámetros hasta que no se devuelva más cursor. La página 1 se envía exactamente como se grabó, así que comprueba que la solicitud grabada sea la primera página, sin cursor.",
         "example": "pageInfo.endCursor"
       }
     },
     "apiLink": {
       "overview": {
-        "text": "Para APIs (GitHub, GitLab, WordPress, ...) que anuncian la página siguiente en la cabecera de respuesta HTTP Link en lugar de en el cuerpo. El script solicita esa URL página tras página para cada combinación de parámetros hasta que no quede enlace siguiente. No para peticiones POST.",
+        "text": "Para APIs (GitHub, GitLab, WordPress, ...) que anuncian la página siguiente en la cabecera de respuesta HTTP Link en lugar de en el cuerpo. El script solicita esa URL página tras página para cada combinación de parámetros hasta que no quede enlace siguiente. No para peticiones POST. La página 1 se envía exactamente como se grabó, así que comprueba que la solicitud grabada sea la primera página. Los enlaces a la página siguiente en otro host nunca se siguen.",
         "example": "Link: <…?page=2>; rel=\"next\""
       }
     },
     "outputLayout": {
       "overview": {
-        "text": "Una lista guardada de nombres de columna en un orden fijo. Elige una y asigna tus campos: así todas las exportaciones para el mismo proceso tienen las mismas columnas, vengan de la página que vengan.",
+        "text": "Una lista guardada de nombres de columna en un orden fijo. Elige una y asigna cada columna a uno de tus campos: cada columna necesita un origen antes de poder generar el script; los grupos de un diseño en árbol se colocan automáticamente. Así todas las exportaciones para el mismo proceso tienen las mismas columnas, vengan de la página que vengan.",
         "example": "Exportación estándar de productos: nombre, precio, enlace"
+      },
+      "manage": {
+        "text": "Un diseño de salida es una lista guardada y reutilizable de nombres de columna. Crea uno aquí y elígelo luego en los ajustes de un scraper para renombrar y ordenar sus columnas de salida."
       }
     },
     "safetyChecks": {
@@ -1024,8 +1004,118 @@
     },
     "dedup": {
       "overview": {
-        "text": "Descarta un elemento cuando ya apareció otro con la misma clave, en esta ejecución o (si lo eliges) en una anterior. Elige los campos que identifican un elemento, p. ej. el número de artículo.",
+        "text": "Descarta un elemento cuando ya apareció otro con la misma clave, en esta ejecución o (si lo eliges) en una anterior. Elige los campos que identifican un elemento (juntos forman su clave), p. ej. el número de artículo. Los elementos cuyos campos clave están todos vacíos nunca se eliminan.",
         "example": "Número de artículo"
+      },
+      "incremental": {
+        "text": "El script recuerda las claves vistas en un pequeño archivo junto a su salida (nombre del archivo de salida + .dedup-seen.json); bórralo para empezar de cero. Las claves recordadas están limitadas por número o antigüedad. El archivo solo se actualiza tras una ejecución que no incumplió una comprobación de seguridad."
+      }
+    },
+    "outputFormat": {
+      "overview": {
+        "text": "El archivo que escribe el script generado. SQLite y Excel contienen una tabla; los resultados anidados se aplanan en ella. Excel necesita el paquete de Python openpyxl en el equipo que ejecuta el script y en el del companion. No disponible para bloques ni combinado, ni junto con la detección de cambios."
+      },
+      "flatten": {
+        "text": "Los resultados anidados se aplanan en una tabla: una fila por elemento más interno, con los valores de niveles superiores repetidos en cada fila. Cada campo de datos necesita un nombre único, o elige un diseño de salida para definir tú las columnas."
+      }
+    },
+    "editableConfig": {
+      "overview": {
+        "text": "Te permite cambiar más tarde las URL de inicio, el nombre de salida o el nombre de salida de un campo en un pequeño archivo XML junto al script, sin tocar el archivo .py. El script crea el archivo en su primera ejecución."
+      }
+    },
+    "skipTrialRun": {
+      "overview": {
+        "text": "El script se entrega sin haberse ejecutado antes contra la página real. Se sigue comprobando su estructura, pero un selector incorrecto o una solicitud bloqueada solo se nota al ejecutarlo tú, y no hay vista previa de datos ni archivo de salida completo."
+      }
+    },
+    "scriptName": {
+      "overview": {
+        "text": "Nombre fijo: rellena el nombre del script de cada scraper nuevo. Desde el sitio web: el nombre se deriva cada vez de la dirección del sitio actual. Puedes seguir cambiándolo en cada scraper."
+      }
+    },
+    "account": {
+      "forgot": {
+        "text": "Introduce tu nombre de usuario o la dirección de correo verificada de tu cuenta. Si la tiene, se envía allí un código; introdúcelo abajo con una contraseña nueva."
+      },
+      "overview": {
+        "text": "La contraseña solo va a tu companion; este navegador guarda solo un token revocable para este dispositivo. Usa un companion por https:// o en este equipo para que nadie pueda leer la contraseña por el camino."
+      }
+    },
+    "accessKey": {
+      "overview": {
+        "text": "Solo hace falta si el companion al que te conectas exige una clave de acceso personal (varias personas comparten un companion). Quien lo gestiona te la crea. Se guarda en este navegador y se envía con cada solicitud."
+      }
+    },
+    "developer": {
+      "overview": {
+        "text": "Solo existe en una versión de desarrollo. Con un certificado autofirmado: abre la dirección del companion una vez en una pestaña (botón de arriba), acepta el aviso y recarga este panel."
+      }
+    },
+    "presets": {
+      "overview": {
+        "text": "Guarda una cadena de transformaciones desde el diálogo de un campo con \"Guardar como plantilla\" y aplícala a cualquier campo con \"Aplicar plantilla …\". Las plantillas integradas son de solo lectura; las tuyas se pueden renombrar o eliminar aquí."
+      }
+    },
+    "savedConfigs": {
+      "overview": {
+        "text": "Todo lo que guardaste para cualquier sitio. Carga una configuración desde el panel en la página de ese sitio; aquí puedes ver sus salidas guardadas o eliminar entradas."
+      },
+      "panel": {
+        "text": "Configuraciones que guardaste para este sitio. Carga una para restaurar su ajuste o abre sus salidas guardadas."
+      }
+    },
+    "combined": {
+      "overview": {
+        "text": "Une varias de tus configuraciones guardadas, incluso de sitios distintos, en un solo script. Sus salidas se combinan en un único resultado."
+      }
+    },
+    "blocks": {
+      "overview": {
+        "text": "Crea varios bloques de extracción independientes (planos o contenedores, mezclados a voluntad) en esta página. Comparten una navegación y cada uno escribe su propio archivo de salida en una sola ejecución. Se necesitan al menos 2 bloques."
+      }
+    },
+    "proxy": {
+      "overview": {
+        "text": "Introduce el nombre de una variable de entorno con una lista de URL de proxy separadas por comas, p. ej. http://user:pass@host:port, no las direcciones en sí. Con varios proxies el script los usa por turnos."
+      }
+    },
+    "requestDelay": {
+      "overview": {
+        "text": "El script espera entre dos solicitudes, un tiempo fijo o aleatorio dentro de un rango (p. ej. de 1 a 3 segundos), para evitar bloqueos y límites de frecuencia. La ejecución tarda más en consecuencia (50 páginas × 2 s ≈ 1,5 minutos más). La ejecución de prueba no cuenta las pausas en su límite de tiempo."
+      }
+    },
+    "robots": {
+      "crawlDelay": {
+        "text": "Si el robots.txt del sitio pide un ritmo (Crawl-delay o Request-rate), el script espera al menos ese tiempo entre dos solicitudes. Junto con \"Pausa entre solicitudes\" gana la pausa mayor. Los sitios que no publican nada no se ven afectados."
+      },
+      "disallow": {
+        "text": "Mientras se ejecuta, el script comprueba cada solicitud (páginas, páginas siguientes, descargas, llamadas a la API) con las reglas Disallow del robots.txt del sitio, por si el sitio las cambió después de crear el script. Un robots.txt ilegible nunca bloquea nada; sin robots.txt no hay restricciones."
+      }
+    },
+    "retry": {
+      "overview": {
+        "text": "Tras un error de conexión, un tiempo de espera o uno de los códigos de estado, el script lo intenta de nuevo tras la espera (con 429/503 tanto como pida el servidor mediante Retry-After, como máximo 60 s). Otros errores como 404 o 403 fallan de inmediato. Si fallan todos los intentos, la ejecución se detiene."
+      }
+    },
+    "changeDetection": {
+      "overview": {
+        "text": "Cada campo es el nombre de una variable de entorno, no su valor: el valor real se lee del entorno cuando se ejecuta el script y nunca se escribe en él."
+      }
+    },
+    "monitoring": {
+      "intro": {
+        "text": "Solo es útil si ejecutas el script una y otra vez, p. ej. cada noche: te avisa cuando el sitio web cambió y tu script dejó de funcionar."
+      }
+    },
+    "textFilter": {
+      "overview": {
+        "text": "Para elementos parecidos (botones, enlaces) que solo se distinguen por su etiqueta. Las mayúsculas y los espacios extra no importan. Déjalo vacío para mantener la selección tal cual."
+      }
+    },
+    "combineSplit": {
+      "overview": {
+        "text": "Un campo combinado o dividido se calcula a partir de otros campos del mismo grupo, no de la página. \"Quitar los campos originales\" oculta las fuentes de la salida pero sigue usándolas."
       }
     }
   },

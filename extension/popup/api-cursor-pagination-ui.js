@@ -61,8 +61,7 @@ function cursorConfigHtml(cursor, draft, state) {
       : ''}
       ${cursor.target === 'Body' ? `<div class="actions">${pathPickerButtonHtml('cursor.bodyPath')}</div>${pathPickerPanelHtml(state, 'cursor.bodyPath')}` : ''}
       <div class="row-label">${escapeHtml(t('apiCursor.maxPagesLabel'))}</div>
-      <input type="number" min="1" step="1" class="api-cursor-field" data-field="maxPages" value="${escapeHtml(cursor.maxPages)}" />
-      <p class="browser-actions-hint">${escapeHtml(t('apiCursor.firstPageHint'))}</p>`;
+      <input type="number" min="1" step="1" class="api-cursor-field" data-field="maxPages" value="${escapeHtml(cursor.maxPages)}" />`;
 }
 
 // Called from popup.js's render() while the API_CONFIG screen is showing.

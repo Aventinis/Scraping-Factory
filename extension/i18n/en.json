@@ -63,7 +63,6 @@
     "modeContainer": "Containers (nested)",
     "modeApi": "API",
     "modeCombined": "Combined",
-    "combinedHint": "Merges several of your own already-saved configurations — even from different sites — into one script whose outputs are combined into a single result.",
     "combinedAddBtn": "+ Add component",
     "combinedNoSavedConfigsHint": "No saved configurations yet — save at least two configurations first (in another mode), then combine them here.",
     "combinedNamePlaceholder": "Name",
@@ -146,20 +145,15 @@
     "notifyEmailFromEnvVarLabel": "Variable holding the sender address",
     "notifyEmailToEnvVarLabel": "Variable holding the recipient address",
     "webhookUrlEnvVarLabel": "Variable holding the webhook URL",
-    "changeDetectionHint": "Each field is the name of an environment variable, not its value — it is read at run time and never written into the script.",
     "proxyToggle": "Use a proxy",
     "proxyEnvVarLabel": "Variable holding the proxy list",
-    "proxyHint": "Name of an environment variable with comma-separated proxy URLs, e.g. http://user:pass@host:port; several are used in turn.",
     "requestDelayToggle": "Pause between requests",
     "requestDelayFromLabel": "from",
     "requestDelayToLabel": "to",
     "requestDelayToPlaceholder": "(fixed)",
     "requestDelaySecondsUnit": "seconds",
-    "requestDelayHint": "Waits between two requests to avoid blocks and rate limits; the run takes correspondingly longer.",
     "respectRobotsDelayToggle": "Respect the site's robots.txt (Crawl-delay)",
-    "respectRobotsDelayHint": "Waits at least the Crawl-delay the site's robots.txt asks for; the larger gap wins over your own pause.",
     "robotsDisallowToggle": "Check the site's robots.txt before every request",
-    "robotsDisallowHint": "While it runs, the script checks every request against the site's robots.txt Disallow rules.",
     "robotsDisallowActionLabel": "If a request is disallowed",
     "robotsDisallowActionSkip": "Skip it and carry on",
     "robotsDisallowActionWarn": "Warn, but request it anyway",
@@ -170,9 +164,7 @@
     "retryDelayLabel": "Wait (s)",
     "retryExponentialToggle": "Double the wait after every retry",
     "retryStatusCodesLabel": "On status codes",
-    "retryHint": "Retries after a connection error, a timeout or one of these status codes; other errors such as 404 fail at once.",
     "dedupToggle": "Remove duplicates",
-    "dedupKeyFieldsHint": "Pick the field(s) that identify an item; a later row with the same key is dropped.",
     "dedupAddKeyFieldBtn": "Add key field",
     "dedupKeyFieldMissing": "no longer exists",
     "dedupIncrementalToggle": "Only write new items since the last run",
@@ -183,7 +175,6 @@
     "dedupRetentionLabel": "Remember",
     "dedupRetentionMaxCount": "newest items (count)",
     "dedupRetentionMaxAge": "days since last seen",
-    "dedupIncrementalHint": "Seen keys are remembered in a small file next to the output; delete it to start over.",
     "requestHeadersToggle": "Send custom request headers",
     "requestHeaderNamePlaceholder": "Header name (e.g. Accept-Language)",
     "requestHeaderKindValue": "Fixed value",
@@ -193,7 +184,6 @@
     "requestHeaderSecretWarning": "This looks like a secret. As a fixed value it would be written into the script in plain text.",
     "requestHeaderSwitchToEnv": "Use environment variable",
     "externalConfigToggle": "Editable config file (XML)",
-    "externalConfigHint": "Edit the start URLs, the output name or the field names later in a small XML file next to the script.",
     "paginationToggle": "Enable pagination",
     "paginationKindNextLink": "\"Next\" link",
     "paginationKindPageNumber": "Page-number URL",
@@ -201,14 +191,12 @@
     "paginationNextLinkSelectorPlaceholder": "e.g. a.next, a:contains(\"Next\")",
     "paginationUrlTemplateLabel": "Page URL pattern",
     "paginationUrlTemplatePlaceholder": "e.g. {url}?page={page}",
-    "paginationUrlTemplateHint": "{page} counts 2, 3, … — page 1 is always the start page.",
     "paginationMaxPagesLabel": "Max. pages",
     "discoveredUrlsToggle": "Discover additional start URLs automatically",
     "discoveredUrlsPageUrlLabel": "Page with the links",
     "discoveredUrlsPageUrlPlaceholder": "e.g. https://example.com/categories",
     "discoveredUrlsLinkSelectorLabel": "Link selector",
     "discoveredUrlsLinkSelectorPlaceholder": "e.g. nav.categories a",
-    "discoveredUrlsHint": "Loads this page once and adds every matching link as an extra start page.",
     "discoveredUrlsMaxUrlsLabel": "Max. number of discovered URLs (safety limit)",
     "monitoringSectionToggle": "Alerts & safety checks",
     "settingsSectionToggle": "Settings",
@@ -227,9 +215,7 @@
     "hardeningRequiredFieldsToggle": "Require fields (drop incomplete rows)",
     "hardeningRequiredFieldsAddBtn": "+ Add field",
     "preflightToggle": "Skip if the page hasn't changed",
-    "preflightHint": "One quick request first; if the page is unchanged or unreachable, the run is skipped.",
     "modeBlocks": "Blocks",
-    "blocksHint": "Several independent extraction blocks share this page's navigation; each writes its own output file.",
     "blocksNameLabel": "Block name",
     "blocksNamePlaceholder": "e.g. Offers",
     "blocksOutputFileNameLabel": "Output file name",
@@ -244,11 +230,7 @@
     "outputBlueprintLabel": "Output layout",
     "outputBlueprintNoneOption": "None",
     "manageBlueprintsBtn": "Manage",
-    "outputBlueprintMappingHint": "Map each target field to one of this configuration's own source fields — every target field needs a source before the script can be generated.",
-    "outputBlueprintTreeMappingHint": "Map each target field to one of your source fields; target groups are placed automatically. Every target field needs a source.",
-    "outputFormatFlattenHint": "Nested results are flattened into one table: one row per innermost item, higher-level values repeated. Every data field needs a unique name.",
     "modeLabel": "Mode",
-    "monitoringIntro": "Only useful if you run the script again and again, e.g. every night: it tells you when the website changed and your script stopped working.",
     "hardeningSectionLabel": "Checks after every run",
     "hardeningRecommendedBtn": "Recommended checks",
     "hardeningRecommendedApplied": "Switched on: {checks}.",
@@ -269,7 +251,8 @@
     "paginationPickPageLink": "Click a link to page 2 to learn the pattern",
     "discoveredUrlsAdvanced": "Advanced: find start pages automatically",
     "retryAdvanced": "Advanced: which errors to retry",
-    "dedupRetentionAdvanced": "Advanced: how long to remember items"
+    "dedupRetentionAdvanced": "Advanced: how long to remember items",
+    "outputFormatFlattenTitle": "Nested results become one table"
   },
   "requestHeaderPresets": {
     "acceptLanguage": {
@@ -338,7 +321,6 @@
     "sourceKindBrowserDiscovery": "Collect from the page (browser)",
     "discoveryUrlLabel": "Page to open",
     "insertParameterPlaceholder": "+ Insert parameter…",
-    "insertParameterHint": "Inserts the placeholder at the cursor — move it to where a fixed value would go, e.g. .../categories/{category}/weeks.",
     "editTemplateBtn": "Edit template",
     "doneEditingTemplateBtn": "Done",
     "valueListPlaceholder": "Values, comma-separated or one per line",
@@ -384,7 +366,6 @@
     "targetBody": "Request body field",
     "bodyNeedsPost": "A body target needs a POST request with a recorded request body.",
     "maxPagesLabel": "Maximum pages per request combination",
-    "firstPageHint": "Page 1 is sent exactly as recorded — make sure the recorded request is the first page, without a cursor.",
     "advancedSummary": "Advanced: the next page's cursor is in the response"
   },
   "apiLink": {
@@ -392,7 +373,6 @@
     "detectedHint": "A recorded response announced a next page via a Link header — this option probably fits.",
     "needsGet": "Link-header pagination needs a GET request.",
     "maxPagesLabel": "Maximum pages per request combination",
-    "firstPageHint": "Page 1 is sent exactly as recorded — make sure the recorded request is the first page. Next-page links to another host are never followed.",
     "advancedSummary": "Advanced: the next page is in the Link header"
   },
   "apiBootstrap": {
@@ -409,7 +389,6 @@
     "bodyEncodingForm": "Form (x-www-form-urlencoded)",
     "valuePathLabel": "JSON path to the token in the response",
     "nameLabel": "Placeholder name",
-    "usageHint": "Use {placeholder} in a header (\"From token\" mode) or pick \"Token value\" for a URL part.",
     "valuePlaceholder": "Value",
     "addRow": "+ Row",
     "sourceKind": "Token value",
@@ -517,7 +496,6 @@
     "saveNotPossibleHint": "Add at least one complete transformation first (combine/split steps can't be saved as a preset).",
     "saveUnavailableHint": "The companion isn't reachable or is too old — your own presets aren't available right now.",
     "settingsTitle": "Transformation presets",
-    "settingsHint": "Save a transformation chain from a field's dialog with \"Save as preset\", then apply it to any field via \"Apply preset …\".",
     "unavailableHint": "Your own presets aren't available (companion unreachable or too old) — only the built-in ones are shown.",
     "renameBtn": "Rename",
     "deleteConfirmPrompt": "Delete?",
@@ -548,7 +526,6 @@
     "scriptNameModeFixed": "Fixed name",
     "scriptNameModeHostname": "From website",
     "scriptNameFixedLabel": "Fixed script name",
-    "scriptNameHostnameHint": "The script name is always derived from the current website's hostname.",
     "allConfigsTitle": "All saved configurations",
     "allConfigsEmpty": "No saved configurations yet.",
     "outputFormatLabel": "Output format",
@@ -556,15 +533,12 @@
     "outputFormatJson": "JSON",
     "outputFormatSqlite": "SQLite database",
     "outputFormatXlsx": "Excel (.xlsx)",
-    "outputFormatHint": "SQLite and Excel write one table; nested results are flattened. Excel needs the Python package openpyxl.",
     "skipVerificationToggle": "Skip the trial run (return the script immediately)",
-    "skipVerificationHint": "The script is returned without a trial run: a wrong selector or a blocked request only shows when you run it yourself, and there is no data preview.",
     "accessKeyTitle": "Access key (shared companion)",
     "accessKeyLabel": "Access key",
     "accessKeyPlaceholder": "sf_…",
     "accessKeySave": "Save and test",
     "accessKeyClear": "Remove",
-    "accessKeyHint": "Only needed if your companion requires a personal access key; whoever runs it creates one for you. It is stored in this browser.",
     "accessKeyOk": "Connected as {name}.",
     "accessKeyNotNeeded": "This companion does not use access keys.",
     "accessKeyMissing": "This companion requires an access key.",
@@ -585,7 +559,6 @@
       "changePassword": "Change password",
       "passwordChanged": "Password changed. Other devices have to sign in again.",
       "noRegistration": "This companion does not allow self-registration — ask whoever runs it for an account or an access key.",
-      "hint": "The password goes only to your companion; this browser keeps just a revocable token. Use https:// or a companion on this computer.",
       "nameMissing": "Enter a user name.",
       "passwordMissing": "Enter a password.",
       "passwordMismatch": "The two passwords are not the same.",
@@ -597,7 +570,6 @@
       "emailMissing": "Enter your email address.",
       "emailInvalid": "That does not look like an email address.",
       "forgot": "Forgot password?",
-      "forgotHint": "Enter your user name or the verified email address of your account. If it has one, a code is sent there; enter it below with a new password.",
       "forgotAccountLabel": "User name or email",
       "forgotSend": "Send code",
       "forgotSent": "If that account has a verified email address, a code is on its way.",
@@ -622,11 +594,11 @@
       "title": "Developer options (development build)",
       "insecureHttp": "Allow plain http:// to a companion on another machine",
       "openCompanion": "Open companion address in a tab",
-      "hint": "Development build only. For a self-signed certificate: open the companion address in a tab once, accept the warning, reload this panel.",
       "reloadHint": "Saved — reload the panel (or retry the connection) to apply it."
     },
     "externalConfigAdvanced": "Advanced: editable config file",
-    "glossaryTitle": "Glossary: what these terms mean"
+    "glossaryTitle": "Glossary: what these terms mean",
+    "connectionTitle": "Companion connection"
   },
   "modals": {
     "fieldName": {
@@ -703,8 +675,7 @@
     "textFilter": {
       "label": "Only the element whose text contains (optional)",
       "placeholder": "e.g. Add to cart",
-      "useElementText": "Use this element's text",
-      "hint": "For similar elements that only their label tells apart. Capitals and extra spaces don't matter."
+      "useElementText": "Use this element's text"
     },
     "matchCount": {
       "found": "{count} element(s) found"
@@ -792,9 +763,7 @@
     "noSelector": "No element selected",
     "pickSelectorBtn": "Select element",
     "envVarLabel": "Variable holding the text to type",
-    "envVarHint": "The value is read from this environment variable at runtime, never stored in the script.",
     "testValueLabel": "Test value",
-    "testValueHint": "Used only for the one-time trial run when generating — never stored, never included in the script.",
     "containerSelectorLabel": "Container (optional)",
     "loadMoreButtonSelectorLabel": "\"Load more\" button (optional)",
     "maxIterationsLabel": "Max. rounds",
@@ -807,7 +776,6 @@
     "scrollStepPxLabel": "Scroll step (pixels)",
     "scrollStepPxPlaceholder": "blank = jump to the bottom",
     "persistentSessionToggle": "Reuse session between runs",
-    "persistentSessionHint": "Remembers the login between runs, so the login steps are skipped next time. Warning: the saved session file holds live cookies — treat it like a password.",
     "addLoginFlowBtn": "+ Login form (4 steps)",
     "loginFlowHint": "Now click the four elements on the page: the user name field, the password field, the login button and something that only shows once you are logged in.",
     "role": {
@@ -891,6 +859,9 @@
       "dateFormat": {
         "text": "Describe how the date is written: {dd} is the day, {mm} the month, {yyyy} the year, everything else exactly as it appears. Only numeric dates work — month names like “Aug” don't.",
         "example": "28.08.2026 → {dd}.{mm}.{yyyy}"
+      },
+      "overview": {
+        "text": "Steps applied to the value before it is written — for example trim it, extract a number or convert it to a date. Save a chain as a preset to reuse it on other fields."
       }
     },
     "hardening": {
@@ -972,7 +943,7 @@
         "example": "electronics, books"
       },
       "sourceDiscovery": {
-        "text": "The values come from another request the site makes, e.g. a list of categories. Click one of those values on the page and the matching request is found for you.",
+        "text": "The values come from another request the site makes, e.g. a list of categories. Click one of those values on the page and the matching request is found for you. When you edit its address, the \"insert parameter\" list adds {name} at the cursor — move it to where a fixed value would go, e.g. .../categories/{category}/weeks.",
         "example": "GET /api/categories  →  every id in the list"
       },
       "sourceRange": {
@@ -986,30 +957,39 @@
       "sourceBootstrap": {
         "text": "This part of the address takes the freshly fetched login token (see \"the API needs a login token first\").",
         "example": "?access_token={token}"
+      },
+      "fields": {
+        "text": "The fields to extract from the response. A group scopes its fields to a list or object in the JSON; a field is one value."
       }
     },
     "apiBootstrap": {
       "overview": {
         "text": "For APIs that need a short-lived token from a login/token request first. The script sends that request at the start of every run and uses the extracted value in the headers/URL below — credentials only ever come from environment variables.",
         "example": "POST /auth/token  →  access_token"
+      },
+      "placeholder": {
+        "text": "Use the name in braces, e.g. {token}, in a header (\"From token\" mode) or pick \"Token value\" as the value source of a URL part. Requests for a list of values reuse the headers."
       }
     },
     "apiCursor": {
       "overview": {
-        "text": "For APIs that only reveal the next page's cursor inside the current response (e.g. pageInfo.endCursor or next_page_token). The script fetches page after page for every parameter combination until no cursor is returned.",
+        "text": "For APIs that only reveal the next page's cursor inside the current response (e.g. pageInfo.endCursor or next_page_token). The script fetches page after page for every parameter combination until no cursor is returned. Page 1 is sent exactly as recorded, so make sure the recorded request is the first page, without a cursor.",
         "example": "pageInfo.endCursor"
       }
     },
     "apiLink": {
       "overview": {
-        "text": "For APIs (GitHub, GitLab, WordPress, ...) that announce the next page in the HTTP Link response header instead of in the body. The script requests that URL page after page for every parameter combination until no next link is left. Not for POST requests.",
+        "text": "For APIs (GitHub, GitLab, WordPress, ...) that announce the next page in the HTTP Link response header instead of in the body. The script requests that URL page after page for every parameter combination until no next link is left. Not for POST requests. Page 1 is sent exactly as recorded, so make sure the recorded request is the first page. Next-page links to another host are never followed.",
         "example": "Link: <…?page=2>; rel=\"next\""
       }
     },
     "outputLayout": {
       "overview": {
-        "text": "A saved list of column names in a fixed order. Pick one and map your fields onto it, so every export for the same pipeline has the same columns — whichever site it came from.",
+        "text": "A saved list of column names in a fixed order. Pick one and map each column to one of your fields — every column needs a source before the script can be generated; groups of a tree layout are placed automatically. So every export for the same pipeline has the same columns, whichever site it came from.",
         "example": "Standard product export: name, price, link"
+      },
+      "manage": {
+        "text": "An output layout is a saved, reusable list of column names. Create one here, then pick it in a scraper's settings to rename and reorder its output columns."
       }
     },
     "safetyChecks": {
@@ -1024,8 +1004,118 @@
     },
     "dedup": {
       "overview": {
-        "text": "Drops an item when one with the same key already appeared — in this run, or (if you choose) in an earlier one. Pick the field(s) that identify an item, e.g. an article number.",
+        "text": "Drops an item when one with the same key already appeared — in this run, or (if you choose) in an earlier one. Pick the field(s) that identify an item (together they form its key), e.g. an article number. Items whose key fields are all empty are never removed.",
         "example": "Article number"
+      },
+      "incremental": {
+        "text": "The script remembers the keys it has seen in a small file next to its output (output file name + .dedup-seen.json); delete that file to start over. The remembered keys are limited by number or age. The file is only updated after a run that did not fail a safety check."
+      }
+    },
+    "outputFormat": {
+      "overview": {
+        "text": "The file the generated script writes. SQLite and Excel contain one table; nested results are flattened into it. Excel needs the Python package openpyxl on the computer that runs the script and on the companion's. Not available for blocks or combined mode, or together with change detection."
+      },
+      "flatten": {
+        "text": "Nested results are flattened into one table: one row per innermost item, with values from higher levels repeated in every row. Every data field needs a unique name — or pick an output layout to choose the columns yourself."
+      }
+    },
+    "editableConfig": {
+      "overview": {
+        "text": "Lets you change the start URLs, the output name or a field's output name later in a small XML file next to the script — without touching the .py file. The script creates the file the first time it runs."
+      }
+    },
+    "skipTrialRun": {
+      "overview": {
+        "text": "The script is handed over without being run once against the live page. It is still checked for structural problems, but a wrong selector or a blocked request only shows when you run it yourself, and there is no data preview or full output file."
+      }
+    },
+    "scriptName": {
+      "overview": {
+        "text": "Fixed name: pre-fills the script name of every new scraper. From website: the name is derived from the current site's address each time. You can still change it per scraper."
+      }
+    },
+    "account": {
+      "forgot": {
+        "text": "Enter your user name or the verified email address of your account. If it has one, a code is sent there; enter it below with a new password."
+      },
+      "overview": {
+        "text": "The password goes only to your companion; this browser keeps just a revocable token for this device. Use an https:// companion or one on this computer so the password can't be read on the way."
+      }
+    },
+    "accessKey": {
+      "overview": {
+        "text": "Only needed if the companion you connect to requires a personal access key (several people sharing one companion). Whoever runs the companion creates it for you. It is stored in this browser and sent with every request."
+      }
+    },
+    "developer": {
+      "overview": {
+        "text": "Only exists in a development build. For a self-signed certificate: open the companion address in a browser tab once (button above), accept the warning, then reload this panel."
+      }
+    },
+    "presets": {
+      "overview": {
+        "text": "Save a transformation chain from a field's dialog with \"Save as preset\", then apply it to any field via \"Apply preset …\". Built-in presets are read-only; your own can be renamed or deleted here."
+      }
+    },
+    "savedConfigs": {
+      "overview": {
+        "text": "Everything you saved for any site. Load a configuration from the panel on that site's own page; here you can browse its saved outputs or delete entries."
+      },
+      "panel": {
+        "text": "Configurations you saved for this site. Load one to restore its setup, or open its saved outputs."
+      }
+    },
+    "combined": {
+      "overview": {
+        "text": "Merges several of your own saved configurations — even from different sites — into one script. Their outputs are combined into a single result."
+      }
+    },
+    "blocks": {
+      "overview": {
+        "text": "Build several independent extraction blocks (flat or container, freely mixed) on this page. They share one navigation and each writes its own output file in one run. At least 2 blocks are needed."
+      }
+    },
+    "proxy": {
+      "overview": {
+        "text": "Enter the name of an environment variable that holds a comma-separated list of proxy URLs, e.g. http://user:pass@host:port — not the addresses themselves. With several proxies the script uses them in turn."
+      }
+    },
+    "requestDelay": {
+      "overview": {
+        "text": "The script waits between two requests — fixed, or random within a range (e.g. 1 to 3 seconds) — to avoid blocks and rate limits. The run takes correspondingly longer (50 pages × 2 s ≈ 1.5 minutes more). The trial run doesn't count the pauses against its time limit."
+      }
+    },
+    "robots": {
+      "crawlDelay": {
+        "text": "If the site's robots.txt asks for a pace (Crawl-delay or Request-rate), the script waits at least that long between two requests. Combined with \"Pause between requests\", the larger gap wins. Sites that publish nothing are unaffected."
+      },
+      "disallow": {
+        "text": "While it runs, the script checks every request (pages, further pages, downloads, API calls) against the site's robots.txt Disallow rules — in case the site changed them after you created the script. A robots.txt that can't be read never blocks anything; no robots.txt means no restrictions."
+      }
+    },
+    "retry": {
+      "overview": {
+        "text": "After a connection error, a timeout or one of the status codes, the script tries again after the wait (for 429/503 as long as the server asks via Retry-After, at most 60 s). Other errors such as 404 or 403 fail at once. If every attempt fails, the run stops."
+      }
+    },
+    "changeDetection": {
+      "overview": {
+        "text": "Every field here is the name of an environment variable, not its value — the real value is read from the environment when the script runs and is never written into the script."
+      }
+    },
+    "monitoring": {
+      "intro": {
+        "text": "Only useful if you run the script again and again, e.g. every night: it tells you when the website changed and your script stopped working."
+      }
+    },
+    "textFilter": {
+      "overview": {
+        "text": "For similar elements (buttons, links) that only their label tells apart. Capitals and extra spaces don't matter. Leave empty to keep the selection as it is."
+      }
+    },
+    "combineSplit": {
+      "overview": {
+        "text": "A combined or split field is computed from other fields of the same group, not from the page. \"Remove the original fields\" hides the sources from the output while still using them."
       }
     }
   },

@@ -1,7 +1,8 @@
-// Issue #354 Part B: the panel carries one line per hint — the long explanations
-// live in the bundled user documentation (docs/user, "Learn more"). This keeps a
-// `*Hint` text from growing back into a paragraph; reword it short and put the
-// detail on the matching docs page instead.
+// Issue #354 Part B: the panel carries one title per control; explanations live
+// behind its "?" (help.<area>.<field>) and, in depth, in the bundled user
+// documentation ("Learn more"). What is still called `*Hint` are short status and
+// instruction lines (an empty list, "pick the four elements now"). This keeps one
+// from growing back into a paragraph — put the explanation behind a "?" instead.
 const en = require('./en.json');
 const de = require('./de.json');
 const es = require('./es.json');

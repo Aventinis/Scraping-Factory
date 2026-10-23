@@ -19,6 +19,7 @@ const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:ApiBootstrapUI');
 const { t } = require('../i18n/i18n');
 const { envVarNoteHtml } = require('./env-var-ui');
+const { helpHostHtml } = require('./help-popover');
 const { autoOpenAdvanced } = require('./advanced-disclosure-ui');
 const { pathPickerButtonHtml, pathPickerPanelHtml, wirePathPickerEvents } = require('./json-path-picker-ui');
 const {
@@ -112,9 +113,8 @@ function bootstrapConfigHtml(bootstrap, recordingEntries, testValues, state) {
       <div class="row-label">${escapeHtml(t('apiBootstrap.valuePathLabel'))}</div>
       <input type="text" class="api-bootstrap-field" data-field="valuePath" placeholder="access_token" value="${escapeHtml(bootstrap.valuePath)}" />
       <div class="actions">${pathPickerButtonHtml('bootstrap.valuePath')}</div>${pathPickerPanelHtml(state, 'bootstrap.valuePath')}
-      <div class="row-label">${escapeHtml(t('apiBootstrap.nameLabel'))}</div>
-      <input type="text" class="api-bootstrap-field" data-field="name" placeholder="token" value="${escapeHtml(bootstrap.name)}" />
-      <p class="browser-actions-hint">${escapeHtml(t('apiBootstrap.usageHint', { placeholder: `{${bootstrap.name || 'token'}}` }))}</p>`;
+      <div class="row-label" data-help-anchor>${escapeHtml(t('apiBootstrap.nameLabel'))}${helpHostHtml('help.apiBootstrap.placeholder', 'modesApi')}</div>
+      <input type="text" class="api-bootstrap-field" data-field="name" placeholder="token" value="${escapeHtml(bootstrap.name)}" />`;
 }
 
 // Called from popup.js's render() while the API_CONFIG screen is showing.
