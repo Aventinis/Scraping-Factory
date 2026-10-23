@@ -11,30 +11,7 @@
 # rather than risk silently never updating stale data. Missing/corrupt
 # sidecar (first run ever, or the file was deleted) is treated the same as
 # "no previous state yet".
-PREFLIGHT_STATE_PATH = OUTPUT_PATH + ".preflight-state.json"
-EXIT_PREFLIGHT_UNCHANGED = 4
-EXIT_PREFLIGHT_UNREACHABLE = 5
-
-
-def _read_preflight_state():
-    try:
-        with open(PREFLIGHT_STATE_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, ValueError, OSError):
-        return {}
-
-
-def _write_preflight_state(etag, last_modified):
-    with open(PREFLIGHT_STATE_PATH, "w", encoding="utf-8") as f:
-        json.dump({"etag": etag, "lastModified": last_modified}, f)
-
-
-# Returns (status, etag, last_modified) — status is "unreachable" (the
-# request itself failed or came back with an error status), "unchanged" (a
-# response header matches the value stored from the last successful run),
-# or "proceed" (no comparable header, no previous state yet, or the value
-# differs — the main run should go ahead as normal).
-def _run_preflight_check(url):
+#@include preflight_state
     headers = {"User-Agent": "Mozilla/5.0 (compatible; ScrapingFactory/1.0; +https://github.com/Aventinis/Scraping-Factory)"}
 {{~ if request_headers.enabled ~}}
     headers.update(EXTRA_HTTP_HEADERS)
@@ -67,17 +44,5 @@ def _run_preflight_check(url):
         response = requests.head(url, headers=headers, timeout=10, allow_redirects=True)
 {{~ end ~}}
 {{~ end ~}}
-        response.raise_for_status()
-    except Exception as e:
-        print(f"ERROR: Preflight check failed — target is unreachable: {url} ({e})", file=sys.stderr)
-        return "unreachable", None, None
-
-    etag = response.headers.get("ETag")
-    last_modified = response.headers.get("Last-Modified")
-    previous = _read_preflight_state()
-    if etag and previous.get("etag") == etag:
-        return "unchanged", etag, last_modified
-    if not etag and last_modified and previous.get("lastModified") == last_modified:
-        return "unchanged", etag, last_modified
-    return "proceed", etag, last_modified
+#@include preflight_evaluate
 {{~ end ~}}

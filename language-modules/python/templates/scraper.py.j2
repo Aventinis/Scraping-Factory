@@ -28,34 +28,7 @@ from urllib.parse import urlsplit
 {{~ if external_config.enabled ~}}
 import xml.etree.ElementTree as ET
 {{~ end ~}}
-{{~ if (pagination.enabled && pagination.kind == "nextLink") || download_enabled || discovered_urls.enabled ~}}
-from urllib.parse import urljoin
-{{~ end ~}}
-{{~ if download_enabled ~}}
-import hashlib
-{{~ end ~}}
-{{~ if change_detection.enabled ~}}
-import difflib
-{{~ if change_detection.notify_method == "Email" ~}}
-import smtplib
-from email.mime.text import MIMEText
-{{~ else ~}}
-import json
-import urllib.request
-{{~ end ~}}
-{{~ end ~}}
-
-# Issue #83: one or more start URLs — the same extraction runs against each,
-# and results are combined into a single output file.
-URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
-#@include discovered_urls_constants
-
-#@include request_headers_static
-{{~ if text_selector.enabled ~}}
-#@include text_selector_common
-
-#@include text_selector_bs4
-{{~ end ~}}
+#@include static_imports_and_constants
 
 OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else if output_is_sqlite }}sqlite{{ else if output_is_xlsx }}xlsx{{ else }}csv{{ end }}"
 
@@ -76,48 +49,13 @@ OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else if outpu
 
 #@include hardening_flat
 
-SELECTORS = {
-{{- for field in fields }}
-    "{{ field.name }}": "{{ field.selector | string.escape }}",
-{{- end }}
-}
-
-ATTRIBUTES = {
-{{- for field in fields }}{{- if field.attribute }}
-    "{{ field.name }}": "{{ field.attribute }}",
-{{- end }}{{- end }}
-}
-
-# Issue #84: per-field post-processing chain (trim/regex extract/replace/
-# to-number), applied in order after the raw value is read — see
-# _apply_transforms below. Empty list = today's behavior, value unchanged.
-TRANSFORMS = {
-{{- for field in fields }}
-    "{{ field.name }}": {{ field.transforms_literal }},
-{{- end }}
-}
+#@include flat_field_selectors
 
 # Issue #213/#214: same "always present" convention as TRANSFORMS above — a
 # field with Download disabled just gets False/None/[] here, which
 # _extract_page_rows below reads uniformly regardless of whether ANY field
 # has it enabled at all.
-DOWNLOAD = {
-{{- for field in fields }}
-    "{{ field.name }}": {{ if field.download }}True{{ else }}False{{ end }},
-{{- end }}
-}
-
-MAX_DOWNLOAD_SIZE = {
-{{- for field in fields }}
-    "{{ field.name }}": {{ if field.max_download_size_bytes }}{{ field.max_download_size_bytes }}{{ else }}None{{ end }},
-{{- end }}
-}
-
-ALLOWED_CONTENT_TYPES = {
-{{- for field in fields }}
-    "{{ field.name }}": [{{ for t in field.allowed_content_types }}"{{ t }}"{{ if !for.last }}, {{ end }}{{ end }}],
-{{- end }}
-}
+#@include flat_field_download_constants
 
 # Issue #206 follow-up: field names whose value is still computed (so a
 # combineFields/splitField transform elsewhere can still reference it via
@@ -191,19 +129,7 @@ def scrape(url):
     page_number = 1
     page_url = url
     while page_url:
-{{~ if robots_check.enabled ~}}
-        if page_number > 1 and not _robots_gate(page_url):
-            break
-{{~ end ~}}
-{{~ if request_delay.enabled ~}}
-        _pace_request()
-{{~ end ~}}
-{{~ if retry.enabled ~}}
-        response = _checked_request("Request", page_url, lambda: _send_with_retry(lambda _u=page_url: requests.get(_u, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10), page_url))
-{{~ else ~}}
-        response = _checked_request("Request", page_url, lambda: requests.get(page_url, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10))
-{{~ end ~}}
-        _require_ok("Request", page_url, response)
+#@include static_fetch_request
 {{~ if hardening.enabled ~}}
         _BLOCKING_RESPONSES.append({"url": page_url, "final_url": response.url, "length": len(response.content), "text": response.text})
 {{~ end ~}}
@@ -218,20 +144,7 @@ def scrape(url):
             break
         rows.extend(page_rows)
 
-{{~ if pagination.enabled ~}}
-        if page_number >= PAGINATION_MAX_PAGES:
-            break
-        page_number += 1
-{{~ if pagination.kind == "nextLink" ~}}
-        next_tag = soup.select_one(PAGINATION_NEXT_LINK_SELECTOR)
-        next_href = next_tag.get("href") if next_tag else None
-        page_url = urljoin(page_url, next_href) if next_href else None
-{{~ else ~}}
-        page_url = PAGINATION_URL_TEMPLATE.format(url=url, page=page_number)
-{{~ end ~}}
-{{~ else ~}}
-        page_url = None
-{{~ end ~}}
+#@include static_paginate
     return rows
 
 

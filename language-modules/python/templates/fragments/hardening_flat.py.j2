@@ -24,14 +24,7 @@ def _run_hardening_checks(data):
     has_error = False
     result_count = len(data)
     for check in HARDENING:
-        if check["kind"] == "noResult":
-            if result_count == 0:
-                message = "No data was extracted — a selector, path or request likely matched nothing."
-                if check["severity"] == "Error":
-                    print(f"ERROR: {message}", file=sys.stderr)
-                    has_error = True
-                else:
-                    print(f"WARNING: {message}", file=sys.stderr)
+#@include hardening_check_no_result
         elif check["kind"] == "nullRate":
             # Issue #130: catches a field whose selector quietly starts
             # matching the wrong thing (still returns a value, always empty)
@@ -48,45 +41,7 @@ def _run_hardening_checks(data):
                     has_error = True
                 else:
                     print(f"WARNING: {message}", file=sys.stderr)
-        elif check["kind"] == "baseline":
-            # Issue #131: catches a gradual drop in result volume that
-            # neither noResult (only fires at exactly zero) nor nullRate
-            # (only watches one field) would ever trip — e.g. a paginated
-            # list quietly losing entries. No baseline yet (first run, or
-            # the sidecar file was deleted) simply has nothing to compare
-            # against.
-            baseline = _read_baseline()
-            if baseline:
-                drop = (baseline - result_count) / baseline
-                if drop > check["dropThreshold"]:
-                    message = f"Result count dropped from {baseline} to {result_count} (more than the {check['dropThreshold']:.0%} threshold)."
-                    if check["severity"] == "Error":
-                        print(f"ERROR: {message}", file=sys.stderr)
-                        has_error = True
-                    else:
-                        print(f"WARNING: {message}", file=sys.stderr)
-        elif check["kind"] == "blocking":
-            # Issue #132: three signals, all evaluated per captured response
-            # — a redirect to a different host (always checked), a body
-            # shorter than minBodyLength (skipped when None), and a
-            # case-insensitive match against blockPhrases.
-            for entry in _BLOCKING_RESPONSES:
-                reasons = []
-                if urlsplit(entry["url"]).netloc != urlsplit(entry["final_url"]).netloc:
-                    reasons.append(f"redirected to a different host ({entry['final_url']})")
-                if check["minBodyLength"] is not None and entry["length"] < check["minBodyLength"]:
-                    reasons.append(f"response body is only {entry['length']} bytes (minimum: {check['minBodyLength']})")
-                matched_phrases = [p for p in check["blockPhrases"] if p.lower() in entry["text"].lower()]
-                if matched_phrases:
-                    reasons.append(f"matched block phrase(s): {', '.join(matched_phrases)}")
-                if reasons:
-                    message = f"Possible blocking detected for {entry['url']}: {'; '.join(reasons)}."
-                    if check["severity"] == "Error":
-                        print(f"ERROR: {message}", file=sys.stderr)
-                        has_error = True
-                    else:
-                        print(f"WARNING: {message}", file=sys.stderr)
-    return has_error
+#@include hardening_checks_tail
 
 
 # Issue #133: unlike _run_hardening_checks above (a post-hoc pass over

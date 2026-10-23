@@ -1,0 +1,8 @@
+        # Every parameter value is URL-encoded before being substituted into
+        # UrlTemplate — values discovered at runtime (DiscoverySource) could
+        # contain spaces or other characters that aren't valid unescaped in a
+        # URL.
+        encoded_combo = {name: quote(str(value), safe="") for name, value in {{ if has_bootstrap }}{**_BOOTSTRAP_VALUES, **combo}{{ else }}combo{{ end }}.items()}
+        url = URL_TEMPLATE.format(**encoded_combo)
+
+        body = _render_body(BODY, {{ if has_bootstrap }}{**_BOOTSTRAP_VALUES, **combo}{{ else }}combo{{ end }})

@@ -1,0 +1,13 @@
+        response.raise_for_status()
+    except Exception as e:
+        print(f"ERROR: Preflight check failed — target is unreachable: {url} ({e})", file=sys.stderr)
+        return "unreachable", None, None
+
+    etag = response.headers.get("ETag")
+    last_modified = response.headers.get("Last-Modified")
+    previous = _read_preflight_state()
+    if etag and previous.get("etag") == etag:
+        return "unchanged", etag, last_modified
+    if not etag and last_modified and previous.get("lastModified") == last_modified:
+        return "unchanged", etag, last_modified
+    return "proceed", etag, last_modified
