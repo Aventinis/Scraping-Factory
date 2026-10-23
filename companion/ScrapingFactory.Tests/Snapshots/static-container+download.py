@@ -745,15 +745,17 @@ def _require_ok(what, url, response):
 # (the companion's own trial-run check included). Such characters are removed
 # from every element's text right before the tree is written as XML; JSON and
 # CSV output don't need this (json.dump escapes them, CSV has no restriction).
-_ILLEGAL_XML_CHARS_RE = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff￾￿]")
+_ILLEGAL_XML_CHARS = dict.fromkeys(
+    [*range(0x00, 0x09), 0x0B, 0x0C, *range(0x0E, 0x20), *range(0xD800, 0xE000), 0xFFFE, 0xFFFF]
+)
 
 
 def _strip_illegal_xml_chars(root):
     for element in root.iter():
         if element.text:
-            element.text = _ILLEGAL_XML_CHARS_RE.sub("", element.text)
+            element.text = element.text.translate(_ILLEGAL_XML_CHARS)
         if element.tail:
-            element.tail = _ILLEGAL_XML_CHARS_RE.sub("", element.tail)
+            element.tail = element.tail.translate(_ILLEGAL_XML_CHARS)
 def main():
     # Issue #83: each URL's own scrape() already wraps its matches in an
     # <Ergebnis> element (see above) — combine every URL's children into one
