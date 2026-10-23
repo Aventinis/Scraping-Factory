@@ -5,9 +5,14 @@ const { loadGlobalSettings } = require('../shared/global-settings');
 
 const fields = [{ name: 'Titel', selector: 'h1' }];
 const groups = [{ kind: 'group', name: 'G', selector: '.g', repeating: true, children: [{ kind: 'field', name: 'F', selector: '.f', mode: 'text', transforms: [] }] }];
-const build = (mode, format, extra = {}) => buildScrapingConfig(
-  'https://example.com', mode, extra.fields ?? fields, extra.groups ?? [], extra.apiConfig ?? null, null, null, 'Static', [], false, format,
-);
+const build = (mode, format, extra = {}) => buildScrapingConfig({
+  url: 'https://example.com',
+  mode,
+  fields: extra.fields ?? fields,
+  groups: extra.groups ?? [],
+  apiConfig: extra.apiConfig ?? null,
+  useJsonOutput: format,
+});
 
 describe('the stored preference', () => {
   afterEach(() => { delete global.chrome; });

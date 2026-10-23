@@ -17,11 +17,16 @@ const combined = [
 ];
 
 // Positional tail: ... skipVerification, robotsDisallow, appendOutput
-const build = (mode, append, extra = {}) => buildScrapingConfig(
-  'https://example.com', mode, extra.fields ?? fields, extra.groups ?? [], extra.apiConfig ?? null, null, null, 'Static', [], false, false,
-  [], null, null, null, null, false, false, false, extra.combined ?? null, extra.blocks ?? null, null, [], {}, 'Flat', [], {},
-  null, false, null, null, null, null, false, false, null, append,
-);
+const build = (mode, append, extra = {}) => buildScrapingConfig({
+  url: 'https://example.com',
+  mode,
+  fields: extra.fields ?? fields,
+  groups: extra.groups ?? [],
+  apiConfig: extra.apiConfig ?? null,
+  combinedComponents: extra.combined ?? null,
+  blocks: extra.blocks ?? null,
+  appendOutput: append,
+});
 
 describe('buildScrapingConfig', () => {
   test.each([
@@ -36,10 +41,7 @@ describe('buildScrapingConfig', () => {
   });
 
   test('is part of the exported configuration', () => {
-    const exported = buildConfigExport(
-      'https://example.com', 'flat', fields, [], {}, null, null, null, 'Static', [], false, false,
-      [], null, null, null, null, false, false, false, null, null, null, [], {}, 'Flat', [], {}, null, false, null, null, null, null, false, false, null, true,
-    );
+    const exported = buildConfigExport({ url: 'https://example.com', mode: 'flat', fields, appendOutput: true });
     expect(exported.config.appendOutput).toBe(true);
   });
 });

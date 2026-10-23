@@ -65,11 +65,16 @@ describe('buildScrapingConfig', () => {
   const headers = draft([row('X-A', 'v')]);
   // Same positional layout the other builder tests use, plus the two new
   // trailing parameters (deduplication, requestHeaders).
-  const build = (mode, requestHeaders, extra = {}) => buildScrapingConfig(
-    'https://example.com', mode, extra.fields ?? fields, extra.groups ?? [], extra.apiConfig ?? null, null, null, 'Static', [], false, false,
-    [], null, null, null, null, false, false, false, extra.combinedComponents ?? null, extra.blocks ?? null,
-    null, [], {}, 'Flat', [], {}, null, false, null, null, null, requestHeaders,
-  );
+  const build = (mode, requestHeaders, extra = {}) => buildScrapingConfig({
+    url: 'https://example.com',
+    mode,
+    fields: extra.fields ?? fields,
+    groups: extra.groups ?? [],
+    apiConfig: extra.apiConfig ?? null,
+    combinedComponents: extra.combinedComponents ?? null,
+    blocks: extra.blocks ?? null,
+    requestHeaders,
+  });
 
   test('flat mode sends headers only when configured', () => {
     expect(build('flat', headers).headers).toEqual([{ name: 'X-A', value: 'v' }]);

@@ -6,11 +6,16 @@ const { applyConfigToState } = require('./config-import');
 
 const fields = [{ name: 'Titel', selector: 'h1' }];
 // Positional tail: ... discoveredUrls, preflight, requestDelay, retry, deduplication, requestHeaders, respectRobotsDelay
-const build = (mode, respect, extra = {}) => buildScrapingConfig(
-  'https://example.com', mode, extra.fields ?? fields, extra.groups ?? [], extra.apiConfig ?? null, null, null, 'Static', [], false, false,
-  [], null, null, null, null, false, false, false, extra.combined ?? null, extra.blocks ?? null, null, [], {}, 'Flat', [], {},
-  null, false, null, null, null, null, respect,
-);
+const build = (mode, respect, extra = {}) => buildScrapingConfig({
+  url: 'https://example.com',
+  mode,
+  fields: extra.fields ?? fields,
+  groups: extra.groups ?? [],
+  apiConfig: extra.apiConfig ?? null,
+  combinedComponents: extra.combined ?? null,
+  blocks: extra.blocks ?? null,
+  respectRobotsDelay: respect,
+});
 
 describe('buildScrapingConfig', () => {
   const groups = [{ kind: 'group', name: 'G', selector: '.g', repeating: true, children: [{ kind: 'field', name: 'F', selector: '.f', mode: 'text', transforms: [] }] }];
@@ -34,10 +39,7 @@ describe('buildScrapingConfig', () => {
   });
 
   test('is part of the exported configuration', () => {
-    const exported = buildConfigExport(
-      'https://example.com', 'flat', fields, [], {}, null, null, null, 'Static', [], false, false,
-      [], null, null, null, null, false, false, false, null, null, null, [], {}, 'Flat', [], {}, null, false, null, null, null, null, true,
-    );
+    const exported = buildConfigExport({ url: 'https://example.com', mode: 'flat', fields, respectRobotsDelay: true });
     expect(exported.config.respectRobotsDelay).toBe(true);
   });
 });

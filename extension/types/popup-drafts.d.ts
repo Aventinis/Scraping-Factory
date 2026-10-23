@@ -39,6 +39,63 @@ declare namespace SFDraft {
    * Built by addField — distinct from SFWire.ScrapingField only in that every
    * optional wire field is always present (never omitted) in the draft.
    */
+  /** The options of buildScrapingConfig (the /generate request body); only `url` and `mode` are required. */
+  interface ConfigBuildOptions {
+    url: string;
+    /** 'flat' | 'container' | 'api' | 'combined' | 'blocks'. Only the slice below that matches the mode is read. */
+    mode: string;
+    fields?: Field[];
+    groups?: ContainerNode[];
+    apiConfig?: SFWire.ApiConfig | null;
+    combinedComponents?: CombinedComponent[] | null;
+    blocks?: Block[] | null;
+
+    engine?: SFWire.ScrapingEngine;
+    browserActions?: BrowserAction[];
+    persistentSession?: boolean;
+    additionalUrls?: string[];
+    pagination?: PaginationState | null;
+    discoveredUrls?: DiscoveredUrlsState | null;
+    preflight?: boolean;
+
+    scriptFileName?: string | null;
+    outputFileName?: string | null;
+    /** true / 'json' → Json, 'sqlite' → Sqlite, 'xlsx' → Xlsx; anything else leaves the companion's per-shape default. */
+    useJsonOutput?: boolean | string | null;
+    outputBlueprint?: OutputBlueprintOptions;
+
+    changeDetection?: ChangeDetectionState | null;
+    hardening?: HardeningState | null;
+    proxy?: ProxyState | null;
+    requestDelay?: RequestDelayState | null;
+    retry?: RetryState | null;
+    respectRobotsDelay?: boolean;
+    robotsDisallow?: RobotsDisallowState | null;
+    deduplication?: DeduplicationState | null;
+    requestHeaders?: RequestHeadersState | null;
+    appendOutput?: boolean;
+
+    includePreview?: boolean;
+    includeOutputFile?: boolean;
+    externalConfig?: boolean;
+    skipVerification?: boolean;
+  }
+
+  /** The blueprint part of ConfigBuildOptions; `schemaKind` picks which of fieldNames+mapping / tree+treeMapping counts. */
+  interface OutputBlueprintOptions {
+    id?: number | string | null;
+    schemaKind?: SFWire.OutputBlueprintSchemaKind;
+    fieldNames?: string[];
+    mapping?: Record<string, string>;
+    tree?: OutputBlueprintTreeNode[];
+    treeMapping?: Record<string, string>;
+  }
+
+  /** buildConfigExport takes the same options plus the manifest (for the version). */
+  interface ConfigExportOptions extends ConfigBuildOptions {
+    manifest?: { version?: string };
+  }
+
   interface Field {
     name: string;
     selector: string | null;

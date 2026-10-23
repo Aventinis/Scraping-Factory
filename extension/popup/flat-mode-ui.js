@@ -139,10 +139,10 @@ function confirmField(bridge) {
   const selector = appendTextFilter(state.pendingSelector, document.getElementById('input-field-name-text-filter')?.value);
   log('FIELD_ADD', { name, selector, framePath: state.pendingFramePath, transforms: state.pendingTransforms });
   bridge.setState(STATES.IDLE, {
-    fields: addField(
-      state.fields, name, selector, state.pendingFramePath, state.pendingTransforms,
-      mode === 'attribute' ? attribute : null, download, maxDownloadSizeBytes, allowedContentTypes,
-    ),
+    fields: addField(state.fields, name, selector, {
+      framePath: state.pendingFramePath, transforms: state.pendingTransforms,
+      attribute: mode === 'attribute' ? attribute : null, download, maxDownloadSizeBytes, allowedContentTypes,
+    }),
     pendingSelector:   null,
     pendingFramePath:  null,
     pendingMatchCount: null,

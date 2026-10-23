@@ -415,163 +415,51 @@ function collectFieldNames(mode, fields, groups, apiConfig) {
   return names;
 }
 
-// `apiConfig` is only read when mode === 'api' — the confirmed ApiConfig
-// wire object built by buildApiConfig (Issue #53 Phase 5), passed straight
-// through as the request body's `api` field. Method is forced server-side
-// (see companion's ScrapingPlanBuilder); OutputFormat is forced too, unless
-// `useJsonOutput` opts into Json (Issue #86, see below).
-// `scriptFileName`/`outputFileName` are sent as-is (possibly blank) — the
-// companion sanitizes and defaults them itself (see FileNameSanitizer),
-// same "server is the source of truth" pattern as OutputFormat.
-// `engine`/`browserActions` (Issue #41/#42, Phase 5) are mode-independent —
-// only included at all when `engine === 'Browser'` (the server already
-// defaults to Static when the key is absent, so the 'Static' case round-trips
-// to byte-for-byte the same request body as before this existed), and
-// `browserActions` only on top of that when non-empty.
-// `includePreview` (Issue #122) is mode-independent too — only included when
-// true, so the default (checkbox unchecked) request stays byte-for-byte
-// identical to before this existed. See companion's ScrapingConfig.IncludePreview.
-// `useJsonOutput` (Issue #86) is mode-independent as well: container/api mode
-// send no `outputFormat` key at all by default (the companion forces its own
-// Xml/Csv default per shape) and only add `outputFormat: 'Json'` when this
-// is true; flat mode always sends an explicit outputFormat, so it just swaps
-// the literal 'Csv' for 'Json'. The companion decides — per mode/shape —
-// whether Json actually fits, same "server is the source of truth" pattern
-// as everything else here.
-// `additionalUrls` (Issue #83) is only included when non-empty, same
-// omit-when-default convention as browserActions — the companion runs the
-// same Fields/Groups extraction config against every one of these in
-// addition to `url`, combining the results. The UI never lets this be
-// non-empty for mode === 'api' (the input is hidden there), since API mode
-// builds its own request URL and the companion rejects the combination
-// outright rather than silently ignoring it.
-// `pagination` (Issue #174) follows the same "hidden and so always empty for
-// mode === 'api'" convention as additionalUrls, for the same reason (API
-// mode already has its own page-parameter mechanism via a Number
-// RangeSource, and the companion rejects the combination outright).
 /**
- * @param {string} url
- * @param {string} mode
- * @param {SFDraft.Field[]} fields
- * @param {SFDraft.ContainerNode[]} groups
- * @param {SFWire.ApiConfig | null} [apiConfig]
- * @param {string | null} [scriptFileName]
- * @param {string | null} [outputFileName]
- * @param {SFWire.ScrapingEngine} [engine]
- * @param {SFDraft.BrowserAction[]} [browserActions]
- * @param {boolean} [includePreview]
- * @param {boolean | string | null} [useJsonOutput] true / 'json' → Json, 'sqlite' → Sqlite, 'xlsx' → Xlsx (Issue #229)
- * @param {string[]} [additionalUrls]
- * @param {SFDraft.ChangeDetectionState | null} [changeDetection]
- * @param {SFDraft.ProxyState | null} [proxy]
- * @param {SFDraft.HardeningState | null} [hardening]
- * @param {SFDraft.PaginationState | null} [pagination]
- * @param {boolean} [persistentSession]
- * @param {boolean} [includeOutputFile]
- * @param {boolean} [externalConfig]
- * @param {SFDraft.CombinedComponent[] | null} [combinedComponents]
- * @param {SFDraft.Block[] | null} [blocks]
- * @param {number | string | null} [outputBlueprintId]
- * @param {string[]} [outputBlueprintFieldNames]
- * @param {Record<string, string>} [outputBlueprintMapping]
- * @param {SFWire.OutputBlueprintSchemaKind} [outputBlueprintSchemaKind]
- * @param {SFDraft.OutputBlueprintTreeNode[]} [outputBlueprintTree]
- * @param {Record<string, string>} [outputBlueprintTreeMapping]
- * @param {SFDraft.DiscoveredUrlsState | null} [discoveredUrls]
- * @param {boolean} [preflight]
- * @param {SFDraft.RequestDelayState | null} [requestDelay]
- * @param {SFDraft.RetryState | null} [retry]
- * @param {SFDraft.DeduplicationState | null} [deduplication]
- * @param {SFDraft.RequestHeadersState | null} [requestHeaders]
- * @param {boolean} [respectRobotsDelay]
- * @param {boolean} [skipVerification]
- * @param {SFDraft.RobotsDisallowState | null} [robotsDisallow]
- * @param {boolean} [appendOutput]
+ * Builds the /generate request body (and the `config` of an export) from the popup state. Only `url` and `mode` are required; an absent or
+ * default value leaves its key out, so a bare state gives the minimal body. The companion stays the source of truth for forced defaults
+ * (output format per shape, Engine.Api, ...). Only the slice matching `mode` (fields / groups / apiConfig / combinedComponents / blocks) is read.
+ * @param {SFDraft.ConfigBuildOptions} options
  * @returns {object}
  */
-function buildScrapingConfig(
-  url, mode, fields, groups, apiConfig = null, scriptFileName = null, outputFileName = null,
+function buildScrapingConfig({
+  url, mode, fields = [], groups = [], apiConfig = null, scriptFileName = null, outputFileName = null,
   engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false,
   additionalUrls = [], changeDetection = null, proxy = null, hardening = null, pagination = null,
   persistentSession = false, includeOutputFile = false, externalConfig = false, combinedComponents = null,
-  blocks = null, outputBlueprintId = null, outputBlueprintFieldNames = [], outputBlueprintMapping = {},
-  // Issue #244: the tree-shaped counterpart of the three params just above
-  // — outputBlueprintSchemaKind picks which pair buildOutputBlueprintMapping
-  // actually reads, the other pair is simply ignored.
-  outputBlueprintSchemaKind = 'Flat', outputBlueprintTree = [], outputBlueprintTreeMapping = {},
-  // Issue #218: appended at the end, not alongside pagination above, since
-  // this function already has dozens of positional callers (including every
-  // existing test) — inserting a new parameter in the middle would silently
-  // shift every argument after it rather than failing loudly.
-  discoveredUrls = null,
-  // Issue #219: same "append at the end, never insert in the middle" rule as
-  // discoveredUrls just above.
-  preflight = false,
-  // Issue #222: same "append at the end" rule.
-  requestDelay = null,
-  // Issue #223: same "append at the end" rule.
-  retry = null,
-  // Issue #225: same "append at the end" rule.
-  deduplication = null,
-  // Issue #226: same "append at the end" rule.
-  requestHeaders = null,
-  // Issue #228: same "append at the end" rule.
-  respectRobotsDelay = false,
-  // Issue #292: same "append at the end" rule.
-  skipVerification = false,
-  // Issue #333: same "append at the end" rule.
-  robotsDisallow = null,
-  // Issue #342: same "append at the end" rule.
-  appendOutput = false,
-) {
-  // Issue #292: a plain on/off switch (the Global Settings preference),
-  // mode-independent — sent for every mode, omitted when off.
+  blocks = null, outputBlueprint = {}, discoveredUrls = null, preflight = false, requestDelay = null,
+  retry = null, deduplication = null, requestHeaders = null, respectRobotsDelay = false,
+  skipVerification = false, robotsDisallow = null, appendOutput = false,
+}) {
+  const {
+    id: outputBlueprintId = null, schemaKind: outputBlueprintSchemaKind = 'Flat', fieldNames: outputBlueprintFieldNames = [],
+    mapping: outputBlueprintMapping = {}, tree: outputBlueprintTree = [], treeMapping: outputBlueprintTreeMapping = {},
+  } = outputBlueprint;
   /** @type {Record<string, unknown>} */
   const skipVerificationFields = skipVerification ? { skipVerification: true } : {};
-  // Issue #228: a plain on/off switch, independent of requestDelay (the
-  // companion uses the larger of the two gaps) — omitted when off.
   const respectRobotsFields = respectRobotsDelay ? { respectRobotsDelay: true } : {};
-  // Issue #229: the output-format preference — the legacy boolean (true =
-  // Json) or one of 'json' | 'sqlite' | 'xlsx'; anything else (false,
-  // 'default') leaves the companion's own per-shape default in charge.
+  // true / 'json' / 'sqlite' / 'xlsx'; anything else leaves the companion's per-shape default in charge.
   const tableOrJsonFormat = useJsonOutput === true || useJsonOutput === 'json' ? 'Json'
     : useJsonOutput === 'sqlite' ? 'Sqlite' : useJsonOutput === 'xlsx' ? 'Xlsx' : null;
   const requestDelayConfig = buildRequestDelayConfig(requestDelay);
   const requestDelayFields = requestDelayConfig ? { requestDelay: requestDelayConfig } : {};
-  // Issue #333: the run-time robots.txt Disallow check (flat/container/api/
-  // blocks; Combined returns before this is used — rejected on the outer request).
   const robotsDisallowFields = robotsDisallow?.enabled ? { robotsDisallow: { action: robotsDisallow.action } } : {};
-  // Issue #342: append to the previous output file instead of replacing it
-  // (flat/container/api/blocks; Combined returns before this is used).
   const appendOutputFields = appendOutput ? { appendOutput: true } : {};
-  // The pacing/robots/append settings in one spread — the object literals below are
-  // already at TypeScript's union-complexity limit.
+  // One spread for the pacing/robots/append settings: the object literals below are at TypeScript's union-complexity limit.
   /** @type {Record<string, unknown>} */
   const settingFields = { ...requestDelayFields, ...respectRobotsFields, ...robotsDisallowFields, ...appendOutputFields };
   const retryConfig = buildRetryConfig(retry);
   const retryFields = retryConfig ? { retry: retryConfig } : {};
-  // Issue #225: key fields no longer in the field list are dropped.
-  // Blocks/Combined return before this is used (not supported there).
+  // Key fields no longer in the field list are dropped.
   const deduplicationConfig = buildDeduplicationConfig(deduplication, collectFieldNames(mode, fields, groups, apiConfig));
   const deduplicationFields = deduplicationConfig ? { deduplication: deduplicationConfig } : {};
-  // Issue #226: DOM shapes only (flat/container/Blocks) — API mode has its
-  // own header list inside apiConfig, and Combined components carry theirs.
+  // DOM shapes only: API mode has its own header list inside apiConfig, Combined components carry theirs.
   const requestHeadersConfig = buildRequestHeadersConfig(requestHeaders);
-  // Typed as a plain record: with this many optional spread groups, TypeScript
-  // otherwise gives up on the object literals' union type (TS2590).
+  // A plain record: with this many optional spread groups TypeScript otherwise gives up on the union type (TS2590).
   /** @type {Record<string, unknown>} */
   const requestHeadersFields = requestHeadersConfig ? { headers: requestHeadersConfig } : {};
-  // Issue #182: Blocks mode has no ad-hoc fields/groups/apiConfig of its own
-  // either — each block is a fully independent {name, outputFileName,
-  // fields|groups} sent verbatim, sharing this one request's Url/engine/
-  // browserActions/additionalUrls/proxy/pagination/persistentSession
-  // (unlike Combined mode above, these DO apply — see ScrapingConfig.Blocks
-  // on the companion side for why). changeDetection/hardening/
-  // useJsonOutput/externalConfig are deliberately NOT included at all —
-  // the companion rejects the first two outright on this outer level (each
-  // block would need its own, not yet reachable from this UI — see
-  // CLAUDE.md), and the latter two have no meaning without a single shape/
-  // output file to apply to.
+  // Blocks mode: each block is sent verbatim and shares this request's url/engine/proxy/pagination/persistentSession. Per-block
+  // changeDetection/hardening have no UI yet; the companion rejects them on the outer request.
   if (mode === 'blocks') {
     const engineFields = engine === 'Browser'
       ? { engine, ...(browserActions.length > 0 ? { browserActions: serializeBrowserActions(browserActions) } : {}) }
@@ -602,15 +490,8 @@ function buildScrapingConfig(
       ...proxyFields, ...settingFields, ...retryFields, ...requestHeadersFields, ...paginationFields, ...persistentSessionFields, ...outputFileFields, ...skipVerificationFields,
     };
   }
-  // Combined mode (Issue #239): no ad-hoc fields/groups/apiConfig of its own
-  // — each component is a fully independent, already-resolved
-  // {name, config, savedConfigId} (see companion-client.js's
-  // resolveCombinedComponents), sent verbatim. None of engine/
-  // browserActions/additionalUrls/changeDetection/proxy/hardening/
-  // pagination/persistentSession/externalConfig/useJsonOutput apply at this
-  // outer level — the companion rejects all of them here outright (each
-  // component's own config carries its own instead) — so this branch
-  // deliberately ignores every one of those parameters.
+  // Combined mode: each component is an already-resolved {name, config, savedConfigId}; the companion rejects every per-run
+  // option on the outer request (a component's own config carries it), so they are ignored here.
   if (mode === 'combined') {
     const previewFields = includePreview ? { includePreview: true } : {};
     const outputFileFields = includeOutputFile ? { includeOutputFile: true } : {};
@@ -641,35 +522,12 @@ function buildScrapingConfig(
   const paginationFields = paginationConfig ? { pagination: paginationConfig } : {};
   const discoveredUrlsConfig = buildDiscoveredUrlsConfig(discoveredUrls);
   const discoveredUrlsFields = discoveredUrlsConfig ? { discoveredUrls: discoveredUrlsConfig } : {};
-  // Issue #175: Browser-engine only, but simply sent as-is (like
-  // browserActions) rather than gated on `engine === 'Browser'` here — the
-  // toggle itself is only reachable through the UI while the browser-actions
-  // section is visible (Engine=Browser), and the companion rejects the
-  // combination server-side regardless (see ScrapingPlanValidator).
+  // Sent as-is rather than gated on the engine; the companion rejects the combination server-side.
   const persistentSessionFields = persistentSession ? { persistentSession: true } : {};
-  // Issue #219: mirrors persistentSessionFields exactly — a plain on/off
-  // switch, only included when true. Hidden from the UI (and thus never
-  // true) for API/Combined/Blocks mode, but that's enforced by the UI's own
-  // visibility toggle, not here — this function doesn't need its own
-  // mode-specific gate since those branches simply never reference it.
   const preflightFields = preflight ? { preflight: true } : {};
-  // Issue #161: mirrors previewFields exactly — only included when true, so
-  // the default (checkbox unchecked) request stays byte-for-byte identical
-  // to before this existed. See companion's ScrapingConfig.IncludeOutputFile.
   const outputFileFields = includeOutputFile ? { includeOutputFile: true } : {};
-  // Issue #178: mirrors previewFields/outputFileFields exactly — only
-  // included when true, so the default (checkbox unchecked) request stays
-  // byte-for-byte identical to before this existed.
   const externalConfigFields = externalConfig ? { externalConfig: true } : {};
-  // Issue #191/#192: reachable for flat mode, container mode, and both of
-  // Api mode's shapes (container/Api-tree flatten into denormalized rows
-  // instead of being renamed in place — see the companion's
-  // OutputBlueprintFlattening) — buildOutputBlueprintMapping itself returns
-  // null (omitted, same "incomplete draft" convention as
-  // buildProxyConfig/buildChangeDetectionConfig) whenever no blueprint is
-  // picked or the mapping isn't complete yet, so this is a genuine no-op
-  // for Combined/Blocks too even though it's computed here unconditionally
-  // for every mode.
+  // Null (key omitted) until a blueprint is picked and its mapping is complete, so a no-op for Combined/Blocks too.
   const outputBlueprintConfig = buildOutputBlueprintMapping(
     outputBlueprintId, outputBlueprintSchemaKind, outputBlueprintFieldNames, outputBlueprintMapping,
     outputBlueprintTree, outputBlueprintTreeMapping,
@@ -701,12 +559,9 @@ function buildScrapingConfig(
       name: f.name, selector: f.selector, attribute: f.attribute ?? null,
       ...(f.framePath ? { framePath: f.framePath } : {}),
       ...(f.transforms && f.transforms.length > 0 ? { transforms: f.transforms } : {}),
-      // Issue #214: same "incomplete/off = key omitted" convention
-      // framePath/transforms above already use.
       ...(f.download ? { download: true } : {}),
       ...(f.download && f.maxDownloadSizeBytes ? { maxDownloadSizeBytes: f.maxDownloadSizeBytes } : {}),
       ...(f.download && f.allowedContentTypes?.length > 0 ? { allowedContentTypes: f.allowedContentTypes } : {}),
-      // Issue #206 follow-up: same "incomplete/off = key omitted" convention.
       ...(f.hiddenFromOutput ? { hiddenFromOutput: true } : {}),
     })),
     outputFormat: tableOrJsonFormat ?? 'Csv',
@@ -718,122 +573,69 @@ function buildScrapingConfig(
   };
 }
 
-// Wraps the exact wire-format config (buildScrapingConfig) with export
-// metadata, so a user hitting a selector problem can hand over one file
-// that both shows the current Fields/Groups/Api config and, unwrapped, is
-// the literal request body /generate would receive — no need to describe
-// the setup by hand. `manifest` is injected so this stays a pure, testable
-// function instead of reaching into chrome.runtime itself.
+// Wraps the exact wire config with export metadata, so a user hitting a selector problem can hand over one file that is, unwrapped, the
+// request body /generate would receive. `manifest` is injected so this stays pure and testable.
 /**
- * @param {string} url
- * @param {string} mode
- * @param {SFDraft.Field[]} fields
- * @param {SFDraft.ContainerNode[]} groups
- * @param {{version?: string}} [manifest]
- * @param {SFWire.ApiConfig | null} [apiConfig]
- * @param {string | null} [scriptFileName]
- * @param {string | null} [outputFileName]
- * @param {SFWire.ScrapingEngine} [engine]
- * @param {SFDraft.BrowserAction[]} [browserActions]
- * @param {boolean} [includePreview]
- * @param {boolean | string | null} [useJsonOutput] true / 'json' → Json, 'sqlite' → Sqlite, 'xlsx' → Xlsx (Issue #229)
- * @param {string[]} [additionalUrls]
- * @param {SFDraft.ChangeDetectionState | null} [changeDetection]
- * @param {SFDraft.ProxyState | null} [proxy]
- * @param {SFDraft.HardeningState | null} [hardening]
- * @param {SFDraft.PaginationState | null} [pagination]
- * @param {boolean} [persistentSession]
- * @param {boolean} [includeOutputFile]
- * @param {boolean} [externalConfig]
- * @param {SFDraft.CombinedComponent[] | null} [combinedComponents]
- * @param {SFDraft.Block[] | null} [blocks]
- * @param {number | string | null} [outputBlueprintId]
- * @param {string[]} [outputBlueprintFieldNames]
- * @param {Record<string, string>} [outputBlueprintMapping]
- * @param {SFWire.OutputBlueprintSchemaKind} [outputBlueprintSchemaKind]
- * @param {SFDraft.OutputBlueprintTreeNode[]} [outputBlueprintTree]
- * @param {Record<string, string>} [outputBlueprintTreeMapping]
- * @param {boolean} [preflight]
- * @param {SFDraft.RequestDelayState | null} [requestDelay]
- * @param {SFDraft.RetryState | null} [retry]
- * @param {SFDraft.DeduplicationState | null} [deduplication]
- * @param {SFDraft.RequestHeadersState | null} [requestHeaders]
- * @param {boolean} [respectRobotsDelay]
- * @param {boolean} [skipVerification]
- * @param {SFDraft.RobotsDisallowState | null} [robotsDisallow]
- * @param {boolean} [appendOutput]
+ * @param {SFDraft.ConfigExportOptions} options
  * @returns {{exportedAt: string, extensionVersion: string, config: object}}
  */
-function buildConfigExport(
-  url, mode, fields, groups, manifest = {}, apiConfig = null, scriptFileName = null, outputFileName = null,
-  engine = 'Static', browserActions = [], includePreview = false, useJsonOutput = false, additionalUrls = [],
-  changeDetection = null, proxy = null, hardening = null, pagination = null, persistentSession = false,
-  includeOutputFile = false, externalConfig = false, combinedComponents = null, blocks = null,
-  outputBlueprintId = null, outputBlueprintFieldNames = [], outputBlueprintMapping = {},
-  outputBlueprintSchemaKind = 'Flat', outputBlueprintTree = [], outputBlueprintTreeMapping = {},
-  // Issue #218: see buildScrapingConfig's own doc comment on why this is
-  // appended at the end rather than alongside pagination above.
-  discoveredUrls = null,
-  // Issue #219: same "append at the end" rule as discoveredUrls just above.
-  preflight = false,
-  // Issue #222: same "append at the end" rule.
-  requestDelay = null,
-  // Issue #223: same "append at the end" rule.
-  retry = null,
-  // Issue #225: same "append at the end" rule.
-  deduplication = null,
-  // Issue #226: same "append at the end" rule.
-  requestHeaders = null,
-  // Issue #228: same "append at the end" rule.
-  respectRobotsDelay = false,
-  // Issue #292: same "append at the end" rule.
-  skipVerification = false,
-  // Issue #333: same "append at the end" rule.
-  robotsDisallow = null,
-  // Issue #342: same "append at the end" rule.
-  appendOutput = false,
-) {
+function buildConfigExport({ manifest = {}, ...options }) {
   return {
     exportedAt: new Date().toISOString(),
     extensionVersion: manifest.version || '?',
-    config: buildScrapingConfig(
-      url, mode, fields, groups, apiConfig, scriptFileName, outputFileName, engine, browserActions, includePreview,
-      useJsonOutput, additionalUrls, changeDetection, proxy, hardening, pagination, persistentSession,
-      includeOutputFile, externalConfig, combinedComponents, blocks,
-      outputBlueprintId, outputBlueprintFieldNames, outputBlueprintMapping,
-      outputBlueprintSchemaKind, outputBlueprintTree, outputBlueprintTreeMapping, discoveredUrls, preflight, requestDelay, retry,
-      deduplication, requestHeaders, respectRobotsDelay, skipVerification, robotsDisallow, appendOutput,
-    ),
+    config: buildScrapingConfig(options),
   };
 }
 
-// Issue #214: attribute/download/maxDownloadSizeBytes/allowedContentTypes
-// let flat mode gain the same Attribute-mode-with-Download capability
-// container mode's own buildFieldNode already has — attribute defaults to
-// null (today's exact pre-#214 behavior, a plain text field) for every
-// existing caller that doesn't pass one. Issue #206 follow-up: selector may
-// be null — combine-split-fields-ui.js's own confirm handlers pass null for
-// a field created through the dedicated combine/split flow, which has no
-// selector of its own (see ScrapingPlanValidator.IsDerivedField, companion
-// side); hiddenFromOutput defaults false, set only via that same flow's own
-// "remove original field(s)" checkbox (updateField below), never here.
+// The one place that maps the popup state (and the cross-session global settings) to buildScrapingConfig's options, so generate(), "Save
+// configuration" and "Export configuration" cannot drift apart. `overrides` wins: combinedComponents (resolved asynchronously by the
+// caller), includeOutputFile (only a real run keeps the output file) and, for an export, manifest.
+/**
+ * @param {Record<string, any>} state the popup's _state
+ * @param {{ includeDataPreview?: boolean, outputFormat?: boolean | string | null, includeOutputFile?: boolean, externalConfig?: boolean, skipVerification?: boolean }} globalSettings
+ * @param {Partial<SFDraft.ConfigExportOptions>} [overrides]
+ * @returns {SFDraft.ConfigExportOptions}
+ */
+function configOptionsFromState(state, globalSettings, overrides = {}) {
+  return {
+    url: state.url, mode: state.mode, fields: state.fields, groups: state.groups, apiConfig: state.apiConfig,
+    scriptFileName: state.scriptFileName, outputFileName: state.outputFileName,
+    engine: state.engine, browserActions: state.browserActions, persistentSession: state.persistentSession,
+    additionalUrls: state.additionalStartUrls, pagination: state.pagination, discoveredUrls: state.discoveredUrls, preflight: state.preflight,
+    changeDetection: state.changeDetection, proxy: state.proxy, hardening: state.hardening, requestDelay: state.requestDelay,
+    retry: state.retry, deduplication: state.deduplication, requestHeaders: state.requestHeaders,
+    respectRobotsDelay: state.respectRobotsDelay, robotsDisallow: state.robotsDisallow, appendOutput: state.appendOutput,
+    blocks: state.blocks,
+    outputBlueprint: {
+      id: state.selectedOutputBlueprintId, schemaKind: state.selectedOutputBlueprintSchemaKind,
+      fieldNames: state.selectedOutputBlueprintFieldNames, mapping: state.outputBlueprintMapping,
+      tree: state.selectedOutputBlueprintTree, treeMapping: state.outputBlueprintTreeMapping,
+    },
+    includePreview: globalSettings.includeDataPreview, useJsonOutput: globalSettings.outputFormat,
+    includeOutputFile: globalSettings.includeOutputFile, externalConfig: globalSettings.externalConfig,
+    skipVerification: globalSettings.skipVerification,
+    ...overrides,
+  };
+}
+
+// Appends a flat field. `selector` may be null for a derived (combine / split) field. `extras` are the optional settings, each with the
+// "off" default: attribute (null = text), download (+ its safety net), framePath, transforms; hiddenFromOutput is set only by the combine /
+// split flow's "remove original field(s)" option (updateField).
 /**
  * @param {SFDraft.Field[]} fields
  * @param {string} name
  * @param {string | null} selector
- * @param {string[] | null} [framePath]
- * @param {SFWire.FieldTransform[]} [transforms]
- * @param {string | null} [attribute]
- * @param {boolean} [download]
- * @param {number | null} [maxDownloadSizeBytes]
- * @param {string[]} [allowedContentTypes]
- * @param {boolean} [hiddenFromOutput]
+ * @param {{
+ *   framePath?: string[] | null, transforms?: SFWire.FieldTransform[], attribute?: string | null, download?: boolean,
+ *   maxDownloadSizeBytes?: number | null, allowedContentTypes?: string[], hiddenFromOutput?: boolean,
+ * }} [extras]
  * @returns {SFDraft.Field[]}
  */
-function addField(
-  fields, name, selector, framePath = null, transforms = [], attribute = null,
-  download = false, maxDownloadSizeBytes = null, allowedContentTypes = [], hiddenFromOutput = false,
-) {
+function addField(fields, name, selector, extras = {}) {
+  const {
+    framePath = null, transforms = [], attribute = null, download = false,
+    maxDownloadSizeBytes = null, allowedContentTypes = [], hiddenFromOutput = false,
+  } = extras;
   const isDownload = !!attribute && !!download;
   return [...fields, {
     name, selector, attribute: attribute || null, framePath: framePath || null,
@@ -1059,7 +861,7 @@ function frameBadgeHtml(framePath) {
 module.exports = {sanitizeFileNameBase, deriveScriptFileNameFromHostname, computeScriptFileNamePatch, parseAdditionalUrls,
   buildChangeDetectionConfig, buildProxyConfig, buildRequestDelayConfig, buildRetryConfig, buildPaginationConfig, buildDiscoveredUrlsConfig, buildHardeningConfig,
   computeInitialMonitoringSectionOpen, collectFieldNames,
-  buildScrapingConfig, buildConfigExport,
+  buildScrapingConfig, buildConfigExport, configOptionsFromState,
   addField, removeField, updateField,
   addBrowserAction, removeBrowserAction, updateBrowserAction, serializeBrowserActions,
   buildVerificationValues,

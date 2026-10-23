@@ -40,11 +40,10 @@ describe('buildRetryConfig', () => {
 
   test('buildScrapingConfig only sends retry when it is on', () => {
     const fields = [{ name: 'Titel', selector: 'h1' }];
-    const args = (retry) => ['https://example.com', 'flat', fields, [], null, null, null, 'Static', [], false, false,
-      [], null, null, null, null, false, false, false, null, null, null, [], {}, 'Flat', [], {}, null, false, null, retry];
-    expect(buildScrapingConfig(...args(draft())).retry).toEqual({ maxAttempts: 3, delayMs: 2000, exponential: true, retryOnStatusCodes: [429, 502, 503, 504] });
-    expect(buildScrapingConfig(...args(draft({ enabled: false })))).not.toHaveProperty('retry');
-    expect(buildScrapingConfig(...args(undefined))).not.toHaveProperty('retry');
+    const config = (retry) => buildScrapingConfig({ url: 'https://example.com', mode: 'flat', fields, retry });
+    expect(config(draft()).retry).toEqual({ maxAttempts: 3, delayMs: 2000, exponential: true, retryOnStatusCodes: [429, 502, 503, 504] });
+    expect(config(draft({ enabled: false }))).not.toHaveProperty('retry');
+    expect(config(undefined)).not.toHaveProperty('retry');
   });
 });
 

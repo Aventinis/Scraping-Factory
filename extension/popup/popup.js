@@ -775,7 +775,7 @@ function computeDerivedFieldAvailableNames(state, scope) {
 // comment). Returns the full _state patch to apply in one setState call.
 function insertDerivedField(state, scope, name, transform, sourceFieldNames, removeOriginals) {
   if (scope.mode === 'flat') {
-    let fields = addField(state.fields, name, null, null, [transform]);
+    let fields = addField(state.fields, name, null, { transforms: [transform] });
     if (removeOriginals) {
       sourceFieldNames.forEach((sourceName) => {
         const index = fields.findIndex(f => f.name === sourceName);
