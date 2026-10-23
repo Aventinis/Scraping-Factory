@@ -4,11 +4,7 @@ public abstract class ScrapingStep
 {
 }
 
-// Issue #83: carries every start URL the same extraction config runs
-// against (the wire-format's Url plus any AdditionalUrls, combined in
-// ScrapingPlanBuilder) — always at least one entry. Only PythonCodeGenerator/
-// PythonPlaywrightCodeGenerator read this; PythonApiCodeGenerator has its own
-// per-request URL templating (ApiConfig.UrlTemplate) and ignores it entirely.
+// Every start URL (Url plus AdditionalUrls), at least one. Only the page-scraping generators read it.
 public sealed class NavigateStep : ScrapingStep
 {
     public required List<string> Urls { get; init; }
@@ -18,104 +14,60 @@ public sealed class ExtractStep : ScrapingStep
 {
     public required string Name { get; init; }
 
-    // See ScrapingField.Selector — same "blank iff derived from a
-    // combineFields/splitField transform" relaxation, just the plan-level
-    // mirror (Issue #206 follow-up).
+    // Blank only for a derived field (see ScrapingField.Selector).
     public string? Selector { get; init; }
 
-    // null = text content; "href", "src" etc. for attribute extraction
+    // null = text content; "href", "src", … = attribute value.
     public string? Attribute { get; init; }
 
-    // Browser-engine only (Issue #42): an ordered list of CSS selectors
-    // identifying each iframe from the top document down to the frame
-    // containing Selector, e.g. ["iframe#outer", "iframe.inner"] — null (the
-    // default) means Selector is evaluated against the top-level document,
-    // today's only behavior. Shadow DOM needs no such field: Playwright's own
-    // selector engine pierces open shadow roots automatically for a plain
-    // CSS selector passed to query_selector/query_selector_all/locator, so
-    // Selector alone is already enough there.
+    // Browser engine only: CSS selectors of the iframes from the top document down to the one holding Selector.
+    // Shadow DOM needs nothing: Playwright pierces open shadow roots.
     public List<string>? FramePath { get; init; }
 
-    // Issue #84: an optional, ordered post-processing chain (trim/regex
-    // extract/replace/to-number) applied to the raw extracted value before
-    // it's written to the output row — see IR/FieldTransform.cs. Null/empty
-    // = today's behavior, the raw value unchanged.
     public List<FieldTransform>? Transforms { get; init; }
 
-    // Issue #213/#214: see DataFieldNode.Download's own doc comment — same
-    // meaning, generalized to flat mode. Only valid (and only meaningful)
-    // when Attribute is set, the flat-mode equivalent of "Mode == Attribute".
+    // Requires Attribute; see ScrapingField.
     public bool Download { get; init; }
-
-    // See DataFieldNode.MaxDownloadSizeBytes/AllowedContentTypes.
     public int? MaxDownloadSizeBytes { get; init; }
     public List<string>? AllowedContentTypes { get; init; }
 
-    // See ScrapingField.HiddenFromOutput — same plan-level mirror.
     public bool HiddenFromOutput { get; init; }
 }
 
-// Browser-engine only: waits for a selector to appear before continuing,
-// for content that's inserted client-side after the initial page load.
+// Browser engine only: waits for a selector to appear. FramePath is absolute from the top document, like ExtractStep's.
 public sealed class WaitForStep : ScrapingStep
 {
     public required string Selector { get; init; }
     public int TimeoutMs { get; init; } = 5000;
-
-    // See ExtractStep.FramePath (Issue #42, Phase 4) — same "absolute path
-    // from the top document, resolved fresh regardless of any other step's
-    // own FramePath" semantic.
     public List<string>? FramePath { get; init; }
 }
 
-// Browser-engine only: fills a form field, e.g. a login form's username or
-// password input. The value is never embedded literally in the generated
-// script — always sourced from an environment variable at runtime, so
-// credentials don't end up in plain text in a saved/shared script.
+// Browser engine only: fills a field from an environment variable (a credential never appears in the script).
 public sealed class FillStep : ScrapingStep
 {
     public required string Selector { get; init; }
     public required string EnvironmentVariableName { get; init; }
-
-    // See ExtractStep.FramePath (Issue #42, Phase 4) — e.g. a login form
-    // embedded via an SSO iframe widget.
     public List<string>? FramePath { get; init; }
 }
 
-// Browser-engine only: clicks an element, e.g. a login form's submit
-// button. Deliberately just a click — anything that needs to happen after
-// (e.g. waiting for the resulting page) is a separate WaitForStep.
+// Browser engine only: a click; waiting for the result is a separate WaitForStep.
 public sealed class ClickStep : ScrapingStep
 {
     public const int DefaultWaitAfterMs = 250;
 
     public required string Selector { get; init; }
 
-    // Issue #267: Playwright's Locator.click() runs in strict mode and aborts
-    // with a "strict mode violation" when the selector matches more than one
-    // element — unusable for e.g. one "Assets" toggle per listed release.
-    // First (the default, so a config that never sets this at least stops
-    // hard-failing) and Last click that single match; All clicks every match
-    // in document order, pausing WaitAfterMs after each so the page can react
-    // before the next click (same idea as ScrollStep.WaitAfterMs).
+    // Playwright's click aborts on a selector with several matches (strict mode), so a target is explicit:
+    // First/Last click that match, All clicks every match in order and pauses WaitAfterMs after each.
     public ClickTarget Target { get; init; } = ClickTarget.First;
     public int WaitAfterMs { get; init; } = DefaultWaitAfterMs;
 
-    // See ExtractStep.FramePath (Issue #42, Phase 4) — e.g. a cookie-consent
-    // button that lives inside an iframe.
     public List<string>? FramePath { get; init; }
 }
 
-// Browser-engine only: repeatedly scrolls (the whole page, or a specific
-// container) and/or clicks a "load more" button, to surface content that
-// only appears after infinite-scroll/lazy-loading has fired — for content
-// already present in the initial DOM, WaitForStep is enough. Always capped
-// by MaxIterations; the earlier stop signal depends on whether
-// LoadMoreButtonSelector is set: with a button, its own disappearance is the
-// signal (more reliable than page height — newly loaded content can still
-// fit within the viewport without ever growing scrollHeight); without one,
-// the page/container no longer growing across two consecutive rounds is the
-// only signal available. See playwright_scroll_step.py.j2.
+// Browser engine only: scrolls and/or clicks a "load more" button until nothing new appears, at most
+// MaxIterations rounds. With a button, its disappearance stops the loop; without one, the page or container
+// no longer growing for two rounds does. See playwright_scroll_step.py.j2.
 public sealed class ScrollStep : ScrapingStep
 {
     public string? ContainerSelector { get; init; }
@@ -123,59 +75,33 @@ public sealed class ScrollStep : ScrapingStep
     public int MaxIterations { get; init; } = 10;
     public int WaitAfterMs { get; init; } = 1000;
 
-    // Issue #289: null (the default) keeps today's exact behavior — jump
-    // straight to the current bottom of the page/container every iteration.
-    // When set, each iteration instead scrolls by exactly this many pixels,
-    // so a section that only lazy-loads once actually scrolled *through*
-    // (an IntersectionObserver per section) gets a chance to enter the
-    // viewport instead of being skipped by a direct jump to the bottom.
+    // null = jump to the bottom each round; set = scroll by this many pixels, for sections that only load once
+    // scrolled through.
     public int? ScrollStepPx { get; init; }
 
-    // See ExtractStep.FramePath (Issue #42, Phase 4) — applies to both
-    // ContainerSelector and LoadMoreButtonSelector, since a single ScrollStep
-    // already targets one specific area of one specific page/frame.
+    // Applies to ContainerSelector and LoadMoreButtonSelector alike.
     public List<string>? FramePath { get; init; }
 }
 
-// Container-Mode: replaces the flat list of ExtractSteps entirely when the
-// wire-format config carries Groups instead of Fields. Engine-independent —
-// unlike WaitFor/Fill/Click it works identically with Static and Browser
-// codegen, only the DOM-access calls in the generated extract_group()
-// differ. See ContainerNode.
+// Container mode; engine-independent (only the DOM calls in the generated extract_group() differ).
 public sealed class ExtractGroupStep : ScrapingStep
 {
     public required List<GroupNode> Roots { get; init; }
 }
 
-// API-Mode (Issue #53): replaces the flat list of ExtractSteps entirely when
-// the wire-format config carries Api instead of Fields/Groups — a single
-// step because, unlike NavigateStep + ExtractStep, fetching and parsing a
-// JSON API response isn't naturally split into a page-navigation phase and
-// a separate extraction phase. Always paired with ScrapingEngine.Api and
-// OutputFormat.Csv, forced in ScrapingPlanBuilder.
+// API mode: one step, since fetching and parsing a JSON response is not split into navigate and extract.
 public sealed class ApiCallStep : ScrapingStep
 {
     public required ApiConfig Config { get; init; }
 }
 
-// Issue #182: replaces the flat ExtractStep list / single ExtractGroupStep
-// entirely when the wire-format config carries Blocks instead of
-// Fields/Groups/Api — a single step (like ExtractGroupStep/ApiCallStep)
-// carrying every independent extraction block instead of exactly one shape,
-// so one script run can write more than one, independently-shaped, output
-// file while still sharing one NavigateStep/one set of browser actions.
+// Blocks mode: every independent extraction block of one run, sharing one NavigateStep.
 public sealed class ExtractionBlockStep : ScrapingStep
 {
     public required List<PlanExtractionBlock> Blocks { get; init; }
 }
 
-// The plan-level (resolved) counterpart to ExtractionBlockConfig — by the
-// time ScrapingPlanBuilder produces one of these, exactly one of
-// Fields/Groups is populated (never both, never neither; the wire-format's
-// own per-block Fields-xor-Groups check already ran in Program.cs) and
-// OutputFormat/OutputFileBaseName have already been resolved from the
-// block's own optional overrides the same way ScrapingPlan's top-level
-// fields are for the single-shape case.
+// The resolved ExtractionBlockConfig: exactly one of Fields/Groups is set, output format and file name are final.
 public sealed class PlanExtractionBlock
 {
     public required string Name { get; init; }
@@ -187,5 +113,4 @@ public sealed class PlanExtractionBlock
     public List<HardeningCheck>? Hardening { get; init; }
 }
 
-// Issue #267: see ClickStep.Target.
 public enum ClickTarget { First, Last, All }

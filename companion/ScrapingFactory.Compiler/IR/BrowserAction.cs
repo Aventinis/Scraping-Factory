@@ -2,17 +2,8 @@ using System.Text.Json.Serialization;
 
 namespace ScrapingFactory.Compiler.IR;
 
-// Wire-format counterpart of WaitForStep/FillStep/ClickStep/ScrollStep — an
-// ordered list on ScrapingConfig.BrowserActions, translated 1:1 into the
-// matching IR step by ScrapingPlanBuilder, in list order, after NavigateStep
-// and before extraction. Before this existed, WaitFor/Fill/Click had no wire
-// representation at all and were only reachable by hand-constructing a
-// ScrapingPlan in-process (e.g. in tests) — ScrollStep needed a wire path
-// regardless, so this closes that pre-existing gap for all four at once
-// instead of bolting on a ScrollStep-only special case. Discriminated the
-// same way ApiParameterSource is (System.Text.Json's built-in polymorphism,
-// an explicit "kind" property) — these four variants have no natural
-// structural tell to sniff, unlike GroupNode/DataFieldNode.
+// Wire form of WaitForStep/FillStep/ClickStep/ScrollStep: an ordered list translated 1:1 into steps by
+// ScrapingPlanBuilder, after navigation and before extraction. An explicit "kind" tag.
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(WaitForAction), "waitFor")]
 [JsonDerivedType(typeof(FillAction), "fill")]
@@ -40,11 +31,9 @@ public sealed class ClickAction : BrowserAction
 {
     public required string Selector { get; init; }
     public List<string>? FramePath { get; init; }
-
-    // Issue #267: which of several matches to click (see ClickTarget).
     public ClickTarget Target { get; init; } = ClickTarget.First;
 
-    // Only used for ClickTarget.All: pause after each click before the next one.
+    // Only for ClickTarget.All: pause after each click.
     public int WaitAfterMs { get; init; } = ClickStep.DefaultWaitAfterMs;
 }
 
@@ -55,15 +44,7 @@ public sealed class ScrollAction : BrowserAction
     public int MaxIterations { get; init; } = 10;
     public int WaitAfterMs { get; init; } = 1000;
 
-    // Issue #289: null (the default) keeps today's exact behavior — jump
-    // straight to the current bottom of the page/container every iteration,
-    // which is correct for classic "infinite scroll" (new items simply
-    // append below the old ones). When set, each iteration instead scrolls
-    // by exactly this many pixels — needed for a site that lazy-loads a
-    // section only once it's actually scrolled *through* (an
-    // IntersectionObserver per section), where jumping straight to the
-    // bottom skips every section in between without it ever entering the
-    // viewport. See ScrollStep's own identical field for the runtime side.
+    // See ScrollStep.ScrollStepPx.
     public int? ScrollStepPx { get; init; }
     public List<string>? FramePath { get; init; }
 }
