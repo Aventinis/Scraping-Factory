@@ -9,7 +9,7 @@ namespace ScrapingFactory.Compiler.Backends;
 // combination).
 public static class VerificationTimeEstimator
 {
-    // Budget per API request beyond the first: generous, but with Program.cs's 10-minute cap about 600 combinations are
+    // Budget per API request beyond the first: generous, but with VerificationPolicy's 10-minute cap about 600 combinations are
     // still verified for real; beyond that the trial run is skipped. A constant, not a setting: it is an estimate. Request
     // delay and retry waits are not counted (the verifier extends its deadline for those at run time).
     public const long AssumedMsPerApiRequest = 1000;

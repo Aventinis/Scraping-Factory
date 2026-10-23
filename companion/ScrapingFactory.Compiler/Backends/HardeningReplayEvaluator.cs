@@ -141,7 +141,7 @@ public static class HardeningReplayEvaluator
             $"Result count is {count} (previous: {baseline}).");
     }
 
-    // Lets Program.cs parse a previous saved output just far enough to get its ResultCount. CSV/JSON/XML only.
+    // Lets ConfigEndpoints parse a previous saved output just far enough to get its ResultCount. CSV/JSON/XML only.
     public static bool IsReplayable(string fileName) =>
         Path.GetExtension(fileName).TrimStart('.').ToLowerInvariant() is "csv" or "json" or "xml";
 

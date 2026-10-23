@@ -2,7 +2,7 @@ namespace ScrapingFactory.Companion;
 
 // Issue #276: the storage contract behind the /configs endpoints (saved
 // configurations, Issue #141, and their saved run outputs, Issue #202), so
-// Program.cs's endpoint handlers depend on this instead of on the SQLite
+// The endpoint handlers (Endpoints/) depend on this instead of on the SQLite
 // implementation (SavedConfigStore) — another backend only has to implement
 // these members and be registered in DI. Deliberately limited to what the
 // handlers call: everything SQLite-specific (the connection string, PRAGMA

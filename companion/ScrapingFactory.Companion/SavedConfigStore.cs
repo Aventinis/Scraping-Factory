@@ -10,7 +10,7 @@ namespace ScrapingFactory.Companion;
 // JSON text. ConfigJson is deliberately opaque here (never deserialized into
 // ScrapingConfig) — this store doesn't need to track the wire format's own
 // ongoing evolution, only round-trip whatever JSON object the extension
-// handed it (see Program.cs's /configs endpoints).
+// handed it (see Endpoints/ConfigEndpoints.cs).
 public sealed record SavedConfigSummary(long Id, string Url, string Name, string SavedAt, long? BlueprintId = null);
 
 public sealed record SavedConfigRecord(long Id, string Url, string Name, string SavedAt, string ConfigJson, long? BlueprintId = null);
@@ -147,7 +147,7 @@ public sealed class SavedConfigStore : ISavedConfigStore
         alterCommand.ExecuteNonQuery();
     }
 
-    // blueprintId is pulled by the caller (Program.cs) out of the same
+    // blueprintId is pulled by the caller (ConfigEndpoints) out of the same
     // ConfigJson it's about to store here, from that JSON's own
     // "outputBlueprint.blueprintId" — see IR/OutputBlueprintMapping.cs's own
     // doc comment on why that property exists at all ("a later cross-
@@ -246,7 +246,7 @@ public sealed class SavedConfigStore : ISavedConfigStore
 
     // Issue #202: a run's actual output data, saved as an explicit, opt-in
     // action (mirroring Save's own opt-in nature) and linked to an already-
-    // saved configuration. Endpoint-level code (Program.cs) is responsible
+    // saved configuration. Endpoint-level code (ConfigEndpoints) is responsible
     // for checking the parent SavedConfig actually exists before calling
     // this — the ON DELETE CASCADE above only guards against the parent
     // being deleted *after* an output was linked to it, not against linking

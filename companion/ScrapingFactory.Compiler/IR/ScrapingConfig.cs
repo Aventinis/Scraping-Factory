@@ -4,9 +4,9 @@ namespace ScrapingFactory.Compiler.IR;
 // null/false is the behavior from before the option existed. Details per option: docs/design-notes/compiler.md.
 //
 // Exactly one of Fields / Groups / Api / Combined / Blocks describes what to extract. Rejected by /generate
-// (Program.cs): AdditionalUrls, Pagination, DiscoveredUrls and Preflight together with Api; most per-run options
-// on the outer config of a Combined request (each component carries its own); ChangeDetection and Hardening on the
-// outer config of a Blocks request (they are per block).
+// (Endpoints/GenerateEndpoint*.cs): AdditionalUrls, Pagination, DiscoveredUrls and Preflight together with Api; most
+// per-run options on the outer config of a Combined request (each component carries its own); ChangeDetection and
+// Hardening on the outer config of a Blocks request (they are per block).
 public sealed class ScrapingConfig
 {
     public string Version { get; init; } = "1";
