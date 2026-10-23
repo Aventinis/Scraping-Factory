@@ -1433,8 +1433,7 @@ is unaffected. Disallow re-checking is the separate option of 2.21ab2 below.
 - Fragment `request_delay.py.j2` (`_robots_delay`, `_fetch_robots_delay`,
   `urllib.robotparser`); the fetch itself is `fragments/robots_fetch.py.j2`,
   shared with 2.21ab2
-- Extension: `scraping-config-builder.js` (trailing `respectRobotsDelay`
-  parameter), `config-import.js`, `session-restore.js`,
+- Extension: `scraping-config-builder.js` (`respectRobotsDelay` option), `config-import.js`, `session-restore.js`,
   `settings-panel-ui.js`, `#toggle-respect-robots-delay` in `screens/idle.html`
 - Tests: `RobotsCrawlDelayTests.cs`, `extension/popup/robots-crawl-delay.test.js`,
   fixture `test-pages/crawl-delay` +
@@ -1461,7 +1460,7 @@ subresources, the auth bootstrap or browser-discovery sessions.
   `request_delay.py.j2`); `_robots_gate` guards in the `main_*` fragments, the
   static page loops, the Browser pagination, preflight/discovery/download
   fragments and `api_fetch.py.j2`/`api_common.py.j2`
-- Extension: `scraping-config-builder.js` (trailing `robotsDisallow`),
+- Extension: `scraping-config-builder.js` (`robotsDisallow` option),
   `config-import.js` (`applyRobotsDisallowConfig`), `session-restore.js`,
   `settings-panel-ui.js`, `#toggle-robots-disallow` in `screens/idle.html`
 - Tests: `RobotsDisallowTests.cs`, `RobotsDisallowEndpointTests.cs`,
@@ -1486,7 +1485,7 @@ carries it per component only.
 - Fragments: `output_append.py.j2` (included from `main_flat`/`main_grouped`/
   `main_blocks` and the two API templates), the SQLite/Excel branches of
   `output_tabular.py.j2`
-- Extension: `scraping-config-builder.js` (trailing `appendOutput`),
+- Extension: `scraping-config-builder.js` (`appendOutput` option),
   `config-import.js`, `session-restore.js`, `settings-panel-ui.js`,
   `#toggle-append-output` in `screens/idle.html`; `dedup-config.js` lost its
   tree-shape Append restriction
@@ -1543,7 +1542,7 @@ repeating group instance that owns every key field.
   `_dedup_register_instance`/`_dedup_delta_tree` for the tree shapes)
 - Extension: `dedup-config.js` (pure) + `dedup-config-ui.js`
   (`renderDedupSection`/`wireDedupEvents`), `scraping-config-builder.js`
-  (trailing `deduplication` parameter), `config-import.js`,
+  (`deduplication` option), `config-import.js`,
   `session-restore.js`, `#toggle-dedup`/`#dedup-config` in
   `screens/idle.html`
 - Tests: `DeduplicationEndToEndTests.cs`, `DeduplicationConfigJsonTests.cs`,
@@ -1593,7 +1592,7 @@ Playwright's `extra_http_headers` (every request of the page) and
   `preflight_playwright`/`discovered_urls_playwright` fragments use them
 - Extension: `request-headers.js` (pure) + `request-headers-ui.js`
   (`renderRequestHeadersSection`/`wireRequestHeadersEvents`),
-  `scraping-config-builder.js` (trailing `requestHeaders` parameter),
+  `scraping-config-builder.js` (`requestHeaders` option),
   `companion-client.js` (test values → `verificationValues`),
   `config-import.js`, `session-restore.js`, `#toggle-request-headers`/
   `#request-headers-config` in `screens/idle.html`
