@@ -5,7 +5,7 @@ namespace ScrapingFactory.Compiler.Backends.Python;
 
 // Combined mode is deliberately not an ICodeGenerator in LanguageModuleRegistry: it consumes other generators'
 // rendered output, which would need the registry injected into a reflectively constructed backend (circular).
-// Program.cs generates each component through the registry and hands the results here to wrap and merge.
+// GenerateEndpoint.Combined.cs generates each component through the registry and hands the results here to wrap and merge.
 public static class PythonCombinedScriptGenerator
 {
     public static string Generate(

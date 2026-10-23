@@ -278,7 +278,7 @@ function renderIdleScreen(bridge) {
 
   // Issue #83: hidden for API mode — Api builds its own request URL from
   // apiConfig.urlTemplate and never reads this list at all (the companion
-  // rejects the combination outright, see Program.cs).
+  // rejects the combination outright, see GenerateEndpoint.cs).
   document.getElementById('additional-urls-row')?.classList.toggle('hidden', state.mode === 'api' || state.mode === 'combined');
   const additionalUrlsInput = document.getElementById('input-additional-urls');
   if (additionalUrlsInput && document.activeElement !== additionalUrlsInput) {

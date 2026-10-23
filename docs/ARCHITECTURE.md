@@ -47,7 +47,7 @@ flowchart LR
     SP -- "HTTP: GET /health, POST /generate,\nPOST/GET/DELETE /configs,\nPOST/GET/DELETE /configs/{id}/outputs,\nPOST/GET/PUT/DELETE /blueprints" --> Companion
     subgraph Companion["Companion app (.NET 10 process)"]
         direction TB
-        Program["Program.cs\n(minimal API)"]
+        Program["Program.cs (startup) +\nEndpoints/*.cs"]
         Plan["ScrapingPlanBuilder /\nScrapingPlanValidator"]
         Gen["ICodeGenerator\n(Python* code generators)"]
         Ver["IScriptVerifier\n(PythonScriptVerifier)"]
@@ -59,6 +59,15 @@ flowchart LR
     end
     Ver -- "spawns" --> PySub["python3 subprocess\n(the actual generated script,\nrun once as a trial)"]
 ```
+
+The companion's HTTP surface is wired in `Program.cs` (services, middleware, `/health`, `/whoami`) and implemented in
+`companion/ScrapingFactory.Companion/Endpoints/`: `ConfigEndpoints.cs` (`/configs`, outputs, `replay-hardening`),
+`BlueprintEndpoints.cs`, `TransformPresetEndpoints.cs` and `GenerateEndpoint.cs` (+ `.Combined.cs`, `.Blocks.cs`: the
+mode-exclusivity checks and the three `/generate` handlers). The trial-run skip rules live in
+`Compiler/Backends/VerificationPolicy.cs`. `ScrapingPlanValidator` is one `partial` class in `Compiler/IR/`
+(`ScrapingPlanValidator.cs` sequences the checks; `.Settings`, `.BrowserSteps`, `.Shapes`, `.Fields`, `.Output`,
+`.Hardening`, `.Blocks` and `.Api*` hold the per-area checks). Below, "in `Program.cs`" for an endpoint or an
+outer-request rejection means the matching `Endpoints/` file.
 
 ### 1.1 The extension has three separate JS execution contexts
 
@@ -170,7 +179,7 @@ files and `popup.js` itself aren't annotated (yet).
 ### 1.3 The companion pipeline: wire format → canonical IR → codegen → real execution
 
 Everything the extension sends is `ScrapingFactory.Compiler.IR.ScrapingConfig` —
-described in full in `CLAUDE.md`'s Architecture Decisions §1. `Program.cs`'s
+described in full in `CLAUDE.md`'s Architecture Decisions §1. `Endpoints/GenerateEndpoint.cs`'s
 `/generate` endpoint runs it through a fixed pipeline, and **every** stage after
 `ScrapingPlanBuilder` only ever sees the canonical `ScrapingPlan`, never the wire
 format directly:
@@ -195,7 +204,7 @@ any change:
   matching new `ScrapingStep` subtype.** `Fields` → `ExtractStep` (many),
   `Groups` → `ExtractGroupStep` (one, wrapping a whole tree), `Api` →
   `ApiCallStep` (one, wrapping `ApiConfig`). All three are mutually exclusive,
-  enforced in `Program.cs` before `ScrapingPlanBuilder` ever runs.
+  enforced in `Endpoints/GenerateEndpoint.cs` before `ScrapingPlanBuilder` ever runs.
 - **`ScrapingPlanValidator` runs before any subprocess is spawned.** It only
   catches structural issues that are wrong regardless of runtime behavior
   (bad URL, empty/duplicate names, `FramePath` without `Engine=Browser`, a
@@ -510,7 +519,7 @@ clear error message instead of a silently broken download.
 
 - Companion: `Backends/Python/PythonScriptVerifier.cs`,
   `Backends/ScriptVerificationResult.cs`, `Backends/IScriptVerifier.cs`,
-  `Program.cs` (the `/generate` handler's verify-then-respond logic)
+  `Endpoints/GenerateEndpoint.cs` (the `/generate` handler's verify-then-respond logic)
 
 ### 2.7a Generated-script snapshot tests (Issue #386)
 
@@ -580,7 +589,7 @@ before ever downloading or running the script themselves.
   `renderDataPreview`, the `generate()` branch that parses JSON vs. plain text)
 - Companion: `IR/ScrapingConfig.cs` (`IncludePreview`),
   `Backends/ScriptPreviewData.cs`, `Backends/Python/PythonScriptVerifier.cs`
-  (`BuildCsvPreview`/`BuildXmlPreview`/`ParseCsvLine`), `Program.cs` (the
+  (`BuildCsvPreview`/`BuildXmlPreview`/`ParseCsvLine`), `Endpoints/GenerateEndpoint.cs` (the
   `IncludePreview == true` response branch)
 
 ### 2.8a Download the full trial-run output (Issue #161)
@@ -598,7 +607,7 @@ so the download is byte-identical to what the script wrote.
 - Companion: `IR/ScrapingConfig.cs` (`IncludeOutputFile`),
   `Backends/ScriptVerificationResult.cs` (`OutputFileContent`/`OutputFileName`),
   `Backends/IScriptVerifier.cs`/`Backends/Python/PythonScriptVerifier.cs` (the
-  `includeOutputFile` parameter), `Program.cs` (the widened JSON-envelope
+  `includeOutputFile` parameter), `Endpoints/GenerateEndpoint.cs` (the widened JSON-envelope
   condition, `outputFile` response key)
 
 ### 2.9 robots.txt check
@@ -954,7 +963,7 @@ empty, no error shown.
   `buildScrapingConfig`/`buildConfigExport`)
 - Companion: `SavedConfigStore.cs` (SQLite-backed, `Host`-scoped lookup —
   the config JSON itself is stored and returned opaquely, never deserialized
-  into `ScrapingConfig`), `Program.cs` (`POST /configs`, `GET
+  into `ScrapingConfig`), `Endpoints/ConfigEndpoints.cs` (`POST /configs`, `GET
   /configs?url=...`, `GET /configs/{id}`, `DELETE /configs/{id}`)
 
 ### 2.14b Persist and browse run outputs (Issue #202)
@@ -983,7 +992,7 @@ saved output is a separate, not-yet-implemented issue (#207).
   feature's own modal/download action)
 - Companion: `SavedConfigStore.cs` (`SavedOutputs` table, `SavedConfigId`
   foreign key with `ON DELETE CASCADE`, `OpenConnection()` enabling `PRAGMA
-  foreign_keys` for every query so that cascade actually fires), `Program.cs`
+  foreign_keys` for every query so that cascade actually fires), `Endpoints/ConfigEndpoints.cs`
   (`POST/GET /configs/{configId}/outputs`, `GET/DELETE
   /configs/{configId}/outputs/{id}`)
 
@@ -1202,7 +1211,7 @@ a copy of the steps (an existing chain is never replaced).
   `bridge.fetchTransformPresets` called from `companion-client.js`'s health
   check
 - Companion: `TransformPresetStore.cs` (`transform-presets.db`), `/transform-presets`
-  POST/GET/PUT(rename)/DELETE and `ValidateTransformPresetChain` in `Program.cs`
+  POST/GET/PUT(rename)/DELETE and `ValidateChain` in `Endpoints/TransformPresetEndpoints.cs`
 - Tests: `TransformPresetsEndpointTests.cs`, `extension/popup/transform-presets.test.js`,
   real-browser check `e2e/examples/issue-279-transform-presets-check.js`
 
@@ -1226,7 +1235,7 @@ from `urlTemplate`/`Parameters` and rejects the combination outright.
   `IR/ScrapingStep.cs` (`NavigateStep.Urls`, `List<string>` instead of a
   single `Url` — the one breaking change to the canonical `ScrapingPlan`,
   confined to the two code generators below), `IR/ScrapingPlanValidator.cs`
-  (validates every entry, identifying a failure by index), `Program.cs` (the
+  (validates every entry, identifying a failure by index), `Endpoints/GenerateEndpoint.cs` (the
   `Api`+`AdditionalUrls` `400` guard, same style as the existing Fields/
   Groups/Api mutual-exclusivity checks)
 - `Backends/Python/PythonCodeGenerator.cs`/`PythonPlaywrightCodeGenerator.cs`
@@ -1268,7 +1277,7 @@ paginates onward independently, entirely inside the generated script's own
   `NextLinkSelector`, or — reusing the same `UrlTemplatePlaceholderPattern`
   API mode's own `UrlTemplate` validation already uses — that
   `PageNumberPagination.UrlTemplate` references both `{url}` and `{page}`),
-  `Program.cs` (the `Api`+`Pagination` `400` guard, same style as
+  `Endpoints/GenerateEndpoint.cs` (the `Api`+`Pagination` `400` guard, same style as
   `Api`+`AdditionalUrls`)
 - `Backends/Python/PythonPaginationLiteral.cs` (`BuildContext`, mirrors
   `PythonProxyLiteral`/`PythonChangeDetectionLiteral` exactly — always emits
@@ -1405,7 +1414,7 @@ minutes of pauses).
 
 - IR: `IR/RequestDelayConfig.cs` (`ScrapingConfig.RequestDelay`/
   `ScrapingPlan.RequestDelay`), validation in `ScrapingPlanValidator`,
-  Combined-mode outer-config rejection in `Program.cs`
+  Combined-mode outer-config rejection in `Endpoints/GenerateEndpoint.Combined.cs`
 - `Backends/Python/PythonRequestDelayLiteral` (`request_delay.*`), wired in
   `PythonScrapingContextBuilder` and `PythonApiCodeGenerator`
 - Templates: all eight request-making templates — `_pace_request()` before
@@ -1427,7 +1436,7 @@ larger of this and a configured pause wins). A site without such a directive
 is unaffected. Disallow re-checking is the separate option of 2.21ab2 below.
 
 - IR: `ScrapingConfig.RespectRobotsDelay`/`ScrapingPlan.RespectRobotsDelay`,
-  Combined-mode outer-config rejection in `Program.cs`
+  Combined-mode outer-config rejection in `Endpoints/GenerateEndpoint.Combined.cs`
 - `Backends/Python/PythonRequestDelayLiteral` (now takes the plan:
   `respect_robots`, `robots_urls_literal`)
 - Fragment `request_delay.py.j2` (`_robots_delay`, `_fetch_robots_delay`,
@@ -1453,7 +1462,7 @@ subresources, the auth bootstrap or browser-discovery sessions.
 
 - IR: `IR/RobotsDisallowConfig.cs` (`ScrapingConfig.RobotsDisallow`/
   `ScrapingPlan.RobotsDisallow`), Combined-mode outer-config rejection in
-  `Program.cs`
+  `Endpoints/GenerateEndpoint.Combined.cs`
 - `Backends/Python/PythonRobotsDisallowLiteral` (`robots_check.*`), wired in
   `PythonScrapingContextBuilder` and `PythonApiCodeGenerator`
 - Fragments: `robots_fetch.py.j2`, `robots_disallow.py.j2` (included from
@@ -1479,7 +1488,7 @@ output is one case of this mechanism (`ScrapingPlan.AppendsOutput`). Combined
 carries it per component only.
 
 - IR: `ScrapingConfig.AppendOutput`/`ScrapingPlan.AppendOutput`/
-  `AppendsOutput`, Combined-mode outer-config rejection in `Program.cs`
+  `AppendsOutput`, Combined-mode outer-config rejection in `Endpoints/GenerateEndpoint.Combined.cs`
 - Wiring: `PythonScrapingContextBuilder`, `PythonApiCodeGenerator`
   (`append_output`)
 - Fragments: `output_append.py.j2` (included from `main_flat`/`main_grouped`/
@@ -1504,7 +1513,7 @@ extends its deadline by the wait plus an allowance for the retried request.
 
 - IR: `IR/RetryConfig.cs` (`ScrapingConfig.Retry`/`ScrapingPlan.Retry`),
   validation in `ScrapingPlanValidator`, Combined outer-config rejection in
-  `Program.cs`
+  `Endpoints/GenerateEndpoint.Combined.cs`
 - `Backends/Python/PythonRetryLiteral` (`retry.*`), wired in
   `PythonScrapingContextBuilder`, `PythonApiCodeGenerator` and (for the
   navigate fragment) `PythonPlaywrightCodeGenerator`
@@ -1532,7 +1541,7 @@ repeating group instance that owns every key field.
 - IR: `IR/DeduplicationConfig.cs` (`ScrapingConfig.Deduplication`/
   `ScrapingPlan.Deduplication`), validation in
   `ScrapingPlanValidator.ValidateDeduplication`, Combined-outer/Blocks
-  rejection in `Program.cs`
+  rejection in `Endpoints/GenerateEndpoint.*.cs`
 - `Backends/Python/PythonDeduplicationLiteral` (`dedup.*` — the flags and the
   configuration as Python literals), wired in `PythonScrapingContextBuilder`
   and `PythonApiCodeGenerator`
@@ -1583,7 +1592,7 @@ Playwright's `extra_http_headers` (every request of the page) and
 
 - IR: `ScrapingConfig.Headers`/`ScrapingPlan.Headers` (reusing `ApiHeader`),
   validation in `ScrapingPlanValidator.ValidateRequestHeaders`,
-  Api/Combined-outer rejection in `Program.cs`,
+  Api/Combined-outer rejection in `Endpoints/GenerateEndpoint.cs`,
   `FillVerificationValues.Filter` (`requestHeaders`)
 - `Backends/Python/PythonRequestHeadersLiteral` (`request_headers.*`), wired in
   `PythonScrapingContextBuilder` and `PythonPlaywrightCodeGenerator`
@@ -1810,13 +1819,13 @@ minutes skips the trial run (response header
 
 - Companion: `Compiler/Backends/VerificationTimeEstimator.cs`,
   `RangeFormat.CountValues` (`Backends/Python/RangeFormat.cs`), the cap and
-  header in `Program.cs`
+  header in `Backends/VerificationPolicy.cs`
 - Tests: `VerificationTimeEstimatorTests.cs`,
   `ApiCombinationTimeoutEndToEndTests.cs`, `CompanionEndpointTests.cs`
 
 The caller can also switch the trial run off (`ScrapingConfig.SkipVerification`,
 Issue #292, the extension's Settings screen): same response mechanics as the
-cap skip, `VerificationSkipReason` in `Program.cs`. Tests:
+cap skip, `VerificationPolicy.SkipReason`. Tests:
 `SkipVerificationEndpointTests.cs`, `e2e/examples/issue-292-skip-verification-check.js`.
 
 ### 2.21ai Clean page-request errors (Issue #319)
@@ -1946,7 +1955,7 @@ map into a different target branch.
   `outputBlueprintTreeMapping` through to `buildOutputBlueprintMapping`.
 - Companion: `OutputBlueprintStore.cs` (own SQLite file/db, no FK/cascade —
   a blueprint isn't tied to any saved configuration), five endpoints under
-  `/blueprints` (list/get/create/update/delete) registered in `Program.cs`,
+  `/blueprints` (list/get/create/update/delete) registered in `Endpoints/BlueprintEndpoints.cs`,
   which also rejects `OutputBlueprint` combined with `Combined`/`Blocks`
   with a `400` (the same rejection originally also covered `Groups`/
   `Api.Groups` — see Issue #192 below for why that's gone).
@@ -1959,7 +1968,7 @@ map into a different target branch.
   (`"Flat"`/`"Tree"`) to match that enum's own wire serialization exactly.
   `Save`/`Update` take an additional `schemaKind`/`tree` pair;
   `FieldCount` reports the total leaf count, recursively, for a tree.
-  `Program.cs`'s shared `ValidateBlueprintRequest` local function defaults
+  `BlueprintEndpoints`' shared `ValidateRequest` method defaults
   a missing `schemaKind` to `"Flat"` and validates a `"Tree"` request's own
   `tree` via `OutputBlueprintTreeSchemaValidator.Validate`.
 - Compiler: `IR/OutputBlueprintMapping.cs` (`OutputBlueprintMapping` —
@@ -2431,7 +2440,7 @@ or tree-insert flow).
 
 **Change what a `ScrapingConfig` can express at the top level** (a new
 mutually-exclusive mode, like a hypothetical fourth extraction shape): `IR/ScrapingConfig.cs`
-(new nullable field) → `Program.cs`'s `/generate` mutual-exclusion checks →
+(new nullable field) → `Endpoints/GenerateEndpoint.cs`'s `/generate` mutual-exclusion checks →
 `ScrapingPlanBuilder.Build()` (new branch, decide `OutputFormat`/`Engine`) →
 `ScrapingPlanValidator.cs` (new validation branch) → a new `ICodeGenerator`
 implementation + template(s) → `LanguageModuleRegistry` picks it up automatically
