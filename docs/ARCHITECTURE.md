@@ -1727,10 +1727,19 @@ stores in one database (tables created on first use, later columns by
 idempotent `information_schema`-checked migrations); an unreachable database
 answers `503`. The installer can write the settings (`--mysql`).
 
-- Companion: `Storage/StorageOptions.cs`, `MySqlSchema.cs`,
+- Companion: `Storage/StorageOptions.cs`, `MySqlSchema.cs`, `SqliteSchema.cs`,
   `MySqlSavedConfigStore.cs`, `MySqlOutputBlueprintStore.cs`,
   `MySqlTransformPresetStore.cs`; DI + startup validation + 503 middleware in
   `Program.cs`; dependency `MySqlConnector`
+- Store layer (Issue #392): every query is written once, against `System.Data.Common`,
+  in an abstract base per store — `Storage/SqlStore.cs` (command/query helpers),
+  `Auth/SqlUserStoreBase.cs`, `Storage/SqlSavedConfigStoreBase.cs`,
+  `SqlOutputBlueprintStoreBase.cs`, `SqlTransformPresetStoreBase.cs`. The SQLite
+  classes (`SqliteUserStore`, `SavedConfigStore`, `OutputBlueprintStore`,
+  `TransformPresetStore`) and the `MySql*Store` classes only add DDL, migrations
+  and the dialect hooks (last insert id, upsert, unique-violation detection,
+  case-insensitive name comparison, host-length limit). Dialect differences:
+  `docs/design-notes/companion.md`, "Store dialects".
 - Installer: `install.sh`/`install.ps1` (`--mysql`, `--sqlite`)
 - CI: `mysql:8.4` service container + `SF_TEST_MYSQL`
 - Tests: `StorageContractTests.cs` (SQLite + MySQL), `StorageProviderTests.cs`
