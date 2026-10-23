@@ -668,6 +668,21 @@ CLAUDE.md for the details.
 - Tests: `popup/hardening-presets.test.js`, `popup/hardening-presets-ui.test.js`,
   real-browser check `e2e/examples/issue-399-hardening-plain-language-check.js`
 
+### 2.10n German documentation (Issue #436)
+
+`docs/user/de/*.md` is the German version of the user documentation (same file names, same heading
+structure), built next to the English pages; "Learn more" opens the German page when the panel is
+German. No wire-format or companion change. See CLAUDE.md for the details.
+
+- Build: `extension/docs-build.js` (both trees, `anchors.json`, source stamps, `translationStatus`),
+  `extension/docs-template/docs.css` (language switch), `install/build-bundle.sh` (both Markdown trees)
+- Extension: `popup/docs-links.js` (`resolveDocTarget(key, language, anchors)`), `popup/docs-links-ui.js`
+  (loads `docs/anchors.json` when the panel is German), `common.learnMore`
+- Screenshots/checks: `e2e/screenshots/run.js --language de`, `lib.js` (`imagesDirFor`, `word()`),
+  `check-docs.js` (both trees, translation status)
+- Tests: `docs-build.test.js`, `popup/docs-links.test.js`, `popup/docs-links-ui.test.js`, real-browser check
+  `e2e/examples/issue-436-german-docs-check.js`
+
 ### 2.10m Pick ids for the pending-selector fallback (Issue #429)
 
 Each element pick carries a `pickId`; the service worker's fallback write stores it, the panel records the
