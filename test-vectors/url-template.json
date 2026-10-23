@@ -1,5 +1,5 @@
 {
- "description": "Issue #388: which values of one placeholder does a pool of recorded request URLs reveal? The extension's findUrlTemplateMatches (popup/api-config.js, 'Fill from recording') and the generated script's _match_url_against_template (browser discovery) must pick the same requests and extract the same values: same origin and path-segment count, every fixed segment/query value equal, other placeholders free. expected lists each distinct extracted value once, in first-seen order, skipping empty values.",
+ "description": "Issue #388: which values of one placeholder does a pool of recorded request URLs reveal? The extension's findUrlTemplateMatches (popup/api-config.ts, 'Fill from recording') and the generated script's _match_url_against_template (browser discovery) must pick the same requests and extract the same values: same origin and path-segment count, every fixed segment/query value equal, other placeholders free. expected lists each distinct extracted value once, in first-seen order, skipping empty values.",
  "cases": [
   {
    "name": "extracts a path placeholder from sibling requests",
