@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.20.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.20.1...v1.20.2) (2026-10-23)
+
+
+### Features
+
+* **docs:** build a German tree next to the English one, map anchors by heading position, language-aware Learn more, source stamps ([#436](https://github.com/Aventinis/Scraping-Factory/issues/436)) ([fab042e](https://github.com/Aventinis/Scraping-Factory/commit/fab042e8e3668db001c33d2cdd8b2d0f3f31ef89))
+* **docs:** screenshot generator --language de and a docs check over both trees with translation status ([#436](https://github.com/Aventinis/Scraping-Factory/issues/436)) ([2c788a5](https://github.com/Aventinis/Scraping-Factory/commit/2c788a5a7c9b1273f80bcccd419d101b255f8167))
+
 ## [1.20.1](https://github.com/Aventinis/Scraping-Factory/compare/v1.20.0...v1.20.1) (2026-10-23)
 
 
