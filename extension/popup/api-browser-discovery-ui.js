@@ -12,7 +12,7 @@ const {
 } = require('./api-config');
 // Issue #216: BrowserDiscoverySource's action list reuses the exact same
 // draft shape/helpers the top-level login-flow editor already uses —
-// api-config.js can't import these itself (scraping-config-builder.js
+// api-config.js can't import these itself (scraping-config-builder.ts
 // already imports api-config.js; the reverse would be a circular
 // require), so the API_CONFIG UI modules (one layer above both) do the
 // wiring instead.

@@ -555,7 +555,7 @@ reads the same data, so changing only one side fails. The shared data lives in `
 
 | Mirror | Extension side | Companion / script side | Checked by |
 | --- | --- | --- | --- |
-| File-name cleanup | `sanitizeFileNameBase` (`scraping-config-builder.js`) | `IR/FileNameSanitizer.cs` | `file-name-sanitizer.json` — `scraping-config-builder.test.js`, `FileNameSanitizerTests.cs` |
+| File-name cleanup | `sanitizeFileNameBase` (`scraping-config-builder.ts`) | `IR/FileNameSanitizer.cs` | `file-name-sanitizer.json` — `scraping-config-builder.test.js`, `FileNameSanitizerTests.cs` |
 | Transform previews | `applyTransformsPreview` (`field-transforms.ts`) | `fragments/transforms.py.j2` `_apply_transforms` | `transforms.json` — `transform-vectors.test.js`, `TransformVectorTests.cs` (real helper, imported from a generated script) |
 | robots.txt matching | `evaluateRobotsTxt` (`content-script.js`) | `fragments/robots_disallow.py.j2` | `robots.json` — `robots-vectors.test.js`, `RobotsVectorTests.cs` |
 | Range formats | `compileRangeFormatPattern` (`api-config.js`) | `Backends/Python/RangeFormat.cs`, `fragments/api_common.py.j2` | `range-format.json`, `range-expansion.json` — `range-format-vectors.test.js`, `RangeFormatVectorTests.cs` |
@@ -1421,7 +1421,7 @@ minutes of pauses).
   every request / page navigation
 - `Backends/Python/PythonScriptVerifier.RunScriptAsync`
   (`PauseAnnouncementPattern`, `MaxRequestDelayExtension`, moving deadline)
-- Extension: `scraping-config-builder.js` (`buildRequestDelayConfig`),
+- Extension: `scraping-config-builder.ts` (`buildRequestDelayConfig`),
   `config-import.ts` (`applyRequestDelayConfig`), `settings-panel-ui.js`,
   `#toggle-request-delay`/`#request-delay-config` in `screens/idle.html`
 - Tests: `RequestDelayTests.cs`, `extension/popup/request-delay.test.js`,
@@ -1442,7 +1442,7 @@ is unaffected. Disallow re-checking is the separate option of 2.21ab2 below.
 - Fragment `request_delay.py.j2` (`_robots_delay`, `_fetch_robots_delay`,
   `urllib.robotparser`); the fetch itself is `fragments/robots_fetch.py.j2`,
   shared with 2.21ab2
-- Extension: `scraping-config-builder.js` (`respectRobotsDelay` option), `config-import.ts`, `session-restore.js`,
+- Extension: `scraping-config-builder.ts` (`respectRobotsDelay` option), `config-import.ts`, `session-restore.js`,
   `settings-panel-ui.js`, `#toggle-respect-robots-delay` in `screens/idle.html`
 - Tests: `RobotsCrawlDelayTests.cs`, `extension/popup/robots-crawl-delay.test.js`,
   fixture `test-pages/crawl-delay` +
@@ -1469,7 +1469,7 @@ subresources, the auth bootstrap or browser-discovery sessions.
   `request_delay.py.j2`); `_robots_gate` guards in the `main_*` fragments, the
   static page loops, the Browser pagination, preflight/discovery/download
   fragments and `api_fetch.py.j2`/`api_common.py.j2`
-- Extension: `scraping-config-builder.js` (`robotsDisallow` option),
+- Extension: `scraping-config-builder.ts` (`robotsDisallow` option),
   `config-import.ts` (`applyRobotsDisallowConfig`), `session-restore.js`,
   `settings-panel-ui.js`, `#toggle-robots-disallow` in `screens/idle.html`
 - Tests: `RobotsDisallowTests.cs`, `RobotsDisallowEndpointTests.cs`,
@@ -1494,7 +1494,7 @@ carries it per component only.
 - Fragments: `output_append.py.j2` (included from `main_flat`/`main_grouped`/
   `main_blocks` and the two API templates), the SQLite/Excel branches of
   `output_tabular.py.j2`
-- Extension: `scraping-config-builder.js` (`appendOutput` option),
+- Extension: `scraping-config-builder.ts` (`appendOutput` option),
   `config-import.ts`, `session-restore.js`, `settings-panel-ui.js`,
   `#toggle-append-output` in `screens/idle.html`; `dedup-config.ts` lost its
   tree-shape Append restriction
@@ -1521,7 +1521,7 @@ extends its deadline by the wait plus an allowance for the retried request.
   `playwright_navigate_step.py.j2`
 - `Backends/Python/PythonScriptVerifier` (`RetryAnnouncementPattern`,
   `RetryAttemptAllowance`)
-- Extension: `scraping-config-builder.js` (`buildRetryConfig`),
+- Extension: `scraping-config-builder.ts` (`buildRetryConfig`),
   `config-import.ts` (`applyRetryConfig`), `settings-panel-ui.js`,
   `#toggle-retry`/`#retry-config` in `screens/idle.html`
 - Tests: `RetryTests.cs`, `extension/popup/retry.test.js`, fixture
@@ -1550,7 +1550,7 @@ repeating group instance that owns every key field.
   (`_dedup_filter_rows`/`_dedup_new_rows` for the flat shapes,
   `_dedup_register_instance`/`_dedup_delta_tree` for the tree shapes)
 - Extension: `dedup-config.ts` (pure) + `dedup-config-ui.js`
-  (`renderDedupSection`/`wireDedupEvents`), `scraping-config-builder.js`
+  (`renderDedupSection`/`wireDedupEvents`), `scraping-config-builder.ts`
   (`deduplication` option), `config-import.ts`,
   `session-restore.js`, `#toggle-dedup`/`#dedup-config` in
   `screens/idle.html`
@@ -1603,7 +1603,7 @@ Playwright's `extra_http_headers` (every request of the page) and
   `preflight_playwright`/`discovered_urls_playwright` fragments use them
 - Extension: `request-headers.ts` (pure) + `request-headers-ui.js`
   (`renderRequestHeadersSection`/`wireRequestHeadersEvents`),
-  `scraping-config-builder.js` (`requestHeaders` option),
+  `scraping-config-builder.ts` (`requestHeaders` option),
   `companion-client.js` (test values → `verificationValues`),
   `config-import.ts`, `session-restore.js`, `#toggle-request-headers`/
   `#request-headers-config` in `screens/idle.html`
@@ -1656,7 +1656,7 @@ the last, or every match in order (with a pause after each click).
   `waitAfterMs`), `PythonPlaywrightCodeGenerator`
 - Templates: `playwright_click_step.py.j2`, `fragments/api_common.py.j2`
   (`_run_browser_action`)
-- Extension: `scraping-config-builder.js` (`addBrowserAction`,
+- Extension: `scraping-config-builder.ts` (`addBrowserAction`,
   `serializeBrowserActions`), `config-import.ts`, `browser-actions-ui.js`,
   `api-config-ui.js`
 - Tests: `ClickTargetTests.cs`, `extension/popup/click-target.test.js`,
@@ -1684,7 +1684,7 @@ needed for Excel only. Appending to an existing file is §2.21ab3.
   `outputFile.encoding`; `HardeningReplayEvaluator.IsReplayable`
 - Extension: `shared/global-settings.js` (`outputFormat`, migration),
   `global-settings-ui.js`, `screens/settings.html`, `idle-screen-ui.js`
-  (extension + flatten hint), `scraping-config-builder.js`,
+  (extension + flatten hint), `scraping-config-builder.ts`,
   `download-helpers.js` (base64 decode)
 - Tests: `TabularOutputTests.cs`, `HardeningReplayEvaluatorTests.cs`,
   `extension/popup/tabular-output.test.js`, `e2e/examples/issue-229-tabular-output-check.js`
@@ -1939,7 +1939,7 @@ map into a different target branch.
   like Proxy/Hardening), `popup/idle-screen-ui.js`
   (`#output-blueprint-toggle-row`'s mode-gated visibility,
   `OUTPUT_BLUEPRINT_RESET` on any mode switch, blocking "Generate" while a
-  picked mapping is incomplete). `scraping-config-builder.js`
+  picked mapping is incomplete). `scraping-config-builder.ts`
   (`buildOutputBlueprintMapping` → `outputBlueprint`, omitted whenever no
   blueprint is picked or the mapping isn't complete, the same convention
   `buildProxyConfig`/`buildChangeDetectionConfig` already use),
@@ -2131,7 +2131,7 @@ shape; only *where the extension sources those four values from* changed.
   fetched `state.allSavedConfigs` — Issue #239's own Combined-mode
   component-picker fetch, reused here — and share `buildSavedOutputsPanelEl`/
   `handleSavedOutputsSubPanelClick` with the per-site panel's own delegated
-  listener). `scraping-config-builder.js` gains
+  listener). `scraping-config-builder.ts` gains
   `deriveScriptFileNameFromHostname`/`computeScriptFileNamePatch` (pure —
   'hostname' mode always overwrites `scriptFileName` from the current
   site, 'fixed' mode only fills a still-blank one), called from

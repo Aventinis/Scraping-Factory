@@ -5,7 +5,7 @@
 //
 // Deliberately mode-agnostic, unlike container-tree-ui.js/api-config-ui.js:
 // it never imports anything from container-tree.ts/api-config.js/
-// scraping-config-builder.js (which would only be safe if this file loaded
+// scraping-config-builder.ts (which would only be safe if this file loaded
 // *after* all three in popup.html — it doesn't, and can't, since
 // flat-mode-ui.js/container-tree-ui.js/api-config-ui.js each need to call
 // this file's own openCombineFieldModal/openSplitFieldModal from their own

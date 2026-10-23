@@ -7,7 +7,7 @@ public class FileNameSanitizerTests
 {
     private const string VectorFile = "file-name-sanitizer.json";
 
-    // Issue #388: the extension's sanitizeFileNameBase (scraping-config-builder.js) runs the same table, so both
+    // Issue #388: the extension's sanitizeFileNameBase (scraping-config-builder.ts) runs the same table, so both
     // sides must reach the same name for the same raw input — the companion never reports back which one it used.
     public static IEnumerable<object[]> Cases() => TestVectors.Names(VectorFile);
 
