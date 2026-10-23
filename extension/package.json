@@ -17,6 +17,15 @@
     "testPathIgnorePatterns": [
       "/node_modules/",
       "<rootDir>/dist/"
+    ],
+    "transform": {
+      "\\.js$": "babel-jest",
+      "\\.ts$": "<rootDir>/jest-transform.js"
+    },
+    "moduleFileExtensions": [
+      "js",
+      "ts",
+      "json"
     ]
   },
   "keywords": [],

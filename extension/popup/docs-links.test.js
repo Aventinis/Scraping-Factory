@@ -13,7 +13,7 @@ for (const f of fs.readdirSync(DOCS_DIR).filter((n) => n.endsWith('.md'))) {
 function sourceFiles() {
   const dirs = [__dirname, path.join(__dirname, 'screens')];
   return dirs.flatMap((d) => fs.readdirSync(d).map((f) => path.join(d, f)))
-    .filter((f) => /\.(html|js)$/.test(f) && !/\.test\.js$/.test(f));
+    .filter((f) => /\.(html|js|ts)$/.test(f) && !/\.test\.js$/.test(f));
 }
 
 describe('DOC_TARGETS', () => {

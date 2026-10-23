@@ -1,0 +1,52 @@
+/** @jest-environment node */
+// The JavaScript -> TypeScript migration (Issue #394): the setup that lets .ts and .js sources live side by side.
+const fs = require('fs');
+const path = require('path');
+const esbuild = require('esbuild');
+
+const ROOT = __dirname;
+
+function tsSources(dir = ROOT) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    if (['node_modules', 'dist', 'dist.building'].includes(entry.name)) return [];
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) return tsSources(full);
+    return /\.ts$/.test(entry.name) && !/\.d\.ts$/.test(entry.name) ? [full] : [];
+  });
+}
+
+describe('TypeScript setup', () => {
+  test('tsconfig checks .ts files under strict', () => {
+    const tsconfig = fs.readFileSync(path.join(ROOT, 'tsconfig.json'), 'utf8');
+    expect(tsconfig).toMatch(/"strict":\s*true/);
+    expect(tsconfig).toMatch(/"include":[^\]]*"\*\*\/\*\.ts"/);
+  });
+
+  test('a converted module loads through Jest from a CommonJS consumer', () => {
+    const { validateEnvVarName } = require('./popup/env-var');
+    expect(validateEnvVarName('API_KEY')).toEqual({ ok: true });
+    expect(validateEnvVarName('1KEY')).toEqual({ ok: false, reason: 'startsWithDigit' });
+  });
+
+  test('the popup bundle contains converted modules, and still-JavaScript code can require them', async () => {
+    const result = await esbuild.build({
+      entryPoints: [path.join(ROOT, 'popup/popup.js')], bundle: true, format: 'iife', platform: 'browser', write: false,
+      define: { 'process.env.NODE_ENV': '"production"', 'process.env.SF_CHANNEL': '"development"' }, logLevel: 'silent',
+    });
+    const code = result.outputFiles[0].text;
+    expect(code).toContain('findInvalidEnvVarNames');
+    expect(code).toContain('applyRecommendedHardening');
+  });
+
+  test('a converted file is TypeScript through and through: no leftover CommonJS exports or @ts-check pragma', () => {
+    const files = tsSources();
+    expect(files.length).toBeGreaterThan(0);
+    for (const file of files) {
+      const text = fs.readFileSync(file, 'utf8');
+      const name = path.relative(ROOT, file);
+      expect([name, /module\.exports/.test(text)]).toEqual([name, false]);
+      expect([name, /\brequire\(/.test(text)]).toEqual([name, false]);
+      expect([name, /@ts-check/.test(text)]).toEqual([name, false]);
+    }
+  });
+});
