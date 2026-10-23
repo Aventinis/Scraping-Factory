@@ -1,6 +1,6 @@
 // Issue #206 follow-up: DOM rendering + event wiring for the dedicated
 // "Felder kombinieren"/"Feld aufteilen" field creation modals — see
-// combine-split-fields.js's own doc comment for why this exists as its own
+// combine-split-fields.ts's own doc comment for why this exists as its own
 // flow instead of two more kinds in the generic transform-chain editor.
 //
 // Deliberately mode-agnostic, unlike container-tree-ui.js/api-config-ui.js:

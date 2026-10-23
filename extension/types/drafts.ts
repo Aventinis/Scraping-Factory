@@ -200,6 +200,20 @@ export interface OutputBlueprintTreeNode {
   children?: OutputBlueprintTreeNode[];
 }
 
+// The blueprint editor's own tree (output-blueprints.ts): a group has children, a field is a leaf; no selector / mode / repeating.
+export interface BlueprintSchemaGroup {
+  kind: 'group';
+  name: string;
+  children: BlueprintSchemaNode[];
+}
+
+export interface BlueprintSchemaField {
+  kind: 'field';
+  name: string;
+}
+
+export type BlueprintSchemaNode = BlueprintSchemaGroup | BlueprintSchemaField;
+
 // ── API mode: token/auth bootstrap (api-bootstrap.ts, Issue #220) ─────────
 
 export interface ApiBootstrapPair {

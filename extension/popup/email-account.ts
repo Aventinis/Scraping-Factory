@@ -2,48 +2,57 @@
 // an address with a mailed code, changing it, and resetting a forgotten
 // password. Pure request/response helpers (DOM and state live in
 // email-account-ui.js); `fetchFn` is companionFetch and `baseUrl` the resolved
-// companion address, passed in like account.js does. Same result shape:
+// companion address, passed in like account.ts does. Same result shape:
 // { ok: true, ... } or { ok: false, status, error, retryAfter }.
-const { request } = require('./account');
+import { request } from './account';
+import type { FetchFn, RequestFailure, RequestResult } from './account';
 
 // The codes the companion mails are 8 digits; people type them with spaces.
-const CODE_DIGITS = 8;
+export const CODE_DIGITS = 8;
 
-function normalizeCode(typed) {
+export interface SetEmailSuccess {
+  ok: true;
+  email: string | null;
+  emailVerified: boolean;
+  verificationSent: boolean;
+}
+
+export function normalizeCode(typed: unknown): string | null {
   const digits = String(typed || '').replace(/[\s-]/g, '');
   return /^\d+$/.test(digits) && digits.length === CODE_DIGITS ? digits : null;
 }
 
-async function verifyEmail(fetchFn, baseUrl, code) {
+export async function verifyEmail(fetchFn: FetchFn, baseUrl: string, code: unknown): Promise<RequestResult> {
   const normalized = normalizeCode(code);
   if (!normalized) return { ok: false, status: 400, error: null, retryAfter: 0, invalidCode: true };
   return request(fetchFn, `${baseUrl}/auth/verify-email`, { code: normalized });
 }
 
-function resendVerification(fetchFn, baseUrl) {
+export function resendVerification(fetchFn: FetchFn, baseUrl: string): Promise<RequestResult> {
   return request(fetchFn, `${baseUrl}/auth/resend-verification`, {});
 }
 
-async function setEmail(fetchFn, baseUrl, email, currentPassword) {
+export async function setEmail(fetchFn: FetchFn, baseUrl: string, email: unknown, currentPassword: unknown): Promise<SetEmailSuccess | RequestFailure> {
   const result = await request(fetchFn, `${baseUrl}/auth/set-email`, {
     email: String(email || '').trim(),
     currentPassword: String(currentPassword || ''),
   });
   if (!result.ok) return result;
+  const data = (result.data ?? {}) as Record<string, unknown>; // the companion's own response
   return {
     ok: true,
-    email: typeof result.data?.email === 'string' ? result.data.email : null,
-    emailVerified: result.data?.emailVerified === true,
-    verificationSent: result.data?.verificationSent === true,
+    email: typeof data.email === 'string' ? data.email : null,
+    emailVerified: data.emailVerified === true,
+    verificationSent: data.verificationSent === true,
   };
 }
 
 // `account` is a user name or the account's verified email address.
-function forgotPassword(fetchFn, baseUrl, account) {
+export function forgotPassword(fetchFn: FetchFn, baseUrl: string, account: unknown): Promise<RequestResult> {
   return request(fetchFn, `${baseUrl}/auth/forgot-password`, { account: String(account || '').trim() });
 }
 
-async function resetPassword(fetchFn, baseUrl, account, code, newPassword) {
+export async function resetPassword(fetchFn: FetchFn, baseUrl: string, account: unknown, code: unknown, newPassword: unknown): Promise<RequestResult> {
   const normalized = normalizeCode(code);
   if (!normalized) return { ok: false, status: 400, error: null, retryAfter: 0, invalidCode: true };
   return request(fetchFn, `${baseUrl}/auth/reset-password`, {
@@ -54,9 +63,7 @@ async function resetPassword(fetchFn, baseUrl, account, code, newPassword) {
 }
 
 // Cheap client-side check before bothering the companion; the real validation is its.
-function looksLikeEmail(value) {
+export function looksLikeEmail(value: unknown): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
 }
-
-module.exports = { CODE_DIGITS, normalizeCode, verifyEmail, resendVerification, setEmail, forgotPassword, resetPassword, looksLikeEmail };
 

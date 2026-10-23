@@ -2,7 +2,7 @@
 // sign out / change password against the companion's /auth endpoints) and,
 // in a development build only, the "Developer options" section. Same
 // `bridge`-parameter convention as every other -ui module; the request logic
-// itself is in account.js.
+// itself is in account.ts.
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');
 

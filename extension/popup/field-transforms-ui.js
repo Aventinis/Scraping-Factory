@@ -32,7 +32,7 @@ function truncatePreviewValue(value) {
 // Issue #206 follow-up: combineFields/splitField are no longer reachable
 // through this generic per-field transform-kind dropdown — they have
 // their own dedicated "Felder kombinieren"/"Feld aufteilen" creation flow
-// (combine-split-fields.js/-ui.js) instead, since neither kind actually
+// (combine-split-fields.ts/-ui.js) instead, since neither kind actually
 // transforms *this* field's own value the way every other kind here does.
 const KIND_OPTIONS = [
   ['trim', 'transforms.trimOption'],

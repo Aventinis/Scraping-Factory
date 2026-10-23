@@ -11,8 +11,40 @@
 // `retryAfter` the seconds of a 429 throttle response.
 const DEVICE_LABEL = 'Browser extension';
 
-async function post(fetchFn, url, body) {
-  let response;
+export type FetchFn = typeof fetch;
+
+export interface RequestSuccess {
+  ok: true;
+  status: number;
+  data: unknown;
+}
+
+export interface RequestFailure {
+  ok: false;
+  status: number;
+  error: string | null;
+  retryAfter: number;
+  /** Set by email-account.ts when the typed code is malformed and no request was made. */
+  invalidCode?: boolean;
+}
+
+export type RequestResult = RequestSuccess | RequestFailure;
+
+export interface AuthSuccess {
+  ok: true;
+  name: string;
+  token: string;
+  email: string | null;
+  emailVerified: boolean;
+  verificationSent: boolean;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : {};
+}
+
+async function post(fetchFn: FetchFn, url: string, body: unknown): Promise<RequestResult> {
+  let response: Response;
   try {
     response = await fetchFn(url, {
       method: 'POST',
@@ -23,7 +55,7 @@ async function post(fetchFn, url, body) {
     return { ok: false, status: 0, error: null, retryAfter: 0 };
   }
   if (response.ok) {
-    let data = null;
+    let data: unknown = null;
     try {
       data = await response.json();
     } catch {
@@ -31,10 +63,10 @@ async function post(fetchFn, url, body) {
     }
     return { ok: true, status: response.status, data };
   }
-  let error = null;
+  let error: string | null = null;
   try {
-    const data = await response.json();
-    if (typeof data?.error === 'string') error = data.error;
+    const data = asRecord(await response.json());
+    if (typeof data.error === 'string') error = data.error;
   } catch {
     // not a JSON error body
   }
@@ -45,8 +77,10 @@ async function post(fetchFn, url, body) {
 // mode: 'login' | 'register'. On success `token` is the per-device token to
 // store as the access key.
 // `email` is only sent when registering (Issue #353) and only if given.
-async function authenticate(fetchFn, baseUrl, mode, name, password, email) {
-  const body = {
+async function authenticate(
+  fetchFn: FetchFn, baseUrl: string, mode: 'login' | 'register', name: unknown, password: unknown, email?: unknown,
+): Promise<AuthSuccess | RequestFailure> {
+  const body: Record<string, string> = {
     name: String(name || '').trim(),
     password: String(password || ''),
     device: DEVICE_LABEL,
@@ -54,27 +88,28 @@ async function authenticate(fetchFn, baseUrl, mode, name, password, email) {
   if (mode === 'register' && String(email || '').trim()) body.email = String(email).trim();
   const result = await post(fetchFn, `${baseUrl}/auth/${mode === 'register' ? 'register' : 'login'}`, body);
   if (!result.ok) return result;
-  const token = typeof result.data?.token === 'string' ? result.data.token : '';
+  const data = asRecord(result.data);
+  const token = typeof data.token === 'string' ? data.token : '';
   if (!token) return { ok: false, status: result.status, error: null, retryAfter: 0 };
   return {
     ok: true,
-    name: result.data.name,
+    name: data.name as string, // the companion's own response
     token,
-    email: typeof result.data.email === 'string' ? result.data.email : null,
-    emailVerified: result.data.emailVerified === true,
-    verificationSent: result.data.verificationSent === true,
+    email: typeof data.email === 'string' ? data.email : null,
+    emailVerified: data.emailVerified === true,
+    verificationSent: data.verificationSent === true,
   };
 }
 
-function signOut(fetchFn, baseUrl) {
+function signOut(fetchFn: FetchFn, baseUrl: string): Promise<RequestResult> {
   return post(fetchFn, `${baseUrl}/auth/logout`, {});
 }
 
-function signOutEverywhere(fetchFn, baseUrl) {
+function signOutEverywhere(fetchFn: FetchFn, baseUrl: string): Promise<RequestResult> {
   return post(fetchFn, `${baseUrl}/auth/logout-all`, {});
 }
 
-function changePassword(fetchFn, baseUrl, currentPassword, newPassword) {
+function changePassword(fetchFn: FetchFn, baseUrl: string, currentPassword: unknown, newPassword: unknown): Promise<RequestResult> {
   return post(fetchFn, `${baseUrl}/auth/change-password`, {
     currentPassword: String(currentPassword || ''),
     newPassword: String(newPassword || ''),
@@ -83,12 +118,12 @@ function changePassword(fetchFn, baseUrl, currentPassword, newPassword) {
 
 // The "repeat password" box guards a typo that would lock the user out of a
 // brand-new account (there is no password reset yet). 'ok' or a reason key.
-function checkRegistrationInput(name, password, repeat) {
+function checkRegistrationInput(name: unknown, password: string, repeat: string): 'ok' | 'nameMissing' | 'passwordMissing' | 'passwordMismatch' {
   if (!String(name || '').trim()) return 'nameMissing';
   if (!password) return 'passwordMissing';
   if (password !== repeat) return 'passwordMismatch';
   return 'ok';
 }
 
-module.exports = { request: post, authenticate, signOut, signOutEverywhere, changePassword, checkRegistrationInput };
+export { post as request, authenticate, signOut, signOutEverywhere, changePassword, checkRegistrationInput };
 
