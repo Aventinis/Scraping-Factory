@@ -3,17 +3,9 @@ using System.Text;
 
 namespace ScrapingFactory.Compiler.Backends.Python;
 
-// Combined mode (Issue #239): deliberately NOT an ICodeGenerator registered
-// via LanguageModuleRegistry, unlike every other backend in this namespace —
-// it needs to *consume* other generators' already-rendered output (one
-// script per component), which would require injecting a
-// LanguageModuleRegistry into a reflectively self-constructed backend, a
-// circular dependency the registry's own discovery mechanism can't support
-// (see LanguageModuleRegistry's doc comment). Program.cs's /generate handler
-// instead resolves and generates each component's own script through the
-// registry itself — exactly like a normal single-mode request would — and
-// hands the already-rendered results here purely for the final
-// wrapping/merging step.
+// Combined mode is deliberately not an ICodeGenerator in LanguageModuleRegistry: it consumes other generators'
+// rendered output, which would need the registry injected into a reflectively constructed backend (circular).
+// Program.cs generates each component through the registry and hands the results here to wrap and merge.
 public static class PythonCombinedScriptGenerator
 {
     public static string Generate(
@@ -22,11 +14,7 @@ public static class PythonCombinedScriptGenerator
         var assembly = Assembly.GetExecutingAssembly();
         var template = EmbeddedScribanTemplate.Load(assembly, "scraper_combined.py.j2");
 
-        // Each component's full script source is embedded as a base64
-        // string (not a raw triple-quoted string) so nothing about a
-        // component's own generated content — a user-entered block phrase,
-        // a static list value, a regex pattern — needs to be re-escaped for
-        // safely nesting one already-generated Python file inside another.
+        // Each component's script is embedded as base64 so nothing in it needs re-escaping inside another Python file.
         var componentContexts = components.Select(c => new
         {
             name_literal = PythonLiteral.Str(c.Name),

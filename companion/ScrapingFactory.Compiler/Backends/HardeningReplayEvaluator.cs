@@ -4,39 +4,22 @@ using ScrapingFactory.Compiler.IR;
 
 namespace ScrapingFactory.Compiler.Backends;
 
-// Issue #207: a companion-side "replay" of script hardening (#129-#133)
-// against an already-saved output (Issue #202) instead of a live script run
-// — a popup-driven, on-demand analysis/tuning aid only. Deliberately mirrors
-// the Python templates' own runtime logic (_run_hardening_checks/
-// _passes_required_fields in scraper.py.j2/scraper_grouped.py.j2) rather
-// than reimplementing it independently, per the issue's own explicit "the
-// central design risk here is avoiding divergence from the templates' own
-// logic" framing — read those two functions again before changing anything
-// here, they're the source of truth this class must keep matching.
-//
-// Never touches the generated .py script or any of its templates — this is
-// a second, independent evaluation path over already-materialized data
-// (a parsed CSV/XML/JSON string), not a new runtime behavior.
+// Replays the hardening checks against an already-saved output (CSV/JSON/XML) instead of a live run, as an
+// on-demand tuning aid. It mirrors the templates' _run_hardening_checks / _passes_required_fields: read those
+// before changing anything here, they are the source of truth. Never touches the generated script.
 public enum HardeningReplayOutcome { Passed, Triggered, Inconclusive, NotEvaluable }
 
 public sealed record HardeningReplayCheckResult(string Kind, HardeningSeverity Severity, HardeningReplayOutcome Outcome, string Message);
 
 public static class HardeningReplayEvaluator
 {
-    // previousResultCount/previousUnavailableReason are resolved by the
-    // caller (Program.cs's new endpoint, which has database access this pure
-    // evaluator deliberately doesn't) — only actually consulted when a
-    // BaselineCheck is among `checks`. previousUnavailableReason explains an
-    // absent previousResultCount specifically (no Blueprint set on this
-    // configuration, or no earlier saved output exists yet), surfaced
-    // verbatim in that check's own Inconclusive message instead of a generic
-    // "no baseline" line.
+    // previousResultCount / previousUnavailableReason are resolved by the caller (it has the database); they are only
+    // used for a BaselineCheck, and the reason explains an absent count in that check's message.
     public static IReadOnlyList<HardeningReplayCheckResult> Evaluate(
         IReadOnlyList<HardeningCheck> checks, string fileName, string content,
         int? previousResultCount, string? previousUnavailableReason)
     {
-        // Issue #229: a saved SQLite/Excel output is binary (stored as base64
-        // text) — nothing here can parse it, so no check is evaluable.
+        // Saved SQLite/Excel outputs are binary (base64 text): nothing can be evaluated.
         if (!IsReplayable(fileName))
         {
             return checks.Select(check => new HardeningReplayCheckResult(
@@ -63,9 +46,7 @@ public static class HardeningReplayEvaluator
         NullRateCheck nullRate => EvaluateNullRate(nullRate, dataset),
         RequiredFieldsCheck requiredFields => EvaluateRequiredFields(requiredFields, dataset),
         BaselineCheck baseline => EvaluateBaseline(baseline, dataset, previousResultCount, previousUnavailableReason),
-        // Issue #132: BlockingCheck evaluates the raw HTTP response (final
-        // URL host, body length, body text) captured at request time — never
-        // persisted anywhere a saved output could replay it from.
+        // Needs the raw HTTP response, which a saved output does not contain.
         BlockingCheck => new HardeningReplayCheckResult(
             "blocking", check.Severity, HardeningReplayOutcome.NotEvaluable,
             "Blocking detection needs the raw response captured during scraping, which isn't part of a saved output — this check can't be replayed."),
@@ -82,14 +63,8 @@ public static class HardeningReplayEvaluator
             "No data was extracted — at least one selector likely matched nothing.");
     }
 
-    // Mirrors the runtime's own "missing key defaults to empty" semantics
-    // exactly once the field is confirmed to exist in this dataset at all —
-    // but a field name that doesn't appear in the saved output's own
-    // columns/tags anywhere (a stale/typo'd/renamed field, or one dropped by
-    // an Output Blueprint mapping/ExternalConfig rename at save time — see
-    // CLAUDE.md's own documented v1 limitation on this) is reported as
-    // Inconclusive rather than mechanically computing a misleading 100%
-    // empty rate.
+    // A field that appears nowhere in the saved output (typo, renamed, dropped by a blueprint) is Inconclusive
+    // rather than a misleading 100% empty rate.
     private static HardeningReplayCheckResult EvaluateNullRate(NullRateCheck check, ParsedDataset dataset)
     {
         if (!dataset.FieldExists(check.FieldName))
@@ -119,13 +94,8 @@ public static class HardeningReplayEvaluator
             $"Field '{check.FieldName}': {rate:P0} of rows are empty (threshold: {check.Threshold:P0}).");
     }
 
-    // Issue #133's own live runtime *filters* rows/instances before writing
-    // — a saved output already reflects that filtering, so replaying this
-    // check can only ever be a diagnostic re-scan of whatever's actually
-    // present now ("would this many rows/instances currently be flagged"),
-    // not a reproduction of the original run's own drop count. Still useful
-    // for testing a field name not required at save time, or a file saved
-    // before this check existed at all.
+    // The live run filters before writing, so a saved output is already filtered: this is a diagnostic re-scan
+    // ("how many would be flagged now"), not a reproduction of the original drop count.
     private static HardeningReplayCheckResult EvaluateRequiredFields(RequiredFieldsCheck check, ParsedDataset dataset)
     {
         var missingFields = check.FieldNames.Where(name => !dataset.FieldExists(name)).ToList();
@@ -171,20 +141,14 @@ public static class HardeningReplayEvaluator
             $"Result count is {count} (previous: {baseline}).");
     }
 
-    // Only ever needs the top-level result count for Baseline comparison —
-    // exposed separately so Program.cs can parse a *previous* saved output
-    // just far enough to get its own ResultCount, without needing a second,
-    // ad-hoc parsing code path.
-    // Issue #229: CSV/JSON/XML only (see Evaluate).
+    // Lets Program.cs parse a previous saved output just far enough to get its ResultCount. CSV/JSON/XML only.
     public static bool IsReplayable(string fileName) =>
         Path.GetExtension(fileName).TrimStart('.').ToLowerInvariant() is "csv" or "json" or "xml";
 
     public static int GetResultCount(string fileName, string content) => ParsedDataset.Parse(fileName, content).ResultCount;
 
-    // Flat (CSV/JSON) rows are a list of string-keyed dicts, matching the
-    // runtime's own `data`; a tree (XML) output is matched by tag name
-    // anywhere in the document, matching the runtime's own `root.iter(name)`/
-    // `root.findall(".//*")` (see scraper_grouped.py.j2's _run_hardening_checks).
+    // Flat (CSV/JSON) rows are string-keyed dicts like the runtime's `data`; a tree (XML) is matched by tag name
+    // anywhere, like the runtime's `root.iter(name)` and `root.findall(".//*")`.
     private abstract class ParsedDataset
     {
         public abstract int ResultCount { get; }
@@ -205,14 +169,8 @@ public static class HardeningReplayEvaluator
         }
     }
 
-    // knownFields is tracked separately from the row list itself (the CSV
-    // header, or the union of every row's own JSON keys) specifically so
-    // FieldExists still correctly recognizes a genuinely configured field
-    // even when there are zero data rows at all — the exact "no data was
-    // extracted" case NoResultCheck itself exists to catch, where relying on
-    // rows.Any(...) alone would otherwise report every other check's field
-    // as "not present" (a misleading message, even though the Inconclusive
-    // outcome it'd produce either way happens to still be correct).
+    // knownFields (the CSV header, or the union of the JSON rows' keys) is kept apart from the rows so a configured
+    // field is still recognized when there are no rows at all.
     private sealed class FlatDataset(List<Dictionary<string, string>> rows, IReadOnlyCollection<string> knownFields) : ParsedDataset
     {
         public override int ResultCount => rows.Count;
@@ -242,15 +200,8 @@ public static class HardeningReplayEvaluator
             return new FlatDataset(rows, columns);
         }
 
-        // Same "excel" CSV dialect (comma-separated, "..."-quoted fields may
-        // contain commas/newlines, "" is an escaped literal quote) as
-        // PythonScriptVerifier's own ParseCsvLine, which every generated
-        // script's csv.DictWriter always writes with — deliberately a
-        // separate copy rather than a shared reference across the two
-        // classes' otherwise-unrelated responsibilities (verification vs.
-        // replay), the same small-helper-duplication convention this
-        // codebase already accepts elsewhere (e.g. sanitizeFileNameBase vs.
-        // FileNameSanitizer).
+        // The "excel" CSV dialect csv.DictWriter writes (same as PythonScriptVerifier.ParseCsvLine; a separate copy
+        // because the two classes are otherwise unrelated).
         private static List<string> ParseCsvLine(string line)
         {
             var fields = new List<string>();
@@ -277,12 +228,7 @@ public static class HardeningReplayEvaluator
             return fields;
         }
 
-        // Unlike CSV, a JSON array carries no header — knownFields here can
-        // only ever be the union of whatever rows actually exist, so (unlike
-        // CSV) a genuinely empty [] can never distinguish "field not
-        // present" from "no rows at all" for FieldExists' own message; the
-        // Inconclusive outcome itself is still correct either way, just the
-        // wording is a documented, JSON-specific limitation.
+        // A JSON array has no header, so an empty [] cannot tell "field absent" from "no rows" (outcome still correct).
         public static FlatDataset FromJson(string content)
         {
             using var document = JsonDocument.Parse(content);
@@ -307,16 +253,8 @@ public static class HardeningReplayEvaluator
         };
     }
 
-    // Issue #133 follow-up (container mode): "instance" here means each
-    // direct child of the document root — the common shape for a single
-    // (or multiple, combined-under-<Ergebnis>) repeating group. A required
-    // field nested inside a *deeper* repeating group only ever drops that
-    // inner instance at runtime, not its outer container — this replay
-    // evaluator doesn't have the original group-tree schema to reproduce
-    // that nesting-aware drop precisely against an already-serialized file,
-    // so CountMissingAnyRequiredField is a documented, coarser approximation
-    // (top-level instances only) rather than the runtime's own exact
-    // nearest-enclosing-instance behavior.
+    // An "instance" is a direct child of the document root. The runtime drops the nearest enclosing repeating
+    // instance at any depth; a saved file has no schema to reproduce that, so this is a coarser approximation.
     private sealed class TreeDataset(XElement root) : ParsedDataset
     {
         public override int ResultCount => root.Descendants().Count();
@@ -326,14 +264,8 @@ public static class HardeningReplayEvaluator
         public override IEnumerable<string> ValuesFor(string fieldName) =>
             root.Descendants(fieldName).Select(el => el.Value ?? "");
 
-        // Mirrors _passes_required_fields' own per-instance logic exactly: a
-        // required field with ZERO matches inside an instance is a silent
-        // no-op there (not a failure) — only a match that's PRESENT but
-        // empty fails that instance. (This replay tool's own EvaluateRequiredFields
-        // still reports a field entirely absent from the whole dataset as
-        // Inconclusive up front, deliberately more conservative than the
-        // live runtime's own per-instance silent-no-op — see that method's
-        // own doc comment.)
+        // Like _passes_required_fields: a required field with zero matches in an instance is a no-op; only a
+        // present but empty match fails it.
         public override int CountMissingAnyRequiredField(IReadOnlyList<string> fieldNames) =>
             root.Elements().Count(instance => fieldNames.Any(name => instance.Descendants(name).Any(el => string.IsNullOrWhiteSpace(el.Value))));
     }

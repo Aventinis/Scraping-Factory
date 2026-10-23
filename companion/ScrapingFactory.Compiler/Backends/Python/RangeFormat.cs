@@ -4,24 +4,16 @@ using ScrapingFactory.Compiler.IR;
 
 namespace ScrapingFactory.Compiler.Backends.Python;
 
-// Compiles a RangeSource.Format mini-template ("{yyyy}"/"{ww}"/"{mm}"/"{dd}"
-// tokens, everything else literal) into a regex, used by
-// ScrapingPlanValidator to reject a From/To value that wouldn't actually
-// parse — before a real script run ever sees it. Mirrors, token for token,
-// the same mini-syntax scraper_api.py.j2's runtime _parse_range_value/
-// _render_range_value understand, so a value accepted here is guaranteed to
-// parse there too (and vice versa for what gets rendered back). Only
-// IsoWeek/Date sources carry a Format; Number is plain integer parsing.
+// Compiles a RangeSource.Format mini-template ("{yyyy}"/"{ww}"/"{mm}"/"{dd}", everything else literal) into a regex so
+// ScrapingPlanValidator can reject a From/To that would not parse. Mirrors the runtime's _parse_range_value /
+// _render_range_value (test-vectors/range-format.json pins them). Only IsoWeek/Date carry a Format.
 internal static class RangeFormat
 {
     public const string DefaultIsoWeekFormat = "{yyyy}-W{ww}";
     public const string DefaultDateFormat = "{yyyy}-{mm}-{dd}";
 
-    // The token set a Format is allowed to use, per RangeType — also the
-    // set that MUST all be present exactly once, since a missing token
-    // would make the format ambiguous to parse/render and an unknown one
-    // would silently become dead literal text no real value could ever
-    // match (see ValidateFormat).
+    // The tokens a Format may use per type; all must occur exactly once (a missing one is ambiguous, an unknown one
+    // becomes dead literal text).
     private static readonly Dictionary<RangeType, string[]> TokensByType = new()
     {
         [RangeType.IsoWeek] = ["yyyy", "ww"],
@@ -45,9 +37,7 @@ internal static class RangeFormat
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "RangeType.Number has no format."),
     };
 
-    // Null = valid (including the "no Format set → default applies" case).
-    // Number is never passed here — ScrapingPlanValidator handles it as
-    // plain int parsing instead, see ValidateRangeSource.
+    // Null = valid (including "no Format"). Number never gets here.
     public static string? ValidateFormat(RangeType type, string? format)
     {
         if (format is null)
@@ -71,23 +61,14 @@ internal static class RangeFormat
         return null;
     }
 
-    // `allowToday` mirrors scraper_api.py.j2's asymmetric handling: IsoWeek
-    // resolves "today" for both From and To (they share one parse helper
-    // there), Date only special-cases it for To (From always goes through
-    // date.fromisoformat) — see _iso_week_range/_date_range. Passing the
-    // wrong allowToday here would accept a value the generated script then
-    // rejects, defeating the point of validating ahead of the real run.
+    // allowToday mirrors the script: IsoWeek resolves "today" for From and To, Date only for To. A wrong value here
+    // would accept something the script then rejects.
     public static bool IsValid(string value, string format, bool allowToday) =>
         (allowToday && value == "today") || CompilePattern(format).IsMatch(value);
 
-    // Issue #295: how many values the generated script's own
-    // _iso_week_range/_date_range/_number_range will expand this source to
-    // (inclusive on both ends, an inverted range yields none) — needed only
-    // to estimate how many real requests a trial run makes, never to build
-    // the values themselves. "today" resolves against the companion's clock,
-    // like the script's own date.today() does at run time. Null when a
-    // value doesn't parse (ScrapingPlanValidator rejects those before any
-    // estimate is made, so this is just a defensive fallback).
+    // How many values the script's own range helpers will expand this source to (inclusive, an inverted range is empty);
+    // used only to estimate the trial run's duration. "today" uses the companion's clock. Null for an unparsable value
+    // (the validator rejects those first).
     public static long? CountValues(RangeSource source)
     {
         try

@@ -2,21 +2,11 @@ using System.Text;
 
 namespace ScrapingFactory.Compiler.IR;
 
-// Issue #227: a selector may end in `:contains("text")` — not standard CSS
-// (a jQuery/Sizzle extension soupsieve doesn't implement), but the one case
-// nothing else expresses: a button identified only by its label. The CSS part
-// in front of it is matched as usual; the matches are then filtered by their
-// text. Matching is deliberately tolerant — the element's whole text
-// (descendants included) is reduced to single spaces, both sides are
-// lower-cased, and the wanted text only has to occur in it — so "in den
-// warenkorb" finds "In den  Warenkorb". The Python runtime (text_selector_*
-// fragments) and the extension's content script implement the same rule; this
-// class only *validates* the syntax at /generate time, so a malformed filter
-// fails with a readable message instead of a soupsieve/Playwright error deep
-// inside the trial run.
-//
-// Syntax: the filter is the very last part of the selector, the text is quoted
-// with ' or " (\", \' and \\ escape), and there is at most one filter.
+// A selector may end in `:contains("text")` (not standard CSS): the CSS part is matched as usual and the matches
+// are filtered by their text, case-insensitive and whitespace-collapsed. The filter is the last part of the
+// selector, the text is quoted with ' or " (\", \' and \\ escape), and there is at most one. The runtime
+// (text_selector_* fragments) and the extension implement the same rule (test-vectors/text-selector.json); this class
+// validates the syntax at /generate time so a malformed filter fails with a readable message.
 public static class SelectorTextFilter
 {
     private const string Marker = ":contains(";
@@ -24,9 +14,8 @@ public static class SelectorTextFilter
     public static bool HasTextFilter(string? selector) =>
         selector is not null && selector.Contains(Marker, StringComparison.OrdinalIgnoreCase);
 
-    // The CSS part and the (unescaped) text, or (selector, null) when there is
-    // no filter. Throws FormatException for a malformed one — callers that
-    // want a message instead use Validate first.
+    // The CSS part and the unescaped text, or (selector, null) without a filter. Throws FormatException for a
+    // malformed one; Validate returns a message instead.
     public static (string BaseSelector, string? Text) Split(string selector)
     {
         var start = selector.IndexOf(Marker, StringComparison.OrdinalIgnoreCase);
@@ -51,9 +40,7 @@ public static class SelectorTextFilter
         return error is null ? null : $"{label}: {error}";
     }
 
-    // Used where a selector isn't a plain element selector (an iframe path
-    // segment, the embedded-JSON script tag): the filter isn't supported
-    // there, and silently passing it to soupsieve/Playwright would fail late.
+    // For selectors that are not element selectors (an iframe path segment, the embedded-JSON script tag).
     public static string? ValidateNotAllowed(string? selector, string label) =>
         HasTextFilter(selector)
             ? $"{label}: :contains(\"…\") is not supported here — use a plain CSS selector."

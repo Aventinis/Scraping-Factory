@@ -4,15 +4,9 @@ using ScrapingFactory.Compiler.IR;
 
 namespace ScrapingFactory.Compiler.Backends.Python;
 
-// Generates a Playwright-based script for the Browser engine (dynamically
-// rendered pages, and simple login flows). Navigate/WaitFor/Fill/Click
-// steps become inline actions rendered from their own small fragment
-// templates, one per step, in order — that's the per-step-type template
-// composition the static generator's monolithic template doesn't need.
-// Extract steps still end up aggregated into SELECTORS/ATTRIBUTES dicts
-// like the static generator, since extraction itself has no per-step
-// control flow (unlike the other step types, which each correspond to one
-// specific action at one specific point in the flow).
+// Generates the Browser-engine (Playwright) script. Navigate/WaitFor/Fill/Click/Scroll steps are rendered from one
+// small fragment template each, in order, since each is one concrete action at a fixed point in the flow; Extract
+// steps are aggregated into dicts like the static generator.
 public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
 {
     public string LanguageId => "python";
@@ -28,13 +22,8 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         var scrollTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_scroll_step.py.j2");
         var shellTemplate = EmbeddedScribanTemplate.Load(assembly, "playwright_scraper.py.j2");
 
-        // Issue #83: the target URL is no longer baked in as a literal here
-        // — it comes from scrape()'s own `url` parameter at runtime, since
-        // the same action sequence now runs once per start URL. See
-        // playwright_navigate_step.py.j2.
-        // Issue #223: with retries on, the navigation itself is wrapped in
-        // _send_with_retry (the shell defines it) — only the navigation, never
-        // a half-run login action sequence.
+        // The URL comes from scrape()'s `url` parameter (the action sequence runs once per start URL). With retries on,
+        // only the navigation is wrapped in _send_with_retry, never a half-run login sequence.
         var navigateFragment = navigateTemplate.Render().TrimEnd();
 
         var actionLines = plan.Steps
@@ -70,41 +59,22 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
 
         var actions = string.Join("\n", actionLines);
 
-        // Issue #175: the same fragments minus Navigate (always element 0 —
-        // ScrapingPlanBuilder always adds exactly one NavigateStep first),
-        // re-indented one level deeper — used only when PersistentSession is
-        // enabled, to nest inside the generated "if not _session_exists:"
-        // block that skips the login-only actions on a run reusing an
-        // already-saved session. `actions` itself is untouched, so a
-        // disabled config's output stays byte-for-byte what it was before
-        // this existed.
+        // The same fragments minus Navigate (always element 0), indented one level deeper, for the "if not _session_exists:"
+        // block of a persistent session. `actions` itself is unchanged.
         var loginActionsOnly = string.Join("\n", actionLines.Skip(1));
         var loginActionsIndented = IndentLines(loginActionsOnly, "    ");
 
-        // Issue #87/#88: change detection and proxy support also read env
-        // vars at runtime (SMTP/webhook credentials, proxy URL list), same
-        // reason FillStep already needs `import os`. Issue #175: persistent
-        // session checks os.path.exists(SESSION_STATE_PATH).
+        // Change detection, proxy and the persistent session also need `import os`.
         var needsOsImport = plan.Steps.OfType<FillStep>().Any() || plan.ChangeDetection is not null || plan.Proxy is not null || plan.PersistentSession
             || PythonRequestHeadersLiteral.UsesEnvironmentVariables(plan.Headers);
-        // A FillStep's credential or Proxy's URL list must come from an
-        // environment variable that's actually set at runtime — both share
-        // the `_require_env`/`EXIT_MISSING_ENV_VAR` helper (see the shell
-        // templates) instead of a raw, unhandled KeyError. Change detection
-        // isn't included: its own env-var reads are unaffected by this.
+        // A FillStep credential or the proxy list must be set at run time; both use the shared _require_env /
+        // EXIT_MISSING_ENV_VAR helper instead of a raw KeyError.
         var needsExitHelper = plan.Steps.OfType<FillStep>().Any() || plan.Proxy is not null
             || PythonRequestHeadersLiteral.UsesEnvironmentVariables(plan.Headers);
-        // change_detection/proxy/hardening/pagination/external_config are no
-        // longer computed here — PythonScrapingContextBuilder's own methods
-        // below each derive them straight from `plan` internally, exactly
-        // like PythonCodeGenerator's (Static engine) equivalent branches do.
+        // The shared options are derived from `plan` inside PythonScrapingContextBuilder.
 
-        // The one piece every shape branch below adds on top of whichever
-        // PythonScrapingContextBuilder context it starts from — the Browser
-        // engine's own login/browser-action sequence, which the Static
-        // engine has no equivalent of at all. `needsOsImportOverride` lets
-        // the Blocks branch fold in its own per-block ChangeDetection check
-        // (see its own call site) without this helper needing to know why.
+        // What every shape branch adds: the login / browser-action sequence, which the Static engine has no equivalent of.
+        // needsOsImportOverride lets the Blocks branch fold in its per-block change detection.
         Dictionary<string, object?> WithBrowserActionKeys(Dictionary<string, object?> context, bool needsOsImportOverride)
         {
             context["actions"] = actions;
@@ -117,17 +87,11 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
             return context;
         }
 
-        // Issue #182: Blocks replaces every other extraction shape wholesale
-        // — see PythonCodeGenerator's equivalent branch for the reasoning.
-        // Login/wait steps (if any) still run first, shared across every
-        // block, exactly like Container-Mode's own case below.
+        // Blocks: login steps still run first, shared across blocks.
         var blockStep = plan.Steps.OfType<ExtractionBlockStep>().SingleOrDefault();
         if (blockStep is not null)
         {
-            // Blocks-specific: needsOsImport was computed from
-            // plan.ChangeDetection (always null for a Blocks plan — see
-            // ScrapingPlanBuilder), so a per-block ChangeDetection needs
-            // folding in here instead.
+            // needsOsImport was computed from plan.ChangeDetection, which is null for a Blocks plan; fold in the blocks' own.
             var blockChangeDetectionAny = blockStep.Blocks.Any(b => b.ChangeDetection is not null);
             var blocksContext = WithBrowserActionKeys(
                 PythonScrapingContextBuilder.BuildBlocksContext(plan, blockStep), needsOsImport || blockChangeDetectionAny);
@@ -135,10 +99,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
             return blocksShellTemplate.Render(blocksContext);
         }
 
-        // Container-Mode: login/wait steps (if any) still run first — only
-        // the extraction phase after them differs (group tree → XML instead
-        // of flat fields → CSV). See ExtractGroupStep and
-        // PythonCodeGenerator's equivalent branch.
+        // Container mode: login steps still run first; only the extraction phase differs (see PythonCodeGenerator).
         var groupStep = plan.Steps.OfType<ExtractGroupStep>().SingleOrDefault();
         if (groupStep is not null)
         {
@@ -152,12 +113,7 @@ public sealed class PythonPlaywrightCodeGenerator : ICodeGenerator
         return shellTemplate.Render(flatContext);
     }
 
-    // Issue #175: re-indents every non-empty line of a rendered action
-    // block by `prefix` — needed because each playwright_*_step.py.j2
-    // fragment already hardcodes its own indentation for the "one level
-    // under sync_playwright()'s with-block" case; nesting the same fragment
-    // one level deeper inside "if not _session_exists:" requires shifting it
-    // over without re-rendering it differently.
+    // Re-indents every non-empty line of a rendered action block (each fragment hardcodes its own indentation).
     private static string IndentLines(string block, string prefix) =>
         block.Length == 0
             ? block
