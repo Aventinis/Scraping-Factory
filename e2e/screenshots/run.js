@@ -8,10 +8,11 @@
 //   node e2e/screenshots/run.js                  # every scenario
 //   node e2e/screenshots/run.js --only modes     # scenarios whose id contains "modes"
 //   node e2e/screenshots/run.js --theme dark     # same scenarios, dark theme
+//   node e2e/screenshots/run.js --language de    # the German UI, written to docs/user/de/images/
 //   node e2e/screenshots/run.js --list           # print scenario ids and exit
 //
 // Runs its own companion on port 5056 (never touches one a human already has
-// on the default port) and writes docs/user/images/*.png.
+// on the default port) and writes docs/user/images/*.png (docs/user/de/images/ with --language de).
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
@@ -22,14 +23,16 @@ const SCENARIO_FILES = ['getting-started', 'modes', 'pagination', 'transforms', 
 const COMPANION_PORT = 5056;
 
 function parseArgs(argv) {
-  const args = { only: null, theme: 'light', list: false };
+  const args = { only: null, theme: 'light', language: 'en', list: false };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--only') args.only = argv[++i];
     else if (argv[i] === '--theme') args.theme = argv[++i];
+    else if (argv[i] === '--language') args.language = argv[++i];
     else if (argv[i] === '--list') args.list = true;
     else throw new Error(`Unknown argument "${argv[i]}"`);
   }
   if (!['light', 'dark'].includes(args.theme)) throw new Error('--theme must be "light" or "dark"');
+  if (!['en', 'de'].includes(args.language)) throw new Error('--language must be "en" or "de"');
   return args;
 }
 
@@ -75,6 +78,7 @@ function parseArgs(argv) {
         fixture: scenario.fixture,
         companionUrl: scenario.companionUrl,
         theme: args.theme,
+        language: args.language,
       });
       try {
         await scenario.run(session);
