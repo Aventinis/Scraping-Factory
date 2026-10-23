@@ -539,6 +539,36 @@ Update with `UPDATE_SNAPSHOTS=1 dotnet test companion/ScrapingFactory.sln --filt
 and review the diff. Template context keys are not checked separately; the IR
 property check is the proxy for "every option reaches a template".
 
+### 2.7b Wire-format mirrors and how each is checked (Issue #388)
+
+Some behavior exists twice, on both sides of the extension/companion boundary. Each copy is pinned by a test that
+reads the same data, so changing only one side fails. The shared data lives in `test-vectors/` (see its README).
+
+| Mirror | Extension side | Companion / script side | Checked by |
+| --- | --- | --- | --- |
+| File-name cleanup | `sanitizeFileNameBase` (`scraping-config-builder.js`) | `IR/FileNameSanitizer.cs` | `file-name-sanitizer.json` — `scraping-config-builder.test.js`, `FileNameSanitizerTests.cs` |
+| Transform previews | `applyTransformsPreview` (`field-transforms.js`) | `fragments/transforms.py.j2` `_apply_transforms` | `transforms.json` — `transform-vectors.test.js`, `TransformVectorTests.cs` (real helper, imported from a generated script) |
+| robots.txt matching | `evaluateRobotsTxt` (`content-script.js`) | `fragments/robots_disallow.py.j2` | `robots.json` — `robots-vectors.test.js`, `RobotsVectorTests.cs` |
+| Range formats | `compileRangeFormatPattern` (`api-config.js`) | `Backends/Python/RangeFormat.cs`, `fragments/api_common.py.j2` | `range-format.json`, `range-expansion.json` — `range-format-vectors.test.js`, `RangeFormatVectorTests.cs` |
+| URL-template matching | `findUrlTemplateMatches` (`api-config.js`) | `_match_url_against_template` (`fragments/api_common.py.j2`) | `url-template.json` — `url-template-vectors.test.js`, `UrlTemplateVectorTests.cs` |
+| `:contains("…")` split | `selector-text-filter.js`, `content-script.js` | `IR/SelectorTextFilter.cs`, `fragments/text_selector_common.py.j2` | `text-selector.json` — both JS tests, `SelectorTextFilterTests.cs` |
+| Environment-variable names | `env-var.js` | `ScrapingPlanValidator` | `env-var-name.json` — `env-var.test.js`, `EnvVarNameVectorTests.cs` |
+| The request body | `buildScrapingConfig` and the draft builders | `IR/ScrapingConfig.cs` and `/generate` | `test-vectors/wire/*.json` — `wire-fixtures.test.js` writes/verifies, `WireFixtureTests.cs` deserializes strictly and calls `/generate` |
+| TypeScript wire types | `types/companion-ir.d.ts` | `IR/*.cs` | `IrTypeDeclarationTests.cs` (reflection: property names, required-ness, enum unions) |
+
+**Evaluated and rejected: generating `companion-ir.d.ts`.** `System.Text.Json`'s `JsonSchemaExporter` handles the
+plain properties and the `[JsonPolymorphic]` unions (`hardening`, `pagination`, `transforms`, parameter sources come out
+as `anyOf` with a `const kind`), but not the custom converters: container nodes lose their `DataFieldNode` branch
+(`children` becomes an untyped array), and API nodes, body nodes and blueprint trees are not described at all. It also
+emits JSON Schema, so a second tool would be needed to get TypeScript, and C# `required` does not mean "the extension must
+send it". So the file stays hand-written and `IrTypeDeclarationTests` guards it (its first run found a missing
+`skipVerification` and an `OutputFormat` without `Sqlite`/`Xlsx`).
+
+Adding a mirror: put the shared cases in `test-vectors/<name>.json`, run them from a Jest test and an xUnit test (the Python
+side through `PythonContractHarness`), and add a row to this table. Known, accepted differences are cases with
+`appliesTo` and a `note`; for example JavaScript's `\w` is ASCII-only while Python's is Unicode-aware, so a transform
+preview can differ from the script for a pattern that depends on that.
+
 ### 2.8 Trial-run data preview (Issue #122)
 
 An opt-in checkbox that lets the user see a capped sample (up to 50 rows/elements)

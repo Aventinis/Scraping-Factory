@@ -36,13 +36,9 @@ const { buildRequestHeadersConfig } = require('./request-headers');
 
 // ── Pure functions (exported for testing) ────────────────────────────────────
 
-// Mirrors the companion's FileNameSanitizer (ScrapingFactory.Compiler/IR/
-// FileNameSanitizer.cs) character-for-character: strips everything but
-// letters/digits/underscore/hyphen and falls back to `fallback` for
-// empty/fully-invalid input. Kept in sync by hand (same pattern as
-// RangeFormat's client-side mirror) so the name shown here — used for the
-// actual download — always matches what the companion baked into the
-// generated script's "# Run: python X.py" comment for the same raw input.
+// Mirrors the companion's FileNameSanitizer (ScrapingFactory.Compiler/IR/FileNameSanitizer.cs):
+// the name shown here — used for the actual download — must match what the companion baked
+// into the script's "# Run: python X.py" comment. test-vectors/file-name-sanitizer.json pins both.
 /**
  * @param {string} input
  * @param {string} fallback
