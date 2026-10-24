@@ -17,7 +17,7 @@ export interface TransformPresetOption {
 }
 
 /** A preset saved in the companion. */
-interface SavedPreset { id: number; name: string; transforms: Transforms }
+export interface SavedPreset { id: number; name: string; transforms: Transforms }
 
 // Built-ins ship with the extension: read-only, available without a companion, nothing to migrate. Names come from i18n (nameKey).
 export const BUILTIN_TRANSFORM_PRESETS: BuiltinPreset[] = [
