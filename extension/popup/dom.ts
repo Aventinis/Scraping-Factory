@@ -14,6 +14,11 @@ export function byId<T extends HTMLElement = HTMLElement>(id: string): T {
   return element;
 }
 
+// Reads a tree row's `data-path` (the JSON array of child indices that buildGroupTreeNodeEl and its siblings write) back as a path.
+export function parseDataPath(element: HTMLElement): number[] {
+  return JSON.parse(element.dataset.path as string);
+}
+
 export function qsOrNull<T extends Element = HTMLElement>(selector: string, root: ParentNode = document): T | null {
   return root.querySelector<T>(selector);
 }
