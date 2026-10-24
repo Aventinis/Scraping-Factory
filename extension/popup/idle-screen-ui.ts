@@ -1,49 +1,50 @@
 // ── Idle screen: mode switch + top-level chrome render / wiring ──
 // The STATES.IDLE render block and its widgets (mode toggle, robots.txt check, preview / API-capture toggles, output-settings
 // filename inputs). Functions take a `bridge` instead of closing over popup.js state.
-const { createLogger } = require('../shared/logger');
-const log = createLogger('SF:Popup');
-const { t } = require('../i18n/i18n');
-const { countApiConfigFields } = require('./api-config');
-const { renderApiEntriesList, renderApiCandidates, toggleApiCapture } = require('./api-config-ui');
-const { renderGroupTree } = require('./container-tree-ui');
-const { renderFields } = require('./flat-mode-ui');
-const { renderBrowserActionsSection } = require('./browser-actions-ui');
-const { parseAdditionalUrls } = require('./scraping-config-builder');
-const { renderSettingsPanel } = require('./settings-panel-ui');
-const { renderPaginationHelpers } = require('./pagination-ui');
-const { renderDedupSection } = require('./dedup-config-ui');
-const { renderRequestHeadersSection } = require('./request-headers-ui');
-const { renderSavedConfigsList, fetchAllSavedConfigs } = require('./saved-configs-ui');
-const { checkRobotsTxt } = require('./companion-client');
-const { togglePreview } = require('./preview');
-const { renderCombinedSection } = require('./combined-config-ui');
-const { renderBlocksSection } = require('./blocks-config-ui');
-const { mappingIsComplete, treeMappingIsComplete } = require('./output-blueprints');
-const { renderOutputBlueprintMappingSection } = require('./output-blueprints-ui');
-const { getGlobalSettings } = require('../shared/global-settings');
+import type { Mode, PopupBridge, StatePatch } from '../types/popup';
+import { createLogger } from '../shared/logger';
+import { t } from '../i18n/i18n';
+import { countApiConfigFields } from './api-config';
+import { renderApiEntriesList, renderApiCandidates, toggleApiCapture } from './api-config-ui';
+import { renderGroupTree } from './container-tree-ui';
+import { renderFields } from './flat-mode-ui';
+import { renderBrowserActionsSection } from './browser-actions-ui';
+import { parseAdditionalUrls } from './scraping-config-builder';
+import { renderSettingsPanel } from './settings-panel-ui';
+import { renderPaginationHelpers } from './pagination-ui';
+import { renderDedupSection } from './dedup-config-ui';
+import { renderRequestHeadersSection } from './request-headers-ui';
+import { renderSavedConfigsList, fetchAllSavedConfigs } from './saved-configs-ui';
+import { checkRobotsTxt } from './companion-client';
+import { togglePreview } from './preview';
+import { renderCombinedSection } from './combined-config-ui';
+import { renderBlocksSection } from './blocks-config-ui';
+import { mappingIsComplete, treeMappingIsComplete } from './output-blueprints';
+import { renderOutputBlueprintMappingSection } from './output-blueprints-ui';
+import { getGlobalSettings } from '../shared/global-settings';
+import { byIdOrNull } from './dom';
 
-// Duplicated verbatim from popup.js's own tiny show(id) helper — same "no
-// cross-module includes for small DOM helpers" convention already used
-// for renderMatchCountHint.
-function show(id) { document.getElementById(id)?.classList.remove('hidden'); }
+const log = createLogger('SF:Popup');
+
+function show(id: string): void { byIdOrNull(id)?.classList.remove('hidden'); }
 
 // Modes are strictly separate: switching clears the other modes' configuration. apiConfigDraft is cleared defensively too
 // (unreachable today). Switching to or from 'blocks' also resets its draft and confirmed list: a half-built block means nothing
 // in another mode.
-const BLOCKS_DRAFT_RESET = {
+const BLOCKS_DRAFT_RESET: StatePatch = {
   blocks: [], blocksDraftShape: 'flat', blocksDraftName: '', blocksDraftOutputFileName: '', blocksEditingIndex: null,
 };
 
 // A blueprint mapping's source-field names only mean something in the mode that built it, so every mode switch clears it.
-const OUTPUT_BLUEPRINT_RESET = {
+const OUTPUT_BLUEPRINT_RESET: StatePatch = {
   selectedOutputBlueprintId: '', selectedOutputBlueprintFieldNames: [], outputBlueprintMapping: {},
   // Issue #244: the tree-shaped mapping's own equivalent state, cleared
   // alongside the flat one for the exact same reason.
   selectedOutputBlueprintSchemaKind: 'Flat', selectedOutputBlueprintTree: [], outputBlueprintTreeMapping: {},
 };
 
-const MODE_SWITCH_CLEARS = {
+// A Record over every mode: a new mode is a compile error until its row is added here.
+const MODE_SWITCH_CLEARS: Record<Mode, StatePatch> = {
   flat:      { groups: [], apiConfig: null, apiConfigDraft: null, combinedComponents: [], ...BLOCKS_DRAFT_RESET, ...OUTPUT_BLUEPRINT_RESET },
   container: { fields: [], apiConfig: null, apiConfigDraft: null, combinedComponents: [], ...BLOCKS_DRAFT_RESET, ...OUTPUT_BLUEPRINT_RESET },
   api:       { fields: [], groups: [], combinedComponents: [], ...BLOCKS_DRAFT_RESET, ...OUTPUT_BLUEPRINT_RESET },
@@ -51,7 +52,7 @@ const MODE_SWITCH_CLEARS = {
   blocks:    { fields: [], groups: [], apiConfig: null, apiConfigDraft: null, combinedComponents: [], ...BLOCKS_DRAFT_RESET },
 };
 
-function switchMode(bridge, mode) {
+export function switchMode(bridge: PopupBridge, mode: Mode): void {
   const state = bridge.getState();
   if (mode === state.mode) return;
   log('MODE_SWITCH', mode);
@@ -63,18 +64,18 @@ function switchMode(bridge, mode) {
 }
 
 // Called from popup.js's render() only while _state.current === STATES.IDLE.
-function renderIdleScreen(bridge) {
+export function renderIdleScreen(bridge: PopupBridge): void {
   const state = bridge.getState();
 
-  const urlEl = document.getElementById('url-display');
+  const urlEl = byIdOrNull('url-display');
   if (urlEl) urlEl.textContent = state.url || '—';
 
-  const robotsBtn = document.getElementById('btn-check-robots');
+  const robotsBtn = byIdOrNull<HTMLButtonElement>('btn-check-robots');
   if (robotsBtn) {
     robotsBtn.disabled = state.robotsTxtChecking;
     robotsBtn.textContent = t(state.robotsTxtChecking ? 'idle.robotsCheckBtnChecking' : 'idle.robotsCheckBtn');
   }
-  const robotsResultEl = document.getElementById('robots-txt-result');
+  const robotsResultEl = byIdOrNull('robots-txt-result');
   if (robotsResultEl) {
     const r = state.robotsTxtResult;
     if (!r) {
@@ -91,30 +92,30 @@ function renderIdleScreen(bridge) {
         : t('robots.allowed', { path: r.path });
       robotsResultEl.className = 'robots-txt-result robots-txt-allowed';
     } else {
-      robotsResultEl.textContent = t('robots.disallowed', { path: r.path, pattern: r.matchedRule.pattern });
+      robotsResultEl.textContent = t('robots.disallowed', { path: r.path, pattern: (r.matchedRule as { pattern: string }).pattern }); // a disallowed path always names its rule
       robotsResultEl.className = 'robots-txt-result robots-txt-disallowed';
     }
   }
 
-  document.getElementById('btn-mode-flat')?.classList.toggle('active', state.mode === 'flat');
-  document.getElementById('btn-mode-container')?.classList.toggle('active', state.mode === 'container');
-  document.getElementById('btn-mode-api')?.classList.toggle('active', state.mode === 'api');
-  document.getElementById('btn-mode-combined')?.classList.toggle('active', state.mode === 'combined');
-  document.getElementById('btn-mode-blocks')?.classList.toggle('active', state.mode === 'blocks');
+  byIdOrNull('btn-mode-flat')?.classList.toggle('active', state.mode === 'flat');
+  byIdOrNull('btn-mode-container')?.classList.toggle('active', state.mode === 'container');
+  byIdOrNull('btn-mode-api')?.classList.toggle('active', state.mode === 'api');
+  byIdOrNull('btn-mode-combined')?.classList.toggle('active', state.mode === 'combined');
+  byIdOrNull('btn-mode-blocks')?.classList.toggle('active', state.mode === 'blocks');
   // Blocks mode reuses the flat / container sections as its block draft editor: shown when the matching top-level mode is active,
   // or Blocks is active and its draft shape picks that shape.
   const isBlocksFlatDraft = state.mode === 'blocks' && state.blocksDraftShape === 'flat';
   const isBlocksGroupDraft = state.mode === 'blocks' && state.blocksDraftShape === 'group';
-  document.getElementById('flat-mode-section')?.classList.toggle('hidden', !(state.mode === 'flat' || isBlocksFlatDraft));
-  document.getElementById('container-mode-section')?.classList.toggle('hidden', !(state.mode === 'container' || isBlocksGroupDraft));
-  document.getElementById('api-mode-section')?.classList.toggle('hidden', state.mode !== 'api');
-  document.getElementById('combined-mode-section')?.classList.toggle('hidden', state.mode !== 'combined');
-  document.getElementById('blocks-mode-section')?.classList.toggle('hidden', state.mode !== 'blocks');
+  byIdOrNull('flat-mode-section')?.classList.toggle('hidden', !(state.mode === 'flat' || isBlocksFlatDraft));
+  byIdOrNull('container-mode-section')?.classList.toggle('hidden', !(state.mode === 'container' || isBlocksGroupDraft));
+  byIdOrNull('api-mode-section')?.classList.toggle('hidden', state.mode !== 'api');
+  byIdOrNull('combined-mode-section')?.classList.toggle('hidden', state.mode !== 'combined');
+  byIdOrNull('blocks-mode-section')?.classList.toggle('hidden', state.mode !== 'blocks');
   // "Show preview" highlights DOM matches: meaningless for API and Combined mode; Blocks keeps it (the draft's fields / groups).
-  document.getElementById('preview-section')?.classList.toggle('hidden', state.mode === 'api' || state.mode === 'combined');
+  byIdOrNull('preview-section')?.classList.toggle('hidden', state.mode === 'api' || state.mode === 'combined');
   // Engine / browser actions are component-level in Combined mode (the companion rejects them on the outer request); Blocks keeps
   // the section, since they are shared at the outer level there.
-  document.getElementById('engine-section')?.classList.toggle('hidden', state.mode === 'combined');
+  byIdOrNull('engine-section')?.classList.toggle('hidden', state.mode === 'combined');
 
   // Engine + browser actions (Issue #41/#42, Phase 5) — mode-independent,
   // so this sits alongside the mode toggle above rather than inside any
@@ -134,11 +135,11 @@ function renderIdleScreen(bridge) {
   // The combine / split buttons are excluded from Blocks mode (its templates do not handle derived fields). Disabled, not hidden,
   // below the needed field count: a real click-picked field has to exist first.
   const combineSplitActionsHidden = state.mode === 'blocks';
-  document.getElementById('btn-add-combine-field')?.classList.toggle('hidden', combineSplitActionsHidden);
-  document.getElementById('btn-add-split-field')?.classList.toggle('hidden', combineSplitActionsHidden);
-  const combineFieldBtn = document.getElementById('btn-add-combine-field');
+  byIdOrNull('btn-add-combine-field')?.classList.toggle('hidden', combineSplitActionsHidden);
+  byIdOrNull('btn-add-split-field')?.classList.toggle('hidden', combineSplitActionsHidden);
+  const combineFieldBtn = byIdOrNull<HTMLButtonElement>('btn-add-combine-field');
   if (combineFieldBtn) combineFieldBtn.disabled = (state.fields || []).length < 2;
-  const splitFieldBtn = document.getElementById('btn-add-split-field');
+  const splitFieldBtn = byIdOrNull<HTMLButtonElement>('btn-add-split-field');
   if (splitFieldBtn) splitFieldBtn.disabled = (state.fields || []).length < 1;
 
   const hasConfig = state.mode === 'container' ? state.groups.length > 0
@@ -153,25 +154,25 @@ function renderIdleScreen(bridge) {
   // check to walk the fetched target tree instead of the flat field list.
   const blueprintMappingIncomplete = outputBlueprintEligibleMode && !!state.selectedOutputBlueprintId
     && (state.selectedOutputBlueprintSchemaKind === 'Tree'
-      ? !treeMappingIsComplete(state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping)
+      ? !treeMappingIsComplete(state.selectedOutputBlueprintTree, state.outputBlueprintTreeMapping ?? {})
       : !mappingIsComplete(state.selectedOutputBlueprintFieldNames, state.outputBlueprintMapping));
-  document.getElementById('output-blueprint-toggle-row')?.classList.toggle('hidden', !outputBlueprintEligibleMode);
+  byIdOrNull('output-blueprint-toggle-row')?.classList.toggle('hidden', !outputBlueprintEligibleMode);
   if (outputBlueprintEligibleMode) renderOutputBlueprintMappingSection(bridge);
-  else document.getElementById('output-blueprint-mapping')?.classList.add('hidden');
-  const genBtn = document.getElementById('btn-generate');
+  else byIdOrNull('output-blueprint-mapping')?.classList.add('hidden');
+  const genBtn = byIdOrNull<HTMLButtonElement>('btn-generate');
   if (genBtn) genBtn.disabled = !hasConfig || blueprintMappingIncomplete;
-  const exportBtn = document.getElementById('btn-export-config');
+  const exportBtn = byIdOrNull<HTMLButtonElement>('btn-export-config');
   if (exportBtn) exportBtn.disabled = !hasConfig;
-  const saveConfigBtn = document.getElementById('btn-save-config');
+  const saveConfigBtn = byIdOrNull<HTMLButtonElement>('btn-save-config');
   if (saveConfigBtn) saveConfigBtn.disabled = !hasConfig;
 
-  const previewBtn = document.getElementById('btn-preview');
+  const previewBtn = byIdOrNull<HTMLButtonElement>('btn-preview');
   if (previewBtn) {
     previewBtn.disabled = !hasConfig;
     previewBtn.classList.toggle('active', state.previewActive);
     previewBtn.textContent = t(state.previewActive ? 'idle.previewHideBtn' : 'idle.previewShowBtn');
   }
-  const previewSummaryEl = document.getElementById('preview-summary');
+  const previewSummaryEl = byIdOrNull('preview-summary');
   if (previewSummaryEl) {
     if (state.previewActive && state.previewSummary) {
       const { total, empty, truncated } = state.previewSummary;
@@ -186,12 +187,12 @@ function renderIdleScreen(bridge) {
     }
   }
 
-  const apiCaptureBtn = document.getElementById('btn-api-capture');
+  const apiCaptureBtn = byIdOrNull('btn-api-capture');
   if (apiCaptureBtn) {
     apiCaptureBtn.classList.toggle('active', state.apiCaptureActive);
     apiCaptureBtn.textContent = t(state.apiCaptureActive ? 'idle.apiCaptureStopBtn' : 'idle.apiCaptureStartBtn');
   }
-  const apiCaptureSummaryEl = document.getElementById('api-capture-summary');
+  const apiCaptureSummaryEl = byIdOrNull('api-capture-summary');
   if (apiCaptureSummaryEl) {
     // Shown whenever there's something recorded, not just while active —
     // Phase 4's search below runs *after* the user stops recording, so
@@ -204,17 +205,17 @@ function renderIdleScreen(bridge) {
     }
   }
 
-  const apiSearchBtn = document.getElementById('btn-api-search');
+  const apiSearchBtn = byIdOrNull<HTMLButtonElement>('btn-api-search');
   if (apiSearchBtn) apiSearchBtn.disabled = state.apiCaptureCount === 0;
 
-  const apiEntriesToggleBtn = document.getElementById('btn-api-entries-toggle');
+  const apiEntriesToggleBtn = byIdOrNull<HTMLButtonElement>('btn-api-entries-toggle');
   if (apiEntriesToggleBtn) {
     apiEntriesToggleBtn.disabled = state.apiCaptureCount === 0;
     apiEntriesToggleBtn.textContent = state.apiEntriesPanelOpen
       ? t('idle.apiEntriesHideBtn')
       : t('idle.apiEntriesShowBtn', { count: state.apiCaptureCount });
   }
-  const apiEntriesPanel = document.getElementById('api-entries-panel');
+  const apiEntriesPanel = byIdOrNull('api-entries-panel');
   if (apiEntriesPanel) {
     if (state.apiEntriesPanelOpen) {
       renderApiEntriesList(state.apiEntries);
@@ -224,7 +225,7 @@ function renderIdleScreen(bridge) {
     }
   }
 
-  const apiCandidatesPanel = document.getElementById('api-candidates-panel');
+  const apiCandidatesPanel = byIdOrNull('api-candidates-panel');
   if (apiCandidatesPanel) {
     if (state.apiCandidates) {
       renderApiCandidates(state.apiCandidates);
@@ -234,10 +235,10 @@ function renderIdleScreen(bridge) {
     }
   }
 
-  const apiConfigPanel = document.getElementById('api-config-panel');
+  const apiConfigPanel = byIdOrNull('api-config-panel');
   if (apiConfigPanel) {
     if (state.apiConfig) {
-      const summaryEl = document.getElementById('api-config-summary');
+      const summaryEl = byIdOrNull('api-config-summary');
       if (summaryEl) {
         const { parameters, headers } = state.apiConfig;
         summaryEl.textContent = t('idle.apiConfigSummary', {
@@ -255,32 +256,32 @@ function renderIdleScreen(bridge) {
   // Only overwrite an input's value while it isn't the one the user is
   // currently typing in — otherwise every keystroke's setState()/render()
   // round-trip would reset the cursor to the end of the field.
-  const scriptNameInput = document.getElementById('input-script-filename');
+  const scriptNameInput = byIdOrNull<HTMLInputElement>('input-script-filename');
   if (scriptNameInput && document.activeElement !== scriptNameInput) scriptNameInput.value = state.scriptFileName;
-  const outputNameInput = document.getElementById('input-output-filename');
+  const outputNameInput = byIdOrNull<HTMLInputElement>('input-output-filename');
   if (outputNameInput && document.activeElement !== outputNameInput) outputNameInput.value = state.outputFileName;
   // Issue #182: no single output file to name for Blocks mode — each
   // block names its own (see #blocks-mode-section's own input).
-  document.getElementById('output-filename-row')?.classList.toggle('hidden', state.mode === 'blocks');
+  byIdOrNull('output-filename-row')?.classList.toggle('hidden', state.mode === 'blocks');
   // The default extension follows the shape (container Xml; API tree Xml, API flat Csv, like flat mode); the global JSON
   // preference (shared/global-settings.ts) overrides it.
   const isTreeShapedMode = state.mode === 'container'
     || (state.mode === 'api' && !!state.apiConfig?.groups?.length);
-  const outputExtEl = document.getElementById('output-filename-ext');
+  const outputExtEl = byIdOrNull('output-filename-ext');
   if (outputExtEl) {
     const chosenFormat = getGlobalSettings().outputFormat;
     const tableFormat = chosenFormat === 'sqlite' || chosenFormat === 'xlsx';
     outputExtEl.textContent = chosenFormat === 'json' ? '.json'
       : tableFormat ? `.${chosenFormat}` : (isTreeShapedMode ? '.xml' : '.csv');
     // Issue #229: a nested result written as a table is flattened.
-    document.getElementById('output-format-hint')?.classList.toggle('hidden', !(tableFormat && isTreeShapedMode));
+    byIdOrNull('output-format-hint')?.classList.toggle('hidden', !(tableFormat && isTreeShapedMode));
   }
 
   // Issue #83: hidden for API mode — Api builds its own request URL from
   // apiConfig.urlTemplate and never reads this list at all (the companion
   // rejects the combination outright, see GenerateEndpoint.cs).
-  document.getElementById('additional-urls-row')?.classList.toggle('hidden', state.mode === 'api' || state.mode === 'combined');
-  const additionalUrlsInput = document.getElementById('input-additional-urls');
+  byIdOrNull('additional-urls-row')?.classList.toggle('hidden', state.mode === 'api' || state.mode === 'combined');
+  const additionalUrlsInput = byIdOrNull<HTMLTextAreaElement>('input-additional-urls');
   if (additionalUrlsInput && document.activeElement !== additionalUrlsInput) {
     additionalUrlsInput.value = state.additionalStartUrls.join('\n');
   }
@@ -296,47 +297,42 @@ function renderIdleScreen(bridge) {
 
   if (state.containerModalOpen) {
     show('modal-container-new');
-    const nameInput = document.getElementById('input-container-name');
+    const nameInput = byIdOrNull<HTMLInputElement>('input-container-name');
     if (nameInput) { nameInput.value = ''; nameInput.focus(); }
-    const singleRadio = document.getElementById('radio-container-single');
+    const singleRadio = byIdOrNull<HTMLInputElement>('radio-container-single');
     if (singleRadio) singleRadio.checked = true;
   }
 }
 
-function wireIdleScreenEvents(bridge) {
-  document.getElementById('btn-mode-flat')?.addEventListener('click', () => switchMode(bridge, 'flat'));
-  document.getElementById('btn-mode-container')?.addEventListener('click', () => switchMode(bridge, 'container'));
-  document.getElementById('btn-mode-api')?.addEventListener('click', () => switchMode(bridge, 'api'));
-  document.getElementById('btn-mode-combined')?.addEventListener('click', () => switchMode(bridge, 'combined'));
-  document.getElementById('btn-mode-blocks')?.addEventListener('click', () => switchMode(bridge, 'blocks'));
+export function wireIdleScreenEvents(bridge: PopupBridge): void {
+  byIdOrNull('btn-mode-flat')?.addEventListener('click', () => switchMode(bridge, 'flat'));
+  byIdOrNull('btn-mode-container')?.addEventListener('click', () => switchMode(bridge, 'container'));
+  byIdOrNull('btn-mode-api')?.addEventListener('click', () => switchMode(bridge, 'api'));
+  byIdOrNull('btn-mode-combined')?.addEventListener('click', () => switchMode(bridge, 'combined'));
+  byIdOrNull('btn-mode-blocks')?.addEventListener('click', () => switchMode(bridge, 'blocks'));
 
-  document.getElementById('btn-preview')?.addEventListener('click', () => {
+  byIdOrNull('btn-preview')?.addEventListener('click', () => {
     log('BTN preview');
     togglePreview(bridge);
   });
 
-  document.getElementById('btn-check-robots')?.addEventListener('click', () => {
+  byIdOrNull('btn-check-robots')?.addEventListener('click', () => {
     log('BTN check-robots');
     checkRobotsTxt(bridge);
   });
 
-  document.getElementById('btn-api-capture')?.addEventListener('click', () => {
+  byIdOrNull('btn-api-capture')?.addEventListener('click', () => {
     log('BTN api-capture');
     toggleApiCapture(bridge);
   });
 
-  document.getElementById('input-script-filename')?.addEventListener('input', (e) => {
-    bridge.setState(bridge.getState().current, { scriptFileName: e.target.value });
+  byIdOrNull('input-script-filename')?.addEventListener('input', (e) => {
+    bridge.setState(bridge.getState().current, { scriptFileName: (e.target as HTMLInputElement).value });
   });
-  document.getElementById('input-output-filename')?.addEventListener('input', (e) => {
-    bridge.setState(bridge.getState().current, { outputFileName: e.target.value });
+  byIdOrNull('input-output-filename')?.addEventListener('input', (e) => {
+    bridge.setState(bridge.getState().current, { outputFileName: (e.target as HTMLInputElement).value });
   });
-  document.getElementById('input-additional-urls')?.addEventListener('input', (e) => {
-    bridge.setState(bridge.getState().current, { additionalStartUrls: parseAdditionalUrls(e.target.value) });
+  byIdOrNull('input-additional-urls')?.addEventListener('input', (e) => {
+    bridge.setState(bridge.getState().current, { additionalStartUrls: parseAdditionalUrls((e.target as HTMLTextAreaElement).value) });
   });
 }
-
-module.exports = {
-  switchMode, renderIdleScreen, wireIdleScreenEvents,
-};
-
