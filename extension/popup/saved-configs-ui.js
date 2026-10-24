@@ -184,7 +184,7 @@ function buildHardeningReplayPanelEl(bridge, outputEntry) {
 
 // Issue #141: local SQLite-backed configuration history — plain fetch
 // wrappers against the companion's /configs endpoints, same style as
-// companion-client.js's generate()/checkCompanion().
+// companion-client.ts's generate()/checkCompanion().
 
 async function fetchSavedConfigs(bridge, url) {
   bridge.patchState({ savedConfigsLoading: true });

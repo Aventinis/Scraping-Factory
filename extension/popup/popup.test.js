@@ -3358,7 +3358,7 @@ describe('Live selector match-count preview (Issue #85)', () => {
   // describe block's own beforeEach: "https://example.com") — there's no
   // chrome.tabs.onUpdated listener anywhere in this extension, so it
   // silently goes stale if the same tab navigates to a different page while
-  // the panel stays open. message-router.js self-corrects the instant a
+  // the panel stays open. message-router.ts self-corrects the instant a
   // selection carries a different page's own url.
   describe('stale tracked URL self-correction', () => {
     test('updates the tracked url and shows an info toast when the picked element came from a different page', () => {

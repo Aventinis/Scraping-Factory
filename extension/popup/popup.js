@@ -523,7 +523,7 @@ let _state = {
   // Issue #239: Combined mode's ordered component list — each entry only
   // ever {savedConfigId, name}, never a cached copy of that component's own
   // full config (always resolved live at generate/save/export time, see
-  // companion-client.js's resolveCombinedComponents). Cleared by
+  // companion-client.ts's resolveCombinedComponents). Cleared by
   // MODE_SWITCH_CLEARS when leaving 'combined', unlike fields/groups/
   // apiConfig it isn't persisted across a popup close/reopen for v1.
   combinedComponents:        [],

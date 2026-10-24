@@ -4,7 +4,7 @@
 // convention this reuses verbatim). A component in _state.combinedComponents
 // only ever stores { savedConfigId, name } — its full underlying
 // ScrapingConfig is always resolved live at generate/save/export time (see
-// companion-client.js's resolveCombinedComponents), never cached here, so
+// companion-client.ts's resolveCombinedComponents), never cached here, so
 // editing/re-saving the source saved configuration elsewhere is picked up
 // automatically the next time this combined configuration is used.
 export interface CombinedComponentRef {

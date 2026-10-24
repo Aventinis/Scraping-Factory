@@ -12,6 +12,7 @@ import { BOOTSTRAP_SOURCE_KIND, buildApiBootstrap, bootstrapDraftIsComplete } fr
 import { buildApiCursorPagination, cursorDraftIsComplete } from './api-cursor-pagination';
 import { buildApiLinkHeaderPagination, linkDraftIsComplete } from './api-link-pagination';
 import { t } from '../i18n/i18n';
+import type { Screen } from '../types/popup';
 
 // The API-mode drafts are declared here rather than in types/drafts.ts: only
 // this module and api-bootstrap.ts read them (scraping-config-builder.ts sees
@@ -133,7 +134,7 @@ export interface ApiSubtreeCandidate {
 // after this module) purely so api-config-ui.js/container-tree-ui.js's
 // event handlers can reference it too; it has no other tie to API mode
 // specifically.
-export const STATES = {
+export const STATES: { readonly [K in Screen]: K } = {
   CHECKING_COMPANION: 'CHECKING_COMPANION',
   COMPANION_ERROR:    'COMPANION_ERROR',
   IDLE:               'IDLE',

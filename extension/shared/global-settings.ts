@@ -30,7 +30,7 @@ type StoredSettings = Partial<GlobalSettingsValues> & { outputAsJson?: boolean }
 // scriptNameMode: 'fixed' (scriptNameFixed is the pre-filled default for
 // every new site) | 'hostname' (the current site's own hostname is derived
 // and pre-filled instead, re-applied every time a new site is detected —
-// see companion-client.js's checkCompanion/message-router.js's stale-URL
+// see companion-client.ts's checkCompanion/message-router.js's stale-URL
 // correction).
 export const DEFAULTS: GlobalSettingsValues = {
   // Issue #229: 'default' (CSV, or XML for a tree) | 'json' | 'sqlite' | 'xlsx'.

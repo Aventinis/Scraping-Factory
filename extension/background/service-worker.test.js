@@ -175,7 +175,7 @@ test('ELEMENT_SELECTED with ownText stores it alongside the selector', async () 
 // anywhere in this extension, so it silently goes stale if the same tab
 // navigates to a different page while the panel stays open. The selection's
 // own page (message.url) is persisted alongside the rest of the pending
-// state so session-restore.js can self-correct on a popup reopen.
+// state so session-restore.ts can self-correct on a popup reopen.
 test('ELEMENT_SELECTED with url stores it alongside the selector', async () => {
   capturedListener({ type: 'ELEMENT_SELECTED', selector: 'a.download', url: 'https://example.com/other-page' }, {});
 

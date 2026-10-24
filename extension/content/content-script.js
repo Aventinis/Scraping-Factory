@@ -1260,7 +1260,7 @@ function onClick(e) {
       // listener anywhere in this extension (see CLAUDE.md), so the side
       // panel's own tracked _state.url can silently go stale if the same tab
       // navigates to a different page while the panel stays open. Lets
-      // message-router.js/session-restore.js detect and self-correct that
+      // message-router.ts/session-restore.js detect and self-correct that
       // mismatch instead of the eventual /generate request silently running
       // against the wrong page.
       url: window.location.href,

@@ -1,20 +1,24 @@
 // ── Inbound content-script / service-worker message dispatch ──
 // The single chrome.runtime.onMessage listener for everything the content script and service worker send back (selection
 // results, DOM tree data, preview / API-capture results, ...). Cross-cutting, so its own module. Takes a `bridge`.
-const { createLogger } = require('../shared/logger');
-const log = createLogger('SF:Popup');
-const { t } = require('../i18n/i18n');
-const { STATES } = require('./api-config');
-const { buildGroupNode, insertContainerNode } = require('./container-tree');
-const { updateBrowserAction, computeScriptFileNamePatch } = require('./scraping-config-builder');
-const { getGlobalSettings } = require('../shared/global-settings');
-const { resolveLinkHref } = require('./pagination-template');
-const { showToast, showMatchCountToast, setLastError } = require('./toast');
-const { markPickHandled } = require('./session-restore');
-const { cancelPendingDomTreeRequest, renderDomTree, highlightHover, highlightSelected } = require('./dom-tree-ui');
+import type { PopupBridge } from '../types/popup';
+import type { PopupInboundMessage } from '../types/messages';
+import type { ApiConfigDraft } from './api-config';
+import { createLogger } from '../shared/logger';
+import { t } from '../i18n/i18n';
+import { STATES } from './api-config';
+import { buildGroupNode, insertContainerNode } from './container-tree';
+import { updateBrowserAction, computeScriptFileNamePatch } from './scraping-config-builder';
+import { getGlobalSettings } from '../shared/global-settings';
+import { resolveLinkHref } from './pagination-template';
+import { showToast, showMatchCountToast, setLastError } from './toast';
+import { markPickHandled, withDiscoveryActionPatch } from './session-restore';
+import { cancelPendingDomTreeRequest, renderDomTree, highlightHover, highlightSelected } from './dom-tree-ui';
 
-function wireMessageListener(bridge) {
-  chrome.runtime.onMessage.addListener((message) => {
+const log = createLogger('SF:Popup');
+
+export function wireMessageListener(bridge: PopupBridge): void {
+  chrome.runtime.onMessage.addListener((message: PopupInboundMessage) => {
     log('MSG_IN', message);
     const state = bridge.getState();
     if (message.type === 'SELECTION_UNAVAILABLE' && state.current === STATES.SELECTING) {
@@ -72,9 +76,10 @@ function wireMessageListener(bridge) {
       if ((state.mode === 'container' || (state.mode === 'blocks' && state.blocksDraftShape === 'group')) && state.selectionKind === 'container') {
         // Name and type came from modal-container-new, so the node is inserted straight away; the match count becomes a toast (read the
         // name before setState() clears pendingNewContainer).
-        const containerName = state.pendingNewContainer.name;
-        const containerRepeating = state.pendingNewContainer.repeating;
-        const node = buildGroupNode(state.pendingNewContainer.name, message.selector, state.pendingNewContainer.repeating, framePath);
+        const pendingContainer = state.pendingNewContainer!; // set by modal-container-new before a container pick starts
+        const containerName = pendingContainer.name;
+        const containerRepeating = pendingContainer.repeating;
+        const node = buildGroupNode(pendingContainer.name, message.selector, pendingContainer.repeating, framePath);
         bridge.setState(STATES.IDLE, {
           groups: insertContainerNode(state.groups, state.pendingParentPath, node),
           selectionKind: null, pendingParentPath: null, pendingNewContainer: null, pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
@@ -93,22 +98,12 @@ function wireMessageListener(bridge) {
       } else if (state.selectionKind === 'apiDiscoveryAction' && state.pendingApiDiscoveryPartId !== null && state.pendingApiDiscoveryActionIndex !== null) {
         // Same as the browserAction branch, one level deeper (a BrowserDiscoverySource's action list) and back to API_CONFIG.
         const partId = state.pendingApiDiscoveryPartId;
-        const draft = state.apiConfigDraft;
-        const source = draft.parameterSources[partId];
+        const draft = state.apiConfigDraft as ApiConfigDraft; // an apiDiscoveryAction pick only starts from API_CONFIG, where the draft exists
         bridge.setState(STATES.API_CONFIG, {
-          apiConfigDraft: {
-            ...draft,
-            parameterSources: {
-              ...draft.parameterSources,
-              [partId]: {
-                ...source,
-                actions: updateBrowserAction(source.actions || [], state.pendingApiDiscoveryActionIndex, {
-                  [state.pendingApiDiscoveryActionField]: message.selector,
-                  framePath,
-                }),
-              },
-            },
-          },
+          apiConfigDraft: withDiscoveryActionPatch(draft, partId, state.pendingApiDiscoveryActionIndex, {
+            [state.pendingApiDiscoveryActionField]: message.selector,
+            framePath,
+          }),
           selectionKind: null, pendingApiDiscoveryPartId: null, pendingApiDiscoveryActionIndex: null, pendingApiDiscoveryActionField: 'selector',
           pendingSelector: null, pendingFramePath: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [],
         });
@@ -192,7 +187,7 @@ function wireMessageListener(bridge) {
       const result = { target: message.target, candidates: message.candidates || [] };
       if (state.apiSearchTarget === 'field') {
         bridge.setState(STATES.IDLE, { apiSearchTarget: null, apiCandidates: result });
-      } else if (state.apiSearchTarget.treeParentPath !== undefined) {
+      } else if (typeof state.apiSearchTarget === 'object' && 'treeParentPath' in state.apiSearchTarget) {
         // Issue #54, Phase A5 — "add root group"/"add sub-field", started
         // from STATES.API_CONFIG (see startApiTreeFieldSearch), returns there.
         bridge.setState(STATES.API_CONFIG, { apiSearchTarget: null, apiTreeSearchResult: { ...result, treeParentPath: state.apiSearchTarget.treeParentPath } });
@@ -204,6 +199,3 @@ function wireMessageListener(bridge) {
     }
   });
 }
-
-module.exports = { wireMessageListener };
-
