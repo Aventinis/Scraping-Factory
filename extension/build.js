@@ -39,6 +39,7 @@ const ENTRY_POINTS = [
 const ENTRY_SOURCES = {
   'popup/popup.js': 'popup/popup.ts',
   'content/api-capture.js': 'content/api-capture.ts',
+  'content/content-script.js': 'content/content-script.ts',
   'background/service-worker.js': 'background/service-worker.ts',
 };
 

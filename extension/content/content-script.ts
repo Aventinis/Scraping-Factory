@@ -1,14 +1,58 @@
 // Exported for testing (Jest/jsdom). In the extension build the chrome API
 // calls are guarded by the message listener below.
 
-const { createLogger, getLogBuffer } = require('../shared/logger');
+import type * as SFWire from '../types/wire';
+import type * as SFDraft from '../types/drafts';
+import type {
+  ContentScriptInboundMessage, DomTreeNode, ElementSelectedMessage, EmbeddedJsonResult, FramePathMessage, PopupInboundMessage, RobotsTxtResult,
+  ApiCaptureWindowMessage,
+} from '../types/messages';
+import type { HighlightStep } from '../popup/hover-highlight';
+import { createLogger, getLogBuffer } from '../shared/logger';
+import { splitTextFilter, appendTextFilter as appendTextFilterToSelector } from '../popup/selector-text-filter';
+
 const log = createLogger('SF:Content');
+
+type Scope = ParentNode;
+interface ElementMatch { element: Element; name: string }
+interface PreviewMatches { matches: ElementMatch[]; empty: string[] }
+interface JsonMatch { path: string; value: unknown }
+interface SiblingField { name: string; path: string; value: unknown }
+interface TreeSkeletonSegment { kind: 'group' | 'field'; path: string }
+interface LastPick { selector: string; scopeRoot: Element | null }
+interface RobotsRule { type: 'allow' | 'disallow'; pattern: string }
+interface RobotsGroup { agents: string[]; rules: RobotsRule[] }
+
+// What the popup reads of a JSON hit; the network and embedded-JSON candidates differ only in where the value was found.
+interface JsonCandidate {
+  path: string;
+  value: unknown;
+  siblings: SiblingField[];
+  itemsPath: string | null;
+  valuePath: string | null;
+  treeSkeleton: TreeSkeletonSegment[] | null;
+}
+interface NetworkCandidate extends JsonCandidate {
+  entryId: number;
+  url: string;
+  method: string;
+  requestHeaders: Array<{ name: string; value: string }>;
+  hasNextLink: boolean;
+}
+interface EmbeddedCandidate extends JsonCandidate { scriptSelector: string }
+
+// PREVIEW_START carries wire container nodes in Container mode and plain fields in Flat mode.
+type PreviewField = { name: string; selector: string };
+
+function sendToPanel(message: PopupInboundMessage): void {
+  chrome.runtime.sendMessage(message);
+}
 
 // Surfaces otherwise-silent script errors in the bug report (see GET_LOGS
 // below) instead of only showing up in the page's own devtools console.
 if (typeof window !== 'undefined') {
-  window.addEventListener('error', (e) => log('UNCAUGHT_ERROR', e.message));
-  window.addEventListener('unhandledrejection', (e) => log('UNHANDLED_REJECTION', String(e.reason)));
+  window.addEventListener('error', (e: ErrorEvent) => log('UNCAUGHT_ERROR', e.message));
+  window.addEventListener('unhandledrejection', (e: PromiseRejectionEvent) => log('UNHANDLED_REJECTION', String(e.reason)));
 }
 
 // scopeRoot (optional): stops the upward walk there instead of document.body,
@@ -23,11 +67,11 @@ if (typeof window !== 'undefined') {
 // "Wiederholend" container's own selector, or any container/field nested
 // inside one (its selector gets re-evaluated once per repeating instance —
 // see popup.ts's hasRepeatingAncestor).
-function buildSelector(element, scopeRoot, avoidId) {
+function buildSelector(element: Element | null, scopeRoot?: Element | null, avoidId?: boolean): string {
   const boundary = scopeRoot || document.body;
-  const segments = [];
+  const segments: string[] = [];
 
-  let current = element;
+  let current: Element | null = element;
   while (current && current !== boundary) {
     if (current.id && !avoidId) {
       segments.unshift(`#${current.id}`);
@@ -57,22 +101,14 @@ function buildSelector(element, scopeRoot, avoidId) {
 // fragments in language-modules/python/templates/fragments): the element's
 // whole text (descendants included) is reduced to single spaces and
 // lower-cased on both sides, and the wanted text only has to occur in it.
-// popup/selector-text-filter.js and the companion's SelectorTextFilter hold
-// the other copies of the syntax — the test vectors are shared.
-const TEXT_FILTER_PATTERN = /:contains\(\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')\s*\)\s*$/i;
-
-function splitTextFilter(selector) {
-  const match = typeof selector === 'string' ? TEXT_FILTER_PATTERN.exec(selector) : null;
-  if (!match) return { base: selector, text: null };
-  const text = match[1] !== undefined ? match[1] : match[2];
-  return { base: selector.slice(0, match.index).trimEnd() || '*', text: text.replace(/\\(.)/g, '$1') };
-}
-
-function normalizeText(text) {
+// The syntax itself (splitTextFilter, appendTextFilterToSelector) is imported
+// from popup/selector-text-filter.ts; the companion's SelectorTextFilter holds
+// the other copy — the test vectors are shared.
+function normalizeText(text: unknown): string {
   return String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
-function querySelectorAllWithText(scope, selector) {
+function querySelectorAllWithText(scope: Scope, selector: string): Element[] {
   const { base, text } = splitTextFilter(selector);
   const matches = Array.from(scope.querySelectorAll(base));
   if (text === null) return matches;
@@ -80,7 +116,7 @@ function querySelectorAllWithText(scope, selector) {
   return matches.filter((el) => normalizeText(el.textContent).includes(wanted));
 }
 
-function querySelectorWithText(scope, selector) {
+function querySelectorWithText(scope: Scope, selector: string): Element | null {
   const { base, text } = splitTextFilter(selector);
   if (text === null) return scope.querySelector(base);
   return querySelectorAllWithText(scope, selector)[0] || null;
@@ -92,12 +128,7 @@ function querySelectorWithText(scope, selector) {
 // plain match count gives at click time. Reset at the start of every
 // selection round in every frame, so only the frame where the latest pick
 // actually happened answers.
-let lastPick = null;
-
-function appendTextFilterToSelector(selector, text) {
-  const wanted = String(text || '').replace(/\s+/g, ' ').trim();
-  return wanted ? `${selector}:contains("${wanted.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")` : selector;
-}
+let lastPick: LastPick | null = null;
 
 // Existence/quantity feedback the instant a selector is built (Issue #85) —
 // purely a client-side UX nicety, no companion round-trip needed. Scoped to
@@ -108,11 +139,11 @@ function appendTextFilterToSelector(selector, text) {
 // "couldn't check" — practically unreachable since buildSelector only ever
 // emits tag/class/id segments, but defensive rather than letting a thrown
 // SyntaxError break the whole click handler.
-function countSelectorMatches(selector, scopeRoot) {
+function countSelectorMatches(selector: string, scopeRoot?: Element | null): number | null {
   try {
     return querySelectorAllWithText(scopeRoot || document, selector).length;
   } catch (err) {
-    log('countSelectorMatches failed', err.message);
+    log('countSelectorMatches failed', (err as Error).message);
     return null;
   }
 }
@@ -122,8 +153,8 @@ function countSelectorMatches(selector, scopeRoot) {
 // live-preview a transform chain against whichever attribute the user types
 // into the container-mode field modal — without a second content-script
 // round trip for every keystroke there.
-function collectElementAttributes(element) {
-  const attributes = {};
+function collectElementAttributes(element: Element): Record<string, string> {
+  const attributes: Record<string, string> = {};
   Array.from(element.attributes).forEach((attr) => { attributes[attr.name] = attr.value; });
   return attributes;
 }
@@ -135,7 +166,7 @@ function collectElementAttributes(element) {
 // filtered by isinstance(c, str)), the same "both sides must independently
 // reach the same result" relationship rawText/attributes already have to
 // the Python runtime's own get_text()/attribute reads.
-function collectOwnText(element) {
+function collectOwnText(element: Element): string {
   return Array.from(element.childNodes)
     .filter((node) => node.nodeType === Node.TEXT_NODE)
     .map((node) => node.textContent)
@@ -146,9 +177,9 @@ function collectOwnText(element) {
 // Identifies an element by its position within the DOM tree, relative to
 // document.body (same boundary buildSelector stops at). Used to correlate
 // page-side hover/click events with nodes in the side panel's tree view.
-function elementPath(element) {
-  const path = [];
-  let current = element;
+function elementPath(element: Element | null): number[] {
+  const path: number[] = [];
+  let current: Element | null = element;
   while (current && current !== document.body) {
     const parent = current.parentElement;
     if (!parent) break;
@@ -163,14 +194,14 @@ function elementPath(element) {
 // the side panel or blow up the message payload.
 const MAX_TREE_NODES = 500;
 
-function serializeDomTree() {
+function serializeDomTree(): { tree: DomTreeNode; truncated: boolean } {
   let count = 0;
   let truncated = false;
 
-  function walk(element, path) {
+  function walk(element: Element, path: number[]): DomTreeNode {
     count++;
     const classes = Array.from(element.classList).filter(c => c.trim() !== '');
-    const children = [];
+    const children: DomTreeNode[] = [];
     for (let i = 0; i < element.children.length; i++) {
       if (count >= MAX_TREE_NODES) { truncated = true; break; }
       children.push(walk(element.children[i], [...path, i]));
@@ -201,27 +232,30 @@ function serializeDomTree() {
 // whole preview (same selector-compatibility limitation documented for the
 // real backend — see CLAUDE.md point 3).
 
-function safeQueryAll(scope, selector) {
+// `selector` is null for a combine/split-derived field; the DOM then looks for a <null> element and finds nothing.
+function safeQueryAll(scope: Scope, selector: string | null): Element[] {
   try {
-    return querySelectorAllWithText(scope, selector);
-  } catch (err) {
-    log('PREVIEW invalid selector', selector, err.message);
+    return querySelectorAllWithText(scope, selector as string);
+  } catch {
+    log('PREVIEW invalid selector', selector);
     return [];
   }
 }
 
-function safeQueryOne(scope, selector) {
+function safeQueryOne(scope: Scope, selector: string | null): Element | null {
   try {
-    return querySelectorWithText(scope, selector);
-  } catch (err) {
-    log('PREVIEW invalid selector', selector, err.message);
+    return querySelectorWithText(scope, selector as string);
+  } catch {
+    log('PREVIEW invalid selector', selector);
     return null;
   }
 }
 
-function matchFlatFields(fields) {
-  const matches = [];
-  const empty = [];
+const isElement = (el: Element | null): el is Element => el !== null;
+
+function matchFlatFields(fields: PreviewField[]): PreviewMatches {
+  const matches: ElementMatch[] = [];
+  const empty: string[] = [];
   fields.forEach(({ name, selector }) => {
     const found = safeQueryAll(document, selector);
     if (found.length === 0) empty.push(name);
@@ -230,12 +264,12 @@ function matchFlatFields(fields) {
   return { matches, empty };
 }
 
-function matchGroupTree(scope, nodes, matches, empty) {
+function matchGroupTree(scope: Scope, nodes: SFWire.ContainerNode[], matches: ElementMatch[], empty: string[]): void {
   nodes.forEach(node => {
-    if (node.children) {
+    if ('children' in node && node.children) {
       const instances = node.repeating
         ? safeQueryAll(scope, node.selector)
-        : [safeQueryOne(scope, node.selector)].filter(Boolean);
+        : [safeQueryOne(scope, node.selector)].filter(isElement);
       if (instances.length === 0) empty.push(node.name);
       instances.forEach(instance => {
         matches.push({ element: instance, name: node.name });
@@ -249,10 +283,10 @@ function matchGroupTree(scope, nodes, matches, empty) {
   });
 }
 
-function computePreviewMatches(mode, fields, groups) {
+function computePreviewMatches(mode: string, fields?: PreviewField[], groups?: SFWire.ContainerNode[]): PreviewMatches {
   if (mode === 'container') {
-    const matches = [];
-    const empty = [];
+    const matches: ElementMatch[] = [];
+    const empty: string[] = [];
     matchGroupTree(document, groups || [], matches, empty);
     return { matches, empty };
   }
@@ -274,19 +308,20 @@ function computePreviewMatches(mode, fields, groups) {
 // which this top-frame-only overlay can't reach (the full preview has the
 // same limitation) — the outermost <iframe> itself (framePath[0]) is
 // highlighted instead, so the user still sees *where* on the page it is.
-function matchHoverHighlight(steps, framePath) {
+function matchHoverHighlight(steps: HighlightStep[] | undefined, framePath?: string[] | null): { elements: Element[]; inIframe: boolean } {
   if (framePath && framePath.length > 0) {
     return { elements: safeQueryAll(document, framePath[0]), inIframe: true };
   }
-  let scopes = [document];
+  let scopes: Scope[] = [document];
   for (const step of steps || []) {
     if (!step || !step.selector) return { elements: [], inIframe: false };
     scopes = scopes.flatMap(scope => (step.all
       ? safeQueryAll(scope, step.selector)
-      : [safeQueryOne(scope, step.selector)].filter(Boolean)));
+      : [safeQueryOne(scope, step.selector)].filter(isElement)));
     if (scopes.length === 0) break;
   }
-  return { elements: steps && steps.length > 0 ? scopes : [], inIframe: false };
+  // With at least one step, the loop has replaced the initial [document] by matched elements.
+  return { elements: steps && steps.length > 0 ? scopes as Element[] : [], inIframe: false };
 }
 
 // ── API-Mode candidate correlation (Issue #53 Phase 4) ──────────────────────
@@ -302,25 +337,25 @@ function matchHoverHighlight(steps, framePath) {
 
 const JSON_PATH_TOKEN_RE = /[^.[\]]+|\[\d+\]/g;
 
-function pathTokens(path) {
+function pathTokens(path: string): string[] {
   return path.match(JSON_PATH_TOKEN_RE) || [];
 }
 
-function tokensToPath(tokens) {
+function tokensToPath(tokens: string[]): string {
   return tokens.reduce((acc, token) => (token.startsWith('[') ? acc + token : (acc ? `${acc}.${token}` : token)), '');
 }
 
 // Walks `tokens` against `data` the same way the Python runtime resolves a
 // path at scrape time — used here to re-locate a match's parent container
 // for siblingFields below.
-function resolveTokens(data, tokens) {
-  let value = data;
+function resolveTokens(data: unknown, tokens: string[]): unknown {
+  let value: unknown = data;
   for (const token of tokens) {
     if (value === null || value === undefined) return undefined;
     if (token.startsWith('[')) {
       value = Array.isArray(value) ? value[parseInt(token.slice(1, -1), 10)] : undefined;
     } else {
-      value = (typeof value === 'object' && !Array.isArray(value)) ? value[token] : undefined;
+      value = (typeof value === 'object' && !Array.isArray(value)) ? (value as Record<string, unknown>)[token] : undefined;
     }
   }
   return value;
@@ -329,17 +364,18 @@ function resolveTokens(data, tokens) {
 // Recursive walk, accumulator-style like matchGroupTree above. Only scalar
 // leaves (string/number/boolean) are candidate matches — an object/array
 // itself never equals a clicked element's text.
-function walkJson(data, path, target, matches) {
+function walkJson(data: unknown, path: string, target: string, matches: JsonMatch[]): void {
   if (Array.isArray(data)) {
     data.forEach((item, i) => walkJson(item, `${path}[${i}]`, target, matches));
   } else if (data && typeof data === 'object') {
-    Object.keys(data).forEach((key) => walkJson(data[key], path ? `${path}.${key}` : key, target, matches));
+    const record = data as Record<string, unknown>;
+    Object.keys(record).forEach((key) => walkJson(record[key], path ? `${path}.${key}` : key, target, matches));
   } else if (data !== null && data !== undefined && String(data).trim() === target) {
     matches.push({ path, value: data });
   }
 }
 
-function findValueInJson(data, targetText, matches) {
+function findValueInJson(data: unknown, targetText: unknown, matches: JsonMatch[]): JsonMatch[] {
   const target = String(targetText ?? '').trim();
   if (target) walkJson(data, '', target, matches);
   return matches;
@@ -353,9 +389,10 @@ function findValueInJson(data, targetText, matches) {
 // scope" flow, where there's no single matched value to derive a scope from
 // in the first place. siblingFields below is the "one matched value's
 // parent" special case of this.
-function siblingFieldsAt(data, scopeTokens) {
-  const parent = resolveTokens(data, scopeTokens);
-  if (!parent || typeof parent !== 'object' || Array.isArray(parent)) return [];
+function siblingFieldsAt(data: unknown, scopeTokens: string[]): SiblingField[] {
+  const found = resolveTokens(data, scopeTokens);
+  if (!found || typeof found !== 'object' || Array.isArray(found)) return [];
+  const parent = found as Record<string, unknown>;
 
   const parentPath = tokensToPath(scopeTokens);
   return Object.keys(parent)
@@ -369,7 +406,7 @@ function siblingFieldsAt(data, scopeTokens) {
 // suggestions for additional fields of the same record. A match that's
 // itself a bare array element (path ends in "[n]", e.g. "tags[0]") has no
 // named siblings — a scalar array has no keys.
-function siblingFields(data, matchPath) {
+function siblingFields(data: unknown, matchPath: string): SiblingField[] {
   const tokens = pathTokens(matchPath);
   if (tokens.length === 0) return [];
   const matchedKey = tokens[tokens.length - 1];
@@ -384,7 +421,7 @@ const MAX_API_CANDIDATES = 20; // caps the UI list on a heavily-recorded session
 // order — the JSON-side analogue of Container-Mode's DOM scoping (an
 // element must be a descendant of one of scopeRootEls to be selectable). An
 // empty scopeTokens list (the default, unscoped search) matches everything.
-function pathStartsWithScope(path, scopeTokens) {
+function pathStartsWithScope(path: string, scopeTokens: string[]): boolean {
   if (scopeTokens.length === 0) return true;
   const tokens = pathTokens(path);
   return tokens.length >= scopeTokens.length && scopeTokens.every((token, i) => tokens[i] === token);
@@ -403,15 +440,15 @@ function pathStartsWithScope(path, scopeTokens) {
 // template" assumption Container-Mode's own scopeSelector already relies on.
 // null/undefined (today's only caller) reproduces the previous whole-pool
 // search unchanged.
-function findApiCandidates(entries, targetText, scopePath = null) {
+function findApiCandidates(entries: SFDraft.ApiCaptureEntry[], targetText: unknown, scopePath: string | null = null): NetworkCandidate[] {
   const target = String(targetText ?? '').trim();
   if (!target) return [];
   const scopeTokens = scopePath ? pathTokens(scopePath) : [];
 
-  const ranked = [];
+  const ranked: Array<NetworkCandidate & { isJsonContentType: boolean; matchCountInBody: number }> = [];
   entries.forEach((entry) => {
     if (!entry.body || entry.bodySkipped) return;
-    let parsed;
+    let parsed: unknown;
     try {
       parsed = JSON.parse(entry.body);
     } catch {
@@ -472,7 +509,7 @@ function findApiCandidates(entries, targetText, scopePath = null) {
 // from the nearest unique ancestor down to this element. The nth-child
 // fallback works identically in soupsieve (BeautifulSoup's CSS engine) since
 // both implement the same CSS spec — not a browser-only trick.
-function scriptTagSelector(el) {
+function scriptTagSelector(el: Element): string {
   if (el.id) return `#${el.id}`;
 
   const type = el.getAttribute('type');
@@ -480,10 +517,10 @@ function scriptTagSelector(el) {
     return `script[type="${type}"]`;
   }
 
-  const segments = [];
-  let current = el;
+  const segments: string[] = [];
+  let current: Element | null = el;
   while (current && current.parentElement) {
-    const parent = current.parentElement;
+    const parent: Element = current.parentElement;
     const index = Array.from(parent.children).indexOf(current) + 1;
     segments.unshift(`${current.tagName.toLowerCase()}:nth-child(${index})`);
     current = parent;
@@ -497,9 +534,9 @@ function scriptTagSelector(el) {
 // The popup parses it; a body past MAX_EMBEDDED_JSON_CHARS is reported as
 // truncated (and not sent) rather than cut, since half a JSON document is useless.
 const MAX_EMBEDDED_JSON_CHARS = 2000000;
-function readEmbeddedJson(scriptSelector) {
+function readEmbeddedJson(scriptSelector: string | null | undefined): EmbeddedJsonResult {
   if (!scriptSelector) return { body: '', truncated: false, found: false };
-  let tag = null;
+  let tag: Element | null = null;
   try {
     tag = document.querySelector(scriptSelector);
   } catch {
@@ -531,7 +568,7 @@ function readEmbeddedJson(scriptSelector) {
 // here — every further match must come from that same tag), scopePath then
 // narrows further to the JSON path being extended, exactly like
 // findApiCandidates' own scopePath already does within one entry's body.
-function findEmbeddedJsonCandidates(targetText, scopePath = null, scriptSelector = null) {
+function findEmbeddedJsonCandidates(targetText: unknown, scopePath: string | null = null, scriptSelector: string | null = null): EmbeddedCandidate[] {
   const target = String(targetText ?? '').trim();
   if (!target) return [];
   const scopeTokens = scopePath ? pathTokens(scopePath) : [];
@@ -540,11 +577,11 @@ function findEmbeddedJsonCandidates(targetText, scopePath = null, scriptSelector
     ? Array.from(document.querySelectorAll(scriptSelector))
     : Array.from(document.querySelectorAll('script'));
 
-  const ranked = [];
+  const ranked: Array<EmbeddedCandidate & { isKnownConvention: boolean; matchCountInBody: number }> = [];
   scriptTags.forEach((tag) => {
     const text = tag.textContent;
     if (!text || !text.trim()) return;
-    let parsed;
+    let parsed: unknown;
     try {
       parsed = JSON.parse(text);
     } catch {
@@ -593,8 +630,8 @@ function findEmbeddedJsonCandidates(targetText, scopePath = null, scriptSelector
 // the shared boundary-finding step both deriveItemsAndValuePath (which
 // only ever needs the *last* one) and deriveApiTreeSkeleton (which needs
 // *every* one) are built on top of.
-function bracketTokenIndices(tokens) {
-  const indices = [];
+function bracketTokenIndices(tokens: string[]): number[] {
+  const indices: number[] = [];
   tokens.forEach((token, i) => { if (token.startsWith('[')) indices.push(i); });
   return indices;
 }
@@ -626,7 +663,7 @@ function bracketTokenIndices(tokens) {
 // touch DiscoverySource), so every earlier array stays frozen to the
 // concrete index the match happened to be found at, exactly like before —
 // see deriveApiTreeSkeleton below for the fully-generalized alternative.
-function deriveItemsAndValuePath(matchPath) {
+function deriveItemsAndValuePath(matchPath: string): { itemsPath: string; valuePath: string } | null {
   const tokens = pathTokens(matchPath);
   const bracketIndices = bracketTokenIndices(tokens);
   if (bracketIndices.length === 0) return null;
@@ -657,12 +694,12 @@ function deriveItemsAndValuePath(matchPath) {
 //
 // Returns null when matchPath never enters an array at all — same case
 // deriveItemsAndValuePath returns null for.
-function deriveApiTreeSkeleton(matchPath) {
+function deriveApiTreeSkeleton(matchPath: string): TreeSkeletonSegment[] | null {
   const tokens = pathTokens(matchPath);
   const bracketIndices = bracketTokenIndices(tokens);
   if (bracketIndices.length === 0) return null;
 
-  const segments = [];
+  const segments: TreeSkeletonSegment[] = [];
   let start = 0;
   for (const bracketIndex of bracketIndices) {
     segments.push({ kind: 'group', path: tokensToPath(tokens.slice(start, bracketIndex)) });
@@ -678,9 +715,9 @@ function deriveApiTreeSkeleton(matchPath) {
 // User-agent line right after another one joins the same group (several
 // names sharing one rule set), but one that follows a rule line starts a
 // fresh group.
-function parseRobotsTxt(text) {
-  const groups = [];
-  let current = null;
+function parseRobotsTxt(text: string): RobotsGroup[] {
+  const groups: RobotsGroup[] = [];
+  let current: RobotsGroup | null = null;
   let sawRuleInCurrent = false;
 
   for (const rawLine of text.split(/\r\n|\r|\n/)) {
@@ -713,7 +750,7 @@ function parseRobotsTxt(text) {
 // de-facto "*" (any sequence) and trailing "$" (end-of-string) extensions
 // most crawlers — including the ones this project cares about — honor,
 // even though they're not in the original robots.txt draft.
-function robotsPatternToRegex(pattern) {
+function robotsPatternToRegex(pattern: string): RegExp {
   const hasEndAnchor = pattern.endsWith('$');
   const body = hasEndAnchor ? pattern.slice(0, -1) : pattern;
   const escaped = body
@@ -730,12 +767,12 @@ function robotsPatternToRegex(pattern) {
 // (`requests`' default UA, a plain Playwright/Chromium UA) don't carry a
 // dedicated product token most robots.txt files would recognize by name,
 // so the generic group is the only one that's meaningfully applicable.
-function evaluateRobotsTxt(text, path) {
+function evaluateRobotsTxt(text: string, path: string): { allowed: boolean; matchedRule: RobotsRule | null } {
   const groups = parseRobotsTxt(text);
   const group = groups.find(g => g.agents.includes('*'));
   if (!group) return { allowed: true, matchedRule: null };
 
-  let best = null;
+  let best: RobotsRule | null = null;
   for (const rule of group.rules) {
     if (!robotsPatternToRegex(rule.pattern).test(path)) continue;
     const isLonger = !best || rule.pattern.length > best.pattern.length;
@@ -750,7 +787,7 @@ function evaluateRobotsTxt(text, path) {
 // request relative to the inspected page (like the page's own JS could
 // make) — no extra host_permissions needed for a cross-origin fetch from
 // an extension page.
-async function checkRobotsTxt() {
+async function checkRobotsTxt(): Promise<RobotsTxtResult> {
   const robotsUrl = `${location.origin}/robots.txt`;
   const path = location.pathname + location.search;
   log('ROBOTS_TXT_CHECK start', robotsUrl);
@@ -767,8 +804,8 @@ async function checkRobotsTxt() {
     const { allowed, matchedRule } = evaluateRobotsTxt(text, path);
     return { ok: true, robotsUrl, path, notFound: false, allowed, matchedRule };
   } catch (err) {
-    log('ROBOTS_TXT_CHECK fail', err.message);
-    return { ok: false, robotsUrl, path, error: err.message };
+    log('ROBOTS_TXT_CHECK fail', (err as Error).message);
+    return { ok: false, robotsUrl, path, error: (err as Error).message };
   }
 }
 
@@ -792,18 +829,18 @@ async function checkRobotsTxt() {
 // .contentWindow matches this frame's window is not restricted by
 // same-origin) via postMessage, recursively up to the top document.
 
-const FRAME_PATH_SOURCE = 'sf-frame-path';
+const FRAME_PATH_SOURCE = 'sf-frame-path' as const;
 const FRAME_PATH_TIMEOUT_MS = 2000;
 let framePathRequestId = 0;
-const pendingFramePathRequests = new Map();
+const pendingFramePathRequests = new Map<number, { resolve: (path: string[] | null) => void; timeoutId: ReturnType<typeof setTimeout> }>();
 
 // Finds the <iframe> element in this frame's own document whose
 // contentWindow is `childWindow`, and returns a selector for it (reusing
 // buildSelector — an <iframe> is just another element in `document`) — or
 // null if no matching iframe is found (e.g. a request racing the frame's
 // removal from the DOM).
-function findIframeSelectorForWindow(childWindow) {
-  const iframes = document.getElementsByTagName('iframe');
+function findIframeSelectorForWindow(childWindow: MessageEventSource | null): string | null {
+  const iframes = Array.from(document.getElementsByTagName('iframe'));
   for (const iframe of iframes) {
     if (iframe.contentWindow === childWindow) return buildSelector(iframe, null, false);
   }
@@ -817,18 +854,19 @@ function findIframeSelectorForWindow(childWindow) {
 // (practically only possible if a parent's own content script somehow isn't
 // running — Spike A showed the request/reply round trip itself is otherwise
 // effectively instant, even across cross-origin frames).
-function resolveFramePath() {
+function resolveFramePath(): Promise<string[] | null> {
   if (window === window.top) return Promise.resolve([]);
 
   const requestId = ++framePathRequestId;
-  return new Promise((resolve) => {
+  return new Promise<string[] | null>((resolve) => {
     const timeoutId = setTimeout(() => {
       pendingFramePathRequests.delete(requestId);
       log('FRAME_PATH request timed out', requestId);
       resolve(null);
     }, FRAME_PATH_TIMEOUT_MS);
     pendingFramePathRequests.set(requestId, { resolve, timeoutId });
-    window.parent.postMessage({ source: FRAME_PATH_SOURCE, type: 'REQUEST', requestId }, '*');
+    const request: FramePathMessage = { source: FRAME_PATH_SOURCE, type: 'REQUEST', requestId };
+    window.parent.postMessage(request, '*');
   });
 }
 
@@ -838,19 +876,23 @@ function resolveFramePath() {
 // itself is nested — both roles can apply to the same frame at once for a
 // frame nested more than one level deep, so this listener always runs
 // regardless of this frame's own position in the tree.
-function handleFramePathMessage(event) {
+function handleFramePathMessage(event: MessageEvent<FramePathMessage | null>): void {
   const data = event.data;
   if (!data || data.source !== FRAME_PATH_SOURCE) return;
+  // A frame's own postMessage sender is a Window; MessageEventSource also covers ports and workers.
+  const sender = event.source as Window;
 
   if (data.type === 'REQUEST') {
-    const mySelectorForChild = findIframeSelectorForWindow(event.source);
+    const mySelectorForChild = findIframeSelectorForWindow(sender);
     if (mySelectorForChild === null) {
-      event.source.postMessage({ source: FRAME_PATH_SOURCE, type: 'REPLY', requestId: data.requestId, path: null }, '*');
+      const reply: FramePathMessage = { source: FRAME_PATH_SOURCE, type: 'REPLY', requestId: data.requestId, path: null };
+      sender.postMessage(reply, '*');
       return;
     }
     resolveFramePath().then((ownPath) => {
       const path = ownPath === null ? null : [...ownPath, mySelectorForChild];
-      event.source.postMessage({ source: FRAME_PATH_SOURCE, type: 'REPLY', requestId: data.requestId, path }, '*');
+      const reply: FramePathMessage = { source: FRAME_PATH_SOURCE, type: 'REPLY', requestId: data.requestId, path };
+      sender.postMessage(reply, '*');
     });
     return;
   }
@@ -868,7 +910,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('message', handleFramePathMessage);
 }
 
-module.exports = {
+export {
   buildSelector, countSelectorMatches, splitTextFilter, normalizeText, querySelectorAllWithText, querySelectorWithText,
   appendTextFilterToSelector, collectElementAttributes, collectOwnText, elementPath, serializeDomTree,
   matchFlatFields, matchGroupTree, computePreviewMatches, matchHoverHighlight,
@@ -888,9 +930,9 @@ module.exports = {
 // above for the same concern) — no postMessage round trip needed, unlike
 // resolveFramePath's actual selector chain, so this is cheap enough to call
 // synchronously from createOverlay() on every selection round.
-function frameDepth() {
+function frameDepth(): number {
   let depth = 0;
-  let w = window;
+  let w: Window = window;
   while (w !== window.top) {
     depth++;
     w = w.parent;
@@ -898,7 +940,7 @@ function frameDepth() {
   return depth;
 }
 
-let overlay = null;
+let overlay: HTMLDivElement | null = null;
 
 // Highlights an element inside a nested frame with a distinct (amber, badged
 // with the nesting depth) style from a top-level one (blue, Issue #41's
@@ -910,7 +952,7 @@ let overlay = null;
 // popup's i18n system — this renders into the inspected page itself, not
 // the extension's own UI, and a resolved frame path is shown as proper
 // translated text in the side panel once a click actually confirms one.
-function createOverlay() {
+function createOverlay(): void {
   if (overlay) return;
   const depth = frameDepth();
   overlay = document.createElement('div');
@@ -946,14 +988,14 @@ function createOverlay() {
   document.body.appendChild(overlay);
 }
 
-function removeOverlay() {
+function removeOverlay(): void {
   if (overlay) {
     overlay.remove();
     overlay = null;
   }
 }
 
-function moveOverlayTo(element) {
+function moveOverlayTo(element: Element): void {
   if (!overlay) return;
   const r = element.getBoundingClientRect();
   Object.assign(overlay.style, {
@@ -974,9 +1016,9 @@ function moveOverlayTo(element) {
 
 const PREVIEW_MAX_BOXES = 300; // caps drawn boxes on pathological pages; the real match count is still reported
 
-let previewBoxes = [];
+let previewBoxes: HTMLDivElement[] = [];
 
-function createPreviewBox(element, name) {
+function createPreviewBox(element: Element, name: string): void {
   previewBoxes.push(createHighlightBox(element, name, PREVIEW_BOX_COLORS));
 }
 
@@ -985,7 +1027,7 @@ const PREVIEW_BOX_COLORS = { border: '#3b82f6', fill: 'rgba(59,130,246,0.15)' };
 // Shared by the full preview (blue, above) and Issue #233's hover highlight
 // (green, below) — one box + name label, appended to <body> and returned so
 // each caller can track/clear its own boxes independently.
-function createHighlightBox(element, name, colors) {
+function createHighlightBox(element: Element, name: string, colors: { border: string; fill: string }): HTMLDivElement {
   const rect = element.getBoundingClientRect();
   const box = document.createElement('div');
   box.className = 'sf-preview-box';
@@ -1022,22 +1064,22 @@ function createHighlightBox(element, name, colors) {
   return box;
 }
 
-function clearPreviewBoxes() {
+function clearPreviewBoxes(): void {
   previewBoxes.forEach(box => box.remove());
   previewBoxes = [];
 }
 
-function startPreview(mode, fields, groups) {
+function startPreview(mode: string, fields?: PreviewField[], groups?: SFWire.ContainerNode[]): void {
   clearPreviewBoxes();
   const { matches, empty } = computePreviewMatches(mode, fields, groups);
   matches.slice(0, PREVIEW_MAX_BOXES).forEach(({ element, name }) => createPreviewBox(element, name));
   const truncated = matches.length > PREVIEW_MAX_BOXES;
 
   log('PREVIEW result', { total: matches.length, empty, truncated });
-  chrome.runtime.sendMessage({ type: 'PREVIEW_RESULT', total: matches.length, empty, truncated });
+  sendToPanel({ type: 'PREVIEW_RESULT', total: matches.length, empty, truncated });
 }
 
-function stopPreview() {
+function stopPreview(): void {
   log('PREVIEW stop');
   clearPreviewBoxes();
 }
@@ -1051,14 +1093,14 @@ function stopPreview() {
 
 const HOVER_HIGHLIGHT_COLORS = { border: '#16a34a', fill: 'rgba(22,163,74,0.18)' };
 
-let hoverHighlightBoxes = [];
+let hoverHighlightBoxes: HTMLDivElement[] = [];
 
-function clearHoverHighlight() {
+function clearHoverHighlight(): void {
   hoverHighlightBoxes.forEach(box => box.remove());
   hoverHighlightBoxes = [];
 }
 
-function showHoverHighlight(name, steps, framePath) {
+function showHoverHighlight(name: string, steps: HighlightStep[], framePath?: string[] | null): void {
   clearHoverHighlight();
   const { elements, inIframe } = matchHoverHighlight(steps, framePath);
   const label = `${name}${inIframe ? ' (iframe)' : ''}${elements.length > 1 ? ` ×${elements.length}` : ''}`;
@@ -1078,8 +1120,8 @@ let domViewEnabled = false;
 // unrelated messages (including plain selection). Coalesce to at most one
 // HOVER_ELEMENT send per ~16ms (one frame), always reflecting the latest target.
 const HOVER_THROTTLE_MS = 16;
-let hoverTimeoutId = null;
-let pendingHoverTarget = null;
+let hoverTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let pendingHoverTarget: Element | null = null;
 
 // Set while a Container-Mode selection is scoped to a repeating group's
 // instances (see startSelection's scopeSelector) — null means the whole
@@ -1094,7 +1136,7 @@ let pendingHoverTarget = null;
 // null-safe (empty string / "false" / an omitted sub-element, never an
 // error), so the bug was purely in what could be *clicked*, not in how a
 // once-built selector behaves at scrape time.
-let scopeRootEls = null;
+let scopeRootEls: Element[] | null = null;
 
 // Issue #137: how long/often startSelection's scope-selector lookup retries
 // a miss before giving up — see retryScopeSelector's own doc comment.
@@ -1124,7 +1166,7 @@ let apiSearchActive = false;
 // stays confined to that group's scope. null (the default) reproduces
 // today's whole-pool search — unrelated to scopeRootEls/isInScope above,
 // which scope *DOM* clickability, not the JSON search a click produces.
-let apiScopePathActive = null;
+let apiScopePathActive: string | null = null;
 
 // Issue #136: the embedded-JSON analogue of apiSearchActive/apiScopePathActive
 // above, set for the duration of a "search page's own JSON" selection round.
@@ -1132,10 +1174,10 @@ let apiScopePathActive = null;
 // click still produces a CSS selector as usual, and additionally searches
 // document.scripts instead of capturedApiEntries.
 let embeddedJsonSearchActive = false;
-let embeddedJsonScopePathActive = null;
-let embeddedJsonScriptSelectorActive = null;
+let embeddedJsonScopePathActive: string | null = null;
+let embeddedJsonScriptSelectorActive: string | null = null;
 
-function isInScope(element) {
+function isInScope(element: Element): boolean {
   return !scopeRootEls || scopeRootEls.some(root => root.contains(element));
 }
 
@@ -1146,18 +1188,18 @@ function isInScope(element) {
 // Only meaningful for an element that already passed isInScope(); returns
 // null for the unscoped case (scopeRootEls === null), same as isInScope's
 // own "whole page is fair game" meaning there.
-function scopeRootFor(element) {
+function scopeRootFor(element: Element): Element | null {
   if (!scopeRootEls) return null;
   return scopeRootEls.find(root => root.contains(element)) || null;
 }
 
-function flushHover() {
+function flushHover(): void {
   hoverTimeoutId = null;
   if (!domViewEnabled || !pendingHoverTarget) return;
   try {
-    chrome.runtime.sendMessage({ type: 'HOVER_ELEMENT', path: elementPath(pendingHoverTarget) });
+    sendToPanel({ type: 'HOVER_ELEMENT', path: elementPath(pendingHoverTarget) });
   } catch (err) {
-    log('HOVER_ELEMENT send failed', err.message);
+    log('HOVER_ELEMENT send failed', (err as Error).message);
   }
 }
 
@@ -1169,12 +1211,13 @@ function flushHover() {
 // hovered/clicked. composedPath()[0] is the true, un-retargeted originating
 // element, including inside shadow trees; found via manual testing against
 // a real shadow-DOM element, not assumed (see PLAN-issues-41-42.md).
-function eventTargetElement(e) {
+function eventTargetElement(e: Event): Element {
   const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
-  return path.length > 0 ? path[0] : e.target;
+  // Only elements receive clicks and mouseovers (the listeners sit on document), so the target is never a text node or window.
+  return (path.length > 0 ? path[0] : e.target) as Element;
 }
 
-function onMouseOver(e) {
+function onMouseOver(e: MouseEvent): void {
   if (e.target === overlay) return;
   const target = eventTargetElement(e);
 
@@ -1194,7 +1237,7 @@ function onMouseOver(e) {
   }
 }
 
-function onClick(e) {
+function onClick(e: MouseEvent): void {
   e.preventDefault();
   e.stopPropagation();
   const target = eventTargetElement(e);
@@ -1207,9 +1250,9 @@ function onClick(e) {
     // otherwise interrupting the selection round.
     log('CLICK outside scope, ignored');
     try {
-      chrome.runtime.sendMessage({ type: 'SELECTION_CLICK_OUT_OF_SCOPE' });
+      sendToPanel({ type: 'SELECTION_CLICK_OUT_OF_SCOPE' });
     } catch (err) {
-      log('SELECTION_CLICK_OUT_OF_SCOPE send failed', err.message);
+      log('SELECTION_CLICK_OUT_OF_SCOPE send failed', (err as Error).message);
     }
     return;
   }
@@ -1231,24 +1274,24 @@ function onClick(e) {
   const clickedText = (target.textContent || '').trim();
   const clickedAttributes = collectElementAttributes(target);
   const clickedOwnText = collectOwnText(target);
-  log('CLICK → selector', selector, 'matchCount', matchCount);
+  log('CLICK → selector', selector);
   stopSelection();
 
   // Path is a nice-to-have for the optional tree-view highlight — never let
   // a failure here block the actual field selection.
-  let path;
+  let path: number[] | undefined;
   try {
     path = elementPath(target);
   } catch (err) {
-    log('elementPath failed', err.message);
+    log('elementPath failed', (err as Error).message);
   }
 
   // null (not []) when this click happened in the top-level document — same
   // "null = today's default, unchanged behavior" convention the companion's
   // ExtractStep.FramePath uses.
   resolveFramePath().then((framePath) => {
-    log('MSG_OUT ELEMENT_SELECTED', selector, framePath);
-    chrome.runtime.sendMessage({
+    log('MSG_OUT ELEMENT_SELECTED', selector);
+    const selected: ElementSelectedMessage = {
       type: 'ELEMENT_SELECTED', selector, path, matchCount,
       // Issue #143: the raw values a transform-chain live preview runs
       // against — trimmed the same way the actual Python extraction already
@@ -1268,7 +1311,8 @@ function onClick(e) {
       // copy in session storage (the service worker's fallback write can land after the
       // panel's cleanup) is recognised as already used instead of replayed on reload.
       pickId: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    });
+    };
+    sendToPanel(selected);
 
     // API-mode search: additionally correlate the clicked element's text
     // against Phase 3's recorded responses (see capturedApiEntries below)
@@ -1312,7 +1356,10 @@ function onClick(e) {
 // whole-page search. Only meaningful alongside embeddedJsonSearch; ignored
 // otherwise. Mutually exclusive with apiSearch in practice (the popup only
 // ever starts one kind of search at a time), but nothing here enforces that.
-function startSelection(scopeSelector, avoidId, apiSearch, apiScopePath, embeddedJsonSearch, embeddedJsonScopePath, embeddedJsonScriptSelector) {
+function startSelection(
+  scopeSelector?: string | null, avoidId?: boolean, apiSearch?: boolean, apiScopePath?: string | null,
+  embeddedJsonSearch?: boolean, embeddedJsonScopePath?: string | null, embeddedJsonScriptSelector?: string | null,
+): void {
   log('SELECTION start', { scopeSelector, avoidId, apiSearch, apiScopePath, embeddedJsonSearch, embeddedJsonScopePath, embeddedJsonScriptSelector });
   const generation = ++selectionGeneration;
   lastPick = null;
@@ -1364,7 +1411,7 @@ function startSelection(scopeSelector, avoidId, apiSearch, apiScopePath, embedde
 // already-superseded (a newer startSelection call) or cancelled
 // (stopSelection) round re-arming selection or sending a stale
 // SELECTION_UNAVAILABLE after the fact.
-function retryScopeSelector(scopeSelector, generation, deadline) {
+function retryScopeSelector(scopeSelector: string, generation: number, deadline: number): void {
   setTimeout(() => {
     if (generation !== selectionGeneration) return; // superseded or cancelled meanwhile
 
@@ -1377,7 +1424,7 @@ function retryScopeSelector(scopeSelector, generation, deadline) {
 
     if (Date.now() >= deadline) {
       log('SELECTION scope not found (after retry)', scopeSelector);
-      chrome.runtime.sendMessage({
+      sendToPanel({
         type: 'SELECTION_UNAVAILABLE',
         reason: `Container-Selektor '${scopeSelector}' findet kein Element auf dieser Seite.`,
         // Issue #137 follow-up: distinguishes this specific "retried and
@@ -1402,13 +1449,13 @@ function retryScopeSelector(scopeSelector, generation, deadline) {
   }, SCOPE_SELECTOR_RETRY_INTERVAL_MS);
 }
 
-function armSelection() {
+function armSelection(): void {
   createOverlay();
   document.addEventListener('mouseover', onMouseOver);
   document.addEventListener('click', onClick, true);
 }
 
-function stopSelection() {
+function stopSelection(): void {
   log('SELECTION stop');
   selectionGeneration++; // invalidate any in-flight retryScopeSelector timer
   document.removeEventListener('mouseover', onMouseOver);
@@ -1428,18 +1475,18 @@ function stopSelection() {
   pendingHoverTarget = null;
 }
 
-function enableDomView() {
+function enableDomView(): void {
   domViewEnabled = true;
   log('DOM_VIEW enable → sending tree');
   try {
-    chrome.runtime.sendMessage({ type: 'DOM_TREE', ...serializeDomTree() });
+    sendToPanel({ type: 'DOM_TREE', ...serializeDomTree() });
   } catch (err) {
-    log('DOM_TREE send failed', err.message);
-    chrome.runtime.sendMessage({ type: 'DOM_TREE', tree: null, truncated: false, error: err.message });
+    log('DOM_TREE send failed', (err as Error).message);
+    sendToPanel({ type: 'DOM_TREE', tree: null, truncated: false, error: (err as Error).message });
   }
 }
 
-function disableDomView() {
+function disableDomView(): void {
   log('DOM_VIEW disable');
   domViewEnabled = false;
   if (hoverTimeoutId !== null) {
@@ -1464,16 +1511,16 @@ function disableDomView() {
 // api-capture.ts's own buffer reset — deliberately *not* cleared on STOP,
 // since Phase 4's search runs after recording has stopped.
 const MAX_LOCAL_API_ENTRIES = 200; // mirrors api-capture.ts's MAX_CAPTURED_ENTRIES; independent cap, same value
-let capturedApiEntries = [];
+let capturedApiEntries: SFDraft.ApiCaptureEntry[] = [];
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('message', (event) => {
+  window.addEventListener('message', (event: MessageEvent<ApiCaptureWindowMessage | null>) => {
     if (event.source !== window) return;
     const data = event.data;
     if (!data || data.source !== 'sf-api-capture' || data.type !== 'API_CAPTURE_ENTRY') return;
     log('API_CAPTURE_ENTRY received', { url: data.entry?.url });
     if (capturedApiEntries.length < MAX_LOCAL_API_ENTRIES) capturedApiEntries.push(data.entry);
-    chrome.runtime.sendMessage({ type: 'API_CAPTURE_ENTRY', entry: data.entry });
+    sendToPanel({ type: 'API_CAPTURE_ENTRY', entry: data.entry });
   });
 }
 
@@ -1490,12 +1537,12 @@ if (typeof window !== 'undefined') {
 // causing duplicate/garbled results (e.g. multiple frames racing to
 // sendResponse() for the same GET_LOGS request, only one of which wins
 // unpredictably).
-function isTopFrame() {
+function isTopFrame(): boolean {
   return window === window.top;
 }
 
 if (typeof chrome !== 'undefined' && chrome.runtime) {
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((message: ContentScriptInboundMessage, sender: chrome.runtime.MessageSender, sendResponse: (response: unknown) => void) => {
     log('MSG_IN', message.type);
     if (message.type === 'START_SELECTION') {
       startSelection(
@@ -1513,7 +1560,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     if (message.type === 'API_CAPTURE_START' || message.type === 'API_CAPTURE_STOP') {
       log('API_CAPTURE forward to MAIN world', message.type);
       if (message.type === 'API_CAPTURE_START') capturedApiEntries = [];
-      window.postMessage({ source: 'sf-api-capture-control', type: message.type }, '*');
+      const control: ApiCaptureWindowMessage = { source: 'sf-api-capture-control', type: message.type };
+      window.postMessage(control, '*');
     }
     if (message.type === 'GET_LOGS') {
       if (!isTopFrame()) return;
