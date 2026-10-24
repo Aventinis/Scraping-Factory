@@ -825,7 +825,7 @@ docs/design-notes/extension.md for the details.
 - Companion: `IR/ScrapingPlanValidator.cs` (`ValidatePageNumberUrlTemplate`),
   `IR/PaginationConfig.cs` (doc comment)
 - Tests: `popup/pagination-template.test.js`, `popup/pagination-ui.test.js`,
-  `ScrapingPlanValidatorTests`, `PaginationEndToEndTests`, fixture
+  `ScrapingPlanValidator*Tests`, `PaginationEndToEndTests`, fixture
   `test-pages/paginated-listing` + `e2e/examples/issue-405-pagination-helpers-check.js`
 
 ### 2.10h Login flow guidance for the browser actions (Issue #403)
@@ -1161,7 +1161,7 @@ for a hardening check that runs once at the very end, not per-transform).
   mirrors of the three new Python helpers, feeding the existing live preview
   (Issue #143) the same way `toNumberPreview` already does.
 - Tests: `FieldTransformJsonTests` (polymorphic (de)serialization),
-  `ScrapingPlanValidatorTests` (`OnError`/`SourceFormat` validation),
+  `ScrapingPlanValidator*Tests` (`OnError`/`SourceFormat` validation),
   `TypeConversionTransformEndToEndTests` (real generated-script runs proving
   each kind's success/failure/onError behavior — the same "black-box
   `PythonScriptVerifier` can't see per-cell values" reasoning
@@ -1556,7 +1556,7 @@ repeating group instance that owns every key field.
   `session-restore.ts`, `#toggle-dedup`/`#dedup-config` in
   `screens/idle.html`
 - Tests: `DeduplicationEndToEndTests.cs`, `DeduplicationConfigJsonTests.cs`,
-  `ScrapingPlanValidatorTests.cs`, `extension/popup/dedup-config.test.js`,
+  `ScrapingPlanValidator*Tests.cs`, `extension/popup/dedup-config.test.js`,
   fixture `test-pages/dedup-listing` +
   `e2e/examples/issue-225-deduplication-check.js`
 
@@ -1609,7 +1609,7 @@ Playwright's `extra_http_headers` (every request of the page) and
   `config-import.ts`, `session-restore.ts`, `#toggle-request-headers`/
   `#request-headers-config` in `screens/idle.html`
 - Tests: `RequestHeadersEndToEndTests.cs`, `RequestHeadersEndpointTests.cs`,
-  `ScrapingPlanValidatorTests.cs`, `FillVerificationValuesTests.cs`,
+  `ScrapingPlanValidator*Tests.cs`, `FillVerificationValuesTests.cs`,
   `extension/popup/request-headers.test.js`, fixture
   `test-pages/request-headers` +
   `e2e/examples/issue-226-request-headers-check.js`
@@ -1640,7 +1640,7 @@ fragments, and JS (`content-script.ts`, `popup/selector-text-filter.ts`).
   `selector-text-filter-ui.ts`, text filter row in `modal-field-name` /
   `modal-field-extended`, live match count
 - Tests: `SelectorTextFilterTests.cs`, `TextSelectorEndToEndTests.cs`,
-  `ScrapingPlanValidatorTests.cs`, `extension/popup/selector-text-filter.test.js`,
+  `ScrapingPlanValidator*Tests.cs`, `extension/popup/selector-text-filter.test.js`,
   `content-script*.test.js`, fixture `test-pages/text-selector` +
   `e2e/examples/issue-227-text-selector-check.js`
 
