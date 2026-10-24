@@ -644,7 +644,7 @@ OS — in full until a companion has answered once on this browser
 (`chrome.storage.local` `companionReached`), as a one-line hint afterwards — plus a
 "Why can't it connect?" help popover. See docs/design-notes/extension.md for the behavior details.
 
-- Extension: `popup/companion-guidance.js` (OS detection, installer commands/paths,
+- Extension: `popup/companion-guidance.ts` (OS detection, installer commands/paths,
   `likelySituations`, the persisted flag), `popup/companion-guidance-ui.js`
   (`renderCompanionGuidance`, called from `popup.js`'s `render()`),
   `popup/companion-client.js` (`checkCompanion` loads/sets the flag and keeps the last
@@ -662,7 +662,7 @@ check after a container pick against the type chosen beforehand, a clickable
 suggestion when a Static trial run returns no data. See docs/design-notes/extension.md for details.
 
 - Extension: `popup/choice-guidance.js` (pure: `containerCountAdvice`,
-  `shouldSuggestBrowserEngine`), `popup/toast.js` (`showMatchCountToast`),
+  `shouldSuggestBrowserEngine`), `popup/toast.ts` (`showMatchCountToast`),
   `popup/message-router.js`/`popup/session-restore.js` (pass the chosen type),
   `popup/container-tree-ui.js` (`.group-tree-type` toggle), `popup/companion-client.js`
   (`generate()` suggestion), help hosts in `popup/screens/idle.html`/`modals.html`,
@@ -678,7 +678,7 @@ instead of the companion's or script's raw text; the raw text stays behind a
 in `popup/error-messages.js`; unknown errors keep the old wording. See docs/design-notes/extension.md.
 
 - Extension: `popup/error-messages.js` (pure: `classifyError`, `describeError`),
-  `popup/toast.js` (`showErrorToast`, `hideToast`, `wireErrorToastEvents`; sticky toast
+  `popup/toast.ts` (`showErrorToast`, `hideToast`, `wireErrorToastEvents`; sticky toast
   with hint/details/close/copy), `popup/companion-client.js` (`showGenerateFailure`),
   the toast markup in `popup/popup.html`, `errors.*` in `i18n/*.json`
 - Tests: `popup/error-messages.test.js`, real-browser check
@@ -881,7 +881,7 @@ for the conventions and the sync test that enforces them.
 - Extension: `popup/help-popover.js` (pure) + `popup/help-popover-ui.js`
   (`initHelpPopovers`, `wireHelpPopoverEvents`; hosts declared as
   `<span class="help-host" data-help="help.…">` in `screens/*.html`),
-  `popup/advanced-disclosure.js` + `popup/advanced-disclosure-ui.js`
+  `popup/advanced-disclosure.ts` + `popup/advanced-disclosure-ui.js`
   (`<details data-advanced="…">`, `chrome.storage.local` key `advancedSections`),
   `popup/popup.css` (`.help-btn`, `.help-popover`, `.advanced-disclosure`),
   `help.*`/`common.helpBtn`/`common.advanced` in `i18n/*.json`, wired from
@@ -920,7 +920,7 @@ scraped values after a real `/generate` trial run, not live DOM matches.
   `matchFlatFields`/`matchGroupTree`, the preview-overlay drawing functions)
 - Single-row hover highlight (Issue #233): hovering one flat field row or
   container tree row highlights just that row's element(s) on the page, in
-  green, with no toggle — `popup/hover-highlight.js` (`buildFlatFieldHighlight`,
+  green, with no toggle — `popup/hover-highlight.ts` (`buildFlatFieldHighlight`,
   `buildGroupNodeHighlight`, `wireHoverHighlight`, wired from
   `flat-mode-ui.js`/`container-tree-ui.js`), `HOVER_HIGHLIGHT`/
   `HOVER_HIGHLIGHT_CLEAR` in `background/service-worker.js`'s
@@ -1685,7 +1685,7 @@ needed for Excel only. Appending to an existing file is §2.21ab3.
 - Extension: `shared/global-settings.ts` (`outputFormat`, migration),
   `global-settings-ui.js`, `screens/settings.html`, `idle-screen-ui.js`
   (extension + flatten hint), `scraping-config-builder.ts`,
-  `download-helpers.js` (base64 decode)
+  `download-helpers.ts` (base64 decode)
 - Tests: `TabularOutputTests.cs`, `HardeningReplayEvaluatorTests.cs`,
   `extension/popup/tabular-output.test.js`, `e2e/examples/issue-229-tabular-output-check.js`
 
@@ -2141,7 +2141,7 @@ shape; only *where the extension sources those four values from* changed.
   `popup.js`'s `_state` drops `useJsonOutput`/`includeDataPreview`/
   `includeOutputFile`/`externalConfig` entirely; every `buildScrapingConfig`/
   `buildConfigExport` call site (`companion-client.js`'s `generate()`,
-  `download-helpers.js`'s `downloadConfigExport`, `saved-configs-ui.js`'s
+  `download-helpers.ts`'s `downloadConfigExport`, `saved-configs-ui.js`'s
   `createSavedConfig`) reads them from `getGlobalSettings()` instead.
   `config-import.ts`'s `applyConfigToState` no longer restores any of the
   four — loading/importing a saved config must never touch a cross-session
