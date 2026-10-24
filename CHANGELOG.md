@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.4](https://github.com/Aventinis/Scraping-Factory/compare/v1.20.3...v1.20.4) (2026-10-24)
+
+
+### Features
+
+* **extension:** add typed DOM helpers (popup/dom.ts) ([5f062da](https://github.com/Aventinis/Scraping-Factory/commit/5f062da046009081312ef8ed23c1f148930a1128))
+
 ## [1.20.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.20.2...v1.20.3) (2026-10-23)
 
 
