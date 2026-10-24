@@ -36,10 +36,10 @@ flowchart LR
         direction TB
         subgraph Page["Inspected page (per-frame)"]
             CS["content-script.js\n(ISOLATED world)"]
-            AC["api-capture.js\n(MAIN world)"]
+            AC["api-capture.ts\n(MAIN world)"]
             CS <-- window.postMessage --> AC
         end
-        SW["service-worker.js\n(background, pure relay)"]
+        SW["service-worker.ts\n(background, pure relay)"]
         SP["popup.ts + friends\n(side panel UI, state machine)"]
         CS <-- chrome.runtime messages --> SW
         SW <-- chrome.runtime messages --> SP
@@ -74,8 +74,8 @@ outer-request rejection means the matching `Endpoints/` file.
 | Context | File(s) | Runs where | Can reach |
 |---|---|---|---|
 | Content script (isolated world) | `extension/content/content-script.js` | Once per frame of the inspected page (`all_frames: true`) | The page's DOM (but not its JS globals); `chrome.runtime` |
-| Network recorder (MAIN world) | `extension/content/api-capture.js` | Once per frame, injected at `document_start`, before the page's own scripts run | The page's real `window.fetch`/`XMLHttpRequest` (needed to patch them); **not** `chrome.runtime` |
-| Background service worker | `extension/background/service-worker.js` | Once per browser session | `chrome.tabs`, relays messages; has no page/DOM access itself |
+| Network recorder (MAIN world) | `extension/content/api-capture.ts` | Once per frame, injected at `document_start`, before the page's own scripts run | The page's real `window.fetch`/`XMLHttpRequest` (needed to patch them); **not** `chrome.runtime` |
+| Background service worker | `extension/background/service-worker.ts` | Once per browser session | `chrome.tabs`, relays messages; has no page/DOM access itself |
 | Side panel UI | `extension/popup/popup.html` + its scripts | Once per open panel | `chrome.runtime`, `chrome.storage`, `fetch` to the companion |
 
 The content script and the MAIN-world recorder are two different JS realms that
@@ -83,7 +83,7 @@ happen to share one `window` — they can only talk via `window.postMessage`, ne
 via a shared variable or direct function call. The service worker cannot talk to a
 content script directly either; it must go through `chrome.tabs.sendMessage`, and a
 content script/panel replies via `chrome.runtime.sendMessage`. The service worker
-(`extension/background/service-worker.js`) is intentionally a pure relay — it holds
+(`extension/background/service-worker.ts`) is intentionally a pure relay — it holds
 no feature logic, just a `FORWARD_TO_TAB` allow-list and a couple of pull-based
 request/response bridges (`GET_LOGS`, `GET_API_CAPTURE_ENTRIES`, `CHECK_ROBOTS_TXT`).
 
@@ -303,7 +303,7 @@ combination, without ever touching the HTML.
 
 - Extension: `popup/api-config.ts` (URL decomposition, value-source builders,
   `buildApiConfig`), `popup/api-config-ui.ts` (API_CONFIG screen rendering +
-  handlers, recording UI), `content/api-capture.js` (MAIN-world fetch/XHR patch),
+  handlers, recording UI), `content/api-capture.ts` (MAIN-world fetch/XHR patch),
   `content/content-script.js` (`findApiCandidates`, `deriveItemsAndValuePath`,
   robots.txt-adjacent JSON-path helpers)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig`, `ApiParameter`, `ApiParameterSource`
@@ -345,7 +345,7 @@ covers.
 - Extension: `popup/api-config.ts` (`jsonValueToBodyDraft`, body-tree
   update/reference/serialize helpers), `popup/api-request-ui.ts`
   (`buildBodyTreeNodeEl`/`renderBodyTree`, body-parameter modal wiring),
-  `content/api-capture.js` (`requestBody`/`requestBodySkipped` capture)
+  `content/api-capture.ts` (`requestBody`/`requestBodySkipped` capture)
 - Companion: `IR/ApiBodyNode.cs` (`ApiBodyObject`/`Array`/`Literal`/`Variable`),
   `IR/ApiBodyNodeJsonConverter.cs`, `IR/ApiConfig.cs` (`Method`, `Body`),
   `ScrapingPlanValidator.cs` (`ValidateApiBodyNode`),
@@ -359,7 +359,7 @@ Extends API mode (§2.3) to sites that render their complete data into the
 initial page HTML (Next.js `__NEXT_DATA__`, Nuxt `__NUXT__`, a generic
 `<script type="application/json">` state blob) and hydrate the DOM from it
 client-side, with no separate, capturable network request ever happening —
-`content/api-capture.js`'s recorder has nothing to correlate against in this
+`content/api-capture.ts`'s recorder has nothing to correlate against in this
 case. A second, recording-free candidate source (`findEmbeddedJsonCandidates`)
 scans `document.scripts` directly at click time and reuses §2.3's own
 `findValueInJson`/`siblingFields`/`deriveApiTreeSkeleton` unchanged — they're
@@ -474,7 +474,7 @@ reached. GET only; flat and tree shapes. The recorder keeps only a
 `hasNextLink` boolean per entry, so the API_CONFIG screen can suggest the
 option.
 
-- Extension: `content/api-capture.js` (`hasNextLinkRel`), `content/content-script.js`
+- Extension: `content/api-capture.ts` (`hasNextLinkRel`), `content/content-script.js`
   (`hasNextLink` on candidates), `popup/api-link-pagination.js` (pure),
   `popup/api-link-pagination-ui.ts`, `popup/api-config.ts`,
   `popup/screens/api-config.html` (`#api-link-section`)
@@ -622,7 +622,7 @@ shown directly in the popup so the user can make an informed decision before
 scraping a site, without having to go look the file up themselves.
 
 - Extension: `content/content-script.js` (`parseRobotsTxt`, `evaluateRobotsTxt`,
-  `checkRobotsTxt`), `background/service-worker.js` (`CHECK_ROBOTS_TXT` relay),
+  `checkRobotsTxt`), `background/service-worker.ts` (`CHECK_ROBOTS_TXT` relay),
   `popup/popup.ts` (`checkRobotsTxt`, the idle-screen result rendering)
 - No companion involvement — entirely client-side.
 
@@ -759,7 +759,7 @@ Each element pick carries a `pickId`; the service worker's fallback write stores
 pick it handled, and a restore ignores a stored selector of an already handled pick, so a late write can
 no longer reopen a field dialog after a reload. No wire-format or companion change. See docs/design-notes/extension.md.
 
-- Extension: `content/content-script.js` (`pickId`), `background/service-worker.js` (`pendingPickId`),
+- Extension: `content/content-script.js` (`pickId`), `background/service-worker.ts` (`pendingPickId`),
   `popup/message-router.ts` + `popup/session-restore.ts` (`markPickHandled`, `isLeftoverOfHandledPick`)
 - Tests: `popup/session-restore.test.js`, `background/service-worker.test.js`, `content/content-script.test.js`,
   `popup/popup.test.js`, real-browser check `e2e/examples/issue-429-pending-selector-race-check.js`
@@ -808,7 +808,7 @@ companion change. See docs/design-notes/extension.md for the details.
   `popup/api-cursor-pagination-ui.ts`/`api-bootstrap-ui.ts`/`api-response-tree-ui.ts`
   (buttons and panels), `popup/advanced-disclosure-ui.ts` (`autoOpenAdvanced`),
   `popup/screens/api-config.html`/`modals.html`, `jsonPathPicker.*`/`help.api*` in `i18n/*.json`;
-  `content/content-script.js` (`readEmbeddedJson`) + `background/service-worker.js`
+  `content/content-script.js` (`readEmbeddedJson`) + `background/service-worker.ts`
   (`GET_EMBEDDED_JSON`)
 - Tests: `popup/json-path-picker.test.js`, `json-path-picker-ui.test.js`,
   `api-config-guidance.test.js`, real-browser checks `e2e/examples/issue-404-*.js`
@@ -905,7 +905,7 @@ reproduce it live or describe it from memory.
 
 - Extension: `shared/logger.ts` (ring buffer, one instance per JS context),
   `popup/popup.ts` (`collectLogs`, `buildBugReport`, `buildGithubIssueUrl`,
-  `downloadBugReport`, `reportBug`), `background/service-worker.js`/
+  `downloadBugReport`, `reportBug`), `background/service-worker.ts`/
   `content/content-script.js` (`GET_LOGS` responders)
 
 ### 2.13 DOM tree view & selection-preview highlighting
@@ -927,7 +927,7 @@ scraped values after a real `/generate` trial run, not live DOM matches.
   green, with no toggle — `popup/hover-highlight.ts` (`buildFlatFieldHighlight`,
   `buildGroupNodeHighlight`, `wireHoverHighlight`, wired from
   `flat-mode-ui.ts`/`container-tree-ui.ts`), `HOVER_HIGHLIGHT`/
-  `HOVER_HIGHLIGHT_CLEAR` in `background/service-worker.js`'s
+  `HOVER_HIGHLIGHT_CLEAR` in `background/service-worker.ts`'s
   `FORWARD_TO_TAB`, `content/content-script.js` (`matchHoverHighlight`,
   `showHoverHighlight`/`clearHoverHighlight`, the shared `createHighlightBox`)
 
@@ -1042,7 +1042,7 @@ live DOM in front of it, so it can just ask it directly.
 
 - Extension: `content/content-script.js` (`countSelectorMatches`, called from
   `onClick` alongside `buildSelector`; result travels as `matchCount` on the
-  `ELEMENT_SELECTED` message), `background/service-worker.js`
+  `ELEMENT_SELECTED` message), `background/service-worker.ts`
   (`pendingMatchCount` in the same session-storage fallback as
   `pendingSelector`/`pendingFramePath`), `popup/popup.ts`
   (`_state.pendingMatchCount`, `renderMatchCountHint` for the flat/container
@@ -1084,7 +1084,7 @@ shapes (flat/container/API) since none of them share a common leaf type.
   clicked element's trimmed text and full attribute map
   (`collectElementAttributes`), sent as `rawText`/`attributes` on the same
   `ELEMENT_SELECTED` message the selector/matchCount already travel on;
-  `service-worker.js`'s session-storage fallback persists them as
+  `service-worker.ts`'s session-storage fallback persists them as
   `pendingRawText`/`pendingElementAttributes` alongside `pendingMatchCount`.
   `field-transforms.ts`'s `applyTransformsPreview`/`toNumberPreview` are a
   hand-kept JS mirror of the Python runtime's own
@@ -2390,7 +2390,7 @@ sanitization/format logic silently breaks the guarantee that what the popup
 sequenceDiagram
     actor User
     participant Popup as popup.ts
-    participant SW as service-worker.js
+    participant SW as service-worker.ts
     participant CS as content-script.js
     participant Comp as Companion (/generate)
     participant Py as python3 subprocess
@@ -2488,7 +2488,7 @@ only).
 
 **Add a new popup-to-content-script round trip** (like `CHECK_ROBOTS_TXT` or
 `GET_API_CAPTURE_ENTRIES`): pick push (service worker forwards a live message,
-add the type to `FORWARD_TO_TAB` in `service-worker.js`) vs. pull (request/response
+add the type to `FORWARD_TO_TAB` in `service-worker.ts`) vs. pull (request/response
 via `sendResponse`, mirroring `GET_LOGS`'s `chrome.tabs.sendMessage(...).then(sendResponse)`
 pattern) based on whether the panel might be closed when the content script has
 something to report — pull is more robust for anything the panel only needs on

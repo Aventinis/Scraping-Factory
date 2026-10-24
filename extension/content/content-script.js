@@ -516,7 +516,7 @@ function readEmbeddedJson(scriptSelector) {
 // HTML (Next.js's __NEXT_DATA__, Nuxt's __NUXT__, a generic
 // <script type="application/json"> state blob, ...) and hydrate the DOM
 // from it client-side, with no separate, capturable network request ever
-// happening — the network recorder (api-capture.js) sees nothing to
+// happening — the network recorder (api-capture.ts) sees nothing to
 // correlate against. Scans document.scripts instead of capturedApiEntries
 // and reuses findValueInJson/siblingFields/deriveApiTreeSkeleton verbatim —
 // they're pure functions over already-parsed JSON, agnostic to where it
@@ -1382,7 +1382,7 @@ function retryScopeSelector(scopeSelector, generation, deadline) {
         reason: `Container-Selektor '${scopeSelector}' findet kein Element auf dieser Seite.`,
         // Issue #137 follow-up: distinguishes this specific "retried and
         // still nothing" case from the other SELECTION_UNAVAILABLE sender
-        // (service-worker.js, when chrome.tabs.sendMessage itself fails —
+        // (service-worker.ts, when chrome.tabs.sendMessage itself fails —
         // no content script running at all, e.g. a chrome:// page or a tab
         // open since before the extension reloaded). Confirmed via a real
         // report: a page can legitimately, repeatedly fail to resolve a
@@ -1449,7 +1449,7 @@ function disableDomView() {
 }
 
 // ── API-Mode capture bridge ──────────────────────────────────────────────────
-// api-capture.js runs in the MAIN world (real fetch/XHR access, no
+// api-capture.ts runs in the MAIN world (real fetch/XHR access, no
 // chrome.runtime) — this isolated-world script is the relay between it and
 // the rest of the extension: START/STOP commands go out via postMessage,
 // captured entries come back the same way and get forwarded to the side
@@ -1461,9 +1461,9 @@ function disableDomView() {
 // copy directly rather than reaching back into the MAIN world for it, since
 // the click-driven correlation step runs here in the isolated world anyway.
 // Cleared on API_CAPTURE_START (see the message listener below), mirroring
-// api-capture.js's own buffer reset — deliberately *not* cleared on STOP,
+// api-capture.ts's own buffer reset — deliberately *not* cleared on STOP,
 // since Phase 4's search runs after recording has stopped.
-const MAX_LOCAL_API_ENTRIES = 200; // mirrors api-capture.js's MAX_CAPTURED_ENTRIES; independent cap, same value
+const MAX_LOCAL_API_ENTRIES = 200; // mirrors api-capture.ts's MAX_CAPTURED_ENTRIES; independent cap, same value
 let capturedApiEntries = [];
 
 if (typeof window !== 'undefined') {

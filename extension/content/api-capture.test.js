@@ -1,4 +1,4 @@
-// api-capture.js is injected in the MAIN world in the real extension, but
+// api-capture.ts is injected in the MAIN world in the real extension, but
 // its buffering/truncation logic (buildEntry, truncateBody, recordEntry,
 // startRecording/stopRecording) is plain JS with no chrome/DOM dependency —
 // exported for testing the same way content-script.js exports its pure

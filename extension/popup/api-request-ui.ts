@@ -161,7 +161,7 @@ export function renderBodyTree(draft: ApiConfigDraft): void {
 }
 // ── Network recording ──
 // A standalone recording of the page's fetch / XHR traffic, not dependent on Fields / Groups; it feeds request discovery (the interception
-// is in api-capture.js, MAIN world, and the content script's API_CAPTURE bridge).
+// is in api-capture.ts, MAIN world, and the content script's API_CAPTURE bridge).
 
 export function setApiConfigHeaderDecision(bridge: PopupBridge, headerName: string, patch: Partial<HeaderDecision>): void {
   const draft = currentDraft(bridge);

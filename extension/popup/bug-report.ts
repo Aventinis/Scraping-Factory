@@ -23,7 +23,7 @@ export interface CollectedLogs {
 export async function collectLogs(): Promise<CollectedLogs> {
   const popup = getLogBuffer();
   try {
-    // The service worker's reply to GET_LOGS (service-worker.js), an untyped message boundary.
+    // The service worker's reply to GET_LOGS (service-worker.ts), an untyped message boundary.
     const response: { background?: LogEntry[]; content?: LogEntry[] | null; contentError?: string | null } | undefined =
       await chrome.runtime.sendMessage({ type: 'GET_LOGS' });
     return { popup, background: response?.background ?? [], content: response?.content ?? null, contentError: response?.contentError ?? null };

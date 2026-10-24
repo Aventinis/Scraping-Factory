@@ -29,7 +29,7 @@ type TypeConversionTransform = Extract<SFWire.FieldTransform, { kind: 'toInteger
 const CURRENCY_FORMAT_LABEL_KEYS: Record<string, string> = { '1.234,56': 'commaDecimal', '1,234.56': 'dotDecimal', '1 234,56': 'spaceGrouped', "1'234.56": 'apostropheGrouped' };
 
 // Long raw values (a whole paragraph clicked in Text mode) would otherwise
-// stretch the modal — same defensive-cap spirit as api-capture.js's own
+// stretch the modal — same defensive-cap spirit as api-capture.ts's own
 // MAX_BODY_CHARS, just a much smaller number since this is a one-line hint.
 const MAX_PREVIEW_CHARS = 200;
 
