@@ -9,7 +9,7 @@ import type * as SFDraft from '../types/drafts';
 type MappingDraft = Record<string, string | null>;
 
 // A fetched schema tree: a group has `children`, a leaf does not (no `kind`).
-interface SchemaTreeWireNode {
+export interface SchemaTreeWireNode {
   name: string;
   children?: SchemaTreeWireNode[] | null;
 }
