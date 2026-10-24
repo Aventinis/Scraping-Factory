@@ -10,23 +10,28 @@
 // Reads (set by api-config-ui.js when the candidate is confirmed):
 //   apiConfigDraft.sourceHasNextLink — the recorded response carried a
 //   rel="next" Link header, so the option is highlighted as a suggestion.
-const { createLogger } = require('../shared/logger');
-const { autoOpenAdvanced } = require('./advanced-disclosure-ui');
-const log = createLogger('SF:ApiLinkPaginationUI');
-const { createDefaultLinkDraft, DEFAULT_MAX_PAGES } = require('./api-link-pagination');
+import type { PopupBridge } from '../types/popup';
+import type { ApiConfigDraft } from './api-config';
+import { createLogger } from '../shared/logger';
+import { autoOpenAdvanced } from './advanced-disclosure-ui';
+import { createDefaultLinkDraft, DEFAULT_MAX_PAGES } from './api-link-pagination';
+import { byIdOrNull } from './dom';
 
-function patchDraft(bridge, patch) {
+const log = createLogger('SF:ApiLinkPaginationUI');
+
+function patchDraft(bridge: PopupBridge, patch: Partial<ApiConfigDraft>): void {
   const state = bridge.getState();
-  bridge.setState(state.current, { apiConfigDraft: { ...state.apiConfigDraft, ...patch } });
+  // These handlers only run on the API_CONFIG screen, where the draft exists.
+  bridge.setState(state.current, { apiConfigDraft: { ...state.apiConfigDraft, ...patch } as ApiConfigDraft });
 }
 
 // Called from popup.js's render() while the API_CONFIG screen is showing.
 // Hidden for an embedded-JSON source (a page load has no Link header to
 // follow); a POST request keeps the section visible but disabled with an
 // explanation, since the next page is requested by URL alone.
-function renderApiLinkPaginationSection(bridge) {
+export function renderApiLinkPaginationSection(bridge: PopupBridge): void {
   const draft = bridge.getState().apiConfigDraft;
-  const section = document.getElementById('api-link-section');
+  const section = byIdOrNull('api-link-section');
   if (!section) return;
   // The section sits inside its "Advanced" disclosure — hide that whole block for an embedded source.
   (section.closest('details') || section).classList.toggle('hidden', !!draft?.embeddedJsonSource);
@@ -34,48 +39,45 @@ function renderApiLinkPaginationSection(bridge) {
   const isPost = (draft?.method || 'GET') !== 'GET';
   autoOpenAdvanced(section, !!link || (!!draft?.sourceHasNextLink && !isPost));
 
-  const toggle = /** @type {HTMLInputElement | null} */ (document.getElementById('toggle-api-link'));
+  const toggle = byIdOrNull<HTMLInputElement>('toggle-api-link');
   if (toggle) {
     toggle.checked = !!link;
     toggle.disabled = isPost;
   }
-  document.getElementById('api-link-post-hint')?.classList.toggle('hidden', !isPost);
+  byIdOrNull('api-link-post-hint')?.classList.toggle('hidden', !isPost);
   // A recorded response that actually announced a next page is worth a nudge.
-  document.getElementById('api-link-detected-hint')?.classList.toggle('hidden', !draft?.sourceHasNextLink || !!link || isPost);
+  byIdOrNull('api-link-detected-hint')?.classList.toggle('hidden', !draft?.sourceHasNextLink || !!link || isPost);
 
-  const configEl = document.getElementById('api-link-config');
+  const configEl = byIdOrNull('api-link-config');
   if (!configEl) return;
   configEl.classList.toggle('hidden', !link);
-  const maxPages = /** @type {HTMLInputElement | null} */ (document.getElementById('input-api-link-max-pages'));
+  const maxPages = byIdOrNull<HTMLInputElement>('input-api-link-max-pages');
   if (maxPages && link && document.activeElement !== maxPages) maxPages.value = String(link.maxPages);
 }
 
 // ── Actions ─────────────────────────────────────────────────────────────────
 
 // Mutually exclusive with cursor pagination: enabling one drops the other.
-function setLinkEnabled(bridge, enabled) {
+function setLinkEnabled(bridge: PopupBridge, enabled: boolean): void {
   log('API_LINK toggle', enabled);
   patchDraft(bridge, enabled
     ? { linkHeaderPagination: createDefaultLinkDraft(), cursorPagination: null }
     : { linkHeaderPagination: null });
 }
 
-function setMaxPages(bridge, value) {
+function setMaxPages(bridge: PopupBridge, value: string): void {
   const parsed = parseInt(value, 10);
   patchDraft(bridge, { linkHeaderPagination: { maxPages: Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_PAGES } });
 }
 
 // ── Event wiring ────────────────────────────────────────────────────────────
 
-function wireApiLinkPaginationEvents(bridge) {
-  const section = document.getElementById('api-link-section');
+export function wireApiLinkPaginationEvents(bridge: PopupBridge): void {
+  const section = byIdOrNull('api-link-section');
   if (!section) return;
   section.addEventListener('change', (e) => {
-    const target = /** @type {HTMLInputElement} */ (e.target);
+    const target = e.target as HTMLInputElement;
     if (target.id === 'toggle-api-link') setLinkEnabled(bridge, target.checked);
     else if (target.id === 'input-api-link-max-pages') setMaxPages(bridge, target.value);
   });
 }
-
-module.exports = { renderApiLinkPaginationSection, wireApiLinkPaginationEvents };
-

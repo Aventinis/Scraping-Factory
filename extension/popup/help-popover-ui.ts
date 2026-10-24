@@ -18,33 +18,35 @@
 //
 // Where the panel goes: after the host's closest `[data-help-anchor]`, else
 // its closest <label>, else the host itself.
-const { t } = require('../i18n/i18n');
-const { getHelpEntry, isValidHelpKey, nextOpenHelpId } = require('./help-popover');
-const { resolveDocTarget } = require('./docs-links');
-const { learnMoreHtml } = require('./docs-links-ui');
+import { t } from '../i18n/i18n';
+import { getHelpEntry, isValidHelpKey, nextOpenHelpId } from './help-popover';
+import type { HelpEntry } from './help-popover';
+import { resolveDocTarget } from './docs-links';
+import { learnMoreHtml } from './docs-links-ui';
+import { byIdOrNull, qsa, qsOrNull } from './dom';
 
 let nextUid = 0;
 let wired = false;
 
-function panelFor(button) {
+function panelFor(button: Element): HTMLElement | null {
   const id = button.getAttribute('aria-controls');
-  return id ? document.getElementById(id) : null;
+  return id ? byIdOrNull(id) : null;
 }
 
-function openButton() {
-  return /** @type {HTMLElement | null} */ (document.querySelector('.help-btn[aria-expanded="true"]'));
+function openButton(): HTMLElement | null {
+  return qsOrNull('.help-btn[aria-expanded="true"]');
 }
 
-function setOpen(button, open) {
+function setOpen(button: Element, open: boolean): void {
   button.setAttribute('aria-expanded', String(open));
   panelFor(button)?.classList.toggle('hidden', !open);
 }
 
-function closeAll() {
-  document.querySelectorAll('.help-btn[aria-expanded="true"]').forEach((b) => setOpen(b, false));
+function closeAll(): void {
+  qsa('.help-btn[aria-expanded="true"]').forEach((b) => setOpen(b, false));
 }
 
-function fillPanel(panel, entry, key) {
+function fillPanel(panel: Element, entry: HelpEntry | null, key: string): void {
   const text = panel.querySelector('.help-popover-text');
   const example = panel.querySelector('.help-popover-example');
   if (text) text.textContent = entry ? entry.text : key;
@@ -54,7 +56,7 @@ function fillPanel(panel, entry, key) {
   }
 }
 
-function buildHost(host, key) {
+function buildHost(host: HTMLElement): { button: HTMLButtonElement; panel: HTMLElement } {
   const uid = String(++nextUid);
   host.dataset.helpUid = uid;
   const panelId = `help-popover-${uid}`;
@@ -91,18 +93,14 @@ function buildHost(host, key) {
   return { button, panel };
 }
 
-/**
- * Builds (once) and translates every help host under `root`.
- * @param {ParentNode} [root]
- */
-function initHelpPopovers(root = document) {
-  root.querySelectorAll('[data-help]').forEach((el) => {
-    const host = /** @type {HTMLElement} */ (el);
+/** Builds (once) and translates every help host under `root`. */
+export function initHelpPopovers(root: ParentNode = document): void {
+  qsa('[data-help]', root).forEach((host) => {
     const key = host.dataset.help || '';
     if (!isValidHelpKey(key)) return;
-    let button = /** @type {HTMLElement | null} */ (host.querySelector('.help-btn'));
+    let button: HTMLElement | null = qsOrNull('.help-btn', host);
     let panel = button ? panelFor(button) : null;
-    if (!button || !panel) ({ button, panel } = buildHost(host, key));
+    if (!button || !panel) ({ button, panel } = buildHost(host));
     const label = t('common.helpBtn');
     button.setAttribute('aria-label', label);
     button.title = label;
@@ -113,12 +111,12 @@ function initHelpPopovers(root = document) {
 
 // Delegated on document so DOM added later (modals, re-rendered rows)
 // works without per-element listeners; wired once.
-function wireHelpPopoverEvents() {
+export function wireHelpPopoverEvents(): void {
   if (wired) return;
   wired = true;
 
   document.addEventListener('click', (e) => {
-    const target = /** @type {Element} */ (e.target);
+    const target = e.target as Element;
     const button = target.closest && target.closest('.help-btn');
     if (button) {
       e.preventDefault();
@@ -141,6 +139,3 @@ function wireHelpPopoverEvents() {
     e.stopPropagation();
   });
 }
-
-module.exports = { initHelpPopovers, wireHelpPopoverEvents };
-
