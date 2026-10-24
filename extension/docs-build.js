@@ -9,6 +9,8 @@
 //
 // Plain files only (an MV3 page may not run inline script). A link to a missing page, anchor or image fails the build; a link that leaves
 // docs/user/ is rendered as plain text (not part of the bundle).
+/** @typedef {typeof import('marked', { with: { 'resolution-mode': 'import' } }).Marked} MarkedClass */
+
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
@@ -22,6 +24,7 @@ const PAGE_ORDER = [
 
 // GitHub's heading-to-anchor rule: lower-case, drop punctuation except
 // hyphens, spaces become hyphens.
+/** @param {string} heading */
 function slugify(heading) {
   return heading
     .toLowerCase()
@@ -31,18 +34,26 @@ function slugify(heading) {
     .replace(/\s/g, '-');
 }
 
-/** The pages of `docsDir` in navigation order: [{ name, file }]. */
+/**
+ * The pages of `docsDir` in navigation order.
+ * @param {string} docsDir
+ * @returns {Array<{ name: string, file: string }>}
+ */
 function listDocPages(docsDir) {
   const names = fs.readdirSync(docsDir).filter((f) => f.endsWith('.md')).map((f) => f.slice(0, -3));
+  /** @param {string} n */
   const rank = (n) => (PAGE_ORDER.includes(n) ? PAGE_ORDER.indexOf(n) : PAGE_ORDER.length);
   names.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
   return names.map((name) => ({ name, file: path.join(docsDir, `${name}.md`) }));
 }
 
-/** Every heading anchor of a markdown source, in order, with GitHub's "-1" suffix for repeats. */
+/**
+ * Every heading anchor of a markdown source, in order, with GitHub's "-1" suffix for repeats.
+ * @param {string} markdown
+ */
 function anchorListOf(markdown) {
-  const seen = new Map();
-  const anchors = [];
+  const seen = /** @type {Map<string, number>} */ (new Map());
+  const anchors = /** @type {string[]} */ ([]);
   let inFence = false;
   for (const line of markdown.split('\n')) {
     if (line.startsWith('```')) inFence = !inFence;
@@ -56,14 +67,20 @@ function anchorListOf(markdown) {
   return anchors;
 }
 
-/** Every heading anchor of a markdown source (a Set; see anchorListOf for the order). */
+/**
+ * Every heading anchor of a markdown source (a Set; see anchorListOf for the order).
+ * @param {string} markdown
+ */
 function anchorsOf(markdown) {
   return new Set(anchorListOf(markdown));
 }
 
-/** The heading levels in order, e.g. [1, 2, 2, 3]: what an English page and its translation must share. */
+/**
+ * The heading levels in order, e.g. [1, 2, 2, 3]: what an English page and its translation must share.
+ * @param {string} markdown
+ */
 function headingStructureOf(markdown) {
-  const levels = [];
+  const levels = /** @type {number[]} */ ([]);
   let inFence = false;
   for (const line of markdown.split('\n')) {
     if (line.startsWith('```')) inFence = !inFence;
@@ -75,18 +92,28 @@ function headingStructureOf(markdown) {
 
 const SOURCE_MARKER = /^<!--\s*source:\s*([0-9a-f]{12})\s*-->\s*\n?/;
 
-/** A short hash of an English page, stamped into its German translation to see when it went stale. */
+/**
+ * A short hash of an English page, stamped into its German translation to see when it went stale.
+ * @param {string} englishMarkdown
+ */
 function sourceHash(englishMarkdown) {
   return crypto.createHash('sha256').update(englishMarkdown.replace(/\r\n/g, '\n')).digest('hex').slice(0, 12);
 }
 
-/** The hash stamped at the top of a German page, or null. */
+/**
+ * The hash stamped at the top of a German page, or null.
+ * @param {string} germanMarkdown
+ */
 function stampedHash(germanMarkdown) {
   const m = germanMarkdown.match(SOURCE_MARKER);
   return m ? m[1] : null;
 }
 
-/** Writes (or replaces) the source marker of a German page for its current English source. */
+/**
+ * Writes (or replaces) the source marker of a German page for its current English source.
+ * @param {string} docsDir
+ * @param {string} name
+ */
 function stampTranslation(docsDir, name) {
   const en = fs.readFileSync(path.join(docsDir, `${name}.md`), 'utf8');
   const dePath = path.join(docsDir, 'de', `${name}.md`);
@@ -99,10 +126,11 @@ function stampTranslation(docsDir, name) {
  * translation (`missing`), a translation whose source changed since it was stamped
  * (`stale`) or that carries no stamp (`unstamped`), and one whose heading structure
  * differs (`structure`, which breaks the anchor mapping).
+ * @param {string} docsDir
  * @returns {{ missing: string[], stale: string[], unstamped: string[], structure: string[] }}
  */
 function translationStatus(docsDir) {
-  const result = { missing: [], stale: [], unstamped: [], structure: [] };
+  const result = { missing: /** @type {string[]} */ ([]), stale: /** @type {string[]} */ ([]), unstamped: /** @type {string[]} */ ([]), structure: /** @type {string[]} */ ([]) };
   for (const { name, file } of listDocPages(docsDir)) {
     const dePath = path.join(docsDir, 'de', `${name}.md`);
     if (!fs.existsSync(dePath)) { result.missing.push(name); continue; }
@@ -116,8 +144,14 @@ function translationStatus(docsDir) {
   return result;
 }
 
+// Not popup/dom.ts's escapeHtml: this script runs under plain Node, which cannot load a .ts file.
+/** @param {unknown} s */
 const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+/**
+ * @param {string} markdown
+ * @param {string} fallback
+ */
 function titleOf(markdown, fallback) {
   const m = markdown.replace(SOURCE_MARKER, '').match(/^#\s+(.+)$/m);
   return m ? m[1].replace(/[`*_]/g, '') : fallback;
@@ -128,6 +162,9 @@ const UI = {
   de: { lang: 'de', nav: 'Dokumentation', switchLabel: 'English', switchTitle: 'This page in English' },
 };
 
+/**
+ * @param {{ title: string, body: string, pages: Array<{ name: string, title: string }>, current: string, lang: 'en' | 'de', otherLanguageHref: string | null }} options
+ */
 function pageHtml({ title, body, pages, current, lang, otherLanguageHref }) {
   const ui = UI[lang];
   const nav = pages.map((p) =>
@@ -161,16 +198,23 @@ ${body}
 
 // Parses every page of one language tree and returns it with the problems found
 // (a link to a missing page/anchor/image). `langDir` holds the .md files, its `images/` the pictures.
+/**
+ * @param {MarkedClass} Marked
+ * @param {string} langDir
+ * @param {string[]} problems
+ * @param {string} label
+ * @param {{ dir: string, prefix: string }} twin
+ */
 function parseTree(Marked, langDir, problems, label, twin) {
   const pages = listDocPages(langDir).map((p) => {
     const markdown = fs.readFileSync(p.file, 'utf8');
-    return { ...p, markdown, title: titleOf(markdown, p.name), anchors: anchorsOf(markdown) };
+    return { ...p, markdown, title: titleOf(markdown, p.name), anchors: anchorsOf(markdown), body: '' };
   });
   const byName = new Map(pages.map((p) => [p.name, p]));
   const imagesDir = path.join(langDir, 'images');
 
   for (const page of pages) {
-    const seen = new Map();
+    const seen = /** @type {Map<string, number>} */ (new Map());
     const where = `${label}${page.name}.md`;
     const marked = new Marked();
     marked.use({
@@ -229,19 +273,24 @@ function parseTree(Marked, langDir, problems, label, twin) {
 
 // marked ships as an ES module only, hence the dynamic import (works on every Node
 // the build supports, and from this CommonJS file).
+/**
+ * @param {{ docsDir: string, outdir: string }} options
+ * @returns {Promise<Array<{ name: string, title: string, german: boolean }>>}
+ */
 async function buildDocs({ docsDir: docsDirArg, outdir }) {
+  /** @type {MarkedClass} */
   let Marked;
   try {
     ({ Marked } = await import('marked'));
   } catch (err) {
-    if (err && err.code === 'ERR_MODULE_NOT_FOUND') {
+    if (err && /** @type {NodeJS.ErrnoException} */ (err).code === 'ERR_MODULE_NOT_FOUND') {
       throw new Error('The documentation build needs the "marked" package, which is not installed. Run `npm install` in extension/ and build again.');
     }
     throw err;
   }
   const docsDir = path.resolve(docsDirArg);
   const deDir = path.join(docsDir, 'de');
-  const problems = [];
+  const problems = /** @type {string[]} */ ([]);
 
   const en = parseTree(Marked, docsDir, problems, 'docs/user/', { dir: deDir, prefix: 'de/' });
   const de = fs.existsSync(deDir) ? parseTree(Marked, deDir, problems, 'docs/user/de/', { dir: docsDir, prefix: '../' }) : { pages: [], imagesDir: null };
@@ -269,7 +318,7 @@ async function buildDocs({ docsDir: docsDirArg, outdir }) {
   if (de.imagesDir && fs.existsSync(de.imagesDir)) fs.cpSync(de.imagesDir, path.join(out, 'de', 'images'), { recursive: true });
 
   // English anchor → German anchor, by heading position, for every page whose structure matches.
-  const anchors = { de: {} };
+  const anchors = { de: /** @type {Record<string, Record<string, string>>} */ ({}) };
   for (const page of de.pages) {
     const source = enByName.get(page.name);
     if (!source) continue;

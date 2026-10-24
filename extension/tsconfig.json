@@ -4,17 +4,18 @@
     "lib": ["ES2022", "DOM"],
     "module": "Node16",
     "moduleResolution": "Node16",
+    // Every extension source is TypeScript under `strict`. The only JavaScript that is checked are the Node-side scripts listed in
+    // `include`: they run under plain Node without a build step (they are the build), so they stay .js and carry JSDoc types.
+    // The *.test.js files are deliberately not part of the project (Issue #478).
     "allowJs": true,
-    // TypeScript sources are type-checked in full under `strict`. A remaining .js file is only checked when it carries a leading
-    // "// @ts-check" pragma (Issue #238); the migration to .ts proceeds file by file (Issue #394).
+    "checkJs": true,
     "strict": true,
-    "checkJs": false,
     "noEmit": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "types": ["node", "chrome"]
   },
-  "include": ["**/*.js", "**/*.ts"],
+  "include": ["**/*.ts", "build.js", "docs-build.js", "jest-transform.js"],
   "exclude": ["node_modules", "e2e", "dist"]
 }
