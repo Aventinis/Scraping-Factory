@@ -1,32 +1,46 @@
 // ── Toast notifications + last-error tracking ──────────────────────────────
 // Extracted from popup.js (docs/design-notes/extension.md, "Popup module boundaries"). setLastError lives here, not in
-// bug-report.js, because showToast calls it whenever a toast carries a `context`; bug-report.js only reads it via
+// bug-report.ts, because showToast calls it whenever a toast carries a `context`; bug-report.ts only reads it via
 // getLastError().
-const { t } = require('../i18n/i18n');
-const { containerCountAdvice } = require('./choice-guidance');
+import { t } from '../i18n/i18n';
+import { containerCountAdvice } from './choice-guidance';
 
-let lastReportedError = null; // { message, context, ts } — feeds the next bug report
+export type ToastVariant = 'info' | 'warn';
 
-function getLastError() {
+export interface ErrorToastContent {
+  title: string;
+  hint: string;
+  details: string;
+}
+
+export interface LastError {
+  message: string;
+  context: string;
+  ts: string;
+}
+
+let lastReportedError: LastError | null = null; // feeds the next bug report
+
+export function getLastError(): LastError | null {
   return lastReportedError;
 }
 
-function setLastError(message, context) {
+export function setLastError(message: string, context: string): void {
   lastReportedError = { message, context, ts: new Date().toISOString() };
 }
 
-let hideTimer = null;
+let hideTimer: ReturnType<typeof setTimeout> | null = null;
 
-function scheduleHide(toast, delayMs) {
+function scheduleHide(toast: HTMLElement | null, delayMs: number | null): void {
   if (hideTimer) clearTimeout(hideTimer);
-  hideTimer = delayMs === null ? null : setTimeout(() => toast.classList.add('hidden'), delayMs);
+  hideTimer = delayMs === null ? null : setTimeout(() => toast?.classList.add('hidden'), delayMs);
 }
 
 // Back to the plain message-only shape a non-error-toast caller expects: the
 // Issue #401 parts (hint, details, close button) only exist for showErrorToast.
-function resetErrorToastParts() {
+function resetErrorToastParts(): void {
   document.getElementById('error-toast-hint')?.classList.add('hidden');
-  const details = document.getElementById('error-toast-details');
+  const details = document.getElementById('error-toast-details') as HTMLDetailsElement | null;
   if (details) { details.classList.add('hidden'); details.open = false; }
   document.getElementById('btn-toast-close')?.classList.add('hidden');
 }
@@ -37,7 +51,7 @@ function resetErrorToastParts() {
 // `variant` ('info' | 'warn') is Issue #85's own non-error use of this same
 // toast (container-group match-count feedback, see showMatchCountToast) —
 // omitted, it's the original red error styling, unchanged.
-function showToast(message, context, variant) {
+export function showToast(message: string, context?: string | null, variant?: ToastVariant): void {
   const toast = document.getElementById('error-toast');
   if (!toast) return;
 
@@ -63,7 +77,7 @@ function showToast(message, context, variant) {
 // bug" sends. Such a toast stays until closed: "Details" is useless on a toast
 // that disappears after eight seconds. `context` null = no "Report bug" (a
 // configuration problem, not a defect), as for showToast.
-function showErrorToast({ title, hint, details }, context) {
+export function showErrorToast({ title, hint, details }: ErrorToastContent, context?: string | null): void {
   const toast = document.getElementById('error-toast');
   if (!toast) return;
 
@@ -71,7 +85,7 @@ function showErrorToast({ title, hint, details }, context) {
   if (msgEl) msgEl.textContent = title;
   const hintEl = document.getElementById('error-toast-hint');
   if (hintEl) { hintEl.textContent = hint; hintEl.classList.toggle('hidden', !hint); }
-  const detailsEl = /** @type {HTMLDetailsElement | null} */ (document.getElementById('error-toast-details'));
+  const detailsEl = document.getElementById('error-toast-details') as HTMLDetailsElement | null;
   if (detailsEl) {
     const textEl = document.getElementById('error-toast-details-text');
     if (textEl) textEl.textContent = details;
@@ -89,7 +103,7 @@ function showErrorToast({ title, hint, details }, context) {
   scheduleHide(toast, null);
 }
 
-function hideToast() {
+export function hideToast(): void {
   const toast = document.getElementById('error-toast');
   if (toast) toast.classList.add('hidden');
   scheduleHide(toast, null);
@@ -97,10 +111,10 @@ function hideToast() {
 
 // Wired once from popup.js's wireEvents(): the close and copy buttons of the
 // plain-language error toast.
-function wireErrorToastEvents() {
+export function wireErrorToastEvents(): void {
   document.getElementById('btn-toast-close')?.addEventListener('click', hideToast);
   document.getElementById('btn-toast-copy-details')?.addEventListener('click', async (e) => {
-    const button = /** @type {HTMLElement} */ (e.currentTarget);
+    const button = e.currentTarget as HTMLElement;
     const text = document.getElementById('error-toast-details-text')?.textContent || '';
     try {
       await navigator.clipboard.writeText(text);
@@ -128,7 +142,7 @@ function wireErrorToastEvents() {
 // one match for a "repeating" one) the toast says so instead of just counting,
 // since the type is asked before the element is picked and so can't show the
 // count next to the choice. Omitted → the plain count, as before.
-function showMatchCountToast(containerName, matchCount, repeating) {
+export function showMatchCountToast(containerName: string, matchCount: number | null, repeating?: boolean | null): void {
   if (matchCount === null) return;
   const advice = containerCountAdvice(matchCount, repeating);
   if (advice === 'singleMany') {
@@ -141,6 +155,3 @@ function showMatchCountToast(containerName, matchCount, repeating) {
   }
   showToast(t('toast.containerAdded', { name: containerName, count: matchCount }), null, matchCount === 0 ? 'warn' : 'info');
 }
-
-module.exports = { showToast, showErrorToast, hideToast, wireErrorToastEvents, showMatchCountToast, getLastError, setLastError };
-

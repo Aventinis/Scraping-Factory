@@ -1112,7 +1112,7 @@ function renderBlocksOutput(blocksOutput) {
 }
 
 // Passed to every api-config-ui.js/container-tree-ui.js/dom-tree-ui.js/
-// preview.js/companion-client.js/saved-configs-ui.js handler, instead of
+// preview.ts/companion-client.js/saved-configs-ui.js handler, instead of
 // those functions closing over this file's own module-level state — see
 // api-config-ui.js's own doc comment for why. Declared at module scope
 // (not just inside wireEvents()) so popup.js's own top-level functions

@@ -263,7 +263,7 @@ function computePreviewMatches(mode, fields, groups) {
 // Resolves the one field/container row the user is hovering in the side
 // panel to its element(s) on the live page. `steps` is the selector chain
 // from the root down to the hovered row ([{selector, all}], built by
-// popup/hover-highlight.js), applied with exactly matchGroupTree's own
+// popup/hover-highlight.ts), applied with exactly matchGroupTree's own
 // semantics: each step is resolved inside every scope the previous step
 // produced, `all: true` (a repeating group, or a flat field) keeping every
 // match and `all: false` (a non-repeating group, or a container field) only

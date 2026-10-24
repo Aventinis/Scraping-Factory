@@ -12,12 +12,25 @@
 // feature (previewActive/#btn-preview), which highlights matched elements
 // on the live page and has nothing to do with the generated script's
 // actual trial-run output.
-const { createLogger } = require('../shared/logger');
+import type * as SFDraft from '../types/drafts';
+import { createLogger } from '../shared/logger';
+import { serializeGroupTree } from './container-tree';
+
 const log = createLogger('SF:Popup');
 
-const { serializeGroupTree } = require('./container-tree');
+export interface PreviewState {
+  mode: string;
+  groups: SFDraft.ContainerNode[];
+  fields: SFDraft.Field[];
+  previewActive: boolean;
+}
 
-function startPreview(bridge) {
+export interface PreviewBridge {
+  getState(): PreviewState;
+  patchState(patch: { previewActive: boolean; previewSummary: null }): void;
+}
+
+export function startPreview(bridge: PreviewBridge): void {
   const state = bridge.getState();
   const hasConfig = state.mode === 'container' ? state.groups.length > 0 : state.fields.length > 0;
   if (!hasConfig) return;
@@ -30,22 +43,19 @@ function startPreview(bridge) {
   bridge.patchState({ previewActive: true, previewSummary: null });
 }
 
-function stopPreview(bridge) {
+export function stopPreview(bridge: PreviewBridge): void {
   log('PREVIEW_STOP');
   chrome.runtime.sendMessage({ type: 'PREVIEW_STOP' });
   bridge.patchState({ previewActive: false, previewSummary: null });
 }
 
-function togglePreview(bridge) {
+export function togglePreview(bridge: PreviewBridge): void {
   if (bridge.getState().previewActive) stopPreview(bridge); else startPreview(bridge);
 }
 
 // Called wherever the Fields/Groups configuration changes or a new selection
 // starts — an active preview would otherwise keep showing highlights for a
 // configuration that no longer matches the current state.
-function stopPreviewIfActive(bridge) {
+export function stopPreviewIfActive(bridge: PreviewBridge): void {
   if (bridge.getState().previewActive) stopPreview(bridge);
 }
-
-module.exports = {startPreview, stopPreview, togglePreview, stopPreviewIfActive};
-

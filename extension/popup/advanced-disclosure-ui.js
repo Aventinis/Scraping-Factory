@@ -1,5 +1,5 @@
 // Issue #396: DOM side of the "Advanced" disclosure (logic and storage in
-// advanced-disclosure.js). Declared in HTML as
+// advanced-disclosure.ts). Declared in HTML as
 //
 //   <details class="advanced-disclosure" data-advanced="request-headers">
 //     <summary data-i18n="common.advanced"></summary>
