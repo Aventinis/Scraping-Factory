@@ -304,7 +304,7 @@ describe('hover message throttling (message-listener wiring)', () => {
 // ── Scoped selection (Container-Mode) ────────────────────────────────────────
 // START_SELECTION carries an optional scopeSelector when adding a nested
 // container/field — only descendants of the first element matching that
-// selector should be pickable (see content-script.js startSelection/onClick).
+// selector should be pickable (see content-script.ts startSelection/onClick).
 
 describe('scoped selection (START_SELECTION with scopeSelector)', () => {
   let capturedListener;
@@ -334,7 +334,7 @@ describe('scoped selection (START_SELECTION with scopeSelector)', () => {
   });
 
   // ELEMENT_SELECTED now goes out after an async resolveFramePath() call
-  // (Issue #42 — see content-script.js) even though it resolves
+  // (Issue #42 — see content-script.ts) even though it resolves
   // synchronously-in-effect here (jsdom has no real nested window, so
   // window === window.top and resolveFramePath() is Promise.resolve([]));
   // `await null` flushes that one microtask before asserting.
@@ -1031,7 +1031,7 @@ describe('findApiCandidates', () => {
   });
 
   // Issue #54, Phase A5: popup.ts runs in a different execution context and
-  // has no access to content-script.js's own functions (deriveApiTreeSkeleton
+  // has no access to content-script.ts's own functions (deriveApiTreeSkeleton
   // included) — so, like itemsPath/valuePath above, the full tree skeleton is
   // pre-derived here and attached to the candidate message.
   test('attaches the derived treeSkeleton (Issue #54 Phase A5) so the popup does not need its own deriveApiTreeSkeleton', () => {
@@ -1479,7 +1479,7 @@ describe('PREVIEW_START / PREVIEW_STOP (message-listener wiring)', () => {
 
 // ── API-Mode capture bridge (message-listener wiring) ────────────────────────
 // api-capture.ts (MAIN world) talks to this isolated-world script via
-// window.postMessage in both directions — see content-script.js's bridge.
+// window.postMessage in both directions — see content-script.ts's bridge.
 //
 // Note: window.addEventListener('message', ...) is registered unconditionally
 // at module load (same as the existing 'error'/'unhandledrejection'

@@ -136,7 +136,7 @@ export interface ApiConfigDraft {
 export type ApiConfigBuildInput = Omit<ApiConfigDraft, 'parameterSources'> & { parameterSources: Record<string, SFWire.ApiParameterSource> };
 
 /**
- * The message content-script.js sends back after a click-based search. It is a
+ * The message content-script.ts sends back after a click-based search. It is a
  * cross-context shape this module only reads, so only the parts
  * buildApiSubtreeFromCandidate uses are declared.
  */
@@ -431,7 +431,7 @@ export function buildApiHeaders(capturedHeaders: Array<{ name: string; value: st
 // companion/ScrapingFactory.Compiler/IR/ApiConfig.cs expects it (method
 // omitted — GET is the only supported value and also the backend default).
 // `itemsPath`/`fields` are the confirmed candidate's own flat shape (derived
-// once via content-script.js's deriveItemsAndValuePath when the candidate
+// once via content-script.ts's deriveItemsAndValuePath when the candidate
 // was confirmed, not re-derived here) — this function only assembles, it
 // doesn't re-derive anything from a JSON body.
 //
@@ -801,10 +801,10 @@ export function lastPathSegmentName(path: string | null | undefined): string | n
 // sub-field" search (skipSegments === the target group's own tree depth,
 // since that many of candidate.treeSkeleton's leading segments are already
 // represented by existing ancestor groups, see resolveApiGroupScopePath's
-// doc comment). candidate.treeSkeleton is content-script.js's
+// doc comment). candidate.treeSkeleton is content-script.ts's
 // deriveApiTreeSkeleton output, pre-computed and attached to the candidate
 // message (findApiCandidates) — popup.ts runs in a different execution
-// context and has no access to content-script.js's own functions, the same
+// context and has no access to content-script.ts's own functions, the same
 // reason candidate.itemsPath/valuePath are pre-derived there too. Auto-names
 // intermediate groups (see lastPathSegmentName); siblings are always direct
 // properties of the same matched record, so (exactly like flat mode before
@@ -814,7 +814,7 @@ export function lastPathSegmentName(path: string | null | undefined): string | n
 // scope (the "sibling field" case), possibly several nested levels wrapped
 // in one outer node otherwise.
 // Issue #147: candidate.value (the leaf) and each picked sibling's own
-// .value (from candidate.siblings, see content-script.js's siblingFields)
+// .value (from candidate.siblings, see content-script.ts's siblingFields)
 // are carried onto the new field drafts as sampleValue — the raw JSON
 // value the transform-chain modal's live preview runs against later.
 export function buildApiSubtreeFromCandidate(
@@ -837,7 +837,7 @@ export function buildApiSubtreeFromCandidate(
 // to an existing ApiGroup at tree `path` — every ancestor's own (relative,
 // index-free) path segment gets its first-instance index appended, the same
 // "first instance is the template" assumption Container-Mode's own
-// scopeSelector already relies on (see content-script.js's
+// scopeSelector already relies on (see content-script.ts's
 // pathStartsWithScope). E.g. tree path [0, 1] under {path:'categories'} →
 // {path:'subcategories'} resolves to "categories[0].subcategories[0]".
 export function resolveApiGroupScopePath(groups: ApiNodeDraft[], path: number[]): string {

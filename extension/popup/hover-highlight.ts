@@ -1,7 +1,7 @@
 // Hovering a row in the flat fields list or container tree highlights that row's element(s) on the live page: the reverse of the DOM inspector's
 // HOVER_ELEMENT, and a single-row counterpart to the full "Show preview" (preview.ts). No toggle: active whenever the list is visible.
 //
-// The pure builders turn a flat field / a container path into the HOVER_HIGHLIGHT payload that content-script.js's matchHoverHighlight resolves:
+// The pure builders turn a flat field / a container path into the HOVER_HIGHLIGHT payload that content-script.ts's matchHoverHighlight resolves:
 // the selector chain from the root to the row, each step flagged `all` as matchGroupTree treats it (repeating group or flat field: every match;
 // non-repeating group or container field: the first per scope). wireHoverHighlight attaches the delegated listeners; it needs no popup state,
 // so unlike most popup modules it takes no `bridge`, callers pass a resolver.

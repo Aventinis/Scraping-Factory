@@ -1,7 +1,7 @@
 // ── Preview mode ─────────────────────────────────────────────────────────────
 // Extracted from popup.ts (docs/design-notes/extension.md, "Popup module boundaries"). Sends the current Fields/Groups to the content
 // script so it can match them against the live DOM and highlight the
-// results directly on the page — see content-script.js's
+// results directly on the page — see content-script.ts's
 // computePreviewMatches/startPreview for the matching semantics (mirrors
 // the backend codegen exactly). Takes a `bridge` object (same convention as
 // api-config-ui.ts/container-tree-ui.js/dom-tree-ui.js) instead of closing
