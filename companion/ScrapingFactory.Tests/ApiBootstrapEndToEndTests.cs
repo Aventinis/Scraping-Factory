@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Net;
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
@@ -171,7 +170,7 @@ public class ApiBootstrapEndToEndTests
             Bootstrap = JsonBootstrap(server.BaseUrl),
         };
 
-        var (exitCode, stdout, stderr, output) = await RunScriptAsync(GenerateScript(api, OutputFormat.Xml), PasswordEnv, "output.xml");
+        var (exitCode, stdout, stderr, output) = await ScriptRunner.RunScriptTextAsync(GenerateScript(api, OutputFormat.Xml), PasswordEnv, "output.xml");
 
         Assert.True(exitCode == 0, stderr);
         Assert.Contains("milch-2", output);
@@ -186,7 +185,7 @@ public class ApiBootstrapEndToEndTests
         using var server = TokenProtectedServer();
         var api = FlatApi(server.BaseUrl, JsonBootstrap(server.BaseUrl), $"{server.BaseUrl}items/{{category}}", BearerHeader);
 
-        var (exitCode, _, stderr, _) = await RunScriptAsync(
+        var (exitCode, _, stderr, _) = await ScriptRunner.RunScriptTextAsync(
             GenerateScript(api), new Dictionary<string, string> { ["SF_TEST_API_PASSWORD"] = "wrong" }, "output.csv");
 
         Assert.Equal(6, exitCode);
@@ -206,7 +205,7 @@ public class ApiBootstrapEndToEndTests
             ValuePath = "data.nope",
         }, $"{server.BaseUrl}items/{{category}}", BearerHeader);
 
-        var (exitCode, _, stderr, _) = await RunScriptAsync(GenerateScript(api), PasswordEnv, "output.csv");
+        var (exitCode, _, stderr, _) = await ScriptRunner.RunScriptTextAsync(GenerateScript(api), PasswordEnv, "output.csv");
 
         Assert.Equal(6, exitCode);
         Assert.Contains("no value found at JSON path 'data.nope'", stderr);
@@ -218,57 +217,11 @@ public class ApiBootstrapEndToEndTests
         using var server = TokenProtectedServer();
         var api = FlatApi(server.BaseUrl, JsonBootstrap(server.BaseUrl, "SF_TEST_API_PASSWORD_UNSET_220"), $"{server.BaseUrl}items/{{category}}", BearerHeader);
 
-        var (exitCode, _, stderr, _) = await RunScriptAsync(GenerateScript(api), new Dictionary<string, string>(), "output.csv");
+        var (exitCode, _, stderr, _) = await ScriptRunner.RunScriptTextAsync(GenerateScript(api), new Dictionary<string, string>(), "output.csv");
 
         Assert.Equal(78, exitCode);
         Assert.Contains("SF_TEST_API_PASSWORD_UNSET_220", stderr);
         Assert.DoesNotContain("Traceback", stderr);
     }
 
-    private static async Task<(int ExitCode, string Stdout, string Stderr, string Output)> RunScriptAsync(
-        string script, IReadOnlyDictionary<string, string> env, string outputFileName)
-    {
-        var workDir = Directory.CreateTempSubdirectory("scrapingfactory-bootstrap-").FullName;
-        try
-        {
-            var scriptPath = Path.Combine(workDir, "scraper.py");
-            await File.WriteAllTextAsync(scriptPath, script);
-            foreach (var candidate in new[] { "python3", "python" })
-            {
-                var psi = new ProcessStartInfo
-                {
-                    FileName = candidate,
-                    WorkingDirectory = workDir,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                };
-                psi.ArgumentList.Add(scriptPath);
-                foreach (var (name, value) in env)
-                    psi.Environment[name] = value;
-                try
-                {
-                    using var process = new Process { StartInfo = psi };
-                    process.Start();
-                    var stderrTask = process.StandardError.ReadToEndAsync();
-                    var stdoutTask = process.StandardOutput.ReadToEndAsync();
-                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                    await process.WaitForExitAsync(cts.Token);
-                    var outputPath = Path.Combine(workDir, outputFileName);
-                    var output = File.Exists(outputPath) ? await File.ReadAllTextAsync(outputPath) : "";
-                    return (process.ExitCode, await stdoutTask, await stderrTask, output);
-                }
-                catch (System.ComponentModel.Win32Exception)
-                {
-                    // executable not found — try the next candidate
-                }
-            }
-            throw new InvalidOperationException("No python3/python executable found.");
-        }
-        finally
-        {
-            Directory.Delete(workDir, recursive: true);
-        }
-    }
 }
