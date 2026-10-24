@@ -197,7 +197,8 @@ export interface Block {
 
 export interface OutputBlueprintTreeNode {
   name: string;
-  children?: OutputBlueprintTreeNode[];
+  /** Absent or null for a leaf (the companion serializes a leaf's children as null). */
+  children?: OutputBlueprintTreeNode[] | null;
 }
 
 // The blueprint editor's own tree (output-blueprints.ts): a group has children, a field is a leaf; no selector / mode / repeating.
