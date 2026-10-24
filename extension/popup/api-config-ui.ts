@@ -227,7 +227,6 @@ export function renderApiConfigModals(bridge: PopupBridge): void {
 
   if (state.apiFieldTransformModalOpen) {
     byIdOrNull('modal-api-field-transforms')?.classList.remove('hidden');
-    // @ts-expect-error field-transforms-ui.js (not converted yet) infers the getter as `() => null` from its default; this line errs once it is typed.
     renderTransformList('api-field-transform-list', state.pendingTransforms, () => bridge.getState().pendingRawText);
     // Issue #147: live preview against the node's own sampleValue, threaded
     // through as pendingRawText by openApiFieldTransformsModal — reuses the

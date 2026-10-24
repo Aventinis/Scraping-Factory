@@ -9,22 +9,21 @@
 // pattern" writes a pattern + group into the transform (like typing it by hand) —
 // so the transform objects (sent to the companion as they are) never carry helper
 // state, and typing in the panel doesn't re-render the list and steal the focus.
-const { t } = require('../i18n/i18n');
-const { helpHostHtml } = require('./help-popover');
-const { RECIPES, buildRecipe, previewRecipe, inferDateFormat } = require('./transform-helpers');
+import { t } from '../i18n/i18n';
+import { helpHostHtml } from './help-popover';
+import { RECIPES, buildRecipe, previewRecipe, inferDateFormat } from './transform-helpers';
+import type { Recipe } from './transform-helpers';
+import { escapeHtml } from './dom';
 
 const PANEL_CLASS = 'transform-helper-panel';
 
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+/** Returns the picked value the transform chain runs on, or null when there is none (read lazily: the modal may change it). */
+export type RawValueGetter = () => string | null;
 
 // ── Regex rows ──────────────────────────────────────────────────────────────
 
 /** The "Pattern helper" button and the "?" popover, appended to a Regex extract row. */
-function appendRegexHelperControls(li) {
+export function appendRegexHelperControls(li: HTMLElement): void {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'btn-secondary btn-tiny btn-transform-helper-toggle';
@@ -34,30 +33,30 @@ function appendRegexHelperControls(li) {
   li.insertAdjacentHTML('beforeend', helpHostHtml('help.transforms.regex'));
 }
 
-function recipeOptionsHtml() {
+function recipeOptionsHtml(): string {
   return `<option value="">${escapeHtml(t('transforms.helper.recipePlaceholder'))}</option>` +
     RECIPES.map((recipe) => `<option value="${recipe.id}">${escapeHtml(t(`transforms.helper.recipe.${recipe.id}`))}</option>`).join('');
 }
 
-function argsHtml(recipeId) {
+function argsHtml(recipeId: string): string {
   const recipe = RECIPES.find((r) => r.id === recipeId);
   if (!recipe) return '';
   if (recipe.choice) {
     return `<select class="transform-recipe-arg" aria-label="${escapeHtml(t('transforms.helper.bracketsLabel'))}">` +
       recipe.choice.map((open, i) => {
-        const close = { '(': ')', '[': ']', '{': '}', '<': '>' }[open];
+        const close = ({ '(': ')', '[': ']', '{': '}', '<': '>' } as Record<string, string>)[open];
         return `<option value="${escapeHtml(open)}"${i === 0 ? ' selected' : ''}>${escapeHtml(open)} ${escapeHtml(close)}</option>`;
       }).join('') + '</select>';
   }
-  const placeholders = {
+  const placeholders = ({
     textAfter: ['transforms.helper.afterPlaceholder'],
     textBefore: ['transforms.helper.beforePlaceholder'],
     textBetween: ['transforms.helper.betweenStartPlaceholder', 'transforms.helper.betweenEndPlaceholder'],
-  }[recipeId] || [];
+  } as Record<string, string[]>)[recipeId] || [];
   return placeholders.map((key) => `<input type="text" class="transform-recipe-arg" placeholder="${escapeHtml(t(key))}" autocomplete="off" />`).join('');
 }
 
-function panelHtml() {
+function panelHtml(): string {
   return `
     <select class="transform-recipe-select">${recipeOptionsHtml()}</select>
     <span class="transform-recipe-args"></span>
@@ -69,16 +68,16 @@ function panelHtml() {
 }
 
 /** What the panel currently describes: { recipe, args } read from its own DOM. */
-function readPanel(panel) {
-  const id = /** @type {HTMLSelectElement} */ (panel.querySelector('.transform-recipe-select')).value;
-  const args = Array.from(panel.querySelectorAll('.transform-recipe-arg')).map((el) => /** @type {HTMLInputElement} */ (el).value);
+function readPanel(panel: Element): { id: string; recipe: Recipe | null } {
+  const id = (panel.querySelector('.transform-recipe-select') as HTMLSelectElement).value;
+  const args = Array.from(panel.querySelectorAll<HTMLInputElement>('.transform-recipe-arg')).map((el) => el.value);
   return { id, recipe: id ? buildRecipe(id, args) : null };
 }
 
-function refreshPanelPreview(panel, getRawValue) {
+function refreshPanelPreview(panel: Element, getRawValue: RawValueGetter): void {
   const { id, recipe } = readPanel(panel);
-  const previewEl = panel.querySelector('.transform-recipe-preview');
-  const useBtn = /** @type {HTMLButtonElement} */ (panel.querySelector('.btn-transform-recipe-use'));
+  const previewEl = panel.querySelector('.transform-recipe-preview') as HTMLElement;
+  const useBtn = panel.querySelector('.btn-transform-recipe-use') as HTMLButtonElement;
   useBtn.disabled = !recipe;
   if (!id) { previewEl.classList.add('hidden'); return; }
   previewEl.classList.remove('hidden');
@@ -96,16 +95,16 @@ function refreshPanelPreview(panel, getRawValue) {
 }
 
 /** Opens (or closes) the helper panel under a Regex extract row. */
-function toggleRecipePanel(rowEl, getRawValue) {
+function toggleRecipePanel(rowEl: HTMLElement, getRawValue: RawValueGetter): void {
   const existing = rowEl.nextElementSibling;
   if (existing && existing.classList.contains(PANEL_CLASS)) { existing.remove(); return; }
   const panel = document.createElement('li');
   panel.className = PANEL_CLASS;
-  panel.dataset.index = rowEl.dataset.index;
+  panel.dataset.index = rowEl.dataset.index as string;
   panel.innerHTML = panelHtml();
   rowEl.insertAdjacentElement('afterend', panel);
   refreshPanelPreview(panel, getRawValue);
-  /** @type {HTMLElement} */ (panel.querySelector('.transform-recipe-select')).focus();
+  (panel.querySelector('.transform-recipe-select') as HTMLElement).focus();
 }
 
 /**
@@ -113,26 +112,26 @@ function toggleRecipePanel(rowEl, getRawValue) {
  * list's re-renders). `applyPattern(index, { pattern, group })` writes into the
  * transform.
  */
-function wireRecipePanels(root, getRawValue, applyPattern) {
+export function wireRecipePanels(root: HTMLElement, getRawValue: RawValueGetter, applyPattern: (index: number, recipe: Recipe) => void): void {
   root.addEventListener('click', (e) => {
-    const target = /** @type {Element} */ (e.target);
+    const target = e.target as Element;
     const toggle = target.closest('.btn-transform-helper-toggle');
-    if (toggle) { toggleRecipePanel(toggle.closest('.transform-row'), getRawValue); return; }
+    if (toggle) { toggleRecipePanel(toggle.closest('.transform-row') as HTMLElement, getRawValue); return; }
     const panel = target.closest(`.${PANEL_CLASS}`);
     if (!panel) return;
     if (target.closest('.btn-transform-recipe-cancel')) { panel.remove(); return; }
     if (target.closest('.btn-transform-recipe-use')) {
       const { recipe } = readPanel(panel);
-      if (recipe) applyPattern(parseInt(/** @type {HTMLElement} */ (panel).dataset.index, 10), recipe);
+      if (recipe) applyPattern(parseInt((panel as HTMLElement).dataset.index as string, 10), recipe);
     }
   });
-  const onPanelEdit = (e) => {
-    const target = /** @type {Element} */ (e.target);
+  const onPanelEdit = (e: Event) => {
+    const target = e.target as Element;
     const panel = target.closest && target.closest(`.${PANEL_CLASS}`);
     if (!panel) return;
     if (target.classList.contains('transform-recipe-select')) {
-      panel.querySelector('.transform-recipe-args').innerHTML = argsHtml(/** @type {HTMLSelectElement} */ (target).value);
-      const firstArg = /** @type {HTMLElement | null} */ (panel.querySelector('.transform-recipe-arg'));
+      (panel.querySelector('.transform-recipe-args') as HTMLElement).innerHTML = argsHtml((target as HTMLSelectElement).value);
+      const firstArg = panel.querySelector<HTMLElement>('.transform-recipe-arg');
       if (firstArg) firstArg.focus();
     }
     refreshPanelPreview(panel, getRawValue);
@@ -144,7 +143,7 @@ function wireRecipePanels(root, getRawValue, applyPattern) {
 // ── Date rows ───────────────────────────────────────────────────────────────
 
 /** The "?" popover next to the format input and the hint line below the row. */
-function appendDateHelper(li, transform, getRawValue) {
+export function appendDateHelper(li: HTMLElement, transform: { sourceFormat?: string | null }, getRawValue: RawValueGetter): void {
   li.setAttribute('data-help-anchor', '');
   li.insertAdjacentHTML('beforeend', helpHostHtml('help.transforms.dateFormat'));
   const raw = getRawValue();
@@ -167,11 +166,8 @@ function appendDateHelper(li, transform, getRawValue) {
 /**
  * Selecting "Convert to date" pre-selects the format guessed from the picked
  * value; when there is no guess the default stays.
- * @returns {{ sourceFormat: string } | null}
  */
-function dateFormatPatchFor(rawValue) {
+export function dateFormatPatchFor(rawValue: string | null | undefined): { sourceFormat: string } | null {
   const guess = inferDateFormat(rawValue);
   return guess ? { sourceFormat: guess.format } : null;
 }
-
-module.exports = { appendRegexHelperControls, wireRecipePanels, appendDateHelper, dateFormatPatchFor };
