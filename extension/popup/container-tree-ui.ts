@@ -302,7 +302,7 @@ export function cancelExtendedField(bridge: PopupBridge): void {
 // wireContainerModeEvents' select-field-mode change handler) and attribute
 // mode passes null until an attribute name has actually been typed, so the
 // hint doesn't show a misleading result before then. Issue #169: "ownText"
-// mode reads pendingOwnText, computed at click time by content-script.js's
+// mode reads pendingOwnText, computed at click time by content-script.ts's
 // collectOwnText — no DOM input to wait on, unlike attribute mode's
 // attribute-name field.
 function resolveExtendedRawValue(state: State): string | null {

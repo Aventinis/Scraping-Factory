@@ -315,7 +315,7 @@ body {
 
 /* Frame-path indicator (Issue #42, Phase 7) — flags a field/node/action
    whose selector was picked inside an iframe (see FramePath on the wire
-   format); the amber tone matches content-script.js's own in-page
+   format); the amber tone matches content-script.ts's own in-page
    overlay/badge color for the same concept. */
 .frame-badge {
   flex: none; font-size: 10px; padding: 1px 6px; border-radius: var(--radius-pill);

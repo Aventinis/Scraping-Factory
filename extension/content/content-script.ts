@@ -462,7 +462,7 @@ function findApiCandidates(entries: SFDraft.ApiCaptureEntry[], targetText: unkno
 
       // itemsPath/valuePath (Issue #53 Phase 5) and treeSkeleton (Issue #54
       // Phase A5) are derived once here so the popup — which only ever sees
-      // this message's plain data, never content-script.js's own functions
+      // this message's plain data, never content-script.ts's own functions
       // (a different execution context entirely; see popup/api-config.ts's
       // own buildApiSubtreeFromCandidate) — doesn't need its own copy of
       // deriveItemsAndValuePath/deriveApiTreeSkeleton to know whether/how a

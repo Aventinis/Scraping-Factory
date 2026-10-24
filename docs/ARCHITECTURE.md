@@ -35,7 +35,7 @@ flowchart LR
     subgraph Browser["Browser"]
         direction TB
         subgraph Page["Inspected page (per-frame)"]
-            CS["content-script.js\n(ISOLATED world)"]
+            CS["content-script.ts\n(ISOLATED world)"]
             AC["api-capture.ts\n(MAIN world)"]
             CS <-- window.postMessage --> AC
         end
@@ -73,7 +73,7 @@ outer-request rejection means the matching `Endpoints/` file.
 
 | Context | File(s) | Runs where | Can reach |
 |---|---|---|---|
-| Content script (isolated world) | `extension/content/content-script.js` | Once per frame of the inspected page (`all_frames: true`) | The page's DOM (but not its JS globals); `chrome.runtime` |
+| Content script (isolated world) | `extension/content/content-script.ts` | Once per frame of the inspected page (`all_frames: true`) | The page's DOM (but not its JS globals); `chrome.runtime` |
 | Network recorder (MAIN world) | `extension/content/api-capture.ts` | Once per frame, injected at `document_start`, before the page's own scripts run | The page's real `window.fetch`/`XMLHttpRequest` (needed to patch them); **not** `chrome.runtime` |
 | Background service worker | `extension/background/service-worker.ts` | Once per browser session | `chrome.tabs`, relays messages; has no page/DOM access itself |
 | Side panel UI | `extension/popup/popup.html` + its scripts | Once per open panel | `chrome.runtime`, `chrome.storage`, `fetch` to the companion |
@@ -262,7 +262,7 @@ Click an element on the page → get a CSS selector → name it → repeat → g
 CSV-producing script.
 
 - Extension: `popup/popup.ts` (`_state.fields`, `addField`/`removeField`,
-  `renderFields`, `confirmField`), `content/content-script.js` (`buildSelector`,
+  `renderFields`, `confirmField`), `content/content-script.ts` (`buildSelector`,
   `startSelection`/`onClick`)
 - Companion: `IR/ScrapingConfig.cs` (`ScrapingField`), `IR/ScrapingStep.cs`
   (`ExtractStep`), `IR/ScrapingPlanBuilder.cs`, `Backends/Python/PythonCodeGenerator.cs`,
@@ -281,7 +281,7 @@ column model.
 
 - Extension: `popup/container-tree.js` (pure tree helpers), `popup/container-tree-ui.ts`
   (tree editor UI, modals), `popup/popup.ts` (`_state.groups`, `_state.mode ===
-  'container'`), `content/content-script.js` (`scopeSelector`/`scopeRoot` support
+  'container'`), `content/content-script.ts` (`scopeSelector`/`scopeRoot` support
   in `startSelection`/`buildSelector`, `matchGroupTree` for the DOM preview)
 - Companion: `IR/ContainerNode.cs` (`GroupNode`/`DataFieldNode`),
   `IR/ContainerNodeJsonConverter.cs`, `IR/ScrapingStep.cs` (`ExtractGroupStep`),
@@ -304,7 +304,7 @@ combination, without ever touching the HTML.
 - Extension: `popup/api-config.ts` (URL decomposition, value-source builders,
   `buildApiConfig`), `popup/api-config-ui.ts` (API_CONFIG screen rendering +
   handlers, recording UI), `content/api-capture.ts` (MAIN-world fetch/XHR patch),
-  `content/content-script.js` (`findApiCandidates`, `deriveItemsAndValuePath`,
+  `content/content-script.ts` (`findApiCandidates`, `deriveItemsAndValuePath`,
   robots.txt-adjacent JSON-path helpers)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig`, `ApiParameter`, `ApiParameterSource`
   variants, `ApiHeader`), `IR/ScrapingStep.cs` (`ApiCallStep`),
@@ -324,7 +324,7 @@ the same reason Container mode's tree output is XML.
 
 - Extension: `popup/api-config.ts` (`ApiGroup`/`ApiField` draft
   build/insert/remove/serialize), `popup/api-response-tree-ui.ts` (`renderApiTree`,
-  `buildApiTreeNodeEl`, sub-group/sub-field search flows), `content/content-script.js`
+  `buildApiTreeNodeEl`, sub-group/sub-field search flows), `content/content-script.ts`
   (`deriveApiTreeSkeleton`, `resolveApiGroupScopePath`-adjacent `pathStartsWithScope`)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig.Groups`, `ApiNode`/`ApiGroup`/`ApiField`),
   `IR/ApiNodeJsonConverter.cs`, `ScrapingPlanValidator.cs` (`ValidateApiNodes`),
@@ -369,7 +369,7 @@ companion fetches the page via `requests` and extracts the identified
 `ItemsPath`/`Fields`/`Groups` extraction is otherwise identical to an ordinary
 API-mode request (fetch-mechanism-agnostic by design).
 
-- Extension: `content/content-script.js` (`findEmbeddedJsonCandidates`,
+- Extension: `content/content-script.ts` (`findEmbeddedJsonCandidates`,
   `scriptTagSelector`), `popup/api-capture-ui.ts`
   (`startEmbeddedJsonFieldSearch`, `confirmEmbeddedJsonFieldCandidate`,
   `renderApiCandidates`'s `candidate.scriptSelector` branch), `popup/api-config.ts`
@@ -474,7 +474,7 @@ reached. GET only; flat and tree shapes. The recorder keeps only a
 `hasNextLink` boolean per entry, so the API_CONFIG screen can suggest the
 option.
 
-- Extension: `content/api-capture.ts` (`hasNextLinkRel`), `content/content-script.js`
+- Extension: `content/api-capture.ts` (`hasNextLinkRel`), `content/content-script.ts`
   (`hasNextLink` on candidates), `popup/api-link-pagination.js` (pure),
   `popup/api-link-pagination-ui.ts`, `popup/api-config.ts`,
   `popup/screens/api-config.html` (`#api-link-section`)
@@ -501,7 +501,7 @@ extraction runs, with no dedicated login-specific UI.
 - Extension: `popup/popup.ts` (`_state.engine`, `_state.browserActions`,
   `addBrowserAction`/`updateBrowserAction`/`serializeBrowserActions`,
   `renderBrowserActions`, `_state.fillTestValues`/`buildVerificationValues`),
-  `content/content-script.js` (cross-frame path resolution: `resolveFramePath`,
+  `content/content-script.ts` (cross-frame path resolution: `resolveFramePath`,
   `handleFramePathMessage`, `findIframeSelectorForWindow`, `frameDepth`)
 - Companion: `IR/BrowserAction.cs`, `IR/ScrapingStep.cs`
   (`WaitForStep`/`FillStep`/`ClickStep`/`ScrollStep`), `IR/FillVerificationValues.cs`,
@@ -561,10 +561,10 @@ reads the same data, so changing only one side fails. The shared data lives in `
 | --- | --- | --- | --- |
 | File-name cleanup | `sanitizeFileNameBase` (`scraping-config-builder.ts`) | `IR/FileNameSanitizer.cs` | `file-name-sanitizer.json` — `scraping-config-builder.test.js`, `FileNameSanitizerTests.cs` |
 | Transform previews | `applyTransformsPreview` (`field-transforms.ts`) | `fragments/transforms.py.j2` `_apply_transforms` | `transforms.json` — `transform-vectors.test.js`, `TransformVectorTests.cs` (real helper, imported from a generated script) |
-| robots.txt matching | `evaluateRobotsTxt` (`content-script.js`) | `fragments/robots_disallow.py.j2` | `robots.json` — `robots-vectors.test.js`, `RobotsVectorTests.cs` |
+| robots.txt matching | `evaluateRobotsTxt` (`content-script.ts`) | `fragments/robots_disallow.py.j2` | `robots.json` — `robots-vectors.test.js`, `RobotsVectorTests.cs` |
 | Range formats | `compileRangeFormatPattern` (`api-config.ts`) | `Backends/Python/RangeFormat.cs`, `fragments/api_common.py.j2` | `range-format.json`, `range-expansion.json` — `range-format-vectors.test.js`, `RangeFormatVectorTests.cs` |
 | URL-template matching | `findUrlTemplateMatches` (`api-config.ts`) | `_match_url_against_template` (`fragments/api_common.py.j2`) | `url-template.json` — `url-template-vectors.test.js`, `UrlTemplateVectorTests.cs` |
-| `:contains("…")` split | `selector-text-filter.ts`, `content-script.js` | `IR/SelectorTextFilter.cs`, `fragments/text_selector_common.py.j2` | `text-selector.json` — both JS tests, `SelectorTextFilterTests.cs` |
+| `:contains("…")` split | `selector-text-filter.ts`, `content-script.ts` | `IR/SelectorTextFilter.cs`, `fragments/text_selector_common.py.j2` | `text-selector.json` — both JS tests, `SelectorTextFilterTests.cs` |
 | Environment-variable names | `env-var.ts` | `ScrapingPlanValidator` | `env-var-name.json` — `env-var.test.js`, `EnvVarNameVectorTests.cs` |
 | The request body | `buildScrapingConfig` and the draft builders | `IR/ScrapingConfig.cs` and `/generate` | `test-vectors/wire/*.json` — `wire-fixtures.test.js` writes/verifies, `WireFixtureTests.cs` deserializes strictly and calls `/generate` |
 | TypeScript wire types | `types/wire.ts` | `IR/*.cs` | `IrTypeDeclarationTests.cs` (reflection: property names, required-ness, enum unions) |
@@ -621,7 +621,7 @@ disallowed for generic crawlers according to the target site's own robots.txt �
 shown directly in the popup so the user can make an informed decision before
 scraping a site, without having to go look the file up themselves.
 
-- Extension: `content/content-script.js` (`parseRobotsTxt`, `evaluateRobotsTxt`,
+- Extension: `content/content-script.ts` (`parseRobotsTxt`, `evaluateRobotsTxt`,
   `checkRobotsTxt`), `background/service-worker.ts` (`CHECK_ROBOTS_TXT` relay),
   `popup/popup.ts` (`checkRobotsTxt`, the idle-screen result rendering)
 - No companion involvement — entirely client-side.
@@ -759,7 +759,7 @@ Each element pick carries a `pickId`; the service worker's fallback write stores
 pick it handled, and a restore ignores a stored selector of an already handled pick, so a late write can
 no longer reopen a field dialog after a reload. No wire-format or companion change. See docs/design-notes/extension.md.
 
-- Extension: `content/content-script.js` (`pickId`), `background/service-worker.ts` (`pendingPickId`),
+- Extension: `content/content-script.ts` (`pickId`), `background/service-worker.ts` (`pendingPickId`),
   `popup/message-router.ts` + `popup/session-restore.ts` (`markPickHandled`, `isLeftoverOfHandledPick`)
 - Tests: `popup/session-restore.test.js`, `background/service-worker.test.js`, `content/content-script.test.js`,
   `popup/popup.test.js`, real-browser check `e2e/examples/issue-429-pending-selector-race-check.js`
@@ -808,7 +808,7 @@ companion change. See docs/design-notes/extension.md for the details.
   `popup/api-cursor-pagination-ui.ts`/`api-bootstrap-ui.ts`/`api-response-tree-ui.ts`
   (buttons and panels), `popup/advanced-disclosure-ui.ts` (`autoOpenAdvanced`),
   `popup/screens/api-config.html`/`modals.html`, `jsonPathPicker.*`/`help.api*` in `i18n/*.json`;
-  `content/content-script.js` (`readEmbeddedJson`) + `background/service-worker.ts`
+  `content/content-script.ts` (`readEmbeddedJson`) + `background/service-worker.ts`
   (`GET_EMBEDDED_JSON`)
 - Tests: `popup/json-path-picker.test.js`, `json-path-picker-ui.test.js`,
   `api-config-guidance.test.js`, real-browser checks `e2e/examples/issue-404-*.js`
@@ -906,7 +906,7 @@ reproduce it live or describe it from memory.
 - Extension: `shared/logger.ts` (ring buffer, one instance per JS context),
   `popup/popup.ts` (`collectLogs`, `buildBugReport`, `buildGithubIssueUrl`,
   `downloadBugReport`, `reportBug`), `background/service-worker.ts`/
-  `content/content-script.js` (`GET_LOGS` responders)
+  `content/content-script.ts` (`GET_LOGS` responders)
 
 ### 2.13 DOM tree view & selection-preview highlighting
 
@@ -920,7 +920,7 @@ scraped values after a real `/generate` trial run, not live DOM matches.
 
 - Extension: `popup/popup.ts` (`requestDomTree`, `renderDomTree`,
   `highlightHover`/`highlightSelected`, `startPreview`/`stopPreview`/`togglePreview`),
-  `content/content-script.js` (`serializeDomTree`, `computePreviewMatches`,
+  `content/content-script.ts` (`serializeDomTree`, `computePreviewMatches`,
   `matchFlatFields`/`matchGroupTree`, the preview-overlay drawing functions)
 - Single-row hover highlight (Issue #233): hovering one flat field row or
   container tree row highlights just that row's element(s) on the page, in
@@ -928,7 +928,7 @@ scraped values after a real `/generate` trial run, not live DOM matches.
   `buildGroupNodeHighlight`, `wireHoverHighlight`, wired from
   `flat-mode-ui.ts`/`container-tree-ui.ts`), `HOVER_HIGHLIGHT`/
   `HOVER_HIGHLIGHT_CLEAR` in `background/service-worker.ts`'s
-  `FORWARD_TO_TAB`, `content/content-script.js` (`matchHoverHighlight`,
+  `FORWARD_TO_TAB`, `content/content-script.ts` (`matchHoverHighlight`,
   `showHoverHighlight`/`clearHoverHighlight`, the shared `createHighlightBox`)
 
 ### 2.14 Configuration export ("Konfiguration exportieren")
@@ -1024,7 +1024,7 @@ the frame the click happened in, so the generated Playwright script can reach th
 same element later via chained frame locators. Static-engine scripts have no
 concept of frames at all, so this only applies to the Browser engine (§2.6).
 
-- Extension: `content/content-script.js` (the whole "Cross-frame path resolution"
+- Extension: `content/content-script.ts` (the whole "Cross-frame path resolution"
   section — `resolveFramePath`, `handleFramePathMessage`, `findIframeSelectorForWindow`),
   `popup/popup.ts` (`frameBadgeHtml`, `pendingFramePath` threading through every
   confirm handler)
@@ -1040,7 +1040,7 @@ picked, instead of only surfacing much later via a full `/generate` round-trip
 and trial run (§2.7). Purely client-side — the content script already has the
 live DOM in front of it, so it can just ask it directly.
 
-- Extension: `content/content-script.js` (`countSelectorMatches`, called from
+- Extension: `content/content-script.ts` (`countSelectorMatches`, called from
   `onClick` alongside `buildSelector`; result travels as `matchCount` on the
   `ELEMENT_SELECTED` message), `background/service-worker.ts`
   (`pendingMatchCount` in the same session-storage fallback as
@@ -1080,7 +1080,7 @@ shapes (flat/container/API) since none of them share a common leaf type.
   `modal-field-name`/`modal-field-extended` shows what the chain actually
   produces against the picked element's real raw value, updating live as
   steps are added/edited/reordered/removed — entirely client-side, no
-  `/generate` round trip. `content-script.js`'s `onClick` collects the
+  `/generate` round trip. `content-script.ts`'s `onClick` collects the
   clicked element's trimmed text and full attribute map
   (`collectElementAttributes`), sent as `rawText`/`attributes` on the same
   `ELEMENT_SELECTED` message the selector/matchCount already travel on;
@@ -1109,7 +1109,7 @@ shapes (flat/container/API) since none of them share a common leaf type.
   `buildApiFieldDraft` (`api-config.ts`) gained an optional `sampleValue`
   (the raw JSON scalar the field/sibling resolved to — `candidate.value` for
   the primary field, or the matching entry's own `.value` in
-  `candidate.siblings` for a picked sibling, see `content-script.js`'s
+  `candidate.siblings` for a picked sibling, see `content-script.ts`'s
   `siblingFields`) — popup-internal only, never sent to the companion.
   `openApiFieldTransformsModal` converts it into `pendingRawText` the same
   way the Python runtime resolves a value before applying transforms (`""`
@@ -1626,7 +1626,7 @@ part of a selector, at most once, quoted with `'` or `"` (escapes `\"`, `\'`,
 `\\`), non-empty; not allowed in FramePath segments or
 `EmbeddedJsonSource.ScriptSelector`. Three mirrored implementations share test
 vectors: C# `SelectorTextFilter` (validation only), the Python runtime
-fragments, and JS (`content-script.js`, `popup/selector-text-filter.js`).
+fragments, and JS (`content-script.ts`, `popup/selector-text-filter.js`).
 
 - IR: `IR/SelectorTextFilter.cs`, called from `ScrapingPlanValidator` for every
   selector-bearing step/field/pagination/discovery/browser-discovery action
@@ -1638,7 +1638,7 @@ fragments, and JS (`content-script.js`, `popup/selector-text-filter.js`).
   (patches `query_selector(_all)` and `locator` → `.filter(has_text=...)`)
 - Templates now escape selectors with `string.escape` when rendering them into
   Python string literals
-- Extension: `content-script.js` (`querySelectorAllWithText`,
+- Extension: `content-script.ts` (`querySelectorAllWithText`,
   `COUNT_PICK_WITH_TEXT`), `popup/selector-text-filter.js` +
   `selector-text-filter-ui.ts`, text filter row in `modal-field-name` /
   `modal-field-extended`, live match count
@@ -2358,7 +2358,7 @@ compile time anywhere.
 | Container tree node | `container-tree.ts`: `buildGroupNode`/`buildFieldNode`, `serializeGroupTree` | `{name,selector,repeating,children:[...],framePath?}` or `{name,selector,mode,attribute?,framePath?}` | `IR/ContainerNode.cs`: `GroupNode`/`DataFieldNode` (via `ContainerNodeJsonConverter`) |
 | API config (top level) | `api-config.ts`: `buildApiConfig()` | `{urlTemplate, method?, parameters:[...], headers?, itemsPath+fields \| groups, body?, embeddedJsonSource?, bootstrap?}` | `IR/ApiConfig.cs`: `ApiConfig` |
 | API parameter source | `api-config.ts`: `buildStaticListSource`/`buildDiscoverySource`/`buildRangeSource` | `{kind:"staticList"\|"discovery"\|"range", ...}` | `IR/ApiConfig.cs`: `ApiParameterSource` (`[JsonPolymorphic]`) |
-| API embedded JSON source (Issue #136) | `api-capture-ui.ts`: `confirmEmbeddedJsonFieldCandidate()` (`{scriptSelector}`, stamped from `content-script.js`'s `scriptTagSelector`) | `{scriptSelector}` | `IR/ApiConfig.cs`: `EmbeddedJsonSource` (plain optional object, no converter) |
+| API embedded JSON source (Issue #136) | `api-capture-ui.ts`: `confirmEmbeddedJsonFieldCandidate()` (`{scriptSelector}`, stamped from `content-script.ts`'s `scriptTagSelector`) | `{scriptSelector}` | `IR/ApiConfig.cs`: `EmbeddedJsonSource` (plain optional object, no converter) |
 | API token/auth bootstrap (Issue #220) | `api-bootstrap.ts`: `buildApiBootstrap()` (draft `{name,method,url,valuePath,bodyEncoding,headers,bodyFields}`) | `{name, method?, url, headers?, bodyFields?, bodyEncoding?, valuePath}` | `IR/ApiConfig.cs`: `ApiBootstrap` (plain optional object, no converter) |
 | API cursor/token pagination (Issue #224) | `api-cursor-pagination.ts`: `buildApiCursorPagination()` (draft `{nextCursorPath,hasNextPagePath,target,queryParameterName,bodyPath,maxPages}`) | `{nextCursorPath, hasNextPagePath?, target: 'Query'\|'Body', queryParameterName?, bodyPath?, maxPages}` | `IR/ApiConfig.cs`: `ApiCursorPagination` (plain optional object, no converter) |
 | API response tree node | `api-config.ts`: `buildApiGroupDraft`/`buildApiFieldDraft`, `serializeApiTree` | `{name,path,children:[...]}` or `{name,path}` | `IR/ApiConfig.cs`: `ApiGroup`/`ApiField` (via `ApiNodeJsonConverter`) |
@@ -2391,7 +2391,7 @@ sequenceDiagram
     actor User
     participant Popup as popup.ts
     participant SW as service-worker.ts
-    participant CS as content-script.js
+    participant CS as content-script.ts
     participant Comp as Companion (/generate)
     participant Py as python3 subprocess
 

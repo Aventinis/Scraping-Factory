@@ -1,6 +1,6 @@
-// Injected in the MAIN world (unlike the isolated content-script.js) to patch window.fetch / XMLHttpRequest before the page's scripts
+// Injected in the MAIN world (unlike the isolated content-script.ts) to patch window.fetch / XMLHttpRequest before the page's scripts
 // call them (manifest: world "MAIN", document_start). MAIN-world scripts have no chrome.runtime, so everything goes through
-// window.postMessage to content-script.js.
+// window.postMessage to content-script.ts.
 //
 // Records fetch / XHR request-response pairs (and each request's headers, for the header-adoption step) while recording is active, so
 // a clicked value can later be searched in their JSON bodies.

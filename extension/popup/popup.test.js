@@ -500,7 +500,7 @@ describe('moveGroupTreeNode', () => {
 
 // ── hasRepeatingAncestor ─────────────────────────────────────────────────────
 // Determines whether a new node's selector will be re-evaluated once per
-// repeating instance — see content-script.js's avoidId (an id-based
+// repeating instance — see content-script.ts's avoidId (an id-based
 // selector would then only ever match one of the N instances).
 
 describe('hasRepeatingAncestor', () => {
@@ -1238,7 +1238,7 @@ describe('buildApiSubtreeFromCandidate (Phase A5)', () => {
 
   // Issue #147: the leaf field's own sampleValue comes from candidate.value;
   // each picked sibling's sampleValue is looked up by name in
-  // candidate.siblings (content-script.js's siblingFields shape).
+  // candidate.siblings (content-script.ts's siblingFields shape).
   test('the leaf field and picked siblings carry their own sampleValue from the candidate', () => {
     const oneLevel = {
       path: 'data.items[0].name', value: 'Smartphone X',
@@ -2696,7 +2696,7 @@ describe('SELECTION_UNAVAILABLE handling', () => {
   });
 
   // Issue #137 follow-up: a scope selector that's retried and still not
-  // found (content-script.js's retryScopeSelector, tagged unavailableKind)
+  // found (content-script.ts's retryScopeSelector, tagged unavailableKind)
   // can have entirely page-specific causes outside the extension's control
   // (confirmed via a real report: a class only present while the element is
   // actually hovered) — shown as a warning, not a hard error, and without
@@ -6129,7 +6129,7 @@ describe('API-mode field transforms (Issue #84 follow-up)', () => {
 // ── API-mode follow-up: recorded-endpoints panel + pool-derived value-list ──
 // autofill. Both features read the recorded pool via a new pull-based
 // GET_API_CAPTURE_ENTRIES round trip (mirrors GET_LOGS/CHECK_ROBOTS_TXT) —
-// content-script.js itself is out of scope here (covered in its own test
+// content-script.ts itself is out of scope here (covered in its own test
 // file), so chrome.runtime.sendMessage is mocked directly to stand in for
 // that round trip.
 

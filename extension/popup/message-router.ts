@@ -52,7 +52,7 @@ export function wireMessageListener(bridge: PopupBridge): void {
       // cleanup below; recording the pick as handled makes such a leftover harmless.
       markPickHandled(message.pickId);
       if (state.apiSearchTarget) {
-        // API-mode search: content-script.js always sends this too (same
+        // API-mode search: content-script.ts always sends this too (same
         // click), but the actual result arrives as a separate API_CANDIDATES
         // message right after — handled below, nothing to do with the plain
         // selector here.
