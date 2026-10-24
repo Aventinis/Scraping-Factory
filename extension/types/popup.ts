@@ -6,6 +6,7 @@ import type { ApiConfigDraft } from '../popup/api-config';
 import type { CombinedComponentRef } from '../popup/combined-config';
 import type { ApiCandidate, RobotsTxtResult } from './messages';
 import type { showToast } from '../popup/toast';
+import type { CaptureEntryLike, PathTreeResult } from '../popup/json-path-picker';
 
 export type Screen =
   | 'CHECKING_COMPANION' | 'COMPANION_ERROR' | 'IDLE' | 'SELECTING' | 'API_CONFIG' | 'GENERATING' | 'DONE' | 'SETTINGS';
@@ -16,6 +17,25 @@ export type SelectionKind = 'field' | 'container' | 'browserAction' | 'paginatio
 
 // Which property of a browser action the picked selector is written into.
 export type BrowserActionField = 'selector' | 'containerSelector' | 'loadMoreButtonSelector';
+
+// The path inputs that offer a "Pick from the recording" panel (popup/json-path-picker-ui.ts).
+export type PathPickerField = 'group' | 'cursor.nextCursorPath' | 'cursor.hasNextPagePath' | 'cursor.bodyPath' | 'bootstrap.valuePath';
+
+// What the one open picker shows: loading, a list of recorded responses to choose from, a message (an i18n key suffix), or the tree.
+export type PathPickerOutcome =
+  | { status: 'loading' }
+  | { status: 'chooser'; choices: CaptureEntryLike[] }
+  | { status: 'message'; message: string }
+  | { status: 'tree'; tree: PathTreeResult };
+
+export type ApiPathPickerState = {
+  field: PathPickerField;
+  /** Identifies this opening, so a slow load cannot overwrite a newer picker. */
+  token: number;
+  sourceLabel?: string;
+  /** The other recorded responses the user can switch to. */
+  choices?: CaptureEntryLike[];
+} & PathPickerOutcome;
 
 export type OutputFileContent = { fileName: string; content: string };
 
@@ -131,7 +151,7 @@ export interface State {
   /** Which discovery source's URL template is open for editing; absent from the initial state. */
   discoveryTemplateEditingPartId?: string | null;
   apiTreeSearchResult: (ApiCandidatesResult & { treeParentPath: number[] | null }) | null;
-  apiPathPicker: unknown;
+  apiPathPicker: ApiPathPickerState | null;
   apiGroupModalOpen: boolean;
   pendingApiTreeParentPath: number[] | null;
   bodyParameterModalOpen: boolean;

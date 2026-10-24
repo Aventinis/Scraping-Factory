@@ -1,23 +1,34 @@
 // API mode: the URL parts and parameter-source cards of the API_CONFIG screen: fixed / variable parts, value lists, discovery endpoints,
 // ranges, and the browser-discovery source (api-browser-discovery-ui.ts). See api-config-ui.ts for the `bridge` convention.
-const { createLogger } = require('../shared/logger');
-const log = createLogger('SF:ApiConfigUI');
-const { t } = require('../i18n/i18n');
-const {
+import type * as SFWire from '../types/wire';
+import type { PopupBridge, State } from '../types/popup';
+import type { ApiCandidate } from '../types/messages';
+import { createLogger } from '../shared/logger';
+import { t } from '../i18n/i18n';
+import {
   STATES, escapeHtml, findUrlTemplateMatches, mergeValueListValues, buildDiscoverySource, RANGE_FORMAT_PRESETS, detectRangeFormat, findUrlPartValue, rangeFormatExample, allParameterParts, earlierParameterNames,
-} = require('./api-config');
+} from './api-config';
+import type { ApiConfigDraft, ApiParameterSourceDraft, ParameterPart, SourceOf, UrlParts } from './api-config';
 // Issue #220: a variable URL part can take the bootstrap value as its
 // source, and a captured header can be built from it ("Bearer {token}").
-const { BOOTSTRAP_SOURCE_KIND } = require('./api-bootstrap');
-const { helpHostHtml } = require('./help-popover');
-const { createAdvancedDisclosure } = require('./advanced-disclosure-ui');
-const { renderParameterPlaceholderPicker, patchApiConfigDraft, patchApiConfigSource, insertParameterPlaceholder } = require('./api-config-shared-ui');
-const { fetchApiCaptureEntries } = require('./api-capture-ui');
-const { renderBrowserDiscoverySourceFields, handleBrowserDiscoveryChange, handleBrowserDiscoveryClick } = require('./api-browser-discovery-ui');
+import { BOOTSTRAP_SOURCE_KIND } from './api-bootstrap';
+import { helpHostHtml } from './help-popover';
+import { createAdvancedDisclosure } from './advanced-disclosure-ui';
+import { renderParameterPlaceholderPicker, patchApiConfigDraft, patchApiConfigSource, insertParameterPlaceholder } from './api-config-shared-ui';
+import { fetchApiCaptureEntries } from './api-capture-ui';
+import { renderBrowserDiscoverySourceFields, handleBrowserDiscoveryChange, handleBrowserDiscoveryClick } from './api-browser-discovery-ui';
+import { byIdOrNull } from './dom';
+
+const log = createLogger('SF:ApiConfigUI');
+
+type SourceKind = ApiParameterSourceDraft['kind'];
+
+// These handlers only run on the API_CONFIG screen, where the draft exists.
+const currentDraft = (bridge: PopupBridge): ApiConfigDraft => bridge.getState().apiConfigDraft as ApiConfigDraft;
 
 // `id` ("path:<index>" or "query:<key>") embeds the query key, which came from the recorded page and is untrusted: escapeHtml, never raw
 // interpolation.
-function urlPartRowHtml(id, valueLabel, variable, name) {
+function urlPartRowHtml(id: string, valueLabel: string, variable: boolean, name: string | undefined): string {
   const safeId = escapeHtml(id);
   return (
     `<span class="api-config-part-value" title="${escapeHtml(valueLabel)}">${escapeHtml(valueLabel)}</span>` +
@@ -26,8 +37,8 @@ function urlPartRowHtml(id, valueLabel, variable, name) {
   );
 }
 
-function renderApiConfigUrlParts(urlParts) {
-  const segEl = document.getElementById('api-config-segments');
+export function renderApiConfigUrlParts(urlParts: UrlParts): void {
+  const segEl = byIdOrNull('api-config-segments');
   if (segEl) {
     segEl.innerHTML = '';
     urlParts.pathSegments.forEach((seg, i) => {
@@ -38,7 +49,7 @@ function renderApiConfigUrlParts(urlParts) {
     });
   }
 
-  const queryEl = document.getElementById('api-config-query-params');
+  const queryEl = byIdOrNull('api-config-query-params');
   if (queryEl) {
     queryEl.innerHTML = '';
     urlParts.queryParams.forEach((p) => {
@@ -51,18 +62,20 @@ function renderApiConfigUrlParts(urlParts) {
 }
 
 // help.apiConfig.sourceStaticList / sourceDiscovery / sourceRange / sourceBrowserDiscovery / sourceBootstrap
-function sourceHelpSuffix(kind) {
+function sourceHelpSuffix(kind: SourceKind): string {
   const name = kind === BOOTSTRAP_SOURCE_KIND ? 'bootstrap' : kind;
   return name[0].toUpperCase() + name.slice(1);
 }
 
-function renderApiConfigParameters(draft, discoveryCandidates, discoveryTemplateEditingPartId) {
-  const container = document.getElementById('api-config-parameters');
+export function renderApiConfigParameters(
+  draft: ApiConfigDraft, discoveryCandidates: State['apiDiscoveryCandidates'], discoveryTemplateEditingPartId: string | null | undefined,
+): void {
+  const container = byIdOrNull('api-config-parameters');
   if (!container) return;
   container.innerHTML = '';
 
   allParameterParts(draft).forEach((part) => {
-    const source = draft.parameterSources[part.id];
+    const source: ApiParameterSourceDraft | undefined = draft.parameterSources[part.id];
     const safePartId = escapeHtml(part.id); // see urlPartRowHtml's doc comment — part.id can embed an untrusted query key
     const card = document.createElement('div');
     card.className = 'api-config-param-card';
@@ -77,7 +90,7 @@ function renderApiConfigParameters(draft, discoveryCandidates, discoveryTemplate
 
     const kindRow = document.createElement('div');
     kindRow.className = 'api-config-source-kind';
-    const sourceKindLabels = {
+    const sourceKindLabels: Record<SourceKind, string> = {
       staticList: t('apiConfig.sourceKindStaticList'),
       discovery: t('apiConfig.sourceKindDiscovery'),
       range: t('apiConfig.sourceKindRange'),
@@ -91,10 +104,10 @@ function renderApiConfigParameters(draft, discoveryCandidates, discoveryTemplate
     // Issue #404: the three everyday sources are shown; browser discovery and
     // the bootstrap token value are rarely needed and sit under "Advanced",
     // which opens by itself while one of them is the chosen source.
-    const basicKinds = ['staticList', 'discovery', 'range'];
-    const advancedKinds = ['browserDiscovery'];
+    const basicKinds: SourceKind[] = ['staticList', 'discovery', 'range'];
+    const advancedKinds: SourceKind[] = ['browserDiscovery'];
     if (isUrlPart && (draft.bootstrap || source?.kind === BOOTSTRAP_SOURCE_KIND)) advancedKinds.push(BOOTSTRAP_SOURCE_KIND);
-    const radioHtml = kind => `
+    const radioHtml = (kind: SourceKind) => `
         <label>
           <input type="radio" name="source-kind-${safePartId}" class="api-config-source-kind-radio"
             data-part-id="${safePartId}" value="${kind}" ${source?.kind === kind ? 'checked' : ''} />
@@ -105,8 +118,8 @@ function renderApiConfigParameters(draft, discoveryCandidates, discoveryTemplate
     kindRow.setAttribute('data-help-anchor', '');
     kindRow.innerHTML = basicKinds.map(radioHtml).join('');
     const advancedSources = createAdvancedDisclosure('api-source-advanced', 'apiConfig.sourceAdvancedSummary');
-    advancedSources.querySelector('.advanced-disclosure-body').innerHTML = advancedKinds.map(radioHtml).join('');
-    if (advancedKinds.includes(source?.kind)) advancedSources.open = true;
+    (advancedSources.querySelector('.advanced-disclosure-body') as HTMLElement).innerHTML = advancedKinds.map(radioHtml).join('');
+    if (source && advancedKinds.includes(source.kind)) advancedSources.open = true;
     kindRow.appendChild(advancedSources);
     card.appendChild(kindRow);
 
@@ -147,10 +160,10 @@ function renderApiConfigParameters(draft, discoveryCandidates, discoveryTemplate
 
 // Preset dropdown, custom-format input and a live example under From / To (IsoWeek / Date only). `source.format` is always set by now
 // (auto-detected or chosen), so "custom" means "not one of the presets".
-function renderRangeFormatFields(source, safePartId) {
+export function renderRangeFormatFields(source: SourceOf<'range'>, safePartId: string): string {
   if (source.type === 'Number') return '';
 
-  const presets = RANGE_FORMAT_PRESETS[source.type];
+  const presets = RANGE_FORMAT_PRESETS[source.type] as NonNullable<(typeof RANGE_FORMAT_PRESETS)[SFWire.RangeType]>; // only Number has none, returned above
   const isCustom = !presets.some(preset => preset.format === source.format);
   const options = presets
     .map(preset => `<option value="${escapeHtml(preset.format)}" ${preset.format === source.format ? 'selected' : ''}>${escapeHtml(t(preset.labelKey))}</option>`)
@@ -169,7 +182,10 @@ function renderRangeFormatFields(source, safePartId) {
 // DiscoverySource.UrlTemplate is read-only (derived by "Search again"); editingPartId (state.discoveryTemplateEditingPartId, a screen-scoped flag
 // outside apiConfigDraft, which is sent to the companion as is) swaps the summary for a text input so the user can replace a concrete segment
 // with "{earlierParameterName}" and chain it. Only the template is edited; itemsPath / valuePath stay.
-function renderDiscoverySourceFields(draft, part, source, discoveryCandidates, editingPartId) {
+export function renderDiscoverySourceFields(
+  draft: ApiConfigDraft, part: ParameterPart, source: SourceOf<'discovery'>, discoveryCandidates: State['apiDiscoveryCandidates'],
+  editingPartId: string | null | undefined,
+): HTMLElement {
   const wrap = document.createElement('div');
   const safePartId = escapeHtml(part.id);
   const earlierNames = earlierParameterNames(draft, part.id);
@@ -238,7 +254,7 @@ function renderDiscoverySourceFields(draft, part, source, discoveryCandidates, e
 
 // Starts a second search round with the same click selection; its result becomes a DiscoverySource for one variable part. `partId` (not the
 // editable display name) identifies it.
-function startDiscoverySearch(bridge, partId) {
+export function startDiscoverySearch(bridge: PopupBridge, partId: string): void {
   log('API_DISCOVERY_SEARCH start', partId);
   chrome.runtime.sendMessage({ type: 'START_SELECTION', apiSearch: true });
   bridge.setState(STATES.SELECTING, {
@@ -248,21 +264,22 @@ function startDiscoverySearch(bridge, partId) {
   if (bridge.getState().domViewEnabled) bridge.requestDomTree();
 }
 
-function confirmDiscoveryCandidate(bridge, partId, candidate) {
-  const source = buildDiscoverySource(candidate.url, candidate.itemsPath, candidate.valuePath);
+export function confirmDiscoveryCandidate(bridge: PopupBridge, partId: string, candidate: ApiCandidate): void {
+  // The "Use" button is only rendered for a candidate that has all three.
+  const source = buildDiscoverySource(candidate.url as string, candidate.itemsPath as string, candidate.valuePath as string);
   const state = bridge.getState();
   log('API_DISCOVERY_CONFIRM', { partId, source });
   bridge.setState(STATES.API_CONFIG, {
     apiDiscoveryCandidates: null,
     apiConfigDraft: {
-      ...state.apiConfigDraft,
-      parameterSources: { ...state.apiConfigDraft.parameterSources, [partId]: source },
+      ...currentDraft(bridge),
+      parameterSources: { ...currentDraft(bridge).parameterSources, [partId]: source },
     },
   });
 }
 
-function toggleApiConfigPartVariable(bridge, partId) {
-  const draft = bridge.getState().apiConfigDraft;
+export function toggleApiConfigPartVariable(bridge: PopupBridge, partId: string): void {
+  const draft = currentDraft(bridge);
   const [scope, key] = partId.split(':');
   const urlParts = scope === 'path'
     ? { ...draft.urlParts, pathSegments: draft.urlParts.pathSegments.map((seg, i) => (String(i) === key ? { ...seg, variable: !seg.variable } : seg)) }
@@ -278,8 +295,8 @@ function toggleApiConfigPartVariable(bridge, partId) {
   patchApiConfigDraft(bridge, { urlParts, parameterSources });
 }
 
-function setApiConfigPartName(bridge, partId, name) {
-  const draft = bridge.getState().apiConfigDraft;
+export function setApiConfigPartName(bridge: PopupBridge, partId: string, name: string): void {
+  const draft = currentDraft(bridge);
   const [scope, key] = partId.split(':');
   const urlParts = scope === 'path'
     ? { ...draft.urlParts, pathSegments: draft.urlParts.pathSegments.map((seg, i) => (String(i) === key ? { ...seg, name } : seg)) }
@@ -287,7 +304,9 @@ function setApiConfigPartName(bridge, partId, name) {
   patchApiConfigDraft(bridge, { urlParts });
 }
 
-const API_CONFIG_SOURCE_DEFAULTS = {
+const API_CONFIG_SOURCE_DEFAULTS: {
+  staticList: SourceOf<'staticList'>; range: SourceOf<'range'>; discovery: SourceOf<'discovery'>; browserDiscovery: SourceOf<'browserDiscovery'>;
+} = {
   staticList: { kind: 'staticList', valuesText: '' },
   range: { kind: 'range', type: 'IsoWeek', from: '', to: '' },
   discovery: { kind: 'discovery' }, // incomplete until confirmDiscoveryCandidate fills in urlTemplate/itemsPath/valuePath
@@ -300,23 +319,22 @@ const API_CONFIG_SOURCE_DEFAULTS = {
 
 // A Range source gets its format from the part's captured example (detectRangeFormat); browser discovery prefills DiscoveryUrl from the
 // inspected page (the likeliest discovery page; still editable).
-function setApiConfigSourceKind(bridge, partId, kind) {
+export function setApiConfigSourceKind(bridge: PopupBridge, partId: string, kind: SourceKind): void {
   const state = bridge.getState();
-  const draft = state.apiConfigDraft;
-  const defaults = API_CONFIG_SOURCE_DEFAULTS[kind];
-  const source = kind === BOOTSTRAP_SOURCE_KIND
+  const draft = currentDraft(bridge);
+  const source: ApiParameterSourceDraft = kind === BOOTSTRAP_SOURCE_KIND
     ? { kind: BOOTSTRAP_SOURCE_KIND }
     : kind === 'range'
-    ? { ...defaults, format: detectRangeFormat(defaults.type, findUrlPartValue(draft.urlParts, partId)) }
+    ? { ...API_CONFIG_SOURCE_DEFAULTS.range, format: detectRangeFormat(API_CONFIG_SOURCE_DEFAULTS.range.type, findUrlPartValue(draft.urlParts, partId)) }
     : kind === 'browserDiscovery'
-      ? { ...defaults, discoveryUrl: state.url || '' }
-      : defaults;
+      ? { ...API_CONFIG_SOURCE_DEFAULTS.browserDiscovery, discoveryUrl: state.url || '' }
+      : API_CONFIG_SOURCE_DEFAULTS[kind];
   patchApiConfigDraft(bridge, { parameterSources: { ...draft.parameterSources, [partId]: source } });
 }
 
 // Derives sibling values for a variable URL part from the recorded pool and merges them into its value list (findUrlTemplateMatches /
 // mergeValueListValues). Runs once when "Value list" is picked and on demand via "Fill from recording".
-async function fillStaticListFromPool(bridge, partId) {
+export async function fillStaticListFromPool(bridge: PopupBridge, partId: string): Promise<void> {
   log('API_AUTOFILL start', partId);
   const entries = await fetchApiCaptureEntries();
 
@@ -337,99 +355,89 @@ async function fillStaticListFromPool(bridge, partId) {
   // no-op case gets one, since nothing else on screen would otherwise
   // confirm that the button/auto-run actually did something.
   if (addedCount > 0) {
-    patchApiConfigSource(bridge, partId, { valuesText: text });
+    patchApiConfigSource<SourceOf<'staticList'>>(bridge, partId, { valuesText: text });
   } else {
     bridge.showToast(t('apiConfig.autoFillNoMatches'));
   }
 }
 
-function wireApiParameterEvents(bridge) {
+export function wireApiParameterEvents(bridge: PopupBridge): void {
   // ── API-Mode config screen (Issue #53 Phase 5) ─────────────────────────────
   // Delegated `change` listeners (not `input`) so typing in a text field
   // doesn't trigger a re-render — and thus lose focus — on every keystroke;
   // see renderApiConfigScreen's doc comment for the trade-off this implies.
 
-  const handleUrlPartControlChange = (e) => {
-    const toggle = e.target.closest('.api-config-part-toggle');
-    if (toggle) { toggleApiConfigPartVariable(bridge, toggle.dataset.partId); return; }
-    const nameInput = e.target.closest('.api-config-part-name');
-    if (nameInput) setApiConfigPartName(bridge, nameInput.dataset.partId, nameInput.value.trim());
+  const handleUrlPartControlChange = (e: Event) => {
+    const target = e.target as Element;
+    const toggle = target.closest<HTMLElement>('.api-config-part-toggle');
+    if (toggle) { toggleApiConfigPartVariable(bridge, toggle.dataset.partId as string); return; }
+    const nameInput = target.closest<HTMLInputElement>('.api-config-part-name');
+    if (nameInput) setApiConfigPartName(bridge, nameInput.dataset.partId as string, nameInput.value.trim());
   };
-  document.getElementById('api-config-segments')?.addEventListener('change', handleUrlPartControlChange);
-  document.getElementById('api-config-query-params')?.addEventListener('change', handleUrlPartControlChange);
+  byIdOrNull('api-config-segments')?.addEventListener('change', handleUrlPartControlChange);
+  byIdOrNull('api-config-query-params')?.addEventListener('change', handleUrlPartControlChange);
 
-  document.getElementById('api-config-parameters')?.addEventListener('change', (e) => {
-    const kindRadio = e.target.closest('.api-config-source-kind-radio');
+  byIdOrNull('api-config-parameters')?.addEventListener('change', (e) => {
+    const target = e.target as Element;
+    const kindRadio = target.closest<HTMLInputElement>('.api-config-source-kind-radio');
     if (kindRadio) {
-      setApiConfigSourceKind(bridge, kindRadio.dataset.partId, kindRadio.value);
+      setApiConfigSourceKind(bridge, kindRadio.dataset.partId as string, kindRadio.value as SourceKind);
       // Best-effort first pass: picking "Value list" is when a user would hunt for sibling requests, so try the pool first.
-      if (kindRadio.value === 'staticList') fillStaticListFromPool(bridge, kindRadio.dataset.partId);
+      if (kindRadio.value === 'staticList') fillStaticListFromPool(bridge, kindRadio.dataset.partId as string);
       return;
     }
-    const staticList = e.target.closest('.api-config-static-list');
-    if (staticList) { patchApiConfigSource(bridge, staticList.dataset.partId, { valuesText: staticList.value }); return; }
-    const rangeType = e.target.closest('.api-config-range-type');
+    const staticList = target.closest<HTMLTextAreaElement>('.api-config-static-list');
+    if (staticList) { patchApiConfigSource<SourceOf<'staticList'>>(bridge, staticList.dataset.partId as string, { valuesText: staticList.value }); return; }
+    const rangeType = target.closest<HTMLSelectElement>('.api-config-range-type');
     if (rangeType) {
-      const partId = rangeType.dataset.partId;
+      const partId = rangeType.dataset.partId as string;
       // Re-detect on every Type change, not just the initial "Range" pick
       // — switching e.g. IsoWeek → Date should re-match the same captured
       // raw value against Date's own presets instead of keeping a format
       // string that no longer means anything for the new Type.
-      const rawValue = findUrlPartValue(bridge.getState().apiConfigDraft.urlParts, partId);
-      patchApiConfigSource(bridge, partId, { type: rangeType.value, format: detectRangeFormat(rangeType.value, rawValue) });
+      const rawValue = findUrlPartValue(currentDraft(bridge).urlParts, partId);
+      const type = rangeType.value as SFWire.RangeType;
+      patchApiConfigSource<SourceOf<'range'>>(bridge, partId, { type, format: detectRangeFormat(type, rawValue) });
       return;
     }
-    const rangeFrom = e.target.closest('.api-config-range-from');
-    if (rangeFrom) { patchApiConfigSource(bridge, rangeFrom.dataset.partId, { from: rangeFrom.value.trim() }); return; }
-    const rangeTo = e.target.closest('.api-config-range-to');
-    if (rangeTo) { patchApiConfigSource(bridge, rangeTo.dataset.partId, { to: rangeTo.value.trim() }); return; }
-    const formatPreset = e.target.closest('.api-config-range-format-preset');
-    if (formatPreset) { patchApiConfigSource(bridge, formatPreset.dataset.partId, { format: formatPreset.value === 'custom' ? '' : formatPreset.value }); return; }
-    const formatCustom = e.target.closest('.api-config-range-format-custom');
-    if (formatCustom) { patchApiConfigSource(bridge, formatCustom.dataset.partId, { format: formatCustom.value.trim() }); return; }
+    const rangeFrom = target.closest<HTMLInputElement>('.api-config-range-from');
+    if (rangeFrom) { patchApiConfigSource<SourceOf<'range'>>(bridge, rangeFrom.dataset.partId as string, { from: rangeFrom.value.trim() }); return; }
+    const rangeTo = target.closest<HTMLInputElement>('.api-config-range-to');
+    if (rangeTo) { patchApiConfigSource<SourceOf<'range'>>(bridge, rangeTo.dataset.partId as string, { to: rangeTo.value.trim() }); return; }
+    const formatPreset = target.closest<HTMLSelectElement>('.api-config-range-format-preset');
+    if (formatPreset) { patchApiConfigSource<SourceOf<'range'>>(bridge, formatPreset.dataset.partId as string, { format: formatPreset.value === 'custom' ? '' : formatPreset.value }); return; }
+    const formatCustom = target.closest<HTMLInputElement>('.api-config-range-format-custom');
+    if (formatCustom) { patchApiConfigSource<SourceOf<'range'>>(bridge, formatCustom.dataset.partId as string, { format: formatCustom.value.trim() }); return; }
 
     // ── Chained parameter discovery (Issue #217) ──────────────────────────
-    const discoveryUrlTemplate = e.target.closest('.api-discovery-url-template');
-    if (discoveryUrlTemplate) { patchApiConfigSource(bridge, discoveryUrlTemplate.dataset.partId, { urlTemplate: discoveryUrlTemplate.value.trim() }); return; }
-    const paramPlaceholderSelect = e.target.closest('.api-param-placeholder-select');
+    const discoveryUrlTemplate = target.closest<HTMLInputElement>('.api-discovery-url-template');
+    if (discoveryUrlTemplate) { patchApiConfigSource<SourceOf<'discovery'>>(bridge, discoveryUrlTemplate.dataset.partId as string, { urlTemplate: discoveryUrlTemplate.value.trim() }); return; }
+    const paramPlaceholderSelect = target.closest<HTMLSelectElement>('.api-param-placeholder-select');
     if (paramPlaceholderSelect) { insertParameterPlaceholder(bridge, paramPlaceholderSelect); return; }
 
     handleBrowserDiscoveryChange(bridge, e);
   });
 
-  document.getElementById('api-config-parameters')?.addEventListener('click', (e) => {
-    const searchBtn = e.target.closest('.api-config-discovery-search');
-    if (searchBtn) { startDiscoverySearch(bridge, searchBtn.dataset.partId); return; }
-    const confirmBtn = e.target.closest('.api-config-discovery-confirm');
+  byIdOrNull('api-config-parameters')?.addEventListener('click', (e) => {
+    const target = e.target as Element;
+    const searchBtn = target.closest<HTMLElement>('.api-config-discovery-search');
+    if (searchBtn) { startDiscoverySearch(bridge, searchBtn.dataset.partId as string); return; }
+    const confirmBtn = target.closest<HTMLElement>('.api-config-discovery-confirm');
     if (confirmBtn) {
-      const index = parseInt(confirmBtn.dataset.candidateIndex, 10);
+      const index = parseInt(confirmBtn.dataset.candidateIndex as string, 10);
       const candidate = bridge.getState().apiDiscoveryCandidates?.candidates?.[index];
-      if (candidate) confirmDiscoveryCandidate(bridge, confirmBtn.dataset.partId, candidate);
+      if (candidate) confirmDiscoveryCandidate(bridge, confirmBtn.dataset.partId as string, candidate);
       return;
     }
-    const autofillBtn = e.target.closest('.api-config-autofill-pool');
-    if (autofillBtn) { fillStaticListFromPool(bridge, autofillBtn.dataset.partId); return; }
+    const autofillBtn = target.closest<HTMLElement>('.api-config-autofill-pool');
+    if (autofillBtn) { fillStaticListFromPool(bridge, autofillBtn.dataset.partId as string); return; }
 
     // ── Chained parameter discovery (Issue #217) ──────────────────────────
-    const editTemplateBtn = e.target.closest('.btn-discovery-template-edit');
+    const editTemplateBtn = target.closest<HTMLElement>('.btn-discovery-template-edit');
     if (editTemplateBtn) { bridge.patchState({ discoveryTemplateEditingPartId: editTemplateBtn.dataset.partId }); return; }
-    const doneTemplateBtn = e.target.closest('.btn-discovery-template-done');
+    const doneTemplateBtn = target.closest<HTMLElement>('.btn-discovery-template-done');
     if (doneTemplateBtn) { bridge.patchState({ discoveryTemplateEditingPartId: null }); return; }
 
     handleBrowserDiscoveryClick(bridge, e);
   });
 }
-
-module.exports = {
-  renderApiConfigUrlParts,
-  renderApiConfigParameters,
-  renderRangeFormatFields,
-  renderDiscoverySourceFields,
-  startDiscoverySearch,
-  confirmDiscoveryCandidate,
-  toggleApiConfigPartVariable,
-  setApiConfigPartName,
-  setApiConfigSourceKind,
-  fillStaticListFromPool,
-  wireApiParameterEvents,
-};

@@ -160,10 +160,10 @@ them share):
 | Module | Owns |
 | --- | --- |
 | `api-capture-ui.ts` | recording toggle, the click-based searches (network, embedded JSON), candidate and recorded-request lists, confirming a candidate |
-| `api-response-tree-ui.js` | response-tree rows, the group and leaf-transforms modals, the JSON-scoped tree search |
-| `api-parameters-ui.js` | URL parts and parameter-source cards (value list, discovery endpoint, range) |
-| `api-browser-discovery-ui.ts` | the BrowserDiscoverySource action editor (its listener branches are called by `api-parameters-ui.js`) |
-| `api-request-ui.js` | captured-header table, POST body tree and its "new parameter" modal |
+| `api-response-tree-ui.ts` | response-tree rows, the group and leaf-transforms modals, the JSON-scoped tree search |
+| `api-parameters-ui.ts` | URL parts and parameter-source cards (value list, discovery endpoint, range) |
+| `api-browser-discovery-ui.ts` | the BrowserDiscoverySource action editor (its listener branches are called by `api-parameters-ui.ts`) |
+| `api-request-ui.ts` | captured-header table, POST body tree and its "new parameter" modal |
 | `api-config-shared-ui.ts` | `patchApiConfigDraft`/`patchApiConfigSource`, the parameter-placeholder picker |
 
 These DOM-free `<feature>.js` modules are also exactly the ones opted into
@@ -323,7 +323,7 @@ mode's own tree editor. Output becomes XML instead of CSV once a tree is used, f
 the same reason Container mode's tree output is XML.
 
 - Extension: `popup/api-config.ts` (`ApiGroup`/`ApiField` draft
-  build/insert/remove/serialize), `popup/api-response-tree-ui.js` (`renderApiTree`,
+  build/insert/remove/serialize), `popup/api-response-tree-ui.ts` (`renderApiTree`,
   `buildApiTreeNodeEl`, sub-group/sub-field search flows), `content/content-script.js`
   (`deriveApiTreeSkeleton`, `resolveApiGroupScopePath`-adjacent `pathStartsWithScope`)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig.Groups`, `ApiNode`/`ApiGroup`/`ApiField`),
@@ -343,7 +343,7 @@ already uses). GraphQL needs no special handling of its own — its `query`/
 covers.
 
 - Extension: `popup/api-config.ts` (`jsonValueToBodyDraft`, body-tree
-  update/reference/serialize helpers), `popup/api-request-ui.js`
+  update/reference/serialize helpers), `popup/api-request-ui.ts`
   (`buildBodyTreeNodeEl`/`renderBodyTree`, body-parameter modal wiring),
   `content/api-capture.js` (`requestBody`/`requestBodySkipped` capture)
 - Companion: `IR/ApiBodyNode.cs` (`ApiBodyObject`/`Array`/`Literal`/`Variable`),
@@ -406,8 +406,8 @@ request actually sends.
   `buildBootstrapVerificationValues`), `popup/api-bootstrap-ui.ts` (the
   section's render/wiring, recording picker), `popup/api-config.ts`
   (`buildApiConfig`'s `bootstrap` param, `buildApiHeaders`'s `'bootstrap'`
-  mode, the Apply gate), `popup/api-request-ui.js` (header "From token" mode),
-  `popup/api-parameters-ui.js` (the "Token value" URL-part source),
+  mode, the Apply gate), `popup/api-request-ui.ts` (header "From token" mode),
+  `popup/api-parameters-ui.ts` (the "Token value" URL-part source),
   `popup/api-config-ui.ts` (`confirmApiConfig`),
   `popup/companion-client.ts` (bootstrap test values → `verificationValues`),
   `popup/screens/api-config.html` (`#api-bootstrap-section`)
@@ -804,8 +804,8 @@ Link pagination, browser discovery, value type) under "Advanced". No wire-format
 companion change. See docs/design-notes/extension.md for the details.
 
 - Extension: `popup/json-path-picker.js` (pure tree model + path derivation),
-  `popup/json-path-picker-ui.js` (state-driven panel, loading, wiring),
-  `popup/api-cursor-pagination-ui.ts`/`api-bootstrap-ui.ts`/`api-response-tree-ui.js`
+  `popup/json-path-picker-ui.ts` (state-driven panel, loading, wiring),
+  `popup/api-cursor-pagination-ui.ts`/`api-bootstrap-ui.ts`/`api-response-tree-ui.ts`
   (buttons and panels), `popup/advanced-disclosure-ui.ts` (`autoOpenAdvanced`),
   `popup/screens/api-config.html`/`modals.html`, `jsonPathPicker.*`/`help.api*` in `i18n/*.json`;
   `content/content-script.js` (`readEmbeddedJson`) + `background/service-worker.js`
@@ -1093,7 +1093,7 @@ shapes (flat/container/API) since none of them share a common leaf type.
   throwing.
 - **API mode follow-up:** the same editor is also reachable from the
   `API_CONFIG` tree screen (§2.16), via a "Transformieren" button rendered
-  next to every leaf `ApiField` row in `popup/api-response-tree-ui.js`'s
+  next to every leaf `ApiField` row in `popup/api-response-tree-ui.ts`'s
   `buildApiTreeNodeEl` (never for a group node — only a leaf actually
   extracts a value, matching `ApiGroup` having no `Transforms` property on
   the companion side). Opens `modal-api-field-transforms`, reusing the exact
@@ -2443,7 +2443,7 @@ checks + browser-only gating) → each Playwright template (`playwright_scraper.
 `ScrapingPlanValidator.ValidateApiConfig` (per-source validation) →
 `PythonApiConfigLiteral.RenderSource` → `scraper_api.py.j2`'s
 `_resolve_parameter_values` runtime → `api-config.ts` (a new `buildXxxSource`
-builder) → `api-parameters-ui.js` (`renderApiConfigParameters`'s per-kind branch,
+builder) → `api-parameters-ui.ts` (`renderApiConfigParameters`'s per-kind branch,
 `API_CONFIG_SOURCE_DEFAULTS`).
 
 **Add a new field extracted from the page/response** (extending an existing shape,

@@ -2,10 +2,10 @@
 // modals' render, and wireApiConfigEvents, which calls the focused modules in turn. It re-exports every name it used to export, so
 // popup.js and idle-screen-ui.js import unchanged:
 //   api-capture-ui.ts            recording, searches, candidate / recorded-request lists
-//   api-response-tree-ui.js      response tree, group + transforms modals, tree search
-//   api-parameters-ui.js         URL parts and parameter sources
+//   api-response-tree-ui.ts      response tree, group + transforms modals, tree search
+//   api-parameters-ui.ts         URL parts and parameter sources
 //   api-browser-discovery-ui.ts  the BrowserDiscoverySource editor
-//   api-request-ui.js            captured headers, POST body tree
+//   api-request-ui.ts            captured headers, POST body tree
 //   api-config-shared-ui.ts      draft helpers the modules above share
 //
 // Handlers that read or mutate popup state take a `bridge` as first parameter — { getState, setState, patchState,
@@ -13,13 +13,13 @@
 // under Jest, each file is an isolated module with no shared scope, so a closure over popup.js's state would not resolve. Purely
 // presentational render / build*El functions need none of this.
 import type * as SFWire from '../types/wire';
-import type { ApiCandidatesResult, PopupBridge } from '../types/popup';
+import type { PopupBridge, State } from '../types/popup';
 import { createLogger } from '../shared/logger';
 import { t } from '../i18n/i18n';
 import {
   STATES, buildStaticListSource, buildRangeSource, buildBrowserDiscoverySource, buildApiConfig, allParameterParts, apiConfigDraftHasAllSourcesChosen,
 } from './api-config';
-import type { ApiConfigDraft, ParameterPart } from './api-config';
+import type { ApiConfigDraft, ApiNodeDraft } from './api-config';
 import { BOOTSTRAP_SOURCE_KIND, resolveBootstrapUrlParts } from './api-bootstrap';
 import { renderTransformList, renderTransformPreview } from './field-transforms-ui';
 import { serializeBrowserActions } from './scraping-config-builder';
@@ -96,12 +96,11 @@ const log = createLogger('SF:ApiConfigUI');
 // The tree UI subsumes the flat field list: a single match renders as a one-node-deep tree; renderApiTree is the only rendering of this
 // part of the screen.
 export function renderApiConfigScreen(
-  draft: ApiConfigDraft, discoveryCandidates: ApiCandidatesResult | null, discoveryTemplateEditingPartId: string | null | undefined,
+  draft: ApiConfigDraft, discoveryCandidates: State['apiDiscoveryCandidates'], discoveryTemplateEditingPartId: string | null | undefined,
 ): void {
-  renderApiTree(draft.groups);
+  renderApiTree(draft.groups as ApiNodeDraft[]); // a tree draft: `groups` is always set while the screen is open
   renderApiConfigUrlParts(draft.urlParts);
   renderApiConfigParameters(draft, discoveryCandidates, discoveryTemplateEditingPartId);
-  // @ts-expect-error api-request-ui.js (not converted yet) infers `bootstrap` as `null` from its default; this line errs once it is typed.
   renderApiConfigHeaders(draft.capturedHeaders, draft.headerDecisions, draft.bootstrap);
   renderBodyTree(draft);
 

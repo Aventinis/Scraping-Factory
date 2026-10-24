@@ -163,7 +163,7 @@ export function updateDiscoveryAction(bridge: PopupBridge, partId: string, index
 }
 
 // The BrowserDiscoverySource part of the "api-config-parameters" delegated
-// listeners (see wireApiParameterEvents in api-parameters-ui.js): called last,
+// listeners (see wireApiParameterEvents in api-parameters-ui.ts): called last,
 // after the parameter-source branches have not matched.
 export function handleBrowserDiscoveryChange(bridge: PopupBridge, e: Event): void {
     const target = e.target as Element;

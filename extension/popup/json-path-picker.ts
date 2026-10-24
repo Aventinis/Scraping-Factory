@@ -1,4 +1,4 @@
-// JSON-path picker: tree model and path derivation — pure, no DOM (json-path-picker-ui.js renders it). API mode asks for JSON
+// JSON-path picker: tree model and path derivation — pure, no DOM (json-path-picker-ui.ts renders it). API mode asks for JSON
 // paths in several places (a group's path, the cursor and "has more" paths, the cursor's body slot, the token path); this
 // turns a recorded response or request body into a clickable tree and a click into a path in the syntax of the script's
 // `_resolve_json_path`: dots for object keys, `[n]` for an array element.

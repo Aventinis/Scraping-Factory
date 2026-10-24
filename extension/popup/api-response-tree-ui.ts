@@ -1,17 +1,28 @@
 // API mode: the response-tree editor: the rows, the "add group" and "edit a leaf's transforms" modals, and the JSON-scoped search that adds a
 // field or group to a confirmed tree. See api-config-ui.ts for the `bridge` convention.
-const { createLogger } = require('../shared/logger');
-const log = createLogger('SF:ApiConfigUI');
-const { t } = require('../i18n/i18n');
-const {
+import type * as SFWire from '../types/wire';
+import type { PopupBridge } from '../types/popup';
+import type { ApiCandidate } from '../types/messages';
+import { createLogger } from '../shared/logger';
+import { t } from '../i18n/i18n';
+import {
   STATES, buildApiGroupDraft, insertApiTreeNode, updateApiTreeNode, removeApiTreeNode, resolveApiTreeNode, buildApiSubtreeFromCandidate, resolveApiGroupScopePath,
-} = require('./api-config');
-const { transformsAreValid, addTransform } = require('./field-transforms');
-const { wireTransformList } = require('./field-transforms-ui');
-const { isDerivedField } = require('./combine-split-fields');
-const { openCombineFieldModal, openSplitFieldModal } = require('./combine-split-fields-ui');
-const { patchApiConfigDraft } = require('./api-config-shared-ui');
-const { wirePathPickerEvents } = require('./json-path-picker-ui');
+} from './api-config';
+import type { ApiConfigDraft, ApiFieldDraft, ApiNodeDraft } from './api-config';
+import { transformsAreValid, addTransform } from './field-transforms';
+import { wireTransformList } from './field-transforms-ui';
+import { isDerivedField } from './combine-split-fields';
+import { openCombineFieldModal, openSplitFieldModal } from './combine-split-fields-ui';
+import { patchApiConfigDraft } from './api-config-shared-ui';
+import { wirePathPickerEvents } from './json-path-picker-ui';
+import { byIdOrNull } from './dom';
+
+const log = createLogger('SF:ApiConfigUI');
+
+// These handlers only run on the API_CONFIG screen, where the draft exists.
+const currentDraft = (bridge: PopupBridge): ApiConfigDraft => bridge.getState().apiConfigDraft as ApiConfigDraft;
+// A tree draft (the flat `fields` shape only exists on the wire): `groups` is always set while the screen is open.
+const currentGroups = (bridge: PopupBridge): ApiNodeDraft[] => currentDraft(bridge).groups as ApiNodeDraft[];
 
 // Issue #139: one static inline chevron per row instead of swapping between
 // two different Unicode glyphs (▸/▾) on click — see container-tree-ui.js's
@@ -23,7 +34,7 @@ const TREE_TOGGLE_CHEVRON_SVG =
 
 // Same pattern as the container tree editor (buildGroupTreeNodeEl). Rows differ: an editable name input and a read-only path; no
 // repeating / attribute / mode label and no frame badge (JSON has no iframes).
-function buildApiTreeNodeEl(node, path, depth) {
+export function buildApiTreeNodeEl(node: ApiNodeDraft, path: number[], depth: number): HTMLElement {
   const li = document.createElement('li');
   li.className = 'api-tree-node';
   li.dataset.path = JSON.stringify(path);
@@ -51,10 +62,11 @@ function buildApiTreeNodeEl(node, path, depth) {
   // field (see buildApiFieldDraft's own doc comment) — shows a
   // distinguishing description instead of "—", mirroring container-tree.ts's
   // own groupNodeSuffix branch for the identical case.
-  pathLabel.textContent = isDerivedField(node.transforms)
-    ? (node.transforms[0].kind === 'combineFields'
-      ? t('group.combinedFieldMode', { sources: node.transforms[0].sourceFieldNames.join(', ') })
-      : t('group.splitFieldMode', { source: node.transforms[0].sourceFieldName }))
+  const derived = node.kind === 'field' && isDerivedField(node.transforms) ? (node.transforms as SFWire.FieldTransform[])[0] : null;
+  pathLabel.textContent = derived
+    ? (derived.kind === 'combineFields'
+      ? t('group.combinedFieldMode', { sources: derived.sourceFieldNames.join(', ') })
+      : t('group.splitFieldMode', { source: (derived as SFWire.SplitFieldTransform).sourceFieldName }))
     : (node.path || '—');
   pathLabel.title = node.path || '';
   row.appendChild(pathLabel);
@@ -132,8 +144,8 @@ function buildApiTreeNodeEl(node, path, depth) {
   return li;
 }
 
-function renderApiTree(groups) {
-  const root = document.getElementById('api-tree-root');
+export function renderApiTree(groups: ApiNodeDraft[]): void {
+  const root = byIdOrNull('api-tree-root');
   if (!root) return;
   root.innerHTML = '';
   groups.forEach((node, i) => root.appendChild(buildApiTreeNodeEl(node, [i], 0)));
@@ -144,10 +156,10 @@ function renderApiTree(groups) {
 
 // A tree sourced from an embedded <script> tag (draft.embeddedJsonSource) is extended by scanning that same tag, not the recorded pool (there
 // is only one source once ScriptSelector is fixed). confirmApiTreeFieldCandidate needs no change: both search kinds fill treeSkeleton / siblings.
-function startApiTreeFieldSearch(bridge, parentPath) {
+export function startApiTreeFieldSearch(bridge: PopupBridge, parentPath: number[] | null): void {
   const state = bridge.getState();
-  const scopePath = parentPath ? resolveApiGroupScopePath(state.apiConfigDraft.groups, parentPath) : null;
-  const embeddedJsonSource = state.apiConfigDraft.embeddedJsonSource;
+  const scopePath = parentPath ? resolveApiGroupScopePath(currentGroups(bridge), parentPath) : null;
+  const embeddedJsonSource = currentDraft(bridge).embeddedJsonSource;
   log('API_TREE_FIELD_SEARCH start', { parentPath, scopePath, embeddedJsonSource });
   if (embeddedJsonSource) {
     chrome.runtime.sendMessage({
@@ -167,24 +179,24 @@ function startApiTreeFieldSearch(bridge, parentPath) {
 // skipSegments = the target group's own tree depth: that many of the
 // candidate's derived skeleton segments are already represented by existing
 // ancestor groups (see resolveApiGroupScopePath) — 0 for a new root.
-function confirmApiTreeFieldCandidate(bridge, candidate, fieldName, siblingNames) {
+export function confirmApiTreeFieldCandidate(bridge: PopupBridge, candidate: ApiCandidate, fieldName: string, siblingNames: string[]): void {
   const state = bridge.getState();
-  const { treeParentPath } = state.apiTreeSearchResult;
+  const { treeParentPath } = state.apiTreeSearchResult as NonNullable<typeof state.apiTreeSearchResult>; // the panel it is confirmed from only shows with a result
   const skipSegments = treeParentPath ? treeParentPath.length : 0;
   const newNodes = buildApiSubtreeFromCandidate(candidate, fieldName, siblingNames, skipSegments);
   log('API_TREE_FIELD_CONFIRM', { treeParentPath, fieldName, siblingNames });
-  const groups = newNodes.reduce((acc, node) => insertApiTreeNode(acc, treeParentPath, node), state.apiConfigDraft.groups);
-  bridge.setState(STATES.API_CONFIG, { apiTreeSearchResult: null, apiConfigDraft: { ...state.apiConfigDraft, groups } });
+  const groups = newNodes.reduce((acc, node) => insertApiTreeNode(acc, treeParentPath, node), currentGroups(bridge));
+  bridge.setState(STATES.API_CONFIG, { apiTreeSearchResult: null, apiConfigDraft: { ...currentDraft(bridge), groups } });
 }
 
-function openApiGroupModal(bridge, parentPath) {
+export function openApiGroupModal(bridge: PopupBridge, parentPath: number[] | null): void {
   log('API_GROUP_MODAL open', { parentPath });
   bridge.patchState({ apiGroupModalOpen: true, pendingApiTreeParentPath: parentPath });
 }
 
-function confirmApiGroupModal(bridge) {
-  const name = document.getElementById('input-api-group-name')?.value.trim();
-  const path = document.getElementById('input-api-group-path')?.value.trim();
+export function confirmApiGroupModal(bridge: PopupBridge): void {
+  const name = byIdOrNull<HTMLInputElement>('input-api-group-name')?.value.trim();
+  const path = byIdOrNull<HTMLInputElement>('input-api-group-path')?.value.trim();
   // A JSON path can legitimately be "" (array of arrays), but only through automatic derivation; requiring a non-empty path keeps this no-click
   // modal unambiguous.
   if (!name || !path) return;
@@ -193,33 +205,33 @@ function confirmApiGroupModal(bridge) {
   const state = bridge.getState();
   log('API_TREE_GROUP_ADD', { name, path, parentPath: state.pendingApiTreeParentPath });
   bridge.setState(STATES.API_CONFIG, {
-    apiConfigDraft: { ...state.apiConfigDraft, groups: insertApiTreeNode(state.apiConfigDraft.groups, state.pendingApiTreeParentPath, node) },
+    apiConfigDraft: { ...currentDraft(bridge), groups: insertApiTreeNode(currentGroups(bridge), state.pendingApiTreeParentPath, node) },
     apiGroupModalOpen: false, pendingApiTreeParentPath: null, apiPathPicker: null,
   });
 }
 
-function cancelApiGroupModal(bridge) {
+export function cancelApiGroupModal(bridge: PopupBridge): void {
   log('API_GROUP_MODAL cancel');
   bridge.patchState({ apiGroupModalOpen: false, pendingApiTreeParentPath: null, apiPathPicker: null });
 }
 
 // Renames a tree node in place — Phase A5 generalization of
 // setApiConfigFieldName (the old flat-only version), see updateApiTreeNode.
-function setApiTreeNodeName(bridge, path, name) {
-  patchApiConfigDraft(bridge, { groups: updateApiTreeNode(bridge.getState().apiConfigDraft.groups, path, node => ({ ...node, name })) });
+export function setApiTreeNodeName(bridge: PopupBridge, path: number[], name: string): void {
+  patchApiConfigDraft(bridge, { groups: updateApiTreeNode(currentGroups(bridge), path, node => ({ ...node, name })) });
 }
 
 // ── Field transforms ──
 // Reuses the flat / container transform editor and _state.pendingTransforms (these screens never overlap). The live preview reuses
 // _state.pendingRawText: the node's sampleValue stringified like the runtime (`"" if value is None else str(value)`); undefined (a
 // hand-typed path with no click behind it) maps to null, so the hint hides instead of showing a misleading empty result.
-function sampleValueToRawText(sampleValue) {
+function sampleValueToRawText(sampleValue: unknown): string | null {
   if (sampleValue === undefined) return null;
   return sampleValue === null ? '' : String(sampleValue);
 }
 
-function openApiFieldTransformsModal(bridge, path) {
-  const node = resolveApiTreeNode(bridge.getState().apiConfigDraft.groups, path);
+export function openApiFieldTransformsModal(bridge: PopupBridge, path: number[]): void {
+  const node = resolveApiTreeNode(currentGroups(bridge), path) as ApiFieldDraft; // the button exists on a leaf only
   log('API_FIELD_TRANSFORMS_MODAL open', { path });
   bridge.patchState({
     apiFieldTransformModalOpen: true, pendingApiFieldTransformPath: path,
@@ -228,88 +240,75 @@ function openApiFieldTransformsModal(bridge, path) {
   });
 }
 
-function confirmApiFieldTransformsModal(bridge) {
+export function confirmApiFieldTransformsModal(bridge: PopupBridge): void {
   const state = bridge.getState();
   if (!transformsAreValid(state.pendingTransforms)) return;
   const transforms = state.pendingTransforms.length > 0 ? state.pendingTransforms : null;
-  const groups = updateApiTreeNode(state.apiConfigDraft.groups, state.pendingApiFieldTransformPath, node => ({ ...node, transforms }));
+  const groups = updateApiTreeNode(currentGroups(bridge), state.pendingApiFieldTransformPath as number[], node => ({ ...(node as ApiFieldDraft), transforms }));
 
   log('API_FIELD_TRANSFORMS_CONFIRM', { path: state.pendingApiFieldTransformPath, transforms });
   bridge.setState(STATES.API_CONFIG, {
-    apiConfigDraft: { ...state.apiConfigDraft, groups },
+    apiConfigDraft: { ...currentDraft(bridge), groups },
     apiFieldTransformModalOpen: false, pendingApiFieldTransformPath: null, pendingTransforms: [], pendingRawText: null,
   });
 }
 
-function cancelApiFieldTransformsModal(bridge) {
+export function cancelApiFieldTransformsModal(bridge: PopupBridge): void {
   log('API_FIELD_TRANSFORMS_MODAL cancel');
   bridge.patchState({ apiFieldTransformModalOpen: false, pendingApiFieldTransformPath: null, pendingTransforms: [], pendingRawText: null });
 }
 
-function wireApiResponseTreeEvents(bridge) {
-  wirePathPickerEvents(bridge, document.getElementById('modal-api-group-new')); // Issue #404
-  document.getElementById('btn-api-tree-add-root')?.addEventListener('click', () => startApiTreeFieldSearch(bridge, null));
+export function wireApiResponseTreeEvents(bridge: PopupBridge): void {
+  wirePathPickerEvents(bridge, byIdOrNull('modal-api-group-new')); // Issue #404
+  byIdOrNull('btn-api-tree-add-root')?.addEventListener('click', () => startApiTreeFieldSearch(bridge, null));
 
   // Event delegation for the API-tree's per-row add/remove buttons and name
   // input — mirrors the Container-tree's own delegation below.
-  document.getElementById('api-tree-root')?.addEventListener('click', (e) => {
-    const li = e.target.closest('.api-tree-node');
+  byIdOrNull('api-tree-root')?.addEventListener('click', (e) => {
+    const target = e.target as Element;
+    const li = target.closest<HTMLElement>('.api-tree-node');
     if (!li) return;
-    const path = JSON.parse(li.dataset.path);
+    const path: number[] = JSON.parse(li.dataset.path as string); // written by buildApiTreeNodeEl
 
-    if (e.target.closest('.btn-add-api-subgroup')) { openApiGroupModal(bridge, path); return; }
-    if (e.target.closest('.btn-add-api-subfield')) { startApiTreeFieldSearch(bridge, path); return; }
+    if (target.closest('.btn-add-api-subgroup')) { openApiGroupModal(bridge, path); return; }
+    if (target.closest('.btn-add-api-subfield')) { startApiTreeFieldSearch(bridge, path); return; }
     // Issue #206 follow-up: no click-based/JSON-path search at all — opens
     // the shared combine/split creation modal directly, scoped to this
     // group's own children (same `path` .btn-add-api-subfield already
     // targets).
-    if (e.target.closest('.btn-add-api-combine-field')) { openCombineFieldModal(bridge, { mode: 'api', groupPath: path }); return; }
-    if (e.target.closest('.btn-add-api-split-field')) { openSplitFieldModal(bridge, { mode: 'api', groupPath: path }); return; }
-    if (e.target.closest('.btn-api-field-transforms')) { openApiFieldTransformsModal(bridge, path); return; }
-    if (e.target.closest('.btn-remove-api-node')) {
+    if (target.closest('.btn-add-api-combine-field')) { openCombineFieldModal(bridge, { mode: 'api', groupPath: path }); return; }
+    if (target.closest('.btn-add-api-split-field')) { openSplitFieldModal(bridge, { mode: 'api', groupPath: path }); return; }
+    if (target.closest('.btn-api-field-transforms')) { openApiFieldTransformsModal(bridge, path); return; }
+    if (target.closest('.btn-remove-api-node')) {
       log('API_TREE_NODE_REMOVE', { path });
-      bridge.setState(bridge.getState().current, { apiConfigDraft: { ...bridge.getState().apiConfigDraft, groups: removeApiTreeNode(bridge.getState().apiConfigDraft.groups, path) } });
+      bridge.setState(bridge.getState().current, { apiConfigDraft: { ...currentDraft(bridge), groups: removeApiTreeNode(currentGroups(bridge), path) } });
     }
   });
 
-  document.getElementById('api-tree-root')?.addEventListener('change', (e) => {
-    const nameInput = e.target.closest('.api-tree-name');
-    if (nameInput) setApiTreeNodeName(bridge, JSON.parse(nameInput.dataset.path), nameInput.value.trim());
+  byIdOrNull('api-tree-root')?.addEventListener('change', (e) => {
+    const nameInput = (e.target as Element).closest<HTMLInputElement>('.api-tree-name');
+    if (nameInput) setApiTreeNodeName(bridge, JSON.parse(nameInput.dataset.path as string), nameInput.value.trim());
   });
 
-  document.getElementById('btn-api-group-confirm')?.addEventListener('click', () => confirmApiGroupModal(bridge));
-  document.getElementById('input-api-group-path')?.addEventListener('keydown', (e) => {
+  byIdOrNull('btn-api-group-confirm')?.addEventListener('click', () => confirmApiGroupModal(bridge));
+  byIdOrNull('input-api-group-path')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') confirmApiGroupModal(bridge);
   });
-  document.getElementById('btn-api-group-cancel')?.addEventListener('click', () => cancelApiGroupModal(bridge));
+  byIdOrNull('btn-api-group-cancel')?.addEventListener('click', () => cancelApiGroupModal(bridge));
 
   // Issue #84 follow-up: API-mode field transforms modal — reuses the same
   // transform-chain editor (field-transforms.ts/field-transforms-ui.js) the
   // flat/container field modals already wire up above.
-  document.getElementById('btn-api-field-transforms-add')?.addEventListener('click', () => {
+  byIdOrNull('btn-api-field-transforms-add')?.addEventListener('click', () => {
     bridge.patchState({ pendingTransforms: addTransform(bridge.getState().pendingTransforms) });
   });
   wireTransformList(
     'api-field-transform-list',
     () => bridge.getState().pendingTransforms,
-    (transforms) => bridge.patchState({ pendingTransforms: transforms }),
+    (transforms: SFWire.FieldTransform[]) => bridge.patchState({ pendingTransforms: transforms }),
+    // @ts-expect-error field-transforms-ui.js (not converted yet) infers the getter as `() => null` from its default; this line errs once it is typed.
     () => bridge.getState().pendingRawText,
   );
-  document.getElementById('btn-api-field-transforms-confirm')?.addEventListener('click', () => confirmApiFieldTransformsModal(bridge));
-  document.getElementById('btn-api-field-transforms-cancel')?.addEventListener('click', () => cancelApiFieldTransformsModal(bridge));
+  byIdOrNull('btn-api-field-transforms-confirm')?.addEventListener('click', () => confirmApiFieldTransformsModal(bridge));
+  byIdOrNull('btn-api-field-transforms-cancel')?.addEventListener('click', () => cancelApiFieldTransformsModal(bridge));
 }
-
-module.exports = {
-  buildApiTreeNodeEl,
-  renderApiTree,
-  startApiTreeFieldSearch,
-  confirmApiTreeFieldCandidate,
-  openApiGroupModal,
-  confirmApiGroupModal,
-  cancelApiGroupModal,
-  setApiTreeNodeName,
-  openApiFieldTransformsModal,
-  confirmApiFieldTransformsModal,
-  cancelApiFieldTransformsModal,
-  wireApiResponseTreeEvents,
-};
