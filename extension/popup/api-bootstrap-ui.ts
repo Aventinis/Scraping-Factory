@@ -15,39 +15,39 @@
 //                                    name; written via patchState only, so
 //                                    they never reach chrome.storage (same
 //                                    treatment as fillTestValues, Issue #43)
-const { createLogger } = require('../shared/logger');
-const log = createLogger('SF:ApiBootstrapUI');
-const { t } = require('../i18n/i18n');
-const { envVarNoteHtml } = require('./env-var-ui');
-const { helpHostHtml } = require('./help-popover');
-const { autoOpenAdvanced } = require('./advanced-disclosure-ui');
-const { pathPickerButtonHtml, pathPickerPanelHtml, wirePathPickerEvents } = require('./json-path-picker-ui');
-const {
+import type * as SFDraft from '../types/drafts';
+import type { PopupBridge, State } from '../types/popup';
+import { createLogger } from '../shared/logger';
+import { t } from '../i18n/i18n';
+import { envVarNoteHtml } from './env-var-ui';
+import { helpHostHtml } from './help-popover';
+import { autoOpenAdvanced } from './advanced-disclosure-ui';
+import { pathPickerButtonHtml, pathPickerPanelHtml, wirePathPickerEvents } from './json-path-picker-ui';
+import {
   createDefaultBootstrapDraft, createBootstrapPair, detectTokenInResponse, bootstrapDraftFromCaptureEntry,
   wireTokenIntoMainRequest, stripBootstrapReferences, suggestEnvVarName,
-} = require('./api-bootstrap');
+} from './api-bootstrap';
+import type { ApiConfigDraft } from './api-config';
+import { patchApiConfigDraft } from './api-config-shared-ui';
+import { fetchApiCaptureEntries } from './api-capture-ui';
+import { byIdOrNull, escapeHtml } from './dom';
 
-// Duplicated from api-config.ts's own copy rather than imported — the
-// codebase's "no cross-module includes for small DOM helpers" convention.
-function escapeHtml(str) {
-  return String(str ?? '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+const log = createLogger('SF:ApiBootstrapUI');
 
-function patchDraft(bridge, patch) {
-  const state = bridge.getState();
-  bridge.setState(state.current, { apiConfigDraft: { ...state.apiConfigDraft, ...patch } });
-}
+type PairListKey = 'headers' | 'bodyFields';
+type RecordingRows = NonNullable<State['apiBootstrapRecordingEntries']>;
 
-function patchBootstrap(bridge, patch) {
-  const draft = bridge.getState().apiConfigDraft;
-  patchDraft(bridge, { bootstrap: { ...draft.bootstrap, ...patch } });
+// These handlers only run on the API_CONFIG screen, where the draft exists.
+const currentDraft = (bridge: PopupBridge): ApiConfigDraft => bridge.getState().apiConfigDraft as ApiConfigDraft;
+
+function patchBootstrap(bridge: PopupBridge, patch: Partial<SFDraft.ApiBootstrap>): void {
+  const draft = currentDraft(bridge);
+  patchApiConfigDraft(bridge, { bootstrap: { ...draft.bootstrap, ...patch } as SFDraft.ApiBootstrap });
 }
 
 // ── Rendering ───────────────────────────────────────────────────────────────
 
-function pairRowHtml(listKey, pair, index, testValues) {
+function pairRowHtml(listKey: PairListKey, pair: SFDraft.ApiBootstrapPair, index: number, testValues: Record<string, string>): string {
   const attrs = `data-list="${listKey}" data-index="${index}"`;
   const valueInput = pair.mode === 'env'
     ? `<input type="text" class="api-bootstrap-pair-env" data-env-var ${attrs} placeholder="${escapeHtml(t('envVar.placeholder.apiHeader'))}" value="${escapeHtml(pair.envName)}" />` +
@@ -65,14 +65,14 @@ function pairRowHtml(listKey, pair, index, testValues) {
       </li>`;
 }
 
-function pairListHtml(listKey, labelKey, pairs, testValues) {
+function pairListHtml(listKey: PairListKey, labelKey: string, pairs: SFDraft.ApiBootstrapPair[], testValues: Record<string, string>): string {
   return `
       <div class="row-label">${escapeHtml(t(labelKey))}</div>
       <ul class="api-bootstrap-pairs">${pairs.map((pair, i) => pairRowHtml(listKey, pair, i, testValues)).join('')}</ul>
       <button type="button" class="btn-secondary btn-tiny btn-api-bootstrap-add-pair" data-list="${listKey}">${escapeHtml(t('apiBootstrap.addRow'))}</button>`;
 }
 
-function recordingListHtml(entries) {
+function recordingListHtml(entries: RecordingRows): string {
   if (entries.length === 0) {
     return `<li class="api-candidates-empty">${escapeHtml(t('apiBootstrap.recordingEmpty'))}</li>`;
   }
@@ -83,7 +83,7 @@ function recordingListHtml(entries) {
       </li>`).join('');
 }
 
-function bootstrapConfigHtml(bootstrap, recordingEntries, testValues, state) {
+function bootstrapConfigHtml(bootstrap: SFDraft.ApiBootstrap, recordingEntries: RecordingRows | null, testValues: Record<string, string>, state: State): string {
   return `
       ${envVarNoteHtml()}
       <div class="actions">
@@ -118,13 +118,13 @@ function bootstrapConfigHtml(bootstrap, recordingEntries, testValues, state) {
 }
 
 // Called from popup.js's render() while the API_CONFIG screen is showing.
-function renderApiBootstrapSection(bridge) {
+export function renderApiBootstrapSection(bridge: PopupBridge): void {
   const state = bridge.getState();
   const bootstrap = state.apiConfigDraft?.bootstrap || null;
-  const toggle = /** @type {HTMLInputElement | null} */ (document.getElementById('toggle-api-bootstrap'));
+  const toggle = byIdOrNull<HTMLInputElement>('toggle-api-bootstrap');
   if (toggle) toggle.checked = !!bootstrap;
-  autoOpenAdvanced(document.getElementById('api-bootstrap-section'), !!bootstrap);
-  const configEl = document.getElementById('api-bootstrap-config');
+  autoOpenAdvanced(byIdOrNull('api-bootstrap-section'), !!bootstrap);
+  const configEl = byIdOrNull('api-bootstrap-config');
   if (!configEl) return;
   configEl.classList.toggle('hidden', !bootstrap);
   configEl.innerHTML = bootstrap
@@ -134,27 +134,27 @@ function renderApiBootstrapSection(bridge) {
 
 // ── Actions ─────────────────────────────────────────────────────────────────
 
-function setBootstrapEnabled(bridge, enabled) {
-  const draft = bridge.getState().apiConfigDraft;
+function setBootstrapEnabled(bridge: PopupBridge, enabled: boolean): void {
+  const draft = currentDraft(bridge);
   log('API_BOOTSTRAP toggle', enabled);
   if (enabled) {
-    patchDraft(bridge, { bootstrap: createDefaultBootstrapDraft() });
+    patchApiConfigDraft(bridge, { bootstrap: createDefaultBootstrapDraft() });
   } else {
     bridge.patchState({ apiBootstrapRecordingEntries: null });
-    patchDraft(bridge, { bootstrap: null, ...stripBootstrapReferences(draft) });
+    patchApiConfigDraft(bridge, { bootstrap: null, ...stripBootstrapReferences(draft) });
   }
 }
 
 // Renaming the bootstrap value carries every header template referencing
 // the old "{name}" along, so a rename never silently breaks the
 // "Bearer {token}" header the user already set up.
-function setBootstrapField(bridge, field, value) {
-  const draft = bridge.getState().apiConfigDraft;
+function setBootstrapField(bridge: PopupBridge, field: string, value: string): void {
+  const draft = currentDraft(bridge);
   if (field !== 'name') {
-    patchBootstrap(bridge, { [field]: field === 'url' || field === 'valuePath' ? value.trim() : value });
+    patchBootstrap(bridge, { [field]: field === 'url' || field === 'valuePath' ? value.trim() : value } as Partial<SFDraft.ApiBootstrap>); // field is one of the data-field names
     return;
   }
-  const oldName = draft.bootstrap.name;
+  const oldName = (draft.bootstrap as SFDraft.ApiBootstrap).name;
   const newName = value.trim();
   const headerDecisions = { ...draft.headerDecisions };
   Object.entries(headerDecisions).forEach(([header, decision]) => {
@@ -162,11 +162,11 @@ function setBootstrapField(bridge, field, value) {
       headerDecisions[header] = { ...decision, template: decision.template.split(`{${oldName}}`).join(`{${newName}}`) };
     }
   });
-  patchDraft(bridge, { bootstrap: { ...draft.bootstrap, name: newName }, headerDecisions });
+  patchApiConfigDraft(bridge, { bootstrap: { ...(draft.bootstrap as SFDraft.ApiBootstrap), name: newName }, headerDecisions });
 }
 
-function updatePair(bridge, listKey, index, patch) {
-  const bootstrap = bridge.getState().apiConfigDraft.bootstrap;
+function updatePair(bridge: PopupBridge, listKey: PairListKey, index: number, patch: Partial<SFDraft.ApiBootstrapPair>): void {
+  const bootstrap = currentDraft(bridge).bootstrap as SFDraft.ApiBootstrap;
   const list = bootstrap[listKey].map((pair, i) => {
     if (i !== index) return pair;
     const next = { ...pair, ...patch };
@@ -177,30 +177,18 @@ function updatePair(bridge, listKey, index, patch) {
   patchBootstrap(bridge, { [listKey]: list });
 }
 
-// GET_API_CAPTURE_ENTRIES round trip — same message api-config-ui.js's own
-// fetchApiCaptureEntries sends, duplicated (a few lines) rather than
-// reaching into that module.
-async function fetchCaptureEntries() {
-  try {
-    return await chrome.runtime.sendMessage({ type: 'GET_API_CAPTURE_ENTRIES' }) || [];
-  } catch (err) {
-    log('GET_API_CAPTURE_ENTRIES failed', err.message);
-    return [];
-  }
-}
-
 // "Take from recording": lists every recorded request with a successful
 // JSON-looking response (the main request itself excluded), sorted so the
 // ones whose response contains a value the main request actually sends
 // (its token, in practice) come first, marked as "likely".
-async function openRecordingPicker(bridge) {
+export async function openRecordingPicker(bridge: PopupBridge): Promise<void> {
   if (bridge.getState().apiBootstrapRecordingEntries) {
     bridge.patchState({ apiBootstrapRecordingEntries: null });
     return;
   }
-  const draft = bridge.getState().apiConfigDraft;
+  const draft = currentDraft(bridge);
   const mainStrings = [draft.sourceUrl || '', ...(draft.capturedHeaders || []).map(h => h.value)];
-  const entries = (await fetchCaptureEntries())
+  const entries = (await fetchApiCaptureEntries())
     .filter(entry => entry.status >= 200 && entry.status < 300 && entry.body && entry.url !== draft.sourceUrl)
     .map((entry) => {
       let likely = false;
@@ -212,22 +200,22 @@ async function openRecordingPicker(bridge) {
       }
       return { entry, likely };
     })
-    .filter(Boolean)
+    .filter((row): row is RecordingRows[number] => row !== null)
     .sort((a, b) => Number(b.likely) - Number(a.likely));
   log('API_BOOTSTRAP recording picker', { count: entries.length });
   bridge.patchState({ apiBootstrapRecordingEntries: entries });
 }
 
-function applyRecordingEntry(bridge, entryId) {
+export function applyRecordingEntry(bridge: PopupBridge, entryId: string | undefined): void {
   const state = bridge.getState();
   const picked = (state.apiBootstrapRecordingEntries || []).find(({ entry }) => String(entry.id) === String(entryId));
   if (!picked) return;
-  const draft = state.apiConfigDraft;
+  const draft = currentDraft(bridge);
   const name = draft.bootstrap?.name?.trim() || undefined;
   const { bootstrap, tokenValue } = bootstrapDraftFromCaptureEntry(picked.entry, { url: draft.sourceUrl, capturedHeaders: draft.capturedHeaders }, name);
   log('API_BOOTSTRAP from recording', { url: bootstrap.url, valuePath: bootstrap.valuePath, tokenDetected: !!tokenValue });
   bridge.patchState({ apiBootstrapRecordingEntries: null });
-  patchDraft(bridge, { bootstrap, ...wireTokenIntoMainRequest(draft, tokenValue, bootstrap.name) });
+  patchApiConfigDraft(bridge, { bootstrap, ...wireTokenIntoMainRequest(draft, tokenValue, bootstrap.name) });
   bridge.showToast(
     bootstrap.valuePath ? t('apiBootstrap.recordingApplied', { path: bootstrap.valuePath }) : t('apiBootstrap.recordingNoValuePath'),
     null, bootstrap.valuePath ? 'info' : 'warn');
@@ -235,52 +223,49 @@ function applyRecordingEntry(bridge, entryId) {
 
 // ── Event wiring ────────────────────────────────────────────────────────────
 
-function wireApiBootstrapEvents(bridge) {
-  const section = document.getElementById('api-bootstrap-section');
+export function wireApiBootstrapEvents(bridge: PopupBridge): void {
+  const section = byIdOrNull('api-bootstrap-section');
   if (!section) return;
   wirePathPickerEvents(bridge, section); // Issue #404
 
   section.addEventListener('change', (e) => {
-    const target = /** @type {HTMLInputElement} */ (e.target);
+    const target = e.target as HTMLInputElement;
     if (target.id === 'toggle-api-bootstrap') { setBootstrapEnabled(bridge, target.checked); return; }
-    if (target.classList.contains('api-bootstrap-field')) { setBootstrapField(bridge, target.dataset.field, target.value); return; }
+    if (target.classList.contains('api-bootstrap-field')) { setBootstrapField(bridge, target.dataset.field as string, target.value); return; }
     if (target.classList.contains('api-bootstrap-test-value')) {
       // patchState (not setState): test values must never reach
       // persistState()/chrome.storage.session, same as fillTestValues.
-      const envName = target.dataset.envName;
+      const envName = target.dataset.envName as string;
       bridge.patchState({ apiBootstrapTestValues: { ...bridge.getState().apiBootstrapTestValues, [envName]: target.value } });
       return;
     }
-    const listKey = target.dataset.list;
-    const index = parseInt(target.dataset.index, 10);
+    const listKey = target.dataset.list as PairListKey | undefined;
+    const index = parseInt(target.dataset.index as string, 10);
     if (!listKey || Number.isNaN(index)) return;
     if (target.classList.contains('api-bootstrap-pair-name')) updatePair(bridge, listKey, index, { name: target.value.trim() });
-    else if (target.classList.contains('api-bootstrap-pair-mode')) updatePair(bridge, listKey, index, { mode: target.value });
+    else if (target.classList.contains('api-bootstrap-pair-mode')) updatePair(bridge, listKey, index, { mode: target.value as 'literal' | 'env' });
     else if (target.classList.contains('api-bootstrap-pair-value')) updatePair(bridge, listKey, index, { value: target.value });
     else if (target.classList.contains('api-bootstrap-pair-env')) updatePair(bridge, listKey, index, { envName: target.value.trim() });
   });
 
   section.addEventListener('click', (e) => {
-    const target = /** @type {HTMLElement} */ (e.target);
+    const target = e.target as HTMLElement;
     if (target.closest('#btn-api-bootstrap-from-recording')) { openRecordingPicker(bridge); return; }
-    const entryEl = /** @type {HTMLElement | null} */ (target.closest('.api-bootstrap-recording-entry'));
+    const entryEl = target.closest<HTMLElement>('.api-bootstrap-recording-entry');
     if (entryEl) { applyRecordingEntry(bridge, entryEl.dataset.entryId); return; }
-    const addBtn = /** @type {HTMLElement | null} */ (target.closest('.btn-api-bootstrap-add-pair'));
+    const addBtn = target.closest<HTMLElement>('.btn-api-bootstrap-add-pair');
     if (addBtn) {
-      const listKey = addBtn.dataset.list;
-      const bootstrap = bridge.getState().apiConfigDraft.bootstrap;
+      const listKey = addBtn.dataset.list as PairListKey;
+      const bootstrap = currentDraft(bridge).bootstrap as SFDraft.ApiBootstrap;
       patchBootstrap(bridge, { [listKey]: [...bootstrap[listKey], createBootstrapPair()] });
       return;
     }
-    const removeBtn = /** @type {HTMLElement | null} */ (target.closest('.btn-api-bootstrap-remove-pair'));
+    const removeBtn = target.closest<HTMLElement>('.btn-api-bootstrap-remove-pair');
     if (removeBtn) {
-      const listKey = removeBtn.dataset.list;
-      const index = parseInt(removeBtn.dataset.index, 10);
-      const bootstrap = bridge.getState().apiConfigDraft.bootstrap;
+      const listKey = removeBtn.dataset.list as PairListKey;
+      const index = parseInt(removeBtn.dataset.index as string, 10);
+      const bootstrap = currentDraft(bridge).bootstrap as SFDraft.ApiBootstrap;
       patchBootstrap(bridge, { [listKey]: bootstrap[listKey].filter((_, i) => i !== index) });
     }
   });
 }
-
-module.exports = { renderApiBootstrapSection, wireApiBootstrapEvents, openRecordingPicker, applyRecordingEntry };
-
