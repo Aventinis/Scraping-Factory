@@ -732,7 +732,7 @@ under an "Advanced" disclosure, and a one-click "Recommended checks" preset. See
 docs/design-notes/extension.md for the details.
 
 - Extension: `popup/hardening-presets.js` (pure: `applyRecommendedHardening`),
-  `popup/settings-panel-ui.js` (button wiring, null-rate row sentences),
+  `popup/settings-panel-ui.ts` (button wiring, null-rate row sentences),
   `popup/screens/idle.html` (intro, heading, hosts, sentences, disclosure),
   `idle.hardening*`/`help.hardening.*` in `i18n/*.json`
 - Tests: `popup/hardening-presets.test.js`, `popup/hardening-presets-ui.test.js`,
@@ -1426,7 +1426,7 @@ minutes of pauses).
 - `Backends/Python/PythonScriptVerifier.RunScriptAsync`
   (`PauseAnnouncementPattern`, `MaxRequestDelayExtension`, moving deadline)
 - Extension: `scraping-config-builder.ts` (`buildRequestDelayConfig`),
-  `config-import.ts` (`applyRequestDelayConfig`), `settings-panel-ui.js`,
+  `config-import.ts` (`applyRequestDelayConfig`), `settings-panel-ui.ts`,
   `#toggle-request-delay`/`#request-delay-config` in `screens/idle.html`
 - Tests: `RequestDelayTests.cs`, `extension/popup/request-delay.test.js`,
   real-browser check `e2e/examples/issue-222-request-delay-check.js`
@@ -1447,7 +1447,7 @@ is unaffected. Disallow re-checking is the separate option of 2.21ab2 below.
   `urllib.robotparser`); the fetch itself is `fragments/robots_fetch.py.j2`,
   shared with 2.21ab2
 - Extension: `scraping-config-builder.ts` (`respectRobotsDelay` option), `config-import.ts`, `session-restore.ts`,
-  `settings-panel-ui.js`, `#toggle-respect-robots-delay` in `screens/idle.html`
+  `settings-panel-ui.ts`, `#toggle-respect-robots-delay` in `screens/idle.html`
 - Tests: `RobotsCrawlDelayTests.cs`, `extension/popup/robots-crawl-delay.test.js`,
   fixture `test-pages/crawl-delay` +
   `e2e/examples/issue-228-robots-crawl-delay-check.js`
@@ -1475,7 +1475,7 @@ subresources, the auth bootstrap or browser-discovery sessions.
   fragments and `api_fetch.py.j2`/`api_common.py.j2`
 - Extension: `scraping-config-builder.ts` (`robotsDisallow` option),
   `config-import.ts` (`applyRobotsDisallowConfig`), `session-restore.ts`,
-  `settings-panel-ui.js`, `#toggle-robots-disallow` in `screens/idle.html`
+  `settings-panel-ui.ts`, `#toggle-robots-disallow` in `screens/idle.html`
 - Tests: `RobotsDisallowTests.cs`, `RobotsDisallowEndpointTests.cs`,
   `extension/popup/robots-disallow.test.js`, fixture
   `test-pages/robots-disallow` + `e2e/examples/issue-333-robots-disallow-check.js`
@@ -1499,7 +1499,7 @@ carries it per component only.
   `main_blocks` and the two API templates), the SQLite/Excel branches of
   `output_tabular.py.j2`
 - Extension: `scraping-config-builder.ts` (`appendOutput` option),
-  `config-import.ts`, `session-restore.ts`, `settings-panel-ui.js`,
+  `config-import.ts`, `session-restore.ts`, `settings-panel-ui.ts`,
   `#toggle-append-output` in `screens/idle.html`; `dedup-config.ts` lost its
   tree-shape Append restriction
 - Tests: `AppendOutputTests.cs`, `AppendOutputEndpointTests.cs`,
@@ -1526,7 +1526,7 @@ extends its deadline by the wait plus an allowance for the retried request.
 - `Backends/Python/PythonScriptVerifier` (`RetryAnnouncementPattern`,
   `RetryAttemptAllowance`)
 - Extension: `scraping-config-builder.ts` (`buildRetryConfig`),
-  `config-import.ts` (`applyRetryConfig`), `settings-panel-ui.js`,
+  `config-import.ts` (`applyRetryConfig`), `settings-panel-ui.ts`,
   `#toggle-retry`/`#retry-config` in `screens/idle.html`
 - Tests: `RetryTests.cs`, `extension/popup/retry.test.js`, fixture
   `test-pages/flaky-server` + `e2e/examples/issue-223-retry-check.js`
@@ -1687,7 +1687,7 @@ needed for Excel only. Appending to an existing file is §2.21ab3.
   `ScriptVerificationResult.OutputFileEncoding`, `/generate` envelope
   `outputFile.encoding`; `HardeningReplayEvaluator.IsReplayable`
 - Extension: `shared/global-settings.ts` (`outputFormat`, migration),
-  `global-settings-ui.js`, `screens/settings.html`, `idle-screen-ui.ts`
+  `global-settings-ui.ts`, `screens/settings.html`, `idle-screen-ui.ts`
   (extension + flatten hint), `scraping-config-builder.ts`,
   `download-helpers.ts` (base64 decode)
 - Tests: `TabularOutputTests.cs`, `HardeningReplayEvaluatorTests.cs`,
@@ -1766,7 +1766,7 @@ request except `/health` and CORS preflights needs `Authorization: Bearer
   `/health` (`authRequired`) and `/whoami` in `Program.cs`; `ownerId` on the
   three store interfaces and both implementations (`OwnerId` columns)
 - Extension: `shared/companion-config.ts` (access key), `companionFetch` in
-  `popup/companion-client.ts`, `global-settings-ui.js` + `screens/settings.html`
+  `popup/companion-client.ts`, `global-settings-ui.ts` + `screens/settings.html`
 - Installer: `--enable-auth` / `-EnableAuth`
 - Tests: `AuthenticationTests.cs`, `extension/popup/access-key.test.js`,
   `e2e/examples/issue-278-access-key-check.js`
@@ -2125,12 +2125,12 @@ shape; only *where the extension sources those four values from* changed.
   (`loadGlobalSettings`/`getGlobalSettings`/`updateGlobalSettings`).
   `popup/screens/settings.html` (new runtime-loaded partial, same
   `loadScreenPartial` convention as `idle.html`/`api-config.html`) +
-  `popup/global-settings-ui.js` (`renderSettingsScreen`/
+  `popup/global-settings-ui.ts` (`renderSettingsScreen`/
   `wireSettingsScreenEvents` — the four toggles and the script-name
   mode/fixed-name controls directly; delegates blueprint management to
   `output-blueprints-ui.js`'s `renderManageBlueprintsModal` — unchanged,
   just repointed from a modal to a permanent section — and the cross-site
-  list to `saved-configs-ui.js`'s new `renderAllSavedConfigsList`/
+  list to `saved-configs-ui.ts`'s new `renderAllSavedConfigsList`/
   `wireAllSavedConfigsEvents`, which read the already-unconditionally-
   fetched `state.allSavedConfigs` — Issue #239's own Combined-mode
   component-picker fetch, reused here — and share `buildSavedOutputsPanelEl`/
@@ -2145,7 +2145,7 @@ shape; only *where the extension sources those four values from* changed.
   `popup.js`'s `_state` drops `useJsonOutput`/`includeDataPreview`/
   `includeOutputFile`/`externalConfig` entirely; every `buildScrapingConfig`/
   `buildConfigExport` call site (`companion-client.ts`'s `generate()`,
-  `download-helpers.ts`'s `downloadConfigExport`, `saved-configs-ui.js`'s
+  `download-helpers.ts`'s `downloadConfigExport`, `saved-configs-ui.ts`'s
   `createSavedConfig`) reads them from `getGlobalSettings()` instead.
   `config-import.ts`'s `applyConfigToState` no longer restores any of the
   four — loading/importing a saved config must never touch a cross-session

@@ -62,12 +62,42 @@ export interface SavedConfigSummary {
   blueprintId?: number | null;
 }
 
+// GET /configs/{id}: the summary plus the stored configuration, verbatim as it was sent to /generate.
+export interface SavedConfigRecord extends SavedConfigSummary {
+  config: SFWire.ScrapingConfig;
+}
+
 export interface SavedOutputSummary {
   id: number;
   savedConfigId: number;
   name: string;
   fileName: string;
   savedAt: string;
+}
+
+// GET /configs/{id}/outputs/{outputId}: the summary plus the stored output (base64 for the binary table formats).
+export interface SavedOutputRecord extends SavedOutputSummary {
+  content: string;
+}
+
+// One line of a "Test hardening" replay (HardeningReplayOutcome in the companion).
+export interface HardeningReplayResult {
+  kind: string;
+  severity: SFWire.HardeningSeverity;
+  outcome: 'Passed' | 'Triggered' | 'Inconclusive' | 'NotEvaluable';
+  message: string;
+}
+
+// "Test hardening" for one saved output: the live checks replayed against it, from the compare-basis choice to the results.
+export interface HardeningReplayState {
+  configId: number;
+  outputId: number;
+  checks: SFWire.HardeningCheck[];
+  compareBasis: 'config' | 'blueprint';
+  needsCompareBasisChoice: boolean;
+  loading: boolean;
+  results: HardeningReplayResult[] | null;
+  error: string | null;
 }
 
 // The companion's ScriptPreviewData (a sample of what the trial run scraped).
@@ -183,13 +213,15 @@ export interface State {
   blocksEditingIndex: number | null;
   blocksOutput: BlockOutput[] | null;
   savedConfigsPendingDeleteId: number | null;
+  /** The Settings tab's own list; absent from the initial state. */
+  allSavedConfigsPendingDeleteId?: number | null;
   saveConfigModalOpen: boolean;
   saveOutputModalOpen: boolean;
   savedConfigsExpandedId: number | null;
   savedOutputs: SavedOutputSummary[] | null;
   savedOutputsLoading: boolean;
   savedOutputsPendingDeleteId: number | null;
-  hardeningReplay: unknown;
+  hardeningReplay: HardeningReplayState | null;
 
   selectedOutputBlueprintId: string;
   selectedOutputBlueprintFieldNames: string[];

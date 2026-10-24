@@ -3,7 +3,7 @@
 // helpers live in combined-config.ts, this file owns the DOM side: the
 // ordered component list, the "add from saved configurations" picker
 // (sourced from every saved configuration regardless of host — see
-// saved-configs-ui.js's fetchAllSavedConfigs — since a component doesn't
+// saved-configs-ui.ts's fetchAllSavedConfigs — since a component doesn't
 // have to match the page currently open), and the merge-key name inputs.
 import type { PopupBridge, SavedConfigSummary } from '../types/popup';
 import { createLogger } from '../shared/logger';

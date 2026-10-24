@@ -1,7 +1,7 @@
 // Pagination helpers (Issue #405) — DOM rendering and event wiring for the
 // page-number template proposal, the "click a link to page 2" picker and the
 // pieces of the Pagination / Discover-start-URLs blocks that changed with it
-// (see pagination-template.ts for the pure derivation, settings-panel-ui.js for
+// (see pagination-template.ts for the pure derivation, settings-panel-ui.ts for
 // the block's remaining inputs — the same <feature>.js/<feature>-ui.js split
 // every other popup feature uses). Every function that touches state takes
 // popup.js's `bridge` as its first parameter, per Architecture Decision #13.
