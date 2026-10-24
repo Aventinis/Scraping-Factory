@@ -8,7 +8,7 @@
            (mode select + attribute picker + download checkbox + safety
            net) — hidden entirely in Blocks mode, which reuses this same
            modal for its own flat draft shape but doesn't support Download
-           yet (see flat-mode-ui.js's renderFlatFieldModal). -->
+           yet (see flat-mode-ui.ts's renderFlatFieldModal). -->
       <div id="field-name-mode-section">
         <label for="select-field-name-mode"><span data-i18n="modals.fieldExtended.typeLabel"></span><span class="help-host" data-help="help.fieldType.flat"></span></label>
         <select id="select-field-name-mode">
@@ -145,7 +145,7 @@
         <label for="select-field-attribute" data-i18n="modals.fieldExtended.attributeLabel"></label>
         <!-- Issue #213 follow-up: a picker of the clicked element's own
              actual attributes (populateAttributeSelect in
-             container-tree-ui.js, "name: value preview" options), not a
+             container-tree-ui.ts, "name: value preview" options), not a
              free-text field: typing a raw HTML attribute name blind
              defeats the point of a visual tool. Pre-selected via
              guessUrlAttribute's own heuristic when one option looks like a

@@ -5,7 +5,7 @@
 // currently being edited as "the block in progress"), the draft's own name/
 // output-filename inputs, and the ordered list of already-confirmed blocks
 // (edit/reorder/remove). The draft's actual field/group content is rendered
-// by flat-mode-ui.js's renderFields/container-tree-ui.js's renderGroupTree —
+// by flat-mode-ui.ts's renderFields/container-tree-ui.js's renderGroupTree —
 // unchanged, called from idle-screen-ui.js exactly like flat/container mode
 // already do, since those functions already operate on _state.fields/
 // _state.groups directly with no mode of their own baked in.

@@ -4,7 +4,7 @@
 // swap-with-adjacent-sibling convention this reuses verbatim). Unlike
 // Combined mode, a block has no external "saved configuration" to point
 // at — its own Fields/Groups content is edited directly, via the exact same
-// flat-mode-ui.js/container-tree-ui.js click-based selection flow flat/
+// flat-mode-ui.ts/container-tree-ui.js click-based selection flow flat/
 // container mode already use, reusing _state.fields/_state.groups as the
 // "block currently being built" draft (see blocks-config-ui.ts) rather than
 // duplicating that whole selection machinery a second time.

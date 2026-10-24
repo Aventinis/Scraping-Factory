@@ -110,7 +110,7 @@ flowchart TB
     apiCfg["popup/api-config.ts\n(pure builders/validators, API mode)"]
     ctree["popup/container-tree.js\n(pure builders/validators, Container mode)"]
     apiUi["popup/api-config-ui.ts + api-*-ui.js\n(DOM rendering + handlers, API mode)"]
-    ctreeUi["popup/container-tree-ui.js\n(DOM rendering + handlers, Container mode)"]
+    ctreeUi["popup/container-tree-ui.ts\n(DOM rendering + handlers, Container mode)"]
     popup["popup/popup.js\n(orchestrator: _state, render(), wireEvents())"]
 
     i18n --> apiCfg
@@ -139,7 +139,7 @@ script, MAIN-world recorder, service worker) into `extension/dist/`, which is wh
 "Load unpacked" points at; Jest runs the same sources directly. Module-level names
 never collide, so there is no load order to maintain.
 
-`api-config-ui.ts` and `container-tree-ui.js`'s handler functions take a `bridge`
+`api-config-ui.ts` and `container-tree-ui.ts`'s handler functions take a `bridge`
 object (`{ getState, setState, patchState, stopPreviewIfActive, requestDomTree,
 showToast }`) as their first parameter instead of closing over `popup.js`'s
 `_state` — necessary because `_state` is private to `popup.js` (importing it back
@@ -279,7 +279,7 @@ flat list of fields. The generated script walks the same tree at runtime and
 writes the result as XML instead of CSV, since a tree doesn't fit CSV's flat
 column model.
 
-- Extension: `popup/container-tree.js` (pure tree helpers), `popup/container-tree-ui.js`
+- Extension: `popup/container-tree.js` (pure tree helpers), `popup/container-tree-ui.ts`
   (tree editor UI, modals), `popup/popup.js` (`_state.groups`, `_state.mode ===
   'container'`), `content/content-script.js` (`scopeSelector`/`scopeRoot` support
   in `startSelection`/`buildSelector`, `matchGroupTree` for the DOM preview)
@@ -668,7 +668,7 @@ suggestion when a Static trial run returns no data. See docs/design-notes/extens
 - Extension: `popup/choice-guidance.js` (pure: `containerCountAdvice`,
   `shouldSuggestBrowserEngine`), `popup/toast.ts` (`showMatchCountToast`),
   `popup/message-router.ts`/`popup/session-restore.ts` (pass the chosen type),
-  `popup/container-tree-ui.js` (`.group-tree-type` toggle), `popup/companion-client.ts`
+  `popup/container-tree-ui.ts` (`.group-tree-type` toggle), `popup/companion-client.ts`
   (`generate()` suggestion), help hosts in `popup/screens/idle.html`/`modals.html`,
   `help.*`/`toast.*`/`group.*` in `i18n/*.json`
 - Tests: `popup/choice-guidance.test.js`, real-browser check
@@ -716,7 +716,7 @@ transform objects are unchanged. See docs/design-notes/extension.md for the deta
 - Extension: `popup/transform-helpers.js` (pure: `buildRecipe`, `previewRecipe`,
   `inferDateFormat`), `popup/transform-helpers-ui.ts`, `popup/field-transforms-ui.ts`
   (`getRawValue` getter through `renderTransformList`/`wireTransformList`),
-  `flat-mode-ui.js`/`container-tree-ui.js`/`api-config-ui.ts` (raw-value resolvers),
+  `flat-mode-ui.ts`/`container-tree-ui.ts`/`api-config-ui.ts` (raw-value resolvers),
   `transforms.helper.*`/`help.transforms.*` in `i18n/*.json`
 - Companion (tests only): `ScrapingFactory.Tests/RegexRecipeEndToEndTests.cs`
 - Tests: `popup/transform-helpers.test.js` (incl. Python `re` parity),
@@ -926,7 +926,7 @@ scraped values after a real `/generate` trial run, not live DOM matches.
   container tree row highlights just that row's element(s) on the page, in
   green, with no toggle — `popup/hover-highlight.ts` (`buildFlatFieldHighlight`,
   `buildGroupNodeHighlight`, `wireHoverHighlight`, wired from
-  `flat-mode-ui.js`/`container-tree-ui.js`), `HOVER_HIGHLIGHT`/
+  `flat-mode-ui.ts`/`container-tree-ui.ts`), `HOVER_HIGHLIGHT`/
   `HOVER_HIGHLIGHT_CLEAR` in `background/service-worker.js`'s
   `FORWARD_TO_TAB`, `content/content-script.js` (`matchHoverHighlight`,
   `showHoverHighlight`/`clearHoverHighlight`, the shared `createHighlightBox`)
@@ -2450,7 +2450,7 @@ builder) → `api-parameters-ui.ts` (`renderApiConfigParameters`'s per-kind bran
 not a new mode): usually extension-only if the shape already exists — flat mode's
 `ScrapingField`, container's `DataFieldNode`, or API's `ApiField` already carry
 everything a code generator needs; only the popup UI that builds one needs
-touching (`popup.js`/`container-tree-ui.js`/`api-config-ui.ts`'s respective modal
+touching (`popup.js`/`container-tree-ui.ts`/`api-config-ui.ts`'s respective modal
 or tree-insert flow).
 
 **Change what a `ScrapingConfig` can express at the top level** (a new
