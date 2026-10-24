@@ -1,5 +1,5 @@
 // Fixes the popup's language-detection default to German, same as
-// popup.test.js's own top-level setup.
+// test-support/popup-env.js's setup.
 Object.defineProperty(window.navigator, 'language', { value: 'de-DE', configurable: true });
 
 describe('Blocks mode (Issue #182)', () => {

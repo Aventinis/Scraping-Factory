@@ -556,7 +556,7 @@ reads the same data, so changing only one side fails. The shared data lives in `
 
 | Mirror | Extension side | Companion / script side | Checked by |
 | --- | --- | --- | --- |
-| File-name cleanup | `sanitizeFileNameBase` (`scraping-config-builder.ts`) | `IR/FileNameSanitizer.cs` | `file-name-sanitizer.json` — `scraping-config-builder.test.js`, `FileNameSanitizerTests.cs` |
+| File-name cleanup | `sanitizeFileNameBase` (`scraping-config-builder.ts`) | `IR/FileNameSanitizer.cs` | `file-name-sanitizer.json` — `scraping-config-builder*.test.js`, `FileNameSanitizerTests.cs` |
 | Transform previews | `applyTransformsPreview` (`field-transforms.ts`) | `fragments/transforms.py.j2` `_apply_transforms` | `transforms.json` — `transform-vectors.test.js`, `TransformVectorTests.cs` (real helper, imported from a generated script) |
 | robots.txt matching | `evaluateRobotsTxt` (`content-script.ts`) | `fragments/robots_disallow.py.j2` | `robots.json` — `robots-vectors.test.js`, `RobotsVectorTests.cs` |
 | Range formats | `compileRangeFormatPattern` (`api-config.ts`) | `Backends/Python/RangeFormat.cs`, `fragments/api_common.py.j2` | `range-format.json`, `range-expansion.json` — `range-format-vectors.test.js`, `RangeFormatVectorTests.cs` |
@@ -758,8 +758,8 @@ no longer reopen a field dialog after a reload. No wire-format or companion chan
 
 - Extension: `content/content-script.ts` (`pickId`), `background/service-worker.ts` (`pendingPickId`),
   `popup/message-router.ts` + `popup/session-restore.ts` (`markPickHandled`, `isLeftoverOfHandledPick`)
-- Tests: `popup/session-restore.test.js`, `background/service-worker.test.js`, `content/content-script.test.js`,
-  `popup/popup.test.js`, real-browser check `e2e/examples/issue-429-pending-selector-race-check.js`
+- Tests: `popup/session-restore.test.js`, `background/service-worker.test.js`, `content/content-script*.test.js`,
+  `popup/api-capture-flow.test.js`, real-browser check `e2e/examples/issue-429-pending-selector-race-check.js`
 
 ### 2.10l Bundled documentation and "Learn more" (Issue #354 Part B)
 
@@ -1641,7 +1641,7 @@ fragments, and JS (`content-script.ts`, `popup/selector-text-filter.ts`).
   `modal-field-extended`, live match count
 - Tests: `SelectorTextFilterTests.cs`, `TextSelectorEndToEndTests.cs`,
   `ScrapingPlanValidatorTests.cs`, `extension/popup/selector-text-filter.test.js`,
-  `content-script.test.js`, fixture `test-pages/text-selector` +
+  `content-script*.test.js`, fixture `test-pages/text-selector` +
   `e2e/examples/issue-227-text-selector-check.js`
 
 ### 2.21ab Click target: first/last/all matches (Issue #267)

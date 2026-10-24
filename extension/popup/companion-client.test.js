@@ -1,5 +1,5 @@
 // Fixes the popup's language-detection default to German, same as
-// popup.test.js's own top-level setup — every assertion below (written
+// test-support/popup-env.js's setup — every assertion below (written
 // against the original hardcoded German copy) depends on it, both via the
 // explicit initI18n() call for the pure-function test below and via each
 // integration test's own require('./popup') (which calls initI18n()
@@ -8,7 +8,7 @@ Object.defineProperty(window.navigator, 'language', { value: 'de-DE', configurab
 
 // buildVerificationErrorMessage (below) renders translated copy via
 // i18n.ts's t() — needs a real dictionary loaded, same as
-// scraping-config-builder.test.js's own setup for frameBadgeHtml.
+// scraping-config-builder.test.js's setup for frameBadgeHtml.
 global.chrome = global.chrome || { storage: { local: { get: (k, cb) => cb({}), set: (o, cb) => cb && cb() } } };
 const { initI18n } = require('../i18n/i18n');
 beforeAll(() => initI18n('de-DE'));

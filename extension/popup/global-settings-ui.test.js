@@ -1,5 +1,5 @@
 // Fixes the popup's language-detection default to German, same as
-// popup.test.js's own top-level setup — every assertion below (written
+// test-support/popup-env.js's setup — every assertion below (written
 // against the original hardcoded German copy) depends on it via each
 // integration test's own require('./popup') (which calls initI18n() itself
 // as part of init()).
