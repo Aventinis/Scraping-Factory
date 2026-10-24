@@ -1,5 +1,5 @@
 // Issue #406: the COMPANION_ERROR screen's structured guidance
-// (companion-guidance-ui.js), against the real markup in popup.html.
+// (companion-guidance-ui.ts), against the real markup in popup.html.
 const fs = require('fs');
 const path = require('path');
 

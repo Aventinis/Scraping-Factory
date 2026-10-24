@@ -10,20 +10,18 @@
 // applies each section's remembered open state once the markup is in the DOM;
 // the `toggle` listener (capture phase — `toggle` does not bubble) then
 // remembers every later change.
-const { isSectionOpen, withSectionOpen, loadAdvancedSections, persistAdvancedSections } =
-  require('./advanced-disclosure');
-const { t } = require('../i18n/i18n');
+import { isSectionOpen, withSectionOpen, loadAdvancedSections, persistAdvancedSections } from './advanced-disclosure';
+import { t } from '../i18n/i18n';
+import { qsa } from './dom';
 
-let sections = {};
+let sections: Record<string, boolean> = {};
 let wired = false;
 
 /**
- * Builds the disclosure element; the caller appends the rare options to
- * `.advanced-disclosure-body`.
- * @param {string} id stable per-section id (the storage key)
- * @param {string} [summaryKey] i18n key of the summary line
+ * Builds the disclosure element; the caller appends the rare options to `.advanced-disclosure-body`. `id` is the stable per-section id
+ * (the storage key), `summaryKey` the i18n key of the summary line.
  */
-function createAdvancedDisclosure(id, summaryKey = 'common.advanced') {
+export function createAdvancedDisclosure(id: string, summaryKey = 'common.advanced'): HTMLDetailsElement {
   const details = document.createElement('details');
   details.className = 'advanced-disclosure';
   details.dataset.advanced = id;
@@ -40,19 +38,18 @@ function createAdvancedDisclosure(id, summaryKey = 'common.advanced') {
 }
 
 /** Applies the remembered open state to every disclosure under `root`. */
-async function initAdvancedDisclosures(root = document) {
+export async function initAdvancedDisclosures(root: ParentNode = document): Promise<void> {
   sections = await loadAdvancedSections();
-  root.querySelectorAll('details[data-advanced]').forEach((el) => {
-    const details = /** @type {HTMLDetailsElement} */ (el);
+  qsa<HTMLDetailsElement>('details[data-advanced]', root).forEach((details) => {
     details.open = isSectionOpen(sections, details.dataset.advanced || '');
   });
 }
 
-function wireAdvancedDisclosureEvents() {
+export function wireAdvancedDisclosureEvents(): void {
   if (wired) return;
   wired = true;
   document.addEventListener('toggle', (e) => {
-    const details = /** @type {HTMLDetailsElement} */ (e.target);
+    const details = e.target as HTMLDetailsElement;
     const id = details && details.dataset && details.dataset.advanced;
     if (!id || !(details.matches && details.matches('details'))) return;
     // Setting `open` programmatically in init fires `toggle` too — only
@@ -69,8 +66,8 @@ function wireAdvancedDisclosureEvents() {
 // tucked away.
 // `section` is any element inside the disclosure; a screen without one (the
 // unit-test fixtures) is left alone.
-function autoOpenAdvanced(section, shouldOpen) {
-  const details = section && section.closest('details.advanced-disclosure');
+export function autoOpenAdvanced(section: Element | null | undefined, shouldOpen: boolean): void {
+  const details = section && section.closest<HTMLDetailsElement>('details.advanced-disclosure');
   if (!details) return;
   if (!shouldOpen) { delete details.dataset.autoOpened; return; }
   if (!details.open && !details.dataset.autoOpened) {
@@ -78,6 +75,3 @@ function autoOpenAdvanced(section, shouldOpen) {
     details.open = true;
   }
 }
-
-module.exports = { createAdvancedDisclosure, initAdvancedDisclosures, wireAdvancedDisclosureEvents, autoOpenAdvanced };
-

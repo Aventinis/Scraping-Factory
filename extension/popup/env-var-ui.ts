@@ -12,9 +12,10 @@
 //   - popup.js's render() calls refreshEnvVarValidation() at its end (dynamic rows
 //     are rebuilt on every render, the message with them) and wires the live check
 //     once with wireEnvVarValidation().
-const { t } = require('../i18n/i18n');
-const { validateEnvVarName } = require('./env-var');
-const { helpHostHtml } = require('./help-popover');
+import { t } from '../i18n/i18n';
+import { validateEnvVarName } from './env-var';
+import { helpHostHtml } from './help-popover';
+import { qsa } from './dom';
 
 const ERROR_CLASS = 'env-var-error';
 
@@ -22,32 +23,29 @@ const ERROR_CLASS = 'env-var-error';
  * The "What is an environment variable?" line with its "?" popover. The row is the
  * popover's anchor, so the panel opens right below it instead of inside a flex row.
  */
-function envVarNoteHtml() {
+export function envVarNoteHtml(): string {
   return `<p class="env-var-note" data-help-anchor><span>${t('envVar.whatLabel')}</span>${helpHostHtml('help.envVar.what', 'envVars')}</p>`;
 }
 
 // Where the message goes: right after the input's own row (a message inside a
 // flex row of several inputs would be squeezed between them). In a <ul>/<ol> the
 // message is an <li>.
-function messageSlot(input) {
-  const row = input.closest('[data-env-var-row], .output-settings-row, .browser-action-field-row, .request-header-row, li') || input.parentElement;
+function messageSlot(input: HTMLElement): HTMLElement | null {
+  const row = input.closest<HTMLElement>('[data-env-var-row], .output-settings-row, .browser-action-field-row, .request-header-row, li') || input.parentElement;
   return row;
 }
 
-function existingMessage(row) {
+function existingMessage(row: Element): Element | null {
   const next = row.nextElementSibling;
   return next && next.classList.contains(ERROR_CLASS) ? next : null;
 }
 
-/**
- * Validates one input and shows or clears its message.
- * @param {HTMLInputElement} input
- */
-function applyEnvVarValidation(input) {
+/** Validates one input and shows or clears its message. */
+export function applyEnvVarValidation(input: HTMLInputElement): void {
   const result = validateEnvVarName(input.value);
   const row = messageSlot(input);
   if (!row) return;
-  let message = existingMessage(row);
+  let message: Element | null = existingMessage(row);
 
   if (result.ok) {
     input.classList.remove('env-var-invalid');
@@ -68,21 +66,19 @@ function applyEnvVarValidation(input) {
 }
 
 /** Re-checks every env-var input on the page (after a render rebuilt some of them). */
-function refreshEnvVarValidation() {
-  document.querySelectorAll('input[data-env-var]').forEach((el) => applyEnvVarValidation(/** @type {HTMLInputElement} */ (el)));
+export function refreshEnvVarValidation(): void {
+  qsa<HTMLInputElement>('input[data-env-var]').forEach(applyEnvVarValidation);
 }
 
 let wired = false;
 
 // Live check while typing, delegated on the document so it covers inputs that are
 // rebuilt later; wired once.
-function wireEnvVarValidation() {
+export function wireEnvVarValidation(): void {
   if (wired) return;
   wired = true;
   document.addEventListener('input', (e) => {
-    const target = /** @type {Element} */ (e.target);
-    if (target && target.matches && target.matches('input[data-env-var]')) applyEnvVarValidation(/** @type {HTMLInputElement} */ (target));
+    const target = e.target as Element;
+    if (target && target.matches && target.matches('input[data-env-var]')) applyEnvVarValidation(target as HTMLInputElement);
   });
 }
-
-module.exports = { envVarNoteHtml, applyEnvVarValidation, refreshEnvVarValidation, wireEnvVarValidation };

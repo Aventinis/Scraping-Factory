@@ -1,7 +1,7 @@
 // Issue #352: the extension side of the companion's self-service accounts —
 // pure request/response helpers for /auth/register, /auth/login, /auth/logout,
 // /auth/logout-all and /auth/change-password (DOM and state live in
-// account-ui.js). `fetchFn` is companionFetch (adds the Bearer token), and
+// account-ui.ts). `fetchFn` is companionFetch (adds the Bearer token), and
 // `baseUrl` the resolved companion address, both passed in so this file needs
 // no other module.
 //
@@ -11,7 +11,8 @@
 // `retryAfter` the seconds of a 429 throttle response.
 const DEVICE_LABEL = 'Browser extension';
 
-export type FetchFn = typeof fetch;
+// companionFetch (which adds the access key) as well as a plain fetch or a test fake.
+export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
 
 export interface RequestSuccess {
   ok: true;

@@ -1,4 +1,4 @@
-// Deduplication by key field(s): pure data / logic (dedup-config-ui.js renders it).
+// Deduplication by key field(s): pure data / logic (dedup-config-ui.ts renders it).
 //
 // Draft (_state.deduplication), kept as typed so a half-edited number never blocks anything (the draft is forgiving, the wire is
 // strict, like buildRequestDelayConfig / buildRetryConfig):

@@ -1,4 +1,4 @@
-// API mode: Link-header pagination — pure data/logic, no DOM (rendering is api-link-pagination-ui.js). Many REST APIs announce
+// API mode: Link-header pagination — pure data/logic, no DOM (rendering is api-link-pagination-ui.ts). Many REST APIs announce
 // the next page in the `Link: <url>; rel="next"` response header instead of the body; the generated script follows it page
 // after page (ApiConfig.LinkHeaderPagination in IR/ApiConfig.cs). The draft (apiConfigDraft.linkHeaderPagination, null =
 // disabled) is just { maxPages }. Page 1 is sent exactly as recorded; GET only, and exclusive with cursor pagination.

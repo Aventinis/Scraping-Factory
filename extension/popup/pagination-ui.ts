@@ -10,18 +10,22 @@
 // absolute href of the last "next" / "page 2" link the user clicked, kept
 // inside the pagination draft so it persists with it; buildPaginationConfig
 // never sends it.
-const { createLogger } = require('../shared/logger');
+import type { PopupBridge, SelectionKind, State } from '../types/popup';
+import { createLogger } from '../shared/logger';
+import { t } from '../i18n/i18n';
+import { STATES } from './api-config';
+import { detectPageTemplate, proposalAlreadyApplied } from './pagination-template';
+import type { PageTemplateProposal } from './pagination-template';
+import { byId, byIdOrNull } from './dom';
+
 const log = createLogger('SF:Popup');
-const { t } = require('../i18n/i18n');
-const { STATES } = require('./api-config');
-const { detectPageTemplate, proposalAlreadyApplied } = require('./pagination-template');
 
 /**
  * The proposal worth showing for the current state, or null. A template that
  * leaves out {url} would request the same page N for every start page, so it
  * is not offered once there are several (additional or discovered ones).
  */
-function currentProposal(state) {
+export function currentProposal(state: State): PageTemplateProposal | null {
   if (!state.pagination.enabled || state.mode === 'api' || state.mode === 'combined') return null;
   const found = detectPageTemplate({ currentUrl: state.url || '', linkHref: state.pagination.linkHref || '' });
   if (!found) return null;
@@ -30,23 +34,23 @@ function currentProposal(state) {
   return proposalAlreadyApplied(state.pagination, found) ? null : found;
 }
 
-function renderPaginationHelpers(bridge) {
+export function renderPaginationHelpers(bridge: PopupBridge): void {
   const state = bridge.getState();
 
   // The proposal banner.
-  const banner = document.getElementById('pagination-suggestion');
+  const banner = byIdOrNull('pagination-suggestion');
   if (banner) {
     const found = currentProposal(state);
     banner.classList.toggle('hidden', !found);
     if (found) {
-      document.getElementById('pagination-suggestion-text').textContent = t('idle.paginationSuggestion');
-      document.getElementById('pagination-suggestion-template').textContent = found.template;
-      document.getElementById('pagination-suggestion-example').textContent = t('idle.paginationSuggestionExample', { example: found.example });
+      byId('pagination-suggestion-text').textContent = t('idle.paginationSuggestion');
+      byId('pagination-suggestion-template').textContent = found.template;
+      byId('pagination-suggestion-example').textContent = t('idle.paginationSuggestionExample', { example: found.example });
     }
   }
 
   // The picked "next" link, shown as a plain chip (its editable selector is under Advanced).
-  const selected = document.getElementById('pagination-next-link-selected');
+  const selected = byIdOrNull('pagination-next-link-selected');
   if (selected) {
     const selector = (state.pagination.nextLinkSelector || '').trim();
     selected.textContent = selector || t('browserActions.noSelector');
@@ -56,7 +60,7 @@ function renderPaginationHelpers(bridge) {
   // Issue #405: "Discover start URLs" lives under Advanced — hidden with the
   // rest of its block for API/Combined/Blocks, and opened once when the
   // option is already on, so a returning user's setting is never tucked away.
-  const advanced = document.getElementById('discovered-urls-advanced');
+  const advanced = byIdOrNull<HTMLDetailsElement>('discovered-urls-advanced');
   if (advanced) {
     advanced.classList.toggle('hidden', state.mode === 'api' || state.mode === 'combined' || state.mode === 'blocks');
     if (state.discoveredUrls.enabled && !advanced.open && !advanced.dataset.autoOpened) {
@@ -66,7 +70,7 @@ function renderPaginationHelpers(bridge) {
   }
 }
 
-function startLinkPick(bridge, selectionKind) {
+function startLinkPick(bridge: PopupBridge, selectionKind: SelectionKind): void {
   bridge.stopPreviewIfActive();
   chrome.runtime.sendMessage({ type: 'START_SELECTION' });
   bridge.setState(STATES.SELECTING, {
@@ -75,9 +79,9 @@ function startLinkPick(bridge, selectionKind) {
   });
 }
 
-function wirePaginationHelperEvents(bridge) {
+export function wirePaginationHelperEvents(bridge: PopupBridge): void {
   // Applying a proposal switches to the page-number kind and fills the template.
-  document.getElementById('btn-pagination-use-template')?.addEventListener('click', () => {
+  byIdOrNull('btn-pagination-use-template')?.addEventListener('click', () => {
     const found = currentProposal(bridge.getState());
     if (!found) return;
     log('BTN pagination-use-template', found.template);
@@ -87,10 +91,8 @@ function wirePaginationHelperEvents(bridge) {
   });
 
   // "Click a link to page 2": learns the pattern from the link's address.
-  document.getElementById('btn-pick-pagination-page-link')?.addEventListener('click', () => {
+  byIdOrNull('btn-pick-pagination-page-link')?.addEventListener('click', () => {
     log('BTN pick-pagination-page-link → START_SELECTION');
     startLinkPick(bridge, 'paginationPageLink');
   });
 }
-
-module.exports = { renderPaginationHelpers, wirePaginationHelperEvents, currentProposal };

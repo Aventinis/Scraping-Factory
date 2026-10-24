@@ -1,4 +1,4 @@
-// Issue #396: the help popover's DOM behavior (help-popover-ui.js).
+// Issue #396: the help popover's DOM behavior (help-popover-ui.ts).
 const { setLanguage } = require('../i18n/i18n');
 const { initHelpPopovers, wireHelpPopoverEvents } = require('./help-popover-ui');
 

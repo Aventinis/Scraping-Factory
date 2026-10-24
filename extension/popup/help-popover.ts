@@ -1,4 +1,4 @@
-// The reusable help popover's pure logic (help-popover-ui.js renders it): a "?" button toggles a short offline explanation with an
+// The reusable help popover's pure logic (help-popover-ui.ts renders it): a "?" button toggles a short offline explanation with an
 // optional example. A screen declares one in HTML only,
 //
 //   <span class="help-host" data-help="help.requestHeaders.headers"></span>
