@@ -175,6 +175,10 @@ companion's wire-format IR) and `SFDraft` (`drafts.ts`, this popup's
 own internal pre-serialization shapes, e.g. `container-tree.ts`'s tree
 nodes). `checkJs` stays off project-wide — the DOM-rendering `<feature>-ui.js`
 files and `popup.js` itself aren't annotated (yet).
+Two more type modules describe the side panel itself: `types/popup.ts` (`State`, the
+shape of `popup.js`'s `_state`; `Screen`; `PopupBridge`, what every `<feature>-ui`
+module receives as `bridge`) and `types/messages.ts` (`PopupInboundMessage`, the
+messages the content script and service worker send to `message-router.ts`).
 
 ### 1.3 The companion pipeline: wire format → canonical IR → codegen → real execution
 
@@ -405,7 +409,7 @@ request actually sends.
   mode, the Apply gate), `popup/api-request-ui.js` (header "From token" mode),
   `popup/api-parameters-ui.js` (the "Token value" URL-part source),
   `popup/api-config-ui.js` (`confirmApiConfig`),
-  `popup/companion-client.js` (bootstrap test values → `verificationValues`),
+  `popup/companion-client.ts` (bootstrap test values → `verificationValues`),
   `popup/screens/api-config.html` (`#api-bootstrap-section`)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig.Bootstrap`, `ApiBootstrap`,
   `ApiBootstrapBodyField`, `ApiBootstrapBodyEncoding`, `ApiHeader.Template`),
@@ -647,7 +651,7 @@ OS — in full until a companion has answered once on this browser
 - Extension: `popup/companion-guidance.ts` (OS detection, installer commands/paths,
   `likelySituations`, the persisted flag), `popup/companion-guidance-ui.js`
   (`renderCompanionGuidance`, called from `popup.js`'s `render()`),
-  `popup/companion-client.js` (`checkCompanion` loads/sets the flag and keeps the last
+  `popup/companion-client.ts` (`checkCompanion` loads/sets the flag and keeps the last
   failure for `getCompanionFailure()`), `#screen-error` in `popup/popup.html`,
   `error.*`/`help.companionError.*` in `i18n/*.json`
 - Tests: `popup/companion-guidance.test.js`, `popup/companion-guidance-ui.test.js`,
@@ -663,8 +667,8 @@ suggestion when a Static trial run returns no data. See docs/design-notes/extens
 
 - Extension: `popup/choice-guidance.js` (pure: `containerCountAdvice`,
   `shouldSuggestBrowserEngine`), `popup/toast.ts` (`showMatchCountToast`),
-  `popup/message-router.js`/`popup/session-restore.js` (pass the chosen type),
-  `popup/container-tree-ui.js` (`.group-tree-type` toggle), `popup/companion-client.js`
+  `popup/message-router.ts`/`popup/session-restore.ts` (pass the chosen type),
+  `popup/container-tree-ui.js` (`.group-tree-type` toggle), `popup/companion-client.ts`
   (`generate()` suggestion), help hosts in `popup/screens/idle.html`/`modals.html`,
   `help.*`/`toast.*`/`group.*` in `i18n/*.json`
 - Tests: `popup/choice-guidance.test.js`, real-browser check
@@ -679,7 +683,7 @@ in `popup/error-messages.js`; unknown errors keep the old wording. See docs/desi
 
 - Extension: `popup/error-messages.js` (pure: `classifyError`, `describeError`),
   `popup/toast.ts` (`showErrorToast`, `hideToast`, `wireErrorToastEvents`; sticky toast
-  with hint/details/close/copy), `popup/companion-client.js` (`showGenerateFailure`),
+  with hint/details/close/copy), `popup/companion-client.ts` (`showGenerateFailure`),
   the toast markup in `popup/popup.html`, `errors.*` in `i18n/*.json`
 - Tests: `popup/error-messages.test.js`, real-browser check
   `e2e/examples/issue-401-plain-errors-check.js`
@@ -695,7 +699,7 @@ bootstrap, an API discovery Fill action) shares one explanation popover
 - Extension: `popup/env-var.js` (pure: `validateEnvVarName`, `findInvalidEnvVarNames`),
   `popup/env-var-ui.js` (`envVarNoteHtml`, `applyEnvVarValidation`,
   `refreshEnvVarValidation`, `wireEnvVarValidation`), `popup/popup.js` (`render()`),
-  `popup/companion-client.js` (`generate()` guard), the inputs in `popup/screens/idle.html`,
+  `popup/companion-client.ts` (`generate()` guard), the inputs in `popup/screens/idle.html`,
   `api-config.html`, `browser-actions-ui.js`, `request-headers-ui.js`, `api-config-ui.js`,
   `api-bootstrap-ui.js`, `envVar.*`/`help.envVar.*` in `i18n/*.json`
 - Tests: `popup/env-var.test.js`, real-browser check
@@ -756,7 +760,7 @@ pick it handled, and a restore ignores a stored selector of an already handled p
 no longer reopen a field dialog after a reload. No wire-format or companion change. See docs/design-notes/extension.md.
 
 - Extension: `content/content-script.js` (`pickId`), `background/service-worker.js` (`pendingPickId`),
-  `popup/message-router.js` + `popup/session-restore.js` (`markPickHandled`, `isLeftoverOfHandledPick`)
+  `popup/message-router.ts` + `popup/session-restore.ts` (`markPickHandled`, `isLeftoverOfHandledPick`)
 - Tests: `popup/session-restore.test.js`, `background/service-worker.test.js`, `content/content-script.test.js`,
   `popup/popup.test.js`, real-browser check `e2e/examples/issue-429-pending-selector-race-check.js`
 
@@ -818,7 +822,7 @@ companion's page-number template now needs only `{page}` for a single start page
 docs/design-notes/extension.md for the details.
 
 - Extension: `popup/pagination-template.js` (pure derivation), `popup/pagination-ui.js`
-  (banner, pickers, Advanced placement), `popup/message-router.js`/`session-restore.js`
+  (banner, pickers, Advanced placement), `popup/message-router.ts`/`session-restore.ts`
   (the clicked link's address), `popup/screens/idle.html`, `idle.pagination*`/
   `help.pagination.*`/`help.discoveredUrls.*` in `i18n/*.json`
 - Companion: `IR/ScrapingPlanValidator.cs` (`ValidatePageNumberUrlTemplate`),
@@ -1208,7 +1212,7 @@ a copy of the steps (an existing chain is never replaced).
   as preset" controls under all three transform editors, the Settings
   section), `.transform-preset-controls` in `screens/modals.html`,
   `#settings-transform-presets-section` in `screens/settings.html`,
-  `bridge.fetchTransformPresets` called from `companion-client.js`'s health
+  `bridge.fetchTransformPresets` called from `companion-client.ts`'s health
   check
 - Companion: `TransformPresetStore.cs` (`transform-presets.db`), `/transform-presets`
   POST/GET/PUT(rename)/DELETE and `ValidateChain` in `Endpoints/TransformPresetEndpoints.cs`
@@ -1442,7 +1446,7 @@ is unaffected. Disallow re-checking is the separate option of 2.21ab2 below.
 - Fragment `request_delay.py.j2` (`_robots_delay`, `_fetch_robots_delay`,
   `urllib.robotparser`); the fetch itself is `fragments/robots_fetch.py.j2`,
   shared with 2.21ab2
-- Extension: `scraping-config-builder.ts` (`respectRobotsDelay` option), `config-import.ts`, `session-restore.js`,
+- Extension: `scraping-config-builder.ts` (`respectRobotsDelay` option), `config-import.ts`, `session-restore.ts`,
   `settings-panel-ui.js`, `#toggle-respect-robots-delay` in `screens/idle.html`
 - Tests: `RobotsCrawlDelayTests.cs`, `extension/popup/robots-crawl-delay.test.js`,
   fixture `test-pages/crawl-delay` +
@@ -1470,7 +1474,7 @@ subresources, the auth bootstrap or browser-discovery sessions.
   static page loops, the Browser pagination, preflight/discovery/download
   fragments and `api_fetch.py.j2`/`api_common.py.j2`
 - Extension: `scraping-config-builder.ts` (`robotsDisallow` option),
-  `config-import.ts` (`applyRobotsDisallowConfig`), `session-restore.js`,
+  `config-import.ts` (`applyRobotsDisallowConfig`), `session-restore.ts`,
   `settings-panel-ui.js`, `#toggle-robots-disallow` in `screens/idle.html`
 - Tests: `RobotsDisallowTests.cs`, `RobotsDisallowEndpointTests.cs`,
   `extension/popup/robots-disallow.test.js`, fixture
@@ -1495,7 +1499,7 @@ carries it per component only.
   `main_blocks` and the two API templates), the SQLite/Excel branches of
   `output_tabular.py.j2`
 - Extension: `scraping-config-builder.ts` (`appendOutput` option),
-  `config-import.ts`, `session-restore.js`, `settings-panel-ui.js`,
+  `config-import.ts`, `session-restore.ts`, `settings-panel-ui.js`,
   `#toggle-append-output` in `screens/idle.html`; `dedup-config.ts` lost its
   tree-shape Append restriction
 - Tests: `AppendOutputTests.cs`, `AppendOutputEndpointTests.cs`,
@@ -1552,7 +1556,7 @@ repeating group instance that owns every key field.
 - Extension: `dedup-config.ts` (pure) + `dedup-config-ui.js`
   (`renderDedupSection`/`wireDedupEvents`), `scraping-config-builder.ts`
   (`deduplication` option), `config-import.ts`,
-  `session-restore.js`, `#toggle-dedup`/`#dedup-config` in
+  `session-restore.ts`, `#toggle-dedup`/`#dedup-config` in
   `screens/idle.html`
 - Tests: `DeduplicationEndToEndTests.cs`, `DeduplicationConfigJsonTests.cs`,
   `ScrapingPlanValidatorTests.cs`, `extension/popup/dedup-config.test.js`,
@@ -1604,8 +1608,8 @@ Playwright's `extra_http_headers` (every request of the page) and
 - Extension: `request-headers.ts` (pure) + `request-headers-ui.js`
   (`renderRequestHeadersSection`/`wireRequestHeadersEvents`),
   `scraping-config-builder.ts` (`requestHeaders` option),
-  `companion-client.js` (test values → `verificationValues`),
-  `config-import.ts`, `session-restore.js`, `#toggle-request-headers`/
+  `companion-client.ts` (test values → `verificationValues`),
+  `config-import.ts`, `session-restore.ts`, `#toggle-request-headers`/
   `#request-headers-config` in `screens/idle.html`
 - Tests: `RequestHeadersEndToEndTests.cs`, `RequestHeadersEndpointTests.cs`,
   `ScrapingPlanValidatorTests.cs`, `FillVerificationValuesTests.cs`,
@@ -1762,7 +1766,7 @@ request except `/health` and CORS preflights needs `Authorization: Bearer
   `/health` (`authRequired`) and `/whoami` in `Program.cs`; `ownerId` on the
   three store interfaces and both implementations (`OwnerId` columns)
 - Extension: `shared/companion-config.ts` (access key), `companionFetch` in
-  `popup/companion-client.js`, `global-settings-ui.js` + `screens/settings.html`
+  `popup/companion-client.ts`, `global-settings-ui.js` + `screens/settings.html`
 - Installer: `--enable-auth` / `-EnableAuth`
 - Tests: `AuthenticationTests.cs`, `extension/popup/access-key.test.js`,
   `e2e/examples/issue-278-access-key-check.js`
@@ -1788,7 +1792,7 @@ channel constant in the extension (`shared/build-config.ts`, set to `release` by
 - Extension: `shared/build-config.ts`, `shared/companion-config.ts` (address policy,
   developer flag), `popup/account.ts` + `popup/account-ui.js`,
   `popup/screens/settings.html` (Account, Developer options),
-  `popup/companion-client.js` (`getCompanionInfo`, `useCustomCompanionUrl`)
+  `popup/companion-client.ts` (`getCompanionInfo`, `useCustomCompanionUrl`)
 - Installer: `--registration`, `--host`, `--tls-cert`/`--tls-key`, `--no-tls`;
   `install/build-bundle.sh` (release channel)
 - Tests: `AccountTests.cs`, `CompanionTlsTests.cs`, `shared/companion-url-policy.test.js`,
@@ -1812,7 +1816,7 @@ verified address; a successful reset revokes every token.
   `/health` + `/whoami` fields)
 - Extension: `popup/email-account.ts`, `popup/email-account-ui.js`,
   `popup/account-ui.js` (shared state), `popup/screens/settings.html`,
-  `popup/companion-client.js` (`getCompanionInfo`)
+  `popup/companion-client.ts` (`getCompanionInfo`)
 - Installer: `--smtp-*`, `--require-email`, `--require-verified-email`,
   `--email-domains`, `--no-email`
 - Tests: `EmailAccountTests.cs`, `popup/email-account*.test.js`,
@@ -2135,12 +2139,12 @@ shape; only *where the extension sources those four values from* changed.
   `deriveScriptFileNameFromHostname`/`computeScriptFileNamePatch` (pure —
   'hostname' mode always overwrites `scriptFileName` from the current
   site, 'fixed' mode only fills a still-blank one), called from
-  `companion-client.js`'s `checkCompanion()` and `message-router.js`'s
+  `companion-client.ts`'s `checkCompanion()` and `message-router.ts`'s
   stale-tracked-URL self-correction (Issue #85's own `ELEMENT_SELECTED`
   page-changed branch) — both "a fresh site was just detected" points.
   `popup.js`'s `_state` drops `useJsonOutput`/`includeDataPreview`/
   `includeOutputFile`/`externalConfig` entirely; every `buildScrapingConfig`/
-  `buildConfigExport` call site (`companion-client.js`'s `generate()`,
+  `buildConfigExport` call site (`companion-client.ts`'s `generate()`,
   `download-helpers.ts`'s `downloadConfigExport`, `saved-configs-ui.js`'s
   `createSavedConfig`) reads them from `getGlobalSettings()` instead.
   `config-import.ts`'s `applyConfigToState` no longer restores any of the
