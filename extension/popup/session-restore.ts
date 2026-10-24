@@ -2,10 +2,9 @@
 // init()'s chrome.storage.session recovery: restore persisted fields / groups / settings, then replay the pending-selector outcome.
 // It mirrors message-router.ts's ELEMENT_SELECTED branches (container insert, browser action, pagination, field modal), replayed
 // from storage after a reopen instead of from a live message, hence its own module.
-import type * as SFWire from '../types/wire';
 import type * as SFDraft from '../types/drafts';
 import type { PopupBridge, State } from '../types/popup';
-import type { ApiConfigDraft } from './api-config';
+import type { ApiConfigDraft, SourceOf } from './api-config';
 import { createLogger } from '../shared/logger';
 import { t } from '../i18n/i18n';
 import { STATES } from './api-config';
@@ -36,17 +35,16 @@ export type StoredSession = Partial<Pick<State,
   handledPickId?: unknown;
 };
 
-// A BrowserDiscoverySource's action list is edited in draft shape (SFDraft.BrowserAction) while the API_CONFIG screen is open and only
-// serialized on Apply, so the wire-typed source is read through a cast here.
+// A browser-discovery source's action list is edited in draft shape while the API_CONFIG screen is open and only serialized on Apply.
 export function withDiscoveryActionPatch(
   draft: ApiConfigDraft, partId: string, index: number, patch: Partial<SFDraft.BrowserAction>,
 ): ApiConfigDraft {
-  const source = draft.parameterSources[partId] as unknown as { actions?: SFDraft.BrowserAction[] };
+  const source = draft.parameterSources[partId] as SourceOf<'browserDiscovery'>; // only called for a browser-discovery part
   return {
     ...draft,
     parameterSources: {
       ...draft.parameterSources,
-      [partId]: { ...source, actions: updateBrowserAction(source.actions || [], index, patch) } as unknown as SFWire.ApiParameterSource,
+      [partId]: { ...source, actions: updateBrowserAction(source.actions || [], index, patch) },
     },
   };
 }

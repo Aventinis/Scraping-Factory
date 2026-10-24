@@ -39,7 +39,18 @@ export interface UrlParts {
   queryParams: QueryParamPart[];
 }
 
-export type ApiParameterSourceDraft = SFWire.ApiParameterSource;
+// What parameterSources holds while the API_CONFIG screen is open; confirmApiConfig turns each into its SFWire.ApiParameterSource. A part
+// whose source kind is not chosen yet has no entry at all.
+export type ApiParameterSourceDraft =
+  | { kind: 'staticList'; valuesText: string }
+  | { kind: 'range'; type: SFWire.RangeType; from: string; to: string; format?: string }
+  // Incomplete until confirmDiscoveryCandidate fills in the three paths.
+  | { kind: 'discovery'; method?: 'GET'; urlTemplate?: string; itemsPath?: string; valuePath?: string }
+  | { kind: 'browserDiscovery'; discoveryUrl: string; actions: SFDraft.BrowserAction[] }
+  // The part carries the bootstrap value; never a declared parameter (see api-bootstrap.ts).
+  | { kind: 'bootstrap' };
+
+export type SourceOf<K extends ApiParameterSourceDraft['kind']> = Extract<ApiParameterSourceDraft, { kind: K }>;
 
 export interface ApiGroupDraft {
   kind: 'group';
@@ -117,7 +128,12 @@ export interface ApiConfigDraft {
   linkHeaderPagination?: SFDraft.ApiLinkHeaderPagination | null;
   sourceHasNextLink?: boolean;
   sourceEntryId?: string;
+  sourceUrl?: string;
+  nextBodyParameterSeq?: number;
 }
+
+// What buildApiConfig assembles: the draft with every parameter source already in its wire form.
+export type ApiConfigBuildInput = Omit<ApiConfigDraft, 'parameterSources'> & { parameterSources: Record<string, SFWire.ApiParameterSource> };
 
 /**
  * The message content-script.js sends back after a click-based search. It is a
@@ -445,7 +461,7 @@ export function buildApiConfig({
   urlParts, itemsPath, fields, groups, parameterSources, capturedHeaders, headerDecisions,
   method, bodyTree, bodyParameterNames = [], parameterIdToName = {}, embeddedJsonSource = null, bootstrap = null,
   cursorPagination = null, linkHeaderPagination = null,
-}: ApiConfigDraft): SFWire.ApiConfig {
+}: ApiConfigBuildInput): SFWire.ApiConfig {
   const urlTemplate = buildUrlTemplate(urlParts);
   // Issue #220: a variable URL part carrying the bootstrap value (already
   // renamed to the bootstrap's own name by resolveBootstrapUrlParts) is a
