@@ -4,7 +4,7 @@
 // architecture decision) — everything talking to the companion's local
 // SQLite-backed /configs and /configs/{id}/outputs endpoints, plus the
 // "Saved configurations" panel's own rendering, lives here. Functions take
-// a `bridge` object (same convention as api-config-ui.js/companion-client.js)
+// a `bridge` object (same convention as api-config-ui.ts/companion-client.js)
 // instead of closing over popup.js's own module-level state.
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');

@@ -1,5 +1,5 @@
 // API mode: the response-tree editor: the rows, the "add group" and "edit a leaf's transforms" modals, and the JSON-scoped search that adds a
-// field or group to a confirmed tree. See api-config-ui.js for the `bridge` convention.
+// field or group to a confirmed tree. See api-config-ui.ts for the `bridge` convention.
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:ApiConfigUI');
 const { t } = require('../i18n/i18n');

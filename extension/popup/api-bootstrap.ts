@@ -1,4 +1,4 @@
-// API mode: the token/auth bootstrap — pure data/logic (api-bootstrap-ui.js renders it). A bootstrap is one request the
+// API mode: the token/auth bootstrap — pure data/logic (api-bootstrap-ui.ts renders it). A bootstrap is one request the
 // script sends at the start of every run, extracting a short-lived value from the JSON response that is spliced into the
 // main request's headers ("Bearer {token}") and/or URL.
 //

@@ -1,6 +1,6 @@
 // ── Companion HTTP client ──
 // Every request the side panel makes to the companion (health check, robots.txt relay, /generate). Functions take a
-// `bridge` (see api-config-ui.js) instead of closing over popup.js state.
+// `bridge` (see api-config-ui.ts) instead of closing over popup.js state.
 import type * as SFWire from '../types/wire';
 import type * as SFDraft from '../types/drafts';
 import type { PopupBridge, BlockOutput, DataPreview, OutputFileContent } from '../types/popup';

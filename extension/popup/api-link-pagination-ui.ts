@@ -1,13 +1,13 @@
 // API mode: Link-header pagination (Issue #321) — DOM rendering and event
 // wiring for the "Follow the Link header" section on the API_CONFIG screen
 // (see api-link-pagination.ts for the pure draft/wire logic, the same
-// <feature>.js/<feature>-ui.js split api-cursor-pagination-ui.js uses). Every
+// <feature>.js/<feature>-ui.js split api-cursor-pagination-ui.ts uses). Every
 // function that touches state takes popup.js's `bridge` as its first
 // parameter, per Architecture Decision #12.
 //
 // State this module owns:
 //   apiConfigDraft.linkHeaderPagination — the draft (null = disabled)
-// Reads (set by api-config-ui.js when the candidate is confirmed):
+// Reads (set by api-config-ui.ts when the candidate is confirmed):
 //   apiConfigDraft.sourceHasNextLink — the recorded response carried a
 //   rel="next" Link header, so the option is highlighted as a suggestion.
 import type { PopupBridge } from '../types/popup';

@@ -1,7 +1,7 @@
 // API mode: the BrowserDiscoverySource editor (Issue #216) — its action-list
 // cards (WaitFor/Fill/Click/Scroll, times in seconds) and the draft mutations
-// behind them. Split out of api-config-ui.js (Issue #390); behavior unchanged.
-// See api-config-ui.js for the `bridge` convention.
+// behind them. Split out of api-config-ui.ts (Issue #390); behavior unchanged.
+// See api-config-ui.ts for the `bridge` convention.
 import type * as SFDraft from '../types/drafts';
 import type { BrowserActionField, PopupBridge } from '../types/popup';
 import { createLogger } from '../shared/logger';

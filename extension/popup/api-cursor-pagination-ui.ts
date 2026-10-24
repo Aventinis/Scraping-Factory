@@ -2,7 +2,7 @@
 // event wiring for the "Follow a next-page cursor" section on the API_CONFIG
 // screen (see api-cursor-pagination.ts for the pure draft/wire logic, the
 // same <feature>.js/<feature>-ui.js split api-bootstrap.ts/
-// api-bootstrap-ui.js use). Every function that touches state takes
+// api-bootstrap-ui.ts use). Every function that touches state takes
 // popup.js's `bridge` as its first parameter, per Architecture Decision #12.
 //
 // State this module owns:

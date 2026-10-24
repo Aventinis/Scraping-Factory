@@ -1,6 +1,6 @@
 // API mode: small draft helpers shared by the API_CONFIG UI modules: patching apiConfigDraft / a parameter source, and the "insert a parameter
 // placeholder" picker of both discovery-source editors. Apart so the parameter and browser-discovery modules need not import each other. See
-// api-config-ui.js for the `bridge` convention.
+// api-config-ui.ts for the `bridge` convention.
 import type { PopupBridge } from '../types/popup';
 import { t } from '../i18n/i18n';
 import { escapeHtml } from './api-config';

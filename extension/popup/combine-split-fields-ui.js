@@ -41,7 +41,7 @@ function cancelSplitFieldModal(bridge) {
 // on interaction (the checkbox list's own checked state lives in the DOM
 // only, read back at confirm time), the same "no re-render can happen
 // mid-edit" reasoning modal-api-group-new's own render block already
-// relies on (see api-config-ui.js's renderApiConfigModals).
+// relies on (see api-config-ui.ts's renderApiConfigModals).
 function renderCombineFieldModal(bridge, availableFieldNames) {
   const state = bridge.getState();
   const modal = document.getElementById('modal-combine-field');

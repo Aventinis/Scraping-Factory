@@ -2,7 +2,7 @@
 // Extracted from popup.js (docs/design-notes/extension.md, "Popup module boundaries") — every "save this Blob to disk via a throwaway
 // anchor click" action lives here. Functions that need the current
 // configuration take a `bridge` object (same convention as
-// api-config-ui.js/companion-client.js) instead of closing over popup.js's
+// api-config-ui.ts/companion-client.js) instead of closing over popup.js's
 // own module-level state; downloadFile itself is state-free.
 import type * as SFDraft from '../types/drafts';
 import { createLogger } from '../shared/logger';

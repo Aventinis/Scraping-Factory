@@ -1,6 +1,6 @@
 // API mode: network recording and the candidate-search results: the recording toggle, the click-based searches (recorded
 // requests, the page's embedded JSON), the candidate and recorded-request lists, and confirming a candidate into an
-// apiConfigDraft. See api-config-ui.js for the `bridge` convention.
+// apiConfigDraft. See api-config-ui.ts for the `bridge` convention.
 import type * as SFDraft from '../types/drafts';
 import type { ApiCandidatesResult, PopupBridge } from '../types/popup';
 import type { ApiCandidate } from '../types/messages';

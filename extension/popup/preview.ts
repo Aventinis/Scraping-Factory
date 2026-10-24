@@ -4,7 +4,7 @@
 // results directly on the page — see content-script.js's
 // computePreviewMatches/startPreview for the matching semantics (mirrors
 // the backend codegen exactly). Takes a `bridge` object (same convention as
-// api-config-ui.js/container-tree-ui.js/dom-tree-ui.js) instead of closing
+// api-config-ui.ts/container-tree-ui.js/dom-tree-ui.js) instead of closing
 // over popup.js's own module-level state.
 //
 // Not to be confused with Issue #122's unrelated trial-run "data preview"
