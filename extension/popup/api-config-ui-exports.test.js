@@ -1,5 +1,5 @@
 // Issue #390: api-config-ui.ts was split into focused modules and re-exports every
-// name it used to export, so popup.js, idle-screen-ui.js and the tests import
+// name it used to export, so popup.js, idle-screen-ui.ts and the tests import
 // unchanged. This pins that public surface: a name dropped (or silently turned
 // into something else) by a later edit fails here instead of at a click.
 const apiConfigUi = require('./api-config-ui');

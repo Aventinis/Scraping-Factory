@@ -1,6 +1,6 @@
 // API mode's DOM rendering and event handling. This file is the orchestrator: the API_CONFIG screen's render / confirm / cancel, the
 // modals' render, and wireApiConfigEvents, which calls the focused modules in turn. It re-exports every name it used to export, so
-// popup.js and idle-screen-ui.js import unchanged:
+// popup.js and idle-screen-ui.ts import unchanged:
 //   api-capture-ui.ts            recording, searches, candidate / recorded-request lists
 //   api-response-tree-ui.ts      response tree, group + transforms modals, tree search
 //   api-parameters-ui.ts         URL parts and parameter sources
@@ -261,7 +261,7 @@ export function wireApiConfigEvents(bridge: PopupBridge): void {
   });
 }
 
-// Everything this module used to export stays reachable from here: popup.js and idle-screen-ui.js import it unchanged
+// Everything this module used to export stays reachable from here: popup.js and idle-screen-ui.ts import it unchanged
 // (pinned by api-config-ui-exports.test.js).
 export {
   buildApiTreeNodeEl,

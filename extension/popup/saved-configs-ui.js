@@ -207,7 +207,7 @@ async function fetchSavedConfigs(bridge, url) {
 // saved configuration regardless of host, needed by Combined mode's
 // component picker (a component doesn't have to match the page currently
 // open). Fetched once on switching into Combined mode (see switchMode in
-// idle-screen-ui.js), same "non-fatal, panel just stays empty" treatment as
+// idle-screen-ui.ts), same "non-fatal, panel just stays empty" treatment as
 // fetchSavedConfigs for an older/unreachable companion.
 async function fetchAllSavedConfigs(bridge) {
   bridge.patchState({ allSavedConfigsLoading: true });

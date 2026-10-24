@@ -1,4 +1,4 @@
-// The "Login form" starter and plain-unit helpers for the browser actions: pure (browser-actions-ui.js renders them). A login is
+// The "Login form" starter and plain-unit helpers for the browser actions: pure (browser-actions-ui.ts renders them). A login is
 // built from the generic WaitFor / Fill / Click / Scroll actions; the starter adds the four typical steps at once so the user only
 // clicks the four elements. Each starter action carries a UI-only `role` (the card then says "Fill in the user name"); the
 // serializer picks the wire fields per kind, so a role never reaches the request.

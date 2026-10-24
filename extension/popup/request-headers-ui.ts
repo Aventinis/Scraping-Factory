@@ -10,22 +10,17 @@
 //   _state.requestHeaderTestValues — one-time test values keyed by environment
 //                                    variable name; memory only, never persisted
 //                                    (same treatment as fillTestValues)
-const { t } = require('../i18n/i18n');
-const { addHeaderRow, appendHeaderRow, removeHeaderRow, updateHeaderRow } = require('./request-headers');
-const {
+import type * as SFDraft from '../types/drafts';
+import type { PopupBridge } from '../types/popup';
+import { t } from '../i18n/i18n';
+import { addHeaderRow, appendHeaderRow, removeHeaderRow, updateHeaderRow } from './request-headers';
+import {
   REQUEST_HEADER_PRESETS, OTHER_PRESET_ID, presetById, presetForName, rowFromPreset,
   isSecretHeaderName, suggestHeaderEnvName,
-} = require('./request-header-presets');
+} from './request-header-presets';
+import { byIdOrNull, escapeHtml } from './dom';
 
-// Duplicated from the other -ui modules' own copies rather than imported —
-// the codebase's "no cross-module includes for small DOM helpers" convention.
-function escapeHtml(str) {
-  return String(str ?? '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
-function patchHeaders(bridge, next) {
+function patchHeaders(bridge: PopupBridge, next: SFDraft.RequestHeadersState): void {
   bridge.setState(bridge.getState().current, { requestHeaders: next });
 }
 
@@ -33,7 +28,7 @@ function patchHeaders(bridge, next) {
 // for, and — for a credential-looking header holding a fixed value — a
 // warning that the value would sit in the script as plain text. Not an input,
 // so it can be refreshed in place without disturbing the focused field.
-function notesHtml(row) {
+function notesHtml(row: SFDraft.RequestHeaderRow): string {
   const preset = presetForName(row.name);
   const parts = [];
   if (preset) parts.push(`<p class="request-header-desc">${escapeHtml(t(`requestHeaderPresets.${preset.id}.desc`))}</p>`);
@@ -43,7 +38,7 @@ function notesHtml(row) {
   return parts.join('');
 }
 
-function rowHtml(row, index, testValues) {
+function rowHtml(row: SFDraft.RequestHeaderRow, index: number, testValues: Record<string, string>): string {
   const isEnv = row.kind === 'env';
   const testValue = isEnv ? (testValues[row.value.trim()] || '') : '';
   return `
@@ -60,18 +55,18 @@ function rowHtml(row, index, testValues) {
       </div>`;
 }
 
-function renderRequestHeadersSection(bridge) {
+export function renderRequestHeadersSection(bridge: PopupBridge): void {
   const state = bridge.getState();
   const headers = state.requestHeaders;
 
   // API mode has its own header editor (adopted from the recorded request)
   // and a Combined request carries its headers per component, so neither
   // offers this — the companion rejects the combinations outright.
-  document.getElementById('request-headers-section')?.classList.toggle('hidden', state.mode === 'api' || state.mode === 'combined');
+  byIdOrNull('request-headers-section')?.classList.toggle('hidden', state.mode === 'api' || state.mode === 'combined');
 
-  const toggle = /** @type {HTMLInputElement | null} */ (document.getElementById('toggle-request-headers'));
+  const toggle = byIdOrNull<HTMLInputElement>('toggle-request-headers');
   if (toggle) toggle.checked = headers.enabled;
-  document.getElementById('request-headers-config')?.classList.toggle('hidden', !headers.enabled);
+  byIdOrNull('request-headers-config')?.classList.toggle('hidden', !headers.enabled);
 
   renderHeaderPicker(headers);
 
@@ -81,24 +76,24 @@ function renderRequestHeadersSection(bridge) {
   // focus moves on, e.g. name → Tab → value) goes through a full render
   // pass, and tearing the row down then would destroy the very input the
   // user just moved into — and so would a test-value keystroke.
-  const list = document.getElementById('request-headers-list');
+  const list = byIdOrNull('request-headers-list');
   if (!list) return;
   const testValues = state.requestHeaderTestValues || {};
   const structure = headers.rows.map((row) => row.kind).join(',');
   if (list.dataset.structure !== structure || list.children.length !== headers.rows.length) {
     list.dataset.structure = structure;
     list.innerHTML = headers.rows.map((row, i) => rowHtml(row, i, testValues)).join('');
-    list.querySelectorAll('.request-header-notes').forEach((el) => { el.dataset.signature = el.innerHTML; });
+    list.querySelectorAll<HTMLElement>('.request-header-notes').forEach((el) => { el.dataset.signature = el.innerHTML; });
     return;
   }
-  headers.rows.forEach((row, i) => syncRow(list.children[i], row, testValues));
+  headers.rows.forEach((row, i) => syncRow(list.children[i] as HTMLElement, row, testValues));
 }
 
 // The "Add a header…" picker (Issue #402). Rebuilt only when its labels or
 // which presets are already in use change (a language switch, a row added or
 // renamed), so it never flickers under an open dropdown.
-function renderHeaderPicker(headers) {
-  const select = /** @type {HTMLSelectElement | null} */ (document.getElementById('select-add-request-header'));
+function renderHeaderPicker(headers: SFDraft.RequestHeadersState): void {
+  const select = byIdOrNull<HTMLSelectElement>('select-add-request-header');
   if (!select) return;
   const used = new Set(headers.rows.map((row) => row.name.trim().toLowerCase()));
   const options = [
@@ -121,18 +116,18 @@ function renderHeaderPicker(headers) {
   select.value = '';
 }
 
-function setIfIdle(input, value) {
+function setIfIdle(input: HTMLInputElement | null, value: string): void {
   if (input && document.activeElement !== input && input.value !== value) input.value = value;
 }
 
 // The test-value box depends on the variable name (it is keyed by it), so it
 // appears/disappears here when that name goes from empty to set and back —
 // as a plain element insert/remove, not a row rebuild.
-function syncRow(rowEl, row, testValues) {
-  setIfIdle(rowEl.querySelector('.request-header-name'), row.name);
-  setIfIdle(rowEl.querySelector('.request-header-value'), row.value);
+function syncRow(rowEl: HTMLElement, row: SFDraft.RequestHeaderRow, testValues: Record<string, string>): void {
+  setIfIdle(rowEl.querySelector<HTMLInputElement>('.request-header-name'), row.name);
+  setIfIdle(rowEl.querySelector<HTMLInputElement>('.request-header-value'), row.value);
   const needsTestInput = row.kind === 'env' && Boolean(row.value.trim());
-  let testInput = rowEl.querySelector('.request-header-test-value');
+  let testInput = rowEl.querySelector<HTMLInputElement>('.request-header-test-value');
   if (needsTestInput && !testInput) {
     testInput = document.createElement('input');
     testInput.type = 'password';
@@ -146,7 +141,7 @@ function syncRow(rowEl, row, testValues) {
   }
   if (testInput) setIfIdle(testInput, testValues[row.value.trim()] || '');
 
-  const notesEl = rowEl.querySelector('.request-header-notes');
+  const notesEl = rowEl.querySelector<HTMLElement>('.request-header-notes');
   const notes = notesHtml(row);
   if (notesEl && notesEl.dataset.signature !== notes) {
     notesEl.dataset.signature = notes;
@@ -154,15 +149,15 @@ function syncRow(rowEl, row, testValues) {
   }
 }
 
-function wireRequestHeadersEvents(bridge) {
-  document.getElementById('toggle-request-headers')?.addEventListener('change', (e) => {
-    const next = { ...bridge.getState().requestHeaders, enabled: /** @type {HTMLInputElement} */ (e.target).checked };
+export function wireRequestHeadersEvents(bridge: PopupBridge): void {
+  byIdOrNull('toggle-request-headers')?.addEventListener('change', (e) => {
+    const next = { ...bridge.getState().requestHeaders, enabled: (e.target as HTMLInputElement).checked };
     patchHeaders(bridge, next);
   });
   // Picking a header from the list adds a ready-to-use row (Issue #402); the
   // select goes back to its placeholder so the next pick starts fresh.
-  document.getElementById('select-add-request-header')?.addEventListener('change', (e) => {
-    const select = /** @type {HTMLSelectElement} */ (e.target);
+  byIdOrNull('select-add-request-header')?.addEventListener('change', (e) => {
+    const select = e.target as HTMLSelectElement;
     const id = select.value;
     select.value = '';
     if (!id) return;
@@ -171,9 +166,9 @@ function wireRequestHeadersEvents(bridge) {
     patchHeaders(bridge, id === OTHER_PRESET_ID || !preset ? addHeaderRow(headers) : appendHeaderRow(headers, rowFromPreset(preset)));
   });
 
-  const list = document.getElementById('request-headers-list');
+  const list = byIdOrNull('request-headers-list');
   list?.addEventListener('click', (e) => {
-    const target = /** @type {HTMLElement} */ (e.target);
+    const target = e.target as HTMLElement;
     const switchBtn = target.closest('.request-header-switch-env');
     if (switchBtn) {
       // A credential-looking header with a fixed value → environment variable,
@@ -191,7 +186,7 @@ function wireRequestHeadersEvents(bridge) {
   // Name/value/kind commit on `change` (blur/enter), like the other row
   // editors here — a re-render per keystroke would steal the focus.
   list?.addEventListener('change', (e) => {
-    const target = /** @type {HTMLInputElement} */ (e.target);
+    const target = e.target as HTMLInputElement;
     const rowEl = target.closest('.request-header-row');
     if (!rowEl) return;
     const index = Number(rowEl.getAttribute('data-index'));
@@ -203,7 +198,7 @@ function wireRequestHeadersEvents(bridge) {
   // A one-time test value is keyed by the variable's name and never touches
   // requestHeaders (which is persisted) — only requestHeaderTestValues.
   list?.addEventListener('input', (e) => {
-    const target = /** @type {HTMLInputElement} */ (e.target);
+    const target = e.target as HTMLInputElement;
     if (!target.classList.contains('request-header-test-value')) return;
     const rowEl = target.closest('.request-header-row');
     const index = Number(rowEl?.getAttribute('data-index'));
@@ -213,6 +208,3 @@ function wireRequestHeadersEvents(bridge) {
     bridge.patchState({ requestHeaderTestValues: { ...bridge.getState().requestHeaderTestValues, [envName]: target.value } });
   });
 }
-
-module.exports = { renderRequestHeadersSection, wireRequestHeadersEvents };
-

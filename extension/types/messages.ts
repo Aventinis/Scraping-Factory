@@ -71,12 +71,12 @@ export type PopupInboundMessage =
   | { type: 'SELECTION_CLICK_OUT_OF_SCOPE' }
   | DomTreeMessage
   | { type: 'HOVER_ELEMENT'; path: number[] }
-  | { type: 'PREVIEW_RESULT'; total: number; empty: number; truncated: boolean }
+  | { type: 'PREVIEW_RESULT'; total: number; empty: string[]; truncated: boolean }
   | { type: 'PREVIEW_UNAVAILABLE'; reason: string }
   | { type: 'API_CAPTURE_ENTRY'; entry: SFDraft.ApiCaptureEntry }
   | { type: 'API_CAPTURE_UNAVAILABLE'; reason: string }
   | ApiCandidatesMessage;
 
 export type RobotsTxtResult =
-  | { ok: true; robotsUrl: string; path: string; notFound: boolean; allowed: boolean | null; matchedRule: unknown }
+  | { ok: true; robotsUrl: string; path: string; notFound: boolean; allowed: boolean; matchedRule: { type: string; pattern: string } | null }
   | { ok: false; error: string };

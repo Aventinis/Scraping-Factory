@@ -142,7 +142,7 @@ export function buildGroupTreeNodeEl(node: SFDraft.ContainerNode, path: number[]
     // Issue #206 follow-up: disabled (not hidden) below the minimum field
     // count each kind needs — clicking "+ Datenfeld" first to build up
     // real fields to combine/split is the expected path, same reasoning
-    // idle-screen-ui.js's own flat-mode button-disable logic uses.
+    // idle-screen-ui.ts's own flat-mode button-disable logic uses.
     const fieldSiblingCount = node.children.filter(c => c.kind === 'field').length;
 
     const addCombineFieldBtn = document.createElement('button');

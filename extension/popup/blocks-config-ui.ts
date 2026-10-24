@@ -6,7 +6,7 @@
 // output-filename inputs, and the ordered list of already-confirmed blocks
 // (edit/reorder/remove). The draft's actual field/group content is rendered
 // by flat-mode-ui.ts's renderFields/container-tree-ui.js's renderGroupTree —
-// unchanged, called from idle-screen-ui.js exactly like flat/container mode
+// unchanged, called from idle-screen-ui.ts exactly like flat/container mode
 // already do, since those functions already operate on _state.fields/
 // _state.groups directly with no mode of their own baked in.
 import type * as SFDraft from '../types/drafts';
@@ -21,7 +21,7 @@ const log = createLogger('SF:Popup');
 // Switching the draft's own shape starts that shape fresh — the other
 // shape's content (whichever of fields/groups doesn't match) is cleared,
 // the same "switching clears what doesn't belong to the new shape"
-// convention idle-screen-ui.js's own switchMode/MODE_SWITCH_CLEARS already
+// convention idle-screen-ui.ts's own switchMode/MODE_SWITCH_CLEARS already
 // uses for the top-level mode switch.
 function switchBlocksDraftShape(bridge: PopupBridge, shape: SFDraft.Block['shape']): void {
   const state = bridge.getState();
@@ -87,7 +87,7 @@ export function renderBlocksSection(bridge: PopupBridge): void {
   byIdOrNull('btn-blocks-draft-flat')?.classList.toggle('active', state.blocksDraftShape === 'flat');
   byIdOrNull('btn-blocks-draft-group')?.classList.toggle('active', state.blocksDraftShape === 'group');
   // The flat/container editors themselves are rendered/shown by
-  // idle-screen-ui.js exactly as they are for flat/container mode — only
+  // idle-screen-ui.ts exactly as they are for flat/container mode — only
   // reachable once a shape has been picked, so the draft editor row stays
   // hidden until then (there's nothing to click "+ Datenfeld"/"+ Gruppe"
   // against before this decision is made).

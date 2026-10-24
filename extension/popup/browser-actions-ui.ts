@@ -1,27 +1,29 @@
 // ── Engine + browser actions: render / wiring ──
 // Extracted from popup.js (docs/design-notes/extension.md, "Popup module boundaries"): the engine toggle and the ordered browser-actions list
 // (WaitFor / Fill / Click / Scroll). Mode-independent, so no interaction with switchMode. Functions take a `bridge`.
-const { createLogger } = require('../shared/logger');
+import type * as SFDraft from '../types/drafts';
+import type { BrowserActionField, PopupBridge } from '../types/popup';
+import { createLogger } from '../shared/logger';
+import { t } from '../i18n/i18n';
+import { STATES, escapeHtml } from './api-config';
+import { envVarNoteHtml } from './env-var-ui';
+import { autoOpenAdvanced, createAdvancedDisclosure } from './advanced-disclosure-ui';
+import { helpHostHtml } from './help-popover';
+import { addLoginFlow, msToSecondsText, secondsTextToMs } from './login-flow';
+import { addBrowserAction, removeBrowserAction, updateBrowserAction, frameBadgeHtml } from './scraping-config-builder';
+import { byIdOrNull } from './dom';
+
 const log = createLogger('SF:Popup');
-const { t } = require('../i18n/i18n');
-const { STATES, escapeHtml } = require('./api-config');
-const { envVarNoteHtml } = require('./env-var-ui');
-const { autoOpenAdvanced } = require('./advanced-disclosure-ui');
-const { helpHostHtml } = require('./help-popover');
-const { createAdvancedDisclosure } = require('./advanced-disclosure-ui');
-const { addLoginFlow, msToSecondsText, secondsTextToMs } = require('./login-flow');
-const { addBrowserAction, removeBrowserAction, updateBrowserAction, frameBadgeHtml } =
-  require('./scraping-config-builder');
 
 // One card per action, its kind fixed at creation (there is no "change the kind" control). A card made by the "Login form" starter carries a
 // UI-only `role` (user / password / submit / loggedIn) that only changes wording; times are shown in seconds (stored as milliseconds, see
 // login-flow.ts); rarely needed options sit under a remembered "Advanced" disclosure.
-function renderBrowserActions(actions, testValues) {
-  const container = document.getElementById('browser-actions-list');
+export function renderBrowserActions(actions: SFDraft.BrowserAction[], testValues: Record<string, string>): void {
+  const container = byIdOrNull('browser-actions-list');
   if (!container) return;
   container.innerHTML = '';
 
-  const kindLabels = {
+  const kindLabels: Record<SFDraft.BrowserAction['kind'], string> = {
     waitFor: t('browserActions.kindWaitFor'),
     fill: t('browserActions.kindFill'),
     click: t('browserActions.kindClick'),
@@ -32,7 +34,7 @@ function renderBrowserActions(actions, testValues) {
   // (data-field) — every kind but 'scroll' has exactly one such row
   // (property 'selector'); 'scroll' has two (containerSelector/
   // loadMoreButtonSelector), both optional, see buildSelectorRow's callers.
-  function buildSelectorRow(index, field, value, label, pickLabel) {
+  function buildSelectorRow(index: number, field: BrowserActionField, value: string | null | undefined, label: string | null, pickLabel?: string | null): HTMLElement {
     const row = document.createElement('div');
     row.className = 'browser-action-selector-row';
     const selectorText = value || t('browserActions.noSelector');
@@ -45,7 +47,7 @@ function renderBrowserActions(actions, testValues) {
   }
 
   // A labelled number input in seconds: shows the default as a placeholder.
-  function secondsRow(labelKey, cls, index, ms, defaultMs, helpKey) {
+  function secondsRow(labelKey: string, cls: string, index: number, ms: number | null | undefined, defaultMs: number, helpKey?: string): HTMLElement {
     const row = document.createElement('div');
     row.className = 'browser-action-field-row';
     row.innerHTML =
@@ -56,16 +58,16 @@ function renderBrowserActions(actions, testValues) {
   }
 
   // Rarely needed options, collapsed by default and remembered per kind.
-  function advancedBlock(id) {
+  function advancedBlock(id: string): { details: HTMLDetailsElement; body: HTMLElement } {
     const details = createAdvancedDisclosure(id);
-    return { details, body: details.querySelector('.advanced-disclosure-body') };
+    return { details, body: details.querySelector('.advanced-disclosure-body') as HTMLElement };
   }
 
   actions.forEach((action, i) => {
     const role = action.role;
     const card = document.createElement('div');
     card.className = 'browser-action-card';
-    card.dataset.index = i;
+    card.dataset.index = String(i);
 
     const header = document.createElement('div');
     header.className = 'browser-action-header';
@@ -167,65 +169,66 @@ function renderBrowserActions(actions, testValues) {
 }
 
 // Called from render(): engine state, browser-actions visibility and the persistent-session toggle's checked state (nested in that section).
-function renderBrowserActionsSection(bridge) {
+export function renderBrowserActionsSection(bridge: PopupBridge): void {
   const state = bridge.getState();
-  document.getElementById('btn-engine-static')?.classList.toggle('active', state.engine === 'Static');
-  document.getElementById('btn-engine-browser')?.classList.toggle('active', state.engine === 'Browser');
-  document.getElementById('browser-actions-section')?.classList.toggle('hidden', state.engine !== 'Browser');
+  byIdOrNull('btn-engine-static')?.classList.toggle('active', state.engine === 'Static');
+  byIdOrNull('btn-engine-browser')?.classList.toggle('active', state.engine === 'Browser');
+  byIdOrNull('browser-actions-section')?.classList.toggle('hidden', state.engine !== 'Browser');
   if (state.engine === 'Browser') renderBrowserActions(state.browserActions, state.fillTestValues);
   // Issue #403: while a starter action still has no element, say what to do next.
-  document.getElementById('login-flow-hint')?.classList.toggle(
+  byIdOrNull('login-flow-hint')?.classList.toggle(
     'hidden', !state.browserActions.some((a) => a.role && !a.selector),
   );
 
-  const persistentSessionToggle = document.getElementById('toggle-persistent-session');
+  const persistentSessionToggle = byIdOrNull<HTMLInputElement>('toggle-persistent-session');
   if (persistentSessionToggle) persistentSessionToggle.checked = state.persistentSession;
   autoOpenAdvanced(persistentSessionToggle, !!state.persistentSession); // Issue #407
 }
 
-function wireBrowserActionsEvents(bridge) {
-  document.getElementById('btn-engine-static')?.addEventListener('click', () => {
+export function wireBrowserActionsEvents(bridge: PopupBridge): void {
+  byIdOrNull('btn-engine-static')?.addEventListener('click', () => {
     log('BTN engine-static');
     bridge.setState(bridge.getState().current, { engine: 'Static' });
   });
-  document.getElementById('btn-engine-browser')?.addEventListener('click', () => {
+  byIdOrNull('btn-engine-browser')?.addEventListener('click', () => {
     log('BTN engine-browser');
     bridge.setState(bridge.getState().current, { engine: 'Browser' });
   });
 
-  document.getElementById('btn-add-login-flow')?.addEventListener('click', () => {
+  byIdOrNull('btn-add-login-flow')?.addEventListener('click', () => {
     log('BTN add-login-flow');
     bridge.setState(bridge.getState().current, { browserActions: addLoginFlow(bridge.getState().browserActions) });
   });
-  document.getElementById('btn-add-action-wait')?.addEventListener('click', () => {
+  byIdOrNull('btn-add-action-wait')?.addEventListener('click', () => {
     log('BTN add-action-wait');
     bridge.setState(bridge.getState().current, { browserActions: addBrowserAction(bridge.getState().browserActions, 'waitFor') });
   });
-  document.getElementById('btn-add-action-fill')?.addEventListener('click', () => {
+  byIdOrNull('btn-add-action-fill')?.addEventListener('click', () => {
     log('BTN add-action-fill');
     bridge.setState(bridge.getState().current, { browserActions: addBrowserAction(bridge.getState().browserActions, 'fill') });
   });
-  document.getElementById('btn-add-action-click')?.addEventListener('click', () => {
+  byIdOrNull('btn-add-action-click')?.addEventListener('click', () => {
     log('BTN add-action-click');
     bridge.setState(bridge.getState().current, { browserActions: addBrowserAction(bridge.getState().browserActions, 'click') });
   });
-  document.getElementById('btn-add-action-scroll')?.addEventListener('click', () => {
+  byIdOrNull('btn-add-action-scroll')?.addEventListener('click', () => {
     log('BTN add-action-scroll');
     bridge.setState(bridge.getState().current, { browserActions: addBrowserAction(bridge.getState().browserActions, 'scroll') });
   });
 
-  document.getElementById('browser-actions-list')?.addEventListener('click', (e) => {
-    const removeBtn = e.target.closest('.btn-remove-action');
+  byIdOrNull('browser-actions-list')?.addEventListener('click', (e) => {
+    const target = e.target as Element;
+    const removeBtn = target.closest<HTMLElement>('.btn-remove-action');
     if (removeBtn) {
-      const index = parseInt(removeBtn.dataset.index, 10);
+      const index = parseInt(removeBtn.dataset.index as string, 10);
       log('BROWSER_ACTION_REMOVE', { index });
       bridge.setState(bridge.getState().current, { browserActions: removeBrowserAction(bridge.getState().browserActions, index) });
       return;
     }
-    const pickBtn = e.target.closest('.btn-pick-action-selector');
+    const pickBtn = target.closest<HTMLElement>('.btn-pick-action-selector');
     if (pickBtn) {
-      const index = parseInt(pickBtn.dataset.index, 10);
-      const field = pickBtn.dataset.field; // 'selector' | 'containerSelector' | 'loadMoreButtonSelector' — see buildSelectorRow
+      const index = parseInt(pickBtn.dataset.index as string, 10);
+      const field = pickBtn.dataset.field as BrowserActionField; // written by buildSelectorRow
       log('BTN pick-action-selector → START_SELECTION', { index, field });
       bridge.stopPreviewIfActive();
       chrome.runtime.sendMessage({ type: 'START_SELECTION' });
@@ -238,10 +241,11 @@ function wireBrowserActionsEvents(bridge) {
 
   // change (not input) — same reasoning as the API-config screen's text
   // inputs: a re-render on every keystroke would reset the cursor position.
-  document.getElementById('browser-actions-list')?.addEventListener('change', (e) => {
-    const timeoutInput = e.target.closest('.browser-action-timeout');
+  byIdOrNull('browser-actions-list')?.addEventListener('change', (e) => {
+    const target = e.target as Element;
+    const timeoutInput = target.closest<HTMLInputElement>('.browser-action-timeout');
     if (timeoutInput) {
-      const index = parseInt(timeoutInput.dataset.index, 10);
+      const index = parseInt(timeoutInput.dataset.index as string, 10);
       bridge.setState(bridge.getState().current, {
         browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
           timeoutMs: secondsTextToMs(timeoutInput.value, 5000),
@@ -249,33 +253,33 @@ function wireBrowserActionsEvents(bridge) {
       });
       return;
     }
-    const envInput = e.target.closest('.browser-action-env-name');
+    const envInput = target.closest<HTMLInputElement>('.browser-action-env-name');
     if (envInput) {
-      const index = parseInt(envInput.dataset.index, 10);
+      const index = parseInt(envInput.dataset.index as string, 10);
       bridge.setState(bridge.getState().current, {
         browserActions: updateBrowserAction(bridge.getState().browserActions, index, { environmentVariableName: envInput.value.trim() }),
       });
       return;
     }
-    const testValueInput = e.target.closest('.browser-action-test-value');
+    const testValueInput = target.closest<HTMLInputElement>('.browser-action-test-value');
     if (testValueInput) {
       // patchState (not setState): fillTestValues must never reach
       // persistState()/chrome.storage.session — see its _state comment.
-      const envName = testValueInput.dataset.envName;
+      const envName = testValueInput.dataset.envName as string;
       bridge.patchState({ fillTestValues: { ...bridge.getState().fillTestValues, [envName]: testValueInput.value } });
       return;
     }
-    const clickTargetSelect = e.target.closest('.browser-action-click-target');
+    const clickTargetSelect = target.closest<HTMLSelectElement>('.browser-action-click-target');
     if (clickTargetSelect) {
-      const index = parseInt(clickTargetSelect.dataset.index, 10);
+      const index = parseInt(clickTargetSelect.dataset.index as string, 10);
       bridge.setState(bridge.getState().current, {
-        browserActions: updateBrowserAction(bridge.getState().browserActions, index, { target: clickTargetSelect.value }),
+        browserActions: updateBrowserAction(bridge.getState().browserActions, index, { target: clickTargetSelect.value as 'first' | 'last' | 'all' }),
       });
       return;
     }
-    const clickWaitInput = e.target.closest('.browser-action-click-wait-after-ms');
+    const clickWaitInput = target.closest<HTMLInputElement>('.browser-action-click-wait-after-ms');
     if (clickWaitInput) {
-      const index = parseInt(clickWaitInput.dataset.index, 10);
+      const index = parseInt(clickWaitInput.dataset.index as string, 10);
       bridge.setState(bridge.getState().current, {
         browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
           waitAfterMs: secondsTextToMs(clickWaitInput.value, 250, { allowZero: true }),
@@ -283,9 +287,9 @@ function wireBrowserActionsEvents(bridge) {
       });
       return;
     }
-    const maxIterationsInput = e.target.closest('.browser-action-max-iterations');
+    const maxIterationsInput = target.closest<HTMLInputElement>('.browser-action-max-iterations');
     if (maxIterationsInput) {
-      const index = parseInt(maxIterationsInput.dataset.index, 10);
+      const index = parseInt(maxIterationsInput.dataset.index as string, 10);
       const maxIterations = parseInt(maxIterationsInput.value, 10);
       bridge.setState(bridge.getState().current, {
         browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
@@ -294,9 +298,9 @@ function wireBrowserActionsEvents(bridge) {
       });
       return;
     }
-    const waitAfterMsInput = e.target.closest('.browser-action-wait-after-ms');
+    const waitAfterMsInput = target.closest<HTMLInputElement>('.browser-action-wait-after-ms');
     if (waitAfterMsInput) {
-      const index = parseInt(waitAfterMsInput.dataset.index, 10);
+      const index = parseInt(waitAfterMsInput.dataset.index as string, 10);
       bridge.setState(bridge.getState().current, {
         browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
           waitAfterMs: secondsTextToMs(waitAfterMsInput.value, 1000, { allowZero: true }),
@@ -308,9 +312,9 @@ function wireBrowserActionsEvents(bridge) {
     // jump-to-bottom default", not an invalid value falling back to some
     // other number — unlike maxIterations/waitAfterMs above, there's no
     // sensible non-null default to clamp to here.
-    const scrollStepPxInput = e.target.closest('.browser-action-scroll-step-px');
+    const scrollStepPxInput = target.closest<HTMLInputElement>('.browser-action-scroll-step-px');
     if (scrollStepPxInput) {
-      const index = parseInt(scrollStepPxInput.dataset.index, 10);
+      const index = parseInt(scrollStepPxInput.dataset.index as string, 10);
       const scrollStepPx = parseInt(scrollStepPxInput.value, 10);
       bridge.setState(bridge.getState().current, {
         browserActions: updateBrowserAction(bridge.getState().browserActions, index, {
@@ -320,8 +324,3 @@ function wireBrowserActionsEvents(bridge) {
     }
   });
 }
-
-module.exports = {
-  renderBrowserActions, renderBrowserActionsSection, wireBrowserActionsEvents,
-};
-
