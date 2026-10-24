@@ -1,31 +1,31 @@
 // API mode's DOM rendering and event handling. This file is the orchestrator: the API_CONFIG screen's render / confirm / cancel, the
 // modals' render, and wireApiConfigEvents, which calls the focused modules in turn. It re-exports every name it used to export, so
 // popup.js and idle-screen-ui.js import unchanged:
-//   api-capture-ui.js            recording, searches, candidate / recorded-request lists
+//   api-capture-ui.ts            recording, searches, candidate / recorded-request lists
 //   api-response-tree-ui.js      response tree, group + transforms modals, tree search
 //   api-parameters-ui.js         URL parts and parameter sources
-//   api-browser-discovery-ui.js  the BrowserDiscoverySource editor
+//   api-browser-discovery-ui.ts  the BrowserDiscoverySource editor
 //   api-request-ui.js            captured headers, POST body tree
-//   api-config-shared-ui.js      draft helpers the modules above share
+//   api-config-shared-ui.ts      draft helpers the modules above share
 //
 // Handlers that read or mutate popup state take a `bridge` as first parameter — { getState, setState, patchState,
 // stopPreviewIfActive, requestDomTree, showToast } — built once by popup.js. It is not just style: popup.js loads after this file and,
 // under Jest, each file is an isolated module with no shared scope, so a closure over popup.js's state would not resolve. Purely
 // presentational render / build*El functions need none of this.
-const { createLogger } = require('../shared/logger');
-const log = createLogger('SF:ApiConfigUI');
-const { t } = require('../i18n/i18n');
-const {
+import type * as SFWire from '../types/wire';
+import type { ApiCandidatesResult, PopupBridge } from '../types/popup';
+import { createLogger } from '../shared/logger';
+import { t } from '../i18n/i18n';
+import {
   STATES, buildStaticListSource, buildRangeSource, buildBrowserDiscoverySource, buildApiConfig, allParameterParts, apiConfigDraftHasAllSourcesChosen,
-} = require('./api-config');
-const { BOOTSTRAP_SOURCE_KIND, resolveBootstrapUrlParts } = require('./api-bootstrap');
-const { renderTransformList, renderTransformPreview } = require('./field-transforms-ui');
-const { serializeBrowserActions } = require('./scraping-config-builder');
-const { renderGroupPathPicker } = require('./json-path-picker-ui');
-const {
-  patchApiConfigSource,
-} = require('./api-config-shared-ui');
-const {
+} from './api-config';
+import type { ApiConfigDraft, ParameterPart } from './api-config';
+import { BOOTSTRAP_SOURCE_KIND, resolveBootstrapUrlParts } from './api-bootstrap';
+import { renderTransformList, renderTransformPreview } from './field-transforms-ui';
+import { serializeBrowserActions } from './scraping-config-builder';
+import { renderGroupPathPicker } from './json-path-picker-ui';
+import { patchApiConfigSource } from './api-config-shared-ui';
+import {
   buildApiTreeNodeEl,
   renderApiTree,
   startApiTreeFieldSearch,
@@ -38,8 +38,8 @@ const {
   confirmApiFieldTransformsModal,
   cancelApiFieldTransformsModal,
   wireApiResponseTreeEvents,
-} = require('./api-response-tree-ui');
-const {
+} from './api-response-tree-ui';
+import {
   renderApiCandidates,
   renderApiEntriesList,
   startApiCapture,
@@ -54,14 +54,14 @@ const {
   toggleApiEntriesPanel,
   wireApiCandidateListEvents,
   wireApiCaptureEvents,
-} = require('./api-capture-ui');
-const {
+} from './api-capture-ui';
+import {
   renderBrowserDiscoverySourceFields,
   addDiscoveryAction,
   removeDiscoveryAction,
   updateDiscoveryAction,
-} = require('./api-browser-discovery-ui');
-const {
+} from './api-browser-discovery-ui';
+import {
   renderApiConfigUrlParts,
   renderApiConfigParameters,
   renderRangeFormatFields,
@@ -73,8 +73,8 @@ const {
   setApiConfigSourceKind,
   fillStaticListFromPool,
   wireApiParameterEvents,
-} = require('./api-parameters-ui');
-const {
+} from './api-parameters-ui';
+import {
   renderApiConfigHeaders,
   bodyNodeLabel,
   buildBodyTreeNodeEl,
@@ -88,21 +88,27 @@ const {
   confirmBodyParameterModal,
   cancelBodyParameterModal,
   wireApiRequestEvents,
-} = require('./api-request-ui');
+} from './api-request-ui';
+import { byIdOrNull } from './dom';
+
+const log = createLogger('SF:ApiConfigUI');
 
 // The tree UI subsumes the flat field list: a single match renders as a one-node-deep tree; renderApiTree is the only rendering of this
 // part of the screen.
-function renderApiConfigScreen(draft, discoveryCandidates, discoveryTemplateEditingPartId) {
+export function renderApiConfigScreen(
+  draft: ApiConfigDraft, discoveryCandidates: ApiCandidatesResult | null, discoveryTemplateEditingPartId: string | null | undefined,
+): void {
   renderApiTree(draft.groups);
   renderApiConfigUrlParts(draft.urlParts);
   renderApiConfigParameters(draft, discoveryCandidates, discoveryTemplateEditingPartId);
+  // @ts-expect-error api-request-ui.js (not converted yet) infers `bootstrap` as `null` from its default; this line errs once it is typed.
   renderApiConfigHeaders(draft.capturedHeaders, draft.headerDecisions, draft.bootstrap);
   renderBodyTree(draft);
 
   // Issue #136: clarifies why the URL segments above describe a plain page
   // load (with no request/method shown, unlike a network-sourced config)
   // when this ApiConfig was sourced from an embedded <script> tag instead.
-  const embeddedJsonNoteEl = document.getElementById('api-config-embedded-json-note');
+  const embeddedJsonNoteEl = byIdOrNull('api-config-embedded-json-note');
   if (embeddedJsonNoteEl) {
     embeddedJsonNoteEl.classList.toggle('hidden', !draft.embeddedJsonSource);
     if (draft.embeddedJsonSource) {
@@ -114,14 +120,14 @@ function renderApiConfigScreen(draft, discoveryCandidates, discoveryTemplateEdit
   // request body could actually be turned into a draft (see
   // loadInitialBodyTreeForCandidate) — hidden entirely rather than shown
   // empty for a GET config or an unparsable/bodyless POST.
-  const bodySection = document.getElementById('api-config-body-section');
+  const bodySection = byIdOrNull('api-config-body-section');
   if (bodySection) bodySection.classList.toggle('hidden', !draft.bodyTree);
 
-  const confirmBtn = document.getElementById('btn-api-config-confirm');
+  const confirmBtn = byIdOrNull<HTMLButtonElement>('btn-api-config-confirm');
   if (confirmBtn) confirmBtn.disabled = !apiConfigDraftHasAllSourcesChosen(draft);
 }
 
-function cancelApiConfig(bridge) {
+export function cancelApiConfig(bridge: PopupBridge): void {
   log('API_CONFIG cancel');
   bridge.setState(STATES.IDLE, { apiConfigDraft: null, apiDiscoveryCandidates: null, apiTreeSearchResult: null, apiPathPicker: null });
 }
@@ -136,10 +142,10 @@ function cancelApiConfig(bridge) {
 // discovery sources are already wire objects. Iterates allParameterParts (URL + body-only parameters) so a body-only parameter's
 // source resolves like a URL one; idToName is what serializeBodyTree needs to turn a variable leaf's draft-only parameterId into the
 // declared name.
-function confirmApiConfig(bridge) {
-  const draft = bridge.getState().apiConfigDraft;
-  const parameterSources = {};
-  const idToName = {};
+export function confirmApiConfig(bridge: PopupBridge): void {
+  const draft = bridge.getState().apiConfigDraft as ApiConfigDraft; // only reachable from the API_CONFIG screen
+  const parameterSources: Record<string, SFWire.ApiParameterSource> = {};
+  const idToName: Record<string, string> = {};
   allParameterParts(draft).forEach((part) => {
     const source = draft.parameterSources[part.id];
     // Issue #220: a bootstrap-sourced URL part is a placeholder for the
@@ -152,7 +158,7 @@ function confirmApiConfig(bridge) {
         ? buildRangeSource(source.type, source.from, source.to, source.format)
         : source.kind === 'browserDiscovery'
           ? buildBrowserDiscoverySource(source.discoveryUrl, serializeBrowserActions(source.actions || []))
-          : source;
+          : source as SFWire.DiscoverySource; // a discovery source is already complete once the user could press Apply
     idToName[part.id] = part.name;
   });
 
@@ -183,11 +189,11 @@ function confirmApiConfig(bridge) {
 // and its three small modals (add group, add body parameter, edit a leaf
 // field's transform chain).
 let groupModalWasOpen = false;
-function renderApiConfigModals(bridge) {
+export function renderApiConfigModals(bridge: PopupBridge): void {
   const state = bridge.getState();
-  renderApiConfigScreen(state.apiConfigDraft, state.apiDiscoveryCandidates, state.discoveryTemplateEditingPartId);
+  renderApiConfigScreen(state.apiConfigDraft as ApiConfigDraft, state.apiDiscoveryCandidates, state.discoveryTemplateEditingPartId);
 
-  const apiTreeSearchPanel = document.getElementById('api-tree-search-panel');
+  const apiTreeSearchPanel = byIdOrNull('api-tree-search-panel');
   if (apiTreeSearchPanel) {
     if (state.apiTreeSearchResult) {
       renderApiCandidates(state.apiTreeSearchResult, { targetEl: 'api-tree-search-target', listEl: 'api-tree-search-list' });
@@ -204,24 +210,25 @@ function renderApiConfigModals(bridge) {
   const groupModalJustOpened = state.apiGroupModalOpen && !groupModalWasOpen;
   groupModalWasOpen = !!state.apiGroupModalOpen;
   if (state.apiGroupModalOpen) {
-    document.getElementById('modal-api-group-new')?.classList.remove('hidden');
+    byIdOrNull('modal-api-group-new')?.classList.remove('hidden');
     if (groupModalJustOpened) {
-      const nameInput = document.getElementById('input-api-group-name');
+      const nameInput = byIdOrNull<HTMLInputElement>('input-api-group-name');
       if (nameInput) { nameInput.value = ''; nameInput.focus(); }
-      const pathInput = document.getElementById('input-api-group-path');
+      const pathInput = byIdOrNull<HTMLInputElement>('input-api-group-path');
       if (pathInput) pathInput.value = '';
     }
   }
   renderGroupPathPicker(bridge); // Issue #404
 
   if (state.bodyParameterModalOpen) {
-    document.getElementById('modal-api-body-parameter-new')?.classList.remove('hidden');
-    const nameInput = document.getElementById('input-api-body-parameter-name');
+    byIdOrNull('modal-api-body-parameter-new')?.classList.remove('hidden');
+    const nameInput = byIdOrNull<HTMLInputElement>('input-api-body-parameter-name');
     if (nameInput) { nameInput.value = ''; nameInput.focus(); }
   }
 
   if (state.apiFieldTransformModalOpen) {
-    document.getElementById('modal-api-field-transforms')?.classList.remove('hidden');
+    byIdOrNull('modal-api-field-transforms')?.classList.remove('hidden');
+    // @ts-expect-error field-transforms-ui.js (not converted yet) infers the getter as `() => null` from its default; this line errs once it is typed.
     renderTransformList('api-field-transform-list', state.pendingTransforms, () => bridge.getState().pendingRawText);
     // Issue #147: live preview against the node's own sampleValue, threaded
     // through as pendingRawText by openApiFieldTransformsModal — reuses the
@@ -230,7 +237,7 @@ function renderApiConfigModals(bridge) {
   }
 }
 
-function wireApiConfigEvents(bridge) {
+export function wireApiConfigEvents(bridge: PopupBridge): void {
   wireApiCaptureEvents(bridge);
   wireApiCandidateListEvents(
     'api-tree-search-list', () => bridge.getState().apiTreeSearchResult?.candidates,
@@ -240,28 +247,29 @@ function wireApiConfigEvents(bridge) {
   wireApiParameterEvents(bridge);
   wireApiRequestEvents(bridge);
 
-  document.getElementById('btn-api-config-cancel')?.addEventListener('click', () => {
+  byIdOrNull('btn-api-config-cancel')?.addEventListener('click', () => {
     log('BTN api-config-cancel');
     cancelApiConfig(bridge);
   });
 
-  document.getElementById('btn-api-config-confirm')?.addEventListener('click', () => {
+  byIdOrNull('btn-api-config-confirm')?.addEventListener('click', () => {
     log('BTN api-config-confirm');
     confirmApiConfig(bridge);
   });
 
-  document.getElementById('btn-api-config-discard')?.addEventListener('click', () => {
+  byIdOrNull('btn-api-config-discard')?.addEventListener('click', () => {
     log('BTN api-config-discard');
     bridge.setState(STATES.IDLE, { apiConfig: null });
   });
 }
 
-module.exports = {
+// Everything this module used to export stays reachable from here: popup.js and idle-screen-ui.js import it unchanged
+// (pinned by api-config-ui-exports.test.js).
+export {
   buildApiTreeNodeEl,
   renderApiTree,
   renderApiCandidates,
   renderApiEntriesList,
-  renderApiConfigScreen,
   renderApiConfigUrlParts,
   renderApiConfigParameters,
   renderRangeFormatFields,
@@ -277,7 +285,6 @@ module.exports = {
   startApiFieldSearch,
   confirmApiFieldCandidate,
   loadInitialBodyTreeForCandidate,
-  cancelApiConfig,
   startEmbeddedJsonFieldSearch,
   confirmEmbeddedJsonFieldCandidate,
   startApiTreeFieldSearch,
@@ -306,10 +313,7 @@ module.exports = {
   openBodyParameterModal,
   confirmBodyParameterModal,
   cancelBodyParameterModal,
-  confirmApiConfig,
   fetchApiCaptureEntries,
   toggleApiEntriesPanel,
   fillStaticListFromPool,
-  renderApiConfigModals,
-  wireApiConfigEvents,
 };
