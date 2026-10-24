@@ -3,36 +3,46 @@
 // in a development build only, the "Developer options" section. Same
 // `bridge`-parameter convention as every other -ui module; the request logic
 // itself is in account.ts.
-const { createLogger } = require('../shared/logger');
+import type { PopupBridge } from '../types/popup';
+import { createLogger } from '../shared/logger';
+import { getAccessKey, setAccessKey, isInsecureHttpAllowed, setInsecureHttpAllowed } from '../shared/companion-config';
+import { isDevelopmentBuild } from '../shared/build-config';
+import { t } from '../i18n/i18n';
+import { showToast } from './toast';
+import { autoOpenAdvanced } from './advanced-disclosure-ui';
+import { getResolvedCompanionUrl, getCompanionInfo, companionFetch } from './companion-client';
+import * as account from './account';
+import type { RequestFailure } from './account';
+import { looksLikeEmail } from './email-account';
+import { byIdOrNull } from './dom';
+
 const log = createLogger('SF:Popup');
 
-const { getAccessKey, setAccessKey, isInsecureHttpAllowed, setInsecureHttpAllowed } =
-  require('../shared/companion-config');
-const { isDevelopmentBuild } = require('../shared/build-config');
-const { t } = require('../i18n/i18n');
-const { showToast } = require('./toast');
-const { autoOpenAdvanced } = require('./advanced-disclosure-ui');
-const { getResolvedCompanionUrl, getCompanionInfo, companionFetch } = require('./companion-client');
-const account = require('./account');
-const { looksLikeEmail } = require('./email-account');
+export interface AccountState {
+  name: string;
+  email: string | null;
+  emailVerified: boolean;
+}
 
 // Who the companion says we are right now (name '' = nobody / not asked yet),
 // and — Issue #353 — the state of that account's email address. Shared with
-// email-account-ui.js through getAccountState()/setAccountState().
-let acct = { name: '', email: null, emailVerified: false };
+// email-account-ui.ts through getAccountState()/setAccountState().
+let acct: AccountState = { name: '', email: null, emailVerified: false };
 
-const getAccountState = () => acct;
-const setAccountState = (patch) => { acct = { ...acct, ...patch }; };
+export const getAccountState = (): AccountState => acct;
+export const setAccountState = (patch: Partial<AccountState>): void => { acct = { ...acct, ...patch }; };
 
-const byId = (id) => document.getElementById(id);
-const value = (id) => /** @type {HTMLInputElement | null} */ (byId(id))?.value ?? '';
-const clear = (...ids) => ids.forEach((id) => {
-  const input = /** @type {HTMLInputElement | null} */ (byId(id));
+// The companion address is resolved by the health check before any account screen can be used.
+const companionUrl = (): string => getResolvedCompanionUrl() as string;
+
+const value = (id: string): string => byIdOrNull<HTMLInputElement>(id)?.value ?? '';
+const clear = (...ids: string[]): void => ids.forEach((id) => {
+  const input = byIdOrNull<HTMLInputElement>(id);
   if (input) input.value = '';
 });
 
-function showAccountStatus(text, warn) {
-  const status = byId('account-status');
+export function showAccountStatus(text: string, warn?: boolean): void {
+  const status = byIdOrNull('account-status');
   if (!status) return;
   status.textContent = text;
   status.classList.toggle('hidden', !text);
@@ -42,7 +52,7 @@ function showAccountStatus(text, warn) {
 // The message for a failed request: the companion's own text where it gave
 // one (its wording is the same plain English as every companion error), a
 // throttle hint for 429, "could not be reached" for status 0.
-function describeAccountFailure(result) {
+export function describeAccountFailure(result: RequestFailure): string {
   if (result.status === 0) return t('settings.account.unreachable');
   if (result.status === 429) return t('settings.account.throttled', { seconds: result.retryAfter || 60 });
   return result.error || t('settings.account.failed', { status: result.status });
@@ -50,13 +60,13 @@ function describeAccountFailure(result) {
 
 // Asks /whoami whether the stored key/token is good; only a successful answer
 // that names a user counts as signed in.
-async function refreshSignedInName() {
+export async function refreshSignedInName(): Promise<void> {
   acct = { name: '', email: null, emailVerified: false };
   if (!getCompanionInfo().authRequired || !getAccessKey()) return;
   try {
     const response = await companionFetch(`${getResolvedCompanionUrl()}/whoami`);
     if (response.ok) {
-      const body = await response.json();
+      const body: { name?: string; email?: string; emailVerified?: unknown } | null = await response.json(); // GET /whoami
       acct = { name: body?.name || '', email: body?.email || null, emailVerified: body?.emailVerified === true };
     }
   } catch {
@@ -66,7 +76,7 @@ async function refreshSignedInName() {
 
 function renderAccountSection() {
   const info = getCompanionInfo();
-  const section = byId('settings-account-section');
+  const section = byIdOrNull('settings-account-section');
   if (!section) return;
   section.classList.toggle('hidden', !info.authRequired);
   // Issue #354: the connection card is collapsed by default; a companion that asks for a login opens it.
@@ -74,18 +84,18 @@ function renderAccountSection() {
   if (!info.authRequired) return;
 
   const signedIn = acct.name !== '';
-  byId('account-signed-out')?.classList.toggle('hidden', signedIn);
-  byId('account-signed-in')?.classList.toggle('hidden', !signedIn);
-  const who = byId('account-signed-in-as');
+  byIdOrNull('account-signed-out')?.classList.toggle('hidden', signedIn);
+  byIdOrNull('account-signed-in')?.classList.toggle('hidden', !signedIn);
+  const who = byIdOrNull('account-signed-in-as');
   if (who) who.textContent = t('settings.account.signedInAs', { name: acct.name });
   // Register needs the operator to have opened registration, and a repeat box.
-  byId('btn-account-register')?.classList.toggle('hidden', !info.registration);
-  byId('account-repeat-row')?.classList.toggle('hidden', !info.registration);
-  byId('account-no-registration')?.classList.toggle('hidden', info.registration);
+  byIdOrNull('btn-account-register')?.classList.toggle('hidden', !info.registration);
+  byIdOrNull('account-repeat-row')?.classList.toggle('hidden', !info.registration);
+  byIdOrNull('account-no-registration')?.classList.toggle('hidden', info.registration);
 }
 
 function renderDeveloperSection() {
-  const section = byId('settings-developer-section');
+  const section = byIdOrNull('settings-developer-section');
   if (!section) return;
   // A release build has no such section at all — not hidden, removed, so
   // nothing in its markup, state or storage can switch the options on.
@@ -93,18 +103,18 @@ function renderDeveloperSection() {
     section.remove();
     return;
   }
-  const toggle = /** @type {HTMLInputElement | null} */ (byId('toggle-dev-insecure-http'));
+  const toggle = byIdOrNull<HTMLInputElement>('toggle-dev-insecure-http');
   if (toggle) toggle.checked = isInsecureHttpAllowed();
 }
 
-function renderAccountAndDeveloperSections() {
+export function renderAccountAndDeveloperSections(): void {
   renderAccountSection();
   renderDeveloperSection();
 }
 
 // After a sign-in/out everything the companion returns is another user's
 // data: re-fetch the lists that depend on it.
-function refreshCompanionData(bridge) {
+export function refreshCompanionData(bridge: PopupBridge): void {
   const url = bridge.getState().url;
   if (url) bridge.fetchSavedConfigs?.(url);
   bridge.fetchAllSavedConfigs?.();
@@ -112,7 +122,7 @@ function refreshCompanionData(bridge) {
   bridge.fetchTransformPresets?.();
 }
 
-async function authenticate(bridge, mode) {
+async function authenticate(bridge: PopupBridge, mode: 'login' | 'register'): Promise<void> {
   const name = value('input-account-name');
   const password = value('input-account-password');
   if (mode === 'register') {
@@ -132,7 +142,7 @@ async function authenticate(bridge, mode) {
     showAccountStatus(t('settings.account.emailInvalid'), true);
     return;
   }
-  const result = await account.authenticate(companionFetch, getResolvedCompanionUrl(), mode, name, password, email);
+  const result = await account.authenticate(companionFetch, companionUrl(), mode, name, password, email);
   if (!result.ok) {
     showAccountStatus(describeAccountFailure(result), true);
     return;
@@ -151,10 +161,10 @@ async function authenticate(bridge, mode) {
   refreshCompanionData(bridge);
 }
 
-async function endSession(bridge, everywhere) {
+async function endSession(bridge: PopupBridge, everywhere: boolean): Promise<void> {
   const result = everywhere
-    ? await account.signOutEverywhere(companionFetch, getResolvedCompanionUrl())
-    : await account.signOut(companionFetch, getResolvedCompanionUrl());
+    ? await account.signOutEverywhere(companionFetch, companionUrl())
+    : await account.signOut(companionFetch, companionUrl());
   // Whatever the companion answered, this browser forgets the token: signing
   // out must work even when the companion can't be reached or already
   // revoked it.
@@ -168,9 +178,9 @@ async function endSession(bridge, everywhere) {
   refreshCompanionData(bridge);
 }
 
-async function changePassword() {
+async function changePassword(): Promise<void> {
   const result = await account.changePassword(
-    companionFetch, getResolvedCompanionUrl(), value('input-account-current-password'), value('input-account-new-password'));
+    companionFetch, companionUrl(), value('input-account-current-password'), value('input-account-new-password'));
   if (!result.ok) {
     showAccountStatus(describeAccountFailure(result), true);
     return;
@@ -179,35 +189,29 @@ async function changePassword() {
   showAccountStatus(t('settings.account.passwordChanged'), false);
 }
 
-function wireAccountAndDeveloperEvents(bridge) {
+export function wireAccountAndDeveloperEvents(bridge: PopupBridge): void {
   // Opening Settings asks who we are, so the section shows the real state.
-  byId('btn-open-settings')?.addEventListener('click', async () => {
+  byIdOrNull('btn-open-settings')?.addEventListener('click', async () => {
     await refreshSignedInName();
     bridge.patchState({});
   });
-  byId('btn-account-login')?.addEventListener('click', () => { log('BTN account-login'); authenticate(bridge, 'login'); });
-  byId('btn-account-register')?.addEventListener('click', () => { log('BTN account-register'); authenticate(bridge, 'register'); });
+  byIdOrNull('btn-account-login')?.addEventListener('click', () => { log('BTN account-login'); authenticate(bridge, 'login'); });
+  byIdOrNull('btn-account-register')?.addEventListener('click', () => { log('BTN account-register'); authenticate(bridge, 'register'); });
   for (const id of ['input-account-name', 'input-account-password']) {
-    byId(id)?.addEventListener('keydown', (e) => { if (e.key === 'Enter') authenticate(bridge, 'login'); });
+    byIdOrNull(id)?.addEventListener('keydown', (e) => { if (e.key === 'Enter') authenticate(bridge, 'login'); });
   }
-  byId('btn-account-logout')?.addEventListener('click', () => { log('BTN account-logout'); endSession(bridge, false); });
-  byId('btn-account-logout-all')?.addEventListener('click', () => { log('BTN account-logout-all'); endSession(bridge, true); });
-  byId('btn-account-change-password')?.addEventListener('click', () => { log('BTN account-change-password'); changePassword(); });
+  byIdOrNull('btn-account-logout')?.addEventListener('click', () => { log('BTN account-logout'); endSession(bridge, false); });
+  byIdOrNull('btn-account-logout-all')?.addEventListener('click', () => { log('BTN account-logout-all'); endSession(bridge, true); });
+  byIdOrNull('btn-account-change-password')?.addEventListener('click', () => { log('BTN account-change-password'); changePassword(); });
 
   // Development build only (the section does not exist in a release build,
   // and setInsecureHttpAllowed ignores the call there anyway).
-  byId('toggle-dev-insecure-http')?.addEventListener('change', async (e) => {
-    await setInsecureHttpAllowed(e.target.checked);
+  byIdOrNull('toggle-dev-insecure-http')?.addEventListener('change', async (e) => {
+    await setInsecureHttpAllowed((e.target as HTMLInputElement).checked);
     showToast(t('settings.developer.reloadHint'), null, 'info');
   });
-  byId('btn-dev-open-companion')?.addEventListener('click', () => {
+  byIdOrNull('btn-dev-open-companion')?.addEventListener('click', () => {
     const url = getResolvedCompanionUrl();
     if (url && typeof chrome !== 'undefined' && chrome.tabs?.create) chrome.tabs.create({ url: `${url}/health` });
   });
 }
-
-module.exports = {
-  renderAccountAndDeveloperSections, wireAccountAndDeveloperEvents,
-  getAccountState, setAccountState, showAccountStatus, describeAccountFailure, refreshSignedInName, refreshCompanionData,
-};
-

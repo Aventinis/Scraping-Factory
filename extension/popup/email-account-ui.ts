@@ -2,48 +2,49 @@
 // the address field at registration, the "verify your email" box with the code
 // the companion mailed, changing the address, and "Forgot password?". Request
 // logic is in email-account.ts; the signed-in state is shared with
-// account-ui.js. Same `bridge`-parameter convention as every other -ui module.
-const { createLogger } = require('../shared/logger');
+// account-ui.ts. Same `bridge`-parameter convention as every other -ui module.
+import type { PopupBridge } from '../types/popup';
+import { createLogger } from '../shared/logger';
+import { t } from '../i18n/i18n';
+import { getResolvedCompanionUrl, getCompanionInfo, companionFetch } from './companion-client';
+import * as email from './email-account';
+import { getAccountState, setAccountState, showAccountStatus, describeAccountFailure, refreshCompanionData } from './account-ui';
+import { byIdOrNull } from './dom';
+
 const log = createLogger('SF:Popup');
 
-const { t } = require('../i18n/i18n');
-const { getResolvedCompanionUrl, getCompanionInfo, companionFetch } = require('./companion-client');
-const email = require('./email-account');
-const { getAccountState, setAccountState, showAccountStatus, describeAccountFailure, refreshCompanionData } =
-  require('./account-ui');
-
-const byId = (id) => document.getElementById(id);
-const value = (id) => /** @type {HTMLInputElement | null} */ (byId(id))?.value ?? '';
-const clear = (...ids) => ids.forEach((id) => {
-  const input = /** @type {HTMLInputElement | null} */ (byId(id));
+const value = (id: string): string => byIdOrNull<HTMLInputElement>(id)?.value ?? '';
+const clear = (...ids: string[]): void => ids.forEach((id) => {
+  const input = byIdOrNull<HTMLInputElement>(id);
   if (input) input.value = '';
 });
-const base = () => getResolvedCompanionUrl();
+// The companion address is resolved by the health check before any account screen can be used.
+const base = (): string => getResolvedCompanionUrl() as string;
 
-function renderEmailAccountSection() {
+export function renderEmailAccountSection(): void {
   const info = getCompanionInfo();
   const account = getAccountState();
   const emailOn = info.email !== 'off';
 
   // Signed out: the address field at registration (only when registering is possible), "Forgot password?".
-  byId('account-email-row')?.classList.toggle('hidden', !(emailOn && info.registration));
-  const label = byId('label-account-email');
+  byIdOrNull('account-email-row')?.classList.toggle('hidden', !(emailOn && info.registration));
+  const label = byIdOrNull('label-account-email');
   if (label) label.textContent = t(info.email === 'required' ? 'settings.account.emailLabelRequired' : 'settings.account.emailLabelOptional');
-  byId('btn-account-forgot')?.classList.toggle('hidden', !info.passwordReset);
-  if (!info.passwordReset) byId('account-forgot-panel')?.classList.add('hidden');
+  byIdOrNull('btn-account-forgot')?.classList.toggle('hidden', !info.passwordReset);
+  if (!info.passwordReset) byIdOrNull('account-forgot-panel')?.classList.add('hidden');
 
   // Signed in: the address, its state, the code box.
-  byId('account-email-section')?.classList.toggle('hidden', !emailOn);
-  const state = byId('account-email-state');
+  byIdOrNull('account-email-section')?.classList.toggle('hidden', !emailOn);
+  const state = byIdOrNull('account-email-state');
   if (state) {
     state.textContent = !account.email
       ? t('settings.account.noEmail')
       : t(account.emailVerified ? 'settings.account.emailVerifiedState' : 'settings.account.emailUnverifiedState', { email: account.email });
   }
-  byId('account-verify-row')?.classList.toggle('hidden', !(account.email && !account.emailVerified && info.passwordReset));
+  byIdOrNull('account-verify-row')?.classList.toggle('hidden', !(account.email && !account.emailVerified && info.passwordReset));
 }
 
-async function sendResetCode() {
+async function sendResetCode(): Promise<void> {
   const account = value('input-account-forgot-account').trim();
   if (!account) {
     showAccountStatus(t('settings.account.forgotAccountMissing'), true);
@@ -53,7 +54,7 @@ async function sendResetCode() {
   showAccountStatus(result.ok ? t('settings.account.forgotSent') : describeAccountFailure(result), !result.ok);
 }
 
-async function confirmReset(bridge) {
+async function confirmReset(bridge: PopupBridge): Promise<void> {
   const account = value('input-account-forgot-account').trim();
   const password = value('input-account-reset-password');
   if (!account) {
@@ -74,12 +75,12 @@ async function confirmReset(bridge) {
     return;
   }
   clear('input-account-forgot-account', 'input-account-reset-code', 'input-account-reset-password');
-  byId('account-forgot-panel')?.classList.add('hidden');
+  byIdOrNull('account-forgot-panel')?.classList.add('hidden');
   showAccountStatus(t('settings.account.resetDone'), false);
   bridge.patchState({});
 }
 
-async function verify(bridge) {
+async function verify(bridge: PopupBridge): Promise<void> {
   const result = await email.verifyEmail(companionFetch, base(), value('input-account-verify-code'));
   if (!result.ok) {
     showAccountStatus(result.invalidCode ? t('settings.account.codeInvalid', { digits: email.CODE_DIGITS }) : describeAccountFailure(result), true);
@@ -93,12 +94,12 @@ async function verify(bridge) {
   refreshCompanionData(bridge);
 }
 
-async function resend() {
+async function resend(): Promise<void> {
   const result = await email.resendVerification(companionFetch, base());
   showAccountStatus(result.ok ? t('settings.account.codeResent') : describeAccountFailure(result), !result.ok);
 }
 
-async function changeEmail(bridge) {
+async function changeEmail(bridge: PopupBridge): Promise<void> {
   const address = value('input-account-new-email').trim();
   if (!email.looksLikeEmail(address)) {
     showAccountStatus(t('settings.account.emailInvalid'), true);
@@ -117,18 +118,15 @@ async function changeEmail(bridge) {
   bridge.patchState({});
 }
 
-function wireEmailAccountEvents(bridge) {
-  byId('btn-account-forgot')?.addEventListener('click', () => {
+export function wireEmailAccountEvents(bridge: PopupBridge): void {
+  byIdOrNull('btn-account-forgot')?.addEventListener('click', () => {
     log('BTN account-forgot');
-    byId('account-forgot-panel')?.classList.toggle('hidden');
+    byIdOrNull('account-forgot-panel')?.classList.toggle('hidden');
   });
-  byId('btn-account-forgot-send')?.addEventListener('click', () => { log('BTN account-forgot-send'); sendResetCode(); });
-  byId('btn-account-reset-confirm')?.addEventListener('click', () => { log('BTN account-reset-confirm'); confirmReset(bridge); });
-  byId('btn-account-verify')?.addEventListener('click', () => { log('BTN account-verify'); verify(bridge); });
-  byId('input-account-verify-code')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') verify(bridge); });
-  byId('btn-account-resend')?.addEventListener('click', () => { log('BTN account-resend'); resend(); });
-  byId('btn-account-set-email')?.addEventListener('click', () => { log('BTN account-set-email'); changeEmail(bridge); });
+  byIdOrNull('btn-account-forgot-send')?.addEventListener('click', () => { log('BTN account-forgot-send'); sendResetCode(); });
+  byIdOrNull('btn-account-reset-confirm')?.addEventListener('click', () => { log('BTN account-reset-confirm'); confirmReset(bridge); });
+  byIdOrNull('btn-account-verify')?.addEventListener('click', () => { log('BTN account-verify'); verify(bridge); });
+  byIdOrNull('input-account-verify-code')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') verify(bridge); });
+  byIdOrNull('btn-account-resend')?.addEventListener('click', () => { log('BTN account-resend'); resend(); });
+  byIdOrNull('btn-account-set-email')?.addEventListener('click', () => { log('BTN account-set-email'); changeEmail(bridge); });
 }
-
-module.exports = { renderEmailAccountSection, wireEmailAccountEvents };
-
