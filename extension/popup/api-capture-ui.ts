@@ -1,21 +1,28 @@
 // API mode: network recording and the candidate-search results: the recording toggle, the click-based searches (recorded
 // requests, the page's embedded JSON), the candidate and recorded-request lists, and confirming a candidate into an
 // apiConfigDraft. See api-config-ui.js for the `bridge` convention.
-const { createLogger } = require('../shared/logger');
-const log = createLogger('SF:ApiConfigUI');
-const { t } = require('../i18n/i18n');
-const {
+import type * as SFDraft from '../types/drafts';
+import type { ApiCandidatesResult, PopupBridge } from '../types/popup';
+import type { ApiCandidate } from '../types/messages';
+import { createLogger } from '../shared/logger';
+import { t } from '../i18n/i18n';
+import {
   STATES, escapeHtml, parseUrlTemplateParts, jsonValueToBodyDraft, buildApiSubtreeFromCandidate,
-} = require('./api-config');
-const { patchApiConfigDraft } = require('./api-config-shared-ui');
+} from './api-config';
+import { patchApiConfigDraft } from './api-config-shared-ui';
+import { byIdOrNull } from './dom';
+
+const log = createLogger('SF:ApiConfigUI');
 
 // ids: the primary-field search panel (#api-candidates-*) and the "add group / sub-field" panel (#api-tree-search-*) render the
 // same candidate shape and differ only in the confirm action, so one function serves both.
-function renderApiCandidates({ target, candidates }, ids = { targetEl: 'api-candidates-target', listEl: 'api-candidates-list' }) {
-  const targetEl = document.getElementById(ids.targetEl);
+export function renderApiCandidates(
+  { target, candidates }: ApiCandidatesResult, ids = { targetEl: 'api-candidates-target', listEl: 'api-candidates-list' },
+): void {
+  const targetEl = byIdOrNull(ids.targetEl);
   if (targetEl) targetEl.textContent = t('apiCandidates.searchedFor', { target });
 
-  const listEl = document.getElementById(ids.listEl);
+  const listEl = byIdOrNull(ids.listEl);
   if (!listEl) return;
   listEl.innerHTML = '';
 
@@ -87,8 +94,8 @@ function renderApiCandidates({ target, candidates }, ids = { targetEl: 'api-cand
 
 // The raw recorded pool, to check that a variable part's other values were actually recorded before relying on the
 // autofill. Reuses the candidate row styling without the value / siblings / use parts.
-function renderApiEntriesList(entries) {
-  const listEl = document.getElementById('api-entries-list');
+export function renderApiEntriesList(entries: SFDraft.ApiCaptureEntry[] | null | undefined): void {
+  const listEl = byIdOrNull('api-entries-list');
   if (!listEl) return;
   listEl.innerHTML = '';
 
@@ -124,13 +131,13 @@ function renderApiEntriesList(entries) {
 // reset on a re-render (accepted). partId ("path:<index>" or "query:<key>") identifies a variable part independently of its
 // user-editable name, so parameterSources can be keyed by something stable.
 
-function startApiCapture(bridge) {
+export function startApiCapture(bridge: PopupBridge): void {
   log('API_CAPTURE_START');
   chrome.runtime.sendMessage({ type: 'API_CAPTURE_START' });
   bridge.patchState({ apiCaptureActive: true, apiCaptureCount: 0 });
 }
 
-function stopApiCapture(bridge) {
+export function stopApiCapture(bridge: PopupBridge): void {
   log('API_CAPTURE_STOP');
   chrome.runtime.sendMessage({ type: 'API_CAPTURE_STOP' });
   // Keep apiCaptureCount — Phase 4's search below runs on what was recorded
@@ -138,7 +145,7 @@ function stopApiCapture(bridge) {
   bridge.patchState({ apiCaptureActive: false });
 }
 
-function toggleApiCapture(bridge) {
+export function toggleApiCapture(bridge: PopupBridge): void {
   if (bridge.getState().apiCaptureActive) stopApiCapture(bridge); else startApiCapture(bridge);
 }
 
@@ -146,7 +153,7 @@ function toggleApiCapture(bridge) {
 // Reuses the click selection (START_SELECTION / ELEMENT_SELECTED) with an apiSearch flag: the content script also correlates
 // the clicked text against the recorded entries and reports API_CANDIDATES.
 
-function startApiFieldSearch(bridge) {
+export function startApiFieldSearch(bridge: PopupBridge): void {
   const state = bridge.getState();
   if (state.apiCaptureCount === 0) return;
   log('API_SEARCH start → START_SELECTION(apiSearch)');
@@ -162,7 +169,7 @@ function startApiFieldSearch(bridge) {
 // The embedded-JSON analogue of startApiFieldSearch: no recording needed, since the content script scans document.scripts
 // at click time. It reuses the same apiSearchTarget / apiCandidates state and list; EMBEDDED_JSON_CANDIDATES is handled like
 // API_CANDIDATES, and confirmation is dispatched by candidate shape (candidate.scriptSelector).
-function startEmbeddedJsonFieldSearch(bridge) {
+export function startEmbeddedJsonFieldSearch(bridge: PopupBridge): void {
   const state = bridge.getState();
   log('EMBEDDED_JSON_SEARCH start → START_SELECTION(embeddedJsonSearch)');
   bridge.stopPreviewIfActive();
@@ -181,7 +188,7 @@ function startEmbeddedJsonFieldSearch(bridge) {
 // `siblingNames` are keys picked as one-click extra fields; each is already a valid name and path (a direct property of the same
 // record), unlike the primary field, which gets a user-chosen name. Builds the full nested tree draft; a single match is a
 // one-node-deep tree (the flat wire shape stays available, see buildApiConfig).
-function confirmApiFieldCandidate(bridge, candidate, fieldName, siblingNames) {
+export function confirmApiFieldCandidate(bridge: PopupBridge, candidate: ApiCandidate, fieldName: string, siblingNames: string[]): void {
   const groups = buildApiSubtreeFromCandidate(candidate, fieldName, siblingNames);
 
   log('API_FIELD_CONFIRM', { url: candidate.url, groups });
@@ -190,14 +197,14 @@ function confirmApiFieldCandidate(bridge, candidate, fieldName, siblingNames) {
     apiCandidates: null,
     apiConfigDraft: {
       sourceUrl: candidate.url,
-      urlParts: parseUrlTemplateParts(candidate.url),
+      urlParts: parseUrlTemplateParts(candidate.url as string), // a network candidate always has its recorded url
       groups,
       capturedHeaders: candidate.requestHeaders || [],
       parameterSources: {},
       headerDecisions: {},
       // candidate.method is available; bodyTree starts null and is filled in asynchronously (the captured body is not on the
       // candidate, only entryId).
-      method: candidate.method || 'GET',
+      method: (candidate.method || 'GET') as 'GET' | 'POST', // the recorded method; the companion rejects anything else
       bodyTree: null,
       bodyParameters: [],
       nextBodyParameterSeq: 0,
@@ -215,7 +222,7 @@ function confirmApiFieldCandidate(bridge, candidate, fieldName, siblingNames) {
 // The embedded-JSON analogue of confirmApiFieldCandidate: there is no captured request, so the request is a GET of the
 // current page (bridge.getState().url), parameterizable later like any URL. No body is possible. embeddedJsonSource is
 // stamped with the candidate's scriptSelector, which scopes further tree searches and goes into the wire object.
-function confirmEmbeddedJsonFieldCandidate(bridge, candidate, fieldName, siblingNames) {
+export function confirmEmbeddedJsonFieldCandidate(bridge: PopupBridge, candidate: ApiCandidate, fieldName: string, siblingNames: string[]): void {
   const groups = buildApiSubtreeFromCandidate(candidate, fieldName, siblingNames);
   const url = bridge.getState().url;
 
@@ -234,7 +241,7 @@ function confirmEmbeddedJsonFieldCandidate(bridge, candidate, fieldName, sibling
       bodyTree: null,
       bodyParameters: [],
       nextBodyParameterSeq: 0,
-      embeddedJsonSource: { scriptSelector: candidate.scriptSelector },
+      embeddedJsonSource: { scriptSelector: candidate.scriptSelector as string }, // an embedded-JSON candidate always names its script tag
     },
   });
 }
@@ -242,14 +249,14 @@ function confirmEmbeddedJsonFieldCandidate(bridge, candidate, fieldName, sibling
 // Fire-and-forget: looks the POST candidate's captured body up in the recorded pool and, if it is a JSON string, turns it
 // into the initial all-literal body draft. It runs after the screen is up: a bodyless POST is a valid config, so the
 // transition is not delayed.
-async function loadInitialBodyTreeForCandidate(bridge, candidate) {
+export async function loadInitialBodyTreeForCandidate(bridge: PopupBridge, candidate: ApiCandidate): Promise<void> {
   if (!candidate.method || candidate.method === 'GET' || candidate.method === 'HEAD') return;
 
   const entries = await fetchApiCaptureEntries();
   const entry = entries.find(e => e.id === candidate.entryId);
   if (!entry || entry.requestBodySkipped || !entry.requestBody) return;
 
-  let parsed;
+  let parsed: unknown;
   try {
     parsed = JSON.parse(entry.requestBody);
   } catch {
@@ -265,17 +272,18 @@ async function loadInitialBodyTreeForCandidate(bridge, candidate) {
 }
 
 // GET_API_CAPTURE_ENTRIES round trip shared by the recorded-endpoints panel and the value-list autofill; needs no bridge.
-async function fetchApiCaptureEntries() {
+export async function fetchApiCaptureEntries(): Promise<SFDraft.ApiCaptureEntry[]> {
   try {
-    return await chrome.runtime.sendMessage({ type: 'GET_API_CAPTURE_ENTRIES' }) || [];
+    const entries: SFDraft.ApiCaptureEntry[] | undefined = await chrome.runtime.sendMessage({ type: 'GET_API_CAPTURE_ENTRIES' }); // the content script's recorded pool
+    return entries || [];
   } catch (err) {
-    log('GET_API_CAPTURE_ENTRIES failed', err.message);
+    log('GET_API_CAPTURE_ENTRIES failed', (err as Error).message);
     return [];
   }
 }
 
 // Toggles the recorded-endpoints panel; fetches a fresh snapshot on every open.
-async function toggleApiEntriesPanel(bridge) {
+export async function toggleApiEntriesPanel(bridge: PopupBridge): Promise<void> {
   if (bridge.getState().apiEntriesPanelOpen) {
     log('API_ENTRIES_PANEL close');
     bridge.patchState({ apiEntriesPanelOpen: false });
@@ -288,18 +296,22 @@ async function toggleApiEntriesPanel(bridge) {
 
 // Event delegation for the sibling chips and the "Use" row, shared by both candidate panels (identical markup; only
 // getCandidates / onConfirm differ).
-function wireApiCandidateListEvents(listElId, getCandidates, onConfirm) {
-  document.getElementById(listElId)?.addEventListener('click', (e) => {
-    const chip = e.target.closest('.api-sibling-chip');
+export function wireApiCandidateListEvents(
+  listElId: string, getCandidates: () => ApiCandidate[] | undefined,
+  onConfirm: (candidate: ApiCandidate, fieldName: string, siblingNames: string[]) => void,
+): void {
+  byIdOrNull(listElId)?.addEventListener('click', (e) => {
+    const target = e.target as Element;
+    const chip = target.closest<HTMLElement>('.api-sibling-chip');
     if (chip) {
       chip.classList.toggle('picked');
       log('API_CANDIDATE sibling toggled', chip.dataset.siblingName);
       return;
     }
 
-    const selectAllBtn = e.target.closest('.api-sibling-select-all');
+    const selectAllBtn = target.closest<HTMLElement>('.api-sibling-select-all');
     if (selectAllBtn) {
-      const chips = selectAllBtn.closest('.api-candidate-siblings').querySelectorAll('.api-sibling-chip');
+      const chips = (selectAllBtn.closest('.api-candidate-siblings') as HTMLElement).querySelectorAll('.api-sibling-chip'); // rendered inside it
       const allPicked = Array.from(chips).every(c => c.classList.contains('picked'));
       chips.forEach(c => c.classList.toggle('picked', !allPicked));
       selectAllBtn.textContent = t(allPicked ? 'apiCandidates.selectAllChips' : 'apiCandidates.deselectAllChips');
@@ -307,41 +319,41 @@ function wireApiCandidateListEvents(listElId, getCandidates, onConfirm) {
       return;
     }
 
-    const confirmBtn = e.target.closest('.api-candidate-confirm');
+    const confirmBtn = target.closest<HTMLElement>('.api-candidate-confirm');
     if (confirmBtn) {
-      const index = parseInt(confirmBtn.dataset.candidateIndex, 10);
+      const index = parseInt(confirmBtn.dataset.candidateIndex as string, 10);
       const candidate = getCandidates()?.[index];
       if (!candidate) return;
-      const li = confirmBtn.closest('.api-candidate');
-      const fieldName = li.querySelector('.api-candidate-field-name')?.value.trim();
+      const li = confirmBtn.closest('.api-candidate') as HTMLElement;
+      const fieldName = li.querySelector<HTMLInputElement>('.api-candidate-field-name')?.value.trim();
       if (!fieldName) return;
-      const siblingNames = Array.from(li.querySelectorAll('.api-sibling-chip.picked')).map(c => c.dataset.siblingName);
+      const siblingNames = Array.from(li.querySelectorAll<HTMLElement>('.api-sibling-chip.picked')).map(c => c.dataset.siblingName as string);
       onConfirm(candidate, fieldName, siblingNames);
     }
   });
 
   // Enables "Use" once a field name has been typed for that row.
-  document.getElementById(listElId)?.addEventListener('input', (e) => {
-    const input = e.target.closest('.api-candidate-field-name');
+  byIdOrNull(listElId)?.addEventListener('input', (e) => {
+    const input = (e.target as Element).closest<HTMLInputElement>('.api-candidate-field-name');
     if (!input) return;
     const li = input.closest('.api-candidate');
-    const confirmBtn = li?.querySelector('.api-candidate-confirm');
+    const confirmBtn = li?.querySelector<HTMLButtonElement>('.api-candidate-confirm');
     if (confirmBtn) confirmBtn.disabled = input.value.trim() === '';
   });
 }
 
-function wireApiCaptureEvents(bridge) {
-  document.getElementById('btn-api-search')?.addEventListener('click', () => {
+export function wireApiCaptureEvents(bridge: PopupBridge): void {
+  byIdOrNull('btn-api-search')?.addEventListener('click', () => {
     log('BTN api-search');
     startApiFieldSearch(bridge);
   });
 
-  document.getElementById('btn-embedded-json-search')?.addEventListener('click', () => {
+  byIdOrNull('btn-embedded-json-search')?.addEventListener('click', () => {
     log('BTN embedded-json-search');
     startEmbeddedJsonFieldSearch(bridge);
   });
 
-  document.getElementById('btn-api-entries-toggle')?.addEventListener('click', () => {
+  byIdOrNull('btn-api-entries-toggle')?.addEventListener('click', () => {
     log('BTN api-entries-toggle');
     toggleApiEntriesPanel(bridge);
   });
@@ -355,20 +367,3 @@ function wireApiCaptureEvents(bridge) {
       : confirmApiFieldCandidate(bridge, candidate, fieldName, siblingNames)),
   );
 }
-
-module.exports = {
-  renderApiCandidates,
-  renderApiEntriesList,
-  startApiCapture,
-  stopApiCapture,
-  toggleApiCapture,
-  startApiFieldSearch,
-  startEmbeddedJsonFieldSearch,
-  confirmApiFieldCandidate,
-  confirmEmbeddedJsonFieldCandidate,
-  loadInitialBodyTreeForCandidate,
-  fetchApiCaptureEntries,
-  toggleApiEntriesPanel,
-  wireApiCandidateListEvents,
-  wireApiCaptureEvents,
-};

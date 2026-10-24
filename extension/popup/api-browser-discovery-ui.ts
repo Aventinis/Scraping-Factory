@@ -2,24 +2,28 @@
 // cards (WaitFor/Fill/Click/Scroll, times in seconds) and the draft mutations
 // behind them. Split out of api-config-ui.js (Issue #390); behavior unchanged.
 // See api-config-ui.js for the `bridge` convention.
-const { createLogger } = require('../shared/logger');
-const log = createLogger('SF:ApiConfigUI');
-const { t } = require('../i18n/i18n');
-const { envVarNoteHtml } = require('./env-var-ui');
-const { msToSecondsText, secondsTextToMs } = require('./login-flow');
-const {
+import type * as SFDraft from '../types/drafts';
+import type { BrowserActionField, PopupBridge } from '../types/popup';
+import { createLogger } from '../shared/logger';
+import { t } from '../i18n/i18n';
+import { envVarNoteHtml } from './env-var-ui';
+import { msToSecondsText, secondsTextToMs } from './login-flow';
+import {
   STATES, escapeHtml, earlierParameterNames,
-} = require('./api-config');
+} from './api-config';
+import type { ApiConfigDraft, ParameterPart, SourceOf } from './api-config';
+
+const log = createLogger('SF:ApiConfigUI');
 // Issue #216: BrowserDiscoverySource's action list reuses the exact same
 // draft shape/helpers the top-level login-flow editor already uses —
 // api-config.ts can't import these itself (scraping-config-builder.ts
 // already imports api-config.ts; the reverse would be a circular
 // require), so the API_CONFIG UI modules (one layer above both) do the
 // wiring instead.
-const {
+import {
   addBrowserAction, removeBrowserAction, updateBrowserAction, frameBadgeHtml,
-} = require('./scraping-config-builder');
-const { renderParameterPlaceholderPicker, patchApiConfigSource } = require('./api-config-shared-ui');
+} from './scraping-config-builder';
+import { renderParameterPlaceholderPicker, patchApiConfigSource } from './api-config-shared-ui';
 
 // Issue #216: BrowserDiscoverySource's own action-list editor — visually
 // mirrors browser-actions-ui.js's renderBrowserActions (one card per
@@ -31,7 +35,7 @@ const { renderParameterPlaceholderPicker, patchApiConfigSource } = require('./ap
 // differently-scoped instance of the same kind of small DOM helper (see renderMatchCountHint). Every control carries both data-part-id and
 // data-index so the single delegated listener on #api-config-parameters
 // can address the right parameter's own action array.
-function renderBrowserDiscoverySourceFields(draft, part, source) {
+export function renderBrowserDiscoverySourceFields(draft: ApiConfigDraft, part: ParameterPart, source: SourceOf<'browserDiscovery'>): HTMLElement {
   const safePartId = escapeHtml(part.id);
   const actions = source.actions || [];
   const wrap = document.createElement('div');
@@ -48,14 +52,14 @@ function renderBrowserDiscoverySourceFields(draft, part, source) {
     renderParameterPlaceholderPicker(earlierNames, safePartId, '.api-discovery-url', 'discoveryUrl');
   wrap.appendChild(urlRow);
 
-  const kindLabels = {
+  const kindLabels: Record<SFDraft.BrowserAction['kind'], string> = {
     waitFor: t('browserActions.kindWaitFor'),
     fill: t('browserActions.kindFill'),
     click: t('browserActions.kindClick'),
     scroll: t('browserActions.kindScroll'),
   };
 
-  function pickRow(index, field, value, label) {
+  function pickRow(index: number, field: string, value: string | null | undefined, label: string | null): HTMLElement {
     const row = document.createElement('div');
     row.className = 'browser-action-selector-row';
     const selectorText = value || t('browserActions.noSelector');
@@ -73,7 +77,7 @@ function renderBrowserDiscoverySourceFields(draft, part, source) {
     const card = document.createElement('div');
     card.className = 'browser-action-card';
     card.dataset.partId = part.id;
-    card.dataset.index = i;
+    card.dataset.index = String(i);
 
     const header = document.createElement('div');
     header.className = 'browser-action-header';
@@ -132,7 +136,8 @@ function renderBrowserDiscoverySourceFields(draft, part, source) {
 
   const addRow = document.createElement('div');
   addRow.className = 'actions';
-  addRow.innerHTML = ['waitFor', 'fill', 'click', 'scroll'].map(kind =>
+  const kinds: SFDraft.BrowserAction['kind'][] = ['waitFor', 'fill', 'click', 'scroll'];
+  addRow.innerHTML = kinds.map(kind =>
     `<button type="button" class="btn-secondary btn-tiny btn-add-discovery-action" data-part-id="${safePartId}" data-kind="${kind}">+ ${escapeHtml(kindLabels[kind])}</button>`,
   ).join('');
   wrap.appendChild(addRow);
@@ -140,92 +145,96 @@ function renderBrowserDiscoverySourceFields(draft, part, source) {
   return wrap;
 }
 
-function addDiscoveryAction(bridge, partId, kind) {
-  const source = bridge.getState().apiConfigDraft.parameterSources[partId];
-  patchApiConfigSource(bridge, partId, { actions: addBrowserAction(source.actions || [], kind) });
+// These handlers only run for a browser-discovery part of an open API_CONFIG draft.
+function discoverySource(bridge: PopupBridge, partId: string): SourceOf<'browserDiscovery'> {
+  return (bridge.getState().apiConfigDraft as ApiConfigDraft).parameterSources[partId] as SourceOf<'browserDiscovery'>;
 }
 
-function removeDiscoveryAction(bridge, partId, index) {
-  const source = bridge.getState().apiConfigDraft.parameterSources[partId];
-  patchApiConfigSource(bridge, partId, { actions: removeBrowserAction(source.actions || [], index) });
+export function addDiscoveryAction(bridge: PopupBridge, partId: string, kind: SFDraft.BrowserAction['kind']): void {
+  patchApiConfigSource<SourceOf<'browserDiscovery'>>(bridge, partId, { actions: addBrowserAction(discoverySource(bridge, partId).actions || [], kind) });
 }
 
-function updateDiscoveryAction(bridge, partId, index, patch) {
-  const source = bridge.getState().apiConfigDraft.parameterSources[partId];
-  patchApiConfigSource(bridge, partId, { actions: updateBrowserAction(source.actions || [], index, patch) });
+export function removeDiscoveryAction(bridge: PopupBridge, partId: string, index: number): void {
+  patchApiConfigSource<SourceOf<'browserDiscovery'>>(bridge, partId, { actions: removeBrowserAction(discoverySource(bridge, partId).actions || [], index) });
+}
+
+export function updateDiscoveryAction(bridge: PopupBridge, partId: string, index: number, patch: Partial<SFDraft.BrowserAction>): void {
+  patchApiConfigSource<SourceOf<'browserDiscovery'>>(bridge, partId, { actions: updateBrowserAction(discoverySource(bridge, partId).actions || [], index, patch) });
 }
 
 // The BrowserDiscoverySource part of the "api-config-parameters" delegated
 // listeners (see wireApiParameterEvents in api-parameters-ui.js): called last,
 // after the parameter-source branches have not matched.
-function handleBrowserDiscoveryChange(bridge, e) {
+export function handleBrowserDiscoveryChange(bridge: PopupBridge, e: Event): void {
+    const target = e.target as Element;
     // ── BrowserDiscoverySource (Issue #216) ───────────────────────────────
-    const discoveryUrl = e.target.closest('.api-discovery-url');
-    if (discoveryUrl) { patchApiConfigSource(bridge, discoveryUrl.dataset.partId, { discoveryUrl: discoveryUrl.value.trim() }); return; }
+    const discoveryUrl = target.closest<HTMLInputElement>('.api-discovery-url');
+    if (discoveryUrl) { patchApiConfigSource(bridge, discoveryUrl.dataset.partId as string, { discoveryUrl: discoveryUrl.value.trim() }); return; }
 
-    const actionTimeout = e.target.closest('.discovery-action-timeout');
+    const actionTimeout = target.closest<HTMLInputElement>('.discovery-action-timeout');
     if (actionTimeout) {
-      updateDiscoveryAction(bridge, actionTimeout.dataset.partId, parseInt(actionTimeout.dataset.index, 10), {
+      updateDiscoveryAction(bridge, actionTimeout.dataset.partId as string, parseInt(actionTimeout.dataset.index as string, 10), {
         timeoutMs: secondsTextToMs(actionTimeout.value, 5000),
       });
       return;
     }
-    const actionEnvName = e.target.closest('.discovery-action-env-name');
+    const actionEnvName = target.closest<HTMLInputElement>('.discovery-action-env-name');
     if (actionEnvName) {
-      updateDiscoveryAction(bridge, actionEnvName.dataset.partId, parseInt(actionEnvName.dataset.index, 10), {
+      updateDiscoveryAction(bridge, actionEnvName.dataset.partId as string, parseInt(actionEnvName.dataset.index as string, 10), {
         environmentVariableName: actionEnvName.value.trim(),
       });
       return;
     }
-    const actionClickTarget = e.target.closest('.discovery-action-click-target');
+    const actionClickTarget = target.closest<HTMLSelectElement>('.discovery-action-click-target');
     if (actionClickTarget) {
-      updateDiscoveryAction(bridge, actionClickTarget.dataset.partId, parseInt(actionClickTarget.dataset.index, 10), { target: actionClickTarget.value });
+      updateDiscoveryAction(bridge, actionClickTarget.dataset.partId as string, parseInt(actionClickTarget.dataset.index as string, 10), { target: actionClickTarget.value as 'first' | 'last' | 'all' });
       return;
     }
-    const actionClickWait = e.target.closest('.discovery-action-click-wait-after-ms');
+    const actionClickWait = target.closest<HTMLInputElement>('.discovery-action-click-wait-after-ms');
     if (actionClickWait) {
-      updateDiscoveryAction(bridge, actionClickWait.dataset.partId, parseInt(actionClickWait.dataset.index, 10), {
+      updateDiscoveryAction(bridge, actionClickWait.dataset.partId as string, parseInt(actionClickWait.dataset.index as string, 10), {
         waitAfterMs: secondsTextToMs(actionClickWait.value, 250, { allowZero: true }),
       });
       return;
     }
-    const actionMaxIterations = e.target.closest('.discovery-action-max-iterations');
+    const actionMaxIterations = target.closest<HTMLInputElement>('.discovery-action-max-iterations');
     if (actionMaxIterations) {
       const maxIterations = parseInt(actionMaxIterations.value, 10);
-      updateDiscoveryAction(bridge, actionMaxIterations.dataset.partId, parseInt(actionMaxIterations.dataset.index, 10), {
+      updateDiscoveryAction(bridge, actionMaxIterations.dataset.partId as string, parseInt(actionMaxIterations.dataset.index as string, 10), {
         maxIterations: Number.isFinite(maxIterations) && maxIterations > 0 ? maxIterations : 10,
       });
       return;
     }
-    const actionWaitAfterMs = e.target.closest('.discovery-action-wait-after-ms');
+    const actionWaitAfterMs = target.closest<HTMLInputElement>('.discovery-action-wait-after-ms');
     if (actionWaitAfterMs) {
-      updateDiscoveryAction(bridge, actionWaitAfterMs.dataset.partId, parseInt(actionWaitAfterMs.dataset.index, 10), {
+      updateDiscoveryAction(bridge, actionWaitAfterMs.dataset.partId as string, parseInt(actionWaitAfterMs.dataset.index as string, 10), {
         waitAfterMs: secondsTextToMs(actionWaitAfterMs.value, 1000, { allowZero: true }),
       });
       return;
     }
     // Issue #289: a blank input deliberately resets to null (today's
     // jump-to-bottom default), not a clamped fallback number.
-    const actionScrollStepPx = e.target.closest('.discovery-action-scroll-step-px');
+    const actionScrollStepPx = target.closest<HTMLInputElement>('.discovery-action-scroll-step-px');
     if (actionScrollStepPx) {
       const scrollStepPx = parseInt(actionScrollStepPx.value, 10);
-      updateDiscoveryAction(bridge, actionScrollStepPx.dataset.partId, parseInt(actionScrollStepPx.dataset.index, 10), {
+      updateDiscoveryAction(bridge, actionScrollStepPx.dataset.partId as string, parseInt(actionScrollStepPx.dataset.index as string, 10), {
         scrollStepPx: Number.isFinite(scrollStepPx) && scrollStepPx > 0 ? scrollStepPx : null,
       });
     }
 }
 
-function handleBrowserDiscoveryClick(bridge, e) {
+export function handleBrowserDiscoveryClick(bridge: PopupBridge, e: Event): void {
+    const target = e.target as Element;
     // ── BrowserDiscoverySource (Issue #216) ───────────────────────────────
-    const addActionBtn = e.target.closest('.btn-add-discovery-action');
-    if (addActionBtn) { addDiscoveryAction(bridge, addActionBtn.dataset.partId, addActionBtn.dataset.kind); return; }
-    const removeActionBtn = e.target.closest('.btn-remove-discovery-action');
-    if (removeActionBtn) { removeDiscoveryAction(bridge, removeActionBtn.dataset.partId, parseInt(removeActionBtn.dataset.index, 10)); return; }
-    const pickActionBtn = e.target.closest('.btn-pick-discovery-action-selector');
+    const addActionBtn = target.closest<HTMLElement>('.btn-add-discovery-action');
+    if (addActionBtn) { addDiscoveryAction(bridge, addActionBtn.dataset.partId as string, addActionBtn.dataset.kind as SFDraft.BrowserAction['kind']); return; }
+    const removeActionBtn = target.closest<HTMLElement>('.btn-remove-discovery-action');
+    if (removeActionBtn) { removeDiscoveryAction(bridge, removeActionBtn.dataset.partId as string, parseInt(removeActionBtn.dataset.index as string, 10)); return; }
+    const pickActionBtn = target.closest<HTMLElement>('.btn-pick-discovery-action-selector');
     if (pickActionBtn) {
-      const partId = pickActionBtn.dataset.partId;
-      const index = parseInt(pickActionBtn.dataset.index, 10);
-      const field = pickActionBtn.dataset.field;
+      const partId = pickActionBtn.dataset.partId as string;
+      const index = parseInt(pickActionBtn.dataset.index as string, 10);
+      const field = pickActionBtn.dataset.field as BrowserActionField;
       log('BTN pick-discovery-action-selector → START_SELECTION', { partId, index, field });
       bridge.stopPreviewIfActive();
       chrome.runtime.sendMessage({ type: 'START_SELECTION' });
@@ -236,12 +245,3 @@ function handleBrowserDiscoveryClick(bridge, e) {
       });
     }
 }
-
-module.exports = {
-  renderBrowserDiscoverySourceFields,
-  addDiscoveryAction,
-  removeDiscoveryAction,
-  updateDiscoveryAction,
-  handleBrowserDiscoveryChange,
-  handleBrowserDiscoveryClick,
-};

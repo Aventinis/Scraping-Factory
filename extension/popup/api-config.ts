@@ -118,7 +118,7 @@ export interface ApiConfigDraft {
   capturedHeaders: Array<{ name: string; value: string }>;
   headerDecisions: Record<string, HeaderDecision>;
   method?: 'GET' | 'POST';
-  bodyTree?: ApiBodyNodeDraft;
+  bodyTree?: ApiBodyNodeDraft | null;
   bodyParameterNames?: string[];
   parameterIdToName?: Record<string, string>;
   embeddedJsonSource?: SFWire.EmbeddedJsonSource | null;
@@ -127,7 +127,7 @@ export interface ApiConfigDraft {
   cursorPagination?: SFDraft.ApiCursorPagination | null;
   linkHeaderPagination?: SFDraft.ApiLinkHeaderPagination | null;
   sourceHasNextLink?: boolean;
-  sourceEntryId?: string;
+  sourceEntryId?: number;
   sourceUrl?: string;
   nextBodyParameterSeq?: number;
 }
