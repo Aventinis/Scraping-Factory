@@ -30,7 +30,7 @@ export function buildFlatFieldHighlight(
   return { name: field.name, steps: [{ selector: field.selector, all: true }], framePath: field.framePath || null };
 }
 
-// Walks `groups` along `path` (the index path container-tree-ui.js stamps on each row's <li data-path>). The framePath is the nearest one on
+// Walks `groups` along `path` (the index path container-tree-ui.ts stamps on each row's <li data-path>). The framePath is the nearest one on
 // the chain, hovered node first: a node picked inside an iframe carries its own, and its descendants were picked in the same frame.
 export function buildGroupNodeHighlight(groups: SFDraft.ContainerNode[], path: number[]): HoverHighlightPayload | null {
   const chain: SFDraft.ContainerNode[] = [];

@@ -4,7 +4,7 @@ import type * as SFWire from './wire';
 import type * as SFDraft from './drafts';
 import type { ApiConfigDraft } from '../popup/api-config';
 import type { CombinedComponentRef } from '../popup/combined-config';
-import type { ApiCandidate, RobotsTxtResult } from './messages';
+import type { ApiCandidate, DomTreeNode, RobotsTxtResult } from './messages';
 import type { showToast } from '../popup/toast';
 import type { CaptureEntryLike, PathTreeResult } from '../popup/json-path-picker';
 import type { SavedPreset } from '../popup/transform-presets';
@@ -131,7 +131,7 @@ export interface State {
 
   containerModalOpen: boolean;
   domViewEnabled: boolean;
-  domTree: unknown;
+  domTree: DomTreeNode | null;
   domTreeTruncated: boolean;
   domTreeError: string | null;
   previewActive: boolean;

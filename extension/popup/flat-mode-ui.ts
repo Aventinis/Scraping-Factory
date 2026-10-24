@@ -1,34 +1,39 @@
 // ── Flat mode render / wiring ──
 // The original mode's module: the flat fields list, the "+ Field" pick flow, modal-field-name and its transform-chain editor.
 // Functions take a `bridge` instead of closing over popup.js state.
-const { createLogger } = require('../shared/logger');
-const { buildFlatFieldHighlight, wireHoverHighlight } = require('./hover-highlight');
+import type * as SFDraft from '../types/drafts';
+import type * as SFWire from '../types/wire';
+import type { PopupBridge, State } from '../types/popup';
+import { createLogger } from '../shared/logger';
+import { buildFlatFieldHighlight, wireHoverHighlight } from './hover-highlight';
+import { t } from '../i18n/i18n';
+import { STATES, escapeHtml } from './api-config';
+import { addField, removeField, frameBadgeHtml } from './scraping-config-builder';
+import { transformsAreValid, addTransform } from './field-transforms';
+import { appendTextFilter } from './selector-text-filter';
+import { resetTextFilter, effectiveMatchCount, wireTextFilter } from './selector-text-filter-ui';
+import { renderTransformList, renderTransformPreview, wireTransformList } from './field-transforms-ui';
+import { parseAllowedContentTypes, megabytesToBytes } from './container-tree';
+import { isDerivedField } from './combine-split-fields';
+import { openCombineFieldModal, openSplitFieldModal } from './combine-split-fields-ui';
+import { renderMatchCountHint, populateAttributeSelect } from './field-modal';
+import { byIdOrNull, qsOrNull } from './dom';
+
 const log = createLogger('SF:Popup');
-const { t } = require('../i18n/i18n');
-const { STATES, escapeHtml } = require('./api-config');
-const { addField, removeField, frameBadgeHtml } = require('./scraping-config-builder');
-const { transformsAreValid, addTransform } = require('./field-transforms');
-const { appendTextFilter } = require('./selector-text-filter');
-const { resetTextFilter, effectiveMatchCount, wireTextFilter } = require('./selector-text-filter-ui');
-const { renderTransformList, renderTransformPreview, wireTransformList } = require('./field-transforms-ui');
-// Pure data helpers are imported from container-tree.ts; small DOM helpers (renderMatchCountHint) are duplicated instead.
-const { guessUrlAttribute, parseAllowedContentTypes, megabytesToBytes } = require('./container-tree');
-const { isDerivedField } = require('./combine-split-fields');
-const { openCombineFieldModal, openSplitFieldModal } = require('./combine-split-fields-ui');
 
 // A combine / split field has no real selector: show a distinguishing description instead (like container-tree.ts's groupNodeSuffix).
-function fieldSelectorLabel(field) {
+function fieldSelectorLabel(field: SFDraft.Field): string {
   if (isDerivedField(field.transforms)) {
-    const transform = field.transforms[0];
+    const transform = (field.transforms as SFWire.FieldTransform[])[0];
     return transform.kind === 'combineFields'
       ? t('group.combinedFieldMode', { sources: transform.sourceFieldNames.join(', ') })
-      : t('group.splitFieldMode', { source: transform.sourceFieldName });
+      : t('group.splitFieldMode', { source: (transform as SFWire.SplitFieldTransform).sourceFieldName });
   }
-  return field.selector;
+  return field.selector as string; // a field without a selector is a derived one, handled above
 }
 
-function renderFields(fields) {
-  const listEl = document.getElementById('fields-list');
+export function renderFields(fields: SFDraft.Field[]): void {
+  const listEl = byIdOrNull('fields-list');
   if (!listEl) return;
   listEl.innerHTML = '';
   fields.forEach((field, i) => {
@@ -46,75 +51,43 @@ function renderFields(fields) {
   });
 }
 
-// Match-count feedback next to the name input the instant a selector is picked. count is null before a pick or if the content
-// script could not compute it; the hint stays hidden then. Duplicated in container-tree-ui.js (its modal needs the same hint).
-function renderMatchCountHint(elId, count) {
-  const el = document.getElementById(elId);
-  if (!el) return;
-  if (count === null || count === undefined) {
-    el.textContent = '';
-    el.classList.add('hidden');
-    return;
-  }
-  el.textContent = t('modals.matchCount.found', { count });
-  el.classList.toggle('warn', count === 0);
-  el.classList.remove('hidden');
-}
-
 // Live preview of the chain's output, reading the live mode / attribute DOM values (not _state). The value the chain would run on now:
 // the picked element's text, or its chosen attribute (null until chosen); also read lazily by the transform editor's helpers.
-function resolveFlatRawValue(state) {
-  const mode = document.getElementById('select-field-name-mode')?.value ?? 'text';
+function resolveFlatRawValue(state: State): string | null {
+  const mode = byIdOrNull<HTMLSelectElement>('select-field-name-mode')?.value ?? 'text';
   if (mode === 'attribute') {
-    const attrName = document.getElementById('select-field-name-attribute')?.value.trim();
+    const attrName = byIdOrNull<HTMLSelectElement>('select-field-name-attribute')?.value.trim();
     return attrName ? (state.pendingElementAttributes?.[attrName] ?? '').trim() : null;
   }
   return state.pendingRawText;
 }
 
-function refreshFlatTransformPreview(bridge) {
+export function refreshFlatTransformPreview(bridge: PopupBridge): void {
   const state = bridge.getState();
   renderTransformPreview('field-transform-preview', resolveFlatRawValue(state), state.pendingTransforms);
 }
 
-// The attribute picker, like container-tree-ui.js's populateAttributeSelect (duplicated, not shared).
-function populateFlatAttributeSelect(attributes) {
-  const select = document.getElementById('select-field-name-attribute');
-  if (!select) return;
-  const entries = Object.entries(attributes || {});
-  if (entries.length === 0) {
-    select.innerHTML = `<option value="">${escapeHtml(t('modals.fieldExtended.noAttributesFound'))}</option>`;
-    return;
-  }
-  const guess = guessUrlAttribute(attributes);
-  select.innerHTML = entries.map(([name, value]) => {
-    const preview = value.length > 40 ? `${value.slice(0, 40)}…` : value;
-    const label = preview ? `${name}: ${preview}` : name;
-    return `<option value="${escapeHtml(name)}"${name === guess ? ' selected' : ''}>${escapeHtml(label)}</option>`;
-  }).join('');
-}
-
 // Called from render() once the confirmed-selection modal is flat mode's own. `isNewPick` tells a closed→open transition (reset
 // name / focus) from a re-render caused by editing the transform chain (which must not wipe what is typed).
-function renderFlatFieldModal(bridge, isNewPick) {
+export function renderFlatFieldModal(bridge: PopupBridge, isNewPick: boolean): void {
   const state = bridge.getState();
-  document.getElementById('modal-field-name')?.classList.remove('hidden');
+  byIdOrNull('modal-field-name')?.classList.remove('hidden');
   // Blocks mode reuses this modal, but Download is not carried onto a block's fields: hide the whole mode / attribute / download block
   // there instead of exposing a control that silently does nothing.
-  document.getElementById('field-name-mode-section')?.classList.toggle('hidden', state.mode === 'blocks');
+  byIdOrNull('field-name-mode-section')?.classList.toggle('hidden', state.mode === 'blocks');
   if (isNewPick) {
-    const input = document.getElementById('input-field-name');
+    const input = byIdOrNull<HTMLInputElement>('input-field-name');
     if (input) { input.value = ''; input.focus(); }
-    const modeSelect = document.getElementById('select-field-name-mode');
+    const modeSelect = byIdOrNull<HTMLSelectElement>('select-field-name-mode');
     if (modeSelect) modeSelect.value = 'text';
-    document.getElementById('field-name-attribute-row')?.classList.add('hidden');
-    populateFlatAttributeSelect(state.pendingElementAttributes);
-    const downloadToggle = document.getElementById('toggle-field-name-download');
+    byIdOrNull('field-name-attribute-row')?.classList.add('hidden');
+    populateAttributeSelect('select-field-name-attribute', state.pendingElementAttributes);
+    const downloadToggle = byIdOrNull<HTMLInputElement>('toggle-field-name-download');
     if (downloadToggle) downloadToggle.checked = false;
-    document.getElementById('field-name-download-options')?.classList.add('hidden');
-    const maxSizeInput = document.getElementById('input-field-name-download-max-size');
+    byIdOrNull('field-name-download-options')?.classList.add('hidden');
+    const maxSizeInput = byIdOrNull<HTMLInputElement>('input-field-name-download-max-size');
     if (maxSizeInput) maxSizeInput.value = '';
-    const allowedTypesInput = document.getElementById('input-field-name-download-allowed-types');
+    const allowedTypesInput = byIdOrNull<HTMLInputElement>('input-field-name-download-allowed-types');
     if (allowedTypesInput) allowedTypesInput.value = '';
     resetTextFilter('input-field-name-text-filter', 'btn-field-name-use-text', state.pendingRawText);
   }
@@ -123,20 +96,20 @@ function renderFlatFieldModal(bridge, isNewPick) {
   refreshFlatTransformPreview(bridge);
 }
 
-function confirmField(bridge) {
+export function confirmField(bridge: PopupBridge): void {
   const state = bridge.getState();
-  const name = document.getElementById('input-field-name')?.value.trim();
+  const name = byIdOrNull<HTMLInputElement>('input-field-name')?.value.trim();
   if (!name) return;
-  const mode = document.getElementById('select-field-name-mode')?.value ?? 'text';
-  const attribute = document.getElementById('select-field-name-attribute')?.value.trim();
+  const mode = byIdOrNull<HTMLSelectElement>('select-field-name-mode')?.value ?? 'text';
+  const attribute = byIdOrNull<HTMLSelectElement>('select-field-name-attribute')?.value.trim();
   if (mode === 'attribute' && !attribute) return;
-  const download = document.getElementById('toggle-field-name-download')?.checked ?? false;
-  const maxDownloadSizeBytes = megabytesToBytes(document.getElementById('input-field-name-download-max-size')?.value);
-  const allowedContentTypes = parseAllowedContentTypes(document.getElementById('input-field-name-download-allowed-types')?.value);
+  const download = byIdOrNull<HTMLInputElement>('toggle-field-name-download')?.checked ?? false;
+  const maxDownloadSizeBytes = megabytesToBytes(byIdOrNull<HTMLInputElement>('input-field-name-download-max-size')?.value as string);
+  const allowedContentTypes = parseAllowedContentTypes(byIdOrNull<HTMLInputElement>('input-field-name-download-allowed-types')?.value as string);
   if (!transformsAreValid(state.pendingTransforms)) return;
   // Issue #227: an optional text the element must contain — appended as a
   // :contains("…") suffix; blank leaves the pick's selector untouched.
-  const selector = appendTextFilter(state.pendingSelector, document.getElementById('input-field-name-text-filter')?.value);
+  const selector = appendTextFilter(state.pendingSelector as string, byIdOrNull<HTMLInputElement>('input-field-name-text-filter')?.value);
   log('FIELD_ADD', { name, selector, framePath: state.pendingFramePath, transforms: state.pendingTransforms });
   bridge.setState(STATES.IDLE, {
     fields: addField(state.fields, name, selector, {
@@ -153,12 +126,12 @@ function confirmField(bridge) {
   });
 }
 
-function wireFlatModeEvents(bridge) {
+export function wireFlatModeEvents(bridge: PopupBridge): void {
   // Issue #233: hovering a field row highlights its element(s) on the page.
-  wireHoverHighlight(document.getElementById('fields-list'), '.field-row',
-    row => buildFlatFieldHighlight(bridge.getState().fields[parseInt(row.dataset.index, 10)]));
+  wireHoverHighlight(byIdOrNull('fields-list'), '.field-row',
+    row => buildFlatFieldHighlight(bridge.getState().fields[parseInt(row.dataset.index as string, 10)]));
 
-  document.getElementById('btn-add-field')?.addEventListener('click', () => {
+  byIdOrNull('btn-add-field')?.addEventListener('click', () => {
     log('BTN add-field → START_SELECTION');
     bridge.stopPreviewIfActive();
     chrome.runtime.sendMessage({ type: 'START_SELECTION' });
@@ -173,13 +146,13 @@ function wireFlatModeEvents(bridge) {
   });
   // Issue #206 follow-up: no click-based selection at all — opens the
   // shared combine/split creation modal directly (combine-split-fields-ui.ts).
-  document.getElementById('btn-add-combine-field')?.addEventListener('click', () => {
+  byIdOrNull('btn-add-combine-field')?.addEventListener('click', () => {
     openCombineFieldModal(bridge, { mode: 'flat' });
   });
-  document.getElementById('btn-add-split-field')?.addEventListener('click', () => {
+  byIdOrNull('btn-add-split-field')?.addEventListener('click', () => {
     openSplitFieldModal(bridge, { mode: 'flat' });
   });
-  document.getElementById('btn-field-transform-add')?.addEventListener('click', () => {
+  byIdOrNull('btn-field-transform-add')?.addEventListener('click', () => {
     bridge.patchState({ pendingTransforms: addTransform(bridge.getState().pendingTransforms) });
   });
   wireTransformList(
@@ -196,41 +169,35 @@ function wireFlatModeEvents(bridge) {
     rerender: () => bridge.patchState({}),
     getRawText: () => bridge.getState().pendingRawText,
   });
-  document.getElementById('btn-field-confirm')?.addEventListener('click', () => confirmField(bridge));
+  byIdOrNull('btn-field-confirm')?.addEventListener('click', () => confirmField(bridge));
 
-  document.getElementById('input-field-name')?.addEventListener('keydown', (e) => {
+  byIdOrNull('input-field-name')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') confirmField(bridge);
   });
 
-  // Issue #214: same show/hide-on-change wiring container-tree-ui.js's
+  // Issue #214: same show/hide-on-change wiring container-tree-ui.ts's
   // wireContainerModeEvents already establishes for its own identical mode
   // select/download checkbox.
-  document.getElementById('select-field-name-mode')?.addEventListener('change', (e) => {
-    document.getElementById('field-name-attribute-row')?.classList.toggle('hidden', e.target.value !== 'attribute');
+  byIdOrNull('select-field-name-mode')?.addEventListener('change', (e) => {
+    byIdOrNull('field-name-attribute-row')?.classList.toggle('hidden', (e.target as HTMLSelectElement).value !== 'attribute');
     refreshFlatTransformPreview(bridge);
   });
-  document.getElementById('select-field-name-attribute')?.addEventListener('change', () => refreshFlatTransformPreview(bridge));
-  document.getElementById('toggle-field-name-download')?.addEventListener('change', (e) => {
-    document.getElementById('field-name-download-options')?.classList.toggle('hidden', !e.target.checked);
+  byIdOrNull('select-field-name-attribute')?.addEventListener('change', () => refreshFlatTransformPreview(bridge));
+  byIdOrNull('toggle-field-name-download')?.addEventListener('change', (e) => {
+    byIdOrNull('field-name-download-options')?.classList.toggle('hidden', !(e.target as HTMLInputElement).checked);
   });
 
-  document.getElementById('btn-field-cancel')?.addEventListener('click', () => {
+  byIdOrNull('btn-field-cancel')?.addEventListener('click', () => {
     log('BTN field-cancel');
     bridge.setState(STATES.IDLE, { pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [] });
   });
   // Event delegation for "Remove" buttons in the field list
-  document.getElementById('fields-list')?.addEventListener('click', (e) => {
-    const btn = e.target.closest('.btn-remove-field');
+  byIdOrNull('fields-list')?.addEventListener('click', (e) => {
+    const btn = (e.target as Element).closest<HTMLElement>('.btn-remove-field');
     if (!btn) return;
-    const index = parseInt(btn.dataset.index, 10);
+    const index = parseInt(btn.dataset.index as string, 10);
     log('FIELD_REMOVE', { index, name: bridge.getState().fields[index]?.name });
     bridge.stopPreviewIfActive();
     bridge.setState(bridge.getState().current, { fields: removeField(bridge.getState().fields, index) });
   });
 }
-
-module.exports = {
-  renderFields, renderMatchCountHint, refreshFlatTransformPreview, renderFlatFieldModal,
-  confirmField, wireFlatModeEvents,
-};
-

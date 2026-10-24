@@ -12,21 +12,26 @@
 // isolation both rule out a plain closure here). renderGroupTree/
 // buildGroupTreeNodeEl need none of this — already pure, explicit-argument
 // functions before the split and still are.
-const { createLogger } = require('../shared/logger');
-const { buildGroupNodeHighlight, wireHoverHighlight } = require('./hover-highlight');
-const log = createLogger('SF:ContainerTreeUI');
-const { t } = require('../i18n/i18n');
-const { STATES, escapeHtml } = require('./api-config');
-const {
+import type * as SFDraft from '../types/drafts';
+import type { PopupBridge, State } from '../types/popup';
+import { createLogger } from '../shared/logger';
+import { buildGroupNodeHighlight, wireHoverHighlight } from './hover-highlight';
+import { t } from '../i18n/i18n';
+import { STATES } from './api-config';
+import {
   groupNodeSuffix, resolveGroupNode, hasRepeatingAncestor, buildFieldNode, insertContainerNode,
-  removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode, guessUrlAttribute,
-  parseAllowedContentTypes, megabytesToBytes, collectSiblingFieldNames,
-} = require('./container-tree');
-const { transformsAreValid, addTransform } = require('./field-transforms');
-const { appendTextFilter } = require('./selector-text-filter');
-const { resetTextFilter, effectiveMatchCount, wireTextFilter } = require('./selector-text-filter-ui');
-const { renderTransformList, renderTransformPreview, wireTransformList } = require('./field-transforms-ui');
-const { openCombineFieldModal, openSplitFieldModal } = require('./combine-split-fields-ui');
+  removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode,
+  parseAllowedContentTypes, megabytesToBytes,
+} from './container-tree';
+import { transformsAreValid, addTransform } from './field-transforms';
+import { appendTextFilter } from './selector-text-filter';
+import { resetTextFilter, effectiveMatchCount, wireTextFilter } from './selector-text-filter-ui';
+import { renderTransformList, renderTransformPreview, wireTransformList } from './field-transforms-ui';
+import { openCombineFieldModal, openSplitFieldModal } from './combine-split-fields-ui';
+import { renderMatchCountHint, populateAttributeSelect } from './field-modal';
+import { byIdOrNull, parseDataPath } from './dom';
+
+const log = createLogger('SF:ContainerTreeUI');
 
 // Issue #139: one static inline chevron per row instead of swapping between
 // two different Unicode glyphs (▸/▾) on click — collapsed/expanded is now a
@@ -44,7 +49,7 @@ const TREE_TOGGLE_CHEVRON_SVG =
 // add-container/add-field/remove buttons, and nodes start expanded since
 // this tree is user-authored and typically small, unlike a full page DOM.
 
-function buildGroupTreeNodeEl(node, path, depth, siblingCount) {
+export function buildGroupTreeNodeEl(node: SFDraft.ContainerNode, path: number[], depth: number, siblingCount: number): HTMLElement {
   const li = document.createElement('li');
   li.className = 'group-tree-node';
   li.dataset.path = JSON.stringify(path);
@@ -78,11 +83,11 @@ function buildGroupTreeNodeEl(node, path, depth, siblingCount) {
   // Issue #398: a group's "(single)"/"(repeating)" suffix is a button that
   // switches the type — it can't be changed anywhere else once the container
   // exists, and the match-count toast right after the pick points at it.
-  const suffix = document.createElement(node.kind === 'group' ? 'button' : 'span');
+  const suffix: HTMLElement = document.createElement(node.kind === 'group' ? 'button' : 'span');
   suffix.className = 'group-tree-label';
   suffix.textContent = groupNodeSuffix(node);
   if (node.kind === 'group') {
-    suffix.type = 'button';
+    (suffix as HTMLButtonElement).type = 'button';
     suffix.classList.add('group-tree-type');
     suffix.title = t(node.repeating ? 'group.toggleToSingleTitle' : 'group.toggleToRepeatingTitle');
   } else {
@@ -177,23 +182,23 @@ function buildGroupTreeNodeEl(node, path, depth, siblingCount) {
   return li;
 }
 
-function renderGroupTree(groups) {
-  const root = document.getElementById('group-tree-root');
+export function renderGroupTree(groups: SFDraft.ContainerNode[]): void {
+  const root = byIdOrNull('group-tree-root');
   if (!root) return;
   root.innerHTML = '';
   groups.forEach((node, i) => root.appendChild(buildGroupTreeNodeEl(node, [i], 0, groups.length)));
 }
-function openContainerModal(bridge, parentPath) {
+export function openContainerModal(bridge: PopupBridge, parentPath: number[] | null): void {
   log('CONTAINER_MODAL open', { parentPath });
   bridge.patchState({ containerModalOpen: true, pendingParentPath: parentPath });
 }
 
 // Container-add order is deliberately "name/type first, then click an
 // element" (unlike field-add below) — see planning-container-scraping.md.
-function confirmContainerModal(bridge) {
-  const name = document.getElementById('input-container-name')?.value.trim();
+export function confirmContainerModal(bridge: PopupBridge): void {
+  const name = byIdOrNull<HTMLInputElement>('input-container-name')?.value.trim();
   if (!name) return;
-  const repeating = document.getElementById('radio-container-repeating')?.checked ?? false;
+  const repeating = byIdOrNull<HTMLInputElement>('radio-container-repeating')?.checked ?? false;
   const state = bridge.getState();
   const parentPath = state.pendingParentPath;
   const scopeSelector = parentPath ? resolveGroupNode(state.groups, parentPath)?.selector : null;
@@ -218,14 +223,14 @@ function confirmContainerModal(bridge) {
   if (state.domViewEnabled) bridge.requestDomTree();
 }
 
-function cancelContainerModal(bridge) {
+export function cancelContainerModal(bridge: PopupBridge): void {
   log('CONTAINER_MODAL cancel');
   bridge.setState(bridge.getState().current, { containerModalOpen: false, pendingParentPath: null });
 }
 
 // Field-add within a container keeps the flat mode's order — click first,
 // name/type after — since the field type doesn't affect what gets clicked.
-function startFieldSelection(bridge, parentPath) {
+export function startFieldSelection(bridge: PopupBridge, parentPath: number[]): void {
   const state = bridge.getState();
   const scopeSelector = resolveGroupNode(state.groups, parentPath)?.selector ?? null;
   const avoidId = hasRepeatingAncestor(state.groups, parentPath);
@@ -246,23 +251,24 @@ function startFieldSelection(bridge, parentPath) {
   if (state.domViewEnabled) bridge.requestDomTree();
 }
 
-function confirmExtendedField(bridge) {
-  const name = document.getElementById('input-field-extended-name')?.value.trim();
+export function confirmExtendedField(bridge: PopupBridge): void {
+  const name = byIdOrNull<HTMLInputElement>('input-field-extended-name')?.value.trim();
   if (!name) return;
-  const mode = document.getElementById('select-field-mode')?.value ?? 'text';
-  const attribute = document.getElementById('select-field-attribute')?.value.trim();
+  // The mode select only offers the four FieldMode values.
+  const mode = (byIdOrNull<HTMLSelectElement>('select-field-mode')?.value ?? 'text') as SFDraft.FieldMode;
+  const attribute = byIdOrNull<HTMLSelectElement>('select-field-attribute')?.value.trim();
   if (mode === 'attribute' && !attribute) return;
-  const download = document.getElementById('toggle-field-download')?.checked ?? false;
-  const maxDownloadSizeBytes = megabytesToBytes(document.getElementById('input-field-download-max-size')?.value);
-  const allowedContentTypes = parseAllowedContentTypes(document.getElementById('input-field-download-allowed-types')?.value);
+  const download = byIdOrNull<HTMLInputElement>('toggle-field-download')?.checked ?? false;
+  const maxDownloadSizeBytes = megabytesToBytes(byIdOrNull<HTMLInputElement>('input-field-download-max-size')?.value as string);
+  const allowedContentTypes = parseAllowedContentTypes(byIdOrNull<HTMLInputElement>('input-field-download-allowed-types')?.value as string);
 
   const state = bridge.getState();
   if (!transformsAreValid(state.pendingTransforms)) return;
   // Issue #227: an optional text the element must contain — appended as a
   // :contains("…") suffix; blank leaves the pick's selector untouched.
-  const selector = appendTextFilter(state.pendingSelector, document.getElementById('input-field-text-filter')?.value);
+  const selector = appendTextFilter(state.pendingSelector as string, byIdOrNull<HTMLInputElement>('input-field-text-filter')?.value);
   const node = buildFieldNode(
-    name, selector, mode, attribute, state.pendingFramePath, state.pendingTransforms, download,
+    name, selector, mode, attribute ?? null, state.pendingFramePath, state.pendingTransforms, download,
     maxDownloadSizeBytes, allowedContentTypes,
   );
   log('FIELD_ADD(container) confirm', node);
@@ -279,29 +285,13 @@ function confirmExtendedField(bridge) {
   });
 }
 
-function cancelExtendedField(bridge) {
+export function cancelExtendedField(bridge: PopupBridge): void {
   log('FIELD_ADD(container) cancel');
   bridge.setState(STATES.IDLE, {
     pendingSelector: null, pendingFramePath: null, pendingMatchCount: null,
     pendingRawText: null, pendingElementAttributes: null,
     pendingTransforms: [], pendingParentPath: null, selectionKind: null,
   });
-}
-
-// Issue #85: existence/quantity feedback next to the name input — same
-// function as flat-mode-ui.js's own copy (see that file's doc comment on
-// why it's duplicated rather than shared).
-function renderMatchCountHint(elId, count) {
-  const el = document.getElementById(elId);
-  if (!el) return;
-  if (count === null || count === undefined) {
-    el.textContent = '';
-    el.classList.add('hidden');
-    return;
-  }
-  el.textContent = t('modals.matchCount.found', { count });
-  el.classList.toggle('warn', count === 0);
-  el.classList.remove('hidden');
 }
 
 // Issue #143: container mode's raw value depends on the mode/attribute the
@@ -315,13 +305,13 @@ function renderMatchCountHint(elId, count) {
 // mode reads pendingOwnText, computed at click time by content-script.js's
 // collectOwnText — no DOM input to wait on, unlike attribute mode's
 // attribute-name field.
-function resolveExtendedRawValue(state) {
-  const mode = document.getElementById('select-field-mode')?.value ?? 'text';
-  let rawValue = null;
+function resolveExtendedRawValue(state: State): string | null {
+  const mode = byIdOrNull<HTMLSelectElement>('select-field-mode')?.value ?? 'text';
+  let rawValue: string | null = null;
   if (mode === 'text') {
     rawValue = state.pendingRawText;
   } else if (mode === 'attribute') {
-    const attrName = document.getElementById('select-field-attribute')?.value.trim();
+    const attrName = byIdOrNull<HTMLSelectElement>('select-field-attribute')?.value.trim();
     if (attrName) rawValue = (state.pendingElementAttributes?.[attrName] ?? '').trim();
   } else if (mode === 'ownText') {
     rawValue = state.pendingOwnText;
@@ -329,47 +319,28 @@ function resolveExtendedRawValue(state) {
   return rawValue;
 }
 
-function refreshExtendedTransformPreview(bridge) {
+export function refreshExtendedTransformPreview(bridge: PopupBridge): void {
   const state = bridge.getState();
   renderTransformPreview('field-extended-transform-preview', resolveExtendedRawValue(state), state.pendingTransforms);
 }
 
-// Populates the attribute picker with the clicked element's own attributes ("name: value preview") instead of a free-text field:
-// typing an HTML attribute name blind defeats a visual tool. guessUrlAttribute preselects the likeliest resource URL; every
-// attribute stays pickable.
-function populateAttributeSelect(attributes) {
-  const select = document.getElementById('select-field-attribute');
-  if (!select) return;
-  const entries = Object.entries(attributes || {});
-  if (entries.length === 0) {
-    select.innerHTML = `<option value="">${escapeHtml(t('modals.fieldExtended.noAttributesFound'))}</option>`;
-    return;
-  }
-  const guess = guessUrlAttribute(attributes);
-  select.innerHTML = entries.map(([name, value]) => {
-    const preview = value.length > 40 ? `${value.slice(0, 40)}…` : value;
-    const label = preview ? `${name}: ${preview}` : name;
-    return `<option value="${escapeHtml(name)}"${name === guess ? ' selected' : ''}>${escapeHtml(label)}</option>`;
-  }).join('');
-}
-
-function renderContainerFieldModal(bridge, isNewPick) {
+export function renderContainerFieldModal(bridge: PopupBridge, isNewPick: boolean): void {
   const state = bridge.getState();
-  document.getElementById('modal-field-extended')?.classList.remove('hidden');
+  byIdOrNull('modal-field-extended')?.classList.remove('hidden');
   if (isNewPick) {
-    const nameInput = document.getElementById('input-field-extended-name');
+    const nameInput = byIdOrNull<HTMLInputElement>('input-field-extended-name');
     if (nameInput) { nameInput.value = ''; nameInput.focus(); }
-    const modeSelect = document.getElementById('select-field-mode');
+    const modeSelect = byIdOrNull<HTMLSelectElement>('select-field-mode');
     if (modeSelect) modeSelect.value = 'text';
-    document.getElementById('field-attribute-row')?.classList.add('hidden');
-    document.getElementById('field-extended-transforms-section')?.classList.remove('hidden');
-    populateAttributeSelect(state.pendingElementAttributes);
-    const downloadToggle = document.getElementById('toggle-field-download');
+    byIdOrNull('field-attribute-row')?.classList.add('hidden');
+    byIdOrNull('field-extended-transforms-section')?.classList.remove('hidden');
+    populateAttributeSelect('select-field-attribute', state.pendingElementAttributes);
+    const downloadToggle = byIdOrNull<HTMLInputElement>('toggle-field-download');
     if (downloadToggle) downloadToggle.checked = false;
-    document.getElementById('field-download-options')?.classList.add('hidden');
-    const maxSizeInput = document.getElementById('input-field-download-max-size');
+    byIdOrNull('field-download-options')?.classList.add('hidden');
+    const maxSizeInput = byIdOrNull<HTMLInputElement>('input-field-download-max-size');
     if (maxSizeInput) maxSizeInput.value = '';
-    const allowedTypesInput = document.getElementById('input-field-download-allowed-types');
+    const allowedTypesInput = byIdOrNull<HTMLInputElement>('input-field-download-allowed-types');
     if (allowedTypesInput) allowedTypesInput.value = '';
     resetTextFilter('input-field-text-filter', 'btn-field-use-text', state.pendingRawText);
   }
@@ -378,38 +349,39 @@ function renderContainerFieldModal(bridge, isNewPick) {
   refreshExtendedTransformPreview(bridge);
 }
 
-function wireContainerModeEvents(bridge) {
+export function wireContainerModeEvents(bridge: PopupBridge): void {
   // Issue #233: hovering a tree row (group or field) highlights that node's
   // element(s) on the page — in every instance of its repeating ancestors.
-  wireHoverHighlight(document.getElementById('group-tree-root'), '.group-tree-row',
-    row => buildGroupNodeHighlight(bridge.getState().groups, JSON.parse(row.closest('.group-tree-node').dataset.path)));
+  wireHoverHighlight(byIdOrNull('group-tree-root'), '.group-tree-row',
+    row => buildGroupNodeHighlight(bridge.getState().groups, parseDataPath(row.closest('.group-tree-node') as HTMLElement)));
 
-  document.getElementById('btn-add-root-container')?.addEventListener('click', () => openContainerModal(bridge, null));
+  byIdOrNull('btn-add-root-container')?.addEventListener('click', () => openContainerModal(bridge, null));
 
   // Event delegation for the container tree's per-row add/remove/move buttons
-  document.getElementById('group-tree-root')?.addEventListener('click', (e) => {
-    const li = e.target.closest('.group-tree-node');
+  byIdOrNull('group-tree-root')?.addEventListener('click', (e) => {
+    const target = e.target as Element;
+    const li = target.closest<HTMLElement>('.group-tree-node');
     if (!li) return;
-    const path = JSON.parse(li.dataset.path);
+    const path = parseDataPath(li);
 
-    if (e.target.closest('.btn-add-subcontainer')) { openContainerModal(bridge, path); return; }
-    if (e.target.closest('.btn-add-subfield')) { startFieldSelection(bridge, path); return; }
+    if (target.closest('.btn-add-subcontainer')) { openContainerModal(bridge, path); return; }
+    if (target.closest('.btn-add-subfield')) { startFieldSelection(bridge, path); return; }
     // Issue #206 follow-up: no click-based selection — opens the shared
     // combine/split creation modal directly, scoped to this group's own
     // children (same `path` .btn-add-subfield already targets).
-    if (e.target.closest('.btn-add-combine-field')) { openCombineFieldModal(bridge, { mode: 'container', parentPath: path }); return; }
-    if (e.target.closest('.btn-add-split-field')) { openSplitFieldModal(bridge, { mode: 'container', parentPath: path }); return; }
-    if (e.target.closest('.group-tree-type')) {
+    if (target.closest('.btn-add-combine-field')) { openCombineFieldModal(bridge, { mode: 'container', parentPath: path }); return; }
+    if (target.closest('.btn-add-split-field')) { openSplitFieldModal(bridge, { mode: 'container', parentPath: path }); return; }
+    if (target.closest('.group-tree-type')) {
       const group = resolveGroupNode(bridge.getState().groups, path);
       if (!group || group.kind !== 'group') return;
       log('GROUP_NODE_TOGGLE_REPEATING', { path, repeating: !group.repeating });
       bridge.stopPreviewIfActive();
       bridge.setState(bridge.getState().current, {
-        groups: updateGroupTreeNode(bridge.getState().groups, path, (node) => ({ ...node, repeating: !group.repeating })),
+        groups: updateGroupTreeNode(bridge.getState().groups, path, (node) => ({ ...(node as SFDraft.GroupNode), repeating: !group.repeating })),
       });
       return;
     }
-    if (e.target.closest('.btn-remove-group-node')) {
+    if (target.closest('.btn-remove-group-node')) {
       log('GROUP_NODE_REMOVE', { path });
       bridge.stopPreviewIfActive();
       bridge.setState(bridge.getState().current, { groups: removeGroupTreeNode(bridge.getState().groups, path) });
@@ -418,12 +390,12 @@ function wireContainerModeEvents(bridge) {
     // Issue #177: reorder among direct siblings — no-ops past either
     // boundary (moveGroupTreeNode's own guard), so the disabled attribute on
     // the boundary buttons is purely a visual affordance, not load-bearing.
-    if (e.target.closest('.btn-group-move-up')) {
+    if (target.closest('.btn-group-move-up')) {
       log('GROUP_NODE_MOVE', { path, direction: -1 });
       bridge.setState(bridge.getState().current, { groups: moveGroupTreeNode(bridge.getState().groups, path, -1) });
       return;
     }
-    if (e.target.closest('.btn-group-move-down')) {
+    if (target.closest('.btn-group-move-down')) {
       log('GROUP_NODE_MOVE', { path, direction: 1 });
       bridge.setState(bridge.getState().current, { groups: moveGroupTreeNode(bridge.getState().groups, path, 1) });
     }
@@ -433,10 +405,10 @@ function wireContainerModeEvents(bridge) {
   // API tree's own nameInput) — a blank value reverts the input to the
   // node's current name instead of saving an empty one, since Container
   // mode's own field-name inputs elsewhere never allow blank either.
-  document.getElementById('group-tree-root')?.addEventListener('change', (e) => {
-    const nameInput = e.target.closest('.group-tree-name');
+  byIdOrNull('group-tree-root')?.addEventListener('change', (e) => {
+    const nameInput = (e.target as Element).closest<HTMLInputElement>('.group-tree-name');
     if (!nameInput) return;
-    const path = JSON.parse(nameInput.dataset.path);
+    const path: number[] = JSON.parse(nameInput.dataset.path as string); // written by buildGroupTreeNodeEl
     const name = nameInput.value.trim();
     if (!name) {
       nameInput.value = resolveGroupNode(bridge.getState().groups, path)?.name ?? '';
@@ -448,11 +420,11 @@ function wireContainerModeEvents(bridge) {
     });
   });
 
-  document.getElementById('btn-container-confirm')?.addEventListener('click', () => confirmContainerModal(bridge));
-  document.getElementById('input-container-name')?.addEventListener('keydown', (e) => {
+  byIdOrNull('btn-container-confirm')?.addEventListener('click', () => confirmContainerModal(bridge));
+  byIdOrNull('input-container-name')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') confirmContainerModal(bridge);
   });
-  document.getElementById('btn-container-cancel')?.addEventListener('click', () => cancelContainerModal(bridge));
+  byIdOrNull('btn-container-cancel')?.addEventListener('click', () => cancelContainerModal(bridge));
   // Issue #227: re-rendering the modal lets the match-count hint follow the
   // typed text (renderContainerFieldModal reads effectiveMatchCount each time).
   wireTextFilter({
@@ -461,23 +433,23 @@ function wireContainerModeEvents(bridge) {
     rerender: () => bridge.patchState({}),
     getRawText: () => bridge.getState().pendingRawText,
   });
-  document.getElementById('btn-field-extended-confirm')?.addEventListener('click', () => confirmExtendedField(bridge));
-  document.getElementById('input-field-extended-name')?.addEventListener('keydown', (e) => {
+  byIdOrNull('btn-field-extended-confirm')?.addEventListener('click', () => confirmExtendedField(bridge));
+  byIdOrNull('input-field-extended-name')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') confirmExtendedField(bridge);
   });
-  document.getElementById('btn-field-extended-cancel')?.addEventListener('click', () => cancelExtendedField(bridge));
+  byIdOrNull('btn-field-extended-cancel')?.addEventListener('click', () => cancelExtendedField(bridge));
   // Issue #214: the safety-net inputs only make sense once Download itself
   // is actually checked — same "hide until relevant" treatment the
   // attribute row already gets from the mode select just below.
-  document.getElementById('toggle-field-download')?.addEventListener('change', (e) => {
-    document.getElementById('field-download-options')?.classList.toggle('hidden', !e.target.checked);
+  byIdOrNull('toggle-field-download')?.addEventListener('change', (e) => {
+    byIdOrNull('field-download-options')?.classList.toggle('hidden', !(e.target as HTMLInputElement).checked);
   });
 
-  document.getElementById('select-field-mode')?.addEventListener('change', (e) => {
-    document.getElementById('field-attribute-row')?.classList.toggle('hidden', e.target.value !== 'attribute');
+  byIdOrNull('select-field-mode')?.addEventListener('change', (e) => {
+    byIdOrNull('field-attribute-row')?.classList.toggle('hidden', (e.target as HTMLSelectElement).value !== 'attribute');
     // Issue #84: transforms are a string post-processing pipeline — not
     // meaningful for "Vorhanden?" (a boolean-ish presence check).
-    document.getElementById('field-extended-transforms-section')?.classList.toggle('hidden', e.target.value === 'exists');
+    byIdOrNull('field-extended-transforms-section')?.classList.toggle('hidden', (e.target as HTMLSelectElement).value === 'exists');
     // Issue #143: the raw value the preview runs against depends on the mode.
     refreshExtendedTransformPreview(bridge);
   });
@@ -486,8 +458,8 @@ function wireContainerModeEvents(bridge) {
   // Issue #213 follow-up: now a <select> (was a free-text <input>) — 'change'
   // matches select-field-mode's own listener convention, fired once a pick
   // is actually made rather than per-keystroke.
-  document.getElementById('select-field-attribute')?.addEventListener('change', () => refreshExtendedTransformPreview(bridge));
-  document.getElementById('btn-field-extended-transform-add')?.addEventListener('click', () => {
+  byIdOrNull('select-field-attribute')?.addEventListener('change', () => refreshExtendedTransformPreview(bridge));
+  byIdOrNull('btn-field-extended-transform-add')?.addEventListener('click', () => {
     bridge.patchState({ pendingTransforms: addTransform(bridge.getState().pendingTransforms) });
   });
   wireTransformList(
@@ -497,12 +469,3 @@ function wireContainerModeEvents(bridge) {
     () => resolveExtendedRawValue(bridge.getState()),
   );
 }
-
-module.exports = {
-  buildGroupTreeNodeEl, renderGroupTree,
-  openContainerModal, confirmContainerModal, cancelContainerModal,
-  startFieldSelection, confirmExtendedField, cancelExtendedField,
-  renderMatchCountHint, refreshExtendedTransformPreview, renderContainerFieldModal,
-  wireContainerModeEvents,
-};
-

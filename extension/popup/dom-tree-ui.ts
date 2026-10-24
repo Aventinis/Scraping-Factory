@@ -4,18 +4,21 @@
 // selector without needing devtools open. Takes a `bridge` object (same
 // convention as api-config-ui.ts/container-tree-ui.js) instead of closing
 // over popup.js's own module-level state.
-const { createLogger } = require('../shared/logger');
+import type { PopupBridge } from '../types/popup';
+import type { DomTreeNode } from '../types/messages';
+import { createLogger } from '../shared/logger';
+import { setLastError } from './toast';
+import { byIdOrNull } from './dom';
+
 const log = createLogger('SF:Popup');
 
-const { setLastError } = require('./toast');
-
 const DOM_TREE_TIMEOUT_MS = 5000;
-let domTreeTimeoutId = null;
+let domTreeTimeoutId: ReturnType<typeof setTimeout> | undefined;
 
 // Sends ENABLE_DOM_VIEW and arms a timeout so a lost/slow response shows an
 // error instead of spinning forever (see feature/dom-tree-view regression:
 // an unthrottled content script could stall the message channel entirely).
-function requestDomTree(bridge) {
+export function requestDomTree(bridge: PopupBridge): void {
   clearTimeout(domTreeTimeoutId);
   bridge.patchState({ domTree: null, domTreeTruncated: false, domTreeError: null });
   chrome.runtime.sendMessage({ type: 'ENABLE_DOM_VIEW' });
@@ -31,7 +34,7 @@ function requestDomTree(bridge) {
 // fallback above doesn't fire after the fact — domTreeTimeoutId is kept
 // module-private here rather than exposed on _state, same encapsulation
 // reasoning as any other purely-internal timer handle.
-function cancelPendingDomTreeRequest() {
+export function cancelPendingDomTreeRequest(): void {
   clearTimeout(domTreeTimeoutId);
 }
 
@@ -39,7 +42,7 @@ function cancelPendingDomTreeRequest() {
 // expand/collapse clicks survive unrelated state updates (e.g. adding/
 // removing a field).
 // Issue #139: one static inline chevron per row instead of swapping between
-// two different Unicode glyphs (▸/▾) on click — see container-tree-ui.js's
+// two different Unicode glyphs (▸/▾) on click — see container-tree-ui.ts's
 // own copy of this constant for the full rationale. Unlike the group/api
 // trees, this one starts *collapsed* (see buildTreeNodeEl/expandAncestors
 // below), so the .collapsed class is applied at build time here too.
@@ -48,14 +51,14 @@ const TREE_TOGGLE_CHEVRON_SVG =
   'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<polyline points="6 9 12 15 18 9"></polyline></svg>';
 
-function formatTreeLabel(node) {
+export function formatTreeLabel(node: DomTreeNode): string {
   let label = node.tag;
   if (node.id) label += `#${node.id}`;
   if (node.classes.length) label += `.${node.classes.join('.')}`;
   return label;
 }
 
-function buildTreeNodeEl(node, depth) {
+export function buildTreeNodeEl(node: DomTreeNode, depth: number): HTMLElement {
   const li = document.createElement('li');
   li.className = 'dom-tree-node';
   li.dataset.path = JSON.stringify(node.path);
@@ -92,32 +95,32 @@ function buildTreeNodeEl(node, depth) {
   return li;
 }
 
-function renderDomTree(tree) {
-  const root = document.getElementById('dom-tree-root');
+export function renderDomTree(tree: DomTreeNode | null | undefined): void {
+  const root = byIdOrNull('dom-tree-root');
   if (!root || !tree) return;
   root.innerHTML = '';
   root.appendChild(buildTreeNodeEl(tree, 0));
 }
 
-function findTreeNode(path) {
-  return document.querySelector(`#dom-tree-root li[data-path='${JSON.stringify(path)}']`);
+export function findTreeNode(path: number[]): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`#dom-tree-root li[data-path='${JSON.stringify(path)}']`);
 }
 
 // Un-collapses every ancestor <ul> of `li` so it becomes visible/scrollable-to.
-function expandAncestors(li) {
+export function expandAncestors(li: HTMLElement): void {
   let ul = li.parentElement;
   while (ul && ul.classList.contains('dom-tree-children')) {
     ul.classList.remove('hidden');
-    const ownerLi = ul.parentElement;
-    const toggle = ownerLi.firstElementChild.querySelector('.dom-tree-toggle');
+    const ownerLi = ul.parentElement as HTMLElement; // a children list always sits in its node's <li>
+    const toggle = (ownerLi.firstElementChild as Element).querySelector('.dom-tree-toggle');
     if (toggle) toggle.classList.remove('collapsed');
     ul = ownerLi.parentElement;
   }
 }
 
-let _lastHoverRow = null;
+let _lastHoverRow: Element | null = null;
 
-function highlightHover(path) {
+export function highlightHover(path: number[]): void {
   if (_lastHoverRow) _lastHoverRow.classList.remove('hover');
   const li = findTreeNode(path);
   const row = li?.firstElementChild ?? null;
@@ -129,7 +132,7 @@ function highlightHover(path) {
   _lastHoverRow = row;
 }
 
-function highlightSelected(path) {
+export function highlightSelected(path: number[]): void {
   document.querySelectorAll('#dom-tree-root .dom-tree-row.selected')
     .forEach(el => el.classList.remove('selected'));
   const li = findTreeNode(path);
@@ -145,27 +148,27 @@ function highlightSelected(path) {
 // — the toggle checkbox's own checked state, and the tree wrapper/loading/
 // error/truncated visibility, all driven by _state rather than DOM-local
 // bookkeeping.
-function renderDomTreeViewState(bridge) {
+export function renderDomTreeViewState(bridge: PopupBridge): void {
   const state = bridge.getState();
-  const toggle = document.getElementById('toggle-dom-view');
+  const toggle = byIdOrNull<HTMLInputElement>('toggle-dom-view');
   if (toggle) toggle.checked = state.domViewEnabled;
 
-  const wrapper = document.getElementById('dom-tree-wrapper');
+  const wrapper = byIdOrNull('dom-tree-wrapper');
   if (wrapper) wrapper.classList.toggle('hidden', !state.domViewEnabled);
 
-  const loading = document.getElementById('dom-tree-loading');
+  const loading = byIdOrNull('dom-tree-loading');
   if (loading) loading.classList.toggle('hidden', state.domTree !== null || !!state.domTreeError);
 
-  const error = document.getElementById('dom-tree-error');
+  const error = byIdOrNull('dom-tree-error');
   if (error) error.classList.toggle('hidden', !state.domTreeError);
 
-  const truncated = document.getElementById('dom-tree-truncated');
+  const truncated = byIdOrNull('dom-tree-truncated');
   if (truncated) truncated.classList.toggle('hidden', !state.domTreeTruncated);
 }
 
-function wireDomTreeViewEvents(bridge) {
-  document.getElementById('toggle-dom-view')?.addEventListener('change', (e) => {
-    const enabled = e.target.checked;
+export function wireDomTreeViewEvents(bridge: PopupBridge): void {
+  byIdOrNull('toggle-dom-view')?.addEventListener('change', (e) => {
+    const enabled = (e.target as HTMLInputElement).checked;
     log('BTN toggle-dom-view', enabled);
     if (enabled) {
       bridge.patchState({ domViewEnabled: true });
@@ -177,9 +180,3 @@ function wireDomTreeViewEvents(bridge) {
     }
   });
 }
-
-module.exports = {requestDomTree, cancelPendingDomTreeRequest,
-  formatTreeLabel, buildTreeNodeEl, renderDomTree, findTreeNode, expandAncestors,
-  highlightHover, highlightSelected,
-  renderDomTreeViewState, wireDomTreeViewEvents,};
-

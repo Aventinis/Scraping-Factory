@@ -494,7 +494,7 @@ function renderBlueprintEditModal(bridge) {
 }
 
 // ── Tree schema editor (create/edit modal, Tree) ────────────────────────
-// Mirrors container-tree-ui.js's own buildGroupTreeNodeEl visually
+// Mirrors container-tree-ui.ts's own buildGroupTreeNodeEl visually
 // (indentation, name input, move/remove buttons) but simpler: no
 // selector/mode/repeating/frame-path — a blueprint's target schema is
 // site-independent (see OutputBlueprintTreeSchema.cs), so there's nothing

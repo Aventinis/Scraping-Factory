@@ -1,7 +1,7 @@
 // Ad hoc real-browser check for Issue #213's new "Download this resource"
 // checkbox (#toggle-field-download inside #field-attribute-row,
 // modal-field-extended, container mode). Exercises the actual production
-// change-listener wired in container-tree-ui.js by revealing the modal
+// change-listener wired in container-tree-ui.ts by revealing the modal
 // directly (no need to drive the full click-based element-selection flow
 // against the fixture page for a check that's purely about this one
 // select's own show/hide wiring).
@@ -24,7 +24,7 @@ const { launchBrowser, openPopup, focusFixture, waitForIdleScreen, startCompanio
     await popupPage.click('#btn-mode-container');
 
     // Reveal modal-field-extended directly — the check below is about the
-    // mode-select's own change-listener wiring (container-tree-ui.js),
+    // mode-select's own change-listener wiring (container-tree-ui.ts),
     // which behaves identically regardless of how the modal became visible.
     await popupPage.evaluate(() => {
       document.getElementById('modal-field-extended').classList.remove('hidden');

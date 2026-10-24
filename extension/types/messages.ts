@@ -42,9 +42,19 @@ export interface SelectionUnavailableMessage {
   unavailableKind?: 'scopeSelectorNotFound';
 }
 
+// One element of the page's DOM as the content script serializes it for the inspector tree.
+export interface DomTreeNode {
+  tag: string;
+  id: string | null;
+  classes: string[];
+  /** Child-index path from <body>. */
+  path: number[];
+  children: DomTreeNode[];
+}
+
 export interface DomTreeMessage {
   type: 'DOM_TREE';
-  tree?: unknown;
+  tree?: DomTreeNode | null;
   truncated?: boolean;
   error?: string;
 }

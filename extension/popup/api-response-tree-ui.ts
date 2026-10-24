@@ -25,7 +25,7 @@ const currentDraft = (bridge: PopupBridge): ApiConfigDraft => bridge.getState().
 const currentGroups = (bridge: PopupBridge): ApiNodeDraft[] => currentDraft(bridge).groups as ApiNodeDraft[];
 
 // Issue #139: one static inline chevron per row instead of swapping between
-// two different Unicode glyphs (▸/▾) on click — see container-tree-ui.js's
+// two different Unicode glyphs (▸/▾) on click — see container-tree-ui.ts's
 // own copy of this constant for the full rationale.
 const TREE_TOGGLE_CHEVRON_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" ' +
@@ -90,7 +90,7 @@ export function buildApiTreeNodeEl(node: ApiNodeDraft, path: number[], depth: nu
     row.appendChild(addFieldBtn);
 
     // Issue #206 follow-up: disabled below the minimum field count each
-    // kind needs — same reasoning container-tree-ui.js's own
+    // kind needs — same reasoning container-tree-ui.ts's own
     // buildGroupTreeNodeEl uses.
     const fieldSiblingCount = node.children.filter(c => c.kind === 'field').length;
 

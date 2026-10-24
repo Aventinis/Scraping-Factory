@@ -2,10 +2,10 @@
 // shared between modal-field-name (flat mode) and modal-field-extended
 // (container mode), each with its own list/add-button element ids but
 // backed by the same _state.pendingTransforms in popup.js. Split out the
-// same way container-tree-ui.js/api-config-ui.js are (see their own doc
+// same way container-tree-ui.ts/api-config-ui.js are (see their own doc
 // comments for why).
 //
-// Unlike container-tree-ui.js's handler functions (which take a `bridge`
+// Unlike container-tree-ui.ts's handler functions (which take a `bridge`
 // object because they need popup.js's stopPreviewIfActive/requestDomTree
 // too), this module only ever needs to read/write one piece of state — so
 // wireTransformList takes plain getter/setter closures instead, supplied by

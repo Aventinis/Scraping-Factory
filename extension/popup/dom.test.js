@@ -1,4 +1,4 @@
-const { byId, byIdOrNull, qs, qsOrNull, qsa, escapeHtml } = require('./dom');
+const { byId, byIdOrNull, qs, qsOrNull, qsa, escapeHtml, parseDataPath } = require('./dom');
 
 beforeEach(() => {
   document.body.innerHTML = '<input id="name" value="x"><ul id="list"><li class="row">a</li><li class="row">b</li></ul>';
@@ -28,6 +28,13 @@ describe('qs / qsOrNull / qsa', () => {
     const rows = qsa('.row');
     expect(Array.isArray(rows)).toBe(true);
     expect(rows.map(r => r.textContent)).toEqual(['a', 'b']);
+  });
+});
+
+describe('parseDataPath', () => {
+  test('reads the JSON path a tree row carries', () => {
+    document.body.innerHTML = '<li data-path="[0,2,1]"></li>';
+    expect(parseDataPath(document.querySelector('li'))).toEqual([0, 2, 1]);
   });
 });
 
