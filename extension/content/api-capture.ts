@@ -13,6 +13,15 @@
 //   is no unforgeable channel between the worlds, and the data only leaves the page through this extension's UI.
 // - Recording survives a same-origin navigation (via sessionStorage, shared per tab and origin) but not a cross-origin one.
 
+import type * as SFDraft from '../types/drafts';
+import type { ApiCaptureWindowMessage } from '../types/messages';
+
+type HeaderPair = { name: string; value: string };
+type HeadersLike = Headers | Array<[string, unknown]> | Record<string, unknown> | null | undefined;
+type BodyText = { text: string; skipped: boolean };
+// The bookkeeping the patched XMLHttpRequest methods keep on the instance between open() and the load event.
+type TrackedXhr = XMLHttpRequest & { _sfMethod?: string; _sfUrl?: string; _sfRequestHeaders?: Array<[string, string]> };
+
 const MAX_CAPTURED_ENTRIES = 200; // caps buffered requests on a long recording of a request-heavy page
 const MAX_BODY_CHARS = 200000; // ~200 KB of text per response — generous for JSON, small enough to stay message-safe
 const SKIP_BODY_CONTENT_TYPE_RE = /^(image|audio|video|font)\//i; // never useful for JSON-API discovery
@@ -22,14 +31,14 @@ const MAX_REQUEST_HEADERS = 40; // pathological-header-count guard, same spirit 
 const MAX_HEADER_VALUE_CHARS = 500; // headers are short by nature — generous but bounded (an auth token still fits many times over)
 
 let _recording = false;
-let _entries = [];
+let _entries: SFDraft.ApiCaptureEntry[] = [];
 let _nextId = 1;
 
 // Character-count truncation (not exact byte-count) — good enough as a size
 // guard, doesn't need TextEncoder precision.
-function truncateBody(text) {
+function truncateBody(text: unknown): { body: string; truncated: boolean } {
   if (typeof text !== 'string' || text.length <= MAX_BODY_CHARS) {
-    return { body: text ?? '', truncated: false };
+    return { body: (text ?? '') as string, truncated: false }; // not a string only for a missing body (undefined / null)
   }
   return { body: text.slice(0, MAX_BODY_CHARS), truncated: true };
 }
@@ -38,7 +47,7 @@ function truncateBody(text) {
 // headers alone, before any body-reading happens, so a huge or binary
 // response never gets materialized into a JS string just to truncate it
 // afterwards.
-function shouldSkipBody(contentType, contentLengthHeader) {
+function shouldSkipBody(contentType: string | null | undefined, contentLengthHeader: string | null | undefined): boolean {
   if (contentType && SKIP_BODY_CONTENT_TYPE_RE.test(contentType)) return true;
   const len = contentLengthHeader != null ? parseInt(contentLengthHeader, 10) : NaN;
   if (!Number.isNaN(len) && len > MAX_BODY_BYTES_TO_READ) return true;
@@ -47,7 +56,7 @@ function shouldSkipBody(contentType, contentLengthHeader) {
 
 // Resolves a possibly-relative URL (XHR open(), a bare fetch() string) against the page's location so an entry's `url` is absolute, as
 // parseUrlTemplateParts' `new URL(...)` requires.
-function resolveUrl(url) {
+function resolveUrl(url: string | URL): string {
   try {
     return new URL(url, location.href).href;
   } catch {
@@ -55,22 +64,22 @@ function resolveUrl(url) {
   }
 }
 
-function truncateHeaderValue(value) {
+function truncateHeaderValue(value: unknown): string {
   const str = String(value);
   return str.length > MAX_HEADER_VALUE_CHARS ? str.slice(0, MAX_HEADER_VALUE_CHARS) : str;
 }
 
 // Normalizes the shapes fetch's `headers` can take (Headers, plain object, [name, value] pairs), and XHR's pair list, into one capped
 // array, for the header-adoption step (literal or environment variable, like FillStep).
-function normalizeHeaders(headersLike) {
+function normalizeHeaders(headersLike: HeadersLike): HeaderPair[] {
   if (!headersLike) return [];
-  let pairs;
+  let pairs: Array<[string, unknown]>;
   if (Array.isArray(headersLike)) {
     pairs = headersLike;
-  } else if (typeof headersLike.entries === 'function') {
-    pairs = Array.from(headersLike.entries()); // Headers instance
+  } else if (typeof (headersLike as Headers).entries === 'function') {
+    pairs = Array.from((headersLike as Headers).entries()); // Headers instance
   } else {
-    pairs = Object.entries(headersLike); // plain {name: value} object
+    pairs = Object.entries(headersLike as Record<string, unknown>); // plain {name: value} object
   }
   return pairs.slice(0, MAX_REQUEST_HEADERS).map(([name, value]) => ({ name: String(name), value: truncateHeaderValue(value) }));
 }
@@ -78,7 +87,7 @@ function normalizeHeaders(headersLike) {
 // Builds one capture entry (separate from the interception glue, so it is testable). Only whether the `Link` header names a
 // rel="next" page is kept, so the API config screen can offer Link-header pagination; a cross-origin response exposes `Link` only if
 // the server lists it in Access-Control-Expose-Headers.
-function hasNextLinkRel(linkHeader) {
+function hasNextLinkRel(linkHeader: string | null | undefined): boolean {
   if (typeof linkHeader !== 'string' || !linkHeader) return false;
   return linkHeader.split(/,(?=\s*<)/).some((part) => {
     const rel = /;\s*rel\s*=\s*(?:"([^"]*)"|([^\s;,]+))/i.exec(part);
@@ -86,7 +95,10 @@ function hasNextLinkRel(linkHeader) {
   });
 }
 
-function buildEntry(url, method, status, contentType, bodyText, bodySkipped, requestHeaders, requestBodyText, requestBodySkipped, linkHeader) {
+function buildEntry(
+  url: string, method: string | null | undefined, status: number, contentType: string | null | undefined, bodyText: unknown, bodySkipped: boolean,
+  requestHeaders: HeaderPair[] | null | undefined, requestBodyText: unknown, requestBodySkipped: boolean, linkHeader: string | null | undefined,
+): SFDraft.ApiCaptureEntry {
   const { body, truncated } = bodySkipped ? { body: '', truncated: false } : truncateBody(bodyText);
   const { body: requestBody, truncated: requestBodyTruncated } = requestBodySkipped ? { body: '', truncated: false } : truncateBody(requestBodyText);
   return {
@@ -106,26 +118,30 @@ function buildEntry(url, method, status, contentType, bodyText, bodySkipped, req
   };
 }
 
-function recordEntry(url, method, status, contentType, bodyText, bodySkipped, requestHeaders, requestBodyText, requestBodySkipped, linkHeader) {
+function recordEntry(
+  url: string, method: string | null | undefined, status: number, contentType: string | null | undefined, bodyText: unknown, bodySkipped: boolean,
+  requestHeaders: HeaderPair[] | null | undefined, requestBodyText: unknown, requestBodySkipped: boolean, linkHeader: string | null | undefined,
+): void {
   if (!_recording) return;
   if (_entries.length >= MAX_CAPTURED_ENTRIES) return; // silently drop — buffer already at cap
 
   const entry = buildEntry(url, method, status, contentType, bodyText, bodySkipped, requestHeaders, requestBodyText, requestBodySkipped, linkHeader);
   _entries.push(entry);
   if (typeof window !== 'undefined') {
-    window.postMessage({ source: 'sf-api-capture', type: 'API_CAPTURE_ENTRY', entry }, '*');
+    const message: ApiCaptureWindowMessage = { source: 'sf-api-capture', type: 'API_CAPTURE_ENTRY', entry };
+    window.postMessage(message, '*');
   }
 }
 
 // Classifies a request-body value synchronously: a string is captured, anything else is flagged as not capturable.
-function classifyRequestBody(body) {
+function classifyRequestBody(body: unknown): BodyText {
   if (body == null) return { text: '', skipped: false };
   return typeof body === 'string' ? { text: body, skipped: false } : { text: '', skipped: true };
 }
 
 // fetch only: init.body takes precedence over a Request's body (as for headers / method). A Request's body is only readable
 // asynchronously (.clone().text()), so the Request-object fallback returns a Promise.
-function readFetchRequestBody(initBody, request) {
+function readFetchRequestBody(initBody: unknown, request: Request | null): Promise<BodyText> {
   if (initBody != null) return Promise.resolve(classifyRequestBody(initBody));
   if (request && typeof request.clone === 'function') {
     return request.clone().text()
@@ -137,7 +153,7 @@ function readFetchRequestBody(initBody, request) {
 
 // Persists the on / off flag in sessionStorage (per tab and origin, shared by both worlds) so a same-origin navigation, which re-runs
 // this script and resets its state, can resume recording.
-function persistRecordingFlag(active) {
+function persistRecordingFlag(active: boolean): void {
   if (typeof sessionStorage === 'undefined') return;
   try {
     if (active) sessionStorage.setItem(RESUME_KEY, '1');
@@ -148,7 +164,7 @@ function persistRecordingFlag(active) {
   }
 }
 
-function shouldResumeRecording() {
+function shouldResumeRecording(): boolean {
   if (typeof sessionStorage === 'undefined') return false;
   try {
     return sessionStorage.getItem(RESUME_KEY) === '1';
@@ -157,19 +173,19 @@ function shouldResumeRecording() {
   }
 }
 
-function startRecording() {
+function startRecording(): void {
   _recording = true;
   _entries = [];
   _nextId = 1;
   persistRecordingFlag(true);
 }
 
-function stopRecording() {
+function stopRecording(): void {
   _recording = false;
   persistRecordingFlag(false);
 }
 
-module.exports = {
+export {
   buildEntry,
   hasNextLinkRel,
   truncateBody,
@@ -195,7 +211,7 @@ module.exports = {
 if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'test') {
   if (shouldResumeRecording()) startRecording(); // same-origin navigation mid-recording — see known limitations above
 
-  window.addEventListener('message', (event) => {
+  window.addEventListener('message', (event: MessageEvent<ApiCaptureWindowMessage | null>) => {
     if (event.source !== window) return;
     const data = event.data;
     if (!data || data.source !== 'sf-api-capture-control') return;
@@ -205,17 +221,17 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'test') {
 
   if (typeof window.fetch === 'function') {
     const originalFetch = window.fetch;
-    window.fetch = function (...args) {
+    window.fetch = function (this: unknown, ...args: Parameters<typeof fetch>) {
       const request = args[0] instanceof Request ? args[0] : null;
-      const url = request ? request.url : resolveUrl(args[0]); // request.url is already absolute; a bare string arg may not be
+      const url = request ? request.url : resolveUrl(args[0] as string | URL); // request.url is already absolute; a bare string arg may not be
       const method = (request && request.method) || (args[1] && args[1].method) || 'GET';
       // init.headers (2nd arg) takes precedence over a Request's own headers
       // — matches fetch's own override semantics when both are given.
-      const headersLike = (args[1] && args[1].headers) || (request && request.headers) || null;
+      const headersLike = (args[1] && args[1].headers) as HeadersLike || (request && request.headers) || null;
       const requestHeaders = normalizeHeaders(headersLike);
       const requestBodyPromise = readFetchRequestBody(args[1] && args[1].body, request);
 
-      return originalFetch.apply(this, args).then((response) => {
+      return originalFetch.apply(this, args).then((response: Response) => {
         if (_recording) {
           const contentType = response.headers.get('content-type');
           const linkHeader = response.headers.get('link');
@@ -239,19 +255,19 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'test') {
     const originalSend = XMLHttpRequest.prototype.send;
     const originalSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
 
-    XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+    XMLHttpRequest.prototype.open = function (this: TrackedXhr, method: string, url: string | URL, ...rest: [boolean?, (string | null)?, (string | null)?]) {
       this._sfMethod = method;
       this._sfUrl = resolveUrl(url);
       this._sfRequestHeaders = []; // reset — the same instance can be open()'d more than once
-      return originalOpen.call(this, method, url, ...rest);
+      return (originalOpen as (...a: unknown[]) => void).call(this, method, url, ...rest); // open() is overloaded (2 or 5 arguments); the rest is passed through untouched
     };
 
-    XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
+    XMLHttpRequest.prototype.setRequestHeader = function (this: TrackedXhr, name: string, value: string) {
       (this._sfRequestHeaders || (this._sfRequestHeaders = [])).push([name, value]);
       return originalSetRequestHeader.call(this, name, value);
     };
 
-    XMLHttpRequest.prototype.send = function (...args) {
+    XMLHttpRequest.prototype.send = function (this: TrackedXhr, ...args: [Document | XMLHttpRequestBodyInit | null | undefined]) {
       if (_recording) {
         const requestHeaders = normalizeHeaders(this._sfRequestHeaders);
         const { text: requestBodyText, skipped: requestBodySkipped } = classifyRequestBody(args[0]);
@@ -264,7 +280,7 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'test') {
           // avoid touching) — this at least skips copying it into our own
           // capture entry.
           if (shouldSkipBody(contentType, this.getResponseHeader('content-length'))) {
-            recordEntry(this._sfUrl, this._sfMethod, this.status, contentType, '', true, requestHeaders, requestBodyText, requestBodySkipped, linkHeader);
+            recordEntry(this._sfUrl as string, this._sfMethod, this.status, contentType, '', true, requestHeaders, requestBodyText, requestBodySkipped, linkHeader);
             return;
           }
           let bodyText = '';
@@ -273,7 +289,7 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'test') {
           } catch {
             // Not a text-ish response — capture the entry without a body.
           }
-          recordEntry(this._sfUrl, this._sfMethod, this.status, contentType, bodyText, false, requestHeaders, requestBodyText, requestBodySkipped, linkHeader);
+          recordEntry(this._sfUrl as string, this._sfMethod, this.status, contentType, bodyText, false, requestHeaders, requestBodyText, requestBodySkipped, linkHeader);
         });
       }
       return originalSend.apply(this, args);
