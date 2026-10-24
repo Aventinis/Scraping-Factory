@@ -1,11 +1,12 @@
 // Issue #407: renders the glossary list (glossary.ts) into the Settings screen.
 // Plain DOM built with textContent — the texts are translations, but a
 // translation must never be able to inject markup.
-const { t } = require('../i18n/i18n');
-const { buildGlossary } = require('./glossary');
+import { t } from '../i18n/i18n';
+import { buildGlossary } from './glossary';
+import { byIdOrNull } from './dom';
 
-function renderGlossary() {
-  const list = document.getElementById('settings-glossary-list');
+export function renderGlossary(): void {
+  const list = byIdOrNull('settings-glossary-list');
   if (!list) return;
   list.innerHTML = '';
   for (const { term, text, example } of buildGlossary(t)) {
@@ -22,5 +23,3 @@ function renderGlossary() {
     list.append(dt, dd);
   }
 }
-
-module.exports = { renderGlossary };

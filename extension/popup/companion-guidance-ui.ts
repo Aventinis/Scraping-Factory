@@ -11,24 +11,26 @@
 //     popover (a #396 help host, see help.companionError.causes).
 // Wording with a parameter (installer name) is set here, not via data-i18n,
 // since applyStaticTranslations() passes no parameters.
-const { t } = require('../i18n/i18n');
-const { DEFAULT_COMPANION_URL } = require('../shared/companion-config');
-const { getResolvedCompanionUrl, getCompanionFailure } = require('./companion-client');
-const {
+import { t } from '../i18n/i18n';
+import { DEFAULT_COMPANION_URL } from '../shared/companion-config';
+import { getResolvedCompanionUrl, getCompanionFailure } from './companion-client';
+import {
   detectPlatform, installerName, installCommand, installedProgramPath, likelySituations, isCompanionReached,
-} = require('./companion-guidance');
+} from './companion-guidance';
+import type { Situation } from './companion-guidance';
+import { byIdOrNull } from './dom';
 
-function setText(id, text) {
-  const el = document.getElementById(id);
+function setText(id: string, text: string): void {
+  const el = byIdOrNull(id);
   if (el) el.textContent = text;
 }
 
-function renderCompanionGuidance() {
+export function renderCompanionGuidance(): void {
   const platform = detectPlatform(typeof navigator !== 'undefined' ? navigator.userAgent : '');
   const longForm = !isCompanionReached();
 
-  document.getElementById('error-guidance-long')?.classList.toggle('hidden', !longForm);
-  document.getElementById('error-hint-short')?.classList.toggle('hidden', longForm);
+  byIdOrNull('error-guidance-long')?.classList.toggle('hidden', !longForm);
+  byIdOrNull('error-hint-short')?.classList.toggle('hidden', longForm);
   if (!longForm) return;
 
   setText('error-install-text', t('error.install.text', { installer: installerName(platform) }));
@@ -42,13 +44,12 @@ function renderCompanionGuidance() {
     defaultUrl: DEFAULT_COMPANION_URL,
     errorMessage: failure && failure.message,
   });
-  for (const situation of ['install', 'start', 'address']) {
-    const el = document.getElementById(`error-situation-${situation}`);
+  const situations: Situation[] = ['install', 'start', 'address'];
+  for (const situation of situations) {
+    const el = byIdOrNull(`error-situation-${situation}`);
     if (!el) continue;
     const isLikely = likely.includes(situation);
     el.classList.toggle('likely', isLikely);
     el.querySelector('.error-likely')?.classList.toggle('hidden', !isLikely);
   }
 }
-
-module.exports = { renderCompanionGuidance };
