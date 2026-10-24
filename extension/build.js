@@ -38,6 +38,8 @@ const ENTRY_POINTS = [
 // A converted entry point keeps its .js output name (the manifest and popup.html point at it); this maps it to the source esbuild reads.
 const ENTRY_SOURCES = {
   'popup/popup.js': 'popup/popup.ts',
+  'content/api-capture.js': 'content/api-capture.ts',
+  'background/service-worker.js': 'background/service-worker.ts',
 };
 
 const STATIC_FILES = [

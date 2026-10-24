@@ -1,6 +1,6 @@
-// The messages the content script and the service worker send to the side panel (popup/message-router.ts is the one listener), and the
-// one request the panel itself sends that has a typed answer. The service worker and content script adopt the same shapes when they
-// are converted.
+// The messages the content script and the service worker send to the side panel (popup/message-router.ts is the one listener), the
+// requests the panel sends to the service worker, and the window.postMessage traffic between the MAIN-world network recorder
+// (content/api-capture.ts) and the content script.
 import type * as SFDraft from './drafts';
 import type { ApiSubtreeCandidate } from '../popup/api-config';
 
@@ -80,3 +80,44 @@ export type PopupInboundMessage =
 export type RobotsTxtResult =
   | { ok: true; robotsUrl: string; path: string; notFound: boolean; allowed: boolean; matchedRule: { type: string; pattern: string } | null }
   | { ok: false; error: string };
+
+// ── Service worker (background/service-worker.ts) ──
+
+// Relayed unchanged to the active tab's content script; a failed relay tells the panel for the ones that have an *_UNAVAILABLE reply.
+export type ForwardedToTabType =
+  | 'START_SELECTION' | 'STOP_SELECTION' | 'ENABLE_DOM_VIEW' | 'DISABLE_DOM_VIEW' | 'PREVIEW_START' | 'PREVIEW_STOP'
+  | 'HOVER_HIGHLIGHT' | 'HOVER_HIGHLIGHT_CLEAR' | 'API_CAPTURE_START' | 'API_CAPTURE_STOP';
+
+// Content script → side panel, forwarded as they are.
+export type ForwardedToPanelType = 'HOVER_ELEMENT' | 'DOM_TREE' | 'PREVIEW_RESULT' | 'API_CAPTURE_ENTRY' | 'API_CANDIDATES';
+
+export type ServiceWorkerInboundMessage =
+  | { type: 'GET_LOGS' }
+  | { type: 'GET_API_CAPTURE_ENTRIES' }
+  | { type: 'GET_EMBEDDED_JSON'; scriptSelector: string }
+  | { type: 'COUNT_PICK_WITH_TEXT'; text: string }
+  | { type: 'CHECK_ROBOTS_TXT' }
+  | { type: ForwardedToTabType; [key: string]: unknown }
+  | { type: ForwardedToPanelType; [key: string]: unknown }
+  | ElementSelectedMessage;
+
+export interface EmbeddedJsonResult {
+  body: string;
+  truncated: boolean;
+  found: boolean;
+}
+
+// ── MAIN-world recorder ↔ content script (window.postMessage) ──
+
+export interface ApiCaptureEntryWindowMessage {
+  source: 'sf-api-capture';
+  type: 'API_CAPTURE_ENTRY';
+  entry: SFDraft.ApiCaptureEntry;
+}
+
+export interface ApiCaptureControlWindowMessage {
+  source: 'sf-api-capture-control';
+  type: 'API_CAPTURE_START' | 'API_CAPTURE_STOP';
+}
+
+export type ApiCaptureWindowMessage = ApiCaptureEntryWindowMessage | ApiCaptureControlWindowMessage;

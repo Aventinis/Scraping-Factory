@@ -1644,7 +1644,7 @@ describe('renderApiEntriesList (recorded-endpoints viewer)', () => {
     expect(rows[0].querySelector('.api-candidate-url').textContent).toBe('GET 200 https://example.com/api/items');
     expect(rows[0].querySelector('.api-candidate-path').textContent).toBe('application/json');
     // The status is always known (read off the response before the
-    // body-skip decision, see api-capture.js) — bodySkipped only affects
+    // body-skip decision, see api-capture.ts) — bodySkipped only affects
     // whether a body was captured, not whether the row shows a status.
     expect(rows[1].querySelector('.api-candidate-url').textContent).toBe('GET 200 https://example.com/img.png');
   });

@@ -467,7 +467,7 @@ describe('scoped selection (START_SELECTION with scopeSelector)', () => {
 
       // Issue #137 follow-up: tagged with unavailableKind so popup.ts can
       // tell this "retried and still nothing" case apart from the other
-      // SELECTION_UNAVAILABLE sender (service-worker.js, no content script
+      // SELECTION_UNAVAILABLE sender (service-worker.ts, no content script
       // at all) and present it as a softer warning instead of a hard error.
       expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
         type: 'SELECTION_UNAVAILABLE', unavailableKind: 'scopeSelectorNotFound',
@@ -1478,7 +1478,7 @@ describe('PREVIEW_START / PREVIEW_STOP (message-listener wiring)', () => {
 });
 
 // ── API-Mode capture bridge (message-listener wiring) ────────────────────────
-// api-capture.js (MAIN world) talks to this isolated-world script via
+// api-capture.ts (MAIN world) talks to this isolated-world script via
 // window.postMessage in both directions — see content-script.js's bridge.
 //
 // Note: window.addEventListener('message', ...) is registered unconditionally

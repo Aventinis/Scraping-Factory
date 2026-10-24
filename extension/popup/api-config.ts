@@ -409,7 +409,7 @@ export function rangeFormatExample(format: string | null | undefined, fromValue:
 }
 
 // capturedHeaders: [{name, value}] from the confirmed candidate's recorded
-// request (api-capture.js's requestHeaders). decisions: {[headerName]:
+// request (api-capture.ts's requestHeaders). decisions: {[headerName]:
 // {include, mode: 'literal'|'env', envName}} — the header-adoption table's
 // per-row choice. Mirrors FillStep's env-var pattern: a header adopted via
 // an environment variable is never embedded literally.

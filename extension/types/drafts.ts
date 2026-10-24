@@ -251,7 +251,7 @@ export interface ApiLinkHeaderPagination {
   maxPages: number;
 }
 
-// One GET_API_CAPTURE_ENTRIES entry (content/api-capture.js's buildEntry).
+// One GET_API_CAPTURE_ENTRIES entry (content/api-capture.ts's buildEntry).
 export interface ApiCaptureEntry {
   id: number;
   url: string;
@@ -259,6 +259,9 @@ export interface ApiCaptureEntry {
   status: number;
   contentType: string | null;
   body: string;
+  bodyTruncated?: boolean;
+  bodySkipped?: boolean;
+  requestBodyTruncated?: boolean;
   requestHeaders?: Array<{ name: string; value: string }>;
   requestBody?: string;
   hasNextLink?: boolean;
