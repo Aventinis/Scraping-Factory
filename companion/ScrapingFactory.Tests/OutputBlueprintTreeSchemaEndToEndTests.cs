@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Xml.Linq;
 using ScrapingFactory.Compiler.Backends;
 using ScrapingFactory.Compiler.Backends.Python;
@@ -18,40 +17,6 @@ namespace ScrapingFactory.Tests;
 // row/element-count-only success check.
 public class OutputBlueprintTreeSchemaEndToEndTests
 {
-    private static async Task<(int ExitCode, string Stderr)> RunScriptAsync(string scriptPath, string workDir)
-    {
-        Exception? lastError = null;
-        foreach (var candidate in new[] { "python3", "python" })
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = candidate,
-                WorkingDirectory = workDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add(scriptPath);
-
-            try
-            {
-                using var process = new Process { StartInfo = psi };
-                process.Start();
-                var stderrTask = process.StandardError.ReadToEndAsync();
-                var stdoutTask = process.StandardOutput.ReadToEndAsync();
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                await process.WaitForExitAsync(cts.Token);
-                return (process.ExitCode, await stderrTask);
-            }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                lastError = ex; // executable not found — try the next candidate
-            }
-        }
-        throw new InvalidOperationException("No Python interpreter found (tried: python3, python).", lastError);
-    }
-
     private static async Task<(int Exit, string Stderr, XDocument Output)> GenerateRunAndReadXmlOutputAsync(ScrapingPlan plan, ICodeGenerator generator)
     {
         var script = generator.Generate(plan);
@@ -60,7 +25,7 @@ public class OutputBlueprintTreeSchemaEndToEndTests
         {
             var scriptPath = Path.Combine(workDir, "scraper.py");
             await File.WriteAllTextAsync(scriptPath, script);
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
             var outputPath = Path.Combine(workDir, "output.xml");
             var doc = File.Exists(outputPath) ? XDocument.Load(outputPath) : new XDocument(new XElement("Ergebnis"));
             return (exit, stderr, doc);
@@ -383,7 +348,7 @@ public class OutputBlueprintTreeSchemaEndToEndTests
             var scriptPath = Path.Combine(workDir, "scraper.py");
             await File.WriteAllTextAsync(scriptPath, script);
 
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
 
             Assert.NotEqual(0, exit);
             Assert.Contains("independent repeating group", stderr);

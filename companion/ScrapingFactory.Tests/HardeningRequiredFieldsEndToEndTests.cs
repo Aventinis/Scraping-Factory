@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Xml.Linq;
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
@@ -13,47 +12,13 @@ namespace ScrapingFactory.Tests;
 // check can't distinguish a filtered run from an unfiltered one; only
 // running the generated script directly and inspecting both its own
 // exit code/stderr and the actual output file content proves it. Same
-// RunScriptAsync pattern as HardeningNullRateEndToEndTests/
+// ScriptRunner pattern as HardeningNullRateEndToEndTests/
 // HardeningBlockingEndToEndTests, for the same reason. Static engine only
 // (flat mode is engine-independent, but this check's own Scriban syntax is
 // already covered for the Browser engine by CompanionEndpointTests' round-
 // trip test — a full behavioral proof doesn't need repeating per engine).
 public class HardeningRequiredFieldsEndToEndTests
 {
-    private static async Task<(int ExitCode, string Stderr)> RunScriptAsync(string scriptPath, string workDir)
-    {
-        Exception? lastError = null;
-        foreach (var candidate in new[] { "python3", "python" })
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = candidate,
-                WorkingDirectory = workDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add(scriptPath);
-
-            try
-            {
-                using var process = new Process { StartInfo = psi };
-                process.Start();
-                var stderrTask = process.StandardError.ReadToEndAsync();
-                var stdoutTask = process.StandardOutput.ReadToEndAsync();
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                await process.WaitForExitAsync(cts.Token);
-                return (process.ExitCode, await stderrTask);
-            }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                lastError = ex; // executable not found — try the next candidate
-            }
-        }
-        throw new InvalidOperationException("No Python interpreter found (tried: python3, python).", lastError);
-    }
-
     private static async Task<(int Exit, string Stderr, string[] OutputLines)> GenerateRunAndReadOutputAsync(ScrapingPlan plan)
     {
         var script = new PythonCodeGenerator().Generate(plan);
@@ -62,7 +27,7 @@ public class HardeningRequiredFieldsEndToEndTests
         {
             var scriptPath = Path.Combine(workDir, "scraper.py");
             await File.WriteAllTextAsync(scriptPath, script);
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
             var outputPath = Path.Combine(workDir, "output.csv");
             var lines = File.Exists(outputPath) ? await File.ReadAllLinesAsync(outputPath) : [];
             return (exit, stderr, lines);
@@ -209,7 +174,7 @@ public class HardeningRequiredFieldsEndToEndTests
         {
             var scriptPath = Path.Combine(workDir, "scraper.py");
             await File.WriteAllTextAsync(scriptPath, script);
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
             var outputPath = Path.Combine(workDir, "output.xml");
             var doc = File.Exists(outputPath) ? XDocument.Load(outputPath) : new XDocument(new XElement("Ergebnis"));
             return (exit, stderr, doc);
@@ -388,7 +353,7 @@ public class HardeningRequiredFieldsEndToEndTests
         {
             var scriptPath = Path.Combine(workDir, "scraper.py");
             await File.WriteAllTextAsync(scriptPath, script);
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
             var outputPath = Path.Combine(workDir, "output.xml");
             var doc = File.Exists(outputPath) ? XDocument.Load(outputPath) : new XDocument(new XElement("Ergebnis"));
             return (exit, stderr, doc);

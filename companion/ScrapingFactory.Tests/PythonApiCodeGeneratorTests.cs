@@ -1,19 +1,13 @@
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
 using Xunit;
+using static ScrapingFactory.Tests.ApiScriptPlans;
 
 namespace ScrapingFactory.Tests;
 
 public class PythonApiCodeGeneratorTests
 {
     private readonly PythonApiCodeGenerator _generator = new();
-
-    private static ScrapingPlan PlanWith(ApiConfig api) => new()
-    {
-        Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = api }],
-        OutputFormat = OutputFormat.Csv,
-        Engine = ScrapingEngine.Api,
-    };
 
     private static ApiConfig SampleApi() => new()
     {

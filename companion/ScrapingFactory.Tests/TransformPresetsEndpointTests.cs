@@ -13,28 +13,10 @@ namespace ScrapingFactory.Tests;
 // Companion:TransformPresetsDbPath override).
 public class TransformPresetsEndpointTests : IDisposable
 {
-    private readonly string _dbPath;
-    private readonly WebApplicationFactory<Program> _factory;
-    private readonly HttpClient _client;
+    private readonly TempDatabaseCompanion _companion = new("Companion:TransformPresetsDbPath", "transform-presets-endpoint-test");
+    private HttpClient _client => _companion.Client;
 
-    public TransformPresetsEndpointTests()
-    {
-        _dbPath = Path.Combine(Path.GetTempPath(), $"sf-transform-presets-endpoint-test-{Guid.NewGuid():N}.db");
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-            builder.ConfigureAppConfiguration((_, config) =>
-                config.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["Companion:TransformPresetsDbPath"] = _dbPath,
-                })));
-        _client = _factory.CreateClient();
-    }
-
-    public void Dispose()
-    {
-        _client.Dispose();
-        _factory.Dispose();
-        if (File.Exists(_dbPath)) File.Delete(_dbPath);
-    }
+    public void Dispose() => _companion.Dispose();
 
     private static StringContent Json(string json) => new(json, Encoding.UTF8, "application/json");
 
@@ -154,7 +136,7 @@ public class TransformPresetsEndpointTests : IDisposable
     {
         await PostPreset("Preis", PriceChain);
 
-        var reopened = new ScrapingFactory.Companion.TransformPresetStore(_dbPath).ListAll();
+        var reopened = new ScrapingFactory.Companion.TransformPresetStore(_companion.DatabasePath).ListAll();
 
         var preset = Assert.Single(reopened);
         Assert.Equal("Preis", preset.Name);

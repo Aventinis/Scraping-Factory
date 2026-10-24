@@ -1,6 +1,7 @@
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
 using Xunit;
+using static ScrapingFactory.Tests.ApiScriptPlans;
 
 namespace ScrapingFactory.Tests;
 
@@ -22,15 +23,6 @@ namespace ScrapingFactory.Tests;
 // the way, including the middle trigger.
 public class ScrollStepDistanceEndToEndTests
 {
-    private static ScrapingPlan PlanWith(ApiConfig api) => new()
-    {
-        Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = api }],
-        OutputFormat = OutputFormat.Csv,
-        Engine = ScrapingEngine.Api,
-    };
-
-    private static string GenerateScript(ApiConfig api) => new PythonApiCodeGenerator().Generate(PlanWith(api));
-
     // Viewport is Playwright's own default (1280x720). Trigger positions
     // (1200, 2600, 4600) are chosen so that trigger-2 falls strictly between
     // the top viewport ([0,720]) and the bottom-clamped viewport

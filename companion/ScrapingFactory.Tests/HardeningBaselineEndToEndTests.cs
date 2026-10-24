@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
@@ -13,44 +12,10 @@ namespace ScrapingFactory.Tests;
 // directory is always fresh, so a baseline file could never already exist
 // there), and there's no other way to prove "a bad run must never become
 // the new normal" than actually running the script twice and inspecting
-// the sidecar file's own content in between. Same RunScriptAsync pattern as
+// the sidecar file's own content in between. Same ScriptRunner pattern as
 // HardeningNullRateEndToEndTests/ProxyEndToEndTests, for the same reason.
 public class HardeningBaselineEndToEndTests
 {
-    private static async Task<(int ExitCode, string Stderr)> RunScriptAsync(string scriptPath, string workDir)
-    {
-        Exception? lastError = null;
-        foreach (var candidate in new[] { "python3", "python" })
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = candidate,
-                WorkingDirectory = workDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add(scriptPath);
-
-            try
-            {
-                using var process = new Process { StartInfo = psi };
-                process.Start();
-                var stderrTask = process.StandardError.ReadToEndAsync();
-                var stdoutTask = process.StandardOutput.ReadToEndAsync();
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                await process.WaitForExitAsync(cts.Token);
-                return (process.ExitCode, await stderrTask);
-            }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                lastError = ex; // executable not found — try the next candidate
-            }
-        }
-        throw new InvalidOperationException("No Python interpreter found (tried: python3, python).", lastError);
-    }
-
     private static string BuildPageWithItems(int count)
     {
         var items = string.Join("", Enumerable.Range(1, count).Select(i => $"<h1 class='item'>Item {i}</h1>"));
@@ -80,7 +45,7 @@ public class HardeningBaselineEndToEndTests
             var scriptPath = Path.Combine(workDir, "scraper.py");
             await File.WriteAllTextAsync(scriptPath, script);
 
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
 
             Assert.Equal(0, exit);
             Assert.Empty(stderr);
@@ -113,7 +78,7 @@ public class HardeningBaselineEndToEndTests
             var baselinePath = Path.Combine(workDir, "output.csv.hardening-baseline.json");
             await File.WriteAllTextAsync(baselinePath, """{"count": 10}""");
 
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
 
             Assert.Equal(2, exit);
             Assert.Contains("ERROR", stderr);
@@ -156,7 +121,7 @@ public class HardeningBaselineEndToEndTests
             var baselinePath = Path.Combine(workDir, "output.csv.hardening-baseline.json");
             await File.WriteAllTextAsync(baselinePath, """{"count": 10}""");
 
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
 
             Assert.Equal(0, exit);
             Assert.Empty(stderr);
@@ -198,7 +163,7 @@ public class HardeningBaselineEndToEndTests
             var baselinePath = Path.Combine(workDir, "output.csv.hardening-baseline.json");
             await File.WriteAllTextAsync(baselinePath, """{"count": 10}""");
 
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
 
             Assert.Equal(0, exit);
             Assert.Contains("WARNING", stderr);

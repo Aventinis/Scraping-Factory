@@ -267,25 +267,18 @@ public class AccountEndpointTests : IDisposable
 
     private WebApplicationFactory<Program> Factory(bool registration = true, Dictionary<string, string?>? extra = null)
     {
-        string Db(string name) { var p = Path.Combine(Path.GetTempPath(), $"sf-acct-ep-{name}-{Guid.NewGuid():N}.db"); _files.Add(p); return p; }
-        var settings = new Dictionary<string, string?>
-        {
-            [AuthOptions.EnabledKey] = "true",
-            [AuthOptions.RegistrationKey] = registration ? "Open" : "Disabled",
-            ["Companion:SavedConfigsDbPath"] = Db("configs"), ["Companion:OutputBlueprintsDbPath"] = Db("blueprints"),
-            ["Companion:TransformPresetsDbPath"] = Db("presets"), ["Companion:UsersDbPath"] = Db("users"),
-        };
+        var settings = TestCompanionFactory.TempDatabaseSettings("acct-ep", _files);
+        settings[AuthOptions.EnabledKey] = "true";
+        settings[AuthOptions.RegistrationKey] = registration ? "Open" : "Disabled";
         foreach (var (key, value) in extra ?? []) settings[key] = value;
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(settings)));
+        _factory = TestCompanionFactory.Create(settings);
         return _factory;
     }
 
     public void Dispose()
     {
         _factory?.Dispose();
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-        foreach (var file in _files) if (File.Exists(file)) File.Delete(file);
+        TestCompanionFactory.DeleteDatabases(_files);
     }
 
     private static StringContent Json(object payload) => new(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
@@ -517,12 +510,12 @@ public class AccountEndpointTests : IDisposable
     [Fact]
     public async Task WithoutAuthentication_ThereAreNoAuthEndpoints()
     {
-        string Db(string n) => Path.Combine(Path.GetTempPath(), $"sf-acct-off-{n}-{Guid.NewGuid():N}.db");
-        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Companion:UsersDbPath"] = Db("u"), ["Companion:SavedConfigsDbPath"] = Db("c"),
-            })));
+        var files = new List<string>();
+        using var factory = TestCompanionFactory.Create(new Dictionary<string, string?>
+        {
+            [TestCompanionFactory.UsersDb] = TestCompanionFactory.TempDatabasePath("acct-off-u", files),
+            [TestCompanionFactory.SavedConfigsDb] = TestCompanionFactory.TempDatabasePath("acct-off-c", files),
+        });
         using var client = factory.CreateClient();
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync("/auth/login", Json(new { name = "a", password = "b" }))).StatusCode);
         Assert.False((await client.GetFromJsonAsync<JsonElement>("/health")).GetProperty("registration").GetBoolean());

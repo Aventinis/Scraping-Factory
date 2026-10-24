@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
 using Xunit;
+using static ScrapingFactory.Tests.ApiScriptPlans;
 
 namespace ScrapingFactory.Tests;
 
@@ -16,13 +17,6 @@ namespace ScrapingFactory.Tests;
 // host, a non-JSON response, and a failing discovery request.
 public class ApiRequestErrorEndToEndTests
 {
-    private static ScrapingPlan PlanWith(ApiConfig api) => new()
-    {
-        Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = api }],
-        OutputFormat = OutputFormat.Csv,
-        Engine = ScrapingEngine.Api,
-    };
-
     private static ApiConfig Api(string urlTemplate, List<ApiParameter>? parameters = null, List<ApiHeader>? headers = null, ApiBootstrap? bootstrap = null) => new()
     {
         UrlTemplate = urlTemplate,
