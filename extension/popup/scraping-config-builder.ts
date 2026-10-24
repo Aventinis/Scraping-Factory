@@ -3,7 +3,7 @@
 // outputs against the wire format (SFWire).
 import type * as SFWire from '../types/wire';
 import type * as SFDraft from '../types/drafts';
-import { escapeHtml } from './api-config';
+import { escapeHtml } from './dom';
 import { t } from '../i18n/i18n';
 import { serializeGroupTree } from './container-tree';
 import { buildOutputBlueprintMapping } from './output-blueprints';

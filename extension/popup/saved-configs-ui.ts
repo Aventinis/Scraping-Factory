@@ -11,14 +11,14 @@ import type {
 } from '../types/popup';
 import { createLogger } from '../shared/logger';
 import { t } from '../i18n/i18n';
-import { STATES, escapeHtml } from './api-config';
+import { STATES } from './api-config';
 import { showToast } from './toast';
 import { buildScrapingConfig, buildHardeningConfig, configOptionsFromState } from './scraping-config-builder';
 import { downloadFile } from './download-helpers';
 import { getResolvedCompanionUrl, resolveCombinedComponents, companionFetch } from './companion-client';
 import { applyConfigToState } from './config-import';
 import { getGlobalSettings } from '../shared/global-settings';
-import { byIdOrNull } from './dom';
+import { byIdOrNull, escapeHtml } from './dom';
 
 const log = createLogger('SF:Popup');
 

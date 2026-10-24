@@ -7,7 +7,7 @@ import type { PopupBridge, State } from '../types/popup';
 import { createLogger } from '../shared/logger';
 import { buildFlatFieldHighlight, wireHoverHighlight } from './hover-highlight';
 import { t } from '../i18n/i18n';
-import { STATES, escapeHtml } from './api-config';
+import { STATES } from './api-config';
 import { addField, removeField, frameBadgeHtml } from './scraping-config-builder';
 import { transformsAreValid, addTransform } from './field-transforms';
 import { appendTextFilter } from './selector-text-filter';
@@ -17,7 +17,7 @@ import { parseAllowedContentTypes, megabytesToBytes } from './container-tree';
 import { isDerivedField } from './combine-split-fields';
 import { openCombineFieldModal, openSplitFieldModal } from './combine-split-fields-ui';
 import { renderMatchCountHint, populateAttributeSelect } from './field-modal';
-import { byIdOrNull, qsOrNull } from './dom';
+import { byIdOrNull, qsOrNull, escapeHtml } from './dom';
 
 const log = createLogger('SF:Popup');
 

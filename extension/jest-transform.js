@@ -3,6 +3,10 @@
 const esbuild = require('esbuild');
 
 module.exports = {
+  /**
+   * @param {string} source
+   * @param {string} filename
+   */
   process(source, filename) {
     const { code, map } = esbuild.transformSync(source, {
       loader: 'ts', format: 'cjs', target: 'es2022', sourcefile: filename, sourcemap: 'external',

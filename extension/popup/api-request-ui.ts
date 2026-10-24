@@ -9,13 +9,13 @@ import { t } from '../i18n/i18n';
 import { helpHostHtml } from './help-popover';
 import { createAdvancedDisclosure } from './advanced-disclosure-ui';
 import {
-  STATES, escapeHtml, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId, allParameterParts,
+  STATES, resolveBodyTreeNode, updateBodyTreeNode, bodyTreeReferencesParameterId, allParameterParts,
 } from './api-config';
 import type {
   ApiBodyLiteralDraft, ApiBodyNodeDraft, ApiBodyVariableDraft, ApiConfigDraft, HeaderDecision, ParameterPart,
 } from './api-config';
 import { patchApiConfigDraft } from './api-config-shared-ui';
-import { byIdOrNull } from './dom';
+import { byIdOrNull, escapeHtml } from './dom';
 
 const log = createLogger('SF:ApiConfigUI');
 

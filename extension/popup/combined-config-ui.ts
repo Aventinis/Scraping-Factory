@@ -8,10 +8,9 @@
 import type { PopupBridge, SavedConfigSummary } from '../types/popup';
 import { createLogger } from '../shared/logger';
 import { t } from '../i18n/i18n';
-import { escapeHtml } from './api-config';
 import { addComponent, removeComponent, updateComponentName, moveComponent } from './combined-config';
 import type { CombinedComponentRef } from './combined-config';
-import { byIdOrNull } from './dom';
+import { byIdOrNull, escapeHtml } from './dom';
 
 const log = createLogger('SF:Popup');
 

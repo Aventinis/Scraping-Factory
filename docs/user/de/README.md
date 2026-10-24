@@ -104,7 +104,7 @@ node e2e/screenshots/check-docs.js            # prüfen, dass jedes Bild und jed
 ```
 
 Ein neuer Link **Mehr erfahren** in der Erweiterung braucht einen Schlüssel in
-`extension/popup/docs-links.js`, der auf eine Seite und Überschrift hier zeigt —
+`extension/popup/docs-links.ts`, der auf eine Seite und Überschrift hier zeigt —
 wer eine Überschrift umbenennt, die ein Link benutzt, lässt den Test dieser Datei
 fehlschlagen, bis der Schlüssel angepasst ist. Halte die Erweiterung selbst bei
 einem Titel pro Bedienelement: Die Erklärung gehört hinter sein **?** (ein Text

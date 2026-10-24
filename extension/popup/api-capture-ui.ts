@@ -7,10 +7,10 @@ import type { ApiCandidate } from '../types/messages';
 import { createLogger } from '../shared/logger';
 import { t } from '../i18n/i18n';
 import {
-  STATES, escapeHtml, parseUrlTemplateParts, jsonValueToBodyDraft, buildApiSubtreeFromCandidate,
+  STATES, parseUrlTemplateParts, jsonValueToBodyDraft, buildApiSubtreeFromCandidate,
 } from './api-config';
 import { patchApiConfigDraft } from './api-config-shared-ui';
-import { byIdOrNull } from './dom';
+import { byIdOrNull, escapeHtml } from './dom';
 
 const log = createLogger('SF:ApiConfigUI');
 

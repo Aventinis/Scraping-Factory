@@ -8,14 +8,14 @@ import type * as SFDraft from '../types/drafts';
 import type { ApiPathPickerState, PathPickerField, PathPickerOutcome, PopupBridge, State } from '../types/popup';
 import { createLogger } from '../shared/logger';
 import { t } from '../i18n/i18n';
-import { escapeHtml, resolveApiGroupScopePath } from './api-config';
+import { resolveApiGroupScopePath } from './api-config';
 import type { ApiConfigDraft, ApiNodeDraft } from './api-config';
 import {
   buildJsonPathTree, selectablePaths, parseEntryJson, findSourceEntry, jsonResponseEntries,
 } from './json-path-picker';
 import type { CaptureEntryLike, PathTreeNode, PickerMode } from './json-path-picker';
 import { fetchApiCaptureEntries } from './api-capture-ui';
-import { byIdOrNull } from './dom';
+import { byIdOrNull, escapeHtml } from './dom';
 
 const log = createLogger('SF:JsonPathPickerUI');
 

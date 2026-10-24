@@ -96,7 +96,7 @@ node e2e/screenshots/check-docs.js            # verify every image and link in b
 ```
 
 A new **Learn more** link in the extension needs a key in
-`extension/popup/docs-links.js` that points at a page and heading here — renaming
+`extension/popup/docs-links.ts` that points at a page and heading here — renaming
 a heading that a link uses makes that file's test fail until the key is updated.
 Keep the extension itself to one title per control: the explanation goes behind its **?**
 (a `help.<area>.<field>` text with `data-doc` for the link), the details on the page.

@@ -6,7 +6,7 @@ import type { ApiCandidate } from '../types/messages';
 import { createLogger } from '../shared/logger';
 import { t } from '../i18n/i18n';
 import {
-  STATES, escapeHtml, findUrlTemplateMatches, mergeValueListValues, buildDiscoverySource, RANGE_FORMAT_PRESETS, detectRangeFormat, findUrlPartValue, rangeFormatExample, allParameterParts, earlierParameterNames,
+  STATES, findUrlTemplateMatches, mergeValueListValues, buildDiscoverySource, RANGE_FORMAT_PRESETS, detectRangeFormat, findUrlPartValue, rangeFormatExample, allParameterParts, earlierParameterNames,
 } from './api-config';
 import type { ApiConfigDraft, ApiParameterSourceDraft, ParameterPart, SourceOf, UrlParts } from './api-config';
 // Issue #220: a variable URL part can take the bootstrap value as its
@@ -17,7 +17,7 @@ import { createAdvancedDisclosure } from './advanced-disclosure-ui';
 import { renderParameterPlaceholderPicker, patchApiConfigDraft, patchApiConfigSource, insertParameterPlaceholder } from './api-config-shared-ui';
 import { fetchApiCaptureEntries } from './api-capture-ui';
 import { renderBrowserDiscoverySourceFields, handleBrowserDiscoveryChange, handleBrowserDiscoveryClick } from './api-browser-discovery-ui';
-import { byIdOrNull } from './dom';
+import { byIdOrNull, escapeHtml } from './dom';
 
 const log = createLogger('SF:ApiConfigUI');
 

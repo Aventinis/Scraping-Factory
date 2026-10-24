@@ -29,7 +29,7 @@ export function updateBlueprintFieldName(fieldNames: string[], index: number, na
 }
 
 // direction: -1 (up) or +1 (down) — same swap-with-adjacent-sibling
-// convention as field-transforms.ts's moveTransform/combined-config.js's
+// convention as field-transforms.ts's moveTransform/combined-config.ts's
 // moveComponent.
 export function moveBlueprintFieldName(fieldNames: string[], index: number, direction: number): string[] {
   const target = index + direction;

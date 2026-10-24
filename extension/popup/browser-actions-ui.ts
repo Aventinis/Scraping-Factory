@@ -5,13 +5,13 @@ import type * as SFDraft from '../types/drafts';
 import type { BrowserActionField, PopupBridge } from '../types/popup';
 import { createLogger } from '../shared/logger';
 import { t } from '../i18n/i18n';
-import { STATES, escapeHtml } from './api-config';
+import { STATES } from './api-config';
 import { envVarNoteHtml } from './env-var-ui';
 import { autoOpenAdvanced, createAdvancedDisclosure } from './advanced-disclosure-ui';
 import { helpHostHtml } from './help-popover';
 import { addLoginFlow, msToSecondsText, secondsTextToMs } from './login-flow';
 import { addBrowserAction, removeBrowserAction, updateBrowserAction, frameBadgeHtml } from './scraping-config-builder';
-import { byIdOrNull } from './dom';
+import { byIdOrNull, escapeHtml } from './dom';
 
 const log = createLogger('SF:Popup');
 

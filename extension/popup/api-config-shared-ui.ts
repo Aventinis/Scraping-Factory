@@ -3,7 +3,7 @@
 // api-config-ui.ts for the `bridge` convention.
 import type { PopupBridge } from '../types/popup';
 import { t } from '../i18n/i18n';
-import { escapeHtml } from './api-config';
+import { escapeHtml } from './dom';
 import type { ApiConfigDraft, ApiParameterSourceDraft } from './api-config';
 import { autoOpenAdvanced } from './advanced-disclosure-ui';
 

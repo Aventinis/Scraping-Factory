@@ -222,7 +222,7 @@ function serializeDomTree(): { tree: DomTreeNode; truncated: boolean } {
 //   resolves its selector once (select_one) or repeatedly (select, when
 //   `repeating`) against the current scope and recurses into each match; a
 //   field leaf is always a single match (select_one). The wire format from
-//   serializeGroupTree (popup/container-tree.js) already distinguishes group
+//   serializeGroupTree (popup/container-tree.ts) already distinguishes group
 //   vs. field by whether `children` is present, exactly like extract_group's
 //   `"children" in node` check — so the same tree can be walked here
 //   unmodified.

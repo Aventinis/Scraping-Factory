@@ -9,8 +9,9 @@ import { t } from '../i18n/i18n';
 import { envVarNoteHtml } from './env-var-ui';
 import { msToSecondsText, secondsTextToMs } from './login-flow';
 import {
-  STATES, escapeHtml, earlierParameterNames,
+  STATES, earlierParameterNames,
 } from './api-config';
+import { escapeHtml } from './dom';
 import type { ApiConfigDraft, ParameterPart, SourceOf } from './api-config';
 
 const log = createLogger('SF:ApiConfigUI');

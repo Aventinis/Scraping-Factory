@@ -36,6 +36,7 @@ const ENTRY_POINTS = [
 ];
 
 // A converted entry point keeps its .js output name (the manifest and popup.html point at it); this maps it to the source esbuild reads.
+/** @type {Record<string, string>} */
 const ENTRY_SOURCES = {
   'popup/popup.js': 'popup/popup.ts',
   'content/api-capture.js': 'content/api-capture.ts',
@@ -52,6 +53,7 @@ const STATIC_FILES = [
 
 // The compile-time constants. Always both defined: the browser has no
 // `process`, so an undefined one would be a ReferenceError at runtime.
+/** @param {string} channel */
 function defineFor(channel) {
   return {
     'process.env.NODE_ENV': '"production"',
@@ -59,19 +61,23 @@ function defineFor(channel) {
   };
 }
 
+/**
+ * @param {{ channel: string, outdir: string }} options
+ * @returns {import('esbuild').BuildOptions}
+ */
 function buildOptions({ channel, outdir }) {
   return {
     entryPoints: ENTRY_POINTS.map((f) => ({ in: path.join(ROOT, ENTRY_SOURCES[f] || f), out: f.replace(/\.js$/, '') })),
     outdir,
     outbase: ROOT,
     bundle: true,
-    format: 'iife',
-    platform: 'browser',
+    format: /** @type {const} */ ('iife'),
+    platform: /** @type {const} */ ('browser'),
     target: 'chrome114',   // manifest.json's minimum_chrome_version
     sourcemap: true,
-    legalComments: 'none',
+    legalComments: /** @type {const} */ ('none'),
     define: defineFor(channel),
-    logLevel: 'info',
+    logLevel: /** @type {const} */ ('info'),
   };
 }
 
@@ -79,6 +85,7 @@ function buildOptions({ channel, outdir }) {
 // http to another machine) exist at all, so a release build must never come out
 // as a development one. Bundles shared/build-config.ts on its own with the very
 // same defines and checks what it evaluates to.
+/** @param {string} channel */
 function verifyChannel(channel) {
   const result = esbuild.buildSync({
     entryPoints: [path.join(ROOT, 'shared/build-config.ts')],
@@ -91,6 +98,7 @@ function verifyChannel(channel) {
   }
 }
 
+/** @param {string} outdir */
 function copyStaticFiles(outdir) {
   for (const file of STATIC_FILES) {
     const target = path.join(outdir, file);
@@ -103,6 +111,10 @@ function copyStaticFiles(outdir) {
 // the side panel opens a bundled page and works offline.
 const DOCS_DIR = path.join(ROOT, '..', 'docs', 'user');
 
+/**
+ * @param {string} outdir
+ * @param {string} [docsDir]
+ */
 async function copyDocs(outdir, docsDir = DOCS_DIR) {
   if (!fs.existsSync(docsDir)) {
     console.warn(`No ${docsDir} — the bundled documentation is skipped.`);
@@ -112,6 +124,7 @@ async function copyDocs(outdir, docsDir = DOCS_DIR) {
   console.log(`Built ${pages.length} documentation pages into ${path.join(outdir, 'docs')}`);
 }
 
+/** @param {string[]} argv */
 function parseArgs(argv) {
   const args = { watch: false, channel: 'development', outdir: DEFAULT_DIST, docsDir: DOCS_DIR };
   for (let i = 0; i < argv.length; i++) {
@@ -130,6 +143,7 @@ function parseArgs(argv) {
 // extension behind when a later step failed (for instance the documentation build
 // without `npm install`): the manifest and popup.html were there, popup.js was
 // not, and the side panel just kept loading.
+/** @param {ReturnType<typeof parseArgs>} args */
 async function buildOnce(args) {
   const staging = `${args.outdir}.building`;
   const previous = `${args.outdir}.previous`;
@@ -176,7 +190,8 @@ async function main() {
   }
   // The documentation pages: rebuilt (debounced) whenever a page or image changes.
   if (fs.existsSync(args.docsDir)) {
-    let timer = null;
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    let timer;
     fs.watch(args.docsDir, { recursive: true }, () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
