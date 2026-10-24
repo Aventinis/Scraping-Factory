@@ -5,7 +5,7 @@
 // own render + event-wiring for these four largely independent, mode-
 // agnostic opt-in features (Issues #87/#88/#129/#130/#131/#132/#133/#174).
 // Functions take a `bridge` object (same convention as api-config-ui.js/
-// companion-client.js) instead of closing over popup.js's own module-level
+// companion-client.ts) instead of closing over popup.js's own module-level
 // state.
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');

@@ -192,7 +192,7 @@ describe('Combined mode (Issue #239)', () => {
 
   test('a restored component whose saved configuration no longer exists is shown as unavailable', async () => {
     // Simulates reopening the popup with a Combined config restored from
-    // chrome.storage.session (see session-restore.js) whose component id
+    // chrome.storage.session (see session-restore.ts) whose component id
     // (999) has since been deleted from the saved-configs store.
     jest.resetModules();
     document.body.innerHTML = html;

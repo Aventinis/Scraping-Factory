@@ -1,19 +1,59 @@
 // ── Session-storage restore (popup reopen recovery) ──
 // init()'s chrome.storage.session recovery: restore persisted fields / groups / settings, then replay the pending-selector outcome.
-// It mirrors message-router.js's ELEMENT_SELECTED branches (container insert, browser action, pagination, field modal), replayed
+// It mirrors message-router.ts's ELEMENT_SELECTED branches (container insert, browser action, pagination, field modal), replayed
 // from storage after a reopen instead of from a live message, hence its own module.
-const { createLogger } = require('../shared/logger');
+import type * as SFWire from '../types/wire';
+import type * as SFDraft from '../types/drafts';
+import type { PopupBridge, State } from '../types/popup';
+import type { ApiConfigDraft } from './api-config';
+import { createLogger } from '../shared/logger';
+import { t } from '../i18n/i18n';
+import { STATES } from './api-config';
+import { buildGroupNode, insertContainerNode } from './container-tree';
+import { updateBrowserAction, computeInitialMonitoringSectionOpen } from './scraping-config-builder';
+import { showToast, showMatchCountToast } from './toast';
+import { resolveLinkHref } from './pagination-template';
+
 const log = createLogger('SF:Popup');
-const { t } = require('../i18n/i18n');
-const { STATES } = require('./api-config');
-const { buildGroupNode, insertContainerNode } = require('./container-tree');
-const { updateBrowserAction, computeInitialMonitoringSectionOpen } = require('./scraping-config-builder');
-const { showToast, showMatchCountToast } = require('./toast');
-const { resolveLinkHref } = require('./pagination-template');
+
+// What persistState() writes to chrome.storage.session, plus what the service worker writes there when a pick happens while the
+// panel is closed (the pending* selection and its page).
+export type StoredSession = Partial<Pick<State,
+  | 'fields' | 'url' | 'mode' | 'groups' | 'engine' | 'browserActions' | 'additionalStartUrls' | 'changeDetection' | 'proxy'
+  | 'requestDelay' | 'retry' | 'deduplication' | 'requestHeaders' | 'pagination' | 'discoveredUrls' | 'persistentSession' | 'preflight'
+  | 'respectRobotsDelay' | 'robotsDisallow' | 'appendOutput' | 'hardening' | 'scriptFileName' | 'outputFileName' | 'selectionKind'
+  | 'pendingParentPath' | 'pendingNewContainer' | 'pendingBrowserActionIndex' | 'pendingBrowserActionField'
+  | 'pendingApiDiscoveryPartId' | 'pendingApiDiscoveryActionIndex' | 'pendingApiDiscoveryActionField' | 'apiSearchTarget'
+  | 'apiConfigDraft' | 'apiConfig' | 'combinedComponents' | 'blocks' | 'blocksDraftShape' | 'blocksDraftName'
+  | 'blocksDraftOutputFileName' | 'blocksEditingIndex' | 'selectedOutputBlueprintId' | 'selectedOutputBlueprintFieldNames'
+  | 'outputBlueprintMapping' | 'pendingElementAttributes' | 'pendingFramePath' | 'pendingSelector'>> & {
+  // Written by the service worker from the page, so only checked with typeof where they are read.
+  pendingMatchCount?: unknown;
+  pendingRawText?: unknown;
+  pendingOwnText?: unknown;
+  pendingUrl?: string;
+  pendingPickId?: unknown;
+  handledPickId?: unknown;
+};
+
+// A BrowserDiscoverySource's action list is edited in draft shape (SFDraft.BrowserAction) while the API_CONFIG screen is open and only
+// serialized on Apply, so the wire-typed source is read through a cast here.
+export function withDiscoveryActionPatch(
+  draft: ApiConfigDraft, partId: string, index: number, patch: Partial<SFDraft.BrowserAction>,
+): ApiConfigDraft {
+  const source = draft.parameterSources[partId] as unknown as { actions?: SFDraft.BrowserAction[] };
+  return {
+    ...draft,
+    parameterSources: {
+      ...draft.parameterSources,
+      [partId]: { ...source, actions: updateBrowserAction(source.actions || [], index, patch) } as unknown as SFWire.ApiParameterSource,
+    },
+  };
+}
 
 // Pure: folds the restored values onto a fresh _state, overwriting only what was persisted (like persistState()). Also computes
 // the one-time Monitoring-section auto-expand, which needs changeDetection / hardening restored.
-function applyStoredSessionState(state, stored) {
+export function applyStoredSessionState(state: State, stored: StoredSession): State {
   let next = state;
   if (Array.isArray(stored.fields)) next = { ...next, fields: stored.fields };
   if (Array.isArray(stored.groups)) next = { ...next, groups: stored.groups };
@@ -71,16 +111,16 @@ function applyStoredSessionState(state, stored) {
 // The service worker writes pendingSelector as a fallback while the live message reaches an open panel, and the panel's cleanup can
 // run before that write lands: the panel records the pick it handled (handledPickId), and a stored selector of that pick is a
 // leftover, not a pending selection.
-function isLeftoverOfHandledPick(stored) {
+export function isLeftoverOfHandledPick(stored: StoredSession): boolean {
   return typeof stored.pendingPickId === 'string' && stored.pendingPickId === stored.handledPickId;
 }
 
-function markPickHandled(pickId) {
+export function markPickHandled(pickId: unknown): void {
   if (typeof pickId !== 'string' || !pickId) return;
   chrome.storage.session.set({ handledPickId: pickId });
 }
 
-async function restorePendingSelection(bridge, stored) {
+export async function restorePendingSelection(bridge: PopupBridge, stored: StoredSession): Promise<boolean> {
   if (!stored.pendingSelector) return false;
   if (isLeftoverOfHandledPick(stored)) {
     log('INIT pending selector belongs to an already handled pick — discarding', stored.pendingPickId);
@@ -91,7 +131,7 @@ async function restorePendingSelection(bridge, stored) {
   markPickHandled(stored.pendingPickId);
   const state = bridge.getState();
 
-  // Same stale-URL self-correction as message-router.js, from the persisted pendingUrl. patchState is enough: the branch below
+  // Same stale-URL self-correction as message-router.ts, from the persisted pendingUrl. patchState is enough: the branch below
   // persists the corrected url with its own setState.
   if (typeof stored.pendingUrl === 'string' && stored.pendingUrl && stored.pendingUrl !== state.url) {
     log('INIT pending selector\'s page changed since last sync', { from: state.url, to: stored.pendingUrl });
@@ -107,7 +147,7 @@ async function restorePendingSelection(bridge, stored) {
     return true;
   }
 
-  // Issue #182: same relaxation as message-router.js's own live-path
+  // Issue #182: same relaxation as message-router.ts's own live-path
   // check — Blocks mode's own group-shaped draft reuses this identical
   // recovery branch.
   const isContainerOrBlocksGroupDraft = stored.mode === 'container' ||
@@ -148,21 +188,11 @@ async function restorePendingSelection(bridge, stored) {
     // list) and returning to API_CONFIG, where this picker lives.
     const partId = stored.pendingApiDiscoveryPartId;
     const field = stored.pendingApiDiscoveryActionField || 'selector';
-    const draft = state.apiConfigDraft;
-    const source = draft.parameterSources[partId];
+    const draft = state.apiConfigDraft as ApiConfigDraft; // an apiDiscoveryAction pick only starts from API_CONFIG, where the draft exists
     log('INIT pending api-discovery-action selector found → updating action', { partId, field, selector: stored.pendingSelector });
-    const apiConfigDraft = {
-      ...draft,
-      parameterSources: {
-        ...draft.parameterSources,
-        [partId]: {
-          ...source,
-          actions: updateBrowserAction(source.actions || [], stored.pendingApiDiscoveryActionIndex, {
-            [field]: stored.pendingSelector, framePath: stored.pendingFramePath || null,
-          }),
-        },
-      },
-    };
+    const apiConfigDraft = withDiscoveryActionPatch(draft, partId, stored.pendingApiDiscoveryActionIndex, {
+      [field]: stored.pendingSelector, framePath: stored.pendingFramePath || null,
+    });
     await chrome.storage.session.set({ apiConfigDraft });
     bridge.setState(STATES.API_CONFIG, {
       apiConfigDraft, selectionKind: null, pendingApiDiscoveryPartId: null, pendingApiDiscoveryActionIndex: null, pendingApiDiscoveryActionField: 'selector',
@@ -229,6 +259,3 @@ async function restorePendingSelection(bridge, stored) {
   });
   return true;
 }
-
-module.exports = { applyStoredSessionState, restorePendingSelection, isLeftoverOfHandledPick, markPickHandled };
-
