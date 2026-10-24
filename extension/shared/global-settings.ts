@@ -1,5 +1,5 @@
 // Cross-session user preferences, reached from the popup's own dedicated
-// Settings tab (extension/popup/global-settings-ui.js) — mirrors
+// Settings tab (extension/popup/global-settings-ui.ts) — mirrors
 // shared/theme.ts's exact pattern (chrome.storage.local, a long-lived device
 // preference that should survive a browser restart, not just a popup close/
 // reopen; one module-level cache populated once by an async init, synchronous
@@ -30,7 +30,7 @@ type StoredSettings = Partial<GlobalSettingsValues> & { outputAsJson?: boolean }
 // scriptNameMode: 'fixed' (scriptNameFixed is the pre-filled default for
 // every new site) | 'hostname' (the current site's own hostname is derived
 // and pre-filled instead, re-applied every time a new site is detected —
-// see companion-client.ts's checkCompanion/message-router.js's stale-URL
+// see companion-client.ts's checkCompanion/message-router.ts's stale-URL
 // correction).
 export const DEFAULTS: GlobalSettingsValues = {
   // Issue #229: 'default' (CSV, or XML for a tree) | 'json' | 'sqlite' | 'xlsx'.

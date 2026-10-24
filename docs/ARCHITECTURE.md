@@ -108,7 +108,7 @@ flowchart TB
     i18n["i18n/i18n.ts"]
     ccfg["shared/companion-config.ts"]
     apiCfg["popup/api-config.ts\n(pure builders/validators, API mode)"]
-    ctree["popup/container-tree.js\n(pure builders/validators, Container mode)"]
+    ctree["popup/container-tree.ts\n(pure builders/validators, Container mode)"]
     apiUi["popup/api-config-ui.ts + api-*-ui.js\n(DOM rendering + handlers, API mode)"]
     ctreeUi["popup/container-tree-ui.ts\n(DOM rendering + handlers, Container mode)"]
     popup["popup/popup.ts\n(orchestrator: _state, render(), wireEvents())"]
@@ -166,19 +166,16 @@ them share):
 | `api-request-ui.ts` | captured-header table, POST body tree and its "new parameter" modal |
 | `api-config-shared-ui.ts` | `patchApiConfigDraft`/`patchApiConfigSource`, the parameter-placeholder picker |
 
-These DOM-free `<feature>.js` modules are also exactly the ones opted into
-JSDoc type checking (Issue #238; the design notes in `docs/design-notes/extension.md` cover it) — a
-leading `// @ts-check` pragma plus `extension/tsconfig.json`
-(`npm run typecheck`, wired into CI) against two type modules under
-`extension/types/`, imported as namespaces: `SFWire` (`wire.ts`, a hand-kept mirror of the
-companion's wire-format IR) and `SFDraft` (`drafts.ts`, this popup's
-own internal pre-serialization shapes, e.g. `container-tree.ts`'s tree
-nodes). `checkJs` stays off project-wide — the DOM-rendering `<feature>-ui.js`
-files and `popup.ts` itself aren't annotated (yet).
-Two more type modules describe the side panel itself: `types/popup.ts` (`State`, the
-shape of `popup.ts`'s `_state`; `Screen`; `PopupBridge`, what every `<feature>-ui`
-module receives as `bridge`) and `types/messages.ts` (`PopupInboundMessage`, the
-messages the content script and service worker send to `message-router.ts`).
+Every extension source is TypeScript under `strict` (`extension/tsconfig.json`, `npm run typecheck`,
+wired into CI), against four type modules under `extension/types/`, imported as namespaces:
+`SFWire` (`wire.ts`, a hand-kept mirror of the companion's wire-format IR), `SFDraft` (`drafts.ts`,
+this popup's own internal pre-serialization shapes, e.g. `container-tree.ts`'s tree nodes),
+`types/popup.ts` (`State`, the shape of `popup.ts`'s `_state`; `Screen`; `PopupBridge`, what every
+`<feature>-ui` module receives as `bridge`) and `types/messages.ts` (the messages between the
+content script, the service worker and the side panel, plus the window messages of the network
+recorder and the frame-path handshake). The only JavaScript left is deliberate: the Node-side
+scripts `build.js`, `docs-build.js` and `jest-transform.js` (type-checked from their JSDoc) and the
+`*.test.js` files (see `docs/design-notes/extension.md`, "TypeScript migration").
 
 ### 1.3 The companion pipeline: wire format → canonical IR → codegen → real execution
 
@@ -279,7 +276,7 @@ flat list of fields. The generated script walks the same tree at runtime and
 writes the result as XML instead of CSV, since a tree doesn't fit CSV's flat
 column model.
 
-- Extension: `popup/container-tree.js` (pure tree helpers), `popup/container-tree-ui.ts`
+- Extension: `popup/container-tree.ts` (pure tree helpers), `popup/container-tree-ui.ts`
   (tree editor UI, modals), `popup/popup.ts` (`_state.groups`, `_state.mode ===
   'container'`), `content/content-script.ts` (`scopeSelector`/`scopeRoot` support
   in `startSelection`/`buildSelector`, `matchGroupTree` for the DOM preview)
@@ -400,7 +397,7 @@ names only; `/generate`'s trial run takes one-time test values for them via
 auto-detects the token's JSON path by finding the response value the main
 request actually sends.
 
-- Extension: `popup/api-bootstrap.js` (pure draft/wire logic:
+- Extension: `popup/api-bootstrap.ts` (pure draft/wire logic:
   `bootstrapDraftFromCaptureEntry`, `detectTokenInResponse`,
   `wireTokenIntoMainRequest`, `buildApiBootstrap`, `resolveBootstrapUrlParts`,
   `buildBootstrapVerificationValues`), `popup/api-bootstrap-ui.ts` (the
@@ -439,7 +436,7 @@ is returned, an optional has-more flag is falsy, a cursor repeats, or
 "Detect from recording" button reads the recorded response/request for
 cursor-looking keys. The `Link`-header sibling is §2.5d.
 
-- Extension: `popup/api-cursor-pagination.js` (pure draft/wire logic:
+- Extension: `popup/api-cursor-pagination.ts` (pure draft/wire logic:
   `cursorDraftIsComplete`, `buildApiCursorPagination`,
   `detectCursorSuggestion`), `popup/api-cursor-pagination-ui.ts` (the
   section's render/wiring), `popup/api-config.ts` (`buildApiConfig`'s
@@ -475,7 +472,7 @@ reached. GET only; flat and tree shapes. The recorder keeps only a
 option.
 
 - Extension: `content/api-capture.ts` (`hasNextLinkRel`), `content/content-script.ts`
-  (`hasNextLink` on candidates), `popup/api-link-pagination.js` (pure),
+  (`hasNextLink` on candidates), `popup/api-link-pagination.ts` (pure),
   `popup/api-link-pagination-ui.ts`, `popup/api-config.ts`,
   `popup/screens/api-config.html` (`#api-link-section`)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig.LinkHeaderPagination`,
@@ -665,7 +662,7 @@ check after a container pick against the type chosen beforehand, a clickable
 "(single)"/"(repeating)" suffix in the container tree, and a "try the Browser engine"
 suggestion when a Static trial run returns no data. See docs/design-notes/extension.md for details.
 
-- Extension: `popup/choice-guidance.js` (pure: `containerCountAdvice`,
+- Extension: `popup/choice-guidance.ts` (pure: `containerCountAdvice`,
   `shouldSuggestBrowserEngine`), `popup/toast.ts` (`showMatchCountToast`),
   `popup/message-router.ts`/`popup/session-restore.ts` (pass the chosen type),
   `popup/container-tree-ui.ts` (`.group-tree-type` toggle), `popup/companion-client.ts`
@@ -679,9 +676,9 @@ suggestion when a Static trial run returns no data. See docs/design-notes/extens
 A failed Generate shows a translated title and hint (what happened, what to try)
 instead of the companion's or script's raw text; the raw text stays behind a
 "Details" disclosure (copyable) and is what "Report bug" sends. Recognised by pattern
-in `popup/error-messages.js`; unknown errors keep the old wording. See docs/design-notes/extension.md.
+in `popup/error-messages.ts`; unknown errors keep the old wording. See docs/design-notes/extension.md.
 
-- Extension: `popup/error-messages.js` (pure: `classifyError`, `describeError`),
+- Extension: `popup/error-messages.ts` (pure: `classifyError`, `describeError`),
   `popup/toast.ts` (`showErrorToast`, `hideToast`, `wireErrorToastEvents`; sticky toast
   with hint/details/close/copy), `popup/companion-client.ts` (`showGenerateFailure`),
   the toast markup in `popup/popup.html`, `errors.*` in `i18n/*.json`
@@ -696,7 +693,7 @@ bootstrap, an API discovery Fill action) shares one explanation popover
 (`help.envVar.what`), one inline name validation and one pre-flight check in
 `generate()`. See docs/design-notes/extension.md for the conventions (`data-env-var`, `envVarNoteHtml()`).
 
-- Extension: `popup/env-var.js` (pure: `validateEnvVarName`, `findInvalidEnvVarNames`),
+- Extension: `popup/env-var.ts` (pure: `validateEnvVarName`, `findInvalidEnvVarNames`),
   `popup/env-var-ui.ts` (`envVarNoteHtml`, `applyEnvVarValidation`,
   `refreshEnvVarValidation`, `wireEnvVarValidation`), `popup/popup.ts` (`render()`),
   `popup/companion-client.ts` (`generate()` guard), the inputs in `popup/screens/idle.html`,
@@ -713,7 +710,7 @@ constructs .NET and Python read the same), and "Convert to date" pre-selects the
 guessed from the picked value. The recipe panel keeps its state in its own DOM; the
 transform objects are unchanged. See docs/design-notes/extension.md for the details.
 
-- Extension: `popup/transform-helpers.js` (pure: `buildRecipe`, `previewRecipe`,
+- Extension: `popup/transform-helpers.ts` (pure: `buildRecipe`, `previewRecipe`,
   `inferDateFormat`), `popup/transform-helpers-ui.ts`, `popup/field-transforms-ui.ts`
   (`getRawValue` getter through `renderTransformList`/`wireTransformList`),
   `flat-mode-ui.ts`/`container-tree-ui.ts`/`api-config-ui.ts` (raw-value resolvers),
@@ -731,7 +728,7 @@ popover per hardening check, thresholds written as sentences, the rare blocking 
 under an "Advanced" disclosure, and a one-click "Recommended checks" preset. See
 docs/design-notes/extension.md for the details.
 
-- Extension: `popup/hardening-presets.js` (pure: `applyRecommendedHardening`),
+- Extension: `popup/hardening-presets.ts` (pure: `applyRecommendedHardening`),
   `popup/settings-panel-ui.ts` (button wiring, null-rate row sentences),
   `popup/screens/idle.html` (intro, heading, hosts, sentences, disclosure),
   `idle.hardening*`/`help.hardening.*` in `i18n/*.json`
@@ -746,7 +743,7 @@ German. No wire-format or companion change. See docs/design-notes/extension.md f
 
 - Build: `extension/docs-build.js` (both trees, `anchors.json`, source stamps, `translationStatus`),
   `extension/docs-template/docs.css` (language switch), `install/build-bundle.sh` (both Markdown trees)
-- Extension: `popup/docs-links.js` (`resolveDocTarget(key, language, anchors)`), `popup/docs-links-ui.ts`
+- Extension: `popup/docs-links.ts` (`resolveDocTarget(key, language, anchors)`), `popup/docs-links-ui.ts`
   (loads `docs/anchors.json` when the panel is German), `common.learnMore`
 - Screenshots/checks: `e2e/screenshots/run.js --language de`, `lib.js` (`imagesDirFor`, `word()`),
   `check-docs.js` (both trees, translation status)
@@ -773,7 +770,7 @@ wire-format or companion change. See docs/design-notes/extension.md for the deta
 - Build: `extension/docs-build.js` (markdown → HTML, link/anchor check, `slugify`),
   `extension/docs-template/docs.css`, `extension/build.js` (`copyDocs`), `install/build-bundle.sh`
   (docs as files in the bundle)
-- Extension: `popup/docs-links.js` (key → page#anchor table), `popup/docs-links-ui.ts`
+- Extension: `popup/docs-links.ts` (key → page#anchor table), `popup/docs-links-ui.ts`
   (links, click, `learnMoreHtml`), `popup/help-popover-ui.ts` (`data-doc` on a help host),
   `popup/screens/*.html`/`popup.html` (the links), `common.learnMore` + shortened `*Hint` texts in `i18n/*.json`
 - Tests: `docs-build.test.js`, `popup/docs-links.test.js`, `popup/docs-links-ui.test.js`,
@@ -787,10 +784,10 @@ remembered "Advanced" groups that open themselves when the option is in use, a 1
 "Part" in Split field, and a glossary on the Settings screen. Labels and grouping only: no
 wire-format, companion or generated-script change. See docs/design-notes/extension.md for the details.
 
-- Extension: `i18n/{de,en,es}.json` (renamed values; keys unchanged), `popup/advanced-defaults.js`
+- Extension: `i18n/{de,en,es}.json` (renamed values; keys unchanged), `popup/advanced-defaults.ts`
   (pure: does a retry code list / dedup retention differ from its default?),
   `popup/advanced-disclosure-ui.ts` (`autoOpenAdvanced`), `popup/combine-split-fields.ts`
-  (`partNumberToIndex`/`indexToPartNumber`), `popup/glossary.js` + `glossary-ui.ts`,
+  (`partNumberToIndex`/`indexToPartNumber`), `popup/glossary.ts` + `glossary-ui.ts`,
   `popup/screens/{idle,settings,modals}.html`, `help.outputLayout|safetyChecks|preflight|dedup.overview`
 - Tests: `popup/advanced-defaults.test.js`, `advanced-groups-ui.test.js`, `glossary.test.js`,
   `combine-split-fields.test.js`, real-browser check `e2e/examples/issue-407-terminology-advanced-check.js`
@@ -803,7 +800,7 @@ value sources and the body, and the rarely needed options (auth bootstrap, curso
 Link pagination, browser discovery, value type) under "Advanced". No wire-format or
 companion change. See docs/design-notes/extension.md for the details.
 
-- Extension: `popup/json-path-picker.js` (pure tree model + path derivation),
+- Extension: `popup/json-path-picker.ts` (pure tree model + path derivation),
   `popup/json-path-picker-ui.ts` (state-driven panel, loading, wiring),
   `popup/api-cursor-pagination-ui.ts`/`api-bootstrap-ui.ts`/`api-response-tree-ui.ts`
   (buttons and panels), `popup/advanced-disclosure-ui.ts` (`autoOpenAdvanced`),
@@ -821,7 +818,7 @@ option under "Advanced", and "?" popovers for the pattern and the max-pages limi
 companion's page-number template now needs only `{page}` for a single start page. See
 docs/design-notes/extension.md for the details.
 
-- Extension: `popup/pagination-template.js` (pure derivation), `popup/pagination-ui.ts`
+- Extension: `popup/pagination-template.ts` (pure derivation), `popup/pagination-ui.ts`
   (banner, pickers, Advanced placement), `popup/message-router.ts`/`session-restore.ts`
   (the clicked link's address), `popup/screens/idle.html`, `idle.pagination*`/
   `help.pagination.*`/`help.discoveredUrls.*` in `i18n/*.json`
@@ -838,7 +835,7 @@ A "Login form (4 steps)" starter, role-named cards, times in seconds, an overvie
 wire format and generated scripts are unchanged (a starter action's `role` never
 leaves the draft). See docs/design-notes/extension.md for the details.
 
-- Extension: `popup/login-flow.js` (pure: `addLoginFlow`, `msToSecondsText`,
+- Extension: `popup/login-flow.ts` (pure: `addLoginFlow`, `msToSecondsText`,
   `secondsTextToMs`), `popup/browser-actions-ui.ts` (cards, starter wiring),
   `popup/api-browser-discovery-ui.ts` (the discovery action editor shares the seconds inputs),
   `popup/advanced-disclosure-ui.ts` (open state applied synchronously),
@@ -855,8 +852,8 @@ plain-language description, and a credential-looking header kept as a fixed valu
 warning with a one-click switch. No wire-format or companion change. See docs/design-notes/extension.md for
 the details.
 
-- Extension: `popup/request-header-presets.js` (pure: presets, `isSecretHeaderName`,
-  `suggestHeaderEnvName`), `popup/request-headers.js` (`appendHeaderRow`),
+- Extension: `popup/request-header-presets.ts` (pure: presets, `isSecretHeaderName`,
+  `suggestHeaderEnvName`), `popup/request-headers.ts` (`appendHeaderRow`),
   `popup/request-headers-ui.ts` (picker, notes, warning wiring),
   `popup/screens/idle.html` (`#select-add-request-header`), `popup/popup.css`
   (`.request-header-picker`/`-notes`), `requestHeaderPresets.*`/`help.requestHeaders.picker`
@@ -882,7 +879,7 @@ three dictionaries) and for tucking rarely needed options into a collapsed,
 per-section-remembered `<details>`. See `docs/design-notes/extension.md`
 for the conventions and the sync test that enforces them.
 
-- Extension: `popup/help-popover.js` (pure) + `popup/help-popover-ui.ts`
+- Extension: `popup/help-popover.ts` (pure) + `popup/help-popover-ui.ts`
   (`initHelpPopovers`, `wireHelpPopoverEvents`; hosts declared as
   `<span class="help-host" data-help="help.…">` in `screens/*.html`),
   `popup/advanced-disclosure.ts` + `popup/advanced-disclosure-ui.ts`
@@ -1058,7 +1055,7 @@ output row — e.g. turning `"Preis: 12,99 €"` into `"12.99"` without the user
 hand-editing the generated script. Added independently to all three field
 shapes (flat/container/API) since none of them share a common leaf type.
 
-- Extension: `popup/field-transforms.js` (pure data helpers — create/add/
+- Extension: `popup/field-transforms.ts` (pure data helpers — create/add/
   remove/update/changeKind/move/validate), `popup/field-transforms-ui.ts`
   (DOM rendering + delegated event wiring, shared between `modal-field-name`
   and `modal-field-extended`), `popup/popup.ts` (`_state.pendingTransforms`,
@@ -1206,7 +1203,7 @@ with the extension; the user's own presets live in a small cross-site
 companion store, the same way Output Blueprints do (§2.23). Applying appends
 a copy of the steps (an existing chain is never replaced).
 
-- Extension: `popup/transform-presets.js` (`BUILTIN_TRANSFORM_PRESETS`,
+- Extension: `popup/transform-presets.ts` (`BUILTIN_TRANSFORM_PRESETS`,
   `allTransformPresets`, `applyTransformPreset`, `transformChainIsSaveable`),
   `popup/transform-presets-ui.ts` (fetch wrappers, the "Apply preset … / Save
   as preset" controls under all three transform editors, the Settings
@@ -1626,7 +1623,7 @@ part of a selector, at most once, quoted with `'` or `"` (escapes `\"`, `\'`,
 `\\`), non-empty; not allowed in FramePath segments or
 `EmbeddedJsonSource.ScriptSelector`. Three mirrored implementations share test
 vectors: C# `SelectorTextFilter` (validation only), the Python runtime
-fragments, and JS (`content-script.ts`, `popup/selector-text-filter.js`).
+fragments, and JS (`content-script.ts`, `popup/selector-text-filter.ts`).
 
 - IR: `IR/SelectorTextFilter.cs`, called from `ScrapingPlanValidator` for every
   selector-bearing step/field/pagination/discovery/browser-discovery action
@@ -1639,7 +1636,7 @@ fragments, and JS (`content-script.ts`, `popup/selector-text-filter.js`).
 - Templates now escape selectors with `string.escape` when rendering them into
   Python string literals
 - Extension: `content-script.ts` (`querySelectorAllWithText`,
-  `COUNT_PICK_WITH_TEXT`), `popup/selector-text-filter.js` +
+  `COUNT_PICK_WITH_TEXT`), `popup/selector-text-filter.ts` +
   `selector-text-filter-ui.ts`, text filter row in `modal-field-name` /
   `modal-field-extended`, live match count
 - Tests: `SelectorTextFilterTests.cs`, `TextSelectorEndToEndTests.cs`,
