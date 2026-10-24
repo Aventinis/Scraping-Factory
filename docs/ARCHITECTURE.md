@@ -153,7 +153,7 @@ module with no shared closure. `api-config.ts` and
 own render/confirm/cancel, the modals' render and `wireApiConfigEvents`, which calls
 each module's `wire…Events(bridge)` in turn — and re-exports every name it used to
 export (`api-config-ui-exports.test.js` pins that surface), so `popup.js` and
-`idle-screen-ui.js` import unchanged. The focused modules, none importing
+`idle-screen-ui.ts` import unchanged. The focused modules, none importing
 `api-config-ui.ts` (no cycles; `api-config-shared-ui.ts` holds the helpers two of
 them share):
 
@@ -700,7 +700,7 @@ bootstrap, an API discovery Fill action) shares one explanation popover
   `popup/env-var-ui.ts` (`envVarNoteHtml`, `applyEnvVarValidation`,
   `refreshEnvVarValidation`, `wireEnvVarValidation`), `popup/popup.js` (`render()`),
   `popup/companion-client.ts` (`generate()` guard), the inputs in `popup/screens/idle.html`,
-  `api-config.html`, `browser-actions-ui.js`, `request-headers-ui.js`, `api-config-ui.ts`,
+  `api-config.html`, `browser-actions-ui.ts`, `request-headers-ui.ts`, `api-config-ui.ts`,
   `api-bootstrap-ui.ts`, `envVar.*`/`help.envVar.*` in `i18n/*.json`
 - Tests: `popup/env-var.test.js`, real-browser check
   `e2e/examples/issue-397-env-var-help-check.js`
@@ -839,7 +839,7 @@ wire format and generated scripts are unchanged (a starter action's `role` never
 leaves the draft). See docs/design-notes/extension.md for the details.
 
 - Extension: `popup/login-flow.js` (pure: `addLoginFlow`, `msToSecondsText`,
-  `secondsTextToMs`), `popup/browser-actions-ui.js` (cards, starter wiring),
+  `secondsTextToMs`), `popup/browser-actions-ui.ts` (cards, starter wiring),
   `popup/api-browser-discovery-ui.ts` (the discovery action editor shares the seconds inputs),
   `popup/advanced-disclosure-ui.ts` (open state applied synchronously),
   `popup/screens/idle.html`, `browserActions.*`/`help.browserActions.*` in `i18n/*.json`
@@ -857,7 +857,7 @@ the details.
 
 - Extension: `popup/request-header-presets.js` (pure: presets, `isSecretHeaderName`,
   `suggestHeaderEnvName`), `popup/request-headers.js` (`appendHeaderRow`),
-  `popup/request-headers-ui.js` (picker, notes, warning wiring),
+  `popup/request-headers-ui.ts` (picker, notes, warning wiring),
   `popup/screens/idle.html` (`#select-add-request-header`), `popup/popup.css`
   (`.request-header-picker`/`-notes`), `requestHeaderPresets.*`/`help.requestHeaders.picker`
   in `i18n/*.json`
@@ -1605,7 +1605,7 @@ Playwright's `extra_http_headers` (every request of the page) and
 - Fragments: `request_headers_static`, `request_headers_playwright`,
   `require_env_function`; the static/Browser templates and the Browser-engine
   `preflight_playwright`/`discovered_urls_playwright` fragments use them
-- Extension: `request-headers.ts` (pure) + `request-headers-ui.js`
+- Extension: `request-headers.ts` (pure) + `request-headers-ui.ts`
   (`renderRequestHeadersSection`/`wireRequestHeadersEvents`),
   `scraping-config-builder.ts` (`requestHeaders` option),
   `companion-client.ts` (test values → `verificationValues`),
@@ -1661,7 +1661,7 @@ the last, or every match in order (with a pause after each click).
 - Templates: `playwright_click_step.py.j2`, `fragments/api_common.py.j2`
   (`_run_browser_action`)
 - Extension: `scraping-config-builder.ts` (`addBrowserAction`,
-  `serializeBrowserActions`), `config-import.ts`, `browser-actions-ui.js`,
+  `serializeBrowserActions`), `config-import.ts`, `browser-actions-ui.ts`,
   `api-config-ui.ts`
 - Tests: `ClickTargetTests.cs`, `extension/popup/click-target.test.js`,
   fixture `test-pages/click-targets` +
@@ -1687,7 +1687,7 @@ needed for Excel only. Appending to an existing file is §2.21ab3.
   `ScriptVerificationResult.OutputFileEncoding`, `/generate` envelope
   `outputFile.encoding`; `HardeningReplayEvaluator.IsReplayable`
 - Extension: `shared/global-settings.ts` (`outputFormat`, migration),
-  `global-settings-ui.js`, `screens/settings.html`, `idle-screen-ui.js`
+  `global-settings-ui.js`, `screens/settings.html`, `idle-screen-ui.ts`
   (extension + flatten hint), `scraping-config-builder.ts`,
   `download-helpers.ts` (base64 decode)
 - Tests: `TabularOutputTests.cs`, `HardeningReplayEvaluatorTests.cs`,
@@ -1940,7 +1940,7 @@ map into a different target branch.
   `collectFieldNames` the hardening null-rate/required-fields pickers
   already use). `popup/popup.js` (`_state.selectedOutputBlueprintId`/
   `selectedOutputBlueprintFieldNames`/`outputBlueprintMapping`, persisted
-  like Proxy/Hardening), `popup/idle-screen-ui.js`
+  like Proxy/Hardening), `popup/idle-screen-ui.ts`
   (`#output-blueprint-toggle-row`'s mode-gated visibility,
   `OUTPUT_BLUEPRINT_RESET` on any mode switch, blocking "Generate" while a
   picked mapping is incomplete). `scraping-config-builder.ts`

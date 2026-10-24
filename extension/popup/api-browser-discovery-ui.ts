@@ -26,7 +26,7 @@ import {
 import { renderParameterPlaceholderPicker, patchApiConfigSource } from './api-config-shared-ui';
 
 // Issue #216: BrowserDiscoverySource's own action-list editor — visually
-// mirrors browser-actions-ui.js's renderBrowserActions (one card per
+// mirrors browser-actions-ui.ts's renderBrowserActions (one card per
 // action, a kind label, a frame badge, a remove button, kind-specific
 // fields) but is its own smaller renderer rather than a reused/
 // parameterized version of that function: renderBrowserActions is

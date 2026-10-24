@@ -144,7 +144,7 @@ function updateOutputBlueprintTreeMappingSource(bridge, leafPath, sourceField) {
 // list, or (Issue #244) the tree mapping view below, depending on
 // selectedOutputBlueprintSchemaKind. Only ever called while the picker
 // itself is reachable (flat mode, or Api mode's flat shape, or — since
-// #192 — container mode/Api's tree shape) — idle-screen-ui.js gates
+// #192 — container mode/Api's tree shape) — idle-screen-ui.ts gates
 // #output-blueprint-toggle-row's own visibility.
 function renderOutputBlueprintMappingSection(bridge) {
   const state = bridge.getState();

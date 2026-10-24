@@ -1,4 +1,4 @@
-// Custom request headers for flat / container / Blocks mode: pure data / logic (request-headers-ui.js renders it). API mode has its
+// Custom request headers for flat / container / Blocks mode: pure data / logic (request-headers-ui.ts renders it). API mode has its
 // own header editor (adopted from the recorded request); this is the hand-written DOM-mode counterpart.
 //
 // Draft (_state.requestHeaders), kept as typed so a half-edited row never blocks anything:

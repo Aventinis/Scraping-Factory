@@ -299,7 +299,7 @@ describe('Output Blueprints (Issue #191)', () => {
     expect(document.getElementById('modal-blueprint-edit').classList.contains('hidden')).toBe(true);
 
     // The mapping picker itself only lives on the IDLE screen (see
-    // idle-screen-ui.js's renderIdleScreen) — the underlying blueprint list
+    // idle-screen-ui.ts's renderIdleScreen) — the underlying blueprint list
     // is already refreshed (state.outputBlueprints), but the picker's own
     // <select> only re-renders once IDLE is shown again.
     document.getElementById('btn-close-settings').click();
