@@ -135,7 +135,8 @@ export interface State {
   domTreeTruncated: boolean;
   domTreeError: string | null;
   previewActive: boolean;
-  previewSummary: { total: number; empty: number; truncated: boolean } | null;
+  /** `empty` lists the names of the configured fields / groups that matched nothing. */
+  previewSummary: { total: number; empty: string[]; truncated: boolean } | null;
   apiCaptureActive: boolean;
   apiCaptureCount: number;
   apiEntriesPanelOpen: boolean;
