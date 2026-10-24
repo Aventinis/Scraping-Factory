@@ -76,6 +76,17 @@ internal static class ScriptRunner
         throw new InvalidOperationException("No Python interpreter found (tried: python3, python).", lastError);
     }
 
+    // Like RunScriptTextAsync, but the directory (named after `tempPrefix`) is kept so the test can inspect what the script wrote;
+    // the caller removes it.
+    public static async Task<(ScriptResult Result, string WorkDir)> RunInTempDirAsync(
+        string script, string tempPrefix, TimeSpan? timeout = null)
+    {
+        var workDir = Directory.CreateTempSubdirectory(tempPrefix).FullName;
+        var scriptPath = Path.Combine(workDir, "scraper.py");
+        await File.WriteAllTextAsync(scriptPath, script);
+        return (await RunAsync(scriptPath, workDir, timeout: timeout), workDir);
+    }
+
     // Writes `script` into a fresh temp directory, runs it there, reads `outputFileName` if given and removes the directory again.
     public static async Task<ScriptResult> RunScriptTextAsync(
         string script, IReadOnlyDictionary<string, string>? env = null, string? outputFileName = null, TimeSpan? timeout = null)

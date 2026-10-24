@@ -1,6 +1,7 @@
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
 using Xunit;
+using static ScrapingFactory.Tests.ApiScriptPlans;
 
 namespace ScrapingFactory.Tests;
 
@@ -17,15 +18,6 @@ namespace ScrapingFactory.Tests;
 // requests against UrlTemplate rather than some separate configured shape.
 public class BrowserDiscoverySourceEndToEndTests
 {
-    private static ScrapingPlan PlanWith(ApiConfig api) => new()
-    {
-        Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = api }],
-        OutputFormat = OutputFormat.Csv,
-        Engine = ScrapingEngine.Api,
-    };
-
-    private static string GenerateScript(ApiConfig api) => new PythonApiCodeGenerator().Generate(PlanWith(api));
-
     // /angebote renders two category links whose onclick handler fires the
     // real category-specific requests directly — deterministic and
     // independent of actual scroll/viewport physics, unlike a real

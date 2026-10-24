@@ -17,56 +17,13 @@ public class FlatModeDownloadEndToEndTests
 {
     private static async Task<(int ExitCode, string Stderr, string WorkDir)> GenerateAndRunAsync(ScrapingPlan plan, string tempPrefix)
     {
-        var script = new PythonCodeGenerator().Generate(plan);
-        var workDir = Directory.CreateTempSubdirectory(tempPrefix).FullName;
-        var scriptPath = Path.Combine(workDir, "scraper.py");
-        await File.WriteAllTextAsync(scriptPath, script);
-
-        Exception? lastError = null;
-        foreach (var candidate in new[] { "python3", "python" })
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = candidate,
-                WorkingDirectory = workDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add(scriptPath);
-
-            try
-            {
-                using var process = new Process { StartInfo = psi };
-                process.Start();
-                var stderrTask = process.StandardError.ReadToEndAsync();
-                var stdoutTask = process.StandardOutput.ReadToEndAsync();
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                await process.WaitForExitAsync(cts.Token);
-                return (process.ExitCode, await stderrTask, workDir);
-            }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                lastError = ex; // executable not found — try the next candidate
-            }
-        }
-        throw new InvalidOperationException("No Python interpreter found (tried: python3, python).", lastError);
+        var (result, workDir) = await ScriptRunner.RunInTempDirAsync(new PythonCodeGenerator().Generate(plan), tempPrefix);
+        return (result.ExitCode, result.Stderr, workDir);
     }
 
     private static ScrapingPlan BuildPlan(
-        string startUrl, bool download, int? maxDownloadSizeBytes = null, List<string>? allowedContentTypes = null) => new()
-    {
-        Steps =
-        [
-            new NavigateStep { Urls = [startUrl] },
-            new ExtractStep
-            {
-                Name = "FileLink", Selector = "a.file", Attribute = "href", Download = download,
-                MaxDownloadSizeBytes = maxDownloadSizeBytes, AllowedContentTypes = allowedContentTypes,
-            },
-        ],
-    };
+        string startUrl, bool download, int? maxDownloadSizeBytes = null, List<string>? allowedContentTypes = null) =>
+        DownloadPlans.Flat(startUrl, download, maxDownloadSizeBytes, allowedContentTypes);
 
     private static LocalTestServer CreateFixtureServer(string fileBytes) => new(request =>
         request.Url!.AbsolutePath == "/report.pdf"

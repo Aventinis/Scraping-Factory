@@ -2,6 +2,7 @@ using System.Net;
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
 using Xunit;
+using static ScrapingFactory.Tests.ApiScriptPlans;
 
 namespace ScrapingFactory.Tests;
 
@@ -14,16 +15,6 @@ namespace ScrapingFactory.Tests;
 public class ApiBootstrapEndToEndTests
 {
     private const string Token = "tok-8f3a1c";
-
-    private static ScrapingPlan PlanWith(ApiConfig api, OutputFormat outputFormat = OutputFormat.Csv) => new()
-    {
-        Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = api }],
-        OutputFormat = outputFormat,
-        Engine = ScrapingEngine.Api,
-    };
-
-    private static string GenerateScript(ApiConfig api, OutputFormat outputFormat = OutputFormat.Csv) =>
-        new PythonApiCodeGenerator().Generate(PlanWith(api, outputFormat));
 
     private static string ReadBody(HttpListenerRequest request)
     {
