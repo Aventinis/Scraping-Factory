@@ -1,4 +1,4 @@
-// The guidance on the "Companion app unreachable" screen: pure logic plus the one persisted flag (companion-guidance-ui.js renders it). Until the first
+// The guidance on the "Companion app unreachable" screen: pure logic plus the one persisted flag (companion-guidance-ui.ts renders it). Until the first
 // successful health check the screen explains in full what the companion is and the three situations with their next step; afterwards the short form.
 // Wording lives in i18n/*.json (`error.*`, `help.companionError.*`), so it works offline.
 export const STORAGE_KEY = 'companionReached';

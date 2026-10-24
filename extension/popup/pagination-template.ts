@@ -1,4 +1,4 @@
-// Page-number template derivation: pure, no DOM (pagination-ui.js renders it). The "Page-number URL" kind needs a template with
+// Page-number template derivation: pure, no DOM (pagination-ui.ts renders it). The "Page-number URL" kind needs a template with
 // {page} (and optionally {url}); this proposes one from the tracked page's URL and, when the user clicked one, the href of a
 // "next" / "page 2" link. Only ever a proposal, never applied by itself, and conservative: anything ambiguous (zero-based
 // counters, offsets, several plausible parameters, a #fragment) returns null. {page} counts from 2 in the script, so page 2 must

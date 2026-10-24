@@ -1,4 +1,4 @@
-// The `:contains("text")` selector suffix: pure helpers (selector-text-filter-ui.js has the field modals' input). The CSS part
+// The `:contains("text")` selector suffix: pure helpers (selector-text-filter-ui.ts has the field modals' input). The CSS part
 // matches as usual, then only elements whose text contains `text` are kept; the matching rule (whole text, whitespace collapsed,
 // case-insensitive) lives in the generated scripts' text_selector_* fragments and the content script. This module builds the
 // suffix and parses it back; the syntax is pinned across all implementations by test-vectors/text-selector.json.

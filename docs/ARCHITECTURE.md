@@ -476,7 +476,7 @@ option.
 
 - Extension: `content/api-capture.js` (`hasNextLinkRel`), `content/content-script.js`
   (`hasNextLink` on candidates), `popup/api-link-pagination.js` (pure),
-  `popup/api-link-pagination-ui.js`, `popup/api-config.ts`,
+  `popup/api-link-pagination-ui.ts`, `popup/api-config.ts`,
   `popup/screens/api-config.html` (`#api-link-section`)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig.LinkHeaderPagination`,
   `ApiLinkHeaderPagination`), `ScrapingPlanValidator.cs`
@@ -649,7 +649,7 @@ OS — in full until a companion has answered once on this browser
 "Why can't it connect?" help popover. See docs/design-notes/extension.md for the behavior details.
 
 - Extension: `popup/companion-guidance.ts` (OS detection, installer commands/paths,
-  `likelySituations`, the persisted flag), `popup/companion-guidance-ui.js`
+  `likelySituations`, the persisted flag), `popup/companion-guidance-ui.ts`
   (`renderCompanionGuidance`, called from `popup.js`'s `render()`),
   `popup/companion-client.ts` (`checkCompanion` loads/sets the flag and keeps the last
   failure for `getCompanionFailure()`), `#screen-error` in `popup/popup.html`,
@@ -697,7 +697,7 @@ bootstrap, an API discovery Fill action) shares one explanation popover
 `generate()`. See docs/design-notes/extension.md for the conventions (`data-env-var`, `envVarNoteHtml()`).
 
 - Extension: `popup/env-var.js` (pure: `validateEnvVarName`, `findInvalidEnvVarNames`),
-  `popup/env-var-ui.js` (`envVarNoteHtml`, `applyEnvVarValidation`,
+  `popup/env-var-ui.ts` (`envVarNoteHtml`, `applyEnvVarValidation`,
   `refreshEnvVarValidation`, `wireEnvVarValidation`), `popup/popup.js` (`render()`),
   `popup/companion-client.ts` (`generate()` guard), the inputs in `popup/screens/idle.html`,
   `api-config.html`, `browser-actions-ui.js`, `request-headers-ui.js`, `api-config-ui.js`,
@@ -746,7 +746,7 @@ German. No wire-format or companion change. See docs/design-notes/extension.md f
 
 - Build: `extension/docs-build.js` (both trees, `anchors.json`, source stamps, `translationStatus`),
   `extension/docs-template/docs.css` (language switch), `install/build-bundle.sh` (both Markdown trees)
-- Extension: `popup/docs-links.js` (`resolveDocTarget(key, language, anchors)`), `popup/docs-links-ui.js`
+- Extension: `popup/docs-links.js` (`resolveDocTarget(key, language, anchors)`), `popup/docs-links-ui.ts`
   (loads `docs/anchors.json` when the panel is German), `common.learnMore`
 - Screenshots/checks: `e2e/screenshots/run.js --language de`, `lib.js` (`imagesDirFor`, `word()`),
   `check-docs.js` (both trees, translation status)
@@ -773,8 +773,8 @@ wire-format or companion change. See docs/design-notes/extension.md for the deta
 - Build: `extension/docs-build.js` (markdown → HTML, link/anchor check, `slugify`),
   `extension/docs-template/docs.css`, `extension/build.js` (`copyDocs`), `install/build-bundle.sh`
   (docs as files in the bundle)
-- Extension: `popup/docs-links.js` (key → page#anchor table), `popup/docs-links-ui.js`
-  (links, click, `learnMoreHtml`), `popup/help-popover-ui.js` (`data-doc` on a help host),
+- Extension: `popup/docs-links.js` (key → page#anchor table), `popup/docs-links-ui.ts`
+  (links, click, `learnMoreHtml`), `popup/help-popover-ui.ts` (`data-doc` on a help host),
   `popup/screens/*.html`/`popup.html` (the links), `common.learnMore` + shortened `*Hint` texts in `i18n/*.json`
 - Tests: `docs-build.test.js`, `popup/docs-links.test.js`, `popup/docs-links-ui.test.js`,
   `i18n/hint-length.test.js`, real-browser check `e2e/examples/issue-354-bundled-docs-check.js`
@@ -789,8 +789,8 @@ wire-format, companion or generated-script change. See docs/design-notes/extensi
 
 - Extension: `i18n/{de,en,es}.json` (renamed values; keys unchanged), `popup/advanced-defaults.js`
   (pure: does a retry code list / dedup retention differ from its default?),
-  `popup/advanced-disclosure-ui.js` (`autoOpenAdvanced`), `popup/combine-split-fields.ts`
-  (`partNumberToIndex`/`indexToPartNumber`), `popup/glossary.js` + `glossary-ui.js`,
+  `popup/advanced-disclosure-ui.ts` (`autoOpenAdvanced`), `popup/combine-split-fields.ts`
+  (`partNumberToIndex`/`indexToPartNumber`), `popup/glossary.js` + `glossary-ui.ts`,
   `popup/screens/{idle,settings,modals}.html`, `help.outputLayout|safetyChecks|preflight|dedup.overview`
 - Tests: `popup/advanced-defaults.test.js`, `advanced-groups-ui.test.js`, `glossary.test.js`,
   `combine-split-fields.test.js`, real-browser check `e2e/examples/issue-407-terminology-advanced-check.js`
@@ -806,7 +806,7 @@ companion change. See docs/design-notes/extension.md for the details.
 - Extension: `popup/json-path-picker.js` (pure tree model + path derivation),
   `popup/json-path-picker-ui.js` (state-driven panel, loading, wiring),
   `popup/api-cursor-pagination-ui.js`/`api-bootstrap-ui.js`/`api-response-tree-ui.js`
-  (buttons and panels), `popup/advanced-disclosure-ui.js` (`autoOpenAdvanced`),
+  (buttons and panels), `popup/advanced-disclosure-ui.ts` (`autoOpenAdvanced`),
   `popup/screens/api-config.html`/`modals.html`, `jsonPathPicker.*`/`help.api*` in `i18n/*.json`;
   `content/content-script.js` (`readEmbeddedJson`) + `background/service-worker.js`
   (`GET_EMBEDDED_JSON`)
@@ -821,7 +821,7 @@ option under "Advanced", and "?" popovers for the pattern and the max-pages limi
 companion's page-number template now needs only `{page}` for a single start page. See
 docs/design-notes/extension.md for the details.
 
-- Extension: `popup/pagination-template.js` (pure derivation), `popup/pagination-ui.js`
+- Extension: `popup/pagination-template.js` (pure derivation), `popup/pagination-ui.ts`
   (banner, pickers, Advanced placement), `popup/message-router.ts`/`session-restore.ts`
   (the clicked link's address), `popup/screens/idle.html`, `idle.pagination*`/
   `help.pagination.*`/`help.discoveredUrls.*` in `i18n/*.json`
@@ -841,7 +841,7 @@ leaves the draft). See docs/design-notes/extension.md for the details.
 - Extension: `popup/login-flow.js` (pure: `addLoginFlow`, `msToSecondsText`,
   `secondsTextToMs`), `popup/browser-actions-ui.js` (cards, starter wiring),
   `popup/api-browser-discovery-ui.js` (the discovery action editor shares the seconds inputs),
-  `popup/advanced-disclosure-ui.js` (open state applied synchronously),
+  `popup/advanced-disclosure-ui.ts` (open state applied synchronously),
   `popup/screens/idle.html`, `browserActions.*`/`help.browserActions.*` in `i18n/*.json`
 - Tests: `popup/login-flow.test.js`, real-browser check
   `e2e/examples/issue-403-login-starter-check.js`
@@ -882,10 +882,10 @@ three dictionaries) and for tucking rarely needed options into a collapsed,
 per-section-remembered `<details>`. See `docs/design-notes/extension.md`
 for the conventions and the sync test that enforces them.
 
-- Extension: `popup/help-popover.js` (pure) + `popup/help-popover-ui.js`
+- Extension: `popup/help-popover.js` (pure) + `popup/help-popover-ui.ts`
   (`initHelpPopovers`, `wireHelpPopoverEvents`; hosts declared as
   `<span class="help-host" data-help="help.…">` in `screens/*.html`),
-  `popup/advanced-disclosure.ts` + `popup/advanced-disclosure-ui.js`
+  `popup/advanced-disclosure.ts` + `popup/advanced-disclosure-ui.ts`
   (`<details data-advanced="…">`, `chrome.storage.local` key `advancedSections`),
   `popup/popup.css` (`.help-btn`, `.help-popover`, `.advanced-disclosure`),
   `help.*`/`common.helpBtn`/`common.advanced` in `i18n/*.json`, wired from
@@ -1553,7 +1553,7 @@ repeating group instance that owns every key field.
   `fragments/dedup_{common,flat,tree}.py.j2` right before `main()`
   (`_dedup_filter_rows`/`_dedup_new_rows` for the flat shapes,
   `_dedup_register_instance`/`_dedup_delta_tree` for the tree shapes)
-- Extension: `dedup-config.ts` (pure) + `dedup-config-ui.js`
+- Extension: `dedup-config.ts` (pure) + `dedup-config-ui.ts`
   (`renderDedupSection`/`wireDedupEvents`), `scraping-config-builder.ts`
   (`deduplication` option), `config-import.ts`,
   `session-restore.ts`, `#toggle-dedup`/`#dedup-config` in
@@ -1640,7 +1640,7 @@ fragments, and JS (`content-script.js`, `popup/selector-text-filter.js`).
   Python string literals
 - Extension: `content-script.js` (`querySelectorAllWithText`,
   `COUNT_PICK_WITH_TEXT`), `popup/selector-text-filter.js` +
-  `selector-text-filter-ui.js`, text filter row in `modal-field-name` /
+  `selector-text-filter-ui.ts`, text filter row in `modal-field-name` /
   `modal-field-extended`, live match count
 - Tests: `SelectorTextFilterTests.cs`, `TextSelectorEndToEndTests.cs`,
   `ScrapingPlanValidatorTests.cs`, `extension/popup/selector-text-filter.test.js`,
@@ -1790,7 +1790,7 @@ channel constant in the extension (`shared/build-config.ts`, set to `release` by
   `CompanionHostOptions.cs`, `Program.cs` (transport validation, Kestrel HTTPS,
   anonymous paths, `/health` `registration`)
 - Extension: `shared/build-config.ts`, `shared/companion-config.ts` (address policy,
-  developer flag), `popup/account.ts` + `popup/account-ui.js`,
+  developer flag), `popup/account.ts` + `popup/account-ui.ts`,
   `popup/screens/settings.html` (Account, Developer options),
   `popup/companion-client.ts` (`getCompanionInfo`, `useCustomCompanionUrl`)
 - Installer: `--registration`, `--host`, `--tls-cert`/`--tls-key`, `--no-tls`;
@@ -1814,8 +1814,8 @@ verified address; a successful reset revokes every token.
   `Storage/MySqlSchema.EnsureIndex`; `UserCommands` (`set-email`, `verify`);
   `Program.cs` (validation, anonymous reset endpoints, `RequireVerified` gate,
   `/health` + `/whoami` fields)
-- Extension: `popup/email-account.ts`, `popup/email-account-ui.js`,
-  `popup/account-ui.js` (shared state), `popup/screens/settings.html`,
+- Extension: `popup/email-account.ts`, `popup/email-account-ui.ts`,
+  `popup/account-ui.ts` (shared state), `popup/screens/settings.html`,
   `popup/companion-client.ts` (`getCompanionInfo`)
 - Installer: `--smtp-*`, `--require-email`, `--require-verified-email`,
   `--email-domains`, `--no-email`

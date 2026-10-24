@@ -1,5 +1,5 @@
 // Issue #397: the shared environment-variable name rule (env-var.ts), the shared
-// inline validation/explanation (env-var-ui.js) and the Generate guard.
+// inline validation/explanation (env-var-ui.ts) and the Generate guard.
 Object.defineProperty(window.navigator, 'language', { value: 'en-US', configurable: true });
 
 const { ENV_VAR_NAME_PATTERN, validateEnvVarName, findInvalidEnvVarNames } = require('./env-var');
@@ -89,7 +89,7 @@ describe('findInvalidEnvVarNames scans every place a name can be typed', () => {
   });
 });
 
-describe('the shared inline validation (env-var-ui.js)', () => {
+describe('the shared inline validation (env-var-ui.ts)', () => {
   let ui;
 
   beforeEach(async () => {

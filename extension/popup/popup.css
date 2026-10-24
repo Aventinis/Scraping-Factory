@@ -992,7 +992,7 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
 .text-filter-row .preview-summary { text-align: left; margin: 6px 0 4px; }
 .text-filter-row + .match-count-hint { margin-top: 0; }
 
-/* Issue #396: reusable help popover (help-popover-ui.js). The "?" button
+/* Issue #396: reusable help popover (help-popover-ui.ts). The "?" button
    sits inline next to a label; its explanation is an in-flow block right
    after the label's row, so it can never run off a narrow side panel. All
    colors come from the theme tokens, so light/dark need no rules of their
@@ -1023,7 +1023,7 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
   color: var(--color-text); font-size: 11px; white-space: pre-wrap; user-select: all;
 }
 
-/* Issue #396: "Advanced" disclosure (advanced-disclosure-ui.js) */
+/* Issue #396: "Advanced" disclosure (advanced-disclosure-ui.ts) */
 .advanced-disclosure { margin-top: 8px; }
 .advanced-disclosure > summary {
   cursor: pointer; font-size: 12px; font-weight: 600; color: var(--color-text-secondary);
@@ -1032,7 +1032,7 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
 .advanced-disclosure > summary:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .advanced-disclosure-body { padding-top: 4px; }
 
-/* Issue #397: environment-variable name inputs (env-var-ui.js) — the shared
+/* Issue #397: environment-variable name inputs (env-var-ui.ts) — the shared
    "What is an environment variable?" line, and the inline validation. */
 .env-var-note { margin: 4px 0 6px; font-size: 11px; color: var(--color-text-muted); text-align: left; }
 .env-var-error { margin: 2px 0 6px; font-size: 11px; color: var(--color-danger); text-align: left; overflow-wrap: anywhere; }

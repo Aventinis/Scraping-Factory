@@ -1,7 +1,7 @@
 // Issue #353: the extension side of the companion's email features — confirming
 // an address with a mailed code, changing it, and resetting a forgotten
 // password. Pure request/response helpers (DOM and state live in
-// email-account-ui.js); `fetchFn` is companionFetch and `baseUrl` the resolved
+// email-account-ui.ts); `fetchFn` is companionFetch and `baseUrl` the resolved
 // companion address, passed in like account.ts does. Same result shape:
 // { ok: true, ... } or { ok: false, status, error, retryAfter }.
 import { request } from './account';
