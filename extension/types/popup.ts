@@ -130,7 +130,15 @@ export interface HardeningReplayState {
 
 // The companion's ScriptPreviewData (a sample of what the trial run scraped).
 export interface DataPreview {
+  outputFormat?: string;
   totalCount: number;
+  truncated?: boolean;
+  /** Table samples (Csv, and a flat Json array). */
+  columns?: string[];
+  rows?: Array<Record<string, string | null>>;
+  /** Text samples of a tree (Xml, Json). */
+  xmlSample?: string | null;
+  jsonSample?: string | null;
   [key: string]: unknown;
 }
 

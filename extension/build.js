@@ -35,6 +35,11 @@ const ENTRY_POINTS = [
   'background/service-worker.js',  // relay
 ];
 
+// A converted entry point keeps its .js output name (the manifest and popup.html point at it); this maps it to the source esbuild reads.
+const ENTRY_SOURCES = {
+  'popup/popup.js': 'popup/popup.ts',
+};
+
 const STATIC_FILES = [
   'manifest.json',
   'popup/popup.html',
@@ -53,7 +58,7 @@ function defineFor(channel) {
 
 function buildOptions({ channel, outdir }) {
   return {
-    entryPoints: ENTRY_POINTS.map((f) => path.join(ROOT, f)),
+    entryPoints: ENTRY_POINTS.map((f) => ({ in: path.join(ROOT, ENTRY_SOURCES[f] || f), out: f.replace(/\.js$/, '') })),
     outdir,
     outbase: ROOT,
     bundle: true,
