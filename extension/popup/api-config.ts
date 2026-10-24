@@ -43,7 +43,7 @@ export interface UrlParts {
 // whose source kind is not chosen yet has no entry at all.
 export type ApiParameterSourceDraft =
   | { kind: 'staticList'; valuesText: string }
-  | { kind: 'range'; type: SFWire.RangeType; from: string; to: string; format?: string }
+  | { kind: 'range'; type: SFWire.RangeType; from: string; to: string; format?: string | null }
   // Incomplete until confirmDiscoveryCandidate fills in the three paths.
   | { kind: 'discovery'; method?: 'GET'; urlTemplate?: string; itemsPath?: string; valuePath?: string }
   | { kind: 'browserDiscovery'; discoveryUrl: string; actions: SFDraft.BrowserAction[] }
@@ -310,7 +310,7 @@ export function buildDiscoverySource(urlTemplate: string, itemsPath: string, val
 // runtime's own hardcoded default (RangeFormat.Resolve) stays the single
 // source of truth for "what ISO-Standard actually means" when nothing was
 // explicitly chosen.
-export function buildRangeSource(type: SFWire.RangeType, from: string, to: string, format?: string): SFWire.RangeSource {
+export function buildRangeSource(type: SFWire.RangeType, from: string, to: string, format?: string | null): SFWire.RangeSource {
   return { kind: 'range', type, from, to, ...(format ? { format } : {}) };
 }
 
